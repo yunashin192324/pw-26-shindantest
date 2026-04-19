@@ -1,0 +1,36 @@
+                ロケーション情報
+              </h3>
+              <div className="mt-6 border-t border-gray">
+                {result.info.map((item, index) => (
+                  <div key={index} className="flex flex-col sm-flex-row py-4 border-b border-gray">
+                    <span className="text-xs text-light-gray sm-w-140 mb-3 sm-mb-0 leading-relaxed tracking-wider">{item.label}</span>
+                    <span className="text-sm text-dark leading-relaxed">{item.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="glass-card p-8">
+              <div className="flex flex-col gap-4">
+                <a href="https://www.his-wedding.com/reservation/" target="_blank" className="w-full py-5 text-center bg-gold text-sm font-bold tracking-widest rounded transition-all shadow-lg block">ウェディングの専門家に無料相談する</a>
+              </div>
+              <div className="mt-8 pt-6 border-t border-gray text-center">
+                <p className="text-xs text-gray mb-3 tracking-widest">＼ 診断結果を共有する ／</p>
+                <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent('私の運命のフォトウェディング地は【' + result.name + '】でした！')}`} target="_blank" className="inline-flex items-center justify-center px-6 py-3 bg-twitter text-sm font-bold rounded transition-all">X (Twitter) で共有</a>
+              </div>
+              <div className="mt-8 text-center">
+                <button onClick={resetDiagnosis} className="text-sm text-light-gray underline cursor-pointer hover:text-dark">もう一度診断をやり直す</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+</script>
+</body>
+</html>
