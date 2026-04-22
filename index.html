@@ -1,36 +1,439 @@
-                ロケーション情報
-              </h3>
-              <div className="mt-6 border-t border-gray">
-                {result.info.map((item, index) => (
-                  <div key={index} className="flex flex-col sm-flex-row py-4 border-b border-gray">
-                    <span className="text-xs text-light-gray sm-w-140 mb-3 sm-mb-0 leading-relaxed tracking-wider">{item.label}</span>
-                    <span className="text-sm text-dark leading-relaxed">{item.value}</span>
-                  </div>
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>献立プランナー</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useMemo, useCallback } = React;
+
+const SUPERMARKETS = ['イオン','ライフ','マルエツ','イトーヨーカドー','オーケー','コストコ','マックスバリュ','その他'];
+
+const PRICES = {
+  '卵':30,'牛乳':20,'食パン':25,'バター':15,'ご飯':50,'味噌':20,'豆腐':50,
+  'わかめ':10,'ねぎ':30,'鶏肉':120,'豚肉':100,'牛肉':200,'鮭':150,
+  'じゃがいも':40,'玉ねぎ':30,'にんじん':30,'キャベツ':40,'レタス':80,
+  'トマト':60,'パスタ':30,'うどん':40,'そば':50,'ラーメン':60,
+  'カレールー':30,'醤油':10,'みりん':10,'ヨーグルト':80,'シリアル':60,
+  'バナナ':30,'豚ひき肉':100,'パン粉':10,'小麦粉':10,
+};
+
+const QUICK_FRIDGE = ['卵','醤油','みりん','味噌','ご飯','塩','油','玉ねぎ','豆腐','牛乳'];
+
+const MEALS = [
+  {id:1,name:'ご飯と味噌汁',type:'朝',emoji:'🍚',
+   ingredients:['ご飯','味噌','豆腐','わかめ','ねぎ'],
+   nutrition:{protein:20,carbs:60,fat:10,fiber:25,calories:400}},
+  {id:2,name:'トーストと目玉焼き',type:'朝',emoji:'🍳',
+   ingredients:['食パン','卵','バター'],
+   nutrition:{protein:25,carbs:45,fat:30,fiber:10,calories:380}},
+  {id:3,name:'ヨーグルトとフルーツ',type:'朝',emoji:'🥣',
+   ingredients:['ヨーグルト','バナナ','シリアル'],
+   nutrition:{protein:15,carbs:55,fat:10,fiber:20,calories:320}},
+  {id:4,name:'おにぎりと味噌汁',type:'朝',emoji:'🍙',
+   ingredients:['ご飯','鮭','味噌','わかめ'],
+   nutrition:{protein:30,carbs:55,fat:15,fiber:15,calories:420}},
+  {id:5,name:'パンケーキ',type:'朝',emoji:'🥞',
+   ingredients:['小麦粉','卵','牛乳','バター'],
+   nutrition:{protein:15,carbs:65,fat:25,fiber:5,calories:450}},
+  {id:6,name:'カレーライス',type:'昼',emoji:'🍛',
+   ingredients:['ご飯','鶏肉','じゃがいも','玉ねぎ','にんじん','カレールー'],
+   nutrition:{protein:35,carbs:65,fat:25,fiber:35,calories:680}},
+  {id:7,name:'ラーメン',type:'昼',emoji:'🍜',
+   ingredients:['ラーメン','豚肉','ねぎ','卵'],
+   nutrition:{protein:30,carbs:60,fat:30,fiber:10,calories:580}},
+  {id:8,name:'うどん',type:'昼',emoji:'🫕',
+   ingredients:['うどん','醤油','みりん','ねぎ','卵'],
+   nutrition:{protein:20,carbs:65,fat:10,fiber:15,calories:450}},
+  {id:9,name:'チャーハン',type:'昼',emoji:'🍳',
+   ingredients:['ご飯','卵','豚肉','ねぎ','醤油'],
+   nutrition:{protein:30,carbs:55,fat:25,fiber:10,calories:520}},
+  {id:10,name:'サンドイッチ',type:'昼',emoji:'🥪',
+   ingredients:['食パン','卵','レタス','トマト','バター'],
+   nutrition:{protein:20,carbs:50,fat:20,fiber:25,calories:420}},
+  {id:11,name:'トマトパスタ',type:'昼',emoji:'🍝',
+   ingredients:['パスタ','トマト','玉ねぎ','豚肉'],
+   nutrition:{protein:25,carbs:60,fat:20,fiber:20,calories:530}},
+  {id:12,name:'ざるそば',type:'昼',emoji:'🍜',
+   ingredients:['そば','醤油','みりん','ねぎ'],
+   nutrition:{protein:20,carbs:60,fat:5,fiber:20,calories:390}},
+  {id:13,name:'唐揚げ定食',type:'夜',emoji:'🍗',
+   ingredients:['鶏肉','醤油','小麦粉','ご飯','キャベツ','味噌','豆腐'],
+   nutrition:{protein:45,carbs:50,fat:35,fiber:30,calories:750}},
+  {id:14,name:'肉じゃが',type:'夜',emoji:'🥘',
+   ingredients:['牛肉','じゃがいも','玉ねぎ','にんじん','醤油','みりん','ご飯'],
+   nutrition:{protein:40,carbs:55,fat:20,fiber:40,calories:650}},
+  {id:15,name:'鮭の塩焼き定食',type:'夜',emoji:'🐟',
+   ingredients:['鮭','ご飯','味噌','豆腐','わかめ'],
+   nutrition:{protein:50,carbs:45,fat:20,fiber:25,calories:580}},
+  {id:16,name:'ハンバーグ定食',type:'夜',emoji:'🍖',
+   ingredients:['豚ひき肉','玉ねぎ','卵','パン粉','ご飯','キャベツ'],
+   nutrition:{protein:45,carbs:45,fat:40,fiber:25,calories:720}},
+  {id:17,name:'豚の生姜焼き定食',type:'夜',emoji:'🥩',
+   ingredients:['豚肉','玉ねぎ','醤油','みりん','ご飯','キャベツ'],
+   nutrition:{protein:40,carbs:48,fat:30,fiber:28,calories:640}},
+  {id:18,name:'麻婆豆腐定食',type:'夜',emoji:'🌶️',
+   ingredients:['豆腐','豚ひき肉','ねぎ','醤油','ご飯'],
+   nutrition:{protein:35,carbs:48,fat:25,fiber:20,calories:590}},
+  {id:19,name:'鶏鍋',type:'夜',emoji:'🫕',
+   ingredients:['鶏肉','豆腐','キャベツ','ねぎ','にんじん','醤油','みりん'],
+   nutrition:{protein:45,carbs:25,fat:15,fiber:50,calories:480}},
+  {id:20,name:'天ぷら定食',type:'夜',emoji:'🍤',
+   ingredients:['鶏肉','小麦粉','卵','ご飯','味噌','豆腐'],
+   nutrition:{protein:35,carbs:55,fat:35,fiber:20,calories:700}},
+];
+
+const MEAL_STYLES = {
+  '朝':{card:'bg-amber-50 border-amber-200',badge:'bg-amber-100 text-amber-700',
+        btnOn:'bg-amber-500 text-white shadow-md',btnOff:'bg-amber-50 text-amber-500 border border-amber-200'},
+  '昼':{card:'bg-sky-50 border-sky-200',badge:'bg-sky-100 text-sky-700',
+        btnOn:'bg-sky-500 text-white shadow-md',btnOff:'bg-sky-50 text-sky-500 border border-sky-200'},
+  '夜':{card:'bg-indigo-50 border-indigo-200',badge:'bg-indigo-100 text-indigo-700',
+        btnOn:'bg-indigo-500 text-white shadow-md',btnOff:'bg-indigo-50 text-indigo-500 border border-indigo-200'},
+};
+const LABELS = {'朝':'朝食','昼':'昼食','夜':'夕食'};
+const ICONS = {'朝':'☀️','昼':'🌤️','夜':'🌙'};
+const NBARS = [
+  {key:'protein',label:'タンパク質',color:'#60a5fa'},
+  {key:'carbs',label:'炭水化物',color:'#fb923c'},
+  {key:'fat',label:'脂質',color:'#facc15'},
+  {key:'fiber',label:'食物繊維',color:'#4ade80'},
+];
+
+function mealCost(meal, fridge) {
+  return meal.ingredients.reduce((s,i) => fridge.includes(i) ? s : s + (PRICES[i]||50), 0);
+}
+function makeEntry(meal, fridge) {
+  return {...meal, cost:mealCost(meal,fridge),
+    inFridge:meal.ingredients.filter(i=>fridge.includes(i)),
+    toBuy:meal.ingredients.filter(i=>!fridge.includes(i))};
+}
+function pickMeal(type, excludeId, fridge) {
+  const pool = MEALS.filter(m=>m.type===type && m.id!==excludeId);
+  const scored = pool.map(m=>({m, s:m.ingredients.filter(i=>fridge.includes(i)).length+Math.random()*2}));
+  scored.sort((a,b)=>b.s-a.s);
+  return scored[0]?.m;
+}
+function genPlan(days, types, fridge) {
+  const last = {};
+  return Array.from({length:days},(_,i)=>{
+    const meals = {};
+    types.forEach(t=>{
+      const pool = MEALS.filter(m=>m.type===t && m.id!==last[t]);
+      const scored = pool.map(m=>({m,s:m.ingredients.filter(i=>fridge.includes(i)).length+Math.random()*2}));
+      scored.sort((a,b)=>b.s-a.s);
+      const c = scored[0]?.m || MEALS.find(m=>m.type===t);
+      if(c){last[t]=c.id; meals[t]=makeEntry(c,fridge);}
+    });
+    return {day:i+1,meals};
+  });
+}
+
+function NBar({label,value,color}){
+  return (
+    <div className="flex items-center gap-2 mb-1.5">
+      <span className="text-xs text-gray-500 w-20 shrink-0">{label}</span>
+      <div className="flex-1 bg-gray-100 rounded-full h-2.5 overflow-hidden">
+        <div className="h-full rounded-full" style={{width:`${Math.min(value,100)}%`,backgroundColor:color}}/>
+      </div>
+      <span className="text-xs font-medium text-gray-600 w-8 text-right">{value}%</span>
+    </div>
+  );
+}
+
+function MealCard({type,meal,fridge,onReroll}){
+  const s = MEAL_STYLES[type];
+  return (
+    <div className={`rounded-2xl border-2 p-4 ${s.card}`}>
+      <div className="flex items-start justify-between mb-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${s.badge}`}>{ICONS[type]} {LABELS[type]}</span>
+          <span className="text-xl">{meal.emoji}</span>
+          <span className="font-bold text-gray-800">{meal.name}</span>
+        </div>
+        <button onClick={onReroll} className="shrink-0 text-xs bg-white text-gray-500 border border-gray-200 px-2 py-1 rounded-lg hover:bg-gray-50 transition-all ml-2">🔄 変更</button>
+      </div>
+      <div className="flex items-baseline gap-2 mb-3">
+        <span className="text-2xl font-bold text-green-600">¥{meal.cost.toLocaleString()}</span>
+        <span className="text-xs text-gray-400">買い物分のみ</span>
+        <span className="text-xs text-gray-400 ml-auto">{meal.nutrition.calories} kcal</span>
+      </div>
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        {meal.ingredients.map(ing=>(
+          <span key={ing} className={`text-xs px-2 py-0.5 rounded-full font-medium ${fridge.includes(ing)?'bg-green-100 text-green-700':'bg-white text-gray-600 border border-gray-200'}`}>
+            {fridge.includes(ing)?'✓ ':''}{ing}
+          </span>
+        ))}
+      </div>
+      <div className="bg-white/70 rounded-xl p-3">
+        <p className="text-xs font-semibold text-gray-500 mb-2">栄養バランス</p>
+        {NBARS.map(({key,label,color})=>(
+          <NBar key={key} label={label} value={meal.nutrition[key]} color={color}/>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Steps({step}){
+  const labels = ['設定','献立','まとめ'];
+  return (
+    <div className="flex items-center justify-center mb-8">
+      {labels.map((s,i)=>(
+        <React.Fragment key={i}>
+          <div className="flex flex-col items-center">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${i+1<step?'bg-green-500 text-white':i+1===step?'bg-green-600 text-white ring-4 ring-green-100':'bg-gray-200 text-gray-400'}`}>
+              {i+1<step?'✓':i+1}
+            </div>
+            <span className={`text-xs mt-1 font-medium ${i+1<=step?'text-green-600':'text-gray-400'}`}>{s}</span>
+          </div>
+          {i<2&&<div className={`h-0.5 w-16 mx-1 mb-4 ${i+1<step?'bg-green-500':'bg-gray-200'}`}/>}
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+
+function App(){
+  const [step,setStep] = useState(1);
+  const [days,setDays] = useState(3);
+  const [types,setTypes] = useState(['朝','昼','夜']);
+  const [market,setMarket] = useState('イオン');
+  const [fridgeInput,setFridgeInput] = useState('');
+  const [fridge,setFridge] = useState(['ご飯','卵','味噌','醤油','みりん']);
+  const [plan,setPlan] = useState(null);
+  const [activeDay,setActiveDay] = useState(0);
+
+  const toggleType = t => setTypes(prev=>
+    prev.includes(t)?(prev.length>1?prev.filter(x=>x!==t):prev)
+    :[...prev,t].sort((a,b)=>['朝','昼','夜'].indexOf(a)-['朝','昼','夜'].indexOf(b))
+  );
+
+  const addFridge = (item) => {
+    const v = (item||fridgeInput).trim();
+    if(v && !fridge.includes(v)) setFridge(p=>[...p,v]);
+    if(!item) setFridgeInput('');
+  };
+
+  const handleGen = () => {
+    setPlan(genPlan(days,types,fridge));
+    setActiveDay(0);
+    setStep(2);
+  };
+
+  const reroll = useCallback((di,t)=>{
+    setPlan(prev=>{
+      const cid = prev[di]?.meals[t]?.id;
+      const c = pickMeal(t,cid,fridge);
+      if(!c) return prev;
+      return prev.map((d,i)=>i!==di?d:{...d,meals:{...d.meals,[t]:makeEntry(c,fridge)}});
+    });
+  },[fridge]);
+
+  const dayCost = d => Object.values(d.meals).reduce((s,m)=>s+m.cost,0);
+
+  const summary = useMemo(()=>{
+    if(!plan) return null;
+    const all = plan.flatMap(d=>Object.values(d.meals));
+    if(!all.length) return null;
+    const shopMap = {};
+    all.forEach(m=>m.toBuy.forEach(i=>{if(!shopMap[i]) shopMap[i]=PRICES[i]||50;}));
+    const shopTotal = Object.values(shopMap).reduce((s,c)=>s+c,0);
+    const avg = k => Math.round(all.reduce((s,m)=>s+m.nutrition[k],0)/all.length);
+    return {shopTotal,shopMap,mealCount:all.length,
+      avg:{protein:avg('protein'),carbs:avg('carbs'),fat:avg('fat'),fiber:avg('fiber'),calories:avg('calories')}};
+  },[plan]);
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50">
+      <div className="max-w-2xl mx-auto px-4 py-8">
+
+        <div className="text-center mb-8">
+          <div className="text-5xl mb-2">🍱</div>
+          <h1 className="text-2xl font-bold text-gray-800">献立プランナー</h1>
+          <p className="text-sm text-gray-500 mt-1">栄養バランス・費用がひと目でわかる</p>
+        </div>
+
+        <Steps step={step}/>
+
+        {step===1&&(
+          <div className="space-y-5">
+            <div className="bg-white rounded-2xl shadow-sm p-6">
+              <h2 className="font-bold text-gray-700 mb-4">📅 日数を選ぶ</h2>
+              <div className="flex gap-2 flex-wrap">
+                {[1,2,3,4,5,6,7].map(d=>(
+                  <button key={d} onClick={()=>setDays(d)}
+                    className={`w-12 h-12 rounded-full font-bold text-sm transition-all ${days===d?'bg-green-500 text-white shadow-md scale-110':'bg-gray-100 text-gray-600 hover:bg-green-100'}`}>
+                    {d}日
+                  </button>
                 ))}
               </div>
             </div>
 
-            <div className="glass-card p-8">
-              <div className="flex flex-col gap-4">
-                <a href="https://www.his-wedding.com/reservation/" target="_blank" className="w-full py-5 text-center bg-gold text-sm font-bold tracking-widest rounded transition-all shadow-lg block">ウェディングの専門家に無料相談する</a>
+            <div className="bg-white rounded-2xl shadow-sm p-6">
+              <h2 className="font-bold text-gray-700 mb-4">🍽️ 食事の種類</h2>
+              <div className="flex gap-3">
+                {['朝','昼','夜'].map(t=>{
+                  const s=MEAL_STYLES[t], on=types.includes(t);
+                  return (
+                    <button key={t} onClick={()=>toggleType(t)}
+                      className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${on?s.btnOn:s.btnOff}`}>
+                      {ICONS[t]} {LABELS[t]}
+                    </button>
+                  );
+                })}
               </div>
-              <div className="mt-8 pt-6 border-t border-gray text-center">
-                <p className="text-xs text-gray mb-3 tracking-widest">＼ 診断結果を共有する ／</p>
-                <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent('私の運命のフォトウェディング地は【' + result.name + '】でした！')}`} target="_blank" className="inline-flex items-center justify-center px-6 py-3 bg-twitter text-sm font-bold rounded transition-all">X (Twitter) で共有</a>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-sm p-6">
+              <h2 className="font-bold text-gray-700 mb-4">🏪 利用するスーパー</h2>
+              <div className="grid grid-cols-2 gap-2">
+                {SUPERMARKETS.map(s=>(
+                  <button key={s} onClick={()=>setMarket(s)}
+                    className={`py-2.5 px-3 rounded-xl text-sm font-medium transition-all ${market===s?'bg-green-500 text-white shadow-sm':'bg-gray-50 text-gray-600 hover:bg-green-50 border border-gray-200'}`}>
+                    {s}
+                  </button>
+                ))}
               </div>
-              <div className="mt-8 text-center">
-                <button onClick={resetDiagnosis} className="text-sm text-light-gray underline cursor-pointer hover:text-dark">もう一度診断をやり直す</button>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-sm p-6">
+              <h2 className="font-bold text-gray-700 mb-1">🧊 冷蔵庫の食材</h2>
+              <p className="text-xs text-gray-400 mb-3">ある食材はコストから除外されます</p>
+              <div className="flex gap-2 mb-3">
+                <input type="text" value={fridgeInput}
+                  onChange={e=>setFridgeInput(e.target.value)}
+                  onKeyDown={e=>e.key==='Enter'&&addFridge()}
+                  placeholder="食材名を入力（例：豆腐）"
+                  className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-300"/>
+                <button onClick={()=>addFridge()}
+                  className="bg-green-500 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-green-600 transition-all">追加</button>
               </div>
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {QUICK_FRIDGE.filter(i=>!fridge.includes(i)).map(i=>(
+                  <button key={i} onClick={()=>addFridge(i)}
+                    className="text-xs bg-gray-50 text-gray-500 border border-gray-200 px-2 py-1 rounded-full hover:bg-green-50 hover:text-green-600 hover:border-green-200 transition-all">
+                    + {i}
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {fridge.map(item=>(
+                  <span key={item} className="flex items-center gap-1 bg-green-50 text-green-700 border border-green-200 px-3 py-1 rounded-full text-sm">
+                    ✓ {item}
+                    <button onClick={()=>setFridge(p=>p.filter(i=>i!==item))} className="text-green-400 hover:text-red-400 ml-1 font-bold">×</button>
+                  </span>
+                ))}
+                {fridge.length===0&&<p className="text-sm text-gray-400">食材がありません</p>}
+              </div>
+            </div>
+
+            <button onClick={handleGen}
+              className="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold text-lg rounded-2xl shadow-lg hover:shadow-xl hover:from-green-600 hover:to-emerald-600 transition-all">
+              献立を作成する →
+            </button>
+          </div>
+        )}
+
+        {step===2&&plan&&(
+          <div>
+            <div className="flex gap-2 mb-5 overflow-x-auto pb-1">
+              {plan.map((dp,i)=>(
+                <button key={i} onClick={()=>setActiveDay(i)}
+                  className={`shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all ${activeDay===i?'bg-green-500 text-white shadow-md':'bg-white text-gray-500 hover:bg-green-50 border border-gray-100'}`}>
+                  {i+1}日目
+                  <span className={`ml-1.5 text-xs ${activeDay===i?'text-green-100':'text-green-500'}`}>¥{dayCost(dp).toLocaleString()}</span>
+                </button>
+              ))}
+            </div>
+
+            {plan[activeDay]&&(
+              <>
+                <div className="bg-white rounded-2xl shadow-sm p-4 mb-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500">{activeDay+1}日目の食費（買い物分）</p>
+                    <p className="text-3xl font-bold text-green-600">¥{dayCost(plan[activeDay]).toLocaleString()}</p>
+                  </div>
+                  <div className="text-4xl">🛒</div>
+                </div>
+                <div className="space-y-4">
+                  {types.map(t=>plan[activeDay].meals[t]&&(
+                    <MealCard key={t} type={t} meal={plan[activeDay].meals[t]} fridge={fridge} onReroll={()=>reroll(activeDay,t)}/>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <div className="flex gap-3 mt-6">
+              <button onClick={()=>setStep(1)} className="flex-1 py-3 bg-white border border-gray-200 text-gray-600 font-bold rounded-2xl hover:bg-gray-50 transition-all">← 設定</button>
+              <button onClick={()=>setStep(3)} className="flex-1 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold rounded-2xl shadow-md hover:shadow-lg transition-all">まとめを見る →</button>
             </div>
           </div>
         )}
+
+        {step===3&&summary&&(
+          <div className="space-y-5">
+            <div className="bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl p-6 text-white shadow-lg">
+              <p className="text-sm opacity-80 mb-1">{days}日間の食材費（買い物分）</p>
+              <p className="text-5xl font-bold">¥{summary.shopTotal.toLocaleString()}</p>
+              <p className="text-sm opacity-70 mt-2">{summary.mealCount}食分 ／ 1食あたり約 ¥{Math.round(summary.shopTotal/summary.mealCount).toLocaleString()}</p>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-sm p-6">
+              <h2 className="font-bold text-gray-700 mb-4">📊 平均栄養バランス（1食あたり）</h2>
+              {NBARS.map(({key,label,color})=>(
+                <NBar key={key} label={label} value={summary.avg[key]} color={color}/>
+              ))}
+              <div className="mt-4 bg-gray-50 rounded-xl p-3 text-center">
+                <p className="text-xs text-gray-500 mb-1">平均カロリー</p>
+                <p className="text-3xl font-bold text-gray-700">{summary.avg.calories}<span className="text-base font-normal text-gray-400"> kcal / 食</span></p>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-sm p-6">
+              <h2 className="font-bold text-gray-700 mb-1">🛒 買い物リスト</h2>
+              <p className="text-xs text-gray-400 mb-4">{market} で購入する食材</p>
+              {Object.keys(summary.shopMap).length===0?(
+                <p className="text-sm text-green-600 font-medium text-center py-4">✓ 全ての食材が冷蔵庫にあります！</p>
+              ):(
+                <>
+                  {Object.entries(summary.shopMap).sort((a,b)=>b[1]-a[1]).map(([ing,cost])=>(
+                    <div key={ing} className="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0">
+                      <div className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-green-400"/>
+                        <span className="text-sm text-gray-700">{ing}</span>
+                      </div>
+                      <span className="text-sm font-bold text-gray-600">¥{cost.toLocaleString()}</span>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between pt-3 mt-3 border-t-2 border-gray-100">
+                    <span className="font-bold text-gray-700">合計</span>
+                    <span className="font-bold text-green-600 text-xl">¥{summary.shopTotal.toLocaleString()}</span>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="flex gap-3">
+              <button onClick={()=>setStep(2)} className="flex-1 py-3 bg-white border border-gray-200 text-gray-600 font-bold rounded-2xl hover:bg-gray-50 transition-all">← 献立に戻る</button>
+              <button onClick={()=>{setStep(1);setPlan(null);}} className="flex-1 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold rounded-2xl shadow-md hover:shadow-lg transition-all">最初からやり直す</button>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );
-};
+}
 
-const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(<App />);
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </script>
 </body>
 </html>
