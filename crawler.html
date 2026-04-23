@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ウェブアドレス抽出ツール</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useRef } = React;
+
+// ---- プロキシ経由でHTMLを取得する（複数の中継所を順番に試す） ----
+async function fetchHtml(url) {
+  const proxies = [
+    async (u) => {
+      const r = await fetch(
+        `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(u)}`,
+        { signal: AbortSignal.timeout(12000) }
+      );
+      if (!r.ok) throw new Error(`codetabs HTTP ${r.status}`);
+      const text = await r.text();
+      if (!text || text.length < 100) throw new Error('codetabs: レスポンスが空');
+      return text;
+    },
+    async (u) => {
+      const r = await fetch(
+        `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
+        { signal: AbortSignal.timeout(12000) }
+      );
+      if (!r.ok) throw new Error(`allorigins HTTP ${r.status}`);
+      const data = await r.json();
+      if (data.status && data.status.http_code >= 400)
+        throw new Error(`allorigins: 対象サーバーエラー ${data.status.http_code}`);
+      if (!data.contents || data.contents.length < 100) throw new Error('allorigins: レスポンスが空');
+      return data.contents;
+    },
+    async (u) => {
+      const r = await fetch(
+        `https://corsproxy.io/?${encodeURIComponent(u)}`,
+        { signal: AbortSignal.timeout(12000) }
+      );
+      if (!r.ok) throw new Error(`corsproxy HTTP ${r.status}`);
+      const text = await r.text();
+      if (!text || text.length < 100) throw new Error('corsproxy: レスポンスが空');
+      return text;
+    },
+    async (u) => {
+      const r = await fetch(
+        `https://thingproxy.freeboard.io/fetch/${u}`,
+        { signal: AbortSignal.timeout(12000) }
+      );
+      if (!r.ok) throw new Error(`thingproxy HTTP ${r.status}`);
+      const text = await r.text();
+      if (!text || text.length < 100) throw new Error('thingproxy: レスポンスが空');
+      return text;
+    },
+  ];
+
+  let lastError = null;
+  for (const proxy of proxies) {
+    try {
+      return await proxy(url);
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  throw new Error(`全ての中継所で取得失敗: ${lastError?.message}`);
+}
+
+// ---- HTMLからリンクを抽出する ----
+function extractLinks(htmlText, currentUrl, baseHost, pathScope) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(htmlText, 'text/html');
+
+  // <base href> があれば基準URLを更新する
+  const baseTag = doc.querySelector('base[href]');
+  const resolveBase = baseTag
+    ? new URL(baseTag.getAttribute('href'), currentUrl).href
+    : currentUrl;
+
+  const elements = doc.querySelectorAll('a[href], area[href], iframe[src], frame[src]');
+  const links = new Set();
+
+  for (const el of elements) {
+    const attr = el.getAttribute('href') || el.getAttribute('src');
+    if (!attr) continue;
+
+    const lower = attr.toLowerCase().trim();
+    if (
+      lower.startsWith('#') ||
+      lower.startsWith('javascript:') ||
+      lower.startsWith('mailto:') ||
+      lower.startsWith('tel:') ||
+      lower.startsWith('data:') ||
+      lower === '' ||
+      lower === 'void(0)'
+    ) continue;
+
+    let absolute;
+    try {
+      absolute = new URL(attr, resolveBase).href;
+    } catch {
+      continue;
+    }
+
+    // フラグメント除去
+    absolute = absolute.split('#')[0];
+    if (!absolute) continue;
+
+    try {
+      const absObj = new URL(absolute);
+      if (absObj.host !== baseHost) continue;
+      // パス制限が有効な場合、指定パス配下のみ対象にする
+      if (pathScope && !absObj.pathname.startsWith(pathScope)) continue;
+      links.add(absolute);
+    } catch {
+      continue;
+    }
+  }
+
+  return links;
+}
+
+// ---- URLの正規化 ----
+function normalizeUrl(url, strip) {
+  if (!strip) return url;
+  try {
+    const u = new URL(url);
+    return u.origin + u.pathname;
+  } catch {
+    return url;
+  }
+}
+
+// ---- メインコンポーネント ----
+function App() {
+  const [targetUrl, setTargetUrl] = useState('');
+  const [maxDepth, setMaxDepth] = useState(2);
+  const [stripQuery, setStripQuery] = useState(false);
+  const [limitToPath, setLimitToPath] = useState(false);
+  const [urls, setUrls] = useState([]);
+  const [failedUrls, setFailedUrls] = useState([]);
+  const [isCrawling, setIsCrawling] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('待機中');
+  const [copyStatus, setCopyStatus] = useState('');
+  const [progressInfo, setProgressInfo] = useState({
+    processedCount: 0,
+    totalFoundCount: 0,
+    percentage: 0,
+    estimatedMinutesRemaining: 0,
+  });
+
+  const stopRef = useRef(false);
+
+  const startExtraction = async () => {
+    if (!targetUrl) {
+      setStatusMessage('ウェブアドレスが入力されていません。');
+      return;
+    }
+
+    setIsCrawling(true);
+    setUrls([]);
+    setFailedUrls([]);
+    setStatusMessage('準備中...');
+    stopRef.current = false;
+    setProgressInfo({ processedCount: 0, totalFoundCount: 0, percentage: 0, estimatedMinutesRemaining: 0 });
+
+    let baseUrl, baseHost, startPath;
+    try {
+      const urlObj = new URL(targetUrl);
+      baseUrl = urlObj.origin;
+      baseHost = urlObj.host;
+      startPath = urlObj.pathname;
+    } catch {
+      setStatusMessage('正しい形式のウェブアドレスではありません。');
+      setIsCrawling(false);
+      return;
+    }
+
+    // パス制限：開始URLのパスを基準にする
+    const pathScope = limitToPath ? startPath : null;
+
+    const visitedUrls = new Set();
+    const normalizedSeen = new Set();
+    const queue = [{ url: targetUrl, depth: 1 }];
+
+    const normalizedStart = normalizeUrl(targetUrl, stripQuery);
+    visitedUrls.add(targetUrl);
+    normalizedSeen.add(normalizedStart);
+
+    const foundUrlsList = [targetUrl];
+    const failedList = [];
+    setUrls([...foundUrlsList]);
+
+    let processedCount = 0;
+    let hasError = false;
+    const startTime = Date.now();
+
+    while (queue.length > 0 && !stopRef.current) {
+      const currentItem = queue.shift();
+      setStatusMessage(`${currentItem.depth}階層目を調査中: ${currentItem.url}`);
+
+      if (currentItem.depth > maxDepth) {
+        processedCount++;
+        continue;
+      }
+
+      try {
+        const htmlText = await fetchHtml(currentItem.url);
+
+        const links = extractLinks(htmlText, currentItem.url, baseHost, pathScope);
+
+        for (const link of links) {
+          const normalized = normalizeUrl(link, stripQuery);
+          if (!normalizedSeen.has(normalized)) {
+            normalizedSeen.add(normalized);
+            visitedUrls.add(link);
+            foundUrlsList.push(link);
+            queue.push({ url: link, depth: currentItem.depth + 1 });
+          }
+        }
+        setUrls([...foundUrlsList]);
+      } catch (error) {
+        console.error('取得失敗:', currentItem.url, error);
+        hasError = true;
+        failedList.push(currentItem.url);
+        setFailedUrls([...failedList]);
+      }
+
+      processedCount++;
+      const totalFoundCount = visitedUrls.size;
+      const percentage = Math.min(
+        Math.floor((processedCount / Math.max(totalFoundCount, 1)) * 100),
+        99
+      );
+      const elapsed = Date.now() - startTime;
+      const avgPerItem = elapsed / processedCount;
+      const estimatedMinutesRemaining = Math.ceil((avgPerItem * queue.length) / 60000);
+
+      setProgressInfo({ processedCount, totalFoundCount, percentage, estimatedMinutesRemaining });
+
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    if (stopRef.current) {
+      setStatusMessage('利用者の指示により停止しました。');
+    } else {
+      if (foundUrlsList.length === 1 && hasError) {
+        setStatusMessage('調査完了。※対象サイトのセキュリティ設定により読み取りがブロックされている可能性があります。');
+      } else if (foundUrlsList.length === 1) {
+        setStatusMessage('調査完了。※JavaScriptで構築されたサイトか、リンクが見つかりませんでした。');
+      } else {
+        setStatusMessage('指定された範囲の調査が完了しました。');
+      }
+      setProgressInfo(prev => ({ ...prev, percentage: 100, estimatedMinutesRemaining: 0 }));
+    }
+    setIsCrawling(false);
+  };
+
+  const stopExtraction = () => {
+    stopRef.current = true;
+    setStatusMessage('停止処理中...');
+  };
+
+  const copyAllUrls = async () => {
+    if (urls.length === 0) return;
+    const text = urls.join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // フォールバック（古いブラウザ向け）
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    setCopyStatus('コピー完了！');
+    setTimeout(() => setCopyStatus(''), 2000);
+  };
+
+  const downloadCsv = () => {
+    if (urls.length === 0) return;
+    const rows = ['No,URL', ...urls.map((url, i) => `${i + 1},"${url.replace(/"/g, '""')}"`)]
+    const csv = '﻿' + rows.join('\n'); // BOM付きUTF-8（Excelで文字化けしない）
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `urls_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 text-gray-800 p-4 md:p-8 font-sans">
+      <div className="max-w-3xl mx-auto bg-white rounded-lg shadow p-6">
+        <h1 className="text-xl font-bold mb-4 border-b pb-2">ウェブアドレス抽出処理</h1>
+
+        <div className="space-y-4 mb-6">
+          <div>
+            <label className="block text-sm font-bold mb-1">出発点となるウェブアドレス</label>
+            <input
+              type="text"
+              value={targetUrl}
+              onChange={(e) => setTargetUrl(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && !isCrawling && startExtraction()}
+              placeholder="https://example.com/path/"
+              className="w-full border border-gray-300 rounded p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={isCrawling}
+            />
+          </div>
+
+          <div className="flex flex-wrap gap-6 items-start">
+            <div>
+              <label className="block text-sm font-bold mb-1">調査する階層の深さ</label>
+              <select
+                value={maxDepth}
+                onChange={(e) => setMaxDepth(parseInt(e.target.value))}
+                className="w-28 border border-gray-300 rounded p-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                disabled={isCrawling}
+              >
+                {[1,2,3,4,5].map(d => (
+                  <option key={d} value={d}>{d}階層</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2 pt-6">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={stripQuery}
+                  onChange={(e) => setStripQuery(e.target.checked)}
+                  disabled={isCrawling}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm">クエリパラメータを除去して重複排除</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={limitToPath}
+                  onChange={(e) => setLimitToPath(e.target.checked)}
+                  disabled={isCrawling}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm">開始URLのパス配下のみ対象にする</span>
+              </label>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            {!isCrawling ? (
+              <button
+                onClick={startExtraction}
+                className="bg-blue-600 text-white px-5 py-2 rounded hover:bg-blue-700 transition font-semibold"
+              >
+                抽出を開始する
+              </button>
+            ) : (
+              <button
+                onClick={stopExtraction}
+                className="bg-red-600 text-white px-5 py-2 rounded hover:bg-red-700 transition font-semibold"
+              >
+                処理を停止する
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* 状態表示 */}
+        <div className="bg-gray-100 rounded p-4 mb-6">
+          <p className="text-sm font-bold text-gray-700">
+            現在の状態: <span className="font-normal">{statusMessage}</span>
+          </p>
+          {isCrawling && (
+            <div className="space-y-2 mt-3">
+              <div className="w-full bg-gray-300 rounded-full h-4 overflow-hidden">
+                <div
+                  className="bg-blue-600 h-4 transition-all duration-300 ease-in-out"
+                  style={{ width: `${progressInfo.percentage}%` }}
+                />
+              </div>
+              <div className="flex flex-col sm:flex-row justify-between text-sm text-gray-600 gap-1">
+                <span>
+                  進行度: {progressInfo.percentage}%（{progressInfo.processedCount} / {progressInfo.totalFoundCount} 件完了）
+                </span>
+                <span>残り目安: 約 {progressInfo.estimatedMinutesRemaining} 分</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 結果一覧 */}
+        <div>
+          <div className="flex flex-wrap justify-between items-end gap-2 mb-2">
+            <h2 className="text-lg font-bold">
+              抽出されたアドレス一覧
+              <span className="text-sm font-normal text-gray-500 ml-2">{urls.length} 件</span>
+            </h2>
+            {urls.length > 0 && (
+              <div className="flex gap-2">
+                <button
+                  onClick={copyAllUrls}
+                  className="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded border border-gray-300 transition min-w-[7rem]"
+                >
+                  {copyStatus ? copyStatus : '📋 まとめてコピー'}
+                </button>
+                <button
+                  onClick={downloadCsv}
+                  className="text-sm bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded transition"
+                >
+                  ⬇ CSV出力
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="border border-gray-300 rounded max-h-96 overflow-y-auto bg-gray-50 p-2">
+            {urls.length === 0 ? (
+              <p className="text-sm text-gray-500 p-2">抽出されたアドレスがここに表示されます。</p>
+            ) : (
+              <ul className="list-decimal list-inside text-sm space-y-1">
+                {urls.map((url, index) => (
+                  <li key={index} className="truncate hover:bg-gray-200 px-1 rounded">
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline"
+                    >
+                      {url}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {failedUrls.length > 0 && (
+            <details className="mt-3 text-sm">
+              <summary className="text-red-600 cursor-pointer font-medium">
+                取得に失敗したURL: {failedUrls.length} 件（クリックで展開）
+              </summary>
+              <ul className="mt-2 text-xs text-gray-500 space-y-0.5 ml-4 list-disc">
+                {failedUrls.map((url, i) => (
+                  <li key={i} className="truncate">{url}</li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+
+        <p className="text-xs text-gray-400 mt-6 border-t pt-3">
+          ※ CORSプロキシ経由でHTMLを取得するため、JavaScriptで動的に構築されるページや、プロキシをブロックするサイトでは一部のリンクが取得できない場合があります。
+        </p>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

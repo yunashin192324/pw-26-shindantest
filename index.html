@@ -1,36 +1,581 @@
-                ロケーション情報
-              </h3>
-              <div className="mt-6 border-t border-gray">
-                {result.info.map((item, index) => (
-                  <div key={index} className="flex flex-col sm-flex-row py-4 border-b border-gray">
-                    <span className="text-xs text-light-gray sm-w-140 mb-3 sm-mb-0 leading-relaxed tracking-wider">{item.label}</span>
-                    <span className="text-sm text-dark leading-relaxed">{item.value}</span>
-                  </div>
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>献立プランナー</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useMemo, useCallback } = React;
+
+const SUPERMARKETS = ['イオン','ライフ','マルエツ','イトーヨーカドー','オーケー','コストコ','マックスバリュ','その他'];
+
+const PRICES = {
+  '卵':30,'牛乳':20,'食パン':25,'バター':15,'ご飯':50,'味噌':20,'豆腐':50,
+  'わかめ':10,'ねぎ':30,'鶏肉':120,'豚肉':100,'牛肉':200,'鮭':150,
+  'じゃがいも':40,'玉ねぎ':30,'にんじん':30,'キャベツ':40,'レタス':80,
+  'トマト':60,'パスタ':30,'うどん':40,'そば':50,'ラーメン':60,
+  'カレールー':30,'醤油':10,'みりん':10,'ヨーグルト':80,'シリアル':60,
+  'バナナ':30,'豚ひき肉':100,'パン粉':10,'小麦粉':10,
+};
+
+Object.assign(PRICES,{
+  'えび':200,'さつまいも':50,'れんこん':80,'かぼちゃ':60,
+  'しょうが':30,'にんにく':20,'もやし':30,'白菜':50,
+  'ほうれん草':80,'ごぼう':60,'ひじき':30,'大根':50,
+  'きゅうり':40,'酢':15,'砂糖':5,'ごま油':20,'かつお節':30,
+  '片栗粉':10,'揚げ油':50,'切り干し大根':40,'塩鮭':150,
+  'オリーブ油':50,'わさび':80,'豆板醤':100,'塩':5,'油':20,
+});
+
+const SIDE_DISHES = [
+  {id:101,name:'ほうれん草のおひたし',emoji:'🥬',
+   ingredients:['ほうれん草','醤油','みりん','かつお節'],
+   nutrition:{protein:8,carbs:8,fat:3,fiber:35,calories:60},
+   recipe:['ほうれん草を沸騰した湯で1分茹でる','冷水に取り水気をよく絞る','4cm長さに切り醤油・みりんで和える','かつお節を散らして完成']},
+  {id:102,name:'きんぴらごぼう',emoji:'🥕',
+   ingredients:['ごぼう','にんじん','醤油','みりん','砂糖','ごま油'],
+   nutrition:{protein:5,carbs:18,fat:8,fiber:40,calories:130},
+   recipe:['ごぼうとにんじんをせん切りにし、ごぼうは水にさらす','ごま油でごぼう・にんじんを炒める','醤油・みりん・砂糖を加えて汁気が飛ぶまで炒める','仕上げにごまを振る']},
+  {id:103,name:'冷奴',emoji:'🧊',
+   ingredients:['豆腐','醤油','ねぎ','かつお節'],
+   nutrition:{protein:12,carbs:5,fat:8,fiber:10,calories:100},
+   recipe:['豆腐を食べやすい大きさに切る','ねぎを小口切りにする','豆腐にねぎ・かつお節を乗せ醤油をかける']},
+  {id:104,name:'卵焼き',emoji:'🍳',
+   ingredients:['卵','醤油','みりん','砂糖'],
+   nutrition:{protein:15,carbs:10,fat:12,fiber:0,calories:150},
+   recipe:['卵を溶き醤油・みりん・砂糖を混ぜる','卵焼き器に油を引いて熱する','卵液を1/3注ぎ半熟のうちに手前に巻く','残りを2回に分けて同様に巻き、形を整えて切る']},
+  {id:105,name:'ひじきの煮物',emoji:'🌿',
+   ingredients:['ひじき','にんじん','醤油','みりん','砂糖'],
+   nutrition:{protein:6,carbs:12,fat:5,fiber:45,calories:100},
+   recipe:['ひじきを水で20分戻す','にんじんをせん切りにする','油でにんじん・ひじきを炒める','水・醤油・みりん・砂糖を加え汁気が飛ぶまで煮る']},
+  {id:106,name:'大根サラダ',emoji:'🥗',
+   ingredients:['大根','醤油','ごま油','酢'],
+   nutrition:{protein:3,carbs:8,fat:6,fiber:20,calories:70},
+   recipe:['大根をせん切りにして塩もみし水気を絞る','醤油・ごま油・酢を合わせてドレッシングを作る','大根とドレッシングを和えごまを振る']},
+  {id:107,name:'きゅうりの浅漬け',emoji:'🥒',
+   ingredients:['きゅうり','塩','醤油'],
+   nutrition:{protein:2,carbs:4,fat:0,fiber:15,calories:25},
+   recipe:['きゅうりを薄切りにする','塩を振り10分置いて水気を絞る','醤油を少し加えて和え、30分漬けて完成']},
+  {id:108,name:'切り干し大根の煮物',emoji:'🍱',
+   ingredients:['切り干し大根','にんじん','醤油','みりん','砂糖'],
+   nutrition:{protein:5,carbs:15,fat:3,fiber:38,calories:90},
+   recipe:['切り干し大根を水で15分戻す','にんじんをせん切りにする','油でにんじんを炒め切り干し大根を加える','水・醤油・みりん・砂糖で味付けし汁気が飛ぶまで煮る']},
+];
+
+const QUICK_FRIDGE = ['卵','醤油','みりん','味噌','ご飯','塩','油','玉ねぎ','豆腐','牛乳'];
+
+const MEALS = [
+  {id:1,name:'ご飯と味噌汁',type:'朝',emoji:'🍚',
+   ingredients:['ご飯','味噌','豆腐','わかめ','ねぎ'],
+   nutrition:{protein:20,carbs:60,fat:10,fiber:25,calories:400},
+   recipe:['だし（またはお湯）を鍋で沸かす','豆腐を1cm角に切りわかめを水で戻す','火を弱め味噌を溶き入れる','豆腐・わかめを加え煮立てずに温める','ねぎを小口切りにして散らして完成']},
+  {id:2,name:'トーストと目玉焼き',type:'朝',emoji:'🍳',
+   ingredients:['食パン','卵','バター'],
+   nutrition:{protein:25,carbs:45,fat:30,fiber:10,calories:380},
+   recipe:['食パンをトースターで2〜3分焼く','フライパンにバターを溶かして熱する','卵を割り入れ弱火で蓋をして3分焼く','塩・こしょうを振りトーストと一緒に盛る']},
+  {id:3,name:'ヨーグルトとフルーツ',type:'朝',emoji:'🥣',
+   ingredients:['ヨーグルト','バナナ','シリアル'],
+   nutrition:{protein:15,carbs:55,fat:10,fiber:20,calories:320},
+   recipe:['バナナを1cm幅の輪切りにする','器にヨーグルトを入れる','シリアルとバナナを乗せる','お好みで蜂蜜をかけて完成']},
+  {id:4,name:'おにぎりと味噌汁',type:'朝',emoji:'🍙',
+   ingredients:['ご飯','鮭','味噌','わかめ','塩'],
+   nutrition:{protein:30,carbs:55,fat:15,fiber:15,calories:420},
+   recipe:['鮭を焼いてほぐし塩で味を整える','ご飯に鮭を混ぜてラップで三角に握る','だしを沸かし味噌を溶く','わかめを加えて煮立てずに仕上げる']},
+  {id:5,name:'パンケーキ',type:'朝',emoji:'🥞',
+   ingredients:['小麦粉','卵','牛乳','バター','砂糖'],
+   nutrition:{protein:15,carbs:65,fat:25,fiber:5,calories:450},
+   recipe:['小麦粉・砂糖・卵・牛乳を混ぜて生地を作る','バターを熱したフライパンに生地を流す','表面に泡が出たら裏返して1分焼く','同様に焼いて積み重ねシロップをかける']},
+  {id:6,name:'カレーライス',type:'昼',emoji:'🍛',
+   ingredients:['ご飯','鶏肉','じゃがいも','玉ねぎ','にんじん','カレールー'],
+   nutrition:{protein:35,carbs:65,fat:25,fiber:35,calories:680},
+   recipe:['鶏肉・玉ねぎ・にんじん・じゃがいもを一口大に切る','油で玉ねぎを炒め鶏肉を加えて炒める','水を加えにんじん・じゃがいもを入れて15分煮る','火を止めカレールーを溶かしさらに10分煮る','ご飯にかけて完成']},
+  {id:7,name:'ラーメン',type:'昼',emoji:'🍜',
+   ingredients:['ラーメン','豚肉','ねぎ','卵','もやし','醤油'],
+   nutrition:{protein:30,carbs:60,fat:30,fiber:10,calories:580},
+   recipe:['卵を8分茹でて半熟にし殻をむく','豚肉を醤油・みりんで炒める','鍋に水・鶏ガラスープ・醤油でスープを作る','ラーメンを茹でてスープに入れる','豚肉・もやし・ねぎ・半熟卵を乗せて完成']},
+  {id:8,name:'温うどん',type:'昼',emoji:'🫕',
+   ingredients:['うどん','醤油','みりん','ねぎ','卵','かつお節'],
+   nutrition:{protein:20,carbs:65,fat:10,fiber:15,calories:450},
+   recipe:['だし・醤油・みりんでつゆを作り温める','うどんを湯通しして温める','器にうどんとつゆを入れる','卵を落とし入れねぎ・かつお節を散らす']},
+  {id:9,name:'チャーハン',type:'昼',emoji:'🍳',
+   ingredients:['ご飯','卵','豚肉','ねぎ','醤油'],
+   nutrition:{protein:30,carbs:55,fat:25,fiber:10,calories:520},
+   recipe:['ご飯はあらかじめほぐしておく','強火でフライパンを熱し豚肉を炒める','端に卵を割り入れ半熟のうちにご飯を加える','ねぎを加えてほぐすように炒める','醤油を鍋肌から回し入れ香りを立てて完成']},
+  {id:10,name:'サンドイッチ',type:'昼',emoji:'🥪',
+   ingredients:['食パン','卵','レタス','トマト'],
+   nutrition:{protein:20,carbs:50,fat:20,fiber:25,calories:420},
+   recipe:['卵を固茹でにしてみじん切りにしマヨネーズで和える','トマトを薄切りにしレタスを洗って水気を取る','食パンにマヨネーズを薄く塗る','レタス・トマト・卵サラダを乗せてサンドする','半分に切って完成']},
+  {id:11,name:'トマトパスタ',type:'昼',emoji:'🍝',
+   ingredients:['パスタ','トマト','玉ねぎ','にんにく','オリーブ油'],
+   nutrition:{protein:20,carbs:60,fat:18,fiber:20,calories:520},
+   recipe:['パスタを塩湯で袋の表示時間通り茹でる','にんにくをみじん切りにしてオリーブ油で炒める','玉ねぎ・トマトを加えて5分煮詰める','塩・こしょうで味を整える','茹でたパスタをソースで和えて完成']},
+  {id:12,name:'ざるそば',type:'昼',emoji:'🍜',
+   ingredients:['そば','醤油','みりん','ねぎ','わさび'],
+   nutrition:{protein:20,carbs:60,fat:5,fiber:20,calories:390},
+   recipe:['醤油・みりん・だしでつゆを作り冷やす','そばを2〜3分茹でる','冷水でよくもみ洗いしてコシを出す','ざるに盛りねぎ・わさびを添える','つゆにつけながら食べる']},
+  {id:13,name:'唐揚げ定食',type:'夜',emoji:'🍗',
+   ingredients:['鶏肉','醤油','しょうが','にんにく','片栗粉','キャベツ','ご飯'],
+   nutrition:{protein:45,carbs:50,fat:35,fiber:30,calories:750},
+   recipe:['鶏肉を一口大に切り醤油・しょうが・にんにくで15分漬ける','片栗粉をまぶす','170℃の油で4分揚げ取り出す','180℃に上げて1分再揚げしカリッとさせる','キャベツの千切りとご飯・味噌汁と盛る']},
+  {id:14,name:'肉じゃが',type:'夜',emoji:'🥘',
+   ingredients:['牛肉','じゃがいも','玉ねぎ','にんじん','醤油','みりん','砂糖'],
+   nutrition:{protein:40,carbs:55,fat:20,fiber:40,calories:650},
+   recipe:['牛肉・じゃがいも・玉ねぎ・にんじんを一口大に切る','鍋に油を熱し牛肉を炒める','野菜を加えて炒め水をひたひたに注ぐ','醤油・みりん・砂糖で味付けし落とし蓋をして15分煮る','じゃがいもが柔らかくなったら完成']},
+  {id:15,name:'鮭の塩焼き定食',type:'夜',emoji:'🐟',
+   ingredients:['鮭','塩','ご飯','味噌','豆腐','わかめ'],
+   nutrition:{protein:50,carbs:45,fat:20,fiber:25,calories:580},
+   recipe:['鮭に塩を振り10分置いて水気を拭く','グリルまたはフライパンで中火で4〜5分焼く','裏返してさらに3〜4分焦げ目をつける','ご飯・味噌汁（豆腐・わかめ）と一緒に盛る']},
+  {id:16,name:'ハンバーグ定食',type:'夜',emoji:'🍖',
+   ingredients:['豚ひき肉','玉ねぎ','卵','パン粉','ご飯','キャベツ'],
+   nutrition:{protein:45,carbs:45,fat:40,fiber:25,calories:720},
+   recipe:['玉ねぎをみじん切りにして炒めて冷ます','ひき肉・炒め玉ねぎ・卵・パン粉をこねる','小判形に成形し中央を少しくぼませる','フライパンで両面を焼き蓋をして中まで火を通す','ご飯・キャベツと盛り合わせソースをかける']},
+  {id:17,name:'豚の生姜焼き定食',type:'夜',emoji:'🥩',
+   ingredients:['豚肉','玉ねぎ','醤油','みりん','しょうが','キャベツ','ご飯'],
+   nutrition:{protein:40,carbs:48,fat:30,fiber:28,calories:640},
+   recipe:['しょうがをすりおろし醤油・みりんと合わせてタレを作る','豚肉をタレに5分漬ける','フライパンに油を熱し玉ねぎを炒める','豚肉を加えて中火で炒めタレを絡める','キャベツの千切りとご飯を添えて完成']},
+  {id:18,name:'麻婆豆腐定食',type:'夜',emoji:'🌶️',
+   ingredients:['豆腐','豚ひき肉','ねぎ','醤油','豆板醤','にんにく','しょうが','ご飯'],
+   nutrition:{protein:35,carbs:48,fat:25,fiber:20,calories:590},
+   recipe:['にんにく・しょうがをみじん切りにする','油で豚ひき肉を炒め豆板醤・にんにく・しょうがを加える','スープ・醤油・みりんを加えて煮る','豆腐を2cm角に切って加え2分煮る','水溶き片栗粉でとろみをつけねぎを散らして完成']},
+  {id:19,name:'鶏鍋',type:'夜',emoji:'🫕',
+   ingredients:['鶏肉','豆腐','白菜','ねぎ','にんじん','醤油','みりん'],
+   nutrition:{protein:45,carbs:25,fat:15,fiber:50,calories:480},
+   recipe:['白菜・にんじんをざく切りねぎを斜め切りにする','鍋にだし・醤油・みりんでスープを作る','鶏肉・白菜・にんじんを入れて火にかける','豆腐・ねぎを加え10分煮込む','ポン酢や柚子こしょうを添えて食べる']},
+  {id:20,name:'天ぷら定食',type:'夜',emoji:'🍤',
+   ingredients:['えび','さつまいも','れんこん','かぼちゃ','小麦粉','卵','揚げ油','ご飯'],
+   nutrition:{protein:30,carbs:60,fat:35,fiber:20,calories:720},
+   recipe:['衣：冷水に卵を溶かし薄力粉をさっくり混ぜる（混ぜすぎない）','えびの背わたを取り腹に切り込みを入れる。野菜は5mm厚に切る','油を180℃に熱する','野菜→えびの順に衣をつけて1〜2分揚げる','天つゆ（醤油・みりん・だし）と大根おろしを添えて完成']},
+];
+
+const MEAL_STYLES = {
+  '朝':{card:'bg-amber-50 border-amber-200',badge:'bg-amber-100 text-amber-700',
+        btnOn:'bg-amber-500 text-white shadow-md',btnOff:'bg-amber-50 text-amber-500 border border-amber-200'},
+  '昼':{card:'bg-sky-50 border-sky-200',badge:'bg-sky-100 text-sky-700',
+        btnOn:'bg-sky-500 text-white shadow-md',btnOff:'bg-sky-50 text-sky-500 border border-sky-200'},
+  '夜':{card:'bg-indigo-50 border-indigo-200',badge:'bg-indigo-100 text-indigo-700',
+        btnOn:'bg-indigo-500 text-white shadow-md',btnOff:'bg-indigo-50 text-indigo-500 border border-indigo-200'},
+};
+const LABELS = {'朝':'朝食','昼':'昼食','夜':'夕食'};
+const ICONS = {'朝':'☀️','昼':'🌤️','夜':'🌙'};
+const NBARS = [
+  {key:'protein',label:'タンパク質',color:'#60a5fa'},
+  {key:'carbs',label:'炭水化物',color:'#fb923c'},
+  {key:'fat',label:'脂質',color:'#facc15'},
+  {key:'fiber',label:'食物繊維',color:'#4ade80'},
+];
+
+function mealCost(meal, fridge) {
+  return meal.ingredients.reduce((s,i) => fridge.includes(i) ? s : s + (PRICES[i]||50), 0);
+}
+function makeEntry(meal, fridge) {
+  return {...meal, cost:mealCost(meal,fridge),
+    inFridge:meal.ingredients.filter(i=>fridge.includes(i)),
+    toBuy:meal.ingredients.filter(i=>!fridge.includes(i))};
+}
+function pickMeal(type, excludeId, fridge) {
+  const pool = MEALS.filter(m=>m.type===type && m.id!==excludeId);
+  const scored = pool.map(m=>({m, s:m.ingredients.filter(i=>fridge.includes(i)).length+Math.random()*2}));
+  scored.sort((a,b)=>b.s-a.s);
+  return scored[0]?.m;
+}
+function genPlan(days, types, fridge) {
+  const usedIds = {};
+  types.forEach(t => { usedIds[t] = new Set(); });
+  const usedSideIds = new Set();
+  return Array.from({length:days},(_,i)=>{
+    const meals = {};
+    types.forEach(t=>{
+      let pool = MEALS.filter(m=>m.type===t && !usedIds[t].has(m.id));
+      if(pool.length===0){ usedIds[t].clear(); pool=MEALS.filter(m=>m.type===t); }
+      const scored = pool.map(m=>({m,s:m.ingredients.filter(i=>fridge.includes(i)).length+Math.random()}));
+      scored.sort((a,b)=>b.s-a.s);
+      const c = scored[0].m;
+      usedIds[t].add(c.id);
+      let sides = [];
+      if(t!=='朝'){
+        let sp = SIDE_DISHES.filter(s=>!usedSideIds.has(s.id));
+        if(sp.length===0){ usedSideIds.clear(); sp=[...SIDE_DISHES]; }
+        const pick = sp[Math.floor(Math.random()*sp.length)];
+        usedSideIds.add(pick.id);
+        sides=[{...pick,cost:pick.ingredients.reduce((s,i)=>fridge.includes(i)?s:s+(PRICES[i]||50),0),toBuy:pick.ingredients.filter(i=>!fridge.includes(i)),inFridge:pick.ingredients.filter(i=>fridge.includes(i))}];
+      }
+      meals[t]={...makeEntry(c,fridge),sides};
+    });
+    return {day:i+1,meals};
+  });
+}
+
+function NBar({label,value,color}){
+  return (
+    <div className="flex items-center gap-2 mb-1.5">
+      <span className="text-xs text-gray-500 w-20 shrink-0">{label}</span>
+      <div className="flex-1 bg-gray-100 rounded-full h-2.5 overflow-hidden">
+        <div className="h-full rounded-full" style={{width:`${Math.min(value,100)}%`,backgroundColor:color}}/>
+      </div>
+      <span className="text-xs font-medium text-gray-600 w-8 text-right">{value}%</span>
+    </div>
+  );
+}
+
+function RecipeAccordion({meal}){
+  const [open,setOpen]=useState(false);
+  const sides=meal.sides||[];
+  return (
+    <div className="mt-2">
+      <button onClick={()=>setOpen(!open)}
+        className="w-full flex items-center justify-between bg-white/60 hover:bg-white/90 rounded-xl px-3 py-2 text-xs font-semibold text-gray-600 transition-all border border-gray-200">
+        <span>📖 作り方を見る</span>
+        <span style={{display:'inline-block',transform:open?'rotate(180deg)':'rotate(0deg)',transition:'transform .2s'}}>▼</span>
+      </button>
+      {open&&(
+        <div className="mt-2 bg-white/80 rounded-xl p-3 space-y-4 text-sm">
+          <div>
+            <p className="font-bold text-gray-700 mb-2">{meal.emoji} {meal.name}</p>
+            <ol className="space-y-1.5">
+              {(meal.recipe||[]).map((step,i)=>(
+                <li key={i} className="flex gap-2 text-gray-600 leading-relaxed">
+                  <span className="shrink-0 w-5 h-5 rounded-full bg-green-100 text-green-700 flex items-center justify-center text-xs font-bold">{i+1}</span>
+                  <span>{step}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+          {sides.map(side=>(
+            <div key={side.id} className="border-t border-gray-100 pt-3">
+              <p className="font-bold text-gray-700 mb-2">{side.emoji} {side.name}（副菜）</p>
+              <ol className="space-y-1.5">
+                {(side.recipe||[]).map((step,i)=>(
+                  <li key={i} className="flex gap-2 text-gray-600 leading-relaxed">
+                    <span className="shrink-0 w-5 h-5 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">{i+1}</span>
+                    <span>{step}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MealCard({type,meal,fridge,onReroll}){
+  const s = MEAL_STYLES[type];
+  const sides=meal.sides||[];
+  const totalCost=meal.cost+sides.reduce((a,b)=>a+b.cost,0);
+  return (
+    <div className={`rounded-2xl border-2 p-4 ${s.card}`}>
+      <div className="flex items-start justify-between mb-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${s.badge}`}>{ICONS[type]} {LABELS[type]}</span>
+          <span className="text-xl">{meal.emoji}</span>
+          <span className="font-bold text-gray-800">{meal.name}</span>
+        </div>
+        <button onClick={onReroll} className="shrink-0 text-xs bg-white text-gray-500 border border-gray-200 px-2 py-1 rounded-lg hover:bg-gray-50 transition-all ml-2">🔄 変更</button>
+      </div>
+      <div className="flex items-baseline gap-2 mb-3">
+        <span className="text-2xl font-bold text-green-600">¥{totalCost.toLocaleString()}</span>
+        <span className="text-xs text-gray-400">買い物分のみ</span>
+        <span className="text-xs text-gray-400 ml-auto">{meal.nutrition.calories} kcal</span>
+      </div>
+      <div className="mb-1">
+        <p className="text-xs font-semibold text-gray-500 mb-1">🍽️ メイン</p>
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {meal.ingredients.map(ing=>(
+            <span key={ing} className={`text-xs px-2 py-0.5 rounded-full font-medium ${fridge.includes(ing)?'bg-green-100 text-green-700':'bg-white text-gray-600 border border-gray-200'}`}>
+              {fridge.includes(ing)?'✓ ':''}{ing}
+            </span>
+          ))}
+        </div>
+      </div>
+      {sides.map(side=>(
+        <div key={side.id} className="mb-2">
+          <p className="text-xs font-semibold text-gray-500 mb-1">🥢 副菜：{side.emoji} {side.name} <span className="text-green-600 font-bold">+¥{side.cost}</span></p>
+          <div className="flex flex-wrap gap-1.5">
+            {side.ingredients.map(ing=>(
+              <span key={ing} className={`text-xs px-2 py-0.5 rounded-full font-medium ${fridge.includes(ing)?'bg-green-100 text-green-700':'bg-white text-gray-600 border border-gray-200'}`}>
+                {fridge.includes(ing)?'✓ ':''}{ing}
+              </span>
+            ))}
+          </div>
+        </div>
+      ))}
+      <div className="bg-white/70 rounded-xl p-3 mt-2">
+        <p className="text-xs font-semibold text-gray-500 mb-2">栄養バランス</p>
+        {NBARS.map(({key,label,color})=>(
+          <NBar key={key} label={label} value={meal.nutrition[key]} color={color}/>
+        ))}
+      </div>
+      <RecipeAccordion meal={meal}/>
+    </div>
+  );
+}
+
+function Steps({step}){
+  const labels = ['設定','献立','まとめ'];
+  return (
+    <div className="flex items-center justify-center mb-8">
+      {labels.map((s,i)=>(
+        <React.Fragment key={i}>
+          <div className="flex flex-col items-center">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${i+1<step?'bg-green-500 text-white':i+1===step?'bg-green-600 text-white ring-4 ring-green-100':'bg-gray-200 text-gray-400'}`}>
+              {i+1<step?'✓':i+1}
+            </div>
+            <span className={`text-xs mt-1 font-medium ${i+1<=step?'text-green-600':'text-gray-400'}`}>{s}</span>
+          </div>
+          {i<2&&<div className={`h-0.5 w-16 mx-1 mb-4 ${i+1<step?'bg-green-500':'bg-gray-200'}`}/>}
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+
+function App(){
+  const [step,setStep] = useState(1);
+  const [days,setDays] = useState(3);
+  const [types,setTypes] = useState(['朝','昼','夜']);
+  const [market,setMarket] = useState('イオン');
+  const [fridgeInput,setFridgeInput] = useState('');
+  const [fridge,setFridge] = useState(['ご飯','卵','味噌','醤油','みりん']);
+  const [plan,setPlan] = useState(null);
+  const [activeDay,setActiveDay] = useState(0);
+
+  const toggleType = t => setTypes(prev=>
+    prev.includes(t)?(prev.length>1?prev.filter(x=>x!==t):prev)
+    :[...prev,t].sort((a,b)=>['朝','昼','夜'].indexOf(a)-['朝','昼','夜'].indexOf(b))
+  );
+
+  const addFridge = (item) => {
+    const v = (item||fridgeInput).trim();
+    if(v && !fridge.includes(v)) setFridge(p=>[...p,v]);
+    if(!item) setFridgeInput('');
+  };
+
+  const handleGen = () => {
+    setPlan(genPlan(days,types,fridge));
+    setActiveDay(0);
+    setStep(2);
+  };
+
+  const reroll = useCallback((di,t)=>{
+    setPlan(prev=>{
+      const cid = prev[di]?.meals[t]?.id;
+      const c = pickMeal(t,cid,fridge);
+      if(!c) return prev;
+      return prev.map((d,i)=>i!==di?d:{...d,meals:{...d.meals,[t]:makeEntry(c,fridge)}});
+    });
+  },[fridge]);
+
+  const dayCost = d => Object.values(d.meals).reduce((s,m)=>s+m.cost+(m.sides||[]).reduce((a,b)=>a+b.cost,0),0);
+
+  const summary = useMemo(()=>{
+    if(!plan) return null;
+    const all = plan.flatMap(d=>Object.values(d.meals));
+    if(!all.length) return null;
+    const shopMap = {};
+    all.forEach(m=>{
+      m.toBuy.forEach(i=>{if(!shopMap[i]) shopMap[i]=PRICES[i]||50;});
+      (m.sides||[]).forEach(side=>side.toBuy.forEach(i=>{if(!shopMap[i]) shopMap[i]=PRICES[i]||50;}));
+    });
+    const shopTotal = Object.values(shopMap).reduce((s,c)=>s+c,0);
+    const avg = k => Math.round(all.reduce((s,m)=>s+m.nutrition[k],0)/all.length);
+    return {shopTotal,shopMap,mealCount:all.length,
+      avg:{protein:avg('protein'),carbs:avg('carbs'),fat:avg('fat'),fiber:avg('fiber'),calories:avg('calories')}};
+  },[plan]);
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50">
+      <div className="max-w-2xl mx-auto px-4 py-8">
+
+        <div className="text-center mb-8">
+          <div className="text-5xl mb-2">🍱</div>
+          <h1 className="text-2xl font-bold text-gray-800">献立プランナー</h1>
+          <p className="text-sm text-gray-500 mt-1">栄養バランス・費用がひと目でわかる</p>
+        </div>
+
+        <Steps step={step}/>
+
+        {/* STEP 1 */}
+        {step===1&&(
+          <div className="space-y-5">
+            <div className="bg-white rounded-2xl shadow-sm p-6">
+              <h2 className="font-bold text-gray-700 mb-4">📅 日数を選ぶ</h2>
+              <div className="flex gap-2 flex-wrap">
+                {[1,2,3,4,5,6,7].map(d=>(
+                  <button key={d} onClick={()=>setDays(d)}
+                    className={`w-12 h-12 rounded-full font-bold text-sm transition-all ${days===d?'bg-green-500 text-white shadow-md scale-110':'bg-gray-100 text-gray-600 hover:bg-green-100'}`}>
+                    {d}日
+                  </button>
                 ))}
               </div>
             </div>
 
-            <div className="glass-card p-8">
-              <div className="flex flex-col gap-4">
-                <a href="https://www.his-wedding.com/reservation/" target="_blank" className="w-full py-5 text-center bg-gold text-sm font-bold tracking-widest rounded transition-all shadow-lg block">ウェディングの専門家に無料相談する</a>
+            <div className="bg-white rounded-2xl shadow-sm p-6">
+              <h2 className="font-bold text-gray-700 mb-4">🍽️ 食事の種類</h2>
+              <div className="flex gap-3">
+                {['朝','昼','夜'].map(t=>{
+                  const s=MEAL_STYLES[t], on=types.includes(t);
+                  return (
+                    <button key={t} onClick={()=>toggleType(t)}
+                      className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${on?s.btnOn:s.btnOff}`}>
+                      {ICONS[t]} {LABELS[t]}
+                    </button>
+                  );
+                })}
               </div>
-              <div className="mt-8 pt-6 border-t border-gray text-center">
-                <p className="text-xs text-gray mb-3 tracking-widest">＼ 診断結果を共有する ／</p>
-                <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent('私の運命のフォトウェディング地は【' + result.name + '】でした！')}`} target="_blank" className="inline-flex items-center justify-center px-6 py-3 bg-twitter text-sm font-bold rounded transition-all">X (Twitter) で共有</a>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-sm p-6">
+              <h2 className="font-bold text-gray-700 mb-4">🏪 利用するスーパー</h2>
+              <div className="grid grid-cols-2 gap-2">
+                {SUPERMARKETS.map(s=>(
+                  <button key={s} onClick={()=>setMarket(s)}
+                    className={`py-2.5 px-3 rounded-xl text-sm font-medium transition-all ${market===s?'bg-green-500 text-white shadow-sm':'bg-gray-50 text-gray-600 hover:bg-green-50 border border-gray-200'}`}>
+                    {s}
+                  </button>
+                ))}
               </div>
-              <div className="mt-8 text-center">
-                <button onClick={resetDiagnosis} className="text-sm text-light-gray underline cursor-pointer hover:text-dark">もう一度診断をやり直す</button>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-sm p-6">
+              <h2 className="font-bold text-gray-700 mb-1">🧊 冷蔵庫の食材</h2>
+              <p className="text-xs text-gray-400 mb-3">ある食材はコストから除外されます</p>
+              <div className="flex gap-2 mb-3">
+                <input type="text" value={fridgeInput}
+                  onChange={e=>setFridgeInput(e.target.value)}
+                  onKeyDown={e=>e.key==='Enter'&&addFridge()}
+                  placeholder="食材名を入力（例：豆腐）"
+                  className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-300"/>
+                <button onClick={()=>addFridge()}
+                  className="bg-green-500 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-green-600 transition-all">追加</button>
               </div>
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {QUICK_FRIDGE.filter(i=>!fridge.includes(i)).map(i=>(
+                  <button key={i} onClick={()=>addFridge(i)}
+                    className="text-xs bg-gray-50 text-gray-500 border border-gray-200 px-2 py-1 rounded-full hover:bg-green-50 hover:text-green-600 hover:border-green-200 transition-all">
+                    + {i}
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {fridge.map(item=>(
+                  <span key={item} className="flex items-center gap-1 bg-green-50 text-green-700 border border-green-200 px-3 py-1 rounded-full text-sm">
+                    ✓ {item}
+                    <button onClick={()=>setFridge(p=>p.filter(i=>i!==item))} className="text-green-400 hover:text-red-400 ml-1 font-bold">×</button>
+                  </span>
+                ))}
+                {fridge.length===0&&<p className="text-sm text-gray-400">食材がありません</p>}
+              </div>
+            </div>
+
+            <button onClick={handleGen}
+              className="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold text-lg rounded-2xl shadow-lg hover:shadow-xl hover:from-green-600 hover:to-emerald-600 transition-all">
+              献立を作成する →
+            </button>
+          </div>
+        )}
+
+        {/* STEP 2 */}
+        {step===2&&plan&&(
+          <div>
+            <div className="flex gap-2 mb-5 overflow-x-auto pb-1">
+              {plan.map((dp,i)=>(
+                <button key={i} onClick={()=>setActiveDay(i)}
+                  className={`shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all ${activeDay===i?'bg-green-500 text-white shadow-md':'bg-white text-gray-500 hover:bg-green-50 border border-gray-100'}`}>
+                  {i+1}日目
+                  <span className={`ml-1.5 text-xs ${activeDay===i?'text-green-100':'text-green-500'}`}>¥{dayCost(dp).toLocaleString()}</span>
+                </button>
+              ))}
+            </div>
+
+            {plan[activeDay]&&(
+              <>
+                <div className="bg-white rounded-2xl shadow-sm p-4 mb-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500">{activeDay+1}日目の食費（買い物分）</p>
+                    <p className="text-3xl font-bold text-green-600">¥{dayCost(plan[activeDay]).toLocaleString()}</p>
+                  </div>
+                  <div className="text-4xl">🛒</div>
+                </div>
+                <div className="space-y-4">
+                  {types.map(t=>plan[activeDay].meals[t]&&(
+                    <MealCard key={t} type={t} meal={plan[activeDay].meals[t]} fridge={fridge} onReroll={()=>reroll(activeDay,t)}/>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <div className="flex gap-3 mt-6">
+              <button onClick={()=>setStep(1)} className="flex-1 py-3 bg-white border border-gray-200 text-gray-600 font-bold rounded-2xl hover:bg-gray-50 transition-all">← 設定</button>
+              <button onClick={()=>setStep(3)} className="flex-1 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold rounded-2xl shadow-md hover:shadow-lg transition-all">まとめを見る →</button>
             </div>
           </div>
         )}
+
+        {/* STEP 3 */}
+        {step===3&&summary&&(
+          <div className="space-y-5">
+            <div className="bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl p-6 text-white shadow-lg">
+              <p className="text-sm opacity-80 mb-1">{days}日間の食材費（買い物分）</p>
+              <p className="text-5xl font-bold">¥{summary.shopTotal.toLocaleString()}</p>
+              <p className="text-sm opacity-70 mt-2">{summary.mealCount}食分 ／ 1食あたり約 ¥{Math.round(summary.shopTotal/summary.mealCount).toLocaleString()}</p>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-sm p-6">
+              <h2 className="font-bold text-gray-700 mb-4">📊 平均栄養バランス（1食あたり）</h2>
+              {NBARS.map(({key,label,color})=>(
+                <NBar key={key} label={label} value={summary.avg[key]} color={color}/>
+              ))}
+              <div className="mt-4 bg-gray-50 rounded-xl p-3 text-center">
+                <p className="text-xs text-gray-500 mb-1">平均カロリー</p>
+                <p className="text-3xl font-bold text-gray-700">{summary.avg.calories}<span className="text-base font-normal text-gray-400"> kcal / 食</span></p>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-sm p-6">
+              <h2 className="font-bold text-gray-700 mb-1">🛒 買い物リスト</h2>
+              <p className="text-xs text-gray-400 mb-4">{market} で購入する食材</p>
+              {Object.keys(summary.shopMap).length===0?(
+                <p className="text-sm text-green-600 font-medium text-center py-4">✓ 全ての食材が冷蔵庫にあります！</p>
+              ):(
+                <>
+                  {Object.entries(summary.shopMap).sort((a,b)=>b[1]-a[1]).map(([ing,cost])=>(
+                    <div key={ing} className="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0">
+                      <div className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-green-400"/>
+                        <span className="text-sm text-gray-700">{ing}</span>
+                      </div>
+                      <span className="text-sm font-bold text-gray-600">¥{cost.toLocaleString()}</span>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between pt-3 mt-3 border-t-2 border-gray-100">
+                    <span className="font-bold text-gray-700">合計</span>
+                    <span className="font-bold text-green-600 text-xl">¥{summary.shopTotal.toLocaleString()}</span>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="flex gap-3">
+              <button onClick={()=>setStep(2)} className="flex-1 py-3 bg-white border border-gray-200 text-gray-600 font-bold rounded-2xl hover:bg-gray-50 transition-all">← 献立に戻る</button>
+              <button onClick={()=>{setStep(1);setPlan(null);}} className="flex-1 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold rounded-2xl shadow-md hover:shadow-lg transition-all">最初からやり直す</button>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );
-};
+}
 
-const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(<App />);
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </script>
 </body>
 </html>
