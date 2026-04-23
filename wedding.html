@@ -371,45 +371,82 @@ const KNOWLEDGE_URLS = [
   "https://www.his-wedding.com/special/sotsuhana/usa/",
 ];
 
-// ===== システムプロンプト =====
-const buildSystemPrompt = () => {
-  const urlSection = KNOWLEDGE_URLS.length > 0
-    ? `\n\n## 参照すべき公式情報ページ\n以下のURLに最新情報があります。詳細な質問には web_search でこれらを確認してください:\n${KNOWLEDGE_URLS.map(u => `- ${u}`).join("\n")}`
-    : "";
+// ===== URL検索マップ（エリア→カテゴリURL） =====
+// システムプロンプトには載せず、Claude が検索すべき URL を動的に絞り込むために使う
+const URL_INDEX = {
+  chapel: {
+    hawaii:     "https://www.his-wedding.com/hawaii/chapel/",
+    europe:     "https://www.his-wedding.com/europe/chapel/",
+    asia:       "https://www.his-wedding.com/asia/chapel/",
+    okinawa:    "https://www.his-wedding.com/okinawa/chapel/",
+    micronesia: "https://www.his-wedding.com/micronesia/chapel/",
+    oceania:    "https://www.his-wedding.com/oceania/chapel/",
+    south:      "https://www.his-wedding.com/south/chapel/",
+    usa:        "https://www.his-wedding.com/usa/chapel/",
+    japan:      "https://www.his-wedding.com/japan/chapel/",
+    overseas:   "https://www.his-wedding.com/overseas/chapel/",
+  },
+  photo: {
+    hawaii:     "https://www.his-wedding.com/photowedding/hawaii/",
+    europe:     "https://www.his-wedding.com/photowedding/europe/",
+    asia:       "https://www.his-wedding.com/photowedding/asia/",
+    okinawa:    "https://www.his-wedding.com/photowedding/okinawa/",
+    micronesia: "https://www.his-wedding.com/photowedding/micronesia/",
+    oceania:    "https://www.his-wedding.com/photowedding/oceania/",
+    south:      "https://www.his-wedding.com/photowedding/south/",
+    usa:        "https://www.his-wedding.com/photowedding/usa/",
+    japan:      "https://www.his-wedding.com/photowedding/japan/",
+    overseas:   "https://www.his-wedding.com/photowedding/overseas/",
+  },
+  info: {
+    money:    "https://www.his-wedding.com/useful/money/",
+    qa:       "https://www.his-wedding.com/useful/qa/",
+    schedule: "https://www.his-wedding.com/useful/schedule/",
+    dress:    "https://www.his-wedding.com/useful/rentaldress/",
+    album:    "https://www.his-wedding.com/useful/album/",
+    resort:   "https://www.his-wedding.com/useful/resortwedding/",
+  },
+};
 
-  return `あなたはHIS Weddingの専属AIウェディングプランナーです。温かく、上品で、専門的なトーンでお客様をお迎えください。
+// ===== システムプロンプト =====
+const SYSTEM_PROMPT = `あなたはHIS Weddingの専属AIウェディングプランナーです。温かく、上品で、専門的なトーンでお客様をお迎えください。
 
 ## HIS Weddingについて
-HIS Weddingは、HISトラベル（日本最大級の旅行会社）のウェディング部門。フォトウェディング・挙式（チャペルウェディング）の両方を国内外で取り扱い、旅行とウェディングを一括でプランニングできるのが強みです。全国に店舗があります。
+HIS Wedding は HIS トラベル（日本最大級の旅行会社）のウェディング部門。旅行とウェディングを一括でプランニングできるのが強み。フォトウェディング・チャペル挙式の両方を全国の店舗で相談できます。
 
-## 取り扱いエリア（主要）
-- **ハワイ**: ダイヤモンドヘッド、アラニ、カハラ、ハレクラニ、カタリナ、プルメリア等30以上のチャペル
-- **ヨーロッパ**: サントリーニ島（アンドロニス他）、パリ、イタリア（パラッツォ他）
-- **バリ島**: アヤナ、バレ、インフィニティ、ケンピンスキー、ウルワツ等
-- **南の島**: モルディブ、フィジー、ボラボラ
-- **グアム・サイパン**: マリンブルー、ガンパチャペル等
-- **沖縄・国内**: 各エリア対応
+## 取り扱いエリアと代表チャペル
+- ハワイ: ダイヤモンドヘッド、プルメリア、ハレクラニ、カタリナ、アラニ、カハラ 等 30 以上
+- ヨーロッパ: サントリーニ島（アンドロニス/カティキエス/ミスティーク）、パリ、イタリア（パラッツォ）等
+- バリ島: アヤナ、バレ、ブルーポイント、インフィニティ、ケンピンスキー、ウルワツ 等
+- 南の島: モルディブ（ハラヴェリ/クダフラー/ランダー/ムーフシ）、フィジー、ボラボラ
+- グアム・サイパン: クリスタル、スカイウェディング、シンフォニー 等
+- 沖縄: 35 以上のチャペル（ブルーインフィニティ、アクアグレイス、アリビラ 等）
+- 国内（北海道等）、オセアニア、USA
 
 ## フォトウェディング
-挙式なしで写真撮影のみ。ハワイ・ヨーロッパ・アジア・沖縄など幅広いエリアで対応。ドレスは提携ブランド多数（Foursis、JUNO、プロノビアス等）。
+挙式なしで撮影のみ。エリアは上記すべて＋ドバイ・モロッコ・カンボジア・ケニア・ボリビア等も対応。ドレスブランド: JUNO、プロノビアス、高見ブライダル、Foursis、ノバレーゼ 他多数。
 
-## 挙式（チャペルウェディング）
-本格チャペルで挙式。ゲストを招いた挙式も可能。${urlSection}
+## web_search の使い方
+お客様から具体的なチャペル名・プラン・料金・空き状況を聞かれた場合のみ web_search を使ってください。
+- チャペル詳細: https://www.his-wedding.com/{エリア}/chapel/{チャペル名}/
+- フォトプラン詳細: https://www.his-wedding.com/photowedding/{エリア}/{プラン名}/
+- 費用の目安: https://www.his-wedding.com/useful/money/
+- よくある質問: https://www.his-wedding.com/useful/qa/
+- ドレス: https://www.his-wedding.com/useful/rentaldress/
+- スケジュール: https://www.his-wedding.com/useful/schedule/
+エリアは hawaii / europe / asia / okinawa / micronesia / south / usa / japan / overseas / oceania のいずれかです。
 
 ## 接客の進め方
-1. まずお客様の「希望エリア・スタイル（フォト/挙式）・人数・時期・予算感」をヒアリング
-2. ヒアリング内容に合った具体的なチャペルや会場を提案
-3. ドレス・スケジュール・旅程の相談にも対応
-4. 具体的な金額は「店舗でご確認ください」と案内し、来店相談へ自然につなげる
+1. まず「希望エリア・フォト or 挙式・人数・時期・予算感」を丁寧にヒアリング
+2. 具体的なチャペルやプランを提案（必要なら web_search で最新情報を確認）
+3. ドレス・旅程・スケジュールの相談にも対応
+4. 来店相談に自然につなげる（URL: https://www.his-wedding.com/sp/special/consultation/）
 
-## 回答のルール
-- 日本語で回答する
-- 回答は簡潔に（長文を避け、要点を絞る）
-- 具体的な最終価格は答えず「店舗スタッフが詳しくご案内できます」と伝える
-- 不明な詳細は正直に「確認が必要です」と伝える
-- 常に前向きで温かいトーンを保つ
-- 来店予約URL: ${RESERVATION_URL}`;
-};
+## 回答ルール
+- 日本語で、簡潔に（箇条書き活用）
+- 具体的な金額は「プランにより異なります。店舗でご確認ください」と案内
+- 不明な詳細は「確認が必要です」と正直に伝える
+- 前向きで温かいトーンを常に保つ`;
 
 // ===== 定数 =====
 const SUGGESTED_QUESTIONS = [
@@ -541,10 +578,8 @@ export default function HISWeddingChatbot() {
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514",
           max_tokens: 800,
-          system: buildSystemPrompt(),
-          tools: KNOWLEDGE_URLS.length > 0
-            ? [{ type: "web_search_20250305", name: "web_search" }]
-            : undefined,
+          system: SYSTEM_PROMPT,
+          tools: [{ type: "web_search_20250305", name: "web_search" }],
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),
         }),
       });
