@@ -569,7 +569,7 @@ function clearSession() {
   try { localStorage.removeItem(SESSION_KEY); } catch {}
 }
 
-export default function HISWeddingChatbot() {
+function HISWeddingChatbot() {
   const saved = loadSession();
   const [messages, setMessages] = useState(saved && saved.length > 0 ? saved : [INITIAL_MESSAGE]);
   const [input, setInput] = useState("");
