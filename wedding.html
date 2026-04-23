@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
   <title>HIS Wedding - AIウェディングプランナー</title>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -588,10 +588,11 @@ export default function HISWeddingChatbot() {
         },
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514",
-          max_tokens: 800,
+          max_tokens: 1000,
           system: SYSTEM_PROMPT,
           tools: [{ type: "web_search_20250305", name: "web_search" }],
-          messages: newMessages.map(m => ({ role: m.role, content: m.content })),
+          // 直近20メッセージのみ送信してトークン・コストを抑える
+          messages: newMessages.slice(-20).map(m => ({ role: m.role, content: m.content })),
         }),
       });
 
@@ -632,10 +633,48 @@ export default function HISWeddingChatbot() {
     }
   };
 
-  const formatMessage = (text) =>
-    text.split("\n").map((line, i, arr) => (
-      <span key={i}>{line}{i < arr.length - 1 && <br />}</span>
-    ));
+  // シンプルなマークダウンレンダラー
+  const renderInline = (text) => {
+    const parts = text.split(/(\*\*[^*]+\*\*)/g);
+    return parts.map((p, i) =>
+      p.startsWith("**") && p.endsWith("**")
+        ? <strong key={i} style={{ fontWeight: 700 }}>{p.slice(2, -2)}</strong>
+        : <span key={i}>{p}</span>
+    );
+  };
+
+  const formatMessage = (text) => {
+    const lines = text.split("\n");
+    const result = [];
+    let listItems = [];
+    const flushList = () => {
+      if (listItems.length) {
+        result.push(
+          <ul key={`ul-${result.length}`} style={{ margin: "6px 0 6px 16px", padding: 0, listStyle: "disc" }}>
+            {listItems.map((item, i) => (
+              <li key={i} style={{ marginBottom: 3 }}>{renderInline(item)}</li>
+            ))}
+          </ul>
+        );
+        listItems = [];
+      }
+    };
+    lines.forEach((line, i) => {
+      const bullet = line.match(/^[-・•]\s+(.+)/);
+      if (bullet) {
+        listItems.push(bullet[1]);
+      } else {
+        flushList();
+        if (line.trim() === "") {
+          result.push(<br key={`br-${i}`} />);
+        } else {
+          result.push(<span key={`line-${i}`} style={{ display: "block" }}>{renderInline(line)}</span>);
+        }
+      }
+    });
+    flushList();
+    return result;
+  };
 
   // 来店CTAを表示するのはアシスタントの最後メッセージ、かつ3往復以上のとき
   const showCTA = (i) =>
@@ -656,7 +695,7 @@ export default function HISWeddingChatbot() {
 
   return (
     <div style={{
-      minHeight: "100vh",
+      minHeight: "100svh",
       background: "linear-gradient(160deg,#fdf8f2 0%,#f5ede0 50%,#ede0d0 100%)",
       display: "flex", alignItems: "center", justifyContent: "center",
       fontFamily: "'Hiragino Mincho ProN','Yu Mincho',Georgia,serif",
@@ -664,7 +703,7 @@ export default function HISWeddingChatbot() {
     }}>
       <div style={{
         width: "100%", maxWidth: 480, position: "relative", zIndex: 1,
-        display: "flex", flexDirection: "column", height: "90vh", maxHeight: 780,
+        display: "flex", flexDirection: "column", height: "90svh", maxHeight: 780,
       }}>
 
         {/* ヘッダー */}
