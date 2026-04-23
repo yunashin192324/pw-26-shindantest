@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>HIS Wedding - AIウェディングプランナー</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body style="margin:0;padding:0;">
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useRef, useEffect, useCallback } = React;
+
+// ===== 設定 =====
+const RESERVATION_URL = "https://www.his-wedding.com/sp/special/consultation/";
+
+// APIキー: ここに直接入力するか、画面から設定できます
+const HARDCODED_API_KEY = "";
+
+// 知識として参照させたいHIS WeddingのURL（web_searchで参照させます）
+// 例: "https://www.his-wedding.com/hawaii/", "https://www.his-wedding.com/europe/"
+const KNOWLEDGE_URLS = [
+  // ここにURLを追加してください
+];
+
+// ===== システムプロンプト =====
+const buildSystemPrompt = () => {
+  const urlSection = KNOWLEDGE_URLS.length > 0
+    ? `\n\n## 参照すべき公式情報ページ\n以下のURLに最新情報があります。詳細な質問には web_search でこれらを確認してください:\n${KNOWLEDGE_URLS.map(u => `- ${u}`).join("\n")}`
+    : "";
+
+  return `あなたはHIS Weddingの専属AIウェディングプランナーです。温かく、上品で、専門的なトーンでお客様をお迎えください。
+
+## HIS Weddingについて
+HIS Weddingは、HISトラベル（日本最大級の旅行会社）のウェディング部門。フォトウェディング・挙式（チャペルウェディング）の両方を国内外で取り扱い、旅行とウェディングを一括でプランニングできるのが強みです。全国に店舗があります。
+
+## 取り扱いエリア（主要）
+- **ハワイ**: ダイヤモンドヘッド、アラニ、カハラ、ハレクラニ、カタリナ、プルメリア等30以上のチャペル
+- **ヨーロッパ**: サントリーニ島（アンドロニス他）、パリ、イタリア（パラッツォ他）
+- **バリ島**: アヤナ、バレ、インフィニティ、ケンピンスキー、ウルワツ等
+- **南の島**: モルディブ、フィジー、ボラボラ
+- **グアム・サイパン**: マリンブルー、ガンパチャペル等
+- **沖縄・国内**: 各エリア対応
+
+## フォトウェディング
+挙式なしで写真撮影のみ。ハワイ・ヨーロッパ・アジア・沖縄など幅広いエリアで対応。ドレスは提携ブランド多数（Foursis、JUNO、プロノビアス等）。
+
+## 挙式（チャペルウェディング）
+本格チャペルで挙式。ゲストを招いた挙式も可能。${urlSection}
+
+## 接客の進め方
+1. まずお客様の「希望エリア・スタイル（フォト/挙式）・人数・時期・予算感」をヒアリング
+2. ヒアリング内容に合った具体的なチャペルや会場を提案
+3. ドレス・スケジュール・旅程の相談にも対応
+4. 具体的な金額は「店舗でご確認ください」と案内し、来店相談へ自然につなげる
+
+## 回答のルール
+- 日本語で回答する
+- 回答は簡潔に（長文を避け、要点を絞る）
+- 具体的な最終価格は答えず「店舗スタッフが詳しくご案内できます」と伝える
+- 不明な詳細は正直に「確認が必要です」と伝える
+- 常に前向きで温かいトーンを保つ
+- 来店予約URL: ${RESERVATION_URL}`;
+};
+
+// ===== 定数 =====
+const SUGGESTED_QUESTIONS = [
+  "ハワイで挙式したい",
+  "フォトウェディングを知りたい",
+  "ヨーロッパで撮影したい",
+  "費用の目安は？",
+  "人気チャペルを教えて",
+  "バリ島のウェディング",
+];
+
+const INITIAL_MESSAGE = {
+  role: "assistant",
+  content: "はじめまして✨ HIS WeddingのAIプランナーです。\n\nフォトウェディング・挙式のご相談、エリア選び、ドレスのことなど、どんなことでもお気軽にどうぞ。\n\nどのようなウェディングをお考えですか？",
+};
+
+// ===== APIキー管理 =====
+function getApiKey() {
+  return HARDCODED_API_KEY || localStorage.getItem("his_wedding_api_key") || "";
+}
+
+// ===== タイピングアニメーション =====
+const TypingDots = () => (
+  <div style={{ display: "flex", gap: 5, alignItems: "center", padding: "4px 0" }}>
+    {[0, 1, 2].map((i) => (
+      <div key={i} style={{
+        width: 7, height: 7, borderRadius: "50%", background: "#b89a6e",
+        animation: "bounce 1.2s infinite", animationDelay: `${i * 0.2}s`,
+      }} />
+    ))}
+    <style>{`@keyframes bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-6px)}}`}</style>
+  </div>
+);
+
+// ===== APIキー設定モーダル =====
+function ApiKeyModal({ onSave }) {
+  const [key, setKey] = useState("");
+  const inputRef = useRef(null);
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  const save = () => {
+    const trimmed = key.trim();
+    if (!trimmed) return;
+    localStorage.setItem("his_wedding_api_key", trimmed);
+    onSave(trimmed);
+  };
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)",
+      display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20,
+    }}>
+      <div style={{
+        background: "white", borderRadius: 16, padding: 28, maxWidth: 400, width: "100%",
+        boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+      }}>
+        <div style={{ fontSize: 22, marginBottom: 8, textAlign: "center" }}>🔑</div>
+        <h2 style={{ margin: "0 0 8px", textAlign: "center", fontSize: 16, color: "#2c2416" }}>APIキーの設定</h2>
+        <p style={{ margin: "0 0 16px", fontSize: 12, color: "#888", textAlign: "center", lineHeight: 1.6 }}>
+          Anthropic APIキーを入力してください。<br />
+          キーはブラウザにのみ保存され、外部に送信されません。
+        </p>
+        <input
+          ref={inputRef}
+          type="password"
+          value={key}
+          onChange={e => setKey(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && save()}
+          placeholder="sk-ant-..."
+          style={{
+            width: "100%", boxSizing: "border-box", border: "1.5px solid #e8d9c5",
+            borderRadius: 10, padding: "10px 12px", fontSize: 13, outline: "none",
+            marginBottom: 12,
+          }}
+        />
+        <button
+          onClick={save}
+          disabled={!key.trim()}
+          style={{
+            width: "100%", padding: "11px", borderRadius: 10, border: "none",
+            background: key.trim() ? "linear-gradient(135deg,#d4a96a,#8b6940)" : "#e8d9c5",
+            color: key.trim() ? "white" : "#b89a6e", fontWeight: 700, fontSize: 14,
+            cursor: key.trim() ? "pointer" : "not-allowed",
+          }}
+        >
+          設定して始める
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ===== メインチャット =====
+export default function HISWeddingChatbot() {
+  const [messages, setMessages] = useState([INITIAL_MESSAGE]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(true);
+  const [apiKey, setApiKey] = useState(getApiKey());
+  const [error, setError] = useState("");
+  const messagesEndRef = useRef(null);
+  const textareaRef = useRef(null);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
+
+  const sendMessage = useCallback(async (text) => {
+    const userText = (text || input).trim();
+    if (!userText || loading) return;
+
+    setInput("");
+    setShowSuggestions(false);
+    setError("");
+
+    const newMessages = [...messages, { role: "user", content: userText }];
+    setMessages(newMessages);
+    setLoading(true);
+
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 800,
+          system: buildSystemPrompt(),
+          tools: KNOWLEDGE_URLS.length > 0
+            ? [{ type: "web_search_20250305", name: "web_search" }]
+            : undefined,
+          messages: newMessages.map(m => ({ role: m.role, content: m.content })),
+        }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        if (response.status === 401) throw new Error("APIキーが無効です。設定を確認してください。");
+        if (response.status === 429) throw new Error("リクエストが多すぎます。しばらく待ってからお試しください。");
+        throw new Error(errData.error?.message || `エラー: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const textContent = data.content
+        ?.filter(b => b.type === "text")
+        .map(b => b.text)
+        .join("\n") || "申し訳ありません、もう一度お試しください。";
+
+      setMessages([...newMessages, { role: "assistant", content: textContent }]);
+    } catch (e) {
+      setError(e.message || "通信エラーが発生しました。");
+      setMessages(prev => prev.slice(0, -1));
+      setInput(userText);
+    } finally {
+      setLoading(false);
+    }
+  }, [messages, input, loading, apiKey]);
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
+  const formatMessage = (text) =>
+    text.split("\n").map((line, i, arr) => (
+      <span key={i}>{line}{i < arr.length - 1 && <br />}</span>
+    ));
+
+  // 来店CTAを表示するのはアシスタントの最後メッセージ、かつ3往復以上のとき
+  const showCTA = (i) =>
+    messages[i].role === "assistant" &&
+    i === messages.length - 1 &&
+    messages.length >= 5;
+
+  const resetChat = () => {
+    setMessages([INITIAL_MESSAGE]);
+    setShowSuggestions(true);
+    setInput("");
+    setError("");
+  };
+
+  if (!apiKey) {
+    return <ApiKeyModal onSave={setApiKey} />;
+  }
+
+  return (
+    <div style={{
+      minHeight: "100vh",
+      background: "linear-gradient(160deg,#fdf8f2 0%,#f5ede0 50%,#ede0d0 100%)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontFamily: "'Hiragino Mincho ProN','Yu Mincho',Georgia,serif",
+      padding: "20px",
+    }}>
+      <div style={{
+        width: "100%", maxWidth: 480, position: "relative", zIndex: 1,
+        display: "flex", flexDirection: "column", height: "90vh", maxHeight: 780,
+      }}>
+
+        {/* ヘッダー */}
+        <div style={{
+          background: "linear-gradient(135deg,#2c2416 0%,#4a3728 100%)",
+          borderRadius: "20px 20px 0 0", padding: "16px 20px",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          boxShadow: "0 4px 20px rgba(44,36,22,0.25)",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: "50%",
+              background: "linear-gradient(135deg,#d4a96a,#b89a6e)",
+              display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17,
+            }}>💍</div>
+            <div>
+              <div style={{ color: "#f5e6cc", fontSize: 13, fontWeight: 600, letterSpacing: "0.08em" }}>
+                HIS Wedding
+              </div>
+              <div style={{ color: "#b89a6e", fontSize: 10, letterSpacing: "0.12em" }}>
+                AIウェディングプランナー
+              </div>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button
+              onClick={resetChat}
+              title="会話をリセット"
+              style={{
+                background: "rgba(255,255,255,0.1)", border: "none",
+                color: "#d4a96a", padding: "6px 10px", borderRadius: 12,
+                fontSize: 11, cursor: "pointer",
+              }}
+            >↺ リセット</button>
+            <a
+              href={RESERVATION_URL}
+              target="_blank" rel="noopener noreferrer"
+              style={{
+                background: "linear-gradient(135deg,#d4a96a,#b89a6e)",
+                color: "#2c2416", padding: "8px 12px", borderRadius: 20,
+                fontSize: 11, fontWeight: 700, textDecoration: "none",
+                letterSpacing: "0.05em", whiteSpace: "nowrap",
+              }}
+            >無料来店相談 →</a>
+          </div>
+        </div>
+
+        {/* メッセージ一覧 */}
+        <div style={{
+          flex: 1, overflowY: "auto", padding: "16px 14px",
+          background: "rgba(253,248,242,0.97)",
+          display: "flex", flexDirection: "column", gap: 14,
+        }}>
+          {messages.map((msg, i) => (
+            <div key={i} style={{
+              display: "flex",
+              justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
+              alignItems: "flex-end", gap: 8,
+              animation: "fadeIn 0.3s ease",
+            }}>
+              {msg.role === "assistant" && (
+                <div style={{
+                  width: 26, height: 26, borderRadius: "50%",
+                  background: "linear-gradient(135deg,#d4a96a,#b89a6e)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 12, flexShrink: 0,
+                }}>💍</div>
+              )}
+              <div style={{
+                maxWidth: "78%",
+                padding: msg.role === "user" ? "9px 13px" : "11px 15px",
+                borderRadius: msg.role === "user"
+                  ? "18px 18px 4px 18px"
+                  : "18px 18px 18px 4px",
+                background: msg.role === "user"
+                  ? "linear-gradient(135deg,#4a3728,#2c2416)"
+                  : "white",
+                color: msg.role === "user" ? "#f5e6cc" : "#3a2e24",
+                fontSize: 13, lineHeight: 1.75,
+                boxShadow: msg.role === "user"
+                  ? "0 2px 10px rgba(44,36,22,0.2)"
+                  : "0 2px 10px rgba(0,0,0,0.07)",
+              }}>
+                {formatMessage(msg.content)}
+                {showCTA(i) && (
+                  <a
+                    href={RESERVATION_URL}
+                    target="_blank" rel="noopener noreferrer"
+                    style={{
+                      display: "block", marginTop: 12, padding: "9px 14px",
+                      background: "linear-gradient(135deg,#d4a96a,#b89a6e)",
+                      color: "#2c2416", borderRadius: 10, fontSize: 12,
+                      fontWeight: 700, textDecoration: "none", textAlign: "center",
+                    }}
+                  >✨ 無料来店相談を予約する</a>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {loading && (
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
+              <div style={{
+                width: 26, height: 26, borderRadius: "50%",
+                background: "linear-gradient(135deg,#d4a96a,#b89a6e)",
+                display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12,
+              }}>💍</div>
+              <div style={{
+                background: "white", borderRadius: "18px 18px 18px 4px",
+                padding: "11px 15px", boxShadow: "0 2px 10px rgba(0,0,0,0.07)",
+              }}>
+                <TypingDots />
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <div style={{
+              background: "#fff0f0", border: "1px solid #ffcccc",
+              borderRadius: 12, padding: "10px 14px", fontSize: 12, color: "#c0392b",
+              textAlign: "center",
+            }}>
+              ⚠️ {error}
+            </div>
+          )}
+
+          {showSuggestions && messages.length === 1 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginTop: 4 }}>
+              {SUGGESTED_QUESTIONS.map((q, i) => (
+                <button
+                  key={i}
+                  onClick={() => sendMessage(q)}
+                  style={{
+                    padding: "7px 12px", borderRadius: 20,
+                    border: "1.5px solid #d4a96a",
+                    background: "rgba(255,255,255,0.85)",
+                    color: "#4a3728", fontSize: 11, cursor: "pointer",
+                  }}
+                >{q}</button>
+              ))}
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* 入力エリア */}
+        <div style={{
+          background: "white", borderRadius: "0 0 20px 20px",
+          padding: "12px 14px",
+          display: "flex", gap: 10, alignItems: "flex-end",
+          boxShadow: "0 -4px 20px rgba(0,0,0,0.05)",
+          borderTop: "1px solid rgba(212,169,106,0.2)",
+        }}>
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={(e) => {
+              setInput(e.target.value);
+              e.target.style.height = "auto";
+              e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
+            }}
+            onKeyDown={handleKeyDown}
+            placeholder="ご希望のエリアやスタイルをお聞かせください..."
+            rows={1}
+            style={{
+              flex: 1, border: "1.5px solid #e8d9c5", borderRadius: 12,
+              padding: "9px 12px", fontSize: 13, fontFamily: "inherit",
+              outline: "none", resize: "none", color: "#3a2e24",
+              background: "#fdf8f2", lineHeight: 1.5, overflow: "hidden",
+            }}
+            onFocus={e => e.target.style.borderColor = "#d4a96a"}
+            onBlur={e => e.target.style.borderColor = "#e8d9c5"}
+          />
+          <button
+            onClick={() => sendMessage()}
+            disabled={loading || !input.trim()}
+            style={{
+              width: 40, height: 40, borderRadius: "50%", border: "none",
+              background: loading || !input.trim()
+                ? "#e8d9c5"
+                : "linear-gradient(135deg,#d4a96a,#8b6940)",
+              color: loading || !input.trim() ? "#b89a6e" : "white",
+              cursor: loading || !input.trim() ? "not-allowed" : "pointer",
+              fontSize: 15, flexShrink: 0,
+            }}
+          >↑</button>
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+        ::-webkit-scrollbar{width:4px}
+        ::-webkit-scrollbar-thumb{background:#d4a96a44;border-radius:4px}
+      `}</style>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<HISWeddingChatbot />);
+</script>
+</body>
+</html>
