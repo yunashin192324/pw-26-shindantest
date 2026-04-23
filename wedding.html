@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
   <title>HIS Wedding - AIウェディングプランナー</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;600;700&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -471,7 +473,7 @@ const SUGGESTED_QUESTIONS = [
 
 const INITIAL_MESSAGE = {
   role: "assistant",
-  content: "はじめまして✨ HIS WeddingのAIプランナーです。\n\nフォトウェディング・挙式のご相談、エリア選び、ドレスのことなど、どんなことでもお気軽にどうぞ。\n\nどのようなウェディングをお考えですか？",
+  content: "はじめまして✨ HIS WeddingのAIウェディングプランナーです。\n\nハワイ・ヨーロッパ・バリ島・沖縄など、世界中のチャペルでの挙式・フォトウェディングをご提案しています。\n\nまずは、どんなウェディングをイメージされていますか？\n\n**例えば…**\n- 海外で２人だけのフォトウェディング\n- ゲストを招いてチャペル挙式\n- まだ何も決まっていない、漠然と考え中",
 };
 
 // ===== APIキー管理 =====
@@ -720,10 +722,16 @@ export default function HISWeddingChatbot() {
   };
 
   // 来店CTAを表示するのはアシスタントの最後メッセージ、かつ3往復以上のとき
-  const showCTA = (i) =>
-    messages[i].role === "assistant" &&
-    i === messages.length - 1 &&
-    messages.length >= 5;
+  // 会話の温度感を見てCTAを出すか判断
+  const showCTA = (i) => {
+    if (messages[i].role !== "assistant") return false;
+    if (i !== messages.length - 1) return false;
+    if (messages.length < 5) return false;
+    // お客様の発言に具体性があればより早めに表示
+    const userTexts = messages.filter(m => m.role === "user").map(m => m.content).join(" ");
+    const highIntent = /チャペル|式場|日程|予算|費用|いつ|何月|ゲスト|人数|ドレス|予約|相談|来店/.test(userTexts);
+    return highIntent ? messages.length >= 3 : messages.length >= 7;
+  };
 
   const resetChat = () => {
     clearSession();
@@ -742,7 +750,7 @@ export default function HISWeddingChatbot() {
       minHeight: "100svh",
       background: "linear-gradient(160deg,#fdf8f2 0%,#f5ede0 50%,#ede0d0 100%)",
       display: "flex", alignItems: "center", justifyContent: "center",
-      fontFamily: "'Hiragino Mincho ProN','Yu Mincho',Georgia,serif",
+      fontFamily: "'Noto Serif JP','Hiragino Mincho ProN','Yu Mincho',Georgia,serif",
       padding: "20px",
     }}>
       <div style={{
