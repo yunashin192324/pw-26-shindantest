@@ -639,7 +639,6 @@ function HISWeddingChatbot() {
           body: JSON.stringify({
             system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
             contents: apiContents,
-            tools: [{ googleSearch: {} }],
             generationConfig: { maxOutputTokens: 1000, temperature: 0.7 },
           }),
         }
