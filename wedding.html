@@ -745,8 +745,10 @@ function HISWeddingChatbot() {
     setError("");
   };
 
-  if (!apiKey) {
-    return <ApiKeyModal onSave={setApiKey} />;
+  const [showApiModal, setShowApiModal] = useState(!apiKey);
+
+  if (showApiModal) {
+    return <ApiKeyModal onSave={(key) => { setApiKey(key); setShowApiModal(false); }} />;
   }
 
   return (
@@ -786,6 +788,15 @@ function HISWeddingChatbot() {
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <button
+              onClick={() => setShowApiModal(true)}
+              title="APIキーを変更"
+              style={{
+                background: "rgba(255,255,255,0.1)", border: "none",
+                color: "#d4a96a", padding: "6px 10px", borderRadius: 12,
+                fontSize: 11, cursor: "pointer",
+              }}
+            >🔑</button>
+            <button
               onClick={resetChat}
               title="会話をリセット"
               style={{
@@ -793,7 +804,7 @@ function HISWeddingChatbot() {
                 color: "#d4a96a", padding: "6px 10px", borderRadius: 12,
                 fontSize: 11, cursor: "pointer",
               }}
-            >↺ リセット</button>
+            >↺</button>
             <a
               href={RESERVATION_URL}
               target="_blank" rel="noopener noreferrer"
