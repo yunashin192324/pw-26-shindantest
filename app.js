@@ -49,6 +49,23 @@ function stageMissType(stage) {
 
 const STAGE_ADVANCE_STREAK = { 1: 2, 2: 2, 3: 3, 4: 3, 5: 2 };
 
+const ENEMIES = [
+  { emoji: '🐥', name: 'ひよこ' },
+  { emoji: '🐸', name: 'かえる' },
+  { emoji: '🦊', name: 'きつね' },
+  { emoji: '🐺', name: 'おおかみ' },
+  { emoji: '🐲', name: 'ドラゴン' },
+  { emoji: '👹', name: 'おに' },
+  { emoji: '👿', name: 'あくま' },
+];
+
+function selectEnemy(progress) {
+  const stages = Object.values(progress.words).map(w => w.stage);
+  const avg = stages.length ? stages.reduce((a, b) => a + b, 0) / stages.length : 1;
+  const idx = Math.max(0, Math.min(Math.floor(avg - 1), ENEMIES.length - 1));
+  return ENEMIES[idx];
+}
+
 function nextReviewDelay(streak) {
   if (streak >= 3) return 86400000;
   if (streak === 2) return 1800000;
@@ -283,6 +300,9 @@ function startBattle(user) {
     results: [],
   };
 
+  const enemy = selectEnemy(App.progress);
+  document.getElementById('enemy-emoji').textContent = enemy.emoji;
+
   document.getElementById('battle-username').textContent = user.name;
   showScreen('battle');
   renderQuestion();
@@ -360,7 +380,18 @@ function renderQuestion() {
   if (q.type === 'listen') {
     qtEl.textContent = '🔊 音声を聴いて答えよう';
   } else {
-    qtEl.textContent = q.prompt;
+    qtEl.innerHTML = '';
+    const promptSpan = document.createElement('div');
+    promptSpan.textContent = q.prompt;
+    qtEl.appendChild(promptSpan);
+    // Stage 1: English word shown → add speak button
+    if (q.stage === 1) {
+      const speakBtn = document.createElement('button');
+      speakBtn.className = 'btn-speak-question';
+      speakBtn.textContent = '🔊 聞く';
+      speakBtn.addEventListener('click', () => speak(q.word.text));
+      qtEl.appendChild(speakBtn);
+    }
   }
 
   // Listen buttons
@@ -385,12 +416,19 @@ function renderQuestion() {
     choicesArea.classList.remove('hidden');
     inputArea.classList.add('hidden');
     const btns = document.querySelectorAll('.choice-btn');
+    const englishChoices = q.answerField === 'text'; // stage 3, 5
     btns.forEach((btn, i) => {
       const ch = q.choices[i];
-      btn.textContent = ch ? ch[q.answerField] : '';
+      const displayText = ch ? ch[q.answerField] : '';
       btn.className = 'choice-btn';
       btn.disabled = false;
+      btn.dataset.answer = displayText;
       btn.dataset.word = ch ? ch.id : '';
+      if (englishChoices && ch) {
+        btn.innerHTML = `<span class="choice-label">${displayText}</span><span class="speak-mini" data-text="${displayText}">🔊</span>`;
+      } else {
+        btn.textContent = displayText;
+      }
     });
   }
 
@@ -422,6 +460,7 @@ function checkAnswer(userAnswer) {
   const entry = b.queue[b.currentIdx];
   const isLongTerm = entry.isLongTerm;
   const effectiveStage = entry.stageOverride !== undefined ? entry.stageOverride : ws.stage;
+  const prevStage = ws.stage;
 
   if (isCorrect) {
     b.correct++;
@@ -458,6 +497,7 @@ function checkAnswer(userAnswer) {
       }
     }
 
+    if (ws.stage > prevStage) showStageUp(ws.stage);
     showResult(true, dmg, mult);
   } else {
     b.results.push({ word: q.word, correct: false });
@@ -521,18 +561,25 @@ function checkAnswer(userAnswer) {
    Choice button events
    ============================================================ */
 document.querySelectorAll('.choice-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
+  btn.addEventListener('click', (e) => {
+    // Speak-mini icon clicked: just play audio
+    if (e.target.classList.contains('speak-mini')) {
+      speak(e.target.dataset.text);
+      return;
+    }
+
     const q = App.battle.currentQuestion;
-    const answer = btn.textContent;
+    const answer = btn.dataset.answer !== undefined ? btn.dataset.answer : btn.textContent;
 
     // Visual feedback
     if (answer === q.word[q.answerField]) {
       btn.classList.add('correct');
     } else {
       btn.classList.add('wrong');
-      // Highlight correct
+      // Highlight correct answer
       document.querySelectorAll('.choice-btn').forEach(b => {
-        if (b.textContent === q.word[q.answerField]) b.classList.add('correct');
+        const bAnswer = b.dataset.answer !== undefined ? b.dataset.answer : b.textContent;
+        if (bAnswer === q.word[q.answerField]) b.classList.add('correct');
       });
     }
     checkAnswer(answer);
@@ -578,6 +625,13 @@ function showResult(isCorrect, dmg, mult) {
     rd.textContent = 'Wrong… 10ダメージ受けた';
     rd.className = 'result-display wrong';
   }
+}
+
+function showStageUp(newStage) {
+  const el = document.getElementById('stage-up-notice');
+  el.textContent = `🎉 ステージ ${newStage} にアップ！`;
+  el.classList.remove('hidden');
+  setTimeout(() => el.classList.add('hidden'), 2000);
 }
 
 function updateHPBars() {
