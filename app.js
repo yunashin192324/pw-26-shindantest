@@ -50,13 +50,13 @@ function stageMissType(stage) {
 const STAGE_ADVANCE_STREAK = { 1: 2, 2: 2, 3: 3, 4: 3, 5: 2 };
 
 const ENEMIES = [
-  { emoji: '🐥', name: 'ひよこ' },
-  { emoji: '🐸', name: 'かえる' },
-  { emoji: '🦊', name: 'きつね' },
-  { emoji: '🐺', name: 'おおかみ' },
-  { emoji: '🐲', name: 'ドラゴン' },
-  { emoji: '👹', name: 'おに' },
-  { emoji: '👿', name: 'あくま' },
+  { name: 'コイキング',   pokeId: 129 },
+  { name: 'ピカチュウ',   pokeId: 25  },
+  { name: 'フシギバナ',   pokeId: 3   },
+  { name: 'リザードン',   pokeId: 6   },
+  { name: 'カイリュー',   pokeId: 149 },
+  { name: 'ミュウツー',   pokeId: 150 },
+  { name: 'ルギア',       pokeId: 249 },
 ];
 
 function selectEnemy(progress) {
@@ -312,7 +312,10 @@ function startBattle(user) {
   };
 
   const enemy = selectEnemy(App.progress);
-  document.getElementById('enemy-emoji').textContent = enemy.emoji;
+  const imgEl = document.getElementById('enemy-img');
+  imgEl.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${enemy.pokeId}.png`;
+  imgEl.alt = enemy.name;
+
   document.getElementById('battle-username').textContent = user.name;
   showScreen('battle');
   renderQuestion();
@@ -347,11 +350,8 @@ function buildBattleQueue(progress, allWords) {
     const isLongTerm = ws.longTermDue.some(d => d <= Date.now());
 
     let stageOverride;
-    if (isLongTerm) {
-      stageOverride = 1;
-    } else if (forceListening) {
-      stageOverride = 2;
-    }
+    if (isLongTerm) stageOverride = 1;
+    else if (forceListening) stageOverride = 2;
 
     queue.push({ word, stageOverride, isLongTerm });
     usedIds.add(word.id);
@@ -380,7 +380,6 @@ function renderQuestion() {
   document.getElementById('battle-qnum').textContent = `問題 ${b.currentIdx + 1} / ${b.queue.length}`;
   document.getElementById('stage-badge').textContent = q.stageLabel;
 
-  // Question text
   const qtEl = document.getElementById('question-text');
   if (q.type === 'listen') {
     qtEl.textContent = '🔊 音声を聴いて答えよう';
@@ -398,7 +397,6 @@ function renderQuestion() {
     }
   }
 
-  // Listen buttons
   const listenBtns = document.getElementById('listen-btns');
   if (q.type === 'listen') {
     listenBtns.classList.remove('hidden');
@@ -407,7 +405,6 @@ function renderQuestion() {
     listenBtns.classList.add('hidden');
   }
 
-  // Choices vs input
   const choicesArea = document.getElementById('choices-area');
   const inputArea = document.getElementById('input-area');
 
@@ -436,10 +433,8 @@ function renderQuestion() {
     });
   }
 
-  // Clear result and hide next button
   document.getElementById('result-display').className = 'result-display hidden';
   document.getElementById('btn-next').classList.add('hidden');
-
   updateComboDisplay();
   updateHPBars();
 }
@@ -526,7 +521,6 @@ function checkAnswer(userAnswer) {
   Store.saveProgress(App.progress);
   updateHPBars();
   updateComboDisplay();
-
   document.querySelectorAll('.choice-btn').forEach(btn => (btn.disabled = true));
 
   function advanceOrEnd() {
@@ -540,7 +534,6 @@ function checkAnswer(userAnswer) {
     renderQuestion();
   }
 
-  // Show next button; also auto-advance after 2s
   const nextBtn = document.getElementById('btn-next');
   nextBtn.classList.remove('hidden');
   const autoTimer = setTimeout(advanceOrEnd, 2000);
