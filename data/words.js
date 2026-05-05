@@ -1,0 +1,22 @@
+window.WORD_DATA = [
+  { id: 1,  text: "apple",      meaning: "りんご",          type: "word",   example: "I eat an apple every day." },
+  { id: 2,  text: "book",       meaning: "本",              type: "word",   example: "She reads a book before bed." },
+  { id: 3,  text: "run",        meaning: "走る",            type: "word",   example: "He runs in the park." },
+  { id: 4,  text: "happy",      meaning: "うれしい",        type: "word",   example: "I am very happy today." },
+  { id: 5,  text: "school",     meaning: "学校",            type: "word",   example: "We go to school by bus." },
+  { id: 6,  text: "beautiful",  meaning: "美しい",          type: "word",   example: "The flower is beautiful." },
+  { id: 7,  text: "eat",        meaning: "食べる",          type: "word",   example: "Let's eat lunch together." },
+  { id: 8,  text: "friend",     meaning: "友達",            type: "word",   example: "She is my best friend." },
+  { id: 9,  text: "water",      meaning: "水",              type: "word",   example: "Please drink some water." },
+  { id: 10, text: "sky",        meaning: "空",              type: "word",   example: "The sky is blue today." },
+  { id: 11, text: "get up",     meaning: "起きる",          type: "phrase", example: "I get up at 7 every morning." },
+  { id: 12, text: "go to bed",  meaning: "寝る",            type: "phrase", example: "I go to bed at 10." },
+  { id: 13, text: "look for",   meaning: "探す",            type: "phrase", example: "I am looking for my key." },
+  { id: 14, text: "give up",    meaning: "あきらめる",      type: "phrase", example: "Don't give up!" },
+  { id: 15, text: "turn on",    meaning: "つける（電源）",  type: "phrase", example: "Please turn on the light." },
+  { id: 16, text: "wake up",    meaning: "目が覚める",      type: "phrase", example: "I wake up early on weekdays." },
+  { id: 17, text: "put on",     meaning: "着る・はく",      type: "phrase", example: "Put on your jacket." },
+  { id: 18, text: "look at",    meaning: "〜を見る",        type: "phrase", example: "Look at that bird!" },
+  { id: 19, text: "talk to",    meaning: "話しかける",      type: "phrase", example: "I talked to my teacher." },
+  { id: 20, text: "get home",   meaning: "帰宅する",        type: "phrase", example: "I get home at 5 pm." }
+];
