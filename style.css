@@ -236,6 +236,13 @@ body {
 .result-display.correct { color: #27ae60; background: #d5f5e3; }
 .result-display.wrong { color: #e74c3c; background: #fdecea; }
 
+.btn-next {
+  display: block;
+  width: 100%;
+  margin: 8px 0 10px;
+  font-size: 1.1rem;
+}
+
 /* Result screen */
 .result-title {
   text-align: center;

@@ -148,19 +148,16 @@ function buildQuestion(word, stage, allWords, forceStage) {
 function selectCandidates(progress, allWords, count, lastWordId) {
   const now = Date.now();
 
-  // Find long-term due words first
   const longTermOverdue = allWords.filter(w => {
     const ws = getWordState(progress, w.id);
     return ws.longTermDue.some(d => d <= now);
   });
 
-  // Words ready for review
   const ready = allWords.filter(w => {
     const ws = getWordState(progress, w.id);
     return ws.nextReview <= now && !longTermOverdue.includes(w);
   });
 
-  // Determine dominant miss type
   function dominantMissType(ws) {
     const { meaning, listening, spelling } = ws.missTypes;
     const max = Math.max(meaning, listening, spelling);
@@ -172,7 +169,6 @@ function selectCandidates(progress, allWords, count, lastWordId) {
 
   function missTypeForStage(stage) { return stageMissType(stage); }
 
-  // Sort ready words
   ready.sort((a, b) => {
     const wa = getWordState(progress, a.id);
     const wb = getWordState(progress, b.id);
@@ -187,7 +183,6 @@ function selectCandidates(progress, allWords, count, lastWordId) {
 
   const pool = [...longTermOverdue, ...ready];
 
-  // Fill up to count with future words if needed
   if (pool.length < count) {
     const future = allWords.filter(w => {
       const ws = getWordState(progress, w.id);
@@ -196,23 +191,41 @@ function selectCandidates(progress, allWords, count, lastWordId) {
     pool.push(...shuffle(future).slice(0, count - pool.length));
   }
 
-  // Remove last word to prevent consecutive repeats (unless it was wrong - handled by caller)
   const filtered = pool.filter(w => w.id !== lastWordId);
-  const result = filtered.slice(0, count);
-
-  // If lastWordId needs to be kept (called with null) just return
-  return result;
+  return filtered.slice(0, count);
 }
 
 /* ============================================================
-   Speech synthesis
+   Speech synthesis — best available English voice
    ============================================================ */
+let _bestVoice = null;
+
+function _initVoice() {
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) return;
+  const prefer = ['Samantha', 'Google US English', 'Microsoft Zira', 'Alex', 'Karen'];
+  for (const name of prefer) {
+    const v = voices.find(v => v.name.includes(name) && v.lang.startsWith('en'));
+    if (v) { _bestVoice = v; return; }
+  }
+  _bestVoice = voices.find(v => v.lang === 'en-US' && v.localService)
+            || voices.find(v => v.lang.startsWith('en-US'))
+            || voices.find(v => v.lang.startsWith('en'));
+}
+
+if (window.speechSynthesis) {
+  window.speechSynthesis.addEventListener('voiceschanged', _initVoice);
+  _initVoice();
+}
+
 function speak(text, rate = 1) {
   if (!window.speechSynthesis) return;
   window.speechSynthesis.cancel();
   const utt = new SpeechSynthesisUtterance(text);
   utt.lang = 'en-US';
   utt.rate = rate;
+  utt.pitch = 1;
+  if (_bestVoice) utt.voice = _bestVoice;
   window.speechSynthesis.speak(utt);
 }
 
@@ -285,8 +298,6 @@ function startBattle(user) {
   App.progress = Store.getProgress(user.userId);
 
   const allWords = window.WORD_DATA;
-
-  // Build question queue (up to 10)
   const queue = buildBattleQueue(App.progress, allWords);
 
   App.battle = {
@@ -302,7 +313,6 @@ function startBattle(user) {
 
   const enemy = selectEnemy(App.progress);
   document.getElementById('enemy-emoji').textContent = enemy.emoji;
-
   document.getElementById('battle-username').textContent = user.name;
   showScreen('battle');
   renderQuestion();
@@ -316,21 +326,17 @@ function buildBattleQueue(progress, allWords) {
   let prevType = null;
 
   for (let i = 0; i < TOTAL; i++) {
-    // Every 5th question (index 4, 9): force stage-2 listening preview
     const forceListening = (i > 0) && (i % 5 === 4);
 
-    // Get candidates excluding previous word
     let candidates = selectCandidates(progress, allWords, 20, prevWordId);
     if (candidates.length === 0) candidates = allWords.filter(w => w.id !== prevWordId);
     if (candidates.length === 0) candidates = allWords;
 
-    // 120pt: same-type preference (50% chance)
     if (prevType && Math.random() < 0.5) {
       const sameTypeCandidates = candidates.filter(w => w.type === prevType && !usedIds.has(w.id));
       if (sameTypeCandidates.length > 0) candidates = sameTypeCandidates;
     }
 
-    // Filter already used (prefer fresh words)
     const fresh = candidates.filter(w => !usedIds.has(w.id));
     if (fresh.length > 0) candidates = fresh;
 
@@ -348,7 +354,6 @@ function buildBattleQueue(progress, allWords) {
     }
 
     queue.push({ word, stageOverride, isLongTerm });
-
     usedIds.add(word.id);
     prevWordId = word.id;
     prevType = word.type;
@@ -384,7 +389,6 @@ function renderQuestion() {
     const promptSpan = document.createElement('div');
     promptSpan.textContent = q.prompt;
     qtEl.appendChild(promptSpan);
-    // Stage 1: English word shown → add speak button
     if (q.stage === 1) {
       const speakBtn = document.createElement('button');
       speakBtn.className = 'btn-speak-question';
@@ -416,7 +420,7 @@ function renderQuestion() {
     choicesArea.classList.remove('hidden');
     inputArea.classList.add('hidden');
     const btns = document.querySelectorAll('.choice-btn');
-    const englishChoices = q.answerField === 'text'; // stage 3, 5
+    const englishChoices = q.answerField === 'text';
     btns.forEach((btn, i) => {
       const ch = q.choices[i];
       const displayText = ch ? ch[q.answerField] : '';
@@ -432,11 +436,10 @@ function renderQuestion() {
     });
   }
 
-  // Result display clear
-  const rd = document.getElementById('result-display');
-  rd.className = 'result-display hidden';
+  // Clear result and hide next button
+  document.getElementById('result-display').className = 'result-display hidden';
+  document.getElementById('btn-next').classList.add('hidden');
 
-  // Combo
   updateComboDisplay();
   updateHPBars();
 }
@@ -466,25 +469,21 @@ function checkAnswer(userAnswer) {
     b.correct++;
     b.results.push({ word: q.word, correct: true });
 
-    // Damage
     b.combo++;
     const mult = b.combo >= 5 ? 2.0 : b.combo >= 3 ? 1.5 : 1.0;
     const dmg = Math.floor(10 * mult);
     b.enemyHP = Math.max(0, b.enemyHP - dmg);
 
-    // Progress update
     ws.correctStreak++;
     ws.history.push({ result: 'correct', ts: Date.now() });
     if (ws.history.length > 20) ws.history = ws.history.slice(-20);
     ws.nextReview = Date.now() + nextReviewDelay(ws.correctStreak);
 
     if (isLongTerm) {
-      // Long-term correct: remove the overdue entry
       const now = Date.now();
       const idx = ws.longTermDue.findIndex(d => d <= now);
       if (idx !== -1) ws.longTermDue.splice(idx, 1);
     } else {
-      // Stage advance
       const needed = STAGE_ADVANCE_STREAK[ws.stage];
       if (needed !== undefined && ws.correctStreak >= needed && ws.stage < 6) {
         ws.stage++;
@@ -502,11 +501,9 @@ function checkAnswer(userAnswer) {
   } else {
     b.results.push({ word: q.word, correct: false });
 
-    // Take damage
     b.combo = 0;
     b.playerHP = Math.max(0, b.playerHP - 10);
 
-    // Progress update
     ws.correctStreak = 0;
     ws.wrongCount++;
     const mt = stageMissType(effectiveStage);
@@ -530,31 +527,28 @@ function checkAnswer(userAnswer) {
   updateHPBars();
   updateComboDisplay();
 
-  // Disable buttons
   document.querySelectorAll('.choice-btn').forEach(btn => (btn.disabled = true));
 
-  // Check battle end
-  if (b.playerHP <= 0) {
-    setTimeout(() => endBattle('lose'), 1500);
-    return;
-  }
-  if (b.enemyHP <= 0) {
-    setTimeout(() => endBattle('win'), 1500);
-    return;
-  }
-
-  // Advance after delay
-  setTimeout(() => {
+  function advanceOrEnd() {
+    if (b.playerHP <= 0) { endBattle('lose'); return; }
+    if (b.enemyHP <= 0) { endBattle('win'); return; }
     b.currentIdx++;
-
-    // Insert wrong word immediately next (instant re-queue)
     if (b.wrongWordToInsert) {
       b.queue.splice(b.currentIdx, 0, { word: b.wrongWordToInsert, stageOverride: undefined, isLongTerm: false });
       b.wrongWordToInsert = null;
     }
-
     renderQuestion();
-  }, 1500);
+  }
+
+  // Show next button; also auto-advance after 2s
+  const nextBtn = document.getElementById('btn-next');
+  nextBtn.classList.remove('hidden');
+  const autoTimer = setTimeout(advanceOrEnd, 2000);
+  nextBtn.onclick = () => {
+    clearTimeout(autoTimer);
+    nextBtn.classList.add('hidden');
+    advanceOrEnd();
+  };
 }
 
 /* ============================================================
@@ -562,7 +556,6 @@ function checkAnswer(userAnswer) {
    ============================================================ */
 document.querySelectorAll('.choice-btn').forEach(btn => {
   btn.addEventListener('click', (e) => {
-    // Speak-mini icon clicked: just play audio
     if (e.target.classList.contains('speak-mini')) {
       speak(e.target.dataset.text);
       return;
@@ -571,12 +564,10 @@ document.querySelectorAll('.choice-btn').forEach(btn => {
     const q = App.battle.currentQuestion;
     const answer = btn.dataset.answer !== undefined ? btn.dataset.answer : btn.textContent;
 
-    // Visual feedback
     if (answer === q.word[q.answerField]) {
       btn.classList.add('correct');
     } else {
       btn.classList.add('wrong');
-      // Highlight correct answer
       document.querySelectorAll('.choice-btn').forEach(b => {
         const bAnswer = b.dataset.answer !== undefined ? b.dataset.answer : b.textContent;
         if (bAnswer === q.word[q.answerField]) b.classList.add('correct');
