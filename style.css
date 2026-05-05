@@ -281,6 +281,44 @@ body {
 }
 .result-buttons .btn { width: 100%; text-align: center; }
 
+.btn-speak-question {
+  display: block;
+  margin: 10px auto 0;
+  background: none;
+  border: 2px solid #1a6fb5;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  padding: 4px 16px;
+  cursor: pointer;
+  color: #1a6fb5;
+  min-height: 36px;
+}
+.btn-speak-question:hover { background: #dceeff; }
+
+.choice-label { vertical-align: middle; }
+.speak-mini {
+  display: inline-block;
+  font-size: 0.8rem;
+  margin-left: 6px;
+  opacity: 0.55;
+  cursor: pointer;
+  padding: 2px 5px;
+  border-radius: 4px;
+  vertical-align: middle;
+}
+.speak-mini:hover { opacity: 1; background: rgba(26,111,181,0.12); }
+
+.stage-up-notice {
+  text-align: center;
+  font-size: 1rem;
+  font-weight: bold;
+  color: #8e44ad;
+  background: #f3e5ff;
+  border-radius: 8px;
+  padding: 6px;
+  margin-bottom: 6px;
+}
+
 @media (max-width: 360px) {
   .choices-area { grid-template-columns: 1fr; }
   .question-text { font-size: 1.2rem; }
