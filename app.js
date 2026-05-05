@@ -205,14 +205,36 @@ function selectCandidates(progress, allWords, count, lastWordId) {
 }
 
 /* ============================================================
-   Speech synthesis
+   Speech synthesis — best available English voice
    ============================================================ */
+let _bestVoice = null;
+
+function _initVoice() {
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) return;
+  const prefer = ['Samantha', 'Google US English', 'Microsoft Zira', 'Alex', 'Karen'];
+  for (const name of prefer) {
+    const v = voices.find(v => v.name.includes(name) && v.lang.startsWith('en'));
+    if (v) { _bestVoice = v; return; }
+  }
+  _bestVoice = voices.find(v => v.lang === 'en-US' && v.localService)
+            || voices.find(v => v.lang.startsWith('en-US'))
+            || voices.find(v => v.lang.startsWith('en'));
+}
+
+if (window.speechSynthesis) {
+  window.speechSynthesis.addEventListener('voiceschanged', _initVoice);
+  _initVoice();
+}
+
 function speak(text, rate = 1) {
   if (!window.speechSynthesis) return;
   window.speechSynthesis.cancel();
   const utt = new SpeechSynthesisUtterance(text);
   utt.lang = 'en-US';
   utt.rate = rate;
+  utt.pitch = 1;
+  if (_bestVoice) utt.voice = _bestVoice;
   window.speechSynthesis.speak(utt);
 }
 
@@ -432,9 +454,10 @@ function renderQuestion() {
     });
   }
 
-  // Result display clear
+  // Result display clear, hide next button
   const rd = document.getElementById('result-display');
   rd.className = 'result-display hidden';
+  document.getElementById('btn-next').classList.add('hidden');
 
   // Combo
   updateComboDisplay();
@@ -533,28 +556,31 @@ function checkAnswer(userAnswer) {
   // Disable buttons
   document.querySelectorAll('.choice-btn').forEach(btn => (btn.disabled = true));
 
-  // Check battle end
-  if (b.playerHP <= 0) {
-    setTimeout(() => endBattle('lose'), 1500);
-    return;
-  }
-  if (b.enemyHP <= 0) {
-    setTimeout(() => endBattle('win'), 1500);
-    return;
-  }
+  const isBattleOver = b.playerHP <= 0 || b.enemyHP <= 0;
 
-  // Advance after delay
-  setTimeout(() => {
+  function advanceOrEnd() {
+    if (b.playerHP <= 0) { endBattle('lose'); return; }
+    if (b.enemyHP <= 0) { endBattle('win'); return; }
     b.currentIdx++;
-
-    // Insert wrong word immediately next (instant re-queue)
     if (b.wrongWordToInsert) {
       b.queue.splice(b.currentIdx, 0, { word: b.wrongWordToInsert, stageOverride: undefined, isLongTerm: false });
       b.wrongWordToInsert = null;
     }
-
     renderQuestion();
-  }, 1500);
+  }
+
+  // Show "次へ" button for manual advance
+  const nextBtn = document.getElementById('btn-next');
+  nextBtn.classList.remove('hidden');
+
+  // Also auto-advance after 2s
+  const autoTimer = setTimeout(advanceOrEnd, 2000);
+
+  nextBtn.onclick = () => {
+    clearTimeout(autoTimer);
+    nextBtn.classList.add('hidden');
+    advanceOrEnd();
+  };
 }
 
 /* ============================================================

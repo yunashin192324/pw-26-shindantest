@@ -308,6 +308,13 @@ body {
 }
 .speak-mini:hover { opacity: 1; background: rgba(26,111,181,0.12); }
 
+.btn-next {
+  display: block;
+  width: 100%;
+  margin: 8px 0 10px;
+  font-size: 1.1rem;
+}
+
 .stage-up-notice {
   text-align: center;
   font-size: 1rem;
