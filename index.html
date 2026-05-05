@@ -369,7 +369,16 @@ function App(){
       const cid = prev[di]?.meals[t]?.id;
       const c = pickMeal(t,cid,fridge);
       if(!c) return prev;
-      return prev.map((d,i)=>i!==di?d:{...d,meals:{...d.meals,[t]:makeEntry(c,fridge)}});
+      let sides = [];
+      if(t !== '朝') {
+        const pick = SIDE_DISHES[Math.floor(Math.random()*SIDE_DISHES.length)];
+        sides = [{...pick,
+          cost: pick.ingredients.reduce((s,i)=>fridge.includes(i)?s:s+(PRICES[i]||50),0),
+          toBuy: pick.ingredients.filter(i=>!fridge.includes(i)),
+          inFridge: pick.ingredients.filter(i=>fridge.includes(i)),
+        }];
+      }
+      return prev.map((d,i)=>i!==di?d:{...d,meals:{...d.meals,[t]:{...makeEntry(c,fridge),sides}}});
     });
   },[fridge]);
 
