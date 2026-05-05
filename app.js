@@ -50,13 +50,13 @@ function stageMissType(stage) {
 const STAGE_ADVANCE_STREAK = { 1: 2, 2: 2, 3: 3, 4: 3, 5: 2 };
 
 const ENEMIES = [
-  { emoji: '🐥', name: 'ひよこ' },
-  { emoji: '🐸', name: 'かえる' },
-  { emoji: '🦊', name: 'きつね' },
-  { emoji: '🐺', name: 'おおかみ' },
-  { emoji: '🐲', name: 'ドラゴン' },
-  { emoji: '👹', name: 'おに' },
-  { emoji: '👿', name: 'あくま' },
+  { name: 'コイキング',   pokeId: 129 },
+  { name: 'ピカチュウ',   pokeId: 25  },
+  { name: 'フシギバナ',   pokeId: 3   },
+  { name: 'リザードン',   pokeId: 6   },
+  { name: 'カイリュー',   pokeId: 149 },
+  { name: 'ミュウツー',   pokeId: 150 },
+  { name: 'ルギア',       pokeId: 249 },
 ];
 
 function selectEnemy(progress) {
@@ -323,7 +323,9 @@ function startBattle(user) {
   };
 
   const enemy = selectEnemy(App.progress);
-  document.getElementById('enemy-emoji').textContent = enemy.emoji;
+  const imgEl = document.getElementById('enemy-img');
+  imgEl.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${enemy.pokeId}.png`;
+  imgEl.alt = enemy.name;
 
   document.getElementById('battle-username').textContent = user.name;
   showScreen('battle');
