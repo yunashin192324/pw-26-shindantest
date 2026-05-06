@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>英語学習バトル</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -35,11 +37,14 @@
     </div>
 
     <div class="enemy-area">
-      <img id="enemy-img" class="enemy-img" src="" alt="敵ポケモン">
-      <div class="hp-bar-wrap">
-        <div class="hp-label">敵HP <span id="enemy-hp-num">100</span></div>
-        <div class="hp-bar"><div id="enemy-hp-bar" class="hp-fill enemy-fill" style="width:100%"></div></div>
+      <div class="enemy-status">
+        <span id="enemy-name" class="enemy-name">???</span>
+        <div class="hp-bar-wrap">
+          <div class="hp-label">HP <span id="enemy-hp-num">100</span></div>
+          <div class="hp-bar"><div id="enemy-hp-bar" class="hp-fill enemy-fill" style="width:100%"></div></div>
+        </div>
       </div>
+      <img id="enemy-img" class="enemy-img" src="" alt="敵ポケモン">
     </div>
 
     <div class="question-area" id="question-area">
