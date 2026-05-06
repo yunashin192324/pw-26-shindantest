@@ -75,7 +75,6 @@ body {
   transition: background 0.1s, border-color 0.1s;
   text-align: left;
 }
-.user-btn::before { content: '▶ '; color: #ffee44; }
 .user-btn:hover { background: #1a1a50; border-color: #ffffaa; }
 
 .add-user-area { margin-top: 10px; }
@@ -563,7 +562,6 @@ body {
 /* ════════════════════════════════════════
    USER SCREEN – enhanced user button
    ════════════════════════════════════════ */
-.user-btn::before { content: none; }
 .user-btn {
   cursor: pointer;
   padding: 12px 14px;
@@ -676,8 +674,8 @@ body {
    ════════════════════════════════════════ */
 .damage-popup.special-hit {
   color: #ffdd00;
-  font-size: 1.6rem;
-  text-shadow: 2px 2px 0 #6600cc, -1px -1px 0 #000;
+  font-size: 2.6rem;
+  text-shadow: 2px 2px 0 #6600cc, -1px -1px 0 #000, 0 0 12px #aa44ff;
 }
 
 /* ════════════════════════════════════════
@@ -690,9 +688,3 @@ body {
   letter-spacing: 1px;
 }
 
-/* ════════════════════════════════════════
-   RESULT TITLE WIN
-   ════════════════════════════════════════ */
-.result-title { color: #ccccee; }
-.result-title.win  { color: #ffee44; text-shadow: 2px 2px 0 #886600; }
-.result-title.lose { color: #ff5555; text-shadow: 2px 2px 0 #660000; }
