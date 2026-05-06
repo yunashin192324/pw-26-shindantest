@@ -30,7 +30,8 @@
   <div class="container">
     <div class="battle-header">
       <span id="battle-username" class="battle-username"></span>
-      <span id="battle-qnum" class="battle-qnum">問題 1 / 10</span>
+      <span id="game-stage-label" class="game-stage-label">ゲームステージ 1</span>
+      <span id="battle-progress" class="battle-progress">0/10 正解</span>
     </div>
 
     <div class="enemy-area">
@@ -84,6 +85,19 @@
     <div class="result-buttons">
       <button id="btn-retry" class="btn btn-primary">もう一度バトル</button>
       <button id="btn-back-user" class="btn btn-gray">ユーザー選択に戻る</button>
+    </div>
+  </div>
+</div>
+
+<!-- ステージクリア オーバーレイ -->
+<div id="stage-clear-overlay" class="stage-clear-overlay hidden">
+  <div class="stage-clear-box">
+    <div class="stage-clear-emoji">🎉</div>
+    <div class="stage-clear-title">ステージクリア！</div>
+    <div id="stage-clear-info" class="stage-clear-info"></div>
+    <div class="stage-clear-buttons">
+      <button id="btn-next-stage" class="btn btn-success">次のステージへ →</button>
+      <button id="btn-stage-home" class="btn btn-gray">ユーザー選択に戻る</button>
     </div>
   </div>
 </div>

@@ -106,9 +106,36 @@ body {
   align-items: center;
   padding: 8px 0;
   margin-bottom: 12px;
+  gap: 8px;
 }
 .battle-username { font-weight: bold; color: #1a6fb5; font-size: 1rem; }
-.battle-qnum { color: #666; font-size: 0.9rem; }
+.game-stage-label { font-weight: bold; color: #8e44ad; font-size: 0.9rem; }
+.battle-progress { color: #27ae60; font-size: 0.9rem; font-weight: bold; white-space: nowrap; }
+
+/* Stage clear overlay */
+.stage-clear-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.65);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.stage-clear-box {
+  background: #fff;
+  border-radius: 20px;
+  padding: 36px 28px;
+  text-align: center;
+  max-width: 360px;
+  width: 90%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+}
+.stage-clear-emoji { font-size: 3.5rem; margin-bottom: 12px; }
+.stage-clear-title { font-size: 2rem; font-weight: bold; color: #27ae60; margin-bottom: 10px; }
+.stage-clear-info { color: #555; font-size: 1rem; margin-bottom: 28px; line-height: 1.5; }
+.stage-clear-buttons { display: flex; flex-direction: column; gap: 12px; }
+.stage-clear-buttons .btn { width: 100%; text-align: center; }
 
 /* Enemy */
 .enemy-area {

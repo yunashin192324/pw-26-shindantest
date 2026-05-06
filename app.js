@@ -11,7 +11,7 @@ const Store = {
   getUsers() { return Store.get('users') || []; },
   saveUsers(users) { Store.set('users', users); },
   getProgress(userId) {
-    return Store.get('progress_' + userId) || { userId, words: {} };
+    return Store.get('progress_' + userId) || { userId, words: {}, gameStage: 1 };
   },
   saveProgress(progress) {
     Store.set('progress_' + progress.userId, progress);
@@ -59,10 +59,8 @@ const ENEMIES = [
   { name: 'ルギア',       pokeId: 249 },
 ];
 
-function selectEnemy(progress) {
-  const stages = Object.values(progress.words).map(w => w.stage);
-  const avg = stages.length ? stages.reduce((a, b) => a + b, 0) / stages.length : 1;
-  const idx = Math.max(0, Math.min(Math.floor(avg - 1), ENEMIES.length - 1));
+function selectEnemy(gameStage) {
+  const idx = Math.max(0, Math.min(gameStage - 1, ENEMIES.length - 1));
   return ENEMIES[idx];
 }
 
@@ -140,56 +138,6 @@ function buildQuestion(word, stage, allWords, forceStage) {
     q.stageLabel = 'Stage 6: 例文を聴いて意味を選ぼう';
   }
   return q;
-}
-
-/* ============================================================
-   Candidate selection
-   ============================================================ */
-function selectCandidates(progress, allWords, count, lastWordId) {
-  const now = Date.now();
-
-  // Find long-term due words first
-  const longTermOverdue = allWords.filter(w => {
-    const ws = getWordState(progress, w.id);
-    return ws.longTermDue.some(d => d <= now);
-  });
-
-  // Words ready for review
-  const ready = allWords.filter(w => {
-    const ws = getWordState(progress, w.id);
-    return ws.nextReview <= now && !longTermOverdue.includes(w);
-  });
-
-  // Seen words (have any progress record) before brand-new words
-  const seenIds = new Set(Object.keys(progress.words).map(Number));
-
-  ready.sort((a, b) => {
-    const wa = getWordState(progress, a.id);
-    const wb = getWordState(progress, b.id);
-    const seenA = seenIds.has(a.id) ? 1 : 0;
-    const seenB = seenIds.has(b.id) ? 1 : 0;
-    if (seenB !== seenA) return seenB - seenA;
-    if (wb.wrongCount !== wa.wrongCount) return wb.wrongCount - wa.wrongCount;
-    return wb.stage - wa.stage;
-  });
-
-  const pool = [...longTermOverdue, ...ready];
-
-  // Fill up to count with future words if needed
-  if (pool.length < count) {
-    const future = allWords.filter(w => {
-      const ws = getWordState(progress, w.id);
-      return ws.nextReview > now && !pool.includes(w);
-    });
-    pool.push(...shuffle(future).slice(0, count - pool.length));
-  }
-
-  // Remove last word to prevent consecutive repeats (unless it was wrong - handled by caller)
-  const filtered = pool.filter(w => w.id !== lastWordId);
-  const result = filtered.slice(0, count);
-
-  // If lastWordId needs to be kept (called with null) just return
-  return result;
 }
 
 /* ============================================================
@@ -293,10 +241,9 @@ function saveNewUser() {
 function startBattle(user) {
   App.currentUser = user;
   App.progress = Store.getProgress(user.userId);
+  if (!App.progress.gameStage) App.progress.gameStage = 1;
 
   const allWords = window.WORD_DATA;
-
-  // Build question queue (up to 10)
   const queue = buildBattleQueue(App.progress, allWords);
 
   App.battle = {
@@ -308,65 +255,31 @@ function startBattle(user) {
     correct: 0,
     total: 0,
     results: [],
+    wordsToComplete: new Set(queue.map(e => e.word.id)),
+    wordsCompleted: new Set(),
+    wrongWordToInsert: null,
   };
 
-  const enemy = selectEnemy(App.progress);
+  const enemy = selectEnemy(App.progress.gameStage);
   const imgEl = document.getElementById('enemy-img');
   imgEl.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${enemy.pokeId}.png`;
   imgEl.alt = enemy.name;
 
   document.getElementById('battle-username').textContent = user.name;
+  document.getElementById('stage-clear-overlay').classList.add('hidden');
   showScreen('battle');
   renderQuestion();
 }
 
 function buildBattleQueue(progress, allWords) {
-  const TOTAL = 10;
-  const queue = [];
-  const usedIds = new Set();
-  let prevWordId = null;
-  let prevType = null;
-
-  for (let i = 0; i < TOTAL; i++) {
-    // Every 5th question (index 4, 9): force stage-2 listening preview
-    const forceListening = (i > 0) && (i % 5 === 4);
-
-    // Get candidates excluding previous word
-    let candidates = selectCandidates(progress, allWords, 20, prevWordId);
-    if (candidates.length === 0) candidates = allWords.filter(w => w.id !== prevWordId);
-    if (candidates.length === 0) candidates = allWords;
-
-    // 120pt: same-type preference (50% chance)
-    if (prevType && Math.random() < 0.5) {
-      const sameTypeCandidates = candidates.filter(w => w.type === prevType && !usedIds.has(w.id));
-      if (sameTypeCandidates.length > 0) candidates = sameTypeCandidates;
-    }
-
-    // Filter already used (prefer fresh words)
-    const fresh = candidates.filter(w => !usedIds.has(w.id));
-    if (fresh.length > 0) candidates = fresh;
-
-    const word = candidates[0];
-    if (!word) break;
-
-    const ws = getWordState(progress, word.id);
-    const isLongTerm = ws.longTermDue.some(d => d <= Date.now());
-
-    let stageOverride;
-    if (isLongTerm) {
-      stageOverride = 1;
-    } else if (forceListening) {
-      stageOverride = 2;
-    }
-
-    queue.push({ word, stageOverride, isLongTerm });
-
-    usedIds.add(word.id);
-    prevWordId = word.id;
-    prevType = word.type;
+  const gameStage = progress.gameStage || 1;
+  const totalWords = allWords.length;
+  const batchStart = ((gameStage - 1) * 10) % totalWords;
+  const batch = allWords.slice(batchStart, batchStart + 10);
+  if (batch.length < 10) {
+    batch.push(...allWords.slice(0, 10 - batch.length));
   }
-
-  return queue;
+  return batch.map(word => ({ word, stageOverride: undefined, isLongTerm: false }));
 }
 
 /* ============================================================
@@ -375,7 +288,11 @@ function buildBattleQueue(progress, allWords) {
 function renderQuestion() {
   const b = App.battle;
   if (b.currentIdx >= b.queue.length) {
-    endBattle('complete');
+    if ([...b.wordsToComplete].every(id => b.wordsCompleted.has(id))) {
+      completeStage();
+    } else {
+      endBattle('lose');
+    }
     return;
   }
 
@@ -384,10 +301,9 @@ function renderQuestion() {
   const q = buildQuestion(entry.word, ws.stage, window.WORD_DATA, entry.stageOverride);
   b.currentQuestion = q;
 
-  document.getElementById('battle-qnum').textContent = `問題 ${b.currentIdx + 1} / ${b.queue.length}`;
+  updateProgressDisplay();
   document.getElementById('stage-badge').textContent = q.stageLabel;
 
-  // Question text
   const qtEl = document.getElementById('question-text');
   if (q.type === 'listen') {
     qtEl.textContent = '🔊 音声を聴いて答えよう';
@@ -396,7 +312,6 @@ function renderQuestion() {
     const promptSpan = document.createElement('div');
     promptSpan.textContent = q.prompt;
     qtEl.appendChild(promptSpan);
-    // Stage 1: English word shown → add speak button
     if (q.stage === 1) {
       const speakBtn = document.createElement('button');
       speakBtn.className = 'btn-speak-question';
@@ -406,7 +321,6 @@ function renderQuestion() {
     }
   }
 
-  // Listen buttons
   const listenBtns = document.getElementById('listen-btns');
   if (q.type === 'listen') {
     listenBtns.classList.remove('hidden');
@@ -415,7 +329,6 @@ function renderQuestion() {
     listenBtns.classList.add('hidden');
   }
 
-  // Choices vs input
   const choicesArea = document.getElementById('choices-area');
   const inputArea = document.getElementById('input-area');
 
@@ -428,7 +341,7 @@ function renderQuestion() {
     choicesArea.classList.remove('hidden');
     inputArea.classList.add('hidden');
     const btns = document.querySelectorAll('.choice-btn');
-    const englishChoices = q.answerField === 'text'; // stage 3, 5
+    const englishChoices = q.answerField === 'text';
     btns.forEach((btn, i) => {
       const ch = q.choices[i];
       const displayText = ch ? ch[q.answerField] : '';
@@ -444,12 +357,10 @@ function renderQuestion() {
     });
   }
 
-  // Result display clear, hide next button
   const rd = document.getElementById('result-display');
   rd.className = 'result-display hidden';
   document.getElementById('btn-next').classList.add('hidden');
 
-  // Combo
   updateComboDisplay();
   updateHPBars();
 }
@@ -475,29 +386,27 @@ function checkAnswer(userAnswer) {
   const effectiveStage = entry.stageOverride !== undefined ? entry.stageOverride : ws.stage;
   const prevStage = ws.stage;
 
+  document.querySelectorAll('.choice-btn').forEach(btn => (btn.disabled = true));
+
   if (isCorrect) {
     b.correct++;
     b.results.push({ word: q.word, correct: true });
 
-    // Damage
     b.combo++;
     const mult = b.combo >= 5 ? 2.0 : b.combo >= 3 ? 1.5 : 1.0;
     const dmg = Math.floor(10 * mult);
     b.enemyHP = Math.max(0, b.enemyHP - dmg);
 
-    // Progress update
     ws.correctStreak++;
     ws.history.push({ result: 'correct', ts: Date.now() });
     if (ws.history.length > 20) ws.history = ws.history.slice(-20);
     ws.nextReview = Date.now() + nextReviewDelay(ws.correctStreak);
 
     if (isLongTerm) {
-      // Long-term correct: remove the overdue entry
       const now = Date.now();
       const idx = ws.longTermDue.findIndex(d => d <= now);
       if (idx !== -1) ws.longTermDue.splice(idx, 1);
     } else {
-      // Stage advance
       const needed = STAGE_ADVANCE_STREAK[ws.stage];
       if (needed !== undefined && ws.correctStreak >= needed && ws.stage < 6) {
         ws.stage++;
@@ -511,15 +420,26 @@ function checkAnswer(userAnswer) {
     }
 
     if (ws.stage > prevStage) showStageUp(ws.stage);
+
+    b.wordsCompleted.add(q.word.id);
+    updateProgressDisplay();
     showResult(true, dmg, mult);
+    Store.saveProgress(App.progress);
+    updateHPBars();
+    updateComboDisplay();
+
+    // All words in this game stage answered correctly → stage clear
+    if ([...b.wordsToComplete].every(id => b.wordsCompleted.has(id))) {
+      setTimeout(() => completeStage(), 1500);
+      return;
+    }
+
   } else {
     b.results.push({ word: q.word, correct: false });
 
-    // Take damage
     b.combo = 0;
     b.playerHP = Math.max(0, b.playerHP - 10);
 
-    // Progress update
     ws.correctStreak = 0;
     ws.wrongCount++;
     const mt = stageMissType(effectiveStage);
@@ -537,20 +457,18 @@ function checkAnswer(userAnswer) {
 
     b.wrongWordToInsert = q.word;
     showResult(false, 10, 1);
+    Store.saveProgress(App.progress);
+    updateHPBars();
+    updateComboDisplay();
+
+    if (b.playerHP <= 0) {
+      setTimeout(() => endBattle('lose'), 1500);
+      return;
+    }
   }
-
-  Store.saveProgress(App.progress);
-  updateHPBars();
-  updateComboDisplay();
-
-  // Disable buttons
-  document.querySelectorAll('.choice-btn').forEach(btn => (btn.disabled = true));
-
-  const isBattleOver = b.playerHP <= 0 || b.enemyHP <= 0;
 
   function advanceOrEnd() {
     if (b.playerHP <= 0) { endBattle('lose'); return; }
-    if (b.enemyHP <= 0) { endBattle('win'); return; }
     b.currentIdx++;
     if (b.wrongWordToInsert) {
       b.queue.splice(b.currentIdx, 0, { word: b.wrongWordToInsert, stageOverride: undefined, isLongTerm: false });
@@ -559,13 +477,9 @@ function checkAnswer(userAnswer) {
     renderQuestion();
   }
 
-  // Show "次へ" button for manual advance
   const nextBtn = document.getElementById('btn-next');
   nextBtn.classList.remove('hidden');
-
-  // Also auto-advance after 2s
   const autoTimer = setTimeout(advanceOrEnd, 2000);
-
   nextBtn.onclick = () => {
     clearTimeout(autoTimer);
     nextBtn.classList.add('hidden');
@@ -578,7 +492,6 @@ function checkAnswer(userAnswer) {
    ============================================================ */
 document.querySelectorAll('.choice-btn').forEach(btn => {
   btn.addEventListener('click', (e) => {
-    // Speak-mini icon clicked: just play audio
     if (e.target.classList.contains('speak-mini')) {
       speak(e.target.dataset.text);
       return;
@@ -587,12 +500,10 @@ document.querySelectorAll('.choice-btn').forEach(btn => {
     const q = App.battle.currentQuestion;
     const answer = btn.dataset.answer !== undefined ? btn.dataset.answer : btn.textContent;
 
-    // Visual feedback
     if (answer === q.word[q.answerField]) {
       btn.classList.add('correct');
     } else {
       btn.classList.add('wrong');
-      // Highlight correct answer
       document.querySelectorAll('.choice-btn').forEach(b => {
         const bAnswer = b.dataset.answer !== undefined ? b.dataset.answer : b.textContent;
         if (bAnswer === q.word[q.answerField]) b.classList.add('correct');
@@ -631,6 +542,14 @@ document.getElementById('btn-play-slow').addEventListener('click', () => {
 /* ============================================================
    UI helpers
    ============================================================ */
+function updateProgressDisplay() {
+  const b = App.battle;
+  const p = App.progress;
+  if (!b || !p) return;
+  document.getElementById('game-stage-label').textContent = `ゲームステージ ${p.gameStage || 1}`;
+  document.getElementById('battle-progress').textContent = `${b.wordsCompleted.size}/10 正解`;
+}
+
 function showResult(isCorrect, dmg, mult) {
   const rd = document.getElementById('result-display');
   if (isCorrect) {
@@ -645,7 +564,7 @@ function showResult(isCorrect, dmg, mult) {
 
 function showStageUp(newStage) {
   const el = document.getElementById('stage-up-notice');
-  el.textContent = `🎉 ステージ ${newStage} にアップ！`;
+  el.textContent = `🎉 学習ステージ ${newStage} にアップ！`;
   el.classList.remove('hidden');
   setTimeout(() => el.classList.add('hidden'), 2000);
 }
@@ -671,7 +590,30 @@ function updateComboDisplay() {
 }
 
 /* ============================================================
-   Battle end
+   Stage clear
+   ============================================================ */
+function completeStage() {
+  const clearedStage = App.progress.gameStage || 1;
+  App.progress.gameStage = clearedStage + 1;
+  Store.saveProgress(App.progress);
+
+  document.getElementById('stage-clear-info').textContent =
+    `ゲームステージ ${clearedStage} クリア！ → ステージ ${App.progress.gameStage} へ進もう！`;
+  document.getElementById('stage-clear-overlay').classList.remove('hidden');
+}
+
+document.getElementById('btn-next-stage').addEventListener('click', () => {
+  document.getElementById('stage-clear-overlay').classList.add('hidden');
+  startBattle(App.currentUser);
+});
+
+document.getElementById('btn-stage-home').addEventListener('click', () => {
+  document.getElementById('stage-clear-overlay').classList.add('hidden');
+  renderUserScreen();
+});
+
+/* ============================================================
+   Battle end (player HP 0)
    ============================================================ */
 function endBattle(reason) {
   const b = App.battle;
@@ -679,15 +621,12 @@ function endBattle(reason) {
   const scoreEl = document.getElementById('result-score');
   const listEl = document.getElementById('result-word-list');
 
-  if (reason === 'win') {
-    titleEl.textContent = '勝利！';
-    titleEl.className = 'result-title win';
-  } else if (reason === 'lose') {
+  if (reason === 'lose') {
     titleEl.textContent = '敗北…';
     titleEl.className = 'result-title lose';
   } else {
-    titleEl.textContent = b.correct >= b.total / 2 ? '勝利！' : '敗北…';
-    titleEl.className = 'result-title ' + (b.correct >= b.total / 2 ? 'win' : 'lose');
+    titleEl.textContent = '結果';
+    titleEl.className = 'result-title';
   }
 
   scoreEl.textContent = `正解 ${b.correct} / ${b.total} 問`;
