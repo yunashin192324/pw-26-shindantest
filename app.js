@@ -50,13 +50,12 @@ function stageMissType(stage) {
 const STAGE_ADVANCE_STREAK = { 1: 1, 2: 1, 3: 2, 4: 2, 5: 1 };
 
 const ENEMIES = [
-  { name: 'コイキング',   pokeId: 129 },
-  { name: 'ピカチュウ',   pokeId: 25  },
-  { name: 'フシギバナ',   pokeId: 3   },
-  { name: 'リザードン',   pokeId: 6   },
-  { name: 'カイリュー',   pokeId: 149 },
-  { name: 'ミュウツー',   pokeId: 150 },
-  { name: 'ルギア',       pokeId: 249 },
+  { name: 'コイキング', pokeId: 129 },
+  { name: 'ピカチュウ', pokeId: 25  },
+  { name: 'フシギバナ', pokeId: 3   },
+  { name: 'リザードン', pokeId: 6   },
+  { name: 'カイリュー', pokeId: 149 },
+  { name: 'ミュウツー', pokeId: 150 },
 ];
 
 function selectEnemy(gameStage) {
@@ -141,7 +140,7 @@ function buildQuestion(word, stage, allWords, forceStage) {
 }
 
 /* ============================================================
-   Speech synthesis — best available English voice
+   Speech synthesis
    ============================================================ */
 let _bestVoice = null;
 
@@ -175,6 +174,132 @@ function speak(text, rate = 1) {
 }
 
 /* ============================================================
+   Audio system (Web Audio API)
+   ============================================================ */
+let _audioCtx = null;
+let _bgmPlaying = false;
+let _bgmNextLoop = 0;
+
+function _getAudio() {
+  if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (_audioCtx.state === 'suspended') _audioCtx.resume();
+  return _audioCtx;
+}
+
+function _playNote(ctx, freq, start, dur, type, vol) {
+  if (!freq || freq <= 0) return;
+  try {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = type || 'square';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(vol || 0.15, start);
+    gain.gain.exponentialRampToValueAtTime(0.001, start + dur * 0.88);
+    osc.start(start);
+    osc.stop(start + dur);
+  } catch (e) {}
+}
+
+function sfxAttack() {
+  try {
+    const ctx = _getAudio();
+    const t = ctx.currentTime;
+    _playNote(ctx, 880, t,        0.04, 'square',   0.25);
+    _playNote(ctx, 660, t + 0.04, 0.06, 'square',   0.20);
+    _playNote(ctx, 440, t + 0.09, 0.08, 'sawtooth', 0.12);
+  } catch (e) {}
+}
+
+function sfxWrong() {
+  try {
+    const ctx = _getAudio();
+    const t = ctx.currentTime;
+    _playNote(ctx, 220, t,        0.13, 'sawtooth', 0.20);
+    _playNote(ctx, 175, t + 0.13, 0.20, 'sawtooth', 0.12);
+  } catch (e) {}
+}
+
+function sfxLevelUp() {
+  try {
+    const ctx = _getAudio();
+    const t = ctx.currentTime;
+    // Dragon Quest style ascending fanfare
+    [[523, 0], [659, 0.11], [784, 0.22], [1047, 0.33],
+     [784, 0.50], [880, 0.61], [1047, 0.72]
+    ].forEach(([f, d]) => _playNote(ctx, f, t + d, 0.12, 'square', 0.28));
+  } catch (e) {}
+}
+
+function sfxStageClear() {
+  try {
+    const ctx = _getAudio();
+    const t = ctx.currentTime;
+    [[523, 0], [659, 0.15], [784, 0.30], [523, 0.45],
+     [659, 0.60], [784, 0.75], [1047, 0.90]
+    ].forEach(([f, d]) => _playNote(ctx, f, t + d, 0.13, 'square', 0.30));
+  } catch (e) {}
+}
+
+// BGM: simple 8-bit battle melody
+const _BGM = [
+  [659,0.2],[587,0.2],[523,0.2],[587,0.2], [659,0.2],[659,0.2],[659,0.4],
+  [587,0.2],[587,0.2],[698,0.2],[587,0.2], [523,0.2],[587,0.2],[523,0.4],
+  [659,0.2],[784,0.2],[880,0.2],[784,0.2], [659,0.2],[587,0.2],[659,0.4],
+  [494,0.2],[523,0.2],[587,0.2],[659,0.2], [659,0.8],
+];
+const _BGM_DUR = _BGM.reduce((s, [, d]) => s + d, 0);
+
+function startBGM() {
+  if (_bgmPlaying) return;
+  _bgmPlaying = true;
+  try {
+    _bgmNextLoop = _getAudio().currentTime + 0.1;
+    _scheduleBGM();
+  } catch (e) { _bgmPlaying = false; }
+}
+
+function stopBGM() {
+  _bgmPlaying = false;
+}
+
+function _scheduleBGM() {
+  if (!_bgmPlaying) return;
+  try {
+    const ctx = _getAudio();
+    let t = _bgmNextLoop;
+    _BGM.forEach(([freq, dur]) => {
+      _playNote(ctx, freq, t, dur * 0.80, 'square', 0.07);
+      t += dur;
+    });
+    _bgmNextLoop += _BGM_DUR;
+    const delay = (_bgmNextLoop - ctx.currentTime) * 1000 - 200;
+    setTimeout(() => _scheduleBGM(), Math.max(0, delay));
+  } catch (e) {}
+}
+
+/* ============================================================
+   Enemy hit animation + floating damage number
+   ============================================================ */
+function playEnemyHit(dmg) {
+  const img = document.getElementById('enemy-img');
+  img.classList.remove('enemy-hit');
+  void img.offsetWidth; // force reflow to restart animation
+  img.classList.add('enemy-hit');
+  setTimeout(() => img.classList.remove('enemy-hit'), 600);
+
+  const area = document.getElementById('enemy-area');
+  const popup = document.createElement('div');
+  popup.className = 'damage-popup';
+  popup.textContent = `-${dmg}`;
+  popup.style.left = (38 + Math.random() * 22) + '%';
+  popup.style.top  = (42 + Math.random() * 14) + '%';
+  area.appendChild(popup);
+  setTimeout(() => popup.remove(), 1200);
+}
+
+/* ============================================================
    App state
    ============================================================ */
 const App = {
@@ -195,6 +320,7 @@ function showScreen(id) {
    User screen
    ============================================================ */
 function renderUserScreen() {
+  stopBGM();
   const users = Store.getUsers();
   const list = document.getElementById('user-list');
   list.innerHTML = '';
@@ -264,10 +390,12 @@ function startBattle(user) {
   const imgEl = document.getElementById('enemy-img');
   imgEl.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${enemy.pokeId}.png`;
   imgEl.alt = enemy.name;
+  document.getElementById('enemy-name').textContent = enemy.name;
 
   document.getElementById('battle-username').textContent = user.name;
   document.getElementById('stage-clear-overlay').classList.add('hidden');
   showScreen('battle');
+  startBGM();
   renderQuestion();
 }
 
@@ -421,6 +549,8 @@ function checkAnswer(userAnswer) {
 
     if (ws.stage > prevStage) showStageUp(ws.stage);
 
+    sfxAttack();
+    playEnemyHit(dmg);
     b.wordsCompleted.add(q.word.id);
     updateProgressDisplay();
     showResult(true, dmg, mult);
@@ -428,7 +558,6 @@ function checkAnswer(userAnswer) {
     updateHPBars();
     updateComboDisplay();
 
-    // All words in this game stage answered correctly → stage clear
     if ([...b.wordsToComplete].every(id => b.wordsCompleted.has(id))) {
       setTimeout(() => completeStage(), 1500);
       return;
@@ -456,6 +585,7 @@ function checkAnswer(userAnswer) {
     }
 
     b.wrongWordToInsert = q.word;
+    sfxWrong();
     showResult(false, 10, 1);
     Store.saveProgress(App.progress);
     updateHPBars();
@@ -563,10 +693,11 @@ function showResult(isCorrect, dmg, mult) {
 }
 
 function showStageUp(newStage) {
+  sfxLevelUp();
   const el = document.getElementById('stage-up-notice');
   el.textContent = `🎉 学習ステージ ${newStage} にアップ！`;
   el.classList.remove('hidden');
-  setTimeout(() => el.classList.add('hidden'), 2000);
+  setTimeout(() => el.classList.add('hidden'), 2500);
 }
 
 function updateHPBars() {
@@ -593,6 +724,8 @@ function updateComboDisplay() {
    Stage clear
    ============================================================ */
 function completeStage() {
+  stopBGM();
+  sfxStageClear();
   const clearedStage = App.progress.gameStage || 1;
   App.progress.gameStage = clearedStage + 1;
   Store.saveProgress(App.progress);
@@ -613,9 +746,10 @@ document.getElementById('btn-stage-home').addEventListener('click', () => {
 });
 
 /* ============================================================
-   Battle end (player HP 0)
+   Battle end
    ============================================================ */
 function endBattle(reason) {
+  stopBGM();
   const b = App.battle;
   const titleEl = document.getElementById('result-title');
   const scoreEl = document.getElementById('result-score');
