@@ -419,7 +419,7 @@ body {
 .stage-clear-info {
   color: #aaaadd;
   font-size: 0.88rem;
-  margin-bottom: 12px;
+  margin-bottom: 26px;
   line-height: 1.9;
 }
 .stage-clear-buttons { display: flex; flex-direction: column; gap: 12px; }
@@ -438,7 +438,6 @@ body {
   margin-top: 32px;
   margin-bottom: 8px;
   letter-spacing: 4px;
-  color: #ccccee;
 }
 .result-title.win  { color: #ffee44; text-shadow: 2px 2px 0 #886600; }
 .result-title.lose { color: #ff5555; text-shadow: 2px 2px 0 #660000; }
@@ -563,6 +562,11 @@ body {
 /* ════════════════════════════════════════
    USER SCREEN – enhanced user button
    ════════════════════════════════════════ */
+.user-btn {
+  cursor: pointer;
+  padding: 12px 14px;
+  position: relative;
+}
 .user-btn-main {
   display: flex;
   align-items: flex-start;
@@ -670,8 +674,8 @@ body {
    ════════════════════════════════════════ */
 .damage-popup.special-hit {
   color: #ffdd00;
-  font-size: 1.6rem;
-  text-shadow: 2px 2px 0 #6600cc, -1px -1px 0 #000;
+  font-size: 2.6rem;
+  text-shadow: 2px 2px 0 #6600cc, -1px -1px 0 #000, 0 0 12px #aa44ff;
 }
 
 /* ════════════════════════════════════════
