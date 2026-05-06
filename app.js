@@ -47,7 +47,7 @@ function stageMissType(stage) {
   return 'meaning';
 }
 
-const STAGE_ADVANCE_STREAK = { 1: 2, 2: 2, 3: 3, 4: 3, 5: 2 };
+const STAGE_ADVANCE_STREAK = { 1: 1, 2: 1, 3: 2, 4: 2, 5: 1 };
 
 const ENEMIES = [
   { name: 'コイキング',   pokeId: 129 },
@@ -68,8 +68,8 @@ function selectEnemy(progress) {
 
 function nextReviewDelay(streak) {
   if (streak >= 3) return 86400000;
-  if (streak === 2) return 1800000;
-  return 300000;
+  if (streak === 2) return 3600000;
+  return 0;
 }
 
 /* ============================================================
@@ -158,27 +158,17 @@ function selectCandidates(progress, allWords, count, lastWordId) {
     return ws.nextReview <= now && !longTermOverdue.includes(w);
   });
 
-  function dominantMissType(ws) {
-    const { meaning, listening, spelling } = ws.missTypes;
-    const max = Math.max(meaning, listening, spelling);
-    if (max === 0) return 'meaning';
-    if (meaning === max) return 'meaning';
-    if (listening === max) return 'listening';
-    return 'spelling';
-  }
-
-  function missTypeForStage(stage) { return stageMissType(stage); }
+  // Seen words (have any progress record) before brand-new words
+  const seenIds = new Set(Object.keys(progress.words).map(Number));
 
   ready.sort((a, b) => {
     const wa = getWordState(progress, a.id);
     const wb = getWordState(progress, b.id);
-    const domA = dominantMissType(wa);
-    const domB = dominantMissType(wb);
-    const matchA = domA === missTypeForStage(wa.stage) ? 1 : 0;
-    const matchB = domB === missTypeForStage(wb.stage) ? 1 : 0;
-    if (matchB !== matchA) return matchB - matchA;
+    const seenA = seenIds.has(a.id) ? 1 : 0;
+    const seenB = seenIds.has(b.id) ? 1 : 0;
+    if (seenB !== seenA) return seenB - seenA;
     if (wb.wrongCount !== wa.wrongCount) return wb.wrongCount - wa.wrongCount;
-    return wa.stage - wb.stage;
+    return wb.stage - wa.stage;
   });
 
   const pool = [...longTermOverdue, ...ready];
