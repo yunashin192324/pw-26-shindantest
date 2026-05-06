@@ -595,10 +595,45 @@ function startBattle(user) {
 
 function buildBattleQueue(progress, allWords, count) {
   count = count || 10;
+  const now = Date.now();
+
+  // Long-term SRS reviews: mastered words with a scheduled recall date that has arrived
+  const ltReviews = [];
+  // Short-term reviews: seen words (stage>1) whose spaced-repetition delay has expired
+  const shortReviews = [];
+
+  for (const word of allWords) {
+    const ws = progress.words[word.id];
+    if (!ws) continue;
+    if (ws.longTermDue && ws.longTermDue.some(t => t <= now)) {
+      ltReviews.push({ word, stageOverride: ws.stage, isLongTerm: true });
+    } else if (ws.stage > 1 && ws.nextReview > 0 && ws.nextReview <= now) {
+      shortReviews.push({ word, stageOverride: undefined, isLongTerm: false });
+    }
+  }
+
+  shuffle(ltReviews);
+  shuffle(shortReviews);
+
+  // Cap reviews so there's always room for new words
+  const picked = [
+    ...ltReviews.slice(0, 3),
+    ...shortReviews.slice(0, 3),
+  ];
+  const pickedIds = new Set(picked.map(e => e.word.id));
+
+  // Fill remaining slots with sequential new words starting from current stage offset
   const batchStart = ((progress.gameStage - 1) * 10) % allWords.length;
-  const batch = allWords.slice(batchStart, batchStart + count);
-  if (batch.length < count) batch.push(...allWords.slice(0, count - batch.length));
-  return batch.map(word => ({ word, stageOverride: undefined, isLongTerm: false }));
+  for (let i = 0; picked.length < count; i++) {
+    if (i >= allWords.length) break;
+    const word = allWords[(batchStart + i) % allWords.length];
+    if (!pickedIds.has(word.id)) {
+      picked.push({ word, stageOverride: undefined, isLongTerm: false });
+      pickedIds.add(word.id);
+    }
+  }
+
+  return shuffle(picked).slice(0, count);
 }
 
 /* ============================================================
