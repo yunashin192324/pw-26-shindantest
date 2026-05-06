@@ -10,6 +10,20 @@
 </head>
 <body>
 
+<!-- バッジ通知 (スライドアップ) -->
+<div id="badge-notification" class="badge-notification hidden">
+  <span id="badge-notification-text"></span>
+</div>
+
+<!-- バッジモーダル -->
+<div id="badge-modal" class="badge-modal hidden">
+  <div class="badge-modal-box">
+    <div class="badge-modal-title">🏅 バッジ一覧</div>
+    <div id="badge-modal-list" class="badge-modal-list"></div>
+    <button id="btn-badge-close" class="btn btn-gray">閉じる</button>
+  </div>
+</div>
+
 <!-- ユーザー選択画面 -->
 <div id="screen-user" class="screen active">
   <div class="container">
@@ -34,9 +48,11 @@
       <span id="battle-username" class="battle-username"></span>
       <span id="game-stage-label" class="game-stage-label">ゲームステージ 1</span>
       <span id="battle-progress" class="battle-progress">0/10 正解</span>
+      <span id="battle-master-count" class="battle-master-count">📚 0</span>
+      <button id="btn-mute" class="btn-mute">🔊</button>
     </div>
 
-    <div class="enemy-area">
+    <div id="enemy-area" class="enemy-area">
       <div class="enemy-status">
         <span id="enemy-name" class="enemy-name">???</span>
         <div class="hp-bar-wrap">
@@ -44,7 +60,7 @@
           <div class="hp-bar"><div id="enemy-hp-bar" class="hp-fill enemy-fill" style="width:100%"></div></div>
         </div>
       </div>
-      <img id="enemy-img" class="enemy-img" src="" alt="敵ポケモン">
+      <img id="enemy-img" class="enemy-img" src="" alt="敵">
     </div>
 
     <div class="question-area" id="question-area">
@@ -69,6 +85,13 @@
     </div>
 
     <div class="player-area">
+      <div id="special-gauge-area" class="special-gauge-area">
+        ⚡ 必殺技ゲージ: <span id="special-gauge-num">0</span>/5
+        <div class="special-gauge-bar">
+          <div id="special-gauge-fill" class="special-gauge-fill" style="width:0%"></div>
+        </div>
+      </div>
+      <div id="dialog-bubble" class="dialog-bubble hidden"></div>
       <div id="stage-up-notice" class="stage-up-notice hidden"></div>
       <div id="combo-display" class="combo-display hidden"></div>
       <div id="result-display" class="result-display hidden"></div>
@@ -100,6 +123,7 @@
     <div class="stage-clear-emoji">🎉</div>
     <div class="stage-clear-title">ステージクリア！</div>
     <div id="stage-clear-info" class="stage-clear-info"></div>
+    <div id="stage-clear-exp" class="stage-clear-exp"></div>
     <div class="stage-clear-buttons">
       <button id="btn-next-stage" class="btn btn-success">次のステージへ →</button>
       <button id="btn-stage-home" class="btn btn-gray">ユーザー選択に戻る</button>
