@@ -460,16 +460,26 @@ body {
 }
 .result-word-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   padding: 7px 0;
   border-bottom: 1px solid #1e1e4a;
   font-size: 0.88rem;
 }
 .result-word-item:last-child { border-bottom: none; }
-.result-word-item .mark { font-size: 1rem; }
+.result-word-item .mark { font-size: 1rem; margin-top: 1px; flex-shrink: 0; }
 .result-word-item.retried { background: rgba(100,60,0,0.18); }
 .result-word-item.missed  { background: rgba(100,0,0,0.18); }
+.result-word-body { flex: 1; min-width: 0; }
+.result-word-row { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.result-word-example {
+  font-size: 0.72rem;
+  color: #6a6a99;
+  margin-top: 3px;
+  font-style: italic;
+  line-height: 1.5;
+  word-break: break-word;
+}
 .result-word-en { font-weight: bold; color: #88aaff; }
 .result-word-ja { color: #9999cc; }
 

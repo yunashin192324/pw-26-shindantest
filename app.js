@@ -1094,10 +1094,17 @@ function endBattle(reason) {
     const mark = firstWasCorrect ? '✅' : everCorrect ? '🔄' : '❌';
     const item = document.createElement('div');
     item.className = 'result-word-item' + (firstWasCorrect ? '' : everCorrect ? ' retried' : ' missed');
+    const exampleHtml = (!firstWasCorrect && word.example)
+      ? `<div class="result-word-example">${word.example}</div>` : '';
     item.innerHTML = `
       <span class="mark">${mark}</span>
-      <span class="result-word-en">${word.text}</span>
-      <span class="result-word-ja">${word.meaning}</span>
+      <div class="result-word-body">
+        <div class="result-word-row">
+          <span class="result-word-en">${word.text}</span>
+          <span class="result-word-ja">${word.meaning}</span>
+        </div>
+        ${exampleHtml}
+      </div>
     `;
     listEl.appendChild(item);
   });
