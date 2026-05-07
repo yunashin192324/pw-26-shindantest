@@ -435,6 +435,7 @@ body {
   margin-bottom: 26px;
   line-height: 1.9;
 }
+.dungeon-next { color: #ffcc44; font-size: 0.85rem; }
 .stage-clear-buttons { display: flex; flex-direction: column; gap: 12px; }
 .stage-clear-buttons .btn { width: 100%; text-align: center; }
 
@@ -622,6 +623,12 @@ body {
   font-size: 0.72rem;
   color: #8888aa;
 }
+.user-btn-dungeon {
+  font-size: 0.70rem;
+  color: #7777bb;
+  margin-top: 3px;
+}
+.user-btn-stage { color: #555588; margin-left: 4px; }
 .user-btn-actions {
   position: absolute;
   top: 10px;

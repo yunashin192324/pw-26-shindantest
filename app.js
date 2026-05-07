@@ -20,6 +20,19 @@ const BOSS_ENEMIES = [
 const BOSS_HP   = 300;
 const BOSS_MAX_Q = 20;
 
+const DUNGEONS = [
+  { name: '基本の村',     emoji: '🏡', from: 1,   to: 20  },
+  { name: '動詞の神殿',   emoji: '⚔️',  from: 21,  to: 100 },
+  { name: '動物の森',     emoji: '🌲', from: 101, to: 120 },
+  { name: '自然の洞窟',   emoji: '🍃', from: 121, to: 150 },
+  { name: '家の迷宮',     emoji: '🏠', from: 151, to: 190 },
+  { name: '食の王国',     emoji: '🍎', from: 191, to: 230 },
+  { name: '街の砦',       emoji: '🏙️', from: 231, to: 260 },
+  { name: '時と人の塔',   emoji: '⏰', from: 261, to: 300 },
+  { name: '形容詞の城',   emoji: '🏰', from: 301, to: 400 },
+  { name: '熟語の魔王城', emoji: '👿', from: 401, to: 500 },
+];
+
 const TITLES = [
   { min: 30, title: '英語の勇者' },
   { min: 25, title: 'マスター' },
@@ -173,6 +186,11 @@ function selectBossEnemy(bossCount) {
 }
 function isBossStage(gameStage) {
   return gameStage > 1 && (gameStage - 1) % 3 === 0;
+}
+function getDungeon(gameStage, allWords) {
+  const idx = ((gameStage - 1) * 10) % allWords.length;
+  const id  = (allWords[idx] || allWords[0]).id;
+  return DUNGEONS.find(d => id >= d.from && id <= d.to) || DUNGEONS[DUNGEONS.length - 1];
 }
 
 /* ============================================================
@@ -456,6 +474,7 @@ function renderUserScreen() {
     const masterCount = getMasterWordCount(prog);
     const streak      = prog.loginStreak || 0;
     const badgeCount  = (prog.badges || []).length;
+    const dungeon     = window.WORD_DATA ? getDungeon(prog.gameStage || 1, window.WORD_DATA) : null;
 
     const wrap = document.createElement('div');
     wrap.className = 'user-btn';
@@ -472,8 +491,8 @@ function renderUserScreen() {
             <span>📚 ${masterCount}語</span>
             <span>🔥 ${streak}日</span>
             <span>🏅 ${badgeCount}個</span>
-            <span>🗺 S.${prog.gameStage || 1}</span>
           </div>
+          <div class="user-btn-dungeon">${dungeon ? dungeon.emoji + ' ' + dungeon.name : '🗺 S.' + (prog.gameStage || 1)} <span class="user-btn-stage">S.${prog.gameStage || 1}</span></div>
         </div>
       </div>
     `;
@@ -572,10 +591,11 @@ function startBattle(user) {
   updateMuteButton();
 
   const allWords = window.WORD_DATA;
-  const boss  = isBossStage(App.progress.gameStage);
-  const enemy = boss ? selectBossEnemy(App.progress.bossCleared || 0) : selectEnemy(App.progress.gameStage);
-  const maxQ  = boss ? BOSS_MAX_Q : 10;
-  const enemyHP = boss ? BOSS_HP : 100;
+  const boss     = isBossStage(App.progress.gameStage);
+  const enemy    = boss ? selectBossEnemy(App.progress.bossCleared || 0) : selectEnemy(App.progress.gameStage);
+  const maxQ     = boss ? BOSS_MAX_Q : 10;
+  const enemyHP  = boss ? BOSS_HP : 100;
+  const dungeon  = getDungeon(App.progress.gameStage, allWords);
 
   const queue = buildBattleQueue(App.progress, allWords, maxQ);
 
@@ -590,7 +610,16 @@ function startBattle(user) {
     isBoss: boss, wrongCount: 0,
     expAtStart: App.progress.totalExp || 0,
     mastersAtStart: getMasterWordCount(App.progress),
+    dungeon,
   };
+
+  // ダンジョン遷移通知（ゲームステージ2以降、ダンジョンが変わった瞬間）
+  if (App.progress.gameStage > 1) {
+    const prevDungeon = getDungeon(App.progress.gameStage - 1, allWords);
+    if (prevDungeon.name !== dungeon.name) {
+      setTimeout(() => showBadgeNotification(dungeon.emoji, `新ダンジョン「${dungeon.name}」へ！`), 1400);
+    }
+  }
 
   const enemyImgEl = document.getElementById('enemy-img');
   enemyImgEl.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${enemy.pokeId}.png`;
@@ -954,8 +983,9 @@ document.getElementById('btn-play-slow').addEventListener('click', () => {
 function updateProgressDisplay() {
   const b = App.battle, p = App.progress;
   if (!b || !p) return;
+  const d = b.dungeon;
   document.getElementById('game-stage-label').textContent =
-    b.isBoss ? '👹 ボスバトル！' : `ゲームステージ ${p.gameStage}`;
+    b.isBoss ? '👹 ボスバトル！' : (d ? `${d.emoji} ${d.name}` : `S.${p.gameStage}`);
   document.getElementById('battle-progress').textContent =
     `${b.wordsCompleted.size}/${b.wordsToComplete.size} 正解`;
   document.getElementById('battle-master-count').textContent = `📚 ${getMasterWordCount(p)}`;
@@ -1039,8 +1069,19 @@ function completeStage() {
     document.getElementById('stage-clear-info').textContent =
       `👹 ボス「${document.getElementById('enemy-name').textContent}」を倒した！`;
   } else {
-    document.getElementById('stage-clear-info').textContent =
-      `ゲームステージ ${cleared} クリア！ → ステージ ${cleared + 1} へ進もう！`;
+    const d    = b.dungeon;
+    const next = getDungeon(cleared + 1, window.WORD_DATA);
+    const newDungeon = d && next.name !== d.name;
+    const infoEl = document.getElementById('stage-clear-info');
+    if (newDungeon) {
+      infoEl.innerHTML =
+        `${d.emoji} ${d.name} クリア！<br>` +
+        `<span class="dungeon-next">→ 次のダンジョン: ${next.emoji} ${next.name}</span>`;
+    } else {
+      infoEl.textContent = d
+        ? `${d.emoji} ${d.name} ステージ${cleared} クリア！`
+        : `ゲームステージ ${cleared} クリア！`;
+    }
   }
 
   App.progress.gameStage = cleared + 1;
