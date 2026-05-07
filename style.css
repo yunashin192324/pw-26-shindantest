@@ -444,11 +444,13 @@ body {
 
 .result-score {
   text-align: center;
-  font-size: 0.95rem;
+  font-size: 0.92rem;
   color: #9999cc;
   margin-bottom: 20px;
-  letter-spacing: 2px;
+  letter-spacing: 1px;
+  line-height: 1.7;
 }
+.result-level { color: #ffee44; font-size: 0.80rem; }
 
 .result-word-list {
   background: #0c0c2c;
@@ -466,6 +468,8 @@ body {
 }
 .result-word-item:last-child { border-bottom: none; }
 .result-word-item .mark { font-size: 1rem; }
+.result-word-item.retried { background: rgba(100,60,0,0.18); }
+.result-word-item.missed  { background: rgba(100,0,0,0.18); }
 .result-word-en { font-weight: bold; color: #88aaff; }
 .result-word-ja { color: #9999cc; }
 

@@ -584,6 +584,7 @@ function startBattle(user) {
     wordsCompleted:  new Set(),
     wrongWordToInsert: null,
     isBoss: boss, wrongCount: 0,
+    expAtStart: App.progress.totalExp || 0,
   };
 
   const enemyImgEl = document.getElementById('enemy-img');
@@ -1072,18 +1073,31 @@ function endBattle(reason) {
   }
 
   const li = computeLevelInfo(App.progress.totalExp || 0);
-  document.getElementById('result-score').textContent =
-    `正解 ${b.correct} / ${b.total} 問  |  Lv.${li.level} ${getTitle(li.level)}`;
+  const expGained = (App.progress.totalExp || 0) - b.expAtStart;
+  document.getElementById('result-score').innerHTML =
+    `<div>正解 ${b.wordsCompleted.size} / ${b.wordsToComplete.size} 語 &nbsp;|&nbsp; +${expGained} EXP</div>` +
+    `<div class="result-level">Lv.${li.level} ${getTitle(li.level)}</div>`;
+
+  // Deduplicate: one row per word — ✅ first-try correct, 🔄 correct after retry, ❌ never correct
+  const wordStatus = new Map();
+  b.results.forEach(r => {
+    if (!wordStatus.has(r.word.id)) {
+      wordStatus.set(r.word.id, { word: r.word, firstWasCorrect: r.correct, everCorrect: r.correct });
+    } else if (r.correct) {
+      wordStatus.get(r.word.id).everCorrect = true;
+    }
+  });
 
   const listEl = document.getElementById('result-word-list');
   listEl.innerHTML = '';
-  b.results.forEach(r => {
+  wordStatus.forEach(({ word, firstWasCorrect, everCorrect }) => {
+    const mark = firstWasCorrect ? '✅' : everCorrect ? '🔄' : '❌';
     const item = document.createElement('div');
-    item.className = 'result-word-item';
+    item.className = 'result-word-item' + (firstWasCorrect ? '' : everCorrect ? ' retried' : ' missed');
     item.innerHTML = `
-      <span class="mark">${r.correct ? '✅' : '❌'}</span>
-      <span class="result-word-en">${r.word.text}</span>
-      <span class="result-word-ja">${r.word.meaning}</span>
+      <span class="mark">${mark}</span>
+      <span class="result-word-en">${word.text}</span>
+      <span class="result-word-ja">${word.meaning}</span>
     `;
     listEl.appendChild(item);
   });
