@@ -472,11 +472,29 @@ function renderUserScreen() {
         </div>
       </div>
     `;
+    const actions = document.createElement('div');
+    actions.className = 'user-btn-actions';
+
     const badgeBtn = document.createElement('button');
-    badgeBtn.className = 'btn btn-gray btn-sm badge-open-btn';
+    badgeBtn.className = 'btn btn-gray btn-sm';
     badgeBtn.textContent = 'バッジ';
     badgeBtn.addEventListener('click', e => { e.stopPropagation(); showBadgeModal(prog); });
-    wrap.appendChild(badgeBtn);
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'btn btn-danger btn-sm';
+    deleteBtn.textContent = '削除';
+    deleteBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (!confirm(`「${u.name}」のデータを削除しますか？`)) return;
+      const users = Store.getUsers().filter(user => user.userId !== u.userId);
+      Store.saveUsers(users);
+      localStorage.removeItem('progress_' + u.userId);
+      renderUserScreen();
+    });
+
+    actions.appendChild(badgeBtn);
+    actions.appendChild(deleteBtn);
+    wrap.appendChild(actions);
 
     wrap.addEventListener('click', () => startBattle(u));
     list.appendChild(wrap);
