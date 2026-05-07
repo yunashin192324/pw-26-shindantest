@@ -585,6 +585,7 @@ function startBattle(user) {
     wrongWordToInsert: null,
     isBoss: boss, wrongCount: 0,
     expAtStart: App.progress.totalExp || 0,
+    mastersAtStart: getMasterWordCount(App.progress),
   };
 
   const enemyImgEl = document.getElementById('enemy-img');
@@ -847,6 +848,7 @@ function checkAnswer(userAnswer) {
 
     b.wrongWordToInsert = q.word;
     sfxWrong();
+    setTimeout(() => speak(q.word.text, 0.85), 380);
     const pa = document.querySelector('.player-area');
     if (pa) { pa.classList.remove('player-hit'); void pa.offsetWidth; pa.classList.add('player-hit'); setTimeout(() => pa.classList.remove('player-hit'), 600); }
     showDialog('wrong');
@@ -1041,8 +1043,14 @@ function completeStage() {
   Store.saveProgress(App.progress);
 
   const li = computeLevelInfo(App.progress.totalExp || 0);
-  document.getElementById('stage-clear-exp').textContent =
-    `Lv.${li.level} ${getTitle(li.level)} / EXP: ${li.exp}/${li.expNeeded}`;
+  const expGained   = (App.progress.totalExp || 0) - b.expAtStart;
+  const newMasters  = getMasterWordCount(App.progress) - b.mastersAtStart;
+  const masterLine  = newMasters > 0 ? `<div class="stage-clear-masters">📚 ${newMasters}語 マスター！</div>` : '';
+  document.getElementById('stage-clear-exp').innerHTML =
+    `<div>+${expGained} EXP &nbsp;／&nbsp; Lv.${li.level} ${getTitle(li.level)}</div>` +
+    `<div class="stage-clear-bar-wrap"><div class="stage-clear-bar" style="width:${Math.round(li.exp/li.expNeeded*100)}%"></div></div>` +
+    `<div class="stage-clear-exp-label">${li.exp} / ${li.expNeeded}</div>` +
+    masterLine;
 
   document.getElementById('stage-clear-overlay').classList.remove('hidden');
 }

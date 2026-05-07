@@ -751,5 +751,22 @@ body {
   font-size: 0.82rem;
   margin-bottom: 20px;
   letter-spacing: 1px;
+  line-height: 1.7;
 }
+.stage-clear-bar-wrap {
+  background: #111122;
+  border: 1px solid #333366;
+  border-radius: 3px;
+  height: 8px;
+  margin: 4px 0 2px;
+  overflow: hidden;
+}
+.stage-clear-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #0055cc, #4499ff);
+  border-radius: 2px;
+  transition: width 0.6s ease;
+}
+.stage-clear-exp-label { font-size: 0.70rem; color: #6677aa; }
+.stage-clear-masters { color: #ffee44; font-size: 0.82rem; margin-top: 4px; letter-spacing: 1px; }
 
