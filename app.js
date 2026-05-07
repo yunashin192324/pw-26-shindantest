@@ -472,6 +472,7 @@ function renderUserScreen() {
             <span>📚 ${masterCount}語</span>
             <span>🔥 ${streak}日</span>
             <span>🏅 ${badgeCount}個</span>
+            <span>🗺 S.${prog.gameStage || 1}</span>
           </div>
         </div>
       </div>
@@ -1075,6 +1076,15 @@ document.getElementById('btn-stage-home').addEventListener('click', () => {
 /* ============================================================
    Battle end
    ============================================================ */
+function highlightWordInExample(example, wordText) {
+  const esc = wordText.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+  const wrap = m => `<strong class="ex-highlight">${m}</strong>`;
+  let out = example.replace(new RegExp('\\b' + esc + '\\b', 'gi'), wrap);
+  if (!out.includes('ex-highlight'))
+    out = example.replace(new RegExp('\\b' + esc + '\\w*\\b', 'gi'), wrap);
+  return out;
+}
+
 function endBattle(reason) {
   stopBGM();
   const b = App.battle;
@@ -1111,7 +1121,7 @@ function endBattle(reason) {
     const item = document.createElement('div');
     item.className = 'result-word-item' + (firstWasCorrect ? '' : everCorrect ? ' retried' : ' missed');
     const exampleHtml = (!firstWasCorrect && word.example)
-      ? `<div class="result-word-example">${word.example}</div>` : '';
+      ? `<div class="result-word-example">${highlightWordInExample(word.example, word.text)}</div>` : '';
     item.innerHTML = `
       <span class="mark">${mark}</span>
       <div class="result-word-body">
