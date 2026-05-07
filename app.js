@@ -210,8 +210,11 @@ function buildQuestion(word, stage, allWords, forceStage) {
   } else if (s === 4) {
     Object.assign(q, { type: 'input', prompt: word.meaning, stageLabel: 'Stage 4: スペルを入力' });
   } else if (s === 5) {
-    const blanked = word.example.replace(
-      new RegExp('\\b' + word.text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&') + '\\b', 'i'), '___');
+    const escaped = word.text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+    let blanked = word.example.replace(new RegExp('\\b' + escaped + '\\b', 'i'), '___');
+    if (!blanked.includes('___')) {
+      blanked = word.example.replace(new RegExp('\\b' + escaped + '\\w*\\b', 'i'), '___');
+    }
     Object.assign(q, { type: 'choice', prompt: blanked,
       choices: buildChoices(word, allWords, 'text'), answerField: 'text', stageLabel: 'Stage 5: 空欄補充' });
   } else {
@@ -1046,13 +1049,18 @@ function completeStage() {
   const expGained   = (App.progress.totalExp || 0) - b.expAtStart;
   const newMasters  = getMasterWordCount(App.progress) - b.mastersAtStart;
   const masterLine  = newMasters > 0 ? `<div class="stage-clear-masters">📚 ${newMasters}語 マスター！</div>` : '';
+  const targetPct = Math.round(li.exp / li.expNeeded * 100);
   document.getElementById('stage-clear-exp').innerHTML =
     `<div>+${expGained} EXP &nbsp;／&nbsp; Lv.${li.level} ${getTitle(li.level)}</div>` +
-    `<div class="stage-clear-bar-wrap"><div class="stage-clear-bar" style="width:${Math.round(li.exp/li.expNeeded*100)}%"></div></div>` +
+    `<div class="stage-clear-bar-wrap"><div class="stage-clear-bar" style="width:0%"></div></div>` +
     `<div class="stage-clear-exp-label">${li.exp} / ${li.expNeeded}</div>` +
     masterLine;
 
   document.getElementById('stage-clear-overlay').classList.remove('hidden');
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const bar = document.querySelector('.stage-clear-bar');
+    if (bar) bar.style.width = targetPct + '%';
+  }));
 }
 
 document.getElementById('btn-next-stage').addEventListener('click', () => {
