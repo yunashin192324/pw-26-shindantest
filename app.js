@@ -717,10 +717,11 @@ function renderQuestion() {
       btn.disabled  = false;
       btn.dataset.answer = text;
       btn.dataset.word   = ch ? ch.id : '';
+      const keyHint = `<span class="choice-key">${i + 1}</span>`;
       if (q.answerField === 'text' && ch) {
-        btn.innerHTML = `<span class="choice-label">${text}</span><span class="speak-mini" data-text="${text}">🔊</span>`;
+        btn.innerHTML = `${keyHint}<span class="choice-label">${text}</span><span class="speak-mini" data-text="${text}">🔊</span>`;
       } else {
-        btn.textContent = text;
+        btn.innerHTML = `${keyHint}${text}`;
       }
     });
   }
@@ -980,7 +981,11 @@ function updateHPBars() {
   document.getElementById('enemy-hp-num').textContent = b.enemyHP;
   document.getElementById('player-hp-num').textContent = b.playerHP;
   document.getElementById('enemy-hp-bar').style.width = (b.enemyHP / b.maxHP * 100) + '%';
-  document.getElementById('player-hp-bar').style.width = b.playerHP + '%';
+  const playerBar = document.getElementById('player-hp-bar');
+  playerBar.style.width = b.playerHP + '%';
+  playerBar.className = 'hp-fill player-fill';
+  if (b.playerHP <= 30) playerBar.classList.add('hp-critical');
+  else if (b.playerHP <= 60) playerBar.classList.add('hp-warning');
   const img = document.getElementById('enemy-img');
   if (img) img.classList.toggle('enemy-defeated', !b.isBoss && b.enemyHP <= 0);
 }
@@ -1088,6 +1093,24 @@ function endBattle(reason) {
 
 document.getElementById('btn-retry').addEventListener('click', () => startBattle(App.currentUser));
 document.getElementById('btn-back-user').addEventListener('click', () => renderUserScreen());
+
+/* ============================================================
+   Keyboard shortcuts
+   ============================================================ */
+document.addEventListener('keydown', e => {
+  if (!App.battle) return;
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (['1','2','3','4'].includes(e.key)) {
+    if (document.getElementById('choices-area').classList.contains('hidden')) return;
+    const btn = document.querySelectorAll('.choice-btn')[parseInt(e.key) - 1];
+    if (btn && !btn.disabled) btn.click();
+    return;
+  }
+  if (e.key === 'Enter') {
+    const nextBtn = document.getElementById('btn-next');
+    if (!nextBtn.classList.contains('hidden')) nextBtn.click();
+  }
+});
 
 /* ============================================================
    Init

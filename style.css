@@ -681,6 +681,36 @@ body {
 }
 
 /* ════════════════════════════════════════
+   KEYBOARD SHORTCUT HINTS
+   ════════════════════════════════════════ */
+.choice-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #111133;
+  border: 1px solid #3a3a88;
+  border-radius: 3px;
+  font-size: 0.62rem;
+  color: #6666aa;
+  width: 14px;
+  height: 14px;
+  margin-right: 5px;
+  flex-shrink: 0;
+  vertical-align: middle;
+  line-height: 1;
+}
+
+/* ════════════════════════════════════════
+   LOW HP WARNING
+   ════════════════════════════════════════ */
+.hp-fill.hp-warning  { background: linear-gradient(90deg, #886600, #ffaa00); }
+.hp-fill.hp-critical { background: linear-gradient(90deg, #880000, #ff3300); animation: hpCriticalPulse 1.2s ease-in-out infinite; }
+@keyframes hpCriticalPulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
+
+/* ════════════════════════════════════════
    PLAYER HIT FLASH
    ════════════════════════════════════════ */
 @keyframes playerHit {
