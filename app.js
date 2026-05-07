@@ -53,6 +53,7 @@ const DIALOGS = {
   special: ['⚡ 必殺技！！', 'スペシャルアタック！', '全力全開！'],
   win:     ['勝利だ！', 'やったぞ！', '最高の冒険者！'],
   lose:    ['次は勝つ！', '鍛え直してくる！', '一緒にがんばろう！'],
+  defeat:  ['撃破！', '敵を倒した！残りも完璧に！', 'ラストスパート！'],
   boss:    ['ボスが現れた！', '強敵だ！気を引き締めて！', '伝説の戦いが始まる！'],
   levelup: ['レベルアップ！', '成長している！', 'どんどん強くなる！'],
 };
@@ -585,9 +586,10 @@ function startBattle(user) {
     isBoss: boss, wrongCount: 0,
   };
 
-  document.getElementById('enemy-img').src =
-    `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${enemy.pokeId}.png`;
-  document.getElementById('enemy-img').alt = enemy.name;
+  const enemyImgEl = document.getElementById('enemy-img');
+  enemyImgEl.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${enemy.pokeId}.png`;
+  enemyImgEl.alt = enemy.name;
+  enemyImgEl.classList.remove('enemy-defeated');
   document.getElementById('enemy-name').textContent = enemy.name;
   document.getElementById('battle-username').textContent = user.name;
   document.getElementById('stage-clear-overlay').classList.add('hidden');
@@ -773,6 +775,7 @@ function checkAnswer(userAnswer) {
       dmg = Math.floor(10 * mult);
       sfxAttack();
     }
+    const prevEnemyHP = b.enemyHP;
     b.enemyHP = Math.max(0, b.enemyHP - dmg);
     playEnemyHit(dmg, isSpecial);
 
@@ -810,6 +813,7 @@ function checkAnswer(userAnswer) {
     else if (b.combo >= 5)  showDialog('combo5');
     else if (b.combo >= 3)  showDialog('combo3');
     else                    showDialog('correct');
+    if (!b.isBoss && prevEnemyHP > 0 && b.enemyHP <= 0) showDialog('defeat');
 
     const mult = b.combo >= 5 ? 2.0 : b.combo >= 3 ? 1.5 : 1.0;
     showResult(true, dmg, isSpecial ? null : mult);
@@ -841,6 +845,8 @@ function checkAnswer(userAnswer) {
 
     b.wrongWordToInsert = q.word;
     sfxWrong();
+    const pa = document.querySelector('.player-area');
+    if (pa) { pa.classList.remove('player-hit'); void pa.offsetWidth; pa.classList.add('player-hit'); setTimeout(() => pa.classList.remove('player-hit'), 600); }
     showDialog('wrong');
     showResult(false, 10, 1);
     Store.saveProgress(App.progress);
@@ -975,6 +981,8 @@ function updateHPBars() {
   document.getElementById('player-hp-num').textContent = b.playerHP;
   document.getElementById('enemy-hp-bar').style.width = (b.enemyHP / b.maxHP * 100) + '%';
   document.getElementById('player-hp-bar').style.width = b.playerHP + '%';
+  const img = document.getElementById('enemy-img');
+  if (img) img.classList.toggle('enemy-defeated', !b.isBoss && b.enemyHP <= 0);
 }
 
 function updateComboDisplay() {
