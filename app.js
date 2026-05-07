@@ -53,6 +53,7 @@ const DIALOGS = {
   special: ['⚡ 必殺技！！', 'スペシャルアタック！', '全力全開！'],
   win:     ['勝利だ！', 'やったぞ！', '最高の冒険者！'],
   lose:    ['次は勝つ！', '鍛え直してくる！', '一緒にがんばろう！'],
+  defeat:  ['撃破！', '敵を倒した！残りも完璧に！', 'ラストスパート！'],
   boss:    ['ボスが現れた！', '強敵だ！気を引き締めて！', '伝説の戦いが始まる！'],
   levelup: ['レベルアップ！', '成長している！', 'どんどん強くなる！'],
 };
@@ -583,11 +584,14 @@ function startBattle(user) {
     wordsCompleted:  new Set(),
     wrongWordToInsert: null,
     isBoss: boss, wrongCount: 0,
+    expAtStart: App.progress.totalExp || 0,
+    mastersAtStart: getMasterWordCount(App.progress),
   };
 
-  document.getElementById('enemy-img').src =
-    `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${enemy.pokeId}.png`;
-  document.getElementById('enemy-img').alt = enemy.name;
+  const enemyImgEl = document.getElementById('enemy-img');
+  enemyImgEl.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${enemy.pokeId}.png`;
+  enemyImgEl.alt = enemy.name;
+  enemyImgEl.classList.remove('enemy-defeated');
   document.getElementById('enemy-name').textContent = enemy.name;
   document.getElementById('battle-username').textContent = user.name;
   document.getElementById('stage-clear-overlay').classList.add('hidden');
@@ -715,10 +719,11 @@ function renderQuestion() {
       btn.disabled  = false;
       btn.dataset.answer = text;
       btn.dataset.word   = ch ? ch.id : '';
+      const keyHint = `<span class="choice-key">${i + 1}</span>`;
       if (q.answerField === 'text' && ch) {
-        btn.innerHTML = `<span class="choice-label">${text}</span><span class="speak-mini" data-text="${text}">🔊</span>`;
+        btn.innerHTML = `${keyHint}<span class="choice-label">${text}</span><span class="speak-mini" data-text="${text}">🔊</span>`;
       } else {
-        btn.textContent = text;
+        btn.innerHTML = `${keyHint}${text}`;
       }
     });
   }
@@ -773,6 +778,7 @@ function checkAnswer(userAnswer) {
       dmg = Math.floor(10 * mult);
       sfxAttack();
     }
+    const prevEnemyHP = b.enemyHP;
     b.enemyHP = Math.max(0, b.enemyHP - dmg);
     playEnemyHit(dmg, isSpecial);
 
@@ -810,6 +816,7 @@ function checkAnswer(userAnswer) {
     else if (b.combo >= 5)  showDialog('combo5');
     else if (b.combo >= 3)  showDialog('combo3');
     else                    showDialog('correct');
+    if (!b.isBoss && prevEnemyHP > 0 && b.enemyHP <= 0) showDialog('defeat');
 
     const mult = b.combo >= 5 ? 2.0 : b.combo >= 3 ? 1.5 : 1.0;
     showResult(true, dmg, isSpecial ? null : mult);
@@ -841,6 +848,9 @@ function checkAnswer(userAnswer) {
 
     b.wrongWordToInsert = q.word;
     sfxWrong();
+    setTimeout(() => speak(q.word.text, 0.85), 380);
+    const pa = document.querySelector('.player-area');
+    if (pa) { pa.classList.remove('player-hit'); void pa.offsetWidth; pa.classList.add('player-hit'); setTimeout(() => pa.classList.remove('player-hit'), 600); }
     showDialog('wrong');
     showResult(false, 10, 1);
     Store.saveProgress(App.progress);
@@ -974,7 +984,13 @@ function updateHPBars() {
   document.getElementById('enemy-hp-num').textContent = b.enemyHP;
   document.getElementById('player-hp-num').textContent = b.playerHP;
   document.getElementById('enemy-hp-bar').style.width = (b.enemyHP / b.maxHP * 100) + '%';
-  document.getElementById('player-hp-bar').style.width = b.playerHP + '%';
+  const playerBar = document.getElementById('player-hp-bar');
+  playerBar.style.width = b.playerHP + '%';
+  playerBar.className = 'hp-fill player-fill';
+  if (b.playerHP <= 30) playerBar.classList.add('hp-critical');
+  else if (b.playerHP <= 60) playerBar.classList.add('hp-warning');
+  const img = document.getElementById('enemy-img');
+  if (img) img.classList.toggle('enemy-defeated', !b.isBoss && b.enemyHP <= 0);
 }
 
 function updateComboDisplay() {
@@ -1027,8 +1043,14 @@ function completeStage() {
   Store.saveProgress(App.progress);
 
   const li = computeLevelInfo(App.progress.totalExp || 0);
-  document.getElementById('stage-clear-exp').textContent =
-    `Lv.${li.level} ${getTitle(li.level)} / EXP: ${li.exp}/${li.expNeeded}`;
+  const expGained   = (App.progress.totalExp || 0) - b.expAtStart;
+  const newMasters  = getMasterWordCount(App.progress) - b.mastersAtStart;
+  const masterLine  = newMasters > 0 ? `<div class="stage-clear-masters">📚 ${newMasters}語 マスター！</div>` : '';
+  document.getElementById('stage-clear-exp').innerHTML =
+    `<div>+${expGained} EXP &nbsp;／&nbsp; Lv.${li.level} ${getTitle(li.level)}</div>` +
+    `<div class="stage-clear-bar-wrap"><div class="stage-clear-bar" style="width:${Math.round(li.exp/li.expNeeded*100)}%"></div></div>` +
+    `<div class="stage-clear-exp-label">${li.exp} / ${li.expNeeded}</div>` +
+    masterLine;
 
   document.getElementById('stage-clear-overlay').classList.remove('hidden');
 }
@@ -1059,18 +1081,38 @@ function endBattle(reason) {
   }
 
   const li = computeLevelInfo(App.progress.totalExp || 0);
-  document.getElementById('result-score').textContent =
-    `正解 ${b.correct} / ${b.total} 問  |  Lv.${li.level} ${getTitle(li.level)}`;
+  const expGained = (App.progress.totalExp || 0) - b.expAtStart;
+  document.getElementById('result-score').innerHTML =
+    `<div>正解 ${b.wordsCompleted.size} / ${b.wordsToComplete.size} 語 &nbsp;|&nbsp; +${expGained} EXP</div>` +
+    `<div class="result-level">Lv.${li.level} ${getTitle(li.level)}</div>`;
+
+  // Deduplicate: one row per word — ✅ first-try correct, 🔄 correct after retry, ❌ never correct
+  const wordStatus = new Map();
+  b.results.forEach(r => {
+    if (!wordStatus.has(r.word.id)) {
+      wordStatus.set(r.word.id, { word: r.word, firstWasCorrect: r.correct, everCorrect: r.correct });
+    } else if (r.correct) {
+      wordStatus.get(r.word.id).everCorrect = true;
+    }
+  });
 
   const listEl = document.getElementById('result-word-list');
   listEl.innerHTML = '';
-  b.results.forEach(r => {
+  wordStatus.forEach(({ word, firstWasCorrect, everCorrect }) => {
+    const mark = firstWasCorrect ? '✅' : everCorrect ? '🔄' : '❌';
     const item = document.createElement('div');
-    item.className = 'result-word-item';
+    item.className = 'result-word-item' + (firstWasCorrect ? '' : everCorrect ? ' retried' : ' missed');
+    const exampleHtml = (!firstWasCorrect && word.example)
+      ? `<div class="result-word-example">${word.example}</div>` : '';
     item.innerHTML = `
-      <span class="mark">${r.correct ? '✅' : '❌'}</span>
-      <span class="result-word-en">${r.word.text}</span>
-      <span class="result-word-ja">${r.word.meaning}</span>
+      <span class="mark">${mark}</span>
+      <div class="result-word-body">
+        <div class="result-word-row">
+          <span class="result-word-en">${word.text}</span>
+          <span class="result-word-ja">${word.meaning}</span>
+        </div>
+        ${exampleHtml}
+      </div>
     `;
     listEl.appendChild(item);
   });
@@ -1080,6 +1122,24 @@ function endBattle(reason) {
 
 document.getElementById('btn-retry').addEventListener('click', () => startBattle(App.currentUser));
 document.getElementById('btn-back-user').addEventListener('click', () => renderUserScreen());
+
+/* ============================================================
+   Keyboard shortcuts
+   ============================================================ */
+document.addEventListener('keydown', e => {
+  if (!App.battle) return;
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (['1','2','3','4'].includes(e.key)) {
+    if (document.getElementById('choices-area').classList.contains('hidden')) return;
+    const btn = document.querySelectorAll('.choice-btn')[parseInt(e.key) - 1];
+    if (btn && !btn.disabled) btn.click();
+    return;
+  }
+  if (e.key === 'Enter') {
+    const nextBtn = document.getElementById('btn-next');
+    if (!nextBtn.classList.contains('hidden')) nextBtn.click();
+  }
+});
 
 /* ============================================================
    Init

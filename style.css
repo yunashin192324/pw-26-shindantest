@@ -444,11 +444,13 @@ body {
 
 .result-score {
   text-align: center;
-  font-size: 0.95rem;
+  font-size: 0.92rem;
   color: #9999cc;
   margin-bottom: 20px;
-  letter-spacing: 2px;
+  letter-spacing: 1px;
+  line-height: 1.7;
 }
+.result-level { color: #ffee44; font-size: 0.80rem; }
 
 .result-word-list {
   background: #0c0c2c;
@@ -458,14 +460,26 @@ body {
 }
 .result-word-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   padding: 7px 0;
   border-bottom: 1px solid #1e1e4a;
   font-size: 0.88rem;
 }
 .result-word-item:last-child { border-bottom: none; }
-.result-word-item .mark { font-size: 1rem; }
+.result-word-item .mark { font-size: 1rem; margin-top: 1px; flex-shrink: 0; }
+.result-word-item.retried { background: rgba(100,60,0,0.18); }
+.result-word-item.missed  { background: rgba(100,0,0,0.18); }
+.result-word-body { flex: 1; min-width: 0; }
+.result-word-row { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.result-word-example {
+  font-size: 0.72rem;
+  color: #6a6a99;
+  margin-top: 3px;
+  font-style: italic;
+  line-height: 1.5;
+  word-break: break-word;
+}
 .result-word-en { font-weight: bold; color: #88aaff; }
 .result-word-ja { color: #9999cc; }
 
@@ -681,6 +695,55 @@ body {
 }
 
 /* ════════════════════════════════════════
+   KEYBOARD SHORTCUT HINTS
+   ════════════════════════════════════════ */
+.choice-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #111133;
+  border: 1px solid #3a3a88;
+  border-radius: 3px;
+  font-size: 0.62rem;
+  color: #6666aa;
+  width: 14px;
+  height: 14px;
+  margin-right: 5px;
+  flex-shrink: 0;
+  vertical-align: middle;
+  line-height: 1;
+}
+
+/* ════════════════════════════════════════
+   LOW HP WARNING
+   ════════════════════════════════════════ */
+.hp-fill.hp-warning  { background: linear-gradient(90deg, #886600, #ffaa00); }
+.hp-fill.hp-critical { background: linear-gradient(90deg, #880000, #ff3300); animation: hpCriticalPulse 1.2s ease-in-out infinite; }
+@keyframes hpCriticalPulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
+
+/* ════════════════════════════════════════
+   PLAYER HIT FLASH
+   ════════════════════════════════════════ */
+@keyframes playerHit {
+  0%   { background: #0c0c2c; border-color: #c8c8e8; box-shadow: inset 0 0 0 1px #2a2a6a, 0 3px 8px rgba(0,0,0,0.6); }
+  20%  { background: #3a0808; border-color: #ff2222; box-shadow: inset 0 0 0 1px #aa0000, 0 0 18px rgba(255,0,0,0.45); }
+  100% { background: #0c0c2c; border-color: #c8c8e8; box-shadow: inset 0 0 0 1px #2a2a6a, 0 3px 8px rgba(0,0,0,0.6); }
+}
+.player-area.player-hit { animation: playerHit 0.6s ease-out; }
+
+/* ════════════════════════════════════════
+   ENEMY DEFEATED (normal battle, HP=0)
+   ════════════════════════════════════════ */
+.enemy-img.enemy-defeated {
+  filter: drop-shadow(0 6px 12px rgba(0,0,0,0.8)) grayscale(0.9) brightness(0.45);
+  opacity: 0.55;
+  transition: opacity 0.7s ease;
+}
+
+/* ════════════════════════════════════════
    STAGE CLEAR EXP LINE
    ════════════════════════════════════════ */
 .stage-clear-exp {
@@ -688,4 +751,22 @@ body {
   font-size: 0.82rem;
   margin-bottom: 20px;
   letter-spacing: 1px;
+  line-height: 1.7;
 }
+.stage-clear-bar-wrap {
+  background: #111122;
+  border: 1px solid #333366;
+  border-radius: 3px;
+  height: 8px;
+  margin: 4px 0 2px;
+  overflow: hidden;
+}
+.stage-clear-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #0055cc, #4499ff);
+  border-radius: 2px;
+  transition: width 0.6s ease;
+}
+.stage-clear-exp-label { font-size: 0.70rem; color: #6677aa; }
+.stage-clear-masters { color: #ffee44; font-size: 0.82rem; margin-top: 4px; letter-spacing: 1px; }
+
