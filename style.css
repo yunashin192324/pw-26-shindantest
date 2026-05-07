@@ -564,7 +564,7 @@ body {
    ════════════════════════════════════════ */
 .user-btn {
   cursor: pointer;
-  padding: 12px 14px;
+  padding: 12px 80px 12px 14px;
   position: relative;
 }
 .user-btn-main {
@@ -589,15 +589,17 @@ body {
   font-size: 0.72rem;
   color: #8888aa;
 }
-.badge-open-btn {
+.user-btn-actions {
   position: absolute;
   top: 10px;
   right: 10px;
-  padding: 4px 10px;
-  font-size: 0.72rem;
-  min-height: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 .btn-sm { padding: 4px 12px; font-size: 0.78rem; min-height: 30px; }
+.btn-danger { background: #330000; border-color: #aa0000; color: #ffaaaa; }
+.btn-danger:hover { background: #550000; }
 
 /* ════════════════════════════════════════
    BATTLE HEADER – new elements
