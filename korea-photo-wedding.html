@@ -1,0 +1,2122 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>韓国フォトウェディング | HIS Wedding Korea</title>
+  <meta name="description" content="韓国フォトウェディング専門。景福宮・北村韓屋村・済州島など憧れのロケーションで、世界に一枚だけの写真を。HIS Weddingが全てをサポートします。">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Noto+Sans+JP:wght@300;400;500&family=Noto+Serif+JP:wght@300;400;600&display=swap" rel="stylesheet">
+  <style>
+    /* ========================================
+       RESET & BASE
+    ======================================== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', sans-serif;
+      background: #0e0b08;
+      color: #2c2416;
+      overflow-x: hidden;
+      font-weight: 300;
+    }
+    img { display: block; width: 100%; height: 100%; object-fit: cover; }
+    a { text-decoration: none; color: inherit; }
+
+    /* ========================================
+       VARIABLES
+    ======================================== */
+    :root {
+      --gold: #c9a96e;
+      --gold-light: #e8d5a8;
+      --gold-dark: #8b6940;
+      --black: #0e0b08;
+      --dark-brown: #1e1610;
+      --brown: #2c2416;
+      --brown-mid: #4a3728;
+      --off-white: #f5f0e8;
+      --cream: #faf6ef;
+      --gray-dark: #1a1a1a;
+      --serif: 'Cormorant Garamond', 'Noto Serif JP', Georgia, serif;
+      --sans: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', sans-serif;
+    }
+
+    /* ========================================
+       SCROLL ANIMATION
+    ======================================== */
+    .fade-in {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.8s ease, transform 0.8s ease;
+    }
+    .fade-in.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .fade-in-left {
+      opacity: 0;
+      transform: translateX(-40px);
+      transition: opacity 0.9s ease, transform 0.9s ease;
+    }
+    .fade-in-left.visible {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    .fade-in-right {
+      opacity: 0;
+      transform: translateX(40px);
+      transition: opacity 0.9s ease, transform 0.9s ease;
+    }
+    .fade-in-right.visible {
+      opacity: 1;
+      transform: translateX(0);
+    }
+
+    /* ========================================
+       GOLD DIVIDER
+    ======================================== */
+    .gold-line {
+      border: none;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--gold), transparent);
+      margin: 0 auto;
+    }
+    .gold-line-full {
+      border: none;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--gold) 20%, var(--gold) 80%, transparent);
+      width: 100%;
+    }
+
+    /* ========================================
+       SECTION HEADING COMMON
+    ======================================== */
+    .section-en {
+      font-family: var(--serif);
+      font-weight: 300;
+      letter-spacing: 0.3em;
+      color: var(--gold);
+      font-size: clamp(2rem, 4vw, 3.2rem);
+      line-height: 1.1;
+    }
+    .section-ja {
+      font-family: var(--sans);
+      font-weight: 300;
+      letter-spacing: 0.15em;
+      color: var(--brown-mid);
+      font-size: 0.85rem;
+      margin-top: 8px;
+    }
+    .section-ja-white {
+      font-family: var(--sans);
+      font-weight: 300;
+      letter-spacing: 0.15em;
+      color: rgba(255,255,255,0.65);
+      font-size: 0.85rem;
+      margin-top: 8px;
+    }
+
+    /* ========================================
+       BUTTON STYLES
+    ======================================== */
+    .btn-outline-gold {
+      display: inline-block;
+      padding: 12px 36px;
+      border: 1px solid var(--gold);
+      color: var(--gold);
+      font-family: var(--sans);
+      font-weight: 300;
+      font-size: 0.75rem;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      transition: all 0.35s ease;
+      cursor: pointer;
+      background: transparent;
+    }
+    .btn-outline-gold:hover {
+      background: var(--gold);
+      color: var(--dark-brown);
+    }
+    .btn-outline-white {
+      display: inline-block;
+      padding: 12px 36px;
+      border: 1px solid rgba(255,255,255,0.7);
+      color: rgba(255,255,255,0.9);
+      font-family: var(--sans);
+      font-weight: 300;
+      font-size: 0.75rem;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      transition: all 0.35s ease;
+      cursor: pointer;
+      background: transparent;
+    }
+    .btn-outline-white:hover {
+      background: rgba(255,255,255,0.15);
+    }
+    .text-link-gold {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--gold);
+      font-size: 0.75rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      font-family: var(--serif);
+      font-weight: 300;
+      border-bottom: 1px solid transparent;
+      transition: border-color 0.3s ease;
+    }
+    .text-link-gold:hover { border-bottom-color: var(--gold); }
+    .text-link-gold::after { content: '→'; font-family: serif; }
+
+    /* ========================================
+       ① NAVIGATION
+    ======================================== */
+    #nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 1000;
+      padding: 20px 40px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: background 0.4s ease, padding 0.4s ease;
+    }
+    #nav.scrolled {
+      background: rgba(14,11,8,0.95);
+      backdrop-filter: blur(10px);
+      padding: 14px 40px;
+    }
+    .nav-logo {
+      font-family: var(--serif);
+      font-weight: 300;
+      font-size: 1.3rem;
+      letter-spacing: 0.3em;
+      color: var(--gold-light);
+    }
+    .nav-logo span { font-size: 0.65rem; display: block; letter-spacing: 0.2em; color: rgba(255,255,255,0.5); margin-top: 2px; }
+    .nav-links {
+      display: flex;
+      gap: 32px;
+      list-style: none;
+    }
+    .nav-links a {
+      color: rgba(255,255,255,0.75);
+      font-size: 0.7rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      font-family: var(--serif);
+      font-weight: 300;
+      transition: color 0.3s;
+    }
+    .nav-links a:hover { color: var(--gold); }
+    .nav-cta {
+      padding: 8px 20px;
+      border: 1px solid var(--gold);
+      color: var(--gold);
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      font-family: var(--sans);
+      font-weight: 300;
+      transition: all 0.3s;
+    }
+    .nav-cta:hover { background: var(--gold); color: var(--dark-brown); }
+    .hamburger {
+      display: none;
+      flex-direction: column;
+      gap: 5px;
+      cursor: pointer;
+      padding: 4px;
+      background: none;
+      border: none;
+    }
+    .hamburger span {
+      display: block;
+      width: 24px;
+      height: 1px;
+      background: var(--gold-light);
+      transition: all 0.35s;
+    }
+    .hamburger.open span:nth-child(1) { transform: translateY(6px) rotate(45deg); }
+    .hamburger.open span:nth-child(2) { opacity: 0; }
+    .hamburger.open span:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
+
+    /* Mobile menu */
+    .mobile-menu {
+      position: fixed;
+      inset: 0;
+      background: rgba(14,11,8,0.97);
+      z-index: 999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 36px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.4s ease;
+    }
+    .mobile-menu.open { opacity: 1; pointer-events: all; }
+    .mobile-menu a {
+      font-family: var(--serif);
+      font-weight: 300;
+      font-size: 1.6rem;
+      letter-spacing: 0.25em;
+      color: rgba(255,255,255,0.8);
+      transition: color 0.3s;
+    }
+    .mobile-menu a:hover { color: var(--gold); }
+    .mobile-menu .mobile-menu-cta {
+      padding: 14px 44px;
+      border: 1px solid var(--gold);
+      color: var(--gold);
+      font-size: 0.8rem;
+      letter-spacing: 0.25em;
+    }
+
+    /* ========================================
+       ① HERO SECTION
+    ======================================== */
+    #hero {
+      position: relative;
+      height: 100vh;
+      min-height: 600px;
+      overflow: hidden;
+    }
+    .hero-bg {
+      position: absolute;
+      inset: 0;
+    }
+    /* ダミー画像 - Unsplash フリー素材 */
+    .hero-bg img {
+      object-position: center 30%;
+    }
+    .hero-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        to bottom,
+        rgba(14,11,8,0.4) 0%,
+        rgba(14,11,8,0.25) 40%,
+        rgba(14,11,8,0.6) 100%
+      );
+    }
+    .hero-content {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 0 20px;
+    }
+    .hero-eyebrow {
+      font-family: var(--serif);
+      font-weight: 300;
+      font-size: 0.7rem;
+      letter-spacing: 0.4em;
+      color: var(--gold);
+      text-transform: uppercase;
+      margin-bottom: 24px;
+    }
+    .hero-logo {
+      font-family: var(--serif);
+      font-weight: 300;
+      font-size: clamp(2.8rem, 7vw, 5.5rem);
+      letter-spacing: 0.2em;
+      color: var(--off-white);
+      line-height: 1.1;
+      margin-bottom: 12px;
+    }
+    .hero-logo .gold { color: var(--gold); }
+    .hero-tagline {
+      font-family: var(--serif);
+      font-weight: 300;
+      font-size: clamp(0.8rem, 2vw, 1.1rem);
+      letter-spacing: 0.3em;
+      color: rgba(255,255,255,0.75);
+      margin-bottom: 48px;
+      font-style: italic;
+    }
+    .hero-scroll {
+      position: absolute;
+      bottom: 36px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      color: rgba(255,255,255,0.5);
+      font-size: 0.6rem;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+    }
+    .hero-scroll-line {
+      width: 1px;
+      height: 48px;
+      background: linear-gradient(to bottom, var(--gold), transparent);
+      animation: scrollLine 2s ease-in-out infinite;
+    }
+    @keyframes scrollLine {
+      0% { transform: scaleY(0); transform-origin: top; }
+      50% { transform: scaleY(1); transform-origin: top; }
+      51% { transform: scaleY(1); transform-origin: bottom; }
+      100% { transform: scaleY(0); transform-origin: bottom; }
+    }
+
+    /* ========================================
+       ② ANNOUNCEMENT BANNER
+    ======================================== */
+    #announcement {
+      background: #111;
+      padding: 32px 0;
+      overflow: hidden;
+    }
+    .announcement-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 40px;
+    }
+    .announcement-header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .announcement-header p {
+      font-family: var(--serif);
+      font-weight: 300;
+      letter-spacing: 0.3em;
+      color: var(--gold);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+    }
+    .announcement-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1px;
+      background: rgba(201,169,110,0.15);
+    }
+    .announcement-item {
+      background: #161210;
+      padding: 24px 20px;
+      border-top: 1px solid rgba(201,169,110,0.25);
+    }
+    .ann-label {
+      display: inline-block;
+      font-size: 0.6rem;
+      letter-spacing: 0.2em;
+      color: var(--gold);
+      border: 1px solid var(--gold);
+      padding: 2px 8px;
+      margin-bottom: 10px;
+    }
+    .ann-date {
+      font-size: 0.65rem;
+      color: rgba(255,255,255,0.35);
+      letter-spacing: 0.1em;
+      margin-bottom: 6px;
+    }
+    .ann-text {
+      font-size: 0.8rem;
+      color: rgba(255,255,255,0.75);
+      line-height: 1.7;
+      font-weight: 300;
+    }
+
+    /* ========================================
+       ③ NAME SECTION
+    ======================================== */
+    #about {
+      background: var(--cream);
+      padding: 100px 0;
+    }
+    .about-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 40px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 80px;
+      align-items: center;
+    }
+    .about-img-wrap {
+      position: relative;
+      aspect-ratio: 2/3;
+      overflow: hidden;
+    }
+    .about-img-deco {
+      position: absolute;
+      top: -20px;
+      left: -20px;
+      right: 20px;
+      bottom: 20px;
+      border: 1px solid rgba(201,169,110,0.3);
+      z-index: 0;
+      pointer-events: none;
+    }
+    .about-img-wrap img {
+      position: relative;
+      z-index: 1;
+    }
+    .about-text { padding: 20px 0; }
+    .about-eyebrow {
+      font-size: 0.65rem;
+      letter-spacing: 0.3em;
+      color: var(--gold);
+      text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+    .about-brand {
+      font-family: var(--serif);
+      font-weight: 300;
+      font-size: clamp(2rem, 4vw, 3.2rem);
+      letter-spacing: 0.2em;
+      color: var(--brown);
+      line-height: 1.2;
+      margin-bottom: 8px;
+    }
+    .about-brand-sub {
+      font-family: var(--serif);
+      font-weight: 300;
+      font-size: 0.9rem;
+      letter-spacing: 0.25em;
+      color: var(--gold);
+      font-style: italic;
+      margin-bottom: 32px;
+    }
+    .about-body {
+      font-size: 0.85rem;
+      line-height: 2.2;
+      color: #5a4e42;
+      font-weight: 300;
+      margin-bottom: 40px;
+    }
+
+    /* ========================================
+       ④ CONCEPT SECTION
+    ======================================== */
+    #concept {
+      background: #fff;
+      padding: 100px 0;
+    }
+    .concept-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 40px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 80px;
+      align-items: start;
+    }
+    .concept-text { padding-top: 20px; }
+    .concept-heading-block { margin-bottom: 40px; }
+    .concept-heading-block .section-en { color: var(--brown); }
+    .concept-heading-block .section-ja { color: #8a7a6a; }
+    .concept-body {
+      font-size: 0.85rem;
+      line-height: 2.3;
+      color: #5a4e42;
+      font-weight: 300;
+      margin-bottom: 20px;
+    }
+    .concept-body + .concept-body { margin-top: 0; }
+    .concept-img-wrap {
+      position: relative;
+      aspect-ratio: 2/3;
+      overflow: hidden;
+    }
+    .concept-img-deco {
+      position: absolute;
+      bottom: -20px;
+      right: -20px;
+      left: 20px;
+      top: 20px;
+      border: 1px solid rgba(201,169,110,0.3);
+      pointer-events: none;
+    }
+    .concept-img-wrap img { position: relative; z-index: 1; }
+
+    /* AWARENESS / COST sub-section */
+    #awareness {
+      background: var(--off-white);
+      padding: 80px 0;
+    }
+    .awareness-inner {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 0 40px;
+      text-align: center;
+    }
+    .awareness-lead {
+      font-family: var(--serif);
+      font-weight: 300;
+      font-size: clamp(1.3rem, 2.5vw, 1.8rem);
+      letter-spacing: 0.1em;
+      color: var(--brown);
+      line-height: 1.8;
+      margin-bottom: 32px;
+    }
+    .awareness-body {
+      font-size: 0.85rem;
+      line-height: 2.3;
+      color: #5a4e42;
+      font-weight: 300;
+      text-align: left;
+      max-width: 680px;
+      margin: 0 auto 40px;
+    }
+    .cost-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      margin-top: 48px;
+      text-align: left;
+    }
+    .cost-card {
+      background: #fff;
+      border: 1px solid rgba(201,169,110,0.2);
+      padding: 32px 24px;
+    }
+    .cost-card-label {
+      font-size: 0.6rem;
+      letter-spacing: 0.2em;
+      color: var(--gold);
+      border-bottom: 1px solid rgba(201,169,110,0.3);
+      padding-bottom: 12px;
+      margin-bottom: 16px;
+      text-transform: uppercase;
+    }
+    .cost-card-price {
+      font-family: var(--serif);
+      font-weight: 300;
+      font-size: 1.8rem;
+      color: var(--brown);
+      letter-spacing: 0.05em;
+    }
+    .cost-card-price span {
+      font-size: 0.75rem;
+      color: #8a7a6a;
+      font-family: var(--sans);
+    }
+    .cost-card-note {
+      font-size: 0.75rem;
+      color: #8a7a6a;
+      margin-top: 8px;
+      line-height: 1.7;
+      font-weight: 300;
+    }
+
+    /* ========================================
+       ⑤ PLAN SECTION
+    ======================================== */
+    #plan {
+      background: var(--dark-brown);
+      padding: 100px 0;
+    }
+    .plan-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 40px;
+    }
+    .plan-header {
+      text-align: center;
+      margin-bottom: 64px;
+    }
+    .plan-header .section-en { color: var(--gold); }
+    .plan-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 2px;
+    }
+    .plan-card {
+      background: #211810;
+      padding: 40px 36px;
+      border-top: 1px solid rgba(201,169,110,0.2);
+      position: relative;
+      transition: background 0.35s;
+    }
+    .plan-card:hover { background: #2e1f14; }
+    .plan-card.featured {
+      background: #2a1c12;
+      border-top-color: var(--gold);
+    }
+    .plan-badge {
+      position: absolute;
+      top: 0; right: 32px;
+      background: var(--gold);
+      color: var(--dark-brown);
+      font-size: 0.6rem;
+      letter-spacing: 0.15em;
+      padding: 4px 12px;
+      font-weight: 500;
+    }
+    .plan-num {
+      font-family: var(--serif);
+      font-size: 0.65rem;
+      letter-spacing: 0.3em;
+      color: var(--gold);
+      margin-bottom: 12px;
+    }
+    .plan-name {
+      font-family: var(--serif);
+      font-weight: 300;
+      font-size: 1.6rem;
+      letter-spacing: 0.15em;
+      color: var(--off-white);
+      margin-bottom: 8px;
+    }
+    .plan-name-ja {
+      font-size: 0.75rem;
+      color: rgba(255,255,255,0.45);
+      letter-spacing: 0.15em;
+      margin-bottom: 24px;
+    }
+    .plan-price {
+      font-family: var(--serif);
+      font-size: 2.2rem;
+      font-weight: 300;
+      color: var(--gold-light);
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+    .plan-price-note {
+      font-size: 0.7rem;
+      color: rgba(255,255,255,0.35);
+      margin-bottom: 28px;
+    }
+    .plan-divider {
+      height: 1px;
+      background: rgba(201,169,110,0.2);
+      margin-bottom: 24px;
+    }
+    .plan-features {
+      list-style: none;
+      margin-bottom: 32px;
+    }
+    .plan-features li {
+      font-size: 0.8rem;
+      color: rgba(255,255,255,0.6);
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 300;
+    }
+    .plan-features li::before {
+      content: '';
+      display: inline-block;
+      width: 16px;
+      height: 1px;
+      background: var(--gold);
+      flex-shrink: 0;
+    }
+
+    /* ========================================
+       ⑥ LOCATION SECTION
+    ======================================== */
+    #location {
+      background: var(--cream);
+      padding: 100px 0;
+    }
+    .location-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 40px;
+    }
+    .location-header {
+      text-align: center;
+      margin-bottom: 64px;
+    }
+    .location-header .section-en { color: var(--brown); }
+    .location-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+    .location-grid-bottom {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+      max-width: 700px;
+      margin: 0 auto;
+    }
+    .location-card {
+      position: relative;
+      overflow: hidden;
+      aspect-ratio: 3/4;
+      cursor: pointer;
+    }
+    .location-card:hover .location-card-img { transform: scale(1.05); }
+    .location-card-img {
+      width: 100%;
+      height: 100%;
+      transition: transform 0.7s ease;
+    }
+    .location-card-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to top, rgba(14,11,8,0.75) 0%, transparent 55%);
+    }
+    .location-card-text {
+      position: absolute;
+      bottom: 24px;
+      left: 24px;
+      right: 24px;
+    }
+    .location-card-en {
+      font-family: var(--serif);
+      font-weight: 300;
+      font-size: 1.1rem;
+      letter-spacing: 0.2em;
+      color: var(--gold-light);
+      margin-bottom: 4px;
+    }
+    .location-card-ja {
+      font-size: 0.75rem;
+      color: rgba(255,255,255,0.65);
+      letter-spacing: 0.15em;
+    }
+
+    /* ========================================
+       SEASON SECTION
+    ======================================== */
+    #season {
+      background: #fff;
+      padding: 100px 0;
+    }
+    .season-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 40px;
+    }
+    .season-header {
+      text-align: center;
+      margin-bottom: 64px;
+    }
+    .season-header .section-en { color: var(--brown); }
+    .season-timeline {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0;
+      border: 1px solid rgba(201,169,110,0.2);
+    }
+    .season-item {
+      padding: 36px 28px;
+      border-right: 1px solid rgba(201,169,110,0.2);
+      position: relative;
+    }
+    .season-item:last-child { border-right: none; }
+    .season-item.best { background: #faf6ef; }
+    .season-item.best::before {
+      content: 'BEST';
+      position: absolute;
+      top: 0; left: 50%;
+      transform: translateX(-50%);
+      background: var(--gold);
+      color: var(--dark-brown);
+      font-size: 0.55rem;
+      letter-spacing: 0.2em;
+      padding: 3px 10px;
+    }
+    .season-month {
+      font-family: var(--serif);
+      font-size: 1.8rem;
+      font-weight: 300;
+      color: var(--gold);
+      letter-spacing: 0.1em;
+      margin-bottom: 8px;
+    }
+    .season-title {
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--brown);
+      letter-spacing: 0.1em;
+      margin-bottom: 12px;
+    }
+    .season-desc {
+      font-size: 0.78rem;
+      line-height: 1.9;
+      color: #6a5e52;
+      font-weight: 300;
+    }
+    .season-img-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px;
+      margin-top: 40px;
+    }
+    .season-img-wrap {
+      aspect-ratio: 3/4;
+      overflow: hidden;
+    }
+    .season-img-wrap img { transition: transform 0.6s ease; }
+    .season-img-wrap:hover img { transform: scale(1.04); }
+
+    /* ========================================
+       ⑥ STUDIO & LOCATION SPLIT
+    ======================================== */
+    #studio {
+      background: var(--off-white);
+      padding: 0;
+    }
+    .studio-inner {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+    .studio-img-wrap {
+      position: relative;
+      min-height: 600px;
+      overflow: hidden;
+    }
+    .studio-img-wrap img { height: 100%; object-position: center; }
+    .studio-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(14,11,8,0.2);
+    }
+    .studio-text {
+      padding: 80px 64px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .studio-text .section-en { color: var(--brown); font-size: 1.8rem; }
+    .studio-text .section-ja { color: #8a7a6a; }
+    .studio-body {
+      font-size: 0.85rem;
+      line-height: 2.3;
+      color: #5a4e42;
+      font-weight: 300;
+      margin: 32px 0;
+    }
+
+    /* ========================================
+       Q&A SECTION
+    ======================================== */
+    #qa {
+      background: var(--dark-brown);
+      padding: 100px 0;
+    }
+    .qa-inner {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 0 40px;
+    }
+    .qa-header {
+      text-align: center;
+      margin-bottom: 64px;
+    }
+    .qa-header .section-en { color: var(--gold); }
+    .qa-item {
+      border-top: 1px solid rgba(201,169,110,0.2);
+      padding: 0;
+      overflow: hidden;
+    }
+    .qa-item:last-of-type { border-bottom: 1px solid rgba(201,169,110,0.2); }
+    .qa-question {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      padding: 24px 0;
+      cursor: pointer;
+      background: none;
+      border: none;
+      width: 100%;
+      text-align: left;
+    }
+    .qa-q-icon {
+      font-family: var(--serif);
+      font-size: 1.2rem;
+      color: var(--gold);
+      flex-shrink: 0;
+      line-height: 1.4;
+    }
+    .qa-q-text {
+      font-size: 0.88rem;
+      color: rgba(255,255,255,0.85);
+      font-weight: 300;
+      line-height: 1.7;
+      flex: 1;
+    }
+    .qa-toggle {
+      font-size: 1.2rem;
+      color: var(--gold);
+      flex-shrink: 0;
+      transition: transform 0.35s;
+      line-height: 1.4;
+    }
+    .qa-item.open .qa-toggle { transform: rotate(45deg); }
+    .qa-answer {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.45s ease;
+    }
+    .qa-item.open .qa-answer { max-height: 500px; }
+    .qa-answer-inner {
+      display: flex;
+      gap: 16px;
+      padding: 0 0 28px 0;
+    }
+    .qa-a-icon {
+      font-family: var(--serif);
+      font-size: 1.2rem;
+      color: rgba(201,169,110,0.5);
+      flex-shrink: 0;
+      line-height: 1.4;
+    }
+    .qa-a-text {
+      font-size: 0.82rem;
+      color: rgba(255,255,255,0.55);
+      line-height: 2;
+      font-weight: 300;
+    }
+
+    /* ========================================
+       WHY HIS SECTION
+    ======================================== */
+    #why {
+      background: var(--cream);
+      padding: 100px 0;
+    }
+    .why-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 40px;
+    }
+    .why-header {
+      text-align: center;
+      margin-bottom: 64px;
+    }
+    .why-header .section-en { color: var(--brown); font-size: 1.4rem; }
+    .why-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 40px;
+    }
+    .why-card {
+      text-align: center;
+      padding: 48px 32px;
+      border: 1px solid rgba(201,169,110,0.2);
+      background: #fff;
+    }
+    .why-num {
+      font-family: var(--serif);
+      font-size: 3rem;
+      font-weight: 300;
+      color: rgba(201,169,110,0.25);
+      line-height: 1;
+      margin-bottom: 20px;
+    }
+    .why-title {
+      font-family: var(--serif);
+      font-size: 1.1rem;
+      font-weight: 300;
+      letter-spacing: 0.15em;
+      color: var(--brown);
+      margin-bottom: 16px;
+    }
+    .why-body {
+      font-size: 0.8rem;
+      line-height: 2;
+      color: #6a5e52;
+      font-weight: 300;
+    }
+    .why-divider {
+      width: 30px;
+      height: 1px;
+      background: var(--gold);
+      margin: 20px auto;
+    }
+
+    /* ========================================
+       ⑦ PHONE BANNER
+    ======================================== */
+    #phone-banner {
+      background: var(--black);
+      padding: 64px 0;
+      text-align: center;
+    }
+    .phone-label {
+      font-size: 0.65rem;
+      letter-spacing: 0.3em;
+      color: var(--gold);
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+    .phone-number {
+      font-family: var(--serif);
+      font-weight: 300;
+      font-size: clamp(2.2rem, 5vw, 3.8rem);
+      letter-spacing: 0.15em;
+      color: var(--off-white);
+    }
+    .phone-sub {
+      font-size: 0.75rem;
+      color: rgba(255,255,255,0.4);
+      margin-top: 12px;
+      letter-spacing: 0.15em;
+      font-weight: 300;
+    }
+
+    /* ========================================
+       ⑧ CTA SECTION
+    ======================================== */
+    #cta {
+      background: var(--brown);
+      padding: 100px 0;
+    }
+    .cta-inner {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 0 40px;
+      text-align: center;
+    }
+    .cta-heading {
+      font-family: var(--serif);
+      font-weight: 300;
+      font-size: clamp(1.6rem, 3.5vw, 2.6rem);
+      letter-spacing: 0.15em;
+      color: var(--off-white);
+      margin-bottom: 12px;
+    }
+    .cta-sub {
+      font-size: 0.82rem;
+      color: rgba(255,255,255,0.5);
+      letter-spacing: 0.1em;
+      margin-bottom: 56px;
+      font-weight: 300;
+    }
+    .cta-buttons {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 40px;
+    }
+    .btn-cta-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 16px 44px;
+      background: var(--gold);
+      color: var(--dark-brown);
+      font-size: 0.78rem;
+      letter-spacing: 0.2em;
+      font-weight: 500;
+      transition: background 0.3s;
+    }
+    .btn-cta-primary:hover { background: var(--gold-light); }
+    .btn-cta-line {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 16px 44px;
+      background: #06C755;
+      color: #fff;
+      font-size: 0.78rem;
+      letter-spacing: 0.15em;
+      font-weight: 500;
+      transition: opacity 0.3s;
+    }
+    .btn-cta-line:hover { opacity: 0.88; }
+    .cta-note {
+      font-size: 0.72rem;
+      color: rgba(255,255,255,0.3);
+      letter-spacing: 0.1em;
+      line-height: 1.8;
+      font-weight: 300;
+    }
+
+    /* ========================================
+       ⑨ FOOTER
+    ======================================== */
+    footer {
+      position: relative;
+      background: var(--black);
+      padding: 80px 0 40px;
+      overflow: hidden;
+    }
+    .footer-bg {
+      position: absolute;
+      inset: 0;
+      opacity: 0.08;
+    }
+    .footer-inner {
+      position: relative;
+      z-index: 1;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 40px;
+    }
+    .footer-top {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1fr;
+      gap: 48px;
+      padding-bottom: 48px;
+      border-bottom: 1px solid rgba(201,169,110,0.15);
+    }
+    .footer-logo {
+      font-family: var(--serif);
+      font-weight: 300;
+      font-size: 1.4rem;
+      letter-spacing: 0.3em;
+      color: var(--gold);
+      margin-bottom: 16px;
+    }
+    .footer-tagline {
+      font-size: 0.75rem;
+      color: rgba(255,255,255,0.35);
+      line-height: 1.9;
+      font-weight: 300;
+    }
+    .footer-col-title {
+      font-size: 0.65rem;
+      letter-spacing: 0.25em;
+      color: var(--gold);
+      text-transform: uppercase;
+      margin-bottom: 20px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(201,169,110,0.2);
+    }
+    .footer-col ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .footer-col ul a {
+      font-size: 0.75rem;
+      color: rgba(255,255,255,0.45);
+      letter-spacing: 0.08em;
+      font-weight: 300;
+      transition: color 0.3s;
+    }
+    .footer-col ul a:hover { color: var(--gold); }
+    .footer-bottom {
+      padding-top: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .footer-copy {
+      font-size: 0.65rem;
+      color: rgba(255,255,255,0.2);
+      letter-spacing: 0.1em;
+    }
+    .footer-sns {
+      display: flex;
+      gap: 20px;
+    }
+    .footer-sns a {
+      font-size: 0.65rem;
+      color: rgba(255,255,255,0.3);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      transition: color 0.3s;
+    }
+    .footer-sns a:hover { color: var(--gold); }
+
+    /* ========================================
+       RESPONSIVE
+    ======================================== */
+    @media (max-width: 1024px) {
+      .about-inner,
+      .concept-inner { grid-template-columns: 1fr; gap: 48px; }
+      .about-img-deco, .concept-img-deco { display: none; }
+      .announcement-grid { grid-template-columns: repeat(2, 1fr); }
+      .cost-cards { grid-template-columns: 1fr; }
+      .why-grid { grid-template-columns: repeat(2, 1fr); gap: 24px; }
+      .footer-top { grid-template-columns: 1fr 1fr; }
+      .season-timeline { grid-template-columns: repeat(2, 1fr); }
+      .season-img-row { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 768px) {
+      #nav { padding: 18px 24px; }
+      #nav.scrolled { padding: 14px 24px; }
+      .nav-links, .nav-cta { display: none; }
+      .hamburger { display: flex; }
+      .hero-logo { font-size: 2.4rem; }
+      .plan-grid { grid-template-columns: 1fr; }
+      .location-grid { grid-template-columns: repeat(2, 1fr); }
+      .studio-inner { grid-template-columns: 1fr; }
+      .studio-img-wrap { min-height: 360px; }
+      .studio-text { padding: 60px 32px; }
+      .location-inner,
+      .qa-inner,
+      .why-inner,
+      .plan-inner,
+      .season-inner,
+      .awareness-inner,
+      .about-inner,
+      .concept-inner,
+      .footer-inner { padding: 0 24px; }
+      .announcement-inner { padding: 0 24px; }
+      .footer-top { grid-template-columns: 1fr; gap: 32px; }
+      .footer-bottom { flex-direction: column; gap: 12px; text-align: center; }
+      .season-timeline { grid-template-columns: 1fr 1fr; }
+      .why-grid { grid-template-columns: 1fr; }
+      #about, #concept, #location, #season, #qa, #why, #plan { padding: 72px 0; }
+    }
+
+    @media (max-width: 480px) {
+      .announcement-grid { grid-template-columns: 1fr; }
+      .location-grid { grid-template-columns: 1fr; }
+      .location-grid-bottom { grid-template-columns: 1fr; max-width: 100%; }
+      .season-timeline { grid-template-columns: 1fr; }
+      .season-img-row { grid-template-columns: repeat(2, 1fr); }
+      .cta-buttons { flex-direction: column; align-items: center; }
+      .cost-cards { grid-template-columns: 1fr; }
+      .plan-card { padding: 32px 24px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ==========================================
+       NAVIGATION
+  ========================================== -->
+  <nav id="nav">
+    <div class="nav-logo">
+      HIS Wedding
+      <span>Korea Photo Wedding</span>
+    </div>
+    <ul class="nav-links">
+      <li><a href="#concept">Concept</a></li>
+      <li><a href="#location">Location</a></li>
+      <li><a href="#plan">Plan</a></li>
+      <li><a href="#studio">Studio</a></li>
+      <li><a href="#qa">FAQ</a></li>
+    </ul>
+    <a href="#cta" class="nav-cta">無料相談</a>
+    <button class="hamburger" id="hamburger" aria-label="メニューを開く">
+      <span></span><span></span><span></span>
+    </button>
+  </nav>
+
+  <!-- Mobile Menu -->
+  <div class="mobile-menu" id="mobileMenu">
+    <a href="#concept" class="mobile-menu-link">Concept</a>
+    <a href="#location" class="mobile-menu-link">Location</a>
+    <a href="#plan" class="mobile-menu-link">Plan</a>
+    <a href="#studio" class="mobile-menu-link">Studio</a>
+    <a href="#qa" class="mobile-menu-link">FAQ</a>
+    <a href="#cta" class="mobile-menu-cta">無料相談はこちら</a>
+  </div>
+
+  <!-- ==========================================
+       ① HERO SECTION
+  ========================================== -->
+  <section id="hero">
+    <!-- ダミー画像: Unsplash フリー素材 - wedding couple -->
+    <div class="hero-bg">
+      <img src="https://source.unsplash.com/1920x1080/?wedding,couple,korea" alt="韓国フォトウェディング" loading="eager">
+    </div>
+    <div class="hero-overlay"></div>
+    <div class="hero-content">
+      <p class="hero-eyebrow fade-in">HIS Wedding presents</p>
+      <h1 class="hero-logo fade-in">
+        Korea<br><span class="gold">Photo Wedding</span>
+      </h1>
+      <p class="hero-tagline fade-in">— 韓国で叶える、一生に一度の物語 —</p>
+      <a href="#cta" class="btn-outline-gold fade-in">無料相談・資料請求</a>
+    </div>
+    <div class="hero-scroll">
+      <div class="hero-scroll-line"></div>
+      <span>Scroll</span>
+    </div>
+  </section>
+
+  <hr class="gold-line-full">
+
+  <!-- ==========================================
+       ② ANNOUNCEMENT BANNER
+  ========================================== -->
+  <section id="announcement">
+    <div class="announcement-inner">
+      <div class="announcement-header fade-in">
+        <p>News &amp; Information</p>
+      </div>
+      <div class="announcement-grid">
+        <div class="announcement-item fade-in">
+          <span class="ann-label">WEDDING FAIR</span>
+          <p class="ann-date">2026.06.15 Sun</p>
+          <p class="ann-text">【大阪・名古屋・福岡開催】韓国フォトウェディング相談会。現地コーディネーターによる最新情報をご案内します。</p>
+        </div>
+        <div class="announcement-item fade-in">
+          <span class="ann-label">PLAN</span>
+          <p class="ann-date">2026.06.01</p>
+          <p class="ann-text">2026年秋の景福宮撮影プランが解禁。先行予約受付中。早期申込特典あり（アルバム無料アップグレード）。</p>
+        </div>
+        <div class="announcement-item fade-in">
+          <span class="ann-label">STUDIO</span>
+          <p class="ann-date">2026.05.20</p>
+          <p class="ann-text">ソウル・弘大エリアに提携スタジオ追加。韓国人気フォトグラファーとの撮影プランが新登場しました。</p>
+        </div>
+        <div class="announcement-item fade-in">
+          <span class="ann-label">CAMPAIGN</span>
+          <p class="ann-date">2026.05.01</p>
+          <p class="ann-text">【期間限定】済州島プラン¥50,000割引キャンペーン実施中。6月末までのご予約が対象となります。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="gold-line-full">
+
+  <!-- ==========================================
+       ③ NAME SECTION
+  ========================================== -->
+  <section id="about">
+    <div class="about-inner">
+      <div class="about-img-wrap fade-in-left">
+        <div class="about-img-deco"></div>
+        <!-- ダミー画像: Unsplash フリー素材 - wedding portrait studio -->
+        <img src="https://source.unsplash.com/600x900/?wedding,portrait,studio,korea" alt="韓国フォトウェディング">
+      </div>
+      <div class="about-text fade-in-right">
+        <p class="about-eyebrow">About Us</p>
+        <h2 class="about-brand">HIS Wedding<br>Korea</h2>
+        <p class="about-brand-sub">Korean Photo Wedding Specialist</p>
+        <hr class="gold-line" style="width:60px;margin:0 0 32px;">
+        <p class="about-body">
+          HIS Weddingは、旅行業界最大手のH.I.S.グループが手がけるウェディング専門ブランドです。<br><br>
+          韓国フォトウェディングにおいては、現地提携スタジオ・ロケーション撮影会社との強固なネットワークを活かし、日本語でのトータルサポートを提供。<br><br>
+          景福宮・北村韓屋村・済州島など、憧れのシーンでの撮影から、ドレス選び・ヘアメイク・現地手配まで、すべてをワンストップでお任せください。
+        </p>
+        <a href="#concept" class="text-link-gold">私たちのこだわりを見る</a>
+      </div>
+    </div>
+  </section>
+
+  <hr class="gold-line-full">
+
+  <!-- ==========================================
+       AWARENESS / COST SECTION
+  ========================================== -->
+  <section id="awareness">
+    <div class="awareness-inner">
+      <p class="awareness-lead fade-in">
+        「韓国フォトウェディング、<br>気になるけど費用は？」
+      </p>
+      <p class="awareness-body fade-in">
+        韓国フォトウェディングは、式を挙げずに写真撮影のみを行うスタイル。<br>
+        チャペル挙式に比べてリーズナブルに、それでいてクオリティの高い写真を残せると、近年カップルの間で急速に人気が広まっています。<br><br>
+        HIS Weddingなら、渡航手配から現地ロケーション撮影まで一括対応。余計なコストを抑えつつ、納得のいくウェディングフォトを実現します。
+      </p>
+      <div class="cost-cards">
+        <div class="cost-card fade-in">
+          <p class="cost-card-label">Studio Plan</p>
+          <p class="cost-card-price">¥188,000 <span>〜</span></p>
+          <p class="cost-card-note">スタジオ撮影のみ。衣裳・ヘアメイク含む。データ納品100カット以上。</p>
+        </div>
+        <div class="cost-card fade-in">
+          <p class="cost-card-label">Location Plan</p>
+          <p class="cost-card-price">¥298,000 <span>〜</span></p>
+          <p class="cost-card-note">ロケーション撮影＋スタジオ撮影のセット。景福宮・北村韓屋村など選択可。</p>
+        </div>
+        <div class="cost-card fade-in">
+          <p class="cost-card-label">Premium Plan</p>
+          <p class="cost-card-price">¥498,000 <span>〜</span></p>
+          <p class="cost-card-note">済州島や複数ロケ対応のプレミアムプラン。アルバム制作・動画撮影含む。</p>
+        </div>
+      </div>
+      <p style="font-size:0.72rem;color:#8a7a6a;margin-top:24px;text-align:center;font-weight:300;">
+        ※上記価格は税込・2名様分の目安です。渡航費・宿泊費は別途。詳細はお問い合わせください。
+      </p>
+    </div>
+  </section>
+
+  <hr class="gold-line-full">
+
+  <!-- ==========================================
+       ④ CONCEPT SECTION
+  ========================================== -->
+  <section id="concept">
+    <div class="concept-inner">
+      <div class="concept-text fade-in-left">
+        <div class="concept-heading-block">
+          <h2 class="section-en">CONCEPT</h2>
+          <p class="section-ja">韓国でしか撮れない、あなただけの一枚</p>
+        </div>
+        <hr class="gold-line" style="width:60px;margin:0 0 32px;">
+        <p class="concept-body">
+          朝鮮王朝時代の宮殿、石畳の続く伝統村、花が咲き誇る済州の野原——。<br>
+          韓国の風景は、どこを切り取っても絵になります。
+        </p>
+        <p class="concept-body">
+          HIS Weddingの韓国フォトウェディングは、単なる記念撮影ではありません。現地を知り尽くした日本語対応のコーディネーターが同行し、光・季節・ロケーションを最大限に活かした「映える」写真を追求します。
+        </p>
+        <p class="concept-body">
+          ドレスは日本発ブランドから韓国人気デザイナーズまで豊富にご用意。헤어(ヘア)とメイクは現地の一流アーティストが担当し、K-beautyスタイルで仕上げます。
+        </p>
+        <a href="#plan" class="text-link-gold" style="margin-top:16px;display:inline-flex;">プランを見る</a>
+      </div>
+      <div class="concept-img-wrap fade-in-right">
+        <div class="concept-img-deco"></div>
+        <!-- ダミー画像: Unsplash フリー素材 - wedding couple korea -->
+        <img src="https://source.unsplash.com/600x900/?wedding,couple,portrait" alt="韓国フォトウェディングコンセプト">
+      </div>
+    </div>
+  </section>
+
+  <hr class="gold-line-full">
+
+  <!-- ==========================================
+       LOCATION SECTION
+  ========================================== -->
+  <section id="location">
+    <div class="location-inner">
+      <div class="location-header fade-in">
+        <h2 class="section-en">LOCATION</h2>
+        <p class="section-ja">撮影ロケーション — 韓国を代表する5つの舞台</p>
+      </div>
+
+      <!-- Top row: 3 cards -->
+      <div class="location-grid">
+
+        <!-- 景福宮 -->
+        <div class="location-card fade-in">
+          <!-- ダミー画像: Unsplash フリー素材 - korea palace gyeongbokgung -->
+          <img class="location-card-img" src="https://source.unsplash.com/600x800/?korea,palace" alt="景福宮">
+          <div class="location-card-overlay"></div>
+          <div class="location-card-text">
+            <p class="location-card-en">Gyeongbokgung</p>
+            <p class="location-card-ja">景福宮 — 朝鮮王朝の宮殿</p>
+          </div>
+        </div>
+
+        <!-- 北村韓屋村 -->
+        <div class="location-card fade-in">
+          <!-- ダミー画像: Unsplash フリー素材 - korea traditional village hanok -->
+          <img class="location-card-img" src="https://source.unsplash.com/600x800/?korea,village,traditional" alt="北村韓屋村">
+          <div class="location-card-overlay"></div>
+          <div class="location-card-text">
+            <p class="location-card-en">Bukchon Hanok</p>
+            <p class="location-card-ja">北村韓屋村 — 伝統の石畳</p>
+          </div>
+        </div>
+
+        <!-- 済州島 -->
+        <div class="location-card fade-in">
+          <!-- ダミー画像: Unsplash フリー素材 - jeju island korea nature -->
+          <img class="location-card-img" src="https://source.unsplash.com/600x800/?jeju,island,korea,nature" alt="済州島">
+          <div class="location-card-overlay"></div>
+          <div class="location-card-text">
+            <p class="location-card-en">Jeju Island</p>
+            <p class="location-card-ja">済州島 — 韓国のハワイ</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom row: 2 cards -->
+      <div class="location-grid-bottom" style="margin-top:24px;">
+
+        <!-- ソウルスタジオ -->
+        <div class="location-card fade-in">
+          <!-- ダミー画像: Unsplash フリー素材 - wedding studio indoor -->
+          <img class="location-card-img" src="https://source.unsplash.com/600x800/?wedding,studio,indoor" alt="ソウルスタジオ">
+          <div class="location-card-overlay"></div>
+          <div class="location-card-text">
+            <p class="location-card-en">Seoul Studio</p>
+            <p class="location-card-ja">ソウルスタジオ — 最新設備</p>
+          </div>
+        </div>
+
+        <!-- 漢江 -->
+        <div class="location-card fade-in">
+          <!-- ダミー画像: Unsplash フリー素材 - han river seoul korea -->
+          <img class="location-card-img" src="https://source.unsplash.com/600x800/?korea,river,seoul,couple" alt="漢江">
+          <div class="location-card-overlay"></div>
+          <div class="location-card-text">
+            <p class="location-card-en">Han River</p>
+            <p class="location-card-ja">漢江 — ソウルの大河</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Location Detail -->
+      <div style="margin-top:64px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:32px;">
+        <div class="fade-in" style="padding:32px;border:1px solid rgba(201,169,110,0.2);background:#fff;">
+          <p style="font-family:var(--serif);font-size:1.1rem;font-weight:300;letter-spacing:0.2em;color:var(--brown);margin-bottom:12px;">景福宮</p>
+          <hr class="gold-line" style="width:40px;margin:0 0 16px;">
+          <p style="font-size:0.78rem;line-height:2;color:#6a5e52;font-weight:300;">朝鮮王朝の正宮。チマチョゴリと宮殿を背景にした写真は、韓国フォトウェディングの代名詞。宮殿内への入場許可取得もサポートします。</p>
+        </div>
+        <div class="fade-in" style="padding:32px;border:1px solid rgba(201,169,110,0.2);background:#fff;">
+          <p style="font-family:var(--serif);font-size:1.1rem;font-weight:300;letter-spacing:0.2em;color:var(--brown);margin-bottom:12px;">北村韓屋村</p>
+          <hr class="gold-line" style="width:40px;margin:0 0 16px;">
+          <p style="font-size:0.78rem;line-height:2;color:#6a5e52;font-weight:300;">瓦屋根と石畳が続く伝統村。韓服（チマチョゴリ）と古き良き路地が織りなす風情ある写真が撮影できる人気スポットです。</p>
+        </div>
+        <div class="fade-in" style="padding:32px;border:1px solid rgba(201,169,110,0.2);background:#fff;">
+          <p style="font-family:var(--serif);font-size:1.1rem;font-weight:300;letter-spacing:0.2em;color:var(--brown);margin-bottom:12px;">済州島</p>
+          <hr class="gold-line" style="width:40px;margin:0 0 16px;">
+          <p style="font-size:0.78rem;line-height:2;color:#6a5e52;font-weight:300;">「韓国のハワイ」と呼ばれる絶景の島。柱状節理・菜の花畑・オルレ海岸など、四季折々のロケーションで唯一無二の一枚を。</p>
+        </div>
+        <div class="fade-in" style="padding:32px;border:1px solid rgba(201,169,110,0.2);background:#fff;">
+          <p style="font-family:var(--serif);font-size:1.1rem;font-weight:300;letter-spacing:0.2em;color:var(--brown);margin-bottom:12px;">ソウルスタジオ</p>
+          <hr class="gold-line" style="width:40px;margin:0 0 16px;">
+          <p style="font-size:0.78rem;line-height:2;color:#6a5e52;font-weight:300;">韓国トップクラスのスタジオで撮影。最新機材・こだわりのライティング・豊富な衣裳により、スタジオならではの洗練された仕上がりに。</p>
+        </div>
+        <div class="fade-in" style="padding:32px;border:1px solid rgba(201,169,110,0.2);background:#fff;">
+          <p style="font-family:var(--serif);font-size:1.1rem;font-weight:300;letter-spacing:0.2em;color:var(--brown);margin-bottom:12px;">漢江</p>
+          <hr class="gold-line" style="width:40px;margin:0 0 16px;">
+          <p style="font-size:0.78rem;line-height:2;color:#6a5e52;font-weight:300;">ソウルの街を流れる大河・漢江。夕景や夜景を背景にした撮影はロマンティックな雰囲気。汝矣島の芝生広場も人気スポットです。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="gold-line-full">
+
+  <!-- ==========================================
+       ⑤ PLAN SECTION
+  ========================================== -->
+  <section id="plan">
+    <div class="plan-inner">
+      <div class="plan-header fade-in">
+        <h2 class="section-en" style="color:var(--gold);">PLAN</h2>
+        <p class="section-ja-white">撮影プラン — ふたりのスタイルに合わせて選べる4プラン</p>
+      </div>
+
+      <div class="plan-grid">
+        <!-- Plan 01 -->
+        <div class="plan-card fade-in">
+          <p class="plan-num">01</p>
+          <h3 class="plan-name">Studio Plan</h3>
+          <p class="plan-name-ja">スタジオプラン</p>
+          <p class="plan-price">¥188,000 <small style="font-size:1rem">〜</small></p>
+          <p class="plan-price-note">※2名様・税込 / 渡航費別途</p>
+          <div class="plan-divider"></div>
+          <ul class="plan-features">
+            <li>ソウル提携スタジオでの撮影（4〜5時間）</li>
+            <li>衣裳2着（ウェディングドレス＋チマチョゴリ）</li>
+            <li>日本語対応ヘアメイク</li>
+            <li>データ納品100カット以上</li>
+            <li>日本語コーディネーター手配</li>
+          </ul>
+          <a href="#cta" class="btn-outline-gold">詳細・お問い合わせ</a>
+        </div>
+
+        <!-- Plan 02 -->
+        <div class="plan-card featured fade-in">
+          <span class="plan-badge">人気No.1</span>
+          <p class="plan-num">02</p>
+          <h3 class="plan-name">Location Plan</h3>
+          <p class="plan-name-ja">ロケーションプラン</p>
+          <p class="plan-price">¥298,000 <small style="font-size:1rem">〜</small></p>
+          <p class="plan-price-note">※2名様・税込 / 渡航費別途</p>
+          <div class="plan-divider"></div>
+          <ul class="plan-features">
+            <li>景福宮 or 北村韓屋村でのロケ撮影</li>
+            <li>スタジオ撮影とのセット</li>
+            <li>衣裳3着（ドレス・チマチョゴリ・カジュアル）</li>
+            <li>日本語対応ヘアメイク・着付け</li>
+            <li>データ納品150カット以上</li>
+            <li>日本語スタッフ終日同行</li>
+          </ul>
+          <a href="#cta" class="btn-outline-gold">詳細・お問い合わせ</a>
+        </div>
+
+        <!-- Plan 03 -->
+        <div class="plan-card fade-in">
+          <p class="plan-num">03</p>
+          <h3 class="plan-name">Jeju Plan</h3>
+          <p class="plan-name-ja">済州島プラン</p>
+          <p class="plan-price">¥398,000 <small style="font-size:1rem">〜</small></p>
+          <p class="plan-price-note">※2名様・税込 / 渡航費別途</p>
+          <div class="plan-divider"></div>
+          <ul class="plan-features">
+            <li>済州島の絶景ロケーション3〜4箇所</li>
+            <li>衣裳3着</li>
+            <li>ヘアメイク・着付け込み</li>
+            <li>データ納品200カット以上</li>
+            <li>現地ドライバー・コーディネーター手配</li>
+            <li>フォトブック（A4・30P）1冊プレゼント</li>
+          </ul>
+          <a href="#cta" class="btn-outline-gold">詳細・お問い合わせ</a>
+        </div>
+
+        <!-- Plan 04 -->
+        <div class="plan-card fade-in">
+          <p class="plan-num">04</p>
+          <h3 class="plan-name">Premium Plan</h3>
+          <p class="plan-name-ja">プレミアムプラン</p>
+          <p class="plan-price">¥498,000 <small style="font-size:1rem">〜</small></p>
+          <p class="plan-price-note">※2名様・税込 / 渡航費別途</p>
+          <div class="plan-divider"></div>
+          <ul class="plan-features">
+            <li>ソウル＋済州島 2エリア撮影（2泊3日）</li>
+            <li>スタジオ＋ロケーション4〜5箇所</li>
+            <li>衣裳4〜5着・ドレス持ち込み可</li>
+            <li>データ納品300カット以上</li>
+            <li>ショートムービー（3〜5分）制作</li>
+            <li>高品質アルバム（A3・50P）制作込み</li>
+          </ul>
+          <a href="#cta" class="btn-outline-gold">詳細・お問い合わせ</a>
+        </div>
+      </div>
+
+      <div style="text-align:center;margin-top:48px;" class="fade-in">
+        <a href="#cta" class="text-link-gold" style="color:rgba(255,255,255,0.4);border-color:rgba(255,255,255,0.2);">オーダーメイドプランのご相談はこちら</a>
+      </div>
+    </div>
+  </section>
+
+  <hr class="gold-line-full">
+
+  <!-- ==========================================
+       SEASON SECTION
+  ========================================== -->
+  <section id="season">
+    <div class="season-inner">
+      <div class="season-header fade-in">
+        <h2 class="section-en">SEASON</h2>
+        <p class="section-ja">おすすめ撮影時期 — 季節ごとの韓国の表情</p>
+      </div>
+
+      <div class="season-timeline">
+        <div class="season-item best fade-in">
+          <p class="season-month">Mar–May</p>
+          <p class="season-title">春 / 桜・菜の花</p>
+          <p class="season-desc">チョンゲ川沿いの桜並木や済州島の菜の花畑が見頃。柔らかな光の中でロマンティックな写真が撮影できる最人気シーズン。</p>
+        </div>
+        <div class="season-item fade-in">
+          <p class="season-month">Jun–Aug</p>
+          <p class="season-title">夏 / 緑・海</p>
+          <p class="season-desc">済州島の青い海や漢江の水辺での撮影に最適。雨季の7月を避けた6月・8月がおすすめ。夕景が美しいシーズンでもあります。</p>
+        </div>
+        <div class="season-item best fade-in">
+          <p class="season-month">Sep–Nov</p>
+          <p class="season-title">秋 / 紅葉・コスモス</p>
+          <p class="season-desc">北漢山や南山の紅葉が壮大。コスモス畑も見頃を迎え、ノスタルジックでドラマティックな写真が撮れる第2の人気シーズン。</p>
+        </div>
+        <div class="season-item fade-in">
+          <p class="season-month">Dec–Feb</p>
+          <p class="season-title">冬 / 雪景色</p>
+          <p class="season-desc">景福宮や北村韓屋村の雪化粧は幻想的。凛とした空気の中での撮影は一味違う美しさ。防寒対策をしっかりして臨みましょう。</p>
+        </div>
+      </div>
+
+      <div class="season-img-row">
+        <!-- ダミー画像: Unsplash フリー素材 - 各季節 -->
+        <div class="season-img-wrap fade-in">
+          <img src="https://source.unsplash.com/400x533/?cherry,blossom,couple" alt="桜の季節の撮影">
+        </div>
+        <div class="season-img-wrap fade-in">
+          <img src="https://source.unsplash.com/400x533/?korea,summer,couple,wedding" alt="夏の撮影">
+        </div>
+        <div class="season-img-wrap fade-in">
+          <img src="https://source.unsplash.com/400x533/?autumn,leaves,couple,wedding" alt="秋の撮影">
+        </div>
+        <div class="season-img-wrap fade-in">
+          <img src="https://source.unsplash.com/400x533/?snow,winter,couple,wedding" alt="冬の撮影">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="gold-line-full">
+
+  <!-- ==========================================
+       ⑥ STUDIO & LOCATION SECTION
+  ========================================== -->
+  <section id="studio">
+    <div class="studio-inner">
+      <div class="studio-img-wrap">
+        <!-- ダミー画像: Unsplash フリー素材 - wedding studio portrait with person -->
+        <img src="https://source.unsplash.com/800x1200/?wedding,studio,portrait,bride" alt="スタジオ撮影・カメラマン">
+        <div class="studio-overlay"></div>
+      </div>
+      <div class="studio-text fade-in-right">
+        <p style="font-size:0.65rem;letter-spacing:0.3em;color:var(--gold);text-transform:uppercase;margin-bottom:20px;">Photographer &amp; Studio</p>
+        <h2 class="section-en" style="font-size:clamp(1.6rem,3vw,2.4rem);">STUDIO &amp;<br>LOCATION</h2>
+        <p class="section-ja">スタジオ・カメラマンのこだわり</p>
+        <hr class="gold-line" style="width:60px;margin:24px 0;">
+        <p class="studio-body">
+          HIS Weddingが提携するのは、韓国トップクラスのウェディングフォトグラファーのみ。日本のお客様の好みを熟知した、日本語コミュニケーション可能な技術者が担当します。<br><br>
+          スタジオは弘大・清潭洞・明洞など人気エリアに複数拠点を確保。最新のライティング機材と豊富なセット・背景から、理想のビジュアルを追求します。<br><br>
+          ロケーション撮影では、許可証の取得・移動手段の手配・撮影スポットの選定まで、すべてコーディネーターが対応します。
+        </p>
+        <div style="display:flex;flex-direction:column;gap:16px;margin-bottom:32px;">
+          <div style="display:flex;gap:16px;align-items:flex-start;">
+            <span style="font-family:var(--serif);font-size:1.5rem;color:var(--gold);line-height:1;">01</span>
+            <div>
+              <p style="font-size:0.82rem;font-weight:500;color:var(--brown);margin-bottom:4px;">実績豊富な日本語対応フォトグラファー</p>
+              <p style="font-size:0.75rem;color:#6a5e52;line-height:1.8;font-weight:300;">年間1,000組以上のウェディングを撮影してきたプロが担当。</p>
+            </div>
+          </div>
+          <div style="display:flex;gap:16px;align-items:flex-start;">
+            <span style="font-family:var(--serif);font-size:1.5rem;color:var(--gold);line-height:1;">02</span>
+            <div>
+              <p style="font-size:0.82rem;font-weight:500;color:var(--brown);margin-bottom:4px;">韓国トレンドのヘアメイク・衣裳</p>
+              <p style="font-size:0.75rem;color:#6a5e52;line-height:1.8;font-weight:300;">K-beautyスタイルの最前線を取り入れたメイクアップで仕上げます。</p>
+            </div>
+          </div>
+          <div style="display:flex;gap:16px;align-items:flex-start;">
+            <span style="font-family:var(--serif);font-size:1.5rem;color:var(--gold);line-height:1;">03</span>
+            <div>
+              <p style="font-size:0.82rem;font-weight:500;color:var(--brown);margin-bottom:4px;">丁寧なレタッチ・高品質データ納品</p>
+              <p style="font-size:0.75rem;color:#6a5e52;line-height:1.8;font-weight:300;">全カットにレタッチを施し、撮影後3〜4週間でお届けします。</p>
+            </div>
+          </div>
+        </div>
+        <a href="#cta" class="text-link-gold">スタジオ・カメラマンを詳しく見る</a>
+      </div>
+    </div>
+  </section>
+
+  <hr class="gold-line-full">
+
+  <!-- ==========================================
+       Q&A SECTION
+  ========================================== -->
+  <section id="qa">
+    <div class="qa-inner">
+      <div class="qa-header fade-in">
+        <h2 class="section-en">FAQ</h2>
+        <p class="section-ja-white">よくあるご不安・ご質問</p>
+      </div>
+
+      <div class="qa-item fade-in">
+        <button class="qa-question" onclick="toggleQA(this)">
+          <span class="qa-q-icon">Q</span>
+          <span class="qa-q-text">韓国語が全くわからなくても大丈夫ですか？</span>
+          <span class="qa-toggle">+</span>
+        </button>
+        <div class="qa-answer">
+          <div class="qa-answer-inner">
+            <span class="qa-a-icon">A</span>
+            <p class="qa-a-text">はい、まったく問題ありません。日本語対応のコーディネーターが入国から撮影終了まで終日サポートします。事前打ち合わせも日本語で行いますので、ご安心ください。</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="qa-item fade-in">
+        <button class="qa-question" onclick="toggleQA(this)">
+          <span class="qa-q-icon">Q</span>
+          <span class="qa-q-text">渡航費は別途ですか？セットにすることはできますか？</span>
+          <span class="qa-toggle">+</span>
+        </button>
+        <div class="qa-answer">
+          <div class="qa-answer-inner">
+            <span class="qa-a-icon">A</span>
+            <p class="qa-a-text">撮影プランと渡航（航空券・ホテル）をセットでご手配することも可能です。旅行業最大手のH.I.S.グループならではの価格でご提供できます。詳しくはお問い合わせください。</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="qa-item fade-in">
+        <button class="qa-question" onclick="toggleQA(this)">
+          <span class="qa-q-icon">Q</span>
+          <span class="qa-q-text">チマチョゴリ（韓服）は必須ですか？ウェディングドレスのみでも撮影できますか？</span>
+          <span class="qa-toggle">+</span>
+        </button>
+        <div class="qa-answer">
+          <div class="qa-answer-inner">
+            <span class="qa-a-icon">A</span>
+            <p class="qa-a-text">もちろんウェディングドレスのみでも撮影可能です。チマチョゴリ・ドレス・カジュアルウェアなど、希望の組み合わせでご相談ください。衣裳持ち込みにも対応しています。</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="qa-item fade-in">
+        <button class="qa-question" onclick="toggleQA(this)">
+          <span class="qa-q-icon">Q</span>
+          <span class="qa-q-text">景福宮での撮影には許可が必要と聞きましたが、どうすればいいですか？</span>
+          <span class="qa-toggle">+</span>
+        </button>
+        <div class="qa-answer">
+          <div class="qa-answer-inner">
+            <span class="qa-a-icon">A</span>
+            <p class="qa-a-text">景福宮での撮影には入場許可証・撮影許可の申請が必要な場合があります。HIS Weddingでは現地コーディネーターが事前申請・許可取得を代行しますのでご安心ください。</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="qa-item fade-in">
+        <button class="qa-question" onclick="toggleQA(this)">
+          <span class="qa-q-icon">Q</span>
+          <span class="qa-q-text">撮影データはいつ、どのように届きますか？</span>
+          <span class="qa-toggle">+</span>
+        </button>
+        <div class="qa-answer">
+          <div class="qa-answer-inner">
+            <span class="qa-a-icon">A</span>
+            <p class="qa-a-text">撮影後、レタッチを含めて3〜4週間程度でデータをお届けします。データはオンラインダウンロード形式が基本です。アルバム・フォトブックの制作をご希望の場合は別途ご相談ください。</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="qa-item fade-in">
+        <button class="qa-question" onclick="toggleQA(this)">
+          <span class="qa-q-icon">Q</span>
+          <span class="qa-q-text">天候が悪かった場合はどうなりますか？</span>
+          <span class="qa-toggle">+</span>
+        </button>
+        <div class="qa-answer">
+          <div class="qa-answer-inner">
+            <span class="qa-a-icon">A</span>
+            <p class="qa-a-text">悪天候の場合、スタジオ撮影への変更や日程を調整するなど、柔軟に対応します。また、曇り空はレタッチで補正することも可能です。事前に担当者と天候対策についてご相談いただけます。</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="qa-item fade-in">
+        <button class="qa-question" onclick="toggleQA(this)">
+          <span class="qa-q-icon">Q</span>
+          <span class="qa-q-text">結婚式・挙式はせず写真だけでも大丈夫ですか？</span>
+          <span class="qa-toggle">+</span>
+        </button>
+        <div class="qa-answer">
+          <div class="qa-answer-inner">
+            <span class="qa-a-icon">A</span>
+            <p class="qa-a-text">もちろん大丈夫です。フォトウェディングは挙式なしで写真撮影のみを行うスタイルです。婚姻届を提出済みの方、これから入籍予定の方、婚約中の方など、どなたでもご利用いただけます。</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <hr class="gold-line-full">
+
+  <!-- ==========================================
+       WHY HIS WEDDING SECTION
+  ========================================== -->
+  <section id="why">
+    <div class="why-inner">
+      <div class="why-header fade-in">
+        <h2 class="section-en" style="font-size:clamp(1.2rem,2.5vw,1.8rem);letter-spacing:0.25em;">WHY HIS WEDDING</h2>
+        <p class="section-ja">なぜHIS Weddingが選ばれるのか</p>
+      </div>
+
+      <div class="why-grid">
+        <div class="why-card fade-in">
+          <p class="why-num">01</p>
+          <div class="why-divider"></div>
+          <p class="why-title">旅行会社だから<br>できるトータルサポート</p>
+          <p class="why-body">H.I.S.グループの強みを活かし、渡航手配・ホテル・撮影をワンストップでご提案。複数の業者に連絡する手間がありません。</p>
+        </div>
+        <div class="why-card fade-in">
+          <p class="why-num">02</p>
+          <div class="why-divider"></div>
+          <p class="why-title">日本語スタッフが<br>現地に同行</p>
+          <p class="why-body">現地に精通した日本語対応コーディネーターが終日サポート。言葉の壁なく、不安なく撮影当日を過ごせます。</p>
+        </div>
+        <div class="why-card fade-in">
+          <p class="why-num">03</p>
+          <div class="why-divider"></div>
+          <p class="why-title">厳選した提携先<br>のみを案内</p>
+          <p class="why-body">スタジオ・フォトグラファーはHIS Weddingが品質を確認した提携先のみをご紹介。クオリティのばらつきが起こりません。</p>
+        </div>
+        <div class="why-card fade-in">
+          <p class="why-num">04</p>
+          <div class="why-divider"></div>
+          <p class="why-title">豊富な実績と<br>お客様の声</p>
+          <p class="why-body">年間多数のカップルが利用。口コミ平均評価4.8/5.0（Google）。先輩カップルの体験談もご紹介できます。</p>
+        </div>
+        <div class="why-card fade-in">
+          <p class="why-num">05</p>
+          <div class="why-divider"></div>
+          <p class="why-title">無料相談で<br>じっくり検討</p>
+          <p class="why-body">全国の店舗・オンラインで無料相談を実施。予算・希望を丁寧にヒアリングし、最適なプランをご提案します。</p>
+        </div>
+        <div class="why-card fade-in">
+          <p class="why-num">06</p>
+          <div class="why-divider"></div>
+          <p class="why-title">ブライダル保険<br>完備</p>
+          <p class="why-body">万が一のキャンセル・延期にも対応できるブライダル保険のご案内も可能。安心してご予約いただけます。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="gold-line-full">
+
+  <!-- ==========================================
+       ⑦ PHONE BANNER
+  ========================================== -->
+  <section id="phone-banner">
+    <p class="phone-label fade-in">お気軽にお電話ください</p>
+    <a href="tel:0120-000-000" class="phone-number fade-in">0120-000-000</a>
+    <p class="phone-sub fade-in">受付時間 10:00 〜 19:00（年中無休）</p>
+  </section>
+
+  <!-- ==========================================
+       ⑧ CTA SECTION
+  ========================================== -->
+  <section id="cta">
+    <div class="cta-inner">
+      <h2 class="cta-heading fade-in">まずは無料相談から<br>始めましょう</h2>
+      <p class="cta-sub fade-in">ご不明な点・ご要望はどんな小さなことでもお気軽に</p>
+      <hr class="gold-line" style="width:60px;margin:0 auto 48px;" class="fade-in">
+      <div class="cta-buttons">
+        <a href="#" class="btn-cta-primary fade-in">
+          <span>無料相談・資料請求</span>
+        </a>
+        <a href="#" class="btn-cta-line fade-in">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.02 2 11c0 2.82 1.4 5.34 3.6 7.1L4.5 22l3.96-1.26C9.56 21.22 10.76 21.5 12 21.5c5.52 0 10-4.02 10-9s-4.48-9-10-9z"/></svg>
+          <span>LINEで相談する</span>
+        </a>
+        <a href="mailto:korea@his-wedding.com" class="btn-outline-white fade-in">
+          メールで問い合わせ
+        </a>
+      </div>
+      <p class="cta-note fade-in">
+        ※ 無料相談はオンライン（Zoom）・全国店舗にて承ります<br>
+        ※ お問い合わせ後のしつこい営業は一切ございません
+      </p>
+    </div>
+  </section>
+
+  <!-- ==========================================
+       ⑨ FOOTER
+  ========================================== -->
+  <footer>
+    <!-- ダミー画像: Unsplash フリー素材 - wedding couple background for footer -->
+    <div class="footer-bg">
+      <img src="https://source.unsplash.com/1920x600/?wedding,korea,couple" alt="">
+    </div>
+    <div class="footer-inner">
+      <div class="footer-top">
+        <div>
+          <p class="footer-logo">HIS Wedding</p>
+          <p class="footer-tagline">
+            世界中のウェディングをサポートする<br>
+            H.I.S.グループのウェディングブランド。<br>
+            韓国フォトウェディングのことなら<br>
+            HIS Weddingにお任せください。
+          </p>
+        </div>
+        <div class="footer-col">
+          <p class="footer-col-title">Menu</p>
+          <ul>
+            <li><a href="#concept">Concept</a></li>
+            <li><a href="#location">Location</a></li>
+            <li><a href="#plan">Plan</a></li>
+            <li><a href="#studio">Studio</a></li>
+            <li><a href="#season">Season</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <p class="footer-col-title">Plan</p>
+          <ul>
+            <li><a href="#plan">Studio Plan</a></li>
+            <li><a href="#plan">Location Plan</a></li>
+            <li><a href="#plan">Jeju Plan</a></li>
+            <li><a href="#plan">Premium Plan</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <p class="footer-col-title">Contact</p>
+          <ul>
+            <li><a href="#cta">無料相談</a></li>
+            <li><a href="#qa">FAQ</a></li>
+            <li><a href="#">プライバシーポリシー</a></li>
+            <li><a href="#">会社概要</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p class="footer-copy">© 2026 HIS Wedding. All rights reserved.</p>
+        <div class="footer-sns">
+          <a href="#">Instagram</a>
+          <a href="#">LINE</a>
+          <a href="#">YouTube</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ==========================================
+       JAVASCRIPT
+  ========================================== -->
+  <script>
+    // ---- Navigation: scroll effect ----
+    const nav = document.getElementById('nav');
+    window.addEventListener('scroll', () => {
+      nav.classList.toggle('scrolled', window.scrollY > 60);
+    });
+
+    // ---- Hamburger menu ----
+    const hamburger = document.getElementById('hamburger');
+    const mobileMenu = document.getElementById('mobileMenu');
+    const mobileLinks = mobileMenu.querySelectorAll('a');
+
+    hamburger.addEventListener('click', () => {
+      hamburger.classList.toggle('open');
+      mobileMenu.classList.toggle('open');
+      document.body.style.overflow = mobileMenu.classList.contains('open') ? 'hidden' : '';
+    });
+
+    mobileLinks.forEach(link => {
+      link.addEventListener('click', () => {
+        hamburger.classList.remove('open');
+        mobileMenu.classList.remove('open');
+        document.body.style.overflow = '';
+      });
+    });
+
+    // ---- Intersection Observer: fade-in animations ----
+    const observerOptions = {
+      threshold: 0.1,
+      rootMargin: '0px 0px -40px 0px'
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry, i) => {
+        if (entry.isIntersecting) {
+          // Stagger children of grids
+          const delay = entry.target.dataset.delay || 0;
+          setTimeout(() => {
+            entry.target.classList.add('visible');
+          }, delay);
+          observer.unobserve(entry.target);
+        }
+      });
+    }, observerOptions);
+
+    // Observe all fade-in elements
+    document.querySelectorAll('.fade-in, .fade-in-left, .fade-in-right').forEach((el, i) => {
+      // Add stagger delay for siblings in grids
+      const parent = el.parentElement;
+      const siblings = Array.from(parent.children).filter(c =>
+        c.classList.contains('fade-in') ||
+        c.classList.contains('fade-in-left') ||
+        c.classList.contains('fade-in-right')
+      );
+      const idx = siblings.indexOf(el);
+      if (idx > 0 && siblings.length > 1) {
+        el.dataset.delay = idx * 100;
+      }
+      observer.observe(el);
+    });
+
+    // ---- Q&A accordion ----
+    function toggleQA(btn) {
+      const item = btn.closest('.qa-item');
+      const isOpen = item.classList.contains('open');
+
+      // Close all
+      document.querySelectorAll('.qa-item.open').forEach(i => i.classList.remove('open'));
+
+      // Open clicked (if not already open)
+      if (!isOpen) {
+        item.classList.add('open');
+      }
+    }
+
+    // ---- Hero fade-in on load ----
+    window.addEventListener('load', () => {
+      document.querySelectorAll('#hero .fade-in').forEach((el, i) => {
+        setTimeout(() => el.classList.add('visible'), 300 + i * 200);
+      });
+    });
+  </script>
+</body>
+</html>
