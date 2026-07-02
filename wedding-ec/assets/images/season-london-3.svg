@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 1066" width="800" height="1066" role="img" aria-label="LONDON SEASON 03">
+  <defs>
+    <linearGradient id="g-5754400331674297779" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#14110d"/>
+      <stop offset="100%" stop-color="#2e2416"/>
+    </linearGradient>
+    <pattern id="p-5754400331674297779" width="46" height="46" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="0" y2="46" stroke="#b8935a" stroke-opacity="0.06" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="800" height="1066" fill="url(#g-5754400331674297779)"/>
+  <rect width="800" height="1066" fill="url(#p-5754400331674297779)"/>
+  <rect x="18" y="18" width="764" height="1030" fill="none" stroke="#b8935a" stroke-opacity="0.35" stroke-width="1"/>
+  <circle cx="400.0" cy="498.8" r="128.0" fill="none" stroke="#d9bd8a" stroke-opacity="0.55" stroke-width="1"/>
+  <text x="400.0" y="506.78000000000003" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-size="35.339999999999996" fill="#d9bd8a" fill-opacity="0.9">S</text>
+  <text x="400.0" y="564.35" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="57" letter-spacing="2" fill="#f2ede2" fill-opacity="0.92">LONDON</text>
+  <text x="400.0" y="604.25" text-anchor="middle" font-family="Arial, sans-serif" font-size="19" letter-spacing="3" fill="#d9bd8a" fill-opacity="0.85">SEASON 03</text>
+</svg>
