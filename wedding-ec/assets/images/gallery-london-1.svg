@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 900" width="900" height="900" role="img" aria-label="LONDON GALLERY 01">
+  <defs>
+    <linearGradient id="g-3982704679128912280" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#14110d"/>
+      <stop offset="100%" stop-color="#2e2416"/>
+    </linearGradient>
+    <pattern id="p-3982704679128912280" width="46" height="46" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="0" y2="46" stroke="#b8935a" stroke-opacity="0.06" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="900" height="900" fill="url(#g-3982704679128912280)"/>
+  <rect width="900" height="900" fill="url(#p-3982704679128912280)"/>
+  <rect x="18" y="18" width="864" height="864" fill="none" stroke="#b8935a" stroke-opacity="0.35" stroke-width="1"/>
+  <circle cx="450.0" cy="411.6" r="144.0" fill="none" stroke="#d9bd8a" stroke-opacity="0.55" stroke-width="1"/>
+  <text x="450.0" y="420.56" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-size="39.68" fill="#d9bd8a" fill-opacity="0.9">G</text>
+  <text x="450.0" y="485.2" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="64" letter-spacing="2" fill="#f2ede2" fill-opacity="0.92">LONDON</text>
+  <text x="450.0" y="529.3" text-anchor="middle" font-family="Arial, sans-serif" font-size="21" letter-spacing="3" fill="#d9bd8a" fill-opacity="0.85">GALLERY 01</text>
+</svg>

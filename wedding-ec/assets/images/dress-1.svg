@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1250" width="1000" height="1250" role="img" aria-label="FOUR SEASONS DRESS COLLECTION">
+  <defs>
+    <linearGradient id="g-3320397475088816760" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1a140c"/>
+      <stop offset="100%" stop-color="#3a2c18"/>
+    </linearGradient>
+    <pattern id="p-3320397475088816760" width="46" height="46" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="0" y2="46" stroke="#b8935a" stroke-opacity="0.06" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="1000" height="1250" fill="url(#g-3320397475088816760)"/>
+  <rect width="1000" height="1250" fill="url(#p-3320397475088816760)"/>
+  <rect x="18" y="18" width="964" height="1214" fill="none" stroke="#b8935a" stroke-opacity="0.35" stroke-width="1"/>
+  <circle cx="500.0" cy="582.4" r="160.0" fill="none" stroke="#d9bd8a" stroke-opacity="0.55" stroke-width="1"/>
+  <text x="500.0" y="592.34" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-size="44.02" fill="#d9bd8a" fill-opacity="0.9">D</text>
+  <text x="500.0" y="664.05" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="71" letter-spacing="2" fill="#f2ede2" fill-opacity="0.92">FOUR SEASONS</text>
+  <text x="500.0" y="712.3499999999999" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" letter-spacing="3" fill="#d9bd8a" fill-opacity="0.85">DRESS COLLECTION</text>
+</svg>
