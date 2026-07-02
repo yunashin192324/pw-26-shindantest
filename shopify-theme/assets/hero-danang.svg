@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" role="img" aria-label="DA NANG VIETNAM">
+  <defs>
+    <linearGradient id="g-1887528174595677633" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#191309"/>
+      <stop offset="100%" stop-color="#382a15"/>
+    </linearGradient>
+    <pattern id="p-1887528174595677633" width="46" height="46" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="0" y2="46" stroke="#b8935a" stroke-opacity="0.06" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#g-1887528174595677633)"/>
+  <rect width="1920" height="1080" fill="url(#p-1887528174595677633)"/>
+  <rect x="18" y="18" width="1884" height="1044" fill="none" stroke="#b8935a" stroke-opacity="0.35" stroke-width="1"/>
+  <circle cx="960.0" cy="493.8" r="172.8" fill="none" stroke="#d9bd8a" stroke-opacity="0.55" stroke-width="1"/>
+  <text x="960.0" y="504.58000000000004" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-size="47.74" fill="#d9bd8a" fill-opacity="0.9">H</text>
+  <text x="960.0" y="582.35" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="77" letter-spacing="2" fill="#f2ede2" fill-opacity="0.92">DA NANG</text>
+  <text x="960.0" y="634.85" text-anchor="middle" font-family="Arial, sans-serif" font-size="25" letter-spacing="3" fill="#d9bd8a" fill-opacity="0.85">VIETNAM</text>
+</svg>

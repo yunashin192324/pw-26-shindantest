@@ -1,0 +1,76 @@
+{%- comment -%}
+  Assign this template to the Page with handle "faq" (Admin > Online
+  Store > Pages > FAQ > Theme template > page.faq).
+
+  Custom data required (Settings > Custom data > Pages):
+    custom.faqs   list of metaobjects (faq_item), sorted by category —
+                  faq_item's optional "category" field groups questions
+                  under headings (予約について / 撮影について / ...).
+                  See shopify-theme/content/page-faq.md for the ready
+                  list including categories, in the right order.
+{%- endcomment -%}
+
+{%- render 'breadcrumb', current_title: page.title -%}
+
+<section class="page-hero">
+  <div class="hero-media">
+    <img src="{{ 'hero-faq.svg' | asset_url }}" alt="{{ page.title | escape }}" width="1920" height="700">
+  </div>
+  <div class="hero-content">
+    <p class="eyebrow">FAQ</p>
+    <h1>よくあるご質問</h1>
+    <p class="lede">ご予約から撮影、衣裳、お支払いまで。よくいただくご質問にお答えします。</p>
+  </div>
+</section>
+
+{%- assign faqs = page.metafields.custom.faqs.value -%}
+<section>
+  <div class="container" style="max-width:860px;">
+    {%- # theme-check-disable UnclosedHTMLElement -%}
+    {%- comment -%} Divs are opened/closed in balanced pairs across loop iterations as the category changes. {%- endcomment -%}
+    {%- assign prev_category = '' -%}
+    {%- for faq in faqs -%}
+      {%- assign this_category = faq.category.value | default: '' -%}
+      {%- if this_category != prev_category -%}
+        {%- unless forloop.first -%}</div>{%- endunless -%}
+        <div class="reveal mb-40">
+          <p class="eyebrow">{{ this_category }}</p>
+          <div class="divider-gold" style="margin-left:0;"></div>
+        </div>
+        <div class="accordion reveal mb-40">
+        {%- assign prev_category = this_category -%}
+      {%- endif -%}
+      <div class="accordion-item">
+        <button class="accordion-trigger"><span>{{ faq.question.value }}</span><span class="plus"></span></button>
+        <div class="accordion-panel"><div class="accordion-panel-inner">{{ faq.answer.value }}</div></div>
+      </div>
+      {%- if forloop.last -%}</div>{%- endif -%}
+    {%- endfor -%}
+    {%- # theme-check-enable UnclosedHTMLElement -%}
+  </div>
+</section>
+
+{%- if faqs.size > 0 -%}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {%- for faq in faqs -%}
+    { "@type": "Question", "name": {{ faq.question.value | strip_html | json }}, "acceptedAnswer": { "@type": "Answer", "text": {{ faq.answer.value | strip_html | json }} } }{%- unless forloop.last -%},{%- endunless -%}
+    {%- endfor -%}
+  ]
+}
+</script>
+{%- endif -%}
+
+<section class="bg-black text-center">
+  <div class="container">
+    <p class="eyebrow reveal">Still have questions?</p>
+    <h2 class="reveal reveal-1">解決しない場合は、お気軽にご相談ください。</h2>
+    <div class="cta-row reveal reveal-2" style="justify-content:center;margin-top:32px;">
+      <a href="{{ pages['about'].url | default: '#' }}#contact" class="btn btn-outline-light">相談する</a>
+      <a href="{{ pages['diagnosis'].url | default: '#' }}" class="btn btn-gold">30秒診断する</a>
+    </div>
+  </div>
+</section>

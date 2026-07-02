@@ -1,0 +1,11 @@
+{
+  "current": "Default",
+  "presets": {
+    "Default": {
+      "color_black": "#14110d",
+      "color_ivory": "#faf8f3",
+      "color_gold": "#b8935a",
+      "color_gold_dark": "#8f6f3f"
+    }
+  }
+}

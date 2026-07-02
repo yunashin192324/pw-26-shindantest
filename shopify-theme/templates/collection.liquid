@@ -1,0 +1,152 @@
+{%- comment -%}
+  Generic collection template — one file serves every destination
+  (hawaii / danang / london / future additions). Adding a new
+  destination = create a Collection in Admin and fill in the custom
+  data below — no theme changes needed.
+
+  Custom data required (Settings > Custom data > Collections). See
+  shopify-theme/README.md for full setup instructions.
+    custom.lede      single line text                    — optional hero subtitle
+    custom.features  list of metaobjects (feature_item)   — 特徴
+    custom.seasons   list of metaobjects (season_card)     — ベストシーズン
+    custom.gallery   list of files                         — ギャラリー
+    custom.faqs      list of metaobjects (faq_item)         — FAQ
+{%- endcomment -%}
+
+{%- render 'breadcrumb', current_title: collection.title -%}
+
+<section class="page-hero">
+  <div class="hero-media">
+    {%- if collection.image -%}
+      <img src="{{ collection.image | image_url: width: 1920 }}" alt="{{ collection.title | escape }}" loading="eager" width="1920" height="1080">
+    {%- else -%}
+      <img src="{{ 'hero-top.svg' | asset_url }}" alt="{{ collection.title | escape }}" width="1920" height="1080">
+    {%- endif -%}
+  </div>
+  <div class="hero-content">
+    <p class="eyebrow">{{ collection.title }}</p>
+    <h1>{{ collection.title }}フォトウェディング</h1>
+    {%- if collection.metafields.custom.lede != blank -%}
+      <p class="lede">{{ collection.metafields.custom.lede }}</p>
+    {%- endif -%}
+  </div>
+</section>
+
+{%- assign features = collection.metafields.custom.features.value -%}
+{%- if features.size > 0 -%}
+<section>
+  <div class="container">
+    <div class="section-head reveal">
+      <p class="eyebrow">Features</p>
+      <h2>{{ collection.title }}で撮る、という選択</h2>
+      <div class="divider-gold"></div>
+      {{ collection.description }}
+    </div>
+    <div class="grid grid-4">
+      {%- for f in features -%}
+      <div class="trust-item reveal">
+        <div class="trust-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="12" cy="12" r="4"/></svg></div>
+        <h3>{{ f.title.value }}</h3>
+        <p>{{ f.description.value }}</p>
+      </div>
+      {%- endfor -%}
+    </div>
+  </div>
+</section>
+{%- endif -%}
+
+<section class="bg-ivory">
+  <div class="container">
+    <div class="section-head reveal">
+      <p class="eyebrow">Plans</p>
+      <h2>{{ collection.title }}のプラン</h2>
+      <div class="divider-gold"></div>
+    </div>
+    <div class="grid grid-2">
+      {%- for product in collection.products -%}
+        {%- render 'product-card', product: product -%}
+      {%- endfor -%}
+    </div>
+  </div>
+</section>
+
+{%- assign seasons = collection.metafields.custom.seasons.value -%}
+{%- if seasons.size > 0 -%}
+<section>
+  <div class="container">
+    <div class="section-head reveal">
+      <p class="eyebrow">Best Season</p>
+      <h2>ベストシーズン</h2>
+      <div class="divider-gold"></div>
+    </div>
+    <div class="grid grid-4">
+      {%- for s in seasons -%}
+      <div class="reveal">
+        <div class="card-media" style="aspect-ratio:3/4;">
+          {%- if s.image.value -%}
+            <img src="{{ s.image.value | image_url: width: 800 }}" alt="{{ s.title.value | escape }}" loading="lazy" width="800" height="1066">
+          {%- endif -%}
+        </div>
+        <h3 style="font-size:1rem;margin-top:14px;">{{ s.title.value }}</h3>
+        <p style="font-size:0.85rem;">{{ s.description.value }}</p>
+      </div>
+      {%- endfor -%}
+    </div>
+  </div>
+</section>
+{%- endif -%}
+
+{%- assign gallery = collection.metafields.custom.gallery.value -%}
+{%- if gallery.size > 0 -%}
+<section class="bg-ivory">
+  <div class="container">
+    <div class="section-head reveal"><p class="eyebrow">Gallery</p><h2>撮影ギャラリー</h2><div class="divider-gold"></div></div>
+    <div class="gallery reveal">
+      {%- for img in gallery -%}
+      <a href="{{ img | image_url: width: 1600 }}"><img src="{{ img | image_url: width: 900 }}" alt="{{ collection.title | escape }}撮影例{{ forloop.index }}" loading="lazy" width="900" height="900"></a>
+      {%- endfor -%}
+    </div>
+  </div>
+</section>
+{%- endif -%}
+
+{%- assign faqs = collection.metafields.custom.faqs.value -%}
+{%- if faqs.size > 0 -%}
+<section>
+  <div class="container" style="max-width:820px;">
+    <div class="section-head reveal"><p class="eyebrow">FAQ</p><h2>{{ collection.title }}撮影のよくある質問</h2><div class="divider-gold"></div></div>
+    <div class="accordion reveal">
+      {%- for faq in faqs -%}
+      <div class="accordion-item">
+        <button class="accordion-trigger"><span>{{ faq.question.value }}</span><span class="plus"></span></button>
+        <div class="accordion-panel"><div class="accordion-panel-inner">{{ faq.answer.value }}</div></div>
+      </div>
+      {%- endfor -%}
+    </div>
+  </div>
+</section>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {%- for faq in faqs -%}
+    { "@type": "Question", "name": {{ faq.question.value | strip_html | json }}, "acceptedAnswer": { "@type": "Answer", "text": {{ faq.answer.value | strip_html | json }} } }{%- unless forloop.last -%},{%- endunless -%}
+    {%- endfor -%}
+  ]
+}
+</script>
+{%- endif -%}
+
+<section class="bg-black text-center">
+  <div class="container">
+    <p class="eyebrow reveal">{{ collection.title }} Photo Wedding</p>
+    <h2 class="reveal reveal-1">{{ collection.title }}で、あなたの一枚を。</h2>
+    <div class="cta-row reveal reveal-2" style="justify-content:center;margin-top:32px;">
+      {%- if collection.products.first -%}
+        <a href="{{ collection.products.first.url }}" class="btn btn-gold">プランを見る</a>
+      {%- endif -%}
+      <a href="{{ pages['diagnosis'].url | default: '#' }}" class="btn btn-outline-light">30秒診断する</a>
+    </div>
+  </div>
+</section>

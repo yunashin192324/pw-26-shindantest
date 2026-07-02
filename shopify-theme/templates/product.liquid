@@ -1,0 +1,137 @@
+{%- comment -%}
+  Generic product template — one file serves every plan (Basic /
+  Premium / Beach / Luxury / Classic / Royal / future additions).
+  Adding a new plan = create a Product in the right Collection and
+  fill in the custom data below — no theme changes needed.
+
+  Custom data required (Settings > Custom data > Products). See
+  shopify-theme/README.md for full setup instructions.
+    custom.availability        single line text  "instant" | "confirm"
+    custom.availability_label  single line text  e.g. "即予約できます"
+    custom.region              single line text  e.g. "Hawaii — Basic"
+    custom.short_description   single line text
+    custom.diagnosis_reason    single line text  used by the diagnosis quiz
+    custom.faqs                list of metaobjects (faq_item)
+
+  Product "Description" (use "Show HTML" in the editor) should contain
+  everything between the price panel and the FAQ: plan overview,
+  included/excluded, options, dress note, schedule, GEO info block,
+  comparison table — using the same CSS classes as the rest of the
+  theme (see shopify-theme/content/product-*.html for ready-to-paste
+  examples). Product photos = native Shopify product images (the
+  "撮影イメージ" gallery below renders every image on the product).
+{%- endcomment -%}
+
+{%- # theme-check-disable UnusedAssign -%}
+{%- comment -%} Read by snippets/sticky-cta.liquid, rendered later from layout/theme.liquid. {%- endcomment -%}
+{%- assign sticky_cta_reserve = true -%}
+{%- # theme-check-enable UnusedAssign -%}
+
+{%- render 'breadcrumb', crumb1_title: product.collections.first.title, crumb1_url: product.collections.first.url, current_title: product.title -%}
+
+<section class="page-hero">
+  <div class="hero-media">
+    {%- if product.featured_image -%}
+      <img src="{{ product.featured_image | image_url: width: 1920 }}" alt="{{ product.featured_image.alt | default: product.title | escape }}" loading="eager" width="1920" height="1000">
+    {%- else -%}
+      <img src="{{ 'hero-top.svg' | asset_url }}" alt="{{ product.title | escape }}" width="1920" height="1000">
+    {%- endif -%}
+  </div>
+  <div class="hero-content">
+    <p class="eyebrow">{{ product.metafields.custom.region | default: product.collections.first.title }}</p>
+    <h1>{{ product.title }}</h1>
+    {%- if product.metafields.custom.short_description != blank -%}<p class="lede">{{ product.metafields.custom.short_description }}</p>{%- endif -%}
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <div class="grid grid-2" style="align-items:start;">
+      <div class="reveal">
+        <p class="eyebrow">Plan Overview</p>
+        <h2>{{ product.title }}</h2>
+        <div class="divider-gold" style="margin-left:0;"></div>
+      </div>
+      <div class="reveal reveal-1">
+        <div class="price-panel">
+          {%- assign avail = product.metafields.custom.availability | default: 'confirm' -%}
+          {%- if avail == 'instant' -%}
+            <span class="avail-tag instant">{{ product.metafields.custom.availability_label | default: '即予約できます' }}</span>
+          {%- else -%}
+            <span class="avail-tag confirm">{{ product.metafields.custom.availability_label | default: '現地確認後ご回答' }}</span>
+          {%- endif -%}
+          <div class="amount mt-40">{{ product.price | money }}<small> 税込 / 2名様</small></div>
+          <div class="cta-row" style="margin-top:22px;">
+            {%- if product.available -%}
+              <a href="#reserve" class="btn btn-gold btn-block">
+                {%- if avail == 'instant' -%}空き状況を確認して予約する{%- else -%}空き状況を問い合わせる{%- endif -%}
+              </a>
+            {%- else -%}
+              <span class="btn btn-block" style="opacity:.5;pointer-events:none;">現在受付を停止しています</span>
+            {%- endif -%}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="product-description">
+  {{ product.description }}
+</div>
+
+{%- if product.images.size > 0 -%}
+<section>
+  <div class="container">
+    <div class="section-head reveal"><p class="eyebrow">Gallery</p><h2>撮影イメージ</h2><div class="divider-gold"></div></div>
+    <div class="gallery reveal">
+      {%- for img in product.images -%}
+      <a href="{{ img | image_url: width: 1600 }}"><img src="{{ img | image_url: width: 900 }}" alt="{{ img.alt | default: product.title | escape }}" loading="lazy" width="900" height="900"></a>
+      {%- endfor -%}
+    </div>
+  </div>
+</section>
+{%- endif -%}
+
+{%- assign faqs = product.metafields.custom.faqs.value -%}
+{%- if faqs.size > 0 -%}
+<section class="bg-ivory">
+  <div class="container" style="max-width:820px;">
+    <div class="section-head reveal"><p class="eyebrow">FAQ</p><h2>よくあるご質問</h2><div class="divider-gold"></div></div>
+    <div class="accordion reveal">
+      {%- for faq in faqs -%}
+      <div class="accordion-item">
+        <button class="accordion-trigger"><span>{{ faq.question.value }}</span><span class="plus"></span></button>
+        <div class="accordion-panel"><div class="accordion-panel-inner">{{ faq.answer.value }}</div></div>
+      </div>
+      {%- endfor -%}
+    </div>
+  </div>
+</section>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {%- for faq in faqs -%}
+    { "@type": "Question", "name": {{ faq.question.value | strip_html | json }}, "acceptedAnswer": { "@type": "Answer", "text": {{ faq.answer.value | strip_html | json }} } }{%- unless forloop.last -%},{%- endunless -%}
+    {%- endfor -%}
+  ]
+}
+</script>
+{%- endif -%}
+
+<section id="reserve" class="bg-black text-center">
+  <div class="container">
+    <p class="eyebrow reveal">Reservation</p>
+    <h2 class="reveal reveal-1">{{ product.title }}を{% if avail == 'instant' %}予約する{% else %}問い合わせる{% endif %}</h2>
+    <div class="cta-row reveal reveal-2" style="justify-content:center;margin-top:32px;">
+      <a href="{{ pages['about'].url | default: '#' }}#contact" class="btn btn-gold">
+        {%- if avail == 'instant' -%}空き状況を確認して予約する{%- else -%}空き状況を問い合わせる{%- endif -%}
+      </a>
+      <a href="{{ pages['diagnosis'].url | default: '#' }}" class="btn btn-outline-light">他のプランも診断する</a>
+    </div>
+  </div>
+</section>
+
+{{ product | structured_data }}

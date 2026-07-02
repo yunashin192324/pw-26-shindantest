@@ -1,0 +1,33 @@
+{%- comment -%}
+  Assign this template to the Page with handle "dress" (Admin >
+  Online Store > Pages > Dress > Theme template > page.dress).
+  The Page's "Content" field (use "Show HTML") should contain the
+  brand intro / trust points / flow sections — see
+  shopify-theme/content/page-dress.html.
+{%- endcomment -%}
+
+{%- render 'breadcrumb', current_title: page.title -%}
+
+<section class="page-hero">
+  <div class="hero-media">
+    <img src="{{ 'hero-dress.svg' | asset_url }}" alt="{{ page.title | escape }}" width="1920" height="900">
+  </div>
+  <div class="hero-content">
+    <p class="eyebrow">Dress — Four Seasons &amp; Company</p>
+    <h1>試着した、その一着を。<br>そのまま世界へ。</h1>
+    <p class="lede">フォーシスアンドカンパニーの上質な衣裳を、全国の提携サロンで試着してから撮影地へ。</p>
+  </div>
+</section>
+
+{{ page.content }}
+
+<section class="bg-black text-center">
+  <div class="container">
+    <p class="eyebrow reveal">Dress</p>
+    <h2 class="reveal reveal-1">まずは、あなたに合う撮影地から。</h2>
+    <div class="cta-row reveal reveal-2" style="justify-content:center;margin-top:32px;">
+      <a href="{{ routes.root_url }}#destinations" class="btn btn-gold">プランを見る</a>
+      <a href="{{ pages['about'].url | default: '#' }}#contact" class="btn btn-outline-light">試着について相談する</a>
+    </div>
+  </div>
+</section>

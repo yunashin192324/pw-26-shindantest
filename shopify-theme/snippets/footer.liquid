@@ -1,0 +1,42 @@
+{%- comment -%}
+  Site footer. Destination links assume Collections with handles:
+  hawaii, danang, london.
+{%- endcomment -%}
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-top">
+      <div>
+        <div class="footer-logo">{{ shop.name }}</div>
+        <p class="footer-tagline">HISブランドの海外フォトウェディング。世界で、一生残る一枚を。</p>
+      </div>
+      <div class="footer-col">
+        <h4>撮影地</h4>
+        <ul>
+          <li><a href="{{ collections['hawaii'].url | default: '#' }}">ハワイ</a></li>
+          <li><a href="{{ collections['danang'].url | default: '#' }}">ダナン</a></li>
+          <li><a href="{{ collections['london'].url | default: '#' }}">ロンドン</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>サイト</h4>
+        <ul>
+          <li><a href="{{ pages['dress'].url | default: '#' }}">ドレス</a></li>
+          <li><a href="{{ pages['diagnosis'].url | default: '#' }}">診断</a></li>
+          <li><a href="{{ pages['faq'].url | default: '#' }}">FAQ</a></li>
+          <li><a href="{{ pages['about'].url | default: '#' }}">会社情報</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>お問い合わせ</h4>
+        <ul>
+          <li><a href="{{ pages['about'].url | default: '#' }}#contact">ご相談・お問い合わせ</a></li>
+          <li><a href="{{ pages['diagnosis'].url | default: '#' }}">30秒診断</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>&copy; {{ 'now' | date: '%Y' }} {{ shop.name }}.</span>
+      <span>Operated by HIS Co., Ltd. / Dress by Four Seasons &amp; Company</span>
+    </div>
+  </div>
+</footer>

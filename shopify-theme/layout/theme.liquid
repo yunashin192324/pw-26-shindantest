@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="{{ request.locale.iso_code }}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>
+  {{ page_title }}
+  {%- if current_tags %} &ndash; {{ 'general.meta.tags' | t: tags: current_tags | join: ', ' }}{% endif -%}
+  {%- if current_page != 1 %} &ndash; {{ 'general.meta.page' | t: page: current_page }}{% endif -%}
+  {%- unless page_title contains shop.name %} | {{ shop.name }}{% endunless -%}
+</title>
+{% if page_description %}<meta name="description" content="{{ page_description | escape }}">{% endif %}
+<link rel="canonical" href="{{ canonical_url }}">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="icon" href="{{ 'favicon.svg' | asset_url }}" type="image/svg+xml">
+{{ 'style.css' | asset_url | stylesheet_tag }}
+<style>
+  :root {
+    --black: {{ settings.color_black }};
+    --ivory: {{ settings.color_ivory }};
+    --gold: {{ settings.color_gold }};
+    --gold-dark: {{ settings.color_gold_dark }};
+  }
+</style>
+
+{{ content_for_header }}
+
+{%- render 'jsonld-organization' -%}
+</head>
+<body>
+
+{%- render 'header' -%}
+
+{{ content_for_layout }}
+
+{%- render 'footer' -%}
+
+{%- render 'sticky-cta' -%}
+
+<script src="{{ 'main.js' | asset_url }}" defer></script>
+</body>
+</html>

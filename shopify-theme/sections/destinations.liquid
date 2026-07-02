@@ -1,0 +1,59 @@
+<section id="destinations" class="bg-ivory">
+  <div class="container">
+    <div class="section-head reveal">
+      {%- if section.settings.eyebrow != blank -%}<p class="eyebrow">{{ section.settings.eyebrow }}</p>{%- endif -%}
+      <h2>{{ section.settings.heading }}</h2>
+      <div class="divider-gold"></div>
+      {%- if section.settings.subheading != blank -%}<p>{{ section.settings.subheading }}</p>{%- endif -%}
+    </div>
+    <div class="grid grid-3">
+      {%- for block in section.blocks -%}
+        {%- assign col = block.settings.collection -%}
+        {%- if col != blank -%}
+        <a href="{{ col.url }}" class="region-card reveal" {{ block.shopify_attributes }}>
+          {%- if block.settings.image -%}
+            <img src="{{ block.settings.image | image_url: width: 900 }}" alt="{{ col.title | escape }}" loading="lazy" width="900" height="1200">
+          {%- elsif col.image -%}
+            <img src="{{ col.image | image_url: width: 900 }}" alt="{{ col.title | escape }}" loading="lazy" width="900" height="1200">
+          {%- endif -%}
+          <div class="region-card-body">
+            {%- if block.settings.region_eyebrow != blank -%}<p class="region-card-eyebrow">{{ block.settings.region_eyebrow }}</p>{%- endif -%}
+            <h3 class="region-card-title">{{ col.title }}</h3>
+            {%- if block.settings.meta_text != blank -%}<p class="region-card-meta">{{ block.settings.meta_text }}</p>{%- endif -%}
+          </div>
+        </a>
+        {%- endif -%}
+      {%- endfor -%}
+    </div>
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "撮影地一覧",
+  "settings": [
+    { "type": "text", "id": "eyebrow", "label": "アイキャッチテキスト", "default": "Destinations" },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "撮影地から選ぶ" },
+    { "type": "textarea", "id": "subheading", "label": "リード文", "default": "現在3方面。今後30〜50方面まで順次拡大予定です。" }
+  ],
+  "blocks": [
+    {
+      "type": "destination",
+      "name": "撮影地",
+      "settings": [
+        { "type": "collection", "id": "collection", "label": "コレクション" },
+        { "type": "image_picker", "id": "image", "label": "画像（未指定時はコレクション画像）" },
+        { "type": "text", "id": "region_eyebrow", "label": "地域ラベル", "info": "例: U.S.A." },
+        { "type": "text", "id": "meta_text", "label": "補足テキスト", "info": "例: プラン2種 / ベストシーズン通年" }
+      ]
+    }
+  ],
+  "max_blocks": 12,
+  "presets": [
+    {
+      "name": "撮影地一覧",
+      "blocks": [ { "type": "destination" }, { "type": "destination" }, { "type": "destination" } ]
+    }
+  ]
+}
+{% endschema %}

@@ -1,0 +1,50 @@
+<section>
+  <div class="container" style="max-width:820px;">
+    <div class="section-head reveal">
+      {%- if section.settings.eyebrow != blank -%}<p class="eyebrow">{{ section.settings.eyebrow }}</p>{%- endif -%}
+      <h2>{{ section.settings.heading }}</h2>
+      <div class="divider-gold"></div>
+    </div>
+    <div class="reveal">
+      {%- render 'faq-accordion', faqs: section.blocks -%}
+    </div>
+    {%- if section.settings.more_link != blank -%}
+    <div class="text-center mt-40">
+      <a href="{{ section.settings.more_link }}" class="btn btn-outline-dark">{{ section.settings.more_text | default: 'FAQをもっと見る' }}</a>
+    </div>
+    {%- endif -%}
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "FAQ（ホーム）",
+  "settings": [
+    { "type": "text", "id": "eyebrow", "label": "アイキャッチテキスト", "default": "FAQ" },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "よくあるご質問" },
+    { "type": "text", "id": "more_text", "label": "もっと見るボタン テキスト", "default": "FAQをもっと見る" },
+    { "type": "url", "id": "more_link", "label": "もっと見るボタン リンク先" }
+  ],
+  "blocks": [
+    {
+      "type": "question",
+      "name": "質問",
+      "settings": [
+        { "type": "text", "id": "question", "label": "質問" },
+        { "type": "richtext", "id": "answer", "label": "回答" }
+      ]
+    }
+  ],
+  "max_blocks": 10,
+  "presets": [
+    {
+      "name": "FAQ（ホーム）",
+      "blocks": [
+        { "type": "question", "settings": { "question": "言葉が通じるか不安です。現地で日本語対応はありますか？", "answer": "<p>プランにより、日本語対応スタッフの同行または通訳手配が可能です。各商品ページの「含まれるもの」でご確認いただけます。</p>" } },
+        { "type": "question", "settings": { "question": "ドレスは現地で借りるのですか、日本から持っていくのですか？", "answer": "<p>日本全国のフォーシスアンドカンパニー提携サロンで試着・選定した衣裳を、そのまま撮影地までお持ちいただきます。</p>" } },
+        { "type": "question", "settings": { "question": "予約から撮影まで、どのくらいの期間が必要ですか？", "answer": "<p>試着・衣裳決定・渡航準備を含め、目安として2〜4ヶ月前のご予約をおすすめしています。</p>" } }
+      ]
+    }
+  ]
+}
+{% endschema %}

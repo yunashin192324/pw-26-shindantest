@@ -1,0 +1,21 @@
+{%- if template == 'index' -%}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TravelAgency",
+  "name": {{ shop.name | json }},
+  "url": {{ shop.url | append: routes.root_url | json }},
+  "logo": {{ 'favicon.svg' | asset_url | json }},
+  "description": {{ shop.description | default: "HISブランドの海外フォトウェディング。ハワイ・ダナン・ロンドンなどのロケーションで、フォーシスアンドカンパニーの衣裳と全国試着・現地サポート付きで撮影できるフォトウェディングブランド。" | json }},
+  "areaServed": [
+    { "@type": "Place", "name": "ハワイ" },
+    { "@type": "Place", "name": "ダナン" },
+    { "@type": "Place", "name": "ロンドン" }
+  ],
+  "brand": [
+    { "@type": "Brand", "name": "HIS" },
+    { "@type": "Brand", "name": "Four Seasons & Company" }
+  ]
+}
+</script>
+{%- endif -%}

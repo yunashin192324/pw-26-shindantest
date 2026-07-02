@@ -1,0 +1,12 @@
+{%- comment -%}
+  Usage: {% render 'faq-accordion', faqs: section.blocks %}
+  Each block needs settings.question (text) and settings.answer (richtext).
+{%- endcomment -%}
+<div class="accordion">
+  {%- for block in faqs -%}
+  <div class="accordion-item" {{ block.shopify_attributes }}>
+    <button class="accordion-trigger"><span>{{ block.settings.question }}</span><span class="plus"></span></button>
+    <div class="accordion-panel"><div class="accordion-panel-inner">{{ block.settings.answer }}</div></div>
+  </div>
+  {%- endfor -%}
+</div>

@@ -1,0 +1,19 @@
+[
+  {
+    "name": "theme_info",
+    "theme_name": "HIS World Wedding",
+    "theme_version": "1.0.0",
+    "theme_author": "HIS World Wedding",
+    "theme_documentation_url": "https://example.com/theme-docs",
+    "theme_support_email": "support@example.com"
+  },
+  {
+    "name": "ブランドカラー",
+    "settings": [
+      { "type": "color", "id": "color_black", "label": "黒（背景・文字）", "default": "#14110d" },
+      { "type": "color", "id": "color_ivory", "label": "アイボリー（背景）", "default": "#faf8f3" },
+      { "type": "color", "id": "color_gold", "label": "ゴールド（アクセント）", "default": "#b8935a" },
+      { "type": "color", "id": "color_gold_dark", "label": "ゴールド（濃色・ホバー）", "default": "#8f6f3f" }
+    ]
+  }
+]

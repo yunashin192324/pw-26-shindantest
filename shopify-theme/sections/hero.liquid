@@ -1,0 +1,36 @@
+<section class="hero">
+  <div class="hero-media">
+    {%- if section.settings.image -%}
+      <img src="{{ section.settings.image | image_url: width: 1920 }}" alt="{{ section.settings.image.alt | default: section.settings.heading | escape }}" loading="eager" width="1920" height="1080">
+    {%- else -%}
+      <img src="{{ 'hero-top.svg' | asset_url }}" alt="{{ section.settings.heading | escape }}" loading="eager" width="1920" height="1080">
+    {%- endif -%}
+  </div>
+  <div class="hero-content">
+    {%- if section.settings.eyebrow != blank -%}<p class="eyebrow">{{ section.settings.eyebrow }}</p>{%- endif -%}
+    <h1>{{ section.settings.heading }}</h1>
+    {%- if section.settings.lede != blank -%}<p class="lede">{{ section.settings.lede }}</p>{%- endif -%}
+    <div class="cta-row">
+      {%- if section.settings.cta1_text != blank -%}<a href="{{ section.settings.cta1_link | default: '#destinations' }}" class="btn btn-gold">{{ section.settings.cta1_text }}</a>{%- endif -%}
+      {%- if section.settings.cta2_text != blank -%}<a href="{{ section.settings.cta2_link | default: pages['diagnosis'].url }}" class="btn btn-outline-light">{{ section.settings.cta2_text }}</a>{%- endif -%}
+    </div>
+  </div>
+  <div class="scroll-cue"><span>SCROLL</span><span class="line"></span></div>
+</section>
+
+{% schema %}
+{
+  "name": "ヒーロー",
+  "settings": [
+    { "type": "image_picker", "id": "image", "label": "背景画像" },
+    { "type": "text", "id": "eyebrow", "label": "アイキャッチテキスト", "default": "HIS World Wedding" },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "世界で、一生残る一枚を。" },
+    { "type": "textarea", "id": "lede", "label": "リード文", "default": "HISだから安心できる海外フォトウェディング。日本全国で試着できるフォーシスアンドカンパニーの衣裳と、現地までの手厚いサポートで、あなたの物語を世界のロケーションで残します。" },
+    { "type": "text", "id": "cta1_text", "label": "ボタン1 テキスト", "default": "撮影地を見る" },
+    { "type": "url", "id": "cta1_link", "label": "ボタン1 リンク先" },
+    { "type": "text", "id": "cta2_text", "label": "ボタン2 テキスト", "default": "30秒診断する" },
+    { "type": "url", "id": "cta2_link", "label": "ボタン2 リンク先" }
+  ],
+  "presets": [ { "name": "ヒーロー" } ]
+}
+{% endschema %}

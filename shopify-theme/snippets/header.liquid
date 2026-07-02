@@ -1,0 +1,18 @@
+{%- comment -%}
+  Site header / primary navigation.
+  Requires Pages with handles: dress, diagnosis, faq, about
+  (create via Shopify Admin > Online Store > Pages, and assign the
+  matching page.*.liquid template to each — see templates/page.*.liquid).
+{%- endcomment -%}
+<header class="site-header">
+  <a href="{{ routes.root_url }}" class="logo">{{ shop.name }}<span class="logo-sub">Overseas Photo Wedding</span></a>
+  <nav class="nav-links">
+    <a href="{{ routes.root_url }}#destinations">撮影地一覧</a>
+    <a href="{{ pages['dress'].url | default: '#' }}">ドレス</a>
+    <a href="{{ pages['diagnosis'].url | default: '#' }}">診断</a>
+    <a href="{{ pages['faq'].url | default: '#' }}">FAQ</a>
+    <a href="{{ pages['about'].url | default: '#' }}">会社情報</a>
+    <a href="{{ pages['diagnosis'].url | default: '#' }}" class="btn btn-sm btn-gold">30秒診断</a>
+  </nav>
+  <button class="nav-toggle" aria-label="メニュー" aria-expanded="false"><span></span><span></span><span></span></button>
+</header>

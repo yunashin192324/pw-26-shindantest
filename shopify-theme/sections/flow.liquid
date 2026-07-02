@@ -1,0 +1,49 @@
+<section class="bg-black">
+  <div class="container">
+    <div class="section-head reveal">
+      {%- if section.settings.eyebrow != blank -%}<p class="eyebrow">{{ section.settings.eyebrow }}</p>{%- endif -%}
+      <h2>{{ section.settings.heading }}</h2>
+      <div class="divider-gold"></div>
+    </div>
+    <div class="flow">
+      {%- for block in section.blocks -%}
+        <div class="flow-step reveal" {{ block.shopify_attributes }}><div class="num"></div><h4>{{ block.settings.title }}</h4><p>{{ block.settings.description }}</p></div>
+        {%- unless forloop.last -%}<div class="flow-arrow">→</div>{%- endunless -%}
+      {%- endfor -%}
+    </div>
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "利用の流れ",
+  "settings": [
+    { "type": "text", "id": "eyebrow", "label": "アイキャッチテキスト", "default": "Flow" },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "ご利用の流れ" }
+  ],
+  "blocks": [
+    {
+      "type": "step",
+      "name": "ステップ",
+      "settings": [
+        { "type": "text", "id": "title", "label": "タイトル" },
+        { "type": "textarea", "id": "description", "label": "説明文" }
+      ]
+    }
+  ],
+  "max_blocks": 8,
+  "presets": [
+    {
+      "name": "利用の流れ",
+      "blocks": [
+        { "type": "step", "settings": { "title": "予約", "description": "オンラインでプランを選び、空き状況を確認して仮予約。" } },
+        { "type": "step", "settings": { "title": "試着", "description": "全国の提携サロンでドレス・タキシードを試着。" } },
+        { "type": "step", "settings": { "title": "衣裳決定", "description": "お気に入りの一着を決定し、撮影内容を最終確認。" } },
+        { "type": "step", "settings": { "title": "渡航", "description": "現地スタッフのサポートのもと、撮影地へ。" } },
+        { "type": "step", "settings": { "title": "撮影", "description": "プロカメラマンが、二人だけの物語を一枚に。" } },
+        { "type": "step", "settings": { "title": "データ納品", "description": "撮影データを高画質でお届け。一生の宝物に。" } }
+      ]
+    }
+  ]
+}
+{% endschema %}

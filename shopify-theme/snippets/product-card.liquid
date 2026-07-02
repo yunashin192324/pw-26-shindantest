@@ -1,0 +1,33 @@
+{%- comment -%}
+  Usage: {% render 'product-card', product: product, badge: '人気No.1' %}
+  Reads optional custom metafields (Settings > Custom data > Products):
+    custom.region              single line text  e.g. "Hawaii — Basic"
+    custom.availability        single line text  "instant" | "confirm"
+    custom.short_description   single line text
+{%- endcomment -%}
+<a href="{{ product.url }}" class="card reveal">
+  <div class="card-media">
+    {%- if badge -%}<span class="card-badge gold">{{ badge }}</span>{%- endif -%}
+    {%- if product.featured_image -%}
+      <img
+        src="{{ product.featured_image | image_url: width: 900 }}"
+        alt="{{ product.featured_image.alt | default: product.title | escape }}"
+        loading="lazy" width="900" height="1125">
+    {%- endif -%}
+  </div>
+  <div class="card-body">
+    <p class="card-region">{{ product.metafields.custom.region | default: product.title }}</p>
+    <h3 class="card-title">{{ product.title }}</h3>
+    <p class="card-desc">{{ product.metafields.custom.short_description | default: product.description | strip_html | truncate: 60 }}</p>
+    {%- assign avail = product.metafields.custom.availability | default: 'confirm' -%}
+    {%- if avail == 'instant' -%}
+      <span class="avail-tag instant">即予約できます</span>
+    {%- else -%}
+      <span class="avail-tag confirm">現地確認後ご回答</span>
+    {%- endif -%}
+    <div class="card-foot">
+      <span class="card-price">{{ product.price | money }}<small>税込 / 2名</small></span>
+      <span class="card-link">詳細を見る ＞</span>
+    </div>
+  </div>
+</a>

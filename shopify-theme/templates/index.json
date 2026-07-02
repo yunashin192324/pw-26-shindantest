@@ -1,0 +1,99 @@
+{
+  "sections": {
+    "hero": {
+      "type": "hero",
+      "settings": {
+        "eyebrow": "HIS World Wedding",
+        "heading": "世界で、一生残る一枚を。",
+        "lede": "HISだから安心できる海外フォトウェディング。日本全国で試着できるフォーシスアンドカンパニーの衣裳と、現地までの手厚いサポートで、あなたの物語を世界のロケーションで残します。",
+        "cta1_text": "撮影地を見る",
+        "cta2_text": "30秒診断する"
+      }
+    },
+    "popular_plans": {
+      "type": "popular-plans",
+      "blocks": {
+        "plan-1": { "type": "plan", "settings": { "badge": "人気No.1" } },
+        "plan-2": { "type": "plan", "settings": {} },
+        "plan-3": { "type": "plan", "settings": {} }
+      },
+      "block_order": ["plan-1", "plan-2", "plan-3"],
+      "settings": {
+        "eyebrow": "Popular Plans",
+        "heading": "人気のフォトウェディングプラン",
+        "subheading": "ハワイ・ダナン・ロンドン——選ばれているプランから、あなたの一枚を探す。"
+      }
+    },
+    "destinations": {
+      "type": "destinations",
+      "blocks": {
+        "dest-1": { "type": "destination", "settings": { "region_eyebrow": "U.S.A.", "meta_text": "プラン2種 / ベストシーズン通年" } },
+        "dest-2": { "type": "destination", "settings": { "region_eyebrow": "Vietnam", "meta_text": "プラン2種 / ベストシーズン2〜8月" } },
+        "dest-3": { "type": "destination", "settings": { "region_eyebrow": "United Kingdom", "meta_text": "プラン2種 / ベストシーズン4〜9月" } }
+      },
+      "block_order": ["dest-1", "dest-2", "dest-3"],
+      "settings": {
+        "eyebrow": "Destinations",
+        "heading": "撮影地から選ぶ",
+        "subheading": "現在3方面。今後30〜50方面まで順次拡大予定です。"
+      }
+    },
+    "trust_points": {
+      "type": "trust-points",
+      "blocks": {
+        "t1": { "type": "point", "settings": { "icon": "shield", "title": "HIS品質", "description": "旅行大手HISが企画・運営。長年の海外手配実績に基づく安心の品質。" } },
+        "t2": { "type": "point", "settings": { "icon": "salon", "title": "日本全国で試着", "description": "渡航前に、お近くの提携サロンでドレス・タキシードの試着が可能。" } },
+        "t3": { "type": "point", "settings": { "icon": "dress", "title": "フォーシスの衣裳", "description": "フォーシスアンドカンパニーの上質なドレス・タキシードをそのまま現地へ。" } },
+        "t4": { "type": "point", "settings": { "icon": "support", "title": "日本語サポート", "description": "現地でも日本語対応スタッフ・通訳が同行、または手配で安心。" } },
+        "t5": { "type": "point", "settings": { "icon": "booking", "title": "オンライン予約", "description": "空き状況の確認からご予約まで、オンラインで完結。" } }
+      },
+      "block_order": ["t1", "t2", "t3", "t4", "t5"],
+      "settings": { "eyebrow": "Peace of Mind", "heading": "選ばれる、5つの安心" }
+    },
+    "dress_teaser": {
+      "type": "dress-teaser",
+      "settings": {
+        "eyebrow": "Dress",
+        "heading": "フォーシスアンドカンパニーの衣裳を、そのまま海外へ。",
+        "text": "全国の提携サロンで試着し、選んだ一着をそのまま撮影地まで。海外挙式・フォトウェディングに精通したフォーシスアンドカンパニーの上質なドレス・タキシードだから、写真映えも着心地も妥協しません。",
+        "cta_text": "ドレスを詳しく見る"
+      }
+    },
+    "flow": {
+      "type": "flow",
+      "blocks": {
+        "f1": { "type": "step", "settings": { "title": "予約", "description": "オンラインでプランを選び、空き状況を確認して仮予約。" } },
+        "f2": { "type": "step", "settings": { "title": "試着", "description": "全国の提携サロンでドレス・タキシードを試着。" } },
+        "f3": { "type": "step", "settings": { "title": "衣裳決定", "description": "お気に入りの一着を決定し、撮影内容を最終確認。" } },
+        "f4": { "type": "step", "settings": { "title": "渡航", "description": "現地スタッフのサポートのもと、撮影地へ。" } },
+        "f5": { "type": "step", "settings": { "title": "撮影", "description": "プロカメラマンが、二人だけの物語を一枚に。" } },
+        "f6": { "type": "step", "settings": { "title": "データ納品", "description": "撮影データを高画質でお届け。一生の宝物に。" } }
+      },
+      "block_order": ["f1", "f2", "f3", "f4", "f5", "f6"],
+      "settings": { "eyebrow": "Flow", "heading": "ご利用の流れ" }
+    },
+    "faq_home": {
+      "type": "faq-home",
+      "blocks": {
+        "q1": { "type": "question", "settings": { "question": "言葉が通じるか不安です。現地で日本語対応はありますか？", "answer": "<p>プランにより、日本語対応スタッフの同行または通訳手配が可能です。各商品ページの「含まれるもの」でご確認いただけます。</p>" } },
+        "q2": { "type": "question", "settings": { "question": "ドレスは現地で借りるのですか、日本から持っていくのですか？", "answer": "<p>日本全国のフォーシスアンドカンパニー提携サロンで試着・選定した衣裳を、そのまま撮影地までお持ちいただきます。現地レンタルとは異なり、サイズも着心地も事前に確認済みです。</p>" } },
+        "q3": { "type": "question", "settings": { "question": "予約から撮影まで、どのくらいの期間が必要ですか？", "answer": "<p>試着・衣裳決定・渡航準備を含め、目安として2〜4ヶ月前のご予約をおすすめしています。繁忙期は早めのご相談が安心です。</p>" } },
+        "q4": { "type": "question", "settings": { "question": "「即予約できます」「現地確認後ご回答」の違いは何ですか？", "answer": "<p>「即予約できます」は空き枠をシステム上で確認でき、その場でご予約が確定するプランです。「現地確認後ご回答」は現地手配先の空き状況を確認のうえ、担当より折り返しご案内するプランです。</p>" } },
+        "q5": { "type": "question", "settings": { "question": "撮影データはいつ届きますか？", "answer": "<p>撮影地・プランにより異なりますが、目安として撮影から3〜8週間でオンライン納品いたします。詳細は各商品ページをご確認ください。</p>" } }
+      },
+      "block_order": ["q1", "q2", "q3", "q4", "q5"],
+      "settings": { "eyebrow": "FAQ", "heading": "よくあるご質問", "more_text": "FAQをもっと見る" }
+    },
+    "cta": {
+      "type": "cta",
+      "blocks": {
+        "b1": { "type": "button", "settings": { "text": "相談する", "style": "outline" } },
+        "b2": { "type": "button", "settings": { "text": "30秒診断する", "style": "gold" } },
+        "b3": { "type": "button", "settings": { "text": "商品一覧を見る", "style": "outline" } }
+      },
+      "block_order": ["b1", "b2", "b3"],
+      "settings": { "eyebrow": "Get Started", "heading": "世界で、一生残る一枚を。まずは、あなたに合う撮影地から。" }
+    }
+  },
+  "order": ["hero", "popular_plans", "destinations", "trust_points", "dress_teaser", "flow", "faq_home", "cta"]
+}

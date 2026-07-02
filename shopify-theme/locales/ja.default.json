@@ -1,0 +1,8 @@
+{
+  "general": {
+    "meta": {
+      "tags": "タグ「{{ tags }}」",
+      "page": "{{ page }}ページ目"
+    }
+  }
+}

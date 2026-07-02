@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 700" width="1920" height="700" role="img" aria-label="FAQ QUESTIONS & ANSWERS">
+  <defs>
+    <linearGradient id="g-4201595037670777548" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1a140c"/>
+      <stop offset="100%" stop-color="#3a2c18"/>
+    </linearGradient>
+    <pattern id="p-4201595037670777548" width="46" height="46" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="0" y2="46" stroke="#b8935a" stroke-opacity="0.06" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="1920" height="700" fill="url(#g-4201595037670777548)"/>
+  <rect width="1920" height="700" fill="url(#p-4201595037670777548)"/>
+  <rect x="18" y="18" width="1884" height="664" fill="none" stroke="#b8935a" stroke-opacity="0.35" stroke-width="1"/>
+  <circle cx="960.0" cy="320.0" r="112.0" fill="none" stroke="#d9bd8a" stroke-opacity="0.55" stroke-width="1"/>
+  <text x="960.0" y="327.0" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-size="31.0" fill="#d9bd8a" fill-opacity="0.9">H</text>
+  <text x="960.0" y="377.5" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="50" letter-spacing="2" fill="#f2ede2" fill-opacity="0.92">FAQ</text>
+  <text x="960.0" y="411.1" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" letter-spacing="3" fill="#d9bd8a" fill-opacity="0.85">QUESTIONS & ANSWERS</text>
+</svg>

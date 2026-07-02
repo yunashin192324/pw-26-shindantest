@@ -1,0 +1,13 @@
+{%- comment -%}
+  Persistent mobile CTA bar. Product templates set
+  {% assign sticky_cta_reserve = true %} before rendering to swap the
+  right-hand button for a same-page "#reserve" anchor.
+{%- endcomment -%}
+<div class="sticky-cta">
+  <a href="{{ pages['about'].url | default: '#' }}#contact" class="btn btn-outline-dark">相談する</a>
+  {%- if sticky_cta_reserve -%}
+    <a href="#reserve" class="btn btn-gold">予約する</a>
+  {%- else -%}
+    <a href="{{ pages['diagnosis'].url | default: '#' }}" class="btn btn-gold">30秒診断</a>
+  {%- endif -%}
+</div>

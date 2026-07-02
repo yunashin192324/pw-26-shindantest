@@ -1,0 +1,21 @@
+{%- comment -%}
+  Assign this template to the Page with handle "about" (Admin >
+  Online Store > Pages > About > Theme template > page.about).
+  The Page's "Content" field (use "Show HTML") should contain the
+  story / values / contact sections — see shopify-theme/content/page-about.html.
+{%- endcomment -%}
+
+{%- render 'breadcrumb', current_title: page.title -%}
+
+<section class="page-hero">
+  <div class="hero-media">
+    <img src="{{ 'hero-about.svg' | asset_url }}" alt="{{ page.title | escape }}" width="1920" height="900">
+  </div>
+  <div class="hero-content">
+    <p class="eyebrow">About Us</p>
+    <h1>安心をかたちに。<br>{{ shop.name }}について。</h1>
+    <p class="lede">旅行大手HISと、衣裳のフォーシスアンドカンパニー。二つの信頼が、あなたの一枚を支えます。</p>
+  </div>
+</section>
+
+{{ page.content }}
