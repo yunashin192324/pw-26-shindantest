@@ -1,0 +1,93 @@
+{% render 'danang-common' %}
+{%- if section.settings.enable -%}
+<div class="danang-scope">
+  {% style %}
+    #shopify-section-{{ section.id }} .danang-faq-title { color: {{ section.settings.title_color }}; }
+    #shopify-section-{{ section.id }} .danang-faq-q { color: {{ section.settings.question_color }}; }
+    #shopify-section-{{ section.id }} .danang-faq-a { color: {{ section.settings.answer_color }}; font-size: {{ section.settings.answer_size }}px; }
+    #shopify-section-{{ section.id }} .danang-faq-item { border: 1px solid #e5e7eb; border-radius: 0.5rem; overflow: hidden; }
+    #shopify-section-{{ section.id }} .danang-faq-panel { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; padding: 0 1.25rem; }
+    #shopify-section-{{ section.id }} .danang-faq-panel.is-open { max-height: 300px; }
+    #shopify-section-{{ section.id }} .danang-faq-icon { color: {{ section.settings.accent_color }}; font-size: 1.125rem; }
+  {% endstyle %}
+
+  <section style="padding:4rem 0;">
+    <div class="danang-wrap danang-wrap--narrow">
+      <div style="text-align:center;margin-bottom:2.5rem;">
+        {%- if section.settings.eyebrow != blank -%}
+          <p class="danang-serif danang-eyebrow">{{ section.settings.eyebrow }}</p>
+        {%- endif -%}
+        <h2 class="danang-serif danang-faq-title" style="font-weight:300;">{{ section.settings.title }}</h2>
+        <div class="danang-divider danang-divider--center" style="margin-top:0.75rem;"></div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:0.75rem;">
+        {%- for block in section.blocks -%}
+          {%- if block.type == 'item' -%}
+            <div class="danang-faq-item" {{ block.shopify_attributes }}>
+              <button class="danang-faq-btn" type="button" style="width:100%;text-align:left;padding:1rem 1.25rem;display:flex;justify-content:space-between;align-items:center;font-size:0.875rem;font-weight:500;background:none;border:0;cursor:pointer;">
+                <span class="danang-faq-q">{{ block.settings.question }}</span>
+                <span class="danang-faq-icon">+</span>
+              </button>
+              <div class="danang-faq-panel">
+                <p class="danang-faq-a" style="padding-bottom:1rem;">{{ block.settings.answer | newline_to_br }}</p>
+              </div>
+            </div>
+          {%- endif -%}
+        {%- endfor -%}
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  var root = document.getElementById('shopify-section-{{ section.id }}');
+  if (!root) return;
+  root.querySelectorAll('.danang-faq-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var panel = btn.nextElementSibling;
+      var icon = btn.querySelector('.danang-faq-icon');
+      var isOpen = panel.classList.toggle('is-open');
+      icon.textContent = isOpen ? '−' : '+';
+    });
+  });
+})();
+</script>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "ダナン｜FAQ",
+  "settings": [
+    { "type": "checkbox", "id": "enable", "label": "このセクションを表示する", "default": true },
+    { "type": "text", "id": "eyebrow", "label": "小見出し", "default": "FAQ" },
+    { "type": "text", "id": "title", "label": "タイトル", "default": "よくあるご質問" },
+    { "type": "color", "id": "title_color", "label": "タイトルの色", "default": "#1a1a1a" },
+    { "type": "color", "id": "question_color", "label": "質問文の色", "default": "#1a1a1a" },
+    { "type": "color", "id": "answer_color", "label": "回答文の色", "default": "#4b5563" },
+    { "type": "range", "id": "answer_size", "label": "回答文の文字サイズ（px）", "min": 12, "max": 20, "step": 1, "default": 14 },
+    { "type": "color", "id": "accent_color", "label": "開閉アイコンの色", "default": "#b8860b" }
+  ],
+  "blocks": [
+    {
+      "type": "item",
+      "name": "質問項目",
+      "settings": [
+        { "type": "text", "id": "question", "label": "質問", "default": "質問文" },
+        { "type": "textarea", "id": "answer", "label": "回答（Enterキーで自由に改行できます）", "default": "回答文" }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "ダナン｜FAQ",
+      "blocks": [
+        { "type": "item", "settings": { "question": "湿度が高いと聞きますが、メイクは崩れませんか？", "answer": "現地の気候に対応したウォータープルーフメイクをご用意しています。撮影中のお直しにも対応いたします。" } },
+        { "type": "item", "settings": { "question": "ビザは必要ですか？", "answer": "日本国籍の方は15日以内の滞在であればビザ免除で渡航可能です。滞在日数によっては事前申請が必要な場合がありますので、詳細はお問い合わせください。" } },
+        { "type": "item", "settings": { "question": "バナヒルズにも行きたい場合はどうすればいいですか？", "answer": "オプションの「バナヒルズ半日観光付き」をお選びいただくか、バナヒルズでの撮影を含むラグジュアリープランをご検討ください。" } }
+      ]
+    }
+  ]
+}
+{% endschema %}

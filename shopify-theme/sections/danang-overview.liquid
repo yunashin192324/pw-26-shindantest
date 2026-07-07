@@ -1,0 +1,143 @@
+{% render 'danang-common' %}
+{%- if section.settings.enable -%}
+<div class="danang-scope">
+  {% style %}
+    #shopify-section-{{ section.id }} .danang-overview-title { color: {{ section.settings.title_color }}; font-size: {{ section.settings.title_size }}px; }
+    #shopify-section-{{ section.id }} .danang-overview-desc { color: {{ section.settings.text_color }}; font-size: {{ section.settings.desc_size }}px; }
+    #shopify-section-{{ section.id }} .danang-price-panel {
+      background: {{ section.settings.panel_bg }};
+      border-color: {{ section.settings.panel_border }};
+    }
+    #shopify-section-{{ section.id }} .danang-price-amount { color: {{ section.settings.panel_text_color }}; }
+    #shopify-section-{{ section.id }} .danang-price-cta {
+      background: {{ section.settings.panel_accent }};
+      color: #fff;
+    }
+    #shopify-section-{{ section.id }} .danang-overview-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 2.5rem;
+      align-items: start;
+    }
+    @media (min-width: 768px) {
+      #shopify-section-{{ section.id }} .danang-overview-grid { grid-template-columns: 1fr 1fr; }
+    }
+  {% endstyle %}
+
+  <section style="padding:4rem 0;">
+    <div class="danang-wrap danang-overview-grid">
+      <div>
+        {%- for block in section.blocks -%}
+          {%- if block.type == 'overview_text' -%}
+            <div {{ block.shopify_attributes }}>
+              {%- if block.settings.eyebrow != blank -%}
+                <p class="danang-serif danang-eyebrow">{{ block.settings.eyebrow }}</p>
+              {%- endif -%}
+              <h2 class="danang-serif danang-overview-title" style="font-weight:300;line-height:1.4;margin-bottom:1rem;">{{ block.settings.title | newline_to_br }}</h2>
+              <div class="danang-divider" style="margin-bottom:1.5rem;"></div>
+              <p class="danang-overview-desc" style="line-height:1.8;">{{ block.settings.desc | newline_to_br }}</p>
+            </div>
+          {%- endif -%}
+        {%- endfor -%}
+
+        <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:2rem;">
+          {%- for block in section.blocks -%}
+            {%- if block.type == 'tag' -%}
+              <span class="danang-tag" {{ block.shopify_attributes }}>{{ block.settings.label }}</span>
+            {%- endif -%}
+          {%- endfor -%}
+        </div>
+      </div>
+
+      <div>
+        {%- for block in section.blocks -%}
+          {%- if block.type == 'price_panel' -%}
+            <div class="danang-card danang-price-panel" style="padding:2rem;" {{ block.shopify_attributes }}>
+              {%- if block.settings.avail_label != blank -%}
+                <span class="danang-tag" style="background:{{ block.settings.avail_bg }};color:{{ block.settings.avail_text_color }};border-color:transparent;font-weight:500;">{{ block.settings.avail_label }}</span>
+              {%- endif -%}
+              <div style="margin:0.75rem 0 0.5rem;">
+                <p class="danang-price-amount" style="font-size:1.5rem;font-weight:300;">
+                  {{ block.settings.price_amount }}
+                  <span style="font-size:0.75rem;color:#6b7280;">{{ block.settings.price_note_small }}</span>
+                </p>
+              </div>
+              <p style="font-size:0.75rem;color:#6b7280;margin-bottom:1.5rem;">{{ block.settings.note | newline_to_br }}</p>
+              {%- if block.settings.cta_label != blank -%}
+                <a href="{{ block.settings.cta_url | default: '#reserve' }}" class="danang-btn danang-btn--block danang-price-cta">{{ block.settings.cta_label }}</a>
+              {%- endif -%}
+              <p style="font-size:0.75rem;color:#9ca3af;margin-top:1rem;text-align:center;">{{ block.settings.cancel_note | newline_to_br }}</p>
+            </div>
+          {%- endif -%}
+        {%- endfor -%}
+      </div>
+    </div>
+  </section>
+</div>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "ダナン｜プラン概要",
+  "settings": [
+    { "type": "checkbox", "id": "enable", "label": "このセクションを表示する", "default": true },
+    { "type": "color", "id": "title_color", "label": "タイトルの色", "default": "#1a1a1a" },
+    { "type": "range", "id": "title_size", "label": "タイトルの文字サイズ（px）", "min": 18, "max": 48, "step": 1, "default": 28 },
+    { "type": "color", "id": "text_color", "label": "本文の色", "default": "#374151" },
+    { "type": "range", "id": "desc_size", "label": "本文の文字サイズ（px）", "min": 12, "max": 22, "step": 1, "default": 14 },
+    { "type": "header", "content": "料金パネル" },
+    { "type": "color", "id": "panel_bg", "label": "パネル背景色", "default": "#ffffff" },
+    { "type": "color", "id": "panel_border", "label": "パネル枠線の色", "default": "#e5c98a" },
+    { "type": "color", "id": "panel_text_color", "label": "価格の文字色", "default": "#1a1a1a" },
+    { "type": "color", "id": "panel_accent", "label": "予約ボタンの色", "default": "#b8860b" }
+  ],
+  "blocks": [
+    {
+      "type": "overview_text",
+      "name": "説明文",
+      "limit": 1,
+      "settings": [
+        { "type": "text", "id": "eyebrow", "label": "小見出し", "default": "Plan Overview" },
+        { "type": "textarea", "id": "title", "label": "タイトル（Enterキーで自由に改行できます）", "default": "世界的に評価されるビーチで撮る一枚" },
+        { "type": "textarea", "id": "desc", "label": "本文（Enterキーで自由に改行できます）", "default": "米国の旅行誌でも「世界の美しいビーチ」に選ばれたミーケービーチと、五つ星リゾートの庭園やプールサイドを舞台に撮影。コストパフォーマンスに優れながらも、非日常感のある一枚が残せます。" }
+      ]
+    },
+    {
+      "type": "tag",
+      "name": "タグ",
+      "settings": [
+        { "type": "text", "id": "label", "label": "表示文字", "default": "タグ" }
+      ]
+    },
+    {
+      "type": "price_panel",
+      "name": "料金パネル",
+      "limit": 1,
+      "settings": [
+        { "type": "text", "id": "avail_label", "label": "予約可否バッジ", "default": "即予約できます" },
+        { "type": "color", "id": "avail_bg", "label": "バッジ背景色", "default": "#dcfce7" },
+        { "type": "color", "id": "avail_text_color", "label": "バッジ文字色", "default": "#15803d" },
+        { "type": "text", "id": "price_amount", "label": "価格", "default": "¥248,000" },
+        { "type": "text", "id": "price_note_small", "label": "価格の補足", "default": "税込 / 2名様" },
+        { "type": "textarea", "id": "note", "label": "補足文（Enterキーで自由に改行できます）", "default": "空き状況はオンライン上でご確認いただけます。ご希望日を選択のうえ、その場でご予約が確定します。" },
+        { "type": "text", "id": "cta_label", "label": "ボタン文字", "default": "空き状況を確認して予約する" },
+        { "type": "url", "id": "cta_url", "label": "ボタンのリンク先" },
+        { "type": "textarea", "id": "cancel_note", "label": "注意書き（Enterキーで自由に改行できます）", "default": "キャンセル・日程変更につきましては予約確定後のご案内書をご確認ください。" }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "ダナン｜プラン概要",
+      "blocks": [
+        { "type": "overview_text" },
+        { "type": "tag", "settings": { "label": "撮影時間 約3時間" } },
+        { "type": "tag", "settings": { "label": "カット数目安 70カット" } },
+        { "type": "tag", "settings": { "label": "カメラマン1名" } },
+        { "type": "tag", "settings": { "label": "ロケーション2箇所" } },
+        { "type": "price_panel" }
+      ]
+    }
+  ]
+}
+{% endschema %}

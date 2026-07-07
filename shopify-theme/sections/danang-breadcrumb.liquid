@@ -1,0 +1,54 @@
+{% render 'danang-common' %}
+{%- if section.settings.enable -%}
+<div class="danang-scope">
+  {% style %}
+    #shopify-section-{{ section.id }} .danang-breadcrumb { color: {{ section.settings.text_color }}; font-size: {{ section.settings.font_size }}px; }
+    #shopify-section-{{ section.id }} .danang-breadcrumb a { color: {{ section.settings.text_color }}; text-decoration: none; }
+    #shopify-section-{{ section.id }} .danang-breadcrumb a:hover { color: {{ section.settings.accent_color }}; }
+  {% endstyle %}
+  <div class="danang-wrap danang-breadcrumb" style="padding-top:0.75rem;padding-bottom:0.75rem;">
+    {%- for block in section.blocks -%}
+      {%- if block.type == 'crumb' -%}
+        {%- if forloop.first == false %}<span> / </span>{% endif -%}
+        {%- if block.settings.url != blank -%}
+          <a href="{{ block.settings.url }}" {{ block.shopify_attributes }}>{{ block.settings.label }}</a>
+        {%- else -%}
+          <span {{ block.shopify_attributes }}>{{ block.settings.label }}</span>
+        {%- endif -%}
+      {%- endif -%}
+    {%- endfor -%}
+  </div>
+</div>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "ダナン｜パンくずリスト",
+  "settings": [
+    { "type": "checkbox", "id": "enable", "label": "このセクションを表示する", "default": true },
+    { "type": "color", "id": "text_color", "label": "文字色", "default": "#6b7280" },
+    { "type": "color", "id": "accent_color", "label": "リンクのホバー色", "default": "#b8860b" },
+    { "type": "range", "id": "font_size", "label": "文字サイズ（px）", "min": 10, "max": 18, "step": 1, "default": 12 }
+  ],
+  "blocks": [
+    {
+      "type": "crumb",
+      "name": "リンク項目",
+      "settings": [
+        { "type": "text", "id": "label", "label": "表示文字", "default": "項目" },
+        { "type": "url", "id": "url", "label": "リンク先（空欄で最後の項目のように文字だけ表示）" }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "ダナン｜パンくずリスト",
+      "blocks": [
+        { "type": "crumb", "settings": { "label": "TOP" } },
+        { "type": "crumb", "settings": { "label": "ダナン" } },
+        { "type": "crumb", "settings": { "label": "ビーチプラン" } }
+      ]
+    }
+  ]
+}
+{% endschema %}

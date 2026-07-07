@@ -1,0 +1,158 @@
+{
+  "sections": {
+    "header": {
+      "type": "danang-header",
+      "blocks": {
+        "nav-1": { "type": "nav_link", "settings": { "label": "撮影地一覧", "url": "" } },
+        "nav-2": { "type": "nav_link", "settings": { "label": "ドレス", "url": "" } },
+        "nav-3": { "type": "nav_link", "settings": { "label": "FAQ", "url": "" } },
+        "nav-4": { "type": "nav_link", "settings": { "label": "会社情報", "url": "" } }
+      },
+      "block_order": ["nav-1", "nav-2", "nav-3", "nav-4"],
+      "settings": {}
+    },
+    "hero": {
+      "type": "danang-hero",
+      "settings": {}
+    },
+    "breadcrumb": {
+      "type": "danang-breadcrumb",
+      "blocks": {
+        "crumb-1": { "type": "crumb", "settings": { "label": "TOP", "url": "" } },
+        "crumb-2": { "type": "crumb", "settings": { "label": "ダナン", "url": "" } },
+        "crumb-3": { "type": "crumb", "settings": { "label": "ビーチプラン", "url": "" } }
+      },
+      "block_order": ["crumb-1", "crumb-2", "crumb-3"],
+      "settings": {}
+    },
+    "overview": {
+      "type": "danang-overview",
+      "blocks": {
+        "text": { "type": "overview_text", "settings": {} },
+        "tag-1": { "type": "tag", "settings": { "label": "撮影時間 約3時間" } },
+        "tag-2": { "type": "tag", "settings": { "label": "カット数目安 70カット" } },
+        "tag-3": { "type": "tag", "settings": { "label": "カメラマン1名" } },
+        "tag-4": { "type": "tag", "settings": { "label": "ロケーション2箇所" } },
+        "panel": { "type": "price_panel", "settings": {} }
+      },
+      "block_order": ["text", "tag-1", "tag-2", "tag-3", "tag-4", "panel"],
+      "settings": {}
+    },
+    "included-excluded": {
+      "type": "danang-included-excluded",
+      "blocks": {
+        "inc-1": { "type": "included_item", "settings": { "text": "撮影料・カメラマン1名（約3時間）" } },
+        "inc-2": { "type": "included_item", "settings": { "text": "衣裳一式（フォーシスアンドカンパニー製 / ドレス・タキシード各1着）" } },
+        "inc-3": { "type": "included_item", "settings": { "text": "簡易ヘアメイク（1回）" } },
+        "inc-4": { "type": "included_item", "settings": { "text": "撮影データ一式のオンライン納品（厳選50カット＋全カット）" } },
+        "inc-5": { "type": "included_item", "settings": { "text": "日本語対応スタッフによる事前サポート" } },
+        "exc-1": { "type": "excluded_item", "settings": { "text": "航空券・宿泊費" } },
+        "exc-2": { "type": "excluded_item", "settings": { "text": "空港・撮影地までの送迎" } },
+        "exc-3": { "type": "excluded_item", "settings": { "text": "バナヒルズ入場料" } },
+        "exc-4": { "type": "excluded_item", "settings": { "text": "アルバム制作（オプション）" } }
+      },
+      "block_order": ["inc-1", "inc-2", "inc-3", "inc-4", "inc-5", "exc-1", "exc-2", "exc-3", "exc-4"],
+      "settings": {}
+    },
+    "options": {
+      "type": "danang-options",
+      "blocks": {
+        "opt-1": { "type": "option", "settings": { "name": "送迎付きプラン", "price": "+¥12,000" } },
+        "opt-2": { "type": "option", "settings": { "name": "バナヒルズ半日観光付き", "price": "+¥18,000" } },
+        "opt-3": { "type": "option", "settings": { "name": "アルバム制作", "price": "+¥40,000" } },
+        "opt-4": { "type": "option", "settings": { "name": "衣裳追加（1着）", "price": "+¥28,000" } }
+      },
+      "block_order": ["opt-1", "opt-2", "opt-3", "opt-4"],
+      "settings": {}
+    },
+    "dress": {
+      "type": "danang-dress",
+      "settings": {}
+    },
+    "gallery": {
+      "type": "danang-gallery",
+      "blocks": {
+        "img-1": { "type": "image", "settings": {} },
+        "img-2": { "type": "image", "settings": {} },
+        "img-3": { "type": "image", "settings": {} },
+        "img-4": { "type": "image", "settings": {} },
+        "img-5": { "type": "image", "settings": {} }
+      },
+      "block_order": ["img-1", "img-2", "img-3", "img-4", "img-5"],
+      "settings": {}
+    },
+    "schedule": {
+      "type": "danang-schedule",
+      "blocks": {
+        "row-1": { "type": "row", "settings": { "time": "8:00", "desc": "リゾート内にて集合・お着替え" } },
+        "row-2": { "type": "row", "settings": { "time": "8:30", "desc": "簡易ヘアメイク" } },
+        "row-3": { "type": "row", "settings": { "time": "9:30", "desc": "ミーケービーチにて撮影" } },
+        "row-4": { "type": "row", "settings": { "time": "11:00", "desc": "リゾート庭園・プールサイドにて撮影" } },
+        "row-5": { "type": "row", "settings": { "time": "11:30", "desc": "撮影終了・解散" } }
+      },
+      "block_order": ["row-1", "row-2", "row-3", "row-4", "row-5"],
+      "settings": {}
+    },
+    "faq": {
+      "type": "danang-faq",
+      "blocks": {
+        "q-1": {
+          "type": "item",
+          "settings": {
+            "question": "湿度が高いと聞きますが、メイクは崩れませんか？",
+            "answer": "現地の気候に対応したウォータープルーフメイクをご用意しています。撮影中のお直しにも対応いたします。"
+          }
+        },
+        "q-2": {
+          "type": "item",
+          "settings": {
+            "question": "ビザは必要ですか？",
+            "answer": "日本国籍の方は15日以内の滞在であればビザ免除で渡航可能です。滞在日数によっては事前申請が必要な場合がありますので、詳細はお問い合わせください。"
+          }
+        },
+        "q-3": {
+          "type": "item",
+          "settings": {
+            "question": "バナヒルズにも行きたい場合はどうすればいいですか？",
+            "answer": "オプションの「バナヒルズ半日観光付き」をお選びいただくか、バナヒルズでの撮影を含むラグジュアリープランをご検討ください。"
+          }
+        }
+      },
+      "block_order": ["q-1", "q-2", "q-3"],
+      "settings": {}
+    },
+    "reservation": {
+      "type": "danang-reservation",
+      "settings": {}
+    },
+    "footer": {
+      "type": "danang-footer",
+      "blocks": {
+        "col-1": { "type": "column", "settings": { "title": "撮影地", "links": "ハワイ\nダナン\nロンドン" } },
+        "col-2": { "type": "column", "settings": { "title": "サイト", "links": "ドレス\n診断\nFAQ\n会社情報" } },
+        "col-3": { "type": "column", "settings": { "title": "お問い合わせ", "links": "ご相談・お問い合わせ\n30秒診断" } }
+      },
+      "block_order": ["col-1", "col-2", "col-3"],
+      "settings": {}
+    },
+    "sticky-cta": {
+      "type": "danang-sticky-cta",
+      "settings": {}
+    }
+  },
+  "order": [
+    "header",
+    "hero",
+    "breadcrumb",
+    "overview",
+    "included-excluded",
+    "options",
+    "dress",
+    "gallery",
+    "schedule",
+    "faq",
+    "reservation",
+    "footer",
+    "sticky-cta"
+  ]
+}

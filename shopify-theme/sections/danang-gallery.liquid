@@ -1,0 +1,84 @@
+{% render 'danang-common' %}
+{%- if section.settings.enable -%}
+<div class="danang-scope">
+  {% style %}
+    #shopify-section-{{ section.id }} .danang-gallery-title { color: {{ section.settings.title_color }}; }
+    #shopify-section-{{ section.id }} .danang-gallery-grid {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem;
+    }
+    @media (min-width: 768px) {
+      #shopify-section-{{ section.id }} .danang-gallery-grid { grid-template-columns: repeat({{ section.settings.columns }}, 1fr); }
+    }
+    #shopify-section-{{ section.id }} .danang-gallery-img {
+      width: 100%; height: {{ section.settings.image_height }}px; object-fit: cover; border-radius: 0.25rem;
+    }
+  {% endstyle %}
+
+  <section style="padding:4rem 0;">
+    <div class="danang-wrap">
+      <div style="text-align:center;margin-bottom:2.5rem;">
+        {%- if section.settings.eyebrow != blank -%}
+          <p class="danang-serif danang-eyebrow">{{ section.settings.eyebrow }}</p>
+        {%- endif -%}
+        <h2 class="danang-serif danang-gallery-title" style="font-weight:300;">{{ section.settings.title }}</h2>
+        <div class="danang-divider danang-divider--center" style="margin-top:0.75rem;"></div>
+      </div>
+
+      <div class="danang-gallery-grid">
+        {%- for block in section.blocks -%}
+          {%- if block.type == 'image' -%}
+            <div {{ block.shopify_attributes }}>
+              {%- if block.settings.image -%}
+                <img
+                  src="{{ block.settings.image | image_url: width: 600 }}"
+                  alt="{{ block.settings.image.alt | default: section.settings.title | escape }}"
+                  loading="lazy"
+                  class="danang-gallery-img"
+                  style="object-position:{% if block.settings.image.presentation.focal_point %}{{ block.settings.image.presentation.focal_point }}{% else %}center{% endif %};"
+                >
+              {%- else -%}
+                <div class="danang-gallery-img" style="background:#eee;">{{ 'lifestyle-1' | placeholder_svg_tag: 'w-full h-full' }}</div>
+              {%- endif -%}
+            </div>
+          {%- endif -%}
+        {%- endfor -%}
+      </div>
+    </div>
+  </section>
+</div>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "ダナン｜ギャラリー",
+  "settings": [
+    { "type": "checkbox", "id": "enable", "label": "このセクションを表示する", "default": true },
+    { "type": "text", "id": "eyebrow", "label": "小見出し", "default": "Gallery" },
+    { "type": "text", "id": "title", "label": "タイトル", "default": "撮影イメージ" },
+    { "type": "color", "id": "title_color", "label": "タイトルの色", "default": "#1a1a1a" },
+    { "type": "range", "id": "columns", "label": "PC表示の列数", "min": 2, "max": 6, "step": 1, "default": 5 },
+    { "type": "range", "id": "image_height", "label": "画像の高さ（px）", "min": 100, "max": 400, "step": 10, "default": 192 }
+  ],
+  "blocks": [
+    {
+      "type": "image",
+      "name": "画像",
+      "settings": [
+        { "type": "image_picker", "id": "image", "label": "画像（トリミング位置は画像の「フォーカルポイント」設定で調整できます）" }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "ダナン｜ギャラリー",
+      "blocks": [
+        { "type": "image" },
+        { "type": "image" },
+        { "type": "image" },
+        { "type": "image" },
+        { "type": "image" }
+      ]
+    }
+  ]
+}
+{% endschema %}

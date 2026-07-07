@@ -1,0 +1,72 @@
+{% render 'danang-common' %}
+{%- if section.settings.enable -%}
+<div class="danang-scope">
+  {% style %}
+    #shopify-section-{{ section.id }} { background: {{ section.settings.bg_color }}; }
+    #shopify-section-{{ section.id }} .danang-dress-title { color: {{ section.settings.title_color }}; }
+    #shopify-section-{{ section.id }} .danang-dress-desc { color: {{ section.settings.text_color }}; font-size: {{ section.settings.desc_size }}px; }
+    #shopify-section-{{ section.id }} .danang-dress-grid {
+      display: grid; grid-template-columns: 1fr; gap: 3rem; align-items: center;
+    }
+    @media (min-width: 768px) {
+      #shopify-section-{{ section.id }} .danang-dress-grid { grid-template-columns: 1fr 1fr; }
+    }
+    #shopify-section-{{ section.id }} .danang-dress-img {
+      width: 100%; height: {{ section.settings.image_height }}px; object-fit: cover; border-radius: 0.5rem;
+    }
+  {% endstyle %}
+
+  <section style="padding:4rem 0;">
+    <div class="danang-wrap danang-dress-grid">
+      {%- if section.settings.image -%}
+        <img
+          src="{{ section.settings.image | image_url: width: 1000 }}"
+          alt="{{ section.settings.image.alt | default: section.settings.title | escape }}"
+          loading="lazy"
+          class="danang-dress-img"
+          style="object-position:{% if section.settings.image.presentation.focal_point %}{{ section.settings.image.presentation.focal_point }}{% else %}center{% endif %};"
+        >
+      {%- else -%}
+        <div class="danang-dress-img" style="background:#eee;">{{ 'lifestyle-2' | placeholder_svg_tag: 'w-full h-full' }}</div>
+      {%- endif -%}
+
+      <div>
+        {%- if section.settings.eyebrow != blank -%}
+          <p class="danang-serif danang-eyebrow">{{ section.settings.eyebrow }}</p>
+        {%- endif -%}
+        <h2 class="danang-serif danang-dress-title" style="font-weight:300;line-height:1.4;margin-bottom:1rem;">{{ section.settings.title | newline_to_br }}</h2>
+        <div class="danang-divider" style="margin-bottom:1.5rem;"></div>
+        <p class="danang-dress-desc" style="line-height:1.8;">{{ section.settings.desc | newline_to_br }}</p>
+        {%- if section.settings.cta_label != blank -%}
+          <div style="margin-top:2rem;">
+            <a href="{{ section.settings.cta_url | default: '#' }}" class="danang-btn" style="border-color:{{ section.settings.title_color }};color:{{ section.settings.title_color }};">{{ section.settings.cta_label }}</a>
+          </div>
+        {%- endif -%}
+      </div>
+    </div>
+  </section>
+</div>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "ダナン｜ドレス",
+  "settings": [
+    { "type": "checkbox", "id": "enable", "label": "このセクションを表示する", "default": true },
+    { "type": "color", "id": "bg_color", "label": "背景色", "default": "#faf8f5" },
+    { "type": "image_picker", "id": "image", "label": "画像（トリミング位置は画像の「フォーカルポイント」設定で調整できます）" },
+    { "type": "range", "id": "image_height", "label": "画像の高さ（px）", "min": 200, "max": 600, "step": 10, "default": 320 },
+    { "type": "text", "id": "eyebrow", "label": "小見出し", "default": "Dress" },
+    { "type": "textarea", "id": "title", "label": "タイトル（Enterキーで自由に改行できます）", "default": "ビーチに映える、軽やかな一着" },
+    { "type": "color", "id": "title_color", "label": "タイトルの色", "default": "#1a1a1a" },
+    { "type": "textarea", "id": "desc", "label": "本文（Enterキーで自由に改行できます）", "default": "潮風の中でも美しいシルエットを保つ、動きやすいドレスをご提案。全国の提携サロンで事前に試着いただけます。" },
+    { "type": "color", "id": "text_color", "label": "本文の色", "default": "#374151" },
+    { "type": "range", "id": "desc_size", "label": "本文の文字サイズ（px）", "min": 12, "max": 22, "step": 1, "default": 14 },
+    { "type": "text", "id": "cta_label", "label": "ボタン文字", "default": "ドレスを詳しく見る" },
+    { "type": "url", "id": "cta_url", "label": "ボタンのリンク先" }
+  ],
+  "presets": [
+    { "name": "ダナン｜ドレス" }
+  ]
+}
+{% endschema %}

@@ -1,0 +1,64 @@
+{%- comment -%}
+  Shared styles/utilities for the "ダナン ビーチプラン" free-page sections.
+  Rendered from every danang-* section so each section stays independently
+  addable/removable in the theme editor without losing shared look & feel.
+{%- endcomment -%}
+{% style %}
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,400&family=Noto+Sans+JP:wght@300;400;500;700&display=swap');
+
+.danang-scope {
+  --danang-gold: #b8860b;
+  --danang-gold-light: #d4a843;
+  --danang-ivory: #faf8f5;
+  --danang-dark: #1a1a1a;
+  font-family: 'Noto Sans JP', sans-serif;
+  color: var(--danang-dark);
+  box-sizing: border-box;
+}
+.danang-scope *, .danang-scope *::before, .danang-scope *::after { box-sizing: inherit; }
+.danang-scope img { max-width: 100%; display: block; }
+.danang-serif { font-family: 'Cormorant Garamond', serif; }
+.danang-wrap { max-width: 1280px; margin: 0 auto; padding: 0 1rem; }
+.danang-wrap--narrow { max-width: 768px; }
+.danang-divider { width: 40px; height: 2px; background: var(--danang-gold); }
+.danang-divider--center { margin-left: auto; margin-right: auto; }
+.danang-tag {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  border: 1px solid #d1d5db;
+  color: inherit;
+}
+.danang-btn {
+  display: inline-block;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.25rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+  text-decoration: none;
+  text-align: center;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: opacity 0.2s ease;
+}
+.danang-btn:hover { opacity: 0.85; }
+.danang-btn--block { display: block; width: 100%; }
+.danang-card {
+  border-radius: 0.5rem;
+  border: 1px solid rgba(184, 134, 11, 0.3);
+  background: #fff;
+}
+.danang-eyebrow {
+  font-family: 'Cormorant Garamond', serif;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+  color: var(--danang-gold);
+  margin-bottom: 0.5rem;
+}
+.danang-visually-hidden {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
+{% endstyle %}

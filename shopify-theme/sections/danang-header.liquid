@@ -1,0 +1,116 @@
+{% render 'danang-common' %}
+{%- if section.settings.enable -%}
+<div class="danang-scope">
+  {% style %}
+    #shopify-section-{{ section.id }} .danang-header {
+      background: {{ section.settings.bg_color }};
+      color: {{ section.settings.text_color }};
+      border-bottom: 1px solid #f0ede8;
+    }
+    #shopify-section-{{ section.id }} .danang-header a,
+    #shopify-section-{{ section.id }} .danang-header span { color: {{ section.settings.text_color }}; }
+    #shopify-section-{{ section.id }} .danang-header .danang-nav-link:hover { color: {{ section.settings.accent_color }}; }
+    #shopify-section-{{ section.id }} .danang-header-cta {
+      background: {{ section.settings.accent_color }};
+      color: #fff;
+    }
+    #shopify-section-{{ section.id }} .danang-mobile-nav { display: none; }
+    #shopify-section-{{ section.id }} .danang-mobile-nav.is-open { display: flex; }
+    @media (min-width: 768px) {
+      #shopify-section-{{ section.id }} .danang-desktop-nav { display: flex; }
+      #shopify-section-{{ section.id }} .danang-menu-toggle { display: none; }
+    }
+    @media (max-width: 767px) {
+      #shopify-section-{{ section.id }} .danang-desktop-nav { display: none; }
+    }
+  {% endstyle %}
+
+  <header class="danang-header" style="position:sticky;top:0;left:0;width:100%;z-index:50;">
+    <div class="danang-wrap" style="height:64px;display:flex;align-items:center;justify-content:space-between;">
+      <a href="{{ section.settings.logo_url | default: '/' }}" class="danang-serif" style="font-size:1.25rem;letter-spacing:0.05em;text-decoration:none;">
+        {{ section.settings.logo_text }}
+      </a>
+
+      <nav class="danang-desktop-nav" style="align-items:center;gap:1.5rem;font-size:0.875rem;">
+        {%- for block in section.blocks -%}
+          {%- if block.type == 'nav_link' -%}
+            <a href="{{ block.settings.url | default: '#' }}" class="danang-nav-link" style="text-decoration:none;" {{ block.shopify_attributes }}>{{ block.settings.label }}</a>
+          {%- endif -%}
+        {%- endfor -%}
+        {%- if section.settings.cta_label != blank -%}
+          <a href="{{ section.settings.cta_url | default: '#' }}" class="danang-btn danang-header-cta">{{ section.settings.cta_label }}</a>
+        {%- endif -%}
+      </nav>
+
+      <button class="danang-menu-toggle" aria-label="メニュー" aria-expanded="false" style="width:2rem;height:2rem;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:6px;background:none;border:0;cursor:pointer;">
+        <span style="display:block;width:20px;height:2px;background:currentColor;"></span>
+        <span style="display:block;width:20px;height:2px;background:currentColor;"></span>
+        <span style="display:block;width:20px;height:2px;background:currentColor;"></span>
+      </button>
+    </div>
+
+    <nav class="danang-mobile-nav" style="flex-direction:column;gap:0;padding:0 1rem 1rem;font-size:0.9rem;">
+      {%- for block in section.blocks -%}
+        {%- if block.type == 'nav_link' -%}
+          <a href="{{ block.settings.url | default: '#' }}" style="display:block;padding:0.6rem 0;text-decoration:none;border-top:1px solid #f0ede8;" {{ block.shopify_attributes }}>{{ block.settings.label }}</a>
+        {%- endif -%}
+      {%- endfor -%}
+      {%- if section.settings.cta_label != blank -%}
+        <a href="{{ section.settings.cta_url | default: '#' }}" class="danang-btn danang-header-cta" style="margin-top:0.75rem;">{{ section.settings.cta_label }}</a>
+      {%- endif -%}
+    </nav>
+  </header>
+</div>
+
+<script>
+(function () {
+  var root = document.getElementById('shopify-section-{{ section.id }}');
+  if (!root) return;
+  var toggle = root.querySelector('.danang-menu-toggle');
+  var nav = root.querySelector('.danang-mobile-nav');
+  if (!toggle || !nav) return;
+  toggle.addEventListener('click', function () {
+    var isOpen = nav.classList.toggle('is-open');
+    toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  });
+})();
+</script>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "ダナン｜ヘッダー",
+  "settings": [
+    { "type": "checkbox", "id": "enable", "label": "このセクションを表示する", "default": true },
+    { "type": "text", "id": "logo_text", "label": "ロゴ文字", "default": "HIS World Wedding" },
+    { "type": "url", "id": "logo_url", "label": "ロゴのリンク先" },
+    { "type": "color", "id": "bg_color", "label": "背景色", "default": "#ffffff" },
+    { "type": "color", "id": "text_color", "label": "文字色", "default": "#1a1a1a" },
+    { "type": "color", "id": "accent_color", "label": "アクセントカラー（ボタンなど）", "default": "#b8860b" },
+    { "type": "header", "content": "右端のボタン" },
+    { "type": "text", "id": "cta_label", "label": "ボタン文字", "default": "30秒診断" },
+    { "type": "url", "id": "cta_url", "label": "ボタンのリンク先" }
+  ],
+  "blocks": [
+    {
+      "type": "nav_link",
+      "name": "ナビゲーションリンク",
+      "settings": [
+        { "type": "text", "id": "label", "label": "表示文字", "default": "メニュー" },
+        { "type": "url", "id": "url", "label": "リンク先" }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "ダナン｜ヘッダー",
+      "blocks": [
+        { "type": "nav_link", "settings": { "label": "撮影地一覧" } },
+        { "type": "nav_link", "settings": { "label": "ドレス" } },
+        { "type": "nav_link", "settings": { "label": "FAQ" } },
+        { "type": "nav_link", "settings": { "label": "会社情報" } }
+      ]
+    }
+  ]
+}
+{% endschema %}

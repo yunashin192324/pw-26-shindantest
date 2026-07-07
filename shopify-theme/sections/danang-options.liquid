@@ -1,0 +1,75 @@
+{% render 'danang-common' %}
+{%- if section.settings.enable -%}
+<div class="danang-scope">
+  {% style %}
+    #shopify-section-{{ section.id }} .danang-options-title { color: {{ section.settings.title_color }}; }
+    #shopify-section-{{ section.id }} .danang-option-name { color: {{ section.settings.item_text_color }}; font-size: {{ section.settings.item_text_size }}px; }
+    #shopify-section-{{ section.id }} .danang-option-price { color: {{ section.settings.accent_color }}; }
+    #shopify-section-{{ section.id }} .danang-options-grid {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;
+    }
+    @media (min-width: 768px) {
+      #shopify-section-{{ section.id }} .danang-options-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+  {% endstyle %}
+
+  <section style="padding:4rem 0;">
+    <div class="danang-wrap">
+      <div style="text-align:center;margin-bottom:2.5rem;">
+        {%- if section.settings.eyebrow != blank -%}
+          <p class="danang-serif danang-eyebrow">{{ section.settings.eyebrow }}</p>
+        {%- endif -%}
+        <h2 class="danang-serif danang-options-title" style="font-weight:300;">{{ section.settings.title }}</h2>
+        <div class="danang-divider danang-divider--center" style="margin-top:0.75rem;"></div>
+      </div>
+
+      <div class="danang-options-grid">
+        {%- for block in section.blocks -%}
+          {%- if block.type == 'option' -%}
+            <div class="danang-card" style="padding:1.25rem;text-align:center;" {{ block.shopify_attributes }}>
+              <p class="danang-option-name" style="font-weight:500;">{{ block.settings.name }}</p>
+              <p class="danang-option-price" style="margin-top:0.5rem;font-size:0.875rem;">{{ block.settings.price }}</p>
+            </div>
+          {%- endif -%}
+        {%- endfor -%}
+      </div>
+    </div>
+  </section>
+</div>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "ダナン｜オプション",
+  "settings": [
+    { "type": "checkbox", "id": "enable", "label": "このセクションを表示する", "default": true },
+    { "type": "text", "id": "eyebrow", "label": "小見出し", "default": "Options" },
+    { "type": "text", "id": "title", "label": "タイトル", "default": "オプション" },
+    { "type": "color", "id": "title_color", "label": "タイトルの色", "default": "#1a1a1a" },
+    { "type": "color", "id": "item_text_color", "label": "項目名の色", "default": "#1a1a1a" },
+    { "type": "range", "id": "item_text_size", "label": "項目名の文字サイズ（px）", "min": 12, "max": 20, "step": 1, "default": 14 },
+    { "type": "color", "id": "accent_color", "label": "価格の色", "default": "#b8860b" }
+  ],
+  "blocks": [
+    {
+      "type": "option",
+      "name": "オプション項目",
+      "settings": [
+        { "type": "text", "id": "name", "label": "項目名", "default": "オプション名" },
+        { "type": "text", "id": "price", "label": "価格", "default": "+¥0" }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "ダナン｜オプション",
+      "blocks": [
+        { "type": "option", "settings": { "name": "送迎付きプラン", "price": "+¥12,000" } },
+        { "type": "option", "settings": { "name": "バナヒルズ半日観光付き", "price": "+¥18,000" } },
+        { "type": "option", "settings": { "name": "アルバム制作", "price": "+¥40,000" } },
+        { "type": "option", "settings": { "name": "衣裳追加（1着）", "price": "+¥28,000" } }
+      ]
+    }
+  ]
+}
+{% endschema %}

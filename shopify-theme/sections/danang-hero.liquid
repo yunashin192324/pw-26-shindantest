@@ -1,0 +1,75 @@
+{% render 'danang-common' %}
+{%- if section.settings.enable -%}
+<div class="danang-scope">
+  {% style %}
+    #shopify-section-{{ section.id }} .danang-hero { height: {{ section.settings.height }}px; }
+    #shopify-section-{{ section.id }} .danang-hero-overlay {
+      background: {{ section.settings.overlay_color }};
+      opacity: {{ section.settings.overlay_opacity | times: 0.01 }};
+    }
+    #shopify-section-{{ section.id }} .danang-hero-eyebrow { color: {{ section.settings.eyebrow_color }}; }
+    #shopify-section-{{ section.id }} .danang-hero-title {
+      color: {{ section.settings.title_color }};
+      font-size: {{ section.settings.title_size }}px;
+    }
+    #shopify-section-{{ section.id }} .danang-hero-lede {
+      color: {{ section.settings.lede_color }};
+      font-size: {{ section.settings.lede_size }}px;
+    }
+  {% endstyle %}
+
+  <section class="danang-hero" style="position:relative;width:100%;overflow:hidden;">
+    {%- if section.settings.image -%}
+      <img
+        src="{{ section.settings.image | image_url: width: 1600 }}"
+        srcset="{{ section.settings.image | image_url: width: 800 }} 800w, {{ section.settings.image | image_url: width: 1600 }} 1600w"
+        alt="{{ section.settings.image.alt | default: section.settings.title | escape }}"
+        loading="lazy"
+        style="width:100%;height:100%;object-fit:cover;object-position:{% if section.settings.image.presentation.focal_point %}{{ section.settings.image.presentation.focal_point }}{% else %}center{% endif %};"
+      >
+    {%- else -%}
+      <div style="width:100%;height:100%;background:#eee;">{{ 'lifestyle-1' | placeholder_svg_tag: 'w-full h-full' }}</div>
+    {%- endif -%}
+
+    <div class="danang-hero-overlay" style="position:absolute;inset:0;"></div>
+
+    <div style="position:absolute;inset:0;display:flex;align-items:flex-end;">
+      <div class="danang-wrap" style="width:100%;padding-bottom:3rem;">
+        {%- if section.settings.eyebrow != blank -%}
+          <p class="danang-serif danang-hero-eyebrow" style="font-size:0.85rem;letter-spacing:0.2em;text-transform:uppercase;margin-bottom:0.5rem;">{{ section.settings.eyebrow }}</p>
+        {%- endif -%}
+        <h1 class="danang-serif danang-hero-title" style="font-weight:300;line-height:1.3;margin-bottom:0.75rem;">{{ section.settings.title | newline_to_br }}</h1>
+        {%- if section.settings.lede != blank -%}
+          <p class="danang-hero-lede">{{ section.settings.lede | newline_to_br }}</p>
+        {%- endif -%}
+      </div>
+    </div>
+  </section>
+</div>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "ダナン｜メインビジュアル",
+  "settings": [
+    { "type": "checkbox", "id": "enable", "label": "このセクションを表示する", "default": true },
+    { "type": "image_picker", "id": "image", "label": "背景画像（トリミング位置は画像の「フォーカルポイント」設定で調整できます）" },
+    { "type": "range", "id": "height", "label": "画像の高さ（px）", "min": 300, "max": 900, "step": 10, "default": 520 },
+    { "type": "header", "content": "画像の上の文字が見えづらい場合" },
+    { "type": "color", "id": "overlay_color", "label": "画像に重ねる色（オーバーレイ）", "default": "#000000" },
+    { "type": "range", "id": "overlay_opacity", "label": "オーバーレイの濃さ（%）", "min": 0, "max": 80, "step": 5, "default": 30 },
+    { "type": "header", "content": "テキスト" },
+    { "type": "text", "id": "eyebrow", "label": "小見出し", "default": "Da Nang — Beach Plan" },
+    { "type": "color", "id": "eyebrow_color", "label": "小見出しの色", "default": "#faf8f5" },
+    { "type": "textarea", "id": "title", "label": "タイトル（Enterキーで自由に改行できます）", "default": "ビーチプラン" },
+    { "type": "color", "id": "title_color", "label": "タイトルの色", "default": "#faf8f5" },
+    { "type": "range", "id": "title_size", "label": "タイトルの文字サイズ（px）", "min": 24, "max": 96, "step": 2, "default": 56 },
+    { "type": "textarea", "id": "lede", "label": "リード文（Enterキーで自由に改行できます）", "default": "ミーケービーチとリゾート内で撮る、開放感あふれる一枚。" },
+    { "type": "color", "id": "lede_color", "label": "リード文の色", "default": "#faf8f5" },
+    { "type": "range", "id": "lede_size", "label": "リード文の文字サイズ（px）", "min": 12, "max": 32, "step": 1, "default": 18 }
+  ],
+  "presets": [
+    { "name": "ダナン｜メインビジュアル" }
+  ]
+}
+{% endschema %}

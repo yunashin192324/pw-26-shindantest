@@ -1,0 +1,76 @@
+{% render 'danang-common' %}
+{%- if section.settings.enable -%}
+<div class="danang-scope">
+  {% style %}
+    #shopify-section-{{ section.id }} { background: {{ section.settings.bg_color }}; }
+    #shopify-section-{{ section.id }} .danang-schedule-title { color: {{ section.settings.title_color }}; }
+    #shopify-section-{{ section.id }} .danang-schedule-time { color: {{ section.settings.time_color }}; }
+    #shopify-section-{{ section.id }} .danang-schedule-desc { color: {{ section.settings.text_color }}; font-size: {{ section.settings.text_size }}px; }
+    #shopify-section-{{ section.id }} .danang-schedule-row { border-bottom: 1px solid #e5e7eb; }
+    #shopify-section-{{ section.id }} .danang-schedule-row:last-child { border-bottom: none; }
+  {% endstyle %}
+
+  <section style="padding:4rem 0;">
+    <div class="danang-wrap danang-wrap--narrow">
+      <div style="text-align:center;margin-bottom:2.5rem;">
+        {%- if section.settings.eyebrow != blank -%}
+          <p class="danang-serif danang-eyebrow">{{ section.settings.eyebrow }}</p>
+        {%- endif -%}
+        <h2 class="danang-serif danang-schedule-title" style="font-weight:300;">{{ section.settings.title }}</h2>
+        <div class="danang-divider danang-divider--center" style="margin-top:0.75rem;"></div>
+      </div>
+
+      <table style="width:100%;font-size:0.875rem;border-collapse:collapse;">
+        <tbody>
+          {%- for block in section.blocks -%}
+            {%- if block.type == 'row' -%}
+              <tr class="danang-schedule-row" {{ block.shopify_attributes }}>
+                <td class="danang-schedule-time" style="padding:0.75rem 1rem 0.75rem 0;font-weight:500;width:5rem;white-space:nowrap;">{{ block.settings.time }}</td>
+                <td class="danang-schedule-desc" style="padding:0.75rem 0;">{{ block.settings.desc | newline_to_br }}</td>
+              </tr>
+            {%- endif -%}
+          {%- endfor -%}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "ダナン｜スケジュール",
+  "settings": [
+    { "type": "checkbox", "id": "enable", "label": "このセクションを表示する", "default": true },
+    { "type": "color", "id": "bg_color", "label": "背景色", "default": "#faf8f5" },
+    { "type": "text", "id": "eyebrow", "label": "小見出し", "default": "Schedule" },
+    { "type": "text", "id": "title", "label": "タイトル", "default": "撮影当日のスケジュール例" },
+    { "type": "color", "id": "title_color", "label": "タイトルの色", "default": "#1a1a1a" },
+    { "type": "color", "id": "time_color", "label": "時刻の色", "default": "#1a1a1a" },
+    { "type": "color", "id": "text_color", "label": "内容の色", "default": "#374151" },
+    { "type": "range", "id": "text_size", "label": "内容の文字サイズ（px）", "min": 12, "max": 20, "step": 1, "default": 14 }
+  ],
+  "blocks": [
+    {
+      "type": "row",
+      "name": "スケジュール項目",
+      "settings": [
+        { "type": "text", "id": "time", "label": "時刻", "default": "0:00" },
+        { "type": "textarea", "id": "desc", "label": "内容（Enterキーで自由に改行できます）", "default": "内容" }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "ダナン｜スケジュール",
+      "blocks": [
+        { "type": "row", "settings": { "time": "8:00", "desc": "リゾート内にて集合・お着替え" } },
+        { "type": "row", "settings": { "time": "8:30", "desc": "簡易ヘアメイク" } },
+        { "type": "row", "settings": { "time": "9:30", "desc": "ミーケービーチにて撮影" } },
+        { "type": "row", "settings": { "time": "11:00", "desc": "リゾート庭園・プールサイドにて撮影" } },
+        { "type": "row", "settings": { "time": "11:30", "desc": "撮影終了・解散" } }
+      ]
+    }
+  ]
+}
+{% endschema %}

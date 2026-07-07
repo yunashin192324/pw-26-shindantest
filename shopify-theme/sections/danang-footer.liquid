@@ -1,0 +1,74 @@
+{% render 'danang-common' %}
+{%- if section.settings.enable -%}
+<div class="danang-scope">
+  {% style %}
+    #shopify-section-{{ section.id }} .danang-footer { background: {{ section.settings.bg_color }}; color: {{ section.settings.text_color }}; }
+    #shopify-section-{{ section.id }} .danang-footer a { color: {{ section.settings.text_color }}; text-decoration: none; opacity: 0.8; }
+    #shopify-section-{{ section.id }} .danang-footer a:hover { opacity: 1; }
+    #shopify-section-{{ section.id }} .danang-footer-grid {
+      display: grid; grid-template-columns: 1fr; gap: 2rem;
+    }
+    @media (min-width: 768px) {
+      #shopify-section-{{ section.id }} .danang-footer-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+  {% endstyle %}
+
+  <footer class="danang-footer" style="padding:3rem 0;">
+    <div class="danang-wrap">
+      <div class="danang-footer-grid" style="margin-bottom:2rem;">
+        <div>
+          <p class="danang-serif" style="font-size:1.125rem;letter-spacing:0.05em;margin-bottom:0.5rem;">{{ section.settings.logo_text }}</p>
+          <p style="font-size:0.75rem;opacity:0.7;">{{ section.settings.tagline | newline_to_br }}</p>
+        </div>
+        {%- for block in section.blocks -%}
+          {%- if block.type == 'column' -%}
+            <div {{ block.shopify_attributes }}>
+              <p style="font-size:0.75rem;font-weight:500;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.75rem;">{{ block.settings.title }}</p>
+              <div style="font-size:0.75rem;line-height:2;">
+                {{ block.settings.links | newline_to_br }}
+              </div>
+            </div>
+          {%- endif -%}
+        {%- endfor -%}
+      </div>
+      <div style="border-top:1px solid rgba(255,255,255,0.2);padding-top:1.5rem;font-size:0.75rem;opacity:0.6;text-align:center;">
+        {{ section.settings.copy_text | newline_to_br }}
+      </div>
+    </div>
+  </footer>
+</div>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "ダナン｜フッター",
+  "settings": [
+    { "type": "checkbox", "id": "enable", "label": "このセクションを表示する", "default": true },
+    { "type": "color", "id": "bg_color", "label": "背景色", "default": "#1a1a1a" },
+    { "type": "color", "id": "text_color", "label": "文字色", "default": "#faf8f5" },
+    { "type": "text", "id": "logo_text", "label": "ロゴ文字", "default": "HIS World Wedding" },
+    { "type": "textarea", "id": "tagline", "label": "キャッチコピー（Enterキーで自由に改行できます）", "default": "HISブランドの海外フォトウェディング。世界で、一生残る一枚を。" },
+    { "type": "textarea", "id": "copy_text", "label": "コピーライト（Enterキーで自由に改行できます）", "default": "© 2026 HIS World Wedding.\nOperated by HIS Co., Ltd. / Dress by Four Seasons & Company" }
+  ],
+  "blocks": [
+    {
+      "type": "column",
+      "name": "リンク列",
+      "settings": [
+        { "type": "text", "id": "title", "label": "見出し", "default": "見出し" },
+        { "type": "textarea", "id": "links", "label": "リンクテキスト（1行に1項目、Enterキーで自由に改行できます）", "default": "リンク1\nリンク2" }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "ダナン｜フッター",
+      "blocks": [
+        { "type": "column", "settings": { "title": "撮影地", "links": "ハワイ\nダナン\nロンドン" } },
+        { "type": "column", "settings": { "title": "サイト", "links": "ドレス\n診断\nFAQ\n会社情報" } },
+        { "type": "column", "settings": { "title": "お問い合わせ", "links": "ご相談・お問い合わせ\n30秒診断" } }
+      ]
+    }
+  ]
+}
+{% endschema %}
