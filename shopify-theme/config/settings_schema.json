@@ -1,0 +1,26 @@
+[
+  {
+    "name": "theme_info",
+    "theme_name": "HIS World Wedding — JOURNAL",
+    "theme_version": "1.0.0",
+    "theme_author": "HIS World Wedding",
+    "theme_documentation_url": "",
+    "theme_support_url": ""
+  },
+  {
+    "name": "サイト全体",
+    "settings": [
+      {
+        "type": "image_picker",
+        "id": "favicon",
+        "label": "ファビコン"
+      },
+      {
+        "type": "image_picker",
+        "id": "social_share_image",
+        "label": "SNSシェア用デフォルト画像",
+        "info": "og:image の既定値。記事ページではアイキャッチ画像が優先されます。"
+      }
+    ]
+  }
+]

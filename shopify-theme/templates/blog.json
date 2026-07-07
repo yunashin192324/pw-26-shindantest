@@ -1,0 +1,51 @@
+{
+  "sections": {
+    "journal-hero": {
+      "type": "journal-hero",
+      "settings": {
+        "eyebrow": "JOURNAL",
+        "heading": "旅が、\nふたりを写す。",
+        "description": "世界中の撮影地、ドレス、旅のヒントをお届けします。"
+      }
+    },
+    "journal-featured": {
+      "type": "journal-featured",
+      "settings": {
+        "heading": "FEATURED"
+      }
+    },
+    "journal-grid": {
+      "type": "journal-grid",
+      "settings": {
+        "eyebrow": "Latest Stories",
+        "heading": "最新記事",
+        "description": "撮影地のリアル、ドレスの選び方、旅の準備——ふたりの物語のヒントを。",
+        "per_page": 9
+      }
+    },
+    "journal-category": {
+      "type": "journal-category",
+      "settings": {
+        "heading": "CATEGORY"
+      },
+      "blocks": {
+        "destinations": { "type": "category", "settings": { "label": "DESTINATIONS", "tag": "destinations" } },
+        "dress": { "type": "category", "settings": { "label": "DRESS", "tag": "dress" } },
+        "travel": { "type": "category", "settings": { "label": "TRAVEL", "tag": "travel" } },
+        "stories": { "type": "category", "settings": { "label": "STORIES", "tag": "stories" } }
+      },
+      "block_order": ["destinations", "dress", "travel", "stories"]
+    },
+    "journal-cta": {
+      "type": "journal-cta",
+      "settings": {
+        "subtle": true,
+        "eyebrow": "Get Started",
+        "heading": "あなたに合う撮影地を探す",
+        "button_label": "30秒診断",
+        "button_url": "/pages/diagnosis"
+      }
+    }
+  },
+  "order": ["journal-hero", "journal-featured", "journal-grid", "journal-category", "journal-cta"]
+}

@@ -1,0 +1,38 @@
+{
+  "sections": {
+    "article-hero": {
+      "type": "article-hero"
+    },
+    "article-body": {
+      "type": "article-body",
+      "settings": {
+        "show_toc": true
+      }
+    },
+    "article-related-products": {
+      "type": "article-related-products",
+      "settings": {
+        "heading": "この記事で紹介したプラン",
+        "max_products": 3
+      }
+    },
+    "article-related-posts": {
+      "type": "article-related-posts",
+      "settings": {
+        "heading": "この記事を読んだ方はこちら"
+      }
+    },
+    "article-cta": {
+      "type": "article-cta",
+      "settings": {
+        "eyebrow": "Get Started",
+        "heading": "海外フォトウェディングについて\nお気軽にご相談ください",
+        "consult_label": "相談する",
+        "consult_url": "/pages/about#contact",
+        "products_label": "商品を見る",
+        "products_url": "/"
+      }
+    }
+  },
+  "order": ["article-hero", "article-body", "article-related-products", "article-related-posts", "article-cta"]
+}

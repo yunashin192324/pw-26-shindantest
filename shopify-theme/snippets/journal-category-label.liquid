@@ -1,0 +1,15 @@
+{%- comment -%}
+  journal-category-label
+  ----------------------------------------------------------------
+  Maps a category tag (see journal-primary-tag.liquid) to its
+  display label. Keep in sync with journal-category.liquid's blocks.
+
+  Usage: {% render 'journal-category-label', tag: primary_tag %}
+{%- endcomment -%}
+{%- case tag -%}
+  {%- when 'destinations' -%}Destinations
+  {%- when 'dress' -%}Dress
+  {%- when 'travel' -%}Travel
+  {%- when 'stories' -%}Stories
+  {%- else -%}Journal
+{%- endcase -%}

@@ -1,0 +1,39 @@
+{%- comment -%}
+  journal-card
+  ----------------------------------------------------------------
+  One article card for the JOURNAL grid / related-posts rail.
+  Reuses the existing .card / .card-media / .card-body components
+  from theme.css — no new card design.
+
+  Params:
+    article      — required, an article object
+    reveal_class — optional, e.g. "reveal-1" for staggered fade-in
+{%- endcomment -%}
+{%- capture primary_tag -%}{% render 'journal-primary-tag', article: article %}{%- endcapture -%}
+{%- assign primary_tag = primary_tag | strip -%}
+{%- capture category_label -%}{% render 'journal-category-label', tag: primary_tag %}{%- endcapture -%}
+
+<a href="{{ article.url }}" class="card journal-card reveal{% if reveal_class %} {{ reveal_class }}{% endif %}">
+  <div class="card-media">
+    {%- if article.image -%}
+      <img
+        src="{{ article.image | image_url: width: 800 }}"
+        srcset="{{ article.image | image_url: width: 500 }} 500w, {{ article.image | image_url: width: 800 }} 800w, {{ article.image | image_url: width: 1200 }} 1200w"
+        sizes="(min-width: 960px) 33vw, 100vw"
+        alt="{{ article.image.alt | default: article.title | escape }}"
+        loading="lazy"
+        width="800" height="1000"
+      >
+    {%- endif -%}
+  </div>
+  <div class="card-body">
+    <div class="journal-meta is-light">
+      <span class="journal-category">{{ category_label }}</span>
+      <span class="dot">/</span>
+      <span>{{ article.published_at | date: '%Y.%m.%d' }}</span>
+    </div>
+    <h3 class="card-title">{{ article.title }}</h3>
+    <p class="card-desc">{{ article.excerpt_or_content | strip_html | truncate: 78 }}</p>
+    <span class="card-link">読む ＞</span>
+  </div>
+</a>

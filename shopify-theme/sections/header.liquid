@@ -1,0 +1,36 @@
+{%- comment -%}
+  Site header — ported as-is from the TOP page (wedding-ec/index.html)
+  so JOURNAL shares the exact same nav, logo and scroll behaviour.
+  theme.js handles the is-scrolled / mobile nav-toggle states.
+{%- endcomment -%}
+{%- assign journal_url = section.settings.journal_blog.url | default: '/blogs/journal' -%}
+
+<header class="site-header">
+  <a href="{{ routes.root_url }}" class="logo">
+    {{ section.settings.logo_text }}<span class="logo-sub">{{ section.settings.logo_sub }}</span>
+  </a>
+  <nav class="nav-links">
+    {%- for link in section.settings.main_menu.links -%}
+      <a href="{{ link.url }}"{% if link.active %} aria-current="page"{% endif %}>{{ link.title }}</a>
+    {%- endfor -%}
+    <a href="{{ journal_url }}">JOURNAL</a>
+    {%- if section.settings.cta_url != blank -%}
+      <a href="{{ section.settings.cta_url }}" class="btn btn-sm btn-gold">{{ section.settings.cta_label }}</a>
+    {%- endif -%}
+  </nav>
+  <button class="nav-toggle" aria-label="メニュー" aria-expanded="false"><span></span><span></span><span></span></button>
+</header>
+
+{% schema %}
+{
+  "name": "ヘッダー",
+  "settings": [
+    { "type": "text", "id": "logo_text", "label": "ロゴ文字", "default": "HIS World Wedding" },
+    { "type": "text", "id": "logo_sub", "label": "ロゴ サブテキスト", "default": "Overseas Photo Wedding" },
+    { "type": "link_list", "id": "main_menu", "label": "ナビゲーションメニュー" },
+    { "type": "blog", "id": "journal_blog", "label": "JOURNALのブログ", "info": "JOURNALリンクの参照先。未設定の場合は /blogs/journal を使用します。" },
+    { "type": "text", "id": "cta_label", "label": "CTAボタン文言", "default": "30秒診断" },
+    { "type": "url", "id": "cta_url", "label": "CTAボタンリンク先" }
+  ]
+}
+{% endschema %}

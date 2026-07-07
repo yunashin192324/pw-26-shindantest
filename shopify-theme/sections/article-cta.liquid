@@ -1,0 +1,28 @@
+{%- comment -%}
+  article-cta — closing CTA at the foot of every article, matching
+  the .bg-black CTA band used on the TOP page and product pages.
+{%- endcomment -%}
+<section class="bg-black text-center">
+  <div class="container">
+    <p class="eyebrow reveal">{{ section.settings.eyebrow }}</p>
+    <h2 class="reveal reveal-1">{{ section.settings.heading | newline_to_br }}</h2>
+    <div class="cta-row reveal reveal-2" style="justify-content:center;margin-top:32px;">
+      <a href="{{ section.settings.consult_url }}" class="btn btn-outline-light">{{ section.settings.consult_label }}</a>
+      <a href="{{ section.settings.products_url }}" class="btn btn-gold">{{ section.settings.products_label }}</a>
+    </div>
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "記事 CTA",
+  "settings": [
+    { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "Get Started" },
+    { "type": "textarea", "id": "heading", "label": "見出し", "default": "海外フォトウェディングについて\nお気軽にご相談ください" },
+    { "type": "text", "id": "consult_label", "label": "相談ボタン文言", "default": "相談する" },
+    { "type": "url", "id": "consult_url", "label": "相談ボタンリンク先" },
+    { "type": "text", "id": "products_label", "label": "商品ボタン文言", "default": "商品を見る" },
+    { "type": "url", "id": "products_url", "label": "商品ボタンリンク先" }
+  ]
+}
+{% endschema %}
