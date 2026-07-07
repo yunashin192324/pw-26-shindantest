@@ -1,0 +1,68 @@
+{%- comment -%}
+  journal-schema
+  ----------------------------------------------------------------
+  Article + BreadcrumbList JSON-LD for a JOURNAL article page.
+  Feeds AIO / GEO (AI + generative-engine discovery) as well as
+  classic SEO rich results.
+
+  Params:
+    article — required
+    blog    — required
+{%- endcomment -%}
+{%- capture primary_tag -%}{% render 'journal-primary-tag', article: article %}{%- endcapture -%}
+{%- assign primary_tag = primary_tag | strip -%}
+{%- capture category_label -%}{% render 'journal-category-label', tag: primary_tag %}{%- endcapture -%}
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": {{ article.title | json }},
+  "description": {{ article.excerpt_or_content | strip_html | truncate: 160 | json }},
+  {%- if article.image %}
+  "image": [{{ article.image | image_url: width: 1600 | prepend: "https:" | json }}],
+  {%- endif %}
+  "datePublished": {{ article.published_at | date: '%Y-%m-%dT%H:%M:%S%z' | json }},
+  {%- if article.updated_at %}
+  "dateModified": {{ article.updated_at | date: '%Y-%m-%dT%H:%M:%S%z' | json }},
+  {%- endif %}
+  "author": {
+    "@type": "Organization",
+    "name": {{ article.author | default: shop.name | json }}
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": {{ shop.name | json }}
+    {%- if settings.favicon -%}
+    ,
+    "logo": {
+      "@type": "ImageObject",
+      "url": {{ settings.favicon | image_url: width: 256 | prepend: "https:" | json }}
+    }
+    {%- endif %}
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": {{ canonical_url | json }}
+  },
+  "articleSection": {{ category_label | json }},
+  "keywords": {{ article.tags | join: ', ' | json }}
+}
+</script>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "TOP", "item": {{ shop.url | append: routes.root_url | json }} },
+    { "@type": "ListItem", "position": 2, "name": "JOURNAL", "item": {{ shop.url | append: blog.url | json }} },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": {{ article.title | json }},
+      "item": {{ canonical_url | json }}
+    }
+  ]
+}
+</script>

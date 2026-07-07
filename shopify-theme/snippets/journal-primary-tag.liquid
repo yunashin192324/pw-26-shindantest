@@ -1,0 +1,23 @@
+{%- comment -%}
+  journal-primary-tag
+  ----------------------------------------------------------------
+  Outputs the first recognised JOURNAL category tag found on an
+  article ("destinations" / "dress" / "travel" / "stories"), or an
+  empty string if the article carries none of them yet.
+
+  Usage:
+    {% capture primary_tag %}{% render 'journal-primary-tag', article: article %}{% endcapture %}
+    {% assign primary_tag = primary_tag | strip %}
+
+  Category tags double as the /journal/tagged/{tag} filter used by
+  the journal-category section, so editors only ever manage one set
+  of tags on the article — no extra field required.
+{%- endcomment -%}
+{%- assign journal_categories = "destinations,dress,travel,stories" | split: "," -%}
+{%- assign result = "" -%}
+{%- for cat in journal_categories -%}
+  {%- if result == "" and article.tags contains cat -%}
+    {%- assign result = cat -%}
+  {%- endif -%}
+{%- endfor -%}
+{{- result -}}

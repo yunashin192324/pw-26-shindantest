@@ -1,0 +1,25 @@
+{%- comment -%}
+  journal-breadcrumb
+  ----------------------------------------------------------------
+  Renders the .breadcrumb component (from theme.css) for JOURNAL.
+  Also doubles as the source for the BreadcrumbList schema in
+  journal-schema.liquid, so keep the two in sync.
+
+  Params:
+    blog     — required, the current blog object
+    article  — optional, the current article (article pages only)
+{%- endcomment -%}
+{%- capture primary_tag -%}{% render 'journal-primary-tag', article: article %}{%- endcapture -%}
+{%- assign primary_tag = primary_tag | strip -%}
+{%- capture category_label -%}{% render 'journal-category-label', tag: primary_tag %}{%- endcapture -%}
+
+<p class="breadcrumb">
+  <span><a href="{{ routes.root_url }}">TOP</a></span>
+  <span><a href="{{ blog.url }}">JOURNAL</a></span>
+  {%- if article -%}
+    {%- if primary_tag != "" -%}
+      <span><a href="{{ blog.url }}/tagged/{{ primary_tag }}">{{ category_label }}</a></span>
+    {%- endif -%}
+    <span>{{ article.title }}</span>
+  {%- endif -%}
+</p>

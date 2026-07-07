@@ -1,0 +1,58 @@
+{%- comment -%}
+  article-body — the article rich-text content.
+
+  Only the "本文" (body) field is required from the merchant. All of
+  the following are achieved by pasting pre-styled markup straight
+  into that one rich-text field — no extra custom fields needed:
+
+    POINT box (AIO-friendly bullet summary):
+      <div class="point-box">
+        <p class="point-box-label">POINT</p>
+        <ul class="check-list">
+          <li>日本から約5時間半</li>
+          <li>時差2時間</li>
+        </ul>
+      </div>
+
+    GEO facts block (destination / flight time / time difference /
+    best season / who it suits — reuses the .geo-block component
+    already used on product pages):
+      <div class="geo-block">
+        <dl class="geo-grid">
+          <div class="geo-item"><dt>撮影地情報</dt><dd>…</dd></div>
+          <div class="geo-item"><dt>飛行時間</dt><dd>…</dd></div>
+        </dl>
+      </div>
+
+    Comparison table (AIO-friendly): <table class="compare-table">…</table>
+    Full-bleed photo: <figure class="breakout"><img …><figcaption>…</figcaption></figure>
+
+  The table of contents below is generated automatically client-side
+  (assets/journal.js) from the <h2>/<h3> tags editors type in the body,
+  so it never needs separate upkeep.
+{%- endcomment -%}
+<section>
+  <div class="container">
+    <div class="article-body-layout">
+      {%- if section.settings.show_toc -%}
+        <aside class="article-toc" data-toc hidden>
+          <p class="article-toc-label">目次</p>
+          <ol data-toc-list></ol>
+        </aside>
+      {%- endif -%}
+
+      <div class="article-content reveal" data-article-content>
+        {{ article.content }}
+      </div>
+    </div>
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "記事本文",
+  "settings": [
+    { "type": "checkbox", "id": "show_toc", "label": "目次を表示する", "default": true }
+  ]
+}
+{% endschema %}

@@ -1,0 +1,39 @@
+{%- comment -%}
+  journal-hero — JOURNAL top hero.
+  Same .hero system as the TOP page (100svh, dark gradient, gold
+  eyebrow, scroll cue) with content centred for the magazine feel.
+{%- endcomment -%}
+<section class="hero journal-hero">
+  <div class="hero-media">
+    {%- if section.settings.image -%}
+      <img
+        src="{{ section.settings.image | image_url: width: 2400 }}"
+        srcset="{{ section.settings.image | image_url: width: 1200 }} 1200w, {{ section.settings.image | image_url: width: 1800 }} 1800w, {{ section.settings.image | image_url: width: 2400 }} 2400w"
+        sizes="100vw"
+        alt="{{ section.settings.image.alt | default: section.settings.heading | escape }}"
+        loading="eager"
+        width="2400" height="1350"
+      >
+    {%- endif -%}
+  </div>
+  <div class="hero-content">
+    <p class="eyebrow">{{ section.settings.eyebrow }}</p>
+    <h1>{{ section.settings.heading | newline_to_br }}</h1>
+    <div class="divider-gold"></div>
+    <p class="lede">{{ section.settings.description }}</p>
+  </div>
+  <div class="scroll-cue"><span>SCROLL</span><span class="line"></span></div>
+</section>
+
+{% schema %}
+{
+  "name": "JOURNAL ヒーロー",
+  "settings": [
+    { "type": "image_picker", "id": "image", "label": "背景写真" },
+    { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "JOURNAL" },
+    { "type": "textarea", "id": "heading", "label": "メイン見出し", "default": "旅が、\nふたりを写す。" },
+    { "type": "textarea", "id": "description", "label": "説明文", "default": "世界中の撮影地、ドレス、旅のヒントをお届けします。" }
+  ],
+  "presets": [{ "name": "JOURNAL ヒーロー" }]
+}
+{% endschema %}

@@ -1,0 +1,55 @@
+{%- comment -%}
+  journal-category — category filter pills.
+  Links use Shopify's native /blogs/{handle}/tagged/{tag} route, so
+  clicking a category re-renders this same blog.json template with
+  blog.articles already filtered — no custom JS filtering required.
+{%- endcomment -%}
+<section>
+  <div class="container" style="max-width:820px;">
+    <div class="section-head reveal">
+      <p class="eyebrow">Category</p>
+      <h2>{{ section.settings.heading }}</h2>
+      <div class="divider-gold"></div>
+    </div>
+    <div class="category-filter reveal">
+      <a href="{{ blog.url }}"{% if current_tags == blank %} class="is-active"{% endif %}>ALL</a>
+      {%- for block in section.blocks -%}
+        {%- assign tag = block.settings.tag -%}
+        <a
+          href="{{ blog.url }}/tagged/{{ tag }}"
+          {% if current_tags contains tag %} class="is-active"{% endif %}
+          {{ block.shopify_attributes }}
+        >{{ block.settings.label }}</a>
+      {%- endfor -%}
+    </div>
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "JOURNAL カテゴリー",
+  "settings": [
+    { "type": "text", "id": "heading", "label": "見出し", "default": "CATEGORY" }
+  ],
+  "blocks": [
+    {
+      "type": "category",
+      "name": "カテゴリー",
+      "settings": [
+        { "type": "text", "id": "label", "label": "表示名" },
+        { "type": "text", "id": "tag", "label": "対応タグ", "info": "記事に付けるタグ名（英字小文字）。例: destinations" }
+      ]
+    }
+  ],
+  "max_blocks": 8,
+  "default": {
+    "blocks": [
+      { "type": "category", "settings": { "label": "DESTINATIONS", "tag": "destinations" } },
+      { "type": "category", "settings": { "label": "DRESS", "tag": "dress" } },
+      { "type": "category", "settings": { "label": "TRAVEL", "tag": "travel" } },
+      { "type": "category", "settings": { "label": "STORIES", "tag": "stories" } }
+    ]
+  },
+  "presets": [{ "name": "JOURNAL カテゴリー" }]
+}
+{% endschema %}

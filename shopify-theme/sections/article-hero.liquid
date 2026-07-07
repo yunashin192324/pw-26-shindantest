@@ -1,0 +1,48 @@
+{%- comment -%}
+  article-hero — full-bleed photo hero for a JOURNAL article.
+  Same .hero component as the TOP page hero; content stays
+  bottom-left like the existing page-hero convention.
+{%- endcomment -%}
+{%- render 'journal-schema', article: article, blog: blog -%}
+
+{%- capture primary_tag -%}{% render 'journal-primary-tag', article: article %}{%- endcapture -%}
+{%- assign primary_tag = primary_tag | strip -%}
+{%- capture category_label -%}{% render 'journal-category-label', tag: primary_tag %}{%- endcapture -%}
+
+{%- assign char_count = article.content | strip_html | size -%}
+{%- assign read_minutes = char_count | divided_by: 500 -%}
+{%- assign read_minutes = read_minutes | at_least: 1 -%}
+
+<section class="hero">
+  <div class="hero-media">
+    {%- if article.image -%}
+      <img
+        src="{{ article.image | image_url: width: 2400 }}"
+        srcset="{{ article.image | image_url: width: 1200 }} 1200w, {{ article.image | image_url: width: 1800 }} 1800w, {{ article.image | image_url: width: 2400 }} 2400w"
+        sizes="100vw"
+        alt="{{ article.image.alt | default: article.title | escape }}"
+        loading="eager"
+        width="2400" height="1350"
+      >
+    {%- endif -%}
+  </div>
+  <div class="hero-content">
+    <div class="journal-meta" style="justify-content:flex-start;margin-bottom:18px;">
+      <span class="journal-category">{{ category_label }}</span>
+      <span class="dot">/</span>
+      <span>{{ article.published_at | date: '%Y.%m.%d' }}</span>
+      <span class="dot">/</span>
+      <span>読了 {{ read_minutes }}分</span>
+    </div>
+    <h1>{{ article.title }}</h1>
+  </div>
+</section>
+
+{% render 'journal-breadcrumb', blog: blog, article: article %}
+
+{% schema %}
+{
+  "name": "記事ヒーロー",
+  "settings": []
+}
+{% endschema %}

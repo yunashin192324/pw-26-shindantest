@@ -1,0 +1,40 @@
+{%- comment -%}
+  journal-cta — closing CTA toward the diagnosis / product pages.
+  "subtle" keeps this editorially quiet while the catalogue is still
+  small (per spec: 商品数が少ない間は診断への導線は控えめでよい), toggle
+  it off later from the theme editor once there is more to send people to.
+{%- endcomment -%}
+{%- if section.settings.subtle -%}
+  <section class="text-center">
+    <div class="container">
+      <p class="reveal">
+        {{ section.settings.heading }}
+        <a href="{{ section.settings.button_url }}" class="card-link" style="margin-left:10px;">{{ section.settings.button_label }} ＞</a>
+      </p>
+    </div>
+  </section>
+{%- else -%}
+  <section class="bg-black text-center">
+    <div class="container">
+      <p class="eyebrow reveal">{{ section.settings.eyebrow }}</p>
+      <h2 class="reveal reveal-1">{{ section.settings.heading | newline_to_br }}</h2>
+      <div class="cta-row reveal reveal-2" style="justify-content:center;margin-top:32px;">
+        <a href="{{ section.settings.button_url }}" class="btn btn-gold">{{ section.settings.button_label }}</a>
+      </div>
+    </div>
+  </section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "JOURNAL CTA",
+  "settings": [
+    { "type": "checkbox", "id": "subtle", "label": "控えめに表示する", "default": true, "info": "商品数が少ない間は控えめ表示がおすすめです。" },
+    { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "Get Started" },
+    { "type": "textarea", "id": "heading", "label": "見出し", "default": "あなたに合う撮影地を探す" },
+    { "type": "text", "id": "button_label", "label": "ボタン文言", "default": "30秒診断" },
+    { "type": "url", "id": "button_url", "label": "ボタンリンク先" }
+  ],
+  "presets": [{ "name": "JOURNAL CTA" }]
+}
+{% endschema %}

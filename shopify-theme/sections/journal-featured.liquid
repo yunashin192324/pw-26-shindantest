@@ -1,0 +1,62 @@
+{%- comment -%}
+  journal-featured — one large "pickup" article, full width.
+  Reuses the .split (image + text) component already used across the
+  site (see wedding-ec dress / about sections) instead of a new layout.
+
+  Editors choose the article via the theme editor "特集記事" setting.
+  If left blank, the most recently published article is used, so the
+  section always has something to show without extra input.
+{%- endcomment -%}
+{%- assign featured_article = section.settings.featured_article | default: blog.articles.first -%}
+
+{%- if featured_article -%}
+  {%- capture primary_tag -%}{% render 'journal-primary-tag', article: featured_article %}{%- endcapture -%}
+  {%- assign primary_tag = primary_tag | strip -%}
+  {%- capture category_label -%}{% render 'journal-category-label', tag: primary_tag %}{%- endcapture -%}
+
+  <section>
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="eyebrow">Featured</p>
+        <h2>{{ section.settings.heading }}</h2>
+        <div class="divider-gold"></div>
+      </div>
+
+      <a href="{{ featured_article.url }}" class="split journal-featured reveal">
+        <div class="split-media">
+          {%- if featured_article.image -%}
+            <img
+              src="{{ featured_article.image | image_url: width: 1200 }}"
+              srcset="{{ featured_article.image | image_url: width: 700 }} 700w, {{ featured_article.image | image_url: width: 1200 }} 1200w"
+              sizes="(min-width: 820px) 50vw, 100vw"
+              alt="{{ featured_article.image.alt | default: featured_article.title | escape }}"
+              loading="eager"
+              width="1200" height="1500"
+            >
+          {%- endif -%}
+        </div>
+        <div>
+          <div class="journal-meta is-light">
+            <span class="journal-category">{{ category_label }}</span>
+            <span class="dot">/</span>
+            <span>{{ featured_article.published_at | date: '%Y.%m.%d' }}</span>
+          </div>
+          <h3 class="card-title">{{ featured_article.title }}</h3>
+          <p class="card-desc">{{ featured_article.excerpt_or_content | strip_html | truncate: 110 }}</p>
+          <span class="card-link">読む ＞</span>
+        </div>
+      </a>
+    </div>
+  </section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "JOURNAL 特集記事",
+  "settings": [
+    { "type": "text", "id": "heading", "label": "見出し", "default": "FEATURED" },
+    { "type": "article", "id": "featured_article", "label": "特集記事", "info": "未選択の場合、最新記事を自動表示します。" }
+  ],
+  "presets": [{ "name": "JOURNAL 特集記事" }]
+}
+{% endschema %}

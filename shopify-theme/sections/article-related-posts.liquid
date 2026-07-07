@@ -1,0 +1,63 @@
+{%- comment -%}
+  article-related-posts — "この記事を読んだ方はこちら".
+  Automatically pulls the 3 most recent other articles that share the
+  current article's primary category tag — no manual curation needed.
+  Falls back to the latest articles overall if the article has no
+  recognised category tag yet.
+{%- endcomment -%}
+{%- capture primary_tag -%}{% render 'journal-primary-tag', article: article %}{%- endcapture -%}
+{%- assign primary_tag = primary_tag | strip -%}
+
+{%- assign related = "" | split: "" -%}
+{%- assign related_ids = "," -%}
+{%- assign max_related = 3 -%}
+{%- for other in blog.articles -%}
+  {%- if related.size >= max_related -%}{%- break -%}{%- endif -%}
+  {%- if other.id == article.id -%}{%- continue -%}{%- endif -%}
+  {%- if primary_tag != "" and other.tags contains primary_tag -%}
+    {%- assign match = blog.articles | where: "id", other.id -%}
+    {%- assign related = related | concat: match -%}
+    {%- assign related_ids = related_ids | append: other.id | append: ',' -%}
+  {%- endif -%}
+{%- endfor -%}
+
+{%- comment -%} Top up with the latest other articles if the category didn't yield enough. {%- endcomment -%}
+{%- if related.size < max_related -%}
+  {%- for other in blog.articles -%}
+    {%- if related.size >= max_related -%}{%- break -%}{%- endif -%}
+    {%- if other.id == article.id -%}{%- continue -%}{%- endif -%}
+    {%- assign needle = ',' | append: other.id | append: ',' -%}
+    {%- if related_ids contains needle -%}{%- continue -%}{%- endif -%}
+    {%- assign match = blog.articles | where: "id", other.id -%}
+    {%- assign related = related | concat: match -%}
+    {%- assign related_ids = related_ids | append: other.id | append: ',' -%}
+  {%- endfor -%}
+{%- endif -%}
+
+{%- if related.size > 0 -%}
+  <section class="bg-ivory">
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="eyebrow">More Stories</p>
+        <h2>{{ section.settings.heading }}</h2>
+        <div class="divider-gold"></div>
+      </div>
+      <div class="grid grid-3">
+        {%- for other in related -%}
+          {%- capture reveal_class -%}{% if forloop.index0 > 0 %}reveal-{{ forloop.index0 }}{% endif %}{%- endcapture -%}
+          {%- assign reveal_class = reveal_class | strip -%}
+          {%- render 'journal-card', article: other, reveal_class: reveal_class -%}
+        {%- endfor -%}
+      </div>
+    </div>
+  </section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "関連記事",
+  "settings": [
+    { "type": "text", "id": "heading", "label": "見出し", "default": "この記事を読んだ方はこちら" }
+  ]
+}
+{% endschema %}

@@ -1,0 +1,58 @@
+{%- comment -%}
+  Site footer — ported as-is from the TOP page. Three link columns are
+  theme-editor linklists so merchants can manage them without code.
+{%- endcomment -%}
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-top">
+      <div>
+        <div class="footer-logo">{{ section.settings.logo_text }}</div>
+        <p class="footer-tagline">{{ section.settings.tagline }}</p>
+      </div>
+      {%- for block in section.blocks -%}
+        <div class="footer-col">
+          <h4>{{ block.settings.heading }}</h4>
+          <ul>
+            {%- for link in block.settings.menu.links -%}
+              <li><a href="{{ link.url }}">{{ link.title }}</a></li>
+            {%- endfor -%}
+          </ul>
+        </div>
+      {%- endfor -%}
+    </div>
+    <div class="footer-bottom">
+      <span>{{ section.settings.copyright }}</span>
+      <span>{{ section.settings.credit }}</span>
+    </div>
+  </div>
+</footer>
+
+{% schema %}
+{
+  "name": "フッター",
+  "settings": [
+    { "type": "text", "id": "logo_text", "label": "ロゴ文字", "default": "HIS World Wedding" },
+    { "type": "textarea", "id": "tagline", "label": "タグライン", "default": "HISブランドの海外フォトウェディング。世界で、一生残る一枚を。" },
+    { "type": "text", "id": "copyright", "label": "コピーライト", "default": "© 2026 HIS World Wedding." },
+    { "type": "text", "id": "credit", "label": "クレジット表記", "default": "Operated by HIS Co., Ltd. / Dress by Four Seasons & Company" }
+  ],
+  "blocks": [
+    {
+      "type": "menu_column",
+      "name": "メニュー列",
+      "settings": [
+        { "type": "text", "id": "heading", "label": "見出し" },
+        { "type": "link_list", "id": "menu", "label": "リンク" }
+      ]
+    }
+  ],
+  "max_blocks": 4,
+  "default": {
+    "blocks": [
+      { "type": "menu_column", "settings": { "heading": "撮影地" } },
+      { "type": "menu_column", "settings": { "heading": "サイト" } },
+      { "type": "menu_column", "settings": { "heading": "お問い合わせ" } }
+    ]
+  }
+}
+{% endschema %}
