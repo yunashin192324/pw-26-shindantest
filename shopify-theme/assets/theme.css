@@ -240,6 +240,7 @@ p { color: var(--text-muted); }
   z-index: 1;
   padding: 0 var(--gutter) 96px;
   max-width: 760px;
+  min-width: 0;
 }
 .hero-content .eyebrow { color: var(--gold-light); }
 .hero-content h1 { margin-bottom: 20px; }
