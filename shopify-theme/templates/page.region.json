@@ -1,0 +1,31 @@
+{
+  "layout": "theme.destinations",
+  "sections": {
+    "region-hero": {
+      "type": "region-hero"
+    },
+    "region-intro": {
+      "type": "region-intro"
+    },
+    "region-city-list": {
+      "type": "region-city-list",
+      "settings": {
+        "heading": "都市一覧"
+      }
+    },
+    "destinations-cta": {
+      "type": "destinations-cta",
+      "settings": {
+        "subtle": true,
+        "heading": "あなたに合う撮影地を探す",
+        "button_label": "30秒診断"
+      }
+    }
+  },
+  "order": [
+    "region-hero",
+    "region-intro",
+    "region-city-list",
+    "destinations-cta"
+  ]
+}

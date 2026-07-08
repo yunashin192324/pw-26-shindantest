@@ -1,0 +1,38 @@
+{%- comment -%}
+  destinations-popular — 人気都市。Destination metaobjectの `popular`
+  フィールドがtrueのものだけを `sort_order` 昇順で横スクロール表示する。
+  PCで6枚程度見える幅にカード幅をCSS側で調整済み、スマホはネイティブ
+  横スワイプ（JS不要）。
+{%- endcomment -%}
+{%- assign popular_destinations = shop.metaobjects.destination.values | where: 'popular.value', true | sort: 'sort_order.value' -%}
+
+{%- if popular_destinations.size > 0 -%}
+<section id="dst-popular">
+  <div class="dst-container">
+    <div class="dst-section-head dst-reveal">
+      <p class="dst-eyebrow">Popular</p>
+      <h2>{{ section.settings.heading }}</h2>
+      <hr class="dst-divider">
+      <p>{{ section.settings.description }}</p>
+    </div>
+  </div>
+  <div class="dst-container">
+    <div class="dst-carousel">
+      {%- for destination in popular_destinations -%}
+        {% render 'destination-card', destination: destination, show_badge: true %}
+      {%- endfor -%}
+    </div>
+  </div>
+</section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "撮影地一覧 人気都市",
+  "settings": [
+    { "type": "text", "id": "heading", "label": "見出し", "default": "人気の撮影地" },
+    { "type": "textarea", "id": "description", "label": "説明文", "default": "多くのカップルに選ばれている撮影地です。" }
+  ],
+  "presets": [{ "name": "撮影地一覧 人気都市" }]
+}
+{% endschema %}

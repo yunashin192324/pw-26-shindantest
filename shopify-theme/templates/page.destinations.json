@@ -1,0 +1,59 @@
+{
+  "layout": "theme.destinations",
+  "sections": {
+    "destinations-hero": {
+      "type": "destinations-hero",
+      "settings": {
+        "eyebrow": "DESTINATIONS",
+        "heading": "世界中の撮影地から\nおふたりだけの物語を。",
+        "description": "120以上の撮影地から、おふたりらしい一枚が生まれる場所を見つけてください。",
+        "diagnosis_label": "30秒診断",
+        "search_label": "撮影地を見る"
+      }
+    },
+    "destinations-search": {
+      "type": "destinations-search",
+      "settings": {
+        "heading": "撮影地を探す",
+        "description": "都市名・国・地域・テーマから検索できます。"
+      }
+    },
+    "destinations-popular": {
+      "type": "destinations-popular",
+      "settings": {
+        "heading": "人気の撮影地",
+        "description": "多くのカップルに選ばれている撮影地です。"
+      }
+    },
+    "destinations-theme-list": {
+      "type": "destinations-theme-list",
+      "settings": {
+        "heading": "テーマから選ぶ",
+        "description": "叶えたい雰囲気から撮影地を探せます。"
+      }
+    },
+    "destinations-region-list": {
+      "type": "destinations-region-list",
+      "settings": {
+        "heading": "地域から選ぶ",
+        "description": "世界8つのエリアから撮影地をご覧いただけます。"
+      }
+    },
+    "destinations-cta": {
+      "type": "destinations-cta",
+      "settings": {
+        "subtle": true,
+        "heading": "あなたに合う撮影地を探す",
+        "button_label": "30秒診断"
+      }
+    }
+  },
+  "order": [
+    "destinations-hero",
+    "destinations-search",
+    "destinations-popular",
+    "destinations-theme-list",
+    "destinations-region-list",
+    "destinations-cta"
+  ]
+}

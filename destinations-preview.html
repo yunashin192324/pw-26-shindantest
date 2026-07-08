@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>【プレビュー / ダミーデータ】撮影地一覧 — HIS World Wedding</title>
+<meta name="robots" content="noindex, nofollow">
+<!--
+  これは本番のShopifyテーマコード(shopify-theme/)とは別物の、見た目確認
+  専用の静的プレビューです。中身の都市名・説明文・画像はすべてダミーです。
+  CSS/JSは複製せず本番と同じ shopify-theme/assets/destinations.css と
+  destinations.js をそのまま読み込んでいるため、実際の挙動(検索・
+  テーマクリック・アコーディオン・スクロールreveal)もそのまま確認できます。
+  実データはShopify管理画面でDestination Metaobjectを作成して入力します
+  (手順: shopify-theme/docs/destinations-metaobject-setup.md)。
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shopify-theme/assets/destinations.css">
+<style>
+  /* プレビューでのみ使う注記バー(本番コードには存在しない) */
+  .preview-banner { position: relative; z-index: 200; background: #222222; color: #fff; text-align: center; font-size: 12px; letter-spacing: .04em; padding: 6px 12px; font-family: 'Noto Sans JP', sans-serif; }
+</style>
+</head>
+<body class="destinations-scope">
+<div class="preview-banner">これは見た目確認用のダミーデータです。本番コードは shopify-theme/ を参照してください。</div>
+
+<header class="dst-header">
+  <a href="#" class="dst-logo">HIS World Wedding</a>
+  <nav class="dst-nav-links">
+    <a href="#" aria-current="page">撮影地一覧</a>
+    <a href="#">JOURNAL</a>
+    <a href="#" class="dst-btn dst-btn-sm dst-btn-gold">30秒診断</a>
+  </nav>
+  <button class="dst-nav-toggle" aria-label="メニュー" aria-expanded="false"><span></span><span></span><span></span></button>
+</header>
+
+<section class="dst-hero">
+  <div class="dst-hero-media"><img data-ph="World Wedding" data-ph-color="222222" data-ph-wide="1" alt=""></div>
+  <div class="dst-hero-content">
+    <p class="dst-eyebrow dst-reveal is-visible">DESTINATIONS</p>
+    <h1 class="dst-reveal is-visible">世界中の撮影地から<br>おふたりだけの物語を。</h1>
+    <p class="dst-lede dst-reveal is-visible">120以上の撮影地から、おふたりらしい一枚が生まれる場所を見つけてください。</p>
+    <div class="dst-cta-row dst-reveal is-visible">
+      <a href="#" class="dst-btn dst-btn-gold">30秒診断</a>
+      <a href="#dst-search" class="dst-btn dst-btn-outline">撮影地を見る</a>
+    </div>
+  </div>
+</section>
+
+<section id="dst-search" class="dst-bg-ivory">
+  <div class="dst-container">
+    <div class="dst-section-head dst-reveal is-visible">
+      <p class="dst-eyebrow">Search</p>
+      <h2>撮影地を探す</h2>
+      <hr class="dst-divider">
+      <p>都市名・国・地域・テーマから検索できます。</p>
+    </div>
+    <div class="dst-search-box dst-reveal is-visible">
+      <div class="dst-search-field">
+        <label for="dst-search-input" class="dst-sr-only">撮影地を検索</label>
+        <input type="search" id="dst-search-input" placeholder="例：パリ、ハワイ、ビーチ" autocomplete="off">
+      </div>
+      <div class="dst-search-meta"><span class="dst-search-count" id="dst-search-count"></span></div>
+      <div class="dst-search-results" id="dst-search-results" hidden></div>
+      <p class="dst-search-empty" id="dst-search-empty">該当する撮影地が見つかりませんでした。別のキーワードでお試しください。</p>
+    </div>
+  </div>
+
+  <template id="dst-result-template">
+    <a href="#" class="dst-card">
+      <div class="dst-card-media"><img loading="lazy" alt=""></div>
+      <div class="dst-card-body">
+        <p class="dst-card-country"></p>
+        <p class="dst-card-name-en"></p>
+        <h3 class="dst-card-name-ja"></h3>
+        <div class="dst-card-themes"></div>
+        <span class="dst-card-link">詳しく見る ＞</span>
+      </div>
+    </a>
+  </template>
+
+  <script type="application/json" id="dst-search-data"></script>
+</section>
+
+<section id="dst-popular">
+  <div class="dst-container">
+    <div class="dst-section-head dst-reveal is-visible">
+      <p class="dst-eyebrow">Popular</p>
+      <h2>人気の撮影地</h2>
+      <hr class="dst-divider">
+      <p>多くのカップルに選ばれている撮影地です。</p>
+    </div>
+  </div>
+  <div class="dst-container">
+    <div class="dst-carousel" id="dst-popular-carousel"></div>
+  </div>
+</section>
+
+<section id="dst-themes">
+  <div class="dst-container">
+    <div class="dst-section-head dst-reveal is-visible">
+      <p class="dst-eyebrow">Theme</p>
+      <h2>テーマから選ぶ</h2>
+      <hr class="dst-divider">
+      <p>叶えたい雰囲気から撮影地を探せます。</p>
+    </div>
+    <div class="dst-theme-grid" id="dst-theme-grid"></div>
+  </div>
+</section>
+
+<section id="dst-regions" class="dst-bg-ivory">
+  <div class="dst-container">
+    <div class="dst-section-head dst-reveal is-visible">
+      <p class="dst-eyebrow">Region</p>
+      <h2>地域から選ぶ</h2>
+      <hr class="dst-divider">
+      <p>世界8つのエリアから撮影地をご覧いただけます。</p>
+    </div>
+    <div id="dst-region-blocks"></div>
+  </div>
+</section>
+
+<section class="dst-cta dst-cta-full dst-text-center">
+  <div class="dst-container">
+    <p class="dst-eyebrow dst-reveal is-visible">Get Started</p>
+    <h2 class="dst-reveal is-visible">あなたに合う撮影地を探す</h2>
+    <div class="dst-cta-row dst-reveal is-visible"><a href="#" class="dst-btn dst-btn-gold">30秒診断</a></div>
+  </div>
+</section>
+
+<footer class="dst-footer">
+  <div class="dst-container">
+    <div class="dst-footer-top">
+      <div>
+        <div class="dst-logo">HIS World Wedding</div>
+        <p class="dst-footer-tagline">世界中の撮影地から、おふたりだけの物語を。</p>
+      </div>
+      <div class="dst-footer-col"><h4>地域から選ぶ</h4><ul><li><a href="#">Europe</a></li><li><a href="#">Asia</a></li></ul></div>
+      <div class="dst-footer-col"><h4>サイト</h4><ul><li><a href="#">JOURNAL</a></li></ul></div>
+      <div class="dst-footer-col"><h4>お問い合わせ</h4><ul><li><a href="#">お問い合わせ</a></li></ul></div>
+    </div>
+    <div class="dst-footer-bottom"><span>© 2026 HIS World Wedding.</span><span>Operated by HIS Co., Ltd.</span></div>
+  </div>
+</footer>
+
+<script>
+/* ===================================================================
+   以下はこのプレビューHTMLだけのダミーデータ生成スクリプト。
+   本番の shopify-theme/ には存在しない(Metaobjectの代わりに使うだけ)。
+   =================================================================== */
+(function () {
+  'use strict';
+
+  function svgPlaceholder(label, colorHex, wide) {
+    var w = wide ? 1600 : 600;
+    var h = wide ? 900 : 750;
+    var fontSize = wide ? 56 : 40;
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + w + ' ' + h + '" width="' + w + '" height="' + h + '">' +
+      '<rect width="100%" height="100%" fill="#faf8f5"/>' +
+      '<rect width="100%" height="100%" fill="#' + colorHex + '" opacity="0.16"/>' +
+      '<text x="50%" y="50%" font-family="Georgia, serif" font-size="' + fontSize + '" fill="#8f6a08" text-anchor="middle" dominant-baseline="middle">' + label + '</text>' +
+      '</svg>';
+    return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+  }
+
+  var THEME_LABELS = {
+    beach: 'ビーチ', streets: '街並み', palace: '宮殿', heritage: '世界遺産', view: '絶景',
+    lake: '湖', desert: '砂漠', balloon: '気球', church: '教会', museum: '美術館',
+    library: '図書館', resort: 'リゾート', sunset: 'サンセット'
+  };
+
+  var REGION_LABELS = {
+    europe: 'Europe', america: 'America', asia: 'Asia', oceania: 'Oceania',
+    middle_east: 'Middle East', africa: 'Africa', south_america: 'South America', japan: 'Japan'
+  };
+
+  /* ダミー都市データ(24都市)。実データはShopify管理画面のMetaobjectで管理する。 */
+  var DUMMY_DESTINATIONS = [
+    { name_ja: 'パリ', name_en: 'Paris', country: 'フランス', region: 'europe', themes: ['streets', 'museum'], popular: true, sort_order: 1 },
+    { name_ja: 'ローマ', name_en: 'Rome', country: 'イタリア', region: 'europe', themes: ['heritage', 'streets'], popular: true, sort_order: 2 },
+    { name_ja: 'サントリーニ', name_en: 'Santorini', country: 'ギリシャ', region: 'europe', themes: ['sunset', 'view'], popular: true, sort_order: 3 },
+    { name_ja: 'プラハ', name_en: 'Prague', country: 'チェコ', region: 'europe', themes: ['palace', 'streets'], sort_order: 4 },
+    { name_ja: 'ロンドン', name_en: 'London', country: 'イギリス', region: 'europe', themes: ['streets', 'palace'], sort_order: 5 },
+    { name_ja: 'ウィーン', name_en: 'Vienna', country: 'オーストリア', region: 'europe', themes: ['palace', 'museum'], sort_order: 6 },
+    { name_ja: 'バルセロナ', name_en: 'Barcelona', country: 'スペイン', region: 'europe', themes: ['streets', 'view'], sort_order: 7 },
+    { name_ja: 'フィレンツェ', name_en: 'Florence', country: 'イタリア', region: 'europe', themes: ['heritage', 'museum'], sort_order: 8 },
+    { name_ja: 'アムステルダム', name_en: 'Amsterdam', country: 'オランダ', region: 'europe', themes: ['streets', 'lake'], sort_order: 9 },
+    { name_ja: 'ハワイ・オアフ島', name_en: 'Oahu, Hawaii', country: 'アメリカ', region: 'america', themes: ['beach', 'resort'], popular: true, sort_order: 1 },
+    { name_ja: 'ロサンゼルス', name_en: 'Los Angeles', country: 'アメリカ', region: 'america', themes: ['sunset', 'streets'], sort_order: 2 },
+    { name_ja: 'ニューヨーク', name_en: 'New York', country: 'アメリカ', region: 'america', themes: ['streets', 'view'], sort_order: 3 },
+    { name_ja: 'カンクン', name_en: 'Cancun', country: 'メキシコ', region: 'america', themes: ['beach', 'resort'], sort_order: 4 },
+    { name_ja: 'バリ島', name_en: 'Bali', country: 'インドネシア', region: 'asia', themes: ['beach', 'resort'], popular: true, sort_order: 1 },
+    { name_ja: 'ダナン', name_en: 'Danang', country: 'ベトナム', region: 'asia', themes: ['beach', 'resort'], sort_order: 2 },
+    { name_ja: '京都', name_en: 'Kyoto', country: '日本', region: 'asia', themes: ['heritage', 'church'], sort_order: 3 },
+    { name_ja: 'バンコク', name_en: 'Bangkok', country: 'タイ', region: 'asia', themes: ['palace', 'streets'], sort_order: 4 },
+    { name_ja: 'ゴールドコースト', name_en: 'Gold Coast', country: 'オーストラリア', region: 'oceania', themes: ['beach', 'view'], sort_order: 1 },
+    { name_ja: 'クイーンズタウン', name_en: 'Queenstown', country: 'ニュージーランド', region: 'oceania', themes: ['lake', 'view'], popular: true, sort_order: 2 },
+    { name_ja: 'ボラボラ島', name_en: 'Bora Bora', country: 'フランス領ポリネシア', region: 'oceania', themes: ['beach', 'resort'], sort_order: 3 },
+    { name_ja: 'ドバイ', name_en: 'Dubai', country: 'アラブ首長国連邦', region: 'middle_east', themes: ['desert', 'view'], sort_order: 1 },
+    { name_ja: 'ペトラ', name_en: 'Petra', country: 'ヨルダン', region: 'middle_east', themes: ['heritage', 'desert'], sort_order: 2 },
+    { name_ja: 'ケープタウン', name_en: 'Cape Town', country: '南アフリカ', region: 'africa', themes: ['view', 'desert'], sort_order: 1 },
+    { name_ja: 'マラケシュ', name_en: 'Marrakesh', country: 'モロッコ', region: 'africa', themes: ['palace', 'streets'], sort_order: 2 },
+    { name_ja: 'リオデジャネイロ', name_en: 'Rio de Janeiro', country: 'ブラジル', region: 'south_america', themes: ['beach', 'view'], sort_order: 1 },
+    { name_ja: 'クスコ', name_en: 'Cusco', country: 'ペルー', region: 'south_america', themes: ['heritage', 'view'], sort_order: 2 },
+    { name_ja: '沖縄', name_en: 'Okinawa', country: '日本', region: 'japan', themes: ['beach', 'resort'], popular: true, sort_order: 1 },
+    { name_ja: '北海道', name_en: 'Hokkaido', country: '日本', region: 'japan', themes: ['lake', 'view'], sort_order: 2 },
+    { name_ja: '金沢', name_en: 'Kanazawa', country: '日本', region: 'japan', themes: ['heritage', 'streets'], sort_order: 3 }
+  ];
+
+  DUMMY_DESTINATIONS.forEach(function (d, i) {
+    d.slug = d.name_en.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    d.url = '#' + d.slug;
+    d.region_label = REGION_LABELS[d.region];
+    d.theme_labels = d.themes.map(function (k) { return THEME_LABELS[k]; });
+    d.thumb = svgPlaceholder(d.name_ja, i % 2 ? 'b8860b' : 'd4a843');
+  });
+
+  /* destinations.js が読むJSONデータセットを書き込む(本番ではLiquidが
+     Metaobjectから生成する部分)。 */
+  document.getElementById('dst-search-data').textContent = JSON.stringify(DUMMY_DESTINATIONS);
+
+  function cardHTML(d) {
+    var tags = d.theme_labels.slice(0, 3).map(function (t) { return '<span class="dst-tag">' + t + '</span>'; }).join('');
+    return '<a href="' + d.url + '" class="dst-card dst-reveal is-visible">' +
+      '<div class="dst-card-media"><img src="' + d.thumb + '" alt="' + d.name_ja + '">' +
+      (d.popular ? '<span class="dst-card-badge">POPULAR</span>' : '') + '</div>' +
+      '<div class="dst-card-body">' +
+      '<p class="dst-card-country">' + d.country + '</p>' +
+      '<p class="dst-card-name-en">' + d.name_en + '</p>' +
+      '<h3 class="dst-card-name-ja">' + d.name_ja + '</h3>' +
+      '<div class="dst-card-themes">' + tags + '</div>' +
+      '<span class="dst-card-link">詳しく見る ＞</span></div></a>';
+  }
+
+  /* 人気都市: popular === true のみ */
+  var popular = DUMMY_DESTINATIONS.filter(function (d) { return d.popular; });
+  document.getElementById('dst-popular-carousel').innerHTML = popular.map(cardHTML).join('');
+
+  /* テーマタイル(13件) */
+  var themeGrid = document.getElementById('dst-theme-grid');
+  themeGrid.innerHTML = Object.keys(THEME_LABELS).map(function (key) {
+    return '<a href="#dst-search" class="dst-theme-tile dst-reveal is-visible" data-dst-theme-key="' + key + '" data-dst-theme-label="' + THEME_LABELS[key] + '">' +
+      '<img src="' + svgPlaceholder(THEME_LABELS[key], '222222') + '" alt="' + THEME_LABELS[key] + '">' +
+      '<span>' + THEME_LABELS[key] + '</span></a>';
+  }).join('');
+
+  /* 地域ブロック(8地域、各最大8件 + 9件以上なら「もっと見る」) */
+  var regionBlocks = document.getElementById('dst-region-blocks');
+  regionBlocks.innerHTML = Object.keys(REGION_LABELS).map(function (key) {
+    var list = DUMMY_DESTINATIONS.filter(function (d) { return d.region === key; })
+      .sort(function (a, b) { return a.sort_order - b.sort_order; });
+    if (!list.length) return '';
+    var shown = list.slice(0, 8);
+    var more = list.length > 8
+      ? '<a href="#" class="dst-region-more">もっと見る（' + list.length + '件）＞</a>'
+      : '';
+    return '<div class="dst-region-block">' +
+      '<div class="dst-region-block-head dst-reveal is-visible"><h3>' + REGION_LABELS[key] + '</h3>' + more + '</div>' +
+      '<div class="dst-region-grid">' + shown.map(cardHTML).join('') + '</div></div>';
+  }).join('');
+
+  /* ヒーロー・テーマ・地域タイルの背景画像プレースホルダー */
+  document.querySelectorAll('img[data-ph]').forEach(function (img) {
+    img.src = svgPlaceholder(img.dataset.ph, img.dataset.phColor || 'b8860b', !!img.dataset.phWide);
+  });
+})();
+</script>
+<script src="shopify-theme/assets/destinations.js"></script>
+</body>
+</html>

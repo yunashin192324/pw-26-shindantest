@@ -1,0 +1,42 @@
+{%- comment -%}
+  destinations-cta — 一覧/地域/都市ページ共通の締めCTA。
+  subtle=trueで控えめな一行CTA、falseで黒背景のフルCTA。
+  診断ページが未公開のうちはbutton_urlを空にしておけばボタンごと
+  非表示になる(あとで設定するだけで反映)。
+{%- endcomment -%}
+{%- if section.settings.button_url != blank -%}
+  {%- if section.settings.subtle -%}
+    <section class="dst-cta dst-cta-subtle dst-text-center">
+      <div class="dst-container">
+        <p class="dst-reveal">
+          {{ section.settings.heading }}
+          <a href="{{ section.settings.button_url }}" class="dst-card-link">{{ section.settings.button_label }} ＞</a>
+        </p>
+      </div>
+    </section>
+  {%- else -%}
+    <section class="dst-cta dst-cta-full dst-text-center">
+      <div class="dst-container">
+        <p class="dst-eyebrow dst-reveal">{{ section.settings.eyebrow }}</p>
+        <h2 class="dst-reveal dst-reveal-1">{{ section.settings.heading | newline_to_br }}</h2>
+        <div class="dst-cta-row dst-reveal dst-reveal-2">
+          <a href="{{ section.settings.button_url }}" class="dst-btn dst-btn-gold">{{ section.settings.button_label }}</a>
+        </div>
+      </div>
+    </section>
+  {%- endif -%}
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "撮影地 CTA",
+  "settings": [
+    { "type": "checkbox", "id": "subtle", "label": "控えめに表示する", "default": true },
+    { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "Get Started" },
+    { "type": "textarea", "id": "heading", "label": "見出し", "default": "あなたに合う撮影地を探す" },
+    { "type": "text", "id": "button_label", "label": "ボタン文言", "default": "30秒診断" },
+    { "type": "url", "id": "button_url", "label": "ボタンリンク先", "info": "空欄の間はセクション自体が表示されません。" }
+  ],
+  "presets": [{ "name": "撮影地 CTA" }]
+}
+{% endschema %}

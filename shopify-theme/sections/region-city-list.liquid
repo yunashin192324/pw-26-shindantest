@@ -1,0 +1,36 @@
+{%- comment -%}
+  region-city-list — 地域ページの都市一覧。ページのhandleから地域キーを
+  判定し、その地域に属するDestinationを全件(sort_order昇順)表示する
+  (一覧ページと異なりここでは8件キャップなし)。
+{%- endcomment -%}
+{%- assign region_key = page.handle | replace: '-', '_' -%}
+{%- assign region_destinations = shop.metaobjects.destination.values | where: 'region.value', region_key | sort: 'sort_order.value' -%}
+
+<section class="dst-bg-ivory">
+  <div class="dst-container">
+    <div class="dst-section-head dst-reveal">
+      <h2>{{ section.settings.heading }}</h2>
+      <hr class="dst-divider">
+      <p>{{ region_destinations.size }}件の撮影地</p>
+    </div>
+    {%- if region_destinations.size > 0 -%}
+      <div class="dst-region-grid">
+        {%- for destination in region_destinations -%}
+          {% render 'destination-card', destination: destination %}
+        {%- endfor -%}
+      </div>
+    {%- else -%}
+      <p class="dst-text-center">近日公開予定です。</p>
+    {%- endif -%}
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "地域 都市一覧",
+  "settings": [
+    { "type": "text", "id": "heading", "label": "見出し", "default": "都市一覧" }
+  ],
+  "presets": [{ "name": "地域 都市一覧" }]
+}
+{% endschema %}

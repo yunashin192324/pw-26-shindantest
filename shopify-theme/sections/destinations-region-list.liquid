@@ -1,0 +1,54 @@
+{%- comment -%}
+  destinations-region-list — 「地域から選ぶ」。
+  8地域は仕様書の指示によりMetaobject化せずコード側で固定
+  (snippets/destination-region-label.liquid が唯一の情報源)。
+  各地域最大8都市(sort_order昇順)、9都市以上ある場合のみ
+  「もっと見る」を該当の地域ページ(/pages/{region})へ表示する。
+{%- endcomment -%}
+{%- assign region_keys = 'europe,america,asia,oceania,middle_east,africa,south_america,japan' | split: ',' -%}
+{%- assign all_destinations = shop.metaobjects.destination.values -%}
+
+<section id="dst-regions" class="dst-bg-ivory">
+  <div class="dst-container">
+    <div class="dst-section-head dst-reveal">
+      <p class="dst-eyebrow">Region</p>
+      <h2>{{ section.settings.heading }}</h2>
+      <hr class="dst-divider">
+      <p>{{ section.settings.description }}</p>
+    </div>
+
+    {%- for region_key in region_keys -%}
+      {%- assign region_handle = region_key | replace: '_', '-' -%}
+      {%- capture region_label -%}{% render 'destination-region-label', region_key: region_key %}{%- endcapture -%}
+      {%- assign region_label = region_label | strip -%}
+      {%- assign region_destinations = all_destinations | where: 'region.value', region_key | sort: 'sort_order.value' -%}
+
+      {%- if region_destinations.size > 0 -%}
+        <div class="dst-region-block">
+          <div class="dst-region-block-head dst-reveal">
+            <h3>{{ region_label }}</h3>
+            {%- if region_destinations.size > 8 -%}
+              <a href="/pages/{{ region_handle }}" class="dst-region-more">もっと見る（{{ region_destinations.size }}件）＞</a>
+            {%- endif -%}
+          </div>
+          <div class="dst-region-grid">
+            {%- for destination in region_destinations limit: 8 -%}
+              {% render 'destination-card', destination: destination %}
+            {%- endfor -%}
+          </div>
+        </div>
+      {%- endif -%}
+    {%- endfor -%}
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "撮影地一覧 地域から選ぶ",
+  "settings": [
+    { "type": "text", "id": "heading", "label": "見出し", "default": "地域から選ぶ" },
+    { "type": "textarea", "id": "description", "label": "説明文", "default": "世界8つのエリアから撮影地をご覧いただけます。" }
+  ],
+  "presets": [{ "name": "撮影地一覧 地域から選ぶ" }]
+}
+{% endschema %}

@@ -1,0 +1,81 @@
+{%- comment -%}
+  destinations-theme-list — 「テーマから選ぶ」。
+  見出し・画像はブロックごとにテーマエディタで自由編集可能。
+  theme_keyはDestination metaobjectの`themes`フィールドの値と対応させる
+  固定キー（snippets/destination-theme-label.liquidの一覧と一致させる
+  こと）。クリックすると検索セクションへスクロールし、そのテーマで
+  絞り込む(destinations.js の dst:search イベント)。
+{%- endcomment -%}
+<section id="dst-themes">
+  <div class="dst-container">
+    <div class="dst-section-head dst-reveal">
+      <p class="dst-eyebrow">Theme</p>
+      <h2>{{ section.settings.heading }}</h2>
+      <hr class="dst-divider">
+      <p>{{ section.settings.description }}</p>
+    </div>
+    <div class="dst-theme-grid">
+      {%- for block in section.blocks -%}
+        <a
+          href="#dst-search"
+          class="dst-theme-tile dst-reveal"
+          data-dst-theme-key="{{ block.settings.theme_key }}"
+          data-dst-theme-label="{{ block.settings.label }}"
+          {{ block.shopify_attributes }}
+        >
+          {%- if block.settings.image -%}
+            <img
+              src="{{ block.settings.image | image_url: width: 500 }}"
+              srcset="{{ block.settings.image | image_url: width: 350 }} 350w, {{ block.settings.image | image_url: width: 500 }} 500w, {{ block.settings.image | image_url: width: 700 }} 700w"
+              sizes="(min-width: 960px) 20vw, 45vw"
+              alt="{{ block.settings.label | escape }}"
+              loading="lazy"
+              width="500" height="500"
+            >
+          {%- endif -%}
+          <span>{{ block.settings.label }}</span>
+        </a>
+      {%- endfor -%}
+    </div>
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "撮影地一覧 テーマから選ぶ",
+  "settings": [
+    { "type": "text", "id": "heading", "label": "見出し", "default": "テーマから選ぶ" },
+    { "type": "textarea", "id": "description", "label": "説明文", "default": "叶えたい雰囲気から撮影地を探せます。" }
+  ],
+  "blocks": [
+    {
+      "type": "theme",
+      "name": "テーマ",
+      "settings": [
+        { "type": "image_picker", "id": "image", "label": "画像" },
+        { "type": "text", "id": "label", "label": "表示名" },
+        { "type": "text", "id": "theme_key", "label": "テーマキー", "info": "Destination metaobjectの「テーマ」フィールドに入力する値と一致させてください。半角英小文字。" }
+      ]
+    }
+  ],
+  "max_blocks": 20,
+  "default": {
+    "blocks": [
+      { "type": "theme", "settings": { "label": "ビーチ", "theme_key": "beach" } },
+      { "type": "theme", "settings": { "label": "街並み", "theme_key": "streets" } },
+      { "type": "theme", "settings": { "label": "宮殿", "theme_key": "palace" } },
+      { "type": "theme", "settings": { "label": "世界遺産", "theme_key": "heritage" } },
+      { "type": "theme", "settings": { "label": "絶景", "theme_key": "view" } },
+      { "type": "theme", "settings": { "label": "湖", "theme_key": "lake" } },
+      { "type": "theme", "settings": { "label": "砂漠", "theme_key": "desert" } },
+      { "type": "theme", "settings": { "label": "気球", "theme_key": "balloon" } },
+      { "type": "theme", "settings": { "label": "教会", "theme_key": "church" } },
+      { "type": "theme", "settings": { "label": "美術館", "theme_key": "museum" } },
+      { "type": "theme", "settings": { "label": "図書館", "theme_key": "library" } },
+      { "type": "theme", "settings": { "label": "リゾート", "theme_key": "resort" } },
+      { "type": "theme", "settings": { "label": "サンセット", "theme_key": "sunset" } }
+    ]
+  },
+  "presets": [{ "name": "撮影地一覧 テーマから選ぶ" }]
+}
+{% endschema %}

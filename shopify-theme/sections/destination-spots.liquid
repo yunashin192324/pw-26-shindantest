@@ -1,0 +1,46 @@
+{%- comment -%}
+  destination-spots — 撮影スポット。Destination metaobjectの
+  `photo_spots` (JSON: [{name, description}]) が未入力の間は
+  セクションごと非表示になる。
+{%- endcomment -%}
+{%- assign destination = shop.metaobjects.destination.values | where: 'slug.value', page.handle | first -%}
+{%- assign spots = destination.photo_spots.value -%}
+
+{%- if destination and spots.size > 0 -%}
+<section class="dst-bg-ivory">
+  <div class="dst-container">
+    <div class="dst-section-head dst-reveal">
+      <p class="dst-eyebrow">Photo Spots</p>
+      <h2>{{ section.settings.heading }}</h2>
+      <hr class="dst-divider">
+    </div>
+    <div class="dst-spots-grid">
+      {%- for spot in spots -%}
+        <div class="dst-reveal">
+          <div class="dst-spot-media">
+            {%- if destination.hero_image.value -%}
+              <img
+                src="{{ destination.hero_image.value | image_url: width: 600 }}"
+                alt="{{ spot.name | escape }}"
+                loading="lazy"
+                width="600" height="800"
+              >
+            {%- endif -%}
+          </div>
+          <h3 class="dst-spot-name">{{ spot.name }}</h3>
+          <p class="dst-spot-desc">{{ spot.description }}</p>
+        </div>
+      {%- endfor -%}
+    </div>
+  </div>
+</section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "都市 撮影スポット",
+  "settings": [
+    { "type": "text", "id": "heading", "label": "見出し", "default": "撮影スポット" }
+  ]
+}
+{% endschema %}

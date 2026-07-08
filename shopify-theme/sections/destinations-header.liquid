@@ -1,0 +1,33 @@
+{%- comment -%}
+  destinations-header
+  ----------------------------------------------------------------
+  独立したヘッダー。既存の sections/header.liquid (TOP/JOURNAL用) には
+  一切手を加えず、layout/theme.destinations.liquid からのみ使用する。
+{%- endcomment -%}
+<header class="dst-header">
+  <a href="{{ routes.root_url }}" class="dst-logo">
+    {{ section.settings.logo_text }}
+  </a>
+  <nav class="dst-nav-links">
+    <a href="{{ routes.root_url }}pages/destinations"{% if request.path == '/pages/destinations' %} aria-current="page"{% endif %}>撮影地一覧</a>
+    {%- for link in section.settings.main_menu.links -%}
+      <a href="{{ link.url }}">{{ link.title }}</a>
+    {%- endfor -%}
+    {%- if section.settings.cta_url != blank -%}
+      <a href="{{ section.settings.cta_url }}" class="dst-btn dst-btn-sm dst-btn-gold">{{ section.settings.cta_label }}</a>
+    {%- endif -%}
+  </nav>
+  <button class="dst-nav-toggle" aria-label="メニュー" aria-expanded="false"><span></span><span></span><span></span></button>
+</header>
+
+{% schema %}
+{
+  "name": "撮影地ヘッダー",
+  "settings": [
+    { "type": "text", "id": "logo_text", "label": "ロゴ文字", "default": "HIS World Wedding" },
+    { "type": "link_list", "id": "main_menu", "label": "ナビゲーションメニュー" },
+    { "type": "text", "id": "cta_label", "label": "CTAボタン文言", "default": "30秒診断" },
+    { "type": "url", "id": "cta_url", "label": "CTAボタンリンク先", "info": "未設定でもボタンごと非表示になるだけで動作します。後から設定可能。" }
+  ]
+}
+{% endschema %}

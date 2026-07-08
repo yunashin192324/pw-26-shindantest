@@ -1,0 +1,60 @@
+{%- comment -%}
+  destination-intro — 都市の紹介文 + GEOブロック(飛行時間・時差・
+  ベストシーズン・おすすめな人)。AI検索(GEO)が引用しやすいよう、
+  短い名前と値の組み合わせで機械可読に配置する。
+{%- endcomment -%}
+{%- assign destination = shop.metaobjects.destination.values | where: 'slug.value', page.handle | first -%}
+
+{%- if destination -%}
+<section>
+  <div class="dst-container">
+    <div class="dst-split">
+      <div class="dst-split-media dst-reveal">
+        {%- if destination.hero_image.value -%}
+          <img
+            src="{{ destination.hero_image.value | image_url: width: 900 }}"
+            srcset="{{ destination.hero_image.value | image_url: width: 600 }} 600w, {{ destination.hero_image.value | image_url: width: 900 }} 900w"
+            sizes="(min-width: 860px) 50vw, 100vw"
+            alt="{{ destination.name_ja.value | escape }}"
+            loading="lazy"
+            width="900" height="1125"
+          >
+        {%- endif -%}
+      </div>
+      <div class="dst-reveal dst-reveal-1">
+        <p class="dst-eyebrow">About {{ destination.name_en.value }}</p>
+        <h2>{{ destination.name_ja.value }}で撮る、ふたりの物語</h2>
+        <hr class="dst-divider" style="margin-left:0;">
+        <p class="dst-lede">{{ destination.description.value }}</p>
+      </div>
+    </div>
+
+    {%- if destination.flight_time.value != blank or destination.time_difference.value != blank or destination.best_season.value != blank or destination.recommended_for.value != blank -%}
+      <div class="dst-geo-block dst-reveal" style="margin-top:64px;">
+        <dl class="dst-geo-grid">
+          <div class="dst-geo-item"><dt>撮影地情報</dt><dd>{{ destination.country.value }} / {{ destination.name_en.value }}</dd></div>
+          {%- if destination.flight_time.value != blank -%}
+            <div class="dst-geo-item"><dt>飛行時間</dt><dd>{{ destination.flight_time.value }}</dd></div>
+          {%- endif -%}
+          {%- if destination.time_difference.value != blank -%}
+            <div class="dst-geo-item"><dt>時差</dt><dd>{{ destination.time_difference.value }}</dd></div>
+          {%- endif -%}
+          {%- if destination.best_season.value != blank -%}
+            <div class="dst-geo-item"><dt>ベストシーズン</dt><dd>{{ destination.best_season.value }}</dd></div>
+          {%- endif -%}
+          {%- if destination.recommended_for.value != blank -%}
+            <div class="dst-geo-item"><dt>おすすめな人</dt><dd>{{ destination.recommended_for.value }}</dd></div>
+          {%- endif -%}
+        </dl>
+      </div>
+    {%- endif -%}
+  </div>
+</section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "都市 紹介文",
+  "settings": []
+}
+{% endschema %}

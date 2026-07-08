@@ -1,0 +1,62 @@
+{%- comment -%}
+  destination-plans — おすすめプラン。
+  Destinationの`slug`と同じhandleのコレクションが実在すれば(現状は
+  hawaii/danang/londonのみ)その商品を実際に表示する。一致する
+  コレクションがない都市(大半)は、実商品が用意され次第すぐ差し替え
+  られるよう同じ見た目のプレースホルダーを仮表示する
+  （仕様確認の上、暫定的にダミー表示として実装）。
+{%- endcomment -%}
+{%- assign destination = shop.metaobjects.destination.values | where: 'slug.value', page.handle | first -%}
+
+{%- if destination -%}
+  {%- assign matched_collection = collections[destination.slug.value] -%}
+  <section>
+    <div class="dst-container">
+      <div class="dst-section-head dst-reveal">
+        <p class="dst-eyebrow">Plan</p>
+        <h2>{{ section.settings.heading }}</h2>
+        <hr class="dst-divider">
+      </div>
+
+      {%- if matched_collection and matched_collection.products.size > 0 -%}
+        <div class="dst-plans-grid">
+          {%- for product in matched_collection.products limit: 3 -%}
+            <a href="{{ product.url }}" class="dst-plan-card dst-reveal">
+              <h3>{{ product.title }}</h3>
+              <p class="dst-plan-price">{{ product.price | money }}〜</p>
+              <p>{{ product.description | strip_html | truncate: 70 }}</p>
+              <span class="dst-card-link" style="margin-top:16px;display:inline-block;">詳しく見る ＞</span>
+            </a>
+          {%- endfor -%}
+        </div>
+      {%- else -%}
+        <div class="dst-plans-grid">
+          <div class="dst-plan-card dst-reveal">
+            <span class="dst-plans-placeholder-badge">近日公開</span>
+            <h3>スタンダードプラン</h3>
+            <p class="dst-plan-price">¥ ---,---〜</p>
+            <p>撮影・衣装・データ納品を含む基本プランです。詳細な内容・お見積りはお問い合わせください。</p>
+          </div>
+          <div class="dst-plan-card dst-reveal dst-reveal-1">
+            <span class="dst-plans-placeholder-badge">近日公開</span>
+            <h3>プレミアムプラン</h3>
+            <p class="dst-plan-price">¥ ---,---〜</p>
+            <p>複数ロケーション・ヘアメイク・アルバム制作などを含む上質なプランです。</p>
+          </div>
+          <p class="dst-plan-note dst-text-center" style="grid-column:1/-1;">
+            {{ destination.name_ja.value }}の正式なプラン・料金は準備中です。ご興味のある方はお気軽にご相談ください。
+          </p>
+        </div>
+      {%- endif -%}
+    </div>
+  </section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "都市 おすすめプラン",
+  "settings": [
+    { "type": "text", "id": "heading", "label": "見出し", "default": "おすすめプラン" }
+  ]
+}
+{% endschema %}

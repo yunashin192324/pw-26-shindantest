@@ -1,0 +1,24 @@
+{%- comment -%}
+  region-intro — 地域紹介文。完全に自由編集のリッチテキストブロック。
+  地域固有の言い回しは1件ずつ管理画面で書くしかないため、あらかじめの
+  文章は用意していない(空欄なら非表示)。
+{%- endcomment -%}
+{%- if section.settings.body != blank -%}
+<section>
+  <div class="dst-container" style="max-width:760px;">
+    <div class="dst-reveal">
+      {{ section.settings.body }}
+    </div>
+  </div>
+</section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "地域 紹介文",
+  "settings": [
+    { "type": "richtext", "id": "body", "label": "紹介文" }
+  ],
+  "presets": [{ "name": "地域 紹介文" }]
+}
+{% endschema %}

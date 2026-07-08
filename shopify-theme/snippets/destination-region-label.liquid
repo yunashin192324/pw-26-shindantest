@@ -1,0 +1,25 @@
+{%- comment -%}
+  destination-region-label
+  ----------------------------------------------------------------
+  地域(region)は仕様書の指示により Metaobject化せずコード側で固定。
+  8つの地域キーと表示ラベル(英語表記)の対応はここ1箇所にのみ定義し、
+  destinations-region-list / region-hero / region-intro / 検索JSON など
+  すべてがこのsnippetを参照する（表記ゆれ防止・保守性のため）。
+
+  Params:
+    region_key — required, 例: 'middle_east'
+  Usage:
+    {%- capture region_label -%}{% render 'destination-region-label', region_key: region_key %}{%- endcapture -%}
+    {%- assign region_label = region_label | strip -%}
+{%- endcomment -%}
+{%- case region_key -%}
+  {%- when 'europe' -%}Europe
+  {%- when 'america' -%}America
+  {%- when 'asia' -%}Asia
+  {%- when 'oceania' -%}Oceania
+  {%- when 'middle_east' -%}Middle East
+  {%- when 'africa' -%}Africa
+  {%- when 'south_america' -%}South America
+  {%- when 'japan' -%}Japan
+  {%- else -%}{{ region_key | replace: '_', ' ' | capitalize }}
+{%- endcase -%}
