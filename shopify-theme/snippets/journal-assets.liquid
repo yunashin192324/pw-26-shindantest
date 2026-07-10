@@ -1,0 +1,31 @@
+{%- comment -%}
+  journal-assets
+  ----------------------------------------------------------------
+  Loads the fonts + CSS/JS this feature needs, without requiring any
+  edit to layout/theme.liquid. Rendered once from journal-hero.liquid
+  and article-hero.liquid — the guaranteed-first section on the two
+  JOURNAL templates — so it's present on every JOURNAL page exactly
+  once per request.
+
+  Your live theme (the one this is being added to) almost certainly
+  already loads: the Cormorant Garamond / Noto Sans JP fonts, its main
+  stylesheet (defining --black/--gold/.btn/.card/… — same tokens this
+  feature relies on), and a script handling header scroll state, the
+  mobile nav toggle, and the .reveal fade-in. Loading those AGAIN here
+  would double up JS event listeners (e.g. the hamburger menu opening
+  and immediately re-closing) — so only journal.css/journal.js, which
+  are genuinely new, are included by default.
+
+  If this is going into a brand-new/empty theme with none of that
+  already present, uncomment the four lines below instead.
+{%- endcomment -%}
+{%- comment -%}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ 'theme.css' | asset_url }}">
+<script src="{{ 'theme.js' | asset_url }}" defer></script>
+{%- endcomment -%}
+
+<link rel="stylesheet" href="{{ 'journal.css' | asset_url }}">
+<script src="{{ 'journal.js' | asset_url }}" defer></script>

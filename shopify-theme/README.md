@@ -11,6 +11,25 @@ white/black/gold tokens, Cormorant Garamond + Noto Sans JP, `.container`,
 same stylesheet/script, copied verbatim; `assets/journal.css` /
 `assets/journal.js` only *add* JOURNAL-specific rules on top.
 
+## Installing into an existing live theme (no theme.liquid edit needed)
+
+Copy these folders/files into your live theme's "Edit code" as new files —
+none of them exist in your theme yet, so there's nothing to merge:
+
+- `sections/journal-*.liquid`, `sections/article-*.liquid` → add as new Sections
+- `snippets/journal-*.liquid` → add as new Snippets
+- `templates/blog.json`, `templates/article.json` → add as new Templates
+- `assets/journal.css`, `assets/journal.js` → add as new Assets
+
+Do **not** copy `layout/theme.liquid`, `assets/theme.css`, `assets/theme.js`,
+or `config/settings_schema.json` over your existing files — your live theme
+already has its own versions of all four, and overwriting them would break
+the header/footer, cart, search, and other pages. `snippets/journal-assets.liquid`
+loads the two new stylesheet/script files itself from inside the JOURNAL
+sections, so you don't need to touch `theme.liquid` at all. `config/`
+is only relevant if you're setting this up as a brand-new empty theme —
+see the comment inside `layout/theme.liquid` for that path.
+
 ## Editor workflow (title / eyecatch / body only)
 
 Creating an article only requires the three standard Shopify fields:
@@ -88,11 +107,14 @@ editors never maintain it separately.
 ## SEO / AIO / GEO
 
 `snippets/journal-schema.liquid` outputs `Article` + `BreadcrumbList`
-JSON-LD on every article. `layout/theme.liquid` sets canonical, OGP and
-Twitter Card tags for every page, using the article's own image on
-article pages. The POINT box / GEO block / comparison table markup above
-exists specifically so AI answer engines and generative search (AIO/GEO)
-have short, structured, quotable facts to lift from each article.
+JSON-LD on every article, rendered from `article-hero.liquid` — this works
+regardless of which `layout/theme.liquid` you're using. `layout/theme.liquid`
+in this package additionally sets canonical/OGP/Twitter Card tags, but if
+you're installing into an existing theme, your theme's own layout almost
+certainly already does this sitewide, so there's nothing extra to add.
+The POINT box / GEO block / comparison table markup above exists
+specifically so AI answer engines and generative search (AIO/GEO) have
+short, structured, quotable facts to lift from each article.
 
 ## About the `/journal/` URL
 
