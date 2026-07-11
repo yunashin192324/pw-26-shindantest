@@ -19,16 +19,22 @@ none of them exist in your theme yet, so there's nothing to merge:
 - `sections/journal-*.liquid`, `sections/article-*.liquid` → add as new Sections
 - `snippets/journal-*.liquid` → add as new Snippets
 - `templates/blog.journal.json`, `templates/article.journal.json` → add as new Templates
-- `assets/journal.css`, `assets/journal.js` → add as new Assets
+- `assets/journal.css`, `assets/journal.js`, `assets/theme.css`, `assets/theme.js` → add as new Assets
 
-Do **not** copy `layout/theme.liquid`, `assets/theme.css`, `assets/theme.js`,
-or `config/settings_schema.json` over your existing files — your live theme
-already has its own versions of all four, and overwriting them would break
-the header/footer, cart, search, and other pages. `snippets/journal-assets.liquid`
-loads the two new stylesheet/script files itself from inside the JOURNAL
-sections, so you don't need to touch `theme.liquid` at all. `config/`
-is only relevant if you're setting this up as a brand-new empty theme —
-see the comment inside `layout/theme.liquid` for that path.
+`snippets/journal-assets.liquid` loads all four of those assets (plus the
+Google Fonts) itself from inside the JOURNAL sections, so you don't need to
+touch `theme.liquid` at all — this makes JOURNAL render correctly even on a
+theme that doesn't already carry this design system (e.g. a fresh Dawn test
+store). `layout/theme.liquid` and `config/settings_schema.json` still don't
+need to be copied over your existing files either way.
+
+**Only if** you're installing this into a theme that's already a copy of the
+TOP page design (same `--black`/`--gold` tokens, same header/footer/`.reveal`
+behaviour already loaded sitewide) should you open `snippets/journal-assets.liquid`
+and comment out the `theme.css`/`theme.js` lines — loading a second copy of
+those on a theme that already has them would double up JS event listeners
+(e.g. the mobile menu opening and immediately re-closing). `journal.css`/
+`journal.js` stay either way; they're genuinely new.
 
 ### Template names — use the `.journal.` suffix
 
