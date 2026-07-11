@@ -18,7 +18,7 @@ none of them exist in your theme yet, so there's nothing to merge:
 
 - `sections/journal-*.liquid`, `sections/article-*.liquid` → add as new Sections
 - `snippets/journal-*.liquid` → add as new Snippets
-- `templates/blog.json`, `templates/article.json` → add as new Templates
+- `templates/blog.journal.json`, `templates/article.journal.json` → add as new Templates
 - `assets/journal.css`, `assets/journal.js` → add as new Assets
 
 Do **not** copy `layout/theme.liquid`, `assets/theme.css`, `assets/theme.js`,
@@ -29,6 +29,26 @@ loads the two new stylesheet/script files itself from inside the JOURNAL
 sections, so you don't need to touch `theme.liquid` at all. `config/`
 is only relevant if you're setting this up as a brand-new empty theme —
 see the comment inside `layout/theme.liquid` for that path.
+
+### Template names — use the `.journal.` suffix
+
+Your live theme almost certainly already ships a default `templates/blog.json`
+and `templates/article.json` for its existing blog. Don't overwrite those —
+add these as **alternate templates** instead, named `blog.journal.json` and
+`article.journal.json` (Shopify's dot-suffix convention; the content is
+identical either way, only the filename differs). When creating the file in
+"Edit code", just type that exact filename — Shopify infers the resource
+type (blog / article) from the part before the first dot.
+
+Once added, Shopify shows them as a template named **"journal"** that you
+select explicitly in two places:
+1. **The JOURNAL blog itself** — Online Store → Blog posts → Manage blogs →
+   open the JOURNAL blog → "Theme template" → choose `journal`.
+2. **Every article you create in it** — on the article's edit page, find
+   "Theme template" and choose `journal`. This is per-article, not inherited
+   from the blog, so it's worth checking each time until it becomes habit —
+   an article left on the default template will render with your theme's
+   normal blog post look instead of JOURNAL.
 
 ## Editor workflow (title / eyecatch / body only)
 
