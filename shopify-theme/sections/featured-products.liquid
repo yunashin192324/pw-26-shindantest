@@ -1,0 +1,68 @@
+{%- comment -%}
+  featured-products — "人気のプラン" grid on the TOP page. Each block
+  picks any product directly (type: product), so merchants can
+  feature plans across different destinations without a shared
+  collection. Badge/availability follow the same product-tag
+  convention as collection-products.liquid ("人気" / "即予約").
+{%- endcomment -%}
+{%- if section.settings.show_section and section.blocks.size > 0 -%}
+  <section id="plans">
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="eyebrow">Popular Plans</p>
+        <h2>{{ section.settings.heading }}</h2>
+        <div class="divider-gold"></div>
+        {%- if section.settings.body != blank -%}<p>{{ section.settings.body }}</p>{%- endif -%}
+      </div>
+      <div class="grid grid-3">
+        {%- for block in section.blocks -%}
+          {%- assign product = block.settings.product -%}
+          {%- if product -%}
+            <a href="{{ product.url }}" class="card reveal{% if forloop.index0 > 0 %} reveal-{{ forloop.index0 | modulo: 4 }}{% endif %}" {{ block.shopify_attributes }}>
+              <div class="card-media">
+                {%- if product.tags contains '人気' -%}<span class="card-badge gold">人気No.1</span>{%- endif -%}
+                {%- if product.featured_image -%}
+                  <img src="{{ product.featured_image | image_url: width: 800 }}" alt="{{ product.featured_image.alt | default: product.title | escape }}" loading="lazy" width="800" height="1000">
+                {%- endif -%}
+              </div>
+              <div class="card-body">
+                <p class="card-region">{{ product.collections.first.title }}</p>
+                <h3 class="card-title">{{ product.title }}</h3>
+                {%- if product.description != blank -%}<p class="card-desc">{{ product.description | strip_html | truncate: 60 }}</p>{%- endif -%}
+                {%- if product.tags contains '即予約' -%}
+                  <span class="avail-tag instant">即予約できます</span>
+                {%- else -%}
+                  <span class="avail-tag confirm">現地確認後ご回答</span>
+                {%- endif -%}
+                <div class="card-foot">
+                  <span class="card-price">{{ product.price | money }}<small>税込 / 2名</small></span>
+                  <span class="card-link">詳細を見る ＞</span>
+                </div>
+              </div>
+            </a>
+          {%- endif -%}
+        {%- endfor -%}
+      </div>
+    </div>
+  </section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "人気のプラン",
+  "settings": [
+    { "type": "checkbox", "id": "show_section", "label": "表示する", "default": true },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "人気のフォトウェディングプラン" },
+    { "type": "richtext", "id": "body", "label": "本文" }
+  ],
+  "blocks": [
+    {
+      "type": "plan",
+      "name": "プラン",
+      "settings": [{ "type": "product", "id": "product", "label": "商品" }]
+    }
+  ],
+  "max_blocks": 6,
+  "presets": [{ "name": "人気のプラン" }]
+}
+{% endschema %}

@@ -1,0 +1,46 @@
+{%- comment -%}
+  cta-band — generic closing dark CTA with up to 3 buttons, reusing
+  .bg-black.text-center. Used to close the TOP, Dress and FAQ pages.
+{%- endcomment -%}
+{%- if section.settings.show_section -%}
+  <section class="bg-black text-center">
+    <div class="container">
+      {%- if section.settings.eyebrow != blank -%}<p class="eyebrow reveal">{{ section.settings.eyebrow }}</p>{%- endif -%}
+      <h2 class="reveal reveal-1">{{ section.settings.heading | newline_to_br }}</h2>
+      {%- if section.blocks.size > 0 -%}
+        <div class="cta-row reveal reveal-2" style="justify-content:center;margin-top:32px;">
+          {%- for block in section.blocks -%}
+            <a href="{{ block.settings.url }}" class="btn {% if block.settings.style == 'gold' %}btn-gold{% else %}btn-outline-light{% endif %}" {{ block.shopify_attributes }}>{{ block.settings.label }}</a>
+          {%- endfor -%}
+        </div>
+      {%- endif -%}
+    </div>
+  </section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "最後のCTA",
+  "settings": [
+    { "type": "checkbox", "id": "show_section", "label": "表示する", "default": true },
+    { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "Get Started" },
+    { "type": "textarea", "id": "heading", "label": "見出し", "default": "まずは、あなたに合う撮影地から。" }
+  ],
+  "blocks": [
+    {
+      "type": "button",
+      "name": "ボタン",
+      "settings": [
+        { "type": "text", "id": "label", "label": "文言", "default": "プランを見る" },
+        { "type": "url", "id": "url", "label": "リンク先" },
+        { "type": "select", "id": "style", "label": "スタイル", "options": [
+            { "value": "gold", "label": "ゴールド（塗り）" },
+            { "value": "outline", "label": "アウトライン" }
+          ], "default": "outline" }
+      ]
+    }
+  ],
+  "max_blocks": 3,
+  "presets": [{ "name": "最後のCTA" }]
+}
+{% endschema %}

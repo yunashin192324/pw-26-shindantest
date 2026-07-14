@@ -1,0 +1,45 @@
+{%- comment -%}
+  page-hero — sub-page hero (About / Dress / FAQ). Same .page-hero
+  component as the product/collection sub-page heroes. Includes its
+  own breadcrumb + BreadcrumbList schema so every Page using this
+  section is SEO-complete on its own.
+{%- endcomment -%}
+{%- render 'page-schema', page: page -%}
+
+<section class="page-hero">
+  <div class="hero-media">
+    {%- if section.settings.background_image -%}
+      <img
+        src="{{ section.settings.background_image | image_url: width: 2400 }}"
+        srcset="{{ section.settings.background_image | image_url: width: 1200 }} 1200w, {{ section.settings.background_image | image_url: width: 1800 }} 1800w, {{ section.settings.background_image | image_url: width: 2400 }} 2400w"
+        sizes="100vw"
+        alt="{{ section.settings.background_image.alt | default: page.title | escape }}"
+        loading="eager"
+        width="2400" height="1350"
+      >
+    {%- endif -%}
+  </div>
+  <div class="hero-content">
+    {%- if section.settings.eyebrow != blank -%}<p class="eyebrow">{{ section.settings.eyebrow }}</p>{%- endif -%}
+    {%- assign heading = section.settings.heading | default: page.title -%}
+    <h1>{{ heading | newline_to_br }}</h1>
+    {%- if section.settings.lede != blank -%}<p class="lede">{{ section.settings.lede }}</p>{%- endif -%}
+  </div>
+</section>
+
+{%- if section.settings.show_breadcrumb -%}
+  {% render 'page-breadcrumb', page: page %}
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "ページヒーロー",
+  "settings": [
+    { "type": "image_picker", "id": "background_image", "label": "背景画像" },
+    { "type": "text", "id": "eyebrow", "label": "英字見出し" },
+    { "type": "textarea", "id": "heading", "label": "見出し", "info": "未入力の場合はページタイトルを表示します。" },
+    { "type": "textarea", "id": "lede", "label": "リード文" },
+    { "type": "checkbox", "id": "show_breadcrumb", "label": "パンくずリストを表示する", "default": true }
+  ]
+}
+{% endschema %}
