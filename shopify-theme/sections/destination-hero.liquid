@@ -5,7 +5,19 @@
   共有しないため、この1行のlookupはdestination-intro / spots / plans /
   faq の各セクションでも同様に繰り返している。
 {%- endcomment -%}
-{%- assign destination = shop.metaobjects.destination.values | where: 'slug.value', page.handle | first -%}
+{%- comment -%}
+  where: 'slug.value', page.handle はストアによってはMetaobjectのdrop
+  解決の相性で一致しないことが実機検証で確認されたため、for+ifの手動
+  ループで該当の都市を1件特定する（直接のdot-access d.slug.value は
+  正しく動くことを確認済み）。
+{%- endcomment -%}
+{%- assign destination = blank -%}
+{%- for d in shop.metaobjects.destination.values -%}
+  {%- if d.slug.value == page.handle -%}
+    {%- assign destination = d -%}
+    {%- break -%}
+  {%- endif -%}
+{%- endfor -%}
 
 {%- if destination -%}
   {%- capture region_label -%}{% render 'destination-region-label', region_key: destination.region.value %}{%- endcapture -%}

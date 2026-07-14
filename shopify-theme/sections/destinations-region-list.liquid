@@ -4,6 +4,13 @@
   (snippets/destination-region-label.liquid が唯一の情報源)。
   各地域最大8都市(sort_order昇順)、9都市以上ある場合のみ
   「もっと見る」を該当の地域ページ(/pages/{region})へ表示する。
+
+  注意: where/sortフィルターに 'region.value' のような文字列を渡す
+  書き方は、ストアによってはMetaobjectのdrop解決の相性で0件になる
+  ことが実機検証で確認された（`{{ d.region.value }}` の直接参照は
+  正しく動くが、フィルター文字列引数経由だと一致しない）。そのため
+  ここでは where/sort を一切使わず、for + if の手動ループと選択ソート
+  だけで実装している。
 {%- endcomment -%}
 {%- assign region_keys = 'europe,america,asia,oceania,middle_east,africa,south_america,japan' | split: ',' -%}
 {%- assign all_destinations = shop.metaobjects.destination.values -%}
@@ -21,19 +28,43 @@
       {%- assign region_handle = region_key | replace: '_', '-' -%}
       {%- capture region_label -%}{% render 'destination-region-label', region_key: region_key %}{%- endcapture -%}
       {%- assign region_label = region_label | strip -%}
-      {%- assign region_destinations = all_destinations | where: 'region.value', region_key | sort: 'sort_order.value' -%}
 
-      {%- if region_destinations.size > 0 -%}
+      {%- comment -%} 1st pass: この地域に該当する件数を数える {%- endcomment -%}
+      {%- assign region_count = 0 -%}
+      {%- for d in all_destinations -%}
+        {%- if d.region.value == region_key -%}
+          {%- assign region_count = region_count | plus: 1 -%}
+        {%- endif -%}
+      {%- endfor -%}
+
+      {%- if region_count > 0 -%}
         <div class="dst-region-block">
           <div class="dst-region-block-head dst-reveal">
             <h3>{{ region_label }}</h3>
-            {%- if region_destinations.size > 8 -%}
-              <a href="/pages/{{ region_handle }}" class="dst-region-more">もっと見る（{{ region_destinations.size }}件）＞</a>
+            {%- if region_count > 8 -%}
+              <a href="/pages/{{ region_handle }}" class="dst-region-more">もっと見る（{{ region_count }}件）＞</a>
             {%- endif -%}
           </div>
           <div class="dst-region-grid">
-            {%- for destination in region_destinations limit: 8 -%}
-              {% render 'destination-card', destination: destination %}
+            {%- comment -%} 2nd pass: sort_order昇順に最大8件、選択ソートで描画 {%- endcomment -%}
+            {%- assign rendered_slugs = '' -%}
+            {%- assign render_max = region_count | at_most: 8 -%}
+            {%- for i in (1..render_max) -%}
+              {%- assign min_sort_order = blank -%}
+              {%- assign min_destination = blank -%}
+              {%- for d in all_destinations -%}
+                {%- assign already_rendered = rendered_slugs contains d.slug.value -%}
+                {%- if d.region.value == region_key and already_rendered == false -%}
+                  {%- if min_sort_order == blank or d.sort_order.value < min_sort_order -%}
+                    {%- assign min_sort_order = d.sort_order.value -%}
+                    {%- assign min_destination = d -%}
+                  {%- endif -%}
+                {%- endif -%}
+              {%- endfor -%}
+              {%- if min_destination != blank -%}
+                {% render 'destination-card', destination: min_destination %}
+                {%- assign rendered_slugs = rendered_slugs | append: min_destination.slug.value | append: ',' -%}
+              {%- endif -%}
             {%- endfor -%}
           </div>
         </div>

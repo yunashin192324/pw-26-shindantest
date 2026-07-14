@@ -6,7 +6,18 @@
   られるよう同じ見た目のプレースホルダーを仮表示する
   （仕様確認の上、暫定的にダミー表示として実装）。
 {%- endcomment -%}
-{%- assign destination = shop.metaobjects.destination.values | where: 'slug.value', page.handle | first -%}
+{%- comment -%}
+  where: 'slug.value', page.handle はストアによってはMetaobjectのdrop
+  解決の相性で一致しないことが実機検証で確認されたため、for+ifの手動
+  ループで該当の都市を1件特定する。
+{%- endcomment -%}
+{%- assign destination = blank -%}
+{%- for d in shop.metaobjects.destination.values -%}
+  {%- if d.slug.value == page.handle -%}
+    {%- assign destination = d -%}
+    {%- break -%}
+  {%- endif -%}
+{%- endfor -%}
 
 {%- if destination -%}
   {%- assign matched_collection = collections[destination.slug.value] -%}

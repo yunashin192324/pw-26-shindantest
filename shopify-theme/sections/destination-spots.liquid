@@ -3,7 +3,18 @@
   `photo_spots` (JSON: [{name, description}]) が未入力の間は
   セクションごと非表示になる。
 {%- endcomment -%}
-{%- assign destination = shop.metaobjects.destination.values | where: 'slug.value', page.handle | first -%}
+{%- comment -%}
+  where: 'slug.value', page.handle はストアによってはMetaobjectのdrop
+  解決の相性で一致しないことが実機検証で確認されたため、for+ifの手動
+  ループで該当の都市を1件特定する。
+{%- endcomment -%}
+{%- assign destination = blank -%}
+{%- for d in shop.metaobjects.destination.values -%}
+  {%- if d.slug.value == page.handle -%}
+    {%- assign destination = d -%}
+    {%- break -%}
+  {%- endif -%}
+{%- endfor -%}
 {%- assign spots = destination.photo_spots.value -%}
 
 {%- if destination and spots.size > 0 -%}

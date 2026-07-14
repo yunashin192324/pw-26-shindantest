@@ -3,10 +3,26 @@
   フィールドがtrueのものだけを `sort_order` 昇順で横スクロール表示する。
   PCで6枚程度見える幅にカード幅をCSS側で調整済み、スマホはネイティブ
   横スワイプ（JS不要）。
-{%- endcomment -%}
-{%- assign popular_destinations = shop.metaobjects.destination.values | where: 'popular.value', true | sort: 'sort_order.value' -%}
 
-{%- if popular_destinations.size > 0 -%}
+  注意: `shop.metaobjects.destination.values | where: 'popular.value', true`
+  のように、where/sortフィルターに `'field.value'` という文字列を渡す
+  書き方は、ストアによってはMetaobjectのdrop解決の相性で0件になる
+  ことが実機検証で確認された（`{{ d.popular.value }}` の直接参照は
+  正しく動くが、フィルター文字列引数経由だと一致しない）。そのため
+  ここでは where/sort を一切使わず、for + if の手動ループと選択ソート
+  だけで実装している。
+{%- endcomment -%}
+{%- assign all_destinations = shop.metaobjects.destination.values -%}
+
+{%- comment -%} 1st pass: 該当件数を数える {%- endcomment -%}
+{%- assign popular_count = 0 -%}
+{%- for d in all_destinations -%}
+  {%- if d.popular.value -%}
+    {%- assign popular_count = popular_count | plus: 1 -%}
+  {%- endif -%}
+{%- endfor -%}
+
+{%- if popular_count > 0 -%}
 <section id="dst-popular">
   <div class="dst-container">
     <div class="dst-section-head dst-reveal">
@@ -18,8 +34,24 @@
   </div>
   <div class="dst-container">
     <div class="dst-carousel">
-      {%- for destination in popular_destinations -%}
-        {% render 'destination-card', destination: destination, show_badge: true %}
+      {%- comment -%} 2nd pass: sort_order昇順に1件ずつ選択して描画（選択ソート） {%- endcomment -%}
+      {%- assign rendered_slugs = '' -%}
+      {%- for i in (1..popular_count) -%}
+        {%- assign min_sort_order = blank -%}
+        {%- assign min_destination = blank -%}
+        {%- for d in all_destinations -%}
+          {%- assign already_rendered = rendered_slugs contains d.slug.value -%}
+          {%- if d.popular.value and already_rendered == false -%}
+            {%- if min_sort_order == blank or d.sort_order.value < min_sort_order -%}
+              {%- assign min_sort_order = d.sort_order.value -%}
+              {%- assign min_destination = d -%}
+            {%- endif -%}
+          {%- endif -%}
+        {%- endfor -%}
+        {%- if min_destination != blank -%}
+          {% render 'destination-card', destination: min_destination, show_badge: true %}
+          {%- assign rendered_slugs = rendered_slugs | append: min_destination.slug.value | append: ',' -%}
+        {%- endif -%}
       {%- endfor -%}
     </div>
   </div>

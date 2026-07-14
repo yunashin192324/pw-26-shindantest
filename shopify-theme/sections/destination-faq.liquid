@@ -1,8 +1,21 @@
 {%- comment -%}
   destination-faq — よくある質問(destination.faqsが空なら非表示)と、
   同じ地域の関連都市への内部リンク(GEO/回遊性向上)。
+
+  注意: where/reject/sortフィルターに 'slug.value' 'region.value'
+  のような文字列を渡す書き方は、ストアによってはMetaobjectのdrop
+  解決の相性で一致しないことが実機検証で確認された（直接のdot-access
+  d.region.value 等は正しく動くことを確認済み）。そのためこのファイル
+  では where/reject/sort を一切使わず、for + if の手動ループと
+  選択ソートだけで実装している。
 {%- endcomment -%}
-{%- assign destination = shop.metaobjects.destination.values | where: 'slug.value', page.handle | first -%}
+{%- assign destination = blank -%}
+{%- for d in shop.metaobjects.destination.values -%}
+  {%- if d.slug.value == page.handle -%}
+    {%- assign destination = d -%}
+    {%- break -%}
+  {%- endif -%}
+{%- endfor -%}
 
 {%- if destination -%}
   {%- assign faqs = destination.faqs.value -%}
@@ -28,8 +41,16 @@
     </section>
   {%- endif -%}
 
-  {%- assign related = shop.metaobjects.destination.values | where: 'region.value', destination.region.value | reject: 'slug.value', destination.slug.value | sort: 'sort_order.value' -%}
-  {%- if related.size > 0 -%}
+  {%- assign all_destinations = shop.metaobjects.destination.values -%}
+  {%- comment -%} 1st pass: 同じ地域・自分以外の件数を数える {%- endcomment -%}
+  {%- assign related_count = 0 -%}
+  {%- for d in all_destinations -%}
+    {%- if d.region.value == destination.region.value and d.slug.value != destination.slug.value -%}
+      {%- assign related_count = related_count | plus: 1 -%}
+    {%- endif -%}
+  {%- endfor -%}
+
+  {%- if related_count > 0 -%}
     <section class="dst-bg-ivory">
       <div class="dst-container">
         <div class="dst-section-head dst-reveal">
@@ -38,8 +59,25 @@
           <hr class="dst-divider">
         </div>
         <div class="dst-region-grid">
-          {%- for other in related limit: 4 -%}
-            {% render 'destination-card', destination: other %}
+          {%- comment -%} 2nd pass: sort_order昇順に最大4件、選択ソートで描画 {%- endcomment -%}
+          {%- assign rendered_slugs = '' -%}
+          {%- assign render_max = related_count | at_most: 4 -%}
+          {%- for i in (1..render_max) -%}
+            {%- assign min_sort_order = blank -%}
+            {%- assign min_destination = blank -%}
+            {%- for d in all_destinations -%}
+              {%- assign already_rendered = rendered_slugs contains d.slug.value -%}
+              {%- if d.region.value == destination.region.value and d.slug.value != destination.slug.value and already_rendered == false -%}
+                {%- if min_sort_order == blank or d.sort_order.value < min_sort_order -%}
+                  {%- assign min_sort_order = d.sort_order.value -%}
+                  {%- assign min_destination = d -%}
+                {%- endif -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {%- if min_destination != blank -%}
+              {% render 'destination-card', destination: min_destination %}
+              {%- assign rendered_slugs = rendered_slugs | append: min_destination.slug.value | append: ',' -%}
+            {%- endif -%}
           {%- endfor -%}
         </div>
       </div>
