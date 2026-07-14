@@ -18,7 +18,7 @@ related-products carousel) — both are loaded only on `template.name ==
 | # | File | Purpose |
 | - | --- | --- |
 | ① | `sections/product-hero.liquid` | Full-bleed visual, name, catchcopy, price, Appointo CTA, scroll cue |
-| — | `sections/product-booking.liquid` | Appointo "buy box" — sits directly under the hero, buy-box position |
+| — | `sections/product-booking.liquid` | Appointo → Shopifyカート → 標準チェックアウトの起点。"buy box", sits directly under the hero |
 | ② | `sections/product-gallery.liquid` | Horizontal-scroll photo gallery |
 | ③ | `sections/product-about.liquid` | Plan overview / feature tags |
 | ④ | `sections/product-features.liquid` | Icon list of what's included (時間・カット数・レタッチ…) |
@@ -59,11 +59,61 @@ Theme Editor — no code changes for day-to-day content edits.
    Reuse an existing product's template as a starting point via "Copy
    from another template" in the same dropdown to avoid rebuilding
    from scratch each time.
-6. Once **Appointo** is installed, open the "予約（Appointo）" section →
-   *Add block* → *Apps* → add the Appointo booking block. Until then the
-   section shows a lightweight date/time/guests placeholder plus the
-   "空き状況を問い合わせる" fallback link (edit its URL in the section
-   settings).
+6. Decide the booking type and tag the product accordingly (see
+   "予約・決済フロー" below): add the **`即予約`** tag for instant
+   booking, or leave it untagged for リクエスト予約. This one tag also
+   drives the badge shown on the hero, this section, collection cards,
+   featured-plan cards, and the diagnosis result — no separate config.
+7. Once **Appointo** is installed, open the "予約（Appointo → カート →
+   チェックアウト）" section → *Add block* → *Apps* → add the Appointo
+   booking block. Until then the section shows a lightweight
+   date/time placeholder plus a working fallback (a real Add to Cart
+   button for 即予約 products, an inquiry link for リクエスト予約 ones).
+
+## 予約・決済フロー (booking → payment flow)
+
+```
+撮影地一覧（Collection） → 商品ページ（Product） → Appointoで日時選択
+  → Shopifyカート → Shopify標準チェックアウト → 決済完了 → 予約確定
+```
+
+Appointo owns date/time selection; **Shopify's standard cart and
+checkout own payment** — this theme never builds a competing "buy"
+mechanism. `product-booking.liquid` wraps everything in a real
+`{% form 'product', product %}`, so submitting it is a normal
+`/cart/add` request (with `return_to` set to `/cart`), exactly what
+Shopify's own Add to Cart button would do. Once Appointo is installed,
+its block renders *inside* that same form (via the section's `"@app"`
+block slot + `{% render block %}`), so whatever hidden inputs it writes
+for the selected date/time are submitted as line-item properties along
+with the add-to-cart request — nothing about the standard flow is
+overridden or duplicated.
+
+**Two booking types, one tag** (`即予約` on the product):
+
+| | `即予約` tag present | no `即予約` tag (= リクエスト予約) |
+| --- | --- | --- |
+| Badge | 即予約 | リクエスト予約 |
+| `product-booking.liquid` behaviour | Renders the real product form + "カートに追加して予約する" button → `/cart` → checkout → payment → booking confirmed immediately | No competing button rendered by default (Appointo's own "request to book" UI, once installed, submits itself); shows an explanatory note instead — 手配課 confirms availability afterwards, **no customer contact happens** |
+| Fallback (Appointo not installed yet) | Working Add to Cart button | Inquiry link (`request_button_label` / `fallback_url` settings) |
+
+Toggle **"このセクション標準のボタンを非表示にする"** in the section
+settings once Appointo's own block ships its own submit button, to
+avoid a duplicate. The same `即予約` tag is read by
+`collection-products.liquid`, `featured-products.liquid`,
+`product-hero.liquid` and the diagnosis result blocks, so the badge is
+always consistent across every page a plan appears on.
+
+## Cart
+
+`templates/cart.json` + `sections/main-cart.liquid` is a standard
+Shopify cart page (quantity update, remove, subtotal, `checkout`
+submit button) — the mandatory step between "Appointoで日時選択" and
+"Shopify標準チェックアウト". Line-item properties (the 予約タイプ this
+theme sets, plus whatever Appointo's block adds for the selected
+date/time) are shown under each line item. `sections/header.liquid` now
+also has a cart icon with an item-count badge (`routes.cart_url`,
+`cart.item_count`) so the cart is reachable from every page.
 
 ## Metafields / Dynamic Source
 
@@ -80,9 +130,11 @@ code, so they aren't included here.
 
 ## Apps
 
-- **Appointo** — see step 6 above. The section's container
+- **Appointo** — see "予約・決済フロー" above. The section's container
   (`.appointo-embed`) carries `data-product-id` / `data-variant-id` in
-  case Appointo's block needs them.
+  case Appointo's block needs them, and for 即予約 products sits inside
+  the real product form so the app's date/time selection becomes part
+  of the add-to-cart submission.
 - **Judge.me** — `product-reviews.liquid` renders
   `{{ shop.metafields.judgeme.widget }}`, which Judge.me populates
   automatically once installed (its own documented embed method). No
@@ -115,8 +167,8 @@ appears, no theme edit), `collection-season`, `collection-gallery`,
 existing `theme.css` components (`.card`, `.trust-item`, `.gallery`,
 `.accordion`) — no new CSS needed. Product cards read two optional tags
 per product: `人気` shows a gold badge, `即予約` swaps the availability
-pill to "即予約できます" (default is "現地確認後ご回答") — set via
-Admin → Product → Tags, no code change.
+pill to "即予約" (default is "リクエスト予約" — see "予約・決済フロー"
+above) — set via Admin → Product → Tags, no code change.
 
 ## Not yet covered
 

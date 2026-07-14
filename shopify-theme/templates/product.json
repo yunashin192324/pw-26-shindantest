@@ -5,8 +5,7 @@
       "settings": {
         "eyebrow": "Overseas Photo Wedding",
         "price_note": "税込 / 2名様",
-        "badge_style": "confirm",
-        "badge_label": "現地確認後ご案内",
+        "show_badge": true,
         "booking_label": "空き状況を見る",
         "secondary_label": "",
         "secondary_url": ""
@@ -17,10 +16,10 @@
       "settings": {
         "heading": "空き状況・ご予約",
         "highlights": "ご希望日の第1〜第2候補まで承ります\n人数・オプションもあわせてご相談いただけます",
-        "badge_style": "confirm",
-        "badge_label": "現地確認後ご案内",
         "price_note": "税込 / 2名様",
-        "fallback_label": "空き状況を問い合わせる",
+        "instant_button_label": "カートに追加して予約する",
+        "request_button_label": "希望日時をリクエストする",
+        "request_explainer": "ご希望の日時を送信いただくと、手配課が空き状況を確認し、予約を確定いたします。確認のためのご連絡・接客は発生しません。",
         "note": "ご希望日の第2候補まで承ります。繁忙期は早めのお問い合わせがおすすめです。"
       }
     },

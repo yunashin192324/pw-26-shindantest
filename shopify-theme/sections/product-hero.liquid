@@ -10,6 +10,7 @@
 
   {%- assign hero_image = section.settings.background_image | default: product.featured_image -%}
   {%- assign variant = product.selected_or_first_available_variant -%}
+  {%- assign is_instant = product.tags contains '即予約' -%}
 
   <section class="hero">
     <div class="hero-media">
@@ -33,8 +34,12 @@
       {%- endif -%}
 
       <div class="cta-row" style="align-items:center;margin-top:8px;">
-        {%- if section.settings.badge_label != blank -%}
-          <span class="avail-tag {% if section.settings.badge_style == 'instant' %}instant{% else %}confirm{% endif %}" style="background:rgba(250,248,243,0.16);color:var(--white);">{{ section.settings.badge_label }}</span>
+        {%- if section.settings.show_badge -%}
+          {%- if is_instant -%}
+            <span class="avail-tag instant" style="background:rgba(250,248,243,0.16);color:var(--white);">即予約</span>
+          {%- else -%}
+            <span class="avail-tag confirm" style="background:rgba(250,248,243,0.16);color:var(--white);">リクエスト予約</span>
+          {%- endif -%}
         {%- endif -%}
         <span style="font-family:var(--font-serif);font-size:1.5rem;color:var(--white);">
           {{ variant.price | money }}<small style="font-size:0.85rem;color:var(--text-on-dark-muted);"> {{ section.settings.price_note }}</small>
@@ -63,11 +68,7 @@
     { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "" },
     { "type": "richtext", "id": "catchcopy", "label": "キャッチコピー" },
     { "type": "text", "id": "price_note", "label": "価格の注記", "default": "税込 / 2名様" },
-    { "type": "select", "id": "badge_style", "label": "バッジの種類", "options": [
-        { "value": "instant", "label": "即予約できます" },
-        { "value": "confirm", "label": "現地確認後ご案内" }
-      ], "default": "confirm" },
-    { "type": "text", "id": "badge_label", "label": "バッジ文言", "default": "現地確認後ご案内" },
+    { "type": "checkbox", "id": "show_badge", "label": "予約バッジを表示する", "info": "商品に「即予約」タグが付いているかどうかで自動的に文言が切り替わります（即予約 / リクエスト予約）。", "default": true },
     { "type": "text", "id": "booking_label", "label": "予約ボタン文言", "default": "空き状況を見る" },
     { "type": "text", "id": "secondary_label", "label": "サブボタン文言", "default": "" },
     { "type": "url", "id": "secondary_url", "label": "サブボタンリンク先" }

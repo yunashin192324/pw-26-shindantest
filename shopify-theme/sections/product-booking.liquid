@@ -1,19 +1,37 @@
 {%- comment -%}
-  product-booking — Appointo "buy box". Sits directly under the hero,
-  in the position an Amazon purchase box would occupy (per spec).
+  product-booking — 予約・決済フロー: Appointoで日時選択 → Shopifyカート
+  → Shopify標準チェックアウト → 決済完了 → 予約確定. Sits directly under
+  the hero, in the buy-box position.
 
-  Real integration: once the Appointo app is installed, its booking
-  widget is a Shopify app block that merchants drag in here from
-  Theme Editor → this section → "Add block" → Apps. The `"@app"` entry
-  in this section's schema is what makes that slot appear, and
-  `{% render block %}` is the standard OS 2.0 way to render whatever
-  app block gets dropped in — this is a real embed slot, not a
-  placeholder. Until Appointo is installed/added, a lightweight
-  fallback (date / time / guests mock + an external booking link)
-  keeps the section looking complete.
+  Booking type is driven by one product tag, so it stays in sync with
+  the same badge shown on collection/featured-product cards and the
+  diagnosis result:
+
+    "即予約" tag present → 通常予約 (instant). Renders a REAL
+    `{% form 'product' %}` (routes.cart_add_url under the hood) with
+    the variant + a "予約タイプ" line-item property, so submitting adds
+    to cart and — with return_to set — lands the customer straight on
+    /cart, i.e. the standard, unmodified Shopify Add to Cart/Checkout
+    flow. Appointo's own block (added via "Add block → Apps" once the
+    app is installed) renders INSIDE this form, so whatever hidden
+    inputs it writes (selected date/time) are submitted as line-item
+    properties along with the add-to-cart request.
+
+    no "即予約" tag → リクエスト予約 (request). No customer contact —
+    the desired date/time is only a request; 手配課 confirms
+    availability afterwards. This intentionally does NOT force a
+    product-form submit here, because Appointo's own "request to book"
+    UI (once installed) may submit itself; the section just gives it a
+    slot plus explanatory copy, and never renders a competing button
+    unless Appointo isn't installed yet (fallback below).
+
+  Until Appointo is installed, a lightweight fallback keeps both
+  states looking complete and still fully usable (instant: a working
+  Add to Cart button; request: an inquiry link).
 {%- endcomment -%}
 {%- if section.settings.show_section -%}
   {%- assign variant = product.selected_or_first_available_variant -%}
+  {%- assign is_instant = product.tags contains '即予約' -%}
   <section id="booking" class="bg-ivory">
     <div class="container">
       <div class="grid grid-2" style="align-items:start;">
@@ -36,32 +54,67 @@
 
         <div class="reveal reveal-1">
           <div class="price-panel booking-panel">
-            <span class="avail-tag {% if section.settings.badge_style == 'instant' %}instant{% else %}confirm{% endif %}">{{ section.settings.badge_label }}</span>
+            {%- if is_instant -%}
+              <span class="avail-tag instant">即予約</span>
+            {%- else -%}
+              <span class="avail-tag confirm">リクエスト予約</span>
+            {%- endif -%}
             <div class="amount mt-40">{{ variant.price | money }}<small> {{ section.settings.price_note }}</small></div>
 
-            <div class="appointo-embed" data-product-id="{{ product.id }}" data-variant-id="{{ variant.id }}">
-              {%- if section.blocks.size > 0 -%}
-                {%- for block in section.blocks -%}
-                  {% render block %}
-                {%- endfor -%}
-              {%- else -%}
-                <div class="booking-field"><span>日付</span><span>—</span></div>
-                <div class="booking-field"><span>時間</span><span>—</span></div>
-                <div class="booking-field"><span>人数</span><span>2名</span></div>
-                {%- if request.design_mode -%}
-                  <p class="note">Appointoアプリを導入後、このセクションの「ブロックを追加」からAppointoの予約ウィジェットを追加してください。</p>
-                {%- endif -%}
-                <div class="cta-row" style="margin-top:22px;">
-                  {%- if section.settings.fallback_url != blank -%}
-                    <a href="{{ section.settings.fallback_url }}" class="btn btn-gold btn-block">{{ section.settings.fallback_label }}</a>
-                  {%- else -%}
-                    <a href="#reserve" class="btn btn-gold btn-block">{{ section.settings.fallback_label }}</a>
-                  {%- endif -%}
-                </div>
-              {%- endif -%}
-            </div>
+            {%- if is_instant -%}
+              {%- form 'product', product, id: 'booking-form', class: 'appointo-embed' -%}
+                <input type="hidden" name="id" value="{{ variant.id }}">
+                <input type="hidden" name="quantity" value="1">
+                <input type="hidden" name="properties[予約タイプ]" value="通常予約">
+                <input type="hidden" name="return_to" value="{{ routes.cart_url }}">
 
-            {%- if section.settings.note != blank -%}<p class="note">{{ section.settings.note }}</p>{%- endif -%}
+                {%- if section.blocks.size > 0 -%}
+                  {%- for block in section.blocks -%}
+                    {% render block %}
+                  {%- endfor -%}
+                {%- else -%}
+                  <div class="booking-field"><span>日付</span><span>—</span></div>
+                  <div class="booking-field"><span>時間</span><span>—</span></div>
+                  {%- if request.design_mode -%}
+                    <p class="note">Appointoアプリを導入後、このセクションの「ブロックを追加」からAppointoの予約ウィジェットを追加してください（このフォームの内側に追加されるため、選択した日時はカート追加時にそのまま予約情報として渡されます）。</p>
+                  {%- endif -%}
+                {%- endif -%}
+
+                {%- unless section.settings.hide_default_submit -%}
+                  <button type="submit" name="add" class="btn btn-gold btn-block mt-40">{{ section.settings.instant_button_label }}</button>
+                {%- endunless -%}
+              {%- endform -%}
+            {%- else -%}
+              <div class="appointo-embed">
+                {%- if section.blocks.size > 0 -%}
+                  {%- for block in section.blocks -%}
+                    {% render block %}
+                  {%- endfor -%}
+                {%- else -%}
+                  <div class="booking-field"><span>希望日</span><span>—</span></div>
+                  <div class="booking-field"><span>希望時間</span><span>—</span></div>
+                  {%- if request.design_mode -%}
+                    <p class="note">Appointoアプリを導入後、このセクションの「ブロックを追加」からAppointoの「リクエスト予約」ウィジェットを追加してください。</p>
+                  {%- endif -%}
+                {%- endif -%}
+
+                {%- if section.settings.request_explainer != blank -%}
+                  <p class="note mt-40">{{ section.settings.request_explainer }}</p>
+                {%- endif -%}
+
+                {%- unless section.settings.hide_default_submit -%}
+                  <div class="cta-row" style="margin-top:22px;">
+                    {%- if section.settings.fallback_url != blank -%}
+                      <a href="{{ section.settings.fallback_url }}" class="btn btn-gold btn-block">{{ section.settings.request_button_label }}</a>
+                    {%- else -%}
+                      <a href="#booking" class="btn btn-gold btn-block">{{ section.settings.request_button_label }}</a>
+                    {%- endif -%}
+                  </div>
+                {%- endunless -%}
+              </div>
+            {%- endif -%}
+
+            {%- if section.settings.note != blank -%}<p class="note mt-40">{{ section.settings.note }}</p>{%- endif -%}
           </div>
         </div>
       </div>
@@ -71,20 +124,18 @@
 
 {% schema %}
 {
-  "name": "予約（Appointo）",
+  "name": "予約（Appointo → カート → チェックアウト）",
   "settings": [
     { "type": "checkbox", "id": "show_section", "label": "表示する", "default": true },
     { "type": "text", "id": "heading", "label": "見出し", "default": "空き状況・ご予約" },
     { "type": "richtext", "id": "description", "label": "本文" },
     { "type": "textarea", "id": "highlights", "label": "ポイント（1行1項目）" },
-    { "type": "select", "id": "badge_style", "label": "バッジの種類", "options": [
-        { "value": "instant", "label": "即予約できます" },
-        { "value": "confirm", "label": "現地確認後ご案内" }
-      ], "default": "confirm" },
-    { "type": "text", "id": "badge_label", "label": "バッジ文言", "default": "現地確認後ご案内" },
     { "type": "text", "id": "price_note", "label": "価格の注記", "default": "税込 / 2名様" },
-    { "type": "text", "id": "fallback_label", "label": "予約ボタン文言（Appointo未設置時）", "default": "空き状況を問い合わせる" },
-    { "type": "url", "id": "fallback_url", "label": "予約ボタンリンク先（Appointo未設置時）" },
+    { "type": "text", "id": "instant_button_label", "label": "「即予約」ボタン文言", "default": "カートに追加して予約する" },
+    { "type": "text", "id": "request_button_label", "label": "「リクエスト予約」ボタン文言", "default": "希望日時をリクエストする" },
+    { "type": "textarea", "id": "request_explainer", "label": "リクエスト予約の説明文", "default": "ご希望の日時を送信いただくと、手配課が空き状況を確認し、予約を確定いたします。確認のためのご連絡・接客は発生しません。" },
+    { "type": "url", "id": "fallback_url", "label": "「リクエスト予約」ボタンのリンク先（Appointo未設置時）" },
+    { "type": "checkbox", "id": "hide_default_submit", "label": "このセクション標準のボタンを非表示にする", "info": "Appointoのブロック自体に送信ボタンが含まれる場合はONにして、ボタンの重複を防いでください。", "default": false },
     { "type": "text", "id": "note", "label": "補足メモ", "default": "ご希望日の第2候補まで承ります。繁忙期は早めのお問い合わせがおすすめです。" }
   ],
   "blocks": [{ "type": "@app" }]

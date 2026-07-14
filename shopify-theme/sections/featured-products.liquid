@@ -30,9 +30,9 @@
                 <h3 class="card-title">{{ product.title }}</h3>
                 {%- if product.description != blank -%}<p class="card-desc">{{ product.description | strip_html | truncate: 60 }}</p>{%- endif -%}
                 {%- if product.tags contains '即予約' -%}
-                  <span class="avail-tag instant">即予約できます</span>
+                  <span class="avail-tag instant">即予約</span>
                 {%- else -%}
-                  <span class="avail-tag confirm">現地確認後ご回答</span>
+                  <span class="avail-tag confirm">リクエスト予約</span>
                 {%- endif -%}
                 <div class="card-foot">
                   <span class="card-price">{{ product.price | money }}<small>税込 / 2名</small></span>

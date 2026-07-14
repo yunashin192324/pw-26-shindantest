@@ -8,8 +8,8 @@
 
   Card conventions (set via product tags, so no code change per product):
     "人気"     tag → gold "人気" badge
-    "即予約"   tag → green "即予約できます" pill
-    default          → "現地確認後ご案内" pill
+    "即予約"   tag → green "即予約" pill
+    default          → "リクエスト予約" pill
 {%- endcomment -%}
 {%- if section.settings.show_section -%}
   <section class="{% if section.settings.background == 'ivory' %}bg-ivory{% endif %}">
@@ -38,9 +38,9 @@
                   <p class="card-desc">{{ product.description | strip_html | truncate: 60 }}</p>
                 {%- endif -%}
                 {%- if product.tags contains '即予約' -%}
-                  <span class="avail-tag instant">即予約できます</span>
+                  <span class="avail-tag instant">即予約</span>
                 {%- else -%}
-                  <span class="avail-tag confirm">現地確認後ご回答</span>
+                  <span class="avail-tag confirm">リクエスト予約</span>
                 {%- endif -%}
                 <div class="card-foot">
                   <span class="card-price">{{ product.price | money }}<small>税込 / 2名</small></span>
