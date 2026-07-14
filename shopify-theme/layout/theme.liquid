@@ -70,5 +70,8 @@
   {%- if template.name == 'product' %}
   <script src="{{ 'product.js' | asset_url }}" defer></script>
   {%- endif %}
+  {%- if template.name == 'page' and template.suffix == 'diagnosis' %}
+  <script src="{{ 'diagnosis.js' | asset_url }}" defer></script>
+  {%- endif %}
 </body>
 </html>

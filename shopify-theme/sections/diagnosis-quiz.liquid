@@ -1,0 +1,126 @@
+{%- comment -%}
+  diagnosis-quiz — 30秒診断. Client-side quiz (diagnosis.js) built on
+  the existing .diag-* components. Add blocks in this fixed order:
+  one "質問" block followed by 2–3 "選択肢" blocks, repeated per
+  question; then any number of "診断結果" blocks, each linking a real
+  Shopify product. The result-bucket key formula lives in
+  diagnosis.js: first question's answer + "-premium"/"-basic" (bumped
+  to premium when the budget or priority answer is "high"/"special")
+  — keep the first three questions' keys as vibe/budget/priority to
+  match it, or add more result blocks with different keys.
+{%- endcomment -%}
+{%- assign question_blocks = section.blocks | where: 'type', 'question' -%}
+{%- assign result_blocks = section.blocks | where: 'type', 'result' -%}
+{%- assign total_questions = question_blocks.size -%}
+
+{%- if section.settings.show_section and total_questions > 0 -%}
+  <section>
+    <div class="container">
+      <div class="diag-wrap" data-diagnosis-quiz>
+        <div class="diag-progress"><div class="diag-progress-fill"></div></div>
+
+        {%- assign q_index = -1 -%}
+        {%- assign panel_open = false -%}
+        {%- assign options_open = false -%}
+        {%- for block in section.blocks -%}
+          {%- if block.type == 'question' -%}
+            {%- if options_open -%}</div>{%- assign options_open = false -%}{%- endif -%}
+            {%- if panel_open -%}</div>{%- endif -%}
+            {%- assign q_index = q_index | plus: 1 -%}
+            <div class="diag-panel{% if q_index == 0 %} is-active{% endif %}" data-index="{{ q_index }}" data-key="{{ block.settings.key }}" {{ block.shopify_attributes }}>
+              <p class="diag-step">Question {{ q_index | plus: 1 }} / {{ total_questions }}</p>
+              <h2 class="diag-question">{{ block.settings.question }}</h2>
+              <div class="diag-options">
+              {%- assign panel_open = true -%}
+              {%- assign options_open = true -%}
+          {%- elsif block.type == 'option' -%}
+            <button class="diag-option" type="button" data-value="{{ block.settings.value }}" {{ block.shopify_attributes }}>{{ block.settings.label }}{%- if block.settings.sub != blank -%}<span class="diag-option-sub">{{ block.settings.sub }}</span>{%- endif -%}</button>
+          {%- endif -%}
+        {%- endfor -%}
+        {%- if options_open -%}</div>{%- endif -%}
+        {%- if panel_open -%}</div>{%- endif -%}
+
+        <div class="diag-panel diag-result" data-index="{{ total_questions }}">
+          <p class="eyebrow">Your Result</p>
+          <p style="margin-top:8px;">あなたにおすすめのプランは</p>
+          <h2 class="diag-result-name">—</h2>
+          <span class="avail-tag diag-result-avail">—</span>
+          <p class="diag-result-reason mt-40">—</p>
+          <p class="diag-result-price">—</p>
+          <div class="cta-row" style="justify-content:center;">
+            <a href="#" class="btn btn-gold diag-result-link">プランを見る</a>
+            <button class="btn btn-outline-dark diag-restart" type="button">もう一度診断する</button>
+          </div>
+          <p class="note mt-40" style="font-size:0.8rem;color:var(--text-muted);">診断結果は目安です。詳しい内容は各プランページでご確認いただくか、お気軽にご相談ください。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script type="application/json" id="diagnosis-results-data">
+  {
+    {%- assign printed_any = false -%}
+    {%- for block in result_blocks -%}
+      {%- assign product = block.settings.product -%}
+      {%- if product and block.settings.result_key != blank -%}
+        {%- if printed_any -%},{%- endif -%}
+        {{ block.settings.result_key | json }}: {
+          "name": {{ product.title | json }},
+          "price": {{ product.price | money | json }},
+          "avail": {{ block.settings.avail_style | json }},
+          "availLabel": {{ block.settings.avail_label | json }},
+          "url": {{ product.url | json }},
+          "reason": {{ block.settings.reason | default: product.description | strip_html | truncate: 120 | json }}
+        }
+        {%- assign printed_any = true -%}
+      {%- endif -%}
+    {%- endfor -%}
+  }
+  </script>
+{%- elsif request.design_mode -%}
+  <section><div class="container"><p class="note text-center">「質問」ブロックと「選択肢」ブロックを追加すると診断が表示されます。</p></div></section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "30秒診断",
+  "settings": [
+    { "type": "checkbox", "id": "show_section", "label": "表示する", "default": true }
+  ],
+  "blocks": [
+    {
+      "type": "question",
+      "name": "質問",
+      "settings": [
+        { "type": "text", "id": "key", "label": "キー（半角英数字）", "default": "vibe", "info": "1問目はdiagnosis.jsの結果判定で使用する診断結果ブロックのキー接頭辞になります。" },
+        { "type": "text", "id": "question", "label": "質問文", "default": "気になる雰囲気はどちらですか？" }
+      ]
+    },
+    {
+      "type": "option",
+      "name": "選択肢",
+      "settings": [
+        { "type": "text", "id": "value", "label": "値（半角英数字）", "default": "hawaii" },
+        { "type": "text", "id": "label", "label": "選択肢の文言", "default": "選択肢" },
+        { "type": "text", "id": "sub", "label": "補足文言（任意）" }
+      ]
+    },
+    {
+      "type": "result",
+      "name": "診断結果",
+      "settings": [
+        { "type": "text", "id": "result_key", "label": "結果キー", "info": "1問目の値 + \"-premium\" または \"-basic\"（例：hawaii-premium）", "default": "hawaii-basic" },
+        { "type": "product", "id": "product", "label": "商品" },
+        { "type": "select", "id": "avail_style", "label": "予約バッジの種類", "options": [
+            { "value": "instant", "label": "即予約できます" },
+            { "value": "confirm", "label": "現地確認後ご回答" }
+          ], "default": "instant" },
+        { "type": "text", "id": "avail_label", "label": "予約バッジ文言", "default": "即予約できます" },
+        { "type": "textarea", "id": "reason", "label": "おすすめ理由（空欄で商品説明を使用）" }
+      ]
+    }
+  ],
+  "max_blocks": 40,
+  "presets": [{ "name": "30秒診断" }]
+}
+{% endschema %}

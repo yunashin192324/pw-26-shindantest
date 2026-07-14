@@ -14,16 +14,37 @@ existing `theme.css` components — no new CSS shipped for this layer.
 | `templates/page.about.json` | `/pages/about` | hero → HISについて → フォーシスについて → 大切にしていること → お問い合わせ |
 | `templates/page.dress.json` | `/pages/dress` | hero → ブランド紹介 → 試着の安心 → 写真2枚 → 流れ → CTA |
 | `templates/page.faq.json` | `/pages/faq` | hero → カテゴリ別FAQ（19問） → CTA |
+| `templates/page.diagnosis.json` | `/pages/diagnosis` | hero → 30秒診断（3問） → CTA |
 
 Shopify Pages don't pick up `page.<suffix>.json` automatically — after
 creating each Page in Admin with the matching **handle** (`about`,
-`dress`, `faq`), open it and set **Theme template** to `page.about` /
-`page.dress` / `page.faq` in the dropdown. This is the same one-click,
-no-code mechanism `PRODUCT.md` documents for per-product templates.
+`dress`, `faq`, `diagnosis`), open it and set **Theme template** to
+`page.about` / `page.dress` / `page.faq` / `page.diagnosis` in the
+dropdown. This is the same one-click, no-code mechanism `PRODUCT.md`
+documents for per-product templates.
 
-A `diagnosis` page (30秒診断) is referenced throughout (nav, CTAs) but
-isn't part of this delivery — it's a separate interactive quiz feature,
-not a content page, and needs its own scoping.
+## 30秒診断 (`diagnosis-quiz.liquid` + `assets/diagnosis.js`)
+
+Client-side quiz, no server round-trip. Blocks come in three types,
+added in a fixed order in Theme Editor:
+
+1. **「質問」** blocks (one per question — key + question text)
+2. **「選択肢」** blocks placed right after their question (2–3 each —
+   value / label / optional sub-label)
+3. **「診断結果」** blocks, any number — each links a real Shopify
+   **product** plus a `result_key` (e.g. `hawaii-premium`)
+
+`diagnosis.js` reads a JSON blob the section embeds (built from the
+「診断結果」 blocks, so it's always in sync with real product
+price/title/url — no hardcoded product data) and computes the result
+key as `<first question's answer>-premium`/`-basic`, bumped to premium
+when the `budget` or `priority` answer is `high`/`special`. Ships in
+`page.diagnosis.json` with the original 3 questions × 3 options
+pre-filled; the 「診断結果」 blocks are intentionally empty until real
+destination products exist (same reasoning as `featured-products` /
+`collections-grid` below) — add up to 6 (or more, for future
+destinations) once products are created, matching `result_key` to each
+destination × tier combination.
 
 ## New reusable sections
 
@@ -64,8 +85,8 @@ of grouping, so SEO/AIO stays correct either way.
 
 ## Still open
 
-- The `diagnosis` (30秒診断) interactive quiz — linked from nav/CTAs
-  throughout, but a distinct feature needing its own design pass, not a
-  static content page like the others here.
-- Live app installs (Appointo / Judge.me / Search & Discovery) — see
-  `PRODUCT.md`.
+- Live app installs (Appointo / Judge.me / Search & Discovery) — store
+  Admin configuration, not theme code. See `PRODUCT.md`.
+- Actually creating the Products / Collections / Pages in Admin and
+  filling in real photos/copy per destination, and then wiring the
+  `featured-products` / `collections-grid` / 診断結果 blocks to them.
