@@ -17,12 +17,14 @@
     fallback so every page still ships a complete OGP / Twitter Card.
   {%- endcomment -%}
   <meta property="og:site_name" content="{{ shop.name }}">
-  <meta property="og:type" content="{% if template.name == 'article' %}article{% else %}website{% endif %}">
+  <meta property="og:type" content="{% if template.name == 'article' %}article{% elsif template.name == 'product' %}product{% else %}website{% endif %}">
   <meta property="og:title" content="{{ page_title | escape }}">
   {% if page_description %}<meta property="og:description" content="{{ page_description | escape }}">{% endif %}
   <meta property="og:url" content="{{ canonical_url }}">
   {% if template.name == 'article' and article.image %}
     <meta property="og:image" content="{{ article.image | image_url: width: 1600 | prepend: 'https:' }}">
+  {% elsif template.name == 'product' and product.featured_image %}
+    <meta property="og:image" content="{{ product.featured_image | image_url: width: 1600 | prepend: 'https:' }}">
   {% elsif settings.social_share_image %}
     <meta property="og:image" content="{{ settings.social_share_image | image_url: width: 1600 | prepend: 'https:' }}">
   {% endif %}
@@ -40,6 +42,9 @@
 
   <link rel="stylesheet" href="{{ 'theme.css' | asset_url }}">
   <link rel="stylesheet" href="{{ 'journal.css' | asset_url }}">
+  {%- if template.name == 'product' %}
+  <link rel="stylesheet" href="{{ 'product.css' | asset_url }}">
+  {%- endif %}
 
   {{ content_for_header }}
 </head>
@@ -51,7 +56,17 @@
 
   {% section 'footer' %}
 
+  {%- if template.name == 'product' %}
+  <div class="sticky-cta">
+    <a href="{{ settings.contact_url | default: '/pages/about#contact' }}" class="btn btn-outline-dark">相談する</a>
+    <a href="#booking" class="btn btn-gold">予約する</a>
+  </div>
+  {%- endif %}
+
   <script src="{{ 'theme.js' | asset_url }}" defer></script>
   <script src="{{ 'journal.js' | asset_url }}" defer></script>
+  {%- if template.name == 'product' %}
+  <script src="{{ 'product.js' | asset_url }}" defer></script>
+  {%- endif %}
 </body>
 </html>

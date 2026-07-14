@@ -1,0 +1,77 @@
+{%- comment -%}
+  product-features — ④ プラン内容. Icon + label + value grid, reusing
+  the existing .trust-item / .trust-icon component. One block per
+  line item; each block's "value" field can be dynamic-source-bound
+  to a product metafield (custom.duration, custom.retouch, etc.) so
+  it differs per product without touching this template.
+{%- endcomment -%}
+{%- if section.settings.show_section and section.blocks.size > 0 -%}
+  <section class="{% if section.settings.background == 'ivory' %}bg-ivory{% endif %}">
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="eyebrow">Plan Details</p>
+        <h2>{{ section.settings.heading }}</h2>
+        <div class="divider-gold"></div>
+      </div>
+      <div class="grid grid-4">
+        {%- for block in section.blocks -%}
+          <div class="trust-item reveal{% if forloop.index0 > 0 %} reveal-{{ forloop.index0 | modulo: 4 }}{% endif %}" {{ block.shopify_attributes }}>
+            <div class="trust-icon">{% render 'product-icon', icon: block.settings.icon %}</div>
+            <h3>{{ block.settings.label }}</h3>
+            {%- if block.settings.value != blank -%}<p>{{ block.settings.value }}</p>{%- endif -%}
+          </div>
+        {%- endfor -%}
+      </div>
+    </div>
+  </section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "プラン内容",
+  "settings": [
+    { "type": "checkbox", "id": "show_section", "label": "表示する", "default": true },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "プラン内容" },
+    { "type": "select", "id": "background", "label": "背景", "options": [
+        { "value": "white", "label": "白" },
+        { "value": "ivory", "label": "アイボリー" }
+      ], "default": "ivory" }
+  ],
+  "blocks": [
+    {
+      "type": "item",
+      "name": "項目",
+      "settings": [
+        { "type": "select", "id": "icon", "label": "アイコン", "options": [
+            { "value": "clock", "label": "撮影時間" },
+            { "value": "image", "label": "納品枚数" },
+            { "value": "sparkle", "label": "レタッチ" },
+            { "value": "makeup", "label": "ヘアメイク" },
+            { "value": "dress", "label": "ドレス" },
+            { "value": "suit", "label": "タキシード" },
+            { "value": "bouquet", "label": "ブーケ" },
+            { "value": "car", "label": "送迎" },
+            { "value": "download", "label": "データ納品" },
+            { "value": "camera", "label": "カメラ" },
+            { "value": "shield", "label": "安心" }
+          ], "default": "clock" },
+        { "type": "text", "id": "label", "label": "項目名", "default": "撮影時間" },
+        { "type": "text", "id": "value", "label": "内容", "default": "約6時間" }
+      ]
+    }
+  ],
+  "max_blocks": 9,
+  "default": {
+    "blocks": [
+      { "type": "item", "settings": { "icon": "clock", "label": "撮影時間", "value": "約6時間" } },
+      { "type": "item", "settings": { "icon": "image", "label": "納品枚数", "value": "厳選100カット＋全カット" } },
+      { "type": "item", "settings": { "icon": "sparkle", "label": "レタッチ", "value": "全カット標準補正" } },
+      { "type": "item", "settings": { "icon": "makeup", "label": "ヘアメイク", "value": "本格ヘアメイク1回" } },
+      { "type": "item", "settings": { "icon": "dress", "label": "ドレス", "value": "2着までチェンジ可" } },
+      { "type": "item", "settings": { "icon": "suit", "label": "タキシード", "value": "2着までチェンジ可" } },
+      { "type": "item", "settings": { "icon": "car", "label": "送迎", "value": "ホテル〜ロケーション間" } },
+      { "type": "item", "settings": { "icon": "download", "label": "データ納品", "value": "撮影後6〜8週間でオンライン納品" } }
+    ]
+  }
+}
+{% endschema %}

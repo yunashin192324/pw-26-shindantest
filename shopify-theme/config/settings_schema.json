@@ -20,6 +20,12 @@
         "id": "social_share_image",
         "label": "SNSシェア用デフォルト画像",
         "info": "og:image の既定値。記事ページではアイキャッチ画像が優先されます。"
+      },
+      {
+        "type": "url",
+        "id": "contact_url",
+        "label": "「相談する」リンク先",
+        "info": "商品ページのスマホ用固定CTAバーで使用します。未設定の場合は /pages/about#contact を使用します。"
       }
     ]
   }

@@ -1,0 +1,50 @@
+{%- comment -%}
+  product-customer-photos — ⑨ お客様フォト. Instagram-style square grid.
+{%- endcomment -%}
+{%- if section.settings.show_section and section.blocks.size > 0 -%}
+  <section class="{% if section.settings.background == 'ivory' %}bg-ivory{% endif %}">
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="eyebrow">Real Voices</p>
+        <h2>{{ section.settings.heading }}</h2>
+        <div class="divider-gold"></div>
+      </div>
+      <div class="insta-grid reveal">
+        {%- for block in section.blocks -%}
+          {%- if block.settings.link != blank -%}<a href="{{ block.settings.link }}" class="insta-grid-item" target="_blank" rel="noopener" {{ block.shopify_attributes }}>{%- else -%}<div class="insta-grid-item" {{ block.shopify_attributes }}>{%- endif -%}
+            {%- if block.settings.image -%}
+              <img src="{{ block.settings.image | image_url: width: 600 }}" alt="{{ block.settings.image.alt | default: product.title | escape }}" loading="lazy" width="600" height="600">
+            {%- endif -%}
+            {%- if block.settings.handle != blank -%}<span class="insta-grid-handle">{{ block.settings.handle }}</span>{%- endif -%}
+          {%- if block.settings.link != blank -%}</a>{%- else -%}</div>{%- endif -%}
+        {%- endfor -%}
+      </div>
+    </div>
+  </section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "お客様フォト",
+  "settings": [
+    { "type": "checkbox", "id": "show_section", "label": "表示する", "default": true },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "お客様のフォトをご紹介" },
+    { "type": "select", "id": "background", "label": "背景", "options": [
+        { "value": "white", "label": "白" },
+        { "value": "ivory", "label": "アイボリー" }
+      ], "default": "white" }
+  ],
+  "blocks": [
+    {
+      "type": "photo",
+      "name": "お客様フォト",
+      "settings": [
+        { "type": "image_picker", "id": "image", "label": "画像" },
+        { "type": "text", "id": "handle", "label": "お客様名 / SNSアカウント（任意）" },
+        { "type": "url", "id": "link", "label": "リンク先（任意）" }
+      ]
+    }
+  ],
+  "max_blocks": 16
+}
+{% endschema %}
