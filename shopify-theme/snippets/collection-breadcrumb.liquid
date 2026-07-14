@@ -1,0 +1,13 @@
+{%- comment -%}
+  collection-breadcrumb — .breadcrumb component for a destination
+  collection page. Keep in sync with the BreadcrumbList in
+  collection-schema.liquid.
+
+  Params:
+    collection — required
+{%- endcomment -%}
+<p class="breadcrumb">
+  <span><a href="{{ routes.root_url }}">TOP</a></span>
+  <span><a href="{{ routes.all_collections_url }}">撮影地一覧</a></span>
+  <span>{{ collection.title }}</span>
+</p>

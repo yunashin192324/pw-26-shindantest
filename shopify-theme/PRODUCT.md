@@ -103,13 +103,23 @@ featured image) / Twitter Card for every product page. Keep FAQ answers
 and location descriptions in full sentences (not just keyword fragments)
 — that's what AI answer engines and generative search actually lift.
 
+## Collection pages (撮影地一覧)
+
+`templates/collection.json` covers the other end of the funnel — TOP →
+**Collection** → Product → Appointo. Sections: `collection-hero`
+(breadcrumb + `BreadcrumbList` schema), `collection-features` (why this
+destination, icon grid), `collection-products` (pulls straight from
+`collection.products` — add a product to the Collection in Admin and it
+appears, no theme edit), `collection-season`, `collection-gallery`,
+`collection-faq` (+ `FAQPage` schema), `collection-cta`. All reuse
+existing `theme.css` components (`.card`, `.trust-item`, `.gallery`,
+`.accordion`) — no new CSS needed. Product cards read two optional tags
+per product: `人気` shows a gold badge, `即予約` swaps the availability
+pill to "即予約できます" (default is "現地確認後ご回答") — set via
+Admin → Product → Tags, no code change.
+
 ## Not yet covered
 
-- The Collection template (`/collections/{handle}`) — Dawn's default
-  collection template + Search & Discovery's merchandising tools cover
-  most of the "撮影地一覧" requirement out of the box; a themed
-  `collection.json` in this same visual language is a natural follow-up
-  if the default doesn't feel on-brand enough.
 - Live app installs (Appointo / Judge.me / Search & Discovery) — the
   theme code is wired for them, but the apps themselves need to be
   installed and configured in this store's Admin.

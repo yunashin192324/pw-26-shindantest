@@ -25,6 +25,8 @@
     <meta property="og:image" content="{{ article.image | image_url: width: 1600 | prepend: 'https:' }}">
   {% elsif template.name == 'product' and product.featured_image %}
     <meta property="og:image" content="{{ product.featured_image | image_url: width: 1600 | prepend: 'https:' }}">
+  {% elsif template.name == 'collection' and collection.image %}
+    <meta property="og:image" content="{{ collection.image | image_url: width: 1600 | prepend: 'https:' }}">
   {% elsif settings.social_share_image %}
     <meta property="og:image" content="{{ settings.social_share_image | image_url: width: 1600 | prepend: 'https:' }}">
   {% endif %}
