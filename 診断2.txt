@@ -486,7 +486,7 @@ const QS = [
     { id:'region', section:'DESTINATION', step:1, title:'撮影は国内・海外どちらをご希望ですか？', sub:'まずは大きな方向性から教えてください。', type:'single',
       opts:[{main:'国内',sub:'沖縄・北海道など',v:'domestic'},{main:'海外',sub:'アジア・ヨーロッパなど',v:'overseas'}]},
     { id:'days', section:'SCHEDULE', step:2, title:'旅行日数はどのくらいを考えていますか？', sub:'移動日を含めたトータルの日数のイメージを教えてください。', type:'single',
-      opts:[{main:'2〜3日',sub:'週末をつかってサクッと',v:'short'},{main:'4〜5日',sub:'有給を1〜2日プラスして',v:'medium'},{main:'6〜7日',sub:'旅行と撮影をしっかり満喫',v:'long'},{main:'8〜10日',sub:'じっくりヨーロッパや遠方も視野に',v:'verylong'},{main:'11日以上',sub:'長期でとことん楽しみたい',v:'ultra'}]},
+      opts:[{main:'2〜3日',sub:'週末をつかってサクッと',v:'short'},{main:'4〜5日',sub:'有給を1〜2日プラスして',v:'medium'},{main:'6〜7日',sub:'旅行と撮影をしっかり満喫',v:'long'},{main:'8〜10日',sub:'じっくり遠方まで視野に',v:'verylong'},{main:'11日以上',sub:'長期でとことん楽しみたい',v:'ultra'}]},
     { id:'scene', section:'LOCATION', step:3, title:'どんな場所で撮影したいですか？', sub:'好きなものを選んでください（複数選択OK）。', type:'multi',
       opts:[{text:'ビーチ・海',v:'beach'},{text:'大自然・森・草原',v:'nature'},{text:'奇岩・砂漠・絶景地形',v:'landscape'},{text:'街並み・路地裏',v:'street'},{text:'お城・宮殿',v:'castle'},{text:'美術館・歴史建築',v:'architecture'},{text:'遺跡',v:'ruins'},{text:'チャペル・教会',v:'chapel'},{text:'花畑・庭園',v:'garden'},{text:'ラグジュアリーホテル・ヴィラ',v:'villa'},{text:'スタジオ',v:'studio'}]},
     { id:'moment', section:'SPECIAL MOMENT', step:4, title:'どんな演出・シーンが欲しいですか？', sub:'特にこだわりたいものを選んでください（複数選択OK）。', type:'multi',
