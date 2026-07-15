@@ -199,7 +199,18 @@
    issues), hero text can end up unreadable against a bright photo. journal.css
    loads after theme.css and only on JOURNAL pages, so it's safe to repeat and
    strengthen these rules here with !important as a guarantee. */
-.hero .hero-media { position: relative !important; }
+.hero .hero-media {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 0 !important;
+}
+.hero .hero-media img {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
 .hero .hero-media::after {
   content: '' !important;
   position: absolute !important;
