@@ -192,3 +192,32 @@
    because it loads after theme.css. The fade-in still plays normally
    wherever theme.js does run (it only ever adds opacity:1, same as this). */
 .reveal { opacity: 1; transform: none; }
+
+/* ---------- Force-readable hero text (defensive, doesn't rely on theme.css) ----------
+   theme.css already darkens hero photos via .hero-media::after and sets white
+   text, but on stores where that file is out of sync (cache/duplicate-theme
+   issues), hero text can end up unreadable against a bright photo. journal.css
+   loads after theme.css and only on JOURNAL pages, so it's safe to repeat and
+   strengthen these rules here with !important as a guarantee. */
+.hero .hero-media { position: relative !important; }
+.hero .hero-media::after {
+  content: '' !important;
+  position: absolute !important;
+  inset: 0 !important;
+  background: linear-gradient(to top, rgba(8,7,5,0.88) 0%, rgba(8,7,5,0.4) 55%, rgba(8,7,5,0.6) 100%) !important;
+}
+.hero .hero-content h1,
+.hero .hero-content .lede,
+.hero .hero-content .journal-meta,
+.hero .hero-content .journal-meta span:not(.journal-category) {
+  color: #ffffff !important;
+  text-shadow: 0 2px 18px rgba(0,0,0,0.65), 0 1px 6px rgba(0,0,0,0.5) !important;
+}
+.hero .hero-content .eyebrow {
+  color: #d9bd8a !important;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.6) !important;
+}
+.hero .hero-content .journal-category {
+  color: #d9bd8a !important;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.6) !important;
+}
