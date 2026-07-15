@@ -224,6 +224,15 @@
   color: #ffffff !important;
   text-shadow: 0 2px 18px rgba(0,0,0,0.65), 0 1px 6px rgba(0,0,0,0.5) !important;
 }
+.hero .hero-content h1 {
+  /* Best-effort: balance line lengths so long JP titles don't wrap into an
+     ugly 1-character orphan line. No effect in browsers that don't support
+     it yet (falls back to normal wrapping) — safe either way. */
+  text-wrap: balance;
+}
+@media (max-width: 600px) {
+  .hero .hero-content h1 { font-size: clamp(1.6rem, 7vw, 2.4rem) !important; }
+}
 .hero .hero-content .eyebrow {
   color: #d9bd8a !important;
   text-shadow: 0 2px 12px rgba(0,0,0,0.6) !important;
