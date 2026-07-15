@@ -181,3 +181,14 @@
 @media (prefers-reduced-motion: reduce) {
   .article-toc a { transition: none; }
 }
+
+/* ---------- Content must never depend on JS to become visible ----------
+   theme.css's .reveal starts every element at opacity:0 and only shows it
+   once theme.js's IntersectionObserver adds .is-visible. On stores where
+   that script doesn't run reliably (conflicts with other theme/app JS,
+   ad blockers, JS-less crawlers — including AI/GEO crawlers, which is the
+   opposite of what this feature is for), .reveal content stays invisible
+   forever. JOURNAL content is always shown; this rule wins the cascade
+   because it loads after theme.css. The fade-in still plays normally
+   wherever theme.js does run (it only ever adds opacity:1, same as this). */
+.reveal { opacity: 1; transform: none; }
