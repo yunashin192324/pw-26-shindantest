@@ -1,0 +1,232 @@
+{% comment %}
+  ファイル名: sections/destination-detail.liquid
+  役割: 撮影地の詳細ページ（例: /pages/danang）。ダナンで既に実証済みの
+  area-lp構成（ヒーロー→魅力→撮影スポット→モデルスケジュール→
+  ギャラリー→FAQ→プラン一覧）を踏襲しつつ、1つのMetaobjectエントリー
+  から全内容を自動生成する版。新しい撮影地を追加してもこのページの
+  コード変更は不要（Metaobjectにエントリー追加＋Pageを1枚作成するだけ）。
+
+  ページのURLハンドルと、Metaobjectの「slug」欄を完全一致させること
+  （詳細はdocs/destination-metaobject-setup.md）。
+
+  「プラン一覧」は今のarea-lpのようにプラン情報を手入力するのではなく、
+  Metaobjectの「plans」欄（商品の複数選択）に実際のShopify Productを
+  直接ひもづける方式にした。価格・在庫・即予約／リクエスト予約バッジは
+  常に商品側の実データから取得されるため、手入力の情報が古くなる心配
+  がない。
+{% endcomment %}
+
+<script>
+  if (!document.getElementById('tw-config')) {
+    var twConfig = document.createElement('script');
+    twConfig.id = 'tw-config';
+    twConfig.innerHTML = "tailwind.config = { theme: { extend: { colors: { ivory: '#FAF8F5', gold: '#B8860B', 'gold-light': '#D4A843', dark: '#1a1a1a' }, fontFamily: { serif: ['var(--font-heading-family, serif)', 'serif'], sans: ['var(--font-body-family, sans-serif)', 'sans-serif'] } } } };";
+    document.head.appendChild(twConfig);
+  }
+  if (!document.getElementById('tw-cdn')) {
+    var twScript = document.createElement('script');
+    twScript.id = 'tw-cdn';
+    twScript.src = 'https://cdn.tailwindcss.com/3.4.17';
+    document.head.appendChild(twScript);
+  }
+</script>
+
+{%- assign destination = shop.metaobjects.destination.values | where: 'slug', page.handle | first -%}
+
+{%- if destination == blank -%}
+  <div class="max-w-3xl mx-auto px-6 py-24 text-center">
+    <p class="text-sm text-gray-500">この撮影地のデータが見つかりませんでした。Metaobject「destination」に、slugが「{{ page.handle }}」のエントリーがあるか確認してください。</p>
+  </div>
+{%- else -%}
+  {%- assign region_labels_keys = 'europe,america,asia,oceania,middle_east,africa,south_america,japan' | split: ',' -%}
+  {%- assign region_labels_vals = 'ヨーロッパ,アメリカ大陸,アジア,オセアニア,中東,アフリカ,南米,日本' | split: ',' -%}
+  {%- assign region_label = destination.region -%}
+  {%- for key in region_labels_keys -%}
+    {%- if key == destination.region -%}{%- assign region_label = region_labels_vals[forloop.index0] -%}{%- endif -%}
+  {%- endfor -%}
+  {%- assign region_url = destination.region | replace: '_', '-' -%}
+  {%- assign locations = destination.locations | parse_json -%}
+  {%- assign schedule_days = destination.schedule | parse_json -%}
+  {%- assign faqs = destination.faqs | parse_json -%}
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "TOP", "item": {{ shop.url | append: routes.root_url | json }} },
+      { "@type": "ListItem", "position": 2, "name": "撮影地一覧", "item": {{ shop.url | append: "/pages/destinations" | json }} },
+      { "@type": "ListItem", "position": 3, "name": {{ region_label | json }}, "item": {{ shop.url | append: "/pages/" | append: region_url | json }} },
+      { "@type": "ListItem", "position": 4, "name": {{ destination.name_ja | json }}, "item": {{ canonical_url | json }} }
+    ]
+  }
+  </script>
+  {% if faqs.size > 0 %}
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {%- for item in faqs -%}
+        { "@type": "Question", "name": {{ item.question | json }}, "acceptedAnswer": { "@type": "Answer", "text": {{ item.answer | json }} } }{%- unless forloop.last -%},{%- endunless -%}
+      {%- endfor -%}
+    ]
+  }
+  </script>
+  {% endif %}
+
+  <div style="font-family: var(--font-body-family, sans-serif);">
+
+    {% comment %} --- HERO --- {% endcomment %}
+    <section class="relative w-full flex flex-col justify-end items-center text-center" style="height: 65vh;">
+      {% if destination.hero_image != blank %}
+        {{ destination.hero_image | image_url: width: 2000 | image_tag: class: 'absolute inset-0 w-full h-full object-cover', alt: destination.name_ja }}
+      {% else %}
+        <div class="absolute inset-0 w-full h-full bg-gray-200"></div>
+      {% endif %}
+      <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(0,0,0,0.65), rgba(0,0,0,0.15));"></div>
+      <div class="relative z-10 px-6 pb-14 text-white max-w-3xl">
+        <p class="font-serif tracking-widest uppercase mb-3 text-sm">{{ destination.name_en }}</p>
+        <h1 class="font-serif font-light" style="font-size: calc(var(--font-heading-scale, 1) * 34px);">{{ destination.name_ja | newline_to_br }}</h1>
+      </div>
+    </section>
+
+    <nav class="max-w-6xl mx-auto px-6 pt-4 text-xs text-gray-500">
+      <a href="{{ routes.root_url }}" style="color:inherit;">TOP</a>
+      <span class="mx-1">/</span>
+      <a href="/pages/destinations" style="color:inherit;">撮影地一覧</a>
+      <span class="mx-1">/</span>
+      <a href="/pages/{{ region_url }}" style="color:inherit;">{{ region_label }}</a>
+      <span class="mx-1">/</span>
+      <span>{{ destination.name_ja }}</span>
+    </nav>
+
+    {% comment %} --- 魅力 / GEO情報 --- {% endcomment %}
+    <section class="py-16 md:py-24 px-6 max-w-4xl mx-auto text-center">
+      <p class="font-serif tracking-widest uppercase mb-2 text-sm" style="color:#B8860B;">Charm</p>
+      <h2 class="font-medium" style="font-size: calc(var(--font-heading-scale, 1) * 24px);">{{ destination.name_ja }}撮影の魅力</h2>
+      <div style="width:48px;height:2px;background:#B8860B;margin:16px auto;"></div>
+      {% if destination.description != blank %}<p class="text-sm text-gray-600 leading-relaxed mt-4">{{ destination.description }}</p>{% endif %}
+
+      {% if destination.flight_time != blank or destination.time_difference != blank or destination.best_season != blank or destination.recommended_for != blank %}
+        <dl class="grid grid-cols-2 md:grid-cols-4 gap-6 mt-10 text-left">
+          {% if destination.flight_time != blank %}<div><dt class="text-xs text-gray-400">飛行時間</dt><dd class="text-sm font-medium mt-1">{{ destination.flight_time }}</dd></div>{% endif %}
+          {% if destination.time_difference != blank %}<div><dt class="text-xs text-gray-400">時差</dt><dd class="text-sm font-medium mt-1">{{ destination.time_difference }}</dd></div>{% endif %}
+          {% if destination.best_season != blank %}<div><dt class="text-xs text-gray-400">ベストシーズン</dt><dd class="text-sm font-medium mt-1">{{ destination.best_season }}</dd></div>{% endif %}
+          {% if destination.recommended_for != blank %}<div><dt class="text-xs text-gray-400">おすすめな人</dt><dd class="text-sm font-medium mt-1">{{ destination.recommended_for }}</dd></div>{% endif %}
+        </dl>
+      {% endif %}
+    </section>
+
+    {% comment %} --- 撮影スポット --- {% endcomment %}
+    {% if locations.size > 0 %}
+    <section class="py-16 md:py-24 px-6 max-w-4xl mx-auto" style="background-color:#FAF8F5;">
+      <div class="text-center mb-12">
+        <p class="font-serif tracking-widest uppercase mb-2 text-sm" style="color:#B8860B;">Locations</p>
+        <h2 class="font-medium" style="font-size: calc(var(--font-heading-scale, 1) * 24px);">撮影スポット</h2>
+      </div>
+      <div class="grid md:grid-cols-2 gap-8">
+        {% for spot in locations %}
+          <div class="border-b border-gray-200 pb-6">
+            <h3 class="font-bold text-sm">{{ spot.name }}</h3>
+            <p class="text-sm text-gray-600 mt-2 leading-relaxed">{{ spot.description }}</p>
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% comment %} --- モデルスケジュール --- {% endcomment %}
+    {% if schedule_days.size > 0 %}
+    <section class="py-16 md:py-24 px-6 max-w-3xl mx-auto">
+      <div class="text-center mb-12">
+        <p class="font-serif tracking-widest uppercase mb-2 text-sm" style="color:#B8860B;">Schedule</p>
+        <h2 class="font-medium" style="font-size: calc(var(--font-heading-scale, 1) * 24px);">モデルスケジュール</h2>
+      </div>
+      {% for day in schedule_days %}
+        <div class="flex gap-6 border-b border-gray-200 py-4 text-sm">
+          <span class="w-20 shrink-0 font-serif" style="color:#B8860B;">{{ day.day }}</span>
+          <span class="text-gray-700">{{ day.description | newline_to_br }}</span>
+        </div>
+      {% endfor %}
+    </section>
+    {% endif %}
+
+    {% comment %} --- ギャラリー --- {% endcomment %}
+    {% if destination.gallery.size > 0 %}
+    <section class="py-16 md:py-24" style="background-color:#1a1a1a;">
+      <div class="text-center mb-12">
+        <p class="font-serif tracking-widest uppercase mb-2 text-sm" style="color:#D4A843;">Gallery</p>
+        <h2 class="font-medium text-white" style="font-size: calc(var(--font-heading-scale, 1) * 24px);">フォトギャラリー</h2>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 px-6 max-w-6xl mx-auto">
+        {% for image in destination.gallery %}
+          <div class="w-full relative" style="padding-top:125%;">
+            {{ image | image_url: width: 700 | image_tag: class: 'absolute inset-0 w-full h-full object-cover', alt: destination.name_ja }}
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% comment %} --- プラン一覧（実商品） --- {% endcomment %}
+    {% if destination.plans.size > 0 %}
+    <section class="py-16 md:py-24 px-6 max-w-6xl mx-auto">
+      <div class="text-center mb-12">
+        <p class="font-serif tracking-widest uppercase mb-2 text-sm" style="color:#B8860B;">Plans</p>
+        <h2 class="font-medium" style="font-size: calc(var(--font-heading-scale, 1) * 24px);">{{ destination.name_ja }}のプラン一覧</h2>
+      </div>
+      <div class="grid md:grid-cols-2 gap-8">
+        {% for product in destination.plans %}
+          <a href="{{ product.url }}" class="group block rounded-lg overflow-hidden border" style="border-color:#e5e7eb;">
+            <div class="w-full relative" style="padding-top:60%;">
+              {% if product.featured_image != blank %}
+                {{ product.featured_image | image_url: width: 900 | image_tag: class: 'absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105', alt: product.title }}
+              {% endif %}
+              {% if product.tags contains '人気' %}
+                <span class="absolute top-3 left-3 px-3 py-1 text-[11px] font-bold text-white rounded-sm" style="background-color:#B8860B;">人気No.1</span>
+              {% endif %}
+            </div>
+            <div class="p-6">
+              <h3 class="font-bold text-base">{{ product.title }}</h3>
+              {% if product.description != blank %}<p class="text-sm text-gray-500 mt-2">{{ product.description | strip_html | truncate: 60 }}</p>{% endif %}
+              <div class="flex items-center justify-between mt-4">
+                {% if product.tags contains '即予約' %}
+                  <span class="text-xs px-3 py-1 rounded-full" style="background:#eef4ec;color:#4b7a52;">即予約</span>
+                {% else %}
+                  <span class="text-xs px-3 py-1 rounded-full" style="background:#f6efe2;color:#8f6a08;">リクエスト予約</span>
+                {% endif %}
+                <span class="font-serif" style="color:#B8860B;font-size: calc(var(--font-heading-scale, 1) * 18px);">{{ product.price | money }}</span>
+              </div>
+            </div>
+          </a>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% comment %} --- FAQ --- {% endcomment %}
+    {% if faqs.size > 0 %}
+    <section class="py-16 md:py-24 px-6 max-w-3xl mx-auto" style="background-color:#FAF8F5;">
+      <div class="text-center mb-12">
+        <p class="font-serif tracking-widest uppercase mb-2 text-sm" style="color:#B8860B;">FAQ</p>
+        <h2 class="font-medium" style="font-size: calc(var(--font-heading-scale, 1) * 24px);">{{ destination.name_ja }}撮影のよくある質問</h2>
+      </div>
+      {% for item in faqs %}
+        <details class="border-b border-gray-200 py-4">
+          <summary class="cursor-pointer font-medium text-sm flex justify-between items-center">{{ item.question }}<span style="color:#B8860B;">＋</span></summary>
+          <p class="text-sm text-gray-600 mt-3 leading-relaxed">{{ item.answer }}</p>
+        </details>
+      {% endfor %}
+    </section>
+    {% endif %}
+
+  </div>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "撮影地詳細（Metaobject連動）",
+  "settings": []
+}
+{% endschema %}

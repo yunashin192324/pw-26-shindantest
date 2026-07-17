@@ -1,0 +1,124 @@
+{% comment %}
+  ファイル名: sections/destinations-index.liquid
+  役割: 撮影地一覧（トップ）ページ。shop.metaobjects.destination の
+  全エントリーから自動生成。新しい撮影地を追加してもこのページの
+  コードは変更不要（Metaobjectにエントリーを追加するだけ）。
+
+  構成: ヒーロー → キーワード検索 → 人気の撮影地 → 地域から選ぶ（8地域）
+{% endcomment %}
+
+<script>
+  if (!document.getElementById('tw-config')) {
+    var twConfig = document.createElement('script');
+    twConfig.id = 'tw-config';
+    twConfig.innerHTML = "tailwind.config = { theme: { extend: { colors: { ivory: '#FAF8F5', gold: '#B8860B', 'gold-light': '#D4A843', dark: '#1a1a1a' }, fontFamily: { serif: ['var(--font-heading-family, serif)', 'serif'], sans: ['var(--font-body-family, sans-serif)', 'sans-serif'] } } } };";
+    document.head.appendChild(twConfig);
+  }
+  if (!document.getElementById('tw-cdn')) {
+    var twScript = document.createElement('script');
+    twScript.id = 'tw-cdn';
+    twScript.src = 'https://cdn.tailwindcss.com/3.4.17';
+    document.head.appendChild(twScript);
+  }
+</script>
+
+{%- assign all_destinations = shop.metaobjects.destination.values | sort: 'sort_order' -%}
+{%- assign popular_destinations = all_destinations | where: 'popular', true -%}
+
+<div id="destinations-index-{{ section.id }}" style="font-family: var(--font-body-family, sans-serif);">
+
+  {% comment %} --- HERO --- {% endcomment %}
+  <section class="relative w-full flex flex-col justify-end items-center text-center" style="height: 55vh;">
+    {% if section.settings.hero_image != blank %}
+      {{ section.settings.hero_image | image_url: width: 2000 | image_tag: class: 'absolute inset-0 w-full h-full object-cover', alt: section.settings.heading }}
+    {% else %}
+      <div class="absolute inset-0 w-full h-full" style="background: linear-gradient(160deg, #241d13, #14110d 60%);"></div>
+    {% endif %}
+    <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(0,0,0,0.6), rgba(0,0,0,0.1));"></div>
+    <div class="relative z-10 px-6 pb-12 text-white max-w-3xl">
+      <p class="font-serif tracking-widest uppercase mb-3 text-sm">{{ section.settings.eyebrow | default: 'Destinations' }}</p>
+      <h1 class="font-serif font-light" style="font-size: calc(var(--font-heading-scale, 1) * 38px);">{{ section.settings.heading | default: '撮影地から選ぶ' }}</h1>
+      {% if section.settings.lede != blank %}<p class="mt-4 text-sm">{{ section.settings.lede }}</p>{% endif %}
+    </div>
+  </section>
+
+  {% comment %} --- 検索 --- {% endcomment %}
+  <section class="py-10 px-6 max-w-2xl mx-auto">
+    <input type="search" id="destination-search-{{ section.id }}" placeholder="撮影地名・国名で検索" class="w-full border border-gray-300 rounded-full px-6 py-3 text-sm focus:outline-none" style="border-color:#e5e7eb;">
+  </section>
+
+  {% comment %} --- 人気の撮影地 --- {% endcomment %}
+  {% if popular_destinations.size > 0 %}
+  <section class="py-10 md:py-16 px-6 max-w-6xl mx-auto">
+    <h2 class="font-serif font-medium text-center mb-8" style="font-size: calc(var(--font-heading-scale, 1) * 24px);">人気の撮影地</h2>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+      {% for destination in popular_destinations limit: 8 %}
+        {% render 'destination-card', destination: destination %}
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% comment %} --- 地域から選ぶ --- {% endcomment %}
+  <section class="py-10 md:py-16 px-6 max-w-6xl mx-auto" style="background-color:#FAF8F5;">
+    <h2 class="font-serif font-medium text-center mb-8" style="font-size: calc(var(--font-heading-scale, 1) * 24px);">地域から選ぶ</h2>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {% assign regions = 'europe,america,asia,oceania,middle_east,africa,south_america,japan' | split: ',' %}
+      {% assign region_labels = 'ヨーロッパ,アメリカ大陸,アジア,オセアニア,中東,アフリカ,南米,日本' | split: ',' %}
+      {% for region_key in regions %}
+        {% assign region_url_key = region_key | replace: '_', '-' %}
+        <a href="/pages/{{ region_url_key }}" class="block text-center py-6 rounded-lg border transition hover:opacity-70" style="border-color:#e5e7eb;">
+          <span class="font-serif" style="font-size: calc(var(--font-heading-scale, 1) * 16px);">{{ region_labels[forloop.index0] }}</span>
+        </a>
+      {% endfor %}
+    </div>
+  </section>
+
+  {% comment %} --- 検索結果（全件、初期非表示） --- {% endcomment %}
+  <section class="py-10 md:py-16 px-6 max-w-6xl mx-auto" id="destination-search-results-{{ section.id }}" style="display:none;">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+      {% for destination in all_destinations %}
+        <div class="destination-search-item" data-name="{{ destination.name_ja | escape }} {{ destination.name_en | escape }} {{ destination.country | escape }}">
+          {% render 'destination-card', destination: destination %}
+        </div>
+      {% endfor %}
+    </div>
+    <p class="text-center text-sm text-gray-400 mt-10 destination-search-empty" style="display:none;">該当する撮影地が見つかりませんでした。</p>
+  </section>
+</div>
+
+<script>
+(function () {
+  var input = document.getElementById('destination-search-{{ section.id }}');
+  var resultsSection = document.getElementById('destination-search-results-{{ section.id }}');
+  if (!input || !resultsSection) return;
+  var items = resultsSection.querySelectorAll('.destination-search-item');
+  var emptyMsg = resultsSection.querySelector('.destination-search-empty');
+
+  input.addEventListener('input', function () {
+    var q = input.value.trim();
+    if (!q) { resultsSection.style.display = 'none'; return; }
+    resultsSection.style.display = '';
+    var visibleCount = 0;
+    items.forEach(function (item) {
+      var match = item.dataset.name.toLowerCase().indexOf(q.toLowerCase()) !== -1;
+      item.style.display = match ? '' : 'none';
+      if (match) visibleCount++;
+    });
+    if (emptyMsg) emptyMsg.style.display = visibleCount === 0 ? '' : 'none';
+  });
+})();
+</script>
+
+{% schema %}
+{
+  "name": "撮影地一覧",
+  "settings": [
+    { "type": "image_picker", "id": "hero_image", "label": "ヒーロー画像" },
+    { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "Destinations" },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "撮影地から選ぶ" },
+    { "type": "textarea", "id": "lede", "label": "リード文" }
+  ],
+  "presets": [{ "name": "撮影地一覧" }]
+}
+{% endschema %}

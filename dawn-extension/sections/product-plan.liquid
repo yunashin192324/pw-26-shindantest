@@ -21,6 +21,13 @@
   ある）。カレンダー予約アプリは「予約（Reserve）」パネル内の
   {% raw %}{% render block %}{% endraw %} スロットに、Theme Editorの
   「ブロックを追加 → アプリ」から追加する。
+
+  カートアイコンについて：
+    ヘッダーが「カート無し版」のため、カートに追加した後にお客様が
+    カートへ戻る導線が無い。そのため即予約フォームは
+    return_to=checkout を指定し、カート追加と同時にカートページを
+    経由せずShopify標準チェックアウトへ直接進む（Buy it nowと同じ
+    体験）。ヘッダーにカートアイコンを復活させる必要はない。
 {% endcomment %}
 
 <script>
@@ -166,7 +173,13 @@
             <input type="hidden" name="id" value="{{ variant.id }}">
             <input type="hidden" name="quantity" value="1">
             <input type="hidden" name="properties[予約タイプ]" value="通常予約">
-            <input type="hidden" name="return_to" value="{{ routes.cart_url }}">
+            {%- comment -%}
+              return_to=checkout はShopifyの/cart/add側がサポートする特別な値で、
+              カートページを一切経由せず、追加直後にShopify標準チェックアウトへ
+              直接進む(≒ Buy it now と同じ体験)。ヘッダーにカートアイコンが無くても
+              購入導線が途切れないための対応(下記コメント参照)。
+            {%- endcomment -%}
+            <input type="hidden" name="return_to" value="checkout">
             <div class="mt-6 space-y-2">
               {% if app_blocks.size > 0 %}
                 {% for block in app_blocks %}{% render block %}{% endfor %}

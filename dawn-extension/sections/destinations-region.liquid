@@ -1,0 +1,78 @@
+{% comment %}
+  ファイル名: sections/destinations-region.liquid
+  役割: 地域別の撮影地一覧（例: /pages/europe → ヨーロッパの撮影地一覧）。
+  8地域固定ページ（europe/america/asia/oceania/middle-east/africa/
+  south-america/japan）で共用。ページのURLハンドルから地域キーを判定し、
+  shop.metaobjects.destination の中から一致するものだけを自動表示する
+  ため、新しい撮影地を追加してもこのページのコードは変更不要。
+
+  ハンドルとMetaobjectの「地域」欄の対応:
+    URLハンドル       → 地域欄の値
+    middle-east       → middle_east
+    south-america     → south_america
+    それ以外はURLハンドルとそのまま一致
+{% endcomment %}
+
+<script>
+  if (!document.getElementById('tw-config')) {
+    var twConfig = document.createElement('script');
+    twConfig.id = 'tw-config';
+    twConfig.innerHTML = "tailwind.config = { theme: { extend: { colors: { ivory: '#FAF8F5', gold: '#B8860B', 'gold-light': '#D4A843', dark: '#1a1a1a' }, fontFamily: { serif: ['var(--font-heading-family, serif)', 'serif'], sans: ['var(--font-body-family, sans-serif)', 'sans-serif'] } } } };";
+    document.head.appendChild(twConfig);
+  }
+  if (!document.getElementById('tw-cdn')) {
+    var twScript = document.createElement('script');
+    twScript.id = 'tw-cdn';
+    twScript.src = 'https://cdn.tailwindcss.com/3.4.17';
+    document.head.appendChild(twScript);
+  }
+</script>
+
+{%- assign region_key = page.handle | replace: '-', '_' -%}
+{%- assign region_labels_keys = 'europe,america,asia,oceania,middle_east,africa,south_america,japan' | split: ',' -%}
+{%- assign region_labels_vals = 'ヨーロッパ,アメリカ大陸,アジア,オセアニア,中東,アフリカ,南米,日本' | split: ',' -%}
+{%- assign region_label = region_key -%}
+{%- for key in region_labels_keys -%}
+  {%- if key == region_key -%}{%- assign region_label = region_labels_vals[forloop.index0] -%}{%- endif -%}
+{%- endfor -%}
+
+{%- assign destinations = shop.metaobjects.destination.values | where: 'region', region_key | sort: 'sort_order' -%}
+
+<div style="font-family: var(--font-body-family, sans-serif);">
+  <nav class="max-w-6xl mx-auto px-6 pt-6 text-xs text-gray-500">
+    <a href="{{ routes.root_url }}" class="hover:text-gold" style="color:inherit;">TOP</a>
+    <span class="mx-1">/</span>
+    <a href="/pages/{{ section.settings.destinations_index_handle | default: 'destinations' }}" style="color:inherit;">撮影地一覧</a>
+    <span class="mx-1">/</span>
+    <span>{{ region_label }}</span>
+  </nav>
+
+  <section class="px-6 pt-8 pb-4 text-center max-w-3xl mx-auto">
+    <p class="font-serif tracking-widest uppercase mb-2 text-sm" style="color:#B8860B;">Region</p>
+    <h1 class="font-serif font-light" style="font-size: calc(var(--font-heading-scale, 1) * 32px);">{{ region_label }}</h1>
+    {% if section.settings.description != blank %}<p class="text-sm text-gray-500 mt-4">{{ section.settings.description }}</p>{% endif %}
+  </section>
+
+  <section class="py-10 md:py-16 px-6 max-w-6xl mx-auto">
+    {% if destinations.size > 0 %}
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+        {% for destination in destinations %}
+          {% render 'destination-card', destination: destination %}
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="text-center text-sm text-gray-400 py-16">この地域の撮影地は準備中です。</p>
+    {% endif %}
+  </section>
+</div>
+
+{% schema %}
+{
+  "name": "地域別撮影地一覧",
+  "settings": [
+    { "type": "textarea", "id": "description", "label": "地域の紹介文（任意）" },
+    { "type": "text", "id": "destinations_index_handle", "label": "撮影地一覧ページのハンドル", "default": "destinations", "info": "パンくずリストのリンク先に使用します。" }
+  ],
+  "presets": [{ "name": "地域別撮影地一覧" }]
+}
+{% endschema %}
