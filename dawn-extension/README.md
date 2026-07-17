@@ -15,12 +15,25 @@
 | `sections/product-plan.liquid` | Sections フォルダに**新規追加** |
 | `templates/product.json` | Templates フォルダに**新規追加** |
 | `sections/area-lp.liquid` | Sections フォルダの**既存`area-lp.liquid`を上書き** |
+| `templates/page.destinations.json` | Templates フォルダの**既存ファイルを上書き** |
+| `templates/page.region.json` | Templates フォルダの**既存ファイルを上書き** |
+| `templates/page.destination.json` | Templates フォルダの**既存ファイルを上書き**（未使用なら新規追加でも可） |
+| `sections/destinations-hero.liquid` | Sections フォルダの**既存ファイルを上書き** |
+| `sections/region-hero.liquid` | Sections フォルダの**既存ファイルを上書き** |
+| `sections/destination-hero.liquid` | Sections フォルダの**既存ファイルを上書き** |
+| `sections/destinations-cta.liquid` | Sections フォルダの**既存ファイルを上書き** |
 
 `area-lp.liquid`は**設定・ブロックのID構成を一切変えていません**。
 今すでに`page.area-2.json`（ダナン）に入っているデータは、そのまま
 何も再入力せずに使えます（実際に、いただいたJSONの全設定・全ブロック
 がこの新しいスキーマと100%互換であることを確認済みです）。変更した
 のは「プラン」ブロックに「商品」欄を追加したことだけです。
+
+`page.destinations.json`／`page.region.json`／`page.destination.json`の
+中の`sections`・`order`（＝入力済みのコンテンツ設定）は一切変えて
+いません。変えたのはファイル冒頭の`"layout"`指定を削除しただけです。
+`destinations-hero.liquid`等4ファイルも、元のマークアップ・スキーマは
+そのまま、冒頭に数行追加しただけです（詳細は次項）。
 
 ---
 
@@ -52,23 +65,36 @@
 実際にProductを作ったら、この「商品」欄で選ぶだけで実データ連携に
 切り替えられます。
 
-## ヘッダー統一について（ご指示：統一したい）
+## ヘッダー統一について（ご指示：統一したい）→ 今回コードで解決しました
 
-destinations package側の各ページ（撮影地一覧・地域別一覧・都市詳細）
-に、専用の「撮影地ヘッダー」「撮影地フッター」セクションが個別に
-追加されているのが原因です。**Theme Editor上での操作だけで直せる
-可能性が高いです：**
+原因を特定しました。「撮影地ヘッダー」「撮影地フッター」は普通の
+セクションではなく、`layout/theme.destinations.liquid`という
+**site全体とは別の独立したレイアウトファイル**に直接組み込まれて
+いました（`page.destinations.json`・`page.region.json`・
+`page.destination.json`の`"layout": "theme.destinations"`という
+指定が原因）。この形は**Theme Editorの「セクションを削除」操作では
+外せません**（レイアウトファイルに直書きされているため）。前回お伝え
+した「Theme Editorで削除するだけで直る可能性が高い」はこの調査の
+結果、誤りでした。訂正します。
 
-1. 該当ページ（撮影地一覧、地域ページ等）をTheme Editorで開く
-2. 左側のセクション一覧から「撮影地ヘッダー」を選択 →「…」→ 削除
-3. 同様に「撮影地フッター」も削除
-4. 保存して、共通ヘッダー（他のページと同じもの）が表示されるか確認
+そこで今回、コードで対応しました。
 
-これで直らない場合（テンプレートJSON側で専用レイアウト
-`theme.destinations`のような別レイアウトファイルが指定されている
-可能性があります）、`templates/page.destinations.json`
-（または該当ページの現在のテンプレートJSON）を共有してください。
-`"layout"`の指定を外す形で修正します。
+1. 3つのテンプレートJSONから`"layout": "theme.destinations"`の指定を
+   削除 → 通常の共通レイアウト（他のページと同じヘッダー・フッター）
+   で表示されるようになります
+2. 独自レイアウトの`<head>`で読み込んでいた専用CSS/JS
+   （`destinations.css`／`destinations.js`）と、CSSが依存している
+   `.destinations-scope`という囲みは、各ページの先頭セクション
+   （`destinations-hero.liquid`／`region-hero.liquid`／
+   `destination-hero.liquid`）と最後の`destinations-cta.liquid`で
+   代わりに読み込む形に変更し、見た目（デザイン）は変えていません
+
+**やること**：上の一覧にある8ファイルをそれぞれ上書きするだけです。
+`destinations.css`／`destinations.js`はすでにアセットとして
+アップロード済みのはずなので、そちらは触らなくて大丈夫です。
+`sections/destinations-header.liquid`・`destinations-footer.liquid`・
+`layout/theme.destinations.liquid`はもう使われなくなりますが、
+残しておいても害はありません（削除は任意です）。
 
 ## 確認をお願いしたいこと（再掲）
 

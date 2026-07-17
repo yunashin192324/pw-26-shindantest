@@ -1,0 +1,67 @@
+{%- comment -%}
+  destination-hero — 都市ページ(/pages/{slug})のヒーロー。
+  page.handle と Destination metaobjectの `slug` フィールドを照合して
+  対象の都市を1件特定する。Shopifyのセクションは相互にスコープを
+  共有しないため、この1行のlookupはdestination-intro / spots / plans /
+  faq の各セクションでも同様に繰り返している。
+{%- endcomment -%}
+{%- assign destination = shop.metaobjects.destination.values | where: 'slug.value', page.handle | first -%}
+
+{%- comment -%}
+  共通ヘッダー統一のため、このページ群は独自レイアウト(theme.destinations)
+  を使わず通常のtheme.liquidで表示する。専用CSS/JSと
+  .destinations-scopeラッパーをここで読み込む（閉じタグは
+  このテンプレート最後のdestinations-ctaセクションで出力）。
+{%- endcomment -%}
+{{ 'destinations.css' | asset_url | stylesheet_tag }}
+<script src="{{ 'destinations.js' | asset_url }}" defer></script>
+<div class="destinations-scope">
+
+{%- if destination -%}
+  {%- capture region_label -%}{% render 'destination-region-label', region_key: destination.region.value %}{%- endcapture -%}
+  {%- assign region_label = region_label | strip -%}
+  {%- render 'destination-schema', destination: destination, region_label: region_label -%}
+
+  <section class="dst-hero dst-hero--tall">
+    <div class="dst-hero-media">
+      {%- if destination.hero_image.value -%}
+        <img
+          src="{{ destination.hero_image.value | image_url: width: 2400 }}"
+          srcset="{{ destination.hero_image.value | image_url: width: 1200 }} 1200w, {{ destination.hero_image.value | image_url: width: 1800 }} 1800w, {{ destination.hero_image.value | image_url: width: 2400 }} 2400w"
+          sizes="100vw"
+          alt="{{ destination.hero_image.value.alt | default: destination.name_ja.value | escape }}"
+          loading="eager"
+          fetchpriority="high"
+          width="2400" height="1350"
+        >
+      {%- endif -%}
+    </div>
+    <div class="dst-hero-content">
+      <p class="dst-eyebrow dst-reveal">{{ destination.country.value }} ／ {{ destination.name_en.value }}</p>
+      <h1 class="dst-reveal dst-reveal-1">{{ destination.name_ja.value }}</h1>
+      <p class="dst-lede dst-reveal dst-reveal-2">{{ destination.description.value | strip_html | truncate: 90 }}</p>
+    </div>
+  </section>
+
+  <nav class="dst-hero-breadcrumb dst-text-center" aria-label="breadcrumb" style="position:static;padding:22px var(--dst-gutter);color:var(--dst-text-muted);">
+    <a href="{{ routes.root_url }}">TOP</a><span>／</span>
+    <a href="/pages/destinations">撮影地一覧</a><span>／</span>
+    <a href="/pages/{{ destination.region.value | replace: '_', '-' }}">{{ region_label }}</a><span>／</span>
+    <span>{{ destination.name_ja.value }}</span>
+  </nav>
+{%- else -%}
+  <section class="dst-text-center" style="padding-top:160px;">
+    <div class="dst-container">
+      <h1>撮影地が見つかりませんでした</h1>
+      <p>お探しの撮影地ページは存在しないか、削除された可能性があります。</p>
+      <a href="/pages/destinations" class="dst-btn dst-btn-outline-dark" style="margin-top:24px;">撮影地一覧へ戻る ＞</a>
+    </div>
+  </section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "都市 ヒーロー",
+  "settings": []
+}
+{% endschema %}
