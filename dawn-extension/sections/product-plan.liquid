@@ -1,0 +1,501 @@
+{% comment %}
+  ファイル名: sections/product-plan.liquid
+  役割: 撮影地プラン(ダナン・ハワイ・ロンドン等)のShopify商品ページ。
+  danang-beach-plan（Page用の単発セクション）と同じ見た目・同じブロック
+  語彙（gallery_image / tag / option / schedule / faq / note）を踏襲しつつ、
+  Shopify Productに対応させたバージョン。
+  ------------------------------------------------------------
+  なぜProduct化したか：
+    予約日時選択アプリ(カレンダー予約アプリ)を使うには、選んだ日時を
+    Shopifyの「カートに追加」に乗せてShopify標準チェックアウトで決済
+    する必要があるため。Pageではカート/チェックアウトに直接つながら
+    ない。
+
+  価格・商品名・商品説明は固定テキストではなく実際のProductオブジェクト
+  (product.title / product.selected_or_first_available_variant.price /
+  product.description)から取得し、他の設定はdanang-beach-planと同じ
+  ように上書き可能なテキスト設定として残してある。
+
+  通常予約／リクエスト予約は商品タグ「即予約」の有無で自動判定
+  （現行のFAQ「即予約できます／現地確認後ご回答」の説明文と一致させて
+  ある）。カレンダー予約アプリは「予約（Reserve）」パネル内の
+  {% raw %}{% render block %}{% endraw %} スロットに、Theme Editorの
+  「ブロックを追加 → アプリ」から追加する。
+{% endcomment %}
+
+<script>
+  if (!document.getElementById('tw-config')) {
+    var twConfig = document.createElement('script');
+    twConfig.id = 'tw-config';
+    twConfig.innerHTML = "tailwind.config = { theme: { extend: { colors: { ivory: '#FAF8F5', gold: '#B8860B', 'gold-light': '#D4A843', dark: '#1a1a1a' }, fontFamily: { serif: ['var(--font-heading-family, serif)', 'serif'], sans: ['var(--font-body-family, sans-serif)', 'sans-serif'] } } } };";
+    document.head.appendChild(twConfig);
+  }
+  if (!document.getElementById('tw-cdn')) {
+    var twScript = document.createElement('script');
+    twScript.id = 'tw-cdn';
+    twScript.src = 'https://cdn.tailwindcss.com/3.4.17';
+    document.head.appendChild(twScript);
+  }
+</script>
+
+<style>
+  #product-plan-{{ section.id }} {
+    font-family: var(--font-body-family, sans-serif);
+    font-size: calc(var(--font-body-scale, 1) * 100%);
+  }
+  #product-plan-{{ section.id }} .font-serif { font-family: var(--font-heading-family, serif); }
+  #product-plan-{{ section.id }} .divider-gold { width: 48px; height: 2px; background: #B8860B; margin: 16px 0; }
+  #product-plan-{{ section.id }} .divider-gold.center { margin-left: auto; margin-right: auto; }
+</style>
+
+{%- assign variant = product.selected_or_first_available_variant -%}
+{%- assign is_instant = product.tags contains '即予約' -%}
+{%- assign hero_img = section.settings.hero_img | default: product.featured_image -%}
+{%- assign hero_title = section.settings.hero_title | default: product.title -%}
+{%- assign gallery_blocks = section.blocks | where: 'type', 'gallery_image' -%}
+{%- assign tag_blocks = section.blocks | where: 'type', 'tag' -%}
+{%- assign option_blocks = section.blocks | where: 'type', 'option' -%}
+{%- assign schedule_blocks = section.blocks | where: 'type', 'schedule' -%}
+{%- assign faq_blocks = section.blocks | where: 'type', 'faq' -%}
+{%- assign note_blocks = section.blocks | where: 'type', 'note' -%}
+{%- assign app_blocks = section.blocks | where: 'type', '@app' -%}
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Product",
+  "name": {{ product.title | json }},
+  "description": {{ product.description | strip_html | truncate: 300 | json }},
+  {%- if product.featured_image %}
+  "image": [{{ product.featured_image | image_url: width: 1600 | prepend: "https:" | json }}],
+  {%- endif %}
+  "brand": { "@type": "Brand", "name": {{ shop.name | json }} },
+  "offers": {
+    "@type": "Offer",
+    "priceCurrency": {{ cart.currency.iso_code | json }},
+    "price": {{ variant.price | money_without_currency | json }},
+    "availability": "https://schema.org/{% if variant.available %}InStock{% else %}OutOfStock{% endif %}",
+    "url": {{ canonical_url | json }}
+  }
+}
+</script>
+{%- if faq_blocks.size > 0 -%}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {%- for block in faq_blocks -%}
+      {
+        "@type": "Question",
+        "name": {{ block.settings.question | strip_html | json }},
+        "acceptedAnswer": { "@type": "Answer", "text": {{ block.settings.answer | strip_html | json }} }
+      }{%- unless forloop.last -%},{%- endunless -%}
+    {%- endfor -%}
+  ]
+}
+</script>
+{%- endif -%}
+
+<div id="product-plan-{{ section.id }}" class="w-full bg-white text-gray-800">
+
+  {% comment %} --- HERO --- {% endcomment %}
+  <section class="relative w-full flex flex-col justify-end items-center text-center" style="height: 70vh;">
+    {% if hero_img != blank %}
+      {% capture hero_img_style %}object-position: {{ section.settings.hero_img_position | default: 'object-center' }};{% endcapture %}
+      {{ hero_img | image_url: width: 2000 | image_tag: class: 'absolute inset-0 w-full h-full object-cover', style: hero_img_style, alt: hero_title }}
+    {% else %}
+      <div class="absolute inset-0 w-full h-full bg-gray-200"></div>
+    {% endif %}
+    <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(0,0,0,0.65), rgba(0,0,0,0.15));"></div>
+    <div class="relative z-10 px-6 pb-16 w-full max-w-4xl text-white">
+      {% if section.settings.hero_eyebrow != blank %}
+        <p class="font-serif tracking-widest uppercase mb-4 text-sm">{{ section.settings.hero_eyebrow }}</p>
+      {% endif %}
+      <h1 class="font-serif font-light leading-tight mb-4" style="font-size: calc(var(--font-heading-scale, 1) * 40px);">{{ hero_title }}</h1>
+      {% if section.settings.hero_lede != blank %}
+        <p class="font-light" style="font-size: calc(var(--font-body-scale, 1) * 16px);">{{ section.settings.hero_lede }}</p>
+      {% endif %}
+    </div>
+  </section>
+
+  <nav class="max-w-6xl mx-auto px-6 pt-4 text-xs text-gray-500" aria-label="breadcrumb">
+    <a href="{{ routes.root_url }}" class="hover:text-gold">TOP</a>
+    {%- if product.collections.first -%}
+      <span class="mx-1">/</span><a href="{{ product.collections.first.url }}" class="hover:text-gold">{{ product.collections.first.title }}</a>
+    {%- endif -%}
+    <span class="mx-1">/</span><span>{{ product.title }}</span>
+  </nav>
+
+  {% comment %} --- OVERVIEW + タグ + 予約(Appointo) --- {% endcomment %}
+  <section class="py-16 md:py-24">
+    <div class="max-w-6xl mx-auto px-6 grid md:grid-cols-2 gap-10 items-start">
+      <div>
+        {% if section.settings.overview_eyebrow != blank %}
+          <p class="font-serif tracking-widest uppercase mb-2 text-sm" style="color:#B8860B;">{{ section.settings.overview_eyebrow }}</p>
+        {% endif %}
+        {% if section.settings.overview_title != blank %}
+          <h2 class="font-medium mb-3" style="font-size: calc(var(--font-heading-scale, 1) * 24px);">{{ section.settings.overview_title }}</h2>
+          <div class="divider-gold"></div>
+        {% endif %}
+        <div class="text-sm leading-relaxed text-gray-600 mt-4">
+          {% if section.settings.overview_desc != blank %}{{ section.settings.overview_desc }}{% else %}{{ product.description }}{% endif %}
+        </div>
+        {% if tag_blocks.size > 0 %}
+          <div class="flex flex-wrap gap-2 mt-6">
+            {% for block in tag_blocks %}
+              <span class="inline-block px-3 py-1 text-xs border border-gray-300 rounded-full text-gray-600" {{ block.shopify_attributes }}>{{ block.settings.title }}</span>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="rounded-lg p-8" style="background-color:#FAF8F5;border:1px solid #eee;">
+        {% if is_instant %}
+          <span class="inline-flex items-center gap-1 px-3 py-1 text-xs rounded-full" style="background:#eef4ec;color:#4b7a52;">即予約</span>
+        {% else %}
+          <span class="inline-flex items-center gap-1 px-3 py-1 text-xs rounded-full" style="background:#f6efe2;color:#8f6a08;">リクエスト予約</span>
+        {% endif %}
+        <div class="mt-4 font-serif" style="font-size: calc(var(--font-heading-scale, 1) * 34px); color:#1a1a1a;">
+          {{ variant.price | money }}
+          <span class="text-sm font-sans text-gray-500">{{ section.settings.price_note }}</span>
+        </div>
+
+        {% if is_instant %}
+          {%- form 'product', product, id: 'plan-reserve-form' -%}
+            <input type="hidden" name="id" value="{{ variant.id }}">
+            <input type="hidden" name="quantity" value="1">
+            <input type="hidden" name="properties[予約タイプ]" value="通常予約">
+            <input type="hidden" name="return_to" value="{{ routes.cart_url }}">
+            <div class="mt-6 space-y-2">
+              {% if app_blocks.size > 0 %}
+                {% for block in app_blocks %}{% render block %}{% endfor %}
+              {% else %}
+                <div class="flex justify-between text-sm border-b border-gray-200 py-3"><span class="text-gray-500">日付</span><span>—</span></div>
+                <div class="flex justify-between text-sm border-b border-gray-200 py-3"><span class="text-gray-500">時間</span><span>—</span></div>
+                {% if request.design_mode %}
+                  <p class="text-xs text-gray-400 mt-2">予約日時選択アプリを導入後、このセクションの「ブロックを追加」→「アプリ」から追加してください（このフォーム内に追加されるため、選択した日時はカート追加時にそのまま渡されます）。</p>
+                {% endif %}
+              {% endif %}
+            </div>
+            {% unless section.settings.hide_default_submit %}
+              <button type="submit" name="add" class="w-full mt-6 px-8 py-4 rounded-full font-medium text-sm text-white transition hover:opacity-80" style="background-color:#B8860B;">{{ section.settings.reserve_button_label_instant | default: '空き状況を確認して予約する' }}</button>
+            {% endunless %}
+          {%- endform -%}
+        {% else %}
+          <div class="mt-6 space-y-2">
+            {% if app_blocks.size > 0 %}
+              {% for block in app_blocks %}{% render block %}{% endfor %}
+            {% else %}
+              <div class="flex justify-between text-sm border-b border-gray-200 py-3"><span class="text-gray-500">希望日</span><span>—</span></div>
+              <div class="flex justify-between text-sm border-b border-gray-200 py-3"><span class="text-gray-500">希望時間</span><span>—</span></div>
+              {% if request.design_mode %}
+                <p class="text-xs text-gray-400 mt-2">予約日時選択アプリの「リクエスト予約」ウィジェットをこのセクションに追加してください。</p>
+              {% endif %}
+            {% endif %}
+          </div>
+          {% if section.settings.request_explainer != blank %}
+            <p class="text-xs text-gray-500 mt-4 leading-relaxed">{{ section.settings.request_explainer }}</p>
+          {% endif %}
+          {% unless section.settings.hide_default_submit %}
+            <a href="{{ section.settings.fallback_url | default: '#reserve' }}" class="block text-center w-full mt-6 px-8 py-4 rounded-full font-medium text-sm text-white transition hover:opacity-80" style="background-color:#B8860B;">{{ section.settings.reserve_button_label_request | default: '希望日時をリクエストする' }}</a>
+          {% endunless %}
+        {% endif %}
+
+        {% if section.settings.price_cancel_note != blank %}
+          <p class="text-xs text-gray-500 mt-6 leading-relaxed">{{ section.settings.price_cancel_note }}</p>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  {% comment %} --- 含まれるもの／含まれないもの --- {% endcomment %}
+  {% if section.settings.included_list != blank or section.settings.excluded_list != blank %}
+  <section class="py-16 md:py-24" style="background-color:#FAF8F5;">
+    <div class="max-w-6xl mx-auto px-6 grid md:grid-cols-2 gap-10">
+      {% if section.settings.included_list != blank %}
+      <div>
+        <h3 class="font-bold mb-4" style="font-size: calc(var(--font-heading-scale, 1) * 18px);">{{ section.settings.included_title | default: '含まれるもの' }}</h3>
+        <div class="divider-gold"></div>
+        <ul class="mt-4 space-y-2 text-sm text-gray-700">
+          {% for line in section.settings.included_list | newline_to_br | split: '<br />' %}
+            {% assign line = line | strip %}
+            {% if line != blank %}<li class="flex gap-2"><span style="color:#B8860B;">✓</span><span>{{ line }}</span></li>{% endif %}
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+      {% if section.settings.excluded_list != blank %}
+      <div>
+        <h3 class="font-bold mb-4" style="font-size: calc(var(--font-heading-scale, 1) * 18px);">{{ section.settings.excluded_title | default: '含まれないもの' }}</h3>
+        <div class="divider-gold"></div>
+        <ul class="mt-4 space-y-2 text-sm text-gray-500">
+          {% for line in section.settings.excluded_list | newline_to_br | split: '<br />' %}
+            {% assign line = line | strip %}
+            {% if line != blank %}<li class="flex gap-2"><span class="text-gray-300">—</span><span>{{ line }}</span></li>{% endif %}
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% comment %} --- オプション --- {% endcomment %}
+  {% if section.settings.show_options and option_blocks.size > 0 %}
+  <section class="py-16 md:py-24">
+    <div class="max-w-6xl mx-auto px-6">
+      <div class="text-center mb-16">
+        {% if section.settings.options_eyebrow != blank %}<p class="font-serif tracking-widest uppercase mb-2 text-sm" style="color:#B8860B;">{{ section.settings.options_eyebrow }}</p>{% endif %}
+        <h2 class="font-medium" style="font-size: calc(var(--font-heading-scale, 1) * 24px);">{{ section.settings.options_title | default: 'オプション' }}</h2>
+        <div class="divider-gold center"></div>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+        {% for block in option_blocks %}
+          <div {{ block.shopify_attributes }}>
+            <h4 class="font-bold text-sm">{{ block.settings.title }}</h4>
+            <p class="text-sm mt-2" style="color:#B8860B;">{{ block.settings.price }}</p>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {% comment %} --- 衣裳への導線 --- {% endcomment %}
+  {% if section.settings.show_dress %}
+  <section class="py-16 md:py-24" style="background-color:#FAF8F5;">
+    <div class="max-w-6xl mx-auto px-6 grid md:grid-cols-2 gap-10 items-center">
+      <div class="w-full relative" style="padding-top: 125%;">
+        {% if section.settings.dress_img != blank %}
+          {% capture dress_img_style %}object-position: {{ section.settings.dress_img_position | default: 'object-center' }};{% endcapture %}
+          {{ section.settings.dress_img | image_url: width: 1000 | image_tag: class: 'absolute top-0 left-0 w-full h-full object-cover rounded-lg', style: dress_img_style, alt: section.settings.dress_title }}
+        {% else %}
+          <div class="absolute top-0 left-0 w-full h-full bg-gray-200 rounded-lg"></div>
+        {% endif %}
+      </div>
+      <div>
+        {% if section.settings.dress_eyebrow != blank %}<p class="font-serif tracking-widest uppercase mb-2 text-sm" style="color:#B8860B;">{{ section.settings.dress_eyebrow }}</p>{% endif %}
+        <h2 class="font-medium mb-3" style="font-size: calc(var(--font-heading-scale, 1) * 24px);">{{ section.settings.dress_title }}</h2>
+        <div class="divider-gold"></div>
+        <p class="text-sm text-gray-600 mt-4 leading-relaxed">{{ section.settings.dress_desc }}</p>
+        {% if section.settings.dress_btn_text != blank %}
+          <a href="{{ section.settings.dress_btn_url }}" class="inline-block mt-6 px-8 py-3 rounded-full font-medium text-sm border transition hover:opacity-70" style="border-color:#1a1a1a;color:#1a1a1a;">{{ section.settings.dress_btn_text }}</a>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {% comment %} --- 撮影ギャラリー --- {% endcomment %}
+  {% if gallery_blocks.size > 0 %}
+  <section class="py-16 md:py-24">
+    <div class="max-w-6xl mx-auto px-6">
+      <div class="text-center mb-16">
+        {% if section.settings.gallery_eyebrow != blank %}<p class="font-serif tracking-widest uppercase mb-2 text-sm" style="color:#B8860B;">{{ section.settings.gallery_eyebrow }}</p>{% endif %}
+        <h2 class="font-medium" style="font-size: calc(var(--font-heading-scale, 1) * 24px);">{{ section.settings.gallery_title | default: '撮影イメージ' }}</h2>
+        <div class="divider-gold center"></div>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+        {% for block in gallery_blocks %}
+          <div class="w-full relative" style="padding-top: 125%;" {{ block.shopify_attributes }}>
+            {% if block.settings.image != blank %}
+              {% capture gimg_style %}object-position: {{ block.settings.img_position | default: 'object-center' }};{% endcapture %}
+              {{ block.settings.image | image_url: width: 800 | image_tag: class: 'absolute top-0 left-0 w-full h-full object-cover rounded-lg', style: gimg_style, alt: product.title }}
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {% comment %} --- スケジュール --- {% endcomment %}
+  {% if schedule_blocks.size > 0 %}
+  <section class="py-16 md:py-24" style="background-color:#FAF8F5;">
+    <div class="max-w-3xl mx-auto px-6">
+      <div class="text-center mb-16">
+        {% if section.settings.schedule_eyebrow != blank %}<p class="font-serif tracking-widest uppercase mb-2 text-sm" style="color:#B8860B;">{{ section.settings.schedule_eyebrow }}</p>{% endif %}
+        <h2 class="font-medium" style="font-size: calc(var(--font-heading-scale, 1) * 24px);">{{ section.settings.schedule_title | default: '撮影当日のスケジュール例' }}</h2>
+        <div class="divider-gold center"></div>
+      </div>
+      <div>
+        {% for block in schedule_blocks %}
+          <div class="flex gap-6 border-b border-gray-200 py-4 text-sm" {{ block.shopify_attributes }}>
+            <span class="w-16 shrink-0 font-serif" style="color:#B8860B;">{{ block.settings.time }}</span>
+            <span class="text-gray-700">{{ block.settings.desc }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {% comment %} --- FAQ --- {% endcomment %}
+  {% if faq_blocks.size > 0 %}
+  <section class="py-16 md:py-24">
+    <div class="max-w-3xl mx-auto px-6">
+      <div class="text-center mb-16">
+        {% if section.settings.faq_eyebrow != blank %}<p class="font-serif tracking-widest uppercase mb-2 text-sm" style="color:#B8860B;">{{ section.settings.faq_eyebrow }}</p>{% endif %}
+        <h2 class="font-medium" style="font-size: calc(var(--font-heading-scale, 1) * 24px);">{{ section.settings.faq_title | default: 'よくあるご質問' }}</h2>
+        <div class="divider-gold center"></div>
+      </div>
+      <div>
+        {% for block in faq_blocks %}
+          <details class="border-b border-gray-200 py-4" {{ block.shopify_attributes }}>
+            <summary class="cursor-pointer font-medium text-sm flex justify-between items-center">{{ block.settings.question }}<span style="color:#B8860B;">＋</span></summary>
+            <p class="text-sm text-gray-600 mt-3 leading-relaxed">{{ block.settings.answer }}</p>
+          </details>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {% comment %} --- 注意事項 --- {% endcomment %}
+  {% if section.settings.show_notes and note_blocks.size > 0 %}
+  <section class="py-16 md:py-24" style="background-color:#FAF8F5;">
+    <div class="max-w-3xl mx-auto px-6">
+      <h3 class="font-bold mb-4 text-sm">{{ section.settings.notes_title | default: '注意事項・ご案内' }}</h3>
+      {% for block in note_blocks %}
+        <div class="text-xs text-gray-500 leading-relaxed mt-3" {{ block.shopify_attributes }}>
+          {% if block.settings.title != blank %}<p class="font-bold text-gray-600 mb-1">{{ block.settings.title }}</p>{% endif %}
+          {{ block.settings.text | newline_to_br }}
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% comment %} --- 最後のCTA --- {% endcomment %}
+  <section id="reserve" class="py-16 md:py-24 text-center text-white" style="background-color:#1a1a1a;">
+    <div class="max-w-3xl mx-auto px-6">
+      {% if section.settings.reserve_eyebrow != blank %}<p class="font-serif tracking-widest uppercase mb-2 text-sm" style="color:#D4A843;">{{ section.settings.reserve_eyebrow }}</p>{% endif %}
+      {% assign reserve_title = section.settings.reserve_title %}
+      {% if reserve_title == blank %}{% assign reserve_title = product.title | append: 'を予約する' %}{% endif %}
+      <h2 class="font-medium" style="font-size: calc(var(--font-heading-scale, 1) * 28px);">{{ reserve_title }}</h2>
+      {% if section.settings.reserve_desc != blank %}<p class="text-sm mt-4 text-gray-300">{{ section.settings.reserve_desc }}</p>{% endif %}
+      <div class="flex flex-wrap justify-center gap-4 mt-8">
+        {% if is_instant %}
+          <a href="#product-plan-{{ section.id }}" class="px-8 py-3 rounded-full font-medium text-sm text-white transition hover:opacity-80" style="background-color:#B8860B;">{{ section.settings.reserve_button_label_instant | default: '空き状況を確認して予約する' }}</a>
+        {% else %}
+          <a href="#product-plan-{{ section.id }}" class="px-8 py-3 rounded-full font-medium text-sm text-white transition hover:opacity-80" style="background-color:#B8860B;">{{ section.settings.reserve_button_label_request | default: '希望日時をリクエストする' }}</a>
+        {% endif %}
+        {% if section.settings.reserve_cta_secondary != blank %}
+          <a href="{{ section.settings.reserve_url_secondary }}" class="px-8 py-3 rounded-full font-medium text-sm border border-white transition hover:opacity-70">{{ section.settings.reserve_cta_secondary }}</a>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+</div>
+
+{% schema %}
+{
+  "name": "商品プランページ",
+  "settings": [
+    { "type": "image_picker", "id": "hero_img", "label": "ヒーロー画像（空欄で商品メイン画像）" },
+    { "type": "text", "id": "hero_img_position", "label": "ヒーロー画像位置", "default": "object-center" },
+    { "type": "text", "id": "hero_eyebrow", "label": "ヒーロー英字見出し" },
+    { "type": "text", "id": "hero_title", "label": "ヒーロー見出し（空欄で商品名）" },
+    { "type": "textarea", "id": "hero_lede", "label": "ヒーローリード文" },
+
+    { "type": "text", "id": "overview_eyebrow", "label": "概要 英字見出し", "default": "PLAN OVERVIEW" },
+    { "type": "text", "id": "overview_title", "label": "概要 見出し" },
+    { "type": "textarea", "id": "overview_desc", "label": "概要 本文（空欄で商品説明）" },
+
+    { "type": "text", "id": "price_note", "label": "価格の注記", "default": "税込 / 2名様" },
+    { "type": "textarea", "id": "price_cancel_note", "label": "キャンセル規定" },
+    { "type": "text", "id": "reserve_button_label_instant", "label": "「即予約」ボタン文言", "default": "空き状況を確認して予約する" },
+    { "type": "text", "id": "reserve_button_label_request", "label": "「リクエスト予約」ボタン文言", "default": "希望日時をリクエストする" },
+    { "type": "textarea", "id": "request_explainer", "label": "リクエスト予約の説明文" },
+    { "type": "url", "id": "fallback_url", "label": "リクエスト予約ボタンのリンク先（予約アプリ未設置時）" },
+    { "type": "checkbox", "id": "hide_default_submit", "label": "標準ボタンを非表示にする", "info": "予約アプリのブロック自体に送信ボタンがある場合はON。", "default": false },
+
+    { "type": "text", "id": "included_title", "label": "含まれるもの 見出し", "default": "含まれるもの" },
+    { "type": "textarea", "id": "included_list", "label": "含まれるもの（1行1項目）" },
+    { "type": "text", "id": "excluded_title", "label": "含まれないもの 見出し", "default": "含まれないもの" },
+    { "type": "textarea", "id": "excluded_list", "label": "含まれないもの（1行1項目）" },
+
+    { "type": "checkbox", "id": "show_options", "label": "オプションを表示する", "default": true },
+    { "type": "text", "id": "options_eyebrow", "label": "オプション 英字見出し", "default": "OPTIONS" },
+    { "type": "text", "id": "options_title", "label": "オプション 見出し", "default": "オプション" },
+
+    { "type": "checkbox", "id": "show_dress", "label": "衣裳導線を表示する", "default": true },
+    { "type": "image_picker", "id": "dress_img", "label": "衣裳 画像" },
+    { "type": "text", "id": "dress_img_position", "label": "衣裳画像位置", "default": "object-center" },
+    { "type": "text", "id": "dress_eyebrow", "label": "衣裳 英字見出し", "default": "DRESS & TUXEDO" },
+    { "type": "text", "id": "dress_title", "label": "衣裳 見出し", "default": "こだわりの衣裳" },
+    { "type": "textarea", "id": "dress_desc", "label": "衣裳 本文" },
+    { "type": "text", "id": "dress_btn_text", "label": "衣裳 ボタン文言", "default": "衣裳一覧を見る" },
+    { "type": "url", "id": "dress_btn_url", "label": "衣裳 ボタンリンク先" },
+
+    { "type": "text", "id": "gallery_eyebrow", "label": "ギャラリー 英字見出し", "default": "GALLERY" },
+    { "type": "text", "id": "gallery_title", "label": "ギャラリー 見出し", "default": "撮影イメージ" },
+
+    { "type": "text", "id": "schedule_eyebrow", "label": "スケジュール 英字見出し", "default": "SCHEDULE" },
+    { "type": "text", "id": "schedule_title", "label": "スケジュール 見出し", "default": "撮影当日のスケジュール例" },
+
+    { "type": "text", "id": "faq_eyebrow", "label": "FAQ 英字見出し", "default": "FAQ" },
+    { "type": "text", "id": "faq_title", "label": "FAQ 見出し", "default": "よくあるご質問" },
+
+    { "type": "checkbox", "id": "show_notes", "label": "注意事項を表示する", "default": true },
+    { "type": "text", "id": "notes_title", "label": "注意事項 見出し", "default": "注意事項・ご案内" },
+
+    { "type": "text", "id": "reserve_eyebrow", "label": "最後のCTA 英字見出し", "default": "RESERVATION" },
+    { "type": "text", "id": "reserve_title", "label": "最後のCTA 見出し（空欄で商品名＋を予約する）" },
+    { "type": "textarea", "id": "reserve_desc", "label": "最後のCTA 本文" },
+    { "type": "text", "id": "reserve_cta_secondary", "label": "最後のCTA サブボタン文言" },
+    { "type": "url", "id": "reserve_url_secondary", "label": "最後のCTA サブボタンリンク先" }
+  ],
+  "blocks": [
+    {
+      "type": "gallery_image",
+      "name": "ギャラリー画像",
+      "settings": [
+        { "type": "image_picker", "id": "image", "label": "画像" },
+        { "type": "text", "id": "img_position", "label": "画像位置", "default": "object-center" }
+      ]
+    },
+    {
+      "type": "tag",
+      "name": "特徴タグ",
+      "settings": [{ "type": "text", "id": "title", "label": "文言", "default": "ダブルカメラマン" }]
+    },
+    {
+      "type": "option",
+      "name": "オプション",
+      "settings": [
+        { "type": "text", "id": "title", "label": "名称", "default": "送迎付きプラン" },
+        { "type": "text", "id": "price", "label": "価格表記", "default": "+¥12,000" }
+      ]
+    },
+    {
+      "type": "schedule",
+      "name": "スケジュール",
+      "settings": [
+        { "type": "text", "id": "time", "label": "時刻", "default": "8:00" },
+        { "type": "text", "id": "desc", "label": "内容", "default": "サロンにてお仕度開始" }
+      ]
+    },
+    {
+      "type": "faq",
+      "name": "FAQ",
+      "settings": [
+        { "type": "text", "id": "question", "label": "質問", "default": "質問文をここに入力" },
+        { "type": "textarea", "id": "answer", "label": "回答" }
+      ]
+    },
+    {
+      "type": "note",
+      "name": "注意事項",
+      "settings": [
+        { "type": "text", "id": "title", "label": "見出し（任意）" },
+        { "type": "textarea", "id": "text", "label": "本文" }
+      ]
+    },
+    { "type": "@app", "name": "予約アプリ（Appointo等）" }
+  ],
+  "max_blocks": 60
+}
+{% endschema %}
