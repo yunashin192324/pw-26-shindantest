@@ -4,45 +4,46 @@
       "type": "page-hero",
       "settings": {
         "eyebrow": "Dress Diagnosis",
-        "heading": "あなたに似合う\nドレスの系統を診断。",
-        "lede": "3つの質問に答えるだけで、おすすめのドレスの系統をご提案します。"
+        "heading": "フォトウェディング\nドレス診断",
+        "lede": "いくつかの質問に答えるだけで、豊富なコレクションの中からあなたの撮影イメージに最も映える運命のドレスをご提案します。"
       }
     },
     "dress-diagnosis-quiz": {
-      "type": "diagnosis-quiz",
+      "type": "dress-diagnostic",
       "settings": {
-        "key_formula": "first_question",
-        "result_lede": "あなたに似合うドレスの系統は",
-        "result_link_label": "このスタイルを詳しく見る",
+        "start_heading": "フォトウェディング ドレス診断",
+        "start_body": "いくつかの質問に答えるだけで、豊富なコレクションの中からあなたの撮影イメージに最も映える運命のドレスをご提案します。",
+        "start_button_label": "診断をスタート",
+        "result_lede": "あなたの撮影にぴったりのドレスは…",
+        "consult_label": "試着について相談する",
+        "consult_url": "/pages/about#contact",
         "result_footnote": "診断結果は目安です。実際の着心地やサイズ感は、ぜひ試着でご確認ください。"
       },
       "blocks": {
-        "q1": { "type": "question", "settings": { "key": "style", "question": "どんな印象のドレスに憧れますか？" } },
-        "q1-o1": { "type": "option", "settings": { "value": "princess", "label": "華やかで王道な雰囲気", "sub": "ボリュームのあるスカートで特別感を" } },
-        "q1-o2": { "type": "option", "settings": { "value": "mermaid", "label": "スタイリッシュで女性らしい雰囲気", "sub": "体のラインを美しく見せる" } },
-        "q1-o3": { "type": "option", "settings": { "value": "aline", "label": "上品でバランスの良い雰囲気", "sub": "どんな会場にも合わせやすい定番" } },
-        "q1-o4": { "type": "option", "settings": { "value": "empire", "label": "軽やかでナチュラルな雰囲気", "sub": "動きやすく可憐な印象に" } },
+        "q1": { "type": "question", "settings": { "question": "Q1. 撮影のロケーション（場所）は、どんなイメージが良いですか？" } },
+        "q1-o1": { "type": "option", "settings": { "label": "チャペルや歴史的建造物など、クラシカルで厳かな場所", "trait": "style", "value": "classic" } },
+        "q1-o2": { "type": "option", "settings": { "label": "海辺や森、自然豊かな公園など、ナチュラルな屋外", "trait": "style", "value": "natural" } },
+        "q1-o3": { "type": "option", "settings": { "label": "おしゃれなスタジオや洋館、都会の街並みなど、モダンな空間", "trait": "style", "value": "modern" } },
 
-        "q2": { "type": "question", "settings": { "key": "body_focus", "question": "体型で気になるところはありますか？" } },
-        "q2-o1": { "type": "option", "settings": { "value": "waist", "label": "ウエストを引き締めて見せたい" } },
-        "q2-o2": { "type": "option", "settings": { "value": "height", "label": "スタイルを高く見せたい" } },
-        "q2-o3": { "type": "option", "settings": { "value": "none", "label": "特にこだわりはない" } },
+        "q2": { "type": "question", "settings": { "question": "Q2. 写真全体を通して、どんなシルエットで残したいですか？" } },
+        "q2-o1": { "type": "option", "settings": { "label": "お姫様のように華やかで可愛らしい雰囲気（ふんわりAライン、プリンセスライン）", "trait": "silhouette", "value": "volume" } },
+        "q2-o2": { "type": "option", "settings": { "label": "スタイル良く、大人っぽく洗練された雰囲気（スッキリとしたスレンダー、マーメイド）", "trait": "silhouette", "value": "slender" } },
 
-        "q3": { "type": "question", "settings": { "key": "venue", "question": "挙式・撮影会場の雰囲気は？" } },
-        "q3-o1": { "type": "option", "settings": { "value": "church", "label": "チャペル・教会" } },
-        "q3-o2": { "type": "option", "settings": { "value": "garden", "label": "ガーデン・屋外" } },
-        "q3-o3": { "type": "option", "settings": { "value": "hotel", "label": "ホテル・格式ある会場" } },
+        "q3": { "type": "question", "settings": { "question": "Q3. お顔周りのアップ写真に影響する、胸元や袖の希望は？" } },
+        "q3-o1": { "type": "option", "settings": { "label": "デコルテを出して、お顔周りをすっきり明るく見せたい", "trait": "neck", "value": "clear" } },
+        "q3-o2": { "type": "option", "settings": { "label": "素肌に重なるレースで、上品で繊細な雰囲気を演出したい", "trait": "neck", "value": "sheer" } },
+        "q3-o3": { "type": "option", "settings": { "label": "袖ありのデザインで、トレンド感やクラシカルさを出したい", "trait": "neck", "value": "sleeves" } },
 
-        "r-princess": { "type": "result", "settings": { "result_key": "princess", "heading": "プリンセスライン", "link_url": "/pages/dress-gallery#princess", "reason": "ふんわりと広がるスカートが華やかで、非日常感のある特別な一着。" } },
-        "r-mermaid": { "type": "result", "settings": { "result_key": "mermaid", "heading": "マーメイドライン", "link_url": "/pages/dress-gallery#mermaid", "reason": "体のラインに沿ったシルエットが、女性らしい上品な印象に。" } },
-        "r-aline": { "type": "result", "settings": { "result_key": "aline", "heading": "Aライン", "link_url": "/pages/dress-gallery#aline", "reason": "どんな体型・会場にも合わせやすい、定番で失敗のないシルエット。" } },
-        "r-empire": { "type": "result", "settings": { "result_key": "empire", "heading": "エンパイアライン", "link_url": "/pages/dress-gallery#empire", "reason": "胸下から広がる軽やかなシルエットで、動きやすく可憐な印象に。" } }
+        "q4": { "type": "question", "settings": { "question": "Q4. 写真の仕上がりや、ドレスの質感に対する希望は？" } },
+        "q4-o1": { "type": "option", "settings": { "label": "細かい刺繍やレースのディテールが綺麗に写る、華やかなスタイル", "trait": "fabric", "value": "lace" } },
+        "q4-o2": { "type": "option", "settings": { "label": "風になびくような軽やかさや、光に透ける透明感がほしい（チュール・オーガンジー等）", "trait": "fabric", "value": "tulle" } },
+        "q4-o3": { "type": "option", "settings": { "label": "光沢感があり、陰影が美しく際立つ、重厚で高級感のあるスタイル（サテン・ミカドシルク等）", "trait": "fabric", "value": "satin" } }
       },
       "block_order": [
-        "q1", "q1-o1", "q1-o2", "q1-o3", "q1-o4",
-        "q2", "q2-o1", "q2-o2", "q2-o3",
+        "q1", "q1-o1", "q1-o2", "q1-o3",
+        "q2", "q2-o1", "q2-o2",
         "q3", "q3-o1", "q3-o2", "q3-o3",
-        "r-princess", "r-mermaid", "r-aline", "r-empire"
+        "q4", "q4-o1", "q4-o2", "q4-o3"
       ]
     },
     "dress-diagnosis-cta": {

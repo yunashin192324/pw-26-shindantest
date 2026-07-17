@@ -39,36 +39,59 @@ Shopify Pagesはフラット（`/pages/{handle}`）なので、URL自体に親�
 
 - `dress-style-gallery.liquid`（`page.dress-gallery.json` の中核）は
   各スタイルのブロックに `id="{{ anchor }}"` を出力するので、
-  `/pages/dress-gallery#princess` のように直接ジャンプできます。
-- `page.dress-diagnosis.json` の診断結果ブロックはこのアンカーへの
-  `link_url` を持っているため、診断結果から該当スタイルへ1クリックで
-  遷移します。
-- 既存の「撮影地一覧の店頭に既にあった `dress-diagnosis` /
-  `wedding-dress-diagnosis` という2つの似た名前のページ」は重複の可能性
-  が高いので、Admin側で `dress-diagnosis` に一本化し、もう片方は削除
-  することをおすすめします（本テーマは `page.dress-diagnosis.json` と
-  いう1テンプレートのみを想定しています）。
+  `/pages/dress-gallery#princess` のように直接ジャンプできます。ドレス
+  診断の結果は個別の商品ではなくカタログ内の1着を直接提示するため
+  （下記参照）、このアンカーは主に「診断せずにスタイルから探したい」
+  導線として使われます。
+- 実際のストアには `/pages/wedding-dress-diagnosis` という**既存の
+  空ページ**があり（`/pages/dress-diagnosis` は404で存在しない）、この
+  ハンドルに合わせるか、Admin側でハンドルを `dress-diagnosis`
+  （`dress` / `dress-gallery` と表記を揃えたもの）に変更するかは
+  未確定です。本テーマは `page.dress-diagnosis.json` というファイル名
+  を採用しているので、後者（ハンドルを `dress-diagnosis` に変更）の方
+  が手間がありません。
 
-## 診断セクションの汎用化（`diagnosis-quiz.liquid`）
+## ドレス診断（`dress-diagnostic.liquid` + `assets/dress-diagnostic.js`）
 
-撮影地診断（`page.diagnosis.json`）とドレス診断
-（`page.dress-diagnosis.json`）は同じ `diagnosis-quiz.liquid` を共用
-しています。「診断結果」ブロックは2モード：
+固定の「系統4パターンから1つ選ぶ」方式ではなく、**Metaobjectに登録した
+実際のドレス全件と、回答の特性（trait）を突き合わせて毎回スコアリング
+し、最も一致度の高い1着を提案する**方式（提供いただいた既存実装のロジ
+ックをそのまま採用し、デザインのみサイトのトンマナ＝`.diag-*` コンポ
+ーネント／`var(--gold)`・`var(--font-serif)` に合わせて再構築）。
 
-- **商品モード**（`商品` フィールドを設定）— 名称・画像・価格・URLを
-  商品から自動取得。撮影地診断で使用。
-- **汎用モード**（`商品` を空欄のまま）— `画像` / `見出し` /
-  `リンク先` / `説明文` を個別に設定。ドレス診断のように「購入できる
-  商品」ではなくスタイル説明ページへ誘導したい場合に使用。
+### 必要なMetaobject定義（Admin側で1回だけ作成）
 
-結果キーの決め方も section 設定 `key_formula` で切り替え可能：
+**設定 → メタオブジェクト → 定義を追加**、タイプは半角小文字で
+`dress_diagnostic_data` としてください（コードが直接この名前を参照す
+るため、1文字でも違うと動きません）。フィールド：
 
-- `first_plus_tier`（既定・撮影地診断で使用）— 1問目の値 ＋
-  他の質問に `high`/`special` があれば `-premium`、なければ `-basic`
-- `first_question`（ドレス診断で使用）— 1問目の値をそのまま結果キー
-  にする。2・3問目は診断の「厚み」を出す演出用で、結果には影響しない
-  （将来的にロジックを足したくなったら `first_plus_tier` に切り替えるか、
-  新しい `key_formula` の値をこのセクションに追加してください）。
+| 名前（表示用） | キー（半角） | フィールドの種類 |
+|---|---|---|
+| 名称 | `name` | 単一行テキスト |
+| 対応サイズ | `size` | 単一行テキスト |
+| 説明文 | `desc` | 複数行テキスト |
+| 画像 | `img` | ファイル（画像を選択） |
+| 雰囲気 | `style` | 単一行テキスト（`classic` / `natural` / `modern`） |
+| シルエット | `silhouette` | 単一行テキスト（`volume` / `slender`） |
+| 首元・袖 | `neck` | 単一行テキスト（`clear` / `sheer` / `sleeves`） |
+| 素材・質感 | `fabric` | 単一行テキスト（`lace` / `tulle` / `satin`） |
+
+**コンテンツ → メタオブジェクト → dress_diagnostic_data → エントリー
+を追加**で、ドレス1着ごとに上記8項目を入力すると、コード変更なしで
+診断対象に追加されます（増減自由）。`style`/`silhouette`/`neck`/
+`fabric` の値は、Theme Editorの「診断結果」ブロックではなく**「選択
+肢」ブロックの「値」欄**と綴りを一致させる必要があります（`page.dress-
+diagnosis.json` に同梱した4問12択はこの表の値と揃えてあります）。
+
+### 撮影地診断との違い
+
+撮影地診断（`page.diagnosis.json` / `diagnosis-quiz.liquid` /
+`assets/diagnosis.js`）は「あらかじめ用意した数パターンのどれかを選ぶ」
+方式のままです。ドレス診断は商品ではなくMetaobjectのカタログ全件を
+対象にした一致度スコアリングという別ロジックのため、あえて
+`diagnosis-quiz.liquid` を流用せず、専用のセクション／JSとして独立
+させています。両者は見た目（`.diag-*` コンポーネント）だけを共有して
+います。
 
 ## 30秒診断 (`diagnosis-quiz.liquid` + `assets/diagnosis.js`)
 
