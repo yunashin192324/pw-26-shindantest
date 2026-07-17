@@ -1,125 +1,79 @@
 # dawn-extension — 既存Dawnテーマへの追加分のみ
 
-前回お送りしたzip（独自theme.liquid一式）は**使いません**。実際のストアが
-素のDawn＋カスタムセクション方式だったため、方針を変更し、**既存の実装は
-そのまま**に、必要な部分だけを追加しています。
+独自theme.liquid一式は使いません。実際のストアが素のDawn＋カスタム
+セクション方式だったため、**既存の実装（destinations packageを含む）
+はそのまま**に、必要な部分だけを追加・修正しています。
 
-## 追加するファイル一覧
+前回の`destinations-index.liquid`／`destinations-region.liquid`／
+`destination-detail.liquid`とその関連テンプレートは**破棄しました**
+（destinations packageの方をベースに進める、というご指示のため）。
 
-| ファイル | 置き場所（テーマのコードエディタ） |
+## 追加・上書きするファイル一覧
+
+| ファイル | 対応 |
 | --- | --- |
-| `sections/product-plan.liquid` | Sections フォルダに追加 |
-| `templates/product.json` | Templates フォルダに追加 |
-| `sections/destinations-index.liquid` | Sections フォルダに追加 |
-| `sections/destinations-region.liquid` | Sections フォルダに追加 |
-| `sections/destination-detail.liquid` | Sections フォルダに追加 |
-| `templates/page.destinations.json` | Templates フォルダに追加 |
-| `templates/page.region.json` | Templates フォルダに追加 |
-| `templates/page.destination.json` | Templates フォルダに追加 |
-| `snippets/destination-card.liquid` | Snippets フォルダに追加 |
+| `sections/product-plan.liquid` | Sections フォルダに**新規追加** |
+| `templates/product.json` | Templates フォルダに**新規追加** |
+| `sections/area-lp.liquid` | Sections フォルダの**既存`area-lp.liquid`を上書き** |
 
-他のファイル（ドレスLP、コレクションLP、FAQ、お問い合わせ、
-特定商取引法ページ、`collections/dress-wedding`、JOURNAL一式）は
-**一切変更していません**。今回のzipには含まれていません。
+`area-lp.liquid`は**設定・ブロックのID構成を一切変えていません**。
+今すでに`page.area-2.json`（ダナン）に入っているデータは、そのまま
+何も再入力せずに使えます（実際に、いただいたJSONの全設定・全ブロック
+がこの新しいスキーマと100%互換であることを確認済みです）。変更した
+のは「プラン」ブロックに「商品」欄を追加したことだけです。
 
 ---
 
-## ① プランページのProduct化（前回分、変更なし）
+## ① プランのProduct化（前回分）
 
-予約日時選択アプリは「選んだ日時をカートに追加 → Shopify標準チェック
-アウトで決済」という仕組みで動きます。ShopifyのPageはカート/チェック
-アウトと直接つながらないため、**Product**でないとこの仕組みが機能
-しません。
+予約日時選択アプリを使うにはShopify Productである必要があるため、
+プラン単位のLPを`product-plan.liquid`としてProduct化しています。
+予約ボタンはカートページを経由せず直接Shopify標準チェックアウトへ
+進みます（`return_to: checkout`）。ヘッダーのカートアイコンは不要です。
 
-`product-plan.liquid` は「予約（価格パネル）」部分を本物の
-`{% raw %}{% form 'product', product %}{% endraw %}` で実装しており、
-予約アプリのブロックはTheme Editorの「ブロックを追加 → アプリ」から
-このフォームの内側に追加されます。
+## ② area-lp.liquidの「プラン」ブロックに商品連携を追加（今回分）
 
-### カートアイコンについて（ご質問への回答）
+いただいた実際のセクションコード（`danang-beach-plan`セクション）と
+`page.area-2.json`を拝見し、**設定・ブロックのID構成を完全に保った
+まま**、Tailwind／Dawn変数の技術構成はそのまま踏襲して再構築しました。
 
-**カートアイコンを消したのは問題ありませんでした。今回さらに一歩進めて
-「カートページすら経由しない」形にしています。**
+「プラン」ブロックだけ、新しく**「商品」欄（Shopify Product選択）**を
+追加しています。
 
-`return_to` を `checkout` に変更したので、予約ボタンを押すと
-カート追加と同時に、カートページを経由せずShopify標準チェックアウトへ
-直接進みます（Amazonの「今すぐ買う」に近い体験）。「フォトウェディングで
-カートは変」という違和感の解消と、購入導線が途切れない、を両立させて
-います。ヘッダーへのカートアイコン復活は不要です。
+- **商品を選んだ場合**：プラン名・説明・価格・画像・リンク先・
+  即予約バッジは、すべてその商品の実データから自動取得されます
+  （`plan_url`に`shopify://products/...`と手入力する必要がなくなり、
+  価格が変わっても商品側を直せば自動で反映されます）
+- **商品を選ばなかった場合**：今まで通り、手入力した
+  title/desc/price/plan_url等がそのまま使われます（後方互換）
 
-### 使い方（ダナン ビーチプランを例に）
+つまり、既存の`plan_CezWBX`（ダナンビーチプラン）は「商品」欄が空欄の
+ままなので今まで通り表示されます。①で作った`product-plan.liquid`で
+実際にProductを作ったら、この「商品」欄で選ぶだけで実データ連携に
+切り替えられます。
 
-1. Admin → 商品 → 商品を追加。名前・価格・タグ`即予約`（有無で「即予約」
-   ⇄「リクエスト予約」表示が自動切替）を設定
-2. テーマテンプレートで `product` を選択
-3. 別プランはAdminの「テーマテンプレートを複製」でコード変更なしに量産
+## ヘッダー統一について（ご指示：統一したい）
 
-⚠️ **価格の確認をお願いします**：今回の`templates/product.json`には
-ダナンビーチプランの価格として **¥111,000**（`danang-beachphoto`ページの
-データ）を入れていますが、いただいたエリアLP（`area-2.json`）内の
-「プラン一覧」ブロックには同じプランと思われるものが **¥99,800** と
-記載されていました。どちらが最新の正しい価格か教えてください。
+destinations package側の各ページ（撮影地一覧・地域別一覧・都市詳細）
+に、専用の「撮影地ヘッダー」「撮影地フッター」セクションが個別に
+追加されているのが原因です。**Theme Editor上での操作だけで直せる
+可能性が高いです：**
 
----
+1. 該当ページ（撮影地一覧、地域ページ等）をTheme Editorで開く
+2. 左側のセクション一覧から「撮影地ヘッダー」を選択 →「…」→ 削除
+3. 同様に「撮影地フッター」も削除
+4. 保存して、共通ヘッダー（他のページと同じもの）が表示されるか確認
 
-## ② 撮影地一覧のMetaobject化（今回追加分）
+これで直らない場合（テンプレートJSON側で専用レイアウト
+`theme.destinations`のような別レイアウトファイルが指定されている
+可能性があります）、`templates/page.destinations.json`
+（または該当ページの現在のテンプレートJSON）を共有してください。
+`"layout"`の指定を外す形で修正します。
 
-「数十〜100以上の撮影地を扱う」というご要望に合わせて、今のダナンの
-`area-lp`（Page 1枚を手作業で作る方式）を、**1つのMetaobjectエントリー
-から自動でページが生成される方式**に置き換えました。
+## 確認をお願いしたいこと（再掲）
 
-```
-/pages/destinations（撮影地一覧・検索・人気・地域リンク）
-  └─ /pages/{region}（地域別一覧、8地域固定）
-       └─ /pages/{slug}（撮影地詳細：魅力・撮影スポット・
-                          モデルスケジュール・ギャラリー・
-                          プラン一覧・FAQ）
-```
-
-**詳細な設定手順は `docs/destination-metaobject-setup.md` を参照して
-ください。** 要点だけ書くと、Metaobject定義`destination`を1回作成し、
-撮影地を1件登録するたびに「Metaobjectへの入力＋Page 1枚作成（テーマ
-テンプレート`page.destination`を選択、URLハンドルをslugと一致）」を
-繰り返すだけです。コード変更は一切不要です。
-
-### プラン一覧は「手入力」ではなく「実商品への参照」
-
-実は、いただいた`area-2.json`（ダナンのエリアLP）を見ると、既に
-「プラン一覧」セクションに`plan`ブロックがあり、
-`plan_url: "shopify://products/ダナンフォトウェディング"` のように
-**Shopify Productへのリンクが手入力の形で存在していました。**
-（前回「エリアページから各プランへの導線が無い」とお伝えしましたが、
-誤りでした。訂正します。）
-
-今回のMetaobject版では、この「プラン」を手入力（価格・バッジも含めて
-手動）ではなく、Metaobjectの`plans`フィールド（商品参照のリスト）で
-**実際のProductを直接選択**する方式にしました。価格・在庫・
-即予約／リクエスト予約バッジは常に商品側の実データから自動反映される
-ので、値が古くなる心配がありません。①のProduct化と自然につながる
-設計です。
-
----
-
-## いじらなくてよいもの（前回確認済み・変更なし）
-
-| ページ / 機能 | 状態 |
-| --- | --- |
-| `page.dress.json`（ドレスLP） | そのままでOK。店舗一覧の実データ差し替えのみ推奨 |
-| `page.dress-lp.json`（コレクションLP） | そのままでOK |
-| `collection.dress-wedding.json` | そのままでOK |
-| `page.custom-contact.json` | そのままでOK |
-| `page.tokushoho.json` | そのままでOK |
-| `page.faq.json` | ほぼOK。「渡航について」カテゴリ追加とプレースホルダー2件の入力を推奨（コード不要） |
-| JOURNAL一式 | 実装・実データ確認済み、そのままでOK |
-| `page.area-2.json`（ダナンのエリアLP） | 今回のMetaobject版に置き換えるなら、このPageのデータをMetaobjectへ移行後、既存Pageは削除でOK（既存分のコード自体は今回何も変更していません） |
-
-## 見つかった要修正・要確認事項（別途対応推奨）
-
-- **ドレス関連ページのハンドル不一致**：`dress` / `dress-lp` /
-  `dress-tuxedo` / `wedding-dress` とファイルごとに参照URLがバラバラ
-- **`wedding-dress-diagnosis`ページ**：実在するが中身が空
-- **ダナンプランの価格差異**：上記「¥111,000 vs ¥99,800」の確認
-- **`plan_url`が空の項目**：`area-2.json`の2件目のプラン
-  「ダナンビーチ＆ダナン市内フォトプラン（ダブルカメラマン）」は
-  `plan_url`が空欄でした。対応するProductを作成してMetaobjectの
-  `plans`に追加してください
+- ダナンビーチプランの価格：`danang-beachphoto`ページは¥111,000、
+  `area-2.json`のプランブロックは¥99,800。どちらが正しいか
+- `plan_url`が空欄の「ダナンビーチ＆ダナン市内フォトプラン
+  （ダブルカメラマン）」：対応するProductを作成して「商品」欄に
+  設定してください
