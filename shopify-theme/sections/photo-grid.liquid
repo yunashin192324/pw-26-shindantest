@@ -1,0 +1,65 @@
+{%- comment -%}
+  photo-grid — generic image + title + caption grid, reusing .card.
+  Used on the dress gallery page for 小物 (accessories) and タキシード
+  (tuxedo), as two separate instances of this same section type.
+{%- endcomment -%}
+{%- if section.settings.show_section and section.blocks.size > 0 -%}
+  <section class="{% if section.settings.background == 'ivory' %}bg-ivory{% endif %}">
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="eyebrow">{{ section.settings.eyebrow }}</p>
+        <h2>{{ section.settings.heading }}</h2>
+        <div class="divider-gold"></div>
+        {%- if section.settings.body != blank -%}<p>{{ section.settings.body }}</p>{%- endif -%}
+      </div>
+      <div class="grid grid-{{ section.settings.columns }}">
+        {%- for block in section.blocks -%}
+          <div class="card reveal{% if forloop.index0 > 0 %} reveal-{{ forloop.index0 | modulo: 4 }}{% endif %}" {{ block.shopify_attributes }}>
+            <div class="card-media">
+              {%- if block.settings.image -%}
+                <img src="{{ block.settings.image | image_url: width: 700 }}" alt="{{ block.settings.image.alt | default: block.settings.title | escape }}" loading="lazy" width="700" height="875">
+              {%- endif -%}
+            </div>
+            <div class="card-body">
+              <h3 class="card-title" style="font-size:1.1rem;">{{ block.settings.title }}</h3>
+              {%- if block.settings.caption != blank -%}<p class="card-desc">{{ block.settings.caption }}</p>{%- endif -%}
+            </div>
+          </div>
+        {%- endfor -%}
+      </div>
+    </div>
+  </section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "写真グリッド",
+  "settings": [
+    { "type": "checkbox", "id": "show_section", "label": "表示する", "default": true },
+    { "type": "text", "id": "eyebrow", "label": "英字見出し" },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "見出し" },
+    { "type": "richtext", "id": "body", "label": "本文" },
+    { "type": "select", "id": "columns", "label": "列数", "options": [
+        { "value": "3", "label": "3列" },
+        { "value": "4", "label": "4列" }
+      ], "default": "3" },
+    { "type": "select", "id": "background", "label": "背景", "options": [
+        { "value": "white", "label": "白" },
+        { "value": "ivory", "label": "アイボリー" }
+      ], "default": "white" }
+  ],
+  "blocks": [
+    {
+      "type": "photo",
+      "name": "写真",
+      "settings": [
+        { "type": "image_picker", "id": "image", "label": "画像" },
+        { "type": "text", "id": "title", "label": "名称", "default": "名称" },
+        { "type": "text", "id": "caption", "label": "説明" }
+      ]
+    }
+  ],
+  "max_blocks": 12,
+  "presets": [{ "name": "写真グリッド" }]
+}
+{% endschema %}

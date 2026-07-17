@@ -12,16 +12,63 @@ existing `theme.css` components — no new CSS shipped for this layer.
 | --- | --- | --- |
 | `templates/index.json` | TOP (`/`) | hero → 人気のプラン → 撮影地から選ぶ → 5つの安心 → ドレス訴求 → 利用の流れ → FAQ抜粋 → CTA |
 | `templates/page.about.json` | `/pages/about` | hero → HISについて → フォーシスについて → 大切にしていること → お問い合わせ |
-| `templates/page.dress.json` | `/pages/dress` | hero → ブランド紹介 → 試着の安心 → 写真2枚 → 流れ → CTA |
+| `templates/page.dress.json` | `/pages/dress` | hero → ブランド紹介 → 試着の安心 → 写真2枚 → 流れ → CTA（概要ページ） |
+| `templates/page.dress-gallery.json` | `/pages/dress-gallery` | hero → ドレスの系統（4種、アンカー付き）→ 小物 → タキシード → CTA |
+| `templates/page.dress-diagnosis.json` | `/pages/dress-diagnosis` | hero → ドレス診断（3問）→ CTA |
 | `templates/page.faq.json` | `/pages/faq` | hero → カテゴリ別FAQ（19問） → CTA |
-| `templates/page.diagnosis.json` | `/pages/diagnosis` | hero → 30秒診断（3問） → CTA |
+| `templates/page.diagnosis.json` | `/pages/diagnosis` | hero → 30秒診断（3問、撮影地・プラン向け） → CTA |
 
 Shopify Pages don't pick up `page.<suffix>.json` automatically — after
 creating each Page in Admin with the matching **handle** (`about`,
-`dress`, `faq`, `diagnosis`), open it and set **Theme template** to
-`page.about` / `page.dress` / `page.faq` / `page.diagnosis` in the
+`dress`, `dress-gallery`, `dress-diagnosis`, `faq`, `diagnosis`), open
+it and set **Theme template** to the matching `page.*` entry in the
 dropdown. This is the same one-click, no-code mechanism `PRODUCT.md`
 documents for per-product templates.
+
+## ドレスの3階層構成
+
+```
+/pages/dress（概要・衣装会社紹介）
+  ├─ /pages/dress-gallery（ドレス画像・小物・タキシード紹介）
+  └─ /pages/dress-diagnosis（ドレス診断）
+```
+
+Shopify Pagesはフラット（`/pages/{handle}`）なので、URL自体に親子関係
+は表現できません。「概要ページの `dress-cta` セクションから2つの子
+ページへボタンでリンクする」ことで、この3階層を表現しています。
+
+- `dress-style-gallery.liquid`（`page.dress-gallery.json` の中核）は
+  各スタイルのブロックに `id="{{ anchor }}"` を出力するので、
+  `/pages/dress-gallery#princess` のように直接ジャンプできます。
+- `page.dress-diagnosis.json` の診断結果ブロックはこのアンカーへの
+  `link_url` を持っているため、診断結果から該当スタイルへ1クリックで
+  遷移します。
+- 既存の「撮影地一覧の店頭に既にあった `dress-diagnosis` /
+  `wedding-dress-diagnosis` という2つの似た名前のページ」は重複の可能性
+  が高いので、Admin側で `dress-diagnosis` に一本化し、もう片方は削除
+  することをおすすめします（本テーマは `page.dress-diagnosis.json` と
+  いう1テンプレートのみを想定しています）。
+
+## 診断セクションの汎用化（`diagnosis-quiz.liquid`）
+
+撮影地診断（`page.diagnosis.json`）とドレス診断
+（`page.dress-diagnosis.json`）は同じ `diagnosis-quiz.liquid` を共用
+しています。「診断結果」ブロックは2モード：
+
+- **商品モード**（`商品` フィールドを設定）— 名称・画像・価格・URLを
+  商品から自動取得。撮影地診断で使用。
+- **汎用モード**（`商品` を空欄のまま）— `画像` / `見出し` /
+  `リンク先` / `説明文` を個別に設定。ドレス診断のように「購入できる
+  商品」ではなくスタイル説明ページへ誘導したい場合に使用。
+
+結果キーの決め方も section 設定 `key_formula` で切り替え可能：
+
+- `first_plus_tier`（既定・撮影地診断で使用）— 1問目の値 ＋
+  他の質問に `high`/`special` があれば `-premium`、なければ `-basic`
+- `first_question`（ドレス診断で使用）— 1問目の値をそのまま結果キー
+  にする。2・3問目は診断の「厚み」を出す演出用で、結果には影響しない
+  （将来的にロジックを足したくなったら `first_plus_tier` に切り替えるか、
+  新しい `key_formula` の値をこのセクションに追加してください）。
 
 ## 30秒診断 (`diagnosis-quiz.liquid` + `assets/diagnosis.js`)
 

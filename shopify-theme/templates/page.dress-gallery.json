@@ -1,0 +1,71 @@
+{
+  "sections": {
+    "dress-gallery-hero": {
+      "type": "page-hero",
+      "settings": {
+        "eyebrow": "Dress Gallery",
+        "heading": "ドレス・小物・タキシード",
+        "lede": "フォーシスアンドカンパニーが手がける衣装ラインナップを、系統別にご紹介します。"
+      }
+    },
+    "dress-styles": {
+      "type": "dress-style-gallery",
+      "settings": {
+        "eyebrow": "Dress Styles",
+        "heading": "ドレスの系統",
+        "background": "white"
+      },
+      "blocks": {
+        "princess": { "type": "style", "settings": { "anchor": "princess", "title": "プリンセスライン", "suits": "華やかで王道な一着を選びたい方" } },
+        "mermaid": { "type": "style", "settings": { "anchor": "mermaid", "title": "マーメイドライン", "suits": "体のラインを美しく見せたい方" } },
+        "aline": { "type": "style", "settings": { "anchor": "aline", "title": "Aライン", "suits": "どんな体型にも合わせやすい定番を選びたい方" } },
+        "empire": { "type": "style", "settings": { "anchor": "empire", "title": "エンパイアライン", "suits": "軽やかで動きやすいシルエットが好みの方" } }
+      },
+      "block_order": ["princess", "mermaid", "aline", "empire"]
+    },
+    "dress-accessories": {
+      "type": "photo-grid",
+      "settings": {
+        "eyebrow": "Accessories",
+        "heading": "小物のご紹介",
+        "columns": "4",
+        "background": "ivory"
+      },
+      "blocks": {
+        "veil": { "type": "photo", "settings": { "title": "ベール" } },
+        "gloves": { "type": "photo", "settings": { "title": "グローブ" } },
+        "jewelry": { "type": "photo", "settings": { "title": "ジュエリー" } },
+        "shoes": { "type": "photo", "settings": { "title": "シューズ" } }
+      },
+      "block_order": ["veil", "gloves", "jewelry", "shoes"]
+    },
+    "tuxedo-lineup": {
+      "type": "photo-grid",
+      "settings": {
+        "eyebrow": "Tuxedo",
+        "heading": "タキシードのご紹介",
+        "columns": "3",
+        "background": "white"
+      },
+      "blocks": {
+        "classic": { "type": "photo", "settings": { "title": "クラシックタキシード" } },
+        "morning": { "type": "photo", "settings": { "title": "モーニングコート" } },
+        "white": { "type": "photo", "settings": { "title": "ホワイトタキシード" } }
+      },
+      "block_order": ["classic", "morning", "white"]
+    },
+    "dress-gallery-cta": {
+      "type": "cta-band",
+      "settings": {
+        "eyebrow": "Dress",
+        "heading": "あなたに似合うドレスの系統を診断してみませんか。"
+      },
+      "blocks": {
+        "cta-1": { "type": "button", "settings": { "label": "ドレス診断をする", "url": "/pages/dress-diagnosis", "style": "gold" } },
+        "cta-2": { "type": "button", "settings": { "label": "試着について相談する", "url": "/pages/about#contact", "style": "outline" } }
+      },
+      "block_order": ["cta-1", "cta-2"]
+    }
+  },
+  "order": ["dress-gallery-hero", "dress-styles", "dress-accessories", "tuxedo-lineup", "dress-gallery-cta"]
+}

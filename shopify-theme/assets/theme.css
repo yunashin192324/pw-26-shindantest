@@ -543,6 +543,8 @@ p { color: var(--text-muted); }
 .diag-option:hover { border-color: var(--gold); background: var(--ivory); transform: translateX(4px); }
 .diag-option .diag-option-sub { display: block; font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; }
 .diag-result { text-align: center; }
+.diag-result-image { max-width: 320px; aspect-ratio: 4/5; overflow: hidden; margin: 0 auto; display: none; }
+.diag-result-image.is-visible { display: block; }
 .diag-result-name { font-family: var(--font-serif); font-size: 1.9rem; margin: 18px 0 10px; }
 .diag-result-reason { color: var(--text-muted); max-width: 460px; margin: 0 auto 22px; }
 .diag-result-price { font-family: var(--font-serif); font-size: 1.2rem; margin-bottom: 26px; }

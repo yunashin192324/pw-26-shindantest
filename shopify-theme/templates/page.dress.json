@@ -56,13 +56,14 @@
       "type": "cta-band",
       "settings": {
         "eyebrow": "Dress",
-        "heading": "まずは、あなたに合う撮影地から。"
+        "heading": "ドレス・小物・タキシードを見る、\nまたはあなたに似合う系統を診断する。"
       },
       "blocks": {
-        "cta-1": { "type": "button", "settings": { "label": "プランを見る", "url": "/#destinations", "style": "gold" } },
-        "cta-2": { "type": "button", "settings": { "label": "試着について相談する", "url": "/pages/about#contact", "style": "outline" } }
+        "cta-1": { "type": "button", "settings": { "label": "ドレス・小物・タキシードを見る", "url": "/pages/dress-gallery", "style": "gold" } },
+        "cta-2": { "type": "button", "settings": { "label": "ドレス診断をする", "url": "/pages/dress-diagnosis", "style": "outline" } },
+        "cta-3": { "type": "button", "settings": { "label": "試着について相談する", "url": "/pages/about#contact", "style": "outline" } }
       },
-      "block_order": ["cta-1", "cta-2"]
+      "block_order": ["cta-1", "cta-2", "cta-3"]
     }
   },
   "order": ["dress-hero", "dress-intro", "dress-why", "dress-lineup", "dress-flow", "dress-cta"]
