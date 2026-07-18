@@ -1,0 +1,37 @@
+{%- comment -%}
+  destination-reasons — 選ばれる理由。Destination metaobjectの
+  `reasons` (JSON: [{title, description}]) が未入力の間は
+  セクションごと非表示になる。area-lp.liquidの「選ばれる理由」
+  ブロックと同じ役割を、Metaobject駆動の共通テンプレート側に移植。
+{%- endcomment -%}
+{%- assign destination = shop.metaobjects.destination.values | where: 'slug.value', page.handle | first -%}
+{%- assign reasons = destination.reasons.value -%}
+
+{%- if destination and reasons.size > 0 -%}
+<section>
+  <div class="dst-container">
+    <div class="dst-section-head dst-reveal">
+      <p class="dst-eyebrow">Charm</p>
+      <h2>{{ section.settings.heading }}</h2>
+      <hr class="dst-divider">
+    </div>
+    <div class="dst-reasons-grid">
+      {%- for reason in reasons -%}
+        <div class="dst-reason-card dst-reveal">
+          <h3 class="dst-reason-title">{{ reason.title }}</h3>
+          <p class="dst-reason-desc">{{ reason.description }}</p>
+        </div>
+      {%- endfor -%}
+    </div>
+  </div>
+</section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "都市 選ばれる理由",
+  "settings": [
+    { "type": "text", "id": "heading", "label": "見出し", "default": "選ばれる理由" }
+  ]
+}
+{% endschema %}

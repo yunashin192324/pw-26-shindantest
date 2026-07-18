@@ -22,6 +22,10 @@
 | `sections/region-hero.liquid` | Sections フォルダの**既存ファイルを上書き** |
 | `sections/destination-hero.liquid` | Sections フォルダの**既存ファイルを上書き** |
 | `sections/destinations-cta.liquid` | Sections フォルダの**既存ファイルを上書き** |
+| `sections/destination-reasons.liquid` | Sections フォルダに**新規追加** |
+| `sections/destination-schedule.liquid` | Sections フォルダに**新規追加** |
+| `sections/destination-gallery.liquid` | Sections フォルダに**新規追加** |
+| `assets/destinations-additions.css` | 既存の`assets/destinations.css`の**末尾に追記**（新規ファイルとして追加ではありません） |
 
 `area-lp.liquid`は**設定・ブロックのID構成を一切変えていません**。
 今すでに`page.area-2.json`（ダナン）に入っているデータは、そのまま
@@ -110,6 +114,44 @@ VS Codeのtheme-check拡張機能で指摘いただいたエラーはすべて�
 - `area-lp.liquid`：同じく`assign`内の比較演算を`if`判定に直しました
 
 これらは見た目やロジックには影響しない書き方の修正のみです。
+
+## ③ 都市詳細ページをMetaobject駆動の共通テンプレートに拡張（今回分）
+
+「都市が増えるたびにテンプレートを複製しないといけないのは管理が大変」
+というご相談を受け、destinations package側の`page.destination.json`
+（Metaobject駆動・都市が増えてもテンプレートは1つのまま）を、今の
+`area-lp.liquid`（ダナン）と同じ内容が表示できるように拡張しました。
+
+追加したセクション3つ：
+
+- `destination-reasons.liquid`：選ばれる理由（Metaobjectの`reasons`
+  フィールド、JSON形式のリスト）
+- `destination-schedule.liquid`：モデルスケジュール（`schedule`
+  フィールド、JSON形式のリスト）
+- `destination-gallery.liquid`：フォトギャラリー（`gallery_images`
+  フィールド、**画像の「リスト」型**。1つの欄で複数枚まとめて
+  アップロードできるので、ブロックを1枚ずつ追加する必要がありません）
+
+どれも対応するMetaobjectフィールドが空欄の間は、セクションごと自動的に
+非表示になります（既存都市のデータに影響なし）。
+
+**やること：**
+1. `docs/destinations-metaobject-fields-addition.md`の手順で、
+   Destination Metaobject定義に`reasons`／`schedule`／`gallery_images`
+   の3フィールドを追加
+2. `assets/destinations-additions.css`の中身を、既存の
+   `assets/destinations.css`の一番下にコピペで追記
+3. 新規セクション3ファイルと、更新した`page.destination.json`を上書き
+
+なお「プラン一覧」（`destination-plans.liquid`、これは既存のままで
+変更していません）は、都市の`slug`と同じhandleの**コレクション**に
+入っている商品を自動表示する仕組みです。area-lp.liquidのように
+ブロックごとに「商品」欄で個別リンクする必要はなく、**コレクションに
+商品を追加するだけ**でプランが反映されます。
+
+ダナンを実際にこの新しい仕組みに移行する手順は
+`docs/danang-migration-guide.md`にまとめました。本番URLをいきなり
+切り替えず、テスト用ページで確認してから切り替える流れにしています。
 
 ## 確認をお願いしたいこと（再掲）
 

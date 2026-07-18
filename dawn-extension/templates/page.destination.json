@@ -6,10 +6,28 @@
     "destination-intro": {
       "type": "destination-intro"
     },
+    "destination-reasons": {
+      "type": "destination-reasons",
+      "settings": {
+        "heading": "選ばれる理由"
+      }
+    },
     "destination-spots": {
       "type": "destination-spots",
       "settings": {
         "heading": "撮影スポット"
+      }
+    },
+    "destination-schedule": {
+      "type": "destination-schedule",
+      "settings": {
+        "heading": "モデルスケジュール"
+      }
+    },
+    "destination-gallery": {
+      "type": "destination-gallery",
+      "settings": {
+        "heading": "フォトギャラリー"
       }
     },
     "destination-plans": {
@@ -38,7 +56,10 @@
   "order": [
     "destination-hero",
     "destination-intro",
+    "destination-reasons",
     "destination-spots",
+    "destination-schedule",
+    "destination-gallery",
     "destination-plans",
     "destination-faq",
     "destinations-cta"

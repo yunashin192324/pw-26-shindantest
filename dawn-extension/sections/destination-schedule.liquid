@@ -1,0 +1,37 @@
+{%- comment -%}
+  destination-schedule — モデルスケジュール。Destination metaobjectの
+  `schedule` (JSON: [{time, description}]) が未入力の間はセクションごと
+  非表示になる。area-lp.liquidの「スケジュール」ブロックと同じ役割を、
+  Metaobject駆動の共通テンプレート側に移植。
+{%- endcomment -%}
+{%- assign destination = shop.metaobjects.destination.values | where: 'slug.value', page.handle | first -%}
+{%- assign schedule = destination.schedule.value -%}
+
+{%- if destination and schedule.size > 0 -%}
+<section class="dst-bg-ivory">
+  <div class="dst-container" style="max-width:760px;">
+    <div class="dst-section-head dst-reveal">
+      <p class="dst-eyebrow">Schedule</p>
+      <h2>{{ section.settings.heading }}</h2>
+      <hr class="dst-divider">
+    </div>
+    <div class="dst-schedule-list">
+      {%- for item in schedule -%}
+        <div class="dst-schedule-item dst-reveal">
+          <p class="dst-schedule-time">{{ item.time }}</p>
+          <p class="dst-schedule-desc">{{ item.description }}</p>
+        </div>
+      {%- endfor -%}
+    </div>
+  </div>
+</section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "都市 モデルスケジュール",
+  "settings": [
+    { "type": "text", "id": "heading", "label": "見出し", "default": "モデルスケジュール" }
+  ]
+}
+{% endschema %}

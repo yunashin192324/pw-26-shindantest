@@ -1,0 +1,37 @@
+{%- comment -%}
+  destination-gallery — フォトギャラリー。Destination metaobjectの
+  `gallery_images`（画像のリストフィールド）が未入力の間はセクションごと
+  非表示になる。Metaobjectの「リスト」型フィールドはエントリー編集画面で
+  複数枚まとめて選択・アップロードできるため、area-lp.liquidのように
+  ブロックを1枚ずつ追加する必要がない。
+{%- endcomment -%}
+{%- assign destination = shop.metaobjects.destination.values | where: 'slug.value', page.handle | first -%}
+{%- assign gallery_images = destination.gallery_images.value -%}
+
+{%- if destination and gallery_images.size > 0 -%}
+<section style="background-color:#1a1a1a;padding-top:64px;padding-bottom:64px;">
+  <div class="dst-container">
+    <div class="dst-section-head dst-reveal" style="color:#ffffff;">
+      <p class="dst-eyebrow">Gallery</p>
+      <h2 style="color:#ffffff;">{{ section.settings.heading }}</h2>
+      <hr class="dst-divider">
+    </div>
+    <div class="dst-gallery-grid">
+      {%- for image in gallery_images -%}
+        <div class="dst-gallery-item">
+          {{ image | image_url: width: 700 | image_tag: class: 'dst-gallery-img', loading: 'lazy' }}
+        </div>
+      {%- endfor -%}
+    </div>
+  </div>
+</section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "都市 フォトギャラリー",
+  "settings": [
+    { "type": "text", "id": "heading", "label": "見出し", "default": "フォトギャラリー" }
+  ]
+}
+{% endschema %}
