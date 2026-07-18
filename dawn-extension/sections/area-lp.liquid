@@ -152,17 +152,17 @@
       <h2 class="text-2xl font-light" style="color:{{ section.settings.gallery_heading_color | default: '#ffffff' }};">{{ section.settings.gallery_heading }}</h2>
       <div class="divider-gold mx-auto mt-3"></div>
     </div>
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 max-w-6xl mx-auto">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 max-w-6xl mx-auto" id="area-gallery-{{ section.id }}">
       {% if gallery_product %}
         {% for image in gallery_product.images %}
-          <div class="w-full relative" style="padding-top:125%;">
+          <div class="w-full relative area-gallery-item cursor-pointer" style="padding-top:125%;" data-full="{{ image | image_url: width: 1800 }}" data-index="{{ forloop.index0 }}">
             {{ image | image_url: width: 700 | image_tag: class: 'absolute inset-0 w-full h-full object-cover object-center', loading: 'lazy' }}
           </div>
         {% endfor %}
       {% else %}
         {% for block in gallery_blocks %}
           {% if block.settings.image != blank %}
-            <div class="w-full relative" style="padding-top:125%;" {{ block.shopify_attributes }}>
+            <div class="w-full relative area-gallery-item cursor-pointer" style="padding-top:125%;" data-full="{{ block.settings.image | image_url: width: 1800 }}" data-index="{{ forloop.index0 }}" {{ block.shopify_attributes }}>
               {% assign gal_class = 'absolute inset-0 w-full h-full object-cover ' | append: block.settings.image_position %}
               {{ block.settings.image | image_url: width: 700 | image_tag: class: gal_class, loading: 'lazy' }}
             </div>
@@ -171,6 +171,72 @@
       {% endif %}
     </div>
   </section>
+
+  {% comment %}
+    ギャラリーのライトボックス。タップで拡大表示、左右スワイプ/矢印で
+    前後の画像に切り替え。
+  {% endcomment %}
+  <div id="area-lightbox-{{ section.id }}" class="fixed inset-0 z-50 hidden" style="background:rgba(0,0,0,0.92);">
+    <button type="button" class="area-lightbox-close absolute top-4 right-4 text-white text-3xl leading-none w-10 h-10 flex items-center justify-center" aria-label="閉じる">×</button>
+    <button type="button" class="area-lightbox-prev absolute left-2 md:left-6 top-1/2 -translate-y-1/2 text-white text-4xl leading-none w-12 h-12 flex items-center justify-center" aria-label="前の画像">‹</button>
+    <button type="button" class="area-lightbox-next absolute right-2 md:right-6 top-1/2 -translate-y-1/2 text-white text-4xl leading-none w-12 h-12 flex items-center justify-center" aria-label="次の画像">›</button>
+    <div class="w-full h-full flex items-center justify-center px-12">
+      <img class="area-lightbox-img" src="" alt="" style="max-width:100%;max-height:90vh;object-fit:contain;">
+    </div>
+  </div>
+  <script>
+    (function () {
+      var root = document.getElementById('area-gallery-{{ section.id }}');
+      var lightbox = document.getElementById('area-lightbox-{{ section.id }}');
+      if (!root || !lightbox) return;
+      var img = lightbox.querySelector('.area-lightbox-img');
+      var items = Array.prototype.slice.call(root.querySelectorAll('.area-gallery-item'));
+      var current = 0;
+      var touchStartX = null;
+
+      function show(i) {
+        if (items.length === 0) return;
+        current = (i + items.length) % items.length;
+        img.src = items[current].getAttribute('data-full');
+      }
+      function open(i) {
+        show(i);
+        lightbox.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+      }
+      function close() {
+        lightbox.classList.add('hidden');
+        document.body.style.overflow = '';
+      }
+
+      items.forEach(function (el, i) {
+        el.addEventListener('click', function () { open(i); });
+      });
+      lightbox.querySelector('.area-lightbox-close').addEventListener('click', close);
+      lightbox.querySelector('.area-lightbox-prev').addEventListener('click', function () { show(current - 1); });
+      lightbox.querySelector('.area-lightbox-next').addEventListener('click', function () { show(current + 1); });
+      lightbox.addEventListener('click', function (e) {
+        if (e.target === lightbox) close();
+      });
+      document.addEventListener('keydown', function (e) {
+        if (lightbox.classList.contains('hidden')) return;
+        if (e.key === 'Escape') close();
+        if (e.key === 'ArrowLeft') show(current - 1);
+        if (e.key === 'ArrowRight') show(current + 1);
+      });
+      lightbox.addEventListener('touchstart', function (e) {
+        touchStartX = e.changedTouches[0].clientX;
+      }, { passive: true });
+      lightbox.addEventListener('touchend', function (e) {
+        if (touchStartX === null) return;
+        var dx = e.changedTouches[0].clientX - touchStartX;
+        if (Math.abs(dx) > 40) {
+          if (dx < 0) { show(current + 1); } else { show(current - 1); }
+        }
+        touchStartX = null;
+      }, { passive: true });
+    })();
+  </script>
   {% endif %}
 
   {% comment %} --- プラン一覧 --- {% endcomment %}
