@@ -355,7 +355,9 @@
   {% endif %}
 
   {% comment %} --- オプション --- {% endcomment %}
-  {% if section.settings.show_options and (mf_options.size > 0 or option_blocks.size > 0) %}
+  {%- assign has_options = false -%}
+  {%- if mf_options.size > 0 or option_blocks.size > 0 -%}{%- assign has_options = true -%}{%- endif -%}
+  {% if section.settings.show_options and has_options %}
   <section class="py-16 md:py-24">
     <div class="max-w-6xl mx-auto px-6">
       <div class="text-center mb-16">
@@ -501,7 +503,9 @@
   {% endif %}
 
   {% comment %} --- 注意事項 --- {% endcomment %}
-  {% if section.settings.show_notes and (plan_notes_text != blank or note_blocks.size > 0) %}
+  {%- assign has_notes = false -%}
+  {%- if plan_notes_text != blank or note_blocks.size > 0 -%}{%- assign has_notes = true -%}{%- endif -%}
+  {% if section.settings.show_notes and has_notes %}
   <section class="py-16 md:py-24" style="background-color:#FAF8F5;">
     <div class="max-w-3xl mx-auto px-6">
       <h3 class="font-bold mb-4 text-sm">{{ section.settings.notes_title | default: '注意事項・ご案内' }}</h3>
