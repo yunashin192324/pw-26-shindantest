@@ -144,7 +144,8 @@
   {% endif %}
 
   {% comment %} --- フォトギャラリー --- {% endcomment %}
-  {% if gallery_blocks.size > 0 %}
+  {%- assign gallery_product = section.settings.gallery_product -%}
+  {% if gallery_product and gallery_product.images.size > 0 or gallery_blocks.size > 0 %}
   <section class="py-16" style="background-color:#1a1a1a;">
     <div class="text-center mb-12 px-4">
       <p class="font-serif text-sm tracking-[0.15em] uppercase mb-2" style="color:{{ section.settings.gallery_eyebrow_color | default: '#D4A843' }};">{{ section.settings.gallery_eyebrow }}</p>
@@ -152,14 +153,22 @@
       <div class="divider-gold mx-auto mt-3"></div>
     </div>
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 max-w-6xl mx-auto">
-      {% for block in gallery_blocks %}
-        {% if block.settings.image != blank %}
-          <div class="w-full relative" style="padding-top:125%;" {{ block.shopify_attributes }}>
-            {% assign gal_class = 'absolute inset-0 w-full h-full object-cover ' | append: block.settings.image_position %}
-            {{ block.settings.image | image_url: width: 700 | image_tag: class: gal_class, loading: 'lazy' }}
+      {% if gallery_product %}
+        {% for image in gallery_product.images %}
+          <div class="w-full relative" style="padding-top:125%;">
+            {{ image | image_url: width: 700 | image_tag: class: 'absolute inset-0 w-full h-full object-cover object-center', loading: 'lazy' }}
           </div>
-        {% endif %}
-      {% endfor %}
+        {% endfor %}
+      {% else %}
+        {% for block in gallery_blocks %}
+          {% if block.settings.image != blank %}
+            <div class="w-full relative" style="padding-top:125%;" {{ block.shopify_attributes }}>
+              {% assign gal_class = 'absolute inset-0 w-full h-full object-cover ' | append: block.settings.image_position %}
+              {{ block.settings.image | image_url: width: 700 | image_tag: class: gal_class, loading: 'lazy' }}
+            </div>
+          {% endif %}
+        {% endfor %}
+      {% endif %}
     </div>
   </section>
   {% endif %}
@@ -329,6 +338,7 @@ document.addEventListener('DOMContentLoaded', function () {
     { "type": "color", "id": "plans_heading_color", "label": "見出し色", "default": "#1a1a1a" },
 
     { "type": "header", "content": "フォトギャラリー" },
+    { "type": "product", "id": "gallery_product", "label": "ギャラリー用商品（任意）", "info": "設定すると、その商品に登録されている画像が全部まとめて自動表示されます（商品の「メディア」欄はShopify標準機能でまとめてアップロードできるため、下のギャラリーブロックを1枚ずつ追加するより早いです）。未設定の場合は下のギャラリーブロックが使われます。" },
     { "type": "text", "id": "gallery_eyebrow", "label": "サブタイトル", "default": "Gallery" },
     { "type": "color", "id": "gallery_eyebrow_color", "label": "サブタイトル色", "default": "#c9a96e" },
     { "type": "text", "id": "gallery_heading", "label": "見出し", "default": "フォトギャラリー" },
