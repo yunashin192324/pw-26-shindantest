@@ -115,8 +115,9 @@
     {% else %}
       <div class="absolute inset-0 w-full h-full bg-gray-200"></div>
     {% endif %}
-    <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(0,0,0,0.65), rgba(0,0,0,0.15));"></div>
-    <div class="relative z-10 px-6 pb-16 w-full max-w-4xl text-white">
+    <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0.45) 60%, rgba(0,0,0,0.2));"></div>
+    {%- assign hero_text_color = section.settings.hero_text_color | default: '#ffffff' -%}
+    <div class="relative z-10 px-6 pb-16 w-full max-w-4xl text-center" style="color:{{ hero_text_color }};">
       {% if section.settings.hero_eyebrow != blank %}
         <p class="font-serif tracking-widest uppercase mb-4 text-sm">{{ section.settings.hero_eyebrow }}</p>
       {% endif %}
@@ -415,6 +416,7 @@
     { "type": "text", "id": "hero_eyebrow", "label": "ヒーロー英字見出し" },
     { "type": "text", "id": "hero_title", "label": "ヒーロー見出し（空欄で商品名）" },
     { "type": "textarea", "id": "hero_lede", "label": "ヒーローリード文" },
+    { "type": "color", "id": "hero_text_color", "label": "ヒーロー文字色", "default": "#ffffff", "info": "背景画像が明るくて文字が読みづらい場合はここで色を変更してください（初期値は白）。" },
 
     { "type": "text", "id": "overview_eyebrow", "label": "概要 英字見出し", "default": "PLAN OVERVIEW" },
     { "type": "text", "id": "overview_title", "label": "概要 見出し" },
