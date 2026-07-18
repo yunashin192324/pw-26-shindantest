@@ -56,7 +56,8 @@
 </style>
 
 {%- assign variant = product.selected_or_first_available_variant -%}
-{%- assign is_instant = product.tags contains '即予約' -%}
+{%- assign is_instant = false -%}
+{%- if product.tags contains '即予約' -%}{%- assign is_instant = true -%}{%- endif -%}
 {%- assign hero_img = section.settings.hero_img | default: product.featured_image -%}
 {%- assign hero_title = section.settings.hero_title | default: product.title -%}
 {%- assign gallery_blocks = section.blocks | where: 'type', 'gallery_image' -%}
@@ -231,7 +232,8 @@
         <h3 class="font-bold mb-4" style="font-size: calc(var(--font-heading-scale, 1) * 18px);">{{ section.settings.included_title | default: '含まれるもの' }}</h3>
         <div class="divider-gold"></div>
         <ul class="mt-4 space-y-2 text-sm text-gray-700">
-          {% for line in section.settings.included_list | newline_to_br | split: '<br />' %}
+          {% assign included_lines = section.settings.included_list | newline_to_br | split: '<br />' %}
+          {% for line in included_lines %}
             {% assign line = line | strip %}
             {% if line != blank %}<li class="flex gap-2"><span style="color:#B8860B;">✓</span><span>{{ line }}</span></li>{% endif %}
           {% endfor %}
@@ -243,7 +245,8 @@
         <h3 class="font-bold mb-4" style="font-size: calc(var(--font-heading-scale, 1) * 18px);">{{ section.settings.excluded_title | default: '含まれないもの' }}</h3>
         <div class="divider-gold"></div>
         <ul class="mt-4 space-y-2 text-sm text-gray-500">
-          {% for line in section.settings.excluded_list | newline_to_br | split: '<br />' %}
+          {% assign excluded_lines = section.settings.excluded_list | newline_to_br | split: '<br />' %}
+          {% for line in excluded_lines %}
             {% assign line = line | strip %}
             {% if line != blank %}<li class="flex gap-2"><span class="text-gray-300">—</span><span>{{ line }}</span></li>{% endif %}
           {% endfor %}
@@ -507,8 +510,8 @@
         { "type": "textarea", "id": "text", "label": "本文" }
       ]
     },
-    { "type": "@app", "name": "予約アプリ（Appointo等）" }
+    { "type": "@app" }
   ],
-  "max_blocks": 60
+  "max_blocks": 50
 }
 {% endschema %}

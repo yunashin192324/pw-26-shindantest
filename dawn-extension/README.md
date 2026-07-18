@@ -13,7 +13,7 @@
 | ファイル | 対応 |
 | --- | --- |
 | `sections/product-plan.liquid` | Sections フォルダに**新規追加** |
-| `templates/product.json` | Templates フォルダに**新規追加** |
+| `templates/product.plan.json` | Templates フォルダに**新規追加**（既存の`product.json`は上書きしません） |
 | `sections/area-lp.liquid` | Sections フォルダの**既存`area-lp.liquid`を上書き** |
 | `templates/page.destinations.json` | Templates フォルダの**既存ファイルを上書き** |
 | `templates/page.region.json` | Templates フォルダの**既存ファイルを上書き** |
@@ -95,6 +95,21 @@
 `sections/destinations-header.liquid`・`destinations-footer.liquid`・
 `layout/theme.destinations.liquid`はもう使われなくなりますが、
 残しておいても害はありません（削除は任意です）。
+
+## テーマチェックのエラー修正（今回分）
+
+VS Codeのtheme-check拡張機能で指摘いただいたエラーはすべて修正済みです。
+
+- `product-plan.liquid`：`{% assign x = a contains b %}`のような比較演算を
+  `assign`の右辺に直接書く書き方と、`{% for line in list | split: ... %}`の
+  ようにfor文の対象に直接フィルターをかける書き方は、Shopifyの新しい
+  strictパーサーでは許可されていません。それぞれ「先に`if`で判定してから
+  真偽値を代入」「先に`assign`でフィルター済みの配列を作ってからfor文に渡す」
+  という書き方に直しました。また`"@app"`ブロックには`"name"`を付けられない
+  仕様のため削除、`max_blocks`は上限の50に修正しました
+- `area-lp.liquid`：同じく`assign`内の比較演算を`if`判定に直しました
+
+これらは見た目やロジックには影響しない書き方の修正のみです。
 
 ## 確認をお願いしたいこと（再掲）
 

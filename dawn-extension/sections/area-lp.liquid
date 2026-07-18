@@ -197,8 +197,12 @@
                 {% if linked_product and linked_product.description != blank %}{{ linked_product.description | strip_html | truncate: 50 }}{% else %}{{ block.settings.desc }}{% endif %}
               </p>
               <div class="flex items-center justify-between mt-4">
-                {%- assign is_instant = block.settings.availability == 'instant' -%}
-                {%- if linked_product -%}{%- assign is_instant = linked_product.tags contains '即予約' -%}{%- endif -%}
+                {%- assign is_instant = false -%}
+                {%- if block.settings.availability == 'instant' -%}{%- assign is_instant = true -%}{%- endif -%}
+                {%- if linked_product -%}
+                  {%- assign is_instant = false -%}
+                  {%- if linked_product.tags contains '即予約' -%}{%- assign is_instant = true -%}{%- endif -%}
+                {%- endif -%}
                 {% if is_instant %}
                   <span class="text-xs px-3 py-1 rounded-full" style="background:#eef4ec;color:#4b7a52;">即予約できます</span>
                 {% else %}
