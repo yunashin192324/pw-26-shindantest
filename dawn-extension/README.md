@@ -13,7 +13,7 @@
 | ファイル | 対応 |
 | --- | --- |
 | `sections/product-plan.liquid` | Sections フォルダに**新規追加** |
-| `templates/product.plan.json` | Templates フォルダに**新規追加**（既存の`product.json`は上書きしません） |
+| `templates/product.location-plan.json` | Templates フォルダに**新規追加**（既存の`product.json`・`product.plan.json`とは別名なので、どちらも上書きしません） |
 | `sections/area-lp.liquid` | Sections フォルダの**既存`area-lp.liquid`を上書き** |
 | `templates/page.destinations.json` | Templates フォルダの**既存ファイルを上書き** |
 | `templates/page.region.json` | Templates フォルダの**既存ファイルを上書き** |
