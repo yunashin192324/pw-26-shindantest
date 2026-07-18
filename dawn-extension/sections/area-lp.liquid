@@ -110,9 +110,9 @@
         {% for block in location_blocks %}
           <div {{ block.shopify_attributes }}>
             {% if block.settings.image != blank %}
-              {% assign loc_class = 'w-full object-cover rounded-lg ' | append: block.settings.image_position %}
+              {% assign loc_class = 'w-full h-full object-cover rounded-lg ' | append: block.settings.image_position %}
               <div style="height:{{ block.settings.img_height_sp | default: 200 }}px;" class="md:!h-[{{ block.settings.img_height_pc | default: 225 }}px]">
-                {{ block.settings.image | image_url: width: 700 | image_tag: class: loc_class | append: ' h-full', loading: 'lazy' }}
+                {{ block.settings.image | image_url: width: 700 | image_tag: class: loc_class, loading: 'lazy' }}
               </div>
             {% endif %}
             <h3 class="mt-4 font-medium text-[{{ block.settings.title_size_sp | default: 14 }}px] md:text-[{{ block.settings.title_size | default: 24 }}px]{% if block.settings.title_is_serif %} font-serif{% endif %}" style="color:{{ block.settings.title_color | default: '#1a1a1a' }};">{{ block.settings.title }}</h3>
@@ -370,8 +370,8 @@ document.addEventListener('DOMContentLoaded', function () {
             { "value": "object-center", "label": "中央" }, { "value": "object-top", "label": "上部" },
             { "value": "object-bottom", "label": "下部" }, { "value": "object-left", "label": "左側" }, { "value": "object-right", "label": "右側" }
           ], "default": "object-center" },
-        { "type": "range", "id": "img_height_pc", "label": "画像高さ(PC)", "min": 100, "max": 400, "step": 20, "default": 220 },
-        { "type": "range", "id": "img_height_sp", "label": "画像高さ(SP)", "min": 100, "max": 400, "step": 20, "default": 200 },
+        { "type": "range", "id": "img_height_pc", "label": "画像高さ(PC)", "min": 100, "max": 400, "step": 25, "default": 225 },
+        { "type": "range", "id": "img_height_sp", "label": "画像高さ(SP)", "min": 100, "max": 400, "step": 25, "default": 200 },
         { "type": "text", "id": "title", "label": "スポット名" },
         { "type": "color", "id": "title_color", "label": "スポット名色", "default": "#1a1a1a" },
         { "type": "range", "id": "title_size", "label": "スポット名サイズ(PC)", "min": 12, "max": 32, "default": 24 },
