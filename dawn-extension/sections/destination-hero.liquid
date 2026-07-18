@@ -9,13 +9,13 @@
 
 {%- comment -%}
   共通ヘッダー統一のため、このページ群は独自レイアウト(theme.destinations)
-  を使わず通常のtheme.liquidで表示する。専用CSS/JSと
-  .destinations-scopeラッパーをここで読み込む（閉じタグは
-  このテンプレート最後のdestinations-ctaセクションで出力）。
+  を使わず通常のtheme.liquidで表示する。専用CSS/JSをここで読み込み、
+  .destinations-scopeクラスはdivで囲む代わりにJSでbodyに付与する
+  (セクション単体でHTMLタグの対応が閉じるようにするため)。
 {%- endcomment -%}
 {{ 'destinations.css' | asset_url | stylesheet_tag }}
 <script src="{{ 'destinations.js' | asset_url }}" defer></script>
-<div class="destinations-scope">
+<script>document.body.classList.add('destinations-scope');</script>
 
 {%- if destination -%}
   {%- capture region_label -%}{% render 'destination-region-label', region_key: destination.region.value %}{%- endcapture -%}

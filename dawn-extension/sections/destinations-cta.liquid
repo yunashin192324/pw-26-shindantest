@@ -4,10 +4,6 @@
   診断ページが未公開のうちはbutton_urlを空にしておけばボタンごと
   非表示になる(あとで設定するだけで反映)。
 
-  このセクションは撮影地一覧/地域/都市の3テンプレートすべてで
-  常に最後に配置される。ヘッダー統一のためhero側で開いた
-  .destinations-scopeラッパーをここで閉じる（CTA自体の表示有無に
-  関わらず、必ず閉じタグを出力する）。
 {%- endcomment -%}
 {%- if section.settings.button_url != blank -%}
   {%- if section.settings.subtle -%}
@@ -31,7 +27,6 @@
     </section>
   {%- endif -%}
 {%- endif -%}
-</div>
 
 {% schema %}
 {

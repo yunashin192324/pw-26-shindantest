@@ -5,12 +5,14 @@
 
   共通ヘッダー統一のため、このページ群は独自レイアウト
   (theme.destinations)を使わず通常のtheme.liquidで表示する。
-  そのため専用CSS/JSと.destinations-scopeラッパーをここで読み込む
-  （閉じタグはこのテンプレート最後のdestinations-ctaセクションで出力）。
+  そのため専用CSS/JSをここで読み込み、.destinations-scopeクラスは
+  divで囲む代わりにJSでbodyに付与する(セクション単体でHTMLタグの
+  対応が閉じるようにするため。複数セクションにまたがってdivを
+  開閉するとShopifyのHTML検証で「壊れたHTML」と警告される)。
 {%- endcomment -%}
 {{ 'destinations.css' | asset_url | stylesheet_tag }}
 <script src="{{ 'destinations.js' | asset_url }}" defer></script>
-<div class="destinations-scope">
+<script>document.body.classList.add('destinations-scope');</script>
 <section class="dst-hero">
   <div class="dst-hero-media">
     {%- if section.settings.image -%}
