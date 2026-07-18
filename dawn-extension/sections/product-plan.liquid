@@ -98,16 +98,27 @@
 {%- endfor -%}
 {%- assign display_tags = display_tags_str | split: '||' -%}
 
-{%- comment -%} 含まれるもの／含まれないもの {%- endcomment -%}
-{%- assign included_items = mf.plan_included_items.value -%}
-{%- assign excluded_items = mf.plan_excluded_items.value -%}
+{%- comment -%}
+  含まれるもの／含まれないもの
+  リスト型フィールドの設定が分かりづらいため、複数行テキスト
+  (1行1項目)を改行で分割して配列化する方式にしている。
+{%- endcomment -%}
+{%- assign included_items = '' | split: '' -%}
+{%- if mf.plan_included_items.value != blank -%}{%- assign included_items = mf.plan_included_items.value | newline_to_br | split: '<br />' -%}{%- endif -%}
+{%- assign excluded_items = '' | split: '' -%}
+{%- if mf.plan_excluded_items.value != blank -%}{%- assign excluded_items = mf.plan_excluded_items.value | newline_to_br | split: '<br />' -%}{%- endif -%}
 
 {%- comment -%} オプション {%- endcomment -%}
 {%- assign mf_options = mf.plan_options.value -%}
 {%- assign option_blocks = section.blocks | where: 'type', 'option' -%}
 
-{%- comment -%} ギャラリー {%- endcomment -%}
-{%- assign mf_gallery = mf.plan_gallery_images.value -%}
+{%- comment -%}
+  ギャラリー：メタフィールドのリスト設定は分かりづらいため使わない。
+  商品の「メディア」欄（標準機能・複数枚まとめてアップロード可）に
+  2枚目以降として登録された画像を、そのままギャラリーとして使う。
+  1枚目はヒーロー画像として既に使われているため2枚目以降が対象。
+{%- endcomment -%}
+{%- assign mf_gallery = product.images | slice: 1, 20 -%}
 {%- assign gallery_blocks = section.blocks | where: 'type', 'gallery_image' -%}
 
 {%- comment -%} スケジュール {%- endcomment -%}
@@ -306,7 +317,8 @@
         <ul class="mt-4 space-y-2 text-sm text-gray-700">
           {% if included_items.size > 0 %}
             {% for line in included_items %}
-              <li class="flex gap-2"><span style="color:#B8860B;">✓</span><span>{{ line }}</span></li>
+              {% assign line = line | strip %}
+              {% if line != blank %}<li class="flex gap-2"><span style="color:#B8860B;">✓</span><span>{{ line }}</span></li>{% endif %}
             {% endfor %}
           {% else %}
             {% assign included_lines = section.settings.included_list | newline_to_br | split: '<br />' %}
@@ -325,7 +337,8 @@
         <ul class="mt-4 space-y-2 text-sm text-gray-500">
           {% if excluded_items.size > 0 %}
             {% for line in excluded_items %}
-              <li class="flex gap-2"><span class="text-gray-300">—</span><span>{{ line }}</span></li>
+              {% assign line = line | strip %}
+              {% if line != blank %}<li class="flex gap-2"><span class="text-gray-300">—</span><span>{{ line }}</span></li>{% endif %}
             {% endfor %}
           {% else %}
             {% assign excluded_lines = section.settings.excluded_list | newline_to_br | split: '<br />' %}
