@@ -28,6 +28,17 @@
     return_to=checkout を指定し、カート追加と同時にカートページを
     経由せずShopify標準チェックアウトへ直接進む（Buy it nowと同じ
     体験）。ヘッダーにカートアイコンを復活させる必要はない。
+
+  ------------------------------------------------------------
+  【プラン数が多い場合のテンプレート共有について】
+    プランが増えるたびに「テンプレートを複製」すると管理が大変になる
+    ため、ここから先の各セクションは「商品のメタフィールド（custom.
+    plan_*）が設定されていればそれを使い、無ければ従来通りブロック/
+    セクション設定を使う」というデュアルモードにしてある。
+    メタフィールドを使えば、この商品プランページテンプレートを
+    複数の商品で共有したまま、商品ごとに内容だけ切り替えられる
+    （テンプレートを複製しなくてよくなる）。
+    セットアップ手順は docs/product-plan-metafields-setup.md 参照。
 {% endcomment %}
 
 <script>
@@ -58,14 +69,59 @@
 {%- assign variant = product.selected_or_first_available_variant -%}
 {%- assign is_instant = false -%}
 {%- if product.tags contains '即予約' -%}{%- assign is_instant = true -%}{%- endif -%}
+{%- assign mf = product.metafields.custom -%}
+
+{%- comment -%} ヒーロー {%- endcomment -%}
 {%- assign hero_img = section.settings.hero_img | default: product.featured_image -%}
 {%- assign hero_title = section.settings.hero_title | default: product.title -%}
-{%- assign gallery_blocks = section.blocks | where: 'type', 'gallery_image' -%}
+{%- assign hero_eyebrow = mf.plan_hero_eyebrow.value | default: section.settings.hero_eyebrow -%}
+{%- assign hero_lede = mf.plan_hero_lede.value | default: section.settings.hero_lede -%}
+{%- assign hero_text_color = mf.plan_hero_text_color.value | default: section.settings.hero_text_color | default: '#ffffff' -%}
+
+{%- comment -%} 概要 {%- endcomment -%}
+{%- assign overview_title = mf.plan_overview_title.value | default: section.settings.overview_title -%}
+
+{%- comment -%} 価格まわり {%- endcomment -%}
+{%- assign price_note = mf.plan_price_note.value | default: section.settings.price_note -%}
+{%- assign price_cancel_note = mf.plan_price_cancel_note.value | default: section.settings.price_cancel_note -%}
+
+{%- comment -%}
+  特徴タグ：商品タグをそのまま使う（即予約/人気は制御用タグなので
+  除外）。tagブロックは、商品タグを使わず個別に文言を出したい場合の
+  後方互換フォールバックとして残す。
+{%- endcomment -%}
+{%- assign hidden_tags = '即予約,人気' | split: ',' -%}
 {%- assign tag_blocks = section.blocks | where: 'type', 'tag' -%}
+{%- assign display_tags_str = '' -%}
+{%- for t in product.tags -%}
+  {%- unless hidden_tags contains t -%}{%- assign display_tags_str = display_tags_str | append: t | append: '||' -%}{%- endunless -%}
+{%- endfor -%}
+{%- assign display_tags = display_tags_str | split: '||' -%}
+
+{%- comment -%} 含まれるもの／含まれないもの {%- endcomment -%}
+{%- assign included_items = mf.plan_included_items.value -%}
+{%- assign excluded_items = mf.plan_excluded_items.value -%}
+
+{%- comment -%} オプション {%- endcomment -%}
+{%- assign mf_options = mf.plan_options.value -%}
 {%- assign option_blocks = section.blocks | where: 'type', 'option' -%}
+
+{%- comment -%} ギャラリー {%- endcomment -%}
+{%- assign mf_gallery = mf.plan_gallery_images.value -%}
+{%- assign gallery_blocks = section.blocks | where: 'type', 'gallery_image' -%}
+
+{%- comment -%} スケジュール {%- endcomment -%}
+{%- assign mf_schedule = mf.plan_schedule.value -%}
 {%- assign schedule_blocks = section.blocks | where: 'type', 'schedule' -%}
+
+{%- comment -%} FAQ {%- endcomment -%}
+{%- assign mf_faqs = mf.plan_faqs.value -%}
 {%- assign faq_blocks = section.blocks | where: 'type', 'faq' -%}
+
+{%- comment -%} 注意事項 {%- endcomment -%}
+{%- assign plan_notes_text = mf.plan_notes.value -%}
 {%- assign note_blocks = section.blocks | where: 'type', 'note' -%}
+
 {%- assign app_blocks = section.blocks | where: 'type', '@app' -%}
 
 <script type="application/ld+json">
@@ -87,19 +143,29 @@
   }
 }
 </script>
-{%- if faq_blocks.size > 0 -%}
+{%- if mf_faqs.size > 0 or faq_blocks.size > 0 -%}
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "FAQPage",
   "mainEntity": [
-    {%- for block in faq_blocks -%}
-      {
-        "@type": "Question",
-        "name": {{ block.settings.question | strip_html | json }},
-        "acceptedAnswer": { "@type": "Answer", "text": {{ block.settings.answer | strip_html | json }} }
-      }{%- unless forloop.last -%},{%- endunless -%}
-    {%- endfor -%}
+    {%- if mf_faqs.size > 0 -%}
+      {%- for item in mf_faqs -%}
+        {
+          "@type": "Question",
+          "name": {{ item.question | strip_html | json }},
+          "acceptedAnswer": { "@type": "Answer", "text": {{ item.answer | strip_html | json }} }
+        }{%- unless forloop.last -%},{%- endunless -%}
+      {%- endfor -%}
+    {%- else -%}
+      {%- for block in faq_blocks -%}
+        {
+          "@type": "Question",
+          "name": {{ block.settings.question | strip_html | json }},
+          "acceptedAnswer": { "@type": "Answer", "text": {{ block.settings.answer | strip_html | json }} }
+        }{%- unless forloop.last -%},{%- endunless -%}
+      {%- endfor -%}
+    {%- endif -%}
   ]
 }
 </script>
@@ -116,14 +182,13 @@
       <div class="absolute inset-0 w-full h-full bg-gray-200"></div>
     {% endif %}
     <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0.45) 60%, rgba(0,0,0,0.2));"></div>
-    {%- assign hero_text_color = section.settings.hero_text_color | default: '#ffffff' -%}
     <div class="relative z-10 px-6 pb-16 w-full max-w-4xl text-center" style="color:{{ hero_text_color }};">
-      {% if section.settings.hero_eyebrow != blank %}
-        <p class="font-serif tracking-widest uppercase mb-4 text-sm" style="color:{{ hero_text_color }};">{{ section.settings.hero_eyebrow }}</p>
+      {% if hero_eyebrow != blank %}
+        <p class="font-serif tracking-widest uppercase mb-4 text-sm" style="color:{{ hero_text_color }};">{{ hero_eyebrow }}</p>
       {% endif %}
       <h1 class="font-serif font-light leading-tight mb-4" style="font-size: calc(var(--font-heading-scale, 1) * 40px); color:{{ hero_text_color }};">{{ hero_title }}</h1>
-      {% if section.settings.hero_lede != blank %}
-        <p class="font-light" style="font-size: calc(var(--font-body-scale, 1) * 16px); color:{{ hero_text_color }};">{{ section.settings.hero_lede }}</p>
+      {% if hero_lede != blank %}
+        <p class="font-light" style="font-size: calc(var(--font-body-scale, 1) * 16px); color:{{ hero_text_color }};">{{ hero_lede }}</p>
       {% endif %}
     </div>
   </section>
@@ -143,14 +208,20 @@
         {% if section.settings.overview_eyebrow != blank %}
           <p class="font-serif tracking-widest uppercase mb-2 text-sm" style="color:#B8860B;">{{ section.settings.overview_eyebrow }}</p>
         {% endif %}
-        {% if section.settings.overview_title != blank %}
-          <h2 class="font-medium mb-3" style="font-size: calc(var(--font-heading-scale, 1) * 24px);">{{ section.settings.overview_title }}</h2>
+        {% if overview_title != blank %}
+          <h2 class="font-medium mb-3" style="font-size: calc(var(--font-heading-scale, 1) * 24px);">{{ overview_title }}</h2>
           <div class="divider-gold"></div>
         {% endif %}
         <div class="text-sm leading-relaxed text-gray-600 mt-4">
-          {% if section.settings.overview_desc != blank %}{{ section.settings.overview_desc }}{% else %}{{ product.description }}{% endif %}
+          {{ product.description }}
         </div>
-        {% if tag_blocks.size > 0 %}
+        {% if display_tags.size > 0 %}
+          <div class="flex flex-wrap gap-2 mt-6">
+            {% for t in display_tags %}
+              <span class="inline-block px-3 py-1 text-xs border border-gray-300 rounded-full text-gray-600">{{ t }}</span>
+            {% endfor %}
+          </div>
+        {% elsif tag_blocks.size > 0 %}
           <div class="flex flex-wrap gap-2 mt-6">
             {% for block in tag_blocks %}
               <span class="inline-block px-3 py-1 text-xs border border-gray-300 rounded-full text-gray-600" {{ block.shopify_attributes }}>{{ block.settings.title }}</span>
@@ -167,7 +238,7 @@
         {% endif %}
         <div class="mt-4 font-serif" style="font-size: calc(var(--font-heading-scale, 1) * 34px); color:#1a1a1a;">
           {{ variant.price | money }}
-          <span class="text-sm font-sans text-gray-500">{{ section.settings.price_note }}</span>
+          <span class="text-sm font-sans text-gray-500">{{ price_note }}</span>
         </div>
 
         {% if is_instant %}
@@ -217,40 +288,52 @@
           {% endunless %}
         {% endif %}
 
-        {% if section.settings.price_cancel_note != blank %}
-          <p class="text-xs text-gray-500 mt-6 leading-relaxed">{{ section.settings.price_cancel_note }}</p>
+        {% if price_cancel_note != blank %}
+          <p class="text-xs text-gray-500 mt-6 leading-relaxed">{{ price_cancel_note }}</p>
         {% endif %}
       </div>
     </div>
   </section>
 
   {% comment %} --- 含まれるもの／含まれないもの --- {% endcomment %}
-  {% if section.settings.included_list != blank or section.settings.excluded_list != blank %}
+  {% if included_items.size > 0 or excluded_items.size > 0 or section.settings.included_list != blank or section.settings.excluded_list != blank %}
   <section class="py-16 md:py-24" style="background-color:#FAF8F5;">
     <div class="max-w-6xl mx-auto px-6 grid md:grid-cols-2 gap-10">
-      {% if section.settings.included_list != blank %}
+      {% if included_items.size > 0 or section.settings.included_list != blank %}
       <div>
         <h3 class="font-bold mb-4" style="font-size: calc(var(--font-heading-scale, 1) * 18px);">{{ section.settings.included_title | default: '含まれるもの' }}</h3>
         <div class="divider-gold"></div>
         <ul class="mt-4 space-y-2 text-sm text-gray-700">
-          {% assign included_lines = section.settings.included_list | newline_to_br | split: '<br />' %}
-          {% for line in included_lines %}
-            {% assign line = line | strip %}
-            {% if line != blank %}<li class="flex gap-2"><span style="color:#B8860B;">✓</span><span>{{ line }}</span></li>{% endif %}
-          {% endfor %}
+          {% if included_items.size > 0 %}
+            {% for line in included_items %}
+              <li class="flex gap-2"><span style="color:#B8860B;">✓</span><span>{{ line }}</span></li>
+            {% endfor %}
+          {% else %}
+            {% assign included_lines = section.settings.included_list | newline_to_br | split: '<br />' %}
+            {% for line in included_lines %}
+              {% assign line = line | strip %}
+              {% if line != blank %}<li class="flex gap-2"><span style="color:#B8860B;">✓</span><span>{{ line }}</span></li>{% endif %}
+            {% endfor %}
+          {% endif %}
         </ul>
       </div>
       {% endif %}
-      {% if section.settings.excluded_list != blank %}
+      {% if excluded_items.size > 0 or section.settings.excluded_list != blank %}
       <div>
         <h3 class="font-bold mb-4" style="font-size: calc(var(--font-heading-scale, 1) * 18px);">{{ section.settings.excluded_title | default: '含まれないもの' }}</h3>
         <div class="divider-gold"></div>
         <ul class="mt-4 space-y-2 text-sm text-gray-500">
-          {% assign excluded_lines = section.settings.excluded_list | newline_to_br | split: '<br />' %}
-          {% for line in excluded_lines %}
-            {% assign line = line | strip %}
-            {% if line != blank %}<li class="flex gap-2"><span class="text-gray-300">—</span><span>{{ line }}</span></li>{% endif %}
-          {% endfor %}
+          {% if excluded_items.size > 0 %}
+            {% for line in excluded_items %}
+              <li class="flex gap-2"><span class="text-gray-300">—</span><span>{{ line }}</span></li>
+            {% endfor %}
+          {% else %}
+            {% assign excluded_lines = section.settings.excluded_list | newline_to_br | split: '<br />' %}
+            {% for line in excluded_lines %}
+              {% assign line = line | strip %}
+              {% if line != blank %}<li class="flex gap-2"><span class="text-gray-300">—</span><span>{{ line }}</span></li>{% endif %}
+            {% endfor %}
+          {% endif %}
         </ul>
       </div>
       {% endif %}
@@ -259,7 +342,7 @@
   {% endif %}
 
   {% comment %} --- オプション --- {% endcomment %}
-  {% if section.settings.show_options and option_blocks.size > 0 %}
+  {% if section.settings.show_options and (mf_options.size > 0 or option_blocks.size > 0) %}
   <section class="py-16 md:py-24">
     <div class="max-w-6xl mx-auto px-6">
       <div class="text-center mb-16">
@@ -268,12 +351,21 @@
         <div class="divider-gold center"></div>
       </div>
       <div class="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
-        {% for block in option_blocks %}
-          <div {{ block.shopify_attributes }}>
-            <h4 class="font-bold text-sm">{{ block.settings.title }}</h4>
-            <p class="text-sm mt-2" style="color:#B8860B;">{{ block.settings.price }}</p>
-          </div>
-        {% endfor %}
+        {% if mf_options.size > 0 %}
+          {% for item in mf_options %}
+            <div>
+              <h4 class="font-bold text-sm">{{ item.title }}</h4>
+              <p class="text-sm mt-2" style="color:#B8860B;">{{ item.price }}</p>
+            </div>
+          {% endfor %}
+        {% else %}
+          {% for block in option_blocks %}
+            <div {{ block.shopify_attributes }}>
+              <h4 class="font-bold text-sm">{{ block.settings.title }}</h4>
+              <p class="text-sm mt-2" style="color:#B8860B;">{{ block.settings.price }}</p>
+            </div>
+          {% endfor %}
+        {% endif %}
       </div>
     </div>
   </section>
@@ -305,7 +397,7 @@
   {% endif %}
 
   {% comment %} --- 撮影ギャラリー --- {% endcomment %}
-  {% if gallery_blocks.size > 0 %}
+  {% if mf_gallery.size > 0 or gallery_blocks.size > 0 %}
   <section class="py-16 md:py-24">
     <div class="max-w-6xl mx-auto px-6">
       <div class="text-center mb-16">
@@ -314,21 +406,29 @@
         <div class="divider-gold center"></div>
       </div>
       <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
-        {% for block in gallery_blocks %}
-          <div class="w-full relative" style="padding-top: 125%;" {{ block.shopify_attributes }}>
-            {% if block.settings.image != blank %}
-              {% capture gimg_style %}object-position: {{ block.settings.img_position | default: 'object-center' }};{% endcapture %}
-              {{ block.settings.image | image_url: width: 800 | image_tag: class: 'absolute top-0 left-0 w-full h-full object-cover rounded-lg', style: gimg_style, alt: product.title }}
-            {% endif %}
-          </div>
-        {% endfor %}
+        {% if mf_gallery.size > 0 %}
+          {% for image in mf_gallery %}
+            <div class="w-full relative" style="padding-top: 125%;">
+              {{ image | image_url: width: 800 | image_tag: class: 'absolute top-0 left-0 w-full h-full object-cover rounded-lg', alt: product.title }}
+            </div>
+          {% endfor %}
+        {% else %}
+          {% for block in gallery_blocks %}
+            <div class="w-full relative" style="padding-top: 125%;" {{ block.shopify_attributes }}>
+              {% if block.settings.image != blank %}
+                {% capture gimg_style %}object-position: {{ block.settings.img_position | default: 'object-center' }};{% endcapture %}
+                {{ block.settings.image | image_url: width: 800 | image_tag: class: 'absolute top-0 left-0 w-full h-full object-cover rounded-lg', style: gimg_style, alt: product.title }}
+              {% endif %}
+            </div>
+          {% endfor %}
+        {% endif %}
       </div>
     </div>
   </section>
   {% endif %}
 
   {% comment %} --- スケジュール --- {% endcomment %}
-  {% if schedule_blocks.size > 0 %}
+  {% if mf_schedule.size > 0 or schedule_blocks.size > 0 %}
   <section class="py-16 md:py-24" style="background-color:#FAF8F5;">
     <div class="max-w-3xl mx-auto px-6">
       <div class="text-center mb-16">
@@ -337,19 +437,28 @@
         <div class="divider-gold center"></div>
       </div>
       <div>
-        {% for block in schedule_blocks %}
-          <div class="flex gap-6 border-b border-gray-200 py-4 text-sm" {{ block.shopify_attributes }}>
-            <span class="w-16 shrink-0 font-serif" style="color:#B8860B;">{{ block.settings.time }}</span>
-            <span class="text-gray-700">{{ block.settings.desc }}</span>
-          </div>
-        {% endfor %}
+        {% if mf_schedule.size > 0 %}
+          {% for item in mf_schedule %}
+            <div class="flex gap-6 border-b border-gray-200 py-4 text-sm">
+              <span class="w-16 shrink-0 font-serif" style="color:#B8860B;">{{ item.time }}</span>
+              <span class="text-gray-700">{{ item.desc }}</span>
+            </div>
+          {% endfor %}
+        {% else %}
+          {% for block in schedule_blocks %}
+            <div class="flex gap-6 border-b border-gray-200 py-4 text-sm" {{ block.shopify_attributes }}>
+              <span class="w-16 shrink-0 font-serif" style="color:#B8860B;">{{ block.settings.time }}</span>
+              <span class="text-gray-700">{{ block.settings.desc }}</span>
+            </div>
+          {% endfor %}
+        {% endif %}
       </div>
     </div>
   </section>
   {% endif %}
 
   {% comment %} --- FAQ --- {% endcomment %}
-  {% if faq_blocks.size > 0 %}
+  {% if mf_faqs.size > 0 or faq_blocks.size > 0 %}
   <section class="py-16 md:py-24">
     <div class="max-w-3xl mx-auto px-6">
       <div class="text-center mb-16">
@@ -358,28 +467,41 @@
         <div class="divider-gold center"></div>
       </div>
       <div>
-        {% for block in faq_blocks %}
-          <details class="border-b border-gray-200 py-4" {{ block.shopify_attributes }}>
-            <summary class="cursor-pointer font-medium text-sm flex justify-between items-center">{{ block.settings.question }}<span style="color:#B8860B;">＋</span></summary>
-            <p class="text-sm text-gray-600 mt-3 leading-relaxed">{{ block.settings.answer }}</p>
-          </details>
-        {% endfor %}
+        {% if mf_faqs.size > 0 %}
+          {% for item in mf_faqs %}
+            <details class="border-b border-gray-200 py-4">
+              <summary class="cursor-pointer font-medium text-sm flex justify-between items-center">{{ item.question }}<span style="color:#B8860B;">＋</span></summary>
+              <p class="text-sm text-gray-600 mt-3 leading-relaxed">{{ item.answer }}</p>
+            </details>
+          {% endfor %}
+        {% else %}
+          {% for block in faq_blocks %}
+            <details class="border-b border-gray-200 py-4" {{ block.shopify_attributes }}>
+              <summary class="cursor-pointer font-medium text-sm flex justify-between items-center">{{ block.settings.question }}<span style="color:#B8860B;">＋</span></summary>
+              <p class="text-sm text-gray-600 mt-3 leading-relaxed">{{ block.settings.answer }}</p>
+            </details>
+          {% endfor %}
+        {% endif %}
       </div>
     </div>
   </section>
   {% endif %}
 
   {% comment %} --- 注意事項 --- {% endcomment %}
-  {% if section.settings.show_notes and note_blocks.size > 0 %}
+  {% if section.settings.show_notes and (plan_notes_text != blank or note_blocks.size > 0) %}
   <section class="py-16 md:py-24" style="background-color:#FAF8F5;">
     <div class="max-w-3xl mx-auto px-6">
       <h3 class="font-bold mb-4 text-sm">{{ section.settings.notes_title | default: '注意事項・ご案内' }}</h3>
-      {% for block in note_blocks %}
-        <div class="text-xs text-gray-500 leading-relaxed mt-3" {{ block.shopify_attributes }}>
-          {% if block.settings.title != blank %}<p class="font-bold text-gray-600 mb-1">{{ block.settings.title }}</p>{% endif %}
-          {{ block.settings.text | newline_to_br }}
-        </div>
-      {% endfor %}
+      {% if plan_notes_text != blank %}
+        <div class="text-xs text-gray-500 leading-relaxed mt-3">{{ plan_notes_text | newline_to_br }}</div>
+      {% else %}
+        {% for block in note_blocks %}
+          <div class="text-xs text-gray-500 leading-relaxed mt-3" {{ block.shopify_attributes }}>
+            {% if block.settings.title != blank %}<p class="font-bold text-gray-600 mb-1">{{ block.settings.title }}</p>{% endif %}
+            {{ block.settings.text | newline_to_br }}
+          </div>
+        {% endfor %}
+      {% endif %}
     </div>
   </section>
   {% endif %}
@@ -411,6 +533,7 @@
 {
   "name": "商品プランページ",
   "settings": [
+    { "type": "paragraph", "content": "以下はテンプレートを複製せず複数の商品で共有する場合、商品ごとの内容は下の設定ではなく商品のメタフィールド(custom.plan_*)で管理してください。詳細はdocs/product-plan-metafields-setup.mdを参照。ここの設定はメタフィールド未設定時のフォールバックとして使われます。" },
     { "type": "image_picker", "id": "hero_img", "label": "ヒーロー画像（空欄で商品メイン画像）" },
     { "type": "text", "id": "hero_img_position", "label": "ヒーロー画像位置", "default": "object-center" },
     { "type": "text", "id": "hero_eyebrow", "label": "ヒーロー英字見出し" },
@@ -420,7 +543,6 @@
 
     { "type": "text", "id": "overview_eyebrow", "label": "概要 英字見出し", "default": "PLAN OVERVIEW" },
     { "type": "text", "id": "overview_title", "label": "概要 見出し" },
-    { "type": "textarea", "id": "overview_desc", "label": "概要 本文（空欄で商品説明）" },
 
     { "type": "text", "id": "price_note", "label": "価格の注記", "default": "税込 / 2名様" },
     { "type": "textarea", "id": "price_cancel_note", "label": "キャンセル規定" },
@@ -469,7 +591,7 @@
   "blocks": [
     {
       "type": "gallery_image",
-      "name": "ギャラリー画像",
+      "name": "ギャラリー画像（メタフィールド未使用時のみ）",
       "settings": [
         { "type": "image_picker", "id": "image", "label": "画像" },
         { "type": "text", "id": "img_position", "label": "画像位置", "default": "object-center" }
@@ -477,12 +599,12 @@
     },
     {
       "type": "tag",
-      "name": "特徴タグ",
+      "name": "特徴タグ（商品タグ未使用時のみ）",
       "settings": [{ "type": "text", "id": "title", "label": "文言", "default": "ダブルカメラマン" }]
     },
     {
       "type": "option",
-      "name": "オプション",
+      "name": "オプション（メタフィールド未使用時のみ）",
       "settings": [
         { "type": "text", "id": "title", "label": "名称", "default": "送迎付きプラン" },
         { "type": "text", "id": "price", "label": "価格表記", "default": "+¥12,000" }
@@ -490,7 +612,7 @@
     },
     {
       "type": "schedule",
-      "name": "スケジュール",
+      "name": "スケジュール（メタフィールド未使用時のみ）",
       "settings": [
         { "type": "text", "id": "time", "label": "時刻", "default": "8:00" },
         { "type": "text", "id": "desc", "label": "内容", "default": "サロンにてお仕度開始" }
@@ -498,7 +620,7 @@
     },
     {
       "type": "faq",
-      "name": "FAQ",
+      "name": "FAQ（メタフィールド未使用時のみ）",
       "settings": [
         { "type": "text", "id": "question", "label": "質問", "default": "質問文をここに入力" },
         { "type": "textarea", "id": "answer", "label": "回答" }
@@ -506,7 +628,7 @@
     },
     {
       "type": "note",
-      "name": "注意事項",
+      "name": "注意事項（メタフィールド未使用時のみ）",
       "settings": [
         { "type": "text", "id": "title", "label": "見出し（任意）" },
         { "type": "textarea", "id": "text", "label": "本文" }
