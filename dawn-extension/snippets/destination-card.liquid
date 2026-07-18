@@ -1,0 +1,66 @@
+{%- comment -%}
+  destination-card
+  ----------------------------------------------------------------
+  1都市分のカード。人気都市カルーセル・地域一覧・地域ページの都市一覧・
+  検索結果すべてで使い回す共通コンポーネント。
+
+  カード構成(仕様書順): 画像 → 国名 → 英語都市名 → 日本語都市名 →
+  説明 → テーマタグ → 詳しく見る。カード全体がリンク。
+
+  Params:
+    destination  — required, Destination metaobjectの1件
+    reveal_class — optional, 例: "dst-reveal-1"（fade-upの遅延段差）
+    show_badge   — optional, true で「人気」バッジを表示
+
+  【テーマタグについて】
+    本来`themes`はリスト型フィールドの想定だったが、実際の運用では
+    単一行テキストに「beach・resort」のように複数値をまとめて入力
+    されている。値を「・」「•」「、」「,」のいずれかで区切って
+    配列化してから処理することで、区切り文字違いや大文字小文字の
+    ゆれを吸収する。
+{%- endcomment -%}
+{%- assign name_ja = destination.name_ja.value -%}
+{%- assign url = destination.slug.value | prepend: '/pages/' -%}
+
+{%- assign themes_raw = destination.themes.value | strip -%}
+{%- assign theme_list = '' | split: '' -%}
+{%- if themes_raw != blank -%}
+  {%- assign themes_raw = themes_raw | replace: '・', '|' | replace: '•', '|' | replace: '、', '|' | replace: ',', '|' -%}
+  {%- assign theme_list = themes_raw | split: '|' -%}
+{%- endif -%}
+
+<a href="{{ url }}" class="dst-card dst-reveal{% if reveal_class %} {{ reveal_class }}{% endif %}">
+  <div class="dst-card-media">
+    {%- if destination.hero_image.value -%}
+      <img
+        src="{{ destination.hero_image.value | image_url: width: 600 }}"
+        srcset="{{ destination.hero_image.value | image_url: width: 400 }} 400w, {{ destination.hero_image.value | image_url: width: 600 }} 600w, {{ destination.hero_image.value | image_url: width: 900 }} 900w"
+        sizes="(min-width: 960px) 25vw, (min-width: 640px) 45vw, 80vw"
+        alt="{{ destination.hero_image.value.alt | default: name_ja | escape }}"
+        loading="lazy"
+        width="600" height="750"
+      >
+    {%- endif -%}
+    {%- if show_badge and destination.popular.value -%}
+      <span class="dst-card-badge">POPULAR</span>
+    {%- endif -%}
+  </div>
+  <div class="dst-card-body">
+    <p class="dst-card-country">{{ destination.country.value }}</p>
+    <p class="dst-card-name-en">{{ destination.name_en.value }}</p>
+    <h3 class="dst-card-name-ja">{{ name_ja }}</h3>
+    <p class="dst-card-desc">{{ destination.description.value | strip_html | truncate: 60 }}</p>
+    {%- if theme_list.size > 0 -%}
+      <div class="dst-card-themes">
+        {%- for raw_key in theme_list limit: 3 -%}
+          {%- assign theme_key = raw_key | strip | downcase -%}
+          {%- if theme_key != blank -%}
+            {%- capture theme_label -%}{% render 'destination-theme-label', theme_key: theme_key %}{%- endcapture -%}
+            <span class="dst-tag">{{ theme_label | strip }}</span>
+          {%- endif -%}
+        {%- endfor -%}
+      </div>
+    {%- endif -%}
+    <span class="dst-card-link">詳しく見る ＞</span>
+  </div>
+</a>
