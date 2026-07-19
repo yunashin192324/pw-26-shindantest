@@ -71,6 +71,13 @@
       {% if section.settings.breadcrumb_2_url != blank %}<a href="{{ section.settings.breadcrumb_2_url }}" class="hover:text-gold">{{ section.settings.breadcrumb_2_text }}</a>{% else %}<span>{{ section.settings.breadcrumb_2_text }}</span>{% endif %}
     {% endif %}
     {% if section.settings.breadcrumb_3_text != blank %}<span class="mx-1">/</span><span>{{ section.settings.breadcrumb_3_text }}</span>{% endif %}
+    {%- comment -%}
+      すでにこの都市に決めている人が、長いページを全部スクロール
+      しなくてもプラン一覧まで一気に飛べるようにするジャンプリンク。
+    {%- endcomment -%}
+    {% if plan_blocks.size > 0 %}
+      <a href="#area-plans-{{ section.id }}" class="ml-2 inline-flex items-center gap-1 font-medium" style="color:#B8860B;">プランを見る ↓</a>
+    {% endif %}
   </div>
 
   {% comment %} --- 選ばれる理由 --- {% endcomment %}
@@ -334,7 +341,7 @@
 
   {% comment %} --- プラン一覧 --- {% endcomment %}
   {% if plan_blocks.size > 0 %}
-  <section class="py-16 bg-ivory">
+  <section id="area-plans-{{ section.id }}" class="py-16 bg-ivory">
     <div class="max-w-6xl mx-auto px-4">
       <div class="text-center mb-12">
         <p class="font-serif text-sm tracking-[0.15em] uppercase mb-2" style="color:{{ section.settings.plans_eyebrow_color | default: '#B8860B' }};">{{ section.settings.plans_eyebrow }}</p>
