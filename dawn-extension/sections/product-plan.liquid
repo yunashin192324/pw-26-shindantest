@@ -143,6 +143,16 @@
 {%- assign plan_notes_text = mf.plan_notes.value -%}
 {%- assign note_blocks = section.blocks | where: 'type', 'note' -%}
 
+{%- comment -%}
+  運行事業者／お申し込み時に必要なもの／撮影不可能日
+  もともと店舗に存在していた既存メタフィールド(custom.agt / custom.need /
+  custom.ngday)をそのまま利用。need・ngdayはリッチテキスト型のため
+  .valueがそのままHTMLとして出力される(newline_to_br不要)。
+{%- endcomment -%}
+{%- assign plan_agent = mf.agt.value -%}
+{%- assign plan_needed_items = mf.need.value -%}
+{%- assign plan_ng_days = mf.ngday.value -%}
+
 {%- assign app_blocks = section.blocks | where: 'type', '@app' -%}
 
 <script type="application/ld+json">
@@ -605,6 +615,38 @@
           </div>
         {% endfor %}
       {% endif %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% comment %} --- 運行事業者／お申し込み時に必要なもの／撮影不可能日 --- {% endcomment %}
+  {%- assign has_extra_info = false -%}
+  {%- if plan_agent != blank or plan_needed_items != blank or plan_ng_days != blank -%}{%- assign has_extra_info = true -%}{%- endif -%}
+  {% if has_extra_info %}
+  <section class="py-16 md:py-24">
+    <div class="max-w-3xl mx-auto px-6">
+      <h3 class="font-bold mb-4 text-sm">ご予約にあたって</h3>
+      <div class="divider-gold"></div>
+      <dl class="mt-6 space-y-6 text-sm">
+        {% if plan_agent != blank %}
+        <div>
+          <dt class="font-bold text-gray-700 mb-1">運行事業者</dt>
+          <dd class="text-gray-500 leading-relaxed">{{ plan_agent }}</dd>
+        </div>
+        {% endif %}
+        {% if plan_needed_items != blank %}
+        <div>
+          <dt class="font-bold text-gray-700 mb-1">お申し込み時に必要なもの</dt>
+          <dd class="text-gray-500 leading-relaxed">{{ plan_needed_items }}</dd>
+        </div>
+        {% endif %}
+        {% if plan_ng_days != blank %}
+        <div>
+          <dt class="font-bold text-gray-700 mb-1">撮影不可能日</dt>
+          <dd class="text-gray-500 leading-relaxed">{{ plan_ng_days }}</dd>
+        </div>
+        {% endif %}
+      </dl>
     </div>
   </section>
   {% endif %}
