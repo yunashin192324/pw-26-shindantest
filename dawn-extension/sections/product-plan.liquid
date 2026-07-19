@@ -447,7 +447,7 @@
     前後の画像に切り替え。バニラJSのみ、section.idでスコープして
     同一テンプレートが複数商品で使われても衝突しないようにしている。
   {% endcomment %}
-  <div id="plan-lightbox-{{ section.id }}" class="fixed inset-0 z-50 hidden" style="background:rgba(0,0,0,0.92);">
+  <div id="plan-lightbox-{{ section.id }}" class="fixed inset-0 hidden" style="background:rgba(0,0,0,0.92);z-index:99999;">
     <button type="button" class="plan-lightbox-close absolute top-4 right-4 text-white text-3xl leading-none w-10 h-10 flex items-center justify-center" aria-label="閉じる">×</button>
     <button type="button" class="plan-lightbox-prev absolute left-2 md:left-6 top-1/2 -translate-y-1/2 text-white text-4xl leading-none w-12 h-12 flex items-center justify-center" aria-label="前の画像">‹</button>
     <button type="button" class="plan-lightbox-next absolute right-2 md:right-6 top-1/2 -translate-y-1/2 text-white text-4xl leading-none w-12 h-12 flex items-center justify-center" aria-label="次の画像">›</button>
@@ -460,6 +460,12 @@
       var root = document.getElementById('plan-gallery-{{ section.id }}');
       var lightbox = document.getElementById('plan-lightbox-{{ section.id }}');
       if (!root || !lightbox) return;
+      {%- comment -%}
+        親要素にtransformが掛かっているとposition:fixedがビューポート
+        基準にならず、ヘッダーの後ろに隠れる等の不具合になるため、
+        <body>直下に移動させて確実に画面全体に固定表示させる。
+      {%- endcomment -%}
+      document.body.appendChild(lightbox);
       var img = lightbox.querySelector('.plan-lightbox-img');
       var items = Array.prototype.slice.call(root.querySelectorAll('.plan-gallery-item'));
       var current = 0;
