@@ -13,21 +13,14 @@
     show_badge   — optional, true で「人気」バッジを表示
 
   【テーマタグについて】
-    本来`themes`はリスト型フィールドの想定だったが、実際の運用では
-    単一行テキストに「beach・resort」のように複数値をまとめて入力
-    されている。値を「・」「•」「、」「,」のいずれかで区切って
-    配列化してから処理することで、区切り文字違いや大文字小文字の
-    ゆれを吸収する。
+    themesは選択リスト(単一行テキストのリスト)型。destination.themes.value
+    はそのまま配列として使える(文字列として区切り文字で分割する処理は不要。
+    以前は単一行テキストへの手入力運用だったため区切り文字分割処理をここに
+    書いていたが、フィールドをリスト型に作り直したことで不要になった)。
 {%- endcomment -%}
 {%- assign name_ja = destination.name_ja.value -%}
 {%- assign url = destination.slug.value | prepend: '/pages/' -%}
-
-{%- assign themes_raw = destination.themes.value | strip -%}
-{%- assign theme_list = '' | split: '' -%}
-{%- if themes_raw != blank -%}
-  {%- assign themes_raw = themes_raw | replace: '・', '|' | replace: '•', '|' | replace: '、', '|' | replace: ',', '|' -%}
-  {%- assign theme_list = themes_raw | split: '|' -%}
-{%- endif -%}
+{%- assign theme_list = destination.themes.value -%}
 
 <a href="{{ url }}" class="dst-card dst-reveal{% if reveal_class %} {{ reveal_class }}{% endif %}">
   <div class="dst-card-media">

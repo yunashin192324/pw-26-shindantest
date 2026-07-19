@@ -416,7 +416,7 @@
 
   {% comment %} --- Sticky CTA --- {% endcomment %}
   {% if section.settings.sticky_btn_1_text != blank or section.settings.sticky_btn_2_text != blank %}
-  <div class="fixed bottom-0 left-0 right-0 z-40 flex gap-2 p-3 bg-white/95 border-t border-gray-200 md:hidden">
+  <div class="fixed bottom-0 left-0 right-0 z-40 flex gap-2 p-3 bg-white/95 border-t border-gray-200 max-w-md mx-auto md:max-w-lg">
     {% if section.settings.sticky_btn_1_text != blank %}
       <a href="{{ section.settings.sticky_btn_1_url }}" class="flex-1 text-center py-3 rounded text-sm font-medium border border-dark">{{ section.settings.sticky_btn_1_text }}</a>
     {% endif %}

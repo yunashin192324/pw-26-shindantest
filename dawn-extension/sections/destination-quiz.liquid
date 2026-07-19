@@ -32,20 +32,15 @@
 </script>
 
 {%- comment -%}
-  全Destinationをテーマタグ付きでJSON化。themesは「beach・resort」の
-  ようなテキスト欄なので、destination-card.liquidと同じ区切り文字
-  (・ • 、 ,)で分割してから渡す。
+  全Destinationをテーマタグ付きでJSON化。themesは選択リスト
+  (単一行テキストのリスト)型なので、d.themes.valueをそのまま配列
+  として使う。
 {%- endcomment -%}
 {%- assign all_destinations = shop.metaobjects.destination.values -%}
 <script type="application/json" id="quiz-destinations-{{ section.id }}">
 [
   {%- for d in all_destinations -%}
-    {%- assign themes_raw = d.themes.value | strip -%}
-    {%- assign theme_list = '' | split: '' -%}
-    {%- if themes_raw != blank -%}
-      {%- assign themes_raw = themes_raw | replace: '・', '|' | replace: '•', '|' | replace: '、', '|' | replace: ',', '|' -%}
-      {%- assign theme_list = themes_raw | split: '|' -%}
-    {%- endif -%}
+    {%- assign theme_list = d.themes.value -%}
     {
       "name": {{ d.name_ja.value | json }},
       "url": "/pages/{{ d.slug.value }}",
