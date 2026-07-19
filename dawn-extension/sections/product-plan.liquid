@@ -212,14 +212,25 @@
     {% else %}
       <div class="absolute inset-0 w-full h-full bg-gray-200"></div>
     {% endif %}
-    <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0.45) 60%, rgba(0,0,0,0.2));"></div>
+    <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.25));"></div>
     <div class="relative z-10 px-6 pb-16 w-full max-w-4xl text-center" style="color:{{ hero_text_color }};">
       {% if hero_eyebrow != blank %}
-        <p class="font-serif tracking-widest uppercase mb-4 text-sm" style="color:{{ hero_text_color }};">{{ hero_eyebrow }}</p>
+        <p class="font-serif tracking-widest uppercase mb-4 text-sm" style="color:{{ hero_text_color }}; text-shadow: 0 2px 10px rgba(0,0,0,0.5);">{{ hero_eyebrow }}</p>
       {% endif %}
-      <h1 class="font-serif font-light leading-tight mb-4" style="font-size: calc(var(--font-heading-scale, 1) * 40px); color:{{ hero_text_color }};">{{ hero_title }}</h1>
+      {%- comment -%}
+        商品名の「（○○）」部分の途中で不自然に改行されるのを防ぐため、
+        括弧以降をwhite-space:nowrapで囲んで1つの塊として扱う。
+      {%- endcomment -%}
+      {%- assign hero_title_parts = hero_title | split: '（' -%}
+      <h1 class="font-serif font-light leading-tight mb-4" style="font-size: calc(var(--font-heading-scale, 1) * 40px); color:{{ hero_text_color }}; text-shadow: 0 2px 12px rgba(0,0,0,0.6);">
+        {%- if hero_title_parts.size > 1 -%}
+          {{ hero_title_parts.first }}<span style="white-space: nowrap;">（{{ hero_title_parts | slice: 1, hero_title_parts.size | join: '（' }}</span>
+        {%- else -%}
+          {{ hero_title }}
+        {%- endif -%}
+      </h1>
       {% if hero_lede != blank %}
-        <p class="font-light" style="font-size: calc(var(--font-body-scale, 1) * 16px); color:{{ hero_text_color }};">{{ hero_lede }}</p>
+        <p class="font-light" style="font-size: calc(var(--font-body-scale, 1) * 16px); color:{{ hero_text_color }}; text-shadow: 0 2px 8px rgba(0,0,0,0.5);">{{ hero_lede }}</p>
       {% endif %}
     </div>
   </section>
