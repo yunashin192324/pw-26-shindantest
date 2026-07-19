@@ -21,19 +21,32 @@
       {%- assign region_handle = region_key | replace: '_', '-' -%}
       {%- capture region_label -%}{% render 'destination-region-label', region_key: region_key %}{%- endcapture -%}
       {%- assign region_label = region_label | strip -%}
-      {%- assign region_destinations = all_destinations | where: 'region.value', region_key | sort: 'sort_order.value' -%}
 
-      {%- if region_destinations.size > 0 -%}
+      {%- comment -%}
+        where: 'region.value', region_key のようなネストしたプロパティ
+        への絞り込みが環境によって効かないケースがあったため、確実に
+        動くよう明示的なfor+ifでカウント・抽出する方式にしている。
+      {%- endcomment -%}
+      {%- assign match_count = 0 -%}
+      {%- for d in all_destinations -%}
+        {%- if d.region.value == region_key -%}{%- assign match_count = match_count | plus: 1 -%}{%- endif -%}
+      {%- endfor -%}
+
+      {%- if match_count > 0 -%}
         <div class="dst-region-block">
           <div class="dst-region-block-head dst-reveal">
             <h3>{{ region_label }}</h3>
-            {%- if region_destinations.size > 8 -%}
-              <a href="/pages/{{ region_handle }}" class="dst-region-more">もっと見る（{{ region_destinations.size }}件）＞</a>
+            {%- if match_count > 8 -%}
+              <a href="/pages/{{ region_handle }}" class="dst-region-more">もっと見る（{{ match_count }}件）＞</a>
             {%- endif -%}
           </div>
           <div class="dst-region-grid">
-            {%- for destination in region_destinations limit: 8 -%}
-              {% render 'destination-card', destination: destination %}
+            {%- assign shown_count = 0 -%}
+            {%- for d in all_destinations -%}
+              {%- if d.region.value == region_key and shown_count < 8 -%}
+                {% render 'destination-card', destination: d %}
+                {%- assign shown_count = shown_count | plus: 1 -%}
+              {%- endif -%}
             {%- endfor -%}
           </div>
         </div>
