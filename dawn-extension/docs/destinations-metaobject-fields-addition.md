@@ -9,6 +9,8 @@
 | 19 | 選ばれる理由 | `reasons` | JSON（リスト） | `[{"title":"見出し","description":"本文"}]` 形式 |
 | 20 | モデルスケジュール | `schedule` | JSON（リスト） | `[{"time":"1日目","description":"内容"}]` 形式 |
 | 21 | フォトギャラリー画像 | `gallery_images` | ファイル（画像）の**リスト** | 通常のファイル欄と違い、複数枚まとめて選択・アップロードできます |
+| 22 | 撮影スポット | `photo_spots` | JSON（リスト） | `[{"title":"見出し","description":"本文","image":"https://..."}]` 形式。`image`は該当スポットの画像URL（Shopifyのファイル一覧にアップロードした画像のURLをコピーして入力） |
+| 23 | よくある質問 | `faqs` | JSON（リスト） | `[{"question":"質問文","answer":"回答文"}]` 形式 |
 
 ## 手順
 

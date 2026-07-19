@@ -8,17 +8,17 @@
 {%- assign reasons = destination.reasons.value -%}
 
 {%- if destination and reasons.size > 0 -%}
-<section>
+<section{% if section.settings.bg_ivory %} class="dst-bg-ivory"{% endif %}>
   <div class="dst-container">
     <div class="dst-section-head dst-reveal">
-      <p class="dst-eyebrow">Charm</p>
-      <h2>{{ section.settings.heading }}</h2>
+      <p class="dst-eyebrow" style="color:{{ section.settings.eyebrow_color }};">{{ section.settings.eyebrow }}</p>
+      <h2 style="color:{{ section.settings.heading_color }};">{{ section.settings.heading }}</h2>
       <hr class="dst-divider">
     </div>
     <div class="dst-reasons-grid">
       {%- for reason in reasons -%}
         <div class="dst-reason-card dst-reveal">
-          <h3 class="dst-reason-title">{{ reason.title }}</h3>
+          <h3 class="dst-reason-title">{% render 'safe-linebreak', text: reason.title %}</h3>
           <p class="dst-reason-desc">{{ reason.description }}</p>
         </div>
       {%- endfor -%}
@@ -31,7 +31,11 @@
 {
   "name": "都市 選ばれる理由",
   "settings": [
-    { "type": "text", "id": "heading", "label": "見出し", "default": "選ばれる理由" }
+    { "type": "checkbox", "id": "bg_ivory", "label": "背景をアイボリーにする", "default": false },
+    { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "Charm" },
+    { "type": "color", "id": "eyebrow_color", "label": "英字見出し色", "default": "#c9a96e" },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "選ばれる理由" },
+    { "type": "color", "id": "heading_color", "label": "見出し色", "default": "#1a1a1a" }
   ]
 }
 {% endschema %}

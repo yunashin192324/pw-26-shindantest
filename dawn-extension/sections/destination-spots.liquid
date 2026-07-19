@@ -1,0 +1,62 @@
+{%- comment -%}
+  destination-spots — 撮影スポット。Destination metaobjectの
+  `photo_spots`（JSON: [{"title","description","image"}]）が未入力の間は
+  セクションごと非表示になる。imageはMetaobjectの「ファイル」タイプの
+  URL文字列として保存される想定（image_url フィルタがそのまま使える）。
+{%- endcomment -%}
+{%- assign destination = shop.metaobjects.destination.values | where: 'slug.value', page.handle | first -%}
+{%- assign spots = destination.photo_spots.value -%}
+
+{%- if destination and spots.size > 0 -%}
+<section{% if section.settings.bg_ivory %} class="dst-bg-ivory"{% endif %}>
+  <div class="dst-container">
+    <div class="dst-section-head dst-reveal">
+      <p class="dst-eyebrow" style="color:{{ section.settings.eyebrow_color }};">{{ section.settings.eyebrow }}</p>
+      <h2 style="color:{{ section.settings.heading_color }};">{{ section.settings.heading }}</h2>
+      <hr class="dst-divider">
+    </div>
+    <div class="dst-spots-grid">
+      {%- for spot in spots -%}
+        <div class="dst-spot-card dst-reveal">
+          {%- if spot.image != blank -%}
+            <div class="dst-spot-media">
+              <img
+                src="{{ spot.image | image_url: width: 700 }}"
+                srcset="{{ spot.image | image_url: width: 500 }} 500w, {{ spot.image | image_url: width: 700 }} 700w, {{ spot.image | image_url: width: 1000 }} 1000w"
+                sizes="(min-width: 760px) 33vw, 90vw"
+                alt="{{ spot.title | escape }}"
+                loading="lazy"
+                width="700" height="875"
+                style="object-position: {{ section.settings.img_position }};"
+              >
+            </div>
+          {%- endif -%}
+          <h3 class="dst-spot-title">{% render 'safe-linebreak', text: spot.title %}</h3>
+          {%- if spot.description != blank -%}<p class="dst-spot-desc">{{ spot.description }}</p>{%- endif -%}
+        </div>
+      {%- endfor -%}
+    </div>
+  </div>
+</section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "都市 撮影スポット",
+  "settings": [
+    { "type": "checkbox", "id": "bg_ivory", "label": "背景をアイボリーにする", "default": false },
+    { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "Spots" },
+    { "type": "color", "id": "eyebrow_color", "label": "英字見出し色", "default": "#c9a96e" },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "撮影スポット" },
+    { "type": "color", "id": "heading_color", "label": "見出し色", "default": "#1a1a1a" },
+    { "type": "select", "id": "img_position", "label": "画像トリミング位置", "default": "center",
+      "options": [
+        { "value": "top", "label": "上" },
+        { "value": "center", "label": "中央" },
+        { "value": "bottom", "label": "下" }
+      ]
+    }
+  ],
+  "presets": [{ "name": "都市 撮影スポット" }]
+}
+{% endschema %}

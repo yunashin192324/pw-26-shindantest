@@ -33,13 +33,14 @@
           loading="eager"
           fetchpriority="high"
           width="2400" height="1350"
+          style="object-position: {{ section.settings.img_position }};"
         >
       {%- endif -%}
     </div>
     <div class="dst-hero-content">
-      <p class="dst-eyebrow dst-reveal">{{ destination.country.value }} ／ {{ destination.name_en.value }}</p>
-      <h1 class="dst-reveal dst-reveal-1">{{ destination.name_ja.value }}</h1>
-      <p class="dst-lede dst-reveal dst-reveal-2">{{ destination.description.value | strip_html | truncate: 90 }}</p>
+      <p class="dst-eyebrow dst-reveal" style="color:{{ section.settings.eyebrow_color }};text-shadow: 0 2px 10px rgba(0,0,0,0.5);">{{ destination.country.value }} ／ {{ destination.name_en.value }}</p>
+      <h1 class="dst-reveal dst-reveal-1" style="color:{{ section.settings.heading_color }};text-shadow: 0 2px 12px rgba(0,0,0,0.6);">{% render 'safe-linebreak', text: destination.name_ja.value %}</h1>
+      <p class="dst-lede dst-reveal dst-reveal-2" style="color:{{ section.settings.lede_color }};text-shadow: 0 2px 8px rgba(0,0,0,0.5);">{{ destination.description.value | strip_html | truncate: 90 }}</p>
     </div>
   </section>
 
@@ -62,6 +63,17 @@
 {% schema %}
 {
   "name": "都市 ヒーロー",
-  "settings": []
+  "settings": [
+    { "type": "select", "id": "img_position", "label": "画像トリミング位置", "default": "center",
+      "options": [
+        { "value": "top", "label": "上" },
+        { "value": "center", "label": "中央" },
+        { "value": "bottom", "label": "下" }
+      ]
+    },
+    { "type": "color", "id": "eyebrow_color", "label": "サブタイトル色", "default": "#ffffff" },
+    { "type": "color", "id": "heading_color", "label": "タイトル色", "default": "#ffffff" },
+    { "type": "color", "id": "lede_color", "label": "リード文色", "default": "#ffffff" }
+  ]
 }
 {% endschema %}

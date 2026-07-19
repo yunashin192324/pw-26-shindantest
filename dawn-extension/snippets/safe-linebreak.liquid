@@ -1,0 +1,13 @@
+{%- comment -%}
+  safe-linebreak
+  ----------------------------------------------------------------
+  見出し等のテキストで「（ダブルカメラマン）」のような括弧部分の
+  途中で不自然に改行されるのを防ぐ。括弧「（」以降をひとかたまりの
+  white-space:nowrapとして出力する。
+
+  Params:
+    text — required, 出力したい文字列（HTMLエスケープ済み前提のものは
+           渡さないこと。プレーンテキストを渡す）
+{%- endcomment -%}
+{%- assign safe_lb_parts = text | split: '（' -%}
+{%- if safe_lb_parts.size > 1 -%}{{ safe_lb_parts.first }}<span style="white-space: nowrap;">（{{ safe_lb_parts | slice: 1, safe_lb_parts.size | join: '（' }}</span>{%- else -%}{{ text }}{%- endif -%}

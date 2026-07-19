@@ -1,0 +1,75 @@
+{%- comment -%}
+  destination-faq — よくある質問 + その他の撮影地への導線。
+  Destination metaobjectの`faqs`（JSON: [{"question","answer"}]）が
+  未入力の間はFAQ部分のみ非表示（関連都市は独立して表示される）。
+  関連都市は同じregionの他都市を自動抽出（無ければ人気都市から補完）。
+{%- endcomment -%}
+{%- assign destination = shop.metaobjects.destination.values | where: 'slug.value', page.handle | first -%}
+{%- assign faqs = destination.faqs.value -%}
+
+{%- comment -%} 関連都市：同じregion優先、self除外、最大3件 {%- endcomment -%}
+{%- assign all_destinations = shop.metaobjects.destination.values -%}
+
+{%- if destination -%}
+  {%- if faqs.size > 0 -%}
+  <section>
+    <div class="dst-container" style="max-width:760px;">
+      <div class="dst-section-head dst-reveal">
+        <p class="dst-eyebrow" style="color:{{ section.settings.eyebrow_color }};">{{ section.settings.eyebrow }}</p>
+        <h2 style="color:{{ section.settings.heading_color }};">{{ section.settings.heading }}</h2>
+        <hr class="dst-divider">
+      </div>
+      <div class="dst-faq-list">
+        {%- for item in faqs -%}
+          <details class="dst-faq-item">
+            <summary class="dst-faq-question">{{ item.question }}</summary>
+            <p class="dst-faq-answer">{{ item.answer }}</p>
+          </details>
+        {%- endfor -%}
+      </div>
+    </div>
+  </section>
+  {%- endif -%}
+
+  {%- assign related_shown = 0 -%}
+  {%- for d in all_destinations -%}
+    {%- if related_shown < 3 and d.slug.value != destination.slug.value and d.region.value == destination.region.value -%}
+      {%- assign related_shown = related_shown | plus: 1 -%}
+    {%- endif -%}
+  {%- endfor -%}
+
+  {%- if related_shown > 0 -%}
+  <section class="dst-bg-ivory">
+    <div class="dst-container">
+      <div class="dst-section-head dst-reveal">
+        <h2 style="color:{{ section.settings.related_heading_color }};">{{ section.settings.related_heading }}</h2>
+        <hr class="dst-divider">
+      </div>
+      <div class="dst-region-grid">
+        {%- assign r_i = 0 -%}
+        {%- for d in all_destinations -%}
+          {%- if r_i < 3 and d.slug.value != destination.slug.value and d.region.value == destination.region.value -%}
+            {% render 'destination-card', destination: d %}
+            {%- assign r_i = r_i | plus: 1 -%}
+          {%- endif -%}
+        {%- endfor -%}
+      </div>
+    </div>
+  </section>
+  {%- endif -%}
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "都市 FAQ・関連都市",
+  "settings": [
+    { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "FAQ" },
+    { "type": "color", "id": "eyebrow_color", "label": "英字見出し色", "default": "#c9a96e" },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "よくある質問" },
+    { "type": "color", "id": "heading_color", "label": "見出し色", "default": "#1a1a1a" },
+    { "type": "text", "id": "related_heading", "label": "関連都市 見出し", "default": "その他の撮影地" },
+    { "type": "color", "id": "related_heading_color", "label": "関連都市 見出し色", "default": "#1a1a1a" }
+  ],
+  "presets": [{ "name": "都市 FAQ・関連都市" }]
+}
+{% endschema %}
