@@ -239,6 +239,93 @@
   </script>
   {% endif %}
 
+  {% comment %} --- お客様の声（運営が集めた実例） --- {% endcomment %}
+  {%- assign testimonial_blocks = section.blocks | where: 'type', 'testimonial' -%}
+  {% if section.settings.show_testimonials and testimonial_blocks.size > 0 %}
+  <section class="py-16 bg-ivory">
+    <div class="max-w-6xl mx-auto px-4">
+      <div class="text-center mb-12">
+        <p class="font-serif text-sm tracking-[0.15em] uppercase mb-2" style="color:#B8860B;">{{ section.settings.testimonials_eyebrow }}</p>
+        <h2 class="text-2xl font-light">{{ section.settings.testimonials_heading }}</h2>
+        <div class="divider-gold mx-auto mt-3"></div>
+      </div>
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {% for block in testimonial_blocks %}
+          <div class="bg-white rounded-lg overflow-hidden shadow-sm" {{ block.shopify_attributes }}>
+            {%- assign has_photo = false -%}
+            {%- if block.settings.image_1 or block.settings.image_2 or block.settings.image_3 or block.settings.image_4 -%}{%- assign has_photo = true -%}{%- endif -%}
+            {% if has_photo %}
+              <div class="grid grid-cols-2 gap-0.5">
+                {% if block.settings.image_1 %}<div class="relative" style="padding-top:100%;">{{ block.settings.image_1 | image_url: width: 500 | image_tag: class: 'absolute inset-0 w-full h-full object-cover', loading: 'lazy' }}</div>{% endif %}
+                {% if block.settings.image_2 %}<div class="relative" style="padding-top:100%;">{{ block.settings.image_2 | image_url: width: 500 | image_tag: class: 'absolute inset-0 w-full h-full object-cover', loading: 'lazy' }}</div>{% endif %}
+                {% if block.settings.image_3 %}<div class="relative" style="padding-top:100%;">{{ block.settings.image_3 | image_url: width: 500 | image_tag: class: 'absolute inset-0 w-full h-full object-cover', loading: 'lazy' }}</div>{% endif %}
+                {% if block.settings.image_4 %}<div class="relative" style="padding-top:100%;">{{ block.settings.image_4 | image_url: width: 500 | image_tag: class: 'absolute inset-0 w-full h-full object-cover', loading: 'lazy' }}</div>{% endif %}
+              </div>
+            {% endif %}
+            <div class="p-5">
+              {% if block.settings.name != blank %}<p class="text-xs text-gray-400 mb-2">{{ block.settings.name }}</p>{% endif %}
+              <p class="text-sm text-gray-700 leading-relaxed">{{ block.settings.comment }}</p>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {% comment %}
+    --- お客様の声 投稿フォーム ---
+    「非表示で先に用意しておきたい」というご要望のため、
+    show_testimonial_form のデフォルトはfalse（非表示）。
+    Shopify標準のcontact formを使用（アプリ・サーバー側の追加実装
+    不要、送信内容は店舗の問い合わせ受信メール宛に届く）。
+  {% endcomment %}
+  {% if section.settings.show_testimonial_form %}
+  <section class="py-16">
+    <div class="max-w-2xl mx-auto px-4">
+      <div class="text-center mb-10">
+        <h2 class="text-2xl font-light">{{ section.settings.testimonial_form_heading | default: '撮影の思い出を投稿する' }}</h2>
+        {% if section.settings.testimonial_form_desc != blank %}
+          <p class="text-sm text-gray-500 mt-3">{{ section.settings.testimonial_form_desc }}</p>
+        {% endif %}
+      </div>
+      {%- form 'contact', id: 'testimonial-form-' | append: section.id -%}
+        {% if form.posted_successfully? %}
+          <p class="text-sm p-4 rounded mb-4" style="background:#eef4ec;color:#4b7a52;">送信ありがとうございます。確認後、掲載させていただく場合がございます。</p>
+        {% endif %}
+        <input type="hidden" name="contact[お問い合わせ種別]" value="お客様の声 投稿（{{ page.title }}）">
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm mb-1 text-gray-600">お名前（ニックネーム可）</label>
+            <input type="text" name="contact[name]" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+          </div>
+          <div>
+            <label class="block text-sm mb-1 text-gray-600">メールアドレス <span style="color:#B8860B;">必須</span></label>
+            <input type="email" name="contact[email]" required class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+          </div>
+          <div>
+            <label class="block text-sm mb-1 text-gray-600">ご感想</label>
+            <textarea name="contact[body]" rows="4" class="w-full border border-gray-300 rounded px-3 py-2 text-sm"></textarea>
+          </div>
+          <div>
+            <label class="block text-sm mb-1 text-gray-600">お写真1</label>
+            <input type="file" name="contact[写真1]" accept="image/*" class="w-full text-sm">
+          </div>
+          <div>
+            <label class="block text-sm mb-1 text-gray-600">お写真2</label>
+            <input type="file" name="contact[写真2]" accept="image/*" class="w-full text-sm">
+          </div>
+          <div>
+            <label class="block text-sm mb-1 text-gray-600">お写真3</label>
+            <input type="file" name="contact[写真3]" accept="image/*" class="w-full text-sm">
+          </div>
+          <button type="submit" class="w-full py-3 rounded-full text-white text-sm font-medium" style="background-color:#B8860B;">送信する</button>
+        </div>
+      {%- endform -%}
+    </div>
+  </section>
+  {% endif %}
+
   {% comment %} --- プラン一覧 --- {% endcomment %}
   {% if plan_blocks.size > 0 %}
   <section class="py-16 bg-ivory">
@@ -410,6 +497,16 @@ document.addEventListener('DOMContentLoaded', function () {
     { "type": "text", "id": "gallery_heading", "label": "見出し", "default": "フォトギャラリー" },
     { "type": "color", "id": "gallery_heading_color", "label": "見出し色", "default": "#ffffff" },
 
+    { "type": "header", "content": "お客様の声" },
+    { "type": "checkbox", "id": "show_testimonials", "label": "お客様の声を表示する", "default": false, "info": "下の「お客様の声」ブロックを追加してからONにしてください。" },
+    { "type": "text", "id": "testimonials_eyebrow", "label": "サブタイトル", "default": "Voice" },
+    { "type": "text", "id": "testimonials_heading", "label": "見出し", "default": "お客様の声" },
+
+    { "type": "header", "content": "お客様の声 投稿フォーム" },
+    { "type": "checkbox", "id": "show_testimonial_form", "label": "投稿フォームを表示する", "default": false, "info": "お客様自身が感想・写真を投稿できるフォームです。準備ができたらONにしてください。送信内容は店舗の問い合わせ受信メール宛に届きます。" },
+    { "type": "text", "id": "testimonial_form_heading", "label": "見出し", "default": "撮影の思い出を投稿する" },
+    { "type": "textarea", "id": "testimonial_form_desc", "label": "説明文" },
+
     { "type": "header", "content": "FAQ" },
     { "type": "text", "id": "faq_eyebrow", "label": "サブタイトル", "default": "FAQ" },
     { "type": "color", "id": "faq_eyebrow_color", "label": "サブタイトル色", "default": "#c9a96e" },
@@ -423,6 +520,18 @@ document.addEventListener('DOMContentLoaded', function () {
     { "type": "url", "id": "sticky_btn_2_url", "label": "ボタン2 リンク" }
   ],
   "blocks": [
+    {
+      "type": "testimonial",
+      "name": "お客様の声",
+      "settings": [
+        { "type": "text", "id": "name", "label": "お名前（ニックネーム可・任意）" },
+        { "type": "textarea", "id": "comment", "label": "コメント" },
+        { "type": "image_picker", "id": "image_1", "label": "写真1" },
+        { "type": "image_picker", "id": "image_2", "label": "写真2" },
+        { "type": "image_picker", "id": "image_3", "label": "写真3" },
+        { "type": "image_picker", "id": "image_4", "label": "写真4" }
+      ]
+    },
     {
       "type": "reason",
       "name": "選ばれる理由",
