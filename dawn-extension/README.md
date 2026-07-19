@@ -202,6 +202,47 @@ VS Codeのtheme-check拡張機能で指摘いただいたエラーはすべて�
 
 </details>
 
+## ⑤ 地域区分の変更・テーマタグ追加（今回分）
+
+ハワイをアメリカ本土から独立させたいというご要望と、テーマタグへの
+「水上ヴィラ」追加に対応しました。
+
+**地域を8→12に変更**（`america`は廃止し`north_america`に置き換え、
+`hawaii`／`micronesia`／`south_pacific`／`indian_ocean`を新設）：
+
+| キー | 表示名 |
+|---|---|
+| `hawaii` | ハワイ |
+| `micronesia` | ミクロネシア |
+| `south_pacific` | 南太平洋 |
+| `indian_ocean` | インド洋 |
+| `oceania` | オセアニア |
+| `asia` | アジア |
+| `middle_east` | 中東 |
+| `europe` | ヨーロッパ |
+| `north_america` | 北米 |
+| `south_america` | 南米 |
+| `africa` | アフリカ |
+| `japan` | 日本 |
+
+**テーマタグに追加**：`overwater`（水上ヴィラ）
+
+対象ファイル：
+- `snippets/destination-region-label.liquid`（新規追加、既存ファイルを上書き）
+- `snippets/destination-theme-label.liquid`（新規追加、既存ファイルを上書き）
+- `sections/destinations-region-list.liquid`（新規追加、既存ファイルを上書き）
+
+**データの直し方**：既存のDestinationエントリーのうち、`region`が
+`america`になっているもの（今のところハワイのみ該当するはずです）を、
+`hawaii`に入力し直してください。ダナン・パリ・ロンドンは`asia`／
+`europe`のままで変更不要です。
+
+**地域ページ（`/pages/{region}`）の新規作成は今のところ不要です。**
+「地域から選ぶ」は1地域9都市を超えた時だけ「もっと見る」から地域
+ページへ誘導する仕組みで、今は各地域とも数都市程度のためです。都市数が
+増えて9件を超えた地域が出てきたら、そのタイミングで該当する地域ページ
+（例：`/pages/hawaii`、テンプレート`page.region`）を作成してください。
+
 ## 確認をお願いしたいこと（再掲）
 
 - ダナンビーチプランの価格：`danang-beachphoto`ページは¥111,000、
