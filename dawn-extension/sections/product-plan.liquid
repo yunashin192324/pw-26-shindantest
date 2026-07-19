@@ -65,6 +65,24 @@
   #product-plan-{{ section.id }} .divider-gold { width: 48px; height: 2px; background: #B8860B; margin: 16px 0; }
   #product-plan-{{ section.id }} .divider-gold.center { margin-left: auto; margin-right: auto; }
   #product-plan-{{ section.id }} .money { font-size: inherit; font-weight: inherit; }
+
+  {%- comment -%}
+    予約ボタン(#plan-reserve-form内のsubmit)：日付/時間が未選択のうちは
+    予約アプリ側のスクリプトがdisabled状態にすることがあり、その際に
+    ブラウザ標準の減光表示で文字がほぼ見えなくなる問題への対処。
+    有効/無効どちらの状態でも明示的に読める配色を強制する。
+  {%- endcomment -%}
+  #product-plan-{{ section.id }} #plan-reserve-form button[type="submit"] {
+    background-color: #B8860B !important;
+    color: #ffffff !important;
+    opacity: 1 !important;
+  }
+  #product-plan-{{ section.id }} #plan-reserve-form button[type="submit"]:disabled {
+    background-color: #e4ddc9 !important;
+    color: #6b6450 !important;
+    opacity: 1 !important;
+    cursor: not-allowed;
+  }
 </style>
 
 {%- assign variant = product.selected_or_first_available_variant -%}
