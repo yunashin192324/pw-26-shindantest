@@ -1,0 +1,428 @@
+/* ===================================================================
+   destinations.css — Shopify管理画面上のライブ版の参照コピー
+   （2026-07-20 のCSS消失インシデント復旧時にユーザーから提供された内容）
+
+   ⚠️ このファイルはあくまで「参照用のスナップショット」です。
+   本番の実体は Shopify管理画面 → オンラインストア → テーマ →
+   コードを編集 → assets/destinations.css にあり、このリポジトリの
+   ファイルとは自動同期していません。今後 destinations.css を編集する
+   ときは、このリポジトリではなく必ずShopify側を直接編集してください。
+   （このファイルは「もし今後また消えた場合の最終手段の控え」として
+   置いています）
+
+   構成：
+   1. 撮影地一覧パッケージの基本デザインシステム（.dst-hero, .dst-card,
+      .dst-btn, カラートークン等）— destinations packageの元々の実装
+   2. destinations-additions.css の内容（選ばれる理由 / モデルスケジュール /
+      フォトギャラリー）
+   3. destinations-additions-2.css の内容（撮影スポット / プラン一覧 / FAQ。
+      プラン一覧のグリッド伸びバグ修正済み最新版）
+   =================================================================== */
+
+/* ===================================================================
+   撮影地一覧 (Destinations) — 独立デザインシステム
+   White / Ivory / Gold. 雑誌のような余白と写真主役のレイアウト。
+   Cormorant Garamond (EN) + Noto Sans JP (JP). Vanilla CSS, no deps.
+
+   このファイルは layout/theme.destinations.liquid からのみ読み込まれ、
+   既存の TOP / JOURNAL (assets/theme.css) には一切依存・影響しない。
+   クラス名はすべて `dst-` を接頭辞にして独立させている。
+   =================================================================== */
+
+/* ---------- Reset ---------- */
+.destinations-scope, .destinations-scope *, .destinations-scope *::before, .destinations-scope *::after {
+  box-sizing: border-box;
+}
+.destinations-scope { margin: 0; padding: 0; }
+.destinations-scope img, .destinations-scope picture { display: block; max-width: 100%; height: auto; }
+.destinations-scope a { text-decoration: none; color: inherit; }
+.destinations-scope ul, .destinations-scope ol { list-style: none; margin: 0; padding: 0; }
+.destinations-scope button, .destinations-scope input { font: inherit; color: inherit; }
+.destinations-scope button { background: none; border: none; cursor: pointer; }
+html { scroll-behavior: smooth; }
+
+/* ---------- Design tokens (仕様書指定のHEX値をそのまま使用) ---------- */
+.destinations-scope {
+  --dst-white: #ffffff;
+  --dst-ivory: #faf8f5;
+  --dst-gold: #b8860b;
+  --dst-accent: #d4a843;
+  --dst-text: #222222;
+
+  /* 仕様書に定義のない補助色。既存トークンには一切依存せず、
+     指定4色から算出した最小限の派生色のみ追加している。 */
+  --dst-gold-dark: #8f6a08;
+  --dst-text-muted: #6b6b63;
+  --dst-border: #e7e1d4;
+  --dst-overlay: rgba(20, 17, 13, 0.5);
+
+  --dst-font-serif: 'Cormorant Garamond', 'Noto Sans JP', serif;
+  --dst-font-sans: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
+
+  --dst-container: 1200px;
+  --dst-gutter: clamp(20px, 5vw, 64px);
+  --dst-section-y: clamp(56px, 9vw, 128px);
+  --dst-ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.destinations-scope {
+  font-family: var(--dst-font-sans);
+  font-weight: 300;
+  color: var(--dst-text);
+  background: var(--dst-white);
+  line-height: 1.85;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+.dst-container {
+  max-width: var(--dst-container);
+  margin: 0 auto;
+  padding-left: var(--dst-gutter);
+  padding-right: var(--dst-gutter);
+}
+
+.destinations-scope section { padding: var(--dst-section-y) 0; }
+.dst-section-tight { padding-top: calc(var(--dst-section-y) / 2); padding-bottom: calc(var(--dst-section-y) / 2); }
+.dst-bg-ivory { background: var(--dst-ivory); }
+
+/* ---------- Typography ---------- */
+.destinations-scope h1,
+.destinations-scope h2,
+.destinations-scope h3,
+.destinations-scope h4 {
+  font-family: var(--dst-font-serif);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  line-height: 1.3;
+  margin: 0;
+}
+.dst-eyebrow {
+  display: inline-block;
+  font-family: var(--dst-font-serif);
+  font-style: italic;
+  font-size: 0.92rem;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--dst-gold);
+  margin-bottom: 16px;
+}
+.destinations-scope h1 { font-size: clamp(2rem, 5vw, 3.4rem); }
+.destinations-scope h2 { font-size: clamp(1.6rem, 3.4vw, 2.4rem); }
+.destinations-scope h3 { font-size: clamp(1.2rem, 2.2vw, 1.5rem); }
+.destinations-scope p { color: var(--dst-text-muted); margin: 0; }
+.dst-section-head { text-align: center; max-width: 680px; margin: 0 auto 52px; }
+.dst-section-head p { margin-top: 16px; }
+.dst-lede { font-size: 1.02rem; }
+.dst-divider {
+  width: 52px;
+  height: 1px;
+  background: var(--dst-gold);
+  margin: 20px auto;
+  border: none;
+}
+
+/* ---------- Buttons ---------- */
+.dst-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 15px 36px;
+  font-family: var(--dst-font-serif);
+  font-size: 1rem;
+  letter-spacing: 0.08em;
+  border: 1px solid currentColor;
+  transition: background 0.35s var(--dst-ease), color 0.35s var(--dst-ease), border-color 0.35s var(--dst-ease);
+  white-space: nowrap;
+}
+.dst-btn-gold { background: var(--dst-gold); color: var(--dst-white); border-color: var(--dst-gold); }
+.dst-btn-gold:hover { background: var(--dst-gold-dark); border-color: var(--dst-gold-dark); }
+.dst-btn-outline { background: transparent; color: var(--dst-white); border-color: rgba(255, 255, 255, 0.75); }
+.dst-btn-outline:hover { background: var(--dst-white); color: var(--dst-text); }
+.dst-btn-outline-dark { background: transparent; color: var(--dst-text); border-color: var(--dst-text); }
+.dst-btn-outline-dark:hover { background: var(--dst-text); color: var(--dst-white); }
+.dst-btn-sm { padding: 10px 24px; font-size: 0.9rem; }
+.dst-cta-row { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+
+/* ---------- Header ---------- */
+.dst-header {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 20px var(--dst-gutter);
+  background: linear-gradient(to bottom, rgba(20, 17, 13, 0.5), rgba(20, 17, 13, 0));
+  transition: background 0.4s var(--dst-ease), padding 0.4s var(--dst-ease);
+}
+.dst-header.is-scrolled {
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(8px);
+  padding: 13px var(--dst-gutter);
+  box-shadow: 0 1px 0 var(--dst-border);
+}
+.dst-header .dst-logo {
+  font-family: var(--dst-font-serif);
+  font-size: 1.15rem;
+  letter-spacing: 0.05em;
+  color: var(--dst-white);
+}
+.dst-header.is-scrolled .dst-logo { color: var(--dst-text); }
+.dst-nav-links { display: flex; align-items: center; gap: 28px; font-size: 0.92rem; letter-spacing: 0.03em; color: var(--dst-white); }
+.dst-header.is-scrolled .dst-nav-links { color: var(--dst-text); }
+.dst-nav-links a[aria-current='page'] { color: var(--dst-accent); }
+.dst-nav-toggle { display: none; flex-direction: column; gap: 5px; width: 26px; }
+.dst-nav-toggle span { display: block; height: 1px; background: var(--dst-white); transition: background 0.3s var(--dst-ease); }
+.dst-header.is-scrolled .dst-nav-toggle span { background: var(--dst-text); }
+
+@media (max-width: 860px) {
+  .dst-nav-links {
+    position: fixed; inset: 0 0 0 auto; width: min(320px, 84vw);
+    background: var(--dst-white); color: var(--dst-text);
+    flex-direction: column; align-items: flex-start; justify-content: center;
+    gap: 26px; padding: 0 40px;
+    transform: translateX(100%); transition: transform 0.4s var(--dst-ease);
+  }
+  .dst-nav-links.is-open { transform: translateX(0); }
+  .dst-nav-toggle { display: flex; }
+}
+
+/* ---------- Footer ---------- */
+.dst-footer { background: var(--dst-text); color: rgba(255, 255, 255, 0.7); padding: 72px 0 30px; }
+.dst-footer .dst-logo { font-family: var(--dst-font-serif); font-size: 1.2rem; color: var(--dst-white); }
+.dst-footer-top { display: grid; grid-template-columns: 1.4fr repeat(3, 1fr); gap: 40px; padding-bottom: 48px; border-bottom: 1px solid rgba(255, 255, 255, 0.14); }
+.dst-footer-tagline { margin-top: 14px; font-size: 0.9rem; max-width: 320px; }
+.dst-footer-col h4 { font-family: var(--dst-font-serif); font-size: 0.95rem; letter-spacing: 0.04em; color: var(--dst-white); margin-bottom: 16px; font-weight: 400; }
+.dst-footer-col ul { display: flex; flex-direction: column; gap: 10px; font-size: 0.88rem; }
+.dst-footer-col a:hover { color: var(--dst-accent); }
+.dst-footer-bottom { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding-top: 26px; font-size: 0.78rem; }
+@media (max-width: 760px) {
+  .dst-footer-top { grid-template-columns: 1fr 1fr; }
+}
+
+/* ---------- Hero (共通: 一覧 / 地域 / 都市) ---------- */
+.dst-hero { position: relative; height: 70vh; min-height: 460px; display: flex; align-items: flex-end; padding: 0; overflow: hidden; }
+.dst-hero--tall { height: 84vh; min-height: 560px; }
+.dst-hero-media { position: absolute; inset: 0; }
+.dst-hero-media img { width: 100%; height: 100%; object-fit: cover; }
+.dst-hero-media::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to top, rgba(20, 17, 13, 0.72) 0%, rgba(20, 17, 13, 0.28) 55%, rgba(20, 17, 13, 0.35) 100%); }
+.dst-hero-content { position: relative; z-index: 1; width: 100%; padding: 0 var(--dst-gutter) 72px; color: var(--dst-white); text-align: center; }
+.dst-hero-content .dst-eyebrow { color: var(--dst-accent); }
+.dst-hero-content h1 { color: var(--dst-white); }
+.dst-hero-content .dst-lede { color: rgba(255, 255, 255, 0.86); max-width: 560px; margin: 18px auto 0; }
+.dst-hero-content .dst-cta-row { justify-content: center; margin-top: 32px; }
+.dst-hero-breadcrumb { position: relative; z-index: 1; width: 100%; padding: 130px var(--dst-gutter) 0; font-size: 0.8rem; letter-spacing: 0.03em; color: rgba(255, 255, 255, 0.75); }
+.dst-hero-breadcrumb a:hover { color: var(--dst-white); }
+.dst-hero-breadcrumb span { margin: 0 6px; }
+
+/* ---------- Search ---------- */
+.dst-search-box { max-width: 640px; margin: 0 auto; }
+.dst-search-field { position: relative; }
+.dst-search-field input {
+  width: 100%;
+  padding: 18px 24px;
+  font-family: var(--dst-font-sans);
+  font-size: 1rem;
+  background: var(--dst-white);
+  border: 1px solid var(--dst-text);
+  transition: border-color 0.3s var(--dst-ease);
+}
+.dst-search-field input:focus { outline: none; border-color: var(--dst-gold); }
+.dst-search-meta { display: flex; justify-content: space-between; align-items: baseline; margin-top: 18px; font-size: 0.85rem; color: var(--dst-text-muted); }
+.dst-search-count strong { color: var(--dst-gold); font-family: var(--dst-font-serif); font-size: 1.05rem; }
+.dst-search-results {
+  margin-top: 28px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 28px;
+}
+.dst-search-results[hidden] { display: none; }
+.dst-search-empty { display: none; text-align: center; padding: 56px 0; color: var(--dst-text-muted); }
+.dst-search-empty.is-visible { display: block; }
+
+/* ---------- Card ---------- */
+.dst-card { display: block; background: var(--dst-white); }
+.dst-card-media { position: relative; aspect-ratio: 4 / 5; overflow: hidden; background: var(--dst-ivory); }
+.dst-card-media img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.6s var(--dst-ease); }
+.dst-card:hover .dst-card-media img { transform: scale(1.05); }
+.dst-card-badge {
+  position: absolute; top: 14px; left: 14px;
+  padding: 5px 12px; font-size: 0.72rem; letter-spacing: 0.1em;
+  background: var(--dst-gold); color: var(--dst-white);
+}
+.dst-card-body { padding: 18px 2px 0; }
+.dst-card-country { font-size: 0.74rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dst-gold-dark); margin-bottom: 6px; }
+.dst-card-name-en { font-family: var(--dst-font-serif); font-style: italic; font-size: 0.95rem; color: var(--dst-text-muted); }
+.dst-card-name-ja { font-family: var(--dst-font-serif); font-size: 1.35rem; margin: 2px 0 10px; }
+.dst-card-desc { font-size: 0.88rem; line-height: 1.75; }
+.dst-card-themes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.dst-tag { font-size: 0.72rem; padding: 4px 10px; border: 1px solid var(--dst-border); color: var(--dst-text-muted); }
+.dst-card-link { display: inline-block; margin-top: 14px; font-size: 0.82rem; letter-spacing: 0.04em; color: var(--dst-gold-dark); border-bottom: 1px solid var(--dst-gold-dark); }
+
+/* ---------- Popular carousel ---------- */
+.dst-carousel { display: flex; gap: 26px; overflow-x: auto; padding-bottom: 8px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.dst-carousel::-webkit-scrollbar { display: none; }
+.dst-carousel .dst-card { flex: 0 0 auto; width: min(280px, 72vw); scroll-snap-align: start; }
+
+/* ---------- Theme grid ---------- */
+.dst-theme-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 18px; }
+.dst-theme-tile {
+  position: relative; aspect-ratio: 1 / 1; overflow: hidden;
+  display: flex; align-items: flex-end; padding: 18px;
+  border: none; text-align: left; width: 100%;
+}
+.dst-theme-tile img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s var(--dst-ease); }
+.dst-theme-tile::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to top, rgba(20, 17, 13, 0.6), rgba(20, 17, 13, 0.05)); }
+.dst-theme-tile span { position: relative; z-index: 1; color: var(--dst-white); font-family: var(--dst-font-serif); font-size: 1.05rem; letter-spacing: 0.02em; }
+.dst-theme-tile:hover img { transform: scale(1.06); }
+.dst-theme-tile.is-active span { color: var(--dst-accent); }
+.dst-theme-tile.is-active::after { background: rgba(184, 134, 11, 0.35); }
+
+/* ---------- Region list ---------- */
+.dst-region-block { margin-bottom: 64px; }
+.dst-region-block:last-child { margin-bottom: 0; }
+.dst-region-block-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 28px; gap: 16px; flex-wrap: wrap; }
+.dst-region-block-head h3 { display: flex; align-items: baseline; gap: 10px; }
+.dst-region-block-head .dst-region-en { font-size: 0.85rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dst-gold-dark); }
+.dst-region-more { font-size: 0.85rem; letter-spacing: 0.04em; color: var(--dst-gold-dark); border-bottom: 1px solid var(--dst-gold-dark); white-space: nowrap; }
+.dst-region-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 26px; }
+
+/* ---------- CTA ---------- */
+.dst-cta { text-align: center; }
+.dst-cta-subtle .dst-container p { font-size: 0.95rem; }
+.dst-cta-subtle .dst-card-link { margin-left: 8px; }
+.dst-cta-full { background: var(--dst-text); color: var(--dst-white); }
+.dst-cta-full p { color: rgba(255, 255, 255, 0.75); }
+.dst-cta-full .dst-cta-row { justify-content: center; margin-top: 30px; }
+
+/* ---------- Destination detail: intro / split ---------- */
+.dst-split { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(32px, 6vw, 80px); align-items: center; }
+.dst-split-media { aspect-ratio: 4 / 5; overflow: hidden; }
+.dst-split-media img { width: 100%; height: 100%; object-fit: cover; }
+@media (max-width: 860px) {
+  .dst-split { grid-template-columns: 1fr; }
+}
+
+/* ---------- GEO facts block ---------- */
+.dst-geo-block { background: var(--dst-ivory); border: 1px solid var(--dst-border); padding: clamp(26px, 4vw, 44px); }
+.dst-geo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 24px; }
+.dst-geo-item dt { font-family: var(--dst-font-serif); color: var(--dst-gold-dark); font-size: 0.92rem; margin-bottom: 6px; }
+.dst-geo-item dd { font-size: 0.92rem; }
+
+/* ---------- Photo spots (旧・プレースホルダー版。実際の描画は
+   destination-spots.liquid が使う下の「撮影スポット」ブロックの
+   クラス名(.dst-spot-title 等)で、CSSカスケード上こちらは
+   後方互換のため残しているだけの未使用コード) ---------- */
+.dst-spots-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 30px; }
+.dst-spot-media { aspect-ratio: 3 / 4; overflow: hidden; margin-bottom: 16px; background: var(--dst-ivory); }
+.dst-spot-media img { width: 100%; height: 100%; object-fit: cover; }
+.dst-spot-name { font-family: var(--dst-font-serif); font-size: 1.15rem; margin-bottom: 6px; }
+.dst-spot-desc { font-size: 0.9rem; }
+
+/* ---------- Plans (旧・プレースホルダー版。実際の描画は
+   destination-plans.liquid が使う下の「プラン一覧」ブロックの
+   クラス名で、こちらは padding だけカスケードで生き残っている) ---------- */
+.dst-plans-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 28px; }
+.dst-plan-card { border: 1px solid var(--dst-border); padding: 30px; }
+.dst-plan-card h3 { margin-bottom: 10px; }
+.dst-plan-price { font-family: var(--dst-font-serif); font-size: 1.6rem; color: var(--dst-gold-dark); margin: 12px 0 16px; }
+.dst-plan-note { font-size: 0.8rem; color: var(--dst-text-muted); margin-top: 10px; }
+.dst-plans-placeholder-badge {
+  display: inline-block; font-size: 0.72rem; letter-spacing: 0.08em;
+  padding: 4px 10px; border: 1px solid var(--dst-gold); color: var(--dst-gold-dark);
+  margin-bottom: 14px;
+}
+
+/* ---------- FAQ / Accordion (旧・プレースホルダー版。実際の描画は
+   destination-faq.liquid が使う下の「FAQ」ブロックの
+   クラス名(.dst-faq-item 等)) ---------- */
+.dst-accordion-item { border-bottom: 1px solid var(--dst-border); }
+.dst-accordion-trigger {
+  width: 100%; display: flex; justify-content: space-between; align-items: center;
+  gap: 20px; padding: 22px 0; text-align: left;
+  font-family: var(--dst-font-serif); font-size: 1.05rem;
+}
+.dst-accordion-trigger .dst-q-mark { color: var(--dst-gold); font-family: var(--dst-font-serif); }
+.dst-accordion-panel { max-height: 0; overflow: hidden; transition: max-height 0.35s var(--dst-ease); }
+.dst-accordion-panel p { padding: 0 0 22px; font-size: 0.92rem; }
+
+/* ---------- Reveal (Intersection Observer fade-up) ---------- */
+.dst-reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.7s var(--dst-ease), transform 0.7s var(--dst-ease); }
+.dst-reveal.is-visible { opacity: 1; transform: translateY(0); }
+.dst-reveal-1 { transition-delay: 0.08s; }
+.dst-reveal-2 { transition-delay: 0.16s; }
+.dst-reveal-3 { transition-delay: 0.24s; }
+
+/* ---------- Utility ---------- */
+.dst-text-center { text-align: center; }
+.dst-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
+@media (max-width: 640px) {
+  .dst-split { gap: 28px; }
+  .dst-footer-top { grid-template-columns: 1fr; }
+}
+
+/* ===================================================================
+   destinations-additions.css
+   選ばれる理由 / モデルスケジュール / フォトギャラリー の3セクション用。
+   =================================================================== */
+
+/* ---------- 選ばれる理由 ---------- */
+.dst-reasons-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 24px; }
+.dst-reason-card { padding: 28px; background: var(--dst-ivory); }
+.dst-reason-title { font-family: var(--dst-font-serif); font-size: 1.05rem; margin-bottom: 10px; }
+.dst-reason-desc { font-size: 0.9rem; white-space: pre-line; line-height: 1.7; }
+
+/* ---------- モデルスケジュール ---------- */
+.dst-schedule-list { display: flex; flex-direction: column; }
+.dst-schedule-item { display: grid; grid-template-columns: 110px 1fr; gap: 20px; padding: 20px 0; border-bottom: 1px solid rgba(0,0,0,0.08); }
+.dst-schedule-item:last-child { border-bottom: none; }
+.dst-schedule-time { font-family: var(--dst-font-serif); color: var(--dst-gold); font-weight: 600; }
+.dst-schedule-desc { font-size: 0.9rem; white-space: pre-line; line-height: 1.7; }
+
+/* ---------- フォトギャラリー ---------- */
+.dst-gallery-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+@media (min-width: 760px) { .dst-gallery-grid { grid-template-columns: repeat(4, 1fr); } }
+.dst-gallery-item { position: relative; padding-top: 125%; overflow: hidden; }
+.dst-gallery-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+
+/* ===================================================================
+   destinations-additions-2.css
+   撮影スポット / プラン一覧 / FAQ の3セクション用。
+   （プラン一覧のグリッド伸びバグ修正済み最新版。この3ブロックは上の
+   旧プレースホルダー版と同名クラスが多いが、後に書かれているこちらが
+   カスケードで優先される）
+   =================================================================== */
+
+/* ---------- 撮影スポット ---------- */
+.dst-spots-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 28px; }
+.dst-spot-card { }
+.dst-spot-media { position: relative; padding-top: 125%; overflow: hidden; margin-bottom: 14px; }
+.dst-spot-media img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.dst-spot-title { font-family: var(--dst-font-serif); font-size: 1rem; margin-bottom: 6px; }
+.dst-spot-desc { font-size: 0.85rem; line-height: 1.7; color: var(--dst-text-muted); }
+
+/* ---------- プラン一覧 ---------- */
+/* プランが1〜2件しかない都市だと、グリッドの行が親要素の高さまで
+   伸びてカードだけ縦に間延びして見えることがあるため、行・カードの
+   高さを内容に合わせて固定する(align-content/align-items: start) */
+.dst-plans-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 24px; align-content: start; align-items: start; }
+.dst-plan-card { display: block; background: #fff; border: 1px solid rgba(0,0,0,0.08); overflow: hidden; height: fit-content; }
+.dst-plan-media { position: relative; padding-top: 125%; overflow: hidden; }
+.dst-plan-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.dst-plan-badge { position: absolute; top: 12px; left: 12px; background: var(--dst-gold); color: #fff; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 2px; }
+.dst-plan-body { padding: 18px; }
+.dst-plan-title { font-family: var(--dst-font-serif); font-size: 1rem; margin-bottom: 8px; }
+.dst-plan-desc { font-size: 0.85rem; color: var(--dst-text-muted); line-height: 1.6; margin-bottom: 10px; }
+.dst-plan-price { font-family: var(--dst-font-serif); color: var(--dst-gold); font-size: 1.15rem; margin-bottom: 10px; }
+
+/* ---------- FAQ ---------- */
+.dst-faq-list { display: flex; flex-direction: column; }
+.dst-faq-item { border-bottom: 1px solid rgba(0,0,0,0.08); padding: 18px 0; }
+.dst-faq-question { cursor: pointer; font-weight: 600; font-size: 0.95rem; list-style: none; }
+.dst-faq-question::-webkit-details-marker { display: none; }
+.dst-faq-question::after { content: "＋"; float: right; color: var(--dst-gold); }
+.dst-faq-item[open] .dst-faq-question::after { content: "－"; }
+.dst-faq-answer { font-size: 0.88rem; line-height: 1.8; color: var(--dst-text-muted); margin-top: 12px; white-space: pre-line; }
