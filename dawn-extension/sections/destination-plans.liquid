@@ -7,7 +7,7 @@
 {%- assign plan_blocks = section.blocks | where: 'type', 'plan' -%}
 
 {%- if plan_blocks.size > 0 -%}
-<section{% if section.settings.bg_ivory %} class="dst-bg-ivory"{% endif %}>
+<section id="dst-plans"{% if section.settings.bg_ivory %} class="dst-bg-ivory"{% endif %}>
   <div class="dst-container">
     <div class="dst-section-head dst-reveal">
       <p class="dst-eyebrow" style="color:{{ section.settings.eyebrow_color }};">{{ section.settings.eyebrow }}</p>
