@@ -66,12 +66,12 @@
     <a href="#dst-plans" id="dst-plans-jumplink" class="ml-2" style="color:#B8860B;font-weight:600;display:none;">プランを見る ↓</a>
   </nav>
   <script>
-    (function () {
+    document.addEventListener('DOMContentLoaded', function () {
       var link = document.getElementById('dst-plans-jumplink');
       if (link && document.getElementById('dst-plans')) {
         link.style.display = 'inline';
       }
-    })();
+    });
   </script>
 {%- else -%}
   <section class="dst-text-center" style="padding-top:160px;">
