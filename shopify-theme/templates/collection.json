@@ -1,0 +1,59 @@
+{
+  "sections": {
+    "collection-hero": {
+      "type": "collection-hero",
+      "settings": {}
+    },
+    "collection-features": {
+      "type": "collection-features",
+      "settings": {
+        "heading": "この撮影地で撮る、という選択",
+        "background": "white"
+      }
+    },
+    "collection-products": {
+      "type": "collection-products",
+      "settings": {
+        "background": "ivory",
+        "columns": "2"
+      }
+    },
+    "collection-season": {
+      "type": "collection-season",
+      "settings": {
+        "heading": "ベストシーズン"
+      }
+    },
+    "collection-gallery": {
+      "type": "collection-gallery",
+      "settings": {
+        "heading": "撮影ギャラリー",
+        "background": "ivory"
+      }
+    },
+    "collection-faq": {
+      "type": "collection-faq",
+      "settings": {
+        "heading": "よくあるご質問",
+        "background": "white"
+      }
+    },
+    "collection-cta": {
+      "type": "collection-cta",
+      "settings": {
+        "heading": "この撮影地で、あなたの一枚を。",
+        "primary_label": "プランを見る",
+        "secondary_label": "30秒診断する"
+      }
+    }
+  },
+  "order": [
+    "collection-hero",
+    "collection-features",
+    "collection-products",
+    "collection-season",
+    "collection-gallery",
+    "collection-faq",
+    "collection-cta"
+  ]
+}

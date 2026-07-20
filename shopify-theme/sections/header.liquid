@@ -9,16 +9,22 @@
   <a href="{{ routes.root_url }}" class="logo">
     {{ section.settings.logo_text }}<span class="logo-sub">{{ section.settings.logo_sub }}</span>
   </a>
-  <nav class="nav-links">
-    {%- for link in section.settings.main_menu.links -%}
-      <a href="{{ link.url }}"{% if link.active %} aria-current="page"{% endif %}>{{ link.title }}</a>
-    {%- endfor -%}
-    <a href="{{ journal_url }}">JOURNAL</a>
-    {%- if section.settings.cta_url != blank -%}
-      <a href="{{ section.settings.cta_url }}" class="btn btn-sm btn-gold">{{ section.settings.cta_label }}</a>
-    {%- endif -%}
-  </nav>
-  <button class="nav-toggle" aria-label="メニュー" aria-expanded="false"><span></span><span></span><span></span></button>
+  <div class="header-right">
+    <nav class="nav-links">
+      {%- for link in section.settings.main_menu.links -%}
+        <a href="{{ link.url }}"{% if link.active %} aria-current="page"{% endif %}>{{ link.title }}</a>
+      {%- endfor -%}
+      <a href="{{ journal_url }}">JOURNAL</a>
+      {%- if section.settings.cta_url != blank -%}
+        <a href="{{ section.settings.cta_url }}" class="btn btn-sm btn-gold">{{ section.settings.cta_label }}</a>
+      {%- endif -%}
+    </nav>
+    <a href="{{ routes.cart_url }}" class="nav-cart" aria-label="カート（{{ cart.item_count }}点）">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 8h16l-1.5 11a2 2 0 01-2 1.8H7.5a2 2 0 01-2-1.8L4 8z"/><path d="M8 8V6a4 4 0 018 0v2"/></svg>
+      {%- if cart.item_count > 0 -%}<span class="nav-cart-count">{{ cart.item_count }}</span>{%- endif -%}
+    </a>
+    <button class="nav-toggle" aria-label="メニュー" aria-expanded="false"><span></span><span></span><span></span></button>
+  </div>
 </header>
 
 {% schema %}

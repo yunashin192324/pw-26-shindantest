@@ -1,0 +1,893 @@
+{% comment %}
+  ファイル名: sections/product-plan.liquid
+  役割: 撮影地プラン(ダナン・ハワイ・ロンドン等)のShopify商品ページ。
+  danang-beach-plan（Page用の単発セクション）と同じ見た目・同じブロック
+  語彙（gallery_image / tag / option / schedule / faq / note）を踏襲しつつ、
+  Shopify Productに対応させたバージョン。
+  ------------------------------------------------------------
+  なぜProduct化したか：
+    予約日時選択アプリ(カレンダー予約アプリ)を使うには、選んだ日時を
+    Shopifyの「カートに追加」に乗せてShopify標準チェックアウトで決済
+    する必要があるため。Pageではカート/チェックアウトに直接つながら
+    ない。
+
+  価格・商品名・商品説明は固定テキストではなく実際のProductオブジェクト
+  (product.title / product.selected_or_first_available_variant.price /
+  product.description)から取得し、他の設定はdanang-beach-planと同じ
+  ように上書き可能なテキスト設定として残してある。
+
+  通常予約／リクエスト予約は商品タグ「即予約」の有無で自動判定
+  （現行のFAQ「即予約できます／現地確認後ご回答」の説明文と一致させて
+  ある）。カレンダー予約アプリは「予約（Reserve）」パネル内の
+  {% raw %}{% render block %}{% endraw %} スロットに、Theme Editorの
+  「ブロックを追加 → アプリ」から追加する。
+
+  カートアイコンについて：
+    ヘッダーが「カート無し版」のため、カートに追加した後にお客様が
+    カートへ戻る導線が無い。そのため即予約フォームは
+    return_to=checkout を指定し、カート追加と同時にカートページを
+    経由せずShopify標準チェックアウトへ直接進む（Buy it nowと同じ
+    体験）。ヘッダーにカートアイコンを復活させる必要はない。
+
+  ------------------------------------------------------------
+  【プラン数が多い場合のテンプレート共有について】
+    プランが増えるたびに「テンプレートを複製」すると管理が大変になる
+    ため、ここから先の各セクションは「商品のメタフィールド（custom.
+    plan_*）が設定されていればそれを使い、無ければ従来通りブロック/
+    セクション設定を使う」というデュアルモードにしてある。
+    メタフィールドを使えば、この商品プランページテンプレートを
+    複数の商品で共有したまま、商品ごとに内容だけ切り替えられる
+    （テンプレートを複製しなくてよくなる）。
+    セットアップ手順は docs/product-plan-metafields-setup.md 参照。
+{% endcomment %}
+
+<script>
+  if (!document.getElementById('tw-config')) {
+    var twConfig = document.createElement('script');
+    twConfig.id = 'tw-config';
+    twConfig.innerHTML = "tailwind.config = { theme: { extend: { colors: { ivory: '#FAF8F5', gold: '#B8860B', 'gold-light': '#D4A843', dark: '#1a1a1a' }, fontFamily: { serif: ['var(--font-heading-family, serif)', 'serif'], sans: ['var(--font-body-family, sans-serif)', 'sans-serif'] } } } };";
+    document.head.appendChild(twConfig);
+  }
+  if (!document.getElementById('tw-cdn')) {
+    var twScript = document.createElement('script');
+    twScript.id = 'tw-cdn';
+    twScript.src = 'https://cdn.tailwindcss.com/3.4.17';
+    document.head.appendChild(twScript);
+  }
+</script>
+
+<style>
+  #product-plan-{{ section.id }} {
+    font-family: var(--font-body-family, sans-serif);
+    font-size: calc(var(--font-body-scale, 1) * 100%);
+  }
+  #product-plan-{{ section.id }} .font-serif { font-family: var(--font-heading-family, serif); }
+  #product-plan-{{ section.id }} .divider-gold { width: 48px; height: 2px; background: #B8860B; margin: 16px 0; }
+  #product-plan-{{ section.id }} .divider-gold.center { margin-left: auto; margin-right: auto; }
+  #product-plan-{{ section.id }} .money { font-size: inherit; font-weight: inherit; }
+
+  {%- comment -%}
+    予約ボタン：検証ツールで確認したところ、実際に表示されているのは
+    こちらの<button>ではなく、Appointo側のスクリプトが生成する
+    <div id="appointo-btn">だった。このdivはこちらのボタンのCSS
+    クラスはコピーしているが、背景色を指定していたinline styleまでは
+    コピーされておらず、背景が透明のまま白文字だけが残って見えなく
+    なっていた。#appointo-btn自体を直接指定して背景色を強制する。
+  {%- endcomment -%}
+  #product-plan-{{ section.id }} #plan-reserve-form button[type="submit"],
+  #product-plan-{{ section.id }} #plan-request-form button[type="submit"],
+  #product-plan-{{ section.id }} #appointo-btn {
+    background-color: #B8860B !important;
+    color: #ffffff !important;
+    opacity: 1 !important;
+  }
+  #product-plan-{{ section.id }} #plan-reserve-form button[type="submit"]:disabled,
+  #product-plan-{{ section.id }} #plan-request-form button[type="submit"]:disabled {
+    background-color: #e4ddc9 !important;
+    color: #6b6450 !important;
+    opacity: 1 !important;
+    cursor: not-allowed;
+  }
+
+  {%- comment -%}
+    ヒーロー見出し：PC基準の40pxのままだと、スマホの狭い画面幅では
+    どんな商品名でも改行位置が窮屈になり不自然に見える。画面幅に応じて
+    段階的に縮小し、括弧部分のnowrapスパンが画面幅をはみ出さないようにする。
+  {%- endcomment -%}
+  @media (max-width: 480px) {
+    #product-plan-{{ section.id }} .plan-hero-title {
+      font-size: calc(var(--font-heading-scale, 1) * 26px) !important;
+    }
+  }
+  @media (min-width: 481px) and (max-width: 767px) {
+    #product-plan-{{ section.id }} .plan-hero-title {
+      font-size: calc(var(--font-heading-scale, 1) * 30px) !important;
+    }
+  }
+</style>
+
+{%- assign variant = product.selected_or_first_available_variant -%}
+{%- assign is_instant = false -%}
+{%- if product.tags contains '即予約' -%}{%- assign is_instant = true -%}{%- endif -%}
+{%- assign mf = product.metafields.custom -%}
+
+{%- comment -%}
+  撮影地詳細ページ(area-lp)への戻りリンク用。商品ごとにメタフィールドで
+  「この商品はどの都市のページに属するか」を設定する
+  (custom.plan_area_name / custom.plan_area_url)。未設定でもエラーには
+  ならず、単にパンくずのその部分が省略されるだけ。
+{%- endcomment -%}
+{%- assign plan_area_name = mf.plan_area_name.value -%}
+{%- assign plan_area_url = mf.plan_area_url.value -%}
+
+{%- comment -%} ヒーロー {%- endcomment -%}
+{%- comment -%}
+  優先順位のバグ修正：以前は section.settings.hero_img (テンプレート共有
+  設定)が常に優先され、商品ごとのメディア1枚目が無視されていた。
+  この場所はテンプレートを複数商品で共有する前提のため、商品自身の
+  画像を優先し、商品に画像が無い場合だけテンプレート設定を使う。
+{%- endcomment -%}
+{%- assign hero_img = product.featured_image | default: section.settings.hero_img -%}
+{%- assign hero_title = section.settings.hero_title | default: product.title -%}
+{%- assign hero_eyebrow = mf.plan_hero_eyebrow.value | default: section.settings.hero_eyebrow -%}
+{%- assign hero_lede = mf.plan_hero_lede.value | default: section.settings.hero_lede -%}
+{%- assign hero_text_color = mf.plan_hero_text_color.value | default: section.settings.hero_text_color | default: '#ffffff' -%}
+
+{%- comment -%} 概要 {%- endcomment -%}
+{%- assign overview_title = mf.plan_overview_title.value | default: section.settings.overview_title -%}
+
+{%- comment -%} 価格まわり {%- endcomment -%}
+{%- assign price_note = mf.plan_price_note.value | default: section.settings.price_note -%}
+{%- assign price_cancel_note = mf.plan_price_cancel_note.value | default: section.settings.price_cancel_note -%}
+
+{%- comment -%}
+  特徴タグ：商品タグをそのまま使う（即予約/人気は制御用タグなので
+  除外）。tagブロックは、商品タグを使わず個別に文言を出したい場合の
+  後方互換フォールバックとして残す。
+{%- endcomment -%}
+{%- assign hidden_tags = '即予約,人気' | split: ',' -%}
+{%- assign tag_blocks = section.blocks | where: 'type', 'tag' -%}
+{%- assign display_tags_str = '' -%}
+{%- for t in product.tags -%}
+  {%- unless hidden_tags contains t -%}{%- assign display_tags_str = display_tags_str | append: t | append: '||' -%}{%- endunless -%}
+{%- endfor -%}
+{%- assign display_tags = display_tags_str | split: '||' -%}
+
+{%- comment -%}
+  含まれるもの／含まれないもの
+  リスト型フィールドの設定が分かりづらいため、複数行テキスト
+  (1行1項目)を改行で分割して配列化する方式にしている。
+{%- endcomment -%}
+{%- assign included_items = '' | split: '' -%}
+{%- if mf.plan_included_items.value != blank -%}{%- assign included_items = mf.plan_included_items.value | newline_to_br | split: '<br />' -%}{%- endif -%}
+{%- assign excluded_items = '' | split: '' -%}
+{%- if mf.plan_excluded_items.value != blank -%}{%- assign excluded_items = mf.plan_excluded_items.value | newline_to_br | split: '<br />' -%}{%- endif -%}
+
+{%- comment -%}
+  オプション：以前はJSON形式だったが非エンジニアには書きづらいため、
+  「1行1項目、名称と価格は｜(縦棒)で区切る」形式に変更。
+  例: 送迎付きプラン|+¥12,000
+{%- endcomment -%}
+{%- assign mf_options_lines = '' | split: '' -%}
+{%- if mf.plan_options.value != blank -%}{%- assign mf_options_lines = mf.plan_options.value | newline_to_br | split: '<br />' -%}{%- endif -%}
+{%- assign option_blocks = section.blocks | where: 'type', 'option' -%}
+
+{%- comment -%}
+  ギャラリー：メタフィールドのリスト設定は分かりづらいため使わない。
+  商品の「メディア」欄（標準機能・複数枚まとめてアップロード可）に
+  2枚目以降として登録された画像を、そのままギャラリーとして使う。
+  1枚目はヒーロー画像として既に使われているため2枚目以降が対象。
+{%- endcomment -%}
+{%- assign mf_gallery = product.images | slice: 1, 20 -%}
+{%- assign gallery_blocks = section.blocks | where: 'type', 'gallery_image' -%}
+
+{%- comment -%}
+  スケジュール：「1行1項目、時刻と内容は｜(縦棒)で区切る」形式。
+  例: 8:00|サロンにてお仕度開始
+{%- endcomment -%}
+{%- assign mf_schedule_lines = '' | split: '' -%}
+{%- if mf.plan_schedule.value != blank -%}{%- assign mf_schedule_lines = mf.plan_schedule.value | newline_to_br | split: '<br />' -%}{%- endif -%}
+{%- assign schedule_blocks = section.blocks | where: 'type', 'schedule' -%}
+
+{%- comment -%}
+  FAQ：「1行1項目、質問と回答は｜(縦棒)で区切る」形式。
+  例: ビザは必要ですか？|パスポートの残存有効期間が6ヶ月以上あれば不要です。
+{%- endcomment -%}
+{%- assign mf_faqs_lines = '' | split: '' -%}
+{%- if mf.plan_faqs.value != blank -%}{%- assign mf_faqs_lines = mf.plan_faqs.value | newline_to_br | split: '<br />' -%}{%- endif -%}
+{%- assign faq_blocks = section.blocks | where: 'type', 'faq' -%}
+
+{%- comment -%} 注意事項 {%- endcomment -%}
+{%- assign plan_notes_text = mf.plan_notes.value -%}
+{%- assign note_blocks = section.blocks | where: 'type', 'note' -%}
+
+{%- comment -%}
+  運行事業者／お申し込み時に必要なもの／撮影不可能日
+  もともと店舗に存在していた既存メタフィールド(custom.agt / custom.need /
+  custom.ngday)をそのまま利用。need・ngdayはリッチテキスト型のため、
+  .valueだと変換前の生データ({"type"=>"root",...})がそのまま出力
+  されてしまう。metafield_tagフィルタ(メタフィールドそのものに適用、
+  .valueを付けない)を使うと型に応じて正しくHTML変換される。
+{%- endcomment -%}
+{%- assign plan_agent = mf.agt.value -%}
+{%- assign plan_needed_items = mf.need | metafield_tag -%}
+{%- assign plan_ng_days = mf.ngday | metafield_tag -%}
+
+{%- assign app_blocks = section.blocks | where: 'type', '@app' -%}
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Product",
+  "name": {{ product.title | json }},
+  "description": {{ product.description | strip_html | truncate: 300 | json }},
+  {%- if product.featured_image %}
+  "image": [{{ product.featured_image | image_url: width: 1600 | prepend: "https:" | json }}],
+  {%- endif %}
+  "brand": { "@type": "Brand", "name": {{ shop.name | json }} },
+  "offers": {
+    "@type": "Offer",
+    "priceCurrency": {{ cart.currency.iso_code | json }},
+    "price": {{ variant.price | money_without_currency | json }},
+    "availability": "https://schema.org/{% if variant.available %}InStock{% else %}OutOfStock{% endif %}",
+    "url": {{ canonical_url | json }}
+  }
+}
+</script>
+{%- if mf_faqs_lines.size > 0 or faq_blocks.size > 0 -%}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {%- if mf_faqs_lines.size > 0 -%}
+      {%- for line in mf_faqs_lines -%}
+        {%- assign line = line | strip -%}
+        {%- if line != blank -%}
+          {%- assign faq_parts = line | replace: '｜', '|' | split: '|' -%}
+          {
+            "@type": "Question",
+            "name": {{ faq_parts[0] | strip | strip_html | json }},
+            "acceptedAnswer": { "@type": "Answer", "text": {{ faq_parts[1] | strip | strip_html | json }} }
+          }{%- unless forloop.last -%},{%- endunless -%}
+        {%- endif -%}
+      {%- endfor -%}
+    {%- else -%}
+      {%- for block in faq_blocks -%}
+        {
+          "@type": "Question",
+          "name": {{ block.settings.question | strip_html | json }},
+          "acceptedAnswer": { "@type": "Answer", "text": {{ block.settings.answer | strip_html | json }} }
+        }{%- unless forloop.last -%},{%- endunless -%}
+      {%- endfor -%}
+    {%- endif -%}
+  ]
+}
+</script>
+{%- endif -%}
+
+<div id="product-plan-{{ section.id }}" class="w-full bg-white text-gray-800">
+
+  {% comment %} --- HERO --- {% endcomment %}
+  <section class="relative w-full flex flex-col justify-end items-center text-center" style="height: 70vh;">
+    {% if hero_img != blank %}
+      {% capture hero_img_style %}object-position: {{ section.settings.hero_img_position | default: 'object-center' }};{% endcapture %}
+      {{ hero_img | image_url: width: 2000 | image_tag: class: 'absolute inset-0 w-full h-full object-cover', style: hero_img_style, alt: hero_title }}
+    {% else %}
+      <div class="absolute inset-0 w-full h-full bg-gray-200"></div>
+    {% endif %}
+    <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.25));"></div>
+    <div class="relative z-10 px-6 pb-16 w-full max-w-4xl text-center" style="color:{{ hero_text_color }};">
+      {% if hero_eyebrow != blank %}
+        <p class="font-serif tracking-widest uppercase mb-4 text-sm" style="color:{{ hero_text_color }}; text-shadow: 0 2px 10px rgba(0,0,0,0.5);">{{ hero_eyebrow }}</p>
+      {% endif %}
+      {%- comment -%}
+        商品名の「（○○）」部分の途中で不自然に改行されるのを防ぐため、
+        括弧以降をwhite-space:nowrapで囲んで1つの塊として扱う。
+      {%- endcomment -%}
+      {%- assign hero_title_parts = hero_title | split: '（' -%}
+      <h1 class="font-serif font-light leading-tight mb-4 plan-hero-title" style="font-size: calc(var(--font-heading-scale, 1) * 40px); color:{{ hero_text_color }}; text-shadow: 0 2px 12px rgba(0,0,0,0.6);">
+        {%- if hero_title_parts.size > 1 -%}
+          {{ hero_title_parts.first }}<span style="white-space: nowrap;">（{{ hero_title_parts | slice: 1, hero_title_parts.size | join: '（' }}</span>
+        {%- else -%}
+          {{ hero_title }}
+        {%- endif -%}
+      </h1>
+      {% if hero_lede != blank %}
+        <p class="font-light" style="font-size: calc(var(--font-body-scale, 1) * 16px); color:{{ hero_text_color }}; text-shadow: 0 2px 8px rgba(0,0,0,0.5);">{{ hero_lede }}</p>
+      {% endif %}
+    </div>
+  </section>
+
+  <nav class="max-w-6xl mx-auto px-6 pt-4 text-xs text-gray-500" aria-label="breadcrumb">
+    <a href="{{ routes.root_url }}" class="hover:text-gold">TOP</a>
+    {%- if plan_area_name != blank and plan_area_url != blank -%}
+      <span class="mx-1">/</span><a href="{{ plan_area_url }}" class="hover:text-gold">{{ plan_area_name }}</a>
+    {%- elsif product.collections.first -%}
+      <span class="mx-1">/</span><a href="{{ product.collections.first.url }}" class="hover:text-gold">{{ product.collections.first.title }}</a>
+    {%- endif -%}
+    <span class="mx-1">/</span><span>{{ product.title }}</span>
+  </nav>
+
+  {% comment %} --- OVERVIEW + タグ + 予約(Appointo) --- {% endcomment %}
+  <section class="py-16 md:py-24">
+    <div class="max-w-6xl mx-auto px-6 grid md:grid-cols-2 gap-10 items-start">
+      <div>
+        {% if section.settings.overview_eyebrow != blank %}
+          <p class="font-serif tracking-widest uppercase mb-2 text-sm" style="color:#B8860B;">{{ section.settings.overview_eyebrow }}</p>
+        {% endif %}
+        {% if overview_title != blank %}
+          <h2 class="font-medium mb-3" style="font-size: calc(var(--font-heading-scale, 1) * 24px);">{{ overview_title }}</h2>
+          <div class="divider-gold"></div>
+        {% endif %}
+        <div class="text-sm leading-relaxed text-gray-600 mt-4">
+          {{ product.description }}
+        </div>
+        {% if display_tags.size > 0 %}
+          <div class="flex flex-wrap gap-2 mt-6">
+            {% for t in display_tags %}
+              <span class="inline-block px-3 py-1 text-xs border border-gray-300 rounded-full text-gray-600">{{ t }}</span>
+            {% endfor %}
+          </div>
+        {% elsif tag_blocks.size > 0 %}
+          <div class="flex flex-wrap gap-2 mt-6">
+            {% for block in tag_blocks %}
+              <span class="inline-block px-3 py-1 text-xs border border-gray-300 rounded-full text-gray-600" {{ block.shopify_attributes }}>{{ block.settings.title }}</span>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="rounded-lg p-8" style="background-color:#FAF8F5;border:1px solid #eee;">
+        {% if is_instant %}
+          <span class="inline-flex items-center gap-1 px-3 py-1 text-xs rounded-full" style="background:#eef4ec;color:#4b7a52;">即予約</span>
+        {% else %}
+          <span class="inline-flex items-center gap-1 px-3 py-1 text-xs rounded-full" style="background:#f6efe2;color:#8f6a08;">リクエスト予約</span>
+        {% endif %}
+        <div class="mt-4 font-serif" style="font-size: calc(var(--font-heading-scale, 1) * 34px); color:#1a1a1a;">
+          {{ variant.price | money_without_currency }}<span style="font-size: 0.4em; font-family: var(--font-body-family, sans-serif); margin-left: 0.1em;">円</span>
+          <span class="text-sm font-sans text-gray-500">{{ price_note }}</span>
+        </div>
+
+        {% if is_instant %}
+          {%- form 'product', product, id: 'plan-reserve-form' -%}
+            <input type="hidden" name="id" value="{{ variant.id }}">
+            <input type="hidden" name="quantity" value="1">
+            <input type="hidden" name="properties[予約タイプ]" value="通常予約">
+            {%- comment -%}
+              return_to=checkout はShopifyの/cart/add側がサポートする特別な値で、
+              カートページを一切経由せず、追加直後にShopify標準チェックアウトへ
+              直接進む(≒ Buy it now と同じ体験)。ヘッダーにカートアイコンが無くても
+              購入導線が途切れないための対応(下記コメント参照)。
+            {%- endcomment -%}
+            <input type="hidden" name="return_to" value="checkout">
+            <div class="mt-6 space-y-2">
+              {% if app_blocks.size > 0 %}
+                {% for block in app_blocks %}{% render block %}{% endfor %}
+              {% else %}
+                <div class="flex justify-between text-sm border-b border-gray-200 py-3"><span class="text-gray-500">日付</span><span>—</span></div>
+                <div class="flex justify-between text-sm border-b border-gray-200 py-3"><span class="text-gray-500">時間</span><span>—</span></div>
+                {% if request.design_mode %}
+                  <p class="text-xs text-gray-400 mt-2">予約日時選択アプリを導入後、このセクションの「ブロックを追加」→「アプリ」から追加してください（このフォーム内に追加されるため、選択した日時はカート追加時にそのまま渡されます）。</p>
+                {% endif %}
+              {% endif %}
+            </div>
+            {% unless section.settings.hide_default_submit %}
+              <button type="submit" name="add" class="w-full mt-6 px-8 py-4 rounded-full font-medium text-sm text-white transition hover:opacity-80" style="background-color:#B8860B;">{{ section.settings.reserve_button_label_instant | default: '空き状況を確認して予約する' }}</button>
+              <p class="text-xs text-gray-400 text-center mt-2">※ボタンを押すとカートを経由せず、そのままお支払い画面に進みます</p>
+            {% endunless %}
+          {%- endform -%}
+        {% else %}
+          {%- comment -%}
+            リクエスト予約：即決済せず、まず「希望日時のリクエスト」を
+            受け付ける。以前はこのボタンがただのリンク(<a>)で、フォームに
+            包まれておらず、カレンダーで選んだ日時が実際には何も送信され
+            ない不具合だったため、商品フォームとしてきちんと送信されるよう
+            修正した。return_toを指定していないため、送信後はカートページ
+            に遷移する（即決済に進ませず、店舗側の空き確認を待つ想定）。
+            Appointo側で該当サービスの「この商品の支払いをスキップ」を
+            ONにしておくと、決済なしでリクエストだけ受け付けられる。
+          {%- endcomment -%}
+          {%- form 'product', product, id: 'plan-request-form' -%}
+            <input type="hidden" name="id" value="{{ variant.id }}">
+            <input type="hidden" name="quantity" value="1">
+            <input type="hidden" name="properties[予約タイプ]" value="リクエスト予約">
+            <div class="mt-6 space-y-2">
+              {% if app_blocks.size > 0 %}
+                {% for block in app_blocks %}{% render block %}{% endfor %}
+              {% else %}
+                <div class="flex justify-between text-sm border-b border-gray-200 py-3"><span class="text-gray-500">希望日</span><span>—</span></div>
+                <div class="flex justify-between text-sm border-b border-gray-200 py-3"><span class="text-gray-500">希望時間</span><span>—</span></div>
+                {% if request.design_mode %}
+                  <p class="text-xs text-gray-400 mt-2">予約日時選択アプリの「リクエスト予約」ウィジェットをこのセクションに追加してください（この商品では、Appointo側の該当サービス設定で「支払いをスキップ」をONにすることを推奨します）。</p>
+                {% endif %}
+              {% endif %}
+            </div>
+            {% if section.settings.request_explainer != blank %}
+              <p class="text-xs text-gray-500 mt-4 leading-relaxed">{{ section.settings.request_explainer }}</p>
+            {% endif %}
+            {% unless section.settings.hide_default_submit %}
+              <button type="submit" name="add" class="w-full mt-6 px-8 py-4 rounded-full font-medium text-sm text-white transition hover:opacity-80" style="background-color:#B8860B;">{{ section.settings.reserve_button_label_request | default: '希望日時をリクエストする' }}</button>
+              <p class="text-xs text-gray-400 text-center mt-2">※現地の空き状況を確認のうえ、担当より折り返しご連絡します（この時点ではお支払いは発生しません）</p>
+            {% endunless %}
+          {%- endform -%}
+        {% endif %}
+
+        {% if price_cancel_note != blank %}
+          <p class="text-xs text-gray-500 mt-6 leading-relaxed">{{ price_cancel_note }}</p>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  {% comment %} --- 含まれるもの／含まれないもの --- {% endcomment %}
+  {% if included_items.size > 0 or excluded_items.size > 0 or section.settings.included_list != blank or section.settings.excluded_list != blank %}
+  <section class="py-16 md:py-24" style="background-color:#FAF8F5;">
+    <div class="max-w-6xl mx-auto px-6 grid md:grid-cols-2 gap-10">
+      {% if included_items.size > 0 or section.settings.included_list != blank %}
+      <div>
+        <h3 class="font-bold mb-4" style="font-size: calc(var(--font-heading-scale, 1) * 18px);">{{ section.settings.included_title | default: '含まれるもの' }}</h3>
+        <div class="divider-gold"></div>
+        <ul class="mt-4 space-y-2 text-sm text-gray-700">
+          {% if included_items.size > 0 %}
+            {% for line in included_items %}
+              {% assign line = line | strip %}
+              {% if line != blank %}<li class="flex gap-2"><span style="color:#B8860B;">✓</span><span>{{ line }}</span></li>{% endif %}
+            {% endfor %}
+          {% else %}
+            {% assign included_lines = section.settings.included_list | newline_to_br | split: '<br />' %}
+            {% for line in included_lines %}
+              {% assign line = line | strip %}
+              {% if line != blank %}<li class="flex gap-2"><span style="color:#B8860B;">✓</span><span>{{ line }}</span></li>{% endif %}
+            {% endfor %}
+          {% endif %}
+        </ul>
+      </div>
+      {% endif %}
+      {% if excluded_items.size > 0 or section.settings.excluded_list != blank %}
+      <div>
+        <h3 class="font-bold mb-4" style="font-size: calc(var(--font-heading-scale, 1) * 18px);">{{ section.settings.excluded_title | default: '含まれないもの' }}</h3>
+        <div class="divider-gold"></div>
+        <ul class="mt-4 space-y-2 text-sm text-gray-500">
+          {% if excluded_items.size > 0 %}
+            {% for line in excluded_items %}
+              {% assign line = line | strip %}
+              {% if line != blank %}<li class="flex gap-2"><span class="text-gray-300">—</span><span>{{ line }}</span></li>{% endif %}
+            {% endfor %}
+          {% else %}
+            {% assign excluded_lines = section.settings.excluded_list | newline_to_br | split: '<br />' %}
+            {% for line in excluded_lines %}
+              {% assign line = line | strip %}
+              {% if line != blank %}<li class="flex gap-2"><span class="text-gray-300">—</span><span>{{ line }}</span></li>{% endif %}
+            {% endfor %}
+          {% endif %}
+        </ul>
+      </div>
+      {% endif %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% comment %} --- オプション --- {% endcomment %}
+  {%- assign has_options = false -%}
+  {%- if mf_options_lines.size > 0 or option_blocks.size > 0 -%}{%- assign has_options = true -%}{%- endif -%}
+  {% if section.settings.show_options and has_options %}
+  <section class="py-16 md:py-24">
+    <div class="max-w-6xl mx-auto px-6">
+      <div class="text-center mb-16">
+        {% if section.settings.options_eyebrow != blank %}<p class="font-serif tracking-widest uppercase mb-2 text-sm" style="color:#B8860B;">{{ section.settings.options_eyebrow }}</p>{% endif %}
+        <h2 class="font-medium" style="font-size: calc(var(--font-heading-scale, 1) * 24px);">{{ section.settings.options_title | default: 'オプション' }}</h2>
+        <div class="divider-gold center"></div>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+        {% if mf_options_lines.size > 0 %}
+          {% for line in mf_options_lines %}
+            {% assign line = line | strip %}
+            {% if line != blank %}
+              {% assign option_parts = line | replace: '｜', '|' | split: '|' %}
+              <div>
+                <h4 class="font-bold text-sm">{{ option_parts[0] | strip }}</h4>
+                <p class="text-sm mt-2" style="color:#B8860B;">{{ option_parts[1] | strip }}</p>
+              </div>
+            {% endif %}
+          {% endfor %}
+        {% else %}
+          {% for block in option_blocks %}
+            <div {{ block.shopify_attributes }}>
+              <h4 class="font-bold text-sm">{{ block.settings.title }}</h4>
+              <p class="text-sm mt-2" style="color:#B8860B;">{{ block.settings.price }}</p>
+            </div>
+          {% endfor %}
+        {% endif %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {% comment %} --- 衣裳への導線 --- {% endcomment %}
+  {% if section.settings.show_dress %}
+  <section class="py-16 md:py-24" style="background-color:#FAF8F5;">
+    <div class="max-w-6xl mx-auto px-6 grid md:grid-cols-2 gap-10 items-center">
+      <div class="w-full relative" style="padding-top: 125%;">
+        {% if section.settings.dress_img != blank %}
+          {% capture dress_img_style %}object-position: {{ section.settings.dress_img_position | default: 'object-center' }};{% endcapture %}
+          {{ section.settings.dress_img | image_url: width: 1000 | image_tag: class: 'absolute top-0 left-0 w-full h-full object-cover rounded-lg', style: dress_img_style, alt: section.settings.dress_title }}
+        {% else %}
+          <div class="absolute top-0 left-0 w-full h-full bg-gray-200 rounded-lg"></div>
+        {% endif %}
+      </div>
+      <div>
+        {% if section.settings.dress_eyebrow != blank %}<p class="font-serif tracking-widest uppercase mb-2 text-sm" style="color:#B8860B;">{{ section.settings.dress_eyebrow }}</p>{% endif %}
+        <h2 class="font-medium mb-3" style="font-size: calc(var(--font-heading-scale, 1) * 24px);">{{ section.settings.dress_title }}</h2>
+        <div class="divider-gold"></div>
+        <p class="text-sm text-gray-600 mt-4 leading-relaxed">{{ section.settings.dress_desc }}</p>
+        {% if section.settings.dress_btn_text != blank %}
+          <a href="{{ section.settings.dress_btn_url }}" class="inline-block mt-6 px-8 py-3 rounded-full font-medium text-sm border transition hover:opacity-70" style="border-color:#1a1a1a;color:#1a1a1a;">{{ section.settings.dress_btn_text }}</a>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {% comment %} --- 撮影ギャラリー --- {% endcomment %}
+  {% if mf_gallery.size > 0 or gallery_blocks.size > 0 %}
+  <section class="py-16 md:py-24">
+    <div class="max-w-6xl mx-auto px-6">
+      <div class="text-center mb-16">
+        {% if section.settings.gallery_eyebrow != blank %}<p class="font-serif tracking-widest uppercase mb-2 text-sm" style="color:#B8860B;">{{ section.settings.gallery_eyebrow }}</p>{% endif %}
+        <h2 class="font-medium" style="font-size: calc(var(--font-heading-scale, 1) * 24px);">{{ section.settings.gallery_title | default: '撮影イメージ' }}</h2>
+        <div class="divider-gold center"></div>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-4" id="plan-gallery-{{ section.id }}">
+        {% if mf_gallery.size > 0 %}
+          {% for image in mf_gallery %}
+            <div class="w-full relative plan-gallery-item cursor-pointer" style="padding-top: 125%;" data-full="{{ image | image_url: width: 1800 }}" data-index="{{ forloop.index0 }}">
+              {{ image | image_url: width: 800 | image_tag: class: 'absolute top-0 left-0 w-full h-full object-cover rounded-lg', alt: product.title }}
+            </div>
+          {% endfor %}
+        {% else %}
+          {% for block in gallery_blocks %}
+            <div class="w-full relative plan-gallery-item cursor-pointer" style="padding-top: 125%;" data-full="{{ block.settings.image | image_url: width: 1800 }}" data-index="{{ forloop.index0 }}" {{ block.shopify_attributes }}>
+              {% if block.settings.image != blank %}
+                {% capture gimg_style %}object-position: {{ block.settings.img_position | default: 'object-center' }};{% endcapture %}
+                {{ block.settings.image | image_url: width: 800 | image_tag: class: 'absolute top-0 left-0 w-full h-full object-cover rounded-lg', style: gimg_style, alt: product.title }}
+              {% endif %}
+            </div>
+          {% endfor %}
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  {% comment %}
+    ギャラリーのライトボックス。タップで拡大表示、左右スワイプ/矢印で
+    前後の画像に切り替え。バニラJSのみ、section.idでスコープして
+    同一テンプレートが複数商品で使われても衝突しないようにしている。
+  {% endcomment %}
+  <div id="plan-lightbox-{{ section.id }}" class="fixed inset-0 hidden" style="background:rgba(0,0,0,0.92);z-index:99999;">
+    <button type="button" class="plan-lightbox-close absolute top-4 right-4 text-white text-3xl leading-none w-10 h-10 flex items-center justify-center" aria-label="閉じる">×</button>
+    <button type="button" class="plan-lightbox-prev absolute left-2 md:left-6 top-1/2 -translate-y-1/2 text-white text-4xl leading-none w-12 h-12 flex items-center justify-center" aria-label="前の画像">‹</button>
+    <button type="button" class="plan-lightbox-next absolute right-2 md:right-6 top-1/2 -translate-y-1/2 text-white text-4xl leading-none w-12 h-12 flex items-center justify-center" aria-label="次の画像">›</button>
+    <div class="w-full h-full flex items-center justify-center px-12">
+      <img class="plan-lightbox-img" alt="" width="1200" height="1500" style="max-width:100%;max-height:90vh;object-fit:contain;">
+    </div>
+  </div>
+  <script>
+    (function () {
+      var root = document.getElementById('plan-gallery-{{ section.id }}');
+      var lightbox = document.getElementById('plan-lightbox-{{ section.id }}');
+      if (!root || !lightbox) return;
+      {%- comment -%}
+        親要素にtransformが掛かっているとposition:fixedがビューポート
+        基準にならず、ヘッダーの後ろに隠れる等の不具合になるため、
+        <body>直下に移動させて確実に画面全体に固定表示させる。
+      {%- endcomment -%}
+      document.body.appendChild(lightbox);
+      var img = lightbox.querySelector('.plan-lightbox-img');
+      var items = Array.prototype.slice.call(root.querySelectorAll('.plan-gallery-item'));
+      var current = 0;
+      var touchStartX = null;
+
+      function show(i) {
+        if (items.length === 0) return;
+        current = (i + items.length) % items.length;
+        img.src = items[current].getAttribute('data-full');
+      }
+      function open(i) {
+        show(i);
+        lightbox.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+      }
+      function close() {
+        lightbox.classList.add('hidden');
+        document.body.style.overflow = '';
+      }
+
+      items.forEach(function (el, i) {
+        el.addEventListener('click', function () { open(i); });
+      });
+      lightbox.querySelector('.plan-lightbox-close').addEventListener('click', close);
+      lightbox.querySelector('.plan-lightbox-prev').addEventListener('click', function () { show(current - 1); });
+      lightbox.querySelector('.plan-lightbox-next').addEventListener('click', function () { show(current + 1); });
+      lightbox.addEventListener('click', function (e) {
+        if (e.target === lightbox) close();
+      });
+      document.addEventListener('keydown', function (e) {
+        if (lightbox.classList.contains('hidden')) return;
+        if (e.key === 'Escape') close();
+        if (e.key === 'ArrowLeft') show(current - 1);
+        if (e.key === 'ArrowRight') show(current + 1);
+      });
+      lightbox.addEventListener('touchstart', function (e) {
+        touchStartX = e.changedTouches[0].clientX;
+      }, { passive: true });
+      lightbox.addEventListener('touchend', function (e) {
+        if (touchStartX === null) return;
+        var dx = e.changedTouches[0].clientX - touchStartX;
+        if (Math.abs(dx) > 40) {
+          if (dx < 0) { show(current + 1); } else { show(current - 1); }
+        }
+        touchStartX = null;
+      }, { passive: true });
+    })();
+  </script>
+  {% endif %}
+
+  {% comment %} --- スケジュール --- {% endcomment %}
+  {% if mf_schedule_lines.size > 0 or schedule_blocks.size > 0 %}
+  <section class="py-16 md:py-24" style="background-color:#FAF8F5;">
+    <div class="max-w-3xl mx-auto px-6">
+      <div class="text-center mb-16">
+        {% if section.settings.schedule_eyebrow != blank %}<p class="font-serif tracking-widest uppercase mb-2 text-sm" style="color:#B8860B;">{{ section.settings.schedule_eyebrow }}</p>{% endif %}
+        <h2 class="font-medium" style="font-size: calc(var(--font-heading-scale, 1) * 24px);">{{ section.settings.schedule_title | default: '撮影当日のスケジュール例' }}</h2>
+        <div class="divider-gold center"></div>
+      </div>
+      <div>
+        {% if mf_schedule_lines.size > 0 %}
+          {% for line in mf_schedule_lines %}
+            {% assign line = line | strip %}
+            {% if line != blank %}
+              {% assign schedule_parts = line | replace: '｜', '|' | split: '|' %}
+              <div class="flex gap-6 border-b border-gray-200 py-4 text-sm">
+                <span class="w-16 shrink-0 font-serif" style="color:#B8860B;">{{ schedule_parts[0] | strip }}</span>
+                <span class="text-gray-700">{{ schedule_parts[1] | strip }}</span>
+              </div>
+            {% endif %}
+          {% endfor %}
+        {% else %}
+          {% for block in schedule_blocks %}
+            <div class="flex gap-6 border-b border-gray-200 py-4 text-sm" {{ block.shopify_attributes }}>
+              <span class="w-16 shrink-0 font-serif" style="color:#B8860B;">{{ block.settings.time }}</span>
+              <span class="text-gray-700">{{ block.settings.desc }}</span>
+            </div>
+          {% endfor %}
+        {% endif %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {% comment %} --- FAQ --- {% endcomment %}
+  {% if mf_faqs_lines.size > 0 or faq_blocks.size > 0 %}
+  <section class="py-16 md:py-24">
+    <div class="max-w-3xl mx-auto px-6">
+      <div class="text-center mb-16">
+        {% if section.settings.faq_eyebrow != blank %}<p class="font-serif tracking-widest uppercase mb-2 text-sm" style="color:#B8860B;">{{ section.settings.faq_eyebrow }}</p>{% endif %}
+        <h2 class="font-medium" style="font-size: calc(var(--font-heading-scale, 1) * 24px);">{{ section.settings.faq_title | default: 'よくあるご質問' }}</h2>
+        <div class="divider-gold center"></div>
+      </div>
+      <div>
+        {% if mf_faqs_lines.size > 0 %}
+          {% for line in mf_faqs_lines %}
+            {% assign line = line | strip %}
+            {% if line != blank %}
+              {% assign faq_display_parts = line | replace: '｜', '|' | split: '|' %}
+              <details class="border-b border-gray-200 py-4">
+                <summary class="cursor-pointer font-medium text-sm flex justify-between items-center">{{ faq_display_parts[0] | strip }}<span style="color:#B8860B;">＋</span></summary>
+                <p class="text-sm text-gray-600 mt-3 leading-relaxed">{{ faq_display_parts[1] | strip }}</p>
+              </details>
+            {% endif %}
+          {% endfor %}
+        {% else %}
+          {% for block in faq_blocks %}
+            <details class="border-b border-gray-200 py-4" {{ block.shopify_attributes }}>
+              <summary class="cursor-pointer font-medium text-sm flex justify-between items-center">{{ block.settings.question }}<span style="color:#B8860B;">＋</span></summary>
+              <p class="text-sm text-gray-600 mt-3 leading-relaxed">{{ block.settings.answer }}</p>
+            </details>
+          {% endfor %}
+        {% endif %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {% comment %} --- 注意事項 --- {% endcomment %}
+  {%- assign has_notes = false -%}
+  {%- if plan_notes_text != blank or note_blocks.size > 0 -%}{%- assign has_notes = true -%}{%- endif -%}
+  {% if section.settings.show_notes and has_notes %}
+  <section class="py-16 md:py-24" style="background-color:#FAF8F5;">
+    <div class="max-w-3xl mx-auto px-6">
+      <h3 class="font-bold mb-4 text-sm">{{ section.settings.notes_title | default: '注意事項・ご案内' }}</h3>
+      {% if plan_notes_text != blank %}
+        <div class="text-xs text-gray-500 leading-relaxed mt-3">{{ plan_notes_text | newline_to_br }}</div>
+      {% else %}
+        {% for block in note_blocks %}
+          <div class="text-xs text-gray-500 leading-relaxed mt-3" {{ block.shopify_attributes }}>
+            {% if block.settings.title != blank %}<p class="font-bold text-gray-600 mb-1">{{ block.settings.title }}</p>{% endif %}
+            {{ block.settings.text | newline_to_br }}
+          </div>
+        {% endfor %}
+      {% endif %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% comment %} --- 運行事業者／お申し込み時に必要なもの／撮影不可能日 --- {% endcomment %}
+  {%- assign has_extra_info = false -%}
+  {%- if plan_agent != blank or plan_needed_items != blank or plan_ng_days != blank -%}{%- assign has_extra_info = true -%}{%- endif -%}
+  {% if has_extra_info %}
+  <section class="py-16 md:py-24">
+    <div class="max-w-3xl mx-auto px-6">
+      <div class="divider-gold"></div>
+      <dl class="mt-6 space-y-6 text-sm">
+        {% if plan_agent != blank %}
+        <div>
+          <dt class="font-bold text-gray-700 mb-1">運行事業者</dt>
+          <dd class="text-gray-500 leading-relaxed">{{ plan_agent }}</dd>
+        </div>
+        {% endif %}
+        {% if plan_needed_items != blank %}
+        <div>
+          <dt class="font-bold text-gray-700 mb-1">お申し込み時に必要なもの</dt>
+          <dd class="text-gray-500 leading-relaxed">{{ plan_needed_items }}</dd>
+        </div>
+        {% endif %}
+        {% if plan_ng_days != blank %}
+        <div>
+          <dt class="font-bold text-gray-700 mb-1">撮影不可能日</dt>
+          <dd class="text-gray-500 leading-relaxed">{{ plan_ng_days }}</dd>
+        </div>
+        {% endif %}
+      </dl>
+    </div>
+  </section>
+  {% endif %}
+
+  {% comment %} --- 最後のCTA --- {% endcomment %}
+  <section id="reserve" class="py-16 md:py-24 text-center text-white" style="background-color:#1a1a1a;">
+    <div class="max-w-3xl mx-auto px-6">
+      {% if section.settings.reserve_eyebrow != blank %}<p class="font-serif tracking-widest uppercase mb-2 text-sm" style="color:#D4A843;">{{ section.settings.reserve_eyebrow }}</p>{% endif %}
+      {% assign reserve_title = section.settings.reserve_title %}
+      {% if reserve_title == blank %}{% assign reserve_title = product.title | append: 'を予約する' %}{% endif %}
+      <h2 class="font-medium" style="font-size: calc(var(--font-heading-scale, 1) * 28px);">{{ reserve_title }}</h2>
+      {% if section.settings.reserve_desc != blank %}<p class="text-sm mt-4 text-gray-300">{{ section.settings.reserve_desc }}</p>{% endif %}
+      <div class="flex flex-wrap justify-center gap-4 mt-8">
+        {%- comment -%}
+          以前はセクション最上部の枠へのリンクになっており、実際の予約
+          フォーム(カレンダー)まで届かなかったため、フォームのidへ
+          直接ジャンプするよう修正。
+        {%- endcomment -%}
+        {% if is_instant %}
+          <a href="#plan-reserve-form" class="px-8 py-3 rounded-full font-medium text-sm text-white transition hover:opacity-80" style="background-color:#B8860B;">{{ section.settings.reserve_button_label_instant | default: '空き状況を確認して予約する' }}</a>
+        {% else %}
+          <a href="#plan-request-form" class="px-8 py-3 rounded-full font-medium text-sm text-white transition hover:opacity-80" style="background-color:#B8860B;">{{ section.settings.reserve_button_label_request | default: '希望日時をリクエストする' }}</a>
+        {% endif %}
+        {% if section.settings.reserve_cta_secondary != blank %}
+          <a href="{{ section.settings.reserve_url_secondary }}" class="px-8 py-3 rounded-full font-medium text-sm border border-white transition hover:opacity-70">{{ section.settings.reserve_cta_secondary }}</a>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+</div>
+
+{% schema %}
+{
+  "name": "商品プランページ",
+  "settings": [
+    { "type": "paragraph", "content": "以下はテンプレートを複製せず複数の商品で共有する場合、商品ごとの内容は下の設定ではなく商品のメタフィールド(custom.plan_*)で管理してください。詳細はdocs/product-plan-metafields-setup.mdを参照。ここの設定はメタフィールド未設定時のフォールバックとして使われます。" },
+    { "type": "image_picker", "id": "hero_img", "label": "ヒーロー画像（空欄で商品メイン画像）" },
+    { "type": "text", "id": "hero_img_position", "label": "ヒーロー画像位置", "default": "object-center" },
+    { "type": "text", "id": "hero_eyebrow", "label": "ヒーロー英字見出し" },
+    { "type": "text", "id": "hero_title", "label": "ヒーロー見出し（空欄で商品名）" },
+    { "type": "textarea", "id": "hero_lede", "label": "ヒーローリード文" },
+    { "type": "color", "id": "hero_text_color", "label": "ヒーロー文字色", "default": "#ffffff", "info": "背景画像が明るくて文字が読みづらい場合はここで色を変更してください（初期値は白）。" },
+
+    { "type": "text", "id": "overview_eyebrow", "label": "概要 英字見出し", "default": "PLAN OVERVIEW" },
+    { "type": "text", "id": "overview_title", "label": "概要 見出し" },
+
+    { "type": "text", "id": "price_note", "label": "価格の注記", "default": "税込 / 2名様" },
+    { "type": "textarea", "id": "price_cancel_note", "label": "キャンセル規定" },
+    { "type": "text", "id": "reserve_button_label_instant", "label": "「即予約」ボタン文言", "default": "空き状況を確認して予約する" },
+    { "type": "text", "id": "reserve_button_label_request", "label": "「リクエスト予約」ボタン文言", "default": "希望日時をリクエストする" },
+    { "type": "textarea", "id": "request_explainer", "label": "リクエスト予約の説明文" },
+    { "type": "url", "id": "fallback_url", "label": "リクエスト予約ボタンのリンク先（予約アプリ未設置時）" },
+    { "type": "checkbox", "id": "hide_default_submit", "label": "標準ボタンを非表示にする", "info": "予約アプリのブロック自体に送信ボタンがある場合はON。", "default": false },
+
+    { "type": "text", "id": "included_title", "label": "含まれるもの 見出し", "default": "含まれるもの" },
+    { "type": "textarea", "id": "included_list", "label": "含まれるもの（1行1項目）" },
+    { "type": "text", "id": "excluded_title", "label": "含まれないもの 見出し", "default": "含まれないもの" },
+    { "type": "textarea", "id": "excluded_list", "label": "含まれないもの（1行1項目）" },
+
+    { "type": "checkbox", "id": "show_options", "label": "オプションを表示する", "default": true },
+    { "type": "text", "id": "options_eyebrow", "label": "オプション 英字見出し", "default": "OPTIONS" },
+    { "type": "text", "id": "options_title", "label": "オプション 見出し", "default": "オプション" },
+
+    { "type": "checkbox", "id": "show_dress", "label": "衣裳導線を表示する", "default": true },
+    { "type": "image_picker", "id": "dress_img", "label": "衣裳 画像" },
+    { "type": "text", "id": "dress_img_position", "label": "衣裳画像位置", "default": "object-center" },
+    { "type": "text", "id": "dress_eyebrow", "label": "衣裳 英字見出し", "default": "DRESS & TUXEDO" },
+    { "type": "text", "id": "dress_title", "label": "衣裳 見出し", "default": "こだわりの衣裳" },
+    { "type": "textarea", "id": "dress_desc", "label": "衣裳 本文" },
+    { "type": "text", "id": "dress_btn_text", "label": "衣裳 ボタン文言", "default": "衣裳一覧を見る" },
+    { "type": "url", "id": "dress_btn_url", "label": "衣裳 ボタンリンク先" },
+
+    { "type": "text", "id": "gallery_eyebrow", "label": "ギャラリー 英字見出し", "default": "GALLERY" },
+    { "type": "text", "id": "gallery_title", "label": "ギャラリー 見出し", "default": "撮影イメージ" },
+
+    { "type": "text", "id": "schedule_eyebrow", "label": "スケジュール 英字見出し", "default": "SCHEDULE" },
+    { "type": "text", "id": "schedule_title", "label": "スケジュール 見出し", "default": "撮影当日のスケジュール例" },
+
+    { "type": "text", "id": "faq_eyebrow", "label": "FAQ 英字見出し", "default": "FAQ" },
+    { "type": "text", "id": "faq_title", "label": "FAQ 見出し", "default": "よくあるご質問" },
+
+    { "type": "checkbox", "id": "show_notes", "label": "注意事項を表示する", "default": true },
+    { "type": "text", "id": "notes_title", "label": "注意事項 見出し", "default": "注意事項・ご案内" },
+
+    { "type": "text", "id": "reserve_eyebrow", "label": "最後のCTA 英字見出し", "default": "RESERVATION" },
+    { "type": "text", "id": "reserve_title", "label": "最後のCTA 見出し（空欄で商品名＋を予約する）" },
+    { "type": "textarea", "id": "reserve_desc", "label": "最後のCTA 本文" },
+    { "type": "text", "id": "reserve_cta_secondary", "label": "最後のCTA サブボタン文言" },
+    { "type": "url", "id": "reserve_url_secondary", "label": "最後のCTA サブボタンリンク先" }
+  ],
+  "blocks": [
+    {
+      "type": "gallery_image",
+      "name": "ギャラリー画像（メタフィールド未使用時のみ）",
+      "settings": [
+        { "type": "image_picker", "id": "image", "label": "画像" },
+        { "type": "text", "id": "img_position", "label": "画像位置", "default": "object-center" }
+      ]
+    },
+    {
+      "type": "tag",
+      "name": "特徴タグ（商品タグ未使用時のみ）",
+      "settings": [{ "type": "text", "id": "title", "label": "文言", "default": "ダブルカメラマン" }]
+    },
+    {
+      "type": "option",
+      "name": "オプション（メタフィールド未使用時のみ）",
+      "settings": [
+        { "type": "text", "id": "title", "label": "名称", "default": "送迎付きプラン" },
+        { "type": "text", "id": "price", "label": "価格表記", "default": "+¥12,000" }
+      ]
+    },
+    {
+      "type": "schedule",
+      "name": "スケジュール（メタフィールド未使用時のみ）",
+      "settings": [
+        { "type": "text", "id": "time", "label": "時刻", "default": "8:00" },
+        { "type": "text", "id": "desc", "label": "内容", "default": "サロンにてお仕度開始" }
+      ]
+    },
+    {
+      "type": "faq",
+      "name": "FAQ（メタフィールド未使用時のみ）",
+      "settings": [
+        { "type": "text", "id": "question", "label": "質問", "default": "質問文をここに入力" },
+        { "type": "textarea", "id": "answer", "label": "回答" }
+      ]
+    },
+    {
+      "type": "note",
+      "name": "注意事項（メタフィールド未使用時のみ）",
+      "settings": [
+        { "type": "text", "id": "title", "label": "見出し（任意）" },
+        { "type": "textarea", "id": "text", "label": "本文" }
+      ]
+    },
+    { "type": "@app" }
+  ],
+  "max_blocks": 50
+}
+{% endschema %}

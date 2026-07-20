@@ -1,0 +1,64 @@
+{
+  "sections": {
+    "faq-hero": {
+      "type": "page-hero",
+      "settings": {
+        "eyebrow": "FAQ",
+        "lede": "ご予約から撮影、衣裳、お支払いまで。よくいただくご質問にお答えします。"
+      }
+    },
+    "faq-full": {
+      "type": "faq-accordion",
+      "settings": {
+        "heading": "よくあるご質問",
+        "background": "white",
+        "width": "860"
+      },
+      "blocks": {
+        "cat-reservation": { "type": "category", "settings": { "label": "Reservation", "sub_heading": "ご予約について" } },
+        "q-1": { "type": "qa", "settings": { "question": "「即予約」と「リクエスト予約」の違いは何ですか？", "answer": "<p>「即予約」は空き枠をシステム上で確認でき、Appointoで日時を選んでそのままカートに進み、決済完了と同時にご予約が確定するプランです。「リクエスト予約」は希望日時を送信いただいたうえで、現地手配先（チャペル・古城・リゾートなど）の空き状況を手配課が確認し、予約を確定するプランです。いずれの場合も、お客様への追加のご連絡・接客は基本的に発生しません。</p>" } },
+        "q-2": { "type": "qa", "settings": { "question": "予約から撮影まで、どのくらいの期間が必要ですか？", "answer": "<p>試着・衣裳決定・渡航準備を含め、目安として2〜4ヶ月前のご予約をおすすめしています。繁忙期（大型連休・年末年始）は早めのご相談が安心です。</p>" } },
+        "q-3": { "type": "qa", "settings": { "question": "キャンセル・日程変更はできますか？", "answer": "<p>予約確定後にお送りするご案内書に、キャンセルポリシーおよび日程変更の条件を記載しています。撮影日が近づくほどキャンセル料が発生する場合がありますので、事前にご確認ください。</p>" } },
+
+        "cat-shoot": { "type": "category", "settings": { "label": "Photo Shoot", "sub_heading": "撮影について" } },
+        "q-4": { "type": "qa", "settings": { "question": "雨天時はどうなりますか？", "answer": "<p>短時間の雨であれば時間をずらして撮影を続行します。長時間の悪天候の場合は、屋内ロケーションへの振替または日程変更でご案内します。詳細は各撮影地ページをご確認ください。</p>" } },
+        "q-5": { "type": "qa", "settings": { "question": "撮影データはいつ、どのように届きますか？", "answer": "<p>撮影地・プランにより異なりますが、目安として撮影から3〜8週間でオンラインギャラリー形式にて納品いたします。ダウンロードしてお使いいただけます。</p>" } },
+        "q-6": { "type": "qa", "settings": { "question": "両親や友人も同行して撮影できますか？", "answer": "<p>プランはお二人での撮影が基本ですが、ご家族・ご友人の同行撮影を含むオプションもご用意できます。詳しくはお問い合わせください。</p>" } },
+
+        "cat-dress": { "type": "category", "settings": { "label": "Dress", "sub_heading": "衣裳について" } },
+        "q-7": { "type": "qa", "settings": { "question": "ドレスは現地で借りるのですか、日本から持っていくのですか？", "answer": "<p>日本全国のフォーシスアンドカンパニー提携サロンで試着・選定した衣裳を、そのまま撮影地までお持ちいただきます。現地レンタルとは異なり、サイズも着心地も事前に確認済みです。</p>" } },
+        "q-8": { "type": "qa", "settings": { "question": "衣裳のサイズが合わなかった場合は？", "answer": "<p>試着時に採寸・お直しまで対応いたしますので、当日のサイズ違いのご心配はほとんどありません。万一の場合も、サロンスタッフが最終調整をいたします。</p>" } },
+        "q-9": { "type": "qa", "settings": { "question": "衣裳を追加で着たい場合はどうすればいいですか？", "answer": "<p>各プランのオプションから衣裳追加をお選びいただけます。プレミアム・ラグジュアリー・ロイヤルプランは標準で2着までのチェンジに対応しています。</p>" } },
+
+        "cat-price": { "type": "category", "settings": { "label": "Price & Payment", "sub_heading": "料金・お支払いについて" } },
+        "q-10": { "type": "qa", "settings": { "question": "表示価格には何が含まれていますか？", "answer": "<p>撮影料・カメラマン・衣裳一式・ヘアメイク・データ納品が基本的に含まれます。航空券・宿泊費・現地送迎などは含まれない場合が多いため、各商品ページの「含まれるもの／含まれないもの」をご確認ください。</p>" } },
+        "q-11": { "type": "qa", "settings": { "question": "お支払い方法は選べますか？", "answer": "<p>クレジットカード・銀行振込に対応しています。詳細は予約確定時にご案内します。</p>" } },
+
+        "cat-travel": { "type": "category", "settings": { "label": "Travel", "sub_heading": "渡航について" } },
+        "q-12": { "type": "qa", "settings": { "question": "ビザは必要ですか？", "answer": "<p>渡航先により異なります。ハワイ・アメリカ方面はESTA、ロンドン・イギリス方面はETAの事前申請が必要です。ダナン・ベトナム方面は短期滞在であればビザ免除の場合があります。詳しくは各撮影地ページをご確認ください。</p>" } },
+        "q-13": { "type": "qa", "settings": { "question": "現地で言葉が通じるか不安です。", "answer": "<p>プランにより、日本語対応スタッフの同行または通訳手配が可能です。各商品ページの「含まれるもの」でご確認いただけます。</p>" } },
+        "q-14": { "type": "qa", "settings": { "question": "ハネムーンと組み合わせることはできますか？", "answer": "<p>可能です。撮影は1日で完結するため、前後の日程を自由に組み合わせてハネムーンをお楽しみいただけます。</p>" } }
+      },
+      "block_order": [
+        "cat-reservation", "q-1", "q-2", "q-3",
+        "cat-shoot", "q-4", "q-5", "q-6",
+        "cat-dress", "q-7", "q-8", "q-9",
+        "cat-price", "q-10", "q-11",
+        "cat-travel", "q-12", "q-13", "q-14"
+      ]
+    },
+    "faq-cta": {
+      "type": "cta-band",
+      "settings": {
+        "eyebrow": "Still have questions?",
+        "heading": "解決しない場合は、お気軽にご相談ください。"
+      },
+      "blocks": {
+        "cta-1": { "type": "button", "settings": { "label": "相談する", "url": "/pages/about#contact", "style": "outline" } },
+        "cta-2": { "type": "button", "settings": { "label": "30秒診断する", "url": "/pages/diagnosis", "style": "gold" } }
+      },
+      "block_order": ["cta-1", "cta-2"]
+    }
+  },
+  "order": ["faq-hero", "faq-full", "faq-cta"]
+}

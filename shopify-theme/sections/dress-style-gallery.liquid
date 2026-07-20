@@ -1,0 +1,75 @@
+{%- comment -%}
+  dress-style-gallery — alternating photo+text blocks for each dress
+  silhouette/style (プリンセス・マーメイド・Aライン・エンパイア, etc).
+  Each block carries an "id"（アンカー）so the dress diagnosis result
+  can deep-link straight to the matching style
+  (/pages/dress-gallery#princess).
+{%- endcomment -%}
+{%- if section.settings.show_section and section.blocks.size > 0 -%}
+  <section class="{% if section.settings.background == 'ivory' %}bg-ivory{% endif %}">
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="eyebrow">{{ section.settings.eyebrow }}</p>
+        <h2>{{ section.settings.heading }}</h2>
+        <div class="divider-gold"></div>
+        {%- if section.settings.body != blank -%}<p>{{ section.settings.body }}</p>{%- endif -%}
+      </div>
+      {%- for block in section.blocks -%}
+        {%- assign is_odd = forloop.index0 | modulo: 2 -%}
+        <div id="{{ block.settings.anchor }}" class="split{% if is_odd == 1 %} reverse{% endif %}" style="margin-top:{% if forloop.first %}0{% else %}72px{% endif %};scroll-margin-top:100px;" {{ block.shopify_attributes }}>
+          <div class="split-media reveal">
+            {%- if block.settings.image -%}
+              <img src="{{ block.settings.image | image_url: width: 900 }}" alt="{{ block.settings.image.alt | default: block.settings.title | escape }}" loading="lazy" width="900" height="1125">
+            {%- endif -%}
+          </div>
+          <div class="reveal reveal-1">
+            <h3 style="font-size:clamp(1.5rem,3vw,2rem);font-family:var(--font-serif);">{{ block.settings.title }}</h3>
+            <div class="divider-gold" style="margin-left:0;"></div>
+            {%- if block.settings.description != blank -%}<p>{{ block.settings.description }}</p>{%- endif -%}
+            {%- if block.settings.suits != blank -%}
+              <p class="mt-40" style="font-size:0.85rem;color:var(--gold-dark);letter-spacing:0.03em;">こんな方に：{{ block.settings.suits }}</p>
+            {%- endif -%}
+          </div>
+        </div>
+      {%- endfor -%}
+    </div>
+  </section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "ドレスの系統",
+  "settings": [
+    { "type": "checkbox", "id": "show_section", "label": "表示する", "default": true },
+    { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "Dress Styles" },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "ドレスの系統" },
+    { "type": "richtext", "id": "body", "label": "本文" },
+    { "type": "select", "id": "background", "label": "背景", "options": [
+        { "value": "white", "label": "白" },
+        { "value": "ivory", "label": "アイボリー" }
+      ], "default": "white" }
+  ],
+  "blocks": [
+    {
+      "type": "style",
+      "name": "スタイル",
+      "settings": [
+        { "type": "text", "id": "anchor", "label": "アンカーID（半角英数字）", "default": "princess", "info": "診断結果からのリンク（例：/pages/dress-gallery#princess）に使用します。" },
+        { "type": "image_picker", "id": "image", "label": "画像" },
+        { "type": "text", "id": "title", "label": "スタイル名", "default": "プリンセスライン" },
+        { "type": "richtext", "id": "description", "label": "説明" },
+        { "type": "text", "id": "suits", "label": "こんな方に" }
+      ]
+    }
+  ],
+  "max_blocks": 8,
+  "default": {
+    "blocks": [
+      { "type": "style", "settings": { "anchor": "princess", "title": "プリンセスライン" } },
+      { "type": "style", "settings": { "anchor": "mermaid", "title": "マーメイドライン" } },
+      { "type": "style", "settings": { "anchor": "aline", "title": "Aライン" } },
+      { "type": "style", "settings": { "anchor": "empire", "title": "エンパイアライン" } }
+    ]
+  }
+}
+{% endschema %}

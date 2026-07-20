@@ -1,0 +1,102 @@
+{%- comment -%}
+  destination-hero — 都市ページ(/pages/{slug})のヒーロー。
+  page.handle と Destination metaobjectの `slug` フィールドを照合して
+  対象の都市を1件特定する。Shopifyのセクションは相互にスコープを
+  共有しないため、この1行のlookupはdestination-intro / spots / plans /
+  faq の各セクションでも同様に繰り返している。
+{%- endcomment -%}
+{%- comment -%}
+  where: 'slug.value', page.handle はこの環境ではネストしたプロパティの
+  絞り込みが効かないことがあるため、確実に動く明示的なfor+ifに置き換え。
+{%- endcomment -%}
+{%- assign all_destination_entries = shop.metaobjects.destination.values -%}
+{%- assign destination = blank -%}
+{%- for d in all_destination_entries -%}
+  {%- if d.slug.value == page.handle -%}{%- assign destination = d -%}{%- endif -%}
+{%- endfor -%}
+
+{%- comment -%}
+  共通ヘッダー統一のため、このページ群は独自レイアウト(theme.destinations)
+  を使わず通常のtheme.liquidで表示する。専用CSS/JSをここで読み込み、
+  .destinations-scopeクラスはdivで囲む代わりにJSでbodyに付与する
+  (セクション単体でHTMLタグの対応が閉じるようにするため)。
+{%- endcomment -%}
+{{ 'destinations.css' | asset_url | stylesheet_tag }}
+<script src="{{ 'destinations.js' | asset_url }}" defer></script>
+<script>document.body.classList.add('destinations-scope');</script>
+
+{%- if destination -%}
+  {%- capture region_label -%}{% render 'destination-region-label', region_key: destination.region.value %}{%- endcapture -%}
+  {%- assign region_label = region_label | strip -%}
+  {%- render 'destination-schema', destination: destination, region_label: region_label -%}
+
+  <section class="dst-hero dst-hero--tall">
+    <div class="dst-hero-media" style="background-color:#1a1a1a;">
+      {%- if destination.hero_image.value -%}
+        <img
+          src="{{ destination.hero_image.value | image_url: width: 2400 }}"
+          srcset="{{ destination.hero_image.value | image_url: width: 1200 }} 1200w, {{ destination.hero_image.value | image_url: width: 1800 }} 1800w, {{ destination.hero_image.value | image_url: width: 2400 }} 2400w"
+          sizes="100vw"
+          alt="{{ destination.hero_image.value.alt | default: destination.name_ja.value | escape }}"
+          loading="eager"
+          fetchpriority="high"
+          width="2400" height="1350"
+          style="object-position: {{ section.settings.img_position }};"
+        >
+      {%- endif -%}
+    </div>
+    <div class="dst-hero-content">
+      <p class="dst-eyebrow dst-reveal" style="color:{{ section.settings.eyebrow_color }};text-shadow: 0 2px 10px rgba(0,0,0,0.5);">{{ destination.country.value }} ／ {{ destination.name_en.value }}</p>
+      <h1 class="dst-reveal dst-reveal-1" style="color:{{ section.settings.heading_color }};text-shadow: 0 2px 12px rgba(0,0,0,0.6);">{% render 'safe-linebreak', text: destination.name_ja.value %}</h1>
+      <p class="dst-lede dst-reveal dst-reveal-2" style="color:{{ section.settings.lede_color }};text-shadow: 0 2px 8px rgba(0,0,0,0.5);">{{ destination.description.value | strip_html | truncate: 90 }}</p>
+    </div>
+  </section>
+
+  <nav class="dst-hero-breadcrumb dst-text-center" aria-label="breadcrumb" style="position:static;padding:22px var(--dst-gutter);color:var(--dst-text-muted);">
+    <a href="{{ routes.root_url }}">TOP</a><span>／</span>
+    <a href="/pages/destinations">撮影地一覧</a><span>／</span>
+    <a href="/pages/{{ destination.region.value | replace: '_', '-' }}">{{ region_label }}</a><span>／</span>
+    <span>{{ destination.name_ja.value }}</span>
+    {%- comment -%}
+      「都市 プラン一覧」セクション(id="dst-plans")はブロック(プラン商品)が
+      1つも無い間はそもそも描画されない。hero側からは他セクションのブロック
+      数を直接知る手段が無いため、JSでDOM上に#dst-plansが実在するかを
+      見てからリンクの表示/非表示を切り替える。
+    {%- endcomment -%}
+    <a href="#dst-plans" id="dst-plans-jumplink" class="ml-2" style="color:#B8860B;font-weight:600;display:none;">プランを見る ↓</a>
+  </nav>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      var link = document.getElementById('dst-plans-jumplink');
+      if (link && document.getElementById('dst-plans')) {
+        link.style.display = 'inline';
+      }
+    });
+  </script>
+{%- else -%}
+  <section class="dst-text-center" style="padding-top:160px;">
+    <div class="dst-container">
+      <h1>撮影地が見つかりませんでした</h1>
+      <p>お探しの撮影地ページは存在しないか、削除された可能性があります。</p>
+      <a href="/pages/destinations" class="dst-btn dst-btn-outline-dark" style="margin-top:24px;">撮影地一覧へ戻る ＞</a>
+    </div>
+  </section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "都市 ヒーロー",
+  "settings": [
+    { "type": "select", "id": "img_position", "label": "画像トリミング位置", "default": "center",
+      "options": [
+        { "value": "top", "label": "上" },
+        { "value": "center", "label": "中央" },
+        { "value": "bottom", "label": "下" }
+      ]
+    },
+    { "type": "color", "id": "eyebrow_color", "label": "サブタイトル色", "default": "#ffffff" },
+    { "type": "color", "id": "heading_color", "label": "タイトル色", "default": "#ffffff" },
+    { "type": "color", "id": "lede_color", "label": "リード文色", "default": "#ffffff" }
+  ]
+}
+{% endschema %}

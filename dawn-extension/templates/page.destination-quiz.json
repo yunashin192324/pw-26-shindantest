@@ -1,0 +1,8 @@
+{
+  "sections": {
+    "destination-quiz": {
+      "type": "destination-quiz"
+    }
+  },
+  "order": ["destination-quiz"]
+}

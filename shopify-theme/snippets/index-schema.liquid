@@ -1,0 +1,29 @@
+{%- comment -%}
+  index-schema — TravelAgency JSON-LD for the TOP page. areaServed is
+  built from every Collection in the store (excluding the automatic
+  "frontpage" one), so it grows automatically as new destinations are
+  added in Admin — no code or section wiring required.
+{%- endcomment -%}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TravelAgency",
+  "name": {{ shop.name | json }},
+  "url": {{ shop.url | append: routes.root_url | json }},
+  {%- if settings.favicon %}
+  "logo": {{ settings.favicon | image_url: width: 256 | prepend: "https:" | json }},
+  {%- endif %}
+  "description": {{ page_description | default: shop.description | json }},
+  "areaServed": [
+    {%- assign printed_any = false -%}
+    {%- for area in collections -%}
+      {%- unless area.handle == 'frontpage' or area.handle == 'all' -%}
+        {%- if printed_any -%},{%- endif -%}
+        { "@type": "Place", "name": {{ area.title | json }} }
+        {%- assign printed_any = true -%}
+      {%- endunless -%}
+    {%- endfor -%}
+  ],
+  "brand": { "@type": "Brand", "name": {{ shop.name | json }} }
+}
+</script>

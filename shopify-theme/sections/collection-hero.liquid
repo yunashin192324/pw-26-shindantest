@@ -1,0 +1,44 @@
+{%- comment -%}
+  collection-hero — destination collection page hero. Same .page-hero
+  component as other sub-pages; content bottom-left.
+{%- endcomment -%}
+{%- render 'collection-schema', collection: collection -%}
+
+<section class="page-hero">
+  <div class="hero-media">
+    {%- assign hero_image = section.settings.background_image | default: collection.featured_image | default: collection.image -%}
+    {%- if hero_image -%}
+      <img
+        src="{{ hero_image | image_url: width: 2400 }}"
+        srcset="{{ hero_image | image_url: width: 1200 }} 1200w, {{ hero_image | image_url: width: 1800 }} 1800w, {{ hero_image | image_url: width: 2400 }} 2400w"
+        sizes="100vw"
+        alt="{{ hero_image.alt | default: collection.title | escape }}"
+        loading="eager"
+        fetchpriority="high"
+        width="2400" height="1350"
+      >
+    {%- endif -%}
+  </div>
+  <div class="hero-content">
+    {%- if section.settings.eyebrow != blank -%}<p class="eyebrow">{{ section.settings.eyebrow }}</p>{%- endif -%}
+    <h1>{{ collection.title }}</h1>
+    {%- if section.settings.lede != blank -%}
+      <p class="lede">{{ section.settings.lede }}</p>
+    {%- elsif collection.description != blank -%}
+      <p class="lede">{{ collection.description | strip_html | truncate: 90 }}</p>
+    {%- endif -%}
+  </div>
+</section>
+
+{% render 'collection-breadcrumb', collection: collection %}
+
+{% schema %}
+{
+  "name": "撮影地ヒーロー",
+  "settings": [
+    { "type": "image_picker", "id": "background_image", "label": "背景画像", "info": "未設定の場合はコレクション画像を使用します。" },
+    { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "" },
+    { "type": "text", "id": "lede", "label": "リード文", "info": "未入力の場合はコレクションの説明文を短く表示します。" }
+  ]
+}
+{% endschema %}

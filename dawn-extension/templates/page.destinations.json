@@ -1,0 +1,35 @@
+{
+  "sections": {
+    "destinations-hero": {
+      "type": "destinations-hero",
+      "settings": {
+        "eyebrow": "DESTINATIONS",
+        "heading": "世界中の撮影地から\nおふたりだけの物語を。",
+        "description": "120以上の撮影地から、おふたりらしい一枚が生まれる場所を見つけてください。",
+        "diagnosis_label": "30秒診断",
+        "search_label": "撮影地を見る"
+      }
+    },
+    "destinations-browse": {
+      "type": "destinations-browse",
+      "settings": {
+        "heading": "撮影地から選ぶ",
+        "description": "都市名・国・地域・テーマから絞り込めます。",
+        "search_placeholder": "都市名・国名・テーマで検索（例：パリ、ハワイ、ビーチ）"
+      }
+    },
+    "destinations-cta": {
+      "type": "destinations-cta",
+      "settings": {
+        "subtle": true,
+        "heading": "あなたに合う撮影地を探す",
+        "button_label": "30秒診断"
+      }
+    }
+  },
+  "order": [
+    "destinations-hero",
+    "destinations-browse",
+    "destinations-cta"
+  ]
+}

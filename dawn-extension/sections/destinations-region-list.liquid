@@ -1,0 +1,67 @@
+{%- comment -%}
+  destinations-region-list — 「地域から選ぶ」。
+  12地域は仕様書の指示によりMetaobject化せずコード側で固定
+  (snippets/destination-region-label.liquid が唯一の情報源)。
+  各地域最大8都市(sort_order昇順)、9都市以上ある場合のみ
+  「もっと見る」を該当の地域ページ(/pages/{region})へ表示する。
+{%- endcomment -%}
+{%- assign region_keys = 'hawaii,micronesia,south_pacific,indian_ocean,oceania,asia,middle_east,europe,north_america,south_america,africa,japan' | split: ',' -%}
+{%- assign all_destinations = shop.metaobjects.destination.values -%}
+
+<section id="dst-regions" class="dst-bg-ivory">
+  <div class="dst-container">
+    <div class="dst-section-head dst-reveal">
+      <p class="dst-eyebrow">Region</p>
+      <h2>{{ section.settings.heading }}</h2>
+      <hr class="dst-divider">
+      <p>{{ section.settings.description }}</p>
+    </div>
+
+    {%- for region_key in region_keys -%}
+      {%- assign region_handle = region_key | replace: '_', '-' -%}
+      {%- capture region_label -%}{% render 'destination-region-label', region_key: region_key %}{%- endcapture -%}
+      {%- assign region_label = region_label | strip -%}
+
+      {%- comment -%}
+        where: 'region.value', region_key のようなネストしたプロパティ
+        への絞り込みが環境によって効かないケースがあったため、確実に
+        動くよう明示的なfor+ifでカウント・抽出する方式にしている。
+      {%- endcomment -%}
+      {%- assign match_count = 0 -%}
+      {%- for d in all_destinations -%}
+        {%- if d.region.value == region_key -%}{%- assign match_count = match_count | plus: 1 -%}{%- endif -%}
+      {%- endfor -%}
+
+      {%- if match_count > 0 -%}
+        <div class="dst-region-block">
+          <div class="dst-region-block-head dst-reveal">
+            <h3>{{ region_label }}</h3>
+            {%- if match_count > 8 -%}
+              <a href="/pages/{{ region_handle }}" class="dst-region-more">もっと見る（{{ match_count }}件）＞</a>
+            {%- endif -%}
+          </div>
+          <div class="dst-region-grid">
+            {%- assign shown_count = 0 -%}
+            {%- for d in all_destinations -%}
+              {%- if d.region.value == region_key and shown_count < 8 -%}
+                {% render 'destination-card', destination: d %}
+                {%- assign shown_count = shown_count | plus: 1 -%}
+              {%- endif -%}
+            {%- endfor -%}
+          </div>
+        </div>
+      {%- endif -%}
+    {%- endfor -%}
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "撮影地一覧 地域から選ぶ",
+  "settings": [
+    { "type": "text", "id": "heading", "label": "見出し", "default": "地域から選ぶ" },
+    { "type": "textarea", "id": "description", "label": "説明文", "default": "世界12のエリアから撮影地をご覧いただけます。" }
+  ],
+  "presets": [{ "name": "撮影地一覧 地域から選ぶ" }]
+}
+{% endschema %}

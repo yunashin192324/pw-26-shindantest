@@ -1,0 +1,58 @@
+{%- comment -%}
+  product-locations — ⑦ ロケーション紹介. One alternating .split block
+  per spot: photo, description, feature tags, best time of day.
+{%- endcomment -%}
+{%- if section.settings.show_section and section.blocks.size > 0 -%}
+  <section>
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="eyebrow">Locations</p>
+        <h2>{{ section.settings.heading }}</h2>
+        <div class="divider-gold"></div>
+      </div>
+      {%- for block in section.blocks -%}
+        {%- assign is_odd = forloop.index0 | modulo: 2 -%}
+        <div class="split{% if is_odd == 1 %} reverse{% endif %}" style="margin-top:{% if forloop.first %}0{% else %}72px{% endif %};" {{ block.shopify_attributes }}>
+          <div class="split-media reveal">
+            {%- if block.settings.image -%}
+              <img src="{{ block.settings.image | image_url: width: 900 }}" alt="{{ block.settings.image.alt | default: block.settings.title | escape }}" loading="lazy" width="900" height="1125">
+            {%- endif -%}
+          </div>
+          <div class="reveal reveal-1">
+            {%- if block.settings.eyebrow != blank -%}<p class="eyebrow">{{ block.settings.eyebrow }}</p>{%- endif -%}
+            <h3 style="font-size:clamp(1.5rem,3vw,2rem);font-family:var(--font-serif);">{{ block.settings.title }}</h3>
+            <div class="divider-gold" style="margin-left:0;"></div>
+            {%- if block.settings.description != blank -%}<p>{{ block.settings.description }}</p>{%- endif -%}
+            {%- if block.settings.best_time != blank -%}
+              <p class="mt-40" style="font-size:0.85rem;color:var(--gold-dark);letter-spacing:0.03em;">おすすめ時間帯：{{ block.settings.best_time }}</p>
+            {%- endif -%}
+          </div>
+        </div>
+      {%- endfor -%}
+    </div>
+  </section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "ロケーション紹介",
+  "settings": [
+    { "type": "checkbox", "id": "show_section", "label": "表示する", "default": true },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "ロケーション紹介" }
+  ],
+  "blocks": [
+    {
+      "type": "spot",
+      "name": "スポット",
+      "settings": [
+        { "type": "image_picker", "id": "image", "label": "画像" },
+        { "type": "text", "id": "eyebrow", "label": "英字見出し" },
+        { "type": "text", "id": "title", "label": "スポット名", "default": "スポット名" },
+        { "type": "richtext", "id": "description", "label": "説明・特徴" },
+        { "type": "text", "id": "best_time", "label": "おすすめ時間帯", "default": "朝一番（日の出後1〜2時間）" }
+      ]
+    }
+  ],
+  "max_blocks": 6
+}
+{% endschema %}

@@ -1,0 +1,60 @@
+{%- comment -%}
+  destinations-theme-list — 「テーマから選ぶ」。destinations-region-list.liquid
+  と同じ考え方で、14テーマはMetaobject化せずコード側で固定
+  (snippets/destination-theme-label.liquid が唯一の情報源)。
+  1都市が複数テーマに該当する場合、該当する全テーマのタイルに重複して
+  表示される（region分けと違い排他ではないため）。各テーマ最大6都市。
+{%- endcomment -%}
+{%- assign theme_keys = 'beach,streets,palace,heritage,view,lake,desert,balloon,church,museum,library,resort,sunset,overwater' | split: ',' -%}
+{%- assign all_destinations = shop.metaobjects.destination.values -%}
+
+<section>
+  <div class="dst-container">
+    <div class="dst-section-head dst-reveal">
+      <p class="dst-eyebrow">Theme</p>
+      <h2>{{ section.settings.heading }}</h2>
+      <hr class="dst-divider">
+      <p>{{ section.settings.description }}</p>
+    </div>
+
+    {%- for theme_key in theme_keys -%}
+      {%- capture theme_label -%}{% render 'destination-theme-label', theme_key: theme_key %}{%- endcapture -%}
+      {%- assign theme_label = theme_label | strip -%}
+
+      {%- assign match_count = 0 -%}
+      {%- for d in all_destinations -%}
+        {%- assign d_themes = d.themes.value -%}
+        {%- if d_themes contains theme_key -%}{%- assign match_count = match_count | plus: 1 -%}{%- endif -%}
+      {%- endfor -%}
+
+      {%- if match_count > 0 -%}
+        <div class="dst-region-block">
+          <div class="dst-region-block-head dst-reveal">
+            <h3>{{ theme_label }}</h3>
+          </div>
+          <div class="dst-region-grid">
+            {%- assign shown_count = 0 -%}
+            {%- for d in all_destinations -%}
+              {%- assign d_themes = d.themes.value -%}
+              {%- if d_themes contains theme_key and shown_count < 6 -%}
+                {% render 'destination-card', destination: d %}
+                {%- assign shown_count = shown_count | plus: 1 -%}
+              {%- endif -%}
+            {%- endfor -%}
+          </div>
+        </div>
+      {%- endif -%}
+    {%- endfor -%}
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "撮影地一覧 テーマから選ぶ",
+  "settings": [
+    { "type": "text", "id": "heading", "label": "見出し", "default": "テーマから選ぶ" },
+    { "type": "textarea", "id": "description", "label": "説明文", "default": "叶えたい雰囲気から撮影地を探せます。" }
+  ],
+  "presets": [{ "name": "撮影地一覧 テーマから選ぶ" }]
+}
+{% endschema %}

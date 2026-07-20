@@ -1,0 +1,93 @@
+{%- comment -%}
+  main-cart — standard Shopify cart page. Native `{% form 'cart' %}`
+  (quantity update + line-item removal + checkout button), styled with
+  the existing design system. This is the step between "Appointoで
+  日時選択" and "Shopify標準チェックアウト" in the booking flow — every
+  line item added by the product-booking section (or by Appointo's own
+  block) lands here before checkout, and shows the 予約タイプ /
+  希望日時 line-item properties Appointo/the booking form attach.
+{%- endcomment -%}
+<section>
+  <div class="container">
+    <div class="section-head reveal" style="text-align:left;max-width:none;margin-bottom:40px;">
+      <p class="eyebrow">Cart</p>
+      <h1>{{ section.settings.heading }}</h1>
+      <div class="divider-gold" style="margin-left:0;"></div>
+    </div>
+
+    {%- if cart.item_count == 0 -%}
+      <div class="cart-empty reveal">
+        <p>{{ section.settings.empty_text }}</p>
+        <div class="cta-row" style="justify-content:center;margin-top:28px;">
+          <a href="{{ section.settings.empty_button_url | default: routes.root_url }}" class="btn btn-gold">{{ section.settings.empty_button_label }}</a>
+        </div>
+      </div>
+    {%- else -%}
+      {%- form 'cart', cart, class: 'reveal' -%}
+        <div style="overflow-x:auto;">
+          <table class="cart-table">
+            <thead>
+              <tr><th></th><th>商品</th><th>数量</th><th style="text-align:right;">小計</th></tr>
+            </thead>
+            <tbody>
+              {%- for item in cart.items -%}
+                <tr class="cart-row">
+                  <td class="cart-row-media">
+                    <a href="{{ item.url }}">
+                      {%- if item.image -%}
+                        <img src="{{ item.image | image_url: width: 300 }}" alt="{{ item.image.alt | default: item.title | escape }}" loading="lazy" width="300" height="375">
+                      {%- endif -%}
+                    </a>
+                  </td>
+                  <td>
+                    <a href="{{ item.url }}" class="cart-row-title">{{ item.product.title }}</a>
+                    {%- if item.variant.title != 'Default Title' -%}
+                      <div class="cart-row-props"><div>{{ item.variant.title }}</div></div>
+                    {%- endif -%}
+                    {%- if item.properties.size > 0 -%}
+                      <div class="cart-row-props">
+                        {%- for property in item.properties -%}
+                          {%- unless property.first contains '_' or property.last == blank -%}
+                            <div>{{ property.first }}：{{ property.last }}</div>
+                          {%- endunless -%}
+                        {%- endfor -%}
+                      </div>
+                    {%- endif -%}
+                    <a href="{{ item.url_to_remove }}" class="cart-row-remove">削除</a>
+                  </td>
+                  <td>
+                    <input class="cart-qty" type="number" name="updates[{{ forloop.index0 }}]" value="{{ item.quantity }}" min="0" aria-label="数量">
+                  </td>
+                  <td class="cart-row-price">{{ item.final_line_price | money }}</td>
+                </tr>
+              {%- endfor -%}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="cart-summary">
+          <div class="cart-summary-line"><span>小計</span><span>{{ cart.item_count }}点</span></div>
+          <div class="cart-summary-line cart-summary-total"><span>合計</span><span>{{ cart.total_price | money }}</span></div>
+          <p class="note" style="margin-top:8px;">送料・手数料はチェックアウト画面で計算されます。</p>
+          <div class="cta-row" style="justify-content:flex-end;margin-top:24px;flex-wrap:wrap;">
+            <button type="submit" name="update" class="btn btn-outline-dark">カートを更新</button>
+            <button type="submit" name="checkout" class="btn btn-gold">{{ section.settings.checkout_label }}</button>
+          </div>
+        </div>
+      {%- endform -%}
+    {%- endif -%}
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "カート",
+  "settings": [
+    { "type": "text", "id": "heading", "label": "見出し", "default": "カート" },
+    { "type": "text", "id": "empty_text", "label": "空の時の文言", "default": "カートに商品がありません。" },
+    { "type": "text", "id": "empty_button_label", "label": "空の時のボタン文言", "default": "撮影地を見る" },
+    { "type": "url", "id": "empty_button_url", "label": "空の時のボタンリンク先" },
+    { "type": "text", "id": "checkout_label", "label": "チェックアウトボタン文言", "default": "レジに進む" }
+  ]
+}
+{% endschema %}

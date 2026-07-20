@@ -1,0 +1,36 @@
+{%- comment -%}
+  destination-schema — 都市ページのJSON-LD構造化データ(SEO用)。
+  Params:
+    destination  — required, Destination metaobjectの1件
+    region_label — required, snippets/destination-region-labelの出力文字列
+{%- endcomment -%}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TouristAttraction",
+  "name": {{ destination.name_ja.value | json }},
+  "description": {{ destination.description.value | strip_html | truncate: 300 | json }},
+  {%- if destination.hero_image.value %}
+  "image": [{{ destination.hero_image.value | image_url: width: 1600 | prepend: "https:" | json }}],
+  {%- endif %}
+  {%- if destination.country.value != blank %}
+  "address": {
+    "@type": "PostalAddress",
+    "addressCountry": {{ destination.country.value | json }}
+  },
+  {%- endif %}
+  "url": {{ canonical_url | json }}
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "TOP", "item": {{ shop.url | append: routes.root_url | json }} },
+    { "@type": "ListItem", "position": 2, "name": "撮影地一覧", "item": {{ shop.url | append: '/pages/destinations' | json }} },
+    { "@type": "ListItem", "position": 3, "name": {{ region_label | json }}, "item": {{ shop.url | append: '/pages/' | append: destination.region.value | replace: '_', '-' | json }} },
+    { "@type": "ListItem", "position": 4, "name": {{ destination.name_ja.value | json }}, "item": {{ canonical_url | json }} }
+  ]
+}
+</script>

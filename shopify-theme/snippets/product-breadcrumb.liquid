@@ -1,0 +1,16 @@
+{%- comment -%}
+  product-breadcrumb — .breadcrumb component for a product page.
+  Keep in sync with the BreadcrumbList in product-schema.liquid.
+
+  Params:
+    product    — required
+    collection — optional, current collection context
+{%- endcomment -%}
+{%- assign crumb_collection = collection | default: product.collections.first -%}
+<p class="breadcrumb">
+  <span><a href="{{ routes.root_url }}">TOP</a></span>
+  {%- if crumb_collection -%}
+    <span><a href="{{ crumb_collection.url }}">{{ crumb_collection.title }}</a></span>
+  {%- endif -%}
+  <span>{{ product.title }}</span>
+</p>

@@ -1,0 +1,72 @@
+{%- comment -%}
+  destinations-search — 撮影地一覧ページのキーワード検索。
+  destinations-hero.liquidの「撮影地を見る」ボタンが#dst-searchへ
+  リンクしているため、idはdst-searchで固定。
+  都市名(日本語/英語)・国名・地域・テーマで検索できる、
+  バニラJSのみのクライアントサイド絞り込み。
+{%- endcomment -%}
+{%- assign all_destinations = shop.metaobjects.destination.values -%}
+
+<section id="dst-search" class="dst-bg-ivory">
+  <div class="dst-container">
+    <div class="dst-section-head dst-reveal">
+      <p class="dst-eyebrow">Search</p>
+      <h2>{{ section.settings.heading }}</h2>
+      <hr class="dst-divider">
+      <p>{{ section.settings.description }}</p>
+    </div>
+    <div style="max-width:480px;margin:0 auto 40px;">
+      <input
+        type="text"
+        id="dst-search-input"
+        placeholder="{{ section.settings.placeholder }}"
+        style="width:100%;padding:14px 20px;border:1px solid #ddd;border-radius:999px;font-size:0.95rem;"
+        autocomplete="off"
+      >
+    </div>
+    <div class="dst-region-grid" id="dst-search-results">
+      {%- for d in all_destinations -%}
+        {%- capture theme_label_str -%}
+          {%- assign theme_list = d.themes.value -%}
+          {%- for raw_key in theme_list -%}{% render 'destination-theme-label', theme_key: raw_key | strip | downcase %} {%- endfor -%}
+        {%- endcapture -%}
+        {%- capture region_label -%}{% render 'destination-region-label', region_key: d.region.value %}{%- endcapture -%}
+        <div class="dst-search-item" data-keywords="{{ d.name_ja.value | append: ' ' | append: d.name_en.value | append: ' ' | append: d.country.value | append: ' ' | append: region_label | append: ' ' | append: theme_label_str | strip | downcase | escape }}">
+          {% render 'destination-card', destination: d %}
+        </div>
+      {%- endfor -%}
+    </div>
+    <p id="dst-search-empty" class="dst-text-center dst-text-muted" style="display:none;padding:40px 0;">該当する撮影地が見つかりませんでした。</p>
+  </div>
+</section>
+
+<script>
+  (function () {
+    var input = document.getElementById('dst-search-input');
+    var items = Array.prototype.slice.call(document.querySelectorAll('#dst-search-results .dst-search-item'));
+    var empty = document.getElementById('dst-search-empty');
+    if (!input) return;
+    input.addEventListener('input', function () {
+      var q = input.value.trim().toLowerCase();
+      var visibleCount = 0;
+      items.forEach(function (el) {
+        var match = q === '' || (el.getAttribute('data-keywords') || '').indexOf(q) !== -1;
+        el.style.display = match ? '' : 'none';
+        if (match) visibleCount++;
+      });
+      empty.style.display = visibleCount === 0 ? '' : 'none';
+    });
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "撮影地一覧 検索",
+  "settings": [
+    { "type": "text", "id": "heading", "label": "見出し", "default": "撮影地を探す" },
+    { "type": "textarea", "id": "description", "label": "説明文", "default": "都市名・国・地域・テーマから検索できます。" },
+    { "type": "text", "id": "placeholder", "label": "検索欄プレースホルダー", "default": "都市名・国名・テーマで検索" }
+  ],
+  "presets": [{ "name": "撮影地一覧 検索" }]
+}
+{% endschema %}

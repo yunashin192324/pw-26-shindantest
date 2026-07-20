@@ -1,0 +1,77 @@
+{%- comment -%}
+  product-hero — ① HERO. Full-bleed visual + name + catchcopy + price +
+  Appointo CTA + scroll cue, built on the existing .hero component.
+  Text/image settings below can all be bound to product metafields via
+  Theme Editor → "Connect dynamic source" so one shared product.json
+  template renders correctly for every destination.
+{%- endcomment -%}
+{%- if section.settings.show_section -%}
+  {%- render 'product-schema', product: product -%}
+
+  {%- assign hero_image = section.settings.background_image | default: product.featured_image -%}
+  {%- assign variant = product.selected_or_first_available_variant -%}
+  {%- assign is_instant = product.tags contains '即予約' -%}
+
+  <section class="hero">
+    <div class="hero-media">
+      {%- if hero_image -%}
+        <img
+          src="{{ hero_image | image_url: width: 2400 }}"
+          srcset="{{ hero_image | image_url: width: 1200 }} 1200w, {{ hero_image | image_url: width: 1800 }} 1800w, {{ hero_image | image_url: width: 2400 }} 2400w"
+          sizes="100vw"
+          alt="{{ hero_image.alt | default: product.title | escape }}"
+          loading="eager"
+          fetchpriority="high"
+          width="2400" height="1350"
+        >
+      {%- endif -%}
+    </div>
+    <div class="hero-content">
+      {%- if section.settings.eyebrow != blank -%}<p class="eyebrow">{{ section.settings.eyebrow }}</p>{%- endif -%}
+      <h1>{{ product.title }}</h1>
+      {%- if section.settings.catchcopy != blank -%}
+        <div class="lede">{{ section.settings.catchcopy }}</div>
+      {%- endif -%}
+
+      <div class="cta-row" style="align-items:center;margin-top:8px;">
+        {%- if section.settings.show_badge -%}
+          {%- if is_instant -%}
+            <span class="avail-tag instant" style="background:rgba(250,248,243,0.16);color:var(--white);">即予約</span>
+          {%- else -%}
+            <span class="avail-tag confirm" style="background:rgba(250,248,243,0.16);color:var(--white);">リクエスト予約</span>
+          {%- endif -%}
+        {%- endif -%}
+        <span style="font-family:var(--font-serif);font-size:1.5rem;color:var(--white);">
+          {{ variant.price | money }}<small style="font-size:0.85rem;color:var(--text-on-dark-muted);"> {{ section.settings.price_note }}</small>
+        </span>
+      </div>
+
+      <div class="cta-row" style="margin-top:28px;">
+        <a href="#booking" class="btn btn-gold">{{ section.settings.booking_label }}</a>
+        {%- if section.settings.secondary_url != blank -%}
+          <a href="{{ section.settings.secondary_url }}" class="btn btn-outline-light">{{ section.settings.secondary_label }}</a>
+        {%- endif -%}
+      </div>
+    </div>
+    <div class="scroll-cue"><span>SCROLL</span><span class="line"></span></div>
+  </section>
+
+  {% render 'product-breadcrumb', product: product %}
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "商品ヒーロー",
+  "settings": [
+    { "type": "checkbox", "id": "show_section", "label": "表示する", "default": true },
+    { "type": "image_picker", "id": "background_image", "label": "背景画像", "info": "未設定の場合はメイン商品画像を使用します。" },
+    { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "" },
+    { "type": "richtext", "id": "catchcopy", "label": "キャッチコピー" },
+    { "type": "text", "id": "price_note", "label": "価格の注記", "default": "税込 / 2名様" },
+    { "type": "checkbox", "id": "show_badge", "label": "予約バッジを表示する", "info": "商品に「即予約」タグが付いているかどうかで自動的に文言が切り替わります（即予約 / リクエスト予約）。", "default": true },
+    { "type": "text", "id": "booking_label", "label": "予約ボタン文言", "default": "空き状況を見る" },
+    { "type": "text", "id": "secondary_label", "label": "サブボタン文言", "default": "" },
+    { "type": "url", "id": "secondary_url", "label": "サブボタンリンク先" }
+  ]
+}
+{% endschema %}

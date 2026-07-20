@@ -1,0 +1,77 @@
+{%- comment -%}
+  product-attire — ⑧ 衣装. Dress / tuxedo photos + fitting guidance.
+{%- endcomment -%}
+{%- if section.settings.show_section -%}
+  <section class="{% if section.settings.background == 'ivory' %}bg-ivory{% endif %}">
+    <div class="container">
+      <div class="split{% if section.settings.image_position == 'right' %} reverse{% endif %}">
+        <div class="split-media reveal">
+          {%- if section.settings.image -%}
+            <img src="{{ section.settings.image | image_url: width: 900 }}" alt="{{ section.settings.image.alt | default: section.settings.heading | escape }}" loading="lazy" width="900" height="1125">
+          {%- endif -%}
+        </div>
+        <div class="reveal reveal-1">
+          <p class="eyebrow">{{ section.settings.eyebrow }}</p>
+          <h2>{{ section.settings.heading }}</h2>
+          <div class="divider-gold" style="margin-left:0;"></div>
+          {%- if section.settings.body != blank -%}<div>{{ section.settings.body }}</div>{%- endif -%}
+          {%- if section.settings.fitting_note != blank -%}
+            <ul class="check-list mt-40">
+              {%- for line in section.settings.fitting_note | newline_to_br | split: '<br />' -%}
+                {%- assign line = line | strip -%}
+                {%- if line != blank -%}<li>{{ line }}</li>{%- endif -%}
+              {%- endfor -%}
+            </ul>
+          {%- endif -%}
+          {%- if section.settings.button_url != blank -%}
+            <div class="cta-row mt-40"><a href="{{ section.settings.button_url }}" class="btn btn-outline-dark">{{ section.settings.button_label }}</a></div>
+          {%- endif -%}
+        </div>
+      </div>
+
+      {%- if section.blocks.size > 0 -%}
+        <div class="gallery reveal mt-40" style="margin-top:56px;">
+          {%- for block in section.blocks -%}
+            {%- if block.settings.image -%}
+              <a href="{{ block.settings.image | image_url: width: 1400 }}" {{ block.shopify_attributes }}>
+                <img src="{{ block.settings.image | image_url: width: 700 }}" alt="{{ block.settings.image.alt | default: section.settings.heading | escape }}" loading="lazy" width="700" height="875">
+              </a>
+            {%- endif -%}
+          {%- endfor -%}
+        </div>
+      {%- endif -%}
+    </div>
+  </section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "衣装",
+  "settings": [
+    { "type": "checkbox", "id": "show_section", "label": "表示する", "default": true },
+    { "type": "select", "id": "background", "label": "背景", "options": [
+        { "value": "white", "label": "白" },
+        { "value": "ivory", "label": "アイボリー" }
+      ], "default": "ivory" },
+    { "type": "image_picker", "id": "image", "label": "メイン画像" },
+    { "type": "select", "id": "image_position", "label": "画像の位置", "options": [
+        { "value": "left", "label": "左" },
+        { "value": "right", "label": "右" }
+      ], "default": "left" },
+    { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "Dress" },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "衣装について" },
+    { "type": "richtext", "id": "body", "label": "本文" },
+    { "type": "textarea", "id": "fitting_note", "label": "試着案内（1行1項目）", "default": "全国の提携サロンで事前に試着可能です\nドレス・タキシード各2着まで無料チェンジ" },
+    { "type": "text", "id": "button_label", "label": "ボタン文言", "default": "ドレスを詳しく見る" },
+    { "type": "url", "id": "button_url", "label": "ボタンリンク先" }
+  ],
+  "blocks": [
+    {
+      "type": "photo",
+      "name": "衣装写真",
+      "settings": [{ "type": "image_picker", "id": "image", "label": "画像" }]
+    }
+  ],
+  "max_blocks": 6
+}
+{% endschema %}

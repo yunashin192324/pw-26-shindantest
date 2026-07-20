@@ -1,0 +1,67 @@
+{
+  "sections": {
+    "destination-hero": {
+      "type": "destination-hero"
+    },
+    "destination-intro": {
+      "type": "destination-intro"
+    },
+    "destination-reasons": {
+      "type": "destination-reasons",
+      "settings": {
+        "heading": "選ばれる理由"
+      }
+    },
+    "destination-spots": {
+      "type": "destination-spots",
+      "settings": {
+        "heading": "撮影スポット"
+      }
+    },
+    "destination-schedule": {
+      "type": "destination-schedule",
+      "settings": {
+        "heading": "モデルスケジュール"
+      }
+    },
+    "destination-gallery": {
+      "type": "destination-gallery",
+      "settings": {
+        "heading": "フォトギャラリー"
+      }
+    },
+    "destination-plans": {
+      "type": "destination-plans",
+      "settings": {
+        "heading": "おすすめプラン"
+      }
+    },
+    "destination-faq": {
+      "type": "destination-faq",
+      "settings": {
+        "heading": "よくある質問",
+        "related_heading": "その他の撮影地"
+      }
+    },
+    "destinations-cta": {
+      "type": "destinations-cta",
+      "settings": {
+        "subtle": false,
+        "eyebrow": "Get Started",
+        "heading": "この撮影地で叶える、ふたりだけの物語",
+        "button_label": "30秒診断"
+      }
+    }
+  },
+  "order": [
+    "destination-hero",
+    "destination-intro",
+    "destination-reasons",
+    "destination-spots",
+    "destination-schedule",
+    "destination-gallery",
+    "destination-plans",
+    "destination-faq",
+    "destinations-cta"
+  ]
+}

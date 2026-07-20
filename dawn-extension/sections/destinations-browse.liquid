@@ -1,0 +1,174 @@
+{%- comment -%}
+  destinations-browse — 撮影地一覧ページの本体。以前は「検索」「人気の
+  撮影地」「テーマから選ぶ」「地域から選ぶ」の4セクションが、それぞれ
+  独立して同じ都市カードを繰り返し表示していた（都市数が少ないうちは
+  ほぼ同じ内容が何度も出るだけになり、UX的にもSEO/AIO/GEO的にも
+  重複コンテンツとして良くなかった）。
+  このセクション1つに統合し、「1つのカードグリッド」に対して
+  「検索ボックス／地域チップ／テーマチップ」のフィルターを効かせる方式に
+  変更。都市が少ない今はすっきり1画面、将来50都市に増えても同じ仕組みの
+  まま自然にスケールする。人気都市は別セクションにせず、並び順を先頭に
+  してPOPULARバッジで示すだけにしている。
+{%- endcomment -%}
+{%- assign all_destinations = shop.metaobjects.destination.values -%}
+{%- assign region_keys = 'hawaii,micronesia,south_pacific,indian_ocean,oceania,asia,middle_east,europe,north_america,south_america,africa,japan' | split: ',' -%}
+{%- assign theme_keys = 'beach,streets,palace,heritage,view,lake,desert,balloon,church,museum,library,resort,sunset,overwater' | split: ',' -%}
+
+<section id="dst-browse" class="dst-bg-ivory">
+  <div class="dst-container">
+    <div class="dst-section-head dst-reveal">
+      <p class="dst-eyebrow">Destinations</p>
+      <h2>{{ section.settings.heading }}</h2>
+      <hr class="dst-divider">
+      <p>{{ section.settings.description }}</p>
+    </div>
+
+    <div class="dst-filter-bar dst-reveal">
+      <input type="text" id="dst-browse-search" class="dst-filter-search" placeholder="{{ section.settings.search_placeholder }}" autocomplete="off">
+
+      <div class="dst-filter-group">
+        <span class="dst-filter-group-label">地域</span>
+        <div class="dst-filter-chips" id="dst-browse-region-chips">
+          {%- for region_key in region_keys -%}
+            {%- assign r_count = 0 -%}
+            {%- for d in all_destinations -%}
+              {%- if d.region.value == region_key -%}{%- assign r_count = r_count | plus: 1 -%}{%- endif -%}
+            {%- endfor -%}
+            {%- if r_count > 0 -%}
+              {%- capture r_label -%}{% render 'destination-region-label', region_key: region_key %}{%- endcapture -%}
+              <button type="button" class="dst-filter-chip" data-filter-type="region" data-filter-value="{{ region_key }}">{{ r_label | strip }}</button>
+            {%- endif -%}
+          {%- endfor -%}
+        </div>
+      </div>
+
+      <div class="dst-filter-group">
+        <span class="dst-filter-group-label">テーマ</span>
+        <div class="dst-filter-chips" id="dst-browse-theme-chips">
+          {%- for theme_key in theme_keys -%}
+            {%- assign t_count = 0 -%}
+            {%- for d in all_destinations -%}
+              {%- assign d_themes = d.themes.value -%}
+              {%- if d_themes contains theme_key -%}{%- assign t_count = t_count | plus: 1 -%}{%- endif -%}
+            {%- endfor -%}
+            {%- if t_count > 0 -%}
+              {%- capture t_label -%}{% render 'destination-theme-label', theme_key: theme_key %}{%- endcapture -%}
+              <button type="button" class="dst-filter-chip" data-filter-type="theme" data-filter-value="{{ theme_key }}">{{ t_label | strip }}</button>
+            {%- endif -%}
+          {%- endfor -%}
+        </div>
+      </div>
+
+      <button type="button" id="dst-browse-clear" class="dst-filter-clear" style="display:none;">絞り込みを解除</button>
+    </div>
+
+    <div class="dst-region-grid" id="dst-browse-grid">
+      {%- comment -%} 人気都市を先に並べ、残りを続ける（別セクション化はしない） {%- endcomment -%}
+      {%- for d in all_destinations -%}
+        {%- if d.popular.value -%}{% render 'destination-card', destination: d, show_badge: true %}{%- endif -%}
+      {%- endfor -%}
+      {%- for d in all_destinations -%}
+        {%- unless d.popular.value -%}{% render 'destination-card', destination: d %}{%- endunless -%}
+      {%- endfor -%}
+    </div>
+    <p id="dst-browse-empty" class="dst-text-center dst-text-muted" style="display:none;padding:40px 0;">該当する撮影地が見つかりませんでした。</p>
+  </div>
+</section>
+
+{%- comment -%} ItemList構造化データ：一覧ページのSEO/AIO/GEO向け {%- endcomment -%}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "ItemList",
+  "itemListElement": [
+    {%- assign li_i = 0 -%}
+    {%- for d in all_destinations -%}
+      {%- assign li_i = li_i | plus: 1 -%}
+      {
+        "@type": "ListItem",
+        "position": {{ li_i }},
+        "name": {{ d.name_ja.value | json }},
+        "url": {{ shop.url | append: '/pages/' | append: d.slug.value | json }}
+      }{%- unless forloop.last -%},{%- endunless -%}
+    {%- endfor -%}
+  ]
+}
+</script>
+
+<style>
+  .dst-filter-bar { max-width: 720px; margin: 0 auto 40px; display: flex; flex-direction: column; gap: 18px; align-items: center; }
+  .dst-filter-search { width: 100%; padding: 14px 20px; border: 1px solid #ddd; border-radius: 999px; font-size: 0.95rem; background: #fff; }
+  .dst-filter-group { width: 100%; text-align: center; }
+  .dst-filter-group-label { display: block; font-size: 0.75rem; letter-spacing: 0.1em; color: var(--dst-text-muted); margin-bottom: 8px; }
+  .dst-filter-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+  .dst-filter-chip { padding: 6px 16px; border: 1px solid #ddd; border-radius: 999px; background: #fff; font-size: 0.8rem; cursor: pointer; transition: all 0.2s; }
+  .dst-filter-chip:hover { border-color: var(--dst-gold); }
+  .dst-filter-chip.is-active { background: var(--dst-gold); border-color: var(--dst-gold); color: #fff; }
+  .dst-filter-clear { font-size: 0.8rem; color: var(--dst-text-muted); text-decoration: underline; background: none; border: none; cursor: pointer; }
+</style>
+
+<script>
+  (function () {
+    var searchInput = document.getElementById('dst-browse-search');
+    var chips = Array.prototype.slice.call(document.querySelectorAll('#dst-browse-region-chips .dst-filter-chip, #dst-browse-theme-chips .dst-filter-chip'));
+    var clearBtn = document.getElementById('dst-browse-clear');
+    var items = Array.prototype.slice.call(document.querySelectorAll('#dst-browse-grid .dst-card'));
+    var empty = document.getElementById('dst-browse-empty');
+    if (!searchInput || items.length === 0) return;
+
+    function activeValues(type) {
+      return chips
+        .filter(function (c) { return c.dataset.filterType === type && c.classList.contains('is-active'); })
+        .map(function (c) { return c.dataset.filterValue; });
+    }
+
+    function applyFilters() {
+      var query = searchInput.value.trim().toLowerCase();
+      var activeRegions = activeValues('region');
+      var activeThemes = activeValues('theme');
+      var anyActive = query !== '' || activeRegions.length > 0 || activeThemes.length > 0;
+      clearBtn.style.display = anyActive ? 'inline' : 'none';
+
+      var visibleCount = 0;
+      items.forEach(function (el) {
+        var region = el.getAttribute('data-region');
+        var themes = (el.getAttribute('data-themes') || '').split(',');
+        var keywords = el.getAttribute('data-keywords') || '';
+
+        var regionMatch = activeRegions.length === 0 || activeRegions.indexOf(region) !== -1;
+        var themeMatch = activeThemes.length === 0 || activeThemes.some(function (t) { return themes.indexOf(t) !== -1; });
+        var searchMatch = query === '' || keywords.indexOf(query) !== -1;
+
+        var visible = regionMatch && themeMatch && searchMatch;
+        el.style.display = visible ? '' : 'none';
+        if (visible) visibleCount++;
+      });
+      empty.style.display = visibleCount === 0 ? '' : 'none';
+    }
+
+    searchInput.addEventListener('input', applyFilters);
+    chips.forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        chip.classList.toggle('is-active');
+        applyFilters();
+      });
+    });
+    clearBtn.addEventListener('click', function () {
+      searchInput.value = '';
+      chips.forEach(function (c) { c.classList.remove('is-active'); });
+      applyFilters();
+    });
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "撮影地一覧 統合ブラウズ",
+  "settings": [
+    { "type": "text", "id": "heading", "label": "見出し", "default": "撮影地から選ぶ" },
+    { "type": "textarea", "id": "description", "label": "説明文", "default": "都市名・国・地域・テーマから絞り込めます。" },
+    { "type": "text", "id": "search_placeholder", "label": "検索欄プレースホルダー", "default": "都市名・国名・テーマで検索（例：パリ、ハワイ、ビーチ）" }
+  ],
+  "presets": [{ "name": "撮影地一覧 統合ブラウズ" }]
+}
+{% endschema %}

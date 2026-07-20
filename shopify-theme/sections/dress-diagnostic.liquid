@@ -1,0 +1,144 @@
+{%- comment -%}
+  dress-diagnostic — ドレス診断（Metaobject駆動）。ロジックは提供いただ
+  いた既存実装を踏襲：各質問の回答（trait/value）と、
+  shop.metaobjects.dress_diagnostic_data に登録された全ドレスの
+  traits（style/silhouette/neck/fabric）を突き合わせ、一致数が最も
+  多い1着をベストマッチとして提案するスコアリング方式。固定の
+  「系統4パターン」ではなく、実際のカタログ全件から毎回選ぶため、
+  ドレスを追加してもコード変更は不要（Admin → コンテンツ →
+  メタオブジェクト → dress_diagnostic_data にエントリーを追加するだけ）。
+
+  元の実装との違い：
+  - 見た目は独自スタイル(#app-diagnostic)ではなく、既存の
+    .diag-* コンポーネント（デザイントークン var(--gold) /
+    var(--font-serif) 等）を再利用し、サイト全体のトンマナに統一。
+  - JSへ渡すデータは `escape` ではなく `json` フィルタで出力
+    （説明文に引用符が含まれてもJSが壊れないように）。
+  - 質問文・選択肢はTheme Editorのブロックで編集可能。
+
+  必要なMetaobject定義（Admin側で1回だけ作成、詳細はSITE.md参照）：
+    type: dress_diagnostic_data
+    fields: name / size / desc / img / style / silhouette / neck / fabric
+{%- endcomment -%}
+{%- assign question_blocks = section.blocks | where: 'type', 'question' -%}
+
+{%- if section.settings.show_section and question_blocks.size > 0 -%}
+  <section>
+    <div class="container">
+      <div class="diag-wrap" data-dress-diagnostic data-results-id="dress-diagnostic-data-{{ section.id }}">
+        <div class="diag-progress"><div class="diag-progress-fill"></div></div>
+
+        <div class="diag-panel is-active" data-view="start">
+          <h2 class="diag-question">{{ section.settings.start_heading }}</h2>
+          <p>{{ section.settings.start_body }}</p>
+          <div class="cta-row" style="justify-content:center;margin-top:32px;">
+            <button type="button" class="btn btn-gold" data-start>{{ section.settings.start_button_label }}</button>
+          </div>
+        </div>
+
+        {%- assign q_index = -1 -%}
+        {%- assign panel_open = false -%}
+        {%- assign options_open = false -%}
+        {%- for block in section.blocks -%}
+          {%- if block.type == 'question' -%}
+            {%- if options_open -%}</div>{%- assign options_open = false -%}{%- endif -%}
+            {%- if panel_open -%}</div>{%- endif -%}
+            {%- assign q_index = q_index | plus: 1 -%}
+            <div class="diag-panel" data-view="question" data-index="{{ q_index }}" {{ block.shopify_attributes }}>
+              <p class="diag-step">Question {{ q_index | plus: 1 }} / {{ question_blocks.size }}</p>
+              <h2 class="diag-question">{{ block.settings.question }}</h2>
+              <div class="diag-options">
+              {%- assign panel_open = true -%}
+              {%- assign options_open = true -%}
+          {%- elsif block.type == 'option' -%}
+            <button class="diag-option" type="button" data-trait="{{ block.settings.trait }}" data-value="{{ block.settings.value }}" {{ block.shopify_attributes }}>{{ block.settings.label }}</button>
+          {%- endif -%}
+        {%- endfor -%}
+        {%- if options_open -%}</div>{%- endif -%}
+        {%- if panel_open -%}</div>{%- endif -%}
+
+        <div class="diag-panel diag-result" data-view="result">
+          <p class="eyebrow">Your Result</p>
+          <p style="margin-top:8px;">{{ section.settings.result_lede }}</p>
+          <div class="diag-result-image"><img src="" alt=""></div>
+          <h2 class="diag-result-name">—</h2>
+          <span class="avail-tag confirm diag-result-size">—</span>
+          <p class="diag-result-reason mt-40">—</p>
+          <div class="cta-row" style="justify-content:center;">
+            <button type="button" class="btn btn-outline-dark" data-restart>もう一度診断する</button>
+            {%- if section.settings.consult_url != blank -%}
+              <a href="{{ section.settings.consult_url }}" class="btn btn-gold">{{ section.settings.consult_label }}</a>
+            {%- endif -%}
+          </div>
+          <p class="note mt-40" style="font-size:0.8rem;color:var(--text-muted);">{{ section.settings.result_footnote }}</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script type="application/json" id="dress-diagnostic-data-{{ section.id }}">
+  [
+    {%- assign printed_any = false -%}
+    {%- for dress in shop.metaobjects.dress_diagnostic_data.values -%}
+      {%- if printed_any -%},{%- endif -%}
+      {
+        "id": {{ dress.system.handle | json }},
+        "name": {{ dress.name | json }},
+        "size": {{ dress.size | json }},
+        "desc": {{ dress.desc | strip_newlines | json }},
+        "img": {{ dress.img | image_url: width: 800 | json }},
+        "traits": {
+          "style": {{ dress.style | json }},
+          "silhouette": {{ dress.silhouette | json }},
+          "neck": {{ dress.neck | json }},
+          "fabric": {{ dress.fabric | json }}
+        }
+      }
+      {%- assign printed_any = true -%}
+    {%- endfor -%}
+  ]
+  </script>
+{%- elsif request.design_mode -%}
+  <section><div class="container"><p class="note text-center">「質問」ブロックと「選択肢」ブロックを追加すると診断が表示されます。あわせてAdmin側で dress_diagnostic_data メタオブジェクトにドレスを登録してください（SITE.md参照）。</p></div></section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "ドレス診断（カタログ連動）",
+  "settings": [
+    { "type": "checkbox", "id": "show_section", "label": "表示する", "default": true },
+    { "type": "text", "id": "start_heading", "label": "開始画面の見出し", "default": "フォトウェディング ドレス診断" },
+    { "type": "textarea", "id": "start_body", "label": "開始画面の本文", "default": "いくつかの質問に答えるだけで、豊富なコレクションの中からあなたの撮影イメージに最も映える運命のドレスをご提案します。" },
+    { "type": "text", "id": "start_button_label", "label": "開始ボタン文言", "default": "診断をスタート" },
+    { "type": "text", "id": "result_lede", "label": "結果画面のリード文", "default": "あなたの撮影にぴったりのドレスは…" },
+    { "type": "text", "id": "consult_label", "label": "結果画面のCTAボタン文言", "default": "試着について相談する" },
+    { "type": "url", "id": "consult_url", "label": "結果画面のCTAボタンリンク先" },
+    { "type": "textarea", "id": "result_footnote", "label": "結果画面の注記", "default": "診断結果は目安です。実際の着心地やサイズ感は、ぜひ試着でご確認ください。" }
+  ],
+  "blocks": [
+    {
+      "type": "question",
+      "name": "質問",
+      "settings": [
+        { "type": "text", "id": "question", "label": "質問文", "default": "質問文をここに入力" }
+      ]
+    },
+    {
+      "type": "option",
+      "name": "選択肢",
+      "settings": [
+        { "type": "text", "id": "label", "label": "選択肢の文言", "default": "選択肢" },
+        { "type": "select", "id": "trait", "label": "対応する特性", "options": [
+            { "value": "style", "label": "style（雰囲気）" },
+            { "value": "silhouette", "label": "silhouette（シルエット）" },
+            { "value": "neck", "label": "neck（首元・袖）" },
+            { "value": "fabric", "label": "fabric（素材・質感）" }
+          ], "default": "style" },
+        { "type": "text", "id": "value", "label": "値（半角英数字）", "info": "メタオブジェクトの対応フィールドの値と一致させてください（例：classic, natural, modern）。", "default": "classic" }
+      ]
+    }
+  ],
+  "max_blocks": 40,
+  "presets": [{ "name": "ドレス診断（カタログ連動）" }]
+}
+{% endschema %}
