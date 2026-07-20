@@ -1,8 +1,10 @@
 {%- comment -%}
   destination-spots — 撮影スポット。Destination metaobjectの
-  `photo_spots`（JSON: [{"title","description","image"}]）が未入力の間は
-  セクションごと非表示になる。imageはMetaobjectの「ファイル」タイプの
-  URL文字列として保存される想定（image_url フィルタがそのまま使える）。
+  `photo_spots`は「Photo Spot」metaobjectへの参照リスト型。
+  各スポットはtitle(単一行テキスト)/description(複数行テキスト)/
+  image(ファイル・画像)を持つ独立したmetaobjectエントリーで、
+  管理画面上でその場で新規作成＆画像アップロードができる
+  (JSONを手書きしたりファイル管理ページを往復したりする必要がない)。
 {%- endcomment -%}
 {%- comment -%}
   where: 'slug.value', page.handle はこの環境ではネストしたプロパティの
@@ -25,14 +27,17 @@
     </div>
     <div class="dst-spots-grid">
       {%- for spot in spots -%}
-        {%- comment -%} title/nameどちらのキーで書かれていても拾えるようにする {%- endcomment -%}
-        {%- assign spot_title = spot.title | default: spot.name -%}
+        {%- comment -%}
+          spotはPhoto Spot metaobjectエントリーそのものなので、各項目は
+          JSONの時と違い .value まで付けて取り出す。
+        {%- endcomment -%}
+        {%- assign spot_title = spot.title.value -%}
         <div class="dst-spot-card dst-reveal">
-          {%- if spot.image != blank -%}
+          {%- if spot.image.value != blank -%}
             <div class="dst-spot-media">
               <img
-                src="{{ spot.image | image_url: width: 700 }}"
-                srcset="{{ spot.image | image_url: width: 500 }} 500w, {{ spot.image | image_url: width: 700 }} 700w, {{ spot.image | image_url: width: 1000 }} 1000w"
+                src="{{ spot.image.value | image_url: width: 700 }}"
+                srcset="{{ spot.image.value | image_url: width: 500 }} 500w, {{ spot.image.value | image_url: width: 700 }} 700w, {{ spot.image.value | image_url: width: 1000 }} 1000w"
                 sizes="(min-width: 760px) 33vw, 90vw"
                 alt="{{ spot_title | escape }}"
                 loading="lazy"
@@ -42,7 +47,7 @@
             </div>
           {%- endif -%}
           {%- if spot_title != blank -%}<h3 class="dst-spot-title">{% render 'safe-linebreak', text: spot_title %}</h3>{%- endif -%}
-          {%- if spot.description != blank -%}<p class="dst-spot-desc">{{ spot.description }}</p>{%- endif -%}
+          {%- if spot.description.value != blank -%}<p class="dst-spot-desc">{{ spot.description.value }}</p>{%- endif -%}
         </div>
       {%- endfor -%}
     </div>
