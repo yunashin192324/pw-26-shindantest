@@ -117,14 +117,14 @@
   }
 
   /* ==========================================================================
-     【追加箇所】太字見出し内の半角数字だけベースラインが沈んで見える
-     Noto Sans Japaneseの表示崩れを補正（プラン名見出し用）
+     【修正】見出しフォント(--font-heading-family)は半角数字の字形が
+     極端に小さく・沈んで見える(オールドスタイル数字)ため、position/
+     line-heightでの位置調整では直らなかった。数字だけ本文用フォント
+     (--font-body-family)に切り替えて描画することで解決する。
      ========================================================================== */
   .lp-container .num-fix {
-    display: inline-block;
-    position: relative;
-    top: -0.12em;
-    line-height: 1;
+    font-family: var(--font-body-family), sans-serif;
+    font-variant-numeric: lining-nums;
   }
 </style>
 
@@ -169,7 +169,30 @@
         <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
           {% assign plan_blocks = section.blocks | where: "type", "plan" %}
           {% for block in plan_blocks %}
-            {% assign plan_name_display = block.settings.plan_name
+            {%- comment -%}
+              商品を選択している場合は、名称・価格・画像・URL・即予約バッジを
+              商品から自動取得する（プランページ側のarea-lp.liquid/
+              destination-plans.liquidと同じ考え方）。選択していなければ
+              従来通りの手入力フィールドを使う。
+            {%- endcomment -%}
+            {%- assign linked_product = block.settings.product -%}
+            {%- assign plan_variant = linked_product.selected_or_first_available_variant -%}
+            {%- assign plan_is_instant = false -%}
+            {%- if linked_product.tags contains '即予約' -%}{%- assign plan_is_instant = true -%}{%- endif -%}
+            {%- if linked_product -%}
+              {%- assign plan_name_source = linked_product.title -%}
+              {%- assign plan_region_source = linked_product.metafields.custom.plan_area_name.value -%}
+              {%- assign plan_desc_source = linked_product.description | strip_html -%}
+              {%- assign plan_url_source = linked_product.url -%}
+              {%- assign plan_price_source = plan_variant.price | money_without_currency | prepend: '¥' -%}
+            {%- else -%}
+              {%- assign plan_name_source = block.settings.plan_name -%}
+              {%- assign plan_region_source = block.settings.plan_region -%}
+              {%- assign plan_desc_source = block.settings.plan_detail -%}
+              {%- assign plan_url_source = block.settings.plan_url | default: '#' -%}
+              {%- assign plan_price_source = block.settings.plan_price -%}
+            {%- endif -%}
+            {% assign plan_name_display = plan_name_source
               | replace: '0', '<span class="num-fix">0</span>'
               | replace: '1', '<span class="num-fix">1</span>'
               | replace: '2', '<span class="num-fix">2</span>'
@@ -181,34 +204,45 @@
               | replace: '8', '<span class="num-fix">8</span>'
               | replace: '9', '<span class="num-fix">9</span>'
             %}
-            <a href="{{ block.settings.plan_url | default: '#' }}" class="group block border border-gray-200 bg-white hover:shadow-xl transition-shadow duration-300 fade-in" {{ block.shopify_attributes }}>
+            <a href="{{ plan_url_source }}" class="group block border border-gray-200 bg-white hover:shadow-xl transition-shadow duration-300 fade-in" {{ block.shopify_attributes }}>
               <div class="relative aspect-[4/3] overflow-hidden">
                 {% if block.settings.is_popular %}
                   <span class="absolute top-4 left-4 z-10 text-white text-xs font-bold px-3 py-1 tracking-wider" style="background-color: {{ block.settings.plan_badge_color | default: 'var(--gold)' }};">{{ block.settings.badge }}</span>
                 {% endif %}
-                {% if block.settings.plan_img %}
+                {% if linked_product.featured_image %}
                   {% assign plan_img_class = 'w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ' | append: block.settings.image_position %}
-                  {{ block.settings.plan_img | image_url: width: 800 | image_tag: class: plan_img_class, loading: 'lazy', alt: block.settings.plan_name }}
+                  {{ linked_product.featured_image | image_url: width: 800 | image_tag: class: plan_img_class, loading: 'lazy', alt: plan_name_source }}
+                {% elsif block.settings.plan_img %}
+                  {% assign plan_img_class = 'w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ' | append: block.settings.image_position %}
+                  {{ block.settings.plan_img | image_url: width: 800 | image_tag: class: plan_img_class, loading: 'lazy', alt: plan_name_source }}
                 {% else %}
                   <div class="w-full h-full bg-gray-200"></div>
                 {% endif %}
               </div>
               <div class="p-6">
-                <p class="font-serif-display text-sm tracking-widest-custom mb-1 font-bold" style="color: {{ block.settings.plan_title_color }};">{{ block.settings.plan_region }}</p>
+                <p class="font-serif-display text-sm tracking-widest-custom mb-1 font-bold" style="color: {{ block.settings.plan_title_color }};">{{ plan_region_source }}</p>
                 <h3 class="text-lg font-bold mb-3" style="color: {{ block.settings.plan_title_color }};">{{ plan_name_display }}</h3>
-                <p class="text-sm mb-4 h-10 line-clamp-2" style="color: {{ block.settings.plan_desc_color }};">{{ block.settings.plan_detail }}</p>
+                <p class="text-sm mb-4 h-10 line-clamp-2" style="color: {{ block.settings.plan_desc_color }};">{{ plan_desc_source }}</p>
 
                 <div class="mb-6">
-                  {% if block.settings.availability == 'instant' %}
-                    <span class="inline-block border border-green-600 text-green-600 text-[10px] px-2 py-1 font-bold bg-green-50">即予約できます</span>
+                  {% if linked_product %}
+                    {% if plan_is_instant %}
+                      <span class="inline-block border border-green-600 text-green-600 text-[10px] px-2 py-1 font-bold bg-green-50">即予約できます</span>
+                    {% else %}
+                      <span class="inline-block border border-gray-500 text-gray-600 text-[10px] px-2 py-1 font-bold bg-amber-50">現地確認後ご回答</span>
+                    {% endif %}
                   {% else %}
-                    <span class="inline-block border border-gray-500 text-gray-600 text-[10px] px-2 py-1 font-bold bg-amber-50">現地確認後ご回答</span>
+                    {% if block.settings.availability == 'instant' %}
+                      <span class="inline-block border border-green-600 text-green-600 text-[10px] px-2 py-1 font-bold bg-green-50">即予約できます</span>
+                    {% else %}
+                      <span class="inline-block border border-gray-500 text-gray-600 text-[10px] px-2 py-1 font-bold bg-amber-50">現地確認後ご回答</span>
+                    {% endif %}
                   {% endif %}
                 </div>
 
                 <div class="flex justify-between items-end border-t border-gray-100 pt-4">
                   <div>
-                    <span class="text-xl font-bold" style="color: {{ block.settings.plan_price_color }};">{{ block.settings.plan_price }}</span>
+                    <span class="text-xl font-bold" style="color: {{ block.settings.plan_price_color }};">{{ plan_price_source }}</span>
                     <span class="text-xs text-gray-500 ml-1">
                       {% if block.settings.show_tax_label %}税込 / {% else %}/ {% endif %}2名
                     </span>
@@ -726,8 +760,9 @@
       "name": "人気プラン",
       "limit": 3,
       "settings": [
+        { "type": "product", "id": "product", "label": "商品（設定すると以下の手入力項目より優先されます）", "info": "設定すると、プラン名・価格・画像・URL・即予約バッジがすべて商品から自動取得されます。地域表記は商品のplan_area_nameメタフィールドがあればそれを使います。" },
         { "type": "checkbox", "id": "is_popular", "label": "「人気No.1」バッジを表示", "default": false },
-        { "type": "image_picker", "id": "plan_img", "label": "プラン画像" },
+        { "type": "image_picker", "id": "plan_img", "label": "プラン画像（商品未選択時のみ）" },
         {
           "type": "select",
           "id": "image_position",
