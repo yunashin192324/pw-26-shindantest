@@ -10,32 +10,12 @@
         "search_label": "撮影地を見る"
       }
     },
-    "destinations-search": {
-      "type": "destinations-search",
+    "destinations-browse": {
+      "type": "destinations-browse",
       "settings": {
-        "heading": "撮影地を探す",
-        "description": "都市名・国・地域・テーマから検索できます。"
-      }
-    },
-    "destinations-popular": {
-      "type": "destinations-popular",
-      "settings": {
-        "heading": "人気の撮影地",
-        "description": "多くのカップルに選ばれている撮影地です。"
-      }
-    },
-    "destinations-theme-list": {
-      "type": "destinations-theme-list",
-      "settings": {
-        "heading": "テーマから選ぶ",
-        "description": "叶えたい雰囲気から撮影地を探せます。"
-      }
-    },
-    "destinations-region-list": {
-      "type": "destinations-region-list",
-      "settings": {
-        "heading": "地域から選ぶ",
-        "description": "世界8つのエリアから撮影地をご覧いただけます。"
+        "heading": "撮影地から選ぶ",
+        "description": "都市名・国・地域・テーマから絞り込めます。",
+        "search_placeholder": "都市名・国名・テーマで検索（例：パリ、ハワイ、ビーチ）"
       }
     },
     "destinations-cta": {
@@ -49,10 +29,7 @@
   },
   "order": [
     "destinations-hero",
-    "destinations-search",
-    "destinations-popular",
-    "destinations-theme-list",
-    "destinations-region-list",
+    "destinations-browse",
     "destinations-cta"
   ]
 }

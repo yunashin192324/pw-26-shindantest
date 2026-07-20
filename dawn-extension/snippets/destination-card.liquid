@@ -28,8 +28,20 @@
   "30% 50%")が入力されていればそれをobject-positionとして使う。
 {%- endcomment -%}
 {%- assign card_img_position = destination.hero_image_position.value | default: 'center' -%}
+{%- comment -%}
+  destinations-browse.liquid(統合一覧+フィルター)のJSがdata属性を
+  読んでチップ絞り込みを行うため、region/themes/検索キーワードを
+  カード自体にdata属性として持たせておく。
+{%- endcomment -%}
+{%- assign theme_data = theme_list | join: ',' | downcase -%}
+{%- capture region_label_for_data -%}{% render 'destination-region-label', region_key: destination.region.value %}{%- endcapture -%}
+{%- assign search_keywords = name_ja | append: ' ' | append: destination.name_en.value | append: ' ' | append: destination.country.value | append: ' ' | append: region_label_for_data | strip | downcase -%}
 
-<a href="{{ url }}" class="dst-card dst-reveal{% if reveal_class %} {{ reveal_class }}{% endif %}">
+<a href="{{ url }}" class="dst-card dst-reveal{% if reveal_class %} {{ reveal_class }}{% endif %}"
+   data-region="{{ destination.region.value }}"
+   data-themes="{{ theme_data }}"
+   data-popular="{{ destination.popular.value }}"
+   data-keywords="{{ search_keywords | escape }}">
   <div class="dst-card-media">
     {%- if destination.hero_image.value -%}
       <img
