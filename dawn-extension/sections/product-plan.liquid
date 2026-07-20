@@ -163,8 +163,13 @@
 {%- assign excluded_items = '' | split: '' -%}
 {%- if mf.plan_excluded_items.value != blank -%}{%- assign excluded_items = mf.plan_excluded_items.value | newline_to_br | split: '<br />' -%}{%- endif -%}
 
-{%- comment -%} オプション {%- endcomment -%}
-{%- assign mf_options = mf.plan_options.value -%}
+{%- comment -%}
+  オプション：以前はJSON形式だったが非エンジニアには書きづらいため、
+  「1行1項目、名称と価格は｜(縦棒)で区切る」形式に変更。
+  例: 送迎付きプラン|+¥12,000
+{%- endcomment -%}
+{%- assign mf_options_lines = '' | split: '' -%}
+{%- if mf.plan_options.value != blank -%}{%- assign mf_options_lines = mf.plan_options.value | newline_to_br | split: '<br />' -%}{%- endif -%}
 {%- assign option_blocks = section.blocks | where: 'type', 'option' -%}
 
 {%- comment -%}
@@ -176,12 +181,20 @@
 {%- assign mf_gallery = product.images | slice: 1, 20 -%}
 {%- assign gallery_blocks = section.blocks | where: 'type', 'gallery_image' -%}
 
-{%- comment -%} スケジュール {%- endcomment -%}
-{%- assign mf_schedule = mf.plan_schedule.value -%}
+{%- comment -%}
+  スケジュール：「1行1項目、時刻と内容は｜(縦棒)で区切る」形式。
+  例: 8:00|サロンにてお仕度開始
+{%- endcomment -%}
+{%- assign mf_schedule_lines = '' | split: '' -%}
+{%- if mf.plan_schedule.value != blank -%}{%- assign mf_schedule_lines = mf.plan_schedule.value | newline_to_br | split: '<br />' -%}{%- endif -%}
 {%- assign schedule_blocks = section.blocks | where: 'type', 'schedule' -%}
 
-{%- comment -%} FAQ {%- endcomment -%}
-{%- assign mf_faqs = mf.plan_faqs.value -%}
+{%- comment -%}
+  FAQ：「1行1項目、質問と回答は｜(縦棒)で区切る」形式。
+  例: ビザは必要ですか？|パスポートの残存有効期間が6ヶ月以上あれば不要です。
+{%- endcomment -%}
+{%- assign mf_faqs_lines = '' | split: '' -%}
+{%- if mf.plan_faqs.value != blank -%}{%- assign mf_faqs_lines = mf.plan_faqs.value | newline_to_br | split: '<br />' -%}{%- endif -%}
 {%- assign faq_blocks = section.blocks | where: 'type', 'faq' -%}
 
 {%- comment -%} 注意事項 {%- endcomment -%}
@@ -221,19 +234,23 @@
   }
 }
 </script>
-{%- if mf_faqs.size > 0 or faq_blocks.size > 0 -%}
+{%- if mf_faqs_lines.size > 0 or faq_blocks.size > 0 -%}
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "FAQPage",
   "mainEntity": [
-    {%- if mf_faqs.size > 0 -%}
-      {%- for item in mf_faqs -%}
-        {
-          "@type": "Question",
-          "name": {{ item.question | strip_html | json }},
-          "acceptedAnswer": { "@type": "Answer", "text": {{ item.answer | strip_html | json }} }
-        }{%- unless forloop.last -%},{%- endunless -%}
+    {%- if mf_faqs_lines.size > 0 -%}
+      {%- for line in mf_faqs_lines -%}
+        {%- assign line = line | strip -%}
+        {%- if line != blank -%}
+          {%- assign faq_parts = line | split: '|' -%}
+          {
+            "@type": "Question",
+            "name": {{ faq_parts[0] | strip | strip_html | json }},
+            "acceptedAnswer": { "@type": "Answer", "text": {{ faq_parts[1] | strip | strip_html | json }} }
+          }{%- unless forloop.last -%},{%- endunless -%}
+        {%- endif -%}
       {%- endfor -%}
     {%- else -%}
       {%- for block in faq_blocks -%}
@@ -453,7 +470,7 @@
 
   {% comment %} --- オプション --- {% endcomment %}
   {%- assign has_options = false -%}
-  {%- if mf_options.size > 0 or option_blocks.size > 0 -%}{%- assign has_options = true -%}{%- endif -%}
+  {%- if mf_options_lines.size > 0 or option_blocks.size > 0 -%}{%- assign has_options = true -%}{%- endif -%}
   {% if section.settings.show_options and has_options %}
   <section class="py-16 md:py-24">
     <div class="max-w-6xl mx-auto px-6">
@@ -463,12 +480,16 @@
         <div class="divider-gold center"></div>
       </div>
       <div class="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
-        {% if mf_options.size > 0 %}
-          {% for item in mf_options %}
-            <div>
-              <h4 class="font-bold text-sm">{{ item.title }}</h4>
-              <p class="text-sm mt-2" style="color:#B8860B;">{{ item.price }}</p>
-            </div>
+        {% if mf_options_lines.size > 0 %}
+          {% for line in mf_options_lines %}
+            {% assign line = line | strip %}
+            {% if line != blank %}
+              {% assign option_parts = line | split: '|' %}
+              <div>
+                <h4 class="font-bold text-sm">{{ option_parts[0] | strip }}</h4>
+                <p class="text-sm mt-2" style="color:#B8860B;">{{ option_parts[1] | strip }}</p>
+              </div>
+            {% endif %}
           {% endfor %}
         {% else %}
           {% for block in option_blocks %}
@@ -613,7 +634,7 @@
   {% endif %}
 
   {% comment %} --- スケジュール --- {% endcomment %}
-  {% if mf_schedule.size > 0 or schedule_blocks.size > 0 %}
+  {% if mf_schedule_lines.size > 0 or schedule_blocks.size > 0 %}
   <section class="py-16 md:py-24" style="background-color:#FAF8F5;">
     <div class="max-w-3xl mx-auto px-6">
       <div class="text-center mb-16">
@@ -622,12 +643,16 @@
         <div class="divider-gold center"></div>
       </div>
       <div>
-        {% if mf_schedule.size > 0 %}
-          {% for item in mf_schedule %}
-            <div class="flex gap-6 border-b border-gray-200 py-4 text-sm">
-              <span class="w-16 shrink-0 font-serif" style="color:#B8860B;">{{ item.time }}</span>
-              <span class="text-gray-700">{{ item.desc }}</span>
-            </div>
+        {% if mf_schedule_lines.size > 0 %}
+          {% for line in mf_schedule_lines %}
+            {% assign line = line | strip %}
+            {% if line != blank %}
+              {% assign schedule_parts = line | split: '|' %}
+              <div class="flex gap-6 border-b border-gray-200 py-4 text-sm">
+                <span class="w-16 shrink-0 font-serif" style="color:#B8860B;">{{ schedule_parts[0] | strip }}</span>
+                <span class="text-gray-700">{{ schedule_parts[1] | strip }}</span>
+              </div>
+            {% endif %}
           {% endfor %}
         {% else %}
           {% for block in schedule_blocks %}
@@ -643,7 +668,7 @@
   {% endif %}
 
   {% comment %} --- FAQ --- {% endcomment %}
-  {% if mf_faqs.size > 0 or faq_blocks.size > 0 %}
+  {% if mf_faqs_lines.size > 0 or faq_blocks.size > 0 %}
   <section class="py-16 md:py-24">
     <div class="max-w-3xl mx-auto px-6">
       <div class="text-center mb-16">
@@ -652,12 +677,16 @@
         <div class="divider-gold center"></div>
       </div>
       <div>
-        {% if mf_faqs.size > 0 %}
-          {% for item in mf_faqs %}
-            <details class="border-b border-gray-200 py-4">
-              <summary class="cursor-pointer font-medium text-sm flex justify-between items-center">{{ item.question }}<span style="color:#B8860B;">＋</span></summary>
-              <p class="text-sm text-gray-600 mt-3 leading-relaxed">{{ item.answer }}</p>
-            </details>
+        {% if mf_faqs_lines.size > 0 %}
+          {% for line in mf_faqs_lines %}
+            {% assign line = line | strip %}
+            {% if line != blank %}
+              {% assign faq_display_parts = line | split: '|' %}
+              <details class="border-b border-gray-200 py-4">
+                <summary class="cursor-pointer font-medium text-sm flex justify-between items-center">{{ faq_display_parts[0] | strip }}<span style="color:#B8860B;">＋</span></summary>
+                <p class="text-sm text-gray-600 mt-3 leading-relaxed">{{ faq_display_parts[1] | strip }}</p>
+              </details>
+            {% endif %}
           {% endfor %}
         {% else %}
           {% for block in faq_blocks %}

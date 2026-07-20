@@ -1,8 +1,8 @@
 {%- comment -%}
   destination-schedule — モデルスケジュール。Destination metaobjectの
-  `schedule` (JSON: [{time, description}]) が未入力の間はセクションごと
-  非表示になる。area-lp.liquidの「スケジュール」ブロックと同じ役割を、
-  Metaobject駆動の共通テンプレート側に移植。
+  `schedule`（JSONではなく「1行1項目、時刻と内容は｜(縦棒)で区切る」
+  形式の複数行テキスト。例: 1日目|成田空港発ーダナン着）が未入力の間は
+  セクションごと非表示になる。
 {%- endcomment -%}
 {%- comment -%}
   where: 'slug.value', page.handle はこの環境ではネストしたプロパティの
@@ -13,9 +13,10 @@
 {%- for d in all_destination_entries -%}
   {%- if d.slug.value == page.handle -%}{%- assign destination = d -%}{%- endif -%}
 {%- endfor -%}
-{%- assign schedule = destination.schedule.value -%}
+{%- assign schedule_lines = '' | split: '' -%}
+{%- if destination.schedule.value != blank -%}{%- assign schedule_lines = destination.schedule.value | newline_to_br | split: '<br />' -%}{%- endif -%}
 
-{%- if destination and schedule.size > 0 -%}
+{%- if destination and schedule_lines.size > 0 -%}
 <section{% if section.settings.bg_ivory %} class="dst-bg-ivory"{% endif %}>
   <div class="dst-container" style="max-width:760px;">
     <div class="dst-section-head dst-reveal">
@@ -24,11 +25,15 @@
       <hr class="dst-divider">
     </div>
     <div class="dst-schedule-list">
-      {%- for item in schedule -%}
-        <div class="dst-schedule-item dst-reveal">
-          <p class="dst-schedule-time">{{ item.time }}</p>
-          <p class="dst-schedule-desc">{{ item.description }}</p>
-        </div>
+      {%- for line in schedule_lines -%}
+        {%- assign line = line | strip -%}
+        {%- if line != blank -%}
+          {%- assign sched_parts = line | split: '|' -%}
+          <div class="dst-schedule-item dst-reveal">
+            <p class="dst-schedule-time">{{ sched_parts[0] | strip }}</p>
+            <p class="dst-schedule-desc">{{ sched_parts[1] | strip }}</p>
+          </div>
+        {%- endif -%}
       {%- endfor -%}
     </div>
   </div>

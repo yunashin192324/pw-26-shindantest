@@ -1,8 +1,8 @@
 {%- comment -%}
   destination-reasons — 選ばれる理由。Destination metaobjectの
-  `reasons` (JSON: [{title, description}]) が未入力の間は
-  セクションごと非表示になる。area-lp.liquidの「選ばれる理由」
-  ブロックと同じ役割を、Metaobject駆動の共通テンプレート側に移植。
+  `reasons`（JSONではなく「1行1項目、見出しと本文は｜(縦棒)で区切る」
+  形式の複数行テキスト。例: 【ノンストレス】|日本から直行便で...）が
+  未入力の間はセクションごと非表示になる。
 {%- endcomment -%}
 {%- comment -%}
   where: 'slug.value', page.handle はこの環境ではネストしたプロパティの
@@ -13,9 +13,10 @@
 {%- for d in all_destination_entries -%}
   {%- if d.slug.value == page.handle -%}{%- assign destination = d -%}{%- endif -%}
 {%- endfor -%}
-{%- assign reasons = destination.reasons.value -%}
+{%- assign reason_lines = '' | split: '' -%}
+{%- if destination.reasons.value != blank -%}{%- assign reason_lines = destination.reasons.value | newline_to_br | split: '<br />' -%}{%- endif -%}
 
-{%- if destination and reasons.size > 0 -%}
+{%- if destination and reason_lines.size > 0 -%}
 <section{% if section.settings.bg_ivory %} class="dst-bg-ivory"{% endif %}>
   <div class="dst-container">
     <div class="dst-section-head dst-reveal">
@@ -24,11 +25,15 @@
       <hr class="dst-divider">
     </div>
     <div class="dst-reasons-grid">
-      {%- for reason in reasons -%}
-        <div class="dst-reason-card dst-reveal">
-          <h3 class="dst-reason-title">{% render 'safe-linebreak', text: reason.title %}</h3>
-          <p class="dst-reason-desc">{{ reason.description }}</p>
-        </div>
+      {%- for line in reason_lines -%}
+        {%- assign line = line | strip -%}
+        {%- if line != blank -%}
+          {%- assign reason_parts = line | split: '|' -%}
+          <div class="dst-reason-card dst-reveal">
+            <h3 class="dst-reason-title">{% render 'safe-linebreak', text: reason_parts[0] | strip %}</h3>
+            <p class="dst-reason-desc">{{ reason_parts[1] | strip }}</p>
+          </div>
+        {%- endif -%}
       {%- endfor -%}
     </div>
   </div>
