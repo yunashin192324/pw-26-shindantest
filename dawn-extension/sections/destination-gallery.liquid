@@ -5,7 +5,15 @@
   複数枚まとめて選択・アップロードできるため、area-lp.liquidのように
   ブロックを1枚ずつ追加する必要がない。
 {%- endcomment -%}
-{%- assign destination = shop.metaobjects.destination.values | where: 'slug.value', page.handle | first -%}
+{%- comment -%}
+  where: 'slug.value', page.handle はこの環境ではネストしたプロパティの
+  絞り込みが効かないことがあるため、確実に動く明示的なfor+ifに置き換え。
+{%- endcomment -%}
+{%- assign all_destination_entries = shop.metaobjects.destination.values -%}
+{%- assign destination = blank -%}
+{%- for d in all_destination_entries -%}
+  {%- if d.slug.value == page.handle -%}{%- assign destination = d -%}{%- endif -%}
+{%- endfor -%}
 {%- assign gallery_images = destination.gallery_images.value -%}
 
 {%- if destination and gallery_images.size > 0 -%}

@@ -4,7 +4,15 @@
   セクションごと非表示になる。area-lp.liquidの「選ばれる理由」
   ブロックと同じ役割を、Metaobject駆動の共通テンプレート側に移植。
 {%- endcomment -%}
-{%- assign destination = shop.metaobjects.destination.values | where: 'slug.value', page.handle | first -%}
+{%- comment -%}
+  where: 'slug.value', page.handle はこの環境ではネストしたプロパティの
+  絞り込みが効かないことがあるため、確実に動く明示的なfor+ifに置き換え。
+{%- endcomment -%}
+{%- assign all_destination_entries = shop.metaobjects.destination.values -%}
+{%- assign destination = blank -%}
+{%- for d in all_destination_entries -%}
+  {%- if d.slug.value == page.handle -%}{%- assign destination = d -%}{%- endif -%}
+{%- endfor -%}
 {%- assign reasons = destination.reasons.value -%}
 
 {%- if destination and reasons.size > 0 -%}

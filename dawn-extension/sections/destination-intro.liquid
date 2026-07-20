@@ -3,7 +3,15 @@
   `description`（都市一覧カード・ヒーローのリード文と共通のフィールド）を
   省略せずフルで表示する。文字色・背景色はセクション設定から変更可能。
 {%- endcomment -%}
-{%- assign destination = shop.metaobjects.destination.values | where: 'slug.value', page.handle | first -%}
+{%- comment -%}
+  where: 'slug.value', page.handle はこの環境ではネストしたプロパティの
+  絞り込みが効かないことがあるため、確実に動く明示的なfor+ifに置き換え。
+{%- endcomment -%}
+{%- assign all_destination_entries = shop.metaobjects.destination.values -%}
+{%- assign destination = blank -%}
+{%- for d in all_destination_entries -%}
+  {%- if d.slug.value == page.handle -%}{%- assign destination = d -%}{%- endif -%}
+{%- endfor -%}
 
 {%- if destination and destination.description.value != blank -%}
 <section{% if section.settings.bg_ivory %} class="dst-bg-ivory"{% endif %}>
