@@ -14,8 +14,11 @@
 .dst-spot-desc { font-size: 0.85rem; line-height: 1.7; color: var(--dst-text-muted); }
 
 /* ---------- プラン一覧 ---------- */
-.dst-plans-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 24px; }
-.dst-plan-card { display: block; background: #fff; border: 1px solid rgba(0,0,0,0.08); overflow: hidden; }
+/* プランが1〜2件しかない都市だと、グリッドの行が親要素の高さまで
+   伸びてカードだけ縦に間延びして見えることがあるため、行・カードの
+   高さを内容に合わせて固定する(align-content/align-items: start) */
+.dst-plans-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 24px; align-content: start; align-items: start; }
+.dst-plan-card { display: block; background: #fff; border: 1px solid rgba(0,0,0,0.08); overflow: hidden; height: fit-content; }
 .dst-plan-media { position: relative; padding-top: 125%; overflow: hidden; }
 .dst-plan-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .dst-plan-badge { position: absolute; top: 12px; left: 12px; background: var(--dst-gold); color: #fff; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 2px; }
