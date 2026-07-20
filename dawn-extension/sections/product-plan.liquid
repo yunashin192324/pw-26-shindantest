@@ -88,6 +88,22 @@
     opacity: 1 !important;
     cursor: not-allowed;
   }
+
+  {%- comment -%}
+    ヒーロー見出し：PC基準の40pxのままだと、スマホの狭い画面幅では
+    どんな商品名でも改行位置が窮屈になり不自然に見える。画面幅に応じて
+    段階的に縮小し、括弧部分のnowrapスパンが画面幅をはみ出さないようにする。
+  {%- endcomment -%}
+  @media (max-width: 480px) {
+    #product-plan-{{ section.id }} .plan-hero-title {
+      font-size: calc(var(--font-heading-scale, 1) * 26px) !important;
+    }
+  }
+  @media (min-width: 481px) and (max-width: 767px) {
+    #product-plan-{{ section.id }} .plan-hero-title {
+      font-size: calc(var(--font-heading-scale, 1) * 30px) !important;
+    }
+  }
 </style>
 
 {%- assign variant = product.selected_or_first_available_variant -%}
@@ -245,7 +261,7 @@
         括弧以降をwhite-space:nowrapで囲んで1つの塊として扱う。
       {%- endcomment -%}
       {%- assign hero_title_parts = hero_title | split: '（' -%}
-      <h1 class="font-serif font-light leading-tight mb-4" style="font-size: calc(var(--font-heading-scale, 1) * 40px); color:{{ hero_text_color }}; text-shadow: 0 2px 12px rgba(0,0,0,0.6);">
+      <h1 class="font-serif font-light leading-tight mb-4 plan-hero-title" style="font-size: calc(var(--font-heading-scale, 1) * 40px); color:{{ hero_text_color }}; text-shadow: 0 2px 12px rgba(0,0,0,0.6);">
         {%- if hero_title_parts.size > 1 -%}
           {{ hero_title_parts.first }}<span style="white-space: nowrap;">（{{ hero_title_parts | slice: 1, hero_title_parts.size | join: '（' }}</span>
         {%- else -%}

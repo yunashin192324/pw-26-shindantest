@@ -21,6 +21,13 @@
 {%- assign name_ja = destination.name_ja.value -%}
 {%- assign url = destination.slug.value | prepend: '/pages/' -%}
 {%- assign theme_list = destination.themes.value -%}
+{%- comment -%}
+  カード画像は縦長(4:5)にトリミングされるため、横長のhero_imageを
+  そのままセンター基準で切り抜くと左右の見せたい部分が欠けることが
+  ある。Metaobjectの`hero_image_position`(単一行テキスト、例: "top" /
+  "30% 50%")が入力されていればそれをobject-positionとして使う。
+{%- endcomment -%}
+{%- assign card_img_position = destination.hero_image_position.value | default: 'center' -%}
 
 <a href="{{ url }}" class="dst-card dst-reveal{% if reveal_class %} {{ reveal_class }}{% endif %}">
   <div class="dst-card-media">
@@ -32,6 +39,7 @@
         alt="{{ destination.hero_image.value.alt | default: name_ja | escape }}"
         loading="lazy"
         width="600" height="750"
+        style="object-position: {{ card_img_position }};"
       >
     {%- endif -%}
     {%- if show_badge and destination.popular.value -%}
