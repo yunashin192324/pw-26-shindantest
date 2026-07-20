@@ -67,13 +67,16 @@
   #product-plan-{{ section.id }} .money { font-size: inherit; font-weight: inherit; }
 
   {%- comment -%}
-    予約ボタン(#plan-reserve-form内のsubmit)：日付/時間が未選択のうちは
-    予約アプリ側のスクリプトがdisabled状態にすることがあり、その際に
-    ブラウザ標準の減光表示で文字がほぼ見えなくなる問題への対処。
-    有効/無効どちらの状態でも明示的に読める配色を強制する。
+    予約ボタン：検証ツールで確認したところ、実際に表示されているのは
+    こちらの<button>ではなく、Appointo側のスクリプトが生成する
+    <div id="appointo-btn">だった。このdivはこちらのボタンのCSS
+    クラスはコピーしているが、背景色を指定していたinline styleまでは
+    コピーされておらず、背景が透明のまま白文字だけが残って見えなく
+    なっていた。#appointo-btn自体を直接指定して背景色を強制する。
   {%- endcomment -%}
   #product-plan-{{ section.id }} #plan-reserve-form button[type="submit"],
-  #product-plan-{{ section.id }} #plan-request-form button[type="submit"] {
+  #product-plan-{{ section.id }} #plan-request-form button[type="submit"],
+  #product-plan-{{ section.id }} #appointo-btn {
     background-color: #B8860B !important;
     color: #ffffff !important;
     opacity: 1 !important;
