@@ -121,7 +121,13 @@
 {%- assign plan_area_url = mf.plan_area_url.value -%}
 
 {%- comment -%} ヒーロー {%- endcomment -%}
-{%- assign hero_img = section.settings.hero_img | default: product.featured_image -%}
+{%- comment -%}
+  優先順位のバグ修正：以前は section.settings.hero_img (テンプレート共有
+  設定)が常に優先され、商品ごとのメディア1枚目が無視されていた。
+  この場所はテンプレートを複数商品で共有する前提のため、商品自身の
+  画像を優先し、商品に画像が無い場合だけテンプレート設定を使う。
+{%- endcomment -%}
+{%- assign hero_img = product.featured_image | default: section.settings.hero_img -%}
 {%- assign hero_title = section.settings.hero_title | default: product.title -%}
 {%- assign hero_eyebrow = mf.plan_hero_eyebrow.value | default: section.settings.hero_eyebrow -%}
 {%- assign hero_lede = mf.plan_hero_lede.value | default: section.settings.hero_lede -%}
