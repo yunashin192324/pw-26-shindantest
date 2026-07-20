@@ -1,0 +1,29 @@
+{%- comment -%}
+  destination-theme-label
+  ----------------------------------------------------------------
+  テーマの日本語ラベルの単一情報源(フォールバック用)。
+  「テーマから選ぶ」セクション(destinations-theme-list.liquid)自体の
+  タイル見出しはテーマエディタのブロック設定(自由編集)が優先されるが、
+  検索結果カードのテーマタグ表示など、Metaobjectの`themes`フィールド
+  (キーのみ保持)からJP表示名を引く場面ではこのsnippetを使う。
+
+  Params:
+    theme_key — required, 例: 'beach'
+{%- endcomment -%}
+{%- case theme_key -%}
+  {%- when 'beach' -%}ビーチ
+  {%- when 'streets' -%}街並み
+  {%- when 'palace' -%}宮殿
+  {%- when 'heritage' -%}世界遺産
+  {%- when 'view' -%}絶景
+  {%- when 'lake' -%}湖
+  {%- when 'desert' -%}砂漠
+  {%- when 'balloon' -%}気球
+  {%- when 'church' -%}教会
+  {%- when 'museum' -%}美術館
+  {%- when 'library' -%}図書館
+  {%- when 'resort' -%}リゾート
+  {%- when 'sunset' -%}サンセット
+  {%- when 'overwater' -%}水上ヴィラ
+  {%- else -%}{{ theme_key | capitalize }}
+{%- endcase -%}

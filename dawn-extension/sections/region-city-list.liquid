@@ -1,0 +1,46 @@
+{%- comment -%}
+  region-city-list — 地域ページの都市一覧。region-hero.liquidと同じ方法
+  (page.handleから地域キーを判定)で、その地域に属するDestinationを
+  全件表示する(8件キャップなし。地域ページ自体が絞り込み済みのため)。
+{%- endcomment -%}
+{%- assign region_key = page.handle | replace: '-', '_' -%}
+{%- assign all_destinations = shop.metaobjects.destination.values -%}
+{%- assign match_count = 0 -%}
+{%- for d in all_destinations -%}
+  {%- if d.region.value == region_key -%}{%- assign match_count = match_count | plus: 1 -%}{%- endif -%}
+{%- endfor -%}
+
+{%- if match_count > 0 -%}
+<section class="dst-bg-ivory">
+  <div class="dst-container">
+    <div class="dst-section-head dst-reveal">
+      <p class="dst-eyebrow">Cities</p>
+      <h2>{{ section.settings.heading }}</h2>
+      <hr class="dst-divider">
+    </div>
+    <div class="dst-region-grid">
+      {%- for d in all_destinations -%}
+        {%- if d.region.value == region_key -%}
+          {% render 'destination-card', destination: d %}
+        {%- endif -%}
+      {%- endfor -%}
+    </div>
+  </div>
+</section>
+{%- else -%}
+<section class="dst-text-center" style="padding:80px 0;">
+  <div class="dst-container">
+    <p class="dst-text-muted">この地域の撮影地は準備中です。</p>
+  </div>
+</section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "地域 都市一覧",
+  "settings": [
+    { "type": "text", "id": "heading", "label": "見出し", "default": "都市一覧" }
+  ],
+  "presets": [{ "name": "地域 都市一覧" }]
+}
+{% endschema %}

@@ -1,0 +1,70 @@
+{%- comment -%}
+  region-hero — 地域ページ(/pages/{region})のヒーロー。
+  地域名はページのhandle(例: 'europe', 'middle-east')から自動判定する
+  ため、見出しを空欄にしておけば8ページとも設定なしでそのまま使える。
+  見出しを入力した場合はそちらが優先される。
+{%- endcomment -%}
+{%- assign region_key = page.handle | replace: '-', '_' -%}
+{%- capture auto_label -%}{% render 'destination-region-label', region_key: region_key %}{%- endcapture -%}
+{%- assign auto_label = auto_label | strip -%}
+{%- assign heading = section.settings.heading | default: auto_label -%}
+
+{%- comment -%}
+  共通ヘッダー統一のため、このページ群は独自レイアウト(theme.destinations)
+  を使わず通常のtheme.liquidで表示する。専用CSS/JSをここで読み込み、
+  .destinations-scopeクラスはdivで囲む代わりにJSでbodyに付与する
+  (セクション単体でHTMLタグの対応が閉じるようにするため)。
+{%- endcomment -%}
+{{ 'destinations.css' | asset_url | stylesheet_tag }}
+<script src="{{ 'destinations.js' | asset_url }}" defer></script>
+<script>document.body.classList.add('destinations-scope');</script>
+<section class="dst-hero">
+  <div class="dst-hero-media" style="background-color:#1a1a1a;">
+    {%- comment -%}
+      画像未設定の間も、見出しの白文字が白背景に消えて見えなくなら
+      ないよう、暗い背景色をフォールバックとして常に敷いておく。
+    {%- endcomment -%}
+    {%- if section.settings.image -%}
+      <img
+        src="{{ section.settings.image | image_url: width: 2400 }}"
+        srcset="{{ section.settings.image | image_url: width: 1200 }} 1200w, {{ section.settings.image | image_url: width: 1800 }} 1800w, {{ section.settings.image | image_url: width: 2400 }} 2400w"
+        sizes="100vw"
+        alt="{{ section.settings.image.alt | default: heading | escape }}"
+        loading="eager"
+        fetchpriority="high"
+        width="2400" height="1350"
+      >
+    {%- endif -%}
+  </div>
+  <div class="dst-hero-content">
+    <p class="dst-eyebrow dst-reveal">Region</p>
+    <h1 class="dst-reveal dst-reveal-1">{{ heading }}</h1>
+    {%- if section.settings.description != blank -%}
+      <p class="dst-lede dst-reveal dst-reveal-2">{{ section.settings.description }}</p>
+    {%- endif -%}
+  </div>
+</section>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "TOP", "item": {{ shop.url | append: routes.root_url | json }} },
+    { "@type": "ListItem", "position": 2, "name": "撮影地一覧", "item": {{ shop.url | append: '/pages/destinations' | json }} },
+    { "@type": "ListItem", "position": 3, "name": {{ heading | json }}, "item": {{ canonical_url | json }} }
+  ]
+}
+</script>
+
+{% schema %}
+{
+  "name": "地域 ヒーロー",
+  "settings": [
+    { "type": "image_picker", "id": "image", "label": "背景写真" },
+    { "type": "text", "id": "heading", "label": "見出し（空欄でページhandleから自動生成）" },
+    { "type": "textarea", "id": "description", "label": "サブコピー" }
+  ],
+  "presets": [{ "name": "地域 ヒーロー" }]
+}
+{% endschema %}

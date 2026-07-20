@@ -1,0 +1,24 @@
+/* ===================================================================
+   destinations-additions.css
+   既存の assets/destinations.css の末尾に追記してください。
+   選ばれる理由 / モデルスケジュール / フォトギャラリー の3セクション用。
+   =================================================================== */
+
+/* ---------- 選ばれる理由 ---------- */
+.dst-reasons-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 24px; }
+.dst-reason-card { padding: 28px; background: var(--dst-ivory); }
+.dst-reason-title { font-family: var(--dst-font-serif); font-size: 1.05rem; margin-bottom: 10px; }
+.dst-reason-desc { font-size: 0.9rem; white-space: pre-line; line-height: 1.7; }
+
+/* ---------- モデルスケジュール ---------- */
+.dst-schedule-list { display: flex; flex-direction: column; }
+.dst-schedule-item { display: grid; grid-template-columns: 110px 1fr; gap: 20px; padding: 20px 0; border-bottom: 1px solid rgba(0,0,0,0.08); }
+.dst-schedule-item:last-child { border-bottom: none; }
+.dst-schedule-time { font-family: var(--dst-font-serif); color: var(--dst-gold); font-weight: 600; }
+.dst-schedule-desc { font-size: 0.9rem; white-space: pre-line; line-height: 1.7; }
+
+/* ---------- フォトギャラリー ---------- */
+.dst-gallery-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+@media (min-width: 760px) { .dst-gallery-grid { grid-template-columns: repeat(4, 1fr); } }
+.dst-gallery-item { position: relative; padding-top: 125%; overflow: hidden; }
+.dst-gallery-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }

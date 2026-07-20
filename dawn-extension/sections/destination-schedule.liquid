@@ -1,0 +1,54 @@
+{%- comment -%}
+  destination-schedule — モデルスケジュール。Destination metaobjectの
+  `schedule`（JSONではなく「1行1項目、時刻と内容は｜(縦棒)で区切る」
+  形式の複数行テキスト。例: 1日目|成田空港発ーダナン着）が未入力の間は
+  セクションごと非表示になる。
+{%- endcomment -%}
+{%- comment -%}
+  where: 'slug.value', page.handle はこの環境ではネストしたプロパティの
+  絞り込みが効かないことがあるため、確実に動く明示的なfor+ifに置き換え。
+{%- endcomment -%}
+{%- assign all_destination_entries = shop.metaobjects.destination.values -%}
+{%- assign destination = blank -%}
+{%- for d in all_destination_entries -%}
+  {%- if d.slug.value == page.handle -%}{%- assign destination = d -%}{%- endif -%}
+{%- endfor -%}
+{%- assign schedule_lines = '' | split: '' -%}
+{%- if destination.schedule.value != blank -%}{%- assign schedule_lines = destination.schedule.value | newline_to_br | split: '<br />' -%}{%- endif -%}
+
+{%- if destination and schedule_lines.size > 0 -%}
+<section{% if section.settings.bg_ivory %} class="dst-bg-ivory"{% endif %}>
+  <div class="dst-container" style="max-width:760px;">
+    <div class="dst-section-head dst-reveal">
+      <p class="dst-eyebrow" style="color:{{ section.settings.eyebrow_color }};">{{ section.settings.eyebrow }}</p>
+      <h2 style="color:{{ section.settings.heading_color }};">{{ section.settings.heading }}</h2>
+      <hr class="dst-divider">
+    </div>
+    <div class="dst-schedule-list">
+      {%- for line in schedule_lines -%}
+        {%- assign line = line | strip -%}
+        {%- if line != blank -%}
+          {%- assign sched_parts = line | replace: '｜', '|' | split: '|' -%}
+          <div class="dst-schedule-item dst-reveal">
+            <p class="dst-schedule-time">{{ sched_parts[0] | strip }}</p>
+            <p class="dst-schedule-desc">{{ sched_parts[1] | strip }}</p>
+          </div>
+        {%- endif -%}
+      {%- endfor -%}
+    </div>
+  </div>
+</section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "都市 モデルスケジュール",
+  "settings": [
+    { "type": "checkbox", "id": "bg_ivory", "label": "背景をアイボリーにする", "default": true },
+    { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "Schedule" },
+    { "type": "color", "id": "eyebrow_color", "label": "英字見出し色", "default": "#c9a96e" },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "モデルスケジュール" },
+    { "type": "color", "id": "heading_color", "label": "見出し色", "default": "#1a1a1a" }
+  ]
+}
+{% endschema %}
