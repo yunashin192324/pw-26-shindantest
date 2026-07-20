@@ -14,7 +14,11 @@
 <script src="{{ 'destinations.js' | asset_url }}" defer></script>
 <script>document.body.classList.add('destinations-scope');</script>
 <section class="dst-hero">
-  <div class="dst-hero-media">
+  <div class="dst-hero-media" style="background-color:#1a1a1a;">
+    {%- comment -%}
+      画像未設定の間も、見出しの白文字が白背景に消えて見えなくなら
+      ないよう、暗い背景色をフォールバックとして常に敷いておく。
+    {%- endcomment -%}
     {%- if section.settings.image -%}
       <img
         src="{{ section.settings.image | image_url: width: 2400 }}"

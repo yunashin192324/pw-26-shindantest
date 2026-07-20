@@ -23,7 +23,7 @@
   {%- render 'destination-schema', destination: destination, region_label: region_label -%}
 
   <section class="dst-hero dst-hero--tall">
-    <div class="dst-hero-media">
+    <div class="dst-hero-media" style="background-color:#1a1a1a;">
       {%- if destination.hero_image.value -%}
         <img
           src="{{ destination.hero_image.value | image_url: width: 2400 }}"
