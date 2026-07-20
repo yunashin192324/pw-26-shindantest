@@ -244,7 +244,7 @@
       {%- for line in mf_faqs_lines -%}
         {%- assign line = line | strip -%}
         {%- if line != blank -%}
-          {%- assign faq_parts = line | split: '|' -%}
+          {%- assign faq_parts = line | replace: '｜', '|' | split: '|' -%}
           {
             "@type": "Question",
             "name": {{ faq_parts[0] | strip | strip_html | json }},
@@ -484,7 +484,7 @@
           {% for line in mf_options_lines %}
             {% assign line = line | strip %}
             {% if line != blank %}
-              {% assign option_parts = line | split: '|' %}
+              {% assign option_parts = line | replace: '｜', '|' | split: '|' %}
               <div>
                 <h4 class="font-bold text-sm">{{ option_parts[0] | strip }}</h4>
                 <p class="text-sm mt-2" style="color:#B8860B;">{{ option_parts[1] | strip }}</p>
@@ -647,7 +647,7 @@
           {% for line in mf_schedule_lines %}
             {% assign line = line | strip %}
             {% if line != blank %}
-              {% assign schedule_parts = line | split: '|' %}
+              {% assign schedule_parts = line | replace: '｜', '|' | split: '|' %}
               <div class="flex gap-6 border-b border-gray-200 py-4 text-sm">
                 <span class="w-16 shrink-0 font-serif" style="color:#B8860B;">{{ schedule_parts[0] | strip }}</span>
                 <span class="text-gray-700">{{ schedule_parts[1] | strip }}</span>
@@ -681,7 +681,7 @@
           {% for line in mf_faqs_lines %}
             {% assign line = line | strip %}
             {% if line != blank %}
-              {% assign faq_display_parts = line | split: '|' %}
+              {% assign faq_display_parts = line | replace: '｜', '|' | split: '|' %}
               <details class="border-b border-gray-200 py-4">
                 <summary class="cursor-pointer font-medium text-sm flex justify-between items-center">{{ faq_display_parts[0] | strip }}<span style="color:#B8860B;">＋</span></summary>
                 <p class="text-sm text-gray-600 mt-3 leading-relaxed">{{ faq_display_parts[1] | strip }}</p>

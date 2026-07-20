@@ -28,7 +28,7 @@
       {%- for line in schedule_lines -%}
         {%- assign line = line | strip -%}
         {%- if line != blank -%}
-          {%- assign sched_parts = line | split: '|' -%}
+          {%- assign sched_parts = line | replace: '｜', '|' | split: '|' -%}
           <div class="dst-schedule-item dst-reveal">
             <p class="dst-schedule-time">{{ sched_parts[0] | strip }}</p>
             <p class="dst-schedule-desc">{{ sched_parts[1] | strip }}</p>

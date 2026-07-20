@@ -28,7 +28,7 @@
       {%- for line in reason_lines -%}
         {%- assign line = line | strip -%}
         {%- if line != blank -%}
-          {%- assign reason_parts = line | split: '|' -%}
+          {%- assign reason_parts = line | replace: '｜', '|' | split: '|' -%}
           <div class="dst-reason-card dst-reveal">
             <h3 class="dst-reason-title">{% render 'safe-linebreak', text: reason_parts[0] | strip %}</h3>
             <p class="dst-reason-desc">{{ reason_parts[1] | strip }}</p>

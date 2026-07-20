@@ -33,7 +33,7 @@
         {%- for line in faq_lines -%}
           {%- assign line = line | strip -%}
           {%- if line != blank -%}
-            {%- assign faq_dst_parts = line | split: '|' -%}
+            {%- assign faq_dst_parts = line | replace: '｜', '|' | split: '|' -%}
             <details class="dst-faq-item">
               <summary class="dst-faq-question">{{ faq_dst_parts[0] | strip }}</summary>
               <p class="dst-faq-answer">{{ faq_dst_parts[1] | strip }}</p>
