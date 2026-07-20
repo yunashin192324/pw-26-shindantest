@@ -25,6 +25,8 @@
     </div>
     <div class="dst-spots-grid">
       {%- for spot in spots -%}
+        {%- comment -%} title/nameどちらのキーで書かれていても拾えるようにする {%- endcomment -%}
+        {%- assign spot_title = spot.title | default: spot.name -%}
         <div class="dst-spot-card dst-reveal">
           {%- if spot.image != blank -%}
             <div class="dst-spot-media">
@@ -32,14 +34,14 @@
                 src="{{ spot.image | image_url: width: 700 }}"
                 srcset="{{ spot.image | image_url: width: 500 }} 500w, {{ spot.image | image_url: width: 700 }} 700w, {{ spot.image | image_url: width: 1000 }} 1000w"
                 sizes="(min-width: 760px) 33vw, 90vw"
-                alt="{{ spot.title | escape }}"
+                alt="{{ spot_title | escape }}"
                 loading="lazy"
                 width="700" height="875"
                 style="object-position: {{ section.settings.img_position }};"
               >
             </div>
           {%- endif -%}
-          <h3 class="dst-spot-title">{% render 'safe-linebreak', text: spot.title %}</h3>
+          {%- if spot_title != blank -%}<h3 class="dst-spot-title">{% render 'safe-linebreak', text: spot_title %}</h3>{%- endif -%}
           {%- if spot.description != blank -%}<p class="dst-spot-desc">{{ spot.description }}</p>{%- endif -%}
         </div>
       {%- endfor -%}
