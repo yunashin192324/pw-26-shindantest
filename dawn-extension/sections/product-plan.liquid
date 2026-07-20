@@ -710,10 +710,15 @@
       <h2 class="font-medium" style="font-size: calc(var(--font-heading-scale, 1) * 28px);">{{ reserve_title }}</h2>
       {% if section.settings.reserve_desc != blank %}<p class="text-sm mt-4 text-gray-300">{{ section.settings.reserve_desc }}</p>{% endif %}
       <div class="flex flex-wrap justify-center gap-4 mt-8">
+        {%- comment -%}
+          以前はセクション最上部の枠へのリンクになっており、実際の予約
+          フォーム(カレンダー)まで届かなかったため、フォームのidへ
+          直接ジャンプするよう修正。
+        {%- endcomment -%}
         {% if is_instant %}
-          <a href="#product-plan-{{ section.id }}" class="px-8 py-3 rounded-full font-medium text-sm text-white transition hover:opacity-80" style="background-color:#B8860B;">{{ section.settings.reserve_button_label_instant | default: '空き状況を確認して予約する' }}</a>
+          <a href="#plan-reserve-form" class="px-8 py-3 rounded-full font-medium text-sm text-white transition hover:opacity-80" style="background-color:#B8860B;">{{ section.settings.reserve_button_label_instant | default: '空き状況を確認して予約する' }}</a>
         {% else %}
-          <a href="#product-plan-{{ section.id }}" class="px-8 py-3 rounded-full font-medium text-sm text-white transition hover:opacity-80" style="background-color:#B8860B;">{{ section.settings.reserve_button_label_request | default: '希望日時をリクエストする' }}</a>
+          <a href="#plan-request-form" class="px-8 py-3 rounded-full font-medium text-sm text-white transition hover:opacity-80" style="background-color:#B8860B;">{{ section.settings.reserve_button_label_request | default: '希望日時をリクエストする' }}</a>
         {% endif %}
         {% if section.settings.reserve_cta_secondary != blank %}
           <a href="{{ section.settings.reserve_url_secondary }}" class="px-8 py-3 rounded-full font-medium text-sm border border-white transition hover:opacity-70">{{ section.settings.reserve_cta_secondary }}</a>
