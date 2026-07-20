@@ -185,12 +185,14 @@
 {%- comment -%}
   運行事業者／お申し込み時に必要なもの／撮影不可能日
   もともと店舗に存在していた既存メタフィールド(custom.agt / custom.need /
-  custom.ngday)をそのまま利用。need・ngdayはリッチテキスト型のため
-  .valueがそのままHTMLとして出力される(newline_to_br不要)。
+  custom.ngday)をそのまま利用。need・ngdayはリッチテキスト型のため、
+  .valueだと変換前の生データ({"type"=>"root",...})がそのまま出力
+  されてしまう。metafield_tagフィルタ(メタフィールドそのものに適用、
+  .valueを付けない)を使うと型に応じて正しくHTML変換される。
 {%- endcomment -%}
 {%- assign plan_agent = mf.agt.value -%}
-{%- assign plan_needed_items = mf.need.value -%}
-{%- assign plan_ng_days = mf.ngday.value -%}
+{%- assign plan_needed_items = mf.need | metafield_tag -%}
+{%- assign plan_ng_days = mf.ngday | metafield_tag -%}
 
 {%- assign app_blocks = section.blocks | where: 'type', '@app' -%}
 
@@ -691,7 +693,6 @@
   {% if has_extra_info %}
   <section class="py-16 md:py-24">
     <div class="max-w-3xl mx-auto px-6">
-      <h3 class="font-bold mb-4 text-sm">ご予約にあたって</h3>
       <div class="divider-gold"></div>
       <dl class="mt-6 space-y-6 text-sm">
         {% if plan_agent != blank %}
