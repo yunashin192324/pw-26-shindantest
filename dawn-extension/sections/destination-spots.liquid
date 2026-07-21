@@ -43,7 +43,7 @@
                 alt="{{ spot_title | escape }}"
                 loading="lazy"
                 width="700" height="875"
-                style="object-position: {{ spot_img_position }};"
+                style="object-position: {{ spot_img_position | escape }};"
               >
             </div>
           {%- endif -%}

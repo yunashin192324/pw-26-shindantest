@@ -6,6 +6,9 @@
     "destination-intro": {
       "type": "destination-intro"
     },
+    "destination-quickfacts": {
+      "type": "destination-quickfacts"
+    },
     "destination-reasons": {
       "type": "destination-reasons",
       "settings": {
@@ -56,6 +59,7 @@
   "order": [
     "destination-hero",
     "destination-intro",
+    "destination-quickfacts",
     "destination-reasons",
     "destination-spots",
     "destination-schedule",

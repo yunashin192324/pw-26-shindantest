@@ -369,6 +369,11 @@ html { scroll-behavior: smooth; }
    選ばれる理由 / モデルスケジュール / フォトギャラリー の3セクション用。
    =================================================================== */
 
+/* ---------- 早わかり情報 ---------- */
+.dst-facts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 32px; text-align: center; }
+.dst-fact-label { font-family: var(--dst-font-serif); font-size: 0.8rem; letter-spacing: 0.08em; color: var(--dst-gold); margin-bottom: 8px; }
+.dst-fact-value { font-size: 1.05rem; font-weight: 600; white-space: pre-line; }
+
 /* ---------- 選ばれる理由 ---------- */
 .dst-reasons-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 24px; }
 .dst-reason-card { padding: 28px; background: var(--dst-ivory); }
