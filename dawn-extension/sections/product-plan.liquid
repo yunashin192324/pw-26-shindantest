@@ -51,7 +51,7 @@
   if (!document.getElementById('tw-cdn')) {
     var twScript = document.createElement('script');
     twScript.id = 'tw-cdn';
-    twScript.src = 'https://cdn.tailwindcss.com/3.4.17';
+    twScript.src = '{{ "tailwind-3.4.17.js" | asset_url }}';
     document.head.appendChild(twScript);
   }
 </script>
