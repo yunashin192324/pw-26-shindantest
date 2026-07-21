@@ -779,6 +779,70 @@
     </div>
   </section>
 
+  {% comment %}
+    --- 関連プラン(同じ撮影地の他プラン) ---
+    plan_area_nameが同じ他の商品をルールベースで抽出。閲覧履歴は
+    使わないが、データが無い今すぐでも安定して表示できる。
+    collections.all.productsは先頭50件までしか見られない点に注意
+    (プラン数が50を超えたらcollection化してpaginateする形に見直す)。
+  {% endcomment %}
+  {%- if plan_area_name != blank -%}
+    {%- assign related_plans_count = 0 -%}
+    {%- capture related_plans_html -%}
+      {%- for p in collections.all.products -%}
+        {%- if p.id != product.id and p.metafields.custom.plan_area_name.value == plan_area_name and related_plans_count < 4 -%}
+          <a href="{{ p.url }}" class="block rounded-lg overflow-hidden border border-gray-200 hover:shadow-md transition">
+            {%- if p.featured_image != blank -%}
+              <div class="aspect-[4/5] overflow-hidden">
+                {{ p.featured_image | image_url: width: 500 | image_tag: class: 'w-full h-full object-cover', loading: 'lazy', alt: p.title }}
+              </div>
+            {%- endif -%}
+            <div class="p-4">
+              <h4 class="font-serif text-sm mb-1">{{ p.title }}</h4>
+              <p class="text-sm font-bold" style="color:#B8860B;">{{ p.price | money_without_currency }}<span class="text-xs font-normal">円〜</span></p>
+            </div>
+          </a>
+          {%- assign related_plans_count = related_plans_count | plus: 1 -%}
+        {%- endif -%}
+      {%- endfor -%}
+    {%- endcapture -%}
+    {%- if related_plans_html != blank -%}
+    <section class="py-16 md:py-24" style="background-color:#FAF8F5;">
+      <div class="max-w-5xl mx-auto px-6">
+        <h3 class="font-serif text-xl mb-6 text-center">{{ plan_area_name }}の他のプラン</h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {{ related_plans_html }}
+        </div>
+      </div>
+    </section>
+    {%- endif -%}
+  {%- endif -%}
+
+  {% comment %}
+    --- Shopify純正AIおすすめ商品 ---
+    plan-recommendations.liquidをfetchで呼び出して差し込む。
+    データ不足で該当なしの場合は何も表示されない(意図的な仕様)。
+  {% endcomment %}
+  <div id="plan-native-recs-{{ section.id }}" data-url="{{ routes.product_recommendations_url }}?section_id=plan-recommendations&product_id={{ product.id }}&limit=4&intent=related"></div>
+  <script>
+    (function () {
+      var wrap = document.getElementById('plan-native-recs-{{ section.id }}');
+      if (!wrap) return;
+      fetch(wrap.dataset.url)
+        .then(function (res) { return res.text(); })
+        .then(function (html) {
+          var tmp = document.createElement('div');
+          tmp.innerHTML = html;
+          var content = tmp.querySelector('.plan-recs-inner');
+          if (content && content.innerHTML.trim() !== '') {
+            wrap.className = 'py-16 md:py-24';
+            wrap.innerHTML = content.innerHTML;
+          }
+        })
+        .catch(function () {});
+    })();
+  </script>
+
 </div>
 
 {% schema %}

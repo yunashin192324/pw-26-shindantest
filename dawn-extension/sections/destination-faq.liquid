@@ -6,7 +6,8 @@
   まま「新規作成」→質問と回答をそれぞれの欄に入力、という流れで
   追加できる(｜区切りのテキストを手書きする必要がない)。
   未入力の間はFAQ部分のみ非表示（関連都市は独立して表示される）。
-  関連都市は同じregionの他都市を自動抽出（無ければ人気都市から補完）。
+  関連都市は同じregionの他都市を優先抽出し、4件に満たない場合は
+  同じtheme(雰囲気)を持つ他地域の都市で補完する。
 {%- endcomment -%}
 {%- comment -%}
   where: 'slug.value', page.handle はこの環境ではネストしたプロパティの
@@ -43,14 +44,38 @@
   </section>
   {%- endif -%}
 
-  {%- assign related_shown = 0 -%}
-  {%- for d in all_destinations -%}
-    {%- if related_shown < 3 and d.slug.value != destination.slug.value and d.region.value == destination.region.value -%}
-      {%- assign related_shown = related_shown | plus: 1 -%}
+  {%- comment -%}
+    関連都市の抽出：①同じ地域を優先、②4件に満たない場合は同じ
+    テーマ(themes配列の重複)を持つ都市で補完。「見ている人はこれも
+    見ています」に寄せた導線として、地域だけでなくテーマの近さも
+    考慮する。
+  {%- endcomment -%}
+  {%- assign related_count = 0 -%}
+  {%- assign my_themes = destination.themes.value -%}
+  {%- capture related_cards_html -%}
+    {%- for d in all_destinations -%}
+      {%- if related_count < 4 and d.slug.value != destination.slug.value and d.region.value == destination.region.value -%}
+        {% render 'destination-card', destination: d %}
+        {%- assign related_count = related_count | plus: 1 -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {%- if related_count < 4 -%}
+      {%- for d in all_destinations -%}
+        {%- if related_count < 4 and d.slug.value != destination.slug.value and d.region.value != destination.region.value -%}
+          {%- assign theme_match = false -%}
+          {%- for t in d.themes.value -%}
+            {%- if my_themes contains t -%}{%- assign theme_match = true -%}{%- endif -%}
+          {%- endfor -%}
+          {%- if theme_match -%}
+            {% render 'destination-card', destination: d %}
+            {%- assign related_count = related_count | plus: 1 -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
     {%- endif -%}
-  {%- endfor -%}
+  {%- endcapture -%}
 
-  {%- if related_shown > 0 -%}
+  {%- if related_count > 0 -%}
   <section class="dst-bg-ivory">
     <div class="dst-container">
       <div class="dst-section-head dst-reveal">
@@ -58,13 +83,7 @@
         <hr class="dst-divider">
       </div>
       <div class="dst-region-grid">
-        {%- assign r_i = 0 -%}
-        {%- for d in all_destinations -%}
-          {%- if r_i < 3 and d.slug.value != destination.slug.value and d.region.value == destination.region.value -%}
-            {% render 'destination-card', destination: d %}
-            {%- assign r_i = r_i | plus: 1 -%}
-          {%- endif -%}
-        {%- endfor -%}
+        {{ related_cards_html }}
       </div>
     </div>
   </section>
