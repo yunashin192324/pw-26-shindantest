@@ -311,30 +311,6 @@ html { scroll-behavior: smooth; }
 .dst-geo-item dt { font-family: var(--dst-font-serif); color: var(--dst-gold-dark); font-size: 0.92rem; margin-bottom: 6px; }
 .dst-geo-item dd { font-size: 0.92rem; }
 
-/* ---------- Photo spots (旧・プレースホルダー版。実際の描画は
-   destination-spots.liquid が使う下の「撮影スポット」ブロックの
-   クラス名(.dst-spot-title 等)で、CSSカスケード上こちらは
-   後方互換のため残しているだけの未使用コード) ---------- */
-.dst-spots-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 30px; }
-.dst-spot-media { aspect-ratio: 3 / 4; overflow: hidden; margin-bottom: 16px; background: var(--dst-ivory); }
-.dst-spot-media img { width: 100%; height: 100%; object-fit: cover; }
-.dst-spot-name { font-family: var(--dst-font-serif); font-size: 1.15rem; margin-bottom: 6px; }
-.dst-spot-desc { font-size: 0.9rem; }
-
-/* ---------- Plans (旧・プレースホルダー版。実際の描画は
-   destination-plans.liquid が使う下の「プラン一覧」ブロックの
-   クラス名で、こちらは padding だけカスケードで生き残っている) ---------- */
-.dst-plans-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 28px; }
-.dst-plan-card { border: 1px solid var(--dst-border); padding: 30px; }
-.dst-plan-card h3 { margin-bottom: 10px; }
-.dst-plan-price { font-family: var(--dst-font-sans); font-weight: 700; font-size: 1.6rem; color: var(--dst-gold-dark); margin: 12px 0 16px; font-variant-numeric: lining-nums tabular-nums; }
-.dst-plan-note { font-size: 0.8rem; color: var(--dst-text-muted); margin-top: 10px; }
-.dst-plans-placeholder-badge {
-  display: inline-block; font-size: 0.72rem; letter-spacing: 0.08em;
-  padding: 4px 10px; border: 1px solid var(--dst-gold); color: var(--dst-gold-dark);
-  margin-bottom: 14px;
-}
-
 /* ---------- FAQ / Accordion (旧・プレースホルダー版。実際の描画は
    destination-faq.liquid が使う下の「FAQ」ブロックの
    クラス名(.dst-faq-item 等)) ---------- */
