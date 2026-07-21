@@ -6,10 +6,11 @@
   管理画面上でその場で新規作成＆画像アップロードができる
   (JSONを手書きしたりファイル管理ページを往復したりする必要がない)。
 
-  image_position(単一行テキスト・選択肢のリストで「上/下/左/右/中央/
-  左上/右上/左下/右下」に限定)は、snippets/destination-image-position
-  で実際のCSS object-position値に変換して使う。未入力ならセクション
-  設定の既定値にフォールバックする。
+  image_position(「画像位置」metaobjectへの参照。中身は上/下/左/右/
+  中央/左上/右上/左下/右下の9エントリーで、管理画面ではクリックで
+  選ぶだけ)は、参照先の`label`フィールドをsnippets/
+  destination-image-positionでCSSのobject-position値に変換して使う。
+  未入力ならセクション設定の既定値にフォールバックする。
 {%- endcomment -%}
 {%- comment -%}
   where: 'slug.value', page.handle はこの環境ではネストしたプロパティの
@@ -37,7 +38,8 @@
           JSONの時と違い .value まで付けて取り出す。
         {%- endcomment -%}
         {%- assign spot_title = spot.title.value -%}
-        {%- capture spot_img_position -%}{% render 'destination-image-position', position_key: spot.image_position.value %}{%- endcapture -%}
+        {%- assign spot_position_label = spot.image_position.value.label.value -%}
+        {%- capture spot_img_position -%}{% render 'destination-image-position', position_key: spot_position_label %}{%- endcapture -%}
         {%- assign spot_img_position = spot_img_position | strip -%}
         {%- if spot_img_position == blank -%}{%- assign spot_img_position = section.settings.img_position -%}{%- endif -%}
         <div class="dst-spot-card dst-reveal">
