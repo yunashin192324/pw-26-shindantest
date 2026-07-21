@@ -388,7 +388,7 @@
         </div>
         <div class="fade-in">
           <p class="font-serif-display tracking-widest-custom mb-2 font-bold" style="color: {{ section.settings.dress_eyebrow_color }};">Dress</p>
-          <h2 class="text-2xl md:text-2xl tracking-widest-custom mb-6 leading-tight font-medium" style="color: {{ section.settings.dress_heading_color }};">{{ section.settings.dress_title | newline_to_br }}</h2>
+          <h2 class="text-2xl md:text-2xl tracking-widest-custom mb-6 leading-tight font-medium" style="color: {{ section.settings.dress_heading_color }}; word-break: keep-all; overflow-wrap: break-word;">{{ section.settings.dress_title | newline_to_br }}</h2>
           <hr class="gold-line max-w-[60px] ml-0" style="border-color: {{ section.settings.dress_eyebrow_color }};">
           <p class="text-sm border-gold leading-loose mb-8" style="color: {{ section.settings.dress_desc_color }};">{{ section.settings.dress_desc | newline_to_br }}</p>
           <a href="{{ section.settings.dress_link | default: '#' }}" class="btn btn-outline-dark">{{ section.settings.dress_btn }}</a>
@@ -712,7 +712,7 @@
       ],
       "default": "object-center"
     },
-    { "type": "textarea", "id": "dress_title", "label": "見出し", "default": "フォーシスアンドカンパニーの衣裳を、\\nそのまま海外へ。" },
+    { "type": "textarea", "id": "dress_title", "label": "見出し", "default": "フォーシスアンドカンパニーの\\n衣裳を、そのまま海外へ。" },
     { "type": "color", "id": "dress_heading_color", "label": "見出しの文字色", "default": "#1a1a1a" },
     { "type": "color", "id": "dress_eyebrow_color", "label": "眉見出し・線の色", "default": "#C9A96E" },
     { "type": "textarea", "id": "dress_desc", "label": "説明文", "default": "全国の提携サロンで試着し、選んだ一着をそのまま撮影地まで。海外挙式・フォトウェディングに精通したフォーシスアンドカンパニーの上質なドレス・タキシードだから、写真映えも着心地も妥協しません。" },
