@@ -34,7 +34,7 @@
       <span class="dot">/</span>
       <span>読了 {{ read_minutes }}分</span>
     </div>
-    <h1>{{ article.title }}</h1>
+    <h1>{% render 'journal-title-break', title: article.title %}</h1>
   </div>
 </section>
 
