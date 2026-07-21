@@ -327,7 +327,7 @@ html { scroll-behavior: smooth; }
 .dst-plans-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 28px; }
 .dst-plan-card { border: 1px solid var(--dst-border); padding: 30px; }
 .dst-plan-card h3 { margin-bottom: 10px; }
-.dst-plan-price { font-family: var(--dst-font-serif); font-size: 1.6rem; color: var(--dst-gold-dark); margin: 12px 0 16px; font-variant-numeric: lining-nums tabular-nums; }
+.dst-plan-price { font-family: var(--dst-font-sans); font-weight: 700; font-size: 1.6rem; color: var(--dst-gold-dark); margin: 12px 0 16px; font-variant-numeric: lining-nums tabular-nums; }
 .dst-plan-note { font-size: 0.8rem; color: var(--dst-text-muted); margin-top: 10px; }
 .dst-plans-placeholder-badge {
   display: inline-block; font-size: 0.72rem; letter-spacing: 0.08em;
@@ -421,7 +421,7 @@ html { scroll-behavior: smooth; }
 .dst-plan-body { padding: 18px; }
 .dst-plan-title { font-family: var(--dst-font-serif); font-size: 1rem; margin-bottom: 8px; }
 .dst-plan-desc { font-size: 0.85rem; color: var(--dst-text-muted); line-height: 1.6; margin-bottom: 10px; }
-.dst-plan-price { font-family: var(--dst-font-serif); color: var(--dst-gold); font-size: 1.15rem; margin-bottom: 10px; font-variant-numeric: lining-nums tabular-nums; }
+.dst-plan-price { font-family: var(--dst-font-sans); font-weight: 700; color: var(--dst-gold); font-size: 1.15rem; margin-bottom: 10px; font-variant-numeric: lining-nums tabular-nums; }
 
 /* ---------- FAQ ---------- */
 .dst-faq-list { display: flex; flex-direction: column; }

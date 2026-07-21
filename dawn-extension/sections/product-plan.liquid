@@ -344,8 +344,8 @@
         {% else %}
           <span class="inline-flex items-center gap-1 px-3 py-1 text-xs rounded-full" style="background:#f6efe2;color:#8f6a08;">リクエスト予約</span>
         {% endif %}
-        <div class="mt-4 font-serif" style="font-size: calc(var(--font-heading-scale, 1) * 34px); color:#1a1a1a; font-variant-numeric: lining-nums tabular-nums;">
-          {{ variant.price | money_without_currency }}<span style="font-size: 0.4em; font-family: var(--font-body-family, sans-serif); margin-left: 0.1em;">円</span>
+        <div class="mt-4" style="font-size: calc(var(--font-heading-scale, 1) * 34px); font-family: var(--font-body-family, sans-serif); font-weight: 700; color:#1a1a1a; font-variant-numeric: lining-nums tabular-nums;">
+          {{ variant.price | money_without_currency }}<span style="font-size: 0.4em; font-weight: 400; margin-left: 0.1em;">円</span>
           <span class="text-sm font-sans text-gray-500">{{ price_note }}</span>
         </div>
 

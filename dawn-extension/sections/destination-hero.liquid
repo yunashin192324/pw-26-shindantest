@@ -26,9 +26,7 @@
 <script>document.body.classList.add('destinations-scope');</script>
 
 {%- if destination -%}
-  {%- capture region_label -%}{% render 'destination-region-label', region_key: destination.region.value %}{%- endcapture -%}
-  {%- assign region_label = region_label | strip -%}
-  {%- render 'destination-schema', destination: destination, region_label: region_label -%}
+  {%- render 'destination-schema', destination: destination -%}
 
   <section class="dst-hero dst-hero--tall">
     <div class="dst-hero-media" style="background-color:#1a1a1a;">
@@ -55,7 +53,6 @@
   <nav class="dst-hero-breadcrumb dst-text-center" aria-label="breadcrumb" style="position:static;padding:22px var(--dst-gutter);color:var(--dst-text-muted);">
     <a href="{{ routes.root_url }}">TOP</a><span>／</span>
     <a href="/pages/destinations">撮影地一覧</a><span>／</span>
-    <a href="/pages/{{ destination.region.value | replace: '_', '-' }}">{{ region_label }}</a><span>／</span>
     <span>{{ destination.name_ja.value }}</span>
     {%- comment -%}
       「都市 プラン一覧」セクション(id="dst-plans")はブロック(プラン商品)が

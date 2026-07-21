@@ -1,8 +1,9 @@
 {%- comment -%}
   destination-schema — 都市ページのJSON-LD構造化データ(SEO用)。
+  パンくずは表示側(destination-hero)に合わせ、地域を挟まず
+  TOP → 撮影地一覧 → 都市名 の3階層で統一している。
   Params:
-    destination  — required, Destination metaobjectの1件
-    region_label — required, snippets/destination-region-labelの出力文字列
+    destination — required, Destination metaobjectの1件
 {%- endcomment -%}
 <script type="application/ld+json">
 {
@@ -29,8 +30,7 @@
   "itemListElement": [
     { "@type": "ListItem", "position": 1, "name": "TOP", "item": {{ shop.url | append: routes.root_url | json }} },
     { "@type": "ListItem", "position": 2, "name": "撮影地一覧", "item": {{ shop.url | append: '/pages/destinations' | json }} },
-    { "@type": "ListItem", "position": 3, "name": {{ region_label | json }}, "item": {{ shop.url | append: '/pages/' | append: destination.region.value | replace: '_', '-' | json }} },
-    { "@type": "ListItem", "position": 4, "name": {{ destination.name_ja.value | json }}, "item": {{ canonical_url | json }} }
+    { "@type": "ListItem", "position": 3, "name": {{ destination.name_ja.value | json }}, "item": {{ canonical_url | json }} }
   ]
 }
 </script>
