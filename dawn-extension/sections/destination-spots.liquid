@@ -5,6 +5,11 @@
   image(ファイル・画像)を持つ独立したmetaobjectエントリーで、
   管理画面上でその場で新規作成＆画像アップロードができる
   (JSONを手書きしたりファイル管理ページを往復したりする必要がない)。
+
+  image_position(単一行テキスト・選択肢のリストで「上/下/左/右/中央/
+  左上/右上/左下/右下」に限定)は、snippets/destination-image-position
+  で実際のCSS object-position値に変換して使う。未入力ならセクション
+  設定の既定値にフォールバックする。
 {%- endcomment -%}
 {%- comment -%}
   where: 'slug.value', page.handle はこの環境ではネストしたプロパティの
@@ -32,7 +37,9 @@
           JSONの時と違い .value まで付けて取り出す。
         {%- endcomment -%}
         {%- assign spot_title = spot.title.value -%}
-        {%- assign spot_img_position = spot.image_position.value | default: section.settings.img_position -%}
+        {%- capture spot_img_position -%}{% render 'destination-image-position', position_key: spot.image_position.value %}{%- endcapture -%}
+        {%- assign spot_img_position = spot_img_position | strip -%}
+        {%- if spot_img_position == blank -%}{%- assign spot_img_position = section.settings.img_position -%}{%- endif -%}
         <div class="dst-spot-card dst-reveal">
           {%- if spot.image.value != blank -%}
             <div class="dst-spot-media">
