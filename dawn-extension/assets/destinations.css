@@ -367,7 +367,7 @@ html { scroll-behavior: smooth; }
 .dst-gallery-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
 @media (min-width: 760px) { .dst-gallery-grid { grid-template-columns: repeat(4, 1fr); } }
 .dst-gallery-item { position: relative; padding-top: 125%; overflow: hidden; }
-.dst-gallery-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.dst-gallery-item .dst-gallery-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 
 /* ===================================================================
    destinations-additions-2.css
@@ -392,7 +392,7 @@ html { scroll-behavior: smooth; }
 .dst-plans-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 24px; align-content: start; align-items: start; }
 .dst-plan-card { display: block; background: #fff; border: 1px solid rgba(0,0,0,0.08); overflow: hidden; height: fit-content; }
 .dst-plan-media { position: relative; padding-top: 125%; overflow: hidden; }
-.dst-plan-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.dst-plan-media .dst-plan-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .dst-plan-badge { position: absolute; top: 12px; left: 12px; background: var(--dst-gold); color: #fff; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 2px; }
 .dst-plan-body { padding: 18px; }
 .dst-plan-title { font-family: var(--dst-font-serif); font-size: 1rem; margin-bottom: 8px; }
