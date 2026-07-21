@@ -384,7 +384,7 @@ html { scroll-behavior: smooth; }
 .dst-schedule-list { display: flex; flex-direction: column; }
 .dst-schedule-item { display: grid; grid-template-columns: 110px 1fr; gap: 20px; padding: 20px 0; border-bottom: 1px solid rgba(0,0,0,0.08); }
 .dst-schedule-item:last-child { border-bottom: none; }
-.dst-schedule-time { font-family: var(--dst-font-serif); color: var(--dst-gold); font-weight: 600; }
+.dst-schedule-time { font-family: var(--dst-font-sans); color: var(--dst-gold); font-weight: 700; font-variant-numeric: lining-nums tabular-nums; }
 .dst-schedule-desc { font-size: 0.9rem; white-space: pre-line; line-height: 1.7; }
 
 /* ---------- フォトギャラリー ---------- */
