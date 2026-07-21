@@ -35,23 +35,19 @@
 }
 </script>
 {%- comment -%}
-  faqs（1行1項目、質問｜回答形式）が入力されていれば、AI検索・生成AI
-  概要などが質問と回答をそのまま抽出しやすいFAQPage構造化データも出力する。
+  faqs（「FAQ Item」metaobjectへの参照リスト）が入力されていれば、
+  AI検索・生成AI概要などが質問と回答をそのまま抽出しやすい
+  FAQPage構造化データも出力する。
 {%- endcomment -%}
-{%- assign schema_faq_lines = '' | split: '' -%}
-{%- if destination.faqs.value != blank -%}{%- assign schema_faq_lines = destination.faqs.value | newline_to_br | split: '<br />' -%}{%- endif -%}
+{%- assign schema_faq_source = destination.faqs.value -%}
 {%- assign schema_faq_items = '' -%}
 {%- assign schema_faq_count = 0 -%}
-{%- for line in schema_faq_lines -%}
-  {%- assign line = line | strip -%}
-  {%- if line != blank -%}
-    {%- assign faq_parts = line | replace: '｜', '|' | split: '|' -%}
-    {%- if faq_parts.size > 1 -%}
-      {%- if schema_faq_count > 0 -%}{%- assign schema_faq_items = schema_faq_items | append: ',' -%}{%- endif -%}
-      {%- capture faq_item -%}{ "@type": "Question", "name": {{ faq_parts[0] | strip | json }}, "acceptedAnswer": { "@type": "Answer", "text": {{ faq_parts[1] | strip | json }} } }{%- endcapture -%}
-      {%- assign schema_faq_items = schema_faq_items | append: faq_item -%}
-      {%- assign schema_faq_count = schema_faq_count | plus: 1 -%}
-    {%- endif -%}
+{%- for item in schema_faq_source -%}
+  {%- if item.question.value != blank and item.answer.value != blank -%}
+    {%- if schema_faq_count > 0 -%}{%- assign schema_faq_items = schema_faq_items | append: ',' -%}{%- endif -%}
+    {%- capture faq_item -%}{ "@type": "Question", "name": {{ item.question.value | json }}, "acceptedAnswer": { "@type": "Answer", "text": {{ item.answer.value | json }} } }{%- endcapture -%}
+    {%- assign schema_faq_items = schema_faq_items | append: faq_item -%}
+    {%- assign schema_faq_count = schema_faq_count | plus: 1 -%}
   {%- endif -%}
 {%- endfor -%}
 {%- if schema_faq_count > 0 -%}

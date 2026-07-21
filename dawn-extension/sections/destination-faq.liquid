@@ -1,8 +1,11 @@
 {%- comment -%}
   destination-faq — よくある質問 + その他の撮影地への導線。
-  Destination metaobjectの`faqs`（JSONではなく「1行1項目、質問と回答は
-  ｜(縦棒)で区切る」形式の複数行テキスト。例: ビザは必要ですか？|不要です）
-  が未入力の間はFAQ部分のみ非表示（関連都市は独立して表示される）。
+  Destination metaobjectの`faqs`は「FAQ Item」metaobjectへの参照
+  リスト型。各項目はquestion(単一行テキスト)/answer(複数行テキスト)を
+  持つ独立したmetaobjectエントリーで、都市エントリーの編集画面の
+  まま「新規作成」→質問と回答をそれぞれの欄に入力、という流れで
+  追加できる(｜区切りのテキストを手書きする必要がない)。
+  未入力の間はFAQ部分のみ非表示（関連都市は独立して表示される）。
   関連都市は同じregionの他都市を自動抽出（無ければ人気都市から補完）。
 {%- endcomment -%}
 {%- comment -%}
@@ -14,14 +17,13 @@
 {%- for d in all_destination_entries -%}
   {%- if d.slug.value == page.handle -%}{%- assign destination = d -%}{%- endif -%}
 {%- endfor -%}
-{%- assign faq_lines = '' | split: '' -%}
-{%- if destination.faqs.value != blank -%}{%- assign faq_lines = destination.faqs.value | newline_to_br | split: '<br />' -%}{%- endif -%}
+{%- assign faq_items = destination.faqs.value -%}
 
 {%- comment -%} 関連都市：同じregion優先、self除外、最大3件 {%- endcomment -%}
 {%- assign all_destinations = shop.metaobjects.destination.values -%}
 
 {%- if destination -%}
-  {%- if faq_lines.size > 0 -%}
+  {%- if faq_items.size > 0 -%}
   <section>
     <div class="dst-container" style="max-width:760px;">
       <div class="dst-section-head dst-reveal">
@@ -30,15 +32,11 @@
         <hr class="dst-divider">
       </div>
       <div class="dst-faq-list">
-        {%- for line in faq_lines -%}
-          {%- assign line = line | strip -%}
-          {%- if line != blank -%}
-            {%- assign faq_dst_parts = line | replace: '｜', '|' | split: '|' -%}
-            <details class="dst-faq-item">
-              <summary class="dst-faq-question">{{ faq_dst_parts[0] | strip }}</summary>
-              <p class="dst-faq-answer">{{ faq_dst_parts[1] | strip }}</p>
-            </details>
-          {%- endif -%}
+        {%- for item in faq_items -%}
+          <details class="dst-faq-item">
+            <summary class="dst-faq-question">{{ item.question.value }}</summary>
+            <p class="dst-faq-answer">{{ item.answer.value }}</p>
+          </details>
         {%- endfor -%}
       </div>
     </div>
