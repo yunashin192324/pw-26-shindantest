@@ -23,7 +23,8 @@
         <a href="{{ linked_product.url }}" class="dst-plan-card dst-reveal" {{ block.shopify_attributes }}>
           <div class="dst-plan-media">
             {%- if linked_product.featured_image != blank -%}
-              {%- capture plan_img_style -%}object-position: {{ section.settings.img_position }};{%- endcapture -%}
+              {%- assign plan_img_position = block.settings.img_position | default: section.settings.img_position -%}
+              {%- capture plan_img_style -%}object-position: {{ plan_img_position }};{%- endcapture -%}
               {{ linked_product.featured_image | image_url: width: 900 | image_tag: class: 'dst-plan-img', loading: 'lazy', alt: linked_product.title, style: plan_img_style }}
             {%- endif -%}
             {%- if is_instant -%}<span class="dst-plan-badge">即予約</span>{%- endif -%}
@@ -54,11 +55,14 @@
     { "type": "color", "id": "eyebrow_color", "label": "英字見出し色", "default": "#c9a96e" },
     { "type": "text", "id": "heading", "label": "見出し", "default": "おすすめプラン" },
     { "type": "color", "id": "heading_color", "label": "見出し色", "default": "#1a1a1a" },
-    { "type": "select", "id": "img_position", "label": "画像トリミング位置", "default": "center",
+    { "type": "select", "id": "img_position", "label": "画像トリミング位置（既定値）", "default": "center",
+      "info": "各プランのimg_positionが未指定の場合に使われる既定値です。",
       "options": [
         { "value": "top", "label": "上" },
         { "value": "center", "label": "中央" },
-        { "value": "bottom", "label": "下" }
+        { "value": "bottom", "label": "下" },
+        { "value": "left", "label": "左" },
+        { "value": "right", "label": "右" }
       ]
     }
   ],
@@ -67,7 +71,18 @@
       "type": "plan",
       "name": "プラン",
       "settings": [
-        { "type": "product", "id": "product", "label": "商品", "info": "この都市のプラン商品を選択してください。名称・価格・画像・URL・即予約バッジは商品から自動取得されます。" }
+        { "type": "product", "id": "product", "label": "商品", "info": "この都市のプラン商品を選択してください。名称・価格・画像・URL・即予約バッジは商品から自動取得されます。" },
+        { "type": "select", "id": "img_position", "label": "画像トリミング位置", "default": "",
+          "info": "空欄ならセクションの既定値を使用します。人物が見切れる場合はここで個別に調整してください。",
+          "options": [
+            { "value": "", "label": "セクションの既定値を使う" },
+            { "value": "top", "label": "上" },
+            { "value": "center", "label": "中央" },
+            { "value": "bottom", "label": "下" },
+            { "value": "left", "label": "左" },
+            { "value": "right", "label": "右" }
+          ]
+        }
       ]
     }
   ],
