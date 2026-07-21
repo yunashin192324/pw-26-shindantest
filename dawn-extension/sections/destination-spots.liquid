@@ -32,6 +32,7 @@
           JSONの時と違い .value まで付けて取り出す。
         {%- endcomment -%}
         {%- assign spot_title = spot.title.value -%}
+        {%- assign spot_img_position = spot.image_position.value | default: section.settings.img_position -%}
         <div class="dst-spot-card dst-reveal">
           {%- if spot.image.value != blank -%}
             <div class="dst-spot-media">
@@ -42,7 +43,7 @@
                 alt="{{ spot_title | escape }}"
                 loading="lazy"
                 width="700" height="875"
-                style="object-position: {{ section.settings.img_position }};"
+                style="object-position: {{ spot_img_position }};"
               >
             </div>
           {%- endif -%}
@@ -64,7 +65,8 @@
     { "type": "color", "id": "eyebrow_color", "label": "英字見出し色", "default": "#c9a96e" },
     { "type": "text", "id": "heading", "label": "見出し", "default": "撮影スポット" },
     { "type": "color", "id": "heading_color", "label": "見出し色", "default": "#1a1a1a" },
-    { "type": "select", "id": "img_position", "label": "画像トリミング位置", "default": "center",
+    { "type": "select", "id": "img_position", "label": "画像トリミング位置（既定値）", "default": "center",
+      "info": "各撮影スポットのimage_positionフィールドが未入力の場合に使われる既定値です。",
       "options": [
         { "value": "top", "label": "上" },
         { "value": "center", "label": "中央" },

@@ -30,8 +30,13 @@
         {%- if line != blank -%}
           {%- assign reason_parts = line | replace: '｜', '|' | split: '|' -%}
           <div class="dst-reason-card dst-reveal">
-            <h3 class="dst-reason-title">{% render 'safe-linebreak', text: reason_parts[0] | strip %}</h3>
-            <p class="dst-reason-desc">{{ reason_parts[1] | strip }}</p>
+            {%- if reason_parts.size > 1 -%}
+              <h3 class="dst-reason-title">{% render 'safe-linebreak', text: reason_parts[0] | strip %}</h3>
+              <p class="dst-reason-desc">{{ reason_parts[1] | strip }}</p>
+            {%- else -%}
+              {%- comment -%}｜区切りが無い行は、細い見出し欄に押し込まず本文として表示{%- endcomment -%}
+              <p class="dst-reason-desc">{{ reason_parts[0] | strip }}</p>
+            {%- endif -%}
           </div>
         {%- endif -%}
       {%- endfor -%}

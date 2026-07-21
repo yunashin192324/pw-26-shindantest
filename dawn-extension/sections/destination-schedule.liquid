@@ -30,8 +30,14 @@
         {%- if line != blank -%}
           {%- assign sched_parts = line | replace: '｜', '|' | split: '|' -%}
           <div class="dst-schedule-item dst-reveal">
-            <p class="dst-schedule-time">{{ sched_parts[0] | strip }}</p>
-            <p class="dst-schedule-desc">{{ sched_parts[1] | strip }}</p>
+            {%- if sched_parts.size > 1 -%}
+              <p class="dst-schedule-time">{{ sched_parts[0] | strip }}</p>
+              <p class="dst-schedule-desc">{{ sched_parts[1] | strip }}</p>
+            {%- else -%}
+              {%- comment -%}｜区切りが無い行は、細い時刻欄に押し込まず本文として表示{%- endcomment -%}
+              <p class="dst-schedule-time"></p>
+              <p class="dst-schedule-desc">{{ sched_parts[0] | strip }}</p>
+            {%- endif -%}
           </div>
         {%- endif -%}
       {%- endfor -%}
