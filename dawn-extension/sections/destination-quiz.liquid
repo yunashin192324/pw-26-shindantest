@@ -51,24 +51,77 @@
 ]
 </script>
 
-<div id="destination-quiz-{{ section.id }}" class="w-full bg-white">
-  <section class="py-16 md:py-24">
-    <div class="max-w-2xl mx-auto px-6">
+<style>
+  #destination-quiz-{{ section.id }} .quiz-card {
+    background: #ffffff;
+    border-radius: 24px;
+    box-shadow: 0 20px 60px -20px rgba(26,26,26,0.18);
+    border: 1px solid rgba(184,134,11,0.15);
+  }
+  #destination-quiz-{{ section.id }} .quiz-progress-track {
+    width: 100%; height: 6px; border-radius: 999px; background: #f0ebe0; overflow: hidden;
+  }
+  #destination-quiz-{{ section.id }} .quiz-progress-fill {
+    height: 100%; border-radius: 999px; background: linear-gradient(90deg, #D4A843, #B8860B);
+    transition: width 0.4s ease;
+  }
+  #destination-quiz-{{ section.id }} .quiz-choice-btn {
+    position: relative;
+    transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  }
+  #destination-quiz-{{ section.id }} .quiz-choice-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 24px -10px rgba(184,134,11,0.35);
+    border-color: #B8860B !important;
+  }
+  #destination-quiz-{{ section.id }} .quiz-choice-btn::before {
+    content: '';
+    position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+    background: #B8860B; border-radius: 4px 0 0 4px;
+    transform: scaleY(0); transition: transform 0.25s ease;
+  }
+  #destination-quiz-{{ section.id }} .quiz-choice-btn:hover::before { transform: scaleY(1); }
+  #destination-quiz-{{ section.id }} .quiz-step { animation: quizFadeIn 0.45s ease; }
+  @keyframes quizFadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  #destination-quiz-{{ section.id }} .quiz-result-card { transition: transform 0.3s ease, box-shadow 0.3s ease; }
+  #destination-quiz-{{ section.id }} .quiz-result-card:hover { transform: translateY(-4px); box-shadow: 0 20px 40px -16px rgba(26,26,26,0.25); }
+  #destination-quiz-{{ section.id }} .quiz-result-card img { transition: transform 0.6s ease; }
+  #destination-quiz-{{ section.id }} .quiz-result-card:hover img { transform: scale(1.06); }
+  #destination-quiz-{{ section.id }} .quiz-rank-badge {
+    position: absolute; top: 12px; left: 12px; z-index: 1;
+    width: 32px; height: 32px; border-radius: 999px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(26,26,26,0.55); backdrop-filter: blur(4px);
+    color: #fff; font-family: var(--font-heading-family, serif); font-size: 15px; font-weight: 600;
+  }
+  #destination-quiz-{{ section.id }} .quiz-rank-badge.is-first { background: linear-gradient(135deg, #D4A843, #B8860B); }
+</style>
+
+<div id="destination-quiz-{{ section.id }}" class="w-full" style="background: linear-gradient(180deg, #FAF8F5 0%, #ffffff 55%);">
+  <section class="py-16 md:py-24 px-4">
+    <div class="max-w-2xl mx-auto quiz-card p-8 md:p-14">
 
       {% comment %} --- イントロ --- {% endcomment %}
       <div class="quiz-step" data-step="intro">
         <div class="text-center">
+          <div class="mx-auto mb-6 flex items-center justify-center rounded-full" style="width:64px;height:64px;background:linear-gradient(135deg,#D4A843,#B8860B);">
+            <span style="font-size:26px;">✨</span>
+          </div>
           <p class="font-serif tracking-widest uppercase mb-2 text-sm" style="color:#B8860B;">{{ section.settings.eyebrow | default: '30 SECONDS' }}</p>
           <h2 class="font-medium mb-4" style="font-size: calc(var(--font-heading-scale, 1) * 28px);">{{ section.settings.heading | default: 'あなたにぴったりの撮影地診断' }}</h2>
-          <p class="text-sm text-gray-600 leading-relaxed mb-8">{{ section.settings.intro_text | default: '簡単な質問に答えるだけで、おふたりに合う撮影地をご提案します。' }}</p>
-          <button type="button" class="quiz-start px-10 py-4 rounded-full font-medium text-sm text-white transition hover:opacity-80" style="background-color:#B8860B;">{{ section.settings.start_label | default: '診断をはじめる' }}</button>
+          <p class="text-base text-gray-600 leading-relaxed mb-8">{{ section.settings.intro_text | default: '簡単な質問に答えるだけで、おふたりに合う撮影地をご提案します。' }}</p>
+          <button type="button" class="quiz-start px-10 py-4 rounded-full font-medium text-base text-white transition hover:opacity-80 hover:scale-105" style="background-color:#B8860B;box-shadow:0 12px 30px -10px rgba(184,134,11,0.6);">{{ section.settings.start_label | default: '診断をはじめる' }}</button>
         </div>
       </div>
 
       {% comment %} --- 質問（テンプレート、JSで複製して差し込む） --- {% endcomment %}
       <div class="quiz-step hidden" data-step="question-template">
-        <div class="text-center mb-2">
-          <p class="text-xs text-gray-400 quiz-progress"></p>
+        <div class="mb-8">
+          <div class="flex justify-between items-center mb-2">
+            <p class="text-xs tracking-widest uppercase" style="color:#B8860B;">Question</p>
+            <p class="text-xs text-gray-400 quiz-progress"></p>
+          </div>
+          <div class="quiz-progress-track"><div class="quiz-progress-fill" style="width:0%;"></div></div>
         </div>
         <h3 class="text-center font-medium mb-8 quiz-question-text" style="font-size: calc(var(--font-heading-scale, 1) * 20px);"></h3>
         <div class="space-y-3 quiz-choices"></div>
@@ -82,7 +135,7 @@
         </div>
         <div class="grid gap-6 quiz-results"></div>
         <div class="text-center mt-10">
-          <button type="button" class="quiz-restart text-sm underline text-gray-500">{{ section.settings.restart_label | default: 'もう一度診断する' }}</button>
+          <button type="button" class="quiz-restart text-sm underline text-gray-500 hover:text-gray-700">{{ section.settings.restart_label | default: 'もう一度診断する' }}</button>
         </div>
       </div>
 
@@ -142,6 +195,7 @@
     var questionTemplateEl = root.querySelector('[data-step="question-template"]');
     var resultEl = root.querySelector('[data-step="result"]');
     var progressEl = questionTemplateEl.querySelector('.quiz-progress');
+    var progressFillEl = questionTemplateEl.querySelector('.quiz-progress-fill');
     var questionTextEl = questionTemplateEl.querySelector('.quiz-question-text');
     var choicesEl = questionTemplateEl.querySelector('.quiz-choices');
     var resultsEl = resultEl.querySelector('.quiz-results');
@@ -154,12 +208,13 @@
     function showQuestion(index) {
       var q = QUESTIONS[index];
       progressEl.textContent = 'Q' + (index + 1) + ' / ' + QUESTIONS.length;
+      if (progressFillEl) { progressFillEl.style.width = Math.round(((index) / QUESTIONS.length) * 100) + '%'; }
       questionTextEl.textContent = q.text;
       choicesEl.innerHTML = '';
       q.choices.forEach(function (choice) {
         var btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'w-full text-left px-6 py-4 rounded-lg border border-gray-200 text-sm hover:border-gold transition';
+        btn.className = 'quiz-choice-btn w-full text-left pl-7 pr-6 py-4 rounded-xl border border-gray-200 text-base bg-white transition';
         btn.style.borderColor = '#e5e7eb';
         btn.textContent = choice.label;
         btn.addEventListener('click', function () {
@@ -197,17 +252,19 @@
     }
 
     function showResult() {
+      if (progressFillEl) { progressFillEl.style.width = '100%'; }
       var results = matchDestinations();
       resultsEl.innerHTML = '';
       if (results.length === 0) {
         resultsEl.innerHTML = '<p class="text-center text-sm text-gray-500">診断結果を表示する撮影地がまだ登録されていません。</p>';
       } else {
-        results.forEach(function (d) {
+        results.forEach(function (d, i) {
           var a = document.createElement('a');
           a.href = d.url;
-          a.className = 'block rounded-lg overflow-hidden border border-gray-200 hover:opacity-90 transition';
-          var imgHtml = d.image ? '<div class="w-full relative" style="padding-top:60%;"><img src="' + d.image + '" alt="' + d.name + '" class="absolute inset-0 w-full h-full object-cover" loading="lazy"></div>' : '';
-          a.innerHTML = imgHtml + '<div class="p-4"><h4 class="font-medium text-base">' + d.name + '</h4><span class="text-xs" style="color:#B8860B;">詳しく見る ＞</span></div>';
+          a.className = 'quiz-result-card block relative rounded-xl overflow-hidden border border-gray-200 transition';
+          var badgeClass = i === 0 ? 'quiz-rank-badge is-first' : 'quiz-rank-badge';
+          var imgHtml = d.image ? '<div class="w-full relative overflow-hidden" style="padding-top:60%;"><img src="' + d.image + '" alt="' + d.name + '" class="absolute inset-0 w-full h-full object-cover" loading="lazy"></div>' : '';
+          a.innerHTML = '<span class="' + badgeClass + '">' + (i + 1) + '</span>' + imgHtml + '<div class="p-4"><h4 class="font-medium text-base">' + d.name + '</h4><span class="text-sm" style="color:#B8860B;">詳しく見る ＞</span></div>';
           resultsEl.appendChild(a);
         });
       }
@@ -224,6 +281,7 @@
     });
     root.querySelector('.quiz-restart').addEventListener('click', function () {
       resetScores();
+      if (progressFillEl) { progressFillEl.style.width = '0%'; }
       resultEl.classList.add('hidden');
       introEl.classList.remove('hidden');
     });

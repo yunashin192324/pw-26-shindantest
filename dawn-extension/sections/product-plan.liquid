@@ -320,7 +320,7 @@
           <h2 class="font-medium mb-3" style="font-size: calc(var(--font-heading-scale, 1) * 24px);">{{ overview_title }}</h2>
           <div class="divider-gold"></div>
         {% endif %}
-        <div class="text-sm leading-relaxed text-gray-600 mt-4">
+        <div class="text-base leading-relaxed text-gray-600 mt-4">
           {{ product.description }}
         </div>
         {% if display_tags.size > 0 %}
@@ -428,7 +428,7 @@
       <div>
         <h3 class="font-bold mb-4" style="font-size: calc(var(--font-heading-scale, 1) * 18px);">{{ section.settings.included_title | default: '含まれるもの' }}</h3>
         <div class="divider-gold"></div>
-        <ul class="mt-4 space-y-2 text-sm text-gray-700">
+        <ul class="mt-4 space-y-2 text-base text-gray-700">
           {% if included_items.size > 0 %}
             {% for line in included_items %}
               {% assign line = line | strip %}
@@ -448,7 +448,7 @@
       <div>
         <h3 class="font-bold mb-4" style="font-size: calc(var(--font-heading-scale, 1) * 18px);">{{ section.settings.excluded_title | default: '含まれないもの' }}</h3>
         <div class="divider-gold"></div>
-        <ul class="mt-4 space-y-2 text-sm text-gray-500">
+        <ul class="mt-4 space-y-2 text-base text-gray-500">
           {% if excluded_items.size > 0 %}
             {% for line in excluded_items %}
               {% assign line = line | strip %}
@@ -520,7 +520,7 @@
         {% if section.settings.dress_eyebrow != blank %}<p class="font-serif tracking-widest uppercase mb-2 text-sm" style="color:#B8860B;">{{ section.settings.dress_eyebrow }}</p>{% endif %}
         <h2 class="font-medium mb-3" style="font-size: calc(var(--font-heading-scale, 1) * 24px);">{{ section.settings.dress_title }}</h2>
         <div class="divider-gold"></div>
-        <p class="text-sm text-gray-600 mt-4 leading-relaxed">{{ section.settings.dress_desc }}</p>
+        <p class="text-base text-gray-600 mt-4 leading-relaxed">{{ section.settings.dress_desc }}</p>
         {% if section.settings.dress_btn_text != blank %}
           <a href="{{ section.settings.dress_btn_url }}" class="inline-block mt-6 px-8 py-3 rounded-full font-medium text-sm border transition hover:opacity-70" style="border-color:#1a1a1a;color:#1a1a1a;">{{ section.settings.dress_btn_text }}</a>
         {% endif %}
@@ -668,7 +668,7 @@
             {% assign line = line | strip %}
             {% if line != blank %}
               {% assign schedule_parts = line | replace: '｜', '|' | split: '|' %}
-              <div class="flex gap-6 border-b border-gray-200 py-4 text-sm">
+              <div class="flex gap-6 border-b border-gray-200 py-4 text-base">
                 <span class="w-16 shrink-0 font-serif" style="color:#B8860B;">{{ schedule_parts[0] | strip }}</span>
                 <span class="text-gray-700">{{ schedule_parts[1] | strip }}</span>
               </div>
@@ -676,7 +676,7 @@
           {% endfor %}
         {% else %}
           {% for block in schedule_blocks %}
-            <div class="flex gap-6 border-b border-gray-200 py-4 text-sm" {{ block.shopify_attributes }}>
+            <div class="flex gap-6 border-b border-gray-200 py-4 text-base" {{ block.shopify_attributes }}>
               <span class="w-16 shrink-0 font-serif" style="color:#B8860B;">{{ block.settings.time }}</span>
               <span class="text-gray-700">{{ block.settings.desc }}</span>
             </div>
@@ -703,16 +703,16 @@
             {% if line != blank %}
               {% assign faq_display_parts = line | replace: '｜', '|' | split: '|' %}
               <details class="border-b border-gray-200 py-4">
-                <summary class="cursor-pointer font-medium text-sm flex justify-between items-center">{{ faq_display_parts[0] | strip }}<span style="color:#B8860B;">＋</span></summary>
-                <p class="text-sm text-gray-600 mt-3 leading-relaxed">{{ faq_display_parts[1] | strip }}</p>
+                <summary class="cursor-pointer font-medium text-base flex justify-between items-center">{{ faq_display_parts[0] | strip }}<span style="color:#B8860B;">＋</span></summary>
+                <p class="text-base text-gray-600 mt-3 leading-relaxed">{{ faq_display_parts[1] | strip }}</p>
               </details>
             {% endif %}
           {% endfor %}
         {% else %}
           {% for block in faq_blocks %}
             <details class="border-b border-gray-200 py-4" {{ block.shopify_attributes }}>
-              <summary class="cursor-pointer font-medium text-sm flex justify-between items-center">{{ block.settings.question }}<span style="color:#B8860B;">＋</span></summary>
-              <p class="text-sm text-gray-600 mt-3 leading-relaxed">{{ block.settings.answer }}</p>
+              <summary class="cursor-pointer font-medium text-base flex justify-between items-center">{{ block.settings.question }}<span style="color:#B8860B;">＋</span></summary>
+              <p class="text-base text-gray-600 mt-3 leading-relaxed">{{ block.settings.answer }}</p>
             </details>
           {% endfor %}
         {% endif %}
