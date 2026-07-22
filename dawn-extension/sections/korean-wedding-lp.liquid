@@ -473,6 +473,26 @@
     {% endif %}
 
     {%- comment -%}
+      撮影地診断バナー：ドレスLP(dresslp.liquid)の「診断・CTAブロック」
+      と同じサイズ感(py-20、max-w-4xl、大きめの丸ボタン)で統一。
+      show_destination_diagnosisで表示/非表示を切り替えられる。
+    {%- endcomment -%}
+    {% if section.settings.show_destination_diagnosis %}
+      <section class="py-20 px-6 text-center" style="background-color:{{ section.settings.dd_bg_color | default: '#FAF8F5' }};">
+        <div class="max-w-4xl mx-auto fade-in">
+          {% if section.settings.dd_subtitle != blank %}
+            <p class="font-serif-display tracking-widest-custom mb-3" style="color:{{ section.settings.dd_sub_color | default: '#B8860B' }};">{{ section.settings.dd_subtitle }}</p>
+          {% endif %}
+          <h2 class="font-medium mb-6 text-2xl md:text-4xl leading-relaxed" style="color:{{ section.settings.dd_title_color | default: '#333333' }};">{{ section.settings.dd_title | newline_to_br }}</h2>
+          {% if section.settings.dd_desc != blank %}
+            <p class="mb-10 leading-relaxed" style="color:{{ section.settings.dd_desc_color | default: '#666666' }};">{{ section.settings.dd_desc | newline_to_br }}</p>
+          {% endif %}
+          <a href="{{ section.settings.dd_button_url | default: '#' }}" class="inline-block px-12 py-4 rounded-full font-bold text-lg transition hover:opacity-80 shadow-lg hover:scale-105 transform duration-300" style="background-color:{{ section.settings.dd_button_color | default: '#B8860B' }};color:#ffffff;">{{ section.settings.dd_button_label }}</a>
+        </div>
+      </section>
+    {% endif %}
+
+    {%- comment -%}
       オンライン相談CTA：HISスタッフによるオンライン相談受付が始まる
       まではshow_consult_ctaをオフにしておけば非表示。独立した
       セクションとして追加すると、このファイル内にべた書きされた
@@ -756,6 +776,19 @@
     { "type": "checkbox", "id": "show_bottom_cta", "label": "ボトムCTAセクションを表示する", "default": true },
     { "type": "text", "id": "cta_text_1", "label": "相談ボタン テキスト", "default": "相談する" },
     { "type": "url", "id": "cta_link_1", "label": "相談ボタン リンク" },
+
+    { "type": "header", "content": "撮影地診断バナー" },
+    { "type": "checkbox", "id": "show_destination_diagnosis", "label": "表示する", "default": false },
+    { "type": "color", "id": "dd_bg_color", "label": "背景色", "default": "#FAF8F5" },
+    { "type": "text", "id": "dd_subtitle", "label": "サブタイトル", "default": "DIAGNOSIS" },
+    { "type": "color", "id": "dd_sub_color", "label": "サブタイトル色", "default": "#B8860B" },
+    { "type": "textarea", "id": "dd_title", "label": "見出し", "default": "あなたにぴったりの\n撮影地を見つける" },
+    { "type": "color", "id": "dd_title_color", "label": "見出し色", "default": "#333333" },
+    { "type": "textarea", "id": "dd_desc", "label": "説明文", "default": "いくつかの簡単な質問に答えるだけで、おふたりにぴったりの撮影地をご提案します。" },
+    { "type": "color", "id": "dd_desc_color", "label": "説明文の色", "default": "#666666" },
+    { "type": "text", "id": "dd_button_label", "label": "ボタン文言", "default": "撮影地診断を始める" },
+    { "type": "url", "id": "dd_button_url", "label": "ボタンリンク先" },
+    { "type": "color", "id": "dd_button_color", "label": "ボタン色", "default": "#B8860B" },
 
     { "type": "header", "content": "オンライン相談CTA" },
     { "type": "checkbox", "id": "show_consult_cta", "label": "表示する", "default": false, "info": "オンライン相談の受付準備ができるまではオフにしておいてください。" },
