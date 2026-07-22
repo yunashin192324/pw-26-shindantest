@@ -471,6 +471,28 @@
         </div>
       </section>
     {% endif %}
+
+    {%- comment -%}
+      オンライン相談CTA：HISスタッフによるオンライン相談受付が始まる
+      まではshow_consult_ctaをオフにしておけば非表示。独立した
+      セクションとして追加すると、このファイル内にべた書きされた
+      下の<footer>より後ろ(見た目上フッターの下)に来てしまうため、
+      本体側にこの位置で直接組み込んでいる。
+    {%- endcomment -%}
+    {% if section.settings.show_consult_cta %}
+      <section class="py-20 px-6 text-center" style="background-color:{{ section.settings.consult_bg_color | default: '#FAF8F5' }};">
+        <div class="max-w-3xl mx-auto fade-in">
+          {% if section.settings.consult_eyebrow != blank %}
+            <p class="font-serif-display tracking-widest-custom mb-4" style="color:{{ section.settings.consult_eyebrow_color | default: '#B8860B' }};">{{ section.settings.consult_eyebrow }}</p>
+          {% endif %}
+          <h2 class="text-2xl md:text-3xl tracking-widest-custom mb-6 leading-relaxed" style="color:{{ section.settings.consult_heading_color | default: '#1a1a1a' }};">{{ section.settings.consult_heading | newline_to_br }}</h2>
+          {% if section.settings.consult_desc != blank %}
+            <p class="text-sm md:text-base mb-10 leading-relaxed" style="color:{{ section.settings.consult_desc_color | default: '#4b5563' }};">{{ section.settings.consult_desc | newline_to_br }}</p>
+          {% endif %}
+          <a href="{{ section.settings.consult_button_url | default: '#' }}" class="btn btn-gold inline-block px-10 py-4 text-sm tracking-widest-custom" style="background-color:{{ section.settings.consult_button_color | default: '#B8860B' }};color:#ffffff;">{{ section.settings.consult_button_label }}</a>
+        </div>
+      </section>
+    {% endif %}
   </main>
 
   <footer class="py-16 px-6 bg-[#2d2419] text-white">
@@ -734,6 +756,19 @@
     { "type": "checkbox", "id": "show_bottom_cta", "label": "ボトムCTAセクションを表示する", "default": true },
     { "type": "text", "id": "cta_text_1", "label": "相談ボタン テキスト", "default": "相談する" },
     { "type": "url", "id": "cta_link_1", "label": "相談ボタン リンク" },
+
+    { "type": "header", "content": "オンライン相談CTA" },
+    { "type": "checkbox", "id": "show_consult_cta", "label": "表示する", "default": false, "info": "オンライン相談の受付準備ができるまではオフにしておいてください。" },
+    { "type": "color", "id": "consult_bg_color", "label": "背景色", "default": "#FAF8F5" },
+    { "type": "text", "id": "consult_eyebrow", "label": "英字見出し", "default": "Online Consultation" },
+    { "type": "color", "id": "consult_eyebrow_color", "label": "英字見出し色", "default": "#B8860B" },
+    { "type": "textarea", "id": "consult_heading", "label": "見出し", "default": "スタッフによるオンライン相談" },
+    { "type": "color", "id": "consult_heading_color", "label": "見出し色", "default": "#1a1a1a" },
+    { "type": "textarea", "id": "consult_desc", "label": "説明文", "default": "撮影地選びやプランについて、専門スタッフがオンラインでご相談に応じます。まずはお気軽にお問い合わせください。" },
+    { "type": "color", "id": "consult_desc_color", "label": "説明文の色", "default": "#4b5563" },
+    { "type": "text", "id": "consult_button_label", "label": "ボタン文言", "default": "オンライン相談はこちら" },
+    { "type": "url", "id": "consult_button_url", "label": "ボタンリンク先", "info": "別途作成中の問い合わせフォームのURLを設定してください。" },
+    { "type": "color", "id": "consult_button_color", "label": "ボタン色", "default": "#B8860B" },
 
     { "type": "header", "content": "フッター" },
     { "type": "textarea", "id": "footer_tagline", "label": "フッターキャッチコピー", "default": "HISブランドの海外フォトウェディング。世界で、一生残る一枚を。" },

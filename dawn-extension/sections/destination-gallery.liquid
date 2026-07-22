@@ -4,6 +4,12 @@
   非表示になる。Metaobjectの「リスト」型フィールドはエントリー編集画面で
   複数枚まとめて選択・アップロードできるため、area-lp.liquidのように
   ブロックを1枚ずつ追加する必要がない。
+
+  各画像の代替テキスト(ALTテキスト)に「説明文｜位置」の形式で書くと、
+  その1枚だけトリミング位置を上書きできる(product-plan.liquidの商品
+  ギャラリーと同じ仕組み)。位置は上/下/左/右/中央/左上/右上/左下/右下、
+  またはtop/bottom/leftのような英語、30% 50%のような数値も可。
+  ｜が無ければセクション設定の既定値を使う。
 {%- endcomment -%}
 {%- comment -%}
   where: 'slug.value', page.handle はこの環境ではネストしたプロパティの
@@ -24,11 +30,22 @@
       <h2 style="color:{{ section.settings.heading_color }};">{{ section.settings.heading }}</h2>
       <hr class="dst-divider">
     </div>
-    {%- capture gallery_img_style -%}object-position: {{ section.settings.img_position }};{%- endcapture -%}
     <div class="dst-gallery-grid">
       {%- for image in gallery_images -%}
+        {%- assign gimg_alt_parts = image.alt | replace: '｜', '|' | split: '|' -%}
+        {%- assign gimg_position_key = gimg_alt_parts[1] | strip -%}
+        {%- capture gimg_pos_mapped -%}{% render 'destination-image-position', position_key: gimg_position_key %}{%- endcapture -%}
+        {%- assign gimg_pos_mapped = gimg_pos_mapped | strip -%}
+        {%- if gimg_pos_mapped != blank -%}
+          {%- assign gimg_position = gimg_pos_mapped -%}
+        {%- elsif gimg_position_key != blank -%}
+          {%- assign gimg_position = gimg_position_key -%}
+        {%- else -%}
+          {%- assign gimg_position = section.settings.img_position -%}
+        {%- endif -%}
+        {%- capture gallery_img_style -%}object-position: {{ gimg_position | escape }};{%- endcapture -%}
         <div class="dst-gallery-item">
-          {{ image | image_url: width: 700 | image_tag: class: 'dst-gallery-img', loading: 'lazy', style: gallery_img_style }}
+          {{ image | image_url: width: 700 | image_tag: class: 'dst-gallery-img', loading: 'lazy', style: gallery_img_style, alt: gimg_alt_parts[0] | strip }}
         </div>
       {%- endfor -%}
     </div>
