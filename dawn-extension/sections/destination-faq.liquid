@@ -1,30 +1,45 @@
 {%- comment -%}
   destination-faq — よくある質問 + その他の撮影地への導線。
-  Destination metaobjectの`faqs`は「FAQ Item」metaobjectへの参照
-  リスト型。各項目はquestion(単一行テキスト)/answer(複数行テキスト)を
-  持つ独立したmetaobjectエントリーで、都市エントリーの編集画面の
-  まま「新規作成」→質問と回答をそれぞれの欄に入力、という流れで
-  追加できる(｜区切りのテキストを手書きする必要がない)。
-  未入力の間はFAQ部分のみ非表示（関連都市は独立して表示される）。
+  「FAQ Item」metaobjectの各エントリーが`destination`フィールドで
+  都市を1つだけ指す方式(FAQ Item側がDestinationを指す一方向の参照)。
+  Destination側に「質問のリスト」を持たせる方式だと、全都市共通の
+  質問プールが都市を増やすたびに際限なく膨らみ、チェックボックスで
+  他都市の質問を誤選択できてしまう問題があったため、この向きに
+  変更した。未入力の間はFAQ部分のみ非表示（関連都市は独立して表示
+  される）。
   関連都市は同じregionの他都市を優先抽出し、4件に満たない場合は
   同じtheme(雰囲気)を持つ他地域の都市で補完する。
 {%- endcomment -%}
 {%- comment -%}
-  where: 'slug.value', page.handle はこの環境ではネストしたプロパティの
-  絞り込みが効かないことがあるため、確実に動く明示的なfor+ifに置き換え。
+  where: 'destination.value.slug.value', destination.slug.value はこの
+  環境ではネストしたプロパティの絞り込みが効かないことがあるため、
+  確実に動く明示的なfor+ifに置き換え。
 {%- endcomment -%}
 {%- assign all_destination_entries = shop.metaobjects.destination.values -%}
 {%- assign destination = blank -%}
 {%- for d in all_destination_entries -%}
   {%- if d.slug.value == page.handle -%}{%- assign destination = d -%}{%- endif -%}
 {%- endfor -%}
-{%- assign faq_items = destination.faqs.value -%}
 
-{%- comment -%} 関連都市：同じregion優先、self除外、最大3件 {%- endcomment -%}
+{%- assign all_faq_items = shop.metaobjects.faq_item.values -%}
+{%- assign faq_count = 0 -%}
+{%- capture faq_html -%}
+  {%- for item in all_faq_items -%}
+    {%- if destination and item.destination.value.slug.value == destination.slug.value -%}
+      <details class="dst-faq-item">
+        <summary class="dst-faq-question">{{ item.question.value }}</summary>
+        <p class="dst-faq-answer">{{ item.answer.value }}</p>
+      </details>
+      {%- assign faq_count = faq_count | plus: 1 -%}
+    {%- endif -%}
+  {%- endfor -%}
+{%- endcapture -%}
+
+{%- comment -%} 関連都市：同じregion優先、self除外、最大4件 {%- endcomment -%}
 {%- assign all_destinations = shop.metaobjects.destination.values -%}
 
 {%- if destination -%}
-  {%- if faq_items.size > 0 -%}
+  {%- if faq_count > 0 -%}
   <section>
     <div class="dst-container" style="max-width:760px;">
       <div class="dst-section-head dst-reveal">
@@ -33,12 +48,7 @@
         <hr class="dst-divider">
       </div>
       <div class="dst-faq-list">
-        {%- for item in faq_items -%}
-          <details class="dst-faq-item">
-            <summary class="dst-faq-question">{{ item.question.value }}</summary>
-            <p class="dst-faq-answer">{{ item.answer.value }}</p>
-          </details>
-        {%- endfor -%}
+        {{ faq_html }}
       </div>
     </div>
   </section>

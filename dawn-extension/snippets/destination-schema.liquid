@@ -35,15 +35,16 @@
 }
 </script>
 {%- comment -%}
-  faqs（「FAQ Item」metaobjectへの参照リスト）が入力されていれば、
-  AI検索・生成AI概要などが質問と回答をそのまま抽出しやすい
-  FAQPage構造化データも出力する。
+  faqs：「FAQ Item」metaobjectの各エントリーがdestinationフィールドで
+  この都市を指しているものを集める(destination-faq.liquidと同じ
+  逆参照方式)。入力されていれば、AI検索・生成AI概要などが質問と
+  回答をそのまま抽出しやすいFAQPage構造化データも出力する。
 {%- endcomment -%}
-{%- assign schema_faq_source = destination.faqs.value -%}
+{%- assign schema_faq_source = shop.metaobjects.faq_item.values -%}
 {%- assign schema_faq_items = '' -%}
 {%- assign schema_faq_count = 0 -%}
 {%- for item in schema_faq_source -%}
-  {%- if item.question.value != blank and item.answer.value != blank -%}
+  {%- if item.destination.value.slug.value == destination.slug.value and item.question.value != blank and item.answer.value != blank -%}
     {%- if schema_faq_count > 0 -%}{%- assign schema_faq_items = schema_faq_items | append: ',' -%}{%- endif -%}
     {%- capture faq_item -%}{ "@type": "Question", "name": {{ item.question.value | json }}, "acceptedAnswer": { "@type": "Answer", "text": {{ item.answer.value | json }} } }{%- endcapture -%}
     {%- assign schema_faq_items = schema_faq_items | append: faq_item -%}

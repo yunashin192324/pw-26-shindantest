@@ -1,24 +1,41 @@
 {%- comment -%}
-  destination-reasons — 選ばれる理由。Destination metaobjectの
-  `reasons`は「Reason」metaobjectへの参照リスト型。各理由は
-  heading(単一行テキスト)/body(複数行テキスト)を持つ独立した
-  metaobjectエントリーで、都市エントリーの編集画面のまま
-  「新規作成」→見出しと本文をそれぞれの欄に入力、という流れで
-  追加できる(｜区切りのテキストを手書きする必要がない)。
-  未入力の間はセクションごと非表示になる。
+  destination-reasons — 選ばれる理由。「Reason」metaobjectの各エントリーが
+  `destination`フィールドで都市を1つだけ指す方式(Reason側がDestinationを
+  指す一方向の参照)。Destination側に「理由のリスト」を持たせる方式だと、
+  全都市共通の理由プールが都市を増やすたびに際限なく膨らみ、チェック
+  ボックスで他都市の理由を誤選択できてしまう問題があったため、この
+  向きに変更した。Reasonを新規作成する時は「都市」欄で1つ選ぶだけで、
+  他の都市のエントリーが一覧に混ざって増え続けることはない。
+  該当するReasonが1件も無い間はセクションごと非表示になる。
 {%- endcomment -%}
 {%- comment -%}
-  where: 'slug.value', page.handle はこの環境ではネストしたプロパティの
-  絞り込みが効かないことがあるため、確実に動く明示的なfor+ifに置き換え。
+  where: 'destination.value.slug.value', destination.slug.value はこの
+  環境ではネストしたプロパティの絞り込みが効かないことがあるため、
+  確実に動く明示的なfor+ifに置き換え。
 {%- endcomment -%}
 {%- assign all_destination_entries = shop.metaobjects.destination.values -%}
 {%- assign destination = blank -%}
 {%- for d in all_destination_entries -%}
   {%- if d.slug.value == page.handle -%}{%- assign destination = d -%}{%- endif -%}
 {%- endfor -%}
-{%- assign reasons = destination.reasons.value -%}
 
-{%- if destination and reasons.size > 0 -%}
+{%- assign all_reasons = shop.metaobjects.reason.values -%}
+{%- assign reasons_count = 0 -%}
+{%- capture reasons_html -%}
+  {%- for r in all_reasons -%}
+    {%- if destination and r.destination.value.slug.value == destination.slug.value -%}
+      <div class="dst-reason-card dst-reveal">
+        {%- if r.heading.value != blank -%}
+          <h3 class="dst-reason-title">{% render 'safe-linebreak', text: r.heading.value %}</h3>
+        {%- endif -%}
+        {%- if r.body.value != blank -%}<p class="dst-reason-desc">{{ r.body.value }}</p>{%- endif -%}
+      </div>
+      {%- assign reasons_count = reasons_count | plus: 1 -%}
+    {%- endif -%}
+  {%- endfor -%}
+{%- endcapture -%}
+
+{%- if destination and reasons_count > 0 -%}
 <section{% if section.settings.bg_ivory %} class="dst-bg-ivory"{% endif %}>
   <div class="dst-container">
     <div class="dst-section-head dst-reveal">
@@ -27,14 +44,7 @@
       <hr class="dst-divider">
     </div>
     <div class="dst-reasons-grid">
-      {%- for reason in reasons -%}
-        <div class="dst-reason-card dst-reveal">
-          {%- if reason.heading.value != blank -%}
-            <h3 class="dst-reason-title">{% render 'safe-linebreak', text: reason.heading.value %}</h3>
-          {%- endif -%}
-          {%- if reason.body.value != blank -%}<p class="dst-reason-desc">{{ reason.body.value }}</p>{%- endif -%}
-        </div>
-      {%- endfor -%}
+      {{ reasons_html }}
     </div>
   </div>
 </section>

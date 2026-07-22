@@ -541,8 +541,28 @@
       <div class="grid grid-cols-2 md:grid-cols-3 gap-4" id="plan-gallery-{{ section.id }}">
         {% if mf_gallery.size > 0 %}
           {% for image in mf_gallery %}
+            {%- comment -%}
+              メディア画像のALTテキストに「説明文｜位置」の形式で書くと、
+              その1枚だけトリミング位置を変えられる(位置は上/下/左/右/
+              中央/左上/右上/左下/右下、または30% 50%のような数値も可)。
+              ｜が無ければ全文をALTとして使い、位置は中央のまま。
+            {%- endcomment -%}
+            {%- assign img_alt_source = image.alt | default: product.title -%}
+            {%- assign img_alt_parts = img_alt_source | replace: '｜', '|' | split: '|' -%}
+            {%- assign img_alt_clean = img_alt_parts[0] | strip -%}
+            {%- assign img_position_key = img_alt_parts[1] | strip -%}
+            {%- capture img_pos_mapped -%}{% render 'destination-image-position', position_key: img_position_key %}{%- endcapture -%}
+            {%- assign img_pos_mapped = img_pos_mapped | strip -%}
+            {%- if img_pos_mapped != blank -%}
+              {%- assign img_position = img_pos_mapped -%}
+            {%- elsif img_position_key != blank -%}
+              {%- assign img_position = img_position_key -%}
+            {%- else -%}
+              {%- assign img_position = 'center' -%}
+            {%- endif -%}
             <div class="w-full relative plan-gallery-item cursor-pointer" style="padding-top: 125%;" data-full="{{ image | image_url: width: 1800 }}" data-index="{{ forloop.index0 }}">
-              {{ image | image_url: width: 800 | image_tag: class: 'absolute top-0 left-0 w-full h-full object-cover rounded-lg', alt: product.title }}
+              {%- capture pgimg_style -%}object-position: {{ img_position | escape }};{%- endcapture -%}
+              {{ image | image_url: width: 800 | image_tag: class: 'absolute top-0 left-0 w-full h-full object-cover rounded-lg', style: pgimg_style, alt: img_alt_clean }}
             </div>
           {% endfor %}
         {% else %}
