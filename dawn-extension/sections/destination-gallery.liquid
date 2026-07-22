@@ -30,7 +30,7 @@
       <h2 style="color:{{ section.settings.heading_color }};">{{ section.settings.heading }}</h2>
       <hr class="dst-divider">
     </div>
-    <div class="dst-gallery-grid">
+    <div class="dst-gallery-grid" id="dst-gallery-{{ section.id }}">
       {%- for image in gallery_images -%}
         {%- assign gimg_alt_parts = image.alt | replace: '｜', '|' | split: '|' -%}
         {%- assign gimg_position_key = gimg_alt_parts[1] | strip -%}
@@ -44,12 +44,80 @@
           {%- assign gimg_position = section.settings.img_position -%}
         {%- endif -%}
         {%- capture gallery_img_style -%}object-position: {{ gimg_position | escape }};{%- endcapture -%}
-        <div class="dst-gallery-item">
+        <div class="dst-gallery-item" data-full="{{ image | image_url: width: 1800 }}">
           {{ image | image_url: width: 700 | image_tag: class: 'dst-gallery-img', loading: 'lazy', style: gallery_img_style, alt: gimg_alt_parts[0] | strip }}
         </div>
       {%- endfor -%}
     </div>
   </div>
+
+  {%- comment -%}
+    ギャラリーのライトボックス。タップで拡大表示、左右スワイプ/矢印/
+    キーボードで前後の画像に切り替え。product-plan.liquidの商品
+    ギャラリーと同じ仕組み(vanilla JS、section.idでスコープ)。
+  {%- endcomment -%}
+  <div id="dst-gallery-lightbox-{{ section.id }}" class="dst-gallery-lightbox" hidden>
+    <button type="button" class="dst-gallery-lightbox-close" aria-label="閉じる">×</button>
+    <button type="button" class="dst-gallery-lightbox-prev" aria-label="前の画像">‹</button>
+    <button type="button" class="dst-gallery-lightbox-next" aria-label="次の画像">›</button>
+    <div class="dst-gallery-lightbox-inner">
+      <img class="dst-gallery-lightbox-img" alt="">
+    </div>
+  </div>
+  <script>
+    (function () {
+      var root = document.getElementById('dst-gallery-{{ section.id }}');
+      var lightbox = document.getElementById('dst-gallery-lightbox-{{ section.id }}');
+      if (!root || !lightbox) return;
+      document.body.appendChild(lightbox);
+      var img = lightbox.querySelector('.dst-gallery-lightbox-img');
+      var items = Array.prototype.slice.call(root.querySelectorAll('.dst-gallery-item'));
+      var current = 0;
+      var touchStartX = null;
+
+      function show(i) {
+        if (items.length === 0) return;
+        current = (i + items.length) % items.length;
+        img.src = items[current].getAttribute('data-full');
+      }
+      function open(i) {
+        show(i);
+        lightbox.hidden = false;
+        document.body.style.overflow = 'hidden';
+      }
+      function close() {
+        lightbox.hidden = true;
+        document.body.style.overflow = '';
+      }
+
+      items.forEach(function (el, i) {
+        el.addEventListener('click', function () { open(i); });
+      });
+      lightbox.querySelector('.dst-gallery-lightbox-close').addEventListener('click', close);
+      lightbox.querySelector('.dst-gallery-lightbox-prev').addEventListener('click', function () { show(current - 1); });
+      lightbox.querySelector('.dst-gallery-lightbox-next').addEventListener('click', function () { show(current + 1); });
+      lightbox.addEventListener('click', function (e) {
+        if (e.target === lightbox) close();
+      });
+      document.addEventListener('keydown', function (e) {
+        if (lightbox.hidden) return;
+        if (e.key === 'Escape') close();
+        if (e.key === 'ArrowLeft') show(current - 1);
+        if (e.key === 'ArrowRight') show(current + 1);
+      });
+      lightbox.addEventListener('touchstart', function (e) {
+        touchStartX = e.changedTouches[0].clientX;
+      }, { passive: true });
+      lightbox.addEventListener('touchend', function (e) {
+        if (touchStartX === null) return;
+        var dx = e.changedTouches[0].clientX - touchStartX;
+        if (Math.abs(dx) > 40) {
+          if (dx < 0) { show(current + 1); } else { show(current - 1); }
+        }
+        touchStartX = null;
+      }, { passive: true });
+    })();
+  </script>
 </section>
 {%- endif -%}
 

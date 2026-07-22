@@ -168,6 +168,11 @@
 .article-toc li.toc-h3 a { padding-left: 30px; font-size: 0.8rem; }
 @media (max-width: 960px) {
   .article-toc { position: static; margin-bottom: 40px; }
+}
+/* 2列表示はスマホの狭い画面幅だと右列がはみ出して切れて見える問題が
+   あったため、ある程度幅がある(タブレット寄りの)画面幅でだけ2列に
+   する。スマホ幅では1列のまま。 */
+@media (max-width: 960px) and (min-width: 560px) {
   .article-toc ol { columns: 2; }
 }
 

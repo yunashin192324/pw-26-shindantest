@@ -48,6 +48,8 @@ body {
   line-height: 1.85;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 .container {
