@@ -513,6 +513,19 @@
         </div>
       </section>
     {% endif %}
+
+    {%- comment -%}
+      撮影地診断フローティングボタン：画面右下に固定表示され、
+      スクロールしても常に追従する。dresslp.liquidのフローティング
+      ボタンと同じ仕組み。position:fixedなので配置場所はどこでもよい。
+    {%- endcomment -%}
+    {% if section.settings.show_floating_diagnosis %}
+      <div class="fixed bottom-6 right-6 md:bottom-10 md:right-10 z-50">
+        <a href="{{ section.settings.floating_diagnosis_url | default: '#' }}" class="flex items-center justify-center px-6 py-4 rounded-full shadow-2xl hover:scale-105 transition-transform duration-300" style="background-color: {{ section.settings.floating_diagnosis_bg | default: '#B8860B' }}; color: {{ section.settings.floating_diagnosis_color | default: '#ffffff' }};">
+          <span class="font-bold text-sm md:text-base">{{ section.settings.floating_diagnosis_text }}</span>
+        </a>
+      </div>
+    {% endif %}
   </main>
 
   <footer class="py-16 px-6 bg-[#2d2419] text-white">
@@ -776,6 +789,13 @@
     { "type": "checkbox", "id": "show_bottom_cta", "label": "ボトムCTAセクションを表示する", "default": true },
     { "type": "text", "id": "cta_text_1", "label": "相談ボタン テキスト", "default": "相談する" },
     { "type": "url", "id": "cta_link_1", "label": "相談ボタン リンク" },
+
+    { "type": "header", "content": "撮影地診断 フローティングボタン" },
+    { "type": "checkbox", "id": "show_floating_diagnosis", "label": "表示する", "default": false, "info": "画面右下に固定表示され、スクロールしても常についてくるボタンです。" },
+    { "type": "text", "id": "floating_diagnosis_text", "label": "ボタン文言", "default": "✨ 撮影地診断をする" },
+    { "type": "url", "id": "floating_diagnosis_url", "label": "リンク先" },
+    { "type": "color", "id": "floating_diagnosis_bg", "label": "背景色", "default": "#B8860B" },
+    { "type": "color", "id": "floating_diagnosis_color", "label": "文字色", "default": "#ffffff" },
 
     { "type": "header", "content": "撮影地診断バナー" },
     { "type": "checkbox", "id": "show_destination_diagnosis", "label": "表示する", "default": false },

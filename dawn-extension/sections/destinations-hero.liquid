@@ -44,6 +44,18 @@
   </div>
 </section>
 
+{%- comment -%}
+  撮影地診断フローティングボタン：画面右下に固定表示され、
+  スクロールしても常に追従する。TOPページ(korean-wedding-lp.liquid)の
+  フローティングボタンと同じ考え方。position:fixedなのでこの
+  セクション内のどこに置いても表示位置は変わらない。
+{%- endcomment -%}
+{%- if section.settings.show_floating_diagnosis -%}
+  <div class="dst-floating-btn">
+    <a href="{{ section.settings.floating_diagnosis_url | default: '#' }}" class="dst-floating-btn-link">{{ section.settings.floating_diagnosis_text }}</a>
+  </div>
+{%- endif -%}
+
 {% schema %}
 {
   "name": "撮影地一覧 ヒーロー",
@@ -54,7 +66,11 @@
     { "type": "textarea", "id": "description", "label": "サブコピー", "default": "120以上の撮影地から、おふたりらしい一枚が生まれる場所を見つけてください。" },
     { "type": "text", "id": "diagnosis_label", "label": "診断ボタン文言", "default": "30秒診断" },
     { "type": "url", "id": "diagnosis_url", "label": "診断ボタンリンク先", "info": "診断ページ公開まではリンク先を空欄にしておくとボタン自体が非表示になります。" },
-    { "type": "text", "id": "search_label", "label": "検索ボタン文言", "default": "撮影地を見る" }
+    { "type": "text", "id": "search_label", "label": "検索ボタン文言", "default": "撮影地を見る" },
+    { "type": "header", "content": "撮影地診断 フローティングボタン" },
+    { "type": "checkbox", "id": "show_floating_diagnosis", "label": "表示する", "default": false, "info": "画面右下に固定表示され、スクロールしても常についてくるボタンです。" },
+    { "type": "text", "id": "floating_diagnosis_text", "label": "ボタン文言", "default": "✨ 撮影地診断をする" },
+    { "type": "url", "id": "floating_diagnosis_url", "label": "リンク先" }
   ],
   "presets": [{ "name": "撮影地一覧 ヒーロー" }]
 }

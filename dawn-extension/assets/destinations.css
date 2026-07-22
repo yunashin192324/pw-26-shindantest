@@ -407,3 +407,18 @@ html { scroll-behavior: smooth; }
 .dst-faq-question::after { content: "＋"; float: right; color: var(--dst-gold); }
 .dst-faq-item[open] .dst-faq-question::after { content: "－"; }
 .dst-faq-answer { font-size: 0.88rem; line-height: 1.8; color: var(--dst-text-muted); margin-top: 12px; white-space: pre-line; }
+
+/* ---------- 撮影地診断 フローティングボタン ---------- */
+.dst-floating-btn { position: fixed; right: 24px; bottom: 24px; z-index: 60; }
+.dst-floating-btn-link {
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px 28px; border-radius: 9999px;
+  background: var(--dst-gold); color: #fff; font-weight: 700; font-size: 0.9rem;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+  transition: transform 0.3s var(--dst-ease), background 0.3s var(--dst-ease);
+}
+.dst-floating-btn-link:hover { transform: scale(1.05); background: var(--dst-gold-dark); }
+@media (max-width: 600px) {
+  .dst-floating-btn { right: 16px; bottom: 16px; }
+  .dst-floating-btn-link { padding: 14px 22px; font-size: 0.85rem; }
+}
