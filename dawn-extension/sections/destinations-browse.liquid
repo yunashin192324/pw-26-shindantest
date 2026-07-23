@@ -24,22 +24,35 @@
 {%- assign all_destination_entries = shop.metaobjects.destination.values -%}
 {%- assign empty_array = "" | split: "" -%}
 {%- assign order_entry = shop.metaobjects.destination_order.values.first -%}
-{%- if order_entry and order_entry.destinations.value -%}
+{%- assign ordered_list = empty_array -%}
+{%- if order_entry and order_entry.destinations.value.size > 0 -%}
   {%- assign ordered_list = order_entry.destinations.value -%}
-{%- else -%}
-  {%- assign ordered_list = empty_array -%}
 {%- endif -%}
-{%- assign all_destinations = ordered_list -%}
-{%- for d in all_destination_entries -%}
-  {%- assign is_ordered = false -%}
-  {%- for od in ordered_list -%}
-    {%- if od.id == d.id -%}{%- assign is_ordered = true -%}{%- endif -%}
+
+{%- comment -%}
+  Destination Orderがまだ設定されていない(ordered_listが空)場合は、
+  そのままall_destination_entriesを使う(以前の挙動と同じ、確実に動く)。
+  設定されている場合だけ、その並び順+末尾に未登録分を追加する処理を行う。
+  「未登録分の追加」は where フィルターだと(このストア環境では稀に
+  一致しないことがあるため)使わず、forloop.index0を使った
+  slice切り出しで1件だけ取り出す、確実な方法にしている。
+  一致判定もカスタムフィールドではなく、Shopify標準の.handleを使う。
+{%- endcomment -%}
+{%- if ordered_list.size > 0 -%}
+  {%- assign all_destinations = ordered_list -%}
+  {%- for d in all_destination_entries -%}
+    {%- assign is_ordered = false -%}
+    {%- for od in ordered_list -%}
+      {%- if od.handle == d.handle -%}{%- assign is_ordered = true -%}{%- endif -%}
+    {%- endfor -%}
+    {%- unless is_ordered -%}
+      {%- assign single = all_destination_entries | slice: forloop.index0, 1 -%}
+      {%- assign all_destinations = all_destinations | concat: single -%}
+    {%- endunless -%}
   {%- endfor -%}
-  {%- unless is_ordered -%}
-    {%- assign single = all_destination_entries | where: 'id', d.id -%}
-    {%- assign all_destinations = all_destinations | concat: single -%}
-  {%- endunless -%}
-{%- endfor -%}
+{%- else -%}
+  {%- assign all_destinations = all_destination_entries -%}
+{%- endif -%}
 {%- assign region_keys = 'hawaii,micronesia,south_pacific,indian_ocean,oceania,asia,middle_east,europe,north_america,south_america,africa,japan' | split: ',' -%}
 {%- assign theme_keys = 'beach,streets,palace,heritage,view,lake,desert,balloon,church,museum,library,resort,sunset,overwater' | split: ',' -%}
 
