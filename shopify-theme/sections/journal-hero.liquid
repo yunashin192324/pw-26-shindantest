@@ -3,7 +3,7 @@
   Same .hero system as the TOP page (100svh, dark gradient, gold
   eyebrow, scroll cue) with content centred for the magazine feel.
 {%- endcomment -%}
-<section class="hero journal-hero">
+<section class="hero journal-hero" style="--hero-text-color: {{ section.settings.text_color }}; --hero-overlay: {{ section.settings.overlay_strength | divided_by: 100.0 }};">
   <div class="hero-media">
     {%- if section.settings.image -%}
       <img
@@ -32,7 +32,11 @@
     { "type": "image_picker", "id": "image", "label": "背景写真" },
     { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "JOURNAL" },
     { "type": "textarea", "id": "heading", "label": "メイン見出し", "default": "旅が、\nふたりを写す。" },
-    { "type": "textarea", "id": "description", "label": "説明文", "default": "世界中の撮影地、ドレス、旅のヒントをお届けします。" }
+    { "type": "textarea", "id": "description", "label": "説明文", "default": "世界中の撮影地、ドレス、旅のヒントをお届けします。" },
+    { "type": "color", "id": "text_color", "label": "文字色", "default": "#ffffff",
+      "info": "写真によって文字が読みにくい場合、この色や下の「暗さ」を調整してください。" },
+    { "type": "range", "id": "overlay_strength", "label": "写真を暗くする強さ", "min": 50, "max": 150, "step": 5, "unit": "%", "default": 100,
+      "info": "明るい写真で文字が読みにくいときは数値を上げてください。" }
   ],
   "presets": [{ "name": "JOURNAL ヒーロー" }]
 }
