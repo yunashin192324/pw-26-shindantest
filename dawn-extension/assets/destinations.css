@@ -290,6 +290,19 @@ html { scroll-behavior: smooth; }
 .dst-region-block-head .dst-region-en { font-size: 0.85rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dst-gold-dark); }
 .dst-region-more { font-size: 0.85rem; letter-spacing: 0.04em; color: var(--dst-gold-dark); border-bottom: 1px solid var(--dst-gold-dark); white-space: nowrap; }
 .dst-region-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 280px)); gap: 26px; }
+@media (max-width: 560px) { .dst-region-grid { grid-template-columns: 1fr; } }
+
+/* ---------- 撮影地一覧: 先頭3件を大きく、残りを4列 ---------- */
+.dst-featured-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; margin-bottom: 48px; }
+.dst-featured-grid .dst-card-name-ja { font-size: 1.6rem; }
+.dst-featured-grid .dst-card-desc { font-size: 0.95rem; }
+@media (max-width: 860px) { .dst-featured-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .dst-featured-grid { grid-template-columns: 1fr; margin-bottom: 32px; } }
+
+.dst-region-grid-4col { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 960px) { .dst-region-grid-4col { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 700px) { .dst-region-grid-4col { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .dst-region-grid-4col { grid-template-columns: 1fr; } }
 
 /* ---------- CTA ---------- */
 .dst-cta { text-align: center; }
@@ -354,6 +367,7 @@ html { scroll-behavior: smooth; }
 
 /* ---------- 選ばれる理由 ---------- */
 .dst-reasons-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 320px)); gap: 24px; }
+@media (max-width: 560px) { .dst-reasons-grid { grid-template-columns: 1fr; } }
 .dst-reason-card { padding: 28px; background: var(--dst-ivory); }
 .dst-reason-title { font-family: var(--dst-font-serif); font-size: 1.05rem; margin-bottom: 10px; }
 .dst-reason-desc { font-size: 0.9rem; white-space: pre-line; line-height: 1.7; }
@@ -405,6 +419,7 @@ html { scroll-behavior: smooth; }
 
 /* ---------- 撮影スポット ---------- */
 .dst-spots-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 300px)); gap: 28px; }
+@media (max-width: 560px) { .dst-spots-grid { grid-template-columns: 1fr; } }
 .dst-spot-card { }
 .dst-spot-media { position: relative; padding-top: 125%; overflow: hidden; margin-bottom: 14px; }
 .dst-spot-media img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
@@ -416,6 +431,7 @@ html { scroll-behavior: smooth; }
    伸びてカードだけ縦に間延びして見えることがあるため、行・カードの
    高さを内容に合わせて固定する(align-content/align-items: start) */
 .dst-plans-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 320px)); gap: 24px; align-content: start; align-items: start; }
+@media (max-width: 560px) { .dst-plans-grid { grid-template-columns: 1fr; } }
 .dst-plan-card { display: block; background: #fff; border: 1px solid rgba(0,0,0,0.08); overflow: hidden; height: fit-content; }
 .dst-plan-media { position: relative; padding-top: 125%; overflow: hidden; }
 .dst-plan-media .dst-plan-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
