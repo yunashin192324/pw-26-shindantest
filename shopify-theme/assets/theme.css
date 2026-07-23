@@ -247,7 +247,8 @@ p { color: var(--text-muted); }
   color: var(--hero-text-color, var(--white));
 }
 .hero-content .eyebrow { color: var(--gold-light); }
-.hero-content h1 { margin-bottom: 20px; }
+.hero-content h1 { margin-bottom: 20px; color: var(--hero-text-color, var(--white)); }
+.hero-content .journal-meta { color: var(--hero-text-color, var(--white)); }
 .hero-content .lede { color: var(--text-on-dark-muted); max-width: 520px; margin-bottom: 40px; }
 .scroll-cue {
   position: absolute;
