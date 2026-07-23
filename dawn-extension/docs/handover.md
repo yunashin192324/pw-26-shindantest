@@ -1,9 +1,13 @@
 # HIS WEDDING（check-p1wk01-yy.myshopify.com）引継ぎ書
 
-作成日：2026-07-20
+最終更新：2026-07-23
 このドキュメントは、これまでの作業を別スレッド（別のClaude会話）に
 引き継ぐための網羅的なまとめです。新しいスレッドの冒頭にこのファイルの
 中身を貼るか、添付して読み込ませれば、経緯を再説明せずに作業を再開できます。
+
+旧版（2026-07-20時点）はこのファイルの下部に大枠を残していますが、
+**このセッションで内容の多くが刷新されているため、まずこの最新版を
+信頼すること。矛盾があれば必ずこちらを優先する。**
 
 ---
 
@@ -11,8 +15,10 @@
 
 - サイト：HIS WEDDING（海外フォトウェディング事業）
 - Shopifyストア：`check-p1wk01-yy.myshopify.com`
-- テーマ：Dawn（カスタマイズ済み。テーマID例: `160483180675`）
-- 依頼者（ユーザー）は非エンジニア。コードは書けない。
+- テーマ：Dawn（カスタマイズ済み。`Shopify.theme.id`は`160483180675`、
+  `schema_version: 15.4.0`）
+- 依頼者（ユーザー）は非エンジニア。コードは書けない。PC操作にも不慣れな
+  場面がある（DevToolsの使い方などはこちらが手順込みで案内する必要がある）。
 - **Claude（AI）はこのShopifyストアへの直接アクセス権（Admin API等）を
   持っていない。** すべての納品物は「コードファイルをチャットで提示 →
   ユーザーがShopify管理画面のコード編集画面に手動でコピペ →保存」という
@@ -22,54 +28,90 @@
 
 ## 2. リポジトリ構成
 
-このリポジトリ（`pw-26-shindantest`）内の `dawn-extension/` フォルダが
-成果物一式。**Dawnテーマ本体一式ではなく、既存の実装への「追加・上書き分」
-だけ**を格納している（`README.md`参照）。
+このリポジトリ（`pw-26-shindantest`）内に2つの独立したフォルダがある。
+**どちらも同じ1つのライブShopifyテーマに反映される（別テーマではない）。**
+
+```
+dawn-extension/     … TOP・撮影地一覧・都市詳細・商品ページ・各種診断
+shopify-theme/      … JOURNAL（ブログ）専用の一式
+```
+
+### dawn-extension/（メイン導線）
 
 ```
 dawn-extension/
-├── README.md                 … 初期の反映手順まとめ（やや古い。要更新）
+├── layout/
+│   └── theme.destinations.liquid   … 撮影地一覧/地域/都市ページ専用レイアウト
 ├── assets/
-│   ├── destinations.css              … ★今回追加。ライブ版の参照コピー(後述)
-│   ├── destinations-additions.css    … destinations.cssへの追記分①
-│   └── destinations-additions-2.css  … destinations.cssへの追記分②
+│   ├── destinations.css                … 都市系ページ共通CSS（最重要ファイル）
+│   ├── destinations-additions.css      … 旧・destinations.cssへの追記分①（現在は使われていない参考ファイル）
+│   ├── destinations-additions-2.css    … 同②（同上）
+│   └── lucide-0.263.0.min.js           … 自己ホスト化したLucideアイコン(CDN依存排除)
 ├── docs/
 │   ├── handover.md                              … このファイル
-│   ├── danang-migration-guide.md                … ダナン移行手順（更新済み）
-│   ├── destinations-metaobject-fields-addition.md … Destinationメタオブジェクト拡張手順
+│   ├── danang-migration-guide.md                … ダナン移行手順（実施済み、詳細は6節）
+│   ├── destinations-metaobject-fields-addition.md … Destination等メタオブジェクト設定手順（最新版）
 │   └── product-plan-metafields-setup.md         … product-plan.liquid用メタフィールド設定手順
-├── sections/   … 22ファイル（詳細は4節）
-├── snippets/   … 5ファイル
-└── templates/  … 5ファイル（JSON）
+├── sections/   … 都市・一覧・商品・診断まわり一式（詳細は4節）
+├── snippets/   … 共通部品
+└── templates/  … JSON テンプレート
 ```
 
-### ⚠️ 最重要の注意点：`assets/destinations.css` について
+### shopify-theme/（JOURNAL）
 
-`destinations.css`はこのリポジトリには**元々存在しなかった**（Shopify側に
-直接作られたファイルで、一度もこのリポジトリに取り込まれていなかった）。
-2026-07-20、ユーザーがこのファイルの中身を誤って全消去し、
-`destinations-additions-2.css`の内容だけに置き換えてしまうインシデントが
-発生。Shopifyのコード編集画面の「Timeline（変更履歴）」機能で10時間前の
-バージョンまで復旧し、その中身をユーザーからチャットに貼ってもらう形で
-Claude側も初めて全文を把握できた。
+```
+shopify-theme/
+├── layout/theme.liquid   … JOURNAL専用ではなく、サイト全体の唯一のメインレイアウト
+│                            （後述「最重要の発見」を必ず読むこと）
+├── assets/theme.css, journal.css, theme.js, journal.js
+├── sections/    … journal-hero / journal-featured / journal-grid / journal-category /
+│                  journal-cta / article-hero / article-body / article-related-posts /
+│                  article-related-products / article-cta / header / footer
+├── snippets/    … journal-card / journal-breadcrumb / journal-schema / journal-title-break 等
+└── templates/blog.json, article.json
+```
 
-**今回それをこのリポジトリに `assets/destinations.css` として保存した
-（`destinations-additions.css`＋`destinations-additions-2.css`の内容も
-含めて1本にマージ済み）。** ただし、これは「参照用のスナップショット」
-であり、Shopify側の実ファイルと自動同期はしていない。**今後
-`destinations.css`を編集するときは、必ずShopify管理画面側を直接編集し、
-可能であれば作業後にこのリポジトリのファイルも手動で最新化すること。**
+### ⚠️ 最重要の発見：`shopify-theme/layout/theme.liquid`はサイト全体の唯一のレイアウト
 
-## 3. 技術的な前提・ハマりどころ（重要・全て実際に踏んだ地雷）
+以前の引継ぎ書では「JOURNAL専用レイアウト」と誤解されていたが、実際には
+**このファイルがサイト全体（TOP・都市ページ以外）の唯一のメインレイアウト**
+であり、中身はほぼ無改造のDawn標準（カラースキーム変数生成、カートドロワー、
+予測検索など）。JOURNAL用の`theme.css`/`journal.css`/`theme.js`/`journal.js`は、
+このファイル内の以下の条件分岐でだけ読み込まれる：
+
+```liquid
+{%- if template.name == 'blog' or template.name == 'article' -%}
+  {{ 'theme.css' | asset_url | stylesheet_tag }}
+  {{ 'journal.css' | asset_url | stylesheet_tag }}
+{%- endif -%}
+```
+（`<script>`側も同様の条件分岐が`</body>`直前にある）
+
+**この発見に至った経緯**：word-break修正後にJOURNAL記事ページのレイアウトが
+崩れ・目次が消えた、という報告を受けて調査した結果、リポジトリで管理していた
+簡略版レイアウトファイルは実際にはライブ環境で使われておらず、
+ユーザーに実際のライブ`theme.liquid`を貼ってもらって初めて実態を把握できた。
+**今後同種の「原因不明のレイアウト崩れ」が起きたら、まずライブの
+`layout/theme.liquid`の中身を貼ってもらって確認すること。憶測で直さない。**
+
+一方、`dawn-extension/layout/theme.destinations.liquid`は撮影地一覧・地域・
+都市詳細ページ専用の完全に別のレイアウトファイル（独自ヘッダー/フッター、
+`destinations.css`/`destinations.js`を読み込む）。このセッションで初めて
+実物をユーザーから提示してもらい、このリポジトリに追加した
+（それまでリポジトリには存在しなかった）。
+
+商品ページ・TOPページは`shopify-theme/layout/theme.liquid`を使う
+（`template.name`が`product`/`index`等になり、JOURNAL専用CSSは読み込まれない）。
+
+## 3. 技術的な前提・ハマりどころ（全て実際に踏んだ地雷。番号は踏襲元と統合）
 
 1. **Liquidの構文制限**：`{% assign %}`内に比較演算子や`contains`を
    直接書けない（`{% if %}`で先に判定してから`assign`する）。
-   `{% if %}`の条件に括弧`()`は使えない。`{% render %}`のパラメータ値には
-   フィルターチェーンを使ってよい（例: `theme_key: raw_key | strip | downcase`）。
+   `{% if %}`の条件に括弧`()`は使えない。
 2. **`where: 'x.value', y`フィルターがネストしたプロパティで不安定**：
    `shop.metaobjects.destination.values | where: 'slug.value', page.handle`
-   のような、メタオブジェクトのネストしたプロパティへの`where`フィルターは
-   この環境では機能しないことがある（同じ値でもマッチしない）。
+   のような、メタオブジェクトのネストしたプロパティへの`where`は
+   この環境では機能しないことがある。
    **対策**：常に明示的な`for`+`if`ループに置き換える。
    ```liquid
    {%- assign destination = blank -%}
@@ -77,182 +119,396 @@ Claude側も初めて全文を把握できた。
      {%- if d.slug.value == page.handle -%}{%- assign destination = d -%}{%- endif -%}
    {%- endfor -%}
    ```
-   （`section.blocks | where: 'type', 'xxx'`のような、トップレベルの
-   単純なプロパティへの`where`は問題なく動く。ネストしたプロパティだけの
-   問題）
+   （`.id`のようなメタオブジェクトの**トップレベル**プロパティへの`where`は
+   問題なく動く。使用例：`destinations-browse.liquid`の並び替えリスト
+   フォールバック処理で`all_destination_entries | where: 'id', d.id`。
+   不安定なのはネストした`.value`プロパティだけ）
 3. **メタフィールド／メタオブジェクトのフィールド型は後から変更不可**：
    型を間違えて作った場合、削除して作り直すしかない。
 4. **リッチテキスト型メタフィールドの`.value`は生JSONを返すことがある**：
-   `{"type"=>"root",...}`のようなRubyハッシュ風の文字列がそのまま出る
-   バグがこの環境にある。**対策**：`.value`ではなく、メタフィールド
-   オブジェクト自体に`| metafield_tag`フィルターを適用する。
-   ```liquid
-   {%- assign plan_needed_items = mf.need | metafield_tag -%}
-   ```
-5. **JSON形式のメタフィールドは非エンジニアのユーザーには難しすぎる**、
-   という強い要望を受け、プロジェクト全体でJSON形式を廃止し、
-   「1行1項目、2つの情報は｜（縦棒）で区切る」というパイプ区切りの
-   プレーンテキスト形式に統一済み（後述の一覧参照）。
-6. **全角パイプ「｜」と半角パイプ「|」の不一致**：日本語IMEは自然に
-   全角の「｜」(U+FF5C)を入力するが、`split: '|'`は半角の「|」(U+007C)
-   にしかマッチしない。**対策**：パイプ区切りをパースする箇所は必ず
-   `| replace: '｜', '|' | split: '|'`という順でフィルターを掛ける
-   （このリポジトリ内の全パース箇所で対応済み。新しく同様の処理を
-   書くときも必ずこの正規化を入れること）。
-7. **セクションはスコープを共有しない**：例えば`destination-hero.liquid`
-   で見つけた`destination`変数は、同じページの`destination-plans.liquid`
-   など他セクションからは見えない。都市ページを構成する7セクション
-   （hero/intro/reasons/spots/schedule/gallery/plans/faq）はそれぞれ
-   独立して同じ「slugでmetaobjectを検索する」処理を繰り返している。
-8. **同期実行される`<script>`はDOM構築順に注意**：あるセクションの
-   `<script>`が、**後で描画される別セクション**の要素を
-   `document.getElementById`等で参照する場合、`DOMContentLoaded`で
-   包まないと「まだ存在しない要素」を探しにいって常に失敗する。
-   2026-07-20に`destination-hero.liquid`の「プランを見る↓」リンクで
-   実際にこのバグを踏んで修正した（全都市ページでリンクが永久に
-   非表示になっていた）。同一セクション内で、自分より前に描画される
-   要素を参照する分には問題ない。
-9. **CSS Gridの`align-items: stretch`（既定値）に注意**：グリッドの
-   行数・要素数が少ないと、アイテムが親要素の高さいっぱいまで
-   間延びして見えることがある（`destination-plans.liquid`のプランが
-   1件しかない都市で実際に発生）。対策として`align-content: start;
-   align-items: start;`（グリッド側）と`height: fit-content;`
-   （アイテム側）を指定。
+   対策は`| metafield_tag`フィルターを使うこと。
+5. **JSON形式のメタフィールドは非エンジニアには難しすぎる**という要望で
+   全面的に廃止し、後述の各種方式（パイプ区切り／逆参照メタオブジェクト／
+   ALTテキスト規約）に統一済み。
+6. **全角パイプ「｜」と半角パイプ「|」の不一致**：`split: '|'`は半角にしか
+   マッチしない。パイプ区切りをパースする箇所は必ず
+   `| replace: '｜', '|' | split: '|'`の順でフィルターを掛けること。
+7. **セクションはスコープを共有しない**：都市ページを構成する各セクション
+   （hero/intro/quickfacts/reasons/spots/schedule/gallery/plans/faq）は
+   それぞれ独立して同じ「slugでmetaobjectを検索する」処理を繰り返している。
+8. **同期実行される`<script>`はDOM構築順に注意**：後で描画される別セクションの
+   要素を参照する場合、実行タイミングに気をつけること。
+9. **CSS Gridの`auto-fill`と`auto-fit`の違い（重要・頻出）**：
+   `repeat(auto-fill, minmax(220px, 1fr))`は、アイテム数が列数に満たない
+   場合でも「空の列」を確保してしまい、1fr込みでその空列にもスペースが
+   配分されるため、少数アイテム時にカードの右側に不自然な空白ができる
+   （プラン1件の都市、関連都市1件などで発生）。
+   **対策**：`repeat(auto-fit, minmax(220px, 280px))`のように`auto-fit`
+   （空列を詰める）＋ 上限付き`minmax`（1frではなく固定上限）の組み合わせに
+   変更。ただしこの対策には**副作用**があり、スマホの1カラム表示時に
+   上限（280px等）で頭打ちになり画面幅を余らせて「左寄り」に見える
+   バグを新たに生む。**この副作用の対策として、狭い画面
+   （`@media (max-width: 560px)`程度）では`grid-template-columns: 1fr;`
+   で上書きし、フル幅の単一カラムに戻すこと。** `destinations.css`内の
+   `.dst-region-grid` / `.dst-plans-grid` / `.dst-reasons-grid` /
+   `.dst-spots-grid`すべてにこの2段構えの対策を適用済み。今後同種の
+   グリッドを追加するときは最初からこのパターンで書くこと。
+10. **CSS Gridで「長い1単語」が列幅を歪める**：`grid-template-columns:
+    repeat(3, 1fr)`の均等割りは、グリッドアイテムの既定`min-width: auto`が
+    子要素の最小コンテンツ幅（≒途中で折り返せない一番長いトークンの幅）を
+    考慮するため、スペースなしで長く続くカタカナ語（例：
+    「フォーシスアンドカンパニー」）を含むカードだけ列全体が広がって
+    見えることがある（JOURNAL「最新記事」グリッドで実際に発生。他の列は
+    正常で、該当カードの列だけ明らかに大きく見えた）。
+    **対策**：グリッドアイテム（`.card`）に`min-width: 0;`を追加する。
+    これで自動最小幅の計算が無効化され、意図通り均等な列幅になる。
+    **診断のコツ**：見た目だけで「サイズが違う」と判断せず、一時的に
+    `outline: 4px solid red;`のようなデバッグ用の枠線を該当要素に
+    付けてスクリーンショットを送ってもらうと、ユーザー自身の目で
+    一発で確認できて手戻りが減る（実際にこの手法で特定した）。
+11. **「親要素に指定した色」は「子要素(h1等)に直接指定された色」に
+    負ける**（CSS継承の優先度に関する重要な地雷）：`.hero-content { color:
+    white; }`のように親divにだけ色を指定しても、Dawn標準の`base.css`が
+    `h1, h2, h3, ... { color: rgb(var(--color-foreground)); }`のように
+    **要素自体に直接**低い詳細度で色を指定していると、そちらが必ず勝つ
+    （継承値は「その要素への直接指定が一つも無いとき」だけ使われる
+    フォールバックであり、詳細度の勝負にすら参加しない）。ヒーロー画像上の
+    タイトル文字が白のはずなのに黒っぽく見える、という形で実際に発生。
+    **対策**：色を変えたい要素自身（`h1`本体）にも直接色を指定すること。
+    **診断のコツ**：ブラウザDevToolsで該当要素を選択→Stylesで実際に
+    「打ち消し線なしで効いている」ルールとその出典ファイル/行番号を
+    確認してもらうのが最も確実（このセッションで複数回、これで
+    一発解決した）。
+12. **Shopify管理画面の「複製する」機能は、メタオブジェクトの
+    ユニーク制約付きフィールド（`slug`等）でエラーになることがある**：
+    「都市名」だけ変更できても`slug`はそのままコピーされ、既存エントリーと
+    重複してユニーク制約違反＝「不明なエラー」として表示される。
+    **対策**：新規都市は「複製する」を使わず、必ず「エントリーを追加」で
+    ゼロから作成し、`slug`を必ず専用の値で手入力する。
+13. **PDF読み込みには`poppler-utils`が必要**：このサンドボックス環境には
+    `libpoppler134`はあるが`pdftoppm`/`pdftotext`本体（`poppler-utils`
+    パッケージ）が入っていないことがある。Readツールで88ページ超のPDFを
+    渡された場合など、`apt-get install -y poppler-utils`（必要なら先に
+    `apt-get update`）で解決する。
+14. **xlsxスキル使用時、`openpyxl`が未インストールなことがある**：
+    `pip install openpyxl`で解決（root権限の警告は無視してよい）。
 
-## 4. パイプ区切り形式まとめ（JSON廃止後の統一フォーマット）
+## 4. 都市ページのデータ入力方式（現行、JSON廃止後）
 
-| 対象 | フィールドキー | 形式 | 使用ファイル |
-|---|---|---|---|
-| プラン: 料金オプション | `plan_options`（商品メタフィールド） | `名称｜価格` | product-plan.liquid |
-| プラン: スケジュール | `plan_schedule`（商品メタフィールド） | `時刻｜内容` | product-plan.liquid |
-| プラン: FAQ | `plan_faqs`（商品メタフィールド） | `質問｜回答` | product-plan.liquid |
-| 都市: 選ばれる理由 | `reasons`（Destinationメタオブジェクト） | `見出し｜本文` | destination-reasons.liquid |
-| 都市: モデルスケジュール | `schedule`（Destinationメタオブジェクト） | `時刻｜内容` | destination-schedule.liquid |
-| 都市: FAQ | `faqs`（Destinationメタオブジェクト） | `質問｜回答` | destination-faq.liquid |
+| データ | 保存場所 | 方式 |
+|---|---|---|
+| 都市の基本情報（名前・国・地域・説明・早わかり情報等） | Destinationメタオブジェクト本体 | 通常のフィールド |
+| フォトギャラリー画像 | Destinationの`gallery_images`（ファイルのリスト） | まとめてアップロード |
+| 撮影スポット | Destinationの`photo_spots`（Photo Spot参照リスト） | その場で新規作成＆画像アップロード |
+| **選ばれる理由** | **Reason**メタオブジェクト（`destination`欄で都市を指定） | 逆参照方式（後述） |
+| **モデルスケジュール** | **Schedule Item**メタオブジェクト（`destination`欄で都市を指定） | 逆参照方式 |
+| **よくある質問** | **FAQ Item**メタオブジェクト（`destination`欄で都市を指定） | 逆参照方式 |
+| **プラン一覧** | Destinationの`plans`（商品参照のリスト） | 都市ごとに直接商品を選択 |
+| **都市の並び順** | **Destination Order**メタオブジェクト（1件のみ、`destinations`欄をドラッグ並び替え） | ドラッグ方式（後述） |
+| 画像のトリミング位置（都市ギャラリー/商品ギャラリー/プラン画像） | 各画像のALTテキストに`｜位置`を追記 | ALTテキスト規約（後述） |
 
-`photo_spots`（撮影スポット）だけは例外で、JSONではなく「Photo Spot」
-という小さな別メタオブジェクトへの参照リスト方式（画像をその場で
-アップロードできる）。詳細は`docs/destinations-metaobject-fields-addition.md`参照。
+### 4-1. 逆参照方式（Reason / Schedule Item / FAQ Item）— 最重要アーキテクチャ
 
-## 5. Metaobject駆動の都市ページシステム（現行の主力アーキテクチャ）
+**背景**：当初はDestination側が`reasons`/`schedule`/`faqs`という参照リストを
+持つ設計だったが、この方式だと「`page.destination.json`が全都市共通の
+1テンプレートである」ため、**ある都市用に選んだ理由が全都市ページの
+選択肢プールに混ざり、都市が増えるたびに一覧が際限なく増え続ける**という
+致命的な欠陥が判明（ユーザーからの指摘で発覚）。
 
-新しい撮影地（都市）ページを増やすのに、テンプレート複製もコード変更も
-不要な仕組み。手順は「①Destinationメタオブジェクトに1件エントリー追加
-②同じslugのPageを`destination`テンプレートで作成」のみ。
+**解決策**：関係の向きを逆にした。Destination側は何も持たず、
+`Reason`/`Schedule Item`/`FAQ Item`という独立したメタオブジェクトの
+各エントリー側に`destination`（単一のメタオブジェクト参照）フィールドを
+持たせ、「このエントリーはどの都市のものか」を1件ずつ指定する。
 
-- テンプレート：`templates/page.destination.json`
-- 構成セクション（`order`順）：
-  `destination-hero → destination-intro → destination-reasons →
-  destination-spots → destination-schedule → destination-gallery →
-  destination-plans → destination-faq → destinations-cta`
-- 各セクションは対応するメタオブジェクトフィールドが空なら**自動的に
-  非表示**になる（エラーではなく仕様）。「選ばれる理由が出ない」等の
-  問い合わせがあれば、まずメタオブジェクトのデータ未入力を疑うこと。
-- `destination-plans.liquid`はブロックに商品を1つずつ紐付ける方式
-  （コレクション自動連携ではない。過去そう説明していたが現在は違う。
-  `danang-migration-guide.md`は既に修正済み）。
+表示側（`destination-reasons.liquid`等）は、対象の全エントリーを
+`shop.metaobjects.reason.values`のように取得し、明示的な`for`+`if`ループで
+`item.destination.value.slug.value == destination.slug.value`のものだけを
+抽出して表示する（3節②のwhere不安定問題を回避するため、ここも
+where filterではなく明示的ループ）。
 
-撮影地一覧ページ（`/pages/destinations`）は`destinations-browse.liquid`
-1セクションに統合済み（検索ボックス＋地域/テーマのフィルターチップ＋
-1つのカードグリッド）。旧来の4セクション構成
-（destinations-search/popular/theme-list/region-list.liquid）は
-ファイルとして残っているが、どのテンプレートからも参照されていない
-（削除しても影響なし、掃除候補）。
+**管理画面上の注意**：Destinationエントリーの編集画面には、今も
+「選ばれる理由」「モデルスケジュール」「よくある質問」という**古い
+未使用の参照リストフィールドが残っている**（削除していないだけで
+実害はない。コードはこの欄をもう読みに行っていない）。この欄の
+選択肢一覧には全都市ぶんの項目がまとめて表示されるが、これは
+Shopifyの参照リストピッカーの仕様上の見え方であり、実際の表示は
+各エントリー自身の`destination`欄だけで完全に都市ごとに独立している。
+ユーザーが繰り返し「他都市のが混ざって見える」と心配した経緯があるが
+実害なし。気になるなら削除してよい。
 
-地域ページ（`/pages/{region}`、例: `europe`）は`page.region.json`
-テンプレートで、`region-hero.liquid`＋`region-intro.liquid`＋
-`region-city-list.liquid`の3セクション構成。地域自体はメタオブジェクト化
-しておらず、12地域のキー・日本語ラベル対応は
-`snippets/destination-region-label.liquid`に集約。同様にテーマ（14種）は
-`snippets/destination-theme-label.liquid`。
+**管理画面での一覧の見づらさ対策**：都市・質問数が増えると
+Content→メタオブジェクト→「FAQ Item」等の一覧が全都市ごちゃまぜになる。
+各メタオブジェクト定義の`destination`フィールドで「フィルタリングを
+有効にする」（メタオブジェクト定義編集画面の下部「フィールドのオプション」
+→「フィルターとして使用されるフィールド」→「＋フィールドを追加する」）を
+設定すると、一覧画面でdestinationによる絞り込みができるようになる
+（Shopify標準機能。テーマコードとは無関係）。ユーザーへの案内済み、
+設定できたかは未確認。
 
-## 6. 現時点で「区別しておくべき2系統」の都市ページ
+### 4-2. プラン一覧（`destination-plans.liquid`）も同じ問題を解決済み
 
-- **新方式（`destination`テンプレート、Metaobject駆動）**：ハワイなど
-  新しく作った都市はこちら。
-- **旧方式（`area-lp.liquid` + 個別テンプレート、例: `page.area-2.json`）**：
-  ダナンが現状これ。まだ移行していない。移行手順は
-  `docs/danang-migration-guide.md`に用意済みだが未実施。
-  ロンドンも同様に旧方式のまま残っている可能性が高い（要確認）。
+旧方式（セクションの**ブロック**に商品を1つずつ紐付け）も、
+`page.destination.json`が全都市共通テンプレートである以上、
+ある都市で追加したプランが全都市に出てしまう同じ欠陥を抱えていた。
 
-## 7. 完了している主な機能（このリポジトリ内、詳細な経緯は割愛）
+**解決策**：Destinationに`plans`フィールド（商品参照の**リスト**、
+`リストにする`必須）を追加し、都市ごとに直接商品を選ぶ方式に変更。
+旧ブロック方式は後方互換のため残してあり、`plans`が1件でも設定されている
+都市ではそちらが優先される（ハワイは旧ブロック方式のまま動作継続中、
+未移行）。新しい都市には必ず`plans`欄を使うこと。
 
-- 商品ページ（`product-plan.liquid`）：Appointo予約カレンダー統合
-  （即予約・リクエスト予約の両方の購入フロー、ギャラリー、日程、
-  オプション、FAQ、注意事項、JSON-LD等）。ダナンのプランで設定済み、
-  他プラン（6件程度）は未設定。
-- Metaobject駆動の都市詳細ページ（7セクション）＋撮影地一覧＋地域ページ。
-- ドレス診断・都市診断（30秒診断）の各クイズページ。
-- TOPページ（`korean-wedding-lp.liquid`）：数字表示の文字化けバグ修正、
-  「人気プラン」ブロックに商品連携オプション追加済み。
+各商品のメイン画像の代替テキストに「｜位置」を追記すると、その商品だけ
+トリミング位置を上書きできる（4-4節のALTテキスト規約と同じ仕組み）。
 
-## 8. 未完了・引き継ぐべきタスク
+### 4-3. 都市の並び順（Destination Order）— 2026-07-23 導入
 
-優先度順ではなく、把握している範囲を列挙：
+**背景**：当初はDestinationに`sort_order`（数値の単一行テキスト）を追加し
+数値で管理する方式にしたが、ユーザーから「他の都市が何番か分からないと
+入力しづらい」「運用（暗記・Excel参照）でカバーするのではなく機能的に
+直してほしい」という強い要望があり、方式を変更した。
 
-1. **ダナン・ロンドンの新テンプレート移行**（`danang-migration-guide.md`
-   参照、実施前提の下準備は完了、実行はこれから）
-2. **メタフィールド／メタオブジェクトフィールドの定義整備**：
-   - 商品側 `plan_options`/`plan_schedule`/`plan_faqs`：JSON型から
-     「複数行テキスト」型への削除→作り直しが必要（旧JSON型が残って
-     いれば。使用中の商品が0件なのは確認済みなので削除して問題ない）
-   - Destinationメタオブジェクト側 `reasons`/`schedule`：新規作成が必要
-     （元々フィールド自体が存在しなかった）
-   - Destinationメタオブジェクト側 `faqs`：JSON型なら削除→
-     「複数行テキスト」で作り直し
-   - 進捗はユーザー側で作業中だった。どこまで終わったか要確認。
-3. **Appointoの予約設定**：ダナン以外の残りプラン（約6件）で
+**現行方式**：`Destination Order`という専用メタオブジェクトを**1件だけ**
+作成し、`destinations`フィールド（Destinationの参照**リスト**、管理画面で
+ドラッグして並び替え可能）に全都市をまとめて入れておく。表示順は
+このリストの並び＝そのまま。数字の入力・記憶は一切不要。
+
+`destinations-browse.liquid`側のロジック：
+```liquid
+{%- assign order_entry = shop.metaobjects.destination_order.values.first -%}
+{%- assign ordered_list = order_entry.destinations.value -%}
+{%- assign all_destinations = ordered_list -%}
+{%- comment -%} リストに入れ忘れている都市は自動的に末尾へ追加(表示が消えない安全策) {%- endcomment -%}
+{%- for d in all_destination_entries -%}
+  ...where: 'id', d.id で不足分をconcat...
+{%- endfor -%}
+```
+旧`sort_order`フィールドはもう読まれていない（残っていても無害、削除可）。
+
+**未確認事項**：`Destination Order`メタオブジェクト定義＋エントリー1件の
+作成、および全都市（既存2件＋新規24件、4-5節参照）をドラッグで並べる作業は
+ユーザー側でこれから実施。**次のスレッドで最初に確認すべき事項。**
+
+### 4-4. ALTテキストによる画像トリミング位置の指定（規約）
+
+対象：都市フォトギャラリー（`destination-gallery.liquid`）、撮影スポット
+（`destination-spots.liquid`、こちらは専用の「画像位置」参照メタオブジェクト
+経由）、プラン商品画像（`destination-plans.liquid`／`product-plan.liquid`の
+商品ギャラリー）。
+
+画像のALT（代替）テキストに`説明文｜位置`の形式で書くと、その1枚だけ
+トリミング位置を上書きできる。
+
+```
+ワイキキビーチの夕暮れ｜下
+チャペル外観｜左
+```
+
+使える位置の言葉：上／下／左／右／中央／左上／右上／左下／右下
+（英語 `top`/`bottom`等や`30% 50%`のような生のCSS値も可、`destination-image-position.liquid`
+スニペットが変換）。`｜`が無ければセクション設定の既定値にフォールバックする。
+全角「｜」対応済み（3節⑥参照）。
+
+撮影スポットだけは方式が異なり、`image_position`という専用の「画像位置」
+参照メタオブジェクト（9つの固定エントリー：上/下/左/右/中央/左上/右上/左下/右下）
+をクリックで選ぶ方式（この環境のメタオブジェクトフィールドには
+「選択肢を制限するドロップダウン」機能が無いため、この小さな参照専用
+メタオブジェクトで代用している）。
+
+### 4-5. 24都市の新規追加（下書き済み・未反映）
+
+ユーザーから「ウィーン、パリ、アムステルダム、ヘルシンキ、ブダペスト、
+沖縄本島、宮古島、石垣島、ロサンゼルス、ラスベガス、カンクン、ケアンズ、
+パース、シドニー、ゴールドコースト、メルボルン、バリ島、カッパドキア、
+エジプト（カイロ）、バルセロナ、ローマ、フィレンツェ、ベネチア、アマルフィ」
+の24都市を追加したいという依頼があり、全都市分の
+
+- 都市基本情報（説明文・飛行時間・時差・ベストシーズン・おすすめな人・テーマ）
+- 選ばれる理由（各2件）
+- モデルスケジュール（各2〜3日分）
+- よくある質問（各3件）
+- 撮影スポット（各3件）
+
+をマーケティング文案として下書きし、Excelファイル
+`都市ページ一括入力テンプレート.xlsx`にまとめて渡した（ユーザーの
+スクラッチパッド経由で送付、リポジトリには未コミット。再生成する場合は
+`/tmp`配下の`build_destination_template.py`と`cities_data.py`が
+ソース。セッションが変わると`/tmp`の中身は消えている前提で、
+再度必要なら同内容を作り直すこと）。
+
+**このExcelは下書き案であり、実際にShopifyへの入力はまだ行われていない
+（次スレッドの主要タスク）。** 地域(region)キーは
+`snippets/destination-region-label.liquid`で定義された12種の固定キー
+（`hawaii`/`micronesia`/`south_pacific`/`indian_ocean`/`oceania`/`asia`/
+`middle_east`/`europe`/`north_america`/`south_america`/`africa`/`japan`）
+のいずれかを使うこと（表示ラベルではなくキーをそのままDestinationの
+`region`欄に入れる）。
+
+## 5. 都市ページのSEO自動化（`layout/theme.destinations.liquid`）
+
+都市ページ（`template.suffix == 'destination'`）は本文(`page.content`)を
+使わずセクションだけで組んでいるため、Shopify管理画面の
+「検索エンジンリスティング」（SEOタイトル/ディスクリプション）を
+手入力しない限り、`<meta name="description">`自体が出力されない、
+OGP画像がサイト全体共通の1枚になる、といった問題があった。
+
+`layout/theme.destinations.liquid`内で、`page.handle`からDestination
+エントリーを検索し（3節②の明示的ループ）、管理画面の手入力が空の場合は
+`name_ja`/`description`/`hero_image`から自動でタイトル・ディスクリプション・
+OGP画像を生成するようフォールバック処理を追加済み。手入力があれば
+そちらが常に優先される。
+
+## 6. 各都市の移行状況（`destination`テンプレート方式への移行）
+
+- **ハワイ**：新方式（`destination`テンプレート）。プランのみ旧ブロック
+  方式のまま（4-2節）。`reasons`/`schedule`/`gallery_images`は
+  データが入っているかセッション終盤時点で未確認（一時期は未入力で
+  非表示だった）。
+- **ダナン**：ユーザーの発言により**新方式（`destination`テンプレート）に
+  移行済み**（従来の`area-lp.liquid`方式ではなくなった）。ただし
+  `reasons`/`schedule`/`faqs`/`plans`等のデータ投入状況は未確認。
+  次スレッドで確認すること。
+- **ロンドン**：状況不明（旧方式`area-lp.liquid`のまま残っている可能性が
+  高いが、このセッション中に明確な確認はしていない）。JOURNALの
+  関連記事カード等には「ロンドンフォトウェディング完全ガイド」という
+  記事が存在することは確認済み（`/blogs/journal/london-photo-wedding`）。
+- **新規24都市**（4-5節）：Destinationエントリー自体も未作成。
+
+`sections/area-lp.liquid`（旧方式）はまだリポジトリに残っている
+（ダナンが移行済みなら、ロンドンの移行が終われば削除候補）。
+
+## 7. 完了している主な機能（このセッションで実施した範囲）
+
+- TOP・JOURNAL・都市ページ全体の改行崩れ（CJK文字のword-break）を
+  多層的に修正（`.lp-container`／`.destinations-scope`／JOURNAL
+  `body`・見出し・`.article-content`見出し全体に`word-break: keep-all;
+  overflow-wrap: break-word;`を適用）。
+- 外部CDN依存の排除：Tailwind/Lucideを自己ホスト化。
+- 都市ページの画像トリミング位置指定を3段階で整備
+  （4-4節のALTテキスト規約に統一、Photo Spotは専用参照メタオブジェクト）。
+- Reason/Schedule Item/FAQ Item/Plansの逆参照アーキテクチャへの全面移行
+  （4-1, 4-2節）。
+- 都市の並び順をDestination Order方式に刷新（4-3節）。
+- 都市ページのSEO自動生成（5節）。
+- 都市ページのフォトギャラリーに拡大表示＋前後スワイプ・矢印付き
+  ライトボックスを追加（`destination-gallery.liquid`、`product-plan.liquid`
+  と同じ仕組み）。矢印/×ボタンが明るい写真の上で見えなくなる不具合と、
+  さらにDawn標準スタイルとの詳細度負けで実は真っ黒だった不具合の
+  両方を修正済み（3節⑪参照）。
+- CSS Gridの空白バグ（3節⑨）・列幅歪みバグ（3節⑩）を一通り修正。
+- JOURNAL：関連記事/最新記事カードの画像アスペクト比崩れ修正、
+  記事見出しの数字ガタつき（Cormorant Garamondのオールドスタイル数字）
+  修正、記事ヒーロー画像の文字色・暗さをテーマエディタから調整できる
+  設定を追加（`article-hero.liquid`/`journal-hero.liquid`両方）。
+- 見ている人はこれも見ています系のレコメンド（Shopify Product
+  Recommendations API＋同一撮影地フォールバック、撮影地は
+  同地域→同テーマフォールバック）。
+- TOPページの「オンライン相談」CTA、「撮影地診断」大型バナー＋
+  フローティングボタン（TOP・撮影地一覧ページ両方、それぞれ表示/非表示
+  切替可）。
+- 撮影地診断（`destination-quiz.liquid`）のUIリッチ化（進捗バー、
+  アイコン、カードスタイル、ホバーアニメーション、結果ランクバッジ。
+  診断ロジック自体は変更なし）。
+- 撮影地一覧ページ（`destinations-browse.liquid`）：PCで表示順の
+  先頭3件を大きなカードで、残りを4列グリッドで表示するよう変更。
+
+## 8. 未完了・引き継ぐべきタスク（優先度順ではなく網羅列挙）
+
+1. **ドレス診断ページに進捗バー等のUIリッチ化を追加する（保留中）**：
+   撮影地診断（`destination-quiz.liquid`）と同じ仕様に揃えたいという
+   依頼があったが、**ドレス診断のセクション/ページファイルがこの
+   リポジトリに存在せず、ユーザーからの提示待ちで止まっている**。
+   `/pages/wedding-dress-diagnosis`というURLが`shopify-theme`側の
+   ヘッダーリンクに存在することは確認済み（`custom-header-wrapper`内の
+   ナビゲーション、`shopify-theme/sections/header.liquid`相当だが、
+   実際のヘッダーは各ページに埋め込まれた`custom-header-wrapper`
+   スタイル/スクリプト付きの独自マークアップの模様。`wedding-ec/`配下の
+   静的HTMLプロトタイプにdiagnosis.htmlがあるが、これは初期プロトタイプで
+   実際のライブページの実装そのものではない可能性が高い）。次スレッドで
+   まずこのページの実際のliquidファイル一式を提示してもらうこと。
+2. **24都市のShopifyへの実投入**（4-5節）：Excelの下書きを元に
+   Destinationエントリー・Reason・Schedule Item・FAQ Item・Photo Spot・
+   `plans`・ギャラリー画像を全都市ぶん作成する必要がある。地域(region)
+   キーの入力ミスに注意（12種の固定キー、5節参照）。
+3. **Destination Orderメタオブジェクトの定義・エントリー作成**（4-3節）：
+   まだ設定されていない可能性が高い。次スレッドで最優先に確認。
+4. **ロンドンの新テンプレート移行**（未確認、6節）。
+   `danang-migration-guide.md`の手順がそのまま流用できるはず
+   （ダナンで実施済みの前例あり）。
+5. **Appointoの予約設定**：ダナン以外の残りプランで
    サービス作成・営業時間・1日あたり上限件数・日付ごとの特例設定が
-   未実施。リクエスト予約型プランは「支払いをスキップ」設定推奨。
-4. **destinations.css の完全な最新状態への統一**：
-   `destinations-additions.css`（選ばれる理由/スケジュール/ギャラリー用）
-   の内容が、Shopify側の実ファイルに追記済みかどうか2026-07-20時点で
-   未確認。追記手順は本引継ぎ書と一緒に渡された直近のやり取りを参照、
-   または本リポジトリの`assets/destinations.css`（マージ済み版）を
-   丸ごと使うよう案内してもよい。
-5. **ハワイの`reasons`/`schedule`/`gallery_images`データ未入力**：
-   このため現在ハワイのページで「選ばれる理由」「モデルスケジュール」
-   「フォトギャラリー」の3セクションが非表示（仕様通り、バグではない）。
-   入力内容が決まっていれば整形して渡せる。
-6. **Shopify Flowによるキャンセル料自動化**：構想のみ、未着手。
-7. **不要ファイルの掃除**（任意）：`destinations-search/popular/
-   theme-list/region-list.liquid`（どのテンプレートからも未参照）、
-   `README.md`の内容更新（初期の反映手順のままで現状と乖離あり）。
-8. **Shopify AI Toolkit**：導入手順の説明・`--allow-mutations`運用方針の
-   相談まで完了。実際のインストール・認証はユーザー側で未実施
-   （ユーザーのローカルPCでのセットアップが必要、このセッションからは
-   操作不可）。方針としては「コードは複製テーマ相手に積極活用可、
-   データ変更はドラフト状態が存在しないため慎重に」で合意済み。
+   未実施（前回引継ぎからの持ち越し、今回未着手）。
+6. **ハワイのプランを`plans`欄（新方式）へ移行**（4-2節、任意・急ぎではない）。
+7. **旧・未使用フィールド／ファイルの整理（任意）**：
+   - Destinationエントリーに残る古い「選ばれる理由」「モデルスケジュール」
+     「よくある質問」参照リストフィールド（4-1節、実害なし）
+   - 旧`sort_order`フィールド（4-3節、実害なし）
+   - `sections/destinations-search.liquid` / `destinations-popular.liquid` /
+     `destinations-theme-list.liquid` / `region-list.liquid`
+     （どのテンプレートからも未参照、`destinations-browse.liquid`に統合済み）
+   - `sections/area-lp.liquid`（旧方式都市ページ用、全都市移行後に削除可）
+8. **`destinations.css`のリポジトリ同期**：このセッション中に何度も
+   Shopify側の実ファイルとリポジトリ版の内容確認・同期を行ったが、
+   今後も編集のたびにリポジトリへの反映を忘れないこと。
+9. **Shopify Flowによるキャンセル料自動化**：構想のみ、未着手（前回引継ぎからの持ち越し）。
 
-## 9. 2026-07-20 に発生した destinations.css 消失インシデントの経緯
+## 9. 過去のインシデント記録（教訓として保持）
 
-1. プラン一覧カードの余白バグ修正のため、`destinations-additions-2.css`
-   の該当ブロックだけを書き換えて提示
-2. ユーザーがShopify側の`destinations.css`を編集する際、「該当ブロックを
-   探して置き換える」つもりが、誤ってファイル全体を今回の追加分
-   （30行程度）だけに置き換えてしまい、基本デザインシステム
-   （`.dst-hero`, `.dst-container`, `.dst-btn`, カラートークン等
-   300行以上）が消失。サイト全体が無地表示になる重大な表示崩れが発生
-3. Shopifyコード編集画面の「TIMELINE」パネル（VS Code風の変更履歴機能）
-   から10時間前の保存版を発見・復旧
-4. 復旧した内容をユーザーがチャットに貼り付け、Claude側で初めて
-   `destinations.css`の完全な中身を把握。この内容を
-   `assets/destinations.css`としてリポジトリに保存（4節参照）
-5. 復旧版には`destinations-additions.css`（選ばれる理由/スケジュール/
-   ギャラリー用CSS）の内容が含まれていなかったため、追加で提示。
-   Shopify側への反映完了確認は未了（8節タスク4）
+### 9-1. 2026-07-20：`destinations.css`消失インシデント
+プラン一覧の余白バグ修正時、ユーザーが誤ってファイル全体を追加分だけに
+置き換えてしまい、基本デザインシステムが消失。Shopifyの「TIMELINE」機能
+（変更履歴）から10時間前の版を復旧。**教訓**：`destinations.css`は
+Shopify側にしか実体がないファイルなので、差分ではなく全文での
+やり取りを徹底する（10節にも反映済み）。
 
-**教訓**：`destinations.css`はこのリポジトリで完結管理できない
-「Shopify側にしか実体がないファイル」だったため、今回のような事故で
-一時的にロスト寸前になった。今後は編集のたびに、可能であれば
-Shopify側の最新内容をこのリポジトリにも反映させる運用を推奨。
+### 9-2. 2026-07-22ごろ：JOURNAL記事ページのレイアウト崩れ
+word-break修正後に発生。原因は2節の「最重要の発見」の通り、リポジトリの
+`theme.liquid`が実際のライブ環境と異なっていたこと。ユーザーに実際の
+ライブファイルを貼ってもらって解決。**教訓**：レイアウトファイル関連の
+原因不明の不具合は、まずライブの実ファイルを確認する。
+
+### 9-3. このセッションで多発した「見た目のバグ」診断の教訓
+- CSS Gridの列幅・空白系の不具合は、口頭説明やスクリーンショットの
+  目視だけで水掛け論になりやすい。**一時的なデバッグ用の赤枠
+  （`outline: 4px solid red;`）を該当要素に入れて再度スクリーンショットを
+  送ってもらう**のが最も早く確実（3節⑩）。
+- 色が反映されない系の不具合は、**ブラウザDevToolsで対象要素を選択し、
+  Stylesパネルで実際に効いているルールの出典（ファイル名:行番号）を
+  確認してもらう**のが最も確実（3節⑪）。
+- 「たぶんキャッシュ／貼り替え漏れだろう」という憶測での指摘は、
+  ユーザーを何度も同じ確認作業に付き合わせることになり信頼を損ねやすい。
+  可能な限り上記のような「客観的に一発で分かる」診断手段を優先すること。
 
 ## 10. コミュニケーション上の注意
 
 - ユーザーは非エンジニア。「差分だけ渡す」より「置き換える範囲ごと
-  全文を渡す」方が事故が少ない（実際に今回の事故もその教訓から）。
+  全文を渡す」方が事故が少ない。
 - Shopify管理画面のUI要素の名称・位置を聞かれたら、具体的なクリック
-  パスを省略せず案内すること。
+  パスを省略せず案内すること（例：「設定 →メタオブジェクト→
+  ○○→フィールドを追加」のように毎回フルパスで書く）。
 - コード変更は基本的にこのリポジトリにコミット・プッシュしてから、
   Shopifyへの反映手順（貼り替え先ファイル名・貼り替え方法）を案内する
-  運用で進めてきた。
+  運用で進めてきた（`git push -u origin claude/thread-migration-qlsyoe`）。
+- ユーザーは「運用でカバーする」提案（数字を覚える、Excelで管理する等）を
+  好まない傾向がある。可能な限り、Shopify標準機能（ドラッグ並び替え、
+  フィルタリング設定等）や自動化で「覚えなくても済む」仕組みを優先して
+  提案すること。
+- ユーザーは通常、送られたファイルをすぐには貼り替えず、後でまとめて
+  作業することがある。「まだ直っていない」という報告を受けたら、
+  まず「最新版を貼り替え済みか」を確認してから調査すること
+  （ただし決めつけて何度も同じ質問を繰り返すと不満を招くため、
+  9-3節の客観的診断手段も併用するバランスが必要）。
+
+---
+
+<details>
+<summary>旧版（2026-07-20時点、参考として保持）</summary>
+
+上記の最新版と矛盾する記述が含まれるため、必ず最新版を優先すること。
+主な差分：destinations.cssの位置づけ（当時は消失インシデント直後）、
+JOSN形式のreasons/schedule/faqs（現在は逆参照メタオブジェクトに刷新済み）、
+都市の並び順の概念自体が当時は存在しなかった、等。
+
+（旧本文は分量が多いため、Git履歴の本ファイル旧バージョン、または
+このリポジトリのコミット履歴で参照可能。）
+
+</details>
