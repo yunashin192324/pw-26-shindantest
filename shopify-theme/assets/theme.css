@@ -246,9 +246,10 @@ p { color: var(--text-muted); }
   max-width: 760px;
   color: var(--hero-text-color, var(--white));
 }
-.hero-content .eyebrow { color: var(--gold-light); }
+.hero-content .eyebrow { color: var(--hero-text-color, var(--gold-light)); opacity: 0.9; }
 .hero-content h1 { margin-bottom: 20px; color: var(--hero-text-color, var(--white)); }
 .hero-content .journal-meta { color: var(--hero-text-color, var(--white)); }
+.hero-content .lede { color: var(--hero-text-color, var(--text-on-dark-muted)); opacity: 0.85; }
 .hero-content .lede { color: var(--text-on-dark-muted); max-width: 520px; margin-bottom: 40px; }
 .scroll-cue {
   position: absolute;
