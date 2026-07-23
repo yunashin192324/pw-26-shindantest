@@ -13,7 +13,7 @@
 {%- assign read_minutes = char_count | divided_by: 500 -%}
 {%- assign read_minutes = read_minutes | at_least: 1 -%}
 
-<section class="hero">
+<section class="hero" style="--hero-text-color: {{ section.settings.text_color }}; --hero-overlay: {{ section.settings.overlay_strength | divided_by: 100.0 }};">
   <div class="hero-media">
     {%- if article.image -%}
       <img
@@ -43,6 +43,11 @@
 {% schema %}
 {
   "name": "記事ヒーロー",
-  "settings": []
+  "settings": [
+    { "type": "color", "id": "text_color", "label": "文字色", "default": "#ffffff",
+      "info": "写真によって文字が読みにくい場合、この色や下の「暗さ」を調整してください。" },
+    { "type": "range", "id": "overlay_strength", "label": "写真を暗くする強さ", "min": 50, "max": 150, "step": 5, "unit": "%", "default": 100,
+      "info": "明るい写真で文字が読みにくいときは数値を上げてください。" }
+  ]
 }
 {% endschema %}
