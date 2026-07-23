@@ -381,8 +381,12 @@ html { scroll-behavior: smooth; }
 .dst-gallery-lightbox-prev,
 .dst-gallery-lightbox-next {
   position: absolute; color: #fff; line-height: 1; display: flex; align-items: center; justify-content: center;
-  background: none; border: none; cursor: pointer;
+  background: rgba(0, 0, 0, 0.38); border: none; border-radius: 50%; cursor: pointer;
+  transition: background-color 0.2s;
 }
+.dst-gallery-lightbox-close:hover,
+.dst-gallery-lightbox-prev:hover,
+.dst-gallery-lightbox-next:hover { background: rgba(0, 0, 0, 0.6); }
 .dst-gallery-lightbox-close { top: 16px; right: 16px; font-size: 2rem; width: 44px; height: 44px; }
 .dst-gallery-lightbox-prev { left: 8px; top: 50%; transform: translateY(-50%); font-size: 2.4rem; width: 48px; height: 48px; }
 .dst-gallery-lightbox-next { right: 8px; top: 50%; transform: translateY(-50%); font-size: 2.4rem; width: 48px; height: 48px; }

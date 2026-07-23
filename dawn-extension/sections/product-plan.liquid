@@ -585,9 +585,9 @@
     同一テンプレートが複数商品で使われても衝突しないようにしている。
   {% endcomment %}
   <div id="plan-lightbox-{{ section.id }}" class="fixed inset-0 hidden" style="background:rgba(0,0,0,0.92);z-index:99999;">
-    <button type="button" class="plan-lightbox-close absolute top-4 right-4 text-white text-3xl leading-none w-10 h-10 flex items-center justify-center" aria-label="閉じる">×</button>
-    <button type="button" class="plan-lightbox-prev absolute left-2 md:left-6 top-1/2 -translate-y-1/2 text-white text-4xl leading-none w-12 h-12 flex items-center justify-center" aria-label="前の画像">‹</button>
-    <button type="button" class="plan-lightbox-next absolute right-2 md:right-6 top-1/2 -translate-y-1/2 text-white text-4xl leading-none w-12 h-12 flex items-center justify-center" aria-label="次の画像">›</button>
+    <button type="button" class="plan-lightbox-close absolute top-4 right-4 text-white text-3xl leading-none w-10 h-10 flex items-center justify-center rounded-full bg-black/40 hover:bg-black/60 transition" aria-label="閉じる">×</button>
+    <button type="button" class="plan-lightbox-prev absolute left-2 md:left-6 top-1/2 -translate-y-1/2 text-white text-4xl leading-none w-12 h-12 flex items-center justify-center rounded-full bg-black/40 hover:bg-black/60 transition" aria-label="前の画像">‹</button>
+    <button type="button" class="plan-lightbox-next absolute right-2 md:right-6 top-1/2 -translate-y-1/2 text-white text-4xl leading-none w-12 h-12 flex items-center justify-center rounded-full bg-black/40 hover:bg-black/60 transition" aria-label="次の画像">›</button>
     <div class="w-full h-full flex items-center justify-center px-12">
       <img class="plan-lightbox-img" alt="" width="1200" height="1500" style="max-width:100%;max-height:90vh;object-fit:contain;">
     </div>
