@@ -7,17 +7,39 @@
   このセクション1つに統合し、「1つのカードグリッド」に対して
   「検索ボックス／地域チップ／テーマチップ」のフィルターを効かせる方式に
   変更。都市が少ない今はすっきり1画面、将来50都市に増えても同じ仕組みの
-  まま自然にスケールする。人気都市は別セクションにせず、並び順を先頭に
-  してPOPULARバッジで示すだけにしている。
+  まま自然にスケールする。人気都市は別セクションにせず、POPULARバッジで
+  示すだけにしている(並び順への影響なし。並び順はDestination Orderで管理)。
 {%- endcomment -%}
 {%- comment -%}
-  並び順はDestinationの`sort_order`欄(数値、単一行テキスト)のみを基準にする。
-  POPULARバッジは表示上のバッジのままで、並び順には影響させない
-  (表示順を唯一の基準にすることで、都市が増えても管理画面の
-  sort_order欄を見るだけで並び順が予測できるようにするため)。
-  未入力(blank)は最後に回るよう、大きな数値にフォールバックする。
+  並び順は「Destination Order」metaobject(1件だけ作成)のdestinations欄
+  (Destinationの参照リスト、管理画面でドラッグして並び替え)で管理する。
+  番号を手入力・記憶する必要が無く、ドラッグ操作だけで完結する
+  (以前使っていたsort_order欄は廃止。数字の重複や桁揃えの手間、
+  「他の都市が何番か分からない」という問題があったため)。
+
+  そのリストにまだ入っていない都市(新規追加直後など、並び替えリストに
+  ドラッグで入れ忘れている場合)は、表示自体が消えてしまわないよう
+  自動的に末尾へ追加する。
 {%- endcomment -%}
-{%- assign all_destinations = shop.metaobjects.destination.values | sort: 'sort_order.value' -%}
+{%- assign all_destination_entries = shop.metaobjects.destination.values -%}
+{%- assign empty_array = "" | split: "" -%}
+{%- assign order_entry = shop.metaobjects.destination_order.values.first -%}
+{%- if order_entry and order_entry.destinations.value -%}
+  {%- assign ordered_list = order_entry.destinations.value -%}
+{%- else -%}
+  {%- assign ordered_list = empty_array -%}
+{%- endif -%}
+{%- assign all_destinations = ordered_list -%}
+{%- for d in all_destination_entries -%}
+  {%- assign is_ordered = false -%}
+  {%- for od in ordered_list -%}
+    {%- if od.id == d.id -%}{%- assign is_ordered = true -%}{%- endif -%}
+  {%- endfor -%}
+  {%- unless is_ordered -%}
+    {%- assign single = all_destination_entries | where: 'id', d.id -%}
+    {%- assign all_destinations = all_destinations | concat: single -%}
+  {%- endunless -%}
+{%- endfor -%}
 {%- assign region_keys = 'hawaii,micronesia,south_pacific,indian_ocean,oceania,asia,middle_east,europe,north_america,south_america,africa,japan' | split: ',' -%}
 {%- assign theme_keys = 'beach,streets,palace,heritage,view,lake,desert,balloon,church,museum,library,resort,sunset,overwater' | split: ',' -%}
 
