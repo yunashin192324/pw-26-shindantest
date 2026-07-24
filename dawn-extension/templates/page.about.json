@@ -32,41 +32,6 @@
             "desc": "衣裳は日本国内の提携サロンで試着したものを事前にお渡し。現地では着替えと撮影に集中するだけです。"
           }
         },
-        "flow_1": {
-          "type": "flow_step",
-          "settings": {
-            "title": "お問い合わせ",
-            "desc": "オンラインフォームより、気になる撮影地やプランをご相談ください。"
-          }
-        },
-        "flow_2": {
-          "type": "flow_step",
-          "settings": {
-            "title": "衣裳のご試着",
-            "desc": "全国の提携サロンで実際に試着してお選びいただけます。"
-          }
-        },
-        "flow_3": {
-          "type": "flow_step",
-          "settings": {
-            "title": "日程・プランの確定",
-            "desc": "ご希望の撮影地・日程をすり合わせ、正式にご予約いただきます。"
-          }
-        },
-        "flow_4": {
-          "type": "flow_step",
-          "settings": {
-            "title": "現地での撮影",
-            "desc": "現地カメラマンと合流し、憧れのロケーションで撮影します。"
-          }
-        },
-        "flow_5": {
-          "type": "flow_step",
-          "settings": {
-            "title": "データのお届け",
-            "desc": "帰国後、編集済みの高画質データをお届けします。"
-          }
-        },
         "testimonial_1": {
           "type": "testimonial",
           "settings": {
@@ -103,49 +68,20 @@
             "button_text": "衣裳一覧を見る",
             "button_url": "shopify://pages/dress-tuxedo"
           }
-        },
-        "faq_1": {
-          "type": "faq",
-          "settings": {
-            "question": "海外に行ったことがなくても大丈夫ですか？",
-            "answer": "はい、渡航や現地でのスケジュールは全てこちらでご案内しますので、初めての方でも安心してご利用いただけます。"
-          }
-        },
-        "faq_2": {
-          "type": "faq",
-          "settings": {
-            "question": "衣裳のサイズが心配です。",
-            "answer": "国内の提携サロンで事前に試着していただけるため、現地で初めて袖を通す不安がありません。"
-          }
-        },
-        "faq_3": {
-          "type": "faq",
-          "settings": {
-            "question": "撮影データはいつ届きますか？",
-            "answer": "帰国後、編集を行ったうえで順次お届けします。目安の日数はプランページでご確認いただけます。"
-          }
         }
       },
       "block_order": [
         "feature_1", "feature_2", "feature_3",
-        "flow_1", "flow_2", "flow_3", "flow_4", "flow_5",
         "testimonial_1", "testimonial_2", "testimonial_3",
-        "cta_1", "cta_2",
-        "faq_1", "faq_2", "faq_3"
+        "cta_1", "cta_2"
       ],
       "settings": {
-        "hero_eyebrow": "HIS WEDDING",
+        "hero_eyebrow": "ABOUT HIS WEDDING",
         "hero_title": "海外フォトウェディングを、\nもっと身近に。",
         "hero_lede": "国内で衣裳を試着して、海外の絶景で撮影するだけ。準備の負担を最小限に、一生に一度の1枚を残すためのフォトウェディングサービスです。",
-        "hero_button_text": "撮影地から選ぶ",
-        "hero_button_url": "shopify://pages/destinations",
         "stat_number": "500",
         "stat_suffix": "組以上",
-        "stat_label": "のカップルにご利用いただいています（要実数差し替え）",
-        "carousel_button_text": "撮影地一覧をもっと見る",
-        "carousel_button_url": "shopify://pages/destinations",
-        "faq_button_text": "よくある質問をもっと見る",
-        "faq_button_url": "shopify://pages/faq"
+        "stat_label": "のカップルにご利用いただいています（要実数差し替え）"
       }
     }
   },
