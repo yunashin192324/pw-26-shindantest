@@ -11,48 +11,57 @@
   示すだけにしている(並び順への影響なし。並び順はDestination Orderで管理)。
 {%- endcomment -%}
 {%- comment -%}
-  並び順は「Destination Order」metaobject(1件だけ作成)のdestinations欄
-  (Destinationの参照リスト、管理画面でドラッグして並び替え)で管理する。
-  番号を手入力・記憶する必要が無く、ドラッグ操作だけで完結する
-  (以前使っていたsort_order欄は廃止。数字の重複や桁揃えの手間、
-  「他の都市が何番か分からない」という問題があったため)。
+  並び順は「Destination Order」metaobject(1件だけ作成)の`order_list`欄
+  (単一行/複数行テキスト)に、都市のslugを1行に1つ、表示したい順番で
+  書く方式で管理する。
 
-  そのリストにまだ入っていない都市(新規追加直後など、並び替えリストに
-  ドラッグで入れ忘れている場合)は、表示自体が消えてしまわないよう
-  自動的に末尾へ追加する。
+  【重要】以前は参照リスト(destinations欄)をドラッグして並び替える方式
+  だったが、Shopifyの仕様上「管理画面でのドラッグ移動は見た目だけで、
+  Liquidが読み取る実際のデータ順序には反映されない」ことが判明した
+  (挿入順は反映されるが、後からの並び替えは反映されない)。そのため
+  この、順番をテキストでそのまま書く方式に変更した。テキストの行を
+  並び替えれば、そのまま表示順に反映される。
+
+  例(order_listの中身):
+    hawaii
+    danang
+    london
+
+  そのリストにまだ書かれていない都市(新規追加直後など)は、表示自体が
+  消えてしまわないよう自動的に末尾へ追加する。
 {%- endcomment -%}
 {%- assign all_destination_entries = shop.metaobjects.destination.values -%}
 {%- assign empty_array = "" | split: "" -%}
 {%- assign order_entry = shop.metaobjects.destination_order.values.first -%}
-{%- assign ordered_list = empty_array -%}
-{%- if order_entry and order_entry.destinations.value.size > 0 -%}
-  {%- assign ordered_list = order_entry.destinations.value -%}
+{%- assign order_slugs = empty_array -%}
+{%- if order_entry and order_entry.order_list.value != blank -%}
+  {%- assign order_raw = order_entry.order_list.value | strip | replace: '　', ' ' -%}
+  {%- assign order_slugs = order_raw | newline_to_br | split: '<br />' -%}
 {%- endif -%}
 
-{%- comment -%}
-  Destination Orderがまだ設定されていない(ordered_listが空)場合は、
-  そのままall_destination_entriesを使う(以前の挙動と同じ、確実に動く)。
-  設定されている場合だけ、その並び順+末尾に未登録分を追加する処理を行う。
-  「未登録分の追加」は where フィルターだと(このストア環境では稀に
-  一致しないことがあるため)使わず、forloop.index0を使った
-  slice切り出しで1件だけ取り出す、確実な方法にしている。
-  一致判定もカスタムフィールドではなく、Shopify標準の.handleを使う。
-{%- endcomment -%}
-{%- if ordered_list.size > 0 -%}
-  {%- assign all_destinations = ordered_list -%}
-  {%- for d in all_destination_entries -%}
-    {%- assign is_ordered = false -%}
-    {%- for od in ordered_list -%}
-      {%- if od.handle == d.handle -%}{%- assign is_ordered = true -%}{%- endif -%}
+{%- assign all_destinations = empty_array -%}
+{%- assign used_slugs = '' -%}
+{%- for raw_slug in order_slugs -%}
+  {%- assign slug = raw_slug | strip | remove: ',' -%}
+  {%- if slug != blank -%}
+    {%- for d in all_destination_entries -%}
+      {%- if d.slug.value == slug -%}
+        {%- assign single = all_destination_entries | slice: forloop.index0, 1 -%}
+        {%- assign all_destinations = all_destinations | concat: single -%}
+        {%- assign used_slugs = used_slugs | append: slug | append: ',' -%}
+      {%- endif -%}
     {%- endfor -%}
-    {%- unless is_ordered -%}
-      {%- assign single = all_destination_entries | slice: forloop.index0, 1 -%}
-      {%- assign all_destinations = all_destinations | concat: single -%}
-    {%- endunless -%}
-  {%- endfor -%}
-{%- else -%}
-  {%- assign all_destinations = all_destination_entries -%}
-{%- endif -%}
+  {%- endif -%}
+{%- endfor -%}
+
+{%- comment -%} order_listに書かれていない都市を末尾に自動追加(表示が消えない安全策) {%- endcomment -%}
+{%- for d in all_destination_entries -%}
+  {%- assign needle = d.slug.value | append: ',' -%}
+  {%- unless used_slugs contains needle -%}
+    {%- assign single = all_destination_entries | slice: forloop.index0, 1 -%}
+    {%- assign all_destinations = all_destinations | concat: single -%}
+  {%- endunless -%}
+{%- endfor -%}
 {%- assign region_keys = 'hawaii,micronesia,south_pacific,indian_ocean,oceania,asia,middle_east,europe,north_america,south_america,africa,japan' | split: ',' -%}
 {%- assign theme_keys = 'beach,streets,palace,heritage,view,lake,desert,balloon,church,museum,library,resort,sunset,overwater' | split: ',' -%}
 
