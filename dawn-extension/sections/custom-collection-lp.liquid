@@ -66,14 +66,10 @@ tailwind.config = {
 
         {% comment %}
           --- 2. 商品ギャラリー（コレクション連携） ---
-          写真(サムネイル)をクリックしたら商品詳細ページへ移動するのではなく、
-          その場でライトボックス（拡大表示のギャラリー）を開き、矢印や
-          キーボードの左右キーで他のドレスの写真も連続して見られるようにする。
-          1商品に複数枚の画像が登録されていれば、そのドレスの中でも
-          次の写真→さらに次の写真、と進んでから次のドレスへ移る
-          （現時点では各商品に1枚しか画像が無いため、実質「次のドレスへ進む」
-          動きに見えるが、後で商品に画像を追加すれば自動的にそのドレス内の
-          複数写真も順番に見られるようになる）。
+          サムネイルをクリックしたら、そのドレスの商品詳細ページへ移動する
+          （以前ライトボックス表示に変更したが、詳細ページ側に「前/次の
+          ドレスへ」の矢印ナビゲーション(snippets/dress-prev-next-nav.liquid)
+          を追加する方針になったため、通常のリンクに戻した）。
         {% endcomment %}
         {% when 'gallery_grid' %}
         <section class="mb-20" {{ block.shopify_attributes }}>
@@ -83,18 +79,12 @@ tailwind.config = {
           {% paginate collection.products by limit %}
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
               {% for product in collection.products %}
-                {%- capture product_images_json -%}
-                  [{%- for image in product.images -%}"{{ image | image_url: width: 1400 }}"{% unless forloop.last %},{% endunless %}{%- endfor -%}]
-                {%- endcapture -%}
-                <button type="button"
-                  class="group block w-full text-left cursor-pointer dress-gallery-item"
-                  data-images="{{ product_images_json | strip_newlines | strip | escape }}"
-                  data-title="{{ product.title | escape }}">
+                <a href="{{ product.url }}" class="group block cursor-pointer">
                   <div class="w-full relative aspect-[3/4] overflow-hidden mb-3 bg-gray-100">
                     {{ product.featured_image | image_url: width: 600 | image_tag: alt: product.title, class: 'absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105' }}
                   </div>
                   <h3 class="text-sm text-gray-800 transition-colors group-hover:text-gold">{{ product.title }}</h3>
-                </button>
+                </a>
               {% else %}
                 {% comment %} コレクション未選択時のプレースホルダー {% endcomment %}
                 {% for i in (1..12) %}
@@ -162,104 +152,7 @@ tailwind.config = {
     {% endfor %}
 
   </div>
-
-  {% comment %} --- 衣装ギャラリー用ライトボックス（拡大表示） --- {% endcomment %}
-  <div id="dress-lightbox" class="fixed inset-0 z-[999] hidden items-center justify-center bg-black/90" aria-hidden="true">
-    <button type="button" id="dress-lightbox-close" class="absolute top-4 right-4 md:top-8 md:right-8 text-white text-3xl leading-none w-10 h-10 flex items-center justify-center" aria-label="閉じる">&times;</button>
-
-    <button type="button" id="dress-lightbox-prev" class="absolute left-2 md:left-6 top-1/2 -translate-y-1/2 text-white text-4xl w-12 h-12 flex items-center justify-center" aria-label="前の写真">&#8249;</button>
-
-    <div class="max-w-3xl w-full px-4 md:px-16 flex flex-col items-center">
-      <img id="dress-lightbox-image" src="" alt="" class="w-full h-auto object-contain mx-auto" style="max-height: 80vh;">
-      <div class="mt-4 text-center text-white">
-        <div id="dress-lightbox-title" class="text-base md:text-lg font-serif tracking-wide"></div>
-        <div id="dress-lightbox-counter" class="text-xs text-gray-300 mt-1"></div>
-      </div>
-    </div>
-
-    <button type="button" id="dress-lightbox-next" class="absolute right-2 md:right-6 top-1/2 -translate-y-1/2 text-white text-4xl w-12 h-12 flex items-center justify-center" aria-label="次の写真">&#8250;</button>
-  </div>
 </div>
-
-<script>
-(function() {
-  var items = Array.prototype.slice.call(document.querySelectorAll('.dress-gallery-item'));
-  if (!items.length) return;
-
-  // 全ドレスの写真を1本のリストにする。1商品に複数枚あればその分だけ連続で入る。
-  var slides = [];
-  var itemStartIndex = [];
-  items.forEach(function(item) {
-    var images = [];
-    try { images = JSON.parse(item.getAttribute('data-images') || '[]'); } catch (e) { images = []; }
-    var title = item.getAttribute('data-title') || '';
-    itemStartIndex.push(images.length ? slides.length : -1);
-    images.forEach(function(url) { slides.push({ title: title, url: url }); });
-  });
-  if (!slides.length) return;
-
-  var lightbox = document.getElementById('dress-lightbox');
-  var imgEl = document.getElementById('dress-lightbox-image');
-  var titleEl = document.getElementById('dress-lightbox-title');
-  var counterEl = document.getElementById('dress-lightbox-counter');
-  var closeBtn = document.getElementById('dress-lightbox-close');
-  var prevBtn = document.getElementById('dress-lightbox-prev');
-  var nextBtn = document.getElementById('dress-lightbox-next');
-  var currentIndex = 0;
-
-  function render() {
-    var slide = slides[currentIndex];
-    imgEl.src = slide.url;
-    imgEl.alt = slide.title;
-    titleEl.textContent = slide.title;
-    counterEl.textContent = (currentIndex + 1) + ' / ' + slides.length;
-  }
-
-  function open(index) {
-    currentIndex = index;
-    render();
-    lightbox.classList.remove('hidden');
-    lightbox.classList.add('flex');
-    lightbox.setAttribute('aria-hidden', 'false');
-    document.body.style.overflow = 'hidden';
-  }
-
-  function close() {
-    lightbox.classList.add('hidden');
-    lightbox.classList.remove('flex');
-    lightbox.setAttribute('aria-hidden', 'true');
-    document.body.style.overflow = '';
-  }
-
-  function showNext() {
-    currentIndex = (currentIndex + 1) % slides.length;
-    render();
-  }
-
-  function showPrev() {
-    currentIndex = (currentIndex - 1 + slides.length) % slides.length;
-    render();
-  }
-
-  items.forEach(function(item, i) {
-    if (itemStartIndex[i] === -1) return;
-    item.addEventListener('click', function() { open(itemStartIndex[i]); });
-  });
-
-  closeBtn.addEventListener('click', close);
-  nextBtn.addEventListener('click', showNext);
-  prevBtn.addEventListener('click', showPrev);
-  lightbox.addEventListener('click', function(e) {
-    if (e.target === lightbox) close();
-  });
-  document.addEventListener('keydown', function(e) {
-    if (lightbox.classList.contains('hidden')) return;
-    if (e.key === 'Escape') close();
-    if (e.key === 'ArrowRight') showNext();
-    if (e.key === 'ArrowLeft') showPrev();
-  });
-})();
-</script>
 
 {% schema %}
 {
