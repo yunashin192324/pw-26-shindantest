@@ -31,7 +31,15 @@
   消えてしまわないよう自動的に末尾へ追加する。
 {%- endcomment -%}
 {%- assign all_destination_entries = shop.metaobjects.destination.values -%}
-{%- assign order_entry = shop.metaobjects.destination_order.values.first -%}
+{%- comment -%}
+  この環境ではshop.metaobjects.<type>.values.first が正しく機能しない
+  (valuesの件数(.size)は正しく取れるのに、.firstはblank/nilを返す)
+  ことが判明したため、.firstは使わずforループで確実に取り出す。
+{%- endcomment -%}
+{%- assign order_entry = blank -%}
+{%- for oe in shop.metaobjects.destination_order.values -%}
+  {%- assign order_entry = oe -%}
+{%- endfor -%}
 {%- assign order_raw = '' -%}
 {%- if order_entry -%}
   {%- if order_entry.order_list.value != blank -%}
@@ -39,31 +47,6 @@
   {%- endif -%}
 {%- endif -%}
 {%- assign order_lines = order_raw | newline_to_br | split: '<br />' -%}
-
-{%- comment -%} ▼▼▼ 一時的なデバッグ表示。原因特定後に削除する ▼▼▼ {%- endcomment -%}
-<div style="background:#000;color:#0f0;font-family:monospace;font-size:13px;padding:20px;white-space:pre-wrap;word-break:break-all;">
-DEBUG
-shop.metaobjects.destination_order.values.size: {{ shop.metaobjects.destination_order.values.size }}
-all_destination_entries.size (for comparison, should be 8): {{ all_destination_entries.size }}
-{%- if order_entry -%}
-order_entry exists: true
-{%- else -%}
-order_entry exists: false
-{%- endif -%}
-{%- if order_entry.order_list -%}
-order_entry.order_list exists: true
-{%- else -%}
-order_entry.order_list exists: false
-{%- endif -%}
-order_raw (raw value): [{{ order_raw }}]
-order_raw size: {{ order_raw.size }}
-order_lines size: {{ order_lines.size }}
-order_lines items:
-{%- for line in order_lines %}
-- [{{ line }}]
-{%- endfor %}
-</div>
-{%- comment -%} ▲▲▲ デバッグ表示ここまで ▲▲▲ {%- endcomment -%}
 
 {%- comment -%}
   カードの並び替えは配列の操作(concat/slice等)を使わず、文字列ベースの
