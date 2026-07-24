@@ -31,37 +31,79 @@
   消えてしまわないよう自動的に末尾へ追加する。
 {%- endcomment -%}
 {%- assign all_destination_entries = shop.metaobjects.destination.values -%}
-{%- assign empty_array = "" | split: "" -%}
 {%- assign order_entry = shop.metaobjects.destination_order.values.first -%}
-{%- assign order_slugs = empty_array -%}
-{%- if order_entry and order_entry.order_list.value != blank -%}
-  {%- assign order_raw = order_entry.order_list.value | strip | replace: '　', ' ' -%}
-  {%- assign order_slugs = order_raw | newline_to_br | split: '<br />' -%}
-{%- endif -%}
-
-{%- assign all_destinations = empty_array -%}
-{%- assign used_slugs = '' -%}
-{%- for raw_slug in order_slugs -%}
-  {%- assign slug = raw_slug | strip | remove: ',' -%}
-  {%- if slug != blank -%}
-    {%- for d in all_destination_entries -%}
-      {%- if d.slug.value == slug -%}
-        {%- assign single = all_destination_entries | slice: forloop.index0, 1 -%}
-        {%- assign all_destinations = all_destinations | concat: single -%}
-        {%- assign used_slugs = used_slugs | append: slug | append: ',' -%}
-      {%- endif -%}
-    {%- endfor -%}
+{%- assign order_raw = '' -%}
+{%- if order_entry -%}
+  {%- if order_entry.order_list.value != blank -%}
+    {%- assign order_raw = order_entry.order_list.value -%}
   {%- endif -%}
-{%- endfor -%}
+{%- endif -%}
+{%- assign order_lines = order_raw | newline_to_br | split: '<br />' -%}
 
-{%- comment -%} order_listに書かれていない都市を末尾に自動追加(表示が消えない安全策) {%- endcomment -%}
-{%- for d in all_destination_entries -%}
-  {%- assign needle = d.slug.value | append: ',' -%}
-  {%- unless used_slugs contains needle -%}
-    {%- assign single = all_destination_entries | slice: forloop.index0, 1 -%}
-    {%- assign all_destinations = all_destinations | concat: single -%}
-  {%- endunless -%}
-{%- endfor -%}
+{%- comment -%}
+  カードの並び替えは配列の操作(concat/slice等)を使わず、文字列ベースの
+  「使用済みslug」管理＋直接レンダリングだけで組み立てる。
+  (以前concat/sliceを使った実装で、原因不明の「都市が1件も表示され
+  なくなる」不具合が発生したため、より単純で挙動を追いやすい
+  この方式に変更した。使用済み判定は前後を'|'で挟んだ文字列同士の
+  containsチェックのみで行う。)
+
+  ①order_list(テキスト)に書かれた順で先頭3件→featured_cards_html
+  ②order_listの続き→rest_cards_htmlに追記
+  ③order_listにまだ書かれていない都市→rest_cards_htmlの末尾に追記
+    (表示が消えてしまわないための安全策)
+{%- endcomment -%}
+{%- assign used_slugs = '|' -%}
+{%- assign shown_count = 0 -%}
+{%- capture featured_cards_html -%}
+  {%- for raw_slug in order_lines -%}
+    {%- assign slug = raw_slug | strip -%}
+    {%- if slug != blank -%}
+      {%- assign needle = '|' | append: slug | append: '|' -%}
+      {%- assign is_used = false -%}
+      {%- if used_slugs contains needle -%}{%- assign is_used = true -%}{%- endif -%}
+      {%- unless is_used -%}
+        {%- if shown_count < 3 -%}
+          {%- for d in all_destination_entries -%}
+            {%- if d.slug.value == slug -%}
+              {% render 'destination-card', destination: d, show_badge: true %}
+              {%- assign used_slugs = used_slugs | append: slug | append: '|' -%}
+              {%- assign shown_count = shown_count | plus: 1 -%}
+            {%- endif -%}
+          {%- endfor -%}
+        {%- endif -%}
+      {%- endunless -%}
+    {%- endif -%}
+  {%- endfor -%}
+{%- endcapture -%}
+
+{%- capture rest_cards_html -%}
+  {%- for raw_slug in order_lines -%}
+    {%- assign slug = raw_slug | strip -%}
+    {%- if slug != blank -%}
+      {%- assign needle = '|' | append: slug | append: '|' -%}
+      {%- assign is_used = false -%}
+      {%- if used_slugs contains needle -%}{%- assign is_used = true -%}{%- endif -%}
+      {%- unless is_used -%}
+        {%- for d in all_destination_entries -%}
+          {%- if d.slug.value == slug -%}
+            {% render 'destination-card', destination: d, show_badge: true %}
+            {%- assign used_slugs = used_slugs | append: slug | append: '|' -%}
+          {%- endif -%}
+        {%- endfor -%}
+      {%- endunless -%}
+    {%- endif -%}
+  {%- endfor -%}
+  {%- for d in all_destination_entries -%}
+    {%- assign needle = '|' | append: d.slug.value | append: '|' -%}
+    {%- assign is_used = false -%}
+    {%- if used_slugs contains needle -%}{%- assign is_used = true -%}{%- endif -%}
+    {%- unless is_used -%}
+      {% render 'destination-card', destination: d, show_badge: true %}
+      {%- assign used_slugs = used_slugs | append: d.slug.value | append: '|' -%}
+    {%- endunless -%}
+  {%- endfor -%}
+{%- endcapture -%}
 {%- assign region_keys = 'hawaii,micronesia,south_pacific,indian_ocean,oceania,asia,middle_east,europe,north_america,south_america,africa,japan' | split: ',' -%}
 {%- assign theme_keys = 'beach,streets,palace,heritage,view,lake,desert,balloon,church,museum,library,resort,sunset,overwater' | split: ',' -%}
 
@@ -82,7 +124,7 @@
         <div class="dst-filter-chips" id="dst-browse-region-chips">
           {%- for region_key in region_keys -%}
             {%- assign r_count = 0 -%}
-            {%- for d in all_destinations -%}
+            {%- for d in all_destination_entries -%}
               {%- if d.region.value == region_key -%}{%- assign r_count = r_count | plus: 1 -%}{%- endif -%}
             {%- endfor -%}
             {%- if r_count > 0 -%}
@@ -98,7 +140,7 @@
         <div class="dst-filter-chips" id="dst-browse-theme-chips">
           {%- for theme_key in theme_keys -%}
             {%- assign t_count = 0 -%}
-            {%- for d in all_destinations -%}
+            {%- for d in all_destination_entries -%}
               {%- assign d_themes = d.themes.value -%}
               {%- if d_themes contains theme_key -%}{%- assign t_count = t_count | plus: 1 -%}{%- endif -%}
             {%- endfor -%}
@@ -115,26 +157,14 @@
 
     <div id="dst-browse-grid">
       {%- comment -%}
-        表示順(sort_order)の先頭3件だけ大きなカードで見せ、残りは
-        PCで4列のグリッドにする。並び順はsort_orderのみが基準。
+        表示順(order_list)の先頭3件は大きなカードで、残りはPCで
+        4列のグリッドで表示する。中身は上でキャプチャ済みのHTML。
       {%- endcomment -%}
-      {%- assign featured_count = 0 -%}
       <div class="dst-featured-grid">
-        {%- for d in all_destinations -%}
-          {%- if featured_count < 3 -%}
-            {% render 'destination-card', destination: d, show_badge: true %}
-            {%- assign featured_count = featured_count | plus: 1 -%}
-          {%- endif -%}
-        {%- endfor -%}
+        {{ featured_cards_html }}
       </div>
       <div class="dst-region-grid dst-region-grid-4col">
-        {%- assign rest_index = 0 -%}
-        {%- for d in all_destinations -%}
-          {%- if rest_index >= 3 -%}
-            {% render 'destination-card', destination: d, show_badge: true %}
-          {%- endif -%}
-          {%- assign rest_index = rest_index | plus: 1 -%}
-        {%- endfor -%}
+        {{ rest_cards_html }}
       </div>
     </div>
     <p id="dst-browse-empty" class="dst-text-center dst-text-muted" style="display:none;padding:40px 0;">該当する撮影地が見つかりませんでした。</p>
@@ -148,7 +178,7 @@
   "@type": "ItemList",
   "itemListElement": [
     {%- assign li_i = 0 -%}
-    {%- for d in all_destinations -%}
+    {%- for d in all_destination_entries -%}
       {%- assign li_i = li_i | plus: 1 -%}
       {
         "@type": "ListItem",
