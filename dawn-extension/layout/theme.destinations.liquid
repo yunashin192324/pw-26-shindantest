@@ -26,16 +26,32 @@
     {%- endfor -%}
   {%- endif -%}
 
+  {%- comment -%}
+    優先順位：①Shopifyページの「検索エンジンリスティング」(手入力)
+    →②Destinationメタオブジェクト自身の「SEOタイトル」「SEOの説明文」欄
+    (手入力、都市ごとに個別管理したい場合はこちらを使う)
+    →③どちらも空欄なら、name_ja/descriptionから自動生成。
+    ②のキーがstore側と異なる場合はここを調整すること
+    (想定キー: seo_title / seo_description)。
+  {%- endcomment -%}
   {%- assign seo_title = page_title -%}
   {%- assign seo_description = page_description -%}
   {%- assign seo_image = settings.social_share_image -%}
   {%- if seo_destination -%}
     {%- if seo_title == blank or seo_title == seo_destination.name_ja.value -%}
-      {%- capture seo_title -%}{{ seo_destination.name_ja.value }}フォトウェディング｜海外ロケーション撮影｜{{ shop.name }}{%- endcapture -%}
+      {%- if seo_destination.seo_title.value != blank -%}
+        {%- assign seo_title = seo_destination.seo_title.value -%}
+      {%- else -%}
+        {%- capture seo_title -%}{{ seo_destination.name_ja.value }}フォトウェディング｜海外ロケーション撮影｜{{ shop.name }}{%- endcapture -%}
+      {%- endif -%}
     {%- endif -%}
     {%- if seo_description == blank -%}
-      {%- assign dst_desc_source = seo_destination.description.value | strip_html | strip -%}
-      {%- capture seo_description -%}{{ seo_destination.name_ja.value }}での海外フォトウェディング。{{ dst_desc_source | truncate: 100 }}{%- endcapture -%}
+      {%- if seo_destination.seo_description.value != blank -%}
+        {%- assign seo_description = seo_destination.seo_description.value -%}
+      {%- else -%}
+        {%- assign dst_desc_source = seo_destination.description.value | strip_html | strip -%}
+        {%- capture seo_description -%}{{ seo_destination.name_ja.value }}での海外フォトウェディング。{{ dst_desc_source | truncate: 100 }}{%- endcapture -%}
+      {%- endif -%}
     {%- endif -%}
     {%- if seo_destination.hero_image.value != blank -%}
       {%- assign seo_image = seo_destination.hero_image.value -%}
