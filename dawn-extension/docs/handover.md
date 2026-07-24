@@ -192,6 +192,29 @@ shopify-theme/
     `apt-get update`）で解決する。
 14. **xlsxスキル使用時、`openpyxl`が未インストールなことがある**：
     `pip install openpyxl`で解決（root権限の警告は無視してよい）。
+15. **`shop.metaobjects.<type>.values.first`がこの環境では機能しない
+    （重大・要注意）**：単体エントリー（シングルトン）のmetaobjectを
+    `.values.first`で取得しようとすると、`.values.size`は正しく`1`を
+    返すにもかかわらず、`.first`はblank/nilを返す。原因不明だが実際に
+    再現し、都市一覧ページの都市が全件消える重大な不具合を引き起こした
+    （Destination Orderのエントリー取得で発生）。
+    **対策**：`.first`は使わず、`{% for %}`ループで確実に取り出す。
+    ```liquid
+    {%- assign order_entry = blank -%}
+    {%- for oe in shop.metaobjects.destination_order.values -%}
+      {%- assign order_entry = oe -%}
+    {%- endfor -%}
+    ```
+    **診断の経緯**：`order_entry exists: false`なのに
+    `shop.metaobjects.destination_order.values.size`が`1`という、
+    一見矛盾する2つのデバッグ出力を画面に直接表示させて初めて発見できた。
+    「原因不明の空表示」系の不具合は、口頭でのやり取りより先に、
+    こうした変数の中身を直接ページに出力するデバッグ表示を入れてもらう方が
+    早く確実に特定できる。
+    **関連の教訓**：`{{ }}`（出力タグ）の中では`!=`/`==`等の比較演算子は
+    使えない（`{% if %}`の中でしか使えない）。デバッグ用コード自体にも
+    このミスを一度混入させてしまい、余計な手戻りが発生した。急いで書く
+    一時的なコードでも、通常のコードと同じ構文ルールを守ること。
 
 ## 4. 都市ページのデータ入力方式（現行、JSON廃止後）
 
