@@ -510,3 +510,13 @@ html { scroll-behavior: smooth; }
 .dst-compare-table thead th a:hover { color: var(--dst-gold); }
 .dst-compare-table tbody th { text-align: left; font-weight: 600; color: var(--dst-text-muted); white-space: nowrap; }
 .dst-compare-th-label { min-width: 120px; }
+
+/* ---------- 撮影スポットMAP ---------- */
+.dst-map-canvas { width: 100%; height: 560px; border-radius: 8px; overflow: hidden; }
+@media (max-width: 640px) { .dst-map-canvas { height: 420px; } }
+.dst-spot-marker span { display: block; width: 16px; height: 16px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.4); }
+.dst-map-popup { min-width: 160px; }
+.dst-map-popup img { width: 100%; height: 90px; object-fit: cover; border-radius: 4px; margin-bottom: 6px; }
+.dst-map-popup strong { display: block; font-size: 0.9rem; margin-bottom: 2px; }
+.dst-map-popup span { display: block; font-size: 0.75rem; color: var(--dst-text-muted); margin-bottom: 6px; }
+.dst-map-popup a { font-size: 0.8rem; color: var(--dst-gold); }
