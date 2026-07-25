@@ -472,3 +472,31 @@ html { scroll-behavior: smooth; }
   .dst-floating-btn { right: 16px; bottom: 16px; }
   .dst-floating-btn-link { padding: 14px 22px; font-size: 0.85rem; }
 }
+
+/* ---------- 先輩カップルの声(体験談) ---------- */
+.dst-testimonial-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 360px)); gap: 32px; justify-content: center; }
+@media (max-width: 560px) { .dst-testimonial-grid { grid-template-columns: 1fr; } }
+.dst-testimonial-col { min-width: 0; }
+.dst-testimonial-card { background: var(--dst-white); border: 1px solid var(--dst-border); border-radius: 4px; overflow: hidden; }
+.dst-testimonial-media { position: relative; aspect-ratio: 4 / 3; overflow: hidden; background: var(--dst-ivory); }
+.dst-testimonial-slide { position: absolute; inset: 0; opacity: 0; transition: opacity 0.4s var(--dst-ease); pointer-events: none; }
+.dst-testimonial-slide.is-active { opacity: 1; pointer-events: auto; }
+.dst-testimonial-img { width: 100%; height: 100%; object-fit: cover; }
+.dst-testimonial-nav {
+  position: absolute; top: 50%; transform: translateY(-50%); z-index: 1;
+  width: 32px; height: 32px; border-radius: 50%; border: none; cursor: pointer;
+  background: rgba(26,26,26,0.5); color: #fff; font-size: 1.3rem; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+}
+.dst-testimonial-nav:hover { background: rgba(26,26,26,0.75); }
+.dst-testimonial-prev { left: 10px; }
+.dst-testimonial-next { right: 10px; }
+.dst-testimonial-dots { position: absolute; bottom: 10px; left: 0; right: 0; display: flex; justify-content: center; gap: 6px; }
+.dst-testimonial-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.55); }
+.dst-testimonial-dot.is-active { background: #fff; }
+.dst-testimonial-body { padding: 22px 20px; }
+.dst-testimonial-name { font-family: var(--dst-font-serif); font-size: 1.05rem; font-weight: 600; margin-bottom: 2px; }
+.dst-testimonial-date { font-size: 0.78rem; color: var(--dst-text-muted); margin-bottom: 14px; }
+.dst-testimonial-qa { margin-top: 4px; }
+.dst-testimonial-qa .dst-faq-item { padding: 12px 0; }
+.dst-testimonial-qa .dst-faq-question { font-size: 0.88rem; }

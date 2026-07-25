@@ -1,0 +1,64 @@
+{%- comment -%}
+  destination-testimonials — 都市ページの「先輩カップルの声」。
+  ----------------------------------------------------------------
+  「体験談(Testimonial)」metaobjectの各エントリーが`destination`フィールド
+  でこの都市を指しているものだけを集めて表示する(Reason/Schedule Item/
+  FAQ Item等と同じ逆参照方式。理由はdestination-reasons.liquid等と同じ
+  ―Destination側にリストを持たせると全都市共通の選択肢プールが
+  際限なく膨らむため)。1件も無ければセクションごと非表示になる。
+
+  TOPページのtestimonials-top.liquidは、この中から「TOPページに掲載」
+  にチェックが入った体験談だけを抜粋してカード表示し、クリックすると
+  このセクション(id="testimonials")へ直接ジャンプする。
+{%- endcomment -%}
+{%- comment -%}
+  where: 'destination.value.slug.value', ... はこの環境ではネストした
+  プロパティの絞り込みが効かないことがあるため、確実に動く明示的な
+  for+ifに置き換え(3節②と同じ対策)。
+{%- endcomment -%}
+{%- assign all_destination_entries = shop.metaobjects.destination.values -%}
+{%- assign destination = blank -%}
+{%- for d in all_destination_entries -%}
+  {%- if d.slug.value == page.handle -%}{%- assign destination = d -%}{%- endif -%}
+{%- endfor -%}
+
+{%- assign all_testimonials = shop.metaobjects.testimonial.values -%}
+{%- assign testimonial_count = 0 -%}
+{%- capture testimonial_cards_html -%}
+  {%- for t in all_testimonials -%}
+    {%- if destination and t.destination.value.slug.value == destination.slug.value -%}
+      <div class="dst-testimonial-col">
+        {% render 'testimonial-card', testimonial: t %}
+      </div>
+      {%- assign testimonial_count = testimonial_count | plus: 1 -%}
+    {%- endif -%}
+  {%- endfor -%}
+{%- endcapture -%}
+
+{%- if destination and testimonial_count > 0 -%}
+<section id="testimonials">
+  <div class="dst-container">
+    <div class="dst-section-head dst-reveal">
+      <p class="dst-eyebrow" style="color:{{ section.settings.eyebrow_color }};">{{ section.settings.eyebrow }}</p>
+      <h2 style="color:{{ section.settings.heading_color }};">{{ section.settings.heading }}</h2>
+      <hr class="dst-divider">
+    </div>
+    <div class="dst-testimonial-grid">
+      {{ testimonial_cards_html }}
+    </div>
+  </div>
+</section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "都市 先輩カップルの声",
+  "settings": [
+    { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "VOICE" },
+    { "type": "color", "id": "eyebrow_color", "label": "英字見出し色", "default": "#c9a96e" },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "先輩カップルの声" },
+    { "type": "color", "id": "heading_color", "label": "見出し色", "default": "#1a1a1a" }
+  ],
+  "presets": [{ "name": "都市 先輩カップルの声" }]
+}
+{% endschema %}

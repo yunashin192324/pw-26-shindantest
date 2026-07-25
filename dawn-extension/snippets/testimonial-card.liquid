@@ -1,0 +1,116 @@
+{%- comment -%}
+  testimonial-card — 体験談(先輩カップルの声)カード。都市ページの
+  destination-testimonials.liquidから、体験談1件ごとにrenderされる。
+
+  写真は0枚でもレイアウトが崩れないようにしてある(写真ゼロなら
+  画像枠自体を出さない)。複数枚ある場合は矢印/スワイプで送れる簡易
+  スライダー(前後ループ)。各画像のALTテキストに「説明文｜位置」と
+  書くとその1枚だけトリミング位置を上書きできる
+  (destination-gallery.liquidと同じALTテキスト規約)。
+
+  Q&Aは複数行テキストの`質問｜回答`形式(1行1組)。product-plan.liquidの
+  FAQと同じパイプ区切り規約で、非エンジニアでも1つのテキスト欄に
+  改行して書くだけで複数の質問に対応できる。
+
+  Params:
+    testimonial — required, Testimonial metaobjectの1件
+{%- endcomment -%}
+{%- assign t_photos = testimonial.photos.value -%}
+{%- assign t_qa_raw = testimonial.qa_pairs.value -%}
+{%- assign t_qa_lines = '' | split: '' -%}
+{%- if t_qa_raw != blank -%}
+  {%- assign t_qa_lines = t_qa_raw | newline_to_br | split: '<br />' -%}
+{%- endif -%}
+{%- assign t_dom_id = testimonial.system.handle -%}
+
+<div class="dst-testimonial-card">
+  {%- if t_photos.size > 0 -%}
+    <div class="dst-testimonial-media" id="dst-tsm-{{ t_dom_id }}">
+      {%- for photo in t_photos -%}
+        {%- assign tp_alt_source = photo.alt | default: testimonial.name.value -%}
+        {%- assign tp_alt_parts = tp_alt_source | replace: '｜', '|' | split: '|' -%}
+        {%- assign tp_alt_clean = tp_alt_parts[0] | strip -%}
+        {%- assign tp_position_key = tp_alt_parts[1] | strip -%}
+        {%- capture tp_pos_mapped -%}{% render 'destination-image-position', position_key: tp_position_key %}{%- endcapture -%}
+        {%- assign tp_pos_mapped = tp_pos_mapped | strip -%}
+        {%- if tp_pos_mapped != blank -%}
+          {%- assign tp_position = tp_pos_mapped -%}
+        {%- elsif tp_position_key != blank -%}
+          {%- assign tp_position = tp_position_key -%}
+        {%- else -%}
+          {%- assign tp_position = 'center' -%}
+        {%- endif -%}
+        {%- capture tp_style -%}object-position: {{ tp_position | escape }};{%- endcapture -%}
+        <div class="dst-testimonial-slide{% if forloop.first %} is-active{% endif %}">
+          {{ photo | image_url: width: 900 | image_tag: class: 'dst-testimonial-img', loading: 'lazy', style: tp_style, alt: tp_alt_clean }}
+        </div>
+      {%- endfor -%}
+      {%- if t_photos.size > 1 -%}
+        <button type="button" class="dst-testimonial-nav dst-testimonial-prev" aria-label="前の写真">‹</button>
+        <button type="button" class="dst-testimonial-nav dst-testimonial-next" aria-label="次の写真">›</button>
+        <div class="dst-testimonial-dots">
+          {%- for photo in t_photos -%}
+            <span class="dst-testimonial-dot{% if forloop.first %} is-active{% endif %}"></span>
+          {%- endfor -%}
+        </div>
+      {%- endif -%}
+    </div>
+  {%- endif -%}
+
+  <div class="dst-testimonial-body">
+    <p class="dst-testimonial-name">{{ testimonial.name.value }}</p>
+    {%- if testimonial.usage_date.value != blank -%}
+      <p class="dst-testimonial-date">{{ testimonial.usage_date.value }}</p>
+    {%- endif -%}
+    {%- if t_qa_lines.size > 0 -%}
+      <div class="dst-faq-list dst-testimonial-qa">
+        {%- for line in t_qa_lines -%}
+          {%- assign line = line | strip -%}
+          {%- if line != blank -%}
+            {%- assign qa_parts = line | replace: '｜', '|' | split: '|' -%}
+            <details class="dst-faq-item">
+              <summary class="dst-faq-question">{{ qa_parts[0] | strip }}</summary>
+              <p class="dst-faq-answer">{{ qa_parts[1] | strip }}</p>
+            </details>
+          {%- endif -%}
+        {%- endfor -%}
+      </div>
+    {%- endif -%}
+  </div>
+</div>
+
+{%- if t_photos.size > 1 -%}
+<script>
+  (function () {
+    var root = document.getElementById('dst-tsm-{{ t_dom_id }}');
+    if (!root) return;
+    var slides = Array.prototype.slice.call(root.querySelectorAll('.dst-testimonial-slide'));
+    var dots = Array.prototype.slice.call(root.querySelectorAll('.dst-testimonial-dot'));
+    var current = 0;
+
+    function show(i) {
+      current = (i + slides.length) % slides.length;
+      slides.forEach(function (el, idx) { el.classList.toggle('is-active', idx === current); });
+      dots.forEach(function (el, idx) { el.classList.toggle('is-active', idx === current); });
+    }
+
+    var prevBtn = root.querySelector('.dst-testimonial-prev');
+    var nextBtn = root.querySelector('.dst-testimonial-next');
+    if (prevBtn) prevBtn.addEventListener('click', function () { show(current - 1); });
+    if (nextBtn) nextBtn.addEventListener('click', function () { show(current + 1); });
+
+    var touchStartX = null;
+    root.addEventListener('touchstart', function (e) {
+      touchStartX = e.changedTouches[0].clientX;
+    }, { passive: true });
+    root.addEventListener('touchend', function (e) {
+      if (touchStartX === null) return;
+      var dx = e.changedTouches[0].clientX - touchStartX;
+      if (Math.abs(dx) > 40) {
+        if (dx < 0) { show(current + 1); } else { show(current - 1); }
+      }
+      touchStartX = null;
+    }, { passive: true });
+  })();
+</script>
+{%- endif -%}

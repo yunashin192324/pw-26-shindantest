@@ -33,6 +33,12 @@
         "heading": "フォトギャラリー"
       }
     },
+    "destination-testimonials": {
+      "type": "destination-testimonials",
+      "settings": {
+        "heading": "先輩カップルの声"
+      }
+    },
     "destination-plans": {
       "type": "destination-plans",
       "settings": {
@@ -64,6 +70,7 @@
     "destination-spots",
     "destination-schedule",
     "destination-gallery",
+    "destination-testimonials",
     "destination-plans",
     "destination-faq",
     "destinations-cta"

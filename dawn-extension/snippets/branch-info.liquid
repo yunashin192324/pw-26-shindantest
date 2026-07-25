@@ -1,0 +1,58 @@
+{%- comment -%}
+  branch-info — プラン商品ページ用「現地拠点のご紹介」ブロック。
+  ----------------------------------------------------------------
+  商品のメタフィールド custom.branch（Branch metaobjectへの単一参照）が
+  設定されている商品だけ表示する。未設定（提携パートナー手配のプラン等）
+  の商品にはこのブロック自体が何も出力されない。
+  同じ支店を複数の商品で使い回せる(支店情報は支店ごとに1回作るだけでよい)。
+
+  画像は任意。無くても崩れないよう、画像が無い場合はテキストのみ
+  1カラムで表示するレイアウトにしている。ALTテキストに
+  「説明文｜位置」と書くとトリミング位置を上書きできる
+  (destination-gallery.liquid等と同じALTテキスト規約)。
+
+  Params:
+    branch — required, Branch metaobjectの1件（blankなら何も出力しない）
+{%- endcomment -%}
+{%- if branch -%}
+  {%- assign branch_image = branch.image.value -%}
+  {%- assign br_alt_source = branch_image.alt | default: branch.name.value -%}
+  {%- assign br_alt_parts = br_alt_source | replace: '｜', '|' | split: '|' -%}
+  {%- assign br_alt_clean = br_alt_parts[0] | strip -%}
+  {%- assign br_position_key = br_alt_parts[1] | strip -%}
+  {%- capture br_pos_mapped -%}{% render 'destination-image-position', position_key: br_position_key %}{%- endcapture -%}
+  {%- assign br_pos_mapped = br_pos_mapped | strip -%}
+  {%- if br_pos_mapped != blank -%}
+    {%- assign br_position = br_pos_mapped -%}
+  {%- elsif br_position_key != blank -%}
+    {%- assign br_position = br_position_key -%}
+  {%- else -%}
+    {%- assign br_position = 'center' -%}
+  {%- endif -%}
+  <section class="py-16 md:py-24" style="background-color:#FAF8F5;">
+    <div class="max-w-5xl mx-auto px-6">
+      <div class="text-center mb-12">
+        <p class="font-serif tracking-widest uppercase mb-2 text-sm" style="color:#B8860B;">LOCAL OFFICE</p>
+        <h2 class="font-medium" style="font-size: calc(var(--font-heading-scale, 1) * 24px);">現地拠点のご紹介</h2>
+        <div class="divider-gold center"></div>
+      </div>
+      <div class="grid {% if branch_image %}md:grid-cols-2{% endif %} gap-10 items-center">
+        {%- if branch_image -%}
+          <div class="w-full relative" style="padding-top: 66.6%;">
+            {%- capture br_img_style -%}object-position: {{ br_position | escape }};{%- endcapture -%}
+            {{ branch_image | image_url: width: 1000 | image_tag: class: 'absolute top-0 left-0 w-full h-full object-cover rounded-lg shadow-lg', style: br_img_style, alt: br_alt_clean }}
+          </div>
+        {%- endif -%}
+        <div>
+          <h3 class="font-bold mb-2" style="font-size:18px;">{{ branch.name.value }}</h3>
+          {%- if branch.location.value != blank -%}
+            <p class="text-sm mb-4" style="color:#B8860B;">{{ branch.location.value }}</p>
+          {%- endif -%}
+          {%- if branch.description.value != blank -%}
+            <p class="text-sm leading-relaxed" style="color:#666666;">{{ branch.description.value | newline_to_br }}</p>
+          {%- endif -%}
+        </div>
+      </div>
+    </div>
+  </section>
+{%- endif -%}

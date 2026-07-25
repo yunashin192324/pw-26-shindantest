@@ -195,6 +195,12 @@
 {%- endcomment -%}
 {%- assign mf_faqs_lines = '' | split: '' -%}
 {%- if mf.plan_faqs.value != blank -%}{%- assign mf_faqs_lines = mf.plan_faqs.value | newline_to_br | split: '<br />' -%}{%- endif -%}
+{%- comment -%}
+  担当支店(custom.branch、Branch metaobjectへの単一参照)。未設定のプラン
+  (提携パートナー手配等)には何も表示しない。branch-info.liquid側で
+  branchがblankの場合は何も出力しないようにしている。
+{%- endcomment -%}
+{%- assign plan_branch = mf.branch.value -%}
 {%- assign faq_blocks = section.blocks | where: 'type', 'faq' -%}
 
 {%- comment -%} 注意事項 {%- endcomment -%}
@@ -686,6 +692,9 @@
     </div>
   </section>
   {% endif %}
+
+  {% comment %} --- 現地拠点のご紹介(担当支店が設定されている場合のみ) --- {% endcomment %}
+  {%- render 'branch-info', branch: plan_branch -%}
 
   {% comment %} --- FAQ --- {% endcomment %}
   {% if mf_faqs_lines.size > 0 or faq_blocks.size > 0 %}
