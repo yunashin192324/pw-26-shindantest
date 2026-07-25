@@ -520,3 +520,10 @@ html { scroll-behavior: smooth; }
 .dst-map-popup strong { display: block; font-size: 0.9rem; margin-bottom: 2px; }
 .dst-map-popup span { display: block; font-size: 0.75rem; color: var(--dst-text-muted); margin-bottom: 6px; }
 .dst-map-popup a { font-size: 0.8rem; color: var(--dst-gold); }
+
+/* ---------- 都市ページ 関連記事 ---------- */
+.dst-article-card { display: block; text-decoration: none; color: inherit; min-width: 0; }
+.dst-article-media { position: relative; aspect-ratio: 4 / 3; overflow: hidden; margin-bottom: 12px; background: var(--dst-ivory); }
+.dst-article-media img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.6s var(--dst-ease); }
+.dst-article-card:hover .dst-article-media img { transform: scale(1.05); }
+.dst-article-title { font-size: 0.95rem; font-weight: 600; line-height: 1.5; }

@@ -58,6 +58,12 @@
         "related_heading": "その他の撮影地"
       }
     },
+    "destination-related-articles": {
+      "type": "destination-related-articles",
+      "settings": {
+        "heading": "関連記事"
+      }
+    },
     "destinations-cta": {
       "type": "destinations-cta",
       "settings": {
@@ -80,6 +86,7 @@
     "destination-plans",
     "destination-plan-compare",
     "destination-faq",
+    "destination-related-articles",
     "destinations-cta"
   ]
 }

@@ -1,0 +1,57 @@
+{%- comment -%}
+  dress-ranking — 衣装(ドレス・タキシード)の人気ランキング。
+  ----------------------------------------------------------------
+  destinations-ranking.liquidと同じ考え方：新規コンテンツを書き起こす
+  のではなく、既存のデータをそのまま流用する。
+  対象コレクション(section.settings.collectionで指定)の商品のうち、
+  商品タグ「人気」が付いているものだけを、コレクションの並び順
+  (Shopify標準の「商品の並び替え」設定、ドラッグ操作がそのまま
+  反映される)のまま順位付けして表示する。
+  新しい商品を追加してタグ「人気」を付けるだけで自動的に反映される
+  (このファイルを編集する必要はない)。
+{%- endcomment -%}
+{%- assign ranking_collection = collections[section.settings.collection] -%}
+{%- assign ranking_limit = section.settings.limit -%}
+{%- assign rank_num = 0 -%}
+{%- capture ranking_cards_html -%}
+  {%- for product in ranking_collection.products -%}
+    {%- if rank_num < ranking_limit and product.tags contains '人気' -%}
+      {%- assign rank_num = rank_num | plus: 1 -%}
+      <a href="{{ product.url }}" class="group block relative">
+        <div class="w-full relative aspect-[3/4] overflow-hidden mb-3 bg-gray-100">
+          {{ product.featured_image | image_url: width: 600 | image_tag: alt: product.title, class: 'absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105' }}
+          <span class="absolute top-3 left-3 flex items-center justify-center rounded-full text-white text-sm font-bold" style="width:32px;height:32px;background:{% if rank_num == 1 %}linear-gradient(135deg,#D4A843,#B8860B){% else %}rgba(26,26,26,0.6){% endif %};">{{ rank_num }}</span>
+        </div>
+        <h3 class="text-sm text-gray-800 transition-colors group-hover:text-gold">{{ product.title }}</h3>
+      </a>
+    {%- endif -%}
+  {%- endfor -%}
+{%- endcapture -%}
+
+{%- if rank_num > 0 -%}
+<section class="py-16 md:py-24 px-6"{% if section.settings.bg_color != blank %} style="background-color:{{ section.settings.bg_color }};"{% endif %}>
+  <div class="max-w-6xl mx-auto">
+    <div class="text-center mb-14">
+      <p class="font-serif tracking-widest uppercase mb-2 text-sm" style="color:#B8860B;">{{ section.settings.eyebrow | default: 'RANKING' }}</p>
+      <h2 class="font-medium" style="font-size: calc(var(--font-heading-scale, 1) * 28px);">{{ section.settings.heading | default: '人気ランキング' }}</h2>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+      {{ ranking_cards_html }}
+    </div>
+  </div>
+</section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "衣装 人気ランキング",
+  "settings": [
+    { "type": "collection", "id": "collection", "label": "対象コレクション" },
+    { "type": "range", "id": "limit", "min": 4, "max": 20, "step": 1, "label": "表示する件数", "default": 8 },
+    { "type": "color", "id": "bg_color", "label": "背景色（空欄で白）" },
+    { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "RANKING" },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "人気ランキング" }
+  ],
+  "presets": [{ "name": "衣装 人気ランキング" }]
+}
+{% endschema %}
