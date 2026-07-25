@@ -45,6 +45,12 @@
         "heading": "おすすめプラン"
       }
     },
+    "destination-plan-compare": {
+      "type": "destination-plan-compare",
+      "settings": {
+        "heading": "プラン比較"
+      }
+    },
     "destination-faq": {
       "type": "destination-faq",
       "settings": {
@@ -72,6 +78,7 @@
     "destination-gallery",
     "destination-testimonials",
     "destination-plans",
+    "destination-plan-compare",
     "destination-faq",
     "destinations-cta"
   ]
