@@ -23,32 +23,32 @@
 {%- if destination and has_facts -%}
 <section{% if section.settings.bg_ivory %} class="dst-bg-ivory"{% endif %}>
   <div class="dst-container">
-    <div class="dst-facts-grid">
+    <dl class="dst-facts-grid">
       {%- if destination.flight_time.value != blank -%}
         <div class="dst-fact-item dst-reveal">
-          <p class="dst-fact-label">{{ section.settings.flight_time_label }}</p>
-          <p class="dst-fact-value">{{ destination.flight_time.value }}</p>
+          <dt class="dst-fact-label">{{ section.settings.flight_time_label }}</dt>
+          <dd class="dst-fact-value">{{ destination.flight_time.value }}</dd>
         </div>
       {%- endif -%}
       {%- if destination.time_difference.value != blank -%}
         <div class="dst-fact-item dst-reveal">
-          <p class="dst-fact-label">{{ section.settings.time_difference_label }}</p>
-          <p class="dst-fact-value">{{ destination.time_difference.value }}</p>
+          <dt class="dst-fact-label">{{ section.settings.time_difference_label }}</dt>
+          <dd class="dst-fact-value">{{ destination.time_difference.value }}</dd>
         </div>
       {%- endif -%}
       {%- if destination.best_season.value != blank -%}
         <div class="dst-fact-item dst-reveal">
-          <p class="dst-fact-label">{{ section.settings.best_season_label }}</p>
-          <p class="dst-fact-value">{{ destination.best_season.value }}</p>
+          <dt class="dst-fact-label">{{ section.settings.best_season_label }}</dt>
+          <dd class="dst-fact-value">{{ destination.best_season.value }}</dd>
         </div>
       {%- endif -%}
       {%- if destination.recommended_for.value != blank -%}
         <div class="dst-fact-item dst-reveal">
-          <p class="dst-fact-label">{{ section.settings.recommended_for_label }}</p>
-          <p class="dst-fact-value">{{ destination.recommended_for.value }}</p>
+          <dt class="dst-fact-label">{{ section.settings.recommended_for_label }}</dt>
+          <dd class="dst-fact-value">{{ destination.recommended_for.value }}</dd>
         </div>
       {%- endif -%}
-    </div>
+    </dl>
   </div>
 </section>
 {%- endif -%}

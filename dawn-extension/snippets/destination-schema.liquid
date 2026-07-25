@@ -5,6 +5,38 @@
   Params:
     destination — required, Destination metaobjectの1件
 {%- endcomment -%}
+{%- comment -%}
+  早わかり情報(飛行時間/時差/ベストシーズン/おすすめな人)をadditional
+  Propertyとして構造化データにも出す。destination-quickfacts.liquidの
+  表示(dl/dt/dd)と同じ内容をAI検索・生成AI概要が直接抽出できるようにする
+  ため。表示側のUIは変えず、データだけ二重化して出力している。
+{%- endcomment -%}
+{%- assign fact_props = '' -%}
+{%- assign fact_count = 0 -%}
+{%- if destination.flight_time.value != blank -%}
+  {%- if fact_count > 0 -%}{%- assign fact_props = fact_props | append: ',' -%}{%- endif -%}
+  {%- capture fact_item -%}{ "@type": "PropertyValue", "name": "飛行時間", "value": {{ destination.flight_time.value | json }} }{%- endcapture -%}
+  {%- assign fact_props = fact_props | append: fact_item -%}
+  {%- assign fact_count = fact_count | plus: 1 -%}
+{%- endif -%}
+{%- if destination.time_difference.value != blank -%}
+  {%- if fact_count > 0 -%}{%- assign fact_props = fact_props | append: ',' -%}{%- endif -%}
+  {%- capture fact_item -%}{ "@type": "PropertyValue", "name": "時差", "value": {{ destination.time_difference.value | json }} }{%- endcapture -%}
+  {%- assign fact_props = fact_props | append: fact_item -%}
+  {%- assign fact_count = fact_count | plus: 1 -%}
+{%- endif -%}
+{%- if destination.best_season.value != blank -%}
+  {%- if fact_count > 0 -%}{%- assign fact_props = fact_props | append: ',' -%}{%- endif -%}
+  {%- capture fact_item -%}{ "@type": "PropertyValue", "name": "ベストシーズン", "value": {{ destination.best_season.value | json }} }{%- endcapture -%}
+  {%- assign fact_props = fact_props | append: fact_item -%}
+  {%- assign fact_count = fact_count | plus: 1 -%}
+{%- endif -%}
+{%- if destination.recommended_for.value != blank -%}
+  {%- if fact_count > 0 -%}{%- assign fact_props = fact_props | append: ',' -%}{%- endif -%}
+  {%- capture fact_item -%}{ "@type": "PropertyValue", "name": "おすすめな人", "value": {{ destination.recommended_for.value | json }} }{%- endcapture -%}
+  {%- assign fact_props = fact_props | append: fact_item -%}
+  {%- assign fact_count = fact_count | plus: 1 -%}
+{%- endif -%}
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -20,6 +52,9 @@
     "addressCountry": {{ destination.country.value | json }}
   },
   {%- endif %}
+  {%- if fact_count > 0 -%}
+  "additionalProperty": [{{ fact_props }}],
+  {%- endif -%}
   "url": {{ canonical_url | json }}
 }
 </script>
