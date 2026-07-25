@@ -11,6 +11,9 @@
     destination  — required, Destination metaobjectの1件
     reveal_class — optional, 例: "dst-reveal-1"（fade-upの遅延段差）
     show_badge   — optional, true で「人気」バッジを表示
+    rank         — optional, 数値を渡すとバッジの代わりに順位バッジ
+                   （1位は金色）を表示する。ランキングページ専用。
+                   rankを渡した場合はshow_badgeより優先される。
 
   【テーマタグについて】
     themesは選択リスト(単一行テキストのリスト)型。destination.themes.value
@@ -54,7 +57,9 @@
         style="object-position: {{ card_img_position }};"
       >
     {%- endif -%}
-    {%- if show_badge and destination.popular.value -%}
+    {%- if rank -%}
+      <span class="dst-card-rank{% if rank == 1 %} is-first{% endif %}">{{ rank }}</span>
+    {%- elsif show_badge and destination.popular.value -%}
       <span class="dst-card-badge">人気</span>
     {%- endif -%}
   </div>

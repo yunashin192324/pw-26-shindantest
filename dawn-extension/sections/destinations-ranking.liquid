@@ -1,0 +1,146 @@
+{%- comment -%}
+  destinations-ranking — 撮影地 人気ランキング。
+  ----------------------------------------------------------------
+  新規コンテンツを書き起こすのではなく、既存データの並び替えビューとして
+  実装している。「人気」（Destinationの`popular`チェックボックス）に
+  絞ったうえで、destinations-browse.liquidと同じ並び順
+  (Destination Orderの`order_list`)に従って1位から順に番号バッジ付きで
+  表示するだけ。新しい都市を追加して「人気」にチェックを入れるだけで
+  自動的にランキングへ反映される（このファイルを編集する必要はない）。
+
+  順位は「Destination Orderに書かれた順」を採用している。数字（費用等）
+  によるスコア順ではない点に注意。
+{%- endcomment -%}
+{%- assign all_destination_entries = shop.metaobjects.destination.values -%}
+{%- comment -%}
+  この環境ではshop.metaobjects.<type>.values.first が機能しないため、
+  .firstは使わずforループで確実に取り出す(3節⑮と同じ対策)。
+{%- endcomment -%}
+{%- assign order_entry = blank -%}
+{%- for oe in shop.metaobjects.destination_order.values -%}
+  {%- assign order_entry = oe -%}
+{%- endfor -%}
+{%- assign order_raw = '' -%}
+{%- if order_entry and order_entry.order_list.value != blank -%}
+  {%- assign order_raw = order_entry.order_list.value -%}
+{%- endif -%}
+{%- assign order_lines = order_raw | newline_to_br | split: '<br />' -%}
+{%- assign ranking_limit = section.settings.limit -%}
+
+{%- comment -%} ①order_listに書かれた順で、popularな都市だけ順位付け {%- endcomment -%}
+{%- assign used_slugs = '|' -%}
+{%- assign rank_num = 0 -%}
+{%- capture ranking_cards_html -%}
+  {%- for raw_slug in order_lines -%}
+    {%- assign slug = raw_slug | strip -%}
+    {%- if slug != blank and rank_num < ranking_limit -%}
+      {%- assign needle = '|' | append: slug | append: '|' -%}
+      {%- assign is_used = false -%}
+      {%- if used_slugs contains needle -%}{%- assign is_used = true -%}{%- endif -%}
+      {%- unless is_used -%}
+        {%- for d in all_destination_entries -%}
+          {%- if d.slug.value == slug and d.popular.value -%}
+            {%- assign rank_num = rank_num | plus: 1 -%}
+            {% render 'destination-card', destination: d, rank: rank_num %}
+            {%- assign used_slugs = used_slugs | append: slug | append: '|' -%}
+          {%- endif -%}
+        {%- endfor -%}
+      {%- endunless -%}
+    {%- endif -%}
+  {%- endfor -%}
+  {%- comment -%} order_listにまだ書かれていない都市も、popularなら末尾に追加(表示漏れ防止の安全策) {%- endcomment -%}
+  {%- for d in all_destination_entries -%}
+    {%- if d.popular.value and rank_num < ranking_limit -%}
+      {%- assign needle = '|' | append: d.slug.value | append: '|' -%}
+      {%- assign is_used = false -%}
+      {%- if used_slugs contains needle -%}{%- assign is_used = true -%}{%- endif -%}
+      {%- unless is_used -%}
+        {%- assign rank_num = rank_num | plus: 1 -%}
+        {% render 'destination-card', destination: d, rank: rank_num %}
+        {%- assign used_slugs = used_slugs | append: d.slug.value | append: '|' -%}
+      {%- endunless -%}
+    {%- endif -%}
+  {%- endfor -%}
+{%- endcapture -%}
+
+<section{% if section.settings.subtle %} class="dst-bg-ivory"{% endif %}>
+  <div class="dst-container">
+    <div class="dst-section-head dst-reveal">
+      <p class="dst-eyebrow">{{ section.settings.eyebrow | default: 'RANKING' }}</p>
+      <h2>{{ section.settings.heading | default: '撮影地 人気ランキング' }}</h2>
+      {%- if section.settings.description != blank -%}
+        <p class="dst-lede">{{ section.settings.description }}</p>
+      {%- endif -%}
+    </div>
+
+    {%- if rank_num > 0 -%}
+      <div class="dst-region-grid dst-region-grid-4col">
+        {{ ranking_cards_html }}
+      </div>
+    {%- else -%}
+      <p class="dst-text-center dst-text-muted" style="padding:40px 0;">
+        「人気」に設定された撮影地がまだありません。Destinationメタオブジェクトの「人気」チェックボックスをONにすると、ここに自動で表示されます。
+      </p>
+    {%- endif -%}
+  </div>
+</section>
+
+{%- comment -%} ランキングのItemList構造化データ(SEO/AIO/GEO向け)。position=順位。 {%- endcomment -%}
+{%- if rank_num > 0 -%}
+  {%- assign schema_used_slugs = '|' -%}
+  {%- assign schema_rank_num = 0 -%}
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    "name": {{ section.settings.heading | default: '撮影地 人気ランキング' | json }},
+    "itemListElement": [
+      {%- for raw_slug in order_lines -%}
+        {%- assign slug = raw_slug | strip -%}
+        {%- if slug != blank and schema_rank_num < ranking_limit -%}
+          {%- assign needle = '|' | append: slug | append: '|' -%}
+          {%- assign is_used = false -%}
+          {%- if schema_used_slugs contains needle -%}{%- assign is_used = true -%}{%- endif -%}
+          {%- unless is_used -%}
+            {%- for d in all_destination_entries -%}
+              {%- if d.slug.value == slug and d.popular.value -%}
+                {%- assign schema_rank_num = schema_rank_num | plus: 1 -%}
+                {%- if schema_rank_num > 1 -%},{%- endif -%}
+                { "@type": "ListItem", "position": {{ schema_rank_num }}, "name": {{ d.name_ja.value | json }}, "url": {{ shop.url | append: '/pages/' | append: d.slug.value | json }} }
+                {%- assign schema_used_slugs = schema_used_slugs | append: slug | append: '|' -%}
+              {%- endif -%}
+            {%- endfor -%}
+          {%- endunless -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {%- for d in all_destination_entries -%}
+        {%- if d.popular.value and schema_rank_num < ranking_limit -%}
+          {%- assign needle = '|' | append: d.slug.value | append: '|' -%}
+          {%- assign is_used = false -%}
+          {%- if schema_used_slugs contains needle -%}{%- assign is_used = true -%}{%- endif -%}
+          {%- unless is_used -%}
+            {%- assign schema_rank_num = schema_rank_num | plus: 1 -%}
+            {%- if schema_rank_num > 1 -%},{%- endif -%}
+            { "@type": "ListItem", "position": {{ schema_rank_num }}, "name": {{ d.name_ja.value | json }}, "url": {{ shop.url | append: '/pages/' | append: d.slug.value | json }} }
+            {%- assign schema_used_slugs = schema_used_slugs | append: d.slug.value | append: '|' -%}
+          {%- endunless -%}
+        {%- endif -%}
+      {%- endfor -%}
+    ]
+  }
+  </script>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "撮影地 人気ランキング",
+  "settings": [
+    { "type": "checkbox", "id": "subtle", "label": "背景をアイボリーにする", "default": false },
+    { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "RANKING" },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "撮影地 人気ランキング" },
+    { "type": "textarea", "id": "description", "label": "説明文" },
+    { "type": "range", "id": "limit", "min": 3, "max": 30, "step": 1, "label": "表示する件数", "default": 10 }
+  ],
+  "presets": [{ "name": "撮影地 人気ランキング" }]
+}
+{% endschema %}

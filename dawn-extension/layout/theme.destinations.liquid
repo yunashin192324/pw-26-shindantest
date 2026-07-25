@@ -93,6 +93,8 @@
   {%- endcomment -%}
   <link rel="stylesheet" href="{{ 'destinations.css' | asset_url }}">
 
+  {%- render 'site-schema' -%}
+
   {{ content_for_header }}
 </head>
 <body class="destinations-scope">

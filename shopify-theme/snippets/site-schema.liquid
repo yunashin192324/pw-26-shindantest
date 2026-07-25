@@ -1,0 +1,69 @@
+{%- comment -%}
+  site-schema — 全ページ共通のOrganization / WebSite JSON-LD構造化データ。
+
+  shopify-theme/layout/theme.liquid と dawn-extension/layout/
+  theme.destinations.liquid の両方からrenderする。このテーマは
+  dawn-extension/とshopify-theme/の2フォルダに分かれているが、実際は
+  同じ1つのライブテーマ(snippetsは1つのフォルダに合流する)なので、
+  どちらのlayoutで開いたページでもこのスニペットが読み込める。
+
+  ページ個別のBreadcrumbList等はこれとは別に各セクション側
+  (destination-schema.liquid / journal-schema.liquid / region-hero.liquid等)
+  で出力しているため、ここでは重複させずOrganizationとWebSiteだけを出す。
+{%- endcomment -%}
+{%- assign site_logo = settings.logo | default: settings.favicon -%}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": {{ shop.name | json }},
+  "url": {{ shop.url | append: routes.root_url | json }}
+  {%- if site_logo -%}
+  ,"logo": {{ site_logo | image_url: width: 512 | prepend: "https:" | json }}
+  {%- endif -%}
+  {%- if shop.email -%}
+  ,"email": {{ shop.email | json }}
+  {%- endif -%}
+  {%- if shop.phone != blank -%}
+  ,"telephone": {{ shop.phone | json }}
+  {%- endif -%}
+  {%- comment -%}
+    sameAs：Dawn標準のソーシャルリンク設定(settings.social_xxx_link)。
+    未設定のものは自動的にスキップされる。
+  {%- endcomment -%}
+  {%- assign social_urls = '' -%}
+  {%- assign social_count = 0 -%}
+  {%- for social_key in 'social_facebook_link,social_instagram_link,social_twitter_link,social_tiktok_link,social_youtube_link,social_pinterest_link,social_linkedin_link,social_snapchat_link,social_vimeo_link' | split: ',' -%}
+    {%- assign social_value = settings[social_key] -%}
+    {%- if social_value != blank -%}
+      {%- if social_count > 0 -%}{%- assign social_urls = social_urls | append: ',' -%}{%- endif -%}
+      {%- assign social_urls = social_urls | append: social_value | json -%}
+      {%- assign social_count = social_count | plus: 1 -%}
+    {%- endif -%}
+  {%- endfor -%}
+  {%- if social_count > 0 -%}
+  ,"sameAs": [{{ social_urls }}]
+  {%- endif -%}
+}
+</script>
+
+{%- comment -%}
+  WebSite + SearchAction：サイト内検索(/search)を持つトップページにのみ
+  出力する(Googleのサイトリンク検索ボックスのガイドラインに合わせ、
+  ホームページのみに限定)。
+{%- endcomment -%}
+{%- if template.name == 'index' -%}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": {{ shop.name | json }},
+  "url": {{ shop.url | append: routes.root_url | json }},
+  "potentialAction": {
+    "@type": "SearchAction",
+    "target": {{ shop.url | append: routes.search_url | append: '?q={search_term_string}' | json }},
+    "query-input": "required name=search_term_string"
+  }
+}
+</script>
+{%- endif -%}

@@ -254,6 +254,14 @@ html { scroll-behavior: smooth; }
   padding: 5px 12px; font-size: 0.72rem; letter-spacing: 0.1em;
   background: var(--dst-gold); color: var(--dst-white);
 }
+.dst-card-rank {
+  position: absolute; top: 14px; left: 14px; z-index: 1;
+  width: 36px; height: 36px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(26,26,26,0.6); backdrop-filter: blur(4px);
+  color: var(--dst-white); font-family: var(--dst-font-serif); font-size: 1rem; font-weight: 600;
+}
+.dst-card-rank.is-first { background: linear-gradient(135deg, #D4A843, var(--dst-gold)); }
 .dst-card-body { padding: 18px 2px 0; }
 .dst-card-country { font-size: 0.74rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dst-gold-dark); margin-bottom: 6px; }
 .dst-card-name-en { font-family: var(--dst-font-serif); font-style: italic; font-size: 0.95rem; color: var(--dst-text-muted); }
