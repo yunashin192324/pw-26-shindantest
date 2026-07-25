@@ -108,9 +108,13 @@
       </div>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
         {% for block in testimonial_blocks %}
-          <div class="bg-white rounded-lg p-8 shadow-sm" {{ block.shopify_attributes }}>
-            <p class="text-sm text-gray-700 leading-relaxed mb-6">{{ block.settings.quote }}</p>
-            <p class="text-xs font-bold" style="color:#B8860B;">{{ block.settings.name }}</p>
+          <div class="bg-white rounded-lg overflow-hidden shadow-sm" {{ block.shopify_attributes }}>
+            {% if block.settings.image != blank %}
+              <div class="w-full relative" style="padding-top:75%;">
+                {{ block.settings.image | image_url: width: 700 | image_tag: class: 'absolute top-0 left-0 w-full h-full object-cover', loading: 'lazy', alt: '' }}
+              </div>
+            {% endif %}
+            <p class="text-sm text-gray-700 leading-relaxed p-8">{{ block.settings.quote }}</p>
           </div>
         {% endfor %}
       </div>
@@ -183,8 +187,8 @@
       "type": "testimonial",
       "name": "お客様の声（1件・要差し替え）",
       "settings": [
-        { "type": "textarea", "id": "quote", "label": "コメント（仮の文章。実際の声に差し替えてください）", "default": "国内で試着してから現地に持って行けたので、サイズの不安もなく安心して撮影に臨めました。" },
-        { "type": "text", "id": "name", "label": "お名前・年代など", "default": "◯◯様（20代）" }
+        { "type": "image_picker", "id": "image", "label": "お客様の写真（任意。空欄なら画像枠自体を表示しない）" },
+        { "type": "textarea", "id": "quote", "label": "コメント（仮の文章。実際の声に差し替えてください）", "default": "国内で試着してから現地に持って行けたので、サイズの不安もなく安心して撮影に臨めました。" }
       ]
     },
     {
@@ -206,8 +210,8 @@
         { "type": "feature", "settings": { "title": "衣裳・撮影・データ、まとめてワンプライス", "desc": "ウェディングドレス＆タキシードのレンタル、現地カメラマンによる撮影、データ納品までを含んだオールインワンプラン。追加費用の心配がありません。" } },
         { "type": "feature", "settings": { "title": "当日は身ひとつでOK", "desc": "衣裳は日本国内の提携サロンで試着したものを事前にお渡し。現地では着替えと撮影に集中するだけです。" } },
         { "type": "testimonial" },
-        { "type": "testimonial", "settings": { "quote": "オンラインでのやり取りだけで準備が完結し、仕事をしながらでも無理なく進められました。", "name": "◯◯様（30代）" } },
-        { "type": "testimonial", "settings": { "quote": "当日は撮影に集中するだけで良かったので、旅行自体も存分に楽しめました。", "name": "◯◯様（20代）" } },
+        { "type": "testimonial", "settings": { "quote": "オンラインでのやり取りだけで準備が完結し、仕事をしながらでも無理なく進められました。" } },
+        { "type": "testimonial", "settings": { "quote": "当日は撮影に集中するだけで良かったので、旅行自体も存分に楽しめました。" } },
         { "type": "cta_card", "settings": { "title": "撮影地から選ぶ", "button_text": "撮影地一覧を見る" } },
         { "type": "cta_card", "settings": { "title": "衣裳から選ぶ", "button_text": "衣裳一覧を見る" } }
       ]
