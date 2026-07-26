@@ -31,7 +31,11 @@
   }
 </script>
 
-{%- assign all_testimonials = shop.metaobjects.testimonial.values -%}
+{%- comment -%}
+  「体験談」メタオブジェクトの実際のタイプハンドルはtestimonialではなく
+  storyになっている(destination-testimonials.liquidと同じ理由)。
+{%- endcomment -%}
+{%- assign all_testimonials = shop.metaobjects.story.values -%}
 {%- assign featured_limit = section.settings.limit -%}
 {%- assign featured_count = 0 -%}
 {%- capture featured_cards_html -%}

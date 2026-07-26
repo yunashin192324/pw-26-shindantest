@@ -22,7 +22,14 @@
   {%- if d.slug.value == page.handle -%}{%- assign destination = d -%}{%- endif -%}
 {%- endfor -%}
 
-{%- assign all_testimonials = shop.metaobjects.testimonial.values -%}
+{%- comment -%}
+  「体験談」メタオブジェクトの実際のタイプハンドルは、作成時の名前入力の
+  経緯により`testimonial`ではなく`story`になっている(管理画面の
+  メタオブジェクト定義編集画面で「タイプ：story」と表示されて確認済み)。
+  データは正しく入っているため、メタオブジェクトを作り直さず、
+  こちら側でハンドル名を合わせている。
+{%- endcomment -%}
+{%- assign all_testimonials = shop.metaobjects.story.values -%}
 {%- assign testimonial_count = 0 -%}
 {%- capture testimonial_cards_html -%}
   {%- for t in all_testimonials -%}
