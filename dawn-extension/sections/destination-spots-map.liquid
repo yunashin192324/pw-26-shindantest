@@ -17,6 +17,21 @@
 {%- endfor -%}
 
 {%- assign spots = destination.photo_spots.value -%}
+
+{%- comment -%} ============ 一時デバッグ表示(原因特定後に削除) ============ {%- endcomment -%}
+<div style="background:#ffe8e8;border:3px solid red;padding:20px;margin:20px;font-size:14px;font-family:monospace;white-space:pre-wrap;">
+[DEBUG] destination見つかったか: {{ destination.name_ja.value | default: "見つからない(nil)" }} (page.handle: {{ page.handle }})
+撮影スポット件数(spots.size): {{ spots.size }}
+{%- for spot in spots %}
+---
+スポット名: {{ spot.title.value }}
+latitude: "{{ spot.latitude.value }}"
+longitude: "{{ spot.longitude.value }}"
+category: "{{ spot.category.value.label.value }}"
+{%- endfor %}
+========================================================
+</div>
+
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" defer></script>
 
