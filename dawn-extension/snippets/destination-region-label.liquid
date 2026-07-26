@@ -2,9 +2,10 @@
   destination-region-label
   ----------------------------------------------------------------
   地域(region)は仕様書の指示により Metaobject化せずコード側で固定。
-  12の地域キーと表示ラベル(英語表記)の対応はここ1箇所にのみ定義し、
-  destinations-region-list / region-hero / region-intro / 検索JSON など
-  すべてがこのsnippetを参照する（表記ゆれ防止・保守性のため）。
+  12の地域キーと表示ラベル(日本語表記。2026-07-26に英語表記から変更)の
+  対応はここ1箇所にのみ定義し、destinations-region-list / region-hero /
+  region-intro / 検索JSON などすべてがこのsnippetを参照する
+  （表記ゆれ防止・保守性のため）。
 
   「america」は「north_america」に置き換え、「hawaii」
   「micronesia」「south_pacific」「indian_ocean」を新設した
@@ -20,17 +21,17 @@
     {%- assign region_label = region_label | strip -%}
 {%- endcomment -%}
 {%- case region_key -%}
-  {%- when 'hawaii' -%}Hawaii
-  {%- when 'micronesia' -%}Micronesia
-  {%- when 'south_pacific' -%}South Pacific
-  {%- when 'indian_ocean' -%}Indian Ocean
-  {%- when 'oceania' -%}Oceania
-  {%- when 'asia' -%}Asia
-  {%- when 'middle_east' -%}Middle East
-  {%- when 'europe' -%}Europe
-  {%- when 'north_america' -%}North America
-  {%- when 'south_america' -%}South America
-  {%- when 'africa' -%}Africa
-  {%- when 'japan' -%}Japan
+  {%- when 'hawaii' -%}ハワイ
+  {%- when 'micronesia' -%}ミクロネシア
+  {%- when 'south_pacific' -%}南太平洋
+  {%- when 'indian_ocean' -%}インド洋
+  {%- when 'oceania' -%}オセアニア
+  {%- when 'asia' -%}アジア
+  {%- when 'middle_east' -%}中東
+  {%- when 'europe' -%}ヨーロッパ
+  {%- when 'north_america' -%}北米
+  {%- when 'south_america' -%}南米
+  {%- when 'africa' -%}アフリカ
+  {%- when 'japan' -%}日本
   {%- else -%}{{ region_key | replace: '_', ' ' | capitalize }}
 {%- endcase -%}
