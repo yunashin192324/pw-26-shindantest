@@ -477,34 +477,19 @@
     {% endif %}
 
     {%- comment -%}
-      撮影地診断バナー：ドレスLP(dresslp.liquid)の「診断・CTAブロック」
-      と同じサイズ感(py-20、max-w-4xl、大きめの丸ボタン)で統一。
-      show_destination_diagnosisで表示/非表示を切り替えられる。
-    {%- endcomment -%}
-    {% if section.settings.show_destination_diagnosis %}
-      <section class="py-20 px-6 text-center" style="background-color:{{ section.settings.dd_bg_color | default: '#FAF8F5' }};">
-        <div class="max-w-4xl mx-auto fade-in">
-          {% if section.settings.dd_subtitle != blank %}
-            <p class="font-serif-display tracking-widest-custom mb-3" style="color:{{ section.settings.dd_sub_color | default: '#B8860B' }};">{{ section.settings.dd_subtitle }}</p>
-          {% endif %}
-          <h2 class="font-medium mb-6 text-2xl md:text-4xl leading-relaxed" style="color:{{ section.settings.dd_title_color | default: '#333333' }};">{{ section.settings.dd_title | newline_to_br }}</h2>
-          {% if section.settings.dd_desc != blank %}
-            <p class="mb-10 leading-relaxed" style="color:{{ section.settings.dd_desc_color | default: '#666666' }};">{{ section.settings.dd_desc | newline_to_br }}</p>
-          {% endif %}
-          <a href="{{ section.settings.dd_button_url | default: '#' }}" class="inline-block px-12 py-4 rounded-full font-bold text-lg transition hover:opacity-80 shadow-lg hover:scale-105 transform duration-300" style="background-color:{{ section.settings.dd_button_color | default: '#B8860B' }};color:#ffffff;">{{ section.settings.dd_button_label }}</a>
-        </div>
-      </section>
-    {% endif %}
-
-    {%- comment -%}
-      先輩カップルの声(体験談)：独立したセクション(testimonials-top.liquid)
-      として追加すると、このファイル内にべた書きされた下の<footer>より
-      後ろ(見た目上フッターの下)に来てしまうため、オンライン相談CTAと
-      同じ理由でこの位置に直接組み込んでいる。
+      先輩カップルの声(体験談)：表示位置をtestimonials_position設定で
+      選べるようにするため、先にここでHTMLを組み立てて変数に入れておき、
+      実際の出力は下の3箇所(撮影地診断バナーの前/オンライン相談CTAの前/
+      オンライン相談CTAの後)のうち選ばれた位置でだけ行う。独立した
+      セクション(testimonials-top.liquid)として追加すると、この
+      ファイル内にべた書きされた下の<footer>より後ろ(見た目上フッターの
+      下)に来てしまうため、オンライン相談CTAと同じ理由でファイル内に
+      直接組み込んでいる。
       データは「体験談」metaobject(実際のタイプハンドルはstory。設定→
       メタオブジェクト→体験談の編集画面で確認できる)のうち、
       「TOPページに掲載」(featured)がtrueのものだけを抜粋表示する。
     {%- endcomment -%}
+    {%- assign testimonials_section_output = '' -%}
     {% if section.settings.show_testimonials %}
       {%- assign all_testimonials_lp = shop.metaobjects.story.values -%}
       {%- assign testimonials_limit_lp = section.settings.testimonials_limit -%}
@@ -537,24 +522,50 @@
         {%- endfor -%}
       {%- endcapture -%}
       {%- if testimonials_count_lp > 0 -%}
-        <section class="py-20 px-6" style="background-color:{{ section.settings.testimonials_bg_color | default: '#ffffff' }};">
-          <div class="max-w-6xl mx-auto">
-            <div class="text-center mb-14 fade-in">
-              {% if section.settings.testimonials_eyebrow != blank %}
-                <p class="font-serif-display tracking-widest-custom mb-3" style="color:{{ section.settings.testimonials_eyebrow_color | default: '#B8860B' }};">{{ section.settings.testimonials_eyebrow }}</p>
-              {% endif %}
-              <h2 class="font-medium text-2xl md:text-4xl leading-relaxed" style="color:{{ section.settings.testimonials_heading_color | default: '#1a1a1a' }};">{{ section.settings.testimonials_heading }}</h2>
-              {% if section.settings.testimonials_desc != blank %}
-                <p class="mt-4 text-sm" style="color:{{ section.settings.testimonials_desc_color | default: '#666666' }};">{{ section.settings.testimonials_desc }}</p>
-              {% endif %}
+        {%- capture testimonials_section_output -%}
+          <section class="py-20 px-6" style="background-color:{{ section.settings.testimonials_bg_color | default: '#ffffff' }};">
+            <div class="max-w-6xl mx-auto">
+              <div class="text-center mb-14 fade-in">
+                {% if section.settings.testimonials_eyebrow != blank %}
+                  <p class="font-serif-display tracking-widest-custom mb-3" style="color:{{ section.settings.testimonials_eyebrow_color | default: '#B8860B' }};">{{ section.settings.testimonials_eyebrow }}</p>
+                {% endif %}
+                <h2 class="font-medium text-2xl md:text-4xl leading-relaxed" style="color:{{ section.settings.testimonials_heading_color | default: '#1a1a1a' }};">{{ section.settings.testimonials_heading }}</h2>
+                {% if section.settings.testimonials_desc != blank %}
+                  <p class="mt-4 text-sm" style="color:{{ section.settings.testimonials_desc_color | default: '#666666' }};">{{ section.settings.testimonials_desc }}</p>
+                {% endif %}
+              </div>
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+                {{ testimonials_cards_html_lp }}
+              </div>
             </div>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
-              {{ testimonials_cards_html_lp }}
-            </div>
-          </div>
-        </section>
+          </section>
+        {%- endcapture -%}
       {%- endif -%}
     {% endif %}
+
+    {% if section.settings.testimonials_position == 'before_dd' %}{{ testimonials_section_output }}{% endif %}
+
+    {%- comment -%}
+      撮影地診断バナー：ドレスLP(dresslp.liquid)の「診断・CTAブロック」
+      と同じサイズ感(py-20、max-w-4xl、大きめの丸ボタン)で統一。
+      show_destination_diagnosisで表示/非表示を切り替えられる。
+    {%- endcomment -%}
+    {% if section.settings.show_destination_diagnosis %}
+      <section class="py-20 px-6 text-center" style="background-color:{{ section.settings.dd_bg_color | default: '#FAF8F5' }};">
+        <div class="max-w-4xl mx-auto fade-in">
+          {% if section.settings.dd_subtitle != blank %}
+            <p class="font-serif-display tracking-widest-custom mb-3" style="color:{{ section.settings.dd_sub_color | default: '#B8860B' }};">{{ section.settings.dd_subtitle }}</p>
+          {% endif %}
+          <h2 class="font-medium mb-6 text-2xl md:text-4xl leading-relaxed" style="color:{{ section.settings.dd_title_color | default: '#333333' }};">{{ section.settings.dd_title | newline_to_br }}</h2>
+          {% if section.settings.dd_desc != blank %}
+            <p class="mb-10 leading-relaxed" style="color:{{ section.settings.dd_desc_color | default: '#666666' }};">{{ section.settings.dd_desc | newline_to_br }}</p>
+          {% endif %}
+          <a href="{{ section.settings.dd_button_url | default: '#' }}" class="inline-block px-12 py-4 rounded-full font-bold text-lg transition hover:opacity-80 shadow-lg hover:scale-105 transform duration-300" style="background-color:{{ section.settings.dd_button_color | default: '#B8860B' }};color:#ffffff;">{{ section.settings.dd_button_label }}</a>
+        </div>
+      </section>
+    {% endif %}
+
+    {% if section.settings.testimonials_position == 'before_consult' %}{{ testimonials_section_output }}{% endif %}
 
     {%- comment -%}
       オンライン相談CTA：HISスタッフによるオンライン相談受付が始まる
@@ -577,6 +588,8 @@
         </div>
       </section>
     {% endif %}
+
+    {% if section.settings.testimonials_position == 'after_consult' %}{{ testimonials_section_output }}{% endif %}
 
     {%- comment -%}
       撮影地診断フローティングボタン：画面右下に固定表示され、
@@ -876,6 +889,13 @@
 
     { "type": "header", "content": "先輩カップルの声" },
     { "type": "checkbox", "id": "show_testimonials", "label": "表示する", "default": true },
+    { "type": "select", "id": "testimonials_position", "label": "表示位置", "default": "before_consult",
+      "options": [
+        { "value": "before_dd", "label": "撮影地診断バナーより前" },
+        { "value": "before_consult", "label": "撮影地診断バナーとオンライン相談CTAの間" },
+        { "value": "after_consult", "label": "オンライン相談CTAより後（フッターの直前）" }
+      ]
+    },
     { "type": "color", "id": "testimonials_bg_color", "label": "背景色", "default": "#ffffff" },
     { "type": "text", "id": "testimonials_eyebrow", "label": "英字見出し", "default": "VOICE" },
     { "type": "color", "id": "testimonials_eyebrow_color", "label": "英字見出し色", "default": "#B8860B" },
