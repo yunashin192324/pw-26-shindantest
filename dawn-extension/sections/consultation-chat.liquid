@@ -52,7 +52,8 @@
 </script>
 
 <style>
-  #consult-chat-{{ section.id }} { position: fixed; right: 20px; bottom: 20px; z-index: 999; }
+  #consult-chat-{{ section.id }} { position: fixed; right: 20px; bottom: {{ section.settings.bottom_offset | default: 100 }}px; z-index: 999; }
+  @media (max-width: 480px) { #consult-chat-{{ section.id }} { right: 16px; bottom: {{ section.settings.bottom_offset_mobile | default: 90 }}px; } }
   #consult-chat-{{ section.id }} .chat-window { background:#fff; border-radius:20px; overflow:hidden; box-shadow:0 20px 60px -16px rgba(26,26,26,0.35); border:1px solid rgba(184,134,11,0.15); }
   #consult-chat-{{ section.id }} .consult-panel { position:absolute; right:0; bottom:76px; width:360px; max-width:calc(100vw - 32px); display:none; }
   #consult-chat-{{ section.id }}.is-open .consult-panel { display:block; }
@@ -77,6 +78,7 @@
   }
 </style>
 
+{%- if section.settings.show_widget -%}
 <div id="consult-chat-{{ section.id }}">
   <div class="consult-panel chat-window">
     <div class="consult-panel-header px-6 py-5 flex items-center gap-3" style="border-bottom:1px solid #f0ebe0;">
@@ -97,6 +99,7 @@
     <span class="consult-launcher-label">{{ section.settings.launcher_label | default: 'チャットで質問' }}</span>
   </button>
 </div>
+{%- endif -%}
 
 <script>
   (function () {
@@ -289,6 +292,9 @@
 {
   "name": "コンシェルジュ相談チャット",
   "settings": [
+    { "type": "checkbox", "id": "show_widget", "label": "このチャットウィジェットを表示する", "default": true },
+    { "type": "range", "id": "bottom_offset", "min": 20, "max": 200, "step": 5, "unit": "px", "label": "画面下からの余白(PC)", "info": "撮影地診断ボタン等、他のフローティングボタンと重なる場合はここで高さを調整してください。", "default": 100 },
+    { "type": "range", "id": "bottom_offset_mobile", "min": 20, "max": 200, "step": 5, "unit": "px", "label": "画面下からの余白(スマホ)", "default": 90 },
     { "type": "text", "id": "launcher_label", "label": "右下ボタンの文言", "default": "チャットで質問" },
     { "type": "text", "id": "heading", "label": "ヘッダーの名称", "default": "HIS WEDDING コンシェルジュ" },
     { "type": "textarea", "id": "greeting", "label": "最初のメッセージ", "default": "こんにちは！本日はどのようなことをお探しですか？" },
