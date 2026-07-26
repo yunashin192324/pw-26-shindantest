@@ -58,7 +58,9 @@
   {%- endif -%}
 
   <div class="dst-testimonial-body">
-    <p class="dst-testimonial-name">{{ testimonial.name.value }}</p>
+    {%- if testimonial.name.value != blank -%}
+      <p class="dst-testimonial-name">{{ testimonial.name.value }}</p>
+    {%- endif -%}
     {%- if testimonial.usage_date.value != blank -%}
       <p class="dst-testimonial-date">{{ testimonial.usage_date.value }}</p>
     {%- endif -%}

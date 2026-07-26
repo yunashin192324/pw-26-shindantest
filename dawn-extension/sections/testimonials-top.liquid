@@ -70,7 +70,9 @@
           <div class="w-full bg-gray-100" style="padding-top:110%;"></div>
         {%- endif -%}
         <div class="p-4">
-          <p class="font-bold text-sm mb-1">{{ t.name.value }}</p>
+          {%- if t.name.value != blank -%}
+            <p class="font-bold text-sm mb-1">{{ t.name.value }}</p>
+          {%- endif -%}
           <p class="text-xs" style="color:#B8860B;">{{ t.destination.value.name_ja.value }}</p>
         </div>
       </a>
