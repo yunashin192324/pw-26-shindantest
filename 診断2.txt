@@ -782,19 +782,41 @@ function renderQ(dir){
             if(q.id==='moment') hiddenVals={balloon:true,animal:true};
         }
         var visibleOpts=q.opts.filter(function(o){return !hiddenVals[o.v];});
-        var specialMoment={starry:true,balloon:true,animal:true};
+        var exemptVals={studio:true,none:true};
         var btnMap={};
-        function refreshMultiState(){
-            var selectedSpecial=false;
-            if(q.id==='moment'){
-                for(var sv in specialMoment){ if(Object.prototype.hasOwnProperty.call(specialMoment,sv)&&multiSel[qi][sv]){selectedSpecial=true;break;} }
+        function liveDayPool(){
+            var pool=[];
+            for(var k in DEST){
+                if(!Object.prototype.hasOwnProperty.call(DEST,k)||DEST[k].domestic) continue;
+                if(answers.days){
+                    var dk=DAYS_KEYS[answers.days];
+                    if(dk!=='all'&&dk.indexOf(k)===-1) continue;
+                }
+                pool.push(k);
             }
+            return pool;
+        }
+        function livePool(){
+            if(answers.region!=='overseas') return null;
+            var pool=liveDayPool();
+            var committed=(q.id==='moment')?(answers.scene||[]).filter(function(v){return !exemptVals[v];}):[];
+            committed.forEach(function(f){ pool=pool.filter(function(k){return DEST[k]&&DEST[k][f];}); });
+            var curFlags=Object.keys(multiSel[qi]||{}).filter(function(v){return !exemptVals[v];});
+            curFlags.forEach(function(f){ pool=pool.filter(function(k){return DEST[k]&&DEST[k][f];}); });
+            return pool;
+        }
+        function refreshMultiState(){
+            var pool=livePool();
             visibleOpts.forEach(function(opt){
                 var btn=btnMap[opt.v];
-                var dis=q.id==='moment'&&selectedSpecial&&!specialMoment[opt.v]&&opt.v!=='none';
+                var already=!!multiSel[qi][opt.v];
+                var dis=false;
+                if(pool&&!exemptVals[opt.v]&&!already){
+                    dis=pool.filter(function(k){return DEST[k]&&DEST[k][opt.v];}).length===0;
+                }
                 btn.disabled=dis;
                 btn.classList.toggle('opt-disabled',dis);
-                btn.classList.toggle('selected',!!multiSel[qi][opt.v]);
+                btn.classList.toggle('selected',already);
             });
             $n.disabled=Object.keys(multiSel[qi]||{}).length===0;
         }
@@ -807,12 +829,7 @@ function renderQ(dir){
                 if(multiSel[qi][opt.v]){delete multiSel[qi][opt.v];}
                 else{
                     if(opt.v==='none'){multiSel[qi]={};}
-                    else{
-                        delete multiSel[qi]['none'];
-                        if(q.id==='moment'&&specialMoment[opt.v]){
-                            for(var k in multiSel[qi]){ if(Object.prototype.hasOwnProperty.call(multiSel[qi],k)&&!specialMoment[k]) delete multiSel[qi][k]; }
-                        }
-                    }
+                    else{ delete multiSel[qi]['none']; }
                     multiSel[qi][opt.v]=true;
                 }
                 refreshMultiState();
