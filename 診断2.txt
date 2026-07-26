@@ -782,23 +782,46 @@ function renderQ(dir){
             if(q.id==='moment') hiddenVals={balloon:true,animal:true};
         }
         var visibleOpts=q.opts.filter(function(o){return !hiddenVals[o.v];});
+        var specialMoment={starry:true,balloon:true,animal:true};
+        var btnMap={};
+        function refreshMultiState(){
+            var selectedSpecial=false;
+            if(q.id==='moment'){
+                for(var sv in specialMoment){ if(Object.prototype.hasOwnProperty.call(specialMoment,sv)&&multiSel[qi][sv]){selectedSpecial=true;break;} }
+            }
+            visibleOpts.forEach(function(opt){
+                var btn=btnMap[opt.v];
+                var dis=q.id==='moment'&&selectedSpecial&&!specialMoment[opt.v]&&opt.v!=='none';
+                btn.disabled=dis;
+                btn.classList.toggle('opt-disabled',dis);
+                btn.classList.toggle('selected',!!multiSel[qi][opt.v]);
+            });
+            $n.disabled=Object.keys(multiSel[qi]||{}).length===0;
+        }
         visibleOpts.forEach(function(opt){
             var btn=document.createElement('button');
             btn.className='opt-multi'+(multiSel[qi][opt.v]?' selected':'');
             btn.innerHTML='<span class="chk"></span><span class="opt-multi-text">'+opt.text+'</span>';
             btn.addEventListener('click',function(){
-                if(multiSel[qi][opt.v]){delete multiSel[qi][opt.v]; btn.classList.remove('selected');}
+                if(btn.disabled) return;
+                if(multiSel[qi][opt.v]){delete multiSel[qi][opt.v];}
                 else{
-                    if(opt.v==='none'){multiSel[qi]={}; $m.querySelectorAll('.opt-multi').forEach(function(b){b.classList.remove('selected');});}
-                    else{delete multiSel[qi]['none']; $m.querySelectorAll('.opt-multi').forEach(function(b){if(b.querySelector('.opt-multi-text')&&b.querySelector('.opt-multi-text').textContent.includes('こだわりなし')) b.classList.remove('selected');});}
-                    multiSel[qi][opt.v]=true; btn.classList.add('selected');
+                    if(opt.v==='none'){multiSel[qi]={};}
+                    else{
+                        delete multiSel[qi]['none'];
+                        if(q.id==='moment'&&specialMoment[opt.v]){
+                            for(var k in multiSel[qi]){ if(Object.prototype.hasOwnProperty.call(multiSel[qi],k)&&!specialMoment[k]) delete multiSel[qi][k]; }
+                        }
+                    }
+                    multiSel[qi][opt.v]=true;
                 }
-                $n.disabled=Object.keys(multiSel[qi]||{}).length===0;
+                refreshMultiState();
                 if(q.id==='scene') updateFlow();
             });
             $m.appendChild(btn);
+            btnMap[opt.v]=btn;
         });
-        $n.disabled=Object.keys(multiSel[qi]||{}).length===0;
+        refreshMultiState();
     }
     showScreen('screen-q',dir==='right'?'anim-right':'anim-left');
 }
