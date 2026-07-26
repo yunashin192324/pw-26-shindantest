@@ -15,7 +15,7 @@
   詳細はdocs/spots-map-setup.mdを参照。
 {%- endcomment -%}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" defer></script>
 
 {%- assign all_destinations = shop.metaobjects.destination.values -%}
 <script type="application/json" id="spots-map-data-{{ section.id }}">
