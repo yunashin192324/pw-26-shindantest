@@ -85,7 +85,7 @@
   {%- endfor -%}
 {%- endcapture -%}
 
-{%- if featured_count > 0 -%}
+{%- if section.settings.show_section and featured_count > 0 -%}
 <div class="w-full" style="background:#ffffff;">
   <section class="py-16 md:py-24 px-4">
     <div class="max-w-6xl mx-auto">
@@ -108,6 +108,7 @@
 {
   "name": "体験者の声(TOP)",
   "settings": [
+    { "type": "checkbox", "id": "show_section", "label": "このセクションを表示する", "default": true },
     { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "VOICE" },
     { "type": "text", "id": "heading", "label": "見出し", "default": "先輩カップルの声" },
     { "type": "textarea", "id": "description", "label": "説明文" },
