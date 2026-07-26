@@ -497,6 +497,66 @@
     {% endif %}
 
     {%- comment -%}
+      先輩カップルの声(体験談)：独立したセクション(testimonials-top.liquid)
+      として追加すると、このファイル内にべた書きされた下の<footer>より
+      後ろ(見た目上フッターの下)に来てしまうため、オンライン相談CTAと
+      同じ理由でこの位置に直接組み込んでいる。
+      データは「体験談」metaobject(実際のタイプハンドルはstory。設定→
+      メタオブジェクト→体験談の編集画面で確認できる)のうち、
+      「TOPページに掲載」(featured)がtrueのものだけを抜粋表示する。
+    {%- endcomment -%}
+    {% if section.settings.show_testimonials %}
+      {%- assign all_testimonials_lp = shop.metaobjects.story.values -%}
+      {%- assign testimonials_limit_lp = section.settings.testimonials_limit -%}
+      {%- assign testimonials_count_lp = 0 -%}
+      {%- capture testimonials_cards_html_lp -%}
+        {%- for t in all_testimonials_lp -%}
+          {%- if t.featured.value and testimonials_count_lp < testimonials_limit_lp and t.destination.value != blank -%}
+            {%- assign t_photos_lp = t.photos.value -%}
+            {%- assign t_cover_lp = blank -%}
+            {%- for p in t_photos_lp limit: 1 -%}
+              {%- assign t_cover_lp = p -%}
+            {%- endfor -%}
+            <a href="/pages/{{ t.destination.value.slug.value }}#testimonials" class="group block rounded-lg overflow-hidden shadow-md bg-white">
+              {%- if t_cover_lp -%}
+                <div class="w-full relative overflow-hidden" style="padding-top:110%;">
+                  {{ t_cover_lp | image_url: width: 700 | image_tag: class: 'absolute top-0 left-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105', loading: 'lazy', alt: t.name.value }}
+                </div>
+              {%- else -%}
+                <div class="w-full bg-gray-100" style="padding-top:110%;"></div>
+              {%- endif -%}
+              <div class="p-4">
+                {%- if t.name.value != blank -%}
+                  <p class="font-bold text-sm mb-1">{{ t.name.value }}</p>
+                {%- endif -%}
+                <p class="text-xs" style="color:#B8860B;">{{ t.destination.value.name_ja.value }}</p>
+              </div>
+            </a>
+            {%- assign testimonials_count_lp = testimonials_count_lp | plus: 1 -%}
+          {%- endif -%}
+        {%- endfor -%}
+      {%- endcapture -%}
+      {%- if testimonials_count_lp > 0 -%}
+        <section class="py-20 px-6" style="background-color:{{ section.settings.testimonials_bg_color | default: '#ffffff' }};">
+          <div class="max-w-6xl mx-auto">
+            <div class="text-center mb-14 fade-in">
+              {% if section.settings.testimonials_eyebrow != blank %}
+                <p class="font-serif-display tracking-widest-custom mb-3" style="color:{{ section.settings.testimonials_eyebrow_color | default: '#B8860B' }};">{{ section.settings.testimonials_eyebrow }}</p>
+              {% endif %}
+              <h2 class="font-medium text-2xl md:text-4xl leading-relaxed" style="color:{{ section.settings.testimonials_heading_color | default: '#1a1a1a' }};">{{ section.settings.testimonials_heading }}</h2>
+              {% if section.settings.testimonials_desc != blank %}
+                <p class="mt-4 text-sm" style="color:{{ section.settings.testimonials_desc_color | default: '#666666' }};">{{ section.settings.testimonials_desc }}</p>
+              {% endif %}
+            </div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+              {{ testimonials_cards_html_lp }}
+            </div>
+          </div>
+        </section>
+      {%- endif -%}
+    {% endif %}
+
+    {%- comment -%}
       オンライン相談CTA：HISスタッフによるオンライン相談受付が始まる
       まではshow_consult_ctaをオフにしておけば非表示。独立した
       セクションとして追加すると、このファイル内にべた書きされた
@@ -813,6 +873,17 @@
     { "type": "text", "id": "dd_button_label", "label": "ボタン文言", "default": "撮影地診断を始める" },
     { "type": "url", "id": "dd_button_url", "label": "ボタンリンク先" },
     { "type": "color", "id": "dd_button_color", "label": "ボタン色", "default": "#B8860B" },
+
+    { "type": "header", "content": "先輩カップルの声" },
+    { "type": "checkbox", "id": "show_testimonials", "label": "表示する", "default": true },
+    { "type": "color", "id": "testimonials_bg_color", "label": "背景色", "default": "#ffffff" },
+    { "type": "text", "id": "testimonials_eyebrow", "label": "英字見出し", "default": "VOICE" },
+    { "type": "color", "id": "testimonials_eyebrow_color", "label": "英字見出し色", "default": "#B8860B" },
+    { "type": "text", "id": "testimonials_heading", "label": "見出し", "default": "先輩カップルの声" },
+    { "type": "color", "id": "testimonials_heading_color", "label": "見出し色", "default": "#1a1a1a" },
+    { "type": "textarea", "id": "testimonials_desc", "label": "説明文" },
+    { "type": "color", "id": "testimonials_desc_color", "label": "説明文の色", "default": "#666666" },
+    { "type": "range", "id": "testimonials_limit", "min": 4, "max": 20, "step": 1, "label": "表示する件数", "default": 8 },
 
     { "type": "header", "content": "オンライン相談CTA" },
     { "type": "checkbox", "id": "show_consult_cta", "label": "表示する", "default": false, "info": "オンライン相談の受付準備ができるまではオフにしておいてください。" },
