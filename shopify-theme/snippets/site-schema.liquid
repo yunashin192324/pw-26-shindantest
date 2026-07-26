@@ -33,7 +33,8 @@
   {%- endcomment -%}
   {%- assign social_urls = '' -%}
   {%- assign social_count = 0 -%}
-  {%- for social_key in 'social_facebook_link,social_instagram_link,social_twitter_link,social_tiktok_link,social_youtube_link,social_pinterest_link,social_linkedin_link,social_snapchat_link,social_vimeo_link' | split: ',' -%}
+  {%- assign social_keys = 'social_facebook_link,social_instagram_link,social_twitter_link,social_tiktok_link,social_youtube_link,social_pinterest_link,social_linkedin_link,social_snapchat_link,social_vimeo_link' | split: ',' -%}
+  {%- for social_key in social_keys -%}
     {%- assign social_value = settings[social_key] -%}
     {%- if social_value != blank -%}
       {%- if social_count > 0 -%}{%- assign social_urls = social_urls | append: ',' -%}{%- endif -%}
