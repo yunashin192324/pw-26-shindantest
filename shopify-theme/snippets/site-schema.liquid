@@ -54,6 +54,14 @@
   ホームページのみに限定)。
 {%- endcomment -%}
 {%- if template.name == 'index' -%}
+  {%- comment -%}
+    Shopifyのコード編集画面のLiquid構文チェックが、{{ }}タグの中に
+    そのまま書いた文字列リテラル内の中括弧({search_term_string})を
+    タグの終端記号と誤認識してエラーを出すことがあるため、
+    先に{% assign %}で組み立ててから出力する。
+  {%- endcomment -%}
+  {%- assign search_target_url = shop.url | append: routes.search_url | append: '?q=' -%}
+  {%- assign search_target_url = search_target_url | append: '{search_term_string}' -%}
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -62,7 +70,7 @@
   "url": {{ shop.url | append: routes.root_url | json }},
   "potentialAction": {
     "@type": "SearchAction",
-    "target": {{ shop.url | append: routes.search_url | append: '?q={search_term_string}' | json }},
+    "target": {{ search_target_url | json }},
     "query-input": "required name=search_term_string"
   }
 }
