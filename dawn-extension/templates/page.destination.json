@@ -21,6 +21,12 @@
         "heading": "撮影スポット"
       }
     },
+    "destination-spots-map": {
+      "type": "destination-spots-map",
+      "settings": {
+        "heading": "撮影スポットMAP"
+      }
+    },
     "destination-schedule": {
       "type": "destination-schedule",
       "settings": {
@@ -80,6 +86,7 @@
     "destination-quickfacts",
     "destination-reasons",
     "destination-spots",
+    "destination-spots-map",
     "destination-schedule",
     "destination-gallery",
     "destination-testimonials",

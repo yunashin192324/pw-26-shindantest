@@ -1,0 +1,163 @@
+{%- comment -%}
+  destination-spots-map — この都市の撮影スポットMAP。
+  ----------------------------------------------------------------
+  spots-map.liquid(全都市横断のMAP、/pages/spots-map)とは別に、
+  この都市のPhoto Spot(destination.photo_spots)だけを1つの地図に
+  まとめて表示する。データはspots-map.liquidと同じPhoto Spotの
+  latitude/longitude/categoryフィールドをそのまま使い回すので、
+  新しい入力は不要(既に緯度経度を入れたスポットがあれば、貼り替える
+  だけでそのまま地図に出る)。
+  Leaflet + OpenStreetMap使用(完全無料、APIキー・請求先アカウント
+  登録不要)。緯度・経度が未入力のスポットは地図に出ない。
+{%- endcomment -%}
+{%- assign all_destination_entries = shop.metaobjects.destination.values -%}
+{%- assign destination = blank -%}
+{%- for d in all_destination_entries -%}
+  {%- if d.slug.value == page.handle -%}{%- assign destination = d -%}{%- endif -%}
+{%- endfor -%}
+
+{%- assign spots = destination.photo_spots.value -%}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" defer></script>
+
+<script type="application/json" id="dst-spots-map-data-{{ section.id }}">
+[
+  {%- assign spot_count = 0 -%}
+  {%- for spot in spots -%}
+    {%- if spot.latitude.value != blank and spot.longitude.value != blank -%}
+      {%- if spot_count > 0 -%},{%- endif -%}
+      {
+        "title": {{ spot.title.value | json }},
+        "lat": {{ spot.latitude.value | times: 1.0 | json }},
+        "lng": {{ spot.longitude.value | times: 1.0 | json }},
+        "category": {{ spot.category.value.label.value | default: 'その他' | json }},
+        "image": {{ spot.image.value | image_url: width: 400 | json }}
+      }
+      {%- assign spot_count = spot_count | plus: 1 -%}
+    {%- endif -%}
+  {%- endfor -%}
+]
+</script>
+
+{%- if destination and spot_count > 0 -%}
+<section{% if section.settings.bg_ivory %} class="dst-bg-ivory"{% endif %}>
+  <div class="dst-container">
+    <div class="dst-section-head dst-reveal">
+      <p class="dst-eyebrow" style="color:{{ section.settings.eyebrow_color }};">{{ section.settings.eyebrow }}</p>
+      <h2 style="color:{{ section.settings.heading_color }};">{{ section.settings.heading }}</h2>
+      <hr class="dst-divider">
+    </div>
+    <div class="dst-filter-chips" id="dst-spots-map-chips-{{ section.id }}" style="margin-bottom:20px;justify-content:center;"></div>
+    <div id="dst-spots-map-canvas-{{ section.id }}" class="dst-map-canvas"></div>
+  </div>
+</section>
+
+<script>
+  (function () {
+    function init() {
+      var dataEl = document.getElementById('dst-spots-map-data-{{ section.id }}');
+      var canvas = document.getElementById('dst-spots-map-canvas-{{ section.id }}');
+      if (!dataEl || !canvas || typeof L === 'undefined') return;
+      var spotsData = JSON.parse(dataEl.textContent || '[]');
+
+      var CATEGORY_COLORS = {
+        '教会': '#8f6a08',
+        '海': '#2b7a9e',
+        'ホテル': '#B8860B',
+        '自然': '#4c7a3f',
+        '街並み': '#7a5c3e',
+        'その他': '#666666'
+      };
+
+      var map = L.map(canvas);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
+        maxZoom: 18
+      }).addTo(map);
+
+      var markers = [];
+      var categoriesPresent = [];
+
+      spotsData.forEach(function (spot) {
+        if (typeof spot.lat !== 'number' || typeof spot.lng !== 'number') return;
+        var color = CATEGORY_COLORS[spot.category] || '#666666';
+        var icon = L.divIcon({
+          className: 'dst-spot-marker',
+          html: '<span style="background:' + color + ';"></span>',
+          iconSize: [16, 16]
+        });
+        var marker = L.marker([spot.lat, spot.lng], { icon: icon });
+        var popupHtml = '<div class="dst-map-popup">'
+          + (spot.image ? '<img src="' + spot.image + '" alt="">' : '')
+          + '<strong>' + spot.title + '</strong>'
+          + '</div>';
+        marker.bindPopup(popupHtml);
+        marker.spotCategory = spot.category;
+        marker.addTo(map);
+        markers.push(marker);
+        if (categoriesPresent.indexOf(spot.category) === -1) categoriesPresent.push(spot.category);
+      });
+
+      if (markers.length > 0) {
+        var group = L.featureGroup(markers);
+        map.fitBounds(group.getBounds().pad(0.4));
+        if (markers.length === 1) { map.setZoom(14); }
+      } else {
+        map.setView([20, 100], 3);
+      }
+
+      var chipsWrap = document.getElementById('dst-spots-map-chips-{{ section.id }}');
+      function applyFilter(category) {
+        markers.forEach(function (m) {
+          var show = !category || m.spotCategory === category;
+          if (show) {
+            if (!map.hasLayer(m)) m.addTo(map);
+          } else {
+            if (map.hasLayer(m)) map.removeLayer(m);
+          }
+        });
+      }
+      function buildChip(label, category, active) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'dst-filter-chip' + (active ? ' is-active' : '');
+        btn.textContent = label;
+        btn.addEventListener('click', function () {
+          Array.prototype.forEach.call(chipsWrap.querySelectorAll('.dst-filter-chip'), function (c) {
+            c.classList.remove('is-active');
+          });
+          btn.classList.add('is-active');
+          applyFilter(category);
+        });
+        return btn;
+      }
+      if (chipsWrap && categoriesPresent.length > 1) {
+        chipsWrap.appendChild(buildChip('すべて', null, true));
+        categoriesPresent.forEach(function (cat) {
+          chipsWrap.appendChild(buildChip(cat, cat, false));
+        });
+      }
+    }
+
+    if (typeof L !== 'undefined') {
+      init();
+    } else {
+      window.addEventListener('load', init);
+    }
+  })();
+</script>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "都市 撮影スポットMAP",
+  "settings": [
+    { "type": "checkbox", "id": "bg_ivory", "label": "背景をアイボリーにする", "default": false },
+    { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "MAP" },
+    { "type": "color", "id": "eyebrow_color", "label": "英字見出し色", "default": "#c9a96e" },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "撮影スポットMAP" },
+    { "type": "color", "id": "heading_color", "label": "見出し色", "default": "#1a1a1a" }
+  ],
+  "presets": [{ "name": "都市 撮影スポットMAP" }]
+}
+{% endschema %}
