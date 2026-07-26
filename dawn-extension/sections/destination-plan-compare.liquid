@@ -25,6 +25,26 @@
 
 {%- assign plan_products = destination.plans.value -%}
 
+{%- comment -%}
+  ============ 一時デバッグ表示(原因特定後に削除すること) ============
+{%- endcomment -%}
+<div style="background:#ffe8e8;border:3px solid red;padding:20px;margin:20px;font-size:14px;font-family:monospace;white-space:pre-wrap;">
+[DEBUG] destination: {{ destination.name_ja.value }} (handle: {{ destination.slug.value }})
+plans件数(plan_products.size): {{ plan_products.size }}
+{%- for p in plan_products %}
+---
+商品名: {{ p.title }}
+compare_data_count: "{{ p.metafields.custom.compare_data_count.value }}"
+compare_dress: "{{ p.metafields.custom.compare_dress.value }}"
+compare_hair_makeup: "{{ p.metafields.custom.compare_hair_makeup.value }}"
+compare_shooting_hours: "{{ p.metafields.custom.compare_shooting_hours.value }}"
+compare_location_count: "{{ p.metafields.custom.compare_location_count.value }}"
+compare_transfer: "{{ p.metafields.custom.compare_transfer.value }}"
+compare_japanese_assistant: "{{ p.metafields.custom.compare_japanese_assistant.value }}"
+{%- endfor %}
+========================================================
+</div>
+
 {%- if plan_products.size > 1 -%}
 <section{% if section.settings.bg_ivory %} class="dst-bg-ivory"{% endif %}>
   <div class="dst-container">
