@@ -717,23 +717,11 @@ function renderQ(dir){
         $s.style.display='flex'; $m.style.display='none'; $n.style.display='none'; $s.innerHTML='';
         var disabledBudgets={};
         if(q.id==='budget'&&answers.region!=='domestic'){
-            var days=answers.days||'ultra', scene=answers.scene||[], moment=answers.moment||[];
             for(var b=1;b<=6;b++){
-                var dk2=DAYS_KEYS[days]==='all'?Object.keys(DEST):(DAYS_KEYS[days]||[]);
-                var bk2=BUDGET_KEYS[b]||[];
-                var elig=dk2.filter(function(k){return bk2.includes(k)&&DEST[k];});
-                if(!elig.length){disabledBudgets[b]=true;continue;}
-                if(scene.length===1&&scene.includes('studio')){if(!elig.some(function(k){return DEST[k]&&DEST[k].studio;})) disabledBudgets[b]=true; continue;}
-                var nns=scene.filter(function(x){return x!=='none';});
-                if(nns.length>0){var ok=false; for(var toi=0;toi<nns.length;toi++){var t=nns[toi];if(elig.some(function(k){return DEST[k]&&DEST[k][t];})){ok=true;break;}} if(!ok){disabledBudgets[b]=true;continue;}}
-                var hm=moment.filter(function(m){return ['starry','balloon','animal'].includes(m);});
-                if(hm.length>0&&!moment.some(function(m){return !['starry','balloon','animal','none'].includes(m);})){
-                    var mok=false;
-                    if(hm.includes('starry')&&elig.some(function(k){return DEST[k]&&DEST[k].starry;})) mok=true;
-                    if(hm.includes('balloon')&&elig.some(function(k){return DEST[k]&&DEST[k].balloon;})) mok=true;
-                    if(hm.includes('animal')&&elig.some(function(k){return DEST[k]&&DEST[k].animal;})) mok=true;
-                    if(!mok){disabledBudgets[b]=true;continue;}
-                }
+                var testAns={};
+                for(var ak in answers){ if(Object.prototype.hasOwnProperty.call(answers,ak)) testAns[ak]=answers[ak]; }
+                testAns.budget=b;
+                if(!score(testAns).length) disabledBudgets[b]=true;
             }
         }
         if(q.id==='budget'){
