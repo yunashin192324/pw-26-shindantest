@@ -656,9 +656,9 @@ function calcMatching(key,ans) {
     var SL={beach:'ビーチ・海',nature:'大自然・森',landscape:'奇岩・砂漠',street:'街並み・路地裏',castle:'お城・宮殿',architecture:'美術館・歴史建築',ruins:'遺跡',chapel:'チャペル・教会',garden:'花界・庭園',villa:'ヴィラ・ホテル',studio:'スタジオ'};
     var ML={sunset:'サンセット',starry:'星空',nightview:'夜景・イルミネーション',balloon:'気球・バルーン',animal:'動物との撮影',morning:'朝日・早朝の光'};
     var resortList=['maldives','bali','hawaii','okinawa_rito','fiji','cancun','phuket','cebu'];
-    var sightList=['paris','wien','italy','barcelona','cappadocia','nz','australia','egypt','central_eu','london','portugal','morocco','romantic_road'];
-    var shopList=['paris','italy','bali','hawaii','korea','singapore','newyork','london','barcelona'];
-    var activeList=['nz','australia','canada','masaimara','cancun','hokkaido','cappadocia'];
+    var sightList=['paris','wien','italy','barcelona','cappadocia','nz','australia','egypt','central_eu','london','portugal','morocco','romantic_road','okinawa'];
+    var shopList=['paris','italy','bali','hawaii','korea','singapore','newyork','london','barcelona','okinawa'];
+    var activeList=['nz','australia','canada','masaimara','cancun','hokkaido','cappadocia','okinawa_rito'];
     var styleMatch={
         resort:function(){ return resortList.indexOf(key)!==-1; },
         sightseeing:function(){ return sightList.indexOf(key)!==-1; },
@@ -804,6 +804,19 @@ function renderQ(dir){
             var curFlags=Object.keys(multiSel[qi]||{}).filter(function(v){return !exemptVals[v];});
             curFlags.forEach(function(f){ pool=pool.filter(function(k){return DEST[k]&&DEST[k][f];}); });
             return pool;
+        }
+        if(answers.region==='overseas'){
+            var reconcilePool=liveDayPool();
+            var reconcileCommitted=(q.id==='moment')?(answers.scene||[]).filter(function(v){return !exemptVals[v];}):[];
+            reconcileCommitted.forEach(function(f){ reconcilePool=reconcilePool.filter(function(k){return DEST[k]&&DEST[k][f];}); });
+            var reconcileKeys=Object.keys(multiSel[qi]);
+            for(var rki=0;rki<reconcileKeys.length;rki++){
+                var rf=reconcileKeys[rki];
+                if(exemptVals[rf]) continue;
+                var reconcileTest=reconcilePool.filter(function(k){return DEST[k]&&DEST[k][rf];});
+                if(reconcileTest.length===0){ delete multiSel[qi][rf]; }
+                else{ reconcilePool=reconcileTest; }
+            }
         }
         function refreshMultiState(){
             var pool=livePool();
@@ -994,9 +1007,9 @@ function renderResult(ranked,origMax){
         },200);
     }
 
-    // Upsell
+    // Upsell (budget-tier logic is meaningless for domestic, where budget never narrows the result)
     var uel=document.getElementById('res-upsell');
-    if(budget<6){
+    if(answers.region==='overseas'&&budget<6){
         var nb=budget+1;
         var nbk=BUDGET_KEYS[nb]||[];
         var cbk=BUDGET_KEYS[budget]||[];
