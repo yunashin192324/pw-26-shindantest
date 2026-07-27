@@ -495,7 +495,7 @@ const QS = [
       opts:[{main:'のんびりリゾートライフ',sub:'プールやヴィラでゆっくり過ごしたい',v:'resort'},{main:'観光地めぐり・文化体験',sub:'世界遺産や美術館をたっぷり観たい',v:'sightseeing'},{main:'グルメ・ショッピング',sub:'地元の食や買い物をとことん楽しみたい',v:'shopping'},{main:'アクティブ・冒険',sub:'ダイビング・ハイキングで体を動かしたい',v:'active'}]},
     { id:'who', section:'PARTY', step:6, title:'撮影には誰と行かれますか？', sub:'同行される方を教えてください。', type:'single',
       opts:[{main:'お二人だけ',sub:'プライベートでロマンチックに',v:'couple'},{main:'子どもと一緒',sub:'ファミリーフォトも残したい',v:'family_kids'},{main:'ご両親・ご親族も一緒',sub:'みんなで思い出をつくりたい',v:'family_elder'},{main:'親族＋友人も招待したい',sub:'小規模パーティー的に行いたい',v:'group'}]},
-    { id:'budget', section:'BUDGET', step:7, title:'フォト+フォト+旅費込みのご予算感は？', sub:'撮影費＋旅費（航空券・宿泊）の合計目安です。前の回答により選択できない帯があります。', type:'single',
+    { id:'budget', section:'BUDGET', step:7, title:'フォト+旅費込みのご予算感は？', sub:'撮影費＋旅費（航空券・宿泊）の合計目安です。前の回答により選択できない帯があります。', type:'single',
       opts:[{main:'60万円未満',sub:'近場でしっかり楽しみたい',v:1},{main:'60〜100万円未満',sub:'ゆとりを持って楽しみたい',v:2},{main:'100〜140万円未満',sub:'特別な旅として思い切りたい',v:3},{main:'140〜180万円未満',sub:'一生に一度の体験にこだわりたい',v:4},{main:'180〜250万円未満',sub:'プレミアムな旅を楽しみたい',v:5},{main:'250万円以上',sub:'最上級の旅にしたい',v:6}]},
 ];
 
@@ -697,8 +697,13 @@ function getCurrentQ(){ return QS[qFlow[curQIdx]]; }
 function getTotalSteps(){ return qFlow.length; }
 function updateFlow(){
     var sel=multiSel[2]?Object.keys(multiSel[2]||{}):[];
-    qFlow=sel.indexOf('studio')!==-1?[0,1,2]:[0,1,2,3,4,5,6];
+    var isStudio=sel.indexOf('studio')!==-1;
+    qFlow=isStudio?[0,1,2]:[0,1,2,3,4,5,6];
     delete answers.budget;
+    if(isStudio){
+        delete answers.moment; delete answers.style; delete answers.who;
+        delete multiSel[3];
+    }
 }
 function renderQ(dir){
     dir=dir||'right';
@@ -736,12 +741,10 @@ function renderQ(dir){
             var dr='';
             if(dis){
                 var sc2=answers.scene||[], mo2=answers.moment||[], rs=[];
-                if(sc2.includes('castle'))       rs.push('お城・宮殿は140万円以上から');
-                if(sc2.includes('architecture')) rs.push('歴史建築・美術館は140万円以上から');
-                if(sc2.includes('ruins'))        rs.push('遺跡は140万円以上から');
+                if(sc2.includes('architecture')) rs.push('歴史建築・美術館は100万円以上から');
                 if(sc2.includes('landscape'))    rs.push('奇岩・砂漠は100万円以上から');
                 if(sc2.includes('villa'))        rs.push('ヴィラは60万円以上から');
-                if(mo2.includes('starry'))       rs.push('星空撮影は60万円以上から');
+                if(mo2.includes('starry'))       rs.push('星空撮影は100万円以上から');
                 if(mo2.includes('balloon'))      rs.push('気球撮影は100万円以上から');
                 dr=rs.length>0?rs.join('、')+'ご案内可能です':'この条件の組み合わせではご案内できません';
             }
@@ -878,7 +881,7 @@ function showLoading(){
         dbg='renderResult';
         renderResult(ranked,origMax);
     }catch(e){
-        alert('Step:'+dbg+' Err:'+e.message+' '+(e.stack?e.stack.split('n')[1]:''));
+        alert('Step:'+dbg+' Err:'+e.message+' '+(e.stack?e.stack.split('\n')[1]:''));
     }
 })()},1200);
         },300);}
@@ -986,7 +989,7 @@ function renderResult(ranked,origMax){
             +'<p class="consult-title">フォトウェディングのこと、<br>もっと詳しく相談しませんか？</p>'
             +'<a href="'+consultUrl+'" target="_blank" class="consult-btn">無料相談を予約する（来店・オンライン）</a>'
             +'<a href="'+consultUrl+'&type=online" target="_blank" class="consult-btn-sub">オンライン相談を予約</a>'
-            +'<p class="consult-note">相談は無料です。診断結果を元にスタッフが詳しくゴ案内します。</p>'
+            +'<p class="consult-note">相談は無料です。診断結果を元にスタッフが詳しくご案内します。</p>'
             +'</div>';
         consultEl.innerHTML=consultHtml;
         setTimeout(function(){
@@ -1056,13 +1059,13 @@ function renderResult(ranked,origMax){
     },100);
 
     var url=window.location.href.split('?')[0];
-    var shareText='フォトウェディング診断で「'+top.name+'」をおすすめされました✨n';
+    var shareText='フォトウェディング診断で「'+top.name+'」をおすすめされました✨\n';
 
 
     // Instagram share button
     document.getElementById('insta-copy-btn').onclick=function(){
         var top2=DEST[ranked[0]];
-        var msg='『'+top2.name+'』をおすすめされました✨nnフォトウェディング撮影地診断→ https://www.his-wedding.comnn#フォトウェディング #'+top2.name+' #HISWedding';
+        var msg='『'+top2.name+'』をおすすめされました✨\n\nフォトウェディング撮影地診断→ https://www.his-wedding.com\n\n#フォトウェディング #'+top2.name+' #HISWedding';
         navigator.clipboard.writeText(msg).then(function(){
             toast('コピーしました！インスタストーリーに貼りつけてシェア！');
         }).catch(function(){toast('コピーできませんでした');})
