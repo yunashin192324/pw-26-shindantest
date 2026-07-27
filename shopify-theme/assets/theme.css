@@ -371,7 +371,15 @@ p { color: var(--text-muted); }
 /* ---------- Split (text + image) ---------- */
 .split { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(30px, 6vw, 90px); align-items: center; }
 .split.reverse .split-media { order: 2; }
-.split-media { aspect-ratio: 4/5; overflow: hidden; }
+.split-media {
+  aspect-ratio: 4/5;
+  overflow: hidden;
+  /* imgのwidth/height属性(例:1200x1500)がグリッドアイテムの既定
+     min-width:autoの最小コンテンツ幅計算に使われ、画像が実寸法で
+     グリッド列を押し広げてしまう(3節⑩と同種のCSS Gridの既知の罠)。
+     min-width:0で無効化し、画像を親の幅に正しく収める。 */
+  min-width: 0;
+}
 @media (max-width: 820px) { .split { grid-template-columns: 1fr; } .split.reverse .split-media { order: 0; } }
 
 /* ---------- Flow / steps ---------- */
