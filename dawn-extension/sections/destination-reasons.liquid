@@ -21,23 +21,23 @@
 
 {%- assign all_reasons = shop.metaobjects.reason.values -%}
 
-{%- comment -%} ============ 一時デバッグ表示(原因特定後に削除) ============ {%- endcomment -%}
-<div style="background:#ffe8e8;border:3px solid red;padding:20px;margin:20px;font-size:14px;font-family:monospace;white-space:pre-wrap;">
-[DEBUG] このページのdestination.slug: "{{ destination.slug.value }}"
-Reason件数(all_reasons.size): {{ all_reasons.size }}
-{%- for r in all_reasons %}
----
-heading: "{{ r.heading.value }}"
-r.destination(参照先そのもの): "{{ r.destination.value }}"
-r.destination.value.slug.value: "{{ r.destination.value.slug.value }}"
-{%- endfor %}
-========================================================
-</div>
-
 {%- assign reasons_count = 0 -%}
 {%- capture reasons_html -%}
   {%- for r in all_reasons -%}
-    {%- if destination and r.destination.value.slug.value == destination.slug.value -%}
+    {%- comment -%}
+      「撮影地」欄が単一参照ではなく参照リスト(「リストにする」が
+      ONの状態)で作成されているため、r.destination.valueは1件でも
+      配列(MetaobjectListDrop)になっている。単一参照・リストの
+      どちらの作り方でも動くよう、直接一致と配列ループの両方を試す。
+    {%- endcomment -%}
+    {%- assign r_dest_match = false -%}
+    {%- if r.destination.value.slug.value == destination.slug.value -%}
+      {%- assign r_dest_match = true -%}
+    {%- endif -%}
+    {%- for rd in r.destination.value -%}
+      {%- if rd.slug.value == destination.slug.value -%}{%- assign r_dest_match = true -%}{%- endif -%}
+    {%- endfor -%}
+    {%- if destination and r_dest_match -%}
       <div class="dst-reason-card dst-reveal">
         {%- if r.heading.value != blank -%}
           <h3 class="dst-reason-title">{% render 'safe-linebreak', text: r.heading.value %}</h3>

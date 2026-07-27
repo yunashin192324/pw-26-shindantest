@@ -79,7 +79,19 @@
 {%- assign schema_faq_items = '' -%}
 {%- assign schema_faq_count = 0 -%}
 {%- for item in schema_faq_source -%}
-  {%- if item.destination.value.slug.value == destination.slug.value and item.question.value != blank and item.answer.value != blank -%}
+  {%- comment -%}
+    「撮影地」欄が単一参照ではなく参照リストで作成されている場合にも
+    対応できるよう、直接一致と配列ループの両方を試す
+    (destination-reasons.liquidと同じ対策)。
+  {%- endcomment -%}
+  {%- assign item_dest_match = false -%}
+  {%- if item.destination.value.slug.value == destination.slug.value -%}
+    {%- assign item_dest_match = true -%}
+  {%- endif -%}
+  {%- for id_ in item.destination.value -%}
+    {%- if id_.slug.value == destination.slug.value -%}{%- assign item_dest_match = true -%}{%- endif -%}
+  {%- endfor -%}
+  {%- if item_dest_match and item.question.value != blank and item.answer.value != blank -%}
     {%- if schema_faq_count > 0 -%}{%- assign schema_faq_items = schema_faq_items | append: ',' -%}{%- endif -%}
     {%- capture faq_item -%}{ "@type": "Question", "name": {{ item.question.value | json }}, "acceptedAnswer": { "@type": "Answer", "text": {{ item.answer.value | json }} } }{%- endcapture -%}
     {%- assign schema_faq_items = schema_faq_items | append: faq_item -%}

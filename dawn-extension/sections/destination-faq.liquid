@@ -25,7 +25,19 @@
 {%- assign faq_count = 0 -%}
 {%- capture faq_html -%}
   {%- for item in all_faq_items -%}
-    {%- if destination and item.destination.value.slug.value == destination.slug.value -%}
+    {%- comment -%}
+      「撮影地」欄が単一参照ではなく参照リストで作成されている場合にも
+      対応できるよう、直接一致と配列ループの両方を試す
+      (destination-reasons.liquidと同じ対策)。
+    {%- endcomment -%}
+    {%- assign item_dest_match = false -%}
+    {%- if item.destination.value.slug.value == destination.slug.value -%}
+      {%- assign item_dest_match = true -%}
+    {%- endif -%}
+    {%- for id_ in item.destination.value -%}
+      {%- if id_.slug.value == destination.slug.value -%}{%- assign item_dest_match = true -%}{%- endif -%}
+    {%- endfor -%}
+    {%- if destination and item_dest_match -%}
       <details class="dst-faq-item">
         <summary class="dst-faq-question">{{ item.question.value }}</summary>
         <p class="dst-faq-answer">{{ item.answer.value }}</p>
