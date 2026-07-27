@@ -502,6 +502,8 @@ html { scroll-behavior: smooth; }
 .dst-testimonial-qa .dst-faq-question { font-size: 0.88rem; }
 
 /* ---------- プラン比較表 ---------- */
+.dst-compare-hint { display: none; text-align: center; font-size: 0.78rem; color: var(--dst-gold-dark); margin: 0 0 12px; }
+.dst-compare-wrap { position: relative; }
 .dst-compare-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .dst-compare-table { width: 100%; min-width: 480px; border-collapse: collapse; font-size: 0.88rem; }
 .dst-compare-table th, .dst-compare-table td { padding: 14px 20px; text-align: center; border-bottom: 1px solid var(--dst-border); white-space: nowrap; }
@@ -510,6 +512,20 @@ html { scroll-behavior: smooth; }
 .dst-compare-table thead th a:hover { color: var(--dst-gold); }
 .dst-compare-table tbody th { text-align: left; font-weight: 600; color: var(--dst-text-muted); white-space: nowrap; }
 .dst-compare-th-label { min-width: 120px; }
+@media (max-width: 640px) {
+  .dst-compare-hint { display: block; }
+  .dst-compare-wrap::after {
+    content: "";
+    position: absolute;
+    top: 0; bottom: 0; right: 0;
+    width: 36px;
+    background: linear-gradient(to right, transparent, var(--dst-white));
+    pointer-events: none;
+  }
+  .dst-bg-ivory .dst-compare-wrap::after {
+    background: linear-gradient(to right, transparent, var(--dst-ivory));
+  }
+}
 
 /* ---------- 撮影スポットMAP ---------- */
 .dst-map-canvas { width: 100%; height: 560px; border-radius: 8px; overflow: hidden; }

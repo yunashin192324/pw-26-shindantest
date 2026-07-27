@@ -39,7 +39,7 @@
 ]
 </script>
 
-{%- if destination and spot_count > 0 -%}
+{%- if section.settings.show_map and destination and spot_count > 0 -%}
 <section{% if section.settings.bg_ivory %} class="dst-bg-ivory"{% endif %}>
   <div class="dst-container">
     <div class="dst-section-head dst-reveal">
@@ -152,6 +152,7 @@
 {
   "name": "都市 撮影スポットMAP",
   "settings": [
+    { "type": "checkbox", "id": "show_map", "label": "表示する", "default": true },
     { "type": "checkbox", "id": "bg_ivory", "label": "背景をアイボリーにする", "default": false },
     { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "MAP" },
     { "type": "color", "id": "eyebrow_color", "label": "英字見出し色", "default": "#c9a96e" },
