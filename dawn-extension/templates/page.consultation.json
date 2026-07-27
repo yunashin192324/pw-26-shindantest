@@ -1,0 +1,21 @@
+{
+  "sections": {
+    "main": {
+      "type": "main-page",
+      "disabled": true,
+      "settings": {
+        "padding_top": 0,
+        "padding_bottom": 0
+      }
+    },
+    "consultation_form_main": {
+      "type": "consultation-form",
+      "settings": {
+        "eyebrow": "Contact",
+        "heading": "オンライン相談",
+        "description": "撮影地選びやプランについて、専門スタッフがオンラインでご相談に応じます。まずはお気軽にお問い合わせください。"
+      }
+    }
+  },
+  "order": ["main", "consultation_form_main"]
+}

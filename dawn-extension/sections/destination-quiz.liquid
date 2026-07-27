@@ -104,10 +104,7 @@
       {% comment %} --- イントロ --- {% endcomment %}
       <div class="quiz-step" data-step="intro">
         <div class="text-center">
-          <div class="mx-auto mb-6 flex items-center justify-center rounded-full" style="width:64px;height:64px;background:linear-gradient(135deg,#D4A843,#B8860B);">
-            <span style="font-size:26px;">✨</span>
-          </div>
-          <p class="font-serif tracking-widest uppercase mb-2 text-sm" style="color:#B8860B;">{{ section.settings.eyebrow | default: '30 SECONDS' }}</p>
+          <p class="font-serif tracking-widest uppercase mb-3 text-sm" style="color:#B8860B;">{{ section.settings.eyebrow | default: '30 SECONDS' }}</p>
           <h2 class="font-medium mb-4" style="font-size: calc(var(--font-heading-scale, 1) * 28px);">{{ section.settings.heading | default: 'あなたにぴったりの撮影地診断' }}</h2>
           <p class="text-base text-gray-600 leading-relaxed mb-8">{{ section.settings.intro_text | default: '簡単な質問に答えるだけで、おふたりに合う撮影地をご提案します。' }}</p>
           <button type="button" class="quiz-start px-10 py-4 rounded-full font-medium text-base text-white transition hover:opacity-80 hover:scale-105" style="background-color:#B8860B;box-shadow:0 12px 30px -10px rgba(184,134,11,0.6);">{{ section.settings.start_label | default: '診断をはじめる' }}</button>

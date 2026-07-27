@@ -16,7 +16,15 @@
   {%- if d.slug.value == page.handle -%}{%- assign destination = d -%}{%- endif -%}
 {%- endfor -%}
 
-{%- assign all_schedule_items = shop.metaobjects.schedule_item.values -%}
+{%- comment -%}
+  並び順は`sort_order`(数値・整数)欄で管理する。ハンドル名を書き換える
+  方式は正式なやり方ではなく、実際の表示順を保証しない(Shopifyの
+  管理画面上の一覧の並びだけがハンドル順に見えることがあるが、
+  shop.metaobjects.<type>.valuesが返す順序とは別物)。
+  この欄が全エントリーに入っていることが前提(空欄が混ざると
+  正しく並ばないことがある)。
+{%- endcomment -%}
+{%- assign all_schedule_items = shop.metaobjects.schedule_item.values | sort: 'sort_order.value' -%}
 {%- assign schedule_count = 0 -%}
 {%- capture schedule_html -%}
   {%- for item in all_schedule_items -%}
