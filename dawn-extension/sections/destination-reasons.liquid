@@ -20,6 +20,20 @@
 {%- endfor -%}
 
 {%- assign all_reasons = shop.metaobjects.reason.values -%}
+
+{%- comment -%} ============ 一時デバッグ表示(原因特定後に削除) ============ {%- endcomment -%}
+<div style="background:#ffe8e8;border:3px solid red;padding:20px;margin:20px;font-size:14px;font-family:monospace;white-space:pre-wrap;">
+[DEBUG] このページのdestination.slug: "{{ destination.slug.value }}"
+Reason件数(all_reasons.size): {{ all_reasons.size }}
+{%- for r in all_reasons %}
+---
+heading: "{{ r.heading.value }}"
+r.destination(参照先そのもの): "{{ r.destination.value }}"
+r.destination.value.slug.value: "{{ r.destination.value.slug.value }}"
+{%- endfor %}
+========================================================
+</div>
+
 {%- assign reasons_count = 0 -%}
 {%- capture reasons_html -%}
   {%- for r in all_reasons -%}
