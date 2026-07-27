@@ -48,17 +48,18 @@
 <div id="his-wedding-intro-{{ section.id }}" class="w-full bg-white">
 
   {% comment %} --- 1. ヒーロー --- {% endcomment %}
+  {%- assign hero_image_position_style = 'object-position: ' | append: section.settings.hero_image_position | append: ';' -%}
   <section class="relative w-full flex flex-col justify-center items-center text-center" style="height: 60vh;">
     {% if section.settings.hero_image != blank %}
-      {{ section.settings.hero_image | image_url: width: 2000 | image_tag: class: 'absolute inset-0 w-full h-full object-cover', alt: section.settings.hero_title }}
+      {{ section.settings.hero_image | image_url: width: 2000 | image_tag: class: 'absolute inset-0 w-full h-full object-cover', alt: section.settings.hero_title, style: hero_image_position_style }}
     {% else %}
       <div class="absolute inset-0 w-full h-full bg-gray-200"></div>
     {% endif %}
     <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(0,0,0,0.75), rgba(0,0,0,0.35) 55%, rgba(0,0,0,0.15));"></div>
-    <div class="relative z-10 px-6 w-full max-w-3xl" style="color:#ffffff;">
-      <p class="font-serif tracking-widest uppercase mb-4 text-sm">{{ section.settings.hero_eyebrow }}</p>
-      <h1 class="font-serif font-light leading-tight mb-4" style="font-size: calc(var(--font-heading-scale, 1) * 40px);">{{ section.settings.hero_title | newline_to_br }}</h1>
-      <p class="font-light" style="font-size: calc(var(--font-body-scale, 1) * 16px);">{{ section.settings.hero_lede }}</p>
+    <div class="relative z-10 px-6 w-full max-w-3xl">
+      <p class="font-serif tracking-widest uppercase mb-4 text-sm" style="color:{{ section.settings.hero_eyebrow_color | default: '#ffffff' }};">{{ section.settings.hero_eyebrow }}</p>
+      <h1 class="font-serif font-light leading-tight mb-4" style="font-size: calc(var(--font-heading-scale, 1) * 40px); color:{{ section.settings.hero_title_color | default: '#ffffff' }};">{{ section.settings.hero_title | newline_to_br }}</h1>
+      <p class="font-light" style="font-size: calc(var(--font-body-scale, 1) * 16px); color:{{ section.settings.hero_lede_color | default: '#ffffff' }};">{{ section.settings.hero_lede }}</p>
     </div>
   </section>
 
@@ -156,9 +157,19 @@
   "name": "HIS WEDDING紹介ページ",
   "settings": [
     { "type": "image_picker", "id": "hero_image", "label": "ヒーロー背景画像" },
+    { "type": "select", "id": "hero_image_position", "label": "ヒーロー画像の位置", "options": [
+        { "value": "center", "label": "中央" },
+        { "value": "top", "label": "上部" },
+        { "value": "bottom", "label": "下部" },
+        { "value": "left", "label": "左寄せ" },
+        { "value": "right", "label": "右寄せ" }
+      ], "default": "center" },
     { "type": "text", "id": "hero_eyebrow", "label": "ヒーロー英字見出し", "default": "ABOUT HIS WEDDING" },
+    { "type": "color", "id": "hero_eyebrow_color", "label": "英字見出しの色", "default": "#ffffff" },
     { "type": "textarea", "id": "hero_title", "label": "ヒーロー メインタイトル（改行可）", "default": "海外フォトウェディングを、\nもっと身近に。" },
+    { "type": "color", "id": "hero_title_color", "label": "メインタイトルの色", "default": "#ffffff" },
     { "type": "textarea", "id": "hero_lede", "label": "ヒーロー リード文", "default": "国内で衣裳を試着して、海外の絶景で撮影するだけ。準備の負担を最小限に、一生に一度の1枚を残すためのフォトウェディングサービスです。" },
+    { "type": "color", "id": "hero_lede_color", "label": "リード文の色", "default": "#ffffff" },
 
     { "type": "header", "content": "実績バナー" },
     { "type": "text", "id": "stat_eyebrow", "label": "英字見出し", "default": "TRACK RECORD" },
