@@ -1,0 +1,193 @@
+{% comment %}
+  店舗一覧専用セクション（50店舗対応・長文折り返し・エリアタブ絞り込み機能付き）
+{% endcomment %}
+
+<script src="https://cdn.tailwindcss.com/3.4.17" defer></script>
+
+<style>
+  .shop-list-container {
+    font-family: var(--font-body-family), sans-serif;
+    font-size: calc(var(--font-body-scale) * 100%);
+  }
+  .shop-list-container .font-serif {
+    font-family: var(--font-heading-family), serif;
+  }
+  .divider-gold { width: 48px; height: 2px; background: #B8860B; margin: 16px auto; }
+</style>
+
+<div class="shop-list-container py-16 md:py-24" style="background-color: {{ section.settings.bg_color }};">
+  <div class="max-w-5xl mx-auto px-6">
+
+    {% if section.settings.title != blank or section.settings.subtitle != blank %}
+    <div class="text-center mb-10">
+      {% if section.settings.subtitle != blank %}
+      <p class="font-serif tracking-widest uppercase mb-2" style="color: {{ section.settings.sub_color }}; font-size: calc(var(--font-heading-scale) * {{ section.settings.sub_size }}px);">{{ section.settings.subtitle }}</p>
+      {% endif %}
+      {% if section.settings.title != blank %}
+      <h2 class="font-medium" style="color: {{ section.settings.title_color }}; font-size: calc(var(--font-heading-scale) * {{ section.settings.title_size }}px);">{{ section.settings.title | newline_to_br }}</h2>
+      <div class="divider-gold"></div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {% comment %} --- エリア絞り込みタブ --- {% endcomment %}
+    {% if section.settings.area_tabs != blank %}
+      {% assign tabs = section.settings.area_tabs | split: ',' %}
+      <div class="flex flex-wrap justify-center gap-3 mb-12">
+        <button class="shop-tab-btn px-5 py-2 rounded-full border border-[#B8860B] bg-[#B8860B] text-white text-sm font-bold transition-colors duration-300" data-target="all">
+          すべて
+        </button>
+        {% for tab in tabs %}
+          {% assign tab_clean = tab | strip %}
+          <button class="shop-tab-btn px-5 py-2 rounded-full border border-gray-300 text-gray-600 text-sm font-bold transition-colors duration-300 hover:border-[#B8860B] hover:text-[#B8860B]" data-target="{{ tab_clean }}">
+            {{ tab_clean }}
+          </button>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% comment %} --- 上段：画像付き店舗 --- {% endcomment %}
+    {% assign featured_shops = section.blocks | where: "type", "featured_shop" %}
+    <div id="featured-shops-container" class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+      {% for block in featured_shops %}
+        <a href="{{ block.settings.url | default: '#' }}" class="shop-item featured-item group block" data-area="{{ block.settings.area | strip }}" {% if block.settings.url contains 'http' %}target="_blank" rel="noopener noreferrer"{% endif %} {{ block.shopify_attributes }}>
+          <div class="w-full relative aspect-[4/3] overflow-hidden mb-4">
+            {% if block.settings.image != blank %}
+              <img src="{{ block.settings.image | image_url: width: 800 }}" class="absolute top-0 left-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" style="object-position: {{ block.settings.image_position }};" alt="{{ block.settings.name }}">
+            {% else %}
+              <div class="absolute top-0 left-0 w-full h-full bg-gray-200"></div>
+            {% endif %}
+          </div>
+          <div class="flex flex-col items-start gap-2">
+            {% if block.settings.badge != blank %}
+              <span class="inline-block px-3 py-1 text-[11px] font-bold text-white tracking-wider flex-shrink-0" style="background-color: {{ block.settings.badge_bg_color | default: '#C9A96E' }};">{{ block.settings.badge }}</span>
+            {% endif %}
+            <h3 class="font-bold text-[16px] leading-snug" style="color: {{ section.settings.title_color }};">{{ block.settings.name }}</h3>
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+
+    {% comment %} --- 下段：画像なし店舗 --- {% endcomment %}
+    {% assign simple_shops = section.blocks | where: "type", "simple_shop" %}
+    <div id="simple-shops-wrapper" class="border-t border-gray-200 pt-10">
+      <div id="simple-shops-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-6">
+        {% for block in simple_shops %}
+          <a href="{{ block.settings.url | default: '#' }}" class="shop-item simple-item group flex items-start gap-3 border-b border-gray-200 pb-3 transition-colors hover:border-[#B8860B]" data-area="{{ block.settings.area | strip }}" {% if block.settings.url contains 'http' %}target="_blank" rel="noopener noreferrer"{% endif %} {{ block.shopify_attributes }}>
+            {% if block.settings.badge != blank %}
+              <span class="mt-0.5 inline-block px-3 py-1 text-[11px] font-bold text-white tracking-wider flex-shrink-0" style="background-color: {{ block.settings.badge_bg_color | default: '#C9A96E' }};">{{ block.settings.badge }}</span>
+            {% endif %}
+            <h3 class="font-bold text-[15px] leading-snug flex-1 transition-colors group-hover:text-[#B8860B]" style="color: {{ section.settings.title_color }};">{{ block.settings.name }}</h3>
+          </a>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const tabBtns = document.querySelectorAll('.shop-tab-btn');
+    const shopItems = document.querySelectorAll('.shop-item');
+    const featuredContainer = document.getElementById('featured-shops-container');
+    const simpleWrapper = document.getElementById('simple-shops-wrapper');
+
+    if (tabBtns.length === 0) return;
+
+    tabBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        // タブのスタイルをリセット
+        tabBtns.forEach(b => {
+          b.classList.remove('bg-[#B8860B]', 'text-white', 'border-[#B8860B]');
+          b.classList.add('text-gray-600', 'border-gray-300');
+        });
+        // クリックされたタブをアクティブ化
+        btn.classList.remove('text-gray-600', 'border-gray-300');
+        btn.classList.add('bg-[#B8860B]', 'text-white', 'border-[#B8860B]');
+
+        const targetArea = btn.getAttribute('data-target');
+        let featuredCount = 0;
+        let simpleCount = 0;
+
+        // 店舗の表示/非表示を切り替え
+        shopItems.forEach(item => {
+          const itemArea = item.getAttribute('data-area');
+          const isFeatured = item.classList.contains('featured-item');
+
+          if (targetArea === 'all' || itemArea === targetArea) {
+            item.style.display = ''; // 表示
+            if (isFeatured) featuredCount++;
+            else simpleCount++;
+          } else {
+            item.style.display = 'none'; // 非表示
+          }
+        });
+
+        // 該当する店舗が0件の場合、コンテナの余白や線を非表示にする
+        if (featuredContainer) {
+          featuredContainer.style.display = featuredCount > 0 ? '' : 'none';
+        }
+        if (simpleWrapper) {
+          simpleWrapper.style.display = simpleCount > 0 ? '' : 'none';
+        }
+      });
+    });
+  });
+</script>
+
+{% schema %}
+{
+  "name": "店舗一覧（タブ絞り込み付）",
+  "settings": [
+    { "type": "color", "id": "bg_color", "label": "背景色", "default": "#FAF8F5" },
+    { "type": "text", "id": "subtitle", "label": "サブタイトル", "default": "SHOP LIST" },
+    { "type": "color", "id": "sub_color", "label": "サブタイトル色", "default": "#B8860B" },
+    { "type": "range", "id": "sub_size", "min": 10, "max": 30, "step": 1, "label": "サブタイトルサイズ基準", "default": 14 },
+    { "type": "textarea", "id": "title", "label": "メインタイトル", "default": "店舗一覧" },
+    { "type": "color", "id": "title_color", "label": "タイトルと店舗名の色", "default": "#333333" },
+    { "type": "range", "id": "title_size", "min": 16, "max": 48, "step": 2, "label": "タイトルサイズ基準", "default": 24 },
+    { "type": "header", "content": "エリアタブ設定" },
+    { "type": "text", "id": "area_tabs", "label": "表示するタブ名（カンマ区切り）", "default": "関東, 関西, 東海, 九州", "info": "「すべて」タブは自動で表示されます。" }
+  ],
+  "blocks": [
+    {
+      "type": "featured_shop",
+      "name": "画像付き店舗（上段）",
+      "settings": [
+        { "type": "text", "id": "area", "label": "所属エリア", "default": "関東", "info": "上の「タブ名」で設定した文字と完全に一致させてください。" },
+        { "type": "image_picker", "id": "image", "label": "店舗画像" },
+        { "type": "select", "id": "image_position", "label": "画像の焦点", "options": [ { "value": "center", "label": "中央" }, { "value": "top", "label": "上部" }, { "value": "bottom", "label": "下部" } ], "default": "center" },
+        { "type": "text", "id": "badge", "label": "都道府県バッジ", "default": "東京" },
+        { "type": "color", "id": "badge_bg_color", "label": "バッジ背景色", "default": "#C9A96E" },
+        { "type": "text", "id": "name", "label": "店舗名", "default": "ウエディングプラザ新宿" },
+        { "type": "url", "id": "url", "label": "リンク先" }
+      ]
+    },
+    {
+      "type": "simple_shop",
+      "name": "画像なし店舗（下段）",
+      "settings": [
+        { "type": "text", "id": "area", "label": "所属エリア", "default": "関東", "info": "上の「タブ名」で設定した文字と完全に一致させてください。" },
+        { "type": "text", "id": "badge", "label": "都道府県バッジ", "default": "東京" },
+        { "type": "color", "id": "badge_bg_color", "label": "バッジ背景色", "default": "#C9A96E" },
+        { "type": "text", "id": "name", "label": "店舗名", "default": "ウエディングデスク渋谷" },
+        { "type": "url", "id": "url", "label": "リンク先" }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "店舗一覧（タブ絞り込み付）",
+      "blocks": [
+        { "type": "featured_shop" },
+        { "type": "featured_shop" },
+        { "type": "featured_shop" },
+        { "type": "simple_shop" },
+        { "type": "simple_shop" },
+        { "type": "simple_shop" }
+      ]
+    }
+  ]
+}
+{% endschema %}
