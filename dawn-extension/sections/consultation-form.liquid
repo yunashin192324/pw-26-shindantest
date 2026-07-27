@@ -41,7 +41,8 @@
         {%- endif -%}
       </div>
 
-      {%- form 'contact', id: 'consultation-form-' | append: section.id -%}
+      {%- assign consultation_form_id = 'consultation-form-' | append: section.id -%}
+      {%- form 'contact', id: consultation_form_id -%}
         <input type="hidden" name="contact[お問い合わせ種別]" value="{{ section.settings.inquiry_type_label | default: 'オンライン相談' }}">
 
         {%- if form.posted_successfully? -%}
