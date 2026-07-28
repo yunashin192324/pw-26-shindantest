@@ -251,27 +251,41 @@
 
   /* ---------- 結果：導入(コンパクト・写真なし) ---------- */
   #destination-quiz-{{ section.id }} .dq-result-intro {
-    min-height: 46vh; display: flex; flex-direction: column; align-items: center; justify-content: center;
-    text-align: center; padding: clamp(64px, 10vh, 110px) clamp(24px, 6vw, 64px);
+    min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: clamp(48px, 7vh, 80px) clamp(24px, 6vw, 64px);
   }
 
-  /* ---------- 結果：1件ずつフルブリードの作品パネル ---------- */
+  /* ---------- 結果：写真パネル。PCは3枚横並び(トリプティク)で一目で見える、
+     スマホは縦積みだが100vhよりやや低くして「間延び」させない ---------- */
   #destination-quiz-{{ section.id }} .dq-result-list { display: block; }
   #destination-quiz-{{ section.id }} .dq-result-card {
     position: relative; display: flex; align-items: flex-end;
-    min-height: 100svh; text-decoration: none; color: #fdfcfa; overflow: hidden;
+    min-height: 78svh; text-decoration: none; color: #fdfcfa; overflow: hidden;
+  }
+  @media (min-width: 900px) {
+    #destination-quiz-{{ section.id }} .dq-result-list { display: flex; height: 88vh; }
+    #destination-quiz-{{ section.id }} .dq-result-card { flex: 1 1 0; min-height: 100%; height: 100%; }
   }
   #destination-quiz-{{ section.id }} .dq-result-card .dq-photo-bg img { transition: transform 1.2s cubic-bezier(.22,1,.36,1), filter 1.2s ease; }
   #destination-quiz-{{ section.id }} .dq-result-card:hover .dq-photo-bg img { transform: scale(1.045); filter: brightness(1.04); }
-  #destination-quiz-{{ section.id }} .dq-result-body { position: relative; z-index: 1; width: 100%; padding: clamp(28px, 6vw, 72px); }
-  #destination-quiz-{{ section.id }} .dq-result-rank {
-    font-family: var(--font-heading-family, serif); font-style: italic; font-size: 13px; letter-spacing: 0.1em;
-    color: var(--dq-gold-light); display: block; margin-bottom: 14px;
+  #destination-quiz-{{ section.id }} .dq-result-card .dq-photo-bg::after {
+    background: linear-gradient(180deg, rgba(10,9,7,0.15) 0%, rgba(10,9,7,0.2) 35%, rgba(10,9,7,0.85) 100%);
   }
-  #destination-quiz-{{ section.id }} .dq-result-name { font-family: var(--font-heading-family, serif); font-weight: 400; font-size: clamp(30px, 5vw, 54px); margin: 0 0 14px; }
+  #destination-quiz-{{ section.id }} .dq-result-body { position: relative; z-index: 1; width: 100%; padding: clamp(24px, 4vw, 40px); }
+  #destination-quiz-{{ section.id }} .dq-result-rank {
+    font-family: var(--font-heading-family, serif); font-style: italic; font-size: 14px; letter-spacing: 0.1em;
+    color: var(--dq-gold-light); display: block; margin-bottom: 10px;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.5);
+  }
+  #destination-quiz-{{ section.id }} .dq-result-name {
+    font-family: var(--font-heading-family, serif); font-weight: 500;
+    font-size: clamp(32px, 4.6vw, 46px); line-height: 1.15; margin: 0 0 16px;
+    text-shadow: 0 4px 20px rgba(0,0,0,0.55);
+  }
   #destination-quiz-{{ section.id }} .dq-result-view {
     display: inline-flex; align-items: center; gap: 8px;
-    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: #fdfcfa; opacity: 0.85;
+    font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #fdfcfa;
+    font-weight: 600; opacity: 0.95; text-shadow: 0 2px 10px rgba(0,0,0,0.5);
   }
   #destination-quiz-{{ section.id }} .dq-result-card:hover .dq-result-view { opacity: 1; }
 
