@@ -134,7 +134,11 @@
     --dq-muted: #85807a;
     --dq-gold: #B8860B;
     --dq-gold-light: #D4A843;
-    --dq-hair: rgba(255,255,255,0.28);
+    --dq-hair: {{ section.settings.choice_divider_color | default: 'rgba(255,255,255,0.28)' }};
+    --dq-choice-index-color: {{ section.settings.choice_index_color | default: '#D4A843' }};
+    --dq-choice-index-size: {{ section.settings.choice_index_size | default: 11 }}px;
+    --dq-choice-divider-thickness: {{ section.settings.choice_divider_thickness | default: 1 }}px;
+    --dq-result-name-color: {{ section.settings.result_name_color | default: '#fdfcfa' }};
     font-family: var(--font-body-family, sans-serif);
     background: var(--dq-paper);
     color: var(--dq-ink);
@@ -256,14 +260,14 @@
   #destination-quiz-{{ section.id }} .dq-choice {
     display: flex; align-items: baseline; gap: 18px;
     width: 100%; text-align: left;
-    background: none; border: none; border-top: 1px solid var(--dq-hair);
+    background: none; border: none; border-top: var(--dq-choice-divider-thickness) solid var(--dq-hair);
     padding: 19px 2px;
     font-size: 16px; color: inherit;
     cursor: pointer; position: relative; will-change: transform;
     transition: transform 0.5s cubic-bezier(.22,1,.36,1);
   }
-  #destination-quiz-{{ section.id }} .dq-choices > button:last-child { border-bottom: 1px solid var(--dq-hair); }
-  #destination-quiz-{{ section.id }} .dq-choice-index { font-family: var(--font-heading-family, serif); font-style: italic; font-size: 11px; color: var(--dq-gold-light); flex-shrink: 0; width: 20px; }
+  #destination-quiz-{{ section.id }} .dq-choices > button:last-child { border-bottom: var(--dq-choice-divider-thickness) solid var(--dq-hair); }
+  #destination-quiz-{{ section.id }} .dq-choice-index { font-family: var(--font-heading-family, serif); font-style: italic; font-size: var(--dq-choice-index-size); color: var(--dq-choice-index-color); flex-shrink: 0; width: 20px; }
   #destination-quiz-{{ section.id }} .dq-choice-label { flex: 1; }
   #destination-quiz-{{ section.id }} .dq-choice-arrow { opacity: 0; transform: translateX(-6px); transition: opacity 0.4s ease, transform 0.4s cubic-bezier(.22,1,.36,1); color: var(--dq-gold-light); font-size: 13px; }
   #destination-quiz-{{ section.id }} .dq-choice:hover { transform: translateX(10px); }
@@ -301,6 +305,7 @@
   #destination-quiz-{{ section.id }} .dq-result-name {
     font-family: var(--font-heading-family, serif); font-weight: 500;
     font-size: clamp(32px, 4.6vw, 46px); line-height: 1.15; margin: 0 0 16px;
+    color: var(--dq-result-name-color);
     text-shadow: 0 4px 20px rgba(0,0,0,0.55);
   }
   #destination-quiz-{{ section.id }} .dq-result-view {
@@ -831,6 +836,12 @@
     { "type": "header", "content": "質問ページの文字色" },
     { "type": "color", "id": "question_title_color", "label": "質問文の色", "default": "#fdfcfa" },
     { "type": "color", "id": "question_choice_color", "label": "選択肢の色", "default": "#fdfcfa" },
+    { "type": "color", "id": "choice_divider_color", "label": "選択肢の罫線の色", "default": "rgba(255,255,255,0.28)" },
+    { "type": "range", "id": "choice_divider_thickness", "label": "選択肢の罫線の太さ", "min": 1, "max": 4, "step": 1, "unit": "px", "default": 1 },
+    { "type": "color", "id": "choice_index_color", "label": "選択肢の番号の色", "default": "#D4A843" },
+    { "type": "range", "id": "choice_index_size", "label": "選択肢の番号の大きさ", "min": 8, "max": 20, "step": 1, "unit": "px", "default": 11 },
+    { "type": "header", "content": "結果ページの文字色" },
+    { "type": "color", "id": "result_name_color", "label": "都市名の色", "default": "#fdfcfa" },
     { "type": "header", "content": "モーション設定" },
     { "type": "checkbox", "id": "enable_custom_cursor", "label": "カーソル追従の円を表示する（PCのみ）", "default": true },
     { "type": "checkbox", "id": "enable_smooth_scroll", "label": "慣性のあるスムーススクロールを有効にする", "default": true, "info": "このページ内のスクロール全体に適用されます。" }
