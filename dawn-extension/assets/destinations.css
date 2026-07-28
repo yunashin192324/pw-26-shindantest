@@ -39,7 +39,7 @@
 .destinations-scope ul, .destinations-scope ol { list-style: none; margin: 0; padding: 0; }
 .destinations-scope button, .destinations-scope input { font: inherit; color: inherit; }
 .destinations-scope button { background: none; border: none; cursor: pointer; }
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; overflow-x: hidden; }
 
 /* ---------- Design tokens (仕様書指定のHEX値をそのまま使用) ---------- */
 .destinations-scope {
@@ -385,7 +385,16 @@ html { scroll-behavior: smooth; }
 .dst-schedule-item { display: grid; grid-template-columns: 110px 1fr; gap: 20px; padding: 20px 0; border-bottom: 1px solid rgba(0,0,0,0.08); }
 .dst-schedule-item:last-child { border-bottom: none; }
 .dst-schedule-time { font-family: var(--dst-font-sans); color: var(--dst-gold); font-weight: 700; font-variant-numeric: lining-nums tabular-nums; }
-.dst-schedule-desc { font-size: 0.9rem; white-space: pre-line; line-height: 1.7; }
+.dst-schedule-desc {
+  font-size: 0.9rem; white-space: pre-line; line-height: 1.7;
+  /* グリッド項目の既定min-widthはauto(=内容のmin-content幅)のため、
+     word-break:keep-allと組み合わさった長い日本語文がグリッドの
+     1frトラックを押し広げ、画面幅からはみ出す(ピンチアウトしないと
+     見えない)不具合が起きていた。min-width:0でトラック側の幅を
+     優先させ、通常の折り返しが効くようにする。 */
+  min-width: 0;
+  overflow-wrap: break-word;
+}
 
 /* ---------- フォトギャラリー ---------- */
 .dst-gallery-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
