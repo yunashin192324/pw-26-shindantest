@@ -1,5 +1,5 @@
 {%- comment -%}
-  destination-quiz — 撮影地 30秒診断（シネマティック・ギャラリーUI版）
+  destination-quiz — 撮影地 30秒診断（フルブリード・フォトギャラリー版）
   ==================================================================
   【診断ロジックは変更していません】
   質問データ(QUESTIONS)・スコアリング・結果マッチング(matchDestinations)・
@@ -16,25 +16,31 @@
   いない。変更したい場合は聞いてください）。
 
   ------------------------------------------------------------------
-  【今回のUI/UX刷新について】
-  参考にしたのは taotajima.jp/works/Magic の「余白・静けさ・シネマ
-  ティックな間」というデザイン思想で、コードは一切参照/複製していない
-  完全新規実装。GSAP + SplitType + Lenis をCDNから読み込み、フェード
-  ＋移動＋ぼかしを組み合わせた演出、単語単位のテキスト reveal、
-  慣性のあるスムーススクロール、カーソル追従の小さな円、ホバー時の
-  微細なチルトを実装。
+  【v2: フルブリード写真を主役にしたレイアウトへ全面変更】
+  1回目の刷新(v1)はモーションは変えたが白背景の小さなカードのままで
+  「写真が主役」になっていなかった、というフィードバックを受けての
+  作り直し。taotajima.jp/works/mtv-ultrahits/ のような「写真が画面
+  いっぱいに広がり、文字はその上に重なるだけ」という構成思想を参考に
+  （コードは一切参照・複製していない完全新規実装）、各ステップを
+  ブラウザいっぱいのフルブリード写真＋オーバーレイ文字に変更した。
 
-  【意図的に実装していない項目とその理由】
+  - イントロ：`intro_image`設定の写真を画面いっぱいに表示（未設定の
+    場合のみ、写真なしのシンプルな文字だけの構成にフォールバック）。
+  - 質問：既に読み込み済みのDestinationの写真を背景に使い回す
+    （設問ごとに切り替わる）。新しい画像設定は不要。
+  - 結果：3件を横並びカードではなく、1件ずつ画面いっぱいの写真パネル
+    として縦に並べ、スクロールしながら見る「作品集」のような構成に。
+
+  【意図的に実装していない項目とその理由】(v1から据え置き)
   - ページ遷移時のシェアード・エレメント・トランジション：
     サイト全体のリンク挙動・レイアウト(theme.liquid)に手を入れる必要が
     あり、このセクション単体の範囲を超え、他ページの動作に影響する
-    リスクが大きいため見送り。将来的に希望があれば別途相談。
+    リスクが大きいため見送り。
   - スクロール連動の背景/前景パララックス：
-    この診断はステップごとに1画面で完結するUI(長いスクロールページ
-    ではない)なので、「スクロール量」ではなく「カーソル移動量」に
-    連動した微細なパララックス(背景0.7倍・画像1.0倍・文字1.2倍相当の
-    速度差)に置き換えている。タッチ端末ではカーソルが存在しないため
-    自動的に無効になる(仕様書の「モバイルは半減」の代替として無効化)。
+    イントロ・質問は1画面完結のためカーソル移動に連動した微細な
+    パララックスに置き換え。結果パネルは実際にスクロールする構成に
+    なったため、IntersectionObserverでパネルごとの出現アニメーションを
+    実装している。
 
   【フォールバック】
   CDN読み込みに失敗した場合(オフライン環境やCDN障害時)でも診断機能
@@ -83,7 +89,7 @@
 {%- comment -%}
   全Destinationをテーマタグ付きでJSON化。themesは選択リスト
   (単一行テキストのリスト)型なので、d.themes.valueをそのまま配列
-  として使う。
+  として使う。質問ステップの背景写真としても同じデータを使い回す。
 {%- endcomment -%}
 {%- assign all_destinations = shop.metaobjects.destination.values -%}
 <script type="application/json" id="quiz-destinations-{{ section.id }}">
@@ -93,7 +99,7 @@
     {
       "name": {{ d.name_ja.value | json }},
       "url": "/pages/{{ d.slug.value }}",
-      "image": {{ d.hero_image.value | image_url: width: 700 | json }},
+      "image": {{ d.hero_image.value | image_url: width: 1600 | json }},
       "themes": [{% for t in theme_list %}{{ t | strip | downcase | json }}{% unless forloop.last %},{% endunless %}{% endfor %}]
     }{%- unless forloop.last -%},{%- endunless -%}
   {%- endfor -%}
@@ -107,286 +113,255 @@
     --dq-muted: #85807a;
     --dq-gold: #B8860B;
     --dq-gold-light: #D4A843;
-    --dq-hair: rgba(22,21,19,0.12);
+    --dq-hair: rgba(255,255,255,0.28);
     font-family: var(--font-body-family, sans-serif);
     background: var(--dq-paper);
     color: var(--dq-ink);
     position: relative;
-    overflow: hidden;
   }
   #destination-quiz-{{ section.id }} * { box-sizing: border-box; }
+  #destination-quiz-{{ section.id }} .word { display: inline-block; will-change: transform, opacity, filter; }
 
-  /* ---------- ステージ（各ステップ共通の器） ---------- */
-  #destination-quiz-{{ section.id }} .dq-stage {
-    position: relative;
-    min-height: 92vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: clamp(64px, 10vw, 120px) clamp(20px, 6vw, 64px);
-  }
-  #destination-quiz-{{ section.id }} .dq-step {
-    width: 100%;
-    max-width: 860px;
-    margin: 0 auto;
-  }
+  /* ---------- ステップ共通：写真フルブリード ---------- */
+  #destination-quiz-{{ section.id }} .dq-step { position: relative; }
   #destination-quiz-{{ section.id }} .dq-step.is-hidden { display: none; }
+  #destination-quiz-{{ section.id }} .dq-cover {
+    position: relative;
+    min-height: 100svh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: clamp(90px, 12vh, 160px) clamp(24px, 6vw, 64px);
+    overflow: hidden;
+  }
+  #destination-quiz-{{ section.id }} .dq-cover.has-photo { color: #fdfcfa; }
+  #destination-quiz-{{ section.id }} .dq-photo-bg { position: absolute; inset: 0; z-index: 0; background: #14120f; }
+  #destination-quiz-{{ section.id }} .dq-photo-bg img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+    will-change: transform, opacity, filter;
+  }
+  #destination-quiz-{{ section.id }} .dq-photo-bg::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(10,9,7,0.42) 0%, rgba(10,9,7,0.28) 42%, rgba(10,9,7,0.62) 100%);
+  }
+  #destination-quiz-{{ section.id }} .dq-cover-inner { position: relative; z-index: 1; width: 100%; max-width: 720px; text-align: center; }
 
   /* ---------- タイポグラフィ ---------- */
   #destination-quiz-{{ section.id }} .dq-eyebrow {
     font-family: var(--font-heading-family, serif);
     font-style: italic;
-    letter-spacing: 0.28em;
+    letter-spacing: 0.3em;
     text-transform: uppercase;
     font-size: 12px;
-    color: var(--dq-gold);
-    margin: 0 0 22px;
-    text-align: center;
+    color: var(--dq-gold-light);
+    margin: 0 0 26px;
   }
-  #destination-quiz-{{ section.id }} .dq-title {
+  #destination-quiz-{{ section.id }} .dq-cover:not(.has-photo) .dq-eyebrow { color: var(--dq-gold); }
+  #destination-quiz-{{ section.id }} .dq-title-xl {
     font-family: var(--font-heading-family, serif);
     font-weight: 400;
-    line-height: 1.35;
-    letter-spacing: 0.01em;
-    font-size: clamp(26px, calc(var(--font-heading-scale, 1) * 4vw), 46px);
-    text-align: center;
-    margin: 0 0 24px;
+    line-height: 1.28;
+    font-size: clamp(30px, calc(var(--font-heading-scale, 1) * 5.4vw), 58px);
+    margin: 0 0 26px;
   }
   #destination-quiz-{{ section.id }} .dq-subtitle {
     font-size: 15px;
     line-height: 1.95;
-    color: var(--dq-muted);
-    text-align: center;
-    max-width: 480px;
+    opacity: 0.88;
+    max-width: 460px;
     margin: 0 auto 48px;
-  }
-
-  /* ---------- 単語分割reveal用（SplitTypeが無い場合はブロックごとfadeにフォールバック） ---------- */
-  #destination-quiz-{{ section.id }} .word { display: inline-block; will-change: transform, opacity, filter; }
-
-  /* ---------- イントロ：画像 ---------- */
-  #destination-quiz-{{ section.id }} .dq-intro-media {
-    width: 100%;
-    max-width: 620px;
-    margin: 0 auto 56px;
-    aspect-ratio: 16/9;
-    overflow: hidden;
-    border-radius: 2px;
-  }
-  #destination-quiz-{{ section.id }} .dq-intro-media img {
-    width: 100%; height: 100%; object-fit: cover; display: block;
-    will-change: transform, opacity, filter;
   }
 
   /* ---------- CTA ---------- */
   #destination-quiz-{{ section.id }} .dq-btn {
-    display: block;
-    margin: 0 auto;
+    display: inline-block;
     padding: 18px 56px;
     border-radius: 999px;
-    border: 1px solid var(--dq-ink);
+    border: 1px solid currentColor;
     background: transparent;
-    color: var(--dq-ink);
+    color: inherit;
     font-family: var(--font-heading-family, serif);
     font-size: 14px;
     letter-spacing: 0.14em;
     text-transform: uppercase;
     cursor: pointer;
-    transition: background 0.5s cubic-bezier(.22,1,.36,1), color 0.5s cubic-bezier(.22,1,.36,1), border-color 0.5s cubic-bezier(.22,1,.36,1);
+    transition: background 0.5s cubic-bezier(.22,1,.36,1), color 0.5s cubic-bezier(.22,1,.36,1);
   }
-  #destination-quiz-{{ section.id }} .dq-btn:hover {
-    background: var(--dq-ink);
-    color: var(--dq-paper);
-  }
+  #destination-quiz-{{ section.id }} .dq-cover.has-photo .dq-btn:hover { background: #fdfcfa; color: #14120f; }
+  #destination-quiz-{{ section.id }} .dq-cover:not(.has-photo) .dq-btn:hover { background: var(--dq-ink); color: var(--dq-paper); }
   #destination-quiz-{{ section.id }} .dq-link {
-    display: block;
-    margin: 56px auto 0;
-    background: none;
-    border: none;
-    padding: 0;
-    font-size: 12px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--dq-muted);
-    cursor: pointer;
-    position: relative;
+    display: inline-block;
+    background: none; border: none; padding: 0;
+    font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: inherit; opacity: 0.75;
+    cursor: pointer; position: relative;
   }
   #destination-quiz-{{ section.id }} .dq-link::after {
-    content: '';
-    position: absolute; left: 0; right: 0; bottom: -4px; height: 1px;
+    content: ''; position: absolute; left: 0; right: 0; bottom: -4px; height: 1px;
     background: currentColor; transform: scaleX(0); transform-origin: left;
     transition: transform 0.5s cubic-bezier(.22,1,.36,1);
   }
+  #destination-quiz-{{ section.id }} .dq-link:hover { opacity: 1; }
   #destination-quiz-{{ section.id }} .dq-link:hover::after { transform: scaleX(1); }
 
-  /* ---------- 進捗（ミニマルな行番号スタイル） ---------- */
+  /* ---------- スクロール誘導(イントロのみ) ---------- */
+  #destination-quiz-{{ section.id }} .dq-scroll-cue {
+    position: absolute; left: 50%; bottom: clamp(24px, 4vh, 48px); transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    font-size: 10px; letter-spacing: 0.3em; text-transform: uppercase; opacity: 0.7; z-index: 1;
+  }
+  #destination-quiz-{{ section.id }} .dq-scroll-cue::after { content: ''; width: 1px; height: 30px; background: currentColor; opacity: 0.6; animation: dqScrollPulse 2.2s ease-in-out infinite; }
+  @keyframes dqScrollPulse { 0%,100% { opacity: 0.15; } 50% { opacity: 0.7; } }
+
+  /* ---------- 進捗(写真の上に重ねる薄いUIチロム) ---------- */
   #destination-quiz-{{ section.id }} .dq-progress {
-    display: flex; align-items: center; gap: 18px;
-    max-width: 560px; margin: 0 auto 64px;
+    position: absolute; top: clamp(24px, 5vh, 56px); left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 16px; width: min(420px, 70vw); z-index: 1;
   }
-  #destination-quiz-{{ section.id }} .dq-progress-index {
-    font-family: var(--font-heading-family, serif);
-    font-style: italic;
-    font-size: 12px;
-    letter-spacing: 0.1em;
-    color: var(--dq-muted);
-    white-space: nowrap;
-  }
-  #destination-quiz-{{ section.id }} .dq-progress-track {
-    flex: 1; height: 1px; background: var(--dq-hair); position: relative;
-  }
-  #destination-quiz-{{ section.id }} .dq-progress-fill {
-    position: absolute; left: 0; top: -1px; height: 1px; width: 0%;
-    background: var(--dq-gold);
-  }
+  #destination-quiz-{{ section.id }} .dq-progress-index { font-family: var(--font-heading-family, serif); font-style: italic; font-size: 11px; letter-spacing: 0.1em; white-space: nowrap; opacity: 0.85; }
+  #destination-quiz-{{ section.id }} .dq-progress-track { flex: 1; height: 1px; background: rgba(255,255,255,0.28); position: relative; }
+  #destination-quiz-{{ section.id }} .dq-progress-fill { position: absolute; left: 0; top: -1px; height: 1px; width: 0%; background: var(--dq-gold-light); }
 
   /* ---------- 質問文 ---------- */
   #destination-quiz-{{ section.id }} .dq-question {
     font-family: var(--font-heading-family, serif);
     font-weight: 400;
-    text-align: center;
-    font-size: clamp(20px, calc(var(--font-heading-scale, 1) * 2.6vw), 30px);
+    font-size: clamp(21px, calc(var(--font-heading-scale, 1) * 3vw), 32px);
     line-height: 1.5;
-    margin: 0 0 56px;
+    margin: 0 0 48px;
   }
 
-  /* ---------- 選択肢：ギャラリーの作品リストのようなミニマル行 ---------- */
-  #destination-quiz-{{ section.id }} .dq-choices { max-width: 560px; margin: 0 auto; }
+  /* ---------- 選択肢：写真の上のミニマルなテキスト行 ---------- */
+  #destination-quiz-{{ section.id }} .dq-choices { max-width: 480px; margin: 0 auto; }
   #destination-quiz-{{ section.id }} .dq-choice {
-    display: flex; align-items: baseline; gap: 20px;
+    display: flex; align-items: baseline; gap: 18px;
     width: 100%; text-align: left;
     background: none; border: none; border-top: 1px solid var(--dq-hair);
-    padding: 22px 4px;
-    font-size: 16px; color: var(--dq-ink);
-    cursor: pointer;
-    position: relative;
-    will-change: transform;
-    transition: transform 0.5s cubic-bezier(.22,1,.36,1), color 0.5s cubic-bezier(.22,1,.36,1);
+    padding: 19px 2px;
+    font-size: 16px; color: inherit;
+    cursor: pointer; position: relative; will-change: transform;
+    transition: transform 0.5s cubic-bezier(.22,1,.36,1);
   }
   #destination-quiz-{{ section.id }} .dq-choices > button:last-child { border-bottom: 1px solid var(--dq-hair); }
-  #destination-quiz-{{ section.id }} .dq-choice-index {
-    font-family: var(--font-heading-family, serif);
-    font-style: italic;
-    font-size: 12px;
-    color: var(--dq-gold);
-    flex-shrink: 0;
-    width: 22px;
-  }
+  #destination-quiz-{{ section.id }} .dq-choice-index { font-family: var(--font-heading-family, serif); font-style: italic; font-size: 11px; color: var(--dq-gold-light); flex-shrink: 0; width: 20px; }
   #destination-quiz-{{ section.id }} .dq-choice-label { flex: 1; }
-  #destination-quiz-{{ section.id }} .dq-choice-arrow {
-    opacity: 0; transform: translateX(-6px);
-    transition: opacity 0.4s ease, transform 0.4s cubic-bezier(.22,1,.36,1);
-    color: var(--dq-gold); font-size: 14px;
-  }
+  #destination-quiz-{{ section.id }} .dq-choice-arrow { opacity: 0; transform: translateX(-6px); transition: opacity 0.4s ease, transform 0.4s cubic-bezier(.22,1,.36,1); color: var(--dq-gold-light); font-size: 13px; }
   #destination-quiz-{{ section.id }} .dq-choice:hover { transform: translateX(10px); }
   #destination-quiz-{{ section.id }} .dq-choice:hover .dq-choice-arrow { opacity: 1; transform: translateX(0); }
-  #destination-quiz-{{ section.id }} .dq-choice:focus-visible { outline: 2px solid var(--dq-gold); outline-offset: 4px; }
+  #destination-quiz-{{ section.id }} .dq-choice:focus-visible { outline: 1px solid var(--dq-gold-light); outline-offset: 6px; }
 
-  /* ---------- 結果ヘッダー ---------- */
-  #destination-quiz-{{ section.id }} .dq-result-head { margin-bottom: 64px; }
+  /* ---------- 結果：導入(コンパクト・写真なし) ---------- */
+  #destination-quiz-{{ section.id }} .dq-result-intro {
+    min-height: 46vh; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: clamp(64px, 10vh, 110px) clamp(24px, 6vw, 64px);
+  }
 
-  /* ---------- 結果グリッド：ギャラリー作品カード ---------- */
-  #destination-quiz-{{ section.id }} .dq-result-grid {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(24px, 4vw, 48px);
-  }
-  @media (max-width: 860px) {
-    #destination-quiz-{{ section.id }} .dq-result-grid { grid-template-columns: 1fr; max-width: 420px; margin: 0 auto; }
-  }
+  /* ---------- 結果：1件ずつフルブリードの作品パネル ---------- */
+  #destination-quiz-{{ section.id }} .dq-result-list { display: block; }
   #destination-quiz-{{ section.id }} .dq-result-card {
-    display: block; text-decoration: none; color: inherit;
-    transform-style: preserve-3d; will-change: transform;
+    position: relative; display: flex; align-items: flex-end;
+    min-height: 100svh; text-decoration: none; color: #fdfcfa; overflow: hidden;
   }
-  #destination-quiz-{{ section.id }} .dq-result-media {
-    position: relative; width: 100%; aspect-ratio: 4/5; overflow: hidden; margin-bottom: 18px; background: #eee;
-  }
-  #destination-quiz-{{ section.id }} .dq-result-media img {
-    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
-    will-change: transform, opacity, filter;
-    transition: transform 0.9s cubic-bezier(.22,1,.36,1), filter 0.9s ease;
-  }
-  #destination-quiz-{{ section.id }} .dq-result-card:hover .dq-result-media img {
-    transform: scale(1.03); filter: brightness(1.05);
-  }
+  #destination-quiz-{{ section.id }} .dq-result-card .dq-photo-bg img { transition: transform 1.2s cubic-bezier(.22,1,.36,1), filter 1.2s ease; }
+  #destination-quiz-{{ section.id }} .dq-result-card:hover .dq-photo-bg img { transform: scale(1.045); filter: brightness(1.04); }
+  #destination-quiz-{{ section.id }} .dq-result-body { position: relative; z-index: 1; width: 100%; padding: clamp(28px, 6vw, 72px); }
   #destination-quiz-{{ section.id }} .dq-result-rank {
-    position: absolute; top: 14px; left: 14px;
-    font-family: var(--font-heading-family, serif); font-style: italic;
-    font-size: 12px; letter-spacing: 0.06em; color: #fff;
-    text-shadow: 0 1px 6px rgba(0,0,0,0.5);
+    font-family: var(--font-heading-family, serif); font-style: italic; font-size: 13px; letter-spacing: 0.1em;
+    color: var(--dq-gold-light); display: block; margin-bottom: 14px;
   }
-  #destination-quiz-{{ section.id }} .dq-result-name {
-    font-family: var(--font-heading-family, serif);
-    font-size: 18px; margin: 0 0 4px;
-  }
+  #destination-quiz-{{ section.id }} .dq-result-name { font-family: var(--font-heading-family, serif); font-weight: 400; font-size: clamp(30px, 5vw, 54px); margin: 0 0 14px; }
   #destination-quiz-{{ section.id }} .dq-result-view {
-    font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dq-gold);
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: #fdfcfa; opacity: 0.85;
+  }
+  #destination-quiz-{{ section.id }} .dq-result-card:hover .dq-result-view { opacity: 1; }
+
+  /* ---------- 結果の終わり ---------- */
+  #destination-quiz-{{ section.id }} .dq-result-end {
+    min-height: 34vh; display: flex; align-items: center; justify-content: center;
+    background: var(--dq-paper); color: var(--dq-ink);
   }
 
   /* ---------- 空状態 ---------- */
-  #destination-quiz-{{ section.id }} .dq-empty { text-align: center; font-size: 14px; color: var(--dq-muted); }
+  #destination-quiz-{{ section.id }} .dq-empty { text-align: center; font-size: 14px; opacity: 0.75; }
 
-  /* ---------- カスタムカーソル(マウス精密ポインタのみ) ---------- */
+  /* ---------- カスタムカーソル(精密ポインタのみ) ---------- */
   #destination-quiz-{{ section.id }} .dq-cursor {
     position: fixed; top: 0; left: 0; width: 10px; height: 10px; margin: -5px 0 0 -5px;
-    border-radius: 50%; background: var(--dq-gold);
-    pointer-events: none; z-index: 60; opacity: 0;
-    transition: width 0.35s cubic-bezier(.22,1,.36,1), height 0.35s cubic-bezier(.22,1,.36,1), margin 0.35s cubic-bezier(.22,1,.36,1), opacity 0.3s ease, background 0.3s ease;
+    border-radius: 50%; background: var(--dq-gold-light);
+    pointer-events: none; z-index: 60; opacity: 0; mix-blend-mode: difference;
+    transition: width 0.35s cubic-bezier(.22,1,.36,1), height 0.35s cubic-bezier(.22,1,.36,1), margin 0.35s cubic-bezier(.22,1,.36,1), opacity 0.3s ease;
     will-change: transform;
   }
-  #destination-quiz-{{ section.id }}.dq-cursor-active .dq-stage { cursor: none; }
+  #destination-quiz-{{ section.id }}.dq-cursor-active { cursor: none; }
   #destination-quiz-{{ section.id }} .dq-cursor.is-visible { opacity: 1; }
-  #destination-quiz-{{ section.id }} .dq-cursor.is-hover { width: 34px; height: 34px; margin: -17px 0 0 -17px; background: transparent; border: 1px solid var(--dq-gold); }
+  #destination-quiz-{{ section.id }} .dq-cursor.is-hover { width: 40px; height: 40px; margin: -20px 0 0 -20px; background: #fdfcfa; }
 
   /* ---------- CSSフォールバック（GSAP未読込 or prefers-reduced-motion） ---------- */
-  #destination-quiz-{{ section.id }} .dq-step.dq-fallback-in { animation: dqFallbackIn 0.5s ease both; }
+  #destination-quiz-{{ section.id }} .dq-fallback-in { animation: dqFallbackIn 0.5s ease both; }
   @keyframes dqFallbackIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
 
+  @media (max-width: 640px) {
+    #destination-quiz-{{ section.id }} .dq-result-body { padding-bottom: 56px; }
+  }
   @media (prefers-reduced-motion: reduce) {
     #destination-quiz-{{ section.id }} * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
   }
 </style>
 
 <div id="destination-quiz-{{ section.id }}">
-  <section class="dq-stage" data-dq-stage>
+  <section data-dq-stage>
     <span class="dq-cursor" data-dq-cursor aria-hidden="true"></span>
 
     {% comment %} --- イントロ --- {% endcomment %}
     <div class="dq-step" data-step="intro">
-      {%- if section.settings.intro_image != blank -%}
-      <div class="dq-intro-media" data-dq-parallax="0.6">
-        <img data-dq-media
-          src="{{ section.settings.intro_image | image_url: width: 1400 }}"
-          srcset="{{ section.settings.intro_image | image_url: width: 800 }} 800w, {{ section.settings.intro_image | image_url: width: 1400 }} 1400w"
-          sizes="(min-width: 768px) 620px, 90vw"
-          alt=""
-          loading="eager">
-      </div>
-      {%- endif -%}
-      <div data-dq-parallax="1.2">
-        <p class="dq-eyebrow" data-dq-text>{{ section.settings.eyebrow | default: '30 SECONDS' }}</p>
-        <h2 class="dq-title" data-dq-text data-dq-split>{{ section.settings.heading | default: 'あなたにぴったりの撮影地診断' }}</h2>
-        <p class="dq-subtitle" data-dq-text>{{ section.settings.intro_text | default: '簡単な質問に答えるだけで、おふたりに合う撮影地をご提案します。' }}</p>
-        <button type="button" class="dq-btn quiz-start" data-dq-text>{{ section.settings.start_label | default: '診断をはじめる' }}</button>
+      <div class="dq-cover{% if section.settings.intro_image != blank %} has-photo{% endif %}">
+        {%- if section.settings.intro_image != blank -%}
+        <div class="dq-photo-bg" data-dq-parallax="0.5">
+          <img data-dq-media
+            src="{{ section.settings.intro_image | image_url: width: 2000 }}"
+            srcset="{{ section.settings.intro_image | image_url: width: 1000 }} 1000w, {{ section.settings.intro_image | image_url: width: 2000 }} 2000w"
+            sizes="100vw"
+            alt=""
+            loading="eager">
+        </div>
+        {%- endif -%}
+        <div class="dq-cover-inner" data-dq-parallax="1.2">
+          <p class="dq-eyebrow" data-dq-text>{{ section.settings.eyebrow | default: '30 SECONDS' }}</p>
+          <h2 class="dq-title-xl" data-dq-text data-dq-split>{{ section.settings.heading | default: 'あなたにぴったりの撮影地診断' }}</h2>
+          <p class="dq-subtitle" data-dq-text>{{ section.settings.intro_text | default: '簡単な質問に答えるだけで、おふたりに合う撮影地をご提案します。' }}</p>
+          <button type="button" class="dq-btn quiz-start" data-dq-text>{{ section.settings.start_label | default: '診断をはじめる' }}</button>
+        </div>
+        <p class="dq-scroll-cue" data-dq-text>Scroll</p>
       </div>
     </div>
 
-    {% comment %} --- 質問（テンプレート、JSで複製して差し込む） --- {% endcomment %}
+    {% comment %} --- 質問（テンプレート、JSで複製して差し込む。背景写真も設問ごとに切替） --- {% endcomment %}
     <div class="dq-step is-hidden" data-step="question-template">
-      <div class="dq-progress">
-        <span class="dq-progress-index quiz-progress"></span>
-        <span class="dq-progress-track"><span class="dq-progress-fill quiz-progress-fill"></span></span>
+      <div class="dq-cover has-photo">
+        <div class="dq-photo-bg" data-dq-question-bg>
+          <img data-dq-media alt="">
+        </div>
+        <div class="dq-progress">
+          <span class="dq-progress-index quiz-progress"></span>
+          <span class="dq-progress-track"><span class="dq-progress-fill quiz-progress-fill"></span></span>
+        </div>
+        <div class="dq-cover-inner">
+          <h3 class="dq-question quiz-question-text" data-dq-split></h3>
+          <div class="dq-choices quiz-choices"></div>
+        </div>
       </div>
-      <h3 class="dq-question quiz-question-text" data-dq-split></h3>
-      <div class="dq-choices quiz-choices"></div>
     </div>
 
-    {% comment %} --- 結果 --- {% endcomment %}
+    {% comment %} --- 結果：導入(コンパクト) + 1件ずつフルブリードの作品パネル --- {% endcomment %}
     <div class="dq-step is-hidden" data-step="result">
-      <div class="dq-result-head">
+      <div class="dq-result-intro">
         <p class="dq-eyebrow">RESULT</p>
-        <h2 class="dq-title" data-dq-split>{{ section.settings.result_heading | default: 'おふたりにおすすめの撮影地' }}</h2>
+        <h2 class="dq-title-xl" data-dq-split>{{ section.settings.result_heading | default: 'おふたりにおすすめの撮影地' }}</h2>
       </div>
-      <div class="dq-result-grid quiz-results"></div>
-      <button type="button" class="dq-link quiz-restart">{{ section.settings.restart_label | default: 'もう一度診断する' }}</button>
+      <div class="dq-result-list quiz-results"></div>
+      <div class="dq-result-end">
+        <button type="button" class="dq-link quiz-restart">{{ section.settings.restart_label | default: 'もう一度診断する' }}</button>
+      </div>
     </div>
   </section>
 </div>
@@ -397,6 +372,7 @@
   if (!root) return;
   var stage = root.querySelector('[data-dq-stage]');
   var destinationsData = JSON.parse(document.getElementById('quiz-destinations-{{ section.id }}').textContent || '[]');
+  var photoPool = destinationsData.filter(function (d) { return !!d.image; });
   var enableCursor = {{ section.settings.enable_custom_cursor | default: true | json }};
   var enableSmoothScroll = {{ section.settings.enable_smooth_scroll | default: true | json }};
 
@@ -451,6 +427,7 @@
   var progressFillEl = questionTemplateEl.querySelector('.quiz-progress-fill');
   var questionTextEl = questionTemplateEl.querySelector('.quiz-question-text');
   var choicesEl = questionTemplateEl.querySelector('.quiz-choices');
+  var questionBgImg = questionTemplateEl.querySelector('[data-dq-question-bg] img');
   var resultsEl = resultEl.querySelector('.quiz-results');
 
   function resetScores() {
@@ -470,10 +447,16 @@
     return btn;
   }
 
+  function questionBackgroundFor(index) {
+    if (!photoPool.length) return '';
+    return photoPool[index % photoPool.length].image;
+  }
+
   function showQuestion(index) {
     var q = QUESTIONS[index];
     progressEl.textContent = String(index + 1).padStart(2, '0') + ' / ' + String(QUESTIONS.length).padStart(2, '0');
     animateProgress(Math.round((index / QUESTIONS.length) * 100));
+    if (questionBgImg) { questionBgImg.src = questionBackgroundFor(index); }
     questionTextEl.textContent = q.text;
     choicesEl.innerHTML = '';
     q.choices.forEach(function (choice, i) {
@@ -513,20 +496,28 @@
     var results = matchDestinations();
     resultsEl.innerHTML = '';
     if (results.length === 0) {
-      resultsEl.innerHTML = '<p class="dq-empty">診断結果を表示する撮影地がまだ登録されていません。</p>';
+      resultsEl.innerHTML = '<div class="dq-result-intro"><p class="dq-empty">診断結果を表示する撮影地がまだ登録されていません。</p></div>';
     } else {
       results.forEach(function (d, i) {
         var a = document.createElement('a');
         a.href = d.url;
         a.className = 'dq-result-card';
-        var imgHtml = d.image
-          ? '<div class="dq-result-media"><span class="dq-result-rank">No. ' + String(i + 1).padStart(2, '0') + '</span><img data-dq-media src="' + d.image + '" alt="' + d.name + '" loading="lazy"></div>'
-          : '<div class="dq-result-media"><span class="dq-result-rank">No. ' + String(i + 1).padStart(2, '0') + '</span></div>';
-        a.innerHTML = imgHtml + '<h4 class="dq-result-name">' + d.name + '</h4><span class="dq-result-view">View destination</span>';
+        var bgHtml = d.image
+          ? '<div class="dq-photo-bg"><img data-dq-media src="' + d.image + '" alt="' + d.name + '" loading="lazy"></div>'
+          : '<div class="dq-photo-bg"></div>';
+        a.innerHTML = bgHtml +
+          '<div class="dq-result-body">' +
+            '<span class="dq-result-rank">No. ' + String(i + 1).padStart(2, '0') + '</span>' +
+            '<h4 class="dq-result-name">' + d.name + '</h4>' +
+            '<span class="dq-result-view">View destination <span aria-hidden="true">＞</span></span>' +
+          '</div>';
         resultsEl.appendChild(a);
       });
     }
-    transitionStep([introEl, questionTemplateEl], resultEl, function () { attachTilt(resultsEl.querySelectorAll('.dq-result-card')); });
+    transitionStep([introEl, questionTemplateEl], resultEl, function () {
+      observeResultPanels(resultsEl.querySelectorAll('.dq-result-card'));
+      attachTilt(resultsEl.querySelectorAll('.dq-result-card'));
+    });
   }
 
   root.querySelector('.quiz-start').addEventListener('click', function () {
@@ -536,7 +527,7 @@
   root.querySelector('.quiz-restart').addEventListener('click', function () {
     resetScores();
     animateProgress(0);
-    transitionStep(resultEl, introEl, function () { playIntro(true); });
+    transitionStep(resultEl, introEl, function () { playIntro(); });
   });
 
   /* ================================================================
@@ -549,9 +540,7 @@
   var isMobile = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
   var EASE = 'cubic-bezier(0.22,1,0.36,1)';
 
-  function libsReady() {
-    return !!(window.gsap);
-  }
+  function libsReady() { return !!(window.gsap); }
 
   function animateProgress(pct) {
     if (libsReady() && !reduceMotion) {
@@ -591,7 +580,7 @@
   }
 
   /* ---------- ページロード演出：背景→画像→タイトル→サブタイトル→UI、計約1.5秒 ---------- */
-  function playIntro(isRestart) {
+  function playIntro() {
     var media = introEl.querySelector('[data-dq-media]');
     var texts = introEl.querySelectorAll('[data-dq-text]');
     var title = introEl.querySelector('[data-dq-split]');
@@ -604,14 +593,14 @@
     var tl = gsap.timeline({ defaults: { ease: EASE } });
     tl.fromTo(introEl, { opacity: 0 }, { opacity: 1, duration: 0.35 });
     if (media) {
-      tl.fromTo(media, { opacity: 0, scale: 1.08, filter: 'blur(12px)' }, { opacity: 1, scale: 1, filter: 'blur(0px)', duration: 0.7 }, '-=0.1');
+      tl.fromTo(media, { opacity: 0, scale: 1.08, filter: 'blur(14px)' }, { opacity: 1, scale: 1, filter: 'blur(0px)', duration: 0.8 }, '-=0.1');
     }
     var titleSplit = title ? splitWords(title) : null;
     if (titleSplit) {
-      tl.fromTo(titleSplit.words, { opacity: 0, y: 24, filter: 'blur(6px)' }, {
+      tl.fromTo(titleSplit.words, { opacity: 0, y: 26, filter: 'blur(6px)' }, {
         opacity: 1, y: 0, filter: 'blur(0px)', duration: 0.7, stagger: 0.045,
         onComplete: function () { titleSplit.revert(); }
-      }, media ? '-=0.35' : '-=0.1');
+      }, media ? '-=0.4' : '-=0.1');
     }
     texts.forEach(function (el, i) {
       if (el === title) return;
@@ -646,7 +635,6 @@
   function revealStepContent(stepEl) {
     if (stepEl === resultEl) {
       revealWords(resultEl.querySelector('[data-dq-split]'), 0.1);
-      staggerIn(resultsEl.querySelectorAll('.dq-result-card'), 0.25);
     }
   }
 
@@ -665,6 +653,37 @@
     }
   }
 
+  /* ---------- 結果パネル：スクロールで画面内に入ったら出現(IntersectionObserver) ---------- */
+  function observeResultPanels(panels) {
+    var items = Array.prototype.slice.call(panels);
+    if (!items.length) return;
+    items.forEach(function (panel) {
+      var body = panel.querySelector('.dq-result-body');
+      var img = panel.querySelector('img');
+      if (libsReady() && !reduceMotion) {
+        gsap.set(body, { opacity: 0, y: 30 });
+        if (img) gsap.set(img, { scale: 1.08, filter: 'blur(10px)' });
+      } else {
+        panel.classList.add('dq-fallback-in');
+        return;
+      }
+      if (!('IntersectionObserver' in window)) {
+        gsap.to(body, { opacity: 1, y: 0, duration: 0.8, ease: EASE });
+        if (img) gsap.to(img, { scale: 1, filter: 'blur(0px)', duration: 1, ease: EASE });
+        return;
+      }
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (!entry.isIntersecting) return;
+          gsap.to(body, { opacity: 1, y: 0, duration: 0.8, ease: EASE });
+          if (img) gsap.to(img, { scale: 1, filter: 'blur(0px)', duration: 1, ease: EASE });
+          io.unobserve(panel);
+        });
+      }, { threshold: 0.35 });
+      io.observe(panel);
+    });
+  }
+
   /* ---------- カーソル追従の小さな円（精密ポインタのみ） ---------- */
   function initCursor() {
     if (!enableCursor || !finePointer || reduceMotion) return;
@@ -673,51 +692,52 @@
     root.classList.add('dq-cursor-active');
     var moveX = libsReady() ? gsap.quickTo(dot, 'x', { duration: 0.35, ease: 'power3' }) : null;
     var moveY = libsReady() ? gsap.quickTo(dot, 'y', { duration: 0.35, ease: 'power3' }) : null;
-    stage.addEventListener('mousemove', function (e) {
+    root.addEventListener('mousemove', function (e) {
       dot.classList.add('is-visible');
       if (moveX && moveY) { moveX(e.clientX); moveY(e.clientY); }
       else { dot.style.transform = 'translate(' + e.clientX + 'px,' + e.clientY + 'px)'; }
     });
-    stage.addEventListener('mouseleave', function () { dot.classList.remove('is-visible'); });
+    root.addEventListener('mouseleave', function () { dot.classList.remove('is-visible'); });
     var hoverTargets = 'button, a';
-    stage.addEventListener('mouseover', function (e) {
+    root.addEventListener('mouseover', function (e) {
       if (e.target.closest && e.target.closest(hoverTargets)) dot.classList.add('is-hover');
     });
-    stage.addEventListener('mouseout', function (e) {
+    root.addEventListener('mouseout', function (e) {
       if (e.target.closest && e.target.closest(hoverTargets)) dot.classList.remove('is-hover');
     });
   }
 
-  /* ---------- 結果カードの微細チルト（3deg以内、精密ポインタのみ） ---------- */
+  /* ---------- 結果パネルの微細チルト（3deg以内、精密ポインタのみ） ---------- */
   function attachTilt(cards) {
     if (!finePointer || reduceMotion || !libsReady()) return;
     Array.prototype.forEach.call(cards, function (card) {
-      var rotX = gsap.quickTo(card, 'rotateX', { duration: 0.4, ease: 'power3' });
-      var rotY = gsap.quickTo(card, 'rotateY', { duration: 0.4, ease: 'power3' });
-      card.style.perspective = '600px';
+      var img = card.querySelector('img');
+      if (!img) return;
+      var moveX = gsap.quickTo(img, 'xPercent', { duration: 0.5, ease: 'power3' });
+      var moveY = gsap.quickTo(img, 'yPercent', { duration: 0.5, ease: 'power3' });
       card.addEventListener('mousemove', function (e) {
         var r = card.getBoundingClientRect();
         var px = (e.clientX - r.left) / r.width - 0.5;
         var py = (e.clientY - r.top) / r.height - 0.5;
-        rotY(px * 6);
-        rotX(py * -6);
+        moveX(px * 2.5);
+        moveY(py * 2.5);
       });
-      card.addEventListener('mouseleave', function () { rotX(0); rotY(0); });
+      card.addEventListener('mouseleave', function () { moveX(0); moveY(0); });
     });
   }
 
-  /* ---------- カーソル連動パララックス（スクロールではなくポインタ移動に連動） ---------- */
+  /* ---------- カーソル連動パララックス（スクロールではなくポインタ移動に連動、イントロのみ） ---------- */
   function initPointerParallax() {
     if (!finePointer || reduceMotion || !libsReady() || isMobile) return;
     var layers = introEl.querySelectorAll('[data-dq-parallax]');
     if (!layers.length) return;
-    stage.addEventListener('mousemove', function (e) {
-      var r = stage.getBoundingClientRect();
+    root.addEventListener('mousemove', function (e) {
+      var r = root.getBoundingClientRect();
       var px = (e.clientX - r.left) / r.width - 0.5;
       var py = (e.clientY - r.top) / r.height - 0.5;
       layers.forEach(function (layer) {
         var speed = parseFloat(layer.getAttribute('data-dq-parallax')) || 1;
-        gsap.to(layer, { x: px * 10 * speed, y: py * 6 * speed, duration: 0.6, ease: 'power3' });
+        gsap.to(layer, { x: px * 12 * speed, y: py * 8 * speed, duration: 0.6, ease: 'power3' });
       });
     });
   }
@@ -738,7 +758,7 @@
 
   /* ---------- 初期化：ライブラリの読み込みを少し待ってから開始 ---------- */
   function boot() {
-    playIntro(false);
+    playIntro();
     initCursor();
     initPointerParallax();
     initSmoothScroll();
@@ -762,11 +782,11 @@
     { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "30 SECONDS" },
     { "type": "text", "id": "heading", "label": "見出し", "default": "あなたにぴったりの撮影地診断" },
     { "type": "textarea", "id": "intro_text", "label": "説明文", "default": "簡単な質問に答えるだけで、おふたりに合う撮影地をご提案します。" },
-    { "type": "image_picker", "id": "intro_image", "label": "冒頭の画像（任意）", "info": "設定すると、ページ読み込み時にゆっくり浮かび上がる演出が入ります。空欄でも問題なく動作します。" },
+    { "type": "image_picker", "id": "intro_image", "label": "冒頭の画像", "info": "画面いっぱいに表示されます。設定を強く推奨します（未設定の場合は写真なしのシンプルな構成になります）。" },
     { "type": "text", "id": "start_label", "label": "開始ボタン文言", "default": "診断をはじめる" },
     { "type": "text", "id": "result_heading", "label": "結果見出し", "default": "おふたりにおすすめの撮影地" },
     { "type": "text", "id": "restart_label", "label": "やり直しボタン文言", "default": "もう一度診断する" },
-    { "type": "header", "content": "配色" },
+    { "type": "header", "content": "配色（写真なしの箇所にのみ適用）" },
     { "type": "color", "id": "bg_color", "label": "背景色", "default": "#FAF8F5" },
     { "type": "color", "id": "text_color", "label": "文字色", "default": "#161513" },
     { "type": "header", "content": "モーション設定" },
