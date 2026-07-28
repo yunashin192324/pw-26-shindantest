@@ -357,7 +357,8 @@
             srcset="{{ section.settings.intro_image | image_url: width: 1000 }} 1000w, {{ section.settings.intro_image | image_url: width: 2000 }} 2000w"
             sizes="100vw"
             alt=""
-            loading="eager">
+            loading="eager"
+            width="2000" height="1125">
         </div>
         {%- endif -%}
         <div class="dq-cover-inner" data-dq-parallax="1.2">
@@ -374,7 +375,7 @@
     <div class="dq-step is-hidden" data-step="question-template">
       <div class="dq-cover has-photo">
         <div class="dq-photo-bg" data-dq-question-bg>
-          <img data-dq-media alt="">
+          <img data-dq-media alt="" width="1600" height="900">
         </div>
         <div class="dq-progress">
           <span class="dq-progress-index quiz-progress"></span>
