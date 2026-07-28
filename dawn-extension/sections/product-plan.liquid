@@ -202,6 +202,16 @@
 {%- endcomment -%}
 {%- assign plan_branch = mf.branch.value -%}
 {%- assign faq_blocks = section.blocks | where: 'type', 'faq' -%}
+{%- comment -%}
+  「質問」欄はデフォルト値("質問文をここに入力")が入っているため、
+  ブロックを追加しただけ(未入力)でも中身があるように見えてしまう。
+  「回答」欄には既定値が無いので、回答が空のブロックは未入力とみなし、
+  件数カウントからも除外する。
+{%- endcomment -%}
+{%- assign faq_blocks_filled_count = 0 -%}
+{%- for block in faq_blocks -%}
+  {%- if block.settings.answer != blank -%}{%- assign faq_blocks_filled_count = faq_blocks_filled_count | plus: 1 -%}{%- endif -%}
+{%- endfor -%}
 
 {%- comment -%} 注意事項 {%- endcomment -%}
 {%- assign plan_notes_text = mf.plan_notes.value -%}
@@ -240,7 +250,7 @@
   }
 }
 </script>
-{%- if mf_faqs_lines.size > 0 or faq_blocks.size > 0 -%}
+{%- if mf_faqs_lines.size > 0 or faq_blocks_filled_count > 0 -%}
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -259,12 +269,16 @@
         {%- endif -%}
       {%- endfor -%}
     {%- else -%}
+      {%- assign faq_rendered_index = 0 -%}
       {%- for block in faq_blocks -%}
-        {
-          "@type": "Question",
-          "name": {{ block.settings.question | strip_html | json }},
-          "acceptedAnswer": { "@type": "Answer", "text": {{ block.settings.answer | strip_html | json }} }
-        }{%- unless forloop.last -%},{%- endunless -%}
+        {%- if block.settings.answer != blank -%}
+          {%- assign faq_rendered_index = faq_rendered_index | plus: 1 -%}
+          {
+            "@type": "Question",
+            "name": {{ block.settings.question | strip_html | json }},
+            "acceptedAnswer": { "@type": "Answer", "text": {{ block.settings.answer | strip_html | json }} }
+          }{%- if faq_rendered_index < faq_blocks_filled_count -%},{%- endif -%}
+        {%- endif -%}
       {%- endfor -%}
     {%- endif -%}
   ]
@@ -697,7 +711,7 @@
   {%- render 'branch-info', branch: plan_branch -%}
 
   {% comment %} --- FAQ --- {% endcomment %}
-  {% if mf_faqs_lines.size > 0 or faq_blocks.size > 0 %}
+  {% if mf_faqs_lines.size > 0 or faq_blocks_filled_count > 0 %}
   <section class="py-16 md:py-24">
     <div class="max-w-3xl mx-auto px-6">
       <div class="text-center mb-16">
@@ -719,10 +733,18 @@
           {% endfor %}
         {% else %}
           {% for block in faq_blocks %}
-            <details class="border-b border-gray-200 py-4" {{ block.shopify_attributes }}>
-              <summary class="cursor-pointer font-medium text-base flex justify-between items-center">{{ block.settings.question }}<span style="color:#B8860B;">＋</span></summary>
-              <p class="text-base text-gray-600 mt-3 leading-relaxed">{{ block.settings.answer }}</p>
-            </details>
+            {% comment %}
+              「質問」欄は仮の文字列がデフォルト値になっているため、
+              ブロックを追加しただけ(未入力)でも表示されてしまう。
+              「回答」欄には既定値が無いので、回答が空のブロックは
+              未入力とみなして表示しない。
+            {% endcomment %}
+            {% if block.settings.answer != blank %}
+              <details class="border-b border-gray-200 py-4" {{ block.shopify_attributes }}>
+                <summary class="cursor-pointer font-medium text-base flex justify-between items-center">{{ block.settings.question }}<span style="color:#B8860B;">＋</span></summary>
+                <p class="text-base text-gray-600 mt-3 leading-relaxed">{{ block.settings.answer }}</p>
+              </details>
+            {% endif %}
           {% endfor %}
         {% endif %}
       </div>
