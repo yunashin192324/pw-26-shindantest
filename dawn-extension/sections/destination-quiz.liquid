@@ -91,6 +91,27 @@
   (単一行テキストのリスト)型なので、d.themes.valueをそのまま配列
   として使う。質問ステップの背景写真としても同じデータを使い回す。
 {%- endcomment -%}
+{%- comment -%}
+  見出し・補足文の文字色。未設定の場合は「イントロ:写真あり→白 / 写真
+  なし→本文文字色」「質問:常に白(常に写真背景のため)」を既定値にする。
+{%- endcomment -%}
+{%- if section.settings.intro_title_color != blank -%}
+  {%- assign intro_title_color = section.settings.intro_title_color -%}
+{%- elsif section.settings.intro_image != blank -%}
+  {%- assign intro_title_color = '#fdfcfa' -%}
+{%- else -%}
+  {%- assign intro_title_color = section.settings.text_color | default: '#161513' -%}
+{%- endif -%}
+{%- if section.settings.intro_subtitle_color != blank -%}
+  {%- assign intro_subtitle_color = section.settings.intro_subtitle_color -%}
+{%- elsif section.settings.intro_image != blank -%}
+  {%- assign intro_subtitle_color = '#fdfcfa' -%}
+{%- else -%}
+  {%- assign intro_subtitle_color = section.settings.text_color | default: '#161513' -%}
+{%- endif -%}
+{%- assign question_title_color = section.settings.question_title_color | default: '#fdfcfa' -%}
+{%- assign question_choice_color = section.settings.question_choice_color | default: '#fdfcfa' -%}
+
 {%- assign all_destinations = shop.metaobjects.destination.values -%}
 <script type="application/json" id="quiz-destinations-{{ section.id }}">
 [
@@ -341,8 +362,8 @@
         {%- endif -%}
         <div class="dq-cover-inner" data-dq-parallax="1.2">
           <p class="dq-eyebrow" data-dq-text>{{ section.settings.eyebrow | default: '30 SECONDS' }}</p>
-          <h2 class="dq-title-xl" data-dq-text data-dq-split>{{ section.settings.heading | default: 'あなたにぴったりの撮影地診断' }}</h2>
-          <p class="dq-subtitle" data-dq-text>{{ section.settings.intro_text | default: '簡単な質問に答えるだけで、おふたりに合う撮影地をご提案します。' }}</p>
+          <h2 class="dq-title-xl" data-dq-text data-dq-split style="color: {{ intro_title_color }};">{{ section.settings.heading | default: 'あなたにぴったりの撮影地診断' }}</h2>
+          <p class="dq-subtitle" data-dq-text style="color: {{ intro_subtitle_color }};">{{ section.settings.intro_text | default: '簡単な質問に答えるだけで、おふたりに合う撮影地をご提案します。' }}</p>
           <button type="button" class="dq-btn quiz-start" data-dq-text>{{ section.settings.start_label | default: '診断をはじめる' }}</button>
         </div>
         <p class="dq-scroll-cue" data-dq-text>Scroll</p>
@@ -360,8 +381,8 @@
           <span class="dq-progress-track"><span class="dq-progress-fill quiz-progress-fill"></span></span>
         </div>
         <div class="dq-cover-inner">
-          <h3 class="dq-question quiz-question-text" data-dq-split></h3>
-          <div class="dq-choices quiz-choices"></div>
+          <h3 class="dq-question quiz-question-text" data-dq-split style="color: {{ question_title_color }};"></h3>
+          <div class="dq-choices quiz-choices" style="color: {{ question_choice_color }};"></div>
         </div>
       </div>
     </div>
@@ -803,6 +824,12 @@
     { "type": "header", "content": "配色（写真なしの箇所にのみ適用）" },
     { "type": "color", "id": "bg_color", "label": "背景色", "default": "#FAF8F5" },
     { "type": "color", "id": "text_color", "label": "文字色", "default": "#161513" },
+    { "type": "header", "content": "イントロの文字色" },
+    { "type": "color", "id": "intro_title_color", "label": "見出しの色", "info": "未設定の場合、冒頭の画像がある時は白、無い時は上の「文字色」になります。" },
+    { "type": "color", "id": "intro_subtitle_color", "label": "補足文の色", "info": "未設定の場合、冒頭の画像がある時は白、無い時は上の「文字色」になります。" },
+    { "type": "header", "content": "質問ページの文字色" },
+    { "type": "color", "id": "question_title_color", "label": "質問文の色", "default": "#fdfcfa" },
+    { "type": "color", "id": "question_choice_color", "label": "選択肢の色", "default": "#fdfcfa" },
     { "type": "header", "content": "モーション設定" },
     { "type": "checkbox", "id": "enable_custom_cursor", "label": "カーソル追従の円を表示する（PCのみ）", "default": true },
     { "type": "checkbox", "id": "enable_smooth_scroll", "label": "慣性のあるスムーススクロールを有効にする", "default": true, "info": "このページ内のスクロール全体に適用されます。" }
