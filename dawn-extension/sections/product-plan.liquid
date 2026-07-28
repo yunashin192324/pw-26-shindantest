@@ -132,6 +132,10 @@
 {%- assign hero_eyebrow = mf.plan_hero_eyebrow.value | default: section.settings.hero_eyebrow -%}
 {%- assign hero_lede = mf.plan_hero_lede.value | default: section.settings.hero_lede -%}
 {%- assign hero_text_color = mf.plan_hero_text_color.value | default: section.settings.hero_text_color | default: '#ffffff' -%}
+{%- assign hero_title_color = section.settings.hero_title_color | default: hero_text_color -%}
+{%- assign hero_lede_color = section.settings.hero_lede_color | default: hero_text_color -%}
+{%- assign hero_title_size = section.settings.hero_title_size | default: 40 -%}
+{%- assign hero_lede_size = section.settings.hero_lede_size | default: 16 -%}
 
 {%- comment -%} 概要 {%- endcomment -%}
 {%- assign overview_title = mf.plan_overview_title.value | default: section.settings.overview_title -%}
@@ -306,7 +310,7 @@
         括弧以降をwhite-space:nowrapで囲んで1つの塊として扱う。
       {%- endcomment -%}
       {%- assign hero_title_parts = hero_title | split: '（' -%}
-      <h1 class="font-serif font-light leading-tight mb-4 plan-hero-title" style="font-size: calc(var(--font-heading-scale, 1) * 40px); color:{{ hero_text_color }}; text-shadow: 0 2px 12px rgba(0,0,0,0.6);">
+      <h1 class="font-serif font-light leading-tight mb-4 plan-hero-title" style="font-size: calc(var(--font-heading-scale, 1) * {{ hero_title_size }}px); color:{{ hero_title_color }}; text-shadow: 0 2px 12px rgba(0,0,0,0.6);">
         {%- if hero_title_parts.size > 1 -%}
           {{ hero_title_parts.first }}<span style="white-space: nowrap;">（{{ hero_title_parts | slice: 1, hero_title_parts.size | join: '（' }}</span>
         {%- else -%}
@@ -314,7 +318,7 @@
         {%- endif -%}
       </h1>
       {% if hero_lede != blank %}
-        <p class="font-light" style="font-size: calc(var(--font-body-scale, 1) * 16px); color:{{ hero_text_color }}; text-shadow: 0 2px 8px rgba(0,0,0,0.5);">{{ hero_lede }}</p>
+        <p class="font-light" style="font-size: calc(var(--font-body-scale, 1) * {{ hero_lede_size }}px); color:{{ hero_lede_color }}; text-shadow: 0 2px 8px rgba(0,0,0,0.5);">{{ hero_lede }}</p>
       {% endif %}
     </div>
   </section>
@@ -906,7 +910,11 @@
     { "type": "text", "id": "hero_eyebrow", "label": "ヒーロー英字見出し" },
     { "type": "text", "id": "hero_title", "label": "ヒーロー見出し（空欄で商品名）" },
     { "type": "textarea", "id": "hero_lede", "label": "ヒーローリード文" },
-    { "type": "color", "id": "hero_text_color", "label": "ヒーロー文字色", "default": "#ffffff", "info": "背景画像が明るくて文字が読みづらい場合はここで色を変更してください（初期値は白）。" },
+    { "type": "color", "id": "hero_text_color", "label": "ヒーロー文字色（見出し・リード文の初期値）", "default": "#ffffff", "info": "背景画像が明るくて文字が読みづらい場合はここで色を変更してください（初期値は白）。下の個別設定を入れるとそちらが優先されます。" },
+    { "type": "color", "id": "hero_title_color", "label": "見出しの色（個別）" },
+    { "type": "range", "id": "hero_title_size", "label": "見出しの文字サイズ基準", "min": 24, "max": 64, "step": 2, "unit": "px", "default": 40 },
+    { "type": "color", "id": "hero_lede_color", "label": "リード文の色（個別）" },
+    { "type": "range", "id": "hero_lede_size", "label": "リード文の文字サイズ基準", "min": 10, "max": 24, "step": 1, "unit": "px", "default": 16 },
 
     { "type": "text", "id": "overview_eyebrow", "label": "概要 英字見出し", "default": "PLAN OVERVIEW" },
     { "type": "text", "id": "overview_title", "label": "概要 見出し" },

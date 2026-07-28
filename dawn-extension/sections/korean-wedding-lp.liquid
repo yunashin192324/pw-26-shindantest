@@ -148,8 +148,8 @@
     <div class="relative z-10 absolute inset-0 flex flex-col items-center justify-center text-center px-6 pt-20 h-full bg-gradient-to-b from-black/15 via-black/5 to-black/20">
       <div class="hero-perfect-shadow">
         <p class="font-serif-display tracking-widest-custom mb-4 font-bold" style="color: {{ section.settings.hero_eyebrow_color }};">{{ section.settings.hero_eyebrow }}</p>
-        <h1 class="font-serif-display text-4xl md:text-6xl tracking-widest-custom mb-6 leading-tight font-medium" style="color: {{ section.settings.hero_title_color }};">{{ section.settings.hero_title | newline_to_br }}</h1>
-        <p class="text-sm md:text-base leading-loose max-w-2xl mx-auto mb-10 opacity-95" style="color: {{ section.settings.hero_desc_color }};">{{ section.settings.hero_desc | newline_to_br }}</p>
+        <h1 class="font-serif-display tracking-widest-custom mb-6 leading-tight font-medium" style="color: {{ section.settings.hero_title_color }}; font-size: clamp(2.25rem, 6vw, calc(var(--font-heading-scale, 1) * {{ section.settings.hero_title_size | default: 60 }}px));">{{ section.settings.hero_title | newline_to_br }}</h1>
+        <p class="leading-loose max-w-2xl mx-auto mb-10 opacity-95" style="color: {{ section.settings.hero_desc_color }}; font-size: calc(var(--font-body-scale, 1) * {{ section.settings.hero_desc_size | default: 16 }}px);">{{ section.settings.hero_desc | newline_to_br }}</p>
         <div class="flex flex-col sm:flex-row gap-4 justify-center">
           {% if section.settings.show_diagnosis %}
             <a href="{{ section.settings.diagnosis_link | default: '#' }}" class="btn btn-gold">{{ section.settings.hero_btn_2_text }}</a>
@@ -764,8 +764,10 @@
     { "type": "color", "id": "hero_eyebrow_color", "label": "眉見出しの文字色", "default": "#C9A96E" },
     { "type": "textarea", "id": "hero_title", "label": "タイトル", "default": "世界で、\\n一生残る一枚を。" },
     { "type": "color", "id": "hero_title_color", "label": "タイトルの文字色", "default": "#ffffff" },
+    { "type": "range", "id": "hero_title_size", "label": "タイトルの文字サイズ基準", "min": 32, "max": 80, "step": 2, "unit": "px", "default": 60 },
     { "type": "textarea", "id": "hero_desc", "label": "サブテキスト", "default": "HISだから安心できる海外フォトウェディング。日本全国で試着できるフォーシスアンドカンパニーの衣裳と、現地までの手厚いサポートで、あなたの物語を世界のロケーションで残します。" },
     { "type": "color", "id": "hero_desc_color", "label": "サブテキストの文字色", "default": "#ffffff" },
+    { "type": "range", "id": "hero_desc_size", "label": "サブテキストの文字サイズ基準", "min": 10, "max": 24, "step": 1, "unit": "px", "default": 16 },
     { "type": "text", "id": "hero_btn_2_text", "label": "ボタン2 テキスト", "default": "30秒診断する" },
 
     { "type": "header", "content": "人気プラン" },

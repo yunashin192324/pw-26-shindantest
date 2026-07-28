@@ -17,10 +17,10 @@
     {%- endif -%}
   </div>
   <div class="hero-content">
-    <p class="eyebrow">{{ section.settings.eyebrow }}</p>
-    <h1>{{ section.settings.heading | newline_to_br }}</h1>
+    <p class="eyebrow" style="color:{{ section.settings.eyebrow_color | default: section.settings.text_color }};">{{ section.settings.eyebrow }}</p>
+    <h1 style="color:{{ section.settings.heading_color | default: section.settings.text_color }};font-size: clamp(2.1rem, 5vw, calc(var(--font-heading-scale, 1) * {{ section.settings.heading_size | default: 58 }}px));">{{ section.settings.heading | newline_to_br }}</h1>
     <div class="divider-gold"></div>
-    <p class="lede">{{ section.settings.description }}</p>
+    <p class="lede" style="color:{{ section.settings.description_color | default: section.settings.text_color }};font-size: calc(var(--font-body-scale, 1) * {{ section.settings.description_size | default: 16 }}px);">{{ section.settings.description }}</p>
   </div>
   <div class="scroll-cue"><span>SCROLL</span><span class="line"></span></div>
 </section>
@@ -31,9 +31,14 @@
   "settings": [
     { "type": "image_picker", "id": "image", "label": "背景写真" },
     { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "JOURNAL" },
+    { "type": "color", "id": "eyebrow_color", "label": "英字見出しの色（個別）" },
     { "type": "textarea", "id": "heading", "label": "メイン見出し", "default": "旅が、\nふたりを写す。" },
+    { "type": "color", "id": "heading_color", "label": "メイン見出しの色（個別）" },
+    { "type": "range", "id": "heading_size", "label": "メイン見出しの文字サイズ基準", "min": 32, "max": 80, "step": 2, "unit": "px", "default": 58 },
     { "type": "textarea", "id": "description", "label": "説明文", "default": "世界中の撮影地、ドレス、旅のヒントをお届けします。" },
-    { "type": "color", "id": "text_color", "label": "文字色", "default": "#ffffff",
+    { "type": "color", "id": "description_color", "label": "説明文の色（個別）" },
+    { "type": "range", "id": "description_size", "label": "説明文の文字サイズ基準", "min": 10, "max": 24, "step": 1, "unit": "px", "default": 16 },
+    { "type": "color", "id": "text_color", "label": "文字色（個別の色を設定しない項目の初期値）", "default": "#ffffff",
       "info": "写真によって文字が読みにくい場合、この色や下の「暗さ」を調整してください。" },
     { "type": "range", "id": "overlay_strength", "label": "写真を暗くする強さ", "min": 50, "max": 150, "step": 5, "unit": "%", "default": 100,
       "info": "明るい写真で文字が読みにくいときは数値を上げてください。" }

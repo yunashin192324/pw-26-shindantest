@@ -34,7 +34,7 @@
       <span class="dot">/</span>
       <span>読了 {{ read_minutes }}分</span>
     </div>
-    <h1>{% render 'journal-title-break', title: article.title %}</h1>
+    <h1 style="font-size: clamp(2.1rem, 5vw, calc(var(--font-heading-scale, 1) * {{ section.settings.heading_size | default: 58 }}px));">{% render 'journal-title-break', title: article.title %}</h1>
   </div>
 </section>
 
@@ -47,7 +47,8 @@
     { "type": "color", "id": "text_color", "label": "文字色", "default": "#ffffff",
       "info": "写真によって文字が読みにくい場合、この色や下の「暗さ」を調整してください。" },
     { "type": "range", "id": "overlay_strength", "label": "写真を暗くする強さ", "min": 50, "max": 150, "step": 5, "unit": "%", "default": 100,
-      "info": "明るい写真で文字が読みにくいときは数値を上げてください。" }
+      "info": "明るい写真で文字が読みにくいときは数値を上げてください。" },
+    { "type": "range", "id": "heading_size", "label": "見出しの文字サイズ基準", "min": 32, "max": 80, "step": 2, "unit": "px", "default": 58 }
   ]
 }
 {% endschema %}

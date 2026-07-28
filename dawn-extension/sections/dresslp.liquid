@@ -51,9 +51,9 @@ tailwind.config = {
         <div class="absolute inset-0" style="background-color: rgba(0,0,0,{{ block.settings.overlay_opacity | divided_by: 100.0 }});"></div>
 
         <div class="relative z-10 px-6 w-full max-w-4xl">
-          <p class="font-serif tracking-widest uppercase mb-4" style="color: {{ block.settings.text_color }}; font-size: calc(var(--font-heading-scale) * {{ block.settings.sub_size }}px);">{{ block.settings.subtitle }}</p>
-          <h1 class="font-serif font-light leading-tight mb-4" style="color: {{ block.settings.text_color }}; font-size: calc(var(--font-heading-scale) * {{ block.settings.title_size }}px);">{{ block.settings.title | newline_to_br }}</h1>
-          <p class="font-light" style="color: {{ block.settings.text_color }}; font-size: calc(var(--font-body-scale) * {{ block.settings.desc_size }}px);">{{ block.settings.desc | newline_to_br }}</p>
+          <p class="font-serif tracking-widest uppercase mb-4" style="color: {{ block.settings.sub_color | default: block.settings.text_color }}; font-size: calc(var(--font-heading-scale) * {{ block.settings.sub_size }}px);">{{ block.settings.subtitle }}</p>
+          <h1 class="font-serif font-light leading-tight mb-4" style="color: {{ block.settings.title_color | default: block.settings.text_color }}; font-size: calc(var(--font-heading-scale) * {{ block.settings.title_size }}px);">{{ block.settings.title | newline_to_br }}</h1>
+          <p class="font-light" style="color: {{ block.settings.desc_color | default: block.settings.text_color }}; font-size: calc(var(--font-body-scale) * {{ block.settings.desc_size }}px);">{{ block.settings.desc | newline_to_br }}</p>
         </div>
       </section>
 
@@ -433,12 +433,15 @@ document.addEventListener('DOMContentLoaded', function() {
             { "value": "center", "label": "中央" }, { "value": "top", "label": "上部" }, { "value": "bottom", "label": "下部" }, { "value": "left", "label": "左寄せ" }, { "value": "right", "label": "右寄せ" }
           ], "default": "center" },
         { "type": "range", "id": "overlay_opacity", "min": 0, "max": 100, "step": 10, "label": "暗さ", "default": 40 },
-        { "type": "color", "id": "text_color", "label": "文字色", "default": "#ffffff" },
+        { "type": "color", "id": "text_color", "label": "文字色（個別の色を設定しない項目の初期値）", "default": "#ffffff" },
         { "type": "text", "id": "subtitle", "label": "サブタイトル", "default": "NEW COLLECTION" },
+        { "type": "color", "id": "sub_color", "label": "サブタイトルの色（個別）" },
         { "type": "range", "id": "sub_size", "min": 10, "max": 30, "step": 1, "label": "サブタイトルサイズ基準", "default": 14 },
         { "type": "textarea", "id": "title", "label": "メインタイトル（改行可）", "default": "運命の一着に出会う" },
+        { "type": "color", "id": "title_color", "label": "メインタイトルの色（個別）" },
         { "type": "range", "id": "title_size", "min": 20, "max": 80, "step": 2, "label": "メインタイトルサイズ基準", "default": 48 },
         { "type": "textarea", "id": "desc", "label": "説明文（改行可）" },
+        { "type": "color", "id": "desc_color", "label": "説明文の色（個別）" },
         { "type": "range", "id": "desc_size", "min": 12, "max": 24, "step": 1, "label": "説明文サイズ基準", "default": 16 }
       ]
     },

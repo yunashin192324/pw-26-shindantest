@@ -37,10 +37,10 @@
     {%- endif -%}
   </div>
   <div class="dst-hero-content">
-    <p class="dst-eyebrow dst-reveal">Region</p>
-    <h1 class="dst-reveal dst-reveal-1">{{ heading }}</h1>
+    <p class="dst-eyebrow dst-reveal" style="color:{{ section.settings.eyebrow_color | default: '#ffffff' }};">Region</p>
+    <h1 class="dst-reveal dst-reveal-1" style="color:{{ section.settings.heading_color | default: '#ffffff' }};font-size: clamp(2rem, 5vw, calc(var(--font-heading-scale, 1) * {{ section.settings.heading_size | default: 54 }}px));">{{ heading }}</h1>
     {%- if section.settings.description != blank -%}
-      <p class="dst-lede dst-reveal dst-reveal-2">{{ section.settings.description }}</p>
+      <p class="dst-lede dst-reveal dst-reveal-2" style="color:{{ section.settings.description_color | default: 'rgba(255,255,255,0.86)' }};font-size: calc(var(--font-body-scale, 1) * {{ section.settings.description_size | default: 16 }}px);">{{ section.settings.description }}</p>
     {%- endif -%}
   </div>
 </section>
@@ -62,8 +62,13 @@
   "name": "地域 ヒーロー",
   "settings": [
     { "type": "image_picker", "id": "image", "label": "背景写真" },
+    { "type": "color", "id": "eyebrow_color", "label": "英字見出しの色", "default": "#ffffff" },
     { "type": "text", "id": "heading", "label": "見出し（空欄でページhandleから自動生成）" },
-    { "type": "textarea", "id": "description", "label": "サブコピー" }
+    { "type": "color", "id": "heading_color", "label": "見出しの色", "default": "#ffffff" },
+    { "type": "range", "id": "heading_size", "label": "見出しの文字サイズ基準", "min": 32, "max": 80, "step": 2, "unit": "px", "default": 54 },
+    { "type": "textarea", "id": "description", "label": "サブコピー" },
+    { "type": "color", "id": "description_color", "label": "サブコピーの色" },
+    { "type": "range", "id": "description_size", "label": "サブコピーの文字サイズ基準", "min": 10, "max": 24, "step": 1, "unit": "px", "default": 16 }
   ],
   "presets": [{ "name": "地域 ヒーロー" }]
 }

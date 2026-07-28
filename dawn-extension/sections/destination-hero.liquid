@@ -45,8 +45,8 @@
     </div>
     <div class="dst-hero-content">
       <p class="dst-eyebrow dst-reveal" style="color:{{ section.settings.eyebrow_color }};text-shadow: 0 2px 10px rgba(0,0,0,0.5);">{{ destination.country.value }} ／ {{ destination.name_en.value }}</p>
-      <h1 class="dst-reveal dst-reveal-1" style="color:{{ section.settings.heading_color }};text-shadow: 0 2px 12px rgba(0,0,0,0.6);">{% render 'safe-linebreak', text: destination.name_ja.value %}</h1>
-      <p class="dst-lede dst-reveal dst-reveal-2" style="color:{{ section.settings.lede_color }};text-shadow: 0 2px 8px rgba(0,0,0,0.5);">{{ destination.description.value | strip_html | truncate: 90 }}</p>
+      <h1 class="dst-reveal dst-reveal-1" style="color:{{ section.settings.heading_color }};font-size: clamp(2rem, 5vw, calc(var(--font-heading-scale, 1) * {{ section.settings.heading_size | default: 54 }}px));text-shadow: 0 2px 12px rgba(0,0,0,0.6);">{% render 'safe-linebreak', text: destination.name_ja.value %}</h1>
+      <p class="dst-lede dst-reveal dst-reveal-2" style="color:{{ section.settings.lede_color }};font-size: calc(var(--font-body-scale, 1) * {{ section.settings.lede_size | default: 16 }}px);text-shadow: 0 2px 8px rgba(0,0,0,0.5);">{{ destination.description.value | strip_html | truncate: 90 }}</p>
     </div>
   </section>
 
@@ -93,7 +93,9 @@
     },
     { "type": "color", "id": "eyebrow_color", "label": "サブタイトル色", "default": "#ffffff" },
     { "type": "color", "id": "heading_color", "label": "タイトル色", "default": "#ffffff" },
-    { "type": "color", "id": "lede_color", "label": "リード文色", "default": "#ffffff" }
+    { "type": "range", "id": "heading_size", "label": "タイトルの文字サイズ基準", "min": 32, "max": 80, "step": 2, "unit": "px", "default": 54 },
+    { "type": "color", "id": "lede_color", "label": "リード文色", "default": "#ffffff" },
+    { "type": "range", "id": "lede_size", "label": "リード文の文字サイズ基準", "min": 10, "max": 24, "step": 1, "unit": "px", "default": 16 }
   ]
 }
 {% endschema %}

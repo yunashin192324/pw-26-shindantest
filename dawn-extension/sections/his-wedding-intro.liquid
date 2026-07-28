@@ -58,7 +58,7 @@
     <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(0,0,0,0.75), rgba(0,0,0,0.35) 55%, rgba(0,0,0,0.15));"></div>
     <div class="relative z-10 px-6 w-full max-w-3xl">
       <p class="font-serif tracking-widest uppercase mb-4 text-sm" style="color:{{ section.settings.hero_eyebrow_color | default: '#ffffff' }};">{{ section.settings.hero_eyebrow }}</p>
-      <h1 class="font-serif font-light leading-tight mb-4" style="font-size: calc(var(--font-heading-scale, 1) * 40px); color:{{ section.settings.hero_title_color | default: '#ffffff' }};">{{ section.settings.hero_title | newline_to_br }}</h1>
+      <h1 class="font-serif font-light leading-tight mb-4" style="font-size: calc(var(--font-heading-scale, 1) * {{ section.settings.hero_title_size | default: 40 }}px); color:{{ section.settings.hero_title_color | default: '#ffffff' }};">{{ section.settings.hero_title | newline_to_br }}</h1>
       <p class="font-light" style="font-size: calc(var(--font-body-scale, 1) * {{ section.settings.hero_lede_size | default: 16 }}px); color:{{ section.settings.hero_lede_color | default: '#ffffff' }};">{{ section.settings.hero_lede }}</p>
     </div>
   </section>
@@ -170,6 +170,7 @@
     { "type": "color", "id": "hero_eyebrow_color", "label": "英字見出しの色", "default": "#ffffff" },
     { "type": "textarea", "id": "hero_title", "label": "ヒーロー メインタイトル（改行可）", "default": "海外フォトウェディングを、\nもっと身近に。" },
     { "type": "color", "id": "hero_title_color", "label": "メインタイトルの色", "default": "#ffffff" },
+    { "type": "range", "id": "hero_title_size", "min": 24, "max": 64, "step": 2, "unit": "px", "label": "メインタイトルの文字サイズ基準", "default": 40 },
     { "type": "textarea", "id": "hero_lede", "label": "ヒーロー リード文", "default": "国内で衣裳を試着して、海外の絶景で撮影するだけ。準備の負担を最小限に、一生に一度の1枚を残すためのフォトウェディングサービスです。" },
     { "type": "color", "id": "hero_lede_color", "label": "リード文の色", "default": "#ffffff" },
     { "type": "range", "id": "hero_lede_size", "min": 10, "max": 24, "step": 1, "unit": "px", "label": "リード文の文字サイズ基準", "info": "「テーマ設定」の本文拡大率の影響も受けるため、拡大率を上げている場合はここを小さめにすると調整できます。", "default": 16 },

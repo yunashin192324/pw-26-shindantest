@@ -32,9 +32,9 @@
     {%- endif -%}
   </div>
   <div class="dst-hero-content">
-    <p class="dst-eyebrow dst-reveal">{{ section.settings.eyebrow }}</p>
-    <h1 class="dst-reveal dst-reveal-1">{{ section.settings.heading | newline_to_br }}</h1>
-    <p class="dst-lede dst-reveal dst-reveal-2">{{ section.settings.description }}</p>
+    <p class="dst-eyebrow dst-reveal" style="color:{{ section.settings.eyebrow_color | default: '#ffffff' }};">{{ section.settings.eyebrow }}</p>
+    <h1 class="dst-reveal dst-reveal-1" style="color:{{ section.settings.heading_color | default: '#ffffff' }};font-size: clamp(2rem, 5vw, calc(var(--font-heading-scale, 1) * {{ section.settings.heading_size | default: 54 }}px));">{{ section.settings.heading | newline_to_br }}</h1>
+    <p class="dst-lede dst-reveal dst-reveal-2" style="color:{{ section.settings.description_color | default: 'rgba(255,255,255,0.86)' }};font-size: calc(var(--font-body-scale, 1) * {{ section.settings.description_size | default: 16 }}px);">{{ section.settings.description }}</p>
     <div class="dst-cta-row dst-reveal dst-reveal-3">
       {%- if section.settings.diagnosis_url != blank -%}
         <a href="{{ section.settings.diagnosis_url }}" class="dst-btn dst-btn-gold">{{ section.settings.diagnosis_label }}</a>
@@ -62,8 +62,13 @@
   "settings": [
     { "type": "image_picker", "id": "image", "label": "背景写真" },
     { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "DESTINATIONS" },
+    { "type": "color", "id": "eyebrow_color", "label": "英字見出しの色", "default": "#ffffff" },
     { "type": "textarea", "id": "heading", "label": "メイン見出し", "default": "世界中の撮影地から\nおふたりだけの物語を。" },
+    { "type": "color", "id": "heading_color", "label": "メイン見出しの色", "default": "#ffffff" },
+    { "type": "range", "id": "heading_size", "label": "メイン見出しの文字サイズ基準", "min": 32, "max": 80, "step": 2, "unit": "px", "default": 54 },
     { "type": "textarea", "id": "description", "label": "サブコピー", "default": "120以上の撮影地から、おふたりらしい一枚が生まれる場所を見つけてください。" },
+    { "type": "color", "id": "description_color", "label": "サブコピーの色" },
+    { "type": "range", "id": "description_size", "label": "サブコピーの文字サイズ基準", "min": 10, "max": 24, "step": 1, "unit": "px", "default": 16 },
     { "type": "text", "id": "diagnosis_label", "label": "診断ボタン文言", "default": "30秒診断" },
     { "type": "url", "id": "diagnosis_url", "label": "診断ボタンリンク先", "info": "診断ページ公開まではリンク先を空欄にしておくとボタン自体が非表示になります。" },
     { "type": "text", "id": "search_label", "label": "検索ボタン文言", "default": "撮影地を見る" },
