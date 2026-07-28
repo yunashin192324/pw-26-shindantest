@@ -19,7 +19,6 @@
         "schedule_1": { "type": "schedule", "settings": { "time": "8:00", "desc": "サロンにてお仕度開始" } },
         "schedule_2": { "type": "schedule", "settings": { "time": "9:30", "desc": "移動・撮影開始（約60分）" } },
         "schedule_3": { "type": "schedule", "settings": { "time": "11:00", "desc": "ホテルへ戻り解散" } },
-        "faq_1": { "type": "faq", "settings": { "question": "ビザは必要ですか？", "answer": "15日以内の観光滞在であればベトナム入国時のビザは原則不要です。" } },
         "note_1": {
           "type": "note",
           "settings": {
@@ -28,7 +27,7 @@
           }
         }
       },
-      "block_order": ["tag_1", "tag_2", "option_1", "gallery_1", "gallery_2", "gallery_3", "gallery_4", "gallery_5", "schedule_1", "schedule_2", "schedule_3", "faq_1", "note_1"],
+      "block_order": ["tag_1", "tag_2", "option_1", "gallery_1", "gallery_2", "gallery_3", "gallery_4", "gallery_5", "schedule_1", "schedule_2", "schedule_3", "note_1"],
       "settings": {
         "hero_img": "shopify://shop_images/1-3457.jpg",
         "hero_img_position": "object-bottom",
