@@ -1,10 +1,9 @@
 {%- comment -%}
-  destination-quiz — 撮影地 30秒診断（フルブリード・フォトギャラリー版）
+  destination-quiz — 撮影地 30秒診断（シネマティック・フルスクリーン版 v3）
   ==================================================================
   【診断ロジックは変更していません】
-  質問データ(QUESTIONS)・スコアリング・結果マッチング(matchDestinations)・
-  ステップ制御の条件分岐は旧版から一切変更なし。変更したのは見た目と
-  モーションのみ。
+  質問データ(QUESTIONS)・スコアリング・結果マッチング(matchDestinations)は
+  従来のまま。変更したのは見た目とモーションのみ。
 
   結果候補は都市名を1件もハードコードしていない。ページ読み込み時に
   Liquidが shop.metaobjects.destination.values を全件JSONに書き出し、
@@ -16,102 +15,39 @@
   いない。変更したい場合は聞いてください）。
 
   ------------------------------------------------------------------
-  【v2: フルブリード写真を主役にしたレイアウトへ全面変更】
-  1回目の刷新(v1)はモーションは変えたが白背景の小さなカードのままで
-  「写真が主役」になっていなかった、というフィードバックを受けての
-  作り直し。taotajima.jp/works/mtv-ultrahits/ のような「写真が画面
-  いっぱいに広がり、文字はその上に重なるだけ」という構成思想を参考に
-  （コードは一切参照・複製していない完全新規実装）、各ステップを
-  ブラウザいっぱいのフルブリード写真＋オーバーレイ文字に変更した。
+  【v3について】
+  ユーザーが用意した参考HTML(1画面ずつのフルブリード写真+マスク
+  テキストreveal+スロットマシン演出の結果発表+マッチ度%表示+
+  シェア機能、というシネマティックな診断UI一式)を元に、見た目と
+  インタラクションを作り直した。参考HTMLのコードはコピーしておらず、
+  同じ演出をこのサイトのデータ構造・診断ロジックに合わせて一から
+  実装している。参考HTML側は7問の分岐診断+予算/日程による都市の
+  絞り込みという別物のロジックを持っていたが、そちらは移植せず、
+  既存のQUESTIONS配列(4問・単一選択・テーマタグ加点方式)のみを使う。
 
-  - イントロ：`intro_image`設定の写真を画面いっぱいに表示（未設定の
-    場合のみ、写真なしのシンプルな文字だけの構成にフォールバック）。
-  - 質問：既に読み込み済みのDestinationの写真を背景に使い回す
-    （設問ごとに切り替わる）。新しい画像設定は不要。
-  - 結果：3件を横並びカードではなく、1件ずつ画面いっぱいの写真パネル
-    として縦に並べ、スクロールしながら見る「作品集」のような構成に。
-
-  【意図的に実装していない項目とその理由】(v1から据え置き)
-  - ページ遷移時のシェアード・エレメント・トランジション：
-    サイト全体のリンク挙動・レイアウト(theme.liquid)に手を入れる必要が
-    あり、このセクション単体の範囲を超え、他ページの動作に影響する
-    リスクが大きいため見送り。
-  - スクロール連動の背景/前景パララックス：
-    イントロ・質問は1画面完結のためカーソル移動に連動した微細な
-    パララックスに置き換え。結果パネルは実際にスクロールする構成に
-    なったため、IntersectionObserverでパネルごとの出現アニメーションを
-    実装している。
-
-  【フォールバック】
-  CDN読み込みに失敗した場合(オフライン環境やCDN障害時)でも診断機能
-  自体は必ず動作するよう、GSAP/SplitType/Lenisはすべて任意強化
-  (progressive enhancement)として実装。読み込めない場合はCSS
-  transitionによる簡易フェードに自動的に切り替わる。
-  prefers-reduced-motionが有効な場合も同様に演出を最小限にする。
+  参考実装との主な違い(データを持っていない項目は省略、または
+  既存データから正直に算出できる形に置き換えている):
+  - 予算/日程による分岐・disabled選択肢・upsell(予算アップ提案)は
+    実装していない(このサイトの診断に予算・日程の質問が無いため)。
+  - 複数選択(チップ)形式は実装していない(QUESTIONSが全問単一選択のため)。
+  - 「マッチ度%」「マッチした条件/対応できない条件」は、選んだ
+    テーマタグと診断結果の都市が実際に持つテーマタグを比較して算出
+    (既存のscores/themesデータをそのまま可視化しているだけで、
+    新しい採点ロジックは追加していない)。
+  - 「サブシティ一覧」は都市データに該当フィールドが無いため非表示。
+  - 参考HTML独自のヘッダー(ハンバーガー+ロゴ)は実装していない
+    (このセクションは既存サイトの共通ヘッダーの中に埋め込まれるため、
+    二重ヘッダーになってしまう)。
+  - GSAP等の外部ライブラリには依存していない(参考実装と同じく
+    素のCSSアニメーション+バニラJSのみで完結させている。CDN障害時の
+    リスクが無い)。
 {%- endcomment -%}
-
-<script>
-  if (!document.getElementById('tw-config')) {
-    var twConfig = document.createElement('script');
-    twConfig.id = 'tw-config';
-    twConfig.innerHTML = "tailwind.config = { theme: { extend: { colors: { ivory: '#FAF8F5', gold: '#B8860B', 'gold-light': '#D4A843', dark: '#1a1a1a' }, fontFamily: { serif: ['var(--font-heading-family, serif)', 'serif'], sans: ['var(--font-body-family, sans-serif)', 'sans-serif'] } } } };";
-    document.head.appendChild(twConfig);
-  }
-  if (!document.getElementById('tw-cdn')) {
-    var twScript = document.createElement('script');
-    twScript.id = 'tw-cdn';
-    twScript.src = '{{ "tailwind-3.4.17.js" | asset_url }}';
-    document.head.appendChild(twScript);
-  }
-</script>
-
-{%- comment -%}
-  演出強化ライブラリ(GSAP / SplitType / Lenis)をidempotentに読み込む。
-  同じセクションが複数回描画されたり、他のセクションと共存しても
-  二重読み込みしない。
-{%- endcomment -%}
-<script>
-  (function () {
-    function loadOnce(id, src) {
-      if (document.getElementById(id)) return;
-      var s = document.createElement('script');
-      s.id = id;
-      s.src = src;
-      s.defer = true;
-      document.head.appendChild(s);
-    }
-    loadOnce('dq-lib-gsap', 'https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js');
-    loadOnce('dq-lib-splittype', 'https://cdn.jsdelivr.net/npm/split-type@0.3.4/dist/split-type.min.js');
-    loadOnce('dq-lib-lenis', 'https://cdn.jsdelivr.net/npm/lenis@1.1.18/dist/lenis.min.js');
-  })();
-</script>
 
 {%- comment -%}
   全Destinationをテーマタグ付きでJSON化。themesは選択リスト
   (単一行テキストのリスト)型なので、d.themes.valueをそのまま配列
-  として使う。質問ステップの背景写真としても同じデータを使い回す。
+  として使う。
 {%- endcomment -%}
-{%- comment -%}
-  見出し・補足文の文字色。未設定の場合は「イントロ:写真あり→白 / 写真
-  なし→本文文字色」「質問:常に白(常に写真背景のため)」を既定値にする。
-{%- endcomment -%}
-{%- if section.settings.intro_title_color != blank -%}
-  {%- assign intro_title_color = section.settings.intro_title_color -%}
-{%- elsif section.settings.intro_image != blank -%}
-  {%- assign intro_title_color = '#fdfcfa' -%}
-{%- else -%}
-  {%- assign intro_title_color = section.settings.text_color | default: '#161513' -%}
-{%- endif -%}
-{%- if section.settings.intro_subtitle_color != blank -%}
-  {%- assign intro_subtitle_color = section.settings.intro_subtitle_color -%}
-{%- elsif section.settings.intro_image != blank -%}
-  {%- assign intro_subtitle_color = '#fdfcfa' -%}
-{%- else -%}
-  {%- assign intro_subtitle_color = section.settings.text_color | default: '#161513' -%}
-{%- endif -%}
-{%- assign question_title_color = section.settings.question_title_color | default: '#fdfcfa' -%}
-{%- assign question_choice_color = section.settings.question_choice_color | default: '#fdfcfa' -%}
-
 {%- assign all_destinations = shop.metaobjects.destination.values -%}
 <script type="application/json" id="quiz-destinations-{{ section.id }}">
 [
@@ -119,8 +55,10 @@
     {%- assign theme_list = d.themes.value -%}
     {
       "name": {{ d.name_ja.value | json }},
+      "nameEn": {{ d.name_en.value | json }},
       "url": "/pages/{{ d.slug.value }}",
       "image": {{ d.hero_image.value | image_url: width: 1600 | json }},
+      "description": {{ d.description.value | strip_html | truncate: 120 | json }},
       "themes": [{% for t in theme_list %}{{ t | strip | downcase | json }}{% unless forloop.last %},{% endunless %}{% endfor %}]
     }{%- unless forloop.last -%},{%- endunless -%}
   {%- endfor -%}
@@ -129,299 +67,441 @@
 
 <style>
   #destination-quiz-{{ section.id }} {
-    --dq-paper: {{ section.settings.bg_color | default: '#FAF8F5' }};
-    --dq-ink: {{ section.settings.text_color | default: '#161513' }};
-    --dq-muted: #85807a;
-    --dq-gold: #B8860B;
-    --dq-gold-light: #D4A843;
-    --dq-hair: {{ section.settings.choice_divider_color | default: 'rgba(255,255,255,0.28)' }};
-    --dq-choice-index-color: {{ section.settings.choice_index_color | default: '#D4A843' }};
-    --dq-choice-index-size: {{ section.settings.choice_index_size | default: 11 }}px;
-    --dq-choice-divider-thickness: {{ section.settings.choice_divider_thickness | default: 1 }}px;
-    --dq-result-name-color: {{ section.settings.result_name_color | default: '#fdfcfa' }};
+    --dq-charcoal: #100e0b;
+    --dq-warm-white: #faf7f2;
+    --dq-gold: {{ section.settings.gold_color | default: '#cba876' }};
+    --dq-gold-dk: #a8824f;
+    --dq-gold-lt: #f1e6d2;
+    --dq-ink: #1c1a16;
+    --dq-ink-2: #5c574c;
+    --dq-ink-3: #8f887a;
+    --dq-line: rgba(255,255,255,.24);
+    --dq-line-soft: rgba(28,26,22,.12);
+    --dq-off-white: #faf8f4;
+    --dq-ease: cubic-bezier(.16,1,.3,1);
+    --dq-ease-soft: cubic-bezier(.22,1,.36,1);
     font-family: var(--font-body-family, sans-serif);
-    background: var(--dq-paper);
-    color: var(--dq-ink);
+    background: var(--dq-charcoal);
+    color: var(--dq-warm-white);
     position: relative;
-  }
-  #destination-quiz-{{ section.id }} * { box-sizing: border-box; }
-  #destination-quiz-{{ section.id }} .word { display: inline-block; will-change: transform, opacity, filter; }
-
-  /* ---------- ステップ共通：写真フルブリード ---------- */
-  #destination-quiz-{{ section.id }} .dq-step { position: relative; }
-  #destination-quiz-{{ section.id }} .dq-step.is-hidden { display: none; }
-  #destination-quiz-{{ section.id }} .dq-cover {
-    position: relative;
-    min-height: 100svh;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    padding: clamp(90px, 12vh, 160px) clamp(24px, 6vw, 64px);
     overflow: hidden;
   }
-  #destination-quiz-{{ section.id }} .dq-cover.has-photo { color: #fdfcfa; }
-  #destination-quiz-{{ section.id }} .dq-photo-bg { position: absolute; inset: 0; z-index: 0; background: #14120f; }
-  #destination-quiz-{{ section.id }} .dq-photo-bg img {
-    width: 100%; height: 100%; object-fit: cover; display: block;
-    will-change: transform, opacity, filter;
-  }
-  #destination-quiz-{{ section.id }} .dq-photo-bg::after {
-    content: '';
-    position: absolute; inset: 0;
-    background: linear-gradient(180deg, rgba(10,9,7,0.42) 0%, rgba(10,9,7,0.28) 42%, rgba(10,9,7,0.62) 100%);
-  }
-  #destination-quiz-{{ section.id }} .dq-cover-inner { position: relative; z-index: 1; width: 100%; max-width: 720px; text-align: center; }
+  #destination-quiz-{{ section.id }} *,
+  #destination-quiz-{{ section.id }} *::before,
+  #destination-quiz-{{ section.id }} *::after { box-sizing: border-box; }
+  #destination-quiz-{{ section.id }} img { max-width: 100%; display: block; }
+  #destination-quiz-{{ section.id }} button { font: inherit; }
+  #destination-quiz-{{ section.id }} a { color: inherit; }
+  #destination-quiz-{{ section.id }} .dq-serif { font-family: var(--font-heading-family, serif); }
 
-  /* ---------- タイポグラフィ ---------- */
-  #destination-quiz-{{ section.id }} .dq-eyebrow {
-    font-family: var(--font-heading-family, serif);
-    font-style: italic;
-    letter-spacing: 0.3em;
-    text-transform: uppercase;
-    font-size: 12px;
-    color: var(--dq-gold-light);
-    margin: 0 0 26px;
+  /* ---------- 粒子・グレイン(装飾。控えめ・reduced-motionで無効) ---------- */
+  #destination-quiz-{{ section.id }} .dq-grain {
+    position: absolute; inset: 0; z-index: 40; pointer-events: none; opacity: .035; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
   }
-  #destination-quiz-{{ section.id }} .dq-cover:not(.has-photo) .dq-eyebrow { color: var(--dq-gold); }
-  #destination-quiz-{{ section.id }} .dq-title-xl {
-    font-family: var(--font-heading-family, serif);
-    font-weight: 400;
-    line-height: 1.28;
-    font-size: clamp(30px, calc(var(--font-heading-scale, 1) * 5.4vw), 58px);
-    margin: 0 0 26px;
+  #destination-quiz-{{ section.id }} .dq-particles { position: absolute; inset: 0; z-index: 2; overflow: hidden; pointer-events: none; }
+  #destination-quiz-{{ section.id }} .dq-particle {
+    position: absolute; border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,255,255,.55), transparent 70%);
+    filter: blur(1px); opacity: .55; animation: dqDrift 16s ease-in-out infinite;
   }
-  #destination-quiz-{{ section.id }} .dq-subtitle {
-    font-size: 15px;
-    line-height: 1.95;
-    opacity: 0.88;
-    max-width: 460px;
-    margin: 0 auto 48px;
-  }
+  @keyframes dqDrift { 0%,100% { transform: translate(0,0); } 50% { transform: translate(14px,-34px); } }
 
-  /* ---------- CTA ---------- */
-  #destination-quiz-{{ section.id }} .dq-btn {
-    display: inline-block;
-    padding: 18px 56px;
-    border-radius: 999px;
-    border: 1px solid currentColor;
-    background: transparent;
-    color: inherit;
-    font-family: var(--font-heading-family, serif);
-    font-size: 14px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    cursor: pointer;
-    transition: background 0.5s cubic-bezier(.22,1,.36,1), color 0.5s cubic-bezier(.22,1,.36,1);
-  }
-  #destination-quiz-{{ section.id }} .dq-cover.has-photo .dq-btn:hover { background: #fdfcfa; color: #14120f; }
-  #destination-quiz-{{ section.id }} .dq-cover:not(.has-photo) .dq-btn:hover { background: var(--dq-ink); color: var(--dq-paper); }
-  #destination-quiz-{{ section.id }} .dq-link {
-    display: inline-block;
-    background: none; border: none; padding: 0;
-    font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase;
-    color: inherit; opacity: 0.75;
-    cursor: pointer; position: relative;
-  }
-  #destination-quiz-{{ section.id }} .dq-link::after {
-    content: ''; position: absolute; left: 0; right: 0; bottom: -4px; height: 1px;
-    background: currentColor; transform: scaleX(0); transform-origin: left;
-    transition: transform 0.5s cubic-bezier(.22,1,.36,1);
-  }
-  #destination-quiz-{{ section.id }} .dq-link:hover { opacity: 1; }
-  #destination-quiz-{{ section.id }} .dq-link:hover::after { transform: scaleX(1); }
+  /* ---------- 画面(スクリーン)切り替え ---------- */
+  #destination-quiz-{{ section.id }} .dq-screen { display: none; }
+  #destination-quiz-{{ section.id }} .dq-screen.active { display: block; }
+  @keyframes dqCineIn { 0% { opacity: 0; transform: scale(1.05); filter: blur(18px); } 55% { filter: blur(3px); } 100% { opacity: 1; transform: scale(1); filter: blur(0); } }
+  #destination-quiz-{{ section.id }} .dq-anim-up,
+  #destination-quiz-{{ section.id }} .dq-anim-right,
+  #destination-quiz-{{ section.id }} .dq-anim-left { animation: dqCineIn 1.1s var(--dq-ease) both; will-change: opacity, transform, filter; }
 
-  /* ---------- スクロール誘導(イントロのみ) ---------- */
-  #destination-quiz-{{ section.id }} .dq-scroll-cue {
-    position: absolute; left: 50%; bottom: clamp(24px, 4vh, 48px); transform: translateX(-50%);
-    display: flex; flex-direction: column; align-items: center; gap: 10px;
-    font-size: 10px; letter-spacing: 0.3em; text-transform: uppercase; opacity: 0.7; z-index: 1;
-  }
-  #destination-quiz-{{ section.id }} .dq-scroll-cue::after { content: ''; width: 1px; height: 30px; background: currentColor; opacity: 0.6; animation: dqScrollPulse 2.2s ease-in-out infinite; }
-  @keyframes dqScrollPulse { 0%,100% { opacity: 0.15; } 50% { opacity: 0.7; } }
+  @keyframes dqRevealUp { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes dqWordUp { from { transform: translateY(112%); } to { transform: translateY(0); } }
+  #destination-quiz-{{ section.id }} .dq-mask-wrap { display: inline-block; overflow: hidden; vertical-align: top; }
+  #destination-quiz-{{ section.id }} .dq-reveal-word { display: inline-block; animation: dqWordUp .95s var(--dq-ease) both; }
 
-  /* ---------- 進捗(写真の上に重ねる薄いUIチロム) ---------- */
-  #destination-quiz-{{ section.id }} .dq-progress {
-    position: absolute; top: clamp(24px, 5vh, 56px); left: 50%; transform: translateX(-50%);
-    display: flex; align-items: center; gap: 16px; width: min(420px, 70vw); z-index: 1;
+  /* ---------- シーン(写真フルブリード) ---------- */
+  #destination-quiz-{{ section.id }} .dq-scene {
+    position: relative; min-height: 100svh; width: 100%; overflow: hidden;
+    display: flex; align-items: center; justify-content: center; padding: clamp(90px, 12vh, 140px) 28px 64px;
   }
-  #destination-quiz-{{ section.id }} .dq-progress-index { font-family: var(--font-heading-family, serif); font-style: italic; font-size: 11px; letter-spacing: 0.1em; white-space: nowrap; opacity: 0.85; }
-  #destination-quiz-{{ section.id }} .dq-progress-track { flex: 1; height: 1px; background: rgba(255,255,255,0.28); position: relative; }
-  #destination-quiz-{{ section.id }} .dq-progress-fill { position: absolute; left: 0; top: -1px; height: 1px; width: 0%; background: var(--dq-gold-light); }
+  #destination-quiz-{{ section.id }} .dq-scene-bg {
+    position: absolute; inset: 0; z-index: 0; overflow: hidden;
+    background: radial-gradient(130% 100% at 30% 15%, #332a1f 0%, #1a1712 45%, #0c0a08 85%);
+  }
+  #destination-quiz-{{ section.id }} .dq-scene-bg img {
+    position: absolute; inset: -6%; width: 112%; height: 112%; object-fit: cover; opacity: 0;
+    filter: blur(18px) saturate(1.05); transition: opacity 1.6s var(--dq-ease), filter 1.6s var(--dq-ease);
+    will-change: opacity, transform, filter;
+  }
+  #destination-quiz-{{ section.id }} .dq-scene-bg img.is-active { opacity: 1; filter: blur(0) saturate(1.05); animation: dqKenburns 20s ease-in-out infinite alternate; }
+  @keyframes dqKenburns { from { transform: scale(1) translate(0,0); } to { transform: scale(1.13) translate(-2%,-1.4%); } }
+  #destination-quiz-{{ section.id }} .dq-scene-veil {
+    position: absolute; inset: 0; z-index: 1;
+    background: linear-gradient(180deg, rgba(9,8,6,.5) 0%, rgba(9,8,6,.18) 32%, rgba(9,8,6,.35) 60%, rgba(9,8,6,.72) 100%);
+  }
+  #destination-quiz-{{ section.id }} .dq-scene-content { position: relative; z-index: 3; width: 100%; max-width: 640px; text-align: center; color: var(--dq-warm-white); }
 
-  /* ---------- 質問文 ---------- */
-  #destination-quiz-{{ section.id }} .dq-question {
-    font-family: var(--font-heading-family, serif);
-    font-weight: 400;
-    font-size: clamp(21px, calc(var(--font-heading-scale, 1) * 3vw), 32px);
-    line-height: 1.5;
-    margin: 0 0 48px;
+  /* ---------- イントロ ---------- */
+  #destination-quiz-{{ section.id }} .dq-hero-eyebrow {
+    display: inline-block; font-style: italic; font-weight: 500; font-size: .74rem;
+    letter-spacing: .42em; color: var(--dq-gold); margin-bottom: 26px; text-transform: uppercase;
+    opacity: 0; animation: dqRevealUp .9s var(--dq-ease) .2s both;
   }
+  #destination-quiz-{{ section.id }} .dq-hero-title { font-size: clamp(2rem, 6vw, 3.2rem); font-weight: 700; line-height: 1.5; letter-spacing: .03em; margin-bottom: 26px; }
+  #destination-quiz-{{ section.id }} .dq-hero-title em { font-style: normal; color: var(--dq-gold); }
+  #destination-quiz-{{ section.id }} .dq-hero-sub {
+    font-size: .95rem; color: rgba(250,247,242,.82); line-height: 2; letter-spacing: .05em; max-width: 420px; margin: 0 auto 40px;
+    opacity: 0; animation: dqRevealUp .9s var(--dq-ease) .85s both;
+  }
+  #destination-quiz-{{ section.id }} .dq-hero-pills { display: flex; gap: 28px; justify-content: center; flex-wrap: wrap; margin-bottom: 44px; opacity: 0; animation: dqRevealUp .9s var(--dq-ease) 1s both; }
+  #destination-quiz-{{ section.id }} .dq-hero-pill { font-style: italic; font-size: .76rem; letter-spacing: .18em; color: var(--dq-gold); border-bottom: 1px solid rgba(203,168,118,.55); padding-bottom: 3px; }
+  #destination-quiz-{{ section.id }} .dq-hero-cta-wrap { opacity: 0; animation: dqRevealUp .9s var(--dq-ease) 1.15s both; display: flex; flex-direction: column; align-items: center; }
+  #destination-quiz-{{ section.id }} .dq-hero-hint { font-style: italic; font-size: .7rem; color: rgba(255,255,255,.55); letter-spacing: .24em; margin-top: 18px; text-align: center; }
 
-  /* ---------- 選択肢：写真の上のミニマルなテキスト行 ---------- */
-  #destination-quiz-{{ section.id }} .dq-choices { max-width: 480px; margin: 0 auto; }
-  #destination-quiz-{{ section.id }} .dq-choice {
-    display: flex; align-items: baseline; gap: 18px;
-    width: 100%; text-align: left;
-    background: none; border: none; border-top: var(--dq-choice-divider-thickness) solid var(--dq-hair);
-    padding: 19px 2px;
-    font-size: 16px; color: inherit;
-    cursor: pointer; position: relative; will-change: transform;
-    transition: transform 0.5s cubic-bezier(.22,1,.36,1);
+  /* ---------- スクロール誘導 ---------- */
+  #destination-quiz-{{ section.id }} .dq-next-indicator {
+    position: absolute; bottom: 28px; left: 50%; transform: translateX(-50%); z-index: 3;
+    display: flex; flex-direction: column; align-items: center; gap: 12px; color: rgba(255,255,255,.7);
+    opacity: 0; animation: dqRevealUp .9s var(--dq-ease) 1.3s both;
   }
-  #destination-quiz-{{ section.id }} .dq-choices > button:last-child { border-bottom: var(--dq-choice-divider-thickness) solid var(--dq-hair); }
-  #destination-quiz-{{ section.id }} .dq-choice-index { font-family: var(--font-heading-family, serif); font-style: italic; font-size: var(--dq-choice-index-size); color: var(--dq-choice-index-color); flex-shrink: 0; width: 20px; }
-  #destination-quiz-{{ section.id }} .dq-choice-label { flex: 1; }
-  #destination-quiz-{{ section.id }} .dq-choice-arrow { opacity: 0; transform: translateX(-6px); transition: opacity 0.4s ease, transform 0.4s cubic-bezier(.22,1,.36,1); color: var(--dq-gold-light); font-size: 13px; }
-  #destination-quiz-{{ section.id }} .dq-choice:hover { transform: translateX(10px); }
-  #destination-quiz-{{ section.id }} .dq-choice:hover .dq-choice-arrow { opacity: 1; transform: translateX(0); }
-  #destination-quiz-{{ section.id }} .dq-choice:focus-visible { outline: 1px solid var(--dq-gold-light); outline-offset: 6px; }
+  #destination-quiz-{{ section.id }} .dq-next-indicator-num { font-style: italic; font-size: .72rem; letter-spacing: .18em; }
+  #destination-quiz-{{ section.id }} .dq-next-indicator-line {
+    position: relative; width: 1px; height: 40px; overflow: hidden;
+    background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.7) 60%, rgba(255,255,255,0));
+  }
+  #destination-quiz-{{ section.id }} .dq-next-indicator-line::after { content: ''; position: absolute; top: -40px; left: 0; width: 1px; height: 40px; background: var(--dq-gold); animation: dqCueDrop 2.6s ease-in-out infinite; }
+  @keyframes dqCueDrop { 0% { top: -40px; } 100% { top: 40px; } }
 
-  /* ---------- 結果：導入(コンパクト・写真なし) ---------- */
-  #destination-quiz-{{ section.id }} .dq-result-intro {
-    min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
-    text-align: center; padding: clamp(48px, 7vh, 80px) clamp(24px, 6vw, 64px);
+  /* ---------- 円形フロストボタン ---------- */
+  #destination-quiz-{{ section.id }} .dq-btn-circle {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    width: 164px; height: 164px; border-radius: 50%; flex-shrink: 0;
+    background: rgba(255,255,255,.2); border: 1px solid rgba(255,255,255,.62);
+    backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%);
+    color: var(--dq-warm-white); font-size: .9rem; font-weight: 700; letter-spacing: .1em; cursor: pointer;
+    transition: transform .45s var(--dq-ease), box-shadow .45s var(--dq-ease), background .35s var(--dq-ease);
+    box-shadow: 0 22px 50px -18px rgba(0,0,0,.6), 0 0 0 1px rgba(0,0,0,.25);
   }
+  #destination-quiz-{{ section.id }} .dq-btn-circle::after { content: '→'; letter-spacing: 0; font-size: .95rem; transition: transform .3s var(--dq-ease); }
+  #destination-quiz-{{ section.id }} .dq-btn-circle:hover { transform: scale(1.06); background: rgba(255,255,255,.22); box-shadow: 0 28px 60px -14px rgba(203,168,118,.5); }
+  #destination-quiz-{{ section.id }} .dq-btn-circle:hover::after { transform: translateX(4px); }
+  #destination-quiz-{{ section.id }} .dq-btn-circle:active { transform: scale(.97); }
+  #destination-quiz-{{ section.id }} .dq-btn-circle:disabled { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.18); color: rgba(255,255,255,.32); cursor: not-allowed; box-shadow: none; }
+  #destination-quiz-{{ section.id }} .dq-btn-circle:disabled::after { display: none; }
 
-  /* ---------- 結果：写真パネル。PCは3枚横並び(トリプティク)で一目で見える、
-     スマホは縦積みだが100vhよりやや低くして「間延び」させない ---------- */
-  #destination-quiz-{{ section.id }} .dq-result-list { display: block; }
-  #destination-quiz-{{ section.id }} .dq-result-card {
-    position: relative; display: flex; align-items: flex-end;
-    min-height: 78svh; text-decoration: none; color: #fdfcfa; overflow: hidden;
-  }
-  @media (min-width: 900px) {
-    #destination-quiz-{{ section.id }} .dq-result-list { display: flex; height: 88vh; }
-    #destination-quiz-{{ section.id }} .dq-result-card { flex: 1 1 0; min-height: 100%; height: 100%; }
-  }
-  #destination-quiz-{{ section.id }} .dq-result-card .dq-photo-bg img { transition: transform 1.2s cubic-bezier(.22,1,.36,1), filter 1.2s ease; }
-  #destination-quiz-{{ section.id }} .dq-result-card:hover .dq-photo-bg img { transform: scale(1.045); filter: brightness(1.04); }
-  #destination-quiz-{{ section.id }} .dq-result-card .dq-photo-bg::after {
-    background: linear-gradient(180deg, rgba(10,9,7,0.15) 0%, rgba(10,9,7,0.2) 35%, rgba(10,9,7,0.85) 100%);
-  }
-  #destination-quiz-{{ section.id }} .dq-result-body { position: relative; z-index: 1; width: 100%; padding: clamp(24px, 4vw, 40px); }
-  #destination-quiz-{{ section.id }} .dq-result-rank {
-    font-family: var(--font-heading-family, serif); font-style: italic; font-size: 14px; letter-spacing: 0.1em;
-    color: var(--dq-gold-light); display: block; margin-bottom: 10px;
-    text-shadow: 0 2px 12px rgba(0,0,0,0.5);
-  }
-  #destination-quiz-{{ section.id }} .dq-result-name {
-    font-family: var(--font-heading-family, serif); font-weight: 500;
-    font-size: clamp(32px, 4.6vw, 46px); line-height: 1.15; margin: 0 0 16px;
-    color: var(--dq-result-name-color);
-    text-shadow: 0 4px 20px rgba(0,0,0,0.55);
-  }
-  #destination-quiz-{{ section.id }} .dq-result-view {
-    display: inline-flex; align-items: center; gap: 8px;
-    font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #fdfcfa;
-    font-weight: 600; opacity: 0.95; text-shadow: 0 2px 10px rgba(0,0,0,0.5);
-  }
-  #destination-quiz-{{ section.id }} .dq-result-card:hover .dq-result-view { opacity: 1; }
+  /* ---------- 質問画面 ---------- */
+  #destination-quiz-{{ section.id }} .dq-q-wrap { width: 100%; max-width: 560px; margin: 0 auto; }
+  #destination-quiz-{{ section.id }} .dq-progress { margin-bottom: 30px; max-width: 200px; margin-left: auto; margin-right: auto; }
+  #destination-quiz-{{ section.id }} .dq-progress-track { height: 1px; background: rgba(255,255,255,.22); position: relative; }
+  #destination-quiz-{{ section.id }} .dq-progress-fill { height: 100%; background: var(--dq-gold); transition: width .8s var(--dq-ease); position: relative; }
+  #destination-quiz-{{ section.id }} .dq-progress-dot { position: absolute; right: -4px; top: -3.5px; width: 8px; height: 8px; background: var(--dq-charcoal); border: 1.5px solid var(--dq-gold); border-radius: 50%; }
+  #destination-quiz-{{ section.id }} .dq-q-label { display: inline-flex; align-items: baseline; justify-content: center; gap: 10px; margin-bottom: 16px; opacity: 0; animation: dqRevealUp .7s var(--dq-ease) .1s both; }
+  #destination-quiz-{{ section.id }} .dq-kicker-num { font-style: italic; font-weight: 500; font-size: .92rem; letter-spacing: .05em; color: var(--dq-gold); }
+  #destination-quiz-{{ section.id }} .dq-kicker-sep { font-style: italic; color: rgba(255,255,255,.4); font-size: .78rem; }
+  #destination-quiz-{{ section.id }} .dq-q-label-text { font-style: italic; font-size: .7rem; letter-spacing: .32em; color: var(--dq-gold); }
+  #destination-quiz-{{ section.id }} .dq-q-title { font-size: clamp(1.3rem, 3.6vw, 1.85rem); font-weight: 700; line-height: 1.6; letter-spacing: .02em; margin-bottom: 34px; text-align: center; }
 
-  /* ---------- 結果の終わり ---------- */
-  #destination-quiz-{{ section.id }} .dq-result-end {
-    min-height: 34vh; display: flex; align-items: center; justify-content: center;
-    background: var(--dq-paper); color: var(--dq-ink);
+  /* ---------- 選択肢(下線リスト) ---------- */
+  #destination-quiz-{{ section.id }} .dq-opts { display: flex; flex-direction: column; border-top: 1px solid rgba(255,255,255,.22); text-align: left; }
+  #destination-quiz-{{ section.id }} .dq-opt {
+    display: flex; align-items: center; width: 100%; background: transparent; border: none;
+    border-bottom: 1px solid rgba(255,255,255,.22); padding: 0; cursor: pointer; text-align: left;
+    color: var(--dq-warm-white); transition: background .3s var(--dq-ease); position: relative; overflow: hidden;
   }
+  #destination-quiz-{{ section.id }} .dq-opt:hover { background: rgba(255,255,255,.05); }
+  #destination-quiz-{{ section.id }} .dq-opt.is-selected { background: rgba(203,168,118,.07); }
+  #destination-quiz-{{ section.id }} .dq-opt-inner { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 21px 4px; gap: 16px; transition: transform .35s var(--dq-ease); }
+  #destination-quiz-{{ section.id }} .dq-opt:hover .dq-opt-inner,
+  #destination-quiz-{{ section.id }} .dq-opt.is-selected .dq-opt-inner { transform: translateX(10px); }
+  #destination-quiz-{{ section.id }} .dq-opt-main { font-size: .98rem; font-weight: 700; line-height: 1.5; letter-spacing: .03em; display: block; transition: color .3s; }
+  #destination-quiz-{{ section.id }} .dq-opt.is-selected .dq-opt-main { color: var(--dq-gold); }
+  #destination-quiz-{{ section.id }} .dq-opt-radio { width: 19px; height: 19px; border: 1.5px solid rgba(255,255,255,.4); border-radius: 50%; flex-shrink: 0; position: relative; transition: border-color .2s; }
+  #destination-quiz-{{ section.id }} .dq-opt.is-selected .dq-opt-radio { border-color: var(--dq-gold); }
+  #destination-quiz-{{ section.id }} .dq-opt.is-selected .dq-opt-radio::after { content: ''; position: absolute; inset: 5px; background: var(--dq-gold); border-radius: 50%; animation: dqRadioIn .18s var(--dq-ease); }
+  @keyframes dqRadioIn { from { transform: scale(0); } to { transform: scale(1); } }
+  #destination-quiz-{{ section.id }} .dq-ripple { position: absolute; border-radius: 50%; background: rgba(203,168,118,.28); transform: scale(0); animation: dqRippleAnim .6s linear; pointer-events: none; }
+  @keyframes dqRippleAnim { to { transform: scale(4); opacity: 0; } }
+  #destination-quiz-{{ section.id }} .dq-opt:focus-visible { outline: 1px solid var(--dq-gold); outline-offset: -2px; }
 
-  /* ---------- 空状態 ---------- */
-  #destination-quiz-{{ section.id }} .dq-empty { text-align: center; font-size: 14px; opacity: 0.75; }
-
-  /* ---------- カスタムカーソル(精密ポインタのみ) ---------- */
-  #destination-quiz-{{ section.id }} .dq-cursor {
-    position: fixed; top: 0; left: 0; width: 10px; height: 10px; margin: -5px 0 0 -5px;
-    border-radius: 50%; background: var(--dq-gold-light);
-    pointer-events: none; z-index: 60; opacity: 0; mix-blend-mode: difference;
-    transition: width 0.35s cubic-bezier(.22,1,.36,1), height 0.35s cubic-bezier(.22,1,.36,1), margin 0.35s cubic-bezier(.22,1,.36,1), opacity 0.3s ease;
-    will-change: transform;
+  /* ---------- NAV(戻る) ---------- */
+  #destination-quiz-{{ section.id }} .dq-nav-wrap { margin-top: 36px; display: flex; flex-direction: column; align-items: center; gap: 18px; }
+  #destination-quiz-{{ section.id }} .dq-btn-back {
+    background: none; border: none; font-style: italic; font-size: .8rem; color: rgba(255,255,255,.62); letter-spacing: .1em;
+    cursor: pointer; border-bottom: 1px solid rgba(255,255,255,.3); padding-bottom: 3px; transition: color .2s, border-color .2s;
   }
-  #destination-quiz-{{ section.id }}.dq-cursor-active { cursor: none; }
-  #destination-quiz-{{ section.id }} .dq-cursor.is-visible { opacity: 1; }
-  #destination-quiz-{{ section.id }} .dq-cursor.is-hover { width: 40px; height: 40px; margin: -20px 0 0 -20px; background: #fdfcfa; }
+  #destination-quiz-{{ section.id }} .dq-btn-back:hover { color: var(--dq-gold); border-color: var(--dq-gold); }
 
-  /* ---------- CSSフォールバック（GSAP未読込 or prefers-reduced-motion） ---------- */
-  #destination-quiz-{{ section.id }} .dq-fallback-in { animation: dqFallbackIn 0.5s ease both; }
-  @keyframes dqFallbackIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+  /* ---------- ローディング(スロットマシン風) ---------- */
+  #destination-quiz-{{ section.id }} .dq-loading-outer { width: 100%; max-width: 480px; margin: 0 auto; text-align: center; }
+  #destination-quiz-{{ section.id }} .dq-loading-kicker { font-style: italic; font-size: .74rem; letter-spacing: .36em; color: var(--dq-gold); display: block; margin-bottom: 30px; }
+  #destination-quiz-{{ section.id }} .dq-loading-title { font-size: 1.2rem; font-weight: 600; line-height: 1.95; letter-spacing: .06em; margin-bottom: 44px; color: var(--dq-warm-white); }
+  #destination-quiz-{{ section.id }} .dq-loading-ring { width: 44px; height: 44px; border: 1.5px solid rgba(255,255,255,.25); border-top-color: var(--dq-gold); border-radius: 50%; animation: dqSpin 1.1s linear infinite; margin: 0 auto 36px; }
+  @keyframes dqSpin { to { transform: rotate(360deg); } }
+  #destination-quiz-{{ section.id }} .dq-loading-slot { height: 58px; overflow: hidden; margin-bottom: 8px; }
+  #destination-quiz-{{ section.id }} .dq-loading-slot-inner { display: flex; flex-direction: column; }
+  #destination-quiz-{{ section.id }} .dq-loading-slot-item { height: 56px; display: flex; align-items: center; justify-content: center; font-size: 1.7rem; font-style: italic; letter-spacing: .16em; color: var(--dq-gold); flex-shrink: 0; }
+  #destination-quiz-{{ section.id }} .dq-loading-final {
+    font-size: 2.3rem; font-style: italic; letter-spacing: .16em; color: var(--dq-gold);
+    opacity: 0; transform: translateY(10px) scale(.92); transition: opacity .9s var(--dq-ease), transform .9s var(--dq-ease);
+    min-height: 56px; display: none; text-shadow: 0 0 40px rgba(203,168,118,.4);
+  }
+  #destination-quiz-{{ section.id }} .dq-loading-final.is-visible { opacity: 1; transform: translateY(0) scale(1); }
 
-  @media (max-width: 640px) {
-    #destination-quiz-{{ section.id }} .dq-result-body { padding-bottom: 56px; }
+  /* ---------- 結果:ヒーロー ---------- */
+  #destination-quiz-{{ section.id }} .dq-result-hero { position: relative; min-height: 84svh; display: flex; align-items: flex-end; justify-content: center; padding: 130px 28px 64px; text-align: center; overflow: hidden; }
+  #destination-quiz-{{ section.id }} .dq-result-hero-content { position: relative; z-index: 2; color: var(--dq-warm-white); max-width: 680px; }
+  #destination-quiz-{{ section.id }} .dq-result-kicker { font-style: italic; font-size: .74rem; letter-spacing: .3em; color: var(--dq-gold); display: block; margin-bottom: 16px; opacity: 0; animation: dqRevealUp .8s var(--dq-ease) .1s both; }
+  #destination-quiz-{{ section.id }} .dq-result-name { font-size: clamp(2rem, 7vw, 3.2rem); font-weight: 700; letter-spacing: .05em; line-height: 1.2; margin-bottom: 10px; }
+  #destination-quiz-{{ section.id }} .dq-result-name-en { font-style: italic; font-size: .92rem; letter-spacing: .2em; color: var(--dq-gold); opacity: 0; animation: dqRevealUp .8s var(--dq-ease) .5s both; }
+
+  /* ---------- 結果:本文(白背景) ---------- */
+  #destination-quiz-{{ section.id }} .dq-result-body { max-width: 720px; margin: 0 auto; padding: 0 28px 80px; background: var(--dq-off-white); color: var(--dq-ink); position: relative; z-index: 2; }
+  #destination-quiz-{{ section.id }} .dq-result-body::before { content: ''; position: absolute; top: -80px; left: 0; right: 0; height: 80px; background: linear-gradient(180deg, transparent, var(--dq-off-white)); pointer-events: none; }
+
+  #destination-quiz-{{ section.id }} .dq-summary-bar { display: flex; flex-wrap: wrap; gap: 9px; padding: 32px 0 22px; justify-content: center; border-bottom: 1px solid var(--dq-line-soft); }
+  #destination-quiz-{{ section.id }} .dq-summary-tag { font-size: .74rem; color: var(--dq-ink-2); border: 1px solid var(--dq-line-soft); background: var(--dq-warm-white); border-radius: 999px; padding: 7px 15px; letter-spacing: .06em; }
+
+  #destination-quiz-{{ section.id }} .dq-matching-section { padding: 26px 0 0; }
+  #destination-quiz-{{ section.id }} .dq-matching-label-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+  #destination-quiz-{{ section.id }} .dq-matching-label-text { font-style: italic; font-size: .72rem; letter-spacing: .26em; color: var(--dq-ink-3); }
+  #destination-quiz-{{ section.id }} .dq-matching-rate { font-size: 1.55rem; font-weight: 600; color: var(--dq-gold-dk); font-style: italic; letter-spacing: .05em; }
+  #destination-quiz-{{ section.id }} .dq-matching-track { height: 2px; background: var(--dq-line-soft); border-radius: 2px; overflow: hidden; }
+  #destination-quiz-{{ section.id }} .dq-matching-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--dq-gold-dk), var(--dq-gold)); transition: width 1.3s var(--dq-ease); }
+  #destination-quiz-{{ section.id }} .dq-chips-wrap { margin-top: 16px; }
+  #destination-quiz-{{ section.id }} .dq-chips-label { font-style: italic; font-size: .68rem; letter-spacing: .22em; color: var(--dq-ink-3); display: block; margin-bottom: 9px; margin-top: 14px; }
+  #destination-quiz-{{ section.id }} .dq-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+  #destination-quiz-{{ section.id }} .dq-chip { display: inline-flex; align-items: center; gap: 4px; font-size: .76rem; padding: 6px 13px; letter-spacing: .04em; border-radius: 999px; }
+  #destination-quiz-{{ section.id }} .dq-chip-yes { background: #f0f7ee; color: #4a7d4a; border: 1px solid #cfe6c8; }
+  #destination-quiz-{{ section.id }} .dq-chip-no { background: #faf1ee; color: var(--dq-gold-dk); border: 1px solid #ecd6c9; }
+
+  #destination-quiz-{{ section.id }} .dq-appeal { padding: 24px 0; margin: 30px 0; border-top: 1px solid var(--dq-line-soft); border-bottom: 1px solid var(--dq-line-soft); font-family: var(--font-heading-family, serif); font-style: italic; font-size: 1rem; line-height: 2; letter-spacing: .02em; color: var(--dq-ink-2); }
+
+  #destination-quiz-{{ section.id }} .dq-dest-card { margin: 0 0 18px; border-radius: 20px; overflow: hidden; background: var(--dq-warm-white); opacity: 0; transform: translateY(20px); transition: opacity .7s var(--dq-ease), transform .7s var(--dq-ease); box-shadow: 0 26px 56px -30px rgba(28,26,22,.25); }
+  #destination-quiz-{{ section.id }} .dq-dest-card.is-visible { opacity: 1; transform: translateY(0); }
+  #destination-quiz-{{ section.id }} .dq-dest-card-head { display: flex; justify-content: space-between; align-items: center; padding: 15px 22px; }
+  #destination-quiz-{{ section.id }} .dq-dest-card-head-label { font-style: italic; font-size: .68rem; letter-spacing: .24em; color: var(--dq-ink-3); }
+  #destination-quiz-{{ section.id }} .dq-dest-card-head-rank { font-style: italic; font-size: .66rem; letter-spacing: .14em; color: var(--dq-gold-dk); }
+  #destination-quiz-{{ section.id }} .dq-dest-card-img-wrap { overflow: hidden; aspect-ratio: 16/9; }
+  #destination-quiz-{{ section.id }} .dq-dest-card-img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .9s var(--dq-ease); }
+  #destination-quiz-{{ section.id }} .dq-dest-card:hover .dq-dest-card-img { transform: scale(1.05); }
+  #destination-quiz-{{ section.id }} .dq-dest-card-body { padding: 26px 24px; }
+  #destination-quiz-{{ section.id }} .dq-dest-card-title { font-size: 1.15rem; font-weight: 700; letter-spacing: .05em; margin-bottom: 12px; line-height: 1.5; }
+  #destination-quiz-{{ section.id }} .dq-dest-card-reason { font-size: .87rem; color: var(--dq-ink-2); line-height: 1.9; margin-bottom: 16px; letter-spacing: .02em; }
+  #destination-quiz-{{ section.id }} .dq-dest-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+  #destination-quiz-{{ section.id }} .dq-dest-tag { font-size: .7rem; color: var(--dq-gold-dk); border: 1px solid var(--dq-gold); border-radius: 999px; padding: 5px 13px; letter-spacing: .06em; }
+  #destination-quiz-{{ section.id }} .dq-dest-link {
+    display: flex; align-items: center; justify-content: center; gap: 8px; background: var(--dq-ink); color: var(--dq-warm-white);
+    border-radius: 999px; padding: 17px; text-decoration: none; font-size: .84rem; font-weight: 700; letter-spacing: .18em;
+    transition: background .3s var(--dq-ease), transform .3s var(--dq-ease);
+  }
+  #destination-quiz-{{ section.id }} .dq-dest-link:hover { background: var(--dq-gold-dk); transform: translateY(-2px); }
+  #destination-quiz-{{ section.id }} .dq-dest-link::after { content: '→'; letter-spacing: 0; }
+
+  #destination-quiz-{{ section.id }} .dq-consult-block {
+    margin: 0 0 22px; background: var(--dq-charcoal); border-radius: 20px; padding: 32px 26px; text-align: center;
+    opacity: 0; transform: translateY(18px); transition: opacity .7s var(--dq-ease) .1s, transform .7s var(--dq-ease) .1s;
+  }
+  #destination-quiz-{{ section.id }} .dq-consult-block.is-visible { opacity: 1; transform: translateY(0); }
+  #destination-quiz-{{ section.id }} .dq-consult-label { font-style: italic; font-size: .7rem; letter-spacing: .3em; color: var(--dq-gold); display: block; margin-bottom: 12px; }
+  #destination-quiz-{{ section.id }} .dq-consult-title { font-size: 1.02rem; font-weight: 600; color: var(--dq-warm-white); letter-spacing: .05em; line-height: 1.7; margin-bottom: 20px; }
+  #destination-quiz-{{ section.id }} .dq-consult-btn {
+    display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; background: var(--dq-gold); color: var(--dq-charcoal);
+    border: none; border-radius: 999px; padding: 17px 18px; font-size: .86rem; font-weight: 700; letter-spacing: .14em;
+    cursor: pointer; text-decoration: none; transition: background .3s var(--dq-ease), transform .3s var(--dq-ease); margin-bottom: 12px;
+  }
+  #destination-quiz-{{ section.id }} .dq-consult-btn:hover { background: var(--dq-gold-lt); transform: translateY(-2px); }
+  #destination-quiz-{{ section.id }} .dq-consult-note { font-size: .72rem; color: rgba(255,255,255,.45); letter-spacing: .06em; margin-top: 14px; line-height: 1.7; }
+
+  #destination-quiz-{{ section.id }} .dq-alt-heading { display: flex; align-items: center; gap: 16px; margin-bottom: 8px; margin-top: 16px; }
+  #destination-quiz-{{ section.id }} .dq-alt-heading-line { flex: 1; height: 1px; background: var(--dq-line-soft); }
+  #destination-quiz-{{ section.id }} .dq-alt-heading-text { font-size: .78rem; font-weight: 700; letter-spacing: .16em; color: var(--dq-ink-3); white-space: nowrap; }
+  #destination-quiz-{{ section.id }} .dq-alt-heading-en { font-style: italic; font-size: .68rem; letter-spacing: .22em; color: var(--dq-gold-dk); display: block; text-align: center; margin-bottom: 24px; }
+  #destination-quiz-{{ section.id }} .dq-alt-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-bottom: 36px; }
+  #destination-quiz-{{ section.id }} .dq-alt-card { display: block; border-radius: 16px; overflow: hidden; text-decoration: none; color: var(--dq-ink); transition: box-shadow .35s var(--dq-ease), transform .35s var(--dq-ease); opacity: 0; transform: translateY(16px); }
+  #destination-quiz-{{ section.id }} .dq-alt-card.is-visible { opacity: 1; transform: translateY(0); }
+  #destination-quiz-{{ section.id }} .dq-alt-card:hover { transform: translateY(-5px) !important; box-shadow: 0 22px 44px -22px rgba(28,26,22,.35); }
+  #destination-quiz-{{ section.id }} .dq-alt-card-img-wrap { overflow: hidden; aspect-ratio: 4/3; }
+  #destination-quiz-{{ section.id }} .dq-alt-card-img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .6s var(--dq-ease); }
+  #destination-quiz-{{ section.id }} .dq-alt-card:hover .dq-alt-card-img { transform: scale(1.08); }
+  #destination-quiz-{{ section.id }} .dq-alt-card-body { padding: 12px 3px; }
+  #destination-quiz-{{ section.id }} .dq-alt-card-name { font-size: .88rem; font-weight: 700; letter-spacing: .04em; margin-bottom: 5px; }
+  #destination-quiz-{{ section.id }} .dq-alt-match-wrap { display: flex; align-items: center; gap: 7px; margin: 5px 0 6px; }
+  #destination-quiz-{{ section.id }} .dq-alt-match-bar { flex: 1; height: 2px; background: var(--dq-line-soft); border-radius: 2px; }
+  #destination-quiz-{{ section.id }} .dq-alt-match-fill { height: 100%; background: var(--dq-gold); border-radius: 2px; }
+  #destination-quiz-{{ section.id }} .dq-alt-match-pct { font-size: .66rem; color: var(--dq-gold-dk); white-space: nowrap; }
+
+  #destination-quiz-{{ section.id }} .dq-share-insta-block { margin-bottom: 20px; border-radius: 16px; background: linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888); padding: 1px; }
+  #destination-quiz-{{ section.id }} .dq-share-insta-inner { background: var(--dq-warm-white); border-radius: 15px; padding: 16px 18px; display: flex; align-items: center; gap: 12px; }
+  #destination-quiz-{{ section.id }} .dq-share-insta-text { flex: 1; }
+  #destination-quiz-{{ section.id }} .dq-share-insta-title { font-size: .84rem; font-weight: 700; letter-spacing: .04em; margin-bottom: 4px; }
+  #destination-quiz-{{ section.id }} .dq-share-insta-sub { font-size: .7rem; color: var(--dq-ink-3); line-height: 1.5; letter-spacing: .02em; }
+  #destination-quiz-{{ section.id }} .dq-share-insta-btn { flex-shrink: 0; background: var(--dq-ink); color: var(--dq-warm-white); border: none; border-radius: 999px; padding: 10px 16px; font-size: .72rem; font-weight: 700; letter-spacing: .1em; cursor: pointer; transition: background .25s; white-space: nowrap; }
+  #destination-quiz-{{ section.id }} .dq-share-insta-btn:hover { background: var(--dq-gold-dk); }
+
+  #destination-quiz-{{ section.id }} .dq-share-row { display: flex; gap: 10px; margin-bottom: 22px; }
+  #destination-quiz-{{ section.id }} .dq-share-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px; padding: 15px 8px; border: none; border-radius: 999px; cursor: pointer; font-size: .74rem; font-weight: 700; letter-spacing: .06em; transition: opacity .2s, transform .2s; white-space: nowrap; }
+  #destination-quiz-{{ section.id }} .dq-share-btn:hover { opacity: .85; transform: translateY(-2px); }
+  #destination-quiz-{{ section.id }} .dq-sb-x { background: #111; color: #fff; }
+  #destination-quiz-{{ section.id }} .dq-sb-line { background: #06C755; color: #fff; }
+  #destination-quiz-{{ section.id }} .dq-sb-copy { background: var(--dq-warm-white); color: var(--dq-ink); border: 1px solid var(--dq-line-soft); }
+  #destination-quiz-{{ section.id }} .dq-btn-restart { display: block; width: 100%; background: none; border: 1px solid var(--dq-line-soft); border-radius: 999px; padding: 16px; font-size: .84rem; letter-spacing: .18em; color: var(--dq-ink-2); cursor: pointer; transition: all .25s; }
+  #destination-quiz-{{ section.id }} .dq-btn-restart:hover { border-color: var(--dq-gold); color: var(--dq-ink); }
+
+  #destination-quiz-{{ section.id }} .dq-empty { text-align: center; font-size: .85rem; color: var(--dq-ink-3); padding: 40px 0; }
+
+  /* ---------- トースト ---------- */
+  #destination-quiz-{{ section.id }} .dq-toast {
+    position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%) translateY(14px); background: var(--dq-charcoal);
+    color: #fff; padding: 12px 26px; border-radius: 999px; font-size: .78rem; letter-spacing: .08em;
+    opacity: 0; transition: all .35s var(--dq-ease); pointer-events: none; z-index: 999; white-space: nowrap;
+  }
+  #destination-quiz-{{ section.id }} .dq-toast.is-shown { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  @media (min-width: 768px) { #destination-quiz-{{ section.id }} .dq-alt-grid { grid-template-columns: repeat(4, 1fr); } }
+  @media (max-width: 600px) {
+    #destination-quiz-{{ section.id }} .dq-scene { padding: 96px 20px 80px; }
+    #destination-quiz-{{ section.id }} .dq-btn-circle { width: 128px; height: 128px; font-size: .78rem; }
+    #destination-quiz-{{ section.id }} .dq-q-title { font-size: 1.15rem; }
+    #destination-quiz-{{ section.id }} .dq-result-name { font-size: 1.8rem; }
+    #destination-quiz-{{ section.id }} .dq-alt-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    #destination-quiz-{{ section.id }} .dq-share-row { flex-direction: column; }
   }
   @media (prefers-reduced-motion: reduce) {
-    #destination-quiz-{{ section.id }} * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    #destination-quiz-{{ section.id }} * { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
   }
 </style>
 
 <div id="destination-quiz-{{ section.id }}">
-  <section data-dq-stage>
-    <span class="dq-cursor" data-dq-cursor aria-hidden="true"></span>
+  <div class="dq-grain" aria-hidden="true"></div>
 
+  <main>
     {% comment %} --- イントロ --- {% endcomment %}
-    <div class="dq-step" data-step="intro">
-      <div class="dq-cover{% if section.settings.intro_image != blank %} has-photo{% endif %}">
-        {%- if section.settings.intro_image != blank -%}
-        <div class="dq-photo-bg" data-dq-parallax="0.5">
-          <img data-dq-media
-            src="{{ section.settings.intro_image | image_url: width: 2000 }}"
-            srcset="{{ section.settings.intro_image | image_url: width: 1000 }} 1000w, {{ section.settings.intro_image | image_url: width: 2000 }} 2000w"
-            sizes="100vw"
-            alt=""
-            loading="eager"
-            width="2000" height="1125">
+    <div class="dq-screen active dq-anim-up" data-dq-screen="start">
+      <div class="dq-scene">
+        <div class="dq-scene-bg" data-dq-bg="start"></div>
+        <div class="dq-scene-veil"></div>
+        <div class="dq-particles" data-dq-particles></div>
+        <div class="dq-scene-content">
+          <span class="dq-hero-eyebrow dq-serif">{{ section.settings.eyebrow | default: 'PHOTO WEDDING DESTINATION' }}</span>
+          <h1 class="dq-hero-title dq-serif" data-dq-mask>{{ section.settings.heading | default: 'あなたにぴったりの、撮影地が見つかります。' }}</h1>
+          <p class="dq-hero-sub">{{ section.settings.intro_text | default: '質問に答えるだけで、おふたりに合う撮影地をご提案します。' }}</p>
+          <div class="dq-hero-pills" data-dq-pills></div>
+          <div class="dq-hero-cta-wrap">
+            <button type="button" class="dq-btn-circle dq-serif" data-dq-start><span>{{ section.settings.start_label | default: 'はじめる' }}</span></button>
+            <p class="dq-hero-hint dq-serif">tap to begin</p>
+          </div>
         </div>
-        {%- endif -%}
-        <div class="dq-cover-inner" data-dq-parallax="1.2">
-          <p class="dq-eyebrow" data-dq-text>{{ section.settings.eyebrow | default: '30 SECONDS' }}</p>
-          <h2 class="dq-title-xl" data-dq-text data-dq-split style="color: {{ intro_title_color }};">{{ section.settings.heading | default: 'あなたにぴったりの撮影地診断' }}</h2>
-          <p class="dq-subtitle" data-dq-text style="color: {{ intro_subtitle_color }};">{{ section.settings.intro_text | default: '簡単な質問に答えるだけで、おふたりに合う撮影地をご提案します。' }}</p>
-          <button type="button" class="dq-btn quiz-start" data-dq-text>{{ section.settings.start_label | default: '診断をはじめる' }}</button>
-        </div>
-        <p class="dq-scroll-cue" data-dq-text>Scroll</p>
-      </div>
-    </div>
-
-    {% comment %} --- 質問（テンプレート、JSで複製して差し込む。背景写真も設問ごとに切替） --- {% endcomment %}
-    <div class="dq-step is-hidden" data-step="question-template">
-      <div class="dq-cover has-photo">
-        <div class="dq-photo-bg" data-dq-question-bg>
-          <img data-dq-media alt="" width="1600" height="900">
-        </div>
-        <div class="dq-progress">
-          <span class="dq-progress-index quiz-progress"></span>
-          <span class="dq-progress-track"><span class="dq-progress-fill quiz-progress-fill"></span></span>
-        </div>
-        <div class="dq-cover-inner">
-          <h3 class="dq-question quiz-question-text" data-dq-split style="color: {{ question_title_color }};"></h3>
-          <div class="dq-choices quiz-choices" style="color: {{ question_choice_color }};"></div>
+        <div class="dq-next-indicator" aria-hidden="true">
+          <span class="dq-next-indicator-num dq-serif">#01</span>
+          <span class="dq-next-indicator-line"></span>
         </div>
       </div>
     </div>
 
-    {% comment %} --- 結果：導入(コンパクト) + 1件ずつフルブリードの作品パネル --- {% endcomment %}
-    <div class="dq-step is-hidden" data-step="result">
-      <div class="dq-result-intro">
-        <p class="dq-eyebrow">RESULT</p>
-        <h2 class="dq-title-xl" data-dq-split>{{ section.settings.result_heading | default: 'おふたりにおすすめの撮影地' }}</h2>
-      </div>
-      <div class="dq-result-list quiz-results"></div>
-      <div class="dq-result-end">
-        <button type="button" class="dq-link quiz-restart">{{ section.settings.restart_label | default: 'もう一度診断する' }}</button>
+    {% comment %} --- 質問(テンプレート、JSで複製) --- {% endcomment %}
+    <div class="dq-screen" data-dq-screen="question">
+      <div class="dq-scene">
+        <div class="dq-scene-bg" data-dq-bg="question"></div>
+        <div class="dq-scene-veil"></div>
+        <div class="dq-scene-content">
+          <div class="dq-q-wrap">
+            <div class="dq-progress">
+              <div class="dq-progress-track"><div class="dq-progress-fill" data-dq-progress-fill style="width:0%"><div class="dq-progress-dot"></div></div></div>
+            </div>
+            <div class="dq-q-label">
+              <span class="dq-kicker-num dq-serif" data-dq-q-num></span>
+              <span class="dq-kicker-sep dq-serif">/</span>
+              <span class="dq-q-label-text dq-serif" data-dq-q-section></span>
+            </div>
+            <h2 class="dq-q-title dq-serif" data-dq-q-title></h2>
+            <div class="dq-opts" data-dq-opts></div>
+            <div class="dq-nav-wrap">
+              <button type="button" class="dq-btn-back dq-serif" data-dq-back>← 前の質問に戻る</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
-  </section>
+
+    {% comment %} --- ローディング --- {% endcomment %}
+    <div class="dq-screen" data-dq-screen="loading">
+      <div class="dq-scene">
+        <div class="dq-scene-bg" data-dq-bg="loading"></div>
+        <div class="dq-scene-veil"></div>
+        <div class="dq-scene-content">
+          <div class="dq-loading-outer">
+            <span class="dq-loading-kicker dq-serif">SEARCHING YOUR DESTINATION...</span>
+            <p class="dq-loading-title">{{ section.settings.loading_text | default: 'おふたりに最適な<br>撮影地を探しています' }}</p>
+            <div class="dq-loading-ring"></div>
+            <div class="dq-loading-slot"><div class="dq-loading-slot-inner" data-dq-slot></div></div>
+            <div class="dq-loading-final dq-serif" data-dq-loading-final></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {% comment %} --- 結果 --- {% endcomment %}
+    <div class="dq-screen" data-dq-screen="result">
+      <div class="dq-result-hero">
+        <div class="dq-scene-bg" data-dq-bg="result"></div>
+        <div class="dq-scene-veil"></div>
+        <div class="dq-result-hero-content">
+          <span class="dq-result-kicker dq-serif">{{ section.settings.result_kicker | default: 'あなたに最適な撮影地は' }}</span>
+          <h2 class="dq-result-name dq-serif" data-dq-result-name></h2>
+          <p class="dq-result-name-en dq-serif" data-dq-result-name-en></p>
+        </div>
+      </div>
+      <div class="dq-result-body">
+        <div class="dq-summary-bar" data-dq-summary></div>
+        <div class="dq-matching-section" data-dq-matching></div>
+        <div class="dq-appeal" data-dq-appeal></div>
+        <div data-dq-main-card></div>
+        <div data-dq-consult></div>
+        <div>
+          <div class="dq-alt-heading"><span class="dq-alt-heading-line"></span><span class="dq-alt-heading-text">{{ section.settings.alt_heading | default: '他にもおすすめの撮影地' }}</span><span class="dq-alt-heading-line"></span></div>
+          <p class="dq-alt-heading-en dq-serif">Other destinations you might love</p>
+          <div class="dq-alt-grid" data-dq-alt></div>
+        </div>
+        <div>
+          <div class="dq-share-insta-block">
+            <div class="dq-share-insta-inner">
+              <div class="dq-share-insta-text">
+                <p class="dq-share-insta-title">インスタストーリーでシェア</p>
+                <p class="dq-share-insta-sub">画面をスクリーンショット→インスタストーリーに貼りつけてシェア！</p>
+              </div>
+              <button type="button" class="dq-share-insta-btn" data-dq-insta-copy>コピー</button>
+            </div>
+          </div>
+          <div class="dq-share-row">
+            <button type="button" class="dq-share-btn dq-sb-x" data-dq-share-x>Xでシェア</button>
+            <button type="button" class="dq-share-btn dq-sb-line" data-dq-share-line>LINEで送る</button>
+            <button type="button" class="dq-share-btn dq-sb-copy" data-dq-share-copy>URLコピー</button>
+          </div>
+          <button type="button" class="dq-btn-restart dq-serif" data-dq-restart>{{ section.settings.restart_label | default: 'もう一度診断する' }}</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div class="dq-toast" data-dq-toast></div>
 </div>
 
 <script>
 (function () {
   var root = document.getElementById('destination-quiz-{{ section.id }}');
   if (!root) return;
-  var stage = root.querySelector('[data-dq-stage]');
   var destinationsData = JSON.parse(document.getElementById('quiz-destinations-{{ section.id }}').textContent || '[]');
   var photoPool = destinationsData.filter(function (d) { return !!d.image; });
-  var enableCursor = {{ section.settings.enable_custom_cursor | default: true | json }};
-  var enableSmoothScroll = {{ section.settings.enable_smooth_scroll | default: true | json }};
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   /* ================================================================
      診断ロジック（QUESTIONS / スコア / マッチング）は旧版から不変。
+     「section」はキッカー表示用の英字ラベル(演出のみ、採点に影響しない)。
      ================================================================ */
   var QUESTIONS = [
     {
+      section: 'SCENERY',
       text: 'どんな景色に惹かれますか？',
       choices: [
         { label: '透き通るビーチ', themes: ['beach', 'overwater'] },
@@ -431,6 +511,7 @@
       ]
     },
     {
+      section: 'STYLE',
       text: 'ふたりらしい撮影スタイルは？',
       choices: [
         { label: '開放的なリゾート感', themes: ['resort', 'overwater', 'beach'] },
@@ -440,6 +521,7 @@
       ]
     },
     {
+      section: 'MOMENT',
       text: 'どんな時間帯の写真を残したいですか？',
       choices: [
         { label: '眩しい真昼のビーチ', themes: ['beach', 'overwater', 'resort'] },
@@ -448,6 +530,7 @@
       ]
     },
     {
+      section: 'ACTIVITY',
       text: '滞在中に楽しみたいことは？',
       choices: [
         { label: 'ゆったりリゾートステイ', themes: ['resort', 'overwater'] },
@@ -458,65 +541,18 @@
     }
   ];
 
+  /* destination-theme-label.liquidの日本語マッピングと同期させること */
+  var THEME_LABELS = {
+    beach: 'ビーチ', streets: '街並み', palace: '宮殿', heritage: '世界遺産', view: '絶景',
+    lake: '湖', desert: '砂漠', balloon: '気球', church: '教会', museum: '美術館',
+    library: '図書館', resort: 'リゾート', sunset: 'サンセット', overwater: '水上ヴィラ'
+  };
+
   var scores = {};
   var currentQuestion = 0;
+  var selectedThemesOrder = [];
 
-  var introEl = root.querySelector('[data-step="intro"]');
-  var questionTemplateEl = root.querySelector('[data-step="question-template"]');
-  var resultEl = root.querySelector('[data-step="result"]');
-  var progressEl = questionTemplateEl.querySelector('.quiz-progress');
-  var progressFillEl = questionTemplateEl.querySelector('.quiz-progress-fill');
-  var questionTextEl = questionTemplateEl.querySelector('.quiz-question-text');
-  var choicesEl = questionTemplateEl.querySelector('.quiz-choices');
-  var questionBgImg = questionTemplateEl.querySelector('[data-dq-question-bg] img');
-  var resultsEl = resultEl.querySelector('.quiz-results');
-
-  function resetScores() {
-    scores = {};
-    currentQuestion = 0;
-  }
-
-  function buildChoiceButton(choice, index, onPick) {
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'dq-choice';
-    btn.innerHTML =
-      '<span class="dq-choice-index">' + String(index + 1).padStart(2, '0') + '</span>' +
-      '<span class="dq-choice-label">' + choice.label + '</span>' +
-      '<span class="dq-choice-arrow">＞</span>';
-    btn.addEventListener('click', function () { onPick(choice); });
-    return btn;
-  }
-
-  function questionBackgroundFor(index) {
-    if (!photoPool.length) return '';
-    return photoPool[index % photoPool.length].image;
-  }
-
-  function showQuestion(index) {
-    var q = QUESTIONS[index];
-    progressEl.textContent = String(index + 1).padStart(2, '0') + ' / ' + String(QUESTIONS.length).padStart(2, '0');
-    animateProgress(Math.round((index / QUESTIONS.length) * 100));
-    if (questionBgImg) { questionBgImg.src = questionBackgroundFor(index); }
-    questionTextEl.textContent = q.text;
-    choicesEl.innerHTML = '';
-    q.choices.forEach(function (choice, i) {
-      choicesEl.appendChild(buildChoiceButton(choice, i, function (picked) {
-        picked.themes.forEach(function (t) { scores[t] = (scores[t] || 0) + 1; });
-        currentQuestion++;
-        if (currentQuestion < QUESTIONS.length) {
-          transitionStep(questionTemplateEl, questionTemplateEl, function () { showQuestion(currentQuestion); });
-        } else {
-          showResult();
-        }
-      }));
-    });
-    revealQuestion();
-  }
-
-  function topThemes() {
-    return Object.keys(scores).sort(function (a, b) { return scores[b] - scores[a]; });
-  }
+  function resetScores() { scores = {}; currentQuestion = 0; selectedThemesOrder = []; }
 
   function matchDestinations() {
     var ranked = destinationsData.map(function (d) {
@@ -529,290 +565,359 @@
     if (ranked.length === 0) {
       ranked = destinationsData.slice(0, 3).map(function (d) { return { destination: d, score: 0 }; });
     }
-    return ranked.slice(0, 3).map(function (r) { return r.destination; });
+    return ranked.slice(0, 3);
   }
 
-  function showResult() {
-    animateProgress(100);
-    var results = matchDestinations();
-    resultsEl.innerHTML = '';
-    if (results.length === 0) {
-      resultsEl.innerHTML = '<div class="dq-result-intro"><p class="dq-empty">診断結果を表示する撮影地がまだ登録されていません。</p></div>';
-    } else {
-      results.forEach(function (d, i) {
-        var a = document.createElement('a');
-        a.href = d.url;
-        a.className = 'dq-result-card';
-        var bgHtml = d.image
-          ? '<div class="dq-photo-bg"><img data-dq-media src="' + d.image + '" alt="' + d.name + '" loading="lazy"></div>'
-          : '<div class="dq-photo-bg"></div>';
-        a.innerHTML = bgHtml +
-          '<div class="dq-result-body">' +
-            '<span class="dq-result-rank">No. ' + String(i + 1).padStart(2, '0') + '</span>' +
-            '<h4 class="dq-result-name">' + d.name + '</h4>' +
-            '<span class="dq-result-view">View destination <span aria-hidden="true">＞</span></span>' +
-          '</div>';
-        resultsEl.appendChild(a);
-      });
-    }
-    transitionStep([introEl, questionTemplateEl], resultEl, function () {
-      observeResultPanels(resultsEl.querySelectorAll('.dq-result-card'));
-      attachTilt(resultsEl.querySelectorAll('.dq-result-card'));
+  function calcMatching(destination) {
+    var selected = Object.keys(scores);
+    var conds = selected.map(function (t) {
+      return { key: t, label: THEME_LABELS[t] || t, matched: (destination.themes || []).indexOf(t) !== -1 };
     });
+    var matched = conds.filter(function (c) { return c.matched; });
+    var unmatched = conds.filter(function (c) { return !c.matched; });
+    var rate = conds.length > 0 ? Math.round(matched.length / conds.length * 100) : 100;
+    return { rate: rate, matched: matched, unmatched: unmatched };
   }
-
-  root.querySelector('.quiz-start').addEventListener('click', function () {
-    resetScores();
-    transitionStep(introEl, questionTemplateEl, function () { showQuestion(0); });
-  });
-  root.querySelector('.quiz-restart').addEventListener('click', function () {
-    resetScores();
-    animateProgress(0);
-    transitionStep(resultEl, introEl, function () { playIntro(); });
-  });
 
   /* ================================================================
-     ここから演出レイヤー。GSAP / SplitType / Lenis が読み込めなかった
-     場合やprefers-reduced-motionの場合は、簡易CSSフェードに自動で
-     切り替わる（診断機能自体は常に動作する）。
+     演出レイヤー(GSAP等の外部ライブラリ不使用。素のCSSアニメーション
+     + バニラJSのみ。参考HTMLと同じ手法)
      ================================================================ */
-  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  var finePointer = window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
-  var isMobile = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
-  var EASE = 'cubic-bezier(0.22,1,0.36,1)';
+  function q(sel, ctx) { return (ctx || root).querySelector(sel); }
+  function qa(sel, ctx) { return Array.prototype.slice.call((ctx || root).querySelectorAll(sel)); }
 
-  function libsReady() { return !!(window.gsap); }
+  function showScreen(name, anim) {
+    anim = anim || 'dq-anim-right';
+    qa('[data-dq-screen]').forEach(function (s) { s.classList.remove('active'); s.style.display = 'none'; });
+    var el = q('[data-dq-screen="' + name + '"]');
+    if (!el) return;
+    el.style.display = 'block';
+    el.classList.add('active');
+    el.classList.remove('dq-anim-right', 'dq-anim-left', 'dq-anim-up');
+    void el.offsetWidth;
+    el.classList.add(anim);
+    var stageTop = root.getBoundingClientRect().top + window.pageYOffset;
+    window.scrollTo({ top: stageTop, behavior: reduceMotion ? 'auto' : 'smooth' });
+    if (name === 'result') initResultParallax();
+  }
 
-  function animateProgress(pct) {
-    if (libsReady() && !reduceMotion) {
-      gsap.to(progressFillEl, { width: pct + '%', duration: 0.6, ease: EASE });
-    } else {
-      progressFillEl.style.transition = 'width 0.4s ease';
-      progressFillEl.style.width = pct + '%';
+  function maskReveal(el, html) {
+    if (!el) return;
+    el.innerHTML = '<span class="dq-mask-wrap"><span class="dq-reveal-word">' + html + '</span></span>';
+  }
+
+  function setSceneBg(key, src) {
+    var container = q('[data-dq-bg="' + key + '"]');
+    if (!container || !src) return;
+    if (container.getAttribute('data-current') === src) return;
+    container.setAttribute('data-current', src);
+    var img = document.createElement('img');
+    img.src = src; img.alt = ''; img.decoding = 'async';
+    container.appendChild(img);
+    requestAnimationFrame(function () { requestAnimationFrame(function () { img.classList.add('is-active'); }); });
+    var olds = qa('img', container).filter(function (o) { return o !== img; });
+    setTimeout(function () { olds.forEach(function (o) { o.remove(); }); }, 1700);
+  }
+
+  function createSlideshow(key, images, interval) {
+    var container = q('[data-dq-bg="' + key + '"]');
+    if (!container || !images.length) return;
+    var layers = images.map(function (src, i) {
+      var img = document.createElement('img');
+      img.src = src; img.alt = ''; img.decoding = 'async'; img.loading = i === 0 ? 'eager' : 'lazy';
+      if (i === 0) img.className = 'is-active';
+      container.appendChild(img);
+      return img;
+    });
+    container.setAttribute('data-current', images[0]);
+    if (reduceMotion || images.length < 2) return;
+    var idx = 0;
+    setInterval(function () {
+      layers[idx].classList.remove('is-active');
+      idx = (idx + 1) % layers.length;
+      layers[idx].classList.add('is-active');
+    }, interval || 7000);
+  }
+
+  function scatterParticles(count) {
+    var container = q('[data-dq-particles]');
+    if (!container || reduceMotion) return;
+    for (var i = 0; i < count; i++) {
+      var p = document.createElement('span');
+      p.className = 'dq-particle';
+      var size = 2 + Math.random() * 4;
+      p.style.width = size + 'px'; p.style.height = size + 'px';
+      p.style.left = (Math.random() * 100) + '%';
+      p.style.top = (20 + Math.random() * 70) + '%';
+      p.style.animationDuration = (10 + Math.random() * 10) + 's';
+      p.style.animationDelay = (Math.random() * 8) + 's';
+      container.appendChild(p);
     }
   }
 
-  function splitWords(el) {
-    if (!el || !window.SplitType) return null;
-    try { return new SplitType(el, { types: 'words' }); } catch (e) { return null; }
+  function toast(msg) {
+    var t = q('[data-dq-toast]');
+    if (!t) return;
+    t.textContent = msg;
+    t.classList.add('is-shown');
+    setTimeout(function () { t.classList.remove('is-shown'); }, 3000);
   }
 
-  function revealBlock(el, delay) {
-    if (!el) return;
-    if (libsReady() && !reduceMotion) {
-      gsap.fromTo(el, { opacity: 0, y: 22, filter: 'blur(8px)' }, { opacity: 1, y: 0, filter: 'blur(0px)', duration: 0.9, ease: EASE, delay: delay || 0 });
-    } else {
-      el.classList.add('dq-fallback-in');
-    }
-  }
-
-  function revealWords(el, delay) {
-    if (!el) return;
-    var split = splitWords(el);
-    if (libsReady() && split && !reduceMotion) {
-      gsap.fromTo(split.words, { opacity: 0, y: 18, filter: 'blur(6px)' }, {
-        opacity: 1, y: 0, filter: 'blur(0px)', duration: 0.8, ease: EASE, stagger: 0.045, delay: delay || 0,
-        onComplete: function () { split.revert(); }
+  var resultParallaxBound = false;
+  function initResultParallax() {
+    if (resultParallaxBound || reduceMotion) return;
+    resultParallaxBound = true;
+    var bg = q('[data-dq-bg="result"]');
+    var ticking = false;
+    window.addEventListener('scroll', function () {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(function () {
+        var sc = window.scrollY || 0;
+        if (bg) bg.style.transform = 'translateY(' + (sc * 0.2) + 'px)';
+        ticking = false;
       });
-    } else {
-      if (split) split.revert();
-      revealBlock(el, delay);
-    }
+    }, { passive: true });
   }
 
-  /* ---------- ページロード演出：背景→画像→タイトル→サブタイトル→UI、計約1.5秒 ---------- */
-  function playIntro() {
-    var media = introEl.querySelector('[data-dq-media]');
-    var texts = introEl.querySelectorAll('[data-dq-text]');
-    var title = introEl.querySelector('[data-dq-split]');
-
-    if (!libsReady() || reduceMotion) {
-      introEl.classList.add('dq-fallback-in');
-      return;
+  /* ---------- イントロ：スライドショー背景 + 粒子 + hero pills ---------- */
+  (function initIntro() {
+    var reelSetting = {{ section.settings.intro_image | image_url: width: 1600 | json }};
+    if (reelSetting) {
+      createSlideshow('start', [reelSetting], 7000);
+    } else if (photoPool.length) {
+      createSlideshow('start', photoPool.slice(0, 5).map(function (d) { return d.image; }), 7000);
     }
-
-    var tl = gsap.timeline({ defaults: { ease: EASE } });
-    tl.fromTo(introEl, { opacity: 0 }, { opacity: 1, duration: 0.35 });
-    if (media) {
-      tl.fromTo(media, { opacity: 0, scale: 1.08, filter: 'blur(14px)' }, { opacity: 1, scale: 1, filter: 'blur(0px)', duration: 0.8 }, '-=0.1');
+    if (photoPool.length) {
+      createSlideshow('loading', photoPool.slice().reverse().slice(0, 5).map(function (d) { return d.image; }), 5000);
     }
-    var titleSplit = title ? splitWords(title) : null;
-    if (titleSplit) {
-      tl.fromTo(titleSplit.words, { opacity: 0, y: 26, filter: 'blur(6px)' }, {
-        opacity: 1, y: 0, filter: 'blur(0px)', duration: 0.7, stagger: 0.045,
-        onComplete: function () { titleSplit.revert(); }
-      }, media ? '-=0.4' : '-=0.1');
+    scatterParticles(16);
+    var pillsEl = q('[data-dq-pills]');
+    if (pillsEl) {
+      var pills = [
+        QUESTIONS.length + '問診断',
+        '{{ section.settings.time_estimate | default: "約1分" }}',
+        destinationsData.length + '以上のエリア'
+      ];
+      pillsEl.innerHTML = pills.map(function (p) { return '<span class="dq-hero-pill dq-serif">' + p + '</span>'; }).join('');
     }
-    texts.forEach(function (el, i) {
-      if (el === title) return;
-      tl.fromTo(el, { opacity: 0, y: 16, filter: 'blur(4px)' }, { opacity: 1, y: 0, filter: 'blur(0px)', duration: 0.5 }, i === 0 ? '-=0.3' : '-=0.25');
-    });
-  }
+  })();
 
-  /* ---------- ステップ間トランジション：フェードアウト→フェードイン ---------- */
-  function transitionStep(hideTargets, showTarget, afterShow) {
-    var hideEls = Array.isArray(hideTargets) ? hideTargets : [hideTargets];
-    if (!libsReady() || reduceMotion) {
-      hideEls.forEach(function (el) { el.classList.add('is-hidden'); });
-      showTarget.classList.remove('is-hidden');
-      showTarget.classList.add('dq-fallback-in');
-      if (afterShow) afterShow();
-      revealStepContent(showTarget);
-      return;
-    }
-    var tl = gsap.timeline();
-    hideEls.forEach(function (el) {
-      tl.to(el, { opacity: 0, y: -14, filter: 'blur(6px)', duration: 0.35, ease: EASE }, 0);
-    });
-    tl.add(function () {
-      hideEls.forEach(function (el) { el.classList.add('is-hidden'); el.style.opacity = ''; el.style.transform = ''; el.style.filter = ''; });
-      showTarget.classList.remove('is-hidden');
-      gsap.fromTo(showTarget, { opacity: 0, y: 14, filter: 'blur(6px)' }, { opacity: 1, y: 0, filter: 'blur(0px)', duration: 0.55, ease: EASE });
-      revealStepContent(showTarget);
-      if (afterShow) afterShow();
-    });
-  }
+  /* ---------- 質問画面 ---------- */
+  var qEls = {
+    progressFill: q('[data-dq-progress-fill]'),
+    qNum: q('[data-dq-q-num]'),
+    qSection: q('[data-dq-q-section]'),
+    qTitle: q('[data-dq-q-title]'),
+    opts: q('[data-dq-opts]'),
+    back: q('[data-dq-back]')
+  };
 
-  function revealStepContent(stepEl) {
-    if (stepEl === resultEl) {
-      revealWords(resultEl.querySelector('[data-dq-split]'), 0.1);
-    }
-  }
-
-  function revealQuestion() {
-    revealWords(questionTextEl, 0.05);
-    staggerIn(choicesEl.querySelectorAll('.dq-choice'), 0.25);
-  }
-
-  function staggerIn(nodeList, delay) {
-    var items = Array.prototype.slice.call(nodeList);
-    if (!items.length) return;
-    if (libsReady() && !reduceMotion) {
-      gsap.fromTo(items, { opacity: 0, y: 20, filter: 'blur(6px)' }, { opacity: 1, y: 0, filter: 'blur(0px)', duration: 0.6, stagger: 0.08, delay: delay || 0, ease: EASE });
-    } else {
-      items.forEach(function (el) { el.classList.add('dq-fallback-in'); });
-    }
-  }
-
-  /* ---------- 結果パネル：スクロールで画面内に入ったら出現(IntersectionObserver) ---------- */
-  function observeResultPanels(panels) {
-    var items = Array.prototype.slice.call(panels);
-    if (!items.length) return;
-    items.forEach(function (panel) {
-      var body = panel.querySelector('.dq-result-body');
-      var img = panel.querySelector('img');
-      if (libsReady() && !reduceMotion) {
-        gsap.set(body, { opacity: 0, y: 30 });
-        if (img) gsap.set(img, { scale: 1.08, filter: 'blur(10px)' });
-      } else {
-        panel.classList.add('dq-fallback-in');
-        return;
-      }
-      if (!('IntersectionObserver' in window)) {
-        gsap.to(body, { opacity: 1, y: 0, duration: 0.8, ease: EASE });
-        if (img) gsap.to(img, { scale: 1, filter: 'blur(0px)', duration: 1, ease: EASE });
-        return;
-      }
-      var io = new IntersectionObserver(function (entries) {
-        entries.forEach(function (entry) {
-          if (!entry.isIntersecting) return;
-          gsap.to(body, { opacity: 1, y: 0, duration: 0.8, ease: EASE });
-          if (img) gsap.to(img, { scale: 1, filter: 'blur(0px)', duration: 1, ease: EASE });
-          io.unobserve(panel);
+  function showQuestion(index) {
+    var qData = QUESTIONS[index];
+    var total = QUESTIONS.length;
+    var step = index + 1;
+    setSceneBg('question', questionBackgroundFor(index));
+    qEls.progressFill.style.width = (step / total * 100) + '%';
+    qEls.qNum.textContent = '#' + String(step).padStart(2, '0');
+    qEls.qSection.textContent = qData.section || '';
+    maskReveal(qEls.qTitle, qData.text);
+    qEls.opts.innerHTML = '';
+    qData.choices.forEach(function (choice, i) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'dq-opt';
+      btn.style.animation = 'dqRevealUp .6s var(--dq-ease) ' + (i * .06) + 's both';
+      btn.innerHTML = '<span class="dq-opt-inner"><span class="dq-opt-main">' + choice.label + '</span><span class="dq-opt-radio"></span></span>';
+      btn.addEventListener('click', function (e) {
+        var r = document.createElement('span');
+        r.className = 'dq-ripple';
+        var rect = btn.getBoundingClientRect();
+        var sz = Math.max(rect.width, rect.height);
+        r.style.width = sz + 'px'; r.style.height = sz + 'px';
+        r.style.left = (e.clientX - rect.left - sz / 2) + 'px';
+        r.style.top = (e.clientY - rect.top - sz / 2) + 'px';
+        btn.appendChild(r);
+        setTimeout(function () { r.remove(); }, 700);
+        btn.classList.add('is-selected');
+        choice.themes.forEach(function (t) {
+          scores[t] = (scores[t] || 0) + 1;
+          if (selectedThemesOrder.indexOf(t) === -1) selectedThemesOrder.push(t);
         });
-      }, { threshold: 0.35 });
-      io.observe(panel);
-    });
-  }
-
-  /* ---------- カーソル追従の小さな円（精密ポインタのみ） ---------- */
-  function initCursor() {
-    if (!enableCursor || !finePointer || reduceMotion) return;
-    var dot = root.querySelector('[data-dq-cursor]');
-    if (!dot) return;
-    root.classList.add('dq-cursor-active');
-    var moveX = libsReady() ? gsap.quickTo(dot, 'x', { duration: 0.35, ease: 'power3' }) : null;
-    var moveY = libsReady() ? gsap.quickTo(dot, 'y', { duration: 0.35, ease: 'power3' }) : null;
-    root.addEventListener('mousemove', function (e) {
-      dot.classList.add('is-visible');
-      if (moveX && moveY) { moveX(e.clientX); moveY(e.clientY); }
-      else { dot.style.transform = 'translate(' + e.clientX + 'px,' + e.clientY + 'px)'; }
-    });
-    root.addEventListener('mouseleave', function () { dot.classList.remove('is-visible'); });
-    var hoverTargets = 'button, a';
-    root.addEventListener('mouseover', function (e) {
-      if (e.target.closest && e.target.closest(hoverTargets)) dot.classList.add('is-hover');
-    });
-    root.addEventListener('mouseout', function (e) {
-      if (e.target.closest && e.target.closest(hoverTargets)) dot.classList.remove('is-hover');
-    });
-  }
-
-  /* ---------- 結果パネルの微細チルト（3deg以内、精密ポインタのみ） ---------- */
-  function attachTilt(cards) {
-    if (!finePointer || reduceMotion || !libsReady()) return;
-    Array.prototype.forEach.call(cards, function (card) {
-      var img = card.querySelector('img');
-      if (!img) return;
-      var moveX = gsap.quickTo(img, 'xPercent', { duration: 0.5, ease: 'power3' });
-      var moveY = gsap.quickTo(img, 'yPercent', { duration: 0.5, ease: 'power3' });
-      card.addEventListener('mousemove', function (e) {
-        var r = card.getBoundingClientRect();
-        var px = (e.clientX - r.left) / r.width - 0.5;
-        var py = (e.clientY - r.top) / r.height - 0.5;
-        moveX(px * 2.5);
-        moveY(py * 2.5);
+        currentQuestion = index + 1;
+        setTimeout(function () {
+          if (currentQuestion < QUESTIONS.length) { showQuestion(currentQuestion); }
+          else { showLoading(); }
+        }, 320);
       });
-      card.addEventListener('mouseleave', function () { moveX(0); moveY(0); });
+      qEls.opts.appendChild(btn);
     });
+    qEls.back.style.display = index > 0 ? 'block' : 'none';
+    showScreen('question', 'dq-anim-right');
   }
 
-  /* ---------- カーソル連動パララックス（スクロールではなくポインタ移動に連動、イントロのみ） ---------- */
-  function initPointerParallax() {
-    if (!finePointer || reduceMotion || !libsReady() || isMobile) return;
-    var layers = introEl.querySelectorAll('[data-dq-parallax]');
-    if (!layers.length) return;
-    root.addEventListener('mousemove', function (e) {
-      var r = root.getBoundingClientRect();
-      var px = (e.clientX - r.left) / r.width - 0.5;
-      var py = (e.clientY - r.top) / r.height - 0.5;
-      layers.forEach(function (layer) {
-        var speed = parseFloat(layer.getAttribute('data-dq-parallax')) || 1;
-        gsap.to(layer, { x: px * 12 * speed, y: py * 8 * speed, duration: 0.6, ease: 'power3' });
+  function questionBackgroundFor(index) {
+    if (!photoPool.length) return '';
+    return photoPool[index % photoPool.length].image;
+  }
+
+  qEls.back.addEventListener('click', function () {
+    if (currentQuestion > 0) {
+      currentQuestion = currentQuestion - 1;
+      showQuestion(currentQuestion);
+    } else {
+      showScreen('start', 'dq-anim-left');
+    }
+  });
+
+  q('[data-dq-start]').addEventListener('click', function () {
+    resetScores();
+    currentQuestion = 0;
+    showQuestion(0);
+  });
+
+  /* ---------- ローディング(スロットマシン) ---------- */
+  function showLoading() {
+    showScreen('loading', 'dq-anim-up');
+    var ranked = matchDestinations();
+    var top = ranked[0] ? ranked[0].destination : null;
+    var allNames = destinationsData.map(function (d) { return d.name; });
+    var slot = q('[data-dq-slot]');
+    var final = q('[data-dq-loading-final]');
+    final.style.display = 'none';
+    final.classList.remove('is-visible');
+    q('.dq-loading-slot').style.display = 'block';
+
+    if (reduceMotion || !allNames.length) {
+      setTimeout(function () { renderResult(ranked); }, 400);
+      return;
+    }
+
+    var items = allNames.concat(allNames.slice(0, 6), top ? top.name : allNames[0]);
+    slot.innerHTML = items.map(function (n) { return '<div class="dq-loading-slot-item dq-serif">' + n + '</div>'; }).join('');
+    var idx = 0, speed = 80, count = 0, max = items.length - 1;
+    function spin() {
+      slot.style.transform = 'translateY(-' + (idx * 56) + 'px)';
+      idx++; count++;
+      speed = count < max * .6 ? 80 : count < max * .85 ? 120 : 200;
+      if (count < max) { setTimeout(spin, speed); }
+      else {
+        setTimeout(function () {
+          q('.dq-loading-slot').style.display = 'none';
+          final.style.display = 'block';
+          final.textContent = top ? top.name : '';
+          setTimeout(function () { final.classList.add('is-visible'); }, 50);
+          setTimeout(function () { renderResult(ranked); }, 1100);
+        }, 300);
+      }
+    }
+    setTimeout(spin, 400);
+  }
+
+  /* ---------- 結果画面 ---------- */
+  function renderResult(ranked) {
+    if (!ranked.length) {
+      q('[data-dq-result-name]').textContent = '診断結果を表示する撮影地がまだ登録されていません。';
+      q('[data-dq-result-name-en]').textContent = '';
+      showScreen('result', 'dq-anim-up');
+      return;
+    }
+    var top = ranked[0].destination;
+    var alts = ranked.slice(1, 3).map(function (r) { return r.destination; });
+
+    setSceneBg('result', top.image);
+    maskReveal(q('[data-dq-result-name]'), top.name);
+    q('[data-dq-result-name-en]').textContent = top.nameEn || '';
+
+    var summaryEl = q('[data-dq-summary]');
+    var summaryTags = selectedThemesOrder.map(function (t) { return THEME_LABELS[t] || t; });
+    summaryEl.innerHTML = summaryTags.map(function (t) { return '<span class="dq-summary-tag">' + t + '</span>'; }).join('');
+
+    var mt = calcMatching(top);
+    var matchedHtml = '', unmatchedHtml = '';
+    if (mt.matched.length) {
+      matchedHtml = '<span class="dq-chips-label dq-serif">— マッチした条件 —</span><div class="dq-chips">'
+        + mt.matched.map(function (c) { return '<span class="dq-chip dq-chip-yes">✓ ' + c.label + '</span>'; }).join('') + '</div>';
+    }
+    if (mt.unmatched.length) {
+      unmatchedHtml = '<span class="dq-chips-label dq-serif">— このエリアでは弱い条件 —</span><div class="dq-chips">'
+        + mt.unmatched.map(function (c) { return '<span class="dq-chip dq-chip-no">✗ ' + c.label + '</span>'; }).join('') + '</div>';
+    }
+    q('[data-dq-matching]').innerHTML =
+      '<div class="dq-matching-label-row"><span class="dq-matching-label-text dq-serif">MATCHING SCORE</span><span class="dq-matching-rate dq-serif">' + mt.rate + '%</span></div>'
+      + '<div class="dq-matching-track"><div class="dq-matching-fill" data-dq-match-fill style="width:0%"></div></div>'
+      + '<div class="dq-chips-wrap">' + matchedHtml + unmatchedHtml + '</div>';
+    setTimeout(function () { var f = q('[data-dq-match-fill]'); if (f) f.style.width = mt.rate + '%'; }, 300);
+
+    q('[data-dq-appeal]').textContent = top.description || '';
+    q('[data-dq-appeal]').style.display = top.description ? 'block' : 'none';
+
+    var tagsHtml = (top.themes || []).slice(0, 4).map(function (t) { return '<span class="dq-dest-tag">' + (THEME_LABELS[t] || t) + '</span>'; }).join('');
+    q('[data-dq-main-card]').innerHTML =
+      '<div class="dq-dest-card" data-dq-main-card-el>'
+      + '<div class="dq-dest-card-head"><span class="dq-dest-card-head-label dq-serif">RECOMMENDED DESTINATION</span><span class="dq-dest-card-head-rank dq-serif">Best Match</span></div>'
+      + (top.image ? '<div class="dq-dest-card-img-wrap"><img class="dq-dest-card-img" src="' + top.image + '" alt="' + top.name + '" loading="lazy"></div>' : '')
+      + '<div class="dq-dest-card-body">'
+      + '<h3 class="dq-dest-card-title">' + top.name + (top.nameEn ? '（' + top.nameEn + '）' : '') + '</h3>'
+      + (top.description ? '<p class="dq-dest-card-reason">' + top.description + '</p>' : '')
+      + '<div class="dq-dest-tags">' + tagsHtml + '</div>'
+      + '<a href="' + top.url + '" class="dq-dest-link">この撮影地のページを見る</a>'
+      + '</div></div>';
+
+    {%- assign consult_url = section.settings.consult_url | default: '/pages/consultation' -%}
+    q('[data-dq-consult]').innerHTML =
+      '<div class="dq-consult-block" data-dq-consult-el>'
+      + '<span class="dq-consult-label dq-serif">CONSULTATION</span>'
+      + '<p class="dq-consult-title">{{ section.settings.consult_title | default: "撮影地選びやプランのこと、もっと詳しく相談しませんか？" }}</p>'
+      + '<a href="{{ consult_url }}" class="dq-consult-btn dq-serif">{{ section.settings.consult_button_label | default: "オンライン相談を予約する" }}</a>'
+      + '<p class="dq-consult-note">相談は無料です。診断結果を元にスタッフが詳しくご案内します。</p>'
+      + '</div>';
+
+    var altEl = q('[data-dq-alt]');
+    altEl.innerHTML = alts.map(function (d) {
+      var am = calcMatching(d);
+      var tagStr = (d.themes || []).slice(0, 2).map(function (t) { return THEME_LABELS[t] || t; }).join('　');
+      return '<a href="' + d.url + '" class="dq-alt-card">'
+        + (d.image ? '<div class="dq-alt-card-img-wrap"><img class="dq-alt-card-img" src="' + d.image + '" alt="' + d.name + '" loading="lazy"></div>' : '')
+        + '<div class="dq-alt-card-body">'
+        + '<p class="dq-alt-card-name">' + d.name + '</p>'
+        + '<div class="dq-alt-match-wrap"><div class="dq-alt-match-bar"><div class="dq-alt-match-fill" style="width:' + am.rate + '%"></div></div><span class="dq-alt-match-pct">' + am.rate + '%</span></div>'
+        + '<p class="dq-alt-card-sub">' + tagStr + '</p>'
+        + '</div></a>';
+    }).join('');
+
+    showScreen('result', 'dq-anim-up');
+
+    setTimeout(function () {
+      var mc = q('[data-dq-main-card-el]'); if (mc) mc.classList.add('is-visible');
+      var ce = q('[data-dq-consult-el]'); if (ce) ce.classList.add('is-visible');
+      qa('.dq-alt-card').forEach(function (el, i) {
+        setTimeout(function () { el.classList.add('is-visible'); }, 100 + i * 90);
       });
-    });
+    }, 100);
+
+    var shareUrl = window.location.href.split('?')[0];
+    var shareText = '撮影地診断で「' + top.name + '」をおすすめされました✨\n';
+    q('[data-dq-insta-copy]').onclick = function () {
+      var msg = '『' + top.name + '』をおすすめされました✨\n\n撮影地診断はこちら→ ' + shareUrl + '\n\n#フォトウェディング #' + top.name;
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(msg).then(function () { toast('コピーしました！インスタストーリーに貼りつけてシェア！'); })
+          .catch(function () { toast('コピーできませんでした'); });
+      }
+    };
+    q('[data-dq-share-x]').onclick = function () { window.open('https://twitter.com/intent/tweet?text=' + encodeURIComponent(shareText + shareUrl), '_blank'); };
+    q('[data-dq-share-line]').onclick = function () { window.open('https://social-plugins.line.me/lineit/share?url=' + encodeURIComponent(shareUrl) + '&text=' + encodeURIComponent(shareText), '_blank'); };
+    q('[data-dq-share-copy]').onclick = function () {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(shareUrl).then(function () { toast('URLをコピーしました'); }).catch(function () { toast('コピーできませんでした'); });
+      }
+    };
   }
 
-  /* ---------- 慣性のあるスムーススクロール（Lenis、任意強化） ---------- */
-  function initSmoothScroll() {
-    if (!enableSmoothScroll || reduceMotion || !window.Lenis || window.__dqLenisInit) return;
-    window.__dqLenisInit = true;
-    var lenis = new window.Lenis({
-      duration: isMobile ? 0.9 : 1.2,
-      easing: function (t) { return Math.min(1, 1.001 - Math.pow(2, -10 * t)); },
-      smoothWheel: true,
-      wheelMultiplier: isMobile ? 0.8 : 1
-    });
-    function raf(time) { lenis.raf(time); requestAnimationFrame(raf); }
-    requestAnimationFrame(raf);
-  }
-
-  /* ---------- 初期化：ライブラリの読み込みを少し待ってから開始 ---------- */
-  function boot() {
-    playIntro();
-    initCursor();
-    initPointerParallax();
-    initSmoothScroll();
-  }
-  if (libsReady() || reduceMotion) {
-    boot();
-  } else {
-    var tries = 0;
-    var waitId = setInterval(function () {
-      tries++;
-      if (libsReady() || tries > 40) { clearInterval(waitId); boot(); }
-    }, 75);
-  }
+  q('[data-dq-restart]').addEventListener('click', function () {
+    resetScores();
+    showScreen('start', 'dq-anim-up');
+  });
 })();
 </script>
 
@@ -820,31 +925,23 @@
 {
   "name": "撮影地 30秒診断",
   "settings": [
-    { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "30 SECONDS" },
-    { "type": "text", "id": "heading", "label": "見出し", "default": "あなたにぴったりの撮影地診断" },
-    { "type": "textarea", "id": "intro_text", "label": "説明文", "default": "簡単な質問に答えるだけで、おふたりに合う撮影地をご提案します。" },
-    { "type": "image_picker", "id": "intro_image", "label": "冒頭の画像", "info": "画面いっぱいに表示されます。設定を強く推奨します（未設定の場合は写真なしのシンプルな構成になります）。" },
-    { "type": "text", "id": "start_label", "label": "開始ボタン文言", "default": "診断をはじめる" },
-    { "type": "text", "id": "result_heading", "label": "結果見出し", "default": "おふたりにおすすめの撮影地" },
+    { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "PHOTO WEDDING DESTINATION" },
+    { "type": "textarea", "id": "heading", "label": "見出し", "default": "あなたにぴったりの、撮影地が見つかります。" },
+    { "type": "textarea", "id": "intro_text", "label": "説明文", "default": "質問に答えるだけで、おふたりに合う撮影地をご提案します。" },
+    { "type": "image_picker", "id": "intro_image", "label": "冒頭の画像（任意）", "info": "空欄の場合、登録済みの撮影地の写真が自動でスライドショー表示されます。" },
+    { "type": "text", "id": "time_estimate", "label": "所要時間の表示文言", "default": "約1分" },
+    { "type": "text", "id": "start_label", "label": "開始ボタン文言", "default": "はじめる" },
+    { "type": "header", "content": "ローディング画面" },
+    { "type": "textarea", "id": "loading_text", "label": "文言（改行は<br>で入力）", "default": "おふたりに最適な<br>撮影地を探しています" },
+    { "type": "header", "content": "結果画面" },
+    { "type": "text", "id": "result_kicker", "label": "結果 冒頭ラベル", "default": "あなたに最適な撮影地は" },
+    { "type": "text", "id": "alt_heading", "label": "他の候補の見出し", "default": "他にもおすすめの撮影地" },
+    { "type": "textarea", "id": "consult_title", "label": "相談ブロックの見出し文", "default": "撮影地選びやプランのこと、もっと詳しく相談しませんか？" },
+    { "type": "text", "id": "consult_button_label", "label": "相談ボタン文言", "default": "オンライン相談を予約する" },
+    { "type": "url", "id": "consult_url", "label": "相談ボタンのリンク先（空欄でオンライン相談ページ）" },
     { "type": "text", "id": "restart_label", "label": "やり直しボタン文言", "default": "もう一度診断する" },
-    { "type": "header", "content": "配色（写真なしの箇所にのみ適用）" },
-    { "type": "color", "id": "bg_color", "label": "背景色", "default": "#FAF8F5" },
-    { "type": "color", "id": "text_color", "label": "文字色", "default": "#161513" },
-    { "type": "header", "content": "イントロの文字色" },
-    { "type": "color", "id": "intro_title_color", "label": "見出しの色", "info": "未設定の場合、冒頭の画像がある時は白、無い時は上の「文字色」になります。" },
-    { "type": "color", "id": "intro_subtitle_color", "label": "補足文の色", "info": "未設定の場合、冒頭の画像がある時は白、無い時は上の「文字色」になります。" },
-    { "type": "header", "content": "質問ページの文字色" },
-    { "type": "color", "id": "question_title_color", "label": "質問文の色", "default": "#fdfcfa" },
-    { "type": "color", "id": "question_choice_color", "label": "選択肢の色", "default": "#fdfcfa" },
-    { "type": "color", "id": "choice_divider_color", "label": "選択肢の罫線の色", "default": "rgba(255,255,255,0.28)" },
-    { "type": "range", "id": "choice_divider_thickness", "label": "選択肢の罫線の太さ", "min": 1, "max": 4, "step": 1, "unit": "px", "default": 1 },
-    { "type": "color", "id": "choice_index_color", "label": "選択肢の番号の色", "default": "#D4A843" },
-    { "type": "range", "id": "choice_index_size", "label": "選択肢の番号の大きさ", "min": 8, "max": 20, "step": 1, "unit": "px", "default": 11 },
-    { "type": "header", "content": "結果ページの文字色" },
-    { "type": "color", "id": "result_name_color", "label": "都市名の色", "default": "#fdfcfa" },
-    { "type": "header", "content": "モーション設定" },
-    { "type": "checkbox", "id": "enable_custom_cursor", "label": "カーソル追従の円を表示する（PCのみ）", "default": true },
-    { "type": "checkbox", "id": "enable_smooth_scroll", "label": "慣性のあるスムーススクロールを有効にする", "default": true, "info": "このページ内のスクロール全体に適用されます。" }
+    { "type": "header", "content": "配色" },
+    { "type": "color", "id": "gold_color", "label": "アクセントカラー（ゴールド）", "default": "#cba876" }
   ],
   "presets": [{ "name": "撮影地 30秒診断" }]
 }
