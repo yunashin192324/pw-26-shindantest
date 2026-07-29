@@ -584,6 +584,13 @@
             {%- else -%}
               {%- assign img_position = 'center' -%}
             {%- endif -%}
+            <div style="border:3px solid red;background:#fff;color:#000;font-size:12px;padding:6px;word-break:break-all;">
+              DEBUG #{{ forloop.index0 }}<br>
+              alt(生)="{{ image.alt }}"<br>
+              alt_clean="{{ img_alt_clean }}"<br>
+              position_key="{{ img_position_key }}"<br>
+              img_position="{{ img_position }}"
+            </div>
             <div class="w-full relative plan-gallery-item cursor-pointer" style="padding-top: 125%;" data-full="{{ image | image_url: width: 1800 }}" data-index="{{ forloop.index0 }}">
               {%- capture pgimg_style -%}object-position: {{ img_position | escape }};{%- endcapture -%}
               {{ image | image_url: width: 800 | image_tag: class: 'absolute top-0 left-0 w-full h-full object-cover rounded-lg', style: pgimg_style, alt: img_alt_clean }}
