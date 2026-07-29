@@ -387,7 +387,7 @@ var CHAPELS = [
 {id:'kawaiahao', name:'カワイアハオ教会', area:'oahu', space:'church', spaceLabel:'教会（伝統建築・独立型）', view:['indoor'], banquet:'nearby', move:'near', color:['white'], notes:['historic'], noteText:'歴史的建造物・重要文化財', priceFloor:288000, isPackageOnly:false, packageRange:'578,000円', rank:23},
 {id:'royalhawaiian', name:'ロイヤル ハワイアン ウェディング', area:'oahu', space:'garden', spaceLabel:'邸宅・ガーデン系（ホテル敷地内）', view:['oceanfront','oceanview','garden'], banquet:'possible', move:'hotel', color:['white'], notes:['luxury_hotel'], noteText:'著名高級ホテル内（ロイヤル ハワイアン）', priceFloor:529000, isPackageOnly:false, packageRange:'852,800円〜1,032,800円', rank:24},
 {id:'ilikai', name:'ザ・イリカイ・チャペル', area:'oahu', space:'hotel', spaceLabel:'ホテル内チャペル', view:['oceanview'], banquet:'possible', move:'hotel', color:['white'], notes:[], noteText:'特になし', priceFloor:264000, isPackageOnly:false, packageRange:'494,000円', rank:25},
-{id:'unity', name:'ユニティ教会', area:'oahu', space:'church', spaceLabel:'教会（伝統建築・独立型）', view:['indoor'], banquet:'nearby', move:'near', color:['white'], notes:[], noteText:'特になし', priceFloor:230000, isPackageOnly:false, packageRange:'要確認', rank:26, priceUnconfirmed:true},
+{id:'unity', name:'ユニティ教会', area:'oahu', space:'church', spaceLabel:'教会（伝統建築・独立型）', view:['indoor'], banquet:'nearby', move:'near', color:['white'], notes:[], noteText:'特になし', priceFloor:178000, isPackageOnly:false, packageRange:'要確認', rank:26, packageUnconfirmed:true},
 {id:'parkchapel', name:'パークチャペル', area:'oahu', space:'church', spaceLabel:'教会（伝統建築・独立型、ダウンタウン所在）', view:['indoor'], banquet:'nearby', move:'far', color:['white'], notes:[], noteText:'特になし', priceFloor:150000, isPackageOnly:false, packageRange:'403,000円', rank:27},
 {id:'oceansuite', name:'オーシャン・スイート・ワイキキ レストランウェディング', area:'oahu', space:'restaurant', spaceLabel:'レストランウェディング', view:['oceanview'], banquet:'possible', move:'hotel', color:['white'], notes:['one_couple'], noteText:'1日1組（少数）限定、眺望が良い', priceFloor:398000, isPackageOnly:true, packageRange:'398,000円', rank:28},
 {id:'nuuanu', name:'ヌアヌ・コングリゲーショナル教会', area:'oahu', space:'church', spaceLabel:'教会（伝統建築・独立型）', view:['indoor'], banquet:'nearby', move:'near', color:['white'], notes:[], noteText:'特になし', priceFloor:218000, isPackageOnly:false, packageRange:'518,000円', rank:29},
@@ -626,7 +626,7 @@ function showResult(){
   top.forEach(function(item, idx){
     var c=item.c;
     var card=document.createElement('div'); card.className='chapel-card';
-    var priceNote = c.priceUnconfirmed ? '<div class="chapel-price-note">※ 価格情報は現在確認中です</div>' : '';
+    var priceNote = c.packageUnconfirmed ? '<div class="chapel-price-note">※ HISパッケージ料金は現在確認中です</div>' : '';
     var tags = [SPACE_LABEL[c.space]].concat(c.view.map(function(v){return VIEW_LABEL[v];}));
     if(c.area==='hawaii') tags.unshift('ハワイ島');
     var reason = buildReason(c, answers, item.matched);
@@ -637,7 +637,7 @@ function showResult(){
         '<p class="chapel-card-sub">'+c.spaceLabel+'</p>'+
         '<p class="chapel-card-reason">'+reason+'</p>'+
         '<div class="chapel-tags">'+tags.map(function(t){return '<span class="chapel-tag">'+t+'</span>';}).join('')+'</div>'+
-        '<div class="chapel-price-row"><span class="chapel-price-label">基本挙式料金</span><span class="chapel-price-val">'+(c.priceUnconfirmed?'要確認':yen(c.priceFloor)+'〜')+'</span></div>'+
+        '<div class="chapel-price-row"><span class="chapel-price-label">基本挙式料金</span><span class="chapel-price-val">'+yen(c.priceFloor)+'〜</span></div>'+
         '<div class="chapel-price-row"><span class="chapel-price-label">HISパッケージ料金</span><span class="chapel-price-val">'+c.packageRange+'</span></div>'+
         priceNote+
       '</div>';
