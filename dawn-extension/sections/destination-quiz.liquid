@@ -191,7 +191,11 @@
   #destination-quiz-{{ section.id }} .dq-btn-circle:disabled::after { display: none; }
 
   /* ---------- 質問画面 ---------- */
-  #destination-quiz-{{ section.id }} .dq-q-wrap { width: 100%; max-width: 560px; margin: 0 auto; }
+  #destination-quiz-{{ section.id }} .dq-q-wrap {
+    width: 100%; max-width: 560px; margin: 0 auto;
+    transition: opacity .38s var(--dq-ease-soft), transform .38s var(--dq-ease-soft);
+  }
+  #destination-quiz-{{ section.id }} .dq-q-wrap.dq-q-leaving { opacity: 0; transform: translateY(36px); }
   #destination-quiz-{{ section.id }} .dq-progress { margin-bottom: 30px; max-width: 200px; margin-left: auto; margin-right: auto; }
   #destination-quiz-{{ section.id }} .dq-progress-track { height: 1px; background: rgba(255,255,255,.22); position: relative; }
   #destination-quiz-{{ section.id }} .dq-progress-fill { height: 100%; background: var(--dq-gold); transition: width .8s var(--dq-ease); position: relative; }
@@ -705,6 +709,7 @@
 
   /* ---------- 質問画面 ---------- */
   var qEls = {
+    wrap: q('.dq-q-wrap'),
     progressFill: q('[data-dq-progress-fill]'),
     qNum: q('[data-dq-q-num]'),
     qSection: q('[data-dq-q-section]'),
@@ -745,15 +750,26 @@
           if (selectedThemesOrder.indexOf(t) === -1) selectedThemesOrder.push(t);
         });
         currentQuestion = index + 1;
+        /* 選んだ質問をいったん下にスライドさせて消してから次へ進む
+           (showQuestion側で新しい内容に差し替えた直後にクラスを外し、
+           そこから元の位置へ戻るアニメーションを再生する) */
+        if (qEls.wrap) qEls.wrap.classList.add('dq-q-leaving');
         setTimeout(function () {
           if (currentQuestion < QUESTIONS.length) { showQuestion(currentQuestion); }
           else { showLoading(); }
-        }, 320);
+        }, 380);
       });
       qEls.opts.appendChild(btn);
     });
     qEls.back.style.display = index > 0 ? 'block' : 'none';
     showScreen('question', 'dq-anim-right');
+    /* 新しい質問に差し替え終えた直後にleavingクラスを外し、
+       スライドダウンした状態から元の位置へ戻るアニメーションを再生する。
+       (前の質問が残っていなくても無害なので、毎回外して問題ない) */
+    if (qEls.wrap) {
+      void qEls.wrap.offsetWidth;
+      qEls.wrap.classList.remove('dq-q-leaving');
+    }
   }
 
   function questionBackgroundFor(index) {
