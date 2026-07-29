@@ -48,7 +48,7 @@
           <a href="{{ linked_product.url }}" class="dst-plan-card dst-reveal">
             <div class="dst-plan-media">
               {%- if linked_product.featured_image != blank -%}
-                {%- assign p_alt_parts = linked_product.featured_image.alt | replace: '｜', '|' | split: '|' -%}
+                {%- assign p_alt_parts = linked_product.featured_image.alt | replace: '｜', '|' | replace: '￤', '|' | replace: '¦', '|' | replace: '│', '|' | replace: '‖', '|' | split: '|' -%}
                 {%- assign p_position_key = p_alt_parts[1] | strip -%}
                 {%- capture p_pos_mapped -%}{% render 'destination-image-position', position_key: p_position_key %}{%- endcapture -%}
                 {%- assign p_pos_mapped = p_pos_mapped | strip -%}

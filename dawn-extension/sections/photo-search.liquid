@@ -20,7 +20,7 @@
   {%- for d in all_destinations -%}
     {%- assign gallery_images = d.gallery_images.value -%}
     {%- for image in gallery_images -%}
-      {%- assign alt_parts = image.alt | replace: '｜', '|' | split: '|' -%}
+      {%- assign alt_parts = image.alt | replace: '｜', '|' | replace: '￤', '|' | replace: '¦', '|' | replace: '│', '|' | replace: '‖', '|' | split: '|' -%}
       {%- assign tags_raw = alt_parts[2] | strip -%}
       {%- assign tag_list = tags_raw | split: ',' -%}
       {%- if photo_count > 0 -%},{%- endif -%}

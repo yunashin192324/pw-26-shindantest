@@ -17,7 +17,7 @@
 {%- if branch -%}
   {%- assign branch_image = branch.image.value -%}
   {%- assign br_alt_source = branch_image.alt | default: branch.name.value -%}
-  {%- assign br_alt_parts = br_alt_source | replace: '｜', '|' | split: '|' -%}
+  {%- assign br_alt_parts = br_alt_source | replace: '｜', '|' | replace: '￤', '|' | replace: '¦', '|' | replace: '│', '|' | replace: '‖', '|' | split: '|' -%}
   {%- assign br_alt_clean = br_alt_parts[0] | strip -%}
   {%- assign br_position_key = br_alt_parts[1] | strip -%}
   {%- capture br_pos_mapped -%}{% render 'destination-image-position', position_key: br_position_key %}{%- endcapture -%}

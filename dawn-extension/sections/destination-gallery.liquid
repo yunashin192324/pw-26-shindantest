@@ -32,7 +32,7 @@
     </div>
     <div class="dst-gallery-grid" id="dst-gallery-{{ section.id }}">
       {%- for image in gallery_images -%}
-        {%- assign gimg_alt_parts = image.alt | replace: '｜', '|' | split: '|' -%}
+        {%- assign gimg_alt_parts = image.alt | replace: '｜', '|' | replace: '￤', '|' | replace: '¦', '|' | replace: '│', '|' | replace: '‖', '|' | split: '|' -%}
         {%- assign gimg_position_key = gimg_alt_parts[1] | strip -%}
         {%- capture gimg_pos_mapped -%}{% render 'destination-image-position', position_key: gimg_position_key %}{%- endcapture -%}
         {%- assign gimg_pos_mapped = gimg_pos_mapped | strip -%}

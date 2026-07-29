@@ -28,7 +28,7 @@
     <div class="dst-testimonial-media" id="dst-tsm-{{ t_dom_id }}">
       {%- for photo in t_photos -%}
         {%- assign tp_alt_source = photo.alt | default: testimonial.name.value -%}
-        {%- assign tp_alt_parts = tp_alt_source | replace: '｜', '|' | split: '|' -%}
+        {%- assign tp_alt_parts = tp_alt_source | replace: '｜', '|' | replace: '￤', '|' | replace: '¦', '|' | replace: '│', '|' | replace: '‖', '|' | split: '|' -%}
         {%- assign tp_alt_clean = tp_alt_parts[0] | strip -%}
         {%- assign tp_position_key = tp_alt_parts[1] | strip -%}
         {%- capture tp_pos_mapped -%}{% render 'destination-image-position', position_key: tp_position_key %}{%- endcapture -%}
@@ -69,7 +69,7 @@
         {%- for line in t_qa_lines -%}
           {%- assign line = line | strip -%}
           {%- if line != blank -%}
-            {%- assign qa_parts = line | replace: '｜', '|' | split: '|' -%}
+            {%- assign qa_parts = line | replace: '｜', '|' | replace: '￤', '|' | replace: '¦', '|' | replace: '│', '|' | replace: '‖', '|' | split: '|' -%}
             <details class="dst-faq-item">
               <summary class="dst-faq-question">{{ qa_parts[0] | strip }}</summary>
               <p class="dst-faq-answer">{{ qa_parts[1] | strip }}</p>

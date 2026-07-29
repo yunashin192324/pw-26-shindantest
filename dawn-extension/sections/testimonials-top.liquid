@@ -54,7 +54,7 @@
       {%- assign t_cover_position = 'center' -%}
       {%- if t_cover -%}
         {%- assign t_cover_alt_source = t_cover.alt | default: t.name.value -%}
-        {%- assign t_cover_alt_parts = t_cover_alt_source | replace: '｜', '|' | split: '|' -%}
+        {%- assign t_cover_alt_parts = t_cover_alt_source | replace: '｜', '|' | replace: '￤', '|' | replace: '¦', '|' | replace: '│', '|' | replace: '‖', '|' | split: '|' -%}
         {%- assign t_cover_position_key = t_cover_alt_parts[1] | strip -%}
         {%- capture t_cover_pos_mapped -%}{% render 'destination-image-position', position_key: t_cover_position_key %}{%- endcapture -%}
         {%- assign t_cover_pos_mapped = t_cover_pos_mapped | strip -%}

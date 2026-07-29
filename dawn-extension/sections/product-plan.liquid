@@ -264,7 +264,7 @@
       {%- for line in mf_faqs_lines -%}
         {%- assign line = line | strip -%}
         {%- if line != blank -%}
-          {%- assign faq_parts = line | replace: '｜', '|' | split: '|' -%}
+          {%- assign faq_parts = line | replace: '｜', '|' | replace: '￤', '|' | replace: '¦', '|' | replace: '│', '|' | replace: '‖', '|' | split: '|' -%}
           {
             "@type": "Question",
             "name": {{ faq_parts[0] | strip | strip_html | json }},
@@ -508,7 +508,7 @@
           {% for line in mf_options_lines %}
             {% assign line = line | strip %}
             {% if line != blank %}
-              {% assign option_parts = line | replace: '｜', '|' | split: '|' %}
+              {% assign option_parts = line | replace: '｜', '|' | replace: '￤', '|' | replace: '¦', '|' | replace: '│', '|' | replace: '‖', '|' | split: '|' %}
               <div>
                 <h4 class="font-bold text-sm">{{ option_parts[0] | strip }}</h4>
                 <p class="text-sm mt-2" style="color:#B8860B;">{{ option_parts[1] | strip }}</p>
@@ -572,7 +572,7 @@
               ｜が無ければ全文をALTとして使い、位置は中央のまま。
             {%- endcomment -%}
             {%- assign img_alt_source = image.alt | default: product.title -%}
-            {%- assign img_alt_parts = img_alt_source | replace: '｜', '|' | split: '|' -%}
+            {%- assign img_alt_parts = img_alt_source | replace: '｜', '|' | replace: '￤', '|' | replace: '¦', '|' | replace: '│', '|' | replace: '‖', '|' | split: '|' -%}
             {%- assign img_alt_clean = img_alt_parts[0] | strip -%}
             {%- assign img_position_key = img_alt_parts[1] | strip -%}
             {%- capture img_pos_mapped -%}{% render 'destination-image-position', position_key: img_position_key %}{%- endcapture -%}
@@ -584,13 +584,6 @@
             {%- else -%}
               {%- assign img_position = 'center' -%}
             {%- endif -%}
-            <div style="border:3px solid red;background:#fff;color:#000;font-size:12px;padding:6px;word-break:break-all;">
-              DEBUG #{{ forloop.index0 }}<br>
-              alt(生)="{{ image.alt }}"<br>
-              alt_clean="{{ img_alt_clean }}"<br>
-              position_key="{{ img_position_key }}"<br>
-              img_position="{{ img_position }}"
-            </div>
             <div class="w-full relative plan-gallery-item cursor-pointer" style="padding-top: 125%;" data-full="{{ image | image_url: width: 1800 }}" data-index="{{ forloop.index0 }}">
               {%- capture pgimg_style -%}object-position: {{ img_position | escape }};{%- endcapture -%}
               {{ image | image_url: width: 800 | image_tag: class: 'absolute top-0 left-0 w-full h-full object-cover rounded-lg', style: pgimg_style, alt: img_alt_clean }}
@@ -698,7 +691,7 @@
           {% for line in mf_schedule_lines %}
             {% assign line = line | strip %}
             {% if line != blank %}
-              {% assign schedule_parts = line | replace: '｜', '|' | split: '|' %}
+              {% assign schedule_parts = line | replace: '｜', '|' | replace: '￤', '|' | replace: '¦', '|' | replace: '│', '|' | replace: '‖', '|' | split: '|' %}
               <div class="flex gap-6 border-b border-gray-200 py-4 text-base">
                 <span class="w-16 shrink-0 font-serif" style="color:#B8860B;">{{ schedule_parts[0] | strip }}</span>
                 <span class="text-gray-700">{{ schedule_parts[1] | strip }}</span>
@@ -735,7 +728,7 @@
           {% for line in mf_faqs_lines %}
             {% assign line = line | strip %}
             {% if line != blank %}
-              {% assign faq_display_parts = line | replace: '｜', '|' | split: '|' %}
+              {% assign faq_display_parts = line | replace: '｜', '|' | replace: '￤', '|' | replace: '¦', '|' | replace: '│', '|' | replace: '‖', '|' | split: '|' %}
               <details class="border-b border-gray-200 py-4">
                 <summary class="cursor-pointer font-medium text-base flex justify-between items-center">{{ faq_display_parts[0] | strip }}<span style="color:#B8860B;">＋</span></summary>
                 <p class="text-base text-gray-600 mt-3 leading-relaxed">{{ faq_display_parts[1] | strip }}</p>
