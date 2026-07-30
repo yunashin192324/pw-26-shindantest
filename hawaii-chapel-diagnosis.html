@@ -369,7 +369,7 @@ var CHAPELS = [
 {id:'aulani', name:'ディズニー・フェアリーテール・ウェディング・アウラニ', area:'oahu', space:'garden', spaceLabel:'邸宅・ガーデン系（ホテル敷地内）', view:['oceanfront','oceanview','garden'], banquet:'possible', move:'far', color:['white'], notes:['luxury_hotel','other'], noteText:'著名高級ホテル内、ディズニーキャラクターと挙式ができる', priceFloor:650000, isPackageOnly:true, packageRange:'650,000円〜3,598,000円', rank:5},
 {id:'makana', name:'ザ・マカナチャペル', area:'oahu', space:'hotel', spaceLabel:'ホテル内チャペル', view:['oceanview'], banquet:'possible', move:'hotel', color:['white'], notes:['luxury_hotel'], noteText:'著名高級ホテル内（シェラトン・ワイキキ）', priceFloor:348000, isPackageOnly:false, packageRange:'668,000円', rank:6},
 {id:'moana', name:'ザ・モアナチャペル', area:'oahu', space:'hotel', spaceLabel:'ホテル内チャペル＋ガーデン（複合）', view:['oceanview'], banquet:'possible', move:'hotel', color:['white'], notes:['luxury_hotel'], noteText:'著名高級ホテル内（モアナサーフライダー）', priceFloor:408000, isPackageOnly:false, packageRange:'698,000円〜753,000円', rank:7},
-{id:'standrews', name:'セント・アンドリュース・カテドラル教会（大聖堂）', area:'oahu', space:'church', spaceLabel:'教会（伝統建築・独立型）', view:['indoor'], banquet:'nearby', move:'near', color:['white'], notes:['other'], noteText:'ステンドグラスが最大の売り', priceFloor:318000, isPackageOnly:false, packageRange:'418,000円〜670,000円', rank:8},
+{id:'standrews', name:'セント・アンドリュース・カテドラル教会（大聖堂）', area:'oahu', space:'church', spaceLabel:'教会（伝統建築・独立型）', view:['indoor'], banquet:'nearby', move:'near', color:['white'], notes:['other'], noteText:'ステンドグラスが最大の売り', priceFloor:318000, isPackageOnly:false, packageRange:'418,000円〜670,000円', rank:8, stainedGlass:'primary'},
 {id:'plumeria', name:'プルメリアガーデン', area:'oahu', space:'garden', spaceLabel:'邸宅・ガーデン系', view:['oceanview'], banquet:'possible', move:'near', color:['white'], notes:['scenery'], noteText:'海が見えるガーデン＋パーティーができる数少ない場所、雨天バックアップ用チャペルあり', priceFloor:308000, isPackageOnly:false, packageRange:'282,000円〜523,000円', rank:9},
 {id:'pohakupuna', name:'ザ・サーフ ポハクプナ ビーチクラブ', area:'oahu', space:'garden', spaceLabel:'邸宅・ガーデン系', view:['oceanfront'], banquet:'possible', move:'far', color:['white'], notes:['one_couple'], noteText:'1日1組（少数）限定', priceFloor:450000, isPackageOnly:false, packageRange:'750,000円〜1,280,000円', rank:10},
 {id:'alohakeakua', name:'ザ・プライベート・ガーデン アロハ・ケ・アクア', area:'oahu', space:'church', spaceLabel:'独立型チャペル＋ガーデン（複合）', view:['garden'], banquet:'possible', move:'far', color:['brown'], notes:['scenery'], noteText:'景観・エリアの美しさ', priceFloor:400000, isPackageOnly:false, packageRange:'348,000円〜723,800円', rank:11},
@@ -377,11 +377,11 @@ var CHAPELS = [
 {id:'ines', name:'アイネス ヴィラノッツェ ワイキキレイア', area:'oahu', space:'modern', spaceLabel:'モダンチャペル（独立型）', view:['indoor'], banquet:'possible', move:'near', color:['white'], notes:['gourmet'], noteText:'グルメ・食事の評判', priceFloor:228000, isPackageOnly:false, packageRange:'600,000円〜630,000円', rank:13},
 {id:'lanilea', name:'ラニレア チャペル', area:'oahu', space:'hotel', spaceLabel:'ホテル内チャペル（プリンスワイキキ内）', view:['oceanview'], banquet:'possible', move:'hotel', color:['white'], notes:['other'], noteText:'価格が安め、上階からの眺望が良い', priceFloor:253000, isPackageOnly:false, packageRange:'298,000円〜576,800円', rank:14},
 {id:'centralunion', name:'セントラル・ユニオン教会大聖堂', area:'oahu', space:'church', spaceLabel:'教会（伝統建築・独立型）', view:['indoor'], banquet:'nearby', move:'near', color:['white'], notes:['historic'], noteText:'歴史的建造物・重要文化財', priceFloor:350000, isPackageOnly:false, packageRange:'605,000円', rank:15},
-{id:'moanalua', name:'モアナルアコミュニティ教会', area:'oahu', space:'church', spaceLabel:'教会（伝統建築・独立型）', view:['indoor'], banquet:'nearby', move:'near', color:['white'], notes:['other'], noteText:'ステンドグラスが綺麗', priceFloor:198000, isPackageOnly:false, packageRange:'488,000円', rank:16},
+{id:'moanalua', name:'モアナルアコミュニティ教会', area:'oahu', space:'church', spaceLabel:'教会（伝統建築・独立型）', view:['indoor'], banquet:'nearby', move:'near', color:['white'], notes:['other'], noteText:'ステンドグラスが綺麗', priceFloor:198000, isPackageOnly:false, packageRange:'488,000円', rank:16, stainedGlass:'secondary'},
 {id:'diamondhead', name:'ザ・ダイヤモンドヘッドチャペル', area:'oahu', space:'hotel', spaceLabel:'ホテル内チャペル', view:['oceanview'], banquet:'possible', move:'hotel', color:['brown'], notes:['luxury_hotel','scenery'], noteText:'著名高級ホテル内、景観・エリアの美しさ、ダイヤモンドヘッドが見える', priceFloor:518000, isPackageOnly:false, packageRange:'1,100,000円', rank:17},
 {id:'kahala', name:'ザ・カハラ ガーデン ウエディング', area:'oahu', space:'garden', spaceLabel:'邸宅・ガーデン系（ホテル敷地内）', view:['oceanview'], banquet:'possible', move:'near', color:['white'], notes:['luxury_hotel'], noteText:'著名高級ホテル内（ザ・カハラ）', priceFloor:692000, isPackageOnly:false, packageRange:'598,000円〜1,015,800円', rank:18},
 {id:'mauloa', name:'ザ・サーフ マウロアガーデン', area:'oahu', space:'garden', spaceLabel:'邸宅・ガーデン系', view:['oceanview'], banquet:'nearby', move:'near', color:['white'], notes:['one_couple'], noteText:'1日1組（少数）限定', priceFloor:250000, isPackageOnly:false, packageRange:'480,000円', rank:19},
-{id:'holy', name:'ホーリーナティビティ教会', area:'oahu', space:'church', spaceLabel:'教会（伝統建築・独立型）', view:['indoor'], banquet:'nearby', move:'near', color:['white'], notes:[], noteText:'特になし', priceFloor:268000, isPackageOnly:false, packageRange:'568,000円', rank:20},
+{id:'holy', name:'ホーリーナティビティ教会', area:'oahu', space:'church', spaceLabel:'教会（伝統建築・独立型）', view:['indoor'], banquet:'nearby', move:'near', color:['white'], notes:[], noteText:'天井まで届くステンドグラス、パイプオルガン', priceFloor:268000, isPackageOnly:false, packageRange:'568,000円', rank:20, stainedGlass:'secondary'},
 {id:'halekulani', name:'ハレクラニウエディング', area:'oahu', space:'garden', spaceLabel:'邸宅・ガーデン系（ホテル敷地内、チャペルもあり）', view:['oceanfront','oceanview','garden'], banquet:'possible', move:'hotel', color:['white'], notes:['luxury_hotel'], noteText:'著名高級ホテル内（ハレクラニ）', priceFloor:671000, isPackageOnly:false, packageRange:'994,800円〜1,380,000円', rank:21},
 {id:'magicisland', name:'マジックアイランド ガーデン ウェディング', area:'oahu', space:'garden', spaceLabel:'邸宅・ガーデン系', view:['oceanview'], banquet:'nearby', move:'near', color:['white'], notes:[], noteText:'特になし', priceFloor:347000, isPackageOnly:true, packageRange:'347,000円', rank:22},
 {id:'kawaiahao', name:'カワイアハオ教会', area:'oahu', space:'church', spaceLabel:'教会（伝統建築・独立型）', view:['indoor'], banquet:'nearby', move:'near', color:['white'], notes:['historic'], noteText:'歴史的建造物・重要文化財', priceFloor:288000, isPackageOnly:false, packageRange:'578,000円', rank:23},
@@ -403,172 +403,195 @@ var BUDGET_TIERS = [
   {v:4, max:800000, label:'60〜80万円'},
   {v:5, max:Infinity, label:'80万円以上'},
 ];
-var SPACE_LABEL={church:'教会（伝統建築・独立型）',modern:'モダンチャペル（独立型）',hotel:'ホテル内チャペル',garden:'邸宅・ガーデン系',restaurant:'レストランウェディング'};
+var CATEGORY_LABEL={garden:'ガーデン',ocean_chapel:'海の見えるチャペル',calm_church:'教会（落ち着いた雰囲気）'};
 var VIEW_LABEL={oceanfront:'オーシャンフロント',oceanview:'オーシャンビュー',garden:'ガーデンのみ',indoor:'眺望なし・屋内'};
-var MOVE_LABEL={hotel:'ホテル内・移動なし',near:'ワイキキ中心部から少し移動',far:'ワイキキを離れた静かなエリア'};
 var COLOR_LABEL={white:'白系',brown:'茶系'};
-var NOTE_LABEL={historic:'歴史的建造物・重要文化財',luxury_hotel:'著名高級ホテル内',scenery:'景観・エリアの美しさ',gourmet:'グルメ・食事の評判',one_couple:'1日1組限定',other:'その他の魅力'};
 var VIEW_ORDER=['indoor','garden','oceanview','oceanfront'];
 
-/* ═══ QUESTIONS ═══ */
-var QS = [
-  { id:'budget', section:'BUDGET', title:'挙式費用のご予算は、どのくらいをお考えですか？', sub:'基本の挙式料金（会場レンタル込み）の目安です。', type:'single',
-    opts:[{main:'30万円未満',sub:'まずは費用を抑えて',v:1},{main:'30〜45万円',sub:'標準的な予算感で',v:2},{main:'45〜60万円',sub:'こだわりを持って',v:3},{main:'60〜80万円',sub:'特別な一日のために',v:4},{main:'80万円以上',sub:'予算にはこだわらない',v:5}]},
-  { id:'banquet', section:'RECEPTION', title:'挙式と披露宴（パーティー）は、同じ会場で行いたいですか？', sub:'同一施設内か、近隣で別途手配するかで会場の選択肢が変わります。', type:'single',
-    opts:[{main:'同じ会場で行いたい',sub:'移動の負担がなく安心です',v:'possible'},{main:'挙式のみ・別会場でも良い',sub:'教会など選択肢が広がります',v:'any'}]},
-  { id:'island', section:'AREA', title:'ハワイ島（離島）も視野に入れたいですか？', sub:'基本はオアフ島の式場からご案内していますが、ご希望があればハワイ島の3会場もあわせてご提案します。', type:'single',
-    opts:[{main:'オアフ島の式場を中心に',sub:'定番の人気エリアです',v:false},{main:'ハワイ島も見てみたい',sub:'コナ・ワイコロアエリアも候補に',v:true}]},
-  { id:'space', section:'SPACE', title:'どんな空間で挙式を挙げたいですか？', sub:'一番近いイメージを選んでください。', type:'single',
-    opts:[{main:'教会（伝統建築・独立型）',sub:'重厚な建築とステンドグラス',v:'church'},{main:'モダンチャペル（独立型）',sub:'洗練されたデザイン',v:'modern'},{main:'ホテル内チャペル',sub:'滞在先での安心感',v:'hotel'},{main:'邸宅・ガーデン系',sub:'緑と開放感のある空間',v:'garden'},{main:'レストランウェディング',sub:'食事と一体になった特別な空間',v:'restaurant'},{main:'こだわらない',sub:'',v:'any'}]},
-  { id:'view', section:'VIEW', title:'眺望へのこだわりはありますか？', sub:'', type:'single',
-    opts:[{main:'オーシャンフロント',sub:'ビーチが目の前',v:'oceanfront'},{main:'オーシャンビュー',sub:'海が見える',v:'oceanview'},{main:'ガーデンのみ',sub:'海は見えなくても緑豊かに',v:'garden'},{main:'眺望なし・屋内',sub:'荘厳な屋内空間を重視',v:'indoor'},{main:'こだわらない',sub:'',v:'any'}]},
-  { id:'move', section:'STAY STYLE', title:'滞在中の過ごし方は、どちらがお好みですか？', sub:'ハワイ島の会場を検討中の場合、この質問はオアフ島の式場にのみ影響します。', type:'single',
-    opts:[{main:'ホテル内・移動なし',sub:'滞在先でそのまま挙式',v:'hotel'},{main:'ワイキキ中心部から少し移動',sub:'車で15分程度',v:'near'},{main:'ワイキキを離れた静かなエリア',sub:'車で30分以上、プライベート感重視',v:'far'},{main:'こだわらない',sub:'',v:'any'}]},
-  { id:'color', section:'INTERIOR', title:'チャペルの内観カラーは、どちらがお好みですか？', sub:'', type:'single',
-    opts:[{main:'白系',sub:'清廉でクラシックな印象',v:'white'},{main:'茶系',sub:'木のぬくもりある落ち着いた印象',v:'brown'},{main:'こだわらない',sub:'',v:'any'}]},
-  { id:'notes', section:'SPECIAL POINT', title:'特に惹かれるポイントはありますか？', sub:'複数選択できます。', type:'multi',
-    opts:[{text:'歴史的建造物・重要文化財',v:'historic'},{text:'著名高級ホテル内',v:'luxury_hotel'},{text:'景観・エリアの美しさ',v:'scenery'},{text:'グルメ・食事の評判',v:'gourmet'},{text:'1日1組限定',v:'one_couple'},{text:'特にこだわりなし',v:'none'}]},
-];
+/* 実際の接客フローに合わせた分類：空間の建築様式ではなく「見た目の印象」でカテゴリ分けする
+   - 邸宅・ガーデン系はそのままガーデン
+   - それ以外で海が見える(オーシャンフロント/オーシャンビュー)ものは海の見えるチャペル
+   - それ以外(屋内・ガーデンのみで海が見えない)は教会(落ち着いた雰囲気) */
+function classifyCategory(c){
+  if(c.space==='garden') return 'garden';
+  if(c.view.indexOf('oceanfront')!==-1 || c.view.indexOf('oceanview')!==-1) return 'ocean_chapel';
+  return 'calm_church';
+}
 
-/* ═══ HARD FILTER ═══ */
-function hardFilter(ans){
-  var pool = CHAPELS.filter(function(c){ return c.area==='oahu' || (ans.island===true && c.area==='hawaii'); });
-  var tier = BUDGET_TIERS.filter(function(t){return t.v===ans.budget;})[0] || BUDGET_TIERS[4];
+/* ═══ QUESTIONS (id-keyed, flow is assembled dynamically after the category answer) ═══ */
+var QS_MAP = {
+  category: { section:'CATEGORY', title:'どんなところで挙式を挙げたいですか？', sub:'一番近いイメージを選んでください。', type:'single',
+    opts:[
+      {main:'ガーデン', sub:'緑と開放感のある空間でゆったりと', v:'garden'},
+      {main:'海の見えるチャペル', sub:'海を望むロケーションで', v:'ocean_chapel'},
+      {main:'教会（落ち着いた雰囲気）', sub:'厳かで静かな空間を重視', v:'calm_church'},
+    ]},
+  companion: { section:'PARTY', title:'どなたと一緒に挙式に参加されますか？', sub:'', type:'single',
+    opts:[
+      {main:'お二人だけ', sub:'プライベートに', v:'couple'},
+      {main:'ご家族と一緒', sub:'食事やパーティーも楽しみたい', v:'family'},
+      {main:'ゲストや小さなお子様も一緒', sub:'安心して過ごせるホテル滞在を重視', v:'guests_kids'},
+    ]},
+  gardenParty: { section:'RECEPTION', title:'披露宴（パーティー）も、同じガーデンで行いたいですか？', sub:'', type:'single',
+    opts:[
+      {main:'はい、同じガーデンで行いたい', sub:'', v:true},
+      {main:'挙式のみ・別会場でも良い', sub:'', v:false},
+    ]},
+  oceanDistance: { section:'VIEW', title:'海との距離は、どちらがお好みですか？', sub:'', type:'single',
+    opts:[
+      {main:'目の前にビーチがあって、すぐビーチフォトがしたい', sub:'オーシャンフロント', v:'oceanfront'},
+      {main:'綺麗な景色を眺めながら挙式したい', sub:'オーシャンビュー・景観重視', v:'oceanview'},
+    ]},
+  chapelColor: { section:'INTERIOR', title:'チャペルの内装カラーは、お好みがありますか？', sub:'', type:'single',
+    opts:[
+      {main:'白系', sub:'清廉でクラシックな印象', v:'white'},
+      {main:'茶系', sub:'木のぬくもりある落ち着いた印象', v:'brown'},
+      {main:'こだわらない', sub:'', v:'any'},
+    ]},
+  stainedGlass: { section:'DETAIL', title:'ステンドグラスなど、教会建築ならではの装飾にこだわりたいですか？', sub:'', type:'single',
+    opts:[
+      {main:'はい、装飾にこだわりたい', sub:'', v:true},
+      {main:'いいえ、こだわらない', sub:'', v:false},
+    ]},
+  banquet: { section:'RECEPTION', title:'挙式と披露宴（パーティー）は、同じ会場で行いたいですか？', sub:'同一施設内か、近隣で別途手配するかで会場の選択肢が変わります。', type:'single',
+    opts:[
+      {main:'同じ会場で行いたい', sub:'移動の負担がなく安心です', v:'possible'},
+      {main:'挙式のみ・別会場でも良い', sub:'', v:'any'},
+    ]},
+  budget: { section:'BUDGET', title:'挙式費用のご予算は、どのくらいをお考えですか？', sub:'基本の挙式料金（会場レンタル込み）の目安です。', type:'single',
+    opts:[{main:'30万円未満',sub:'まずは費用を抑えて',v:1},{main:'30〜45万円',sub:'標準的な予算感で',v:2},{main:'45〜60万円',sub:'こだわりを持って',v:3},{main:'60〜80万円',sub:'特別な一日のために',v:4},{main:'80万円以上',sub:'予算にはこだわらない',v:5}]},
+  island: { section:'AREA', title:'ハワイ島（離島）も視野に入れたいですか？', sub:'基本はオアフ島の式場からご案内していますが、ご希望があればハワイ島の3会場もあわせてご提案します。', type:'single',
+    opts:[{main:'オアフ島の式場を中心に',sub:'定番の人気エリアです',v:false},{main:'ハワイ島も見てみたい',sub:'コナ・ワイコロアエリアも候補に',v:true}]},
+};
+
+/* カテゴリ回答後にその場で確定するフロー。ガーデン分岐は「披露宴もガーデンで」の回答が
+   そのまま披露宴同施設のハード条件を兼ねるため、別途の披露宴質問は挟まない。 */
+function buildFlow(category){
+  var flow=['category','companion'];
+  if(category==='garden') flow.push('gardenParty');
+  else if(category==='ocean_chapel') flow.push('oceanDistance','chapelColor');
+  else if(category==='calm_church') flow.push('stainedGlass');
+  if(category!=='garden') flow.push('banquet');
+  flow.push('budget','island');
+  return flow;
+}
+function resolvedBanquet(ans){
+  if(ans.category==='garden') return ans.gardenParty ? 'possible' : 'any';
+  return ans.banquet;
+}
+
+/* ═══ HARD FILTER (カテゴリ→予算→披露宴→エリアの順で母集団を削る) ═══ */
+function hardFilter(ans, overrides){
+  overrides = overrides || {};
+  var pool = CHAPELS.filter(function(c){ return classifyCategory(c) === (overrides.category || ans.category); });
+  pool = pool.filter(function(c){ return c.area==='oahu' || (ans.island===true && c.area==='hawaii'); });
+  var budgetV = overrides.budget || ans.budget;
+  var tier = BUDGET_TIERS.filter(function(t){return t.v===budgetV;})[0] || BUDGET_TIERS[4];
   pool = pool.filter(function(c){ return c.priceFloor <= tier.max; });
-  if(ans.banquet==='possible') pool = pool.filter(function(c){ return c.banquet==='possible'; });
+  var banquetV = overrides.banquet || resolvedBanquet(ans);
+  if(banquetV==='possible') pool = pool.filter(function(c){ return c.banquet==='possible'; });
   return pool;
 }
-/* recovery: progressively relax hard conditions until pool is non-empty */
+/* recovery: 段階的に条件を緩めてゼロ件を回避する */
 function recoveryFilter(ans){
   var msgs=[];
   var pool = hardFilter(ans);
   if(pool.length>0) return {pool:pool,msgs:msgs};
-  if(ans.banquet==='possible'){
-    var a2={budget:ans.budget,banquet:'any',island:ans.island};
-    var p2=hardFilter(a2);
-    if(p2.length>0){ msgs.push('この予算で披露宴も同一施設に絞ると候補がありませんでした。披露宴を近隣で別途手配する形であれば、'+p2.length+'件ご案内できます。'); return {pool:p2,msgs:msgs}; }
+  if(resolvedBanquet(ans)==='possible'){
+    var p2=hardFilter(ans,{banquet:'any'});
+    if(p2.length>0){ msgs.push('披露宴を同一施設に絞ると候補がありませんでした。近隣で別途手配する形であれば、'+p2.length+'件ご案内できます。'); return {pool:p2,msgs:msgs}; }
   }
-  var a3={budget:5,banquet:ans.banquet,island:ans.island};
-  var p3=hardFilter(a3);
-  if(p3.length>0){ msgs.push('ご希望のご予算では候補が見つかりませんでした。予算の上限を広げると、'+p3.length+'件ご案内できます。'); return {pool:p3,msgs:msgs}; }
-  var a4={budget:5,banquet:'any',island:true};
-  var p4=hardFilter(a4);
-  msgs.push('条件を広げてご案内します。');
+  var p3=hardFilter(ans,{banquet:'any',budget:5});
+  if(p3.length>0){ msgs.push('ご希望の条件では候補が見つかりませんでした。予算の上限を広げると、'+CATEGORY_LABEL[ans.category]+'の中で'+p3.length+'件ご案内できます。'); return {pool:p3,msgs:msgs}; }
+  var p4 = CHAPELS.filter(function(c){ return c.area==='oahu' || (ans.island===true && c.area==='hawaii'); });
+  msgs.push('ご希望の「'+CATEGORY_LABEL[ans.category]+'」では該当がありませんでした。他のカテゴリも含めてご案内します。');
   return {pool:p4,msgs:msgs};
 }
 
-/* ═══ SOFT SCORING ═══ */
+/* ═══ SOFT SCORING（カテゴリ内での順位づけ） ═══ */
 function viewScore(userView, venueViews){
-  if(!userView||userView==='any') return 0;
+  if(!userView) return 0;
   var ui=VIEW_ORDER.indexOf(userView), best=-1;
   for(var i=0;i<venueViews.length;i++){
     var vi=VIEW_ORDER.indexOf(venueViews[i]);
     var dist=Math.abs(ui-vi);
-    var pts = dist===0?3:dist===1?1.5:dist===2?0.5:0;
+    var pts = dist===0?5:dist===1?2:dist===2?0.5:0;
     if(pts>best) best=pts;
   }
   return best<0?0:best;
 }
 function scoreChapel(c, ans){
-  var s=0, matched={space:false,view:false,move:false,color:false,notes:[]};
-  if(ans.space && ans.space!=='any' && c.space===ans.space){ s+=3; matched.space=true; }
-  var vs=viewScore(ans.view, c.view); s+=vs; if(vs>=3) matched.view=true;
-  if(ans.move && ans.move!=='any' && c.area==='oahu' && c.move===ans.move){ s+=2; matched.move=true; }
-  if(ans.color && ans.color!=='any' && c.color.indexOf(ans.color)!==-1){ s+=2; matched.color=true; }
-  if(ans.notes && ans.notes.length){
-    for(var i=0;i<ans.notes.length;i++){ if(c.notes.indexOf(ans.notes[i])!==-1){ s+=1; matched.notes.push(ans.notes[i]); } }
+  var s=0, reasons=[];
+  if(ans.companion==='family' && c.notes.indexOf('gourmet')!==-1){ s+=3; reasons.push('gourmet'); }
+  if(ans.companion==='guests_kids' && c.space==='hotel'){ s+=3; reasons.push('hotel_stay'); }
+  if(ans.category==='ocean_chapel'){
+    var vs=viewScore(ans.oceanDistance, c.view); s+=vs; if(vs>=5) reasons.push('view');
+    if(ans.chapelColor && ans.chapelColor!=='any' && c.color.indexOf(ans.chapelColor)!==-1){ s += (ans.chapelColor==='brown'?4:2); reasons.push('color'); }
   }
-  return {score:s, matched:matched};
+  if(ans.category==='garden' && ans.gardenParty===true && c.banquet==='possible'){ s+=2; reasons.push('garden_party'); }
+  if(ans.category==='calm_church' && ans.stainedGlass===true){
+    if(c.stainedGlass==='primary'){ s+=6; reasons.push('stained_primary'); }
+    else if(c.stainedGlass==='secondary'){ s+=3; reasons.push('stained_secondary'); }
+  }
+  if(c.notes.indexOf('scenery')!==-1) s+=0.5; // ごく僅かな一般加点(タイブレーク補助)
+  return {score:s, reasons:reasons};
 }
 function rankChapels(pool, ans){
-  return pool.map(function(c){ var r=scoreChapel(c,ans); return {c:c, score:r.score, matched:r.matched}; })
+  return pool.map(function(c){ var r=scoreChapel(c,ans); return {c:c, score:r.score, reasons:r.reasons}; })
     .sort(function(a,b){ return b.score-a.score || a.c.rank-b.c.rank; });
 }
 
 function yen(n){ return n.toLocaleString('ja-JP')+'円'; }
 
-function buildReason(c, ans, matched){
+function buildReason(c, ans, reasons){
   var parts=[];
-  if(matched.space) parts.push('「'+SPACE_LABEL[ans.space]+'」というご希望にぴったりの空間タイプです');
-  if(matched.view) parts.push((VIEW_LABEL[ans.view]||'')+'のご希望に合う眺望です');
-  if(matched.move) parts.push(MOVE_LABEL[ans.move]+'というご希望の立地です');
-  if(matched.color) parts.push('内観カラーも「'+COLOR_LABEL[ans.color]+'」のご希望通りです');
-  if(matched.notes.length){
-    var nlabels=matched.notes.map(function(n){return NOTE_LABEL[n];});
-    parts.push(nlabels.join('・')+'という点も魅力です');
+  parts.push('「'+CATEGORY_LABEL[ans.category]+'」というご希望に合う会場です');
+  if(reasons.indexOf('view')!==-1){
+    parts.push(ans.oceanDistance==='oceanfront' ? 'ビーチが目の前で、すぐにビーチフォトが叶います' : '綺麗な景色を眺めながら挙式できます');
   }
-  if(!parts.length) parts.push(c.noteText!=='特になし'?c.noteText:'ご希望の条件内で人気の高い式場です');
+  if(reasons.indexOf('color')!==-1) parts.push('内装カラーも「'+COLOR_LABEL[ans.chapelColor]+'」のご希望通りです');
+  if(reasons.indexOf('garden_party')!==-1) parts.push('披露宴も同じガーデンで行えます');
+  if(reasons.indexOf('stained_primary')!==-1) parts.push('ステンドグラスなど教会建築の装飾が最大の魅力です');
+  else if(reasons.indexOf('stained_secondary')!==-1) parts.push('ステンドグラスなど教会建築ならではの装飾も楽しめます');
+  if(reasons.indexOf('gourmet')!==-1) parts.push('食事の評判も良く、ご家族との時間にもぴったりです');
+  if(reasons.indexOf('hotel_stay')!==-1) parts.push('ホテル内なので、ゲストやお子様連れでも安心です');
+  if(parts.length<2 && c.noteText && c.noteText!=='特になし') parts.push(c.noteText);
   return parts.join('。')+'。';
 }
 
 /* ═══ FLOW STATE ═══ */
-var qFlow=[0,1,2,3,4,5,6,7], curQIdx=0, answers={}, multiSel={};
-function getCurrentQ(){ return QS[qFlow[curQIdx]]; }
+var qFlow=['category'], curQIdx=0, answers={};
+function getCurrentQ(){ return QS_MAP[qFlow[curQIdx]]; }
 function getTotalSteps(){ return qFlow.length; }
 
-function maskRevealText(el, text){
-  el.textContent=text;
-}
-
 function renderQ(){
-  var q=getCurrentQ(), total=getTotalSteps(), step=curQIdx+1;
+  var qid=qFlow[curQIdx], q=getCurrentQ(), total=getTotalSteps(), step=curQIdx+1;
   document.getElementById('q-bar').style.width=(step/total*100)+'%';
   document.getElementById('q-section').textContent=q.section;
   document.getElementById('q-num').textContent='#0'+step;
-  maskRevealText(document.getElementById('q-title'), q.title);
+  document.getElementById('q-title').textContent=q.title;
   document.getElementById('q-sub').textContent=q.sub||'';
   document.getElementById('back-btn').style.display=curQIdx>0?'block':'none';
   var $s=document.getElementById('opts-single');
-  var $m=document.getElementById('opts-multi');
-  var $n=document.getElementById('next-btn');
-  if(q.type==='single'){
-    $s.style.display='flex'; $m.style.display='none'; $n.style.display='none'; $s.innerHTML='';
-    q.opts.forEach(function(opt,optIdx){
-      var btn=document.createElement('button');
-      btn.className='opt'+(answers[q.id]===opt.v?' selected':'');
-      btn.style.animation='revealUp .6s var(--ease) '+(optIdx*.06)+'s both';
-      btn.innerHTML='<span class="opt-inner"><span class="opt-texts"><span class="opt-main">'+opt.main+'</span>'+(opt.sub?'<span class="opt-sub-text">'+opt.sub+'</span>':'')+'</span><span class="opt-radio"></span></span>';
-      btn.addEventListener('click',function(e){
-        var r=document.createElement('span'); r.className='ripple';
-        var rect=btn.getBoundingClientRect(), sz=Math.max(rect.width,rect.height);
-        r.style.cssText='width:'+sz+'px;height:'+sz+'px;left:'+(e.clientX-rect.left-sz/2)+'px;top:'+(e.clientY-rect.top-sz/2)+'px;';
-        btn.appendChild(r); setTimeout(function(){r.remove();},700);
-        answers[q.id]=opt.v;
-        $s.querySelectorAll('.opt').forEach(function(b){b.classList.remove('selected');});
-        btn.classList.add('selected');
-        setTimeout(function(){ if(curQIdx<getTotalSteps()-1){ curQIdx++; renderQ(); } else showLoading(); },300);
-      });
-      $s.appendChild(btn);
+  $s.style.display='flex'; $s.innerHTML='';
+  q.opts.forEach(function(opt,optIdx){
+    var btn=document.createElement('button');
+    btn.className='opt'+(answers[qid]===opt.v?' selected':'');
+    btn.style.animation='revealUp .6s var(--ease) '+(optIdx*.06)+'s both';
+    btn.innerHTML='<span class="opt-inner"><span class="opt-texts"><span class="opt-main">'+opt.main+'</span>'+(opt.sub?'<span class="opt-sub-text">'+opt.sub+'</span>':'')+'</span><span class="opt-radio"></span></span>';
+    btn.addEventListener('click',function(e){
+      var r=document.createElement('span'); r.className='ripple';
+      var rect=btn.getBoundingClientRect(), sz=Math.max(rect.width,rect.height);
+      r.style.cssText='width:'+sz+'px;height:'+sz+'px;left:'+(e.clientX-rect.left-sz/2)+'px;top:'+(e.clientY-rect.top-sz/2)+'px;';
+      btn.appendChild(r); setTimeout(function(){r.remove();},700);
+      answers[qid]=opt.v;
+      $s.querySelectorAll('.opt').forEach(function(b){b.classList.remove('selected');});
+      btn.classList.add('selected');
+      if(qid==='category'){ qFlow=buildFlow(opt.v); }
+      setTimeout(function(){ if(curQIdx<getTotalSteps()-1){ curQIdx++; renderQ(); } else showLoading(); },300);
     });
-  } else {
-    $s.style.display='none'; $m.style.display='flex'; $n.style.display='block'; $n.disabled=true; $m.innerHTML='';
-    var qi=qFlow[curQIdx];
-    if(!multiSel[qi]){ multiSel[qi]={}; var _ia=answers[q.id]||[]; for(var _ii=0;_ii<_ia.length;_ii++) multiSel[qi][_ia[_ii]]=true; }
-    var btnMap={};
-    q.opts.forEach(function(opt,optIdx){
-      var btn=document.createElement('button');
-      btn.className='opt-multi'+(multiSel[qi][opt.v]?' selected':'');
-      btn.style.animation='revealUp .5s var(--ease) '+(optIdx*.04)+'s both';
-      btn.innerHTML='<span class="chk"></span><span class="opt-multi-text">'+opt.text+'</span>';
-      btn.addEventListener('click',function(){
-        if(multiSel[qi][opt.v]){ delete multiSel[qi][opt.v]; }
-        else{
-          if(opt.v==='none'){ multiSel[qi]={}; } else { delete multiSel[qi]['none']; }
-          multiSel[qi][opt.v]=true;
-        }
-        q.opts.forEach(function(o){ btnMap[o.v].classList.toggle('selected', !!multiSel[qi][o.v]); });
-        $n.disabled=Object.keys(multiSel[qi]||{}).length===0;
-      });
-      $m.appendChild(btn);
-      btnMap[opt.v]=btn;
-    });
-    $n.disabled=Object.keys(multiSel[qi]||{}).length===0;
-    $n.onclick=function(){
-      var sel=Object.keys(multiSel[qi]||{}).filter(function(v){return v!=='none';});
-      answers[q.id]=sel;
-      if(curQIdx<getTotalSteps()-1){ curQIdx++; renderQ(); } else showLoading();
-    };
-  }
+    $s.appendChild(btn);
+  });
 }
 
 function goBack(){
@@ -576,7 +599,7 @@ function goBack(){
 }
 
 /* ═══ LOADING → RESULT ═══ */
-var LOADING_MSGS=['ご予算を確認しています…','披露宴の条件を確認しています…','空間タイプを照合しています…','眺望を比較しています…','最適な式場を絞り込んでいます…'];
+var LOADING_MSGS=['ご希望のカテゴリを確認しています…','同行者の条件を確認しています…','予算・披露宴の条件を確認しています…','エリアを確認しています…','最適な式場を絞り込んでいます…'];
 function showLoading(){
   document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});
   document.getElementById('screen-loading').classList.add('active');
@@ -592,18 +615,18 @@ function showLoading(){
 
 function buildSummary(ans){
   var bm={1:'30万円未満',2:'30〜45万円',3:'45〜60万円',4:'60〜80万円',5:'80万円以上'};
-  var out=[bm[ans.budget]];
-  out.push(ans.banquet==='possible'?'挙式・披露宴 同施設希望':'挙式のみ・別会場OK');
+  var cm={couple:'お二人だけ',family:'ご家族と一緒',guests_kids:'ゲスト・お子様と一緒'};
+  var out=[CATEGORY_LABEL[ans.category]];
+  out.push(cm[ans.companion]);
+  out.push(bm[ans.budget]);
+  out.push(resolvedBanquet(ans)==='possible'?'挙式・披露宴 同施設希望':'挙式のみ・別会場OK');
   out.push(ans.island?'オアフ島＋ハワイ島':'オアフ島中心');
-  if(ans.space && ans.space!=='any') out.push(SPACE_LABEL[ans.space]);
-  if(ans.view && ans.view!=='any') out.push(VIEW_LABEL[ans.view]);
-  return out;
+  return out.filter(Boolean);
 }
 
 function showResult(){
   document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});
-  var resultScreen=document.getElementById('screen-result');
-  resultScreen.classList.add('active');
+  document.getElementById('screen-result').classList.add('active');
 
   var rec = recoveryFilter(answers);
   var pool = rec.pool;
@@ -627,9 +650,9 @@ function showResult(){
     var c=item.c;
     var card=document.createElement('div'); card.className='chapel-card';
     var priceNote = c.packageUnconfirmed ? '<div class="chapel-price-note">※ HISパッケージ料金は現在確認中です</div>' : '';
-    var tags = [SPACE_LABEL[c.space]].concat(c.view.map(function(v){return VIEW_LABEL[v];}));
+    var tags = [CATEGORY_LABEL[classifyCategory(c)]].concat(c.view.map(function(v){return VIEW_LABEL[v];}));
     if(c.area==='hawaii') tags.unshift('ハワイ島');
-    var reason = buildReason(c, answers, item.matched);
+    var reason = buildReason(c, answers, item.reasons);
     card.innerHTML =
       '<div class="chapel-card-head"><span class="chapel-card-rank">CHOICE '+(idx+1)+'</span><span class="chapel-card-area">'+(c.area==='oahu'?'オアフ島':'ハワイ島')+'</span></div>'+
       '<div class="chapel-card-body">'+
@@ -654,14 +677,14 @@ function showResult(){
 document.getElementById('start-btn').addEventListener('click', function(){
   document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});
   document.getElementById('screen-q').classList.add('active');
-  curQIdx=0; answers={}; multiSel={};
+  curQIdx=0; answers={}; qFlow=['category'];
   renderQ();
 });
 document.getElementById('back-btn').addEventListener('click', goBack);
 document.getElementById('restart-btn').addEventListener('click', function(){
   document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});
   document.getElementById('screen-start').classList.add('active');
-  curQIdx=0; answers={}; multiSel={};
+  curQIdx=0; answers={}; qFlow=['category'];
 });
 window.addEventListener('scroll', function(){
   document.getElementById('siteHeader').classList.toggle('scrolled', window.scrollY>10);
