@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>3分で、ハワイの式場が見つかります。| HIS WEDDING Hawaii Chapel Diagnosis</title>
+<meta name="description" content="質問に答えるだけで、お二人にぴったりのハワイの挙式会場をご提案する診断コンテンツです。">
+<link href="https://fonts.googleapis.com" rel="preconnect" />
+<link href="https://fonts.gstatic.com" rel="preconnect" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&amp;family=Noto+Serif+JP:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet" />
+<style>
+:root{
+  --warm-white:#faf7f2;--ivory:#f3ecdf;--stone:#e7ded0;--sand:#d8c9ab;
+  --champagne:#cba876;--gold:#cba876;--gold-lt:#f1e6d2;--gold-dk:#a8824f;
+  --charcoal:#100e0b;--ink:#1c1a16;--ink-2:#5c574c;--ink-3:#8f887a;
+  --line:rgba(255,255,255,.24);--line-soft:rgba(28,26,22,.12);
+  --white:#ffffff;--off-white:#faf8f4;
+  --sea:#3f7a78;--sea-dk:#2c5957;
+  --serif:"Noto Serif JP",serif;--display:"Cormorant Garamond",serif;
+  --ease:cubic-bezier(.16,1,.3,1);--ease-soft:cubic-bezier(.22,1,.36,1);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--charcoal);font-family:var(--serif);color:var(--ink);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+img{max-width:100%;display:block}
+button{font:inherit}
+a{color:inherit}
+
+.grain{position:fixed;inset:0;z-index:998;pointer-events:none;opacity:.035;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");}
+
+.site-header{position:fixed;top:0;left:0;right:0;z-index:200;display:flex;align-items:center;justify-content:space-between;
+  padding:26px 40px;transition:padding .4s var(--ease),background .4s var(--ease),backdrop-filter .4s var(--ease);}
+.site-header.scrolled{padding:16px 40px;background:rgba(16,14,11,.55);backdrop-filter:blur(16px) saturate(140%);-webkit-backdrop-filter:blur(16px) saturate(140%);}
+.header-left{display:flex;align-items:center;gap:16px}
+.header-hamburger{display:flex;flex-direction:column;justify-content:center;gap:5px;width:22px;flex-shrink:0}
+.header-hamburger span{display:block;width:100%;height:1px;background:var(--warm-white);box-shadow:0 1px 8px rgba(0,0,0,.35)}
+.header-logo{font-family:var(--display);font-style:italic;font-weight:500;font-size:1.05rem;letter-spacing:.22em;color:var(--warm-white);text-decoration:none;text-shadow:0 1px 12px rgba(0,0,0,.35)}
+.header-link{display:inline-flex;align-items:center;gap:8px;font-family:var(--display);font-style:italic;font-weight:500;
+  font-size:.74rem;letter-spacing:.2em;color:var(--warm-white);text-decoration:none;border-bottom:1px solid rgba(255,255,255,.4);
+  padding-bottom:3px;text-shadow:0 1px 10px rgba(0,0,0,.35);transition:color .25s var(--ease),border-color .25s var(--ease)}
+.header-link:hover{color:var(--gold);border-color:var(--gold)}
+.header-link svg{width:12px;height:12px;transition:transform .3s var(--ease)}
+.header-link:hover svg{transform:translate(2px,-2px)}
+
+.screen{display:none}
+.screen.active{display:block}
+@keyframes cineIn{0%{opacity:0;transform:scale(1.05);filter:blur(18px)}55%{filter:blur(3px)}100%{opacity:1;transform:scale(1);filter:blur(0)}}
+.anim-up{animation:cineIn 1.1s var(--ease) both;will-change:opacity,transform,filter}
+
+@keyframes revealUp{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:translateY(0)}}
+@keyframes wordUp{from{transform:translateY(112%)}to{transform:translateY(0)}}
+.mask-wrap{display:inline-block;overflow:hidden;vertical-align:top}
+.reveal-word{display:inline-block;opacity:1}
+.anim-up .reveal-word{animation:wordUp .95s var(--ease) both}
+
+.scene{position:relative;min-height:100vh;min-height:100dvh;width:100%;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;padding:120px 32px 64px;}
+.scene-bg{position:absolute;inset:0;z-index:0;overflow:hidden;background:linear-gradient(160deg,#0c2624,#0c0a08 65%)}
+.scene-bg img{position:absolute;inset:-6%;width:112%;height:112%;object-fit:cover;opacity:0;filter:blur(18px) saturate(1.05);
+  transition:opacity 1.6s var(--ease),filter 1.6s var(--ease);will-change:opacity,transform,filter;}
+.scene-bg img.active{opacity:1;filter:blur(0) saturate(1.05);animation:kenburns 20s ease-in-out infinite alternate}
+@keyframes kenburns{from{transform:scale(1) translate(0,0)}to{transform:scale(1.13) translate(-2%,-1.4%)}}
+.scene-veil{position:absolute;inset:0;z-index:1;
+  background:linear-gradient(180deg,rgba(9,8,6,.5) 0%,rgba(9,8,6,.18) 32%,rgba(9,8,6,.35) 60%,rgba(9,8,6,.72) 100%);}
+.scene-content{position:relative;z-index:3;width:100%;max-width:640px;text-align:center;color:var(--warm-white)}
+
+.hero-eyebrow{display:inline-block;font-family:var(--display);font-style:italic;font-weight:500;font-size:.74rem;
+  letter-spacing:.42em;color:var(--gold);margin-bottom:26px;text-transform:uppercase;opacity:0;animation:revealUp .9s var(--ease) .2s both}
+.hero-title{font-size:clamp(2rem,6vw,3.4rem);font-weight:700;line-height:1.5;letter-spacing:.03em;margin-bottom:26px}
+.hero-title .mask-wrap .reveal-word{animation-delay:.35s}
+.hero-title .mask-wrap:nth-of-type(2) .reveal-word{animation-delay:.5s}
+.hero-title em{font-style:normal;color:var(--gold)}
+.hero-sub{font-size:.95rem;color:rgba(250,247,242,.82);line-height:2;letter-spacing:.05em;max-width:440px;margin:0 auto 40px;
+  opacity:0;animation:revealUp .9s var(--ease) .85s both}
+.hero-pills{display:flex;gap:28px;justify-content:center;flex-wrap:wrap;margin-bottom:44px;
+  opacity:0;animation:revealUp .9s var(--ease) 1s both}
+.hero-pill{font-family:var(--display);font-style:italic;font-size:.76rem;letter-spacing:.18em;color:var(--gold);
+  border-bottom:1px solid rgba(203,168,118,.55);padding-bottom:3px}
+.hero-cta-wrap{opacity:0;animation:revealUp .9s var(--ease) 1.15s both;display:flex;flex-direction:column;align-items:center}
+.hero-hint{font-family:var(--display);font-style:italic;font-size:.7rem;color:rgba(255,255,255,.55);letter-spacing:.24em;margin-top:18px;text-align:center}
+
+.btn-cinema{display:flex;flex-direction:row;align-items:center;justify-content:center;gap:8px;
+  width:172px;height:172px;border-radius:50%;flex-shrink:0;
+  background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.5);
+  backdrop-filter:blur(20px) saturate(140%);-webkit-backdrop-filter:blur(20px) saturate(140%);
+  color:var(--warm-white);font-family:var(--serif);font-size:.9rem;font-weight:700;letter-spacing:.1em;cursor:pointer;
+  transition:transform .45s var(--ease),box-shadow .45s var(--ease),background .35s var(--ease);
+  box-shadow:0 22px 50px -18px rgba(0,0,0,.5);}
+.btn-cinema::after{content:'→';letter-spacing:0;font-size:.95rem;transition:transform .3s var(--ease)}
+.btn-cinema:hover{transform:scale(1.06);background:rgba(255,255,255,.22);box-shadow:0 28px 60px -14px rgba(203,168,118,.5)}
+.btn-cinema:hover::after{transform:translateX(4px)}
+.btn-cinema:active{transform:scale(.97)}
+
+.q-wrap{width:100%;max-width:600px}
+.progress{margin-bottom:30px;max-width:200px;margin-left:auto;margin-right:auto}
+.progress-track{height:1px;background:rgba(255,255,255,.22);position:relative}
+.progress-fill{height:100%;background:var(--gold);transition:width .8s var(--ease);position:relative}
+.progress-dot{position:absolute;right:-4px;top:-3.5px;width:8px;height:8px;background:var(--charcoal);border:1.5px solid var(--gold);border-radius:50%}
+.q-label{display:inline-flex;align-items:baseline;justify-content:center;gap:10px;margin-bottom:16px;opacity:0;animation:revealUp .7s var(--ease) .1s both}
+.kicker-num{font-family:var(--display);font-style:italic;font-weight:500;font-size:.92rem;letter-spacing:.05em;color:var(--gold)}
+.kicker-sep{font-family:var(--display);font-style:italic;color:rgba(255,255,255,.4);font-size:.78rem}
+.q-label-text{font-family:var(--display);font-style:italic;font-size:.7rem;letter-spacing:.32em;color:var(--gold)}
+.q-title{font-size:clamp(1.25rem,3.4vw,1.7rem);font-weight:700;line-height:1.6;letter-spacing:.02em;margin-bottom:10px}
+.q-sub{font-size:.86rem;color:rgba(250,247,242,.78);line-height:1.85;margin-bottom:34px;letter-spacing:.03em;
+  opacity:0;animation:revealUp .8s var(--ease) .25s both}
+
+.opts-single{display:flex;flex-direction:column;border-top:1px solid rgba(255,255,255,.22);text-align:left}
+.opt{display:flex;align-items:center;width:100%;background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,.22);
+  border-radius:0;padding:0;cursor:pointer;text-align:left;font-family:var(--serif);color:var(--warm-white);
+  transition:background .3s var(--ease),transform .3s var(--ease);
+  position:relative;overflow:hidden;}
+.opt:hover{background:rgba(255,255,255,.05)}
+.opt.selected{background:rgba(203,168,118,.07)}
+.opt-inner{display:flex;align-items:center;justify-content:space-between;width:100%;padding:21px 4px;gap:16px;
+  transition:transform .35s var(--ease)}
+.opt:hover .opt-inner,.opt.selected .opt-inner{transform:translateX(10px)}
+.opt-texts{flex:1}
+.opt-main{font-size:.98rem;font-weight:700;color:var(--warm-white);line-height:1.5;letter-spacing:.03em;display:block;transition:color .3s}
+.opt.selected .opt-main{color:var(--gold)}
+.opt-sub-text{font-size:.78rem;color:rgba(250,247,242,.55);line-height:1.5;margin-top:3px;letter-spacing:.02em;display:block}
+.opt-radio{width:19px;height:19px;border:1.5px solid rgba(255,255,255,.4);border-radius:50%;flex-shrink:0;position:relative;transition:border-color .2s}
+.opt.selected .opt-radio{border-color:var(--gold)}
+.opt.selected .opt-radio::after{content:'';position:absolute;inset:5px;background:var(--gold);border-radius:50%;animation:rIn .18s var(--ease)}
+@keyframes rIn{from{transform:scale(0)}to{transform:scale(1)}}
+.ripple{position:absolute;border-radius:50%;background:rgba(203,168,118,.28);transform:scale(0);animation:rAnim .6s linear;pointer-events:none}
+@keyframes rAnim{to{transform:scale(4);opacity:0}}
+
+.opts-multi{display:flex;flex-wrap:wrap;gap:10px}
+.opt-multi{display:flex;align-items:center;gap:10px;background:transparent;border:1px solid rgba(255,255,255,.35);
+  border-radius:999px;padding:13px 19px;cursor:pointer;font-family:var(--serif);color:var(--warm-white);
+  transition:background .3s var(--ease),border-color .3s var(--ease),transform .3s var(--ease)}
+.opt-multi:hover{transform:translateY(-2px);background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.6)}
+.opt-multi.selected{background:rgba(203,168,118,.14);border-color:var(--gold)}
+.chk{width:17px;height:17px;border:1.5px solid rgba(255,255,255,.5);border-radius:5px;flex-shrink:0;position:relative;transition:all .18s}
+.opt-multi.selected .chk{background:var(--gold);border-color:var(--gold)}
+.opt-multi.selected .chk::after{content:'';position:absolute;left:5px;top:1px;width:4px;height:8px;border:2px solid var(--charcoal);
+  border-top:none;border-left:none;transform:rotate(45deg);animation:ckIn .14s var(--ease)}
+@keyframes ckIn{from{transform:rotate(45deg) scale(0)}to{transform:rotate(45deg) scale(1)}}
+.opt-multi-text{font-size:.85rem;letter-spacing:.03em;line-height:1.5}
+
+.nav-wrap{margin-top:40px;display:flex;flex-direction:column;align-items:center;gap:22px}
+.btn-next{width:150px;height:150px;border-radius:50%;flex-shrink:0;
+  background:rgba(255,255,255,.14);color:var(--warm-white);border:1px solid rgba(255,255,255,.5);
+  backdrop-filter:blur(20px) saturate(140%);-webkit-backdrop-filter:blur(20px) saturate(140%);
+  font-family:var(--serif);font-size:.84rem;font-weight:700;letter-spacing:.2em;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  transition:background .3s var(--ease),transform .4s var(--ease),opacity .25s,box-shadow .4s var(--ease);
+  box-shadow:0 20px 46px -18px rgba(0,0,0,.5)}
+.btn-next::after{content:'→';letter-spacing:0;font-size:.92rem;transition:transform .3s var(--ease)}
+.btn-next:not(:disabled):hover{background:rgba(255,255,255,.22);transform:scale(1.06);box-shadow:0 24px 54px -14px rgba(203,168,118,.5)}
+.btn-next:not(:disabled):hover::after{transform:translateX(3px)}
+.btn-next:disabled{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.18);color:rgba(255,255,255,.32);cursor:not-allowed;box-shadow:none}
+.btn-back{background:none;border:none;font-family:var(--display);font-style:italic;font-size:.8rem;color:rgba(255,255,255,.62);letter-spacing:.1em;
+  cursor:pointer;border-bottom:1px solid rgba(255,255,255,.3);padding-bottom:3px;transition:color .2s,border-color .2s}
+.btn-back:hover{color:var(--gold);border-color:var(--gold)}
+
+.loading-outer{width:100%;max-width:520px}
+.loading-kicker{font-family:var(--display);font-style:italic;font-size:.74rem;letter-spacing:.36em;color:var(--gold);display:block;margin-bottom:30px}
+.loading-title{font-size:1.2rem;font-weight:600;line-height:1.95;letter-spacing:.06em;margin-bottom:48px;color:var(--warm-white)}
+.loading-ring{width:46px;height:46px;border:1.5px solid rgba(255,255,255,.25);border-top-color:var(--gold);border-radius:50%;
+  animation:spin 1.1s linear infinite;margin:0 auto 40px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-slot{height:62px;overflow:hidden;margin-bottom:8px}
+.loading-slot-item{height:60px;display:flex;align-items:center;justify-content:center;font-family:var(--display);
+  font-size:1.5rem;font-style:italic;letter-spacing:.1em;color:var(--gold);flex-shrink:0;padding:0 20px;text-align:center}
+
+.result-wrap{max-width:none;margin:0;padding-bottom:0}
+.result-hero{position:relative;min-height:60vh;min-height:60dvh;display:flex;align-items:flex-end;justify-content:center;
+  padding:140px 32px 70px;text-align:center;overflow:hidden;background:linear-gradient(160deg,#123a37,#0c0a08 80%)}
+.result-hero-veil{position:absolute;inset:0;z-index:1;
+  background:linear-gradient(180deg,rgba(9,8,6,.15) 0%,rgba(9,8,6,.1) 35%,rgba(9,8,6,.55) 78%,rgba(9,8,6,.9) 100%)}
+.result-hero-content{position:relative;z-index:2;color:var(--warm-white);max-width:720px}
+.result-kicker{font-family:var(--display);font-style:italic;font-size:.74rem;letter-spacing:.34em;color:var(--gold);
+  display:block;margin-bottom:16px;opacity:0;animation:revealUp .8s var(--ease) .1s both}
+.result-name{font-size:clamp(1.6rem,5vw,2.4rem);font-weight:700;letter-spacing:.04em;line-height:1.5;margin-bottom:12px}
+
+.result-body{max-width:760px;margin:0 auto;padding:0 32px 90px;background:var(--warm-white);position:relative;z-index:2}
+.result-body::before{content:'';position:absolute;top:-90px;left:0;right:0;height:90px;
+  background:linear-gradient(180deg,transparent,var(--warm-white));pointer-events:none}
+
+.summary-bar{display:flex;flex-wrap:wrap;gap:9px;padding:36px 0 24px;justify-content:center;border-bottom:1px solid var(--line-soft)}
+.summary-tag{font-size:.74rem;color:var(--ink-2);border:1px solid var(--line-soft);background:var(--off-white);
+  border-radius:999px;padding:7px 16px;letter-spacing:.06em}
+
+.recovery-box{margin:26px 0;padding:20px 22px;background:var(--gold-lt);border-radius:16px;font-size:.85rem;line-height:1.9;color:var(--ink-2)}
+
+.chapel-card{margin:26px 0 0;border-radius:22px;overflow:hidden;background:var(--off-white);
+  opacity:0;transform:translateY(20px);transition:opacity .7s var(--ease),transform .7s var(--ease);
+  box-shadow:0 28px 60px -30px rgba(28,26,22,.25)}
+.chapel-card.card-visible{opacity:1;transform:translateY(0)}
+.chapel-card-head{display:flex;justify-content:space-between;align-items:center;padding:22px 26px 0}
+.chapel-card-rank{font-family:var(--display);font-style:italic;font-size:.78rem;letter-spacing:.2em;color:var(--gold-dk)}
+.chapel-card-area{font-size:.68rem;color:var(--ink-3);letter-spacing:.08em;border:1px solid var(--line-soft);border-radius:999px;padding:4px 12px}
+.chapel-card-body{padding:16px 26px 28px}
+.chapel-card-title{font-size:1.15rem;font-weight:700;letter-spacing:.04em;margin-bottom:6px;line-height:1.5}
+.chapel-card-sub{font-size:.78rem;color:var(--ink-3);letter-spacing:.03em;margin-bottom:16px}
+.chapel-card-reason{font-size:.88rem;color:var(--ink-2);line-height:1.95;margin-bottom:18px;letter-spacing:.02em;
+  border-left:2px solid var(--gold);padding-left:14px}
+.chapel-tags{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}
+.chapel-tag{font-size:.7rem;color:var(--gold-dk);border:1px solid var(--gold);border-radius:999px;padding:5px 13px;letter-spacing:.06em}
+.chapel-price-row{display:flex;justify-content:space-between;align-items:baseline;padding:14px 0;border-top:1px solid var(--line-soft);font-size:.82rem}
+.chapel-price-label{color:var(--ink-3);letter-spacing:.06em}
+.chapel-price-val{font-family:var(--display);font-style:italic;font-size:1.05rem;color:var(--gold-dk);letter-spacing:.03em}
+.chapel-price-note{font-size:.68rem;color:var(--ink-3);margin-top:2px}
+
+.alt-heading{display:flex;align-items:center;gap:16px;margin:44px 0 8px}
+.alt-heading-line{flex:1;height:1px;background:var(--line-soft)}
+.alt-heading-text{font-size:.78rem;font-weight:700;letter-spacing:.16em;color:var(--ink-3);white-space:nowrap}
+.alt-heading-en{font-family:var(--display);font-style:italic;font-size:.68rem;letter-spacing:.22em;color:var(--gold-dk);
+  display:block;text-align:center;margin-bottom:20px}
+
+.consult-block{margin:34px 0 22px;background:var(--charcoal);border-radius:22px;padding:34px 28px;text-align:center}
+.consult-label{font-family:var(--display);font-style:italic;font-size:.7rem;letter-spacing:.3em;color:var(--gold);display:block;margin-bottom:12px}
+.consult-title{font-size:1.05rem;font-weight:600;color:var(--white);letter-spacing:.05em;line-height:1.7;margin-bottom:22px}
+.consult-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;background:var(--gold);color:var(--charcoal);
+  border:none;border-radius:999px;padding:18px 20px;font-family:var(--serif);font-size:.86rem;font-weight:700;letter-spacing:.16em;
+  cursor:pointer;text-decoration:none;transition:background .3s var(--ease),transform .3s var(--ease);margin-bottom:12px}
+.consult-btn:hover{background:var(--gold-lt);transform:translateY(-2px)}
+.consult-note{font-size:.72rem;color:rgba(255,255,255,.45);letter-spacing:.06em;margin-top:16px;line-height:1.7}
+
+.btn-restart{display:block;width:100%;background:none;border:1px solid var(--line-soft);border-radius:999px;padding:17px;
+  font-family:var(--serif);font-size:.84rem;letter-spacing:.2em;color:var(--ink-2);cursor:pointer;transition:all .25s;margin-top:14px}
+.btn-restart:hover{border-color:var(--gold);color:var(--ink)}
+
+@media(max-width:600px){
+  .site-header{padding:18px 20px}
+  .site-header.scrolled{padding:14px 20px}
+  .header-logo{display:none}
+  .header-link{font-size:.62rem;letter-spacing:.14em}
+  .scene{padding:100px 20px 86px}
+  .hero-sub{font-size:.86rem}
+  .btn-cinema,.btn-next{width:132px;height:132px;font-size:.78rem}
+  .q-title{font-size:1.1rem}
+  .kicker-num{font-size:.78rem}
+  .opt-inner{padding:17px 6px}
+  .opt-main{font-size:.9rem}
+  .opt-multi{padding:13px 16px}
+  .opt-multi-text{font-size:.82rem}
+  .loading-title{font-size:1.05rem}
+  .result-hero{padding:120px 20px 54px}
+  .result-name{font-size:1.5rem}
+  .result-body{padding:0 20px 70px}
+  .chapel-card-body{padding:14px 20px 22px}
+  .chapel-card-head{padding:18px 20px 0}
+  .consult-block{padding:28px 22px}
+}
+
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+}
+</style>
+</head>
+<body>
+
+<div class="grain" aria-hidden="true"></div>
+
+<header class="site-header" id="siteHeader">
+<span class="header-left">
+  <span class="header-hamburger" aria-hidden="true"><span></span><span></span><span></span></span>
+  <span class="header-logo">HIS WEDDING</span>
+</span>
+<a class="header-link" href="https://www.his-wedding.com/photowedding/hawaii/" target="_blank" rel="noopener">About Hawaii Wedding <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M7 17L17 7M9 7h8v8"/></svg></a>
+</header>
+
+<main>
+
+<!-- START -->
+<div class="screen active anim-up" id="screen-start">
+<div class="scene" id="scene-start">
+  <div class="scene-veil"></div>
+  <div class="scene-content">
+    <span class="hero-eyebrow">HAWAII CHAPEL DIAGNOSIS</span>
+    <h1 class="hero-title">
+      <span class="mask-wrap"><span class="reveal-word">3分で、</span></span><br>
+      <span class="mask-wrap"><span class="reveal-word">ハワイの<em>式場</em>が見つかります。</span></span>
+    </h1>
+    <p class="hero-sub">質問に答えるだけで、<br>お二人にふさわしいハワイの挙式会場を、<br>理由付きで2〜3件ご提案します。</p>
+    <div class="hero-pills"><span class="hero-pill">分岐診断</span><span class="hero-pill">約3分</span><span class="hero-pill">ハワイ32式場</span></div>
+    <div class="hero-cta-wrap">
+      <button class="btn-cinema" id="start-btn"><span>はじめる</span></button>
+      <p class="hero-hint">tap to begin</p>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- QUESTION -->
+<div class="screen" id="screen-q">
+<div class="scene" id="scene-q">
+  <div class="scene-veil"></div>
+  <div class="scene-content">
+  <div class="q-wrap">
+  <div class="progress">
+    <div class="progress-track"><div class="progress-fill" id="q-bar" style="width:12.5%"><div class="progress-dot"></div></div></div>
+  </div>
+  <div class="q-label"><span class="kicker-num" id="q-num">#01</span><span class="kicker-sep">/</span><span class="q-label-text" id="q-section"></span></div>
+  <h2 class="q-title" id="q-title">&nbsp;</h2>
+  <p class="q-sub" id="q-sub">&nbsp;</p>
+  <div class="opts-single" id="opts-single"></div>
+  <div class="opts-multi" id="opts-multi" style="display:none"></div>
+  <div class="nav-wrap">
+    <button class="btn-next" disabled id="next-btn" style="display:none">次へ</button>
+    <button class="btn-back" id="back-btn" style="display:none">← 前の質問に戻る</button>
+  </div>
+  </div>
+  </div>
+</div>
+</div>
+
+<!-- LOADING -->
+<div class="screen" id="screen-loading">
+<div class="scene" id="scene-loading">
+  <div class="scene-veil"></div>
+  <div class="scene-content">
+  <div class="loading-outer">
+    <span class="loading-kicker">SEARCHING YOUR CHAPEL...</span>
+    <p class="loading-title">お二人に最適な<br>ハワイの式場を絞り込んでいます</p>
+    <div class="loading-ring"></div>
+    <div class="loading-slot"><div class="loading-slot-inner" id="slot-inner"></div></div>
+  </div>
+  </div>
+</div>
+</div>
+
+<!-- RESULT -->
+<div class="screen" id="screen-result">
+<div class="result-wrap">
+  <div class="result-hero">
+    <div class="result-hero-veil"></div>
+    <div class="result-hero-content">
+      <span class="result-kicker">あなたに最適な式場は</span>
+      <h2 class="result-name" id="res-name">&nbsp;</h2>
+    </div>
+  </div>
+
+  <div class="result-body">
+    <div class="summary-bar" id="res-summary"></div>
+    <div id="res-recovery"></div>
+    <div id="res-cards"></div>
+
+    <div class="consult-block" id="res-consult">
+      <span class="consult-label">CONSULTATION</span>
+      <p class="consult-title">気になる式場が見つかったら、<br>専任スタッフに無料でご相談ください。</p>
+      <a class="consult-btn" href="https://www.his-wedding.com/photowedding/hawaii/" target="_blank" rel="noopener">式場について相談する</a>
+      <p class="consult-note">※ 掲載の料金は基本プランの目安です。挙式日・人数・オプションにより変動します。<br>詳細は専任スタッフまでお問い合わせください。</p>
+    </div>
+
+    <button class="btn-restart" id="restart-btn">もう一度診断する</button>
+  </div>
+</div>
+</div>
+
+</main>
+
+<script>
+/* ═══ CHAPEL DATA (32 venues) ═══ */
+/* area: oahu|hawaii / space: church|modern|hotel|garden|restaurant
+   view: subset of oceanfront|oceanview|garden|indoor (multi = 会場により異なる、複数ヒット)
+   banquet: possible|nearby / move: hotel|near|far|null(hawaii島は対象外)
+   color: subset of white|brown / notes: subset of historic|luxury_hotel|scenery|gourmet|one_couple|other
+   priceFloor: 基本挙式料金の下限(円)。isPackageOnly=trueは基本料金非公開のためHISパッケージ料金を暫定使用
+   rank: HIS掲載順(同点時のタイブレークに使用) */
+var CHAPELS = [
+{id:'catalina', name:'セント・カタリナ・シーサイドチャペル', area:'oahu', space:'church', spaceLabel:'独立型チャペル', view:['oceanview'], banquet:'possible', move:'far', color:['white'], notes:['scenery','gourmet'], noteText:'海が綺麗なエリア、食事が美味しい', priceFloor:338000, isPackageOnly:false, packageRange:'553,000円〜573,000円', rank:1},
+{id:'koolina', name:'コオリナ・チャペル・プレイス・オブ・ジョイ', area:'oahu', space:'church', spaceLabel:'独立型チャペル', view:['oceanfront'], banquet:'possible', move:'far', color:['white'], notes:['scenery'], noteText:'ビーチが目の前ですぐビーチフォトできる、人が少なめ', priceFloor:408000, isPackageOnly:false, packageRange:'448,000円〜731,800円', rank:2},
+{id:'terrace', name:'ザ・テラス バイ・ザ・シー', area:'oahu', space:'church', spaceLabel:'独立型チャペル', view:['oceanview'], banquet:'possible', move:'near', color:['white','brown'], notes:['gourmet','scenery'], noteText:'有名レストラン併設、ダイヤモンドヘッドが見える（カウイチャペルは茶系）', priceFloor:398000, isPackageOnly:false, packageRange:'458,000円〜698,000円', rank:3},
+{id:'calvary', name:'キャルバリー・バイ・ザ・シー教会', area:'oahu', space:'church', spaceLabel:'教会（伝統建築・独立型）', view:['oceanview'], banquet:'nearby', move:'near', color:['brown'], notes:['other'], noteText:'オアフ島で唯一海が見える教会', priceFloor:380000, isPackageOnly:false, packageRange:'550,000円', rank:4},
+{id:'aulani', name:'ディズニー・フェアリーテール・ウェディング・アウラニ', area:'oahu', space:'garden', spaceLabel:'邸宅・ガーデン系（ホテル敷地内）', view:['oceanfront','oceanview','garden'], banquet:'possible', move:'far', color:['white'], notes:['luxury_hotel','other'], noteText:'著名高級ホテル内、ディズニーキャラクターと挙式ができる', priceFloor:650000, isPackageOnly:true, packageRange:'650,000円〜3,598,000円', rank:5},
+{id:'makana', name:'ザ・マカナチャペル', area:'oahu', space:'hotel', spaceLabel:'ホテル内チャペル', view:['oceanview'], banquet:'possible', move:'hotel', color:['white'], notes:['luxury_hotel'], noteText:'著名高級ホテル内（シェラトン・ワイキキ）', priceFloor:348000, isPackageOnly:false, packageRange:'668,000円', rank:6},
+{id:'moana', name:'ザ・モアナチャペル', area:'oahu', space:'hotel', spaceLabel:'ホテル内チャペル＋ガーデン（複合）', view:['oceanview'], banquet:'possible', move:'hotel', color:['white'], notes:['luxury_hotel'], noteText:'著名高級ホテル内（モアナサーフライダー）', priceFloor:408000, isPackageOnly:false, packageRange:'698,000円〜753,000円', rank:7},
+{id:'standrews', name:'セント・アンドリュース・カテドラル教会（大聖堂）', area:'oahu', space:'church', spaceLabel:'教会（伝統建築・独立型）', view:['indoor'], banquet:'nearby', move:'near', color:['white'], notes:['other'], noteText:'ステンドグラスが最大の売り', priceFloor:318000, isPackageOnly:false, packageRange:'418,000円〜670,000円', rank:8},
+{id:'plumeria', name:'プルメリアガーデン', area:'oahu', space:'garden', spaceLabel:'邸宅・ガーデン系', view:['oceanview'], banquet:'possible', move:'near', color:['white'], notes:['scenery'], noteText:'海が見えるガーデン＋パーティーができる数少ない場所、雨天バックアップ用チャペルあり', priceFloor:308000, isPackageOnly:false, packageRange:'282,000円〜523,000円', rank:9},
+{id:'pohakupuna', name:'ザ・サーフ ポハクプナ ビーチクラブ', area:'oahu', space:'garden', spaceLabel:'邸宅・ガーデン系', view:['oceanfront'], banquet:'possible', move:'far', color:['white'], notes:['one_couple'], noteText:'1日1組（少数）限定', priceFloor:450000, isPackageOnly:false, packageRange:'750,000円〜1,280,000円', rank:10},
+{id:'alohakeakua', name:'ザ・プライベート・ガーデン アロハ・ケ・アクア', area:'oahu', space:'church', spaceLabel:'独立型チャペル＋ガーデン（複合）', view:['garden'], banquet:'possible', move:'far', color:['brown'], notes:['scenery'], noteText:'景観・エリアの美しさ', priceFloor:400000, isPackageOnly:false, packageRange:'348,000円〜723,800円', rank:11},
+{id:'kahawai', name:'カハワイ・チャペル', area:'oahu', space:'hotel', spaceLabel:'ホテル内チャペル（アウトリガー・ワイキキ・ビーチ・リゾート内）', view:['oceanfront'], banquet:'possible', move:'hotel', color:['white'], notes:[], noteText:'特になし', priceFloor:398000, isPackageOnly:false, packageRange:'699,000円〜799,000円', rank:12},
+{id:'ines', name:'アイネス ヴィラノッツェ ワイキキレイア', area:'oahu', space:'modern', spaceLabel:'モダンチャペル（独立型）', view:['indoor'], banquet:'possible', move:'near', color:['white'], notes:['gourmet'], noteText:'グルメ・食事の評判', priceFloor:228000, isPackageOnly:false, packageRange:'600,000円〜630,000円', rank:13},
+{id:'lanilea', name:'ラニレア チャペル', area:'oahu', space:'hotel', spaceLabel:'ホテル内チャペル（プリンスワイキキ内）', view:['oceanview'], banquet:'possible', move:'hotel', color:['white'], notes:['other'], noteText:'価格が安め、上階からの眺望が良い', priceFloor:253000, isPackageOnly:false, packageRange:'298,000円〜576,800円', rank:14},
+{id:'centralunion', name:'セントラル・ユニオン教会大聖堂', area:'oahu', space:'church', spaceLabel:'教会（伝統建築・独立型）', view:['indoor'], banquet:'nearby', move:'near', color:['white'], notes:['historic'], noteText:'歴史的建造物・重要文化財', priceFloor:350000, isPackageOnly:false, packageRange:'605,000円', rank:15},
+{id:'moanalua', name:'モアナルアコミュニティ教会', area:'oahu', space:'church', spaceLabel:'教会（伝統建築・独立型）', view:['indoor'], banquet:'nearby', move:'near', color:['white'], notes:['other'], noteText:'ステンドグラスが綺麗', priceFloor:198000, isPackageOnly:false, packageRange:'488,000円', rank:16},
+{id:'diamondhead', name:'ザ・ダイヤモンドヘッドチャペル', area:'oahu', space:'hotel', spaceLabel:'ホテル内チャペル', view:['oceanview'], banquet:'possible', move:'hotel', color:['brown'], notes:['luxury_hotel','scenery'], noteText:'著名高級ホテル内、景観・エリアの美しさ、ダイヤモンドヘッドが見える', priceFloor:518000, isPackageOnly:false, packageRange:'1,100,000円', rank:17},
+{id:'kahala', name:'ザ・カハラ ガーデン ウエディング', area:'oahu', space:'garden', spaceLabel:'邸宅・ガーデン系（ホテル敷地内）', view:['oceanview'], banquet:'possible', move:'near', color:['white'], notes:['luxury_hotel'], noteText:'著名高級ホテル内（ザ・カハラ）', priceFloor:692000, isPackageOnly:false, packageRange:'598,000円〜1,015,800円', rank:18},
+{id:'mauloa', name:'ザ・サーフ マウロアガーデン', area:'oahu', space:'garden', spaceLabel:'邸宅・ガーデン系', view:['oceanview'], banquet:'nearby', move:'near', color:['white'], notes:['one_couple'], noteText:'1日1組（少数）限定', priceFloor:250000, isPackageOnly:false, packageRange:'480,000円', rank:19},
+{id:'holy', name:'ホーリーナティビティ教会', area:'oahu', space:'church', spaceLabel:'教会（伝統建築・独立型）', view:['indoor'], banquet:'nearby', move:'near', color:['white'], notes:[], noteText:'特になし', priceFloor:268000, isPackageOnly:false, packageRange:'568,000円', rank:20},
+{id:'halekulani', name:'ハレクラニウエディング', area:'oahu', space:'garden', spaceLabel:'邸宅・ガーデン系（ホテル敷地内、チャペルもあり）', view:['oceanfront','oceanview','garden'], banquet:'possible', move:'hotel', color:['white'], notes:['luxury_hotel'], noteText:'著名高級ホテル内（ハレクラニ）', priceFloor:671000, isPackageOnly:false, packageRange:'994,800円〜1,380,000円', rank:21},
+{id:'magicisland', name:'マジックアイランド ガーデン ウェディング', area:'oahu', space:'garden', spaceLabel:'邸宅・ガーデン系', view:['oceanview'], banquet:'nearby', move:'near', color:['white'], notes:[], noteText:'特になし', priceFloor:347000, isPackageOnly:true, packageRange:'347,000円', rank:22},
+{id:'kawaiahao', name:'カワイアハオ教会', area:'oahu', space:'church', spaceLabel:'教会（伝統建築・独立型）', view:['indoor'], banquet:'nearby', move:'near', color:['white'], notes:['historic'], noteText:'歴史的建造物・重要文化財', priceFloor:288000, isPackageOnly:false, packageRange:'578,000円', rank:23},
+{id:'royalhawaiian', name:'ロイヤル ハワイアン ウェディング', area:'oahu', space:'garden', spaceLabel:'邸宅・ガーデン系（ホテル敷地内）', view:['oceanfront','oceanview','garden'], banquet:'possible', move:'hotel', color:['white'], notes:['luxury_hotel'], noteText:'著名高級ホテル内（ロイヤル ハワイアン）', priceFloor:529000, isPackageOnly:false, packageRange:'852,800円〜1,032,800円', rank:24},
+{id:'ilikai', name:'ザ・イリカイ・チャペル', area:'oahu', space:'hotel', spaceLabel:'ホテル内チャペル', view:['oceanview'], banquet:'possible', move:'hotel', color:['white'], notes:[], noteText:'特になし', priceFloor:264000, isPackageOnly:false, packageRange:'494,000円', rank:25},
+{id:'unity', name:'ユニティ教会', area:'oahu', space:'church', spaceLabel:'教会（伝統建築・独立型）', view:['indoor'], banquet:'nearby', move:'near', color:['white'], notes:[], noteText:'特になし', priceFloor:178000, isPackageOnly:false, packageRange:'要確認', rank:26, packageUnconfirmed:true},
+{id:'parkchapel', name:'パークチャペル', area:'oahu', space:'church', spaceLabel:'教会（伝統建築・独立型、ダウンタウン所在）', view:['indoor'], banquet:'nearby', move:'far', color:['white'], notes:[], noteText:'特になし', priceFloor:150000, isPackageOnly:false, packageRange:'403,000円', rank:27},
+{id:'oceansuite', name:'オーシャン・スイート・ワイキキ レストランウェディング', area:'oahu', space:'restaurant', spaceLabel:'レストランウェディング', view:['oceanview'], banquet:'possible', move:'hotel', color:['white'], notes:['one_couple'], noteText:'1日1組（少数）限定、眺望が良い', priceFloor:398000, isPackageOnly:true, packageRange:'398,000円', rank:28},
+{id:'nuuanu', name:'ヌアヌ・コングリゲーショナル教会', area:'oahu', space:'church', spaceLabel:'教会（伝統建築・独立型）', view:['indoor'], banquet:'nearby', move:'near', color:['white'], notes:[], noteText:'特になし', priceFloor:218000, isPackageOnly:false, packageRange:'518,000円', rank:29},
+{id:'waikoloa', name:'ヒルトン・ワイコロア・チャペル', area:'hawaii', space:'hotel', spaceLabel:'ホテル内チャペル', view:['oceanview'], banquet:'possible', move:null, color:['white'], notes:[], noteText:'特になし', priceFloor:680000, isPackageOnly:false, packageRange:'1,221,800円〜1,267,800円', rank:30},
+{id:'kona', name:'アウトリガー・コナ・ベイサイド・チャペル', area:'hawaii', space:'hotel', spaceLabel:'ホテル内チャペル', view:['oceanview'], banquet:'possible', move:null, color:['white'], notes:[], noteText:'特になし', priceFloor:540000, isPackageOnly:false, packageRange:'1,081,800円〜1,131,800円', rank:31},
+{id:'fairmont', name:'ザ・フェアモント・オーキッド・ウェディング', area:'hawaii', space:'garden', spaceLabel:'邸宅・ガーデン系', view:['oceanview'], banquet:'possible', move:null, color:['white'], notes:['luxury_hotel'], noteText:'著名高級ホテル内（フェアモント・オーキッド）', priceFloor:1088000, isPackageOnly:false, packageRange:'1,629,800円', rank:32},
+];
+
+var BUDGET_TIERS = [
+  {v:1, max:300000, label:'30万円未満'},
+  {v:2, max:450000, label:'30〜45万円'},
+  {v:3, max:600000, label:'45〜60万円'},
+  {v:4, max:800000, label:'60〜80万円'},
+  {v:5, max:Infinity, label:'80万円以上'},
+];
+var SPACE_LABEL={church:'教会（伝統建築・独立型）',modern:'モダンチャペル（独立型）',hotel:'ホテル内チャペル',garden:'邸宅・ガーデン系',restaurant:'レストランウェディング'};
+var VIEW_LABEL={oceanfront:'オーシャンフロント',oceanview:'オーシャンビュー',garden:'ガーデンのみ',indoor:'眺望なし・屋内'};
+var MOVE_LABEL={hotel:'ホテル内・移動なし',near:'ワイキキ中心部から少し移動',far:'ワイキキを離れた静かなエリア'};
+var COLOR_LABEL={white:'白系',brown:'茶系'};
+var NOTE_LABEL={historic:'歴史的建造物・重要文化財',luxury_hotel:'著名高級ホテル内',scenery:'景観・エリアの美しさ',gourmet:'グルメ・食事の評判',one_couple:'1日1組限定',other:'その他の魅力'};
+var VIEW_ORDER=['indoor','garden','oceanview','oceanfront'];
+
+/* ═══ QUESTIONS ═══ */
+var QS = [
+  { id:'budget', section:'BUDGET', title:'挙式費用のご予算は、どのくらいをお考えですか？', sub:'基本の挙式料金（会場レンタル込み）の目安です。', type:'single',
+    opts:[{main:'30万円未満',sub:'まずは費用を抑えて',v:1},{main:'30〜45万円',sub:'標準的な予算感で',v:2},{main:'45〜60万円',sub:'こだわりを持って',v:3},{main:'60〜80万円',sub:'特別な一日のために',v:4},{main:'80万円以上',sub:'予算にはこだわらない',v:5}]},
+  { id:'banquet', section:'RECEPTION', title:'挙式と披露宴（パーティー）は、同じ会場で行いたいですか？', sub:'同一施設内か、近隣で別途手配するかで会場の選択肢が変わります。', type:'single',
+    opts:[{main:'同じ会場で行いたい',sub:'移動の負担がなく安心です',v:'possible'},{main:'挙式のみ・別会場でも良い',sub:'教会など選択肢が広がります',v:'any'}]},
+  { id:'island', section:'AREA', title:'ハワイ島（離島）も視野に入れたいですか？', sub:'基本はオアフ島の式場からご案内していますが、ご希望があればハワイ島の3会場もあわせてご提案します。', type:'single',
+    opts:[{main:'オアフ島の式場を中心に',sub:'定番の人気エリアです',v:false},{main:'ハワイ島も見てみたい',sub:'コナ・ワイコロアエリアも候補に',v:true}]},
+  { id:'space', section:'SPACE', title:'どんな空間で挙式を挙げたいですか？', sub:'一番近いイメージを選んでください。', type:'single',
+    opts:[{main:'教会（伝統建築・独立型）',sub:'重厚な建築とステンドグラス',v:'church'},{main:'モダンチャペル（独立型）',sub:'洗練されたデザイン',v:'modern'},{main:'ホテル内チャペル',sub:'滞在先での安心感',v:'hotel'},{main:'邸宅・ガーデン系',sub:'緑と開放感のある空間',v:'garden'},{main:'レストランウェディング',sub:'食事と一体になった特別な空間',v:'restaurant'},{main:'こだわらない',sub:'',v:'any'}]},
+  { id:'view', section:'VIEW', title:'眺望へのこだわりはありますか？', sub:'', type:'single',
+    opts:[{main:'オーシャンフロント',sub:'ビーチが目の前',v:'oceanfront'},{main:'オーシャンビュー',sub:'海が見える',v:'oceanview'},{main:'ガーデンのみ',sub:'海は見えなくても緑豊かに',v:'garden'},{main:'眺望なし・屋内',sub:'荘厳な屋内空間を重視',v:'indoor'},{main:'こだわらない',sub:'',v:'any'}]},
+  { id:'move', section:'STAY STYLE', title:'滞在中の過ごし方は、どちらがお好みですか？', sub:'ハワイ島の会場を検討中の場合、この質問はオアフ島の式場にのみ影響します。', type:'single',
+    opts:[{main:'ホテル内・移動なし',sub:'滞在先でそのまま挙式',v:'hotel'},{main:'ワイキキ中心部から少し移動',sub:'車で15分程度',v:'near'},{main:'ワイキキを離れた静かなエリア',sub:'車で30分以上、プライベート感重視',v:'far'},{main:'こだわらない',sub:'',v:'any'}]},
+  { id:'color', section:'INTERIOR', title:'チャペルの内観カラーは、どちらがお好みですか？', sub:'', type:'single',
+    opts:[{main:'白系',sub:'清廉でクラシックな印象',v:'white'},{main:'茶系',sub:'木のぬくもりある落ち着いた印象',v:'brown'},{main:'こだわらない',sub:'',v:'any'}]},
+  { id:'notes', section:'SPECIAL POINT', title:'特に惹かれるポイントはありますか？', sub:'複数選択できます。', type:'multi',
+    opts:[{text:'歴史的建造物・重要文化財',v:'historic'},{text:'著名高級ホテル内',v:'luxury_hotel'},{text:'景観・エリアの美しさ',v:'scenery'},{text:'グルメ・食事の評判',v:'gourmet'},{text:'1日1組限定',v:'one_couple'},{text:'特にこだわりなし',v:'none'}]},
+];
+
+/* ═══ HARD FILTER ═══ */
+function hardFilter(ans){
+  var pool = CHAPELS.filter(function(c){ return c.area==='oahu' || (ans.island===true && c.area==='hawaii'); });
+  var tier = BUDGET_TIERS.filter(function(t){return t.v===ans.budget;})[0] || BUDGET_TIERS[4];
+  pool = pool.filter(function(c){ return c.priceFloor <= tier.max; });
+  if(ans.banquet==='possible') pool = pool.filter(function(c){ return c.banquet==='possible'; });
+  return pool;
+}
+/* recovery: progressively relax hard conditions until pool is non-empty */
+function recoveryFilter(ans){
+  var msgs=[];
+  var pool = hardFilter(ans);
+  if(pool.length>0) return {pool:pool,msgs:msgs};
+  if(ans.banquet==='possible'){
+    var a2={budget:ans.budget,banquet:'any',island:ans.island};
+    var p2=hardFilter(a2);
+    if(p2.length>0){ msgs.push('この予算で披露宴も同一施設に絞ると候補がありませんでした。披露宴を近隣で別途手配する形であれば、'+p2.length+'件ご案内できます。'); return {pool:p2,msgs:msgs}; }
+  }
+  var a3={budget:5,banquet:ans.banquet,island:ans.island};
+  var p3=hardFilter(a3);
+  if(p3.length>0){ msgs.push('ご希望のご予算では候補が見つかりませんでした。予算の上限を広げると、'+p3.length+'件ご案内できます。'); return {pool:p3,msgs:msgs}; }
+  var a4={budget:5,banquet:'any',island:true};
+  var p4=hardFilter(a4);
+  msgs.push('条件を広げてご案内します。');
+  return {pool:p4,msgs:msgs};
+}
+
+/* ═══ SOFT SCORING ═══ */
+function viewScore(userView, venueViews){
+  if(!userView||userView==='any') return 0;
+  var ui=VIEW_ORDER.indexOf(userView), best=-1;
+  for(var i=0;i<venueViews.length;i++){
+    var vi=VIEW_ORDER.indexOf(venueViews[i]);
+    var dist=Math.abs(ui-vi);
+    var pts = dist===0?3:dist===1?1.5:dist===2?0.5:0;
+    if(pts>best) best=pts;
+  }
+  return best<0?0:best;
+}
+function scoreChapel(c, ans){
+  var s=0, matched={space:false,view:false,move:false,color:false,notes:[]};
+  if(ans.space && ans.space!=='any' && c.space===ans.space){ s+=3; matched.space=true; }
+  var vs=viewScore(ans.view, c.view); s+=vs; if(vs>=3) matched.view=true;
+  if(ans.move && ans.move!=='any' && c.area==='oahu' && c.move===ans.move){ s+=2; matched.move=true; }
+  if(ans.color && ans.color!=='any' && c.color.indexOf(ans.color)!==-1){ s+=2; matched.color=true; }
+  if(ans.notes && ans.notes.length){
+    for(var i=0;i<ans.notes.length;i++){ if(c.notes.indexOf(ans.notes[i])!==-1){ s+=1; matched.notes.push(ans.notes[i]); } }
+  }
+  return {score:s, matched:matched};
+}
+function rankChapels(pool, ans){
+  return pool.map(function(c){ var r=scoreChapel(c,ans); return {c:c, score:r.score, matched:r.matched}; })
+    .sort(function(a,b){ return b.score-a.score || a.c.rank-b.c.rank; });
+}
+
+function yen(n){ return n.toLocaleString('ja-JP')+'円'; }
+
+function buildReason(c, ans, matched){
+  var parts=[];
+  if(matched.space) parts.push('「'+SPACE_LABEL[ans.space]+'」というご希望にぴったりの空間タイプです');
+  if(matched.view) parts.push((VIEW_LABEL[ans.view]||'')+'のご希望に合う眺望です');
+  if(matched.move) parts.push(MOVE_LABEL[ans.move]+'というご希望の立地です');
+  if(matched.color) parts.push('内観カラーも「'+COLOR_LABEL[ans.color]+'」のご希望通りです');
+  if(matched.notes.length){
+    var nlabels=matched.notes.map(function(n){return NOTE_LABEL[n];});
+    parts.push(nlabels.join('・')+'という点も魅力です');
+  }
+  if(!parts.length) parts.push(c.noteText!=='特になし'?c.noteText:'ご希望の条件内で人気の高い式場です');
+  return parts.join('。')+'。';
+}
+
+/* ═══ FLOW STATE ═══ */
+var qFlow=[0,1,2,3,4,5,6,7], curQIdx=0, answers={}, multiSel={};
+function getCurrentQ(){ return QS[qFlow[curQIdx]]; }
+function getTotalSteps(){ return qFlow.length; }
+
+function maskRevealText(el, text){
+  el.textContent=text;
+}
+
+function renderQ(){
+  var q=getCurrentQ(), total=getTotalSteps(), step=curQIdx+1;
+  document.getElementById('q-bar').style.width=(step/total*100)+'%';
+  document.getElementById('q-section').textContent=q.section;
+  document.getElementById('q-num').textContent='#0'+step;
+  maskRevealText(document.getElementById('q-title'), q.title);
+  document.getElementById('q-sub').textContent=q.sub||'';
+  document.getElementById('back-btn').style.display=curQIdx>0?'block':'none';
+  var $s=document.getElementById('opts-single');
+  var $m=document.getElementById('opts-multi');
+  var $n=document.getElementById('next-btn');
+  if(q.type==='single'){
+    $s.style.display='flex'; $m.style.display='none'; $n.style.display='none'; $s.innerHTML='';
+    q.opts.forEach(function(opt,optIdx){
+      var btn=document.createElement('button');
+      btn.className='opt'+(answers[q.id]===opt.v?' selected':'');
+      btn.style.animation='revealUp .6s var(--ease) '+(optIdx*.06)+'s both';
+      btn.innerHTML='<span class="opt-inner"><span class="opt-texts"><span class="opt-main">'+opt.main+'</span>'+(opt.sub?'<span class="opt-sub-text">'+opt.sub+'</span>':'')+'</span><span class="opt-radio"></span></span>';
+      btn.addEventListener('click',function(e){
+        var r=document.createElement('span'); r.className='ripple';
+        var rect=btn.getBoundingClientRect(), sz=Math.max(rect.width,rect.height);
+        r.style.cssText='width:'+sz+'px;height:'+sz+'px;left:'+(e.clientX-rect.left-sz/2)+'px;top:'+(e.clientY-rect.top-sz/2)+'px;';
+        btn.appendChild(r); setTimeout(function(){r.remove();},700);
+        answers[q.id]=opt.v;
+        $s.querySelectorAll('.opt').forEach(function(b){b.classList.remove('selected');});
+        btn.classList.add('selected');
+        setTimeout(function(){ if(curQIdx<getTotalSteps()-1){ curQIdx++; renderQ(); } else showLoading(); },300);
+      });
+      $s.appendChild(btn);
+    });
+  } else {
+    $s.style.display='none'; $m.style.display='flex'; $n.style.display='block'; $n.disabled=true; $m.innerHTML='';
+    var qi=qFlow[curQIdx];
+    if(!multiSel[qi]){ multiSel[qi]={}; var _ia=answers[q.id]||[]; for(var _ii=0;_ii<_ia.length;_ii++) multiSel[qi][_ia[_ii]]=true; }
+    var btnMap={};
+    q.opts.forEach(function(opt,optIdx){
+      var btn=document.createElement('button');
+      btn.className='opt-multi'+(multiSel[qi][opt.v]?' selected':'');
+      btn.style.animation='revealUp .5s var(--ease) '+(optIdx*.04)+'s both';
+      btn.innerHTML='<span class="chk"></span><span class="opt-multi-text">'+opt.text+'</span>';
+      btn.addEventListener('click',function(){
+        if(multiSel[qi][opt.v]){ delete multiSel[qi][opt.v]; }
+        else{
+          if(opt.v==='none'){ multiSel[qi]={}; } else { delete multiSel[qi]['none']; }
+          multiSel[qi][opt.v]=true;
+        }
+        q.opts.forEach(function(o){ btnMap[o.v].classList.toggle('selected', !!multiSel[qi][o.v]); });
+        $n.disabled=Object.keys(multiSel[qi]||{}).length===0;
+      });
+      $m.appendChild(btn);
+      btnMap[opt.v]=btn;
+    });
+    $n.disabled=Object.keys(multiSel[qi]||{}).length===0;
+    $n.onclick=function(){
+      var sel=Object.keys(multiSel[qi]||{}).filter(function(v){return v!=='none';});
+      answers[q.id]=sel;
+      if(curQIdx<getTotalSteps()-1){ curQIdx++; renderQ(); } else showLoading();
+    };
+  }
+}
+
+function goBack(){
+  if(curQIdx>0){ curQIdx--; renderQ(); }
+}
+
+/* ═══ LOADING → RESULT ═══ */
+var LOADING_MSGS=['ご予算を確認しています…','披露宴の条件を確認しています…','空間タイプを照合しています…','眺望を比較しています…','最適な式場を絞り込んでいます…'];
+function showLoading(){
+  document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});
+  document.getElementById('screen-loading').classList.add('active');
+  var slot=document.getElementById('slot-inner');
+  var i=0;
+  slot.innerHTML='<div class="loading-slot-item">'+LOADING_MSGS[0]+'</div>';
+  var iv=setInterval(function(){
+    i++;
+    if(i>=LOADING_MSGS.length){ clearInterval(iv); setTimeout(showResult,500); return; }
+    slot.innerHTML='<div class="loading-slot-item">'+LOADING_MSGS[i]+'</div>';
+  },550);
+}
+
+function buildSummary(ans){
+  var bm={1:'30万円未満',2:'30〜45万円',3:'45〜60万円',4:'60〜80万円',5:'80万円以上'};
+  var out=[bm[ans.budget]];
+  out.push(ans.banquet==='possible'?'挙式・披露宴 同施設希望':'挙式のみ・別会場OK');
+  out.push(ans.island?'オアフ島＋ハワイ島':'オアフ島中心');
+  if(ans.space && ans.space!=='any') out.push(SPACE_LABEL[ans.space]);
+  if(ans.view && ans.view!=='any') out.push(VIEW_LABEL[ans.view]);
+  return out;
+}
+
+function showResult(){
+  document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});
+  var resultScreen=document.getElementById('screen-result');
+  resultScreen.classList.add('active');
+
+  var rec = recoveryFilter(answers);
+  var pool = rec.pool;
+  var ranked = rankChapels(pool, answers);
+  var top = ranked.slice(0, Math.min(3, ranked.length));
+
+  document.getElementById('res-name').textContent = top.length ? top[0].c.name : 'ご希望に近い式場';
+
+  var sumEl=document.getElementById('res-summary'); sumEl.innerHTML='';
+  buildSummary(answers).forEach(function(t){
+    var span=document.createElement('span'); span.className='summary-tag'; span.textContent=t; sumEl.appendChild(span);
+  });
+
+  var recEl=document.getElementById('res-recovery'); recEl.innerHTML='';
+  rec.msgs.forEach(function(m){
+    var box=document.createElement('div'); box.className='recovery-box'; box.textContent=m; recEl.appendChild(box);
+  });
+
+  var cardsEl=document.getElementById('res-cards'); cardsEl.innerHTML='';
+  top.forEach(function(item, idx){
+    var c=item.c;
+    var card=document.createElement('div'); card.className='chapel-card';
+    var priceNote = c.packageUnconfirmed ? '<div class="chapel-price-note">※ HISパッケージ料金は現在確認中です</div>' : '';
+    var tags = [SPACE_LABEL[c.space]].concat(c.view.map(function(v){return VIEW_LABEL[v];}));
+    if(c.area==='hawaii') tags.unshift('ハワイ島');
+    var reason = buildReason(c, answers, item.matched);
+    card.innerHTML =
+      '<div class="chapel-card-head"><span class="chapel-card-rank">CHOICE '+(idx+1)+'</span><span class="chapel-card-area">'+(c.area==='oahu'?'オアフ島':'ハワイ島')+'</span></div>'+
+      '<div class="chapel-card-body">'+
+        '<h3 class="chapel-card-title">'+c.name+'</h3>'+
+        '<p class="chapel-card-sub">'+c.spaceLabel+'</p>'+
+        '<p class="chapel-card-reason">'+reason+'</p>'+
+        '<div class="chapel-tags">'+tags.map(function(t){return '<span class="chapel-tag">'+t+'</span>';}).join('')+'</div>'+
+        '<div class="chapel-price-row"><span class="chapel-price-label">基本挙式料金</span><span class="chapel-price-val">'+yen(c.priceFloor)+'〜</span></div>'+
+        '<div class="chapel-price-row"><span class="chapel-price-label">HISパッケージ料金</span><span class="chapel-price-val">'+c.packageRange+'</span></div>'+
+        priceNote+
+      '</div>';
+    cardsEl.appendChild(card);
+    setTimeout(function(){ card.classList.add('card-visible'); }, 120+idx*140);
+  });
+
+  if(!top.length){
+    cardsEl.innerHTML = '<div class="recovery-box">条件に合う式場が見つかりませんでした。お手数ですが条件を変えて、もう一度お試しください。</div>';
+  }
+}
+
+/* ═══ INIT ═══ */
+document.getElementById('start-btn').addEventListener('click', function(){
+  document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});
+  document.getElementById('screen-q').classList.add('active');
+  curQIdx=0; answers={}; multiSel={};
+  renderQ();
+});
+document.getElementById('back-btn').addEventListener('click', goBack);
+document.getElementById('restart-btn').addEventListener('click', function(){
+  document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});
+  document.getElementById('screen-start').classList.add('active');
+  curQIdx=0; answers={}; multiSel={};
+});
+window.addEventListener('scroll', function(){
+  document.getElementById('siteHeader').classList.toggle('scrolled', window.scrollY>10);
+});
+</script>
+</body>
+</html>
