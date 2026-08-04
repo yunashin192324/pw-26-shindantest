@@ -31,6 +31,9 @@
     * { box-sizing: border-box; }
     body { font-family: 'Noto Sans JP', -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 24px; min-height: 100vh; }
     .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
+    /* 修正: この汎用 .hidden ルールが抜けていたため、class="hidden" を付けても要素が
+       非表示にならず「閲覧権限がありません」と本来のダッシュボードが同時に表示されていた。 */
+    .hidden { display: none !important; }
 
     /* ヘッダー */
     .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding: 16px 24px; flex-wrap: wrap; gap: 12px; }
