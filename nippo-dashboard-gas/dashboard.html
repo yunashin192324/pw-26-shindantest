@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>営業ダッシュボード</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700;800&family=DM+Mono:wght@500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #0b5cff;
+      --primary-dark: #0842c7;
+      --primary-light: #eaf1ff;
+      --bg: #f2f4f8;
+      --surface: #ffffff;
+      --border: #e3e6ef;
+      --text: #1d2433;
+      --text-muted: #6b7280;
+      --success: #059669;
+      --success-light: #d1fae5;
+      --warning: #d97706;
+      --warning-light: #fef3c7;
+      --danger: #dc2626;
+      --danger-light: #fee2e2;
+      --radius-lg: 18px;
+      --radius-md: 12px;
+      --shadow-sm: 0 1px 2px rgba(16,24,40,.06);
+      --shadow-md: 0 8px 24px rgba(16,24,40,.08);
+    }
+    * { box-sizing: border-box; }
+    body { font-family: 'Noto Sans JP', -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 24px; min-height: 100vh; }
+    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
+
+    /* ヘッダー */
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding: 16px 24px; flex-wrap: wrap; gap: 12px; }
+    .header-left { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand-badge { width: 38px; height: 38px; border-radius: 10px; background: linear-gradient(135deg, var(--primary), #6a8dff); display: flex; align-items: center; justify-content: center; font-size: 1.2rem; }
+    .header h1 { margin: 0; font-size: 1.2rem; font-weight: 800; letter-spacing: -0.01em; }
+    .header-sub { font-size: 0.76rem; color: var(--text-muted); font-weight: 600; }
+    .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .store-selector { background: var(--surface); border: 1.5px solid var(--border); color: var(--text); padding: 9px 16px; border-radius: 10px; font-size: 0.88rem; font-weight: 700; outline: none; cursor: pointer; display: none; }
+    .user-badge { font-size: 0.82rem; font-weight: 700; color: var(--primary); background: var(--primary-light); padding: 7px 14px; border-radius: 10px; }
+    .nav-btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; background: var(--surface); color: var(--text); text-decoration: none; border-radius: 10px; font-weight: 700; font-size: 0.85rem; border: 1.5px solid var(--border); transition: all 0.18s ease; cursor: pointer; }
+    .nav-btn:hover { border-color: var(--primary); color: var(--primary); }
+    .export-btn { background: var(--success-light); border-color: #a7e3c8; color: #047857; }
+    .export-btn:hover { border-color: var(--success); color: var(--success); }
+
+    /* タブ */
+    .tabs-container { display: flex; background: var(--surface); border: 1px solid var(--border); padding: 5px; border-radius: 14px; width: fit-content; margin-bottom: 22px; box-shadow: var(--shadow-sm); }
+    .tab-btn { background: transparent; border: none; color: var(--text-muted); padding: 10px 22px; font-size: 0.92rem; font-weight: 700; border-radius: 10px; cursor: pointer; transition: all 0.2s ease; font-family: inherit; }
+    .tab-btn.active { background: var(--primary); color: white; box-shadow: 0 4px 10px rgba(11,92,255,.28); }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; animation: fadeIn 0.35s ease forwards; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* KPIカード */
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 18px; margin-bottom: 22px; }
+    .kpi-card { padding: 20px 22px; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+    .kpi-card::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 4px; background: var(--primary); }
+    .kpi-card.success::before { background: var(--success); }
+    .kpi-card.warning::before { background: var(--warning); }
+    .kpi-title { font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 800; }
+    .kpi-value { font-size: 2.15rem; font-weight: 800; margin-top: 6px; line-height: 1.15; font-family: 'DM Mono', monospace; }
+    .kpi-sub { font-size: 0.8rem; margin-top: 8px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .yoy-up { color: var(--success); font-weight: 700; }
+    .yoy-down { color: var(--danger); font-weight: 700; }
+    .yoy-flat { color: var(--text-muted); font-weight: 600; }
+    .yoy-prev { color: #9aa1b2; font-size: 0.74rem; }
+
+    /* ゲージ（成約率カード用） */
+    .kpi-card.gauge-card { align-items: center; }
+    .gauge-wrap { position: relative; width: 100%; max-width: 180px; margin: 4px auto -6px; }
+    .gauge-center { position: absolute; left: 0; right: 0; top: 60%; text-align: center; }
+    .gauge-value { font-size: 1.5rem; font-weight: 800; font-family: 'DM Mono', monospace; }
+    .gauge-label { font-size: 0.7rem; color: var(--text-muted); font-weight: 700; margin-top: 2px; }
+
+    /* チャート */
+    .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 18px; margin-bottom: 22px; }
+    .chart-container { padding: 22px; height: 360px; position: relative; }
+    .section-title { font-size: 1.05rem; font-weight: 800; margin-bottom: 14px; padding-left: 2px; }
+
+    /* ピボット */
+    .table-wrapper { overflow-x: auto; border-radius: var(--radius-lg); }
+    .matrix-table { width: 100%; border-collapse: collapse; text-align: right; font-size: 0.9rem; }
+    .matrix-table th, .matrix-table td { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+    .matrix-table th { background: #f7f8fb; color: var(--text-muted); font-size: 0.78rem; font-weight: 800; position: sticky; top: 0; text-transform: uppercase; letter-spacing: .03em; }
+    .matrix-table th:first-child, .matrix-table td:first-child { text-align: left; }
+    .matrix-table .area-row { background: var(--primary-light); font-weight: 800; }
+    .matrix-table .venue-row { color: #4b5164; }
+    .matrix-table .venue-row td:first-child { padding-left: 34px; font-size: 0.86rem; position: relative; }
+    .matrix-table .venue-row td:first-child::before { content: '└'; position: absolute; left: 16px; color: #b7bdcc; }
+    .matrix-table tr:hover td { background: #fafbff; }
+
+    /* 式場別リスト */
+    .venue-filter-container { margin-bottom: 20px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .venue-selector { background: var(--surface); border: 1.5px solid var(--border); color: var(--text); padding: 11px 18px; border-radius: 10px; font-size: 0.92rem; outline: none; cursor: pointer; min-width: 240px; font-weight: 700; }
+    .venue-selector:focus { border-color: var(--primary); }
+    .monthly-summary-grid { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 18px; }
+    .mini-kpi { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-md); padding: 10px 15px; min-width: 74px; text-align: center; }
+    .mini-kpi.active { border-color: var(--primary); background: var(--primary-light); }
+    .mini-kpi-title { font-size: 0.7rem; color: var(--text-muted); margin-bottom: 3px; font-weight: 700; }
+    .mini-kpi-val { font-size: 1.1rem; font-weight: 800; font-family: 'DM Mono', monospace; }
+    .list-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.87rem; }
+    .list-table th, .list-table td { padding: 13px 14px; border-bottom: 1px solid var(--border); }
+    .list-table th { background: #f7f8fb; color: var(--text-muted); font-size: 0.76rem; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; }
+    .list-table tr:hover { background: #fafbff; }
+    .badge { padding: 4px 10px; border-radius: 20px; font-size: 0.76rem; font-weight: 800; }
+    .badge-success { background: var(--success-light); color: #047857; }
+    .badge-warning { background: var(--warning-light); color: #b45309; }
+    .badge-neutral { background: #eef0f5; color: #5b616f; }
+
+    /* 編集・削除ボタン */
+    .action-btn { padding: 6px 13px; border-radius: 8px; font-size: 0.78rem; font-weight: 800; cursor: pointer; border: 1.5px solid; transition: all 0.15s; }
+    .edit-btn { background: var(--primary-light); border-color: #c7dbff; color: var(--primary); }
+    .edit-btn:hover { background: #dbe7ff; }
+    .delete-btn { background: var(--danger-light); border-color: #fbc6c6; color: var(--danger); margin-left: 6px; }
+    .delete-btn:hover { background: #fbd2d2; }
+
+    /* 編集モーダル／確認ダイアログ */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(20,24,38,0.5); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(2px); }
+    .modal-overlay.hidden { display: none; }
+    .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 30px; width: 100%; max-width: 720px; max-height: 90vh; overflow-y: auto; box-shadow: 0 30px 60px rgba(16,24,40,.25); }
+    .modal h3 { margin: 0 0 22px; font-size: 1.2rem; font-weight: 800; border-left: 4px solid var(--primary); padding-left: 14px; }
+    .modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .modal-field { margin-bottom: 2px; }
+    .modal-field.full { grid-column: 1 / -1; }
+    .modal-field label { display: block; font-size: 0.78rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; }
+    .modal-field input, .modal-field select {
+      width: 100%; padding: 10px 12px; background: #fbfbfd; border: 1.5px solid var(--border); border-radius: 9px;
+      color: var(--text); font-size: 0.88rem; box-sizing: border-box; outline: none; font-family: inherit;
+    }
+    .modal-field select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7280' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 30px; }
+    .modal-field input:focus, .modal-field select:focus { border-color: var(--primary); background: #fff; box-shadow: 0 0 0 4px var(--primary-light); }
+    .modal-actions { display: flex; gap: 10px; margin-top: 22px; justify-content: flex-end; }
+    .modal-save-btn { padding: 11px 26px; background: var(--primary); color: white; border: none; border-radius: 10px; font-weight: 800; cursor: pointer; font-size: 0.92rem; transition: background .18s; }
+    .modal-save-btn:hover { background: var(--primary-dark); }
+    .modal-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .modal-delete-btn { padding: 11px 18px; background: var(--danger-light); color: var(--danger); border: 1.5px solid #fbc6c6; border-radius: 10px; font-weight: 800; cursor: pointer; font-size: 0.92rem; transition: all 0.15s; }
+    .modal-delete-btn:hover { background: #fbd2d2; }
+    .modal-delete-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .modal-cancel-btn { padding: 11px 18px; background: transparent; color: var(--text-muted); border: 1.5px solid var(--border); border-radius: 10px; font-weight: 700; cursor: pointer; font-size: 0.92rem; }
+    .modal-cancel-btn:hover { background: #f5f6f9; }
+    .modal-error { background: var(--danger-light); border: 1px solid #fbc6c6; color: #991b1b; padding: 10px 14px; border-radius: 9px; font-size: 0.86rem; margin-bottom: 16px; display: none; font-weight: 600; }
+
+    /* 削除確認ダイアログ（専用・軽量） */
+    .confirm-modal { max-width: 420px; text-align: center; padding: 30px; }
+    .confirm-modal .confirm-icon { font-size: 2rem; margin-bottom: 10px; }
+    .confirm-modal h3 { border-left: none; padding-left: 0; text-align: center; }
+    .confirm-modal p { color: var(--text-muted); font-size: 0.88rem; line-height: 1.7; margin: 0 0 20px; }
+    .confirm-modal .modal-actions { justify-content: center; }
+
+    /* ローダー・エラー */
+    .loader { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60vh; color: var(--text-muted); }
+    .spinner { width: 38px; height: 38px; border: 4px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.9s linear infinite; margin-bottom: 16px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60vh; color: var(--danger); text-align: center; }
+    .error-state p { margin-top: 10px; color: var(--text-muted); font-size: 0.88rem; }
+    .no-access { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 50vh; color: var(--text-muted); text-align: center; gap: 8px; }
+
+    /* トースト */
+    .toast { position: fixed; top: 20px; right: 20px; padding: 14px 20px; border-radius: 12px; color: white; font-weight: 700; box-shadow: 0 12px 28px rgba(0,0,0,.18); z-index: 300; display: flex; align-items: center; gap: 10px; transition: all 0.3s ease; max-width: 360px; }
+    .toast.hide { transform: translateX(140%); opacity: 0; }
+    .toast-success { background: var(--success); }
+    .toast-error { background: var(--danger); }
+
+    @media (max-width: 700px) {
+      body { padding: 14px; }
+      .modal-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- トースト通知 -->
+  <div id="toastBox" class="toast hide">
+    <span id="toastIcon"></span>
+    <span id="toastMsg"></span>
+  </div>
+
+  <!-- 編集モーダル -->
+  <div id="editModalOverlay" class="modal-overlay hidden">
+    <div class="modal">
+      <h3>✏️ データ編集</h3>
+      <div id="modalError" class="modal-error"></div>
+      <div class="modal-grid">
+        <div class="modal-field"><label>区分</label>
+          <select id="m-type"><option value="新規">新規</option><option value="既存">既存</option></select></div>
+        <div class="modal-field"><label>店舗名</label><select id="m-store"></select></div>
+        <div class="modal-field"><label>担当者</label><input id="m-staff" type="text"></div>
+        <div class="modal-field"><label>問合せNB日</label><input id="m-nbDate" type="date"></div>
+        <div class="modal-field"><label>問合せ方法</label><select id="m-method"></select></div>
+        <div class="modal-field"><label>媒体</label><select id="m-media"></select></div>
+        <div class="modal-field"><label>チャレンジNO</label><input id="m-challenge" type="text" maxlength="11"></div>
+        <div class="modal-field"><label>CPL旅行</label><input id="m-cplTour" type="number"></div>
+        <div class="modal-field"><label>列席旅行</label><input id="m-guestTour" type="number"></div>
+        <div class="modal-field"><label>挙式日</label><input id="m-weddingDate" type="date"></div>
+        <div class="modal-field"><label>方面</label><select id="m-area" onchange="updateModalVenues()"></select></div>
+        <div class="modal-field"><label>式場</label><select id="m-venue"></select></div>
+        <div class="modal-field"><label>プラン</label><select id="m-plan"></select></div>
+        <div class="modal-field"><label>問合結果</label><select id="m-result"></select></div>
+        <div class="modal-field"><label>AGT</label><select id="m-agt"></select></div>
+        <div class="modal-field full"><label>成約・未成約理由</label><input id="m-reason" type="text"></div>
+        <div class="modal-field full"><label>履歴シートリンク</label><input id="m-historyLink" type="url" placeholder="https://..."></div>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-delete-btn" id="modalDeleteBtn" onclick="openDeleteConfirm()">🗑 削除</button>
+        <button class="modal-cancel-btn" onclick="closeEditModal()">キャンセル</button>
+        <button class="modal-save-btn" id="modalSaveBtn" onclick="saveEdit()">保存する</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 削除確認ダイアログ -->
+  <div id="deleteConfirmOverlay" class="modal-overlay hidden">
+    <div class="modal confirm-modal">
+      <div class="confirm-icon">⚠️</div>
+      <h3>このデータを削除しますか？</h3>
+      <p id="deleteConfirmDetail"></p>
+      <div class="modal-actions">
+        <button class="modal-cancel-btn" onclick="closeDeleteConfirm()">キャンセル</button>
+        <button class="modal-delete-btn" id="confirmDeleteBtn" onclick="confirmDelete()">🗑 削除する</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ローディング -->
+  <div id="loading" class="loader">
+    <div class="spinner"></div>
+    <div style="font-weight:700; letter-spacing:0.02em;">データを同期中...</div>
+  </div>
+
+  <div id="errorState" class="error-state" style="display:none;">
+    <div style="font-size:2rem;">⚠️</div>
+    <div id="errorMsg" style="font-size:1.05rem; font-weight:800; margin-top:8px;">データの読み込みに失敗しました</div>
+    <p id="errorDetail"></p>
+  </div>
+
+  <div id="dashboard" style="display:none;">
+    <div class="header panel">
+      <div class="header-left">
+        <div class="brand">
+          <div class="brand-badge">📊</div>
+          <div>
+            <h1>営業ダッシュボード</h1>
+            <div class="header-sub">Sales Performance Overview</div>
+          </div>
+        </div>
+        <select id="storeFilter" class="store-selector" onchange="applyFilters()"></select>
+        <span id="userBadge" class="user-badge"></span>
+      </div>
+      <div class="header-right">
+        <button class="nav-btn export-btn" onclick="exportCSV()">📥 CSV出力</button>
+        <a id="adminNavBtn" href="<?= ScriptApp.getService().getUrl() ?>?page=admin" class="nav-btn hidden">⚙️ 管理者メニュー</a>
+        <a href="<?= ScriptApp.getService().getUrl() ?>" class="nav-btn">✍️ 日報入力へ戻る</a>
+      </div>
+    </div>
+
+    <div id="noAccessState" class="no-access hidden">
+      <div style="font-size:2rem;">🔒</div>
+      <div style="font-weight:800; color:var(--text);">閲覧権限がありません</div>
+      <div>アカウントの権限設定について管理者にお問い合わせください。</div>
+    </div>
+
+    <div id="mainContent">
+      <div class="tabs-container">
+        <button class="tab-btn active" onclick="switchTab(this,'tab-overview')">📊 全社サマリ</button>
+        <button class="tab-btn" onclick="switchTab(this,'tab-venue')">📋 式場別リスト</button>
+      </div>
+
+      <div id="tab-overview" class="tab-content active">
+        <div class="kpi-grid" id="kpiGrid"></div>
+        <div class="chart-grid">
+          <div class="chart-container panel"><canvas id="trendChart"></canvas></div>
+          <div class="chart-container panel"><canvas id="mediaChart"></canvas></div>
+        </div>
+        <div class="section-title">エリア・式場別 月次問合せマトリクス</div>
+        <div class="table-wrapper panel" id="pivotContainer"></div>
+      </div>
+
+      <div id="tab-venue" class="tab-content">
+        <div class="venue-filter-container">
+          <select id="venueSelector" class="venue-selector" onchange="renderVenueList()">
+            <option value="">式場を選択してください</option>
+          </select>
+          <select id="resultFilter" class="venue-selector" onchange="renderVenueList()" style="min-width:150px;">
+            <option value="成約" selected>成約のみ</option>
+            <option value="未成約">未成約のみ</option>
+            <option value="すべて">すべて表示</option>
+          </select>
+        </div>
+        <div id="venueMonthlySummary" class="monthly-summary-grid"></div>
+        <div class="table-wrapper panel" style="min-height:400px;">
+          <table class="list-table">
+            <thead>
+              <tr>
+                <th>挙式日</th><th>方面</th><th>チャレンジ</th>
+                <th>店舗名</th><th>AGT</th><th>プラン</th><th>担当者</th><th>問合結果</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="venueListBody">
+              <tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:40px;">式場を選択するとデータが表示されます</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var rawData = null;
+    var masterData = {};
+    var charts = {};
+    var currentFilteredData = [];
+    var editingRow = null; // 現在編集中の行データ
+
+    window.onload = function() {
+      google.script.run
+        .withSuccessHandler(function(response) {
+          rawData = response;
+          google.script.run
+            .withSuccessHandler(function(master) {
+              masterData = master && !master._error ? master : {};
+              initializeDashboard();
+            })
+            .withFailureHandler(function() {
+              masterData = {};
+              initializeDashboard();
+            })
+            .getMasterData();
+        })
+        .withFailureHandler(function(err) { showErrorState('データの読み込みに失敗しました', err.message); })
+        .getRawDataForDashboard();
+    };
+
+    function showErrorState(msg, detail) {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('errorState').style.display = 'flex';
+      document.getElementById('errorMsg').textContent = msg;
+      document.getElementById('errorDetail').textContent = detail || '';
+    }
+
+    function showToast(msg, type) {
+      var box = document.getElementById('toastBox');
+      document.getElementById('toastIcon').textContent = type === 'success' ? '✓' : '✕';
+      document.getElementById('toastMsg').textContent = msg;
+      box.className = 'toast toast-' + type;
+      setTimeout(function() { box.classList.add('hide'); }, 3500);
+    }
+
+    function escHtml(str) {
+      return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    // 「成約」判定・値の比較は表記ゆれ（前後の空白等）を許容するため必ずこのヘルパーを使う。
+    // 旧版は一部の箇所のみ String().trim() しており、比較が揺れて集計がずれる不具合があった。
+    function normVal(v) { return String(v || '').trim(); }
+    function isContract(v) { return normVal(v) === '成約'; }
+
+    function initializeDashboard(response) {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('dashboard').style.display = 'block';
+
+      if (rawData.auth.role === 'unknown') {
+        document.getElementById('mainContent').classList.add('hidden');
+        document.getElementById('noAccessState').classList.remove('hidden');
+        document.getElementById('userBadge').textContent = '閲覧権限がありません';
+        return;
+      }
+
+      populateMasterSelects();
+      buildKpiCards(rawData.kpiConfig);
+      setupAuthUI();
+      applyFilters();
+    }
+
+    function populateMasterSelects() {
+      var mapping = { method: '問合せ方法', media: '媒体', store: '店舗', area: '方面', result: '問合結果', agt: 'AGT', plan: 'プラン' };
+      Object.keys(mapping).forEach(function(id) {
+        var el = document.getElementById('m-' + id);
+        if (!el || !masterData[mapping[id]]) return;
+        el.innerHTML = '<option value="">未選択</option>';
+        masterData[mapping[id]].forEach(function(item) {
+          var opt = document.createElement('option');
+          opt.value = opt.textContent = item.text;
+          el.appendChild(opt);
+        });
+      });
+    }
+
+    function updateModalVenues(selectedVenue) {
+      var areaVal = document.getElementById('m-area').value;
+      var venueEl = document.getElementById('m-venue');
+      venueEl.innerHTML = '<option value="">未選択</option>';
+      if (!areaVal || !masterData['式場']) return;
+      masterData['式場']
+        .filter(function(item) { return item.parent === areaVal; })
+        .sort(function(a, b) { return a.text.localeCompare(b.text, 'ja'); })
+        .forEach(function(item) {
+          var opt = document.createElement('option');
+          opt.value = opt.textContent = item.text;
+          venueEl.appendChild(opt);
+        });
+      if (selectedVenue) venueEl.value = selectedVenue;
+    }
+
+    function buildKpiCards(kpiConfig) {
+      var grid = document.getElementById('kpiGrid');
+      grid.innerHTML = '';
+      kpiConfig.forEach(function(kpi) {
+        var card = document.createElement('div');
+        var isGauge = kpi.id === 'cvr';
+        card.className = 'kpi-card panel' + (kpi.style !== 'default' ? ' ' + kpi.style : '') + (isGauge ? ' gauge-card' : '');
+        if (isGauge) {
+          card.innerHTML =
+            '<div class="kpi-title">' + escHtml(kpi.label) + '</div>' +
+            '<div class="gauge-wrap"><canvas id="gauge-' + kpi.id + '" height="100"></canvas>' +
+              '<div class="gauge-center"><div class="gauge-value" id="kpi-' + kpi.id + '">-</div><div class="gauge-label">達成率</div></div>' +
+            '</div>' +
+            '<div class="kpi-sub" id="yoy-' + kpi.id + '">集計中...</div>';
+        } else {
+          card.innerHTML =
+            '<div class="kpi-title">' + escHtml(kpi.label) + '</div>' +
+            '<div class="kpi-value" id="kpi-' + kpi.id + '">-</div>' +
+            '<div class="kpi-sub" id="yoy-' + kpi.id + '">集計中...</div>';
+        }
+        grid.appendChild(card);
+      });
+    }
+
+    function switchTab(btn, tabId) {
+      document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+      document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('active'); });
+      btn.classList.add('active');
+      document.getElementById(tabId).classList.add('active');
+    }
+
+    function setupAuthUI() {
+      var auth = rawData.auth;
+      var storeFilter = document.getElementById('storeFilter');
+      var userBadge   = document.getElementById('userBadge');
+      if (auth.role === 'admin') {
+        userBadge.textContent = '本部権限';
+        storeFilter.style.display = 'block';
+        document.getElementById('adminNavBtn').classList.remove('hidden');
+        var opts = '<option value="ALL">全店舗総合</option>';
+        auth.availableStores.forEach(function(s) { opts += '<option value="' + escHtml(s) + '">' + escHtml(s) + '</option>'; });
+        storeFilter.innerHTML = opts;
+      } else if (auth.role === 'staff') {
+        userBadge.textContent = auth.store + ' アカウント';
+        // 削除ボタンを非表示（スタッフは削除不可）
+        document.getElementById('modalDeleteBtn').style.display = 'none';
+      }
+    }
+
+    function applyFilters() {
+      var auth = rawData.auth;
+      var selectedStore = 'ALL';
+      if (auth.role === 'admin') selectedStore = document.getElementById('storeFilter').value;
+      else if (auth.role === 'staff') selectedStore = auth.store;
+
+      function filterData(dataArray) {
+        if (!dataArray || dataArray.length === 0) return [];
+        var rows = dataArray;
+        if (isNaN(new Date(dataArray[0][0]).getTime())) rows = dataArray.slice(1);
+        if (selectedStore === 'ALL') return rows;
+        return rows.filter(function(row) { return normVal(row[17]) === selectedStore; });
+      }
+
+      currentFilteredData = filterData(rawData.current);
+      var prevFiltered    = filterData(rawData.prev);
+      updateDashboards(currentFilteredData, prevFiltered);
+      updateVenueSelector(currentFilteredData);
+    }
+
+    // ==========================================
+    // タブ1: 全社サマリ
+    // ==========================================
+
+    function updateDashboards(currentData, prevData) {
+      var now = new Date();
+      var currentMonth = now.getMonth();
+      var currentYear  = now.getFullYear();
+
+      function getThisMonthData(dataArray, targetYear) {
+        return dataArray.filter(function(row) {
+          if (!row[0]) return false;
+          var d = new Date(row[0]);
+          return !isNaN(d.getTime()) && d.getMonth() === currentMonth && d.getFullYear() === targetYear;
+        });
+      }
+
+      var thisMonthCurrent = getThisMonthData(currentData, currentYear);
+      var thisMonthPrev    = getThisMonthData(prevData, currentYear - 1);
+
+      var totalInquiries     = thisMonthCurrent.length;
+      var prevTotalInquiries = thisMonthPrev.length;
+      var contracts     = thisMonthCurrent.filter(function(r) { return isContract(r[11]); }).length;
+      var prevContracts = thisMonthPrev.filter(function(r) { return isContract(r[11]); }).length;
+      var cvr = totalInquiries > 0 ? ((contracts / totalInquiries) * 100).toFixed(1) : 0;
+
+      var kpiValues = { total: totalInquiries, contracts: contracts, cvr: cvr + '%' };
+      var yoyPairs  = { total: [totalInquiries, prevTotalInquiries], contracts: [contracts, prevContracts] };
+
+      rawData.kpiConfig.forEach(function(kpi) {
+        var valEl = document.getElementById('kpi-' + kpi.id);
+        var yoyEl = document.getElementById('yoy-' + kpi.id);
+        if (valEl && kpiValues[kpi.id] !== undefined) valEl.textContent = kpiValues[kpi.id];
+        if (yoyEl) {
+          if (yoyPairs[kpi.id]) yoyEl.innerHTML = buildYoyHtml(yoyPairs[kpi.id][0], yoyPairs[kpi.id][1]);
+          else if (kpi.id === 'cvr') yoyEl.innerHTML = '<span class="yoy-flat">今月の実績ベース</span>';
+        }
+        if (kpi.id === 'cvr') drawGauge(parseFloat(cvr) || 0);
+      });
+
+      drawCharts(thisMonthCurrent, thisMonthPrev, currentMonth);
+      renderPivotTable(currentData.filter(function(row) {
+        return row[0] && new Date(row[0]).getFullYear() === currentYear;
+      }));
+    }
+
+    function buildYoyHtml(cur, prev) {
+      if (prev === 0 && cur === 0) return '<span class="yoy-flat">前年同月: データなし</span>';
+      if (prev === 0) return '<span class="yoy-up">▲ 100% (前年実績ゼロ)</span>';
+      var ratio = Math.round(((cur - prev) / prev) * 100);
+      var prevLabel = '<span class="yoy-prev">前年: ' + prev + '</span>';
+      if (ratio > 0) return '<span class="yoy-up">▲ +' + ratio + '% (前年比)</span> ' + prevLabel;
+      if (ratio < 0) return '<span class="yoy-down">▼ ' + ratio + '% (前年比)</span> ' + prevLabel;
+      return '<span class="yoy-flat">▶ ±0% (前年比)</span> ' + prevLabel;
+    }
+
+    function drawGauge(pct) {
+      var clamped = Math.max(0, Math.min(100, pct));
+      var color = clamped >= 50 ? '#059669' : (clamped >= 25 ? '#d97706' : '#dc2626');
+      var canvas = document.getElementById('gauge-cvr');
+      if (!canvas) return;
+      if (charts.gauge) charts.gauge.destroy();
+      charts.gauge = new Chart(canvas, {
+        type: 'doughnut',
+        data: { datasets: [{ data: [clamped, 100 - clamped], backgroundColor: [color, '#eef0f5'], borderWidth: 0 }] },
+        options: {
+          responsive: true, maintainAspectRatio: true,
+          rotation: 270, circumference: 180, cutout: '78%',
+          plugins: { legend: { display: false }, tooltip: { enabled: false } },
+          animation: { duration: 500 }
+        }
+      });
+    }
+
+    function drawCharts(curData, prevData, curMonth) {
+      Chart.defaults.color = '#6b7280';
+      Chart.defaults.font.family = "'Noto Sans JP', sans-serif";
+      if (charts.media) charts.media.destroy();
+      if (charts.trend) charts.trend.destroy();
+
+      var mediaCounts = {};
+      curData.filter(function(r) { return normVal(r[1]) === '新規'; }).forEach(function(r) {
+        var m = r[3] || '未分類';
+        mediaCounts[m] = (mediaCounts[m] || 0) + 1;
+      });
+      charts.media = new Chart(document.getElementById('mediaChart'), {
+        type: 'doughnut',
+        data: { labels: Object.keys(mediaCounts), datasets: [{ data: Object.values(mediaCounts), backgroundColor: ['#0b5cff','#059669','#d97706','#dc2626','#8b5cf6','#ec4899','#06b6d4'], borderWidth: 0, hoverOffset: 4 }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: '新規問合せ 媒体別比率 (今月)', color: '#1d2433', font: { size: 15, weight: '700' }, padding: { bottom: 18 } }, legend: { position: 'right', labels: { usePointStyle: true, padding: 18, font: { size: 12 } } } }, cutout: '68%' }
+      });
+
+      var days = new Date(new Date().getFullYear(), curMonth + 1, 0).getDate();
+      var labels = Array.from({length: days}, function(_, i) { return (i + 1) + '日'; });
+      var curTrend  = new Array(days).fill(0);
+      var prevTrend = new Array(days).fill(0);
+      curData.forEach(function(r) { curTrend[new Date(r[0]).getDate() - 1]++; });
+      prevData.forEach(function(r) { prevTrend[new Date(r[0]).getDate() - 1]++; });
+
+      charts.trend = new Chart(document.getElementById('trendChart'), {
+        type: 'line',
+        data: { labels: labels, datasets: [
+          { label: '今年度', data: curTrend, borderColor: '#0b5cff', backgroundColor: 'rgba(11,92,255,0.08)', borderWidth: 3, tension: 0.4, fill: true, pointBackgroundColor: '#fff', pointBorderColor: '#0b5cff', pointBorderWidth: 2, pointRadius: 3, pointHoverRadius: 6 },
+          { label: '前年度', data: prevTrend, borderColor: '#c2c7d4', borderWidth: 2, borderDash: [5,5], tension: 0.4, fill: false, pointRadius: 0, pointHoverRadius: 4 }
+        ]},
+        options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { title: { display: true, text: '今月の日別問合せ推移 (前年対比)', color: '#1d2433', font: { size: 15, weight: '700' }, padding: { bottom: 18 } }, tooltip: { backgroundColor: 'rgba(29,36,51,0.92)', padding: 12, cornerRadius: 8 } }, scales: { x: { grid: { color: '#f0f1f5' } }, y: { grid: { color: '#f0f1f5' }, beginAtZero: true, ticks: { stepSize: 1 } } } }
+      });
+    }
+
+    function renderPivotTable(data) {
+      var pivotData = {};
+      var months = Array.from({length:12}, function(_, i) { return (i+1) + '月'; });
+      data.forEach(function(row) {
+        var d = new Date(row[0]);
+        var m = (d.getMonth() + 1) + '月';
+        var area  = row[10] || '方面未設定';
+        var venue = row[13] || '式場未設定';
+        if (!pivotData[area]) pivotData[area] = { total:0, byMonth:{}, venues:{} };
+        pivotData[area].total++;
+        pivotData[area].byMonth[m] = (pivotData[area].byMonth[m] || 0) + 1;
+        if (!pivotData[area].venues[venue]) pivotData[area].venues[venue] = { total:0, byMonth:{} };
+        pivotData[area].venues[venue].total++;
+        pivotData[area].venues[venue].byMonth[m] = (pivotData[area].venues[venue].byMonth[m] || 0) + 1;
+      });
+
+      var html = '<table class="matrix-table"><thead><tr><th>方面 / 式場</th><th>年間合計</th>';
+      months.forEach(function(m) { html += '<th>' + m + '</th>'; });
+      html += '</tr></thead><tbody>';
+
+      var areas = Object.keys(pivotData).sort(function(a,b) { return pivotData[b].total - pivotData[a].total; });
+      if (areas.length === 0) { document.getElementById('pivotContainer').innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-muted);">今年のデータはまだありません。</div>'; return; }
+
+      areas.forEach(function(area) {
+        var a = pivotData[area];
+        html += '<tr class="area-row"><td>' + escHtml(area) + '</td><td>' + a.total + '</td>';
+        months.forEach(function(m) { var v = a.byMonth[m]||0; html += '<td style="' + (v>0?'font-weight:800;':'opacity:0.35;') + '">' + v + '</td>'; });
+        html += '</tr>';
+        Object.keys(a.venues).sort(function(x,y){ return a.venues[y].total - a.venues[x].total; }).forEach(function(venue) {
+          var vd = a.venues[venue];
+          html += '<tr class="venue-row"><td>' + escHtml(venue) + '</td><td>' + vd.total + '</td>';
+          months.forEach(function(m) { var v = vd.byMonth[m]||0; html += '<td style="' + (v>0?'color:var(--text);font-weight:600;':'opacity:0.3;') + '">' + (v>0?v:'-') + '</td>'; });
+          html += '</tr>';
+        });
+      });
+      html += '</tbody></table>';
+      document.getElementById('pivotContainer').innerHTML = html;
+    }
+
+    // ==========================================
+    // タブ2: 式場別リスト
+    // ==========================================
+
+    function updateVenueSelector(data) {
+      var venueSet = new Set();
+      data.forEach(function(r) { if (r[13]) venueSet.add(r[13]); });
+      var opts = '<option value="">式場を選択してください</option>';
+      Array.from(venueSet).sort().forEach(function(v) { opts += '<option value="' + escHtml(v) + '">' + escHtml(v) + '</option>'; });
+      document.getElementById('venueSelector').innerHTML = opts;
+      document.getElementById('venueMonthlySummary').innerHTML = '';
+      document.getElementById('venueListBody').innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:40px;">式場を選択するとデータが表示されます</td></tr>';
+    }
+
+    function renderVenueList() {
+      var selectedVenue = document.getElementById('venueSelector').value;
+      var resultFilter  = document.getElementById('resultFilter').value;
+      if (!selectedVenue) return;
+
+      var currentYear = new Date().getFullYear();
+      var venueData = currentFilteredData.filter(function(row) {
+        if (!row[9]) return false;
+        var d = new Date(row[9]);
+        if (isNaN(d.getTime()) || d.getFullYear() !== currentYear) return false;
+        if (row[13] !== selectedVenue) return false;
+        if (resultFilter === '成約' && !isContract(row[11])) return false;
+        if (resultFilter === '未成約' && isContract(row[11])) return false;
+        return true;
+      });
+
+      // 月別サマリ
+      var monthCounts = new Array(12).fill(0);
+      venueData.forEach(function(r) { monthCounts[new Date(r[9]).getMonth()]++; });
+      var curMonth = new Date().getMonth();
+      var summaryHtml = '<div class="mini-kpi"><div class="mini-kpi-title">年間合計</div><div class="mini-kpi-val">' + venueData.length + '件</div></div>';
+      for (var i = 0; i < 12; i++) {
+        summaryHtml += '<div class="mini-kpi ' + (i===curMonth?'active':'') + '" style="' + (monthCounts[i]===0?'opacity:0.4;':'') + '"><div class="mini-kpi-title">' + (i+1) + '月</div><div class="mini-kpi-val">' + monthCounts[i] + '</div></div>';
+      }
+      document.getElementById('venueMonthlySummary').innerHTML = summaryHtml;
+
+      // リスト（編集ボタン付き）
+      var sorted = venueData.sort(function(a,b) { return new Date(b[9]) - new Date(a[9]); });
+      var tbody = document.getElementById('venueListBody');
+      if (sorted.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:40px;">該当データはありません</td></tr>';
+        return;
+      }
+
+      var listHtml = '';
+      sorted.forEach(function(row, idx) {
+        var d = new Date(row[9]);
+        var dateStr = d.getFullYear() + '/' + (d.getMonth()+1) + '/' + d.getDate();
+        var result = row[11] || '未定';
+        var badgeClass = isContract(result) ? 'badge-success' : (normVal(result)==='失注'||normVal(result)==='キャンセル' ? 'badge-warning' : 'badge-neutral');
+        listHtml +=
+          '<tr>' +
+          '<td style="font-weight:700;">' + dateStr + '</td>' +
+          '<td>' + escHtml(row[10]||'-') + '</td>' +
+          '<td style="font-family:\'DM Mono\',monospace;">' + escHtml(row[6]||'-') + '</td>' +
+          '<td>' + escHtml(row[17]||'-') + '</td>' +
+          '<td>' + escHtml(row[12]||'-') + '</td>' +
+          '<td>' + escHtml(row[14]||'-') + '</td>' +
+          '<td>' + escHtml(row[5]||'-') + '</td>' +
+          '<td><span class="badge ' + badgeClass + '">' + escHtml(result) + '</span></td>' +
+          '<td>' +
+            '<button class="action-btn edit-btn" onclick="openEditModal(' + idx + ')">編集</button>' +
+            (rawData.auth.role === 'admin' ? '<button class="action-btn delete-btn" onclick="openDeleteConfirm(' + idx + ')">削除</button>' : '') +
+          '</td>' +
+          '</tr>';
+      });
+      tbody.innerHTML = listHtml;
+
+      // 表示中データをグローバルに保持（モーダルから参照するため）
+      window._venueListData = sorted;
+    }
+
+    // ==========================================
+    // 編集モーダル
+    // ==========================================
+
+    var HEADERS = ['timestamp','type','method','media','nbDate','staff','challenge',
+                   'cplTour','guestTour','weddingDate','area','result','agt',
+                   'venue','plan','reason','historyLink','store'];
+
+    function openEditModal(idx) {
+      var row = window._venueListData[idx];
+      editingRow = row;
+
+      var textFields = ['staff','challenge','cplTour','guestTour','nbDate','weddingDate','reason','historyLink'];
+      var selectFields = ['type','store','method','media','result','agt','plan'];
+
+      textFields.concat(selectFields).forEach(function(f) {
+        var el = document.getElementById('m-' + f);
+        if (!el) return;
+        var colIdx = HEADERS.indexOf(f);
+        if (colIdx === -1) return;
+        var val = row[colIdx] || '';
+        if ((f === 'nbDate' || f === 'weddingDate') && val) {
+          var d = new Date(val);
+          if (!isNaN(d.getTime())) {
+            val = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+          }
+        }
+        el.value = val;
+      });
+
+      // 方面→式場は依存関係があるため専用処理
+      var areaVal = row[HEADERS.indexOf('area')] || '';
+      var venueVal = row[HEADERS.indexOf('venue')] || '';
+      document.getElementById('m-area').value = areaVal;
+      updateModalVenues(venueVal);
+
+      var errEl = document.getElementById('modalError');
+      errEl.style.display = 'none';
+      errEl.textContent = '';
+
+      document.getElementById('editModalOverlay').classList.remove('hidden');
+    }
+
+    function closeEditModal() {
+      document.getElementById('editModalOverlay').classList.add('hidden');
+      editingRow = null;
+    }
+
+    function saveEdit() {
+      if (!editingRow) return;
+      var saveBtn = document.getElementById('modalSaveBtn');
+      saveBtn.textContent = '保存中...';
+      saveBtn.disabled = true;
+
+      var payload = {
+        type: document.getElementById('m-type').value,
+        method: document.getElementById('m-method').value,
+        media: document.getElementById('m-media').value,
+        nbDate: document.getElementById('m-nbDate').value,
+        store: document.getElementById('m-store').value,
+        staff: document.getElementById('m-staff').value,
+        challenge: document.getElementById('m-challenge').value,
+        cplTour: document.getElementById('m-cplTour').value,
+        guestTour: document.getElementById('m-guestTour').value,
+        weddingDate: document.getElementById('m-weddingDate').value,
+        area: document.getElementById('m-area').value,
+        result: document.getElementById('m-result').value,
+        agt: document.getElementById('m-agt').value,
+        venue: document.getElementById('m-venue').value,
+        plan: document.getElementById('m-plan').value,
+        reason: document.getElementById('m-reason').value,
+        historyLink: document.getElementById('m-historyLink').value
+      };
+
+      var rowIndex  = editingRow[18];
+      var sheetName = editingRow[19];
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          saveBtn.textContent = '保存する';
+          saveBtn.disabled = false;
+          if (res.success) {
+            showToast('保存しました', 'success');
+            closeEditModal();
+            reloadDashboard();
+          } else {
+            var errEl = document.getElementById('modalError');
+            errEl.textContent = res.error;
+            errEl.style.display = 'block';
+          }
+        })
+        .withFailureHandler(function(err) {
+          saveBtn.textContent = '保存する';
+          saveBtn.disabled = false;
+          var errEl = document.getElementById('modalError');
+          errEl.textContent = '通信エラー: ' + err.message;
+          errEl.style.display = 'block';
+        })
+        .updateRow(sheetName, rowIndex, payload);
+    }
+
+    // ==========================================
+    // 削除確認（改善: モーダルをちらつかせず専用ダイアログで確認する）
+    // ==========================================
+
+    var pendingDeleteRow = null;
+
+    function openDeleteConfirm(idx) {
+      var row = window._venueListData[idx];
+      pendingDeleteRow = row;
+
+      var d = new Date(row[9]);
+      var dateStr = !isNaN(d.getTime()) ? (d.getFullYear() + '/' + (d.getMonth()+1) + '/' + d.getDate()) : '未定';
+      var challenge = row[6] || '(チャレンジNOなし)';
+      document.getElementById('deleteConfirmDetail').innerHTML =
+        '挙式日: <strong>' + escHtml(dateStr) + '</strong><br>チャレンジNO: <strong>' + escHtml(challenge) + '</strong><br><br>この操作は取り消せません。';
+
+      document.getElementById('deleteConfirmOverlay').classList.remove('hidden');
+    }
+
+    function closeDeleteConfirm() {
+      document.getElementById('deleteConfirmOverlay').classList.add('hidden');
+      pendingDeleteRow = null;
+    }
+
+    function confirmDelete() {
+      var row = pendingDeleteRow;
+      if (!row) return;
+      var rowIndex  = row[18];
+      var sheetName = row[19];
+
+      var btn = document.getElementById('confirmDeleteBtn');
+      btn.textContent = '削除中...';
+      btn.disabled = true;
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          btn.textContent = '🗑 削除する';
+          btn.disabled = false;
+          if (res.success) {
+            showToast('削除しました', 'success');
+            closeDeleteConfirm();
+            reloadDashboard();
+          } else {
+            showToast(res.error, 'error');
+          }
+        })
+        .withFailureHandler(function(err) {
+          btn.textContent = '🗑 削除する';
+          btn.disabled = false;
+          showToast('通信エラー: ' + err.message, 'error');
+        })
+        .deleteRow(sheetName, rowIndex);
+    }
+
+    function reloadDashboard() {
+      google.script.run
+        .withSuccessHandler(function(response) {
+          rawData = response;
+          applyFilters();
+        })
+        .getRawDataForDashboard();
+    }
+
+    // ==========================================
+    // CSVエクスポート
+    // ==========================================
+
+    function exportCSV() {
+      if (!currentFilteredData || currentFilteredData.length === 0) {
+        showToast('エクスポートするデータがありません', 'error');
+        return;
+      }
+
+      var headers = ['タイムスタンプ','区分','問合せ方法','媒体','問合せNB日','担当者',
+                     'チャレンジNO','CPL旅行','列席旅行','挙式日','方面','問合結果',
+                     'AGT','式場','プラン','理由','履歴リンク','店舗'];
+
+      var rows = [headers];
+
+      currentFilteredData.forEach(function(row) {
+        // [18]=行番号, [19]=シート名 は除外して0-17だけ出力
+        var csvRow = [];
+        for (var i = 0; i < 18; i++) {
+          var val = String(row[i] || '');
+          // 日時を読みやすい形式に変換
+          if (i === 0 && val) {
+            var d = new Date(val);
+            if (!isNaN(d.getTime())) val = d.getFullYear() + '/' + (d.getMonth()+1) + '/' + d.getDate() + ' ' + d.getHours() + ':' + String(d.getMinutes()).padStart(2,'0');
+          }
+          // カンマ・改行・ダブルクォートをエスケープ
+          if (val.indexOf(',') !== -1 || val.indexOf('"') !== -1 || val.indexOf('\n') !== -1) {
+            val = '"' + val.replace(/"/g, '""') + '"';
+          }
+          csvRow.push(val);
+        }
+        rows.push(csvRow);
+      });
+
+      // BOM付きUTF-8でExcelでも日本語が開ける
+      var csvContent = '\uFEFF' + rows.map(function(r) { return r.join(','); }).join('\r\n');
+      var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      var url  = URL.createObjectURL(blob);
+
+      var now = new Date();
+      var filename = '日報データ_' + now.getFullYear() + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0') + '.csv';
+
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      showToast(currentFilteredData.length + '件をCSV出力しました', 'success');
+    }
+
+  </script>
+
+</body>
+</html>

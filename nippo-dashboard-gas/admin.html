@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>管理者メニュー</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700;800&family=DM+Mono:wght@500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #0b5cff; --primary-dark: #0842c7; --primary-light: #eaf1ff;
+      --bg: #f2f4f8; --surface: #fff; --border: #e3e6ef; --text: #1d2433; --text-muted: #6b7280;
+      --success: #059669; --success-light: #d1fae5;
+      --danger: #dc2626; --danger-light: #fee2e2;
+      --warning: #d97706; --warning-light: #fef3c7;
+      --radius-lg: 18px; --shadow-sm: 0 1px 2px rgba(16,24,40,.06); --shadow-md: 0 8px 24px rgba(16,24,40,.08);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding: 28px; }
+
+    .page { max-width: 1080px; margin: 0 auto; }
+    .nav-back { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 18px; color: var(--text-muted); font-size: 0.85rem; font-weight: 700; text-decoration: none; }
+    .nav-back:hover { color: var(--primary); }
+
+    .top-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 26px; }
+    .brand-badge { width: 40px; height: 40px; border-radius: 11px; background: linear-gradient(135deg, var(--primary), #6a8dff); display: flex; align-items: center; justify-content: center; font-size: 1.25rem; }
+    h1 { font-size: 1.25rem; font-weight: 800; color: var(--text); }
+    .h-sub { font-size: 0.78rem; color: var(--text-muted); font-weight: 600; }
+
+    .status-line { color: var(--text-muted); font-size: 0.88rem; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
+    .spinner { width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 26px; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; }
+    .card-icon { width: 42px; height: 42px; border-radius: 11px; background: var(--primary-light); display: flex; align-items: center; justify-content: center; font-size: 1.2rem; margin-bottom: 14px; }
+    .card-title { font-size: 1.02rem; font-weight: 800; margin-bottom: 6px; }
+    .card-desc { font-size: 0.83rem; color: var(--text-muted); margin-bottom: 18px; line-height: 1.7; }
+    .stat-row { display: flex; gap: 12px; margin-bottom: 16px; }
+    .stat { background: var(--bg); border-radius: 10px; padding: 12px 14px; flex: 1; }
+    .stat-label { font-size: 0.7rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+    .stat-val { font-size: 1.3rem; font-weight: 800; color: var(--primary); font-family: 'DM Mono', monospace; margin-top: 4px; }
+    .btn { width: 100%; padding: 12px; border: none; border-radius: 10px; font-family: inherit; font-size: 0.9rem; font-weight: 800; cursor: pointer; transition: all 0.15s; margin-top: auto; }
+    .btn:hover { opacity: 0.88; transform: translateY(-1px); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-warning { background: var(--warning); color: #fff; }
+    .btn-danger  { background: var(--danger);  color: #fff; }
+    .result-msg { margin-top: 12px; padding: 11px 14px; border-radius: 9px; font-size: 0.83rem; font-weight: 700; display: none; }
+    .result-ok  { background: var(--success-light); color: #065f46; }
+    .result-err { background: var(--danger-light); color: #991b1b; }
+    .warning-box { background: var(--warning-light); border: 1.5px solid #fbd38d; border-radius: 10px; padding: 13px 15px; font-size: 0.82rem; color: #92400e; margin-bottom: 16px; line-height: 1.7; }
+    .info-box { background: var(--primary-light); border: 1.5px solid #c7dbff; border-radius: 10px; padding: 13px 15px; font-size: 0.82rem; color: #0842c7; margin-bottom: 16px; line-height: 1.7; }
+    .loader-icon { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.4); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 6px; }
+    .error-block { color: var(--danger); font-size: 0.9rem; font-weight: 700; background: var(--danger-light); padding: 14px 18px; border-radius: 12px; }
+  </style>
+</head>
+<body>
+<div class="page">
+  <a href="<?= ScriptApp.getService().getUrl() ?>?page=dashboard" class="nav-back">← ダッシュボードへ戻る</a>
+
+  <div class="top-bar">
+    <div class="brand-badge">⚙️</div>
+    <div>
+      <h1>管理者メニュー</h1>
+      <div class="h-sub">Admin Console</div>
+    </div>
+  </div>
+
+  <div id="loading" class="status-line"><span class="spinner"></span>データを確認中...</div>
+
+  <div class="grid" id="menuGrid" style="display:none">
+
+    <!-- 月次集計 -->
+    <div class="card">
+      <div class="card-icon">📊</div>
+      <div class="card-title">月次集計を今すぐ実行</div>
+      <div class="card-desc">
+        今年度データ（店舗×月）を集計し、SUMMARYシートへ書き出します。既存データは削除しません。<br>
+        月次自動メールの送信対象とは別に、いつでも手動実行できます。
+      </div>
+      <div class="stat-row">
+        <div class="stat">
+          <div class="stat-label">DATAシート行数</div>
+          <div class="stat-val" id="dataRows">-</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">SUMMARY行数</div>
+          <div class="stat-val" id="summaryRows">-</div>
+        </div>
+      </div>
+      <div class="stat" style="margin-bottom:16px">
+        <div class="stat-label">最終集計日時</div>
+        <div style="font-size:.85rem;font-weight:700;color:var(--text);margin-top:4px" id="lastUpdated">-</div>
+      </div>
+      <button class="btn btn-primary" id="btnBuildSummary" onclick="runBuildSummary()">
+        📊 集計を実行する
+      </button>
+      <div class="result-msg" id="msgBuildSummary"></div>
+    </div>
+
+    <!-- 自動集計トリガー -->
+    <div class="card">
+      <div class="card-icon">⏰</div>
+      <div class="card-title">月次レポートの自動送信設定</div>
+      <div class="card-desc">
+        毎月1日の午前8時ごろに、前月の営業実績メール（sendMonthlyReport）を
+        「設定」シートに登録されたADMINへ自動送信するトリガーを設定します。<br>
+        <strong>初回のみ1回実行してください。</strong>再実行しても重複作成されません。
+      </div>
+      <button class="btn btn-primary" id="btnSetupTrigger" onclick="setupTrigger()">
+        ⏰ トリガーを設定する
+      </button>
+      <div class="result-msg" id="msgSetupTrigger"></div>
+    </div>
+
+    <!-- 年度末アーカイブ -->
+    <div class="card">
+      <div class="card-icon">📦</div>
+      <div class="card-title">年度末アーカイブ</div>
+      <div class="card-desc">
+        前年度データを整理する機能です。
+      </div>
+      <div class="info-box">
+        ℹ️ このシステムは年が変わると自動的に <strong>DATA_2026</strong> のような
+        年度別シートへ切り替わり、過去データは既存の DATA_年 シートにそのまま残ります。
+        そのため手動でのアーカイブ操作は現在必要ありません。
+      </div>
+      <button class="btn btn-warning" id="btnArchive" onclick="runArchive()">
+        📦 詳細を確認する
+      </button>
+      <div class="result-msg" id="msgArchive"></div>
+    </div>
+
+  </div>
+
+  <div id="errorBlock" class="error-block" style="display:none"></div>
+</div>
+
+<script>
+  window.onload = function() {
+    google.script.run
+      .withSuccessHandler(initMenu)
+      .withFailureHandler(function(err) {
+        // 修正: 元のコードには failure ハンドラがなく、getAdminMenuData が
+        // 例外を投げた場合「データを確認中...」から進まなくなる不具合があった。
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('errorBlock').style.display = 'block';
+        document.getElementById('errorBlock').textContent = '⚠️ 読み込みに失敗しました: ' + err.message;
+      })
+      .getAdminMenuData();
+  };
+
+  function initMenu(data) {
+    document.getElementById('loading').style.display = 'none';
+    if (!data.success) {
+      document.getElementById('errorBlock').style.display = 'block';
+      document.getElementById('errorBlock').textContent = '⚠️ ' + data.error;
+      return;
+    }
+    document.getElementById('menuGrid').style.display = 'grid';
+    document.getElementById('dataRows').textContent    = data.dataRows.toLocaleString() + '件';
+    document.getElementById('summaryRows').textContent = data.summaryRows.toLocaleString() + '件';
+    document.getElementById('lastUpdated').textContent = data.lastUpdated;
+  }
+
+  function runBuildSummary() {
+    var btn = document.getElementById('btnBuildSummary');
+    btn.innerHTML = '<span class="loader-icon"></span>集計中...';
+    btn.disabled = true;
+    google.script.run
+      .withSuccessHandler(function(res) {
+        btn.textContent = '📊 集計を実行する';
+        btn.disabled = false;
+        if (res.success) { showMsg('msgBuildSummary', '集計が完了しました', 'ok'); }
+        else { showMsg('msgBuildSummary', 'エラー: ' + res.error, 'err'); }
+      })
+      .withFailureHandler(function(err) {
+        btn.textContent = '📊 集計を実行する';
+        btn.disabled = false;
+        showMsg('msgBuildSummary', '通信エラー: ' + err.message, 'err');
+      })
+      .runBuildSummary();
+  }
+
+  function setupTrigger() {
+    var btn = document.getElementById('btnSetupTrigger');
+    btn.innerHTML = '<span class="loader-icon"></span>設定中...';
+    btn.disabled = true;
+    google.script.run
+      .withSuccessHandler(function(res) {
+        btn.textContent = '⏰ トリガーを設定する';
+        btn.disabled = false;
+        if (!res.success) { showMsg('msgSetupTrigger', 'エラー: ' + res.error, 'err'); return; }
+        if (res.alreadyExists) { showMsg('msgSetupTrigger', 'すでに設定済みです', 'ok'); }
+        else { showMsg('msgSetupTrigger', '毎月1日午前8時ごろの自動送信トリガーを設定しました', 'ok'); }
+      })
+      .withFailureHandler(function(err) {
+        btn.textContent = '⏰ トリガーを設定する';
+        btn.disabled = false;
+        showMsg('msgSetupTrigger', '通信エラー: ' + err.message, 'err');
+      })
+      .setupMonthlyTrigger();
+  }
+
+  function runArchive() {
+    var btn = document.getElementById('btnArchive');
+    btn.innerHTML = '<span class="loader-icon"></span>確認中...';
+    btn.disabled = true;
+    google.script.run
+      .withSuccessHandler(function(res) {
+        btn.textContent = '📦 詳細を確認する';
+        btn.disabled = false;
+        showMsg('msgArchive', res.success ? '完了しました' : res.error, res.success ? 'ok' : 'err');
+      })
+      .withFailureHandler(function(err) {
+        btn.textContent = '📦 詳細を確認する';
+        btn.disabled = false;
+        showMsg('msgArchive', '通信エラー: ' + err.message, 'err');
+      })
+      .runArchive();
+  }
+
+  function showMsg(id, text, type) {
+    var el = document.getElementById(id);
+    el.textContent = (type === 'ok' ? '✓ ' : '✕ ') + text;
+    el.className = 'result-msg result-' + type;
+    el.style.display = 'block';
+  }
+</script>
+</body>
+</html>
