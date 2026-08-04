@@ -448,14 +448,72 @@
         userBadge.textContent = '本部権限';
         storeFilter.style.display = 'block';
         document.getElementById('adminNavBtn').classList.remove('hidden');
-        var opts = '<option value="ALL">全店舗総合</option>';
-        auth.availableStores.forEach(function(s) { opts += '<option value="' + escHtml(s) + '">' + escHtml(s) + '</option>'; });
-        storeFilter.innerHTML = opts;
+        storeFilter.innerHTML = buildStoreFilterOptions();
       } else if (auth.role === 'staff') {
         userBadge.textContent = auth.store + ' アカウント';
         // 削除ボタンを非表示（スタッフは削除不可）
         document.getElementById('modalDeleteBtn').style.display = 'none';
       }
+    }
+
+    /**
+     * 店舗セレクターの選択肢を組み立てる。
+     * MASTERシートの「店舗」行が持つ 地方(region) / 区分(category, 一般・AVA等) の
+     * メタ情報をもとに、個別店舗だけでなく「地方でまとめて集計」「区分でまとめて集計」
+     * も選べるようにする。選択値は以下の3パターン:
+     *   'ALL'                → 全店舗総合
+     *   'REGION::地方名'     → その地方に属する店舗をすべて合算
+     *   'CATEGORY::区分名'   → その区分に属する店舗をすべて合算
+     *   店舗名そのもの        → 個別店舗（従来通り）
+     */
+    function buildStoreFilterOptions() {
+      var auth = rawData.auth;
+      var storeMeta = rawData.storeMeta || {};
+      var regions = rawData.regions || [];
+      var categories = rawData.categories || [];
+      var stores = auth.availableStores || [];
+
+      var html = '<option value="ALL">全店舗総合</option>';
+
+      if (regions.length) {
+        html += '<optgroup label="地方で集計">';
+        regions.forEach(function(r) { html += '<option value="REGION::' + escHtml(r) + '">' + escHtml(r) + '（地方合計）</option>'; });
+        html += '</optgroup>';
+      }
+      if (categories.length) {
+        html += '<optgroup label="区分で集計">';
+        categories.forEach(function(c) { html += '<option value="CATEGORY::' + escHtml(c) + '">' + escHtml(c) + '（区分合計）</option>'; });
+        html += '</optgroup>';
+      }
+
+      // 個別店舗は地方ごとにグルーピングして見やすくする
+      var byRegion = {};
+      stores.forEach(function(s) {
+        var region = (storeMeta[s] && storeMeta[s].region) || 'その他';
+        if (!byRegion[region]) byRegion[region] = [];
+        byRegion[region].push(s);
+      });
+      Object.keys(byRegion).sort().forEach(function(region) {
+        html += '<optgroup label="' + escHtml(region) + 'の店舗">';
+        byRegion[region].sort().forEach(function(s) {
+          html += '<option value="' + escHtml(s) + '">' + escHtml(s) + '</option>';
+        });
+        html += '</optgroup>';
+      });
+
+      return html;
+    }
+
+    function storeMatchesSelection(storeName, selection) {
+      if (selection === 'ALL') return true;
+      var meta = rawData.storeMeta ? rawData.storeMeta[storeName] : null;
+      if (selection.indexOf('REGION::') === 0) {
+        return !!meta && meta.region === selection.slice('REGION::'.length);
+      }
+      if (selection.indexOf('CATEGORY::') === 0) {
+        return !!meta && meta.category === selection.slice('CATEGORY::'.length);
+      }
+      return storeName === selection;
     }
 
     function applyFilters() {
@@ -469,7 +527,7 @@
         var rows = dataArray;
         if (isNaN(new Date(dataArray[0][0]).getTime())) rows = dataArray.slice(1);
         if (selectedStore === 'ALL') return rows;
-        return rows.filter(function(row) { return normVal(row[17]) === selectedStore; });
+        return rows.filter(function(row) { return storeMatchesSelection(normVal(row[17]), selectedStore); });
       }
 
       currentFilteredData = filterData(rawData.current);

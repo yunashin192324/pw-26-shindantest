@@ -1,5 +1,11 @@
 /**
- * 日報管理システム バックエンド (V8.1)
+ * 日報管理システム バックエンド (V8.2)
+ *
+ * V8.2 での追加機能:
+ *   ・MASTERシートの「店舗」行が持つ 地方(C列) / 区分(D列: 一般・AVA等) の
+ *     メタ情報を集計し、ダッシュボードの店舗セレクターで「地方ごと」「区分ごと」
+ *     にまとめて集計できるようにした（getRawDataForDashboard の storeMeta /
+ *     regions / categories、dashboard.html の buildStoreFilterOptions）。
  *
  * V8.1 での追加修正:
  *   ・実際の運用シートには「設定」シートが存在せず、権限情報はMASTERシート内に
@@ -36,7 +42,7 @@
  */
 
 const SS = SpreadsheetApp.getActiveSpreadsheet();
-const CACHE_KEY_DASHBOARD = 'dashboard_raw_v3';
+const CACHE_KEY_DASHBOARD = 'dashboard_raw_v4';
 const CACHE_DURATION = 600;
 const CHALLENGE_PATTERN = /^[a-zA-Z0-9]{11}$/;
 
@@ -367,14 +373,24 @@ function _buildDashboardCache() {
     });
   }
 
-  // 店舗一覧
+  // 店舗一覧（MASTERシートの「店舗」行は B列:店舗名 / C列:地方 / D列:区分(一般・AVA等) を持つ。
+  // 地方・区分ごとの集計をダッシュボードで選べるように、店舗名だけでなくこのメタ情報も収集する）。
   const stores = [];
+  const storeMeta = {};
+  const regionSet = {};
+  const categorySet = {};
   const masterSheet = getSheet('MASTER');
   if (masterSheet) {
     masterSheet.getDataRange().getValues().forEach(function(row) {
-      if (String(row[0]).trim() === '店舗' && String(row[1]).trim()) {
-        stores.push(String(row[1]).trim());
-      }
+      if (String(row[0]).trim() !== '店舗') return;
+      const name = String(row[1] || '').trim();
+      if (!name) return;
+      const region   = String(row[2] || '').trim();
+      const category = String(row[3] || '').trim();
+      stores.push(name);
+      storeMeta[name] = { region: region, category: category };
+      if (region) regionSet[region] = true;
+      if (category) categorySet[category] = true;
     });
   }
 
@@ -382,6 +398,9 @@ function _buildDashboardCache() {
     current: currentData,
     prev: prevData,
     availableStores: stores,
+    storeMeta: storeMeta,
+    regions: Object.keys(regionSet).sort(),
+    categories: Object.keys(categorySet).sort(),
     kpiConfig: getKpiConfig()
   };
 }
@@ -396,7 +415,10 @@ function getRawDataForDashboard() {
       auth: { email: auth.email, role: 'unknown', store: '', availableStores: [] },
       current: [],
       prev: [],
-      kpiConfig: getKpiConfig()
+      kpiConfig: getKpiConfig(),
+      storeMeta: {},
+      regions: [],
+      categories: []
     };
   }
 
@@ -421,7 +443,10 @@ function getRawDataForDashboard() {
     auth: { email: auth.email, role: auth.role, store: auth.store, availableStores: full.availableStores },
     current: current,
     prev: prev,
-    kpiConfig: full.kpiConfig
+    kpiConfig: full.kpiConfig,
+    storeMeta: full.storeMeta,
+    regions: full.regions,
+    categories: full.categories
   };
 }
 
