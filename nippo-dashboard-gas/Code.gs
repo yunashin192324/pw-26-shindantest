@@ -1,5 +1,14 @@
 /**
- * 日報管理システム バックエンド (V8)
+ * 日報管理システム バックエンド (V8.1)
+ *
+ * V8.1 での追加修正:
+ *   ・実際の運用シートには「設定」シートが存在せず、権限情報はMASTERシート内に
+ *     「A列:権限 / B列:メール / C列:ADMIN or manager / D列:店舗名」という行で
+ *     格納されていた。getRoleConfig() がこの実際の構造を見ておらず、常に空を
+ *     返して全員が unknown（閲覧権限なし）になっていたため修正。
+ *   ・上記の「権限」行（社員のメールアドレス等）が getMasterData() 経由で
+ *     日報入力フォームを開いた全ユーザーに送られてしまっていたため、
+ *     フォーム描画に使わないこの行をレスポンスから除外するよう修正。
  *
  * V7 からの変更点（コードレビューで発見した不具合の修正）:
  *   1. [重大/セキュリティ] Session.getActiveUser().getEmail() が空文字を返した
@@ -93,19 +102,30 @@ function isChallengeDuplicate_(sheet, challengeVal, excludeRowIndex) {
 // 権限設定
 // ==========================================
 
+/**
+ * 権限情報は独立した「設定」シートではなく、MASTERシートの中に
+ *   A列: 権限 / B列: メールアドレス / C列: ADMIN or manager / D列: 店舗名(managerのみ)
+ * という行として格納されている（実際の運用シートの構成に合わせている）。
+ * ADMIN以外でD列に店舗名がある行はすべて店舗スタッフとして扱う。
+ */
 function getRoleConfig() {
-  const sheet = getSheet('設定');
+  const sheet = getSheet('MASTER');
   if (!sheet) return { ADMINS: [], STORE_MAP: {} };
   const data = sheet.getDataRange().getValues();
   const admins = [];
   const storeMap = {};
   data.forEach(function(row) {
-    const type  = String(row[0] || '').trim();
+    const key = String(row[0] || '').trim();
+    if (key !== '権限') return;
     const email = String(row[1] || '').trim().toLowerCase();
-    const store = String(row[2] || '').trim();
+    const type  = String(row[2] || '').trim();
+    const store = String(row[3] || '').trim();
     if (!email) return;
-    if (type === 'ADMIN') admins.push(email);
-    if (type === 'STORE_STAFF' && store) storeMap[email] = store;
+    if (type === 'ADMIN') {
+      admins.push(email);
+    } else if (store) {
+      storeMap[email] = store;
+    }
   });
   return { ADMINS: admins, STORE_MAP: storeMap };
 }
@@ -164,6 +184,9 @@ function getMasterData() {
     const val    = String(row[1] || '').trim();
     const parent = String(row[2] || '').trim();
     if (!key || !val) return;
+    // 「権限」行（社員のメールアドレスや管理者/店舗の割り当て）はフォーム描画に不要な
+    // 機密情報のため、日報入力フォームを開いた全ユーザーに送らないよう除外する。
+    if (key === '権限') return;
     if (!master[key]) master[key] = [];
     master[key].push({ text: val, parent: parent });
   });
