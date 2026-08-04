@@ -1,11 +1,17 @@
 /**
- * 日報管理システム バックエンド (V8.2)
+ * 日報管理システム バックエンド (V8.3)
+ *
+ * V8.3 での修正:
+ *   ・「店舗」行の 地方・区分 の実際の列位置は C列/D列ではなく D列(地方)/E列(区分)
+ *     だったため読み取り列を修正（C列は「式場」行などが方面を入れる共用列で、
+ *     「店舗」行では未使用）。あわせて、同じ店舗名の行が複数存在する場合に
+ *     店舗一覧へ重複表示されないようマージするよう修正。
  *
  * V8.2 での追加機能:
- *   ・MASTERシートの「店舗」行が持つ 地方(C列) / 区分(D列: 一般・AVA等) の
- *     メタ情報を集計し、ダッシュボードの店舗セレクターで「地方ごと」「区分ごと」
- *     にまとめて集計できるようにした（getRawDataForDashboard の storeMeta /
- *     regions / categories、dashboard.html の buildStoreFilterOptions）。
+ *   ・MASTERシートの「店舗」行が持つ 地方 / 区分(一般・AVA等) のメタ情報を集計し、
+ *     ダッシュボードの店舗セレクターで「地方ごと」「区分ごと」にまとめて集計
+ *     できるようにした（getRawDataForDashboard の storeMeta / regions /
+ *     categories、dashboard.html の buildStoreFilterOptions）。
  *
  * V8.1 での追加修正:
  *   ・実際の運用シートには「設定」シートが存在せず、権限情報はMASTERシート内に
@@ -42,7 +48,7 @@
  */
 
 const SS = SpreadsheetApp.getActiveSpreadsheet();
-const CACHE_KEY_DASHBOARD = 'dashboard_raw_v4';
+const CACHE_KEY_DASHBOARD = 'dashboard_raw_v5';
 const CACHE_DURATION = 600;
 const CHALLENGE_PATTERN = /^[a-zA-Z0-9]{11}$/;
 
@@ -373,7 +379,9 @@ function _buildDashboardCache() {
     });
   }
 
-  // 店舗一覧（MASTERシートの「店舗」行は B列:店舗名 / C列:地方 / D列:区分(一般・AVA等) を持つ。
+  // 店舗一覧（MASTERシートの「店舗」行は B列:店舗名 / C列:(未使用・他キーの親列と共用) /
+  // D列:地方 / E列:区分(一般・AVA等) を持つ。C列は「式場」行などが方面を入れる共用列で、
+  // 「店舗」行では使われていないため、地方・区分は D列・E列から読み取る。
   // 地方・区分ごとの集計をダッシュボードで選べるように、店舗名だけでなくこのメタ情報も収集する）。
   const stores = [];
   const storeMeta = {};
@@ -385,10 +393,17 @@ function _buildDashboardCache() {
       if (String(row[0]).trim() !== '店舗') return;
       const name = String(row[1] || '').trim();
       if (!name) return;
-      const region   = String(row[2] || '').trim();
-      const category = String(row[3] || '').trim();
-      stores.push(name);
-      storeMeta[name] = { region: region, category: category };
+      const region   = String(row[3] || '').trim();
+      const category = String(row[4] || '').trim();
+      // 同じ店舗名の行がシート上に複数存在するケースがあるため、店舗一覧には1回だけ
+      // 追加し、地方・区分は値が入っている方を優先してマージする（二重表示を防止）。
+      if (!storeMeta[name]) {
+        stores.push(name);
+        storeMeta[name] = { region: region, category: category };
+      } else {
+        if (!storeMeta[name].region && region) storeMeta[name].region = region;
+        if (!storeMeta[name].category && category) storeMeta[name].category = category;
+      }
       if (region) regionSet[region] = true;
       if (category) categorySet[category] = true;
     });
