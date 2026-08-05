@@ -233,7 +233,7 @@ html { scroll-behavior: smooth; overflow-x: hidden; }
 }
 .dst-search-field input:focus { outline: none; border-color: var(--dst-gold); }
 .dst-search-meta { display: flex; justify-content: space-between; align-items: baseline; margin-top: 18px; font-size: 0.85rem; color: var(--dst-text-muted); }
-.dst-search-count strong { color: var(--dst-gold); font-family: var(--dst-font-serif); font-size: 1.05rem; }
+.dst-search-count strong { color: var(--dst-gold); font-family: var(--dst-font-serif); font-size: 1.05rem; font-variant-numeric: lining-nums tabular-nums; }
 .dst-search-results {
   margin-top: 28px;
   display: grid;
@@ -454,7 +454,7 @@ html { scroll-behavior: smooth; overflow-x: hidden; }
 .dst-plan-media .dst-plan-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .dst-plan-badge { position: absolute; top: 12px; left: 12px; background: var(--dst-gold); color: #fff; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 2px; }
 .dst-plan-body { padding: 18px; }
-.dst-plan-title { font-family: var(--dst-font-serif); font-size: 1rem; margin-bottom: 8px; }
+.dst-plan-title { font-family: var(--dst-font-serif); font-size: 1rem; margin-bottom: 8px; font-variant-numeric: lining-nums tabular-nums; }
 .dst-plan-desc { font-size: 0.85rem; color: var(--dst-text-muted); line-height: 1.6; margin-bottom: 10px; }
 .dst-plan-price { font-family: var(--dst-font-sans); font-weight: 700; color: var(--dst-gold); font-size: 1.15rem; margin-bottom: 10px; font-variant-numeric: lining-nums tabular-nums; }
 
@@ -516,7 +516,7 @@ html { scroll-behavior: smooth; overflow-x: hidden; }
 .dst-compare-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .dst-compare-table { width: 100%; min-width: 480px; border-collapse: collapse; font-size: 0.88rem; }
 .dst-compare-table th, .dst-compare-table td { padding: 14px 20px; text-align: center; border-bottom: 1px solid var(--dst-border); white-space: nowrap; }
-.dst-compare-table thead th { font-family: var(--dst-font-serif); font-size: 0.98rem; border-bottom: 2px solid var(--dst-gold); }
+.dst-compare-table thead th { font-family: var(--dst-font-serif); font-size: 0.98rem; border-bottom: 2px solid var(--dst-gold); font-variant-numeric: lining-nums tabular-nums; }
 .dst-compare-table thead th a { color: var(--dst-text); }
 .dst-compare-table thead th a:hover { color: var(--dst-gold); }
 .dst-compare-table tbody th { text-align: left; font-weight: 600; color: var(--dst-text-muted); white-space: nowrap; }
