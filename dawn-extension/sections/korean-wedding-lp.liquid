@@ -119,6 +119,15 @@
   .hero-perfect-shadow p {
     text-shadow: 0 4px 16px rgba(0, 0, 0, 0.60), 0 1px 4px rgba(0, 0, 0, 0.45);
   }
+  /* 【修正】親のflexコンテナがalign-items:centerのため、.hero-perfect-shadow
+     (flexアイテム)は本来コンテンツに合わせて幅が縮む「shrink-to-fit」に
+     なる。ここに幅の指定が無いと、サブテキストのmax-w-2xl(672px)などの
+     影響でスマホの画面幅より広く計算され、左右が均等に見切れてしまう
+     ことがあった。widthを明示してビューポート幅に収める。 */
+  .hero-perfect-shadow {
+    width: 100%;
+    max-width: 100%;
+  }
 
   /* ==========================================================================
      【修正】見出しフォント(--font-heading-family)は半角数字の字形が
@@ -145,7 +154,7 @@
       <div class="absolute inset-0 bg-black" style="opacity: {{ section.settings.hero_overlay_opacity | divided_by: 100.0 }};"></div>
     </div>
 
-    <div class="relative z-10 absolute inset-0 flex flex-col items-center justify-center text-center px-6 pt-20 h-full bg-gradient-to-b from-black/15 via-black/5 to-black/20">
+    <div class="z-10 absolute inset-0 flex flex-col items-center justify-center text-center px-6 pt-20 h-full bg-gradient-to-b from-black/15 via-black/5 to-black/20">
       <div class="hero-perfect-shadow">
         <p class="font-serif-display tracking-widest-custom mb-4 font-bold" style="color: {{ section.settings.hero_eyebrow_color }};">{{ section.settings.hero_eyebrow }}</p>
         <h1 class="font-serif-display tracking-widest-custom mb-6 leading-tight font-medium" style="color: {{ section.settings.hero_title_color }}; font-size: clamp(2.25rem, 6vw, calc(var(--font-heading-scale, 1) * {{ section.settings.hero_title_size | default: 60 }}px));">{{ section.settings.hero_title | newline_to_br }}</h1>
