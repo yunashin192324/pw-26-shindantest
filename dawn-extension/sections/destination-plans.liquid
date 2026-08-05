@@ -31,6 +31,30 @@
 {%- assign plan_products = destination.plans.value -%}
 {%- assign plan_blocks = section.blocks | where: 'type', 'plan' -%}
 
+{%- comment -%}
+  【一時デバッグ】追加した商品が反映されない件の再調査用。原因が
+  分かり次第この枠ごと削除します。
+{%- endcomment -%}
+{%- assign dbg_matching_entries = 0 -%}
+<div style="border:3px solid red; background:#fff; color:#000; padding:16px; margin:16px; font-family:monospace; font-size:13px; white-space:pre-wrap;">
+【デバッグ】このページの判定結果（再調査）
+page.handle = {{ page.handle }}
+
+同じslugを持つDestinationエントリーの数（本来1件のはず）:
+{%- for d in all_destination_entries -%}
+  {%- if d.slug.value == page.handle -%}
+    {%- assign dbg_matching_entries = dbg_matching_entries | plus: 1 -%}
+- エントリーID: {{ d.id }} / handle: {{ d.system.handle }} / plans件数: {{ d.plans.value.size }}
+  {%- endif -%}
+{%- endfor -%}
+→ 合計 {{ dbg_matching_entries }} 件ヒット（2件以上出ていたら「ハワイ」という名前のDestinationエントリーが重複して存在しています）
+
+今回実際に使われているdestination.plans（新方式）の件数 = {{ plan_products.size }}
+{%- for p in plan_products %}
+- [{{ forloop.index }}] {{ p.title }}（id: {{ p.id }}）
+{%- endfor %}
+</div>
+
 {%- if plan_products.size > 0 or plan_blocks.size > 0 -%}
 <section id="dst-plans"{% if section.settings.bg_ivory %} class="dst-bg-ivory"{% endif %}>
   <div class="dst-container">
