@@ -88,7 +88,8 @@
   #product-plan-{{ section.id }} .plan-variant-pill:hover {
     border-color: #B8860B;
   }
-  #product-plan-{{ section.id }} .plan-variant-pill.is-selected {
+  #product-plan-{{ section.id }} .plan-variant-pill.is-selected,
+  #product-plan-{{ section.id }} .plan-variant-pill:has(.plan-variant-radio:checked) {
     background-color: #B8860B;
     border-color: #B8860B;
     color: #ffffff;
@@ -436,7 +437,7 @@
                 <p class="text-xs text-gray-500 mb-2">{{ option.name }}</p>
                 <div class="flex flex-wrap gap-2">
                   {%- for value in option.values -%}
-                    <label class="plan-variant-pill{% if option.selected_value == value %} is-selected{% endif %}">
+                    <label class="plan-variant-pill">
                       <input
                         type="radio"
                         class="plan-variant-radio"
@@ -452,6 +453,79 @@
             {%- endfor -%}
           </div>
           <script type="application/json" data-plan-variants-json>{{ product.variants | json }}</script>
+          <script>
+            {%- comment -%}
+              このscriptはピッカー本体の直後（フォームより上）にあるため、
+              フォーム側の要素(input[name="id"]等)がまだDOMに無い時点で
+              実行される。DOMContentLoadedを待ってから要素を取得することで、
+              位置に依存せず安全に動くようにしている。
+            {%- endcomment -%}
+            document.addEventListener('DOMContentLoaded', function () {
+              var root = document.getElementById('product-plan-{{ section.id }}');
+              if (!root) return;
+              var dataEl = root.querySelector('[data-plan-variants-json]');
+              if (!dataEl) return;
+              var variants;
+              try {
+                variants = JSON.parse(dataEl.textContent);
+              } catch (e) {
+                return;
+              }
+
+              var radios = Array.prototype.slice.call(root.querySelectorAll('[data-option-position]'));
+              var priceEl = root.querySelector('[data-plan-price]');
+              var idInputs = Array.prototype.slice.call(root.querySelectorAll('input[name="id"]'));
+              var submitButtons = Array.prototype.slice.call(root.querySelectorAll('button[type="submit"][name="add"]'));
+
+              function currentSelection() {
+                var sel = {};
+                radios.forEach(function (r) {
+                  if (r.checked) sel[r.getAttribute('data-option-position')] = r.value;
+                });
+                return sel;
+              }
+
+              function findVariant(sel) {
+                return variants.filter(function (v) {
+                  return Object.keys(sel).every(function (pos) {
+                    return v['option' + pos] === sel[pos];
+                  });
+                })[0];
+              }
+
+              function formatPrice(price) {
+                return Math.round(price).toLocaleString('ja-JP');
+              }
+
+              function applyVariant(v) {
+                if (!v) return;
+                if (priceEl) priceEl.textContent = formatPrice(v.price);
+                idInputs.forEach(function (input) { input.value = v.id; });
+                submitButtons.forEach(function (btn) { btn.disabled = !v.available; });
+              }
+
+              radios.forEach(function (radio) {
+                radio.addEventListener('change', function () {
+                  applyVariant(findVariant(currentSelection()));
+                });
+              });
+
+              {%- comment -%}
+                在庫を切らした側の値（例：2027年分の予約枠がまだ解放されて
+                いない等）を選択肢の見た目でも分かるようにする
+                （必須ではないが、選べない年をグレーアウト表示しておくと
+                親切なので付けている）。
+              {%- endcomment -%}
+              root.querySelectorAll('.plan-variant-pill').forEach(function (pill) {
+                var input = pill.querySelector('input');
+                if (!input) return;
+                var pos = input.getAttribute('data-option-position');
+                var matched = variants.filter(function (v) { return v['option' + pos] === input.value; });
+                var anyAvailable = matched.some(function (v) { return v.available; });
+                pill.classList.toggle('is-unavailable', !anyAvailable);
+              });
+            });
+          </script>
         {%- endunless -%}
 
         {% if is_instant %}
@@ -517,82 +591,6 @@
             {% endunless %}
           {%- endform -%}
         {% endif %}
-
-        {%- unless product.has_only_default_variant -%}
-          <script>
-            (function () {
-              var root = document.getElementById('product-plan-{{ section.id }}');
-              if (!root) return;
-              var dataEl = root.querySelector('[data-plan-variants-json]');
-              if (!dataEl) return;
-              var variants;
-              try {
-                variants = JSON.parse(dataEl.textContent);
-              } catch (e) {
-                return;
-              }
-
-              var radios = Array.prototype.slice.call(root.querySelectorAll('[data-option-position]'));
-              var priceEl = root.querySelector('[data-plan-price]');
-              var idInputs = Array.prototype.slice.call(root.querySelectorAll('input[name="id"]'));
-              var submitButtons = Array.prototype.slice.call(root.querySelectorAll('button[type="submit"][name="add"]'));
-
-              function currentSelection() {
-                var sel = {};
-                radios.forEach(function (r) {
-                  if (r.checked) sel[r.getAttribute('data-option-position')] = r.value;
-                });
-                return sel;
-              }
-
-              function findVariant(sel) {
-                return variants.filter(function (v) {
-                  return Object.keys(sel).every(function (pos) {
-                    return v['option' + pos] === sel[pos];
-                  });
-                })[0];
-              }
-
-              function formatPrice(price) {
-                return Math.round(price).toLocaleString('ja-JP');
-              }
-
-              function applyVariant(v) {
-                if (!v) return;
-                if (priceEl) priceEl.textContent = formatPrice(v.price);
-                idInputs.forEach(function (input) { input.value = v.id; });
-                submitButtons.forEach(function (btn) { btn.disabled = !v.available; });
-              }
-
-              radios.forEach(function (radio) {
-                radio.addEventListener('change', function () {
-                  root.querySelectorAll('.plan-variant-pill').forEach(function (pill) {
-                    var input = pill.querySelector('input');
-                    if (input) pill.classList.toggle('is-selected', input.checked);
-                  });
-                  applyVariant(findVariant(currentSelection()));
-                });
-              });
-
-              {%- comment -%}
-                在庫を切らした側の値（例：2027年分の予約枠がまだ解放されて
-                いない等）を選択肢の見た目でも分かるようにする
-                （必須ではないが、選べない年をグレーアウト表示しておくと
-                親切なので付けている）。
-              {%- endcomment -%}
-              root.querySelectorAll('.plan-variant-pill').forEach(function (pill) {
-                var input = pill.querySelector('input');
-                if (!input) return;
-                var pos = input.getAttribute('data-option-position');
-                var testSel = {};
-                testSel[pos] = input.value;
-                var matched = variants.filter(function (v) { return v['option' + pos] === testSel[pos]; });
-                var anyAvailable = matched.some(function (v) { return v.available; });
-                pill.classList.toggle('is-unavailable', !anyAvailable);
-              });
-            })();
-          </script>
-        {%- endunless -%}
 
         {% if price_cancel_note != blank %}
           <p class="text-xs text-gray-500 mt-6 leading-relaxed">{{ price_cancel_note }}</p>

@@ -521,6 +521,7 @@ html { scroll-behavior: smooth; overflow-x: hidden; }
 .dst-compare-table thead th a:hover { color: var(--dst-gold); }
 .dst-compare-table tbody th { text-align: left; font-weight: 600; color: var(--dst-text-muted); white-space: nowrap; }
 .dst-compare-th-label { min-width: 120px; }
+.dst-compare-price-variant { display: block; font-size: 0.72rem; color: var(--dst-text-muted); font-weight: 400; margin-top: 2px; }
 @media (max-width: 640px) {
   .dst-compare-hint { display: block; }
   .dst-compare-wrap::after {

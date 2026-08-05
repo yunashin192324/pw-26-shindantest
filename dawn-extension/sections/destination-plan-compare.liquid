@@ -51,7 +51,18 @@
             <th>価格</th>
             {%- for p in plan_products -%}
               {%- assign cp_variant = p.selected_or_first_available_variant -%}
-              <td>{{ cp_variant.price | money }}</td>
+              <td>
+                {{ cp_variant.price | money }}
+                {%- comment -%}
+                  商品に複数バリアント（例：撮影年2026年/2027年）がある場合、
+                  代表価格だけだと「どちらの年の価格か」が分からないため、
+                  カッコ書きでバリアント名を添える(Default Titleの場合は
+                  何も付けない＝バリアントが1種類の商品には影響なし)。
+                {%- endcomment -%}
+                {%- if cp_variant.title != blank and cp_variant.title != 'Default Title' -%}
+                  <span class="dst-compare-price-variant">（{{ cp_variant.title }}）</span>
+                {%- endif -%}
+              </td>
             {%- endfor -%}
           </tr>
           <tr>
