@@ -349,17 +349,23 @@
     {% else %}
       <div class="absolute inset-0 w-full h-full bg-gray-200"></div>
     {% endif %}
-    <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.25));"></div>
+    {%- comment -%}
+      文字の視認性対策：明るい/白飛びした写真だと、下からのグラデーション
+      だけでは見出しの上の方（複数行になった時の1行目や、見出しより上の
+      英字見出し）が十分暗くならず読みにくくなることがあった。暗い部分を
+      より高い位置まで、より濃く伸ばして対応する。
+    {%- endcomment -%}
+    <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(0,0,0,0.9), rgba(0,0,0,0.72) 45%, rgba(0,0,0,0.4) 78%, rgba(0,0,0,0.15) 100%);"></div>
     <div class="relative z-10 px-6 pb-16 w-full max-w-4xl text-center" style="color:{{ hero_text_color }};">
       {% if hero_eyebrow != blank %}
-        <p class="font-serif tracking-widest uppercase mb-4 text-sm" style="color:{{ hero_text_color }}; text-shadow: 0 2px 10px rgba(0,0,0,0.5);">{{ hero_eyebrow }}</p>
+        <p class="font-serif tracking-widest uppercase mb-4 text-sm" style="color:{{ hero_text_color }}; text-shadow: 0 1px 3px rgba(0,0,0,0.9), 0 2px 12px rgba(0,0,0,0.6);">{{ hero_eyebrow }}</p>
       {% endif %}
       {%- comment -%}
         商品名の「（○○）」部分の途中で不自然に改行されるのを防ぐため、
         括弧以降をwhite-space:nowrapで囲んで1つの塊として扱う。
       {%- endcomment -%}
       {%- assign hero_title_parts = hero_title | split: '（' -%}
-      <h1 class="font-serif font-light leading-tight mb-4 plan-hero-title" style="font-size: calc(var(--font-heading-scale, 1) * {{ hero_title_size }}px); color:{{ hero_title_color }}; text-shadow: 0 2px 12px rgba(0,0,0,0.6);">
+      <h1 class="font-serif font-light leading-tight mb-4 plan-hero-title" style="font-size: calc(var(--font-heading-scale, 1) * {{ hero_title_size }}px); color:{{ hero_title_color }}; text-shadow: 0 1px 4px rgba(0,0,0,0.9), 0 4px 18px rgba(0,0,0,0.7);">
         {%- if hero_title_parts.size > 1 -%}
           {{ hero_title_parts.first }}<span style="white-space: nowrap;">（{{ hero_title_parts | slice: 1, hero_title_parts.size | join: '（' }}</span>
         {%- else -%}
@@ -367,7 +373,7 @@
         {%- endif -%}
       </h1>
       {% if hero_lede != blank %}
-        <p class="font-light" style="font-size: calc(var(--font-body-scale, 1) * {{ hero_lede_size }}px); color:{{ hero_lede_color }}; text-shadow: 0 2px 8px rgba(0,0,0,0.5);">{{ hero_lede }}</p>
+        <p class="font-light" style="font-size: calc(var(--font-body-scale, 1) * {{ hero_lede_size }}px); color:{{ hero_lede_color }}; text-shadow: 0 1px 3px rgba(0,0,0,0.9), 0 2px 10px rgba(0,0,0,0.6);">{{ hero_lede }}</p>
       {% endif %}
     </div>
   </section>

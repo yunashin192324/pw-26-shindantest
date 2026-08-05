@@ -209,7 +209,7 @@ html { scroll-behavior: smooth; overflow-x: hidden; }
 .dst-hero--tall { height: 84vh; min-height: 560px; }
 .dst-hero-media { position: absolute; inset: 0; }
 .dst-hero-media img { width: 100%; height: 100%; object-fit: cover; }
-.dst-hero-media::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to top, rgba(20, 17, 13, 0.72) 0%, rgba(20, 17, 13, 0.28) 55%, rgba(20, 17, 13, 0.35) 100%); }
+.dst-hero-media::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to top, rgba(20, 17, 13, 0.85) 0%, rgba(20, 17, 13, 0.55) 45%, rgba(20, 17, 13, 0.4) 100%); }
 .dst-hero-content { position: relative; z-index: 1; width: 100%; padding: 0 var(--dst-gutter) 72px; color: var(--dst-white); text-align: center; }
 .dst-hero-content .dst-eyebrow { color: var(--dst-accent); }
 .dst-hero-content h1 { color: var(--dst-white); }
@@ -450,7 +450,10 @@ html { scroll-behavior: smooth; overflow-x: hidden; }
 .dst-plans-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 320px)); gap: 24px; align-content: start; align-items: start; }
 @media (max-width: 560px) { .dst-plans-grid { grid-template-columns: 1fr; } }
 .dst-plan-card { display: block; min-width: 0; background: #fff; border: 1px solid rgba(0,0,0,0.08); overflow: hidden; height: fit-content; }
-.dst-plan-media { position: relative; padding-top: 125%; overflow: hidden; }
+/* 125%(4:5の縦長)だと、横長の写真をここまで縦にトリミングすると
+   被写体（新郎新婦2人）が横に離れているケースで片方が切れやすい。
+   100%(正方形)に緩めて、横方向により多くの写真範囲が残るようにする。 */
+.dst-plan-media { position: relative; padding-top: 100%; overflow: hidden; }
 .dst-plan-media .dst-plan-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .dst-plan-badge { position: absolute; top: 12px; left: 12px; background: var(--dst-gold); color: #fff; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 2px; }
 .dst-plan-body { padding: 18px; }
