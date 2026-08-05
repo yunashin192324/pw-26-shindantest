@@ -41,7 +41,13 @@
         {%- assign spot_position_label = spot.image_position.value.label.value -%}
         {%- capture spot_img_position -%}{% render 'destination-image-position', position_key: spot_position_label %}{%- endcapture -%}
         {%- assign spot_img_position = spot_img_position | strip -%}
-        {%- if spot_img_position == blank -%}{%- assign spot_img_position = section.settings.img_position -%}{%- endif -%}
+        {%- if spot_img_position == blank -%}
+          {%- if spot.image.value.presentation.focal_point -%}
+            {%- assign spot_img_position = spot.image.value.presentation.focal_point.x | append: '% ' | append: spot.image.value.presentation.focal_point.y | append: '%' -%}
+          {%- else -%}
+            {%- assign spot_img_position = section.settings.img_position -%}
+          {%- endif -%}
+        {%- endif -%}
         <div class="dst-spot-card dst-reveal">
           {%- if spot.image.value != blank -%}
             <div class="dst-spot-media">

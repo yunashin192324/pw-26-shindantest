@@ -62,6 +62,8 @@
           {%- assign t_cover_position = t_cover_pos_mapped -%}
         {%- elsif t_cover_position_key != blank -%}
           {%- assign t_cover_position = t_cover_position_key -%}
+        {%- elsif t_cover.presentation.focal_point -%}
+          {%- assign t_cover_position = t_cover.presentation.focal_point.x | append: '% ' | append: t_cover.presentation.focal_point.y | append: '%' -%}
         {%- endif -%}
       {%- endif -%}
       <a href="/pages/{{ t.destination.value.slug.value }}#testimonials" class="testimonial-top-card group block rounded-lg overflow-hidden shadow-md bg-white">

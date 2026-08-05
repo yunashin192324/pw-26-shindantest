@@ -736,6 +736,8 @@
               {%- assign img_position = img_pos_mapped -%}
             {%- elsif img_position_key != blank -%}
               {%- assign img_position = img_position_key -%}
+            {%- elsif image.presentation.focal_point -%}
+              {%- assign img_position = image.presentation.focal_point.x | append: '% ' | append: image.presentation.focal_point.y | append: '%' -%}
             {%- else -%}
               {%- assign img_position = 'center' -%}
             {%- endif -%}

@@ -37,6 +37,8 @@
           {%- assign tp_position = tp_pos_mapped -%}
         {%- elsif tp_position_key != blank -%}
           {%- assign tp_position = tp_position_key -%}
+        {%- elsif photo.presentation.focal_point -%}
+          {%- assign tp_position = photo.presentation.focal_point.x | append: '% ' | append: photo.presentation.focal_point.y | append: '%' -%}
         {%- else -%}
           {%- assign tp_position = 'center' -%}
         {%- endif -%}

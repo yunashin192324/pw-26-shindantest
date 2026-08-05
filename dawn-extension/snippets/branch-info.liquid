@@ -26,6 +26,8 @@
     {%- assign br_position = br_pos_mapped -%}
   {%- elsif br_position_key != blank -%}
     {%- assign br_position = br_position_key -%}
+  {%- elsif branch_image.presentation.focal_point -%}
+    {%- assign br_position = branch_image.presentation.focal_point.x | append: '% ' | append: branch_image.presentation.focal_point.y | append: '%' -%}
   {%- else -%}
     {%- assign br_position = 'center' -%}
   {%- endif -%}

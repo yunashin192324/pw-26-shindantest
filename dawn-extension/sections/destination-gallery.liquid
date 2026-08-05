@@ -40,6 +40,8 @@
           {%- assign gimg_position = gimg_pos_mapped -%}
         {%- elsif gimg_position_key != blank -%}
           {%- assign gimg_position = gimg_position_key -%}
+        {%- elsif image.presentation.focal_point -%}
+          {%- assign gimg_position = image.presentation.focal_point.x | append: '% ' | append: image.presentation.focal_point.y | append: '%' -%}
         {%- else -%}
           {%- assign gimg_position = section.settings.img_position -%}
         {%- endif -%}
