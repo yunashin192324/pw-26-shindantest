@@ -67,6 +67,54 @@
   #product-plan-{{ section.id }} .money { font-size: inherit; font-weight: inherit; }
 
   {%- comment -%}
+    バリアント選択ピル：例えば「年」オプション（2026年／2027年など）で
+    価格が異なる商品用。商品バリアントが1種類しか無い商品では
+    {% raw %}{% unless product.has_only_default_variant %}{% endraw %}に
+    より何も出力されないので、他の全プラン商品には影響しない。
+  {%- endcomment -%}
+  #product-plan-{{ section.id }} .plan-variant-pill {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.45rem 1.1rem;
+    border: 1px solid #ddd;
+    border-radius: 9999px;
+    font-size: 0.85rem;
+    color: #555;
+    cursor: pointer;
+    transition: border-color .15s, background-color .15s, color .15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #product-plan-{{ section.id }} .plan-variant-pill:hover {
+    border-color: #B8860B;
+  }
+  #product-plan-{{ section.id }} .plan-variant-pill.is-selected {
+    background-color: #B8860B;
+    border-color: #B8860B;
+    color: #ffffff;
+  }
+  #product-plan-{{ section.id }} .plan-variant-pill.is-unavailable {
+    opacity: 0.4;
+    text-decoration: line-through;
+  }
+  {%- comment -%}
+    このテーマにTailwindの.sr-onlyが常に読み込まれているとは限らない
+    ため、ラジオボタンを見た目上隠す処理はここで直接定義しておく
+    （他のCSSに依存しない）。
+  {%- endcomment -%}
+  #product-plan-{{ section.id }} .plan-variant-radio {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  {%- comment -%}
     予約ボタン：検証ツールで確認したところ、実際に表示されているのは
     こちらの<button>ではなく、Appointo側のスクリプトが生成する
     <div id="appointo-btn">だった。このdivはこちらのボタンのCSS
@@ -369,9 +417,42 @@
           <span class="inline-flex items-center gap-1 px-3 py-1 text-xs rounded-full" style="background:#f6efe2;color:#8f6a08;">リクエスト予約</span>
         {% endif %}
         <div class="mt-4" style="font-size: calc(var(--font-heading-scale, 1) * 34px); font-family: var(--font-body-family, sans-serif); font-weight: 700; color:#1a1a1a; font-variant-numeric: lining-nums tabular-nums;">
-          {{ variant.price | money_without_currency }}<span style="font-size: 0.4em; font-weight: 400; margin-left: 0.1em;">円</span>
+          <span data-plan-price>{{ variant.price | money_without_currency }}</span><span style="font-size: 0.4em; font-weight: 400; margin-left: 0.1em;">円</span>
           <span class="text-sm font-sans text-gray-500">{{ price_note }}</span>
         </div>
+
+        {%- comment -%}
+          バリアント選択（例：撮影年による価格違い）。商品にバリアントが
+          複数ある場合だけ表示。「年」に限らず、商品編集画面で追加した
+          オプション名・値がそのまま出る（オプション名は自由に決めてよい）。
+          選ぶと下の予約フォームに送信されるバリアントIDと、上の価格表示が
+          JSでその場で切り替わる。日程そのものはAppointo側の担当のまま
+          （バリアント選択とAppointoの日程選択は別物）。
+        {%- endcomment -%}
+        {%- unless product.has_only_default_variant -%}
+          <div class="mt-5 space-y-4" data-plan-variant-picker>
+            {%- for option in product.options_with_values -%}
+              <div>
+                <p class="text-xs text-gray-500 mb-2">{{ option.name }}</p>
+                <div class="flex flex-wrap gap-2">
+                  {%- for value in option.values -%}
+                    <label class="plan-variant-pill{% if option.selected_value == value %} is-selected{% endif %}">
+                      <input
+                        type="radio"
+                        class="plan-variant-radio"
+                        name="plan-option-{{ option.position }}-{{ section.id }}"
+                        value="{{ value | escape }}"
+                        data-option-position="{{ option.position }}"
+                        {% if option.selected_value == value %}checked{% endif %}>
+                      <span>{{ value }}</span>
+                    </label>
+                  {%- endfor -%}
+                </div>
+              </div>
+            {%- endfor -%}
+          </div>
+          <script type="application/json" data-plan-variants-json>{{ product.variants | json }}</script>
+        {%- endunless -%}
 
         {% if is_instant %}
           {%- form 'product', product, id: 'plan-reserve-form' -%}
@@ -436,6 +517,82 @@
             {% endunless %}
           {%- endform -%}
         {% endif %}
+
+        {%- unless product.has_only_default_variant -%}
+          <script>
+            (function () {
+              var root = document.getElementById('product-plan-{{ section.id }}');
+              if (!root) return;
+              var dataEl = root.querySelector('[data-plan-variants-json]');
+              if (!dataEl) return;
+              var variants;
+              try {
+                variants = JSON.parse(dataEl.textContent);
+              } catch (e) {
+                return;
+              }
+
+              var radios = Array.prototype.slice.call(root.querySelectorAll('[data-option-position]'));
+              var priceEl = root.querySelector('[data-plan-price]');
+              var idInputs = Array.prototype.slice.call(root.querySelectorAll('input[name="id"]'));
+              var submitButtons = Array.prototype.slice.call(root.querySelectorAll('button[type="submit"][name="add"]'));
+
+              function currentSelection() {
+                var sel = {};
+                radios.forEach(function (r) {
+                  if (r.checked) sel[r.getAttribute('data-option-position')] = r.value;
+                });
+                return sel;
+              }
+
+              function findVariant(sel) {
+                return variants.filter(function (v) {
+                  return Object.keys(sel).every(function (pos) {
+                    return v['option' + pos] === sel[pos];
+                  });
+                })[0];
+              }
+
+              function formatPrice(price) {
+                return Math.round(price).toLocaleString('ja-JP');
+              }
+
+              function applyVariant(v) {
+                if (!v) return;
+                if (priceEl) priceEl.textContent = formatPrice(v.price);
+                idInputs.forEach(function (input) { input.value = v.id; });
+                submitButtons.forEach(function (btn) { btn.disabled = !v.available; });
+              }
+
+              radios.forEach(function (radio) {
+                radio.addEventListener('change', function () {
+                  root.querySelectorAll('.plan-variant-pill').forEach(function (pill) {
+                    var input = pill.querySelector('input');
+                    if (input) pill.classList.toggle('is-selected', input.checked);
+                  });
+                  applyVariant(findVariant(currentSelection()));
+                });
+              });
+
+              {%- comment -%}
+                在庫を切らした側の値（例：2027年分の予約枠がまだ解放されて
+                いない等）を選択肢の見た目でも分かるようにする
+                （必須ではないが、選べない年をグレーアウト表示しておくと
+                親切なので付けている）。
+              {%- endcomment -%}
+              root.querySelectorAll('.plan-variant-pill').forEach(function (pill) {
+                var input = pill.querySelector('input');
+                if (!input) return;
+                var pos = input.getAttribute('data-option-position');
+                var testSel = {};
+                testSel[pos] = input.value;
+                var matched = variants.filter(function (v) { return v['option' + pos] === testSel[pos]; });
+                var anyAvailable = matched.some(function (v) { return v.available; });
+                pill.classList.toggle('is-unavailable', !anyAvailable);
+              });
+            })();
+          </script>
+        {%- endunless -%}
 
         {% if price_cancel_note != blank %}
           <p class="text-xs text-gray-500 mt-6 leading-relaxed">{{ price_cancel_note }}</p>
