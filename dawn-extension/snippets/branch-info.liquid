@@ -22,12 +22,12 @@
   {%- assign br_position_key = br_alt_parts[1] | strip -%}
   {%- capture br_pos_mapped -%}{% render 'destination-image-position', position_key: br_position_key %}{%- endcapture -%}
   {%- assign br_pos_mapped = br_pos_mapped | strip -%}
-  {%- if br_pos_mapped != blank -%}
+  {%- if branch_image.presentation.focal_point -%}
+    {%- assign br_position = branch_image.presentation.focal_point.x | append: '% ' | append: branch_image.presentation.focal_point.y | append: '%' -%}
+  {%- elsif br_pos_mapped != blank -%}
     {%- assign br_position = br_pos_mapped -%}
   {%- elsif br_position_key != blank -%}
     {%- assign br_position = br_position_key -%}
-  {%- elsif branch_image.presentation.focal_point -%}
-    {%- assign br_position = branch_image.presentation.focal_point.x | append: '% ' | append: branch_image.presentation.focal_point.y | append: '%' -%}
   {%- else -%}
     {%- assign br_position = 'center' -%}
   {%- endif -%}

@@ -36,12 +36,12 @@
         {%- assign gimg_position_key = gimg_alt_parts[1] | strip -%}
         {%- capture gimg_pos_mapped -%}{% render 'destination-image-position', position_key: gimg_position_key %}{%- endcapture -%}
         {%- assign gimg_pos_mapped = gimg_pos_mapped | strip -%}
-        {%- if gimg_pos_mapped != blank -%}
+        {%- if image.presentation.focal_point -%}
+          {%- assign gimg_position = image.presentation.focal_point.x | append: '% ' | append: image.presentation.focal_point.y | append: '%' -%}
+        {%- elsif gimg_pos_mapped != blank -%}
           {%- assign gimg_position = gimg_pos_mapped -%}
         {%- elsif gimg_position_key != blank -%}
           {%- assign gimg_position = gimg_position_key -%}
-        {%- elsif image.presentation.focal_point -%}
-          {%- assign gimg_position = image.presentation.focal_point.x | append: '% ' | append: image.presentation.focal_point.y | append: '%' -%}
         {%- else -%}
           {%- assign gimg_position = section.settings.img_position -%}
         {%- endif -%}

@@ -33,12 +33,12 @@
         {%- assign tp_position_key = tp_alt_parts[1] | strip -%}
         {%- capture tp_pos_mapped -%}{% render 'destination-image-position', position_key: tp_position_key %}{%- endcapture -%}
         {%- assign tp_pos_mapped = tp_pos_mapped | strip -%}
-        {%- if tp_pos_mapped != blank -%}
+        {%- if photo.presentation.focal_point -%}
+          {%- assign tp_position = photo.presentation.focal_point.x | append: '% ' | append: photo.presentation.focal_point.y | append: '%' -%}
+        {%- elsif tp_pos_mapped != blank -%}
           {%- assign tp_position = tp_pos_mapped -%}
         {%- elsif tp_position_key != blank -%}
           {%- assign tp_position = tp_position_key -%}
-        {%- elsif photo.presentation.focal_point -%}
-          {%- assign tp_position = photo.presentation.focal_point.x | append: '% ' | append: photo.presentation.focal_point.y | append: '%' -%}
         {%- else -%}
           {%- assign tp_position = 'center' -%}
         {%- endif -%}

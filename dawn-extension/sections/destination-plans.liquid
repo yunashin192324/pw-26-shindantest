@@ -52,18 +52,18 @@
                 {%- assign p_position_key = p_alt_parts[1] | strip -%}
                 {%- capture p_pos_mapped -%}{% render 'destination-image-position', position_key: p_position_key %}{%- endcapture -%}
                 {%- assign p_pos_mapped = p_pos_mapped | strip -%}
-                {%- if p_pos_mapped != blank -%}
+                {%- comment -%}
+                  フォーカスポイント（管理画面の画像編集で設定する青い点）を
+                  最優先で使う。管理画面上で直感的・正確に設定できるため。
+                  ALTテキストの｜位置指定は、フォーカスポイントが未設定の
+                  画像のためのフォールバックとして残す。
+                {%- endcomment -%}
+                {%- if linked_product.featured_image.presentation.focal_point -%}
+                  {%- assign plan_img_position = linked_product.featured_image.presentation.focal_point.x | append: '% ' | append: linked_product.featured_image.presentation.focal_point.y | append: '%' -%}
+                {%- elsif p_pos_mapped != blank -%}
                   {%- assign plan_img_position = p_pos_mapped -%}
                 {%- elsif p_position_key != blank -%}
                   {%- assign plan_img_position = p_position_key -%}
-                {%- elsif linked_product.featured_image.presentation.focal_point -%}
-                  {%- comment -%}
-                    ALTテキストに｜位置の指定が無ければ、Shopify標準の
-                    「フォーカスポイント」（管理画面の画像編集で設定する
-                    青い点）を優先的に使う。無指定の「中央」より正確に
-                    被写体を残せるため。
-                  {%- endcomment -%}
-                  {%- assign plan_img_position = linked_product.featured_image.presentation.focal_point.x | append: '% ' | append: linked_product.featured_image.presentation.focal_point.y | append: '%' -%}
                 {%- else -%}
                   {%- assign plan_img_position = section.settings.img_position -%}
                 {%- endif -%}
@@ -93,13 +93,10 @@
           <a href="{{ linked_product.url }}" class="dst-plan-card dst-reveal" {{ block.shopify_attributes }}>
             <div class="dst-plan-media">
               {%- if linked_product.featured_image != blank -%}
-                {%- assign plan_img_position = block.settings.img_position -%}
-                {%- if plan_img_position == blank -%}
-                  {%- if linked_product.featured_image.presentation.focal_point -%}
-                    {%- assign plan_img_position = linked_product.featured_image.presentation.focal_point.x | append: '% ' | append: linked_product.featured_image.presentation.focal_point.y | append: '%' -%}
-                  {%- else -%}
-                    {%- assign plan_img_position = section.settings.img_position -%}
-                  {%- endif -%}
+                {%- if linked_product.featured_image.presentation.focal_point -%}
+                  {%- assign plan_img_position = linked_product.featured_image.presentation.focal_point.x | append: '% ' | append: linked_product.featured_image.presentation.focal_point.y | append: '%' -%}
+                {%- else -%}
+                  {%- assign plan_img_position = block.settings.img_position | default: section.settings.img_position -%}
                 {%- endif -%}
                 {%- capture plan_img_style -%}object-position: {{ plan_img_position }};{%- endcapture -%}
                 {{ linked_product.featured_image | image_url: width: 900 | image_tag: class: 'dst-plan-img', loading: 'lazy', alt: linked_product.title, style: plan_img_style }}

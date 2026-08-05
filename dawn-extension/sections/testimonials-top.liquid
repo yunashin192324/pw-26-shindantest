@@ -58,12 +58,12 @@
         {%- assign t_cover_position_key = t_cover_alt_parts[1] | strip -%}
         {%- capture t_cover_pos_mapped -%}{% render 'destination-image-position', position_key: t_cover_position_key %}{%- endcapture -%}
         {%- assign t_cover_pos_mapped = t_cover_pos_mapped | strip -%}
-        {%- if t_cover_pos_mapped != blank -%}
+        {%- if t_cover.presentation.focal_point -%}
+          {%- assign t_cover_position = t_cover.presentation.focal_point.x | append: '% ' | append: t_cover.presentation.focal_point.y | append: '%' -%}
+        {%- elsif t_cover_pos_mapped != blank -%}
           {%- assign t_cover_position = t_cover_pos_mapped -%}
         {%- elsif t_cover_position_key != blank -%}
           {%- assign t_cover_position = t_cover_position_key -%}
-        {%- elsif t_cover.presentation.focal_point -%}
-          {%- assign t_cover_position = t_cover.presentation.focal_point.x | append: '% ' | append: t_cover.presentation.focal_point.y | append: '%' -%}
         {%- endif -%}
       {%- endif -%}
       <a href="/pages/{{ t.destination.value.slug.value }}#testimonials" class="testimonial-top-card group block rounded-lg overflow-hidden shadow-md bg-white">
