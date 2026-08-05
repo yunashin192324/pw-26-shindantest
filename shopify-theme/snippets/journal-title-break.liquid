@@ -1,0 +1,22 @@
+{%- comment -%}
+  journal-title-break
+  ----------------------------------------------------------------
+  記事タイトルの改行対策。「〇〇完全ガイド」という命名規則が多く、
+  句読点や空白が一切無いタイトルだと、theme.cssのword-break:
+  keep-allだけでは改行の良い候補が無く、結局単語の途中で強制的に
+  折り返されてしまうことがある。末尾が「完全ガイド」の場合はその
+  境目にだけ、改行してよい印(<wbr>)を入れて良い位置で折り返させる。
+
+  Params:
+    title — required, 記事タイトル文字列(プレーンテキスト)
+  Usage:
+    <h1>{% render 'journal-title-break', title: article.title %}</h1>
+{%- endcomment -%}
+{%- assign jtb_suffix = '完全ガイド' -%}
+{%- assign jtb_tail = title | slice: -5, 5 -%}
+{%- if jtb_tail == jtb_suffix -%}
+  {%- assign jtb_head_len = title.size | minus: 5 -%}
+  {{- title | slice: 0, jtb_head_len -}}<wbr>{{- jtb_suffix -}}
+{%- else -%}
+  {{- title -}}
+{%- endif -%}

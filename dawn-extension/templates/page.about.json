@@ -1,0 +1,86 @@
+{
+  "sections": {
+    "main": {
+      "type": "main-page",
+      "disabled": true,
+      "settings": {
+        "padding_top": 0,
+        "padding_bottom": 0
+      }
+    },
+    "his_wedding_intro_main": {
+      "type": "his-wedding-intro",
+      "blocks": {
+        "feature_1": {
+          "type": "feature",
+          "settings": {
+            "title": "来店不要、オンラインで完結",
+            "desc": "プランのご相談からお申し込みまで、オンラインで完結。忙しいおふたりでも、すきま時間で準備を進められます。"
+          }
+        },
+        "feature_2": {
+          "type": "feature",
+          "settings": {
+            "title": "衣裳・撮影・データ、まとめてワンプライス",
+            "desc": "ウェディングドレス＆タキシードのレンタル、現地カメラマンによる撮影、データ納品までを含んだオールインワンプラン。追加費用の心配がありません。"
+          }
+        },
+        "feature_3": {
+          "type": "feature",
+          "settings": {
+            "title": "当日は身ひとつでOK",
+            "desc": "衣裳は日本国内の提携サロンで試着したものを事前にお渡し。現地では着替えと撮影に集中するだけです。"
+          }
+        },
+        "testimonial_1": {
+          "type": "testimonial",
+          "settings": {
+            "quote": "国内で試着してから現地に持って行けたので、サイズの不安もなく安心して撮影に臨めました。"
+          }
+        },
+        "testimonial_2": {
+          "type": "testimonial",
+          "settings": {
+            "quote": "オンラインでのやり取りだけで準備が完結し、仕事をしながらでも無理なく進められました。"
+          }
+        },
+        "testimonial_3": {
+          "type": "testimonial",
+          "settings": {
+            "quote": "当日は撮影に集中するだけで良かったので、旅行自体も存分に楽しめました。"
+          }
+        },
+        "cta_1": {
+          "type": "cta_card",
+          "settings": {
+            "title": "撮影地から選ぶ",
+            "button_text": "撮影地一覧を見る",
+            "button_url": "shopify://pages/destinations"
+          }
+        },
+        "cta_2": {
+          "type": "cta_card",
+          "settings": {
+            "title": "衣裳から選ぶ",
+            "button_text": "衣裳一覧を見る",
+            "button_url": "shopify://pages/dress-tuxedo"
+          }
+        }
+      },
+      "block_order": [
+        "feature_1", "feature_2", "feature_3",
+        "testimonial_1", "testimonial_2", "testimonial_3",
+        "cta_1", "cta_2"
+      ],
+      "settings": {
+        "hero_eyebrow": "ABOUT HIS WEDDING",
+        "hero_title": "海外フォトウェディングを、\nもっと身近に。",
+        "hero_lede": "国内で衣裳を試着して、海外の絶景で撮影するだけ。準備の負担を最小限に、一生に一度の1枚を残すためのフォトウェディングサービスです。",
+        "stat_number": "500",
+        "stat_suffix": "組以上",
+        "stat_label": "のカップルにご利用いただいています（要実数差し替え）"
+      }
+    }
+  },
+  "order": ["main", "his_wedding_intro_main"]
+}

@@ -1,0 +1,305 @@
+{%- comment -%}
+  consultation-chat — 「何を探していますか？」から始まるチャット型相談。
+  ----------------------------------------------------------------
+  自由入力の本物のAIチャットではなく、ルールベースの分岐診断を
+  チャット吹き出しの見た目で見せる方式(destination-quiz.liquidと同じ
+  ロジックの延長。追加費用・外部AIサービス不要)。
+
+  「撮影地を探している」を選んだ場合だけ、destination-quiz.liquidと同じ
+  テーマタグのスコアリングで撮影地を提案する(質問は2問に短縮し、
+  チャットらしいテンポにしている)。他の選択肢は、既存の関連ページへの
+  ご案内(衣装診断ページ／撮影地一覧／オンライン相談)。
+
+  「オンライン相談はこちら」のリンク先はsection.settings.consult_urlで
+  設定する(空欄ならボタン自体を出さない)。
+
+  TOPページ等どこにでも追加できるよう、destination-quiz.liquidと同じ
+  方式でTailwindを自己インジェクションし単体で完結させている。
+
+  画面右下に固定表示される丸いボタン(consult-launcher)をクリックすると、
+  その上にチャット画面(consult-panel)がポップアップして開く、実際の
+  チャットボットウィジェットと同じ見た目。閉じるボタン(×)、または
+  ランチャーボタンをもう一度押すと閉じる。
+{%- endcomment -%}
+<script>
+  if (!document.getElementById('tw-config')) {
+    var twConfig = document.createElement('script');
+    twConfig.id = 'tw-config';
+    twConfig.innerHTML = "tailwind.config = { theme: { extend: { colors: { ivory: '#FAF8F5', gold: '#B8860B', 'gold-light': '#D4A843', dark: '#1a1a1a' }, fontFamily: { serif: ['var(--font-heading-family, serif)', 'serif'], sans: ['var(--font-body-family, sans-serif)', 'sans-serif'] } } } };";
+    document.head.appendChild(twConfig);
+  }
+  if (!document.getElementById('tw-cdn')) {
+    var twScript = document.createElement('script');
+    twScript.id = 'tw-cdn';
+    twScript.src = '{{ "tailwind-3.4.17.js" | asset_url }}';
+    document.head.appendChild(twScript);
+  }
+</script>
+
+{%- assign all_destinations = shop.metaobjects.destination.values -%}
+<script type="application/json" id="consult-chat-destinations-{{ section.id }}">
+[
+  {%- for d in all_destinations -%}
+    {%- assign theme_list = d.themes.value -%}
+    {
+      "name": {{ d.name_ja.value | json }},
+      "url": {{ '/pages/' | append: d.slug.value | json }},
+      "image": {{ d.hero_image.value | image_url: width: 400 | json }},
+      "themes": [{% for t in theme_list %}{{ t | strip | downcase | json }}{% unless forloop.last %},{% endunless %}{% endfor %}]
+    }{%- unless forloop.last -%},{%- endunless -%}
+  {%- endfor -%}
+]
+</script>
+
+<style>
+  #consult-chat-{{ section.id }} { position: fixed; right: 20px; bottom: {{ section.settings.bottom_offset | default: 100 }}px; z-index: 999; }
+  @media (max-width: 480px) { #consult-chat-{{ section.id }} { right: 16px; bottom: {{ section.settings.bottom_offset_mobile | default: 90 }}px; } }
+  #consult-chat-{{ section.id }} .chat-window { background:#fff; border-radius:20px; overflow:hidden; box-shadow:0 20px 60px -16px rgba(26,26,26,0.35); border:1px solid rgba(184,134,11,0.15); }
+  #consult-chat-{{ section.id }} .consult-panel { position:absolute; right:0; bottom:76px; width:360px; max-width:calc(100vw - 32px); display:none; }
+  #consult-chat-{{ section.id }}.is-open .consult-panel { display:block; }
+  #consult-chat-{{ section.id }} .consult-panel-header { position:relative; }
+  #consult-chat-{{ section.id }} .consult-close-btn { position:absolute; top:14px; right:14px; background:none; border:none; font-size:20px; line-height:1; color:#999; cursor:pointer; padding:4px; }
+  #consult-chat-{{ section.id }} .consult-close-btn:hover { color:#1a1a1a; }
+  #consult-chat-{{ section.id }} .consult-launcher { display:flex; align-items:center; gap:8px; padding:16px 22px; border-radius:9999px; border:none; cursor:pointer; background:linear-gradient(135deg,#D4A843,#B8860B); color:#fff; box-shadow:0 10px 30px -8px rgba(0,0,0,0.4); font-size:0.85rem; font-weight:700; transition:transform 0.25s ease; }
+  #consult-chat-{{ section.id }} .consult-launcher:hover { transform:scale(1.05); }
+  #consult-chat-{{ section.id }} .chat-thread { display:flex; flex-direction:column; gap:12px; height:360px; overflow-y:auto; }
+  #consult-chat-{{ section.id }} .chat-bubble { max-width:80%; padding:10px 16px; border-radius:16px; font-size:0.88rem; line-height:1.6; }
+  #consult-chat-{{ section.id }} .chat-bubble-bot { background:#f5f2ec; color:#1a1a1a; border-bottom-left-radius:4px; align-self:flex-start; }
+  #consult-chat-{{ section.id }} .chat-bubble-user { background:#B8860B; color:#fff; border-bottom-right-radius:4px; align-self:flex-end; }
+  #consult-chat-{{ section.id }} .chat-option-btn { padding:8px 16px; border-radius:9999px; border:1px solid #e5e7eb; background:#fff; font-size:0.8rem; cursor:pointer; transition:all 0.2s; text-decoration:none; display:inline-block; color:#1a1a1a; }
+  #consult-chat-{{ section.id }} .chat-option-btn:hover { border-color:#B8860B; color:#B8860B; }
+  #consult-chat-{{ section.id }} .chat-restart-inline { padding:8px 16px; border:none; background:transparent; color:#999; font-size:0.76rem; text-decoration:underline; cursor:pointer; }
+  #consult-chat-{{ section.id }} .chat-result-card { display:block; margin-top:8px; border-radius:10px; overflow:hidden; text-decoration:none; color:inherit; border:1px solid #eee; }
+  #consult-chat-{{ section.id }} .chat-result-card img { width:100%; height:120px; object-fit:cover; display:block; }
+  #consult-chat-{{ section.id }} .chat-result-card span { display:block; padding:8px 12px; font-size:0.85rem; font-weight:600; }
+  @media (max-width: 480px) {
+    #consult-chat-{{ section.id }} .consult-launcher-label { display:none; }
+    #consult-chat-{{ section.id }} .consult-launcher { padding:16px; border-radius:50%; }
+  }
+</style>
+
+{%- if section.settings.show_widget -%}
+<div id="consult-chat-{{ section.id }}">
+  <div class="consult-panel chat-window">
+    <div class="consult-panel-header px-6 py-5 flex items-center gap-3" style="border-bottom:1px solid #f0ebe0;">
+      <div class="rounded-full flex items-center justify-center" style="width:40px;height:40px;background:linear-gradient(135deg,#D4A843,#B8860B);flex-shrink:0;">
+        <span style="font-size:18px;">💬</span>
+      </div>
+      <div>
+        <p class="font-medium text-sm">{{ section.settings.heading | default: 'HIS WEDDING コンシェルジュ' }}</p>
+        <p class="text-xs text-gray-400">オンライン相談窓口</p>
+      </div>
+      <button type="button" class="consult-close-btn" aria-label="閉じる">×</button>
+    </div>
+    <div class="chat-thread px-6 py-6"></div>
+    <div class="chat-options px-6 pb-6 flex flex-wrap gap-2"></div>
+  </div>
+  <button type="button" class="consult-launcher">
+    <span style="font-size:18px;">💬</span>
+    <span class="consult-launcher-label">{{ section.settings.launcher_label | default: 'チャットで質問' }}</span>
+  </button>
+</div>
+{%- endif -%}
+
+<script>
+  (function () {
+    var root = document.getElementById('consult-chat-{{ section.id }}');
+    if (!root) return;
+    var dataEl = document.getElementById('consult-chat-destinations-{{ section.id }}');
+    var destinationsData = JSON.parse((dataEl && dataEl.textContent) || '[]');
+    var thread = root.querySelector('.chat-thread');
+    var optionsWrap = root.querySelector('.chat-options');
+    var launcherBtn = root.querySelector('.consult-launcher');
+    var closeBtn = root.querySelector('.consult-close-btn');
+    var greeting = {{ section.settings.greeting | default: 'こんにちは！本日はどのようなことをお探しですか？' | json }};
+    var consultUrl = {{ section.settings.consult_url | json }};
+
+    launcherBtn.addEventListener('click', function () {
+      root.classList.toggle('is-open');
+    });
+    closeBtn.addEventListener('click', function () {
+      root.classList.remove('is-open');
+    });
+
+    var scores = {};
+    var destStep = 0;
+
+    var DEST_QUESTIONS = [
+      {
+        text: 'どんな景色に惹かれますか？',
+        choices: [
+          { label: '透き通るビーチ', themes: ['beach', 'overwater'] },
+          { label: '歴史ある街並み', themes: ['streets', 'heritage'] },
+          { label: '雄大な自然・絶景', themes: ['view', 'lake', 'desert'] },
+          { label: '荘厳な宮殿や教会', themes: ['palace', 'church'] }
+        ]
+      },
+      {
+        text: 'ふたりらしい撮影スタイルは？',
+        choices: [
+          { label: '開放的なリゾート感', themes: ['resort', 'overwater', 'beach'] },
+          { label: 'クラシックで上品な雰囲気', themes: ['palace', 'museum', 'church'] },
+          { label: '幻想的でロマンチック', themes: ['sunset', 'lake', 'view'] },
+          { label: 'アクティブで非日常的', themes: ['desert', 'balloon'] }
+        ]
+      }
+    ];
+
+    function addBubble(from, html) {
+      var el = document.createElement('div');
+      el.className = 'chat-bubble chat-bubble-' + from;
+      el.innerHTML = html;
+      thread.appendChild(el);
+      thread.scrollTop = thread.scrollHeight;
+      return el;
+    }
+
+    function clearOptions() { optionsWrap.innerHTML = ''; }
+
+    function addOptionButton(label, onClick) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'chat-option-btn';
+      btn.textContent = label;
+      btn.addEventListener('click', onClick);
+      optionsWrap.appendChild(btn);
+    }
+
+    function addLinkButton(label, url) {
+      var a = document.createElement('a');
+      a.href = url;
+      a.className = 'chat-option-btn';
+      a.textContent = label;
+      optionsWrap.appendChild(a);
+    }
+
+    function addRestart() {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'chat-restart-inline';
+      btn.textContent = 'はじめから質問する';
+      btn.addEventListener('click', function () {
+        thread.innerHTML = '';
+        addBubble('bot', greeting);
+        showRoot();
+      });
+      optionsWrap.appendChild(btn);
+    }
+
+    function userSelect(label) { addBubble('user', label); }
+
+    function showRoot() {
+      clearOptions();
+      addOptionButton('撮影地を探している', function () {
+        userSelect('撮影地を探している');
+        clearOptions();
+        startDestinationFlow();
+      });
+      addOptionButton('衣装(ドレス・タキシード)を探している', function () {
+        userSelect('衣装(ドレス・タキシード)を探している');
+        clearOptions();
+        showDressBranch();
+      });
+      addOptionButton('費用・プランについて知りたい', function () {
+        userSelect('費用・プランについて知りたい');
+        clearOptions();
+        showPlanBranch();
+      });
+      addOptionButton('直接相談したい', function () {
+        userSelect('直接相談したい');
+        clearOptions();
+        showConsultBranch();
+      });
+    }
+
+    function startDestinationFlow() {
+      scores = {};
+      destStep = 0;
+      addBubble('bot', 'いくつか質問させてください。');
+      setTimeout(askDestinationQuestion, 300);
+    }
+
+    function askDestinationQuestion() {
+      var q = DEST_QUESTIONS[destStep];
+      if (!q) { showDestinationResult(); return; }
+      addBubble('bot', q.text);
+      clearOptions();
+      q.choices.forEach(function (choice) {
+        addOptionButton(choice.label, function () {
+          userSelect(choice.label);
+          choice.themes.forEach(function (t) { scores[t] = (scores[t] || 0) + 1; });
+          destStep++;
+          clearOptions();
+          setTimeout(askDestinationQuestion, 250);
+        });
+      });
+    }
+
+    function showDestinationResult() {
+      var ranked = destinationsData.map(function (d) {
+        var overlap = (d.themes || []).filter(function (t) { return scores[t]; })
+          .reduce(function (sum, t) { return sum + scores[t]; }, 0);
+        return { d: d, score: overlap };
+      }).filter(function (r) { return r.score > 0; });
+      ranked.sort(function (a, b) { return b.score - a.score; });
+      if (ranked.length === 0) {
+        ranked = destinationsData.slice(0, 3).map(function (d) { return { d: d, score: 0 }; });
+      }
+      var top = ranked.slice(0, 3);
+      var html = 'いくつか候補をご提案します。';
+      top.forEach(function (r) {
+        html += '<a href="' + r.d.url + '" class="chat-result-card">'
+          + (r.d.image ? '<img src="' + r.d.image + '" alt="">' : '')
+          + '<span>' + r.d.name + '</span></a>';
+      });
+      addBubble('bot', html);
+      clearOptions();
+      addRestart();
+    }
+
+    function showDressBranch() {
+      addBubble('bot', '衣装は「衣装診断」から、撮影のイメージに合うドレス・タキシードをご提案できます。');
+      clearOptions();
+      addLinkButton('ドレス診断をはじめる', '/pages/wedding-dress-diagnosis');
+      addRestart();
+    }
+
+    function showPlanBranch() {
+      addBubble('bot', '費用は撮影地・プランによって異なります。撮影地一覧の各都市ページで、プランの比較ができます。');
+      clearOptions();
+      addLinkButton('撮影地一覧を見る', '/pages/destinations');
+      addRestart();
+    }
+
+    function showConsultBranch() {
+      if (consultUrl) {
+        addBubble('bot', 'オンラインでのご相談も承っております。担当スタッフがご案内いたします。');
+        clearOptions();
+        addLinkButton('オンライン相談はこちら', consultUrl);
+      } else {
+        addBubble('bot', 'お問い合わせページよりご相談ください。');
+        clearOptions();
+      }
+      addRestart();
+    }
+
+    addBubble('bot', greeting);
+    showRoot();
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "コンシェルジュ相談チャット",
+  "settings": [
+    { "type": "checkbox", "id": "show_widget", "label": "このチャットウィジェットを表示する", "default": true },
+    { "type": "range", "id": "bottom_offset", "min": 20, "max": 200, "step": 5, "unit": "px", "label": "画面下からの余白(PC)", "info": "撮影地診断ボタン等、他のフローティングボタンと重なる場合はここで高さを調整してください。", "default": 100 },
+    { "type": "range", "id": "bottom_offset_mobile", "min": 20, "max": 200, "step": 5, "unit": "px", "label": "画面下からの余白(スマホ)", "default": 90 },
+    { "type": "text", "id": "launcher_label", "label": "右下ボタンの文言", "default": "チャットで質問" },
+    { "type": "text", "id": "heading", "label": "ヘッダーの名称", "default": "HIS WEDDING コンシェルジュ" },
+    { "type": "textarea", "id": "greeting", "label": "最初のメッセージ", "default": "こんにちは！本日はどのようなことをお探しですか？" },
+    { "type": "url", "id": "consult_url", "label": "「オンライン相談はこちら」のリンク先（空欄ならボタン自体を表示しない）" }
+  ],
+  "presets": [{ "name": "コンシェルジュ相談チャット" }]
+}
+{% endschema %}

@@ -1,0 +1,652 @@
+{% comment %}
+  ファイル名: sections/area-lp.liquid
+  役割: 撮影地の詳細ページ（例: page.area-2.json＝ダナン）。
+  いただいたpage.area-2.jsonの設定・ブロック構造（reason / location /
+  schedule / gallery / faq / plan）を完全にそのまま踏襲して再構築した
+  もの。**設定・ブロックのIDは1つも変えていないため、今すでに入って
+  いるダナンのデータ（page.area-2.json）はそのまま流用できます。**
+
+  変更したのは「plan」ブロックだけです。今までは価格・バッジ・
+  リンク先（shopify://products/...）を全部手入力していましたが、
+  「商品」欄でShopify Productを直接選ぶと、価格・在庫・バッジは商品の
+  実データから自動反映されるようにしました（商品を選ばなければ、
+  今までどおり手入力の値がそのまま使われるので、既存の
+  plan_CezWBX / plan_grNwE7 の表示は変わりません）。
+{% endcomment %}
+
+<script>
+  if (!document.getElementById('tw-config')) {
+    var twConfig = document.createElement('script');
+    twConfig.id = 'tw-config';
+    twConfig.innerHTML = "tailwind.config = { theme: { extend: { colors: { ivory: '#FAF8F5', gold: '#B8860B', 'gold-light': '#D4A843', dark: '#1a1a1a' }, fontFamily: { serif: ['var(--font-heading-family, serif)', 'serif'], sans: ['var(--font-body-family, sans-serif)', 'sans-serif'] } } } };";
+    document.head.appendChild(twConfig);
+  }
+  if (!document.getElementById('tw-cdn')) {
+    var twScript = document.createElement('script');
+    twScript.id = 'tw-cdn';
+    twScript.src = '{{ "tailwind-3.4.17.js" | asset_url }}';
+    document.head.appendChild(twScript);
+  }
+</script>
+
+<style>
+  #area-lp-{{ section.id }} .divider-gold { width: 40px; height: 2px; background: #B8860B; }
+  #area-lp-{{ section.id }} .accordion-panel { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
+  #area-lp-{{ section.id }} .accordion-panel.open { max-height: 400px; }
+</style>
+
+{%- assign reason_blocks = section.blocks | where: 'type', 'reason' -%}
+{%- assign location_blocks = section.blocks | where: 'type', 'location' -%}
+{%- assign schedule_blocks = section.blocks | where: 'type', 'schedule' -%}
+{%- assign gallery_blocks = section.blocks | where: 'type', 'gallery' -%}
+{%- assign faq_blocks = section.blocks | where: 'type', 'faq' -%}
+{%- assign plan_blocks = section.blocks | where: 'type', 'plan' -%}
+
+<div id="area-lp-{{ section.id }}" class="w-full bg-white" style="font-family: var(--font-body-family, sans-serif); font-size: calc(var(--font-body-scale, 1) * 100%);">
+
+  {% comment %} --- HERO --- {% endcomment %}
+  <section class="relative w-full h-[70vh] overflow-hidden">
+    {% if section.settings.hero_image != blank %}
+      {% assign hero_class = 'w-full h-full object-cover ' | append: section.settings.hero_image_position %}
+      {{ section.settings.hero_image | image_url: width: 2000 | image_tag: class: hero_class, loading: 'eager' }}
+    {% else %}
+      <div class="w-full h-full bg-gray-200"></div>
+    {% endif %}
+    <div class="absolute inset-0 bg-black/35 flex items-end">
+      <div class="max-w-7xl mx-auto w-full px-6 pb-12">
+        <p class="font-serif text-sm tracking-[0.2em] uppercase mb-2" style="color:{{ section.settings.hero_eyebrow_color | default: '#ffffff' }};">{{ section.settings.hero_eyebrow }}</p>
+        <h1 class="font-serif font-light mb-3 text-[{{ section.settings.hero_heading_size_sp | default: 24 }}px] md:text-[{{ section.settings.hero_heading_size | default: 40 }}px]" style="color:{{ section.settings.hero_heading_color | default: '#ffffff' }};">{{ section.settings.hero_heading | newline_to_br }}</h1>
+        <p class="text-[{{ section.settings.hero_lede_size_sp | default: 13 }}px] md:text-[{{ section.settings.hero_lede_size | default: 15 }}px]" style="color:{{ section.settings.hero_lede_color | default: '#ffffff' }};">{{ section.settings.hero_lede }}</p>
+      </div>
+    </div>
+  </section>
+
+  {% comment %} --- パンくず --- {% endcomment %}
+  <div class="max-w-7xl mx-auto px-4 py-3 text-xs text-gray-500">
+    {% if section.settings.breadcrumb_1_text != blank %}
+      {% if section.settings.breadcrumb_1_url != blank %}<a href="{{ section.settings.breadcrumb_1_url }}" class="hover:text-gold">{{ section.settings.breadcrumb_1_text }}</a>{% else %}<span>{{ section.settings.breadcrumb_1_text }}</span>{% endif %}
+    {% endif %}
+    {% if section.settings.breadcrumb_2_text != blank %}
+      <span class="mx-1">/</span>
+      {% if section.settings.breadcrumb_2_url != blank %}<a href="{{ section.settings.breadcrumb_2_url }}" class="hover:text-gold">{{ section.settings.breadcrumb_2_text }}</a>{% else %}<span>{{ section.settings.breadcrumb_2_text }}</span>{% endif %}
+    {% endif %}
+    {% if section.settings.breadcrumb_3_text != blank %}<span class="mx-1">/</span><span>{{ section.settings.breadcrumb_3_text }}</span>{% endif %}
+    {%- comment -%}
+      すでにこの都市に決めている人が、長いページを全部スクロール
+      しなくてもプラン一覧まで一気に飛べるようにするジャンプリンク。
+    {%- endcomment -%}
+    {% if plan_blocks.size > 0 %}
+      <a href="#area-plans-{{ section.id }}" class="ml-2 inline-flex items-center gap-1 font-medium" style="color:#B8860B;">プランを見る ↓</a>
+    {% endif %}
+  </div>
+
+  {% comment %} --- 選ばれる理由 --- {% endcomment %}
+  {% if reason_blocks.size > 0 %}
+  <section class="py-16">
+    <div class="max-w-5xl mx-auto px-4">
+      <div class="text-center mb-12">
+        <p class="font-serif text-sm tracking-[0.15em] uppercase mb-2" style="color:{{ section.settings.features_eyebrow_color | default: '#B8860B' }};">{{ section.settings.features_eyebrow }}</p>
+        <h2 class="text-2xl font-light" style="color:{{ section.settings.features_heading_color }};">{{ section.settings.features_heading }}</h2>
+        <div class="divider-gold mx-auto mt-3"></div>
+        {% if section.settings.features_desc != blank %}
+          <p class="text-sm mt-4 max-w-2xl mx-auto text-[{{ section.settings.features_desc_size_sp | default: 13 }}px] md:text-[{{ section.settings.features_desc_size | default: 14 }}px]" style="color:{{ section.settings.features_desc_color | default: '#4b5563' }};">{{ section.settings.features_desc }}</p>
+        {% endif %}
+      </div>
+      <div class="grid md:grid-cols-2 gap-8">
+        {% for block in reason_blocks %}
+          <div {{ block.shopify_attributes }}>
+            <h3 class="font-medium mb-2 text-[{{ block.settings.title_size_sp | default: 15 }}px] md:text-[{{ block.settings.title_size | default: 16 }}px]" style="color:{{ block.settings.title_color | default: '#1a1a1a' }};">{{ block.settings.title }}</h3>
+            <p class="leading-relaxed text-[{{ block.settings.desc_size_sp | default: 13 }}px] md:text-[{{ block.settings.desc_size | default: 14 }}px]" style="color:{{ block.settings.desc_color | default: '#4b5563' }};">{{ block.settings.desc | newline_to_br }}</p>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {% comment %} --- 撮影スポット --- {% endcomment %}
+  {% if location_blocks.size > 0 %}
+  <section class="py-16 bg-ivory">
+    <div class="max-w-5xl mx-auto px-4">
+      <div class="text-center mb-12">
+        <p class="font-serif text-sm tracking-[0.15em] uppercase mb-2" style="color:{{ section.settings.location_eyebrow_color | default: '#B8860B' }};">{{ section.settings.location_eyebrow }}</p>
+        <h2 class="text-2xl font-light" style="color:{{ section.settings.location_heading_color }};">{{ section.settings.location_heading }}</h2>
+        <div class="divider-gold mx-auto mt-3"></div>
+      </div>
+      <div class="grid md:grid-cols-3 gap-6">
+        {% for block in location_blocks %}
+          <div {{ block.shopify_attributes }}>
+            {% if block.settings.image != blank %}
+              {% assign loc_class = 'w-full h-full object-cover rounded-lg ' | append: block.settings.image_position %}
+              <div style="height:{{ block.settings.img_height_sp | default: 200 }}px;" class="md:!h-[{{ block.settings.img_height_pc | default: 225 }}px]">
+                {{ block.settings.image | image_url: width: 700 | image_tag: class: loc_class, loading: 'lazy' }}
+              </div>
+            {% endif %}
+            <h3 class="mt-4 font-medium text-[{{ block.settings.title_size_sp | default: 14 }}px] md:text-[{{ block.settings.title_size | default: 24 }}px]{% if block.settings.title_is_serif %} font-serif{% endif %}" style="color:{{ block.settings.title_color | default: '#1a1a1a' }};">{{ block.settings.title }}</h3>
+            <p class="mt-2 text-[{{ block.settings.desc_size_sp | default: 11 }}px] md:text-[{{ block.settings.desc_size | default: 14 }}px]{% if block.settings.desc_is_serif %} font-serif{% endif %}" style="color:{{ block.settings.desc_color | default: '#4b5563' }};">{{ block.settings.desc }}</p>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {% comment %} --- モデルスケジュール --- {% endcomment %}
+  {% if schedule_blocks.size > 0 %}
+  <section class="py-16">
+    <div class="max-w-3xl mx-auto px-4">
+      <div class="text-center mb-12">
+        <p class="font-serif text-sm tracking-[0.15em] uppercase mb-2" style="color:{{ section.settings.schedule_eyebrow_color | default: '#B8860B' }};">{{ section.settings.schedule_eyebrow }}</p>
+        <h2 class="text-2xl font-light" style="color:{{ section.settings.schedule_heading_color }};">{{ section.settings.schedule_heading }}</h2>
+        <div class="divider-gold mx-auto mt-3"></div>
+      </div>
+      {% for block in schedule_blocks %}
+        <div class="flex gap-6 border-b border-gray-200 py-4" {{ block.shopify_attributes }}>
+          <span class="w-16 shrink-0 font-serif text-[{{ block.settings.time_size_sp | default: 15 }}px] md:text-[{{ block.settings.time_size | default: 18 }}px]" style="color:{{ block.settings.time_color | default: '#B8860B' }};">{{ block.settings.time }}</span>
+          <div class="text-[{{ block.settings.desc_size_sp | default: 13 }}px] md:text-[{{ block.settings.desc_size | default: 14 }}px]" style="color:{{ block.settings.content_color | default: '#4b5563' }};">{{ block.settings.desc }}</div>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% comment %} --- フォトギャラリー --- {% endcomment %}
+  {%- assign gallery_product = section.settings.gallery_product -%}
+  {% if gallery_product and gallery_product.images.size > 0 or gallery_blocks.size > 0 %}
+  <section class="py-16" style="background-color:#1a1a1a;">
+    <div class="text-center mb-12 px-4">
+      <p class="font-serif text-sm tracking-[0.15em] uppercase mb-2" style="color:{{ section.settings.gallery_eyebrow_color | default: '#D4A843' }};">{{ section.settings.gallery_eyebrow }}</p>
+      <h2 class="text-2xl font-light" style="color:{{ section.settings.gallery_heading_color | default: '#ffffff' }};">{{ section.settings.gallery_heading }}</h2>
+      <div class="divider-gold mx-auto mt-3"></div>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 max-w-6xl mx-auto" id="area-gallery-{{ section.id }}">
+      {% if gallery_product %}
+        {% for image in gallery_product.images %}
+          <div class="w-full relative area-gallery-item cursor-pointer" style="padding-top:125%;" data-full="{{ image | image_url: width: 1800 }}" data-index="{{ forloop.index0 }}">
+            {{ image | image_url: width: 700 | image_tag: class: 'absolute inset-0 w-full h-full object-cover object-center', loading: 'lazy' }}
+          </div>
+        {% endfor %}
+      {% else %}
+        {% for block in gallery_blocks %}
+          {% if block.settings.image != blank %}
+            <div class="w-full relative area-gallery-item cursor-pointer" style="padding-top:125%;" data-full="{{ block.settings.image | image_url: width: 1800 }}" data-index="{{ forloop.index0 }}" {{ block.shopify_attributes }}>
+              {% assign gal_class = 'absolute inset-0 w-full h-full object-cover ' | append: block.settings.image_position %}
+              {{ block.settings.image | image_url: width: 700 | image_tag: class: gal_class, loading: 'lazy' }}
+            </div>
+          {% endif %}
+        {% endfor %}
+      {% endif %}
+    </div>
+  </section>
+
+  {% comment %}
+    ギャラリーのライトボックス。タップで拡大表示、左右スワイプ/矢印で
+    前後の画像に切り替え。
+  {% endcomment %}
+  <div id="area-lightbox-{{ section.id }}" class="fixed inset-0 hidden" style="background:rgba(0,0,0,0.92);z-index:99999;">
+    <button type="button" class="area-lightbox-close absolute top-4 right-4 text-white text-3xl leading-none w-10 h-10 flex items-center justify-center" aria-label="閉じる">×</button>
+    <button type="button" class="area-lightbox-prev absolute left-2 md:left-6 top-1/2 -translate-y-1/2 text-white text-4xl leading-none w-12 h-12 flex items-center justify-center" aria-label="前の画像">‹</button>
+    <button type="button" class="area-lightbox-next absolute right-2 md:right-6 top-1/2 -translate-y-1/2 text-white text-4xl leading-none w-12 h-12 flex items-center justify-center" aria-label="次の画像">›</button>
+    <div class="w-full h-full flex items-center justify-center px-12">
+      <img class="area-lightbox-img" alt="" width="1200" height="1500" style="max-width:100%;max-height:90vh;object-fit:contain;">
+    </div>
+  </div>
+  <script>
+    (function () {
+      var root = document.getElementById('area-gallery-{{ section.id }}');
+      var lightbox = document.getElementById('area-lightbox-{{ section.id }}');
+      if (!root || !lightbox) return;
+      {%- comment -%}
+        親要素にtransformが掛かっているとposition:fixedがビューポート
+        基準にならず、ヘッダーの後ろに隠れる等の不具合になるため、
+        <body>直下に移動させて確実に画面全体に固定表示させる。
+      {%- endcomment -%}
+      document.body.appendChild(lightbox);
+      var img = lightbox.querySelector('.area-lightbox-img');
+      var items = Array.prototype.slice.call(root.querySelectorAll('.area-gallery-item'));
+      var current = 0;
+      var touchStartX = null;
+
+      function show(i) {
+        if (items.length === 0) return;
+        current = (i + items.length) % items.length;
+        img.src = items[current].getAttribute('data-full');
+      }
+      function open(i) {
+        show(i);
+        lightbox.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+      }
+      function close() {
+        lightbox.classList.add('hidden');
+        document.body.style.overflow = '';
+      }
+
+      items.forEach(function (el, i) {
+        el.addEventListener('click', function () { open(i); });
+      });
+      lightbox.querySelector('.area-lightbox-close').addEventListener('click', close);
+      lightbox.querySelector('.area-lightbox-prev').addEventListener('click', function () { show(current - 1); });
+      lightbox.querySelector('.area-lightbox-next').addEventListener('click', function () { show(current + 1); });
+      lightbox.addEventListener('click', function (e) {
+        if (e.target === lightbox) close();
+      });
+      document.addEventListener('keydown', function (e) {
+        if (lightbox.classList.contains('hidden')) return;
+        if (e.key === 'Escape') close();
+        if (e.key === 'ArrowLeft') show(current - 1);
+        if (e.key === 'ArrowRight') show(current + 1);
+      });
+      lightbox.addEventListener('touchstart', function (e) {
+        touchStartX = e.changedTouches[0].clientX;
+      }, { passive: true });
+      lightbox.addEventListener('touchend', function (e) {
+        if (touchStartX === null) return;
+        var dx = e.changedTouches[0].clientX - touchStartX;
+        if (Math.abs(dx) > 40) {
+          if (dx < 0) { show(current + 1); } else { show(current - 1); }
+        }
+        touchStartX = null;
+      }, { passive: true });
+    })();
+  </script>
+  {% endif %}
+
+  {% comment %} --- お客様の声（運営が集めた実例） --- {% endcomment %}
+  {%- assign testimonial_blocks = section.blocks | where: 'type', 'testimonial' -%}
+  {% if section.settings.show_testimonials and testimonial_blocks.size > 0 %}
+  <section class="py-16 bg-ivory">
+    <div class="max-w-6xl mx-auto px-4">
+      <div class="text-center mb-12">
+        <p class="font-serif text-sm tracking-[0.15em] uppercase mb-2" style="color:#B8860B;">{{ section.settings.testimonials_eyebrow }}</p>
+        <h2 class="text-2xl font-light">{{ section.settings.testimonials_heading }}</h2>
+        <div class="divider-gold mx-auto mt-3"></div>
+      </div>
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {% for block in testimonial_blocks %}
+          <div class="bg-white rounded-lg overflow-hidden shadow-sm" {{ block.shopify_attributes }}>
+            {%- assign has_photo = false -%}
+            {%- if block.settings.image_1 or block.settings.image_2 or block.settings.image_3 or block.settings.image_4 -%}{%- assign has_photo = true -%}{%- endif -%}
+            {% if has_photo %}
+              <div class="grid grid-cols-2 gap-0.5">
+                {% if block.settings.image_1 %}<div class="relative" style="padding-top:100%;">{{ block.settings.image_1 | image_url: width: 500 | image_tag: class: 'absolute inset-0 w-full h-full object-cover', loading: 'lazy' }}</div>{% endif %}
+                {% if block.settings.image_2 %}<div class="relative" style="padding-top:100%;">{{ block.settings.image_2 | image_url: width: 500 | image_tag: class: 'absolute inset-0 w-full h-full object-cover', loading: 'lazy' }}</div>{% endif %}
+                {% if block.settings.image_3 %}<div class="relative" style="padding-top:100%;">{{ block.settings.image_3 | image_url: width: 500 | image_tag: class: 'absolute inset-0 w-full h-full object-cover', loading: 'lazy' }}</div>{% endif %}
+                {% if block.settings.image_4 %}<div class="relative" style="padding-top:100%;">{{ block.settings.image_4 | image_url: width: 500 | image_tag: class: 'absolute inset-0 w-full h-full object-cover', loading: 'lazy' }}</div>{% endif %}
+              </div>
+            {% endif %}
+            <div class="p-5">
+              {% if block.settings.name != blank %}<p class="text-xs text-gray-400 mb-2">{{ block.settings.name }}</p>{% endif %}
+              <p class="text-sm text-gray-700 leading-relaxed">{{ block.settings.comment }}</p>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {% comment %}
+    --- お客様の声 投稿フォーム ---
+    「非表示で先に用意しておきたい」というご要望のため、
+    show_testimonial_form のデフォルトはfalse（非表示）。
+    Shopify標準のcontact formを使用（アプリ・サーバー側の追加実装
+    不要、送信内容は店舗の問い合わせ受信メール宛に届く）。
+  {% endcomment %}
+  {% if section.settings.show_testimonial_form %}
+  <section class="py-16">
+    <div class="max-w-2xl mx-auto px-4">
+      <div class="text-center mb-10">
+        <h2 class="text-2xl font-light">{{ section.settings.testimonial_form_heading | default: '撮影の思い出を投稿する' }}</h2>
+        {% if section.settings.testimonial_form_desc != blank %}
+          <p class="text-sm text-gray-500 mt-3">{{ section.settings.testimonial_form_desc }}</p>
+        {% endif %}
+      </div>
+      {%- form 'contact', id: 'testimonial-form-' | append: section.id -%}
+        {% if form.posted_successfully? %}
+          <p class="text-sm p-4 rounded mb-4" style="background:#eef4ec;color:#4b7a52;">送信ありがとうございます。確認後、掲載させていただく場合がございます。</p>
+        {% endif %}
+        <input type="hidden" name="contact[お問い合わせ種別]" value="お客様の声 投稿（{{ page.title }}）">
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm mb-1 text-gray-600">お名前（ニックネーム可）</label>
+            <input type="text" name="contact[name]" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+          </div>
+          <div>
+            <label class="block text-sm mb-1 text-gray-600">メールアドレス <span style="color:#B8860B;">必須</span></label>
+            <input type="email" name="contact[email]" required class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+          </div>
+          <div>
+            <label class="block text-sm mb-1 text-gray-600">ご感想</label>
+            <textarea name="contact[body]" rows="4" class="w-full border border-gray-300 rounded px-3 py-2 text-sm"></textarea>
+          </div>
+          <div>
+            <label class="block text-sm mb-1 text-gray-600">お写真1</label>
+            <input type="file" name="contact[写真1]" accept="image/*" class="w-full text-sm">
+          </div>
+          <div>
+            <label class="block text-sm mb-1 text-gray-600">お写真2</label>
+            <input type="file" name="contact[写真2]" accept="image/*" class="w-full text-sm">
+          </div>
+          <div>
+            <label class="block text-sm mb-1 text-gray-600">お写真3</label>
+            <input type="file" name="contact[写真3]" accept="image/*" class="w-full text-sm">
+          </div>
+          <button type="submit" class="w-full py-3 rounded-full text-white text-sm font-medium" style="background-color:#B8860B;">送信する</button>
+        </div>
+      {%- endform -%}
+    </div>
+  </section>
+  {% endif %}
+
+  {% comment %} --- プラン一覧 --- {% endcomment %}
+  {% if plan_blocks.size > 0 %}
+  <section id="area-plans-{{ section.id }}" class="py-16 bg-ivory">
+    <div class="max-w-6xl mx-auto px-4">
+      <div class="text-center mb-12">
+        <p class="font-serif text-sm tracking-[0.15em] uppercase mb-2" style="color:{{ section.settings.plans_eyebrow_color | default: '#B8860B' }};">{{ section.settings.plans_eyebrow }}</p>
+        <h2 class="text-2xl font-light" style="color:{{ section.settings.plans_heading_color }};">{{ section.settings.plans_heading }}</h2>
+        <div class="divider-gold mx-auto mt-3"></div>
+      </div>
+      <div class="grid md:grid-cols-2 gap-8">
+        {% for block in plan_blocks %}
+          {%- assign linked_product = block.settings.product -%}
+          <a href="{% if linked_product %}{{ linked_product.url }}{% else %}{{ block.settings.plan_url }}{% endif %}" class="group block rounded-lg overflow-hidden border border-gray-200 bg-white" {{ block.shopify_attributes }}>
+            <div class="w-full relative" style="padding-top:60%;">
+              {% if linked_product and linked_product.featured_image %}
+                {{ linked_product.featured_image | image_url: width: 900 | image_tag: class: 'absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105', loading: 'lazy' }}
+              {% elsif block.settings.plan_image != blank %}
+                {% assign plan_img_class = 'absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 ' | append: block.settings.image_position %}
+                {{ block.settings.plan_image | image_url: width: 900 | image_tag: class: plan_img_class, loading: 'lazy' }}
+              {% endif %}
+              {%- assign show_badge = block.settings.badge -%}
+              {%- if linked_product and linked_product.tags contains '人気' -%}{%- assign show_badge = '人気No.1' -%}{%- endif -%}
+              {% if show_badge != blank %}
+                <span class="absolute top-3 left-3 px-3 py-1 text-[11px] font-bold text-white rounded-sm" style="background-color:{{ block.settings.plan_badge_color | default: '#c9a96e' }};">{{ show_badge }}</span>
+              {% endif %}
+            </div>
+            <div class="p-6">
+              <p class="text-xs uppercase tracking-wider text-gray-400">{{ block.settings.region }}</p>
+              <h3 class="font-medium text-base mt-1" style="color:{{ block.settings.plan_title_color | default: '#1a1a1a' }};">{% if linked_product %}{{ linked_product.title }}{% else %}{{ block.settings.title }}{% endif %}</h3>
+              <p class="text-sm mt-2" style="color:{{ block.settings.plan_desc_color | default: '#4b5563' }};">
+                {% if linked_product and linked_product.description != blank %}{{ linked_product.description | strip_html | truncate: 50 }}{% else %}{{ block.settings.desc }}{% endif %}
+              </p>
+              <div class="flex items-center justify-between mt-4">
+                {%- assign is_instant = false -%}
+                {%- if block.settings.availability == 'instant' -%}{%- assign is_instant = true -%}{%- endif -%}
+                {%- if linked_product -%}
+                  {%- assign is_instant = false -%}
+                  {%- if linked_product.tags contains '即予約' -%}{%- assign is_instant = true -%}{%- endif -%}
+                {%- endif -%}
+                {% if is_instant %}
+                  <span class="text-xs px-3 py-1 rounded-full" style="background:#eef4ec;color:#4b7a52;">即予約できます</span>
+                {% else %}
+                  <span class="text-xs px-3 py-1 rounded-full" style="background:#f6efe2;color:#8f6a08;">現地確認後ご回答</span>
+                {% endif %}
+                <span class="font-serif" style="color:{{ block.settings.plan_price_color | default: '#c9a96e' }};font-size: calc(var(--font-heading-scale, 1) * 18px);">
+                  {% if linked_product %}{{ linked_product.price | money }}{% else %}{{ block.settings.price }}{% if block.settings.show_tax %}<span class="text-xs">（税込）</span>{% endif %}{% endif %}
+                </span>
+              </div>
+            </div>
+          </a>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {% comment %} --- FAQ --- {% endcomment %}
+  {% if faq_blocks.size > 0 %}
+  <section class="py-16">
+    <div class="max-w-3xl mx-auto px-4">
+      <div class="text-center mb-12">
+        <p class="font-serif text-sm tracking-[0.15em] uppercase mb-2" style="color:{{ section.settings.faq_eyebrow_color | default: '#B8860B' }};">{{ section.settings.faq_eyebrow | default: 'FAQ' }}</p>
+        <h2 class="text-2xl font-light" style="color:{{ section.settings.faq_heading_color }};">{{ section.settings.faq_heading | default: 'よくあるご質問' }}</h2>
+        <div class="divider-gold mx-auto mt-3"></div>
+      </div>
+      <div class="space-y-3">
+        {% for block in faq_blocks %}
+          <div class="border border-gray-200 rounded-lg overflow-hidden" {{ block.shopify_attributes }}>
+            <button class="area-lp-accordion-btn w-full text-left px-5 py-4 flex justify-between items-center text-sm font-medium" style="color:{{ block.settings.faq_q_color | default: '#1a1a1a' }};">
+              <span>{{ block.settings.question }}</span>
+              <span style="color:#B8860B;">+</span>
+            </button>
+            <div class="accordion-panel px-5">
+              <p class="text-sm pb-4" style="color:{{ block.settings.faq_a_color | default: '#4b5563' }};">{{ block.settings.answer | newline_to_br }}</p>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {% comment %} --- Sticky CTA --- {% endcomment %}
+  {% if section.settings.sticky_btn_1_text != blank or section.settings.sticky_btn_2_text != blank %}
+  <div class="fixed bottom-0 left-0 right-0 z-40 flex gap-2 p-3 bg-white/95 border-t border-gray-200 max-w-md mx-auto md:max-w-lg">
+    {% if section.settings.sticky_btn_1_text != blank %}
+      <a href="{{ section.settings.sticky_btn_1_url }}" class="flex-1 text-center py-3 rounded text-sm font-medium border border-dark">{{ section.settings.sticky_btn_1_text }}</a>
+    {% endif %}
+    {% if section.settings.sticky_btn_2_text != blank %}
+      <a href="{{ section.settings.sticky_btn_2_url }}" class="flex-1 text-center py-3 rounded text-sm font-medium text-white" style="background-color:#B8860B;">{{ section.settings.sticky_btn_2_text }}</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  document.querySelectorAll('#area-lp-{{ section.id }} .area-lp-accordion-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var panel = btn.nextElementSibling;
+      var icon = btn.querySelector('span:last-child');
+      panel.classList.toggle('open');
+      icon.textContent = panel.classList.contains('open') ? '−' : '+';
+    });
+  });
+});
+</script>
+
+{% schema %}
+{
+  "name": "撮影地エリアLP",
+  "settings": [
+    { "type": "header", "content": "パンくずリスト" },
+    { "type": "text", "id": "breadcrumb_1_text", "label": "1階層目 テキスト", "default": "TOP" },
+    { "type": "url", "id": "breadcrumb_1_url", "label": "1階層目 リンク" },
+    { "type": "text", "id": "breadcrumb_2_text", "label": "2階層目 テキスト", "default": "撮影地一覧" },
+    { "type": "url", "id": "breadcrumb_2_url", "label": "2階層目 リンク" },
+    { "type": "text", "id": "breadcrumb_3_text", "label": "3階層目 テキスト（現在地）" },
+
+    { "type": "header", "content": "ヒーロー" },
+    { "type": "image_picker", "id": "hero_image", "label": "画像" },
+    { "type": "select", "id": "hero_image_position", "label": "トリミング位置", "options": [
+        { "value": "object-center", "label": "中央" }, { "value": "object-top", "label": "上部" },
+        { "value": "object-bottom", "label": "下部" }, { "value": "object-left", "label": "左側" }, { "value": "object-right", "label": "右側" }
+      ], "default": "object-center" },
+    { "type": "text", "id": "hero_eyebrow", "label": "サブタイトル" },
+    { "type": "color", "id": "hero_eyebrow_color", "label": "サブタイトル色", "default": "#ffffff" },
+    { "type": "textarea", "id": "hero_heading", "label": "タイトル" },
+    { "type": "color", "id": "hero_heading_color", "label": "タイトル色", "default": "#ffffff" },
+    { "type": "range", "id": "hero_heading_size", "label": "タイトルサイズ(PC)", "min": 16, "max": 60, "default": 40 },
+    { "type": "range", "id": "hero_heading_size_sp", "label": "タイトルサイズ(SP)", "min": 14, "max": 40, "default": 24 },
+    { "type": "text", "id": "hero_lede", "label": "リード文" },
+    { "type": "color", "id": "hero_lede_color", "label": "リード文色", "default": "#ffffff" },
+    { "type": "range", "id": "hero_lede_size", "label": "リード文サイズ(PC)", "min": 10, "max": 24, "default": 15 },
+    { "type": "range", "id": "hero_lede_size_sp", "label": "リード文サイズ(SP)", "min": 10, "max": 20, "default": 13 },
+
+    { "type": "header", "content": "選ばれる理由" },
+    { "type": "text", "id": "features_eyebrow", "label": "サブタイトル", "default": "Charm" },
+    { "type": "color", "id": "features_eyebrow_color", "label": "サブタイトル色", "default": "#c9a96e" },
+    { "type": "text", "id": "features_heading", "label": "見出し" },
+    { "type": "color", "id": "features_heading_color", "label": "見出し色", "default": "#1a1a1a" },
+    { "type": "textarea", "id": "features_desc", "label": "本文" },
+    { "type": "color", "id": "features_desc_color", "label": "本文色", "default": "#4b5563" },
+    { "type": "range", "id": "features_desc_size", "label": "本文サイズ(PC)", "min": 10, "max": 20, "default": 14 },
+    { "type": "range", "id": "features_desc_size_sp", "label": "本文サイズ(SP)", "min": 10, "max": 18, "default": 13 },
+
+    { "type": "header", "content": "撮影スポット" },
+    { "type": "text", "id": "location_eyebrow", "label": "サブタイトル", "default": "Locations" },
+    { "type": "color", "id": "location_eyebrow_color", "label": "サブタイトル色", "default": "#c9a96e" },
+    { "type": "text", "id": "location_heading", "label": "見出し", "default": "撮影スポット" },
+    { "type": "color", "id": "location_heading_color", "label": "見出し色", "default": "#1a1a1a" },
+
+    { "type": "header", "content": "モデルスケジュール" },
+    { "type": "text", "id": "schedule_eyebrow", "label": "サブタイトル", "default": "Schedule" },
+    { "type": "color", "id": "schedule_eyebrow_color", "label": "サブタイトル色", "default": "#c9a96e" },
+    { "type": "text", "id": "schedule_heading", "label": "見出し", "default": "モデルスケジュール" },
+    { "type": "color", "id": "schedule_heading_color", "label": "見出し色", "default": "#1a1a1a" },
+
+    { "type": "header", "content": "プラン一覧" },
+    { "type": "text", "id": "plans_eyebrow", "label": "サブタイトル", "default": "Plans" },
+    { "type": "color", "id": "plans_eyebrow_color", "label": "サブタイトル色", "default": "#c9a96e" },
+    { "type": "text", "id": "plans_heading", "label": "見出し" },
+    { "type": "color", "id": "plans_heading_color", "label": "見出し色", "default": "#1a1a1a" },
+
+    { "type": "header", "content": "フォトギャラリー" },
+    { "type": "product", "id": "gallery_product", "label": "ギャラリー用商品（任意）", "info": "設定すると、その商品に登録されている画像が全部まとめて自動表示されます（商品の「メディア」欄はShopify標準機能でまとめてアップロードできるため、下のギャラリーブロックを1枚ずつ追加するより早いです）。未設定の場合は下のギャラリーブロックが使われます。" },
+    { "type": "text", "id": "gallery_eyebrow", "label": "サブタイトル", "default": "Gallery" },
+    { "type": "color", "id": "gallery_eyebrow_color", "label": "サブタイトル色", "default": "#c9a96e" },
+    { "type": "text", "id": "gallery_heading", "label": "見出し", "default": "フォトギャラリー" },
+    { "type": "color", "id": "gallery_heading_color", "label": "見出し色", "default": "#ffffff" },
+
+    { "type": "header", "content": "お客様の声" },
+    { "type": "checkbox", "id": "show_testimonials", "label": "お客様の声を表示する", "default": false, "info": "下の「お客様の声」ブロックを追加してからONにしてください。" },
+    { "type": "text", "id": "testimonials_eyebrow", "label": "サブタイトル", "default": "Voice" },
+    { "type": "text", "id": "testimonials_heading", "label": "見出し", "default": "お客様の声" },
+
+    { "type": "header", "content": "お客様の声 投稿フォーム" },
+    { "type": "checkbox", "id": "show_testimonial_form", "label": "投稿フォームを表示する", "default": false, "info": "お客様自身が感想・写真を投稿できるフォームです。準備ができたらONにしてください。送信内容は店舗の問い合わせ受信メール宛に届きます。" },
+    { "type": "text", "id": "testimonial_form_heading", "label": "見出し", "default": "撮影の思い出を投稿する" },
+    { "type": "textarea", "id": "testimonial_form_desc", "label": "説明文" },
+
+    { "type": "header", "content": "FAQ" },
+    { "type": "text", "id": "faq_eyebrow", "label": "サブタイトル", "default": "FAQ" },
+    { "type": "color", "id": "faq_eyebrow_color", "label": "サブタイトル色", "default": "#c9a96e" },
+    { "type": "text", "id": "faq_heading", "label": "見出し", "default": "よくあるご質問" },
+    { "type": "color", "id": "faq_heading_color", "label": "見出し色", "default": "#1a1a1a" },
+
+    { "type": "header", "content": "モバイル固定CTA" },
+    { "type": "text", "id": "sticky_btn_1_text", "label": "ボタン1 文言" },
+    { "type": "url", "id": "sticky_btn_1_url", "label": "ボタン1 リンク" },
+    { "type": "text", "id": "sticky_btn_2_text", "label": "ボタン2 文言" },
+    { "type": "url", "id": "sticky_btn_2_url", "label": "ボタン2 リンク" }
+  ],
+  "blocks": [
+    {
+      "type": "testimonial",
+      "name": "お客様の声",
+      "settings": [
+        { "type": "text", "id": "name", "label": "お名前（ニックネーム可・任意）" },
+        { "type": "textarea", "id": "comment", "label": "コメント" },
+        { "type": "image_picker", "id": "image_1", "label": "写真1" },
+        { "type": "image_picker", "id": "image_2", "label": "写真2" },
+        { "type": "image_picker", "id": "image_3", "label": "写真3" },
+        { "type": "image_picker", "id": "image_4", "label": "写真4" }
+      ]
+    },
+    {
+      "type": "reason",
+      "name": "選ばれる理由",
+      "settings": [
+        { "type": "text", "id": "title", "label": "見出し" },
+        { "type": "color", "id": "title_color", "label": "見出し色", "default": "#1a1a1a" },
+        { "type": "range", "id": "title_size", "label": "見出しサイズ(PC)", "min": 12, "max": 24, "default": 16 },
+        { "type": "range", "id": "title_size_sp", "label": "見出しサイズ(SP)", "min": 12, "max": 22, "default": 15 },
+        { "type": "textarea", "id": "desc", "label": "本文" },
+        { "type": "color", "id": "desc_color", "label": "本文色", "default": "#4b5563" },
+        { "type": "range", "id": "desc_size", "label": "本文サイズ(PC)", "min": 10, "max": 20, "default": 14 },
+        { "type": "range", "id": "desc_size_sp", "label": "本文サイズ(SP)", "min": 10, "max": 18, "default": 13 }
+      ]
+    },
+    {
+      "type": "location",
+      "name": "撮影スポット",
+      "settings": [
+        { "type": "image_picker", "id": "image", "label": "画像" },
+        { "type": "select", "id": "image_position", "label": "トリミング位置", "options": [
+            { "value": "object-center", "label": "中央" }, { "value": "object-top", "label": "上部" },
+            { "value": "object-bottom", "label": "下部" }, { "value": "object-left", "label": "左側" }, { "value": "object-right", "label": "右側" }
+          ], "default": "object-center" },
+        { "type": "range", "id": "img_height_pc", "label": "画像高さ(PC)", "min": 100, "max": 400, "step": 25, "default": 225 },
+        { "type": "range", "id": "img_height_sp", "label": "画像高さ(SP)", "min": 100, "max": 400, "step": 25, "default": 200 },
+        { "type": "text", "id": "title", "label": "スポット名" },
+        { "type": "color", "id": "title_color", "label": "スポット名色", "default": "#1a1a1a" },
+        { "type": "range", "id": "title_size", "label": "スポット名サイズ(PC)", "min": 12, "max": 32, "default": 24 },
+        { "type": "range", "id": "title_size_sp", "label": "スポット名サイズ(SP)", "min": 12, "max": 24, "default": 14 },
+        { "type": "checkbox", "id": "title_is_serif", "label": "スポット名を明朝体にする", "default": false },
+        { "type": "text", "id": "desc", "label": "説明" },
+        { "type": "color", "id": "desc_color", "label": "説明色", "default": "#4b5563" },
+        { "type": "range", "id": "desc_size", "label": "説明サイズ(PC)", "min": 10, "max": 20, "default": 14 },
+        { "type": "range", "id": "desc_size_sp", "label": "説明サイズ(SP)", "min": 10, "max": 18, "default": 11 },
+        { "type": "checkbox", "id": "desc_is_serif", "label": "説明を明朝体にする", "default": false }
+      ]
+    },
+    {
+      "type": "schedule",
+      "name": "スケジュール",
+      "settings": [
+        { "type": "text", "id": "time", "label": "日程/時刻" },
+        { "type": "color", "id": "time_color", "label": "日程/時刻色", "default": "#c9a96e" },
+        { "type": "range", "id": "time_size", "label": "日程/時刻サイズ(PC)", "min": 12, "max": 24, "default": 18 },
+        { "type": "range", "id": "time_size_sp", "label": "日程/時刻サイズ(SP)", "min": 12, "max": 22, "default": 15 },
+        { "type": "richtext", "id": "desc", "label": "内容" },
+        { "type": "color", "id": "content_color", "label": "内容色", "default": "#4b5563" },
+        { "type": "range", "id": "desc_size", "label": "内容サイズ(PC)", "min": 10, "max": 20, "default": 14 },
+        { "type": "range", "id": "desc_size_sp", "label": "内容サイズ(SP)", "min": 10, "max": 18, "default": 13 }
+      ]
+    },
+    {
+      "type": "gallery",
+      "name": "ギャラリー画像",
+      "settings": [
+        { "type": "image_picker", "id": "image", "label": "画像" },
+        { "type": "select", "id": "image_position", "label": "トリミング位置", "options": [
+            { "value": "object-center", "label": "中央" }, { "value": "object-top", "label": "上部" },
+            { "value": "object-bottom", "label": "下部" }, { "value": "object-left", "label": "左側" }, { "value": "object-right", "label": "右側" }
+          ], "default": "object-center" }
+      ]
+    },
+    {
+      "type": "faq",
+      "name": "FAQ",
+      "settings": [
+        { "type": "text", "id": "question", "label": "質問" },
+        { "type": "color", "id": "faq_q_color", "label": "質問色", "default": "#1a1a1a" },
+        { "type": "textarea", "id": "answer", "label": "回答" },
+        { "type": "color", "id": "faq_a_color", "label": "回答色", "default": "#4b5563" }
+      ]
+    },
+    {
+      "type": "plan",
+      "name": "プラン",
+      "settings": [
+        { "type": "header", "content": "商品にリンクする場合（推奨）" },
+        { "type": "product", "id": "product", "label": "商品", "info": "設定すると、名称・説明・価格・画像・URL・即予約バッジが商品から自動取得されます（下の手入力項目は無視されます）。" },
+        { "type": "header", "content": "商品にリンクしない場合（手入力）" },
+        { "type": "image_picker", "id": "plan_image", "label": "画像" },
+        { "type": "select", "id": "image_position", "label": "トリミング位置", "options": [
+            { "value": "object-center", "label": "中央" }, { "value": "object-top", "label": "上部" },
+            { "value": "object-bottom", "label": "下部" }, { "value": "object-left", "label": "左側" }, { "value": "object-right", "label": "右側" }
+          ], "default": "object-center" },
+        { "type": "text", "id": "region", "label": "地域表記（例: Da Nang）" },
+        { "type": "text", "id": "title", "label": "プラン名" },
+        { "type": "color", "id": "plan_title_color", "label": "プラン名色", "default": "#1a1a1a" },
+        { "type": "textarea", "id": "desc", "label": "説明" },
+        { "type": "color", "id": "plan_desc_color", "label": "説明色", "default": "#4b5563" },
+        { "type": "select", "id": "availability", "label": "予約種別", "options": [
+            { "value": "instant", "label": "即予約できます" }, { "value": "confirm", "label": "現地確認後ご回答" }
+          ], "default": "instant" },
+        { "type": "text", "id": "price", "label": "価格" },
+        { "type": "color", "id": "plan_price_color", "label": "価格色", "default": "#c9a96e" },
+        { "type": "checkbox", "id": "show_tax", "label": "「税込」を表示", "default": false },
+        { "type": "url", "id": "plan_url", "label": "リンク先" },
+        { "type": "header", "content": "共通" },
+        { "type": "text", "id": "badge", "label": "バッジ文言（例: 人気No.1）" },
+        { "type": "color", "id": "plan_badge_color", "label": "バッジ色", "default": "#c9a96e" }
+      ]
+    }
+  ],
+  "presets": [{ "name": "撮影地エリアLP" }]
+}
+{% endschema %}

@@ -1,0 +1,117 @@
+{%- comment -%}
+  campaign-banner — 条件を満たすと「あなたは◯◯対象です」を表示する
+  キャンペーンバナー。
+  ----------------------------------------------------------------
+  実際に金額を割り引く処理(会計時の割引)はここでは行わない。
+  Shopify管理画面の「ディスカウント」で実際の割引ルールを作成するのは
+  引き続きご自身の作業(Admin API権限が無いため代行不可)。ここでは、
+  その割引条件と同じ条件を選んで告知バナーを出すだけ。
+
+  表示条件はテーマエディタの「表示条件」プルダウンで4種類から選べる
+  (コード変更不要。キャンペーンのたびに切り替えられる):
+    ① カート合計金額が一定額以上
+    ② 特定の商品がカートに入っている
+    ③ 初回利用(ログイン済み・注文回数0の会員のみ判定可。ゲスト購入者の
+       「初回かどうか」はブラウザ側からは判定できないため対応不可)
+    ④ クーポンコードの案内(条件判定なし、常に表示。コードを告知する
+       だけの用途)
+
+  ①②はLiquidのcartオブジェクトを使うため、ページの読み込み時点での
+  カート内容が基準になる。カートドロワーで商品を追加した直後は、
+  ページの再読み込み(または別ページへの遷移)まで反映されない。
+
+  同時に複数のキャンペーンを走らせたい場合は、このセクションを
+  ページに複数回追加し、それぞれ別の条件・メッセージを設定すればよい。
+{%- endcomment -%}
+<script>
+  if (!document.getElementById('tw-config')) {
+    var twConfig = document.createElement('script');
+    twConfig.id = 'tw-config';
+    twConfig.innerHTML = "tailwind.config = { theme: { extend: { colors: { ivory: '#FAF8F5', gold: '#B8860B', 'gold-light': '#D4A843', dark: '#1a1a1a' }, fontFamily: { serif: ['var(--font-heading-family, serif)', 'serif'], sans: ['var(--font-body-family, sans-serif)', 'sans-serif'] } } } };";
+    document.head.appendChild(twConfig);
+  }
+  if (!document.getElementById('tw-cdn')) {
+    var twScript = document.createElement('script');
+    twScript.id = 'tw-cdn';
+    twScript.src = '{{ "tailwind-3.4.17.js" | asset_url }}';
+    document.head.appendChild(twScript);
+  }
+</script>
+
+{%- assign show_banner = false -%}
+{%- case section.settings.condition_type -%}
+  {%- when 'cart_total' -%}
+    {%- assign threshold_cents = section.settings.cart_total_threshold | times: 100 -%}
+    {%- if section.settings.cart_total_threshold > 0 and cart.total_price >= threshold_cents -%}
+      {%- assign show_banner = true -%}
+    {%- endif -%}
+  {%- when 'product_in_cart' -%}
+    {%- if section.settings.target_product != blank -%}
+      {%- for item in cart.items -%}
+        {%- if item.product_id == section.settings.target_product.id -%}
+          {%- assign show_banner = true -%}
+        {%- endif -%}
+      {%- endfor -%}
+    {%- endif -%}
+  {%- when 'first_time' -%}
+    {%- if customer and customer.orders_count == 0 -%}
+      {%- assign show_banner = true -%}
+    {%- endif -%}
+  {%- when 'coupon_code' -%}
+    {%- assign show_banner = true -%}
+{%- endcase -%}
+
+{%- if show_banner -%}
+  {%- assign banner_message = section.settings.message | default: 'あなたは{amount}対象です' -%}
+  {%- assign banner_message = banner_message | replace: '{amount}', section.settings.discount_amount -%}
+  {%- assign banner_message = banner_message | replace: '{code}', section.settings.coupon_code -%}
+  <div id="campaign-banner-{{ section.id }}" class="w-full" style="background-color:{{ section.settings.bg_color | default: '#B8860B' }};">
+    <div class="max-w-6xl mx-auto px-6 py-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-center relative">
+      <span class="text-sm font-medium" style="color:{{ section.settings.text_color | default: '#ffffff' }};">🎁 {{ banner_message }}</span>
+      {%- if section.settings.button_url != blank and section.settings.button_label != blank -%}
+        <a href="{{ section.settings.button_url }}" class="text-xs underline" style="color:{{ section.settings.text_color | default: '#ffffff' }};">{{ section.settings.button_label }}</a>
+      {%- endif -%}
+      <button type="button" class="campaign-banner-close" aria-label="閉じる" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);color:{{ section.settings.text_color | default: '#ffffff' }};background:none;border:none;cursor:pointer;font-size:16px;line-height:1;">×</button>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var root = document.getElementById('campaign-banner-{{ section.id }}');
+      if (!root) return;
+      var closeBtn = root.querySelector('.campaign-banner-close');
+      if (closeBtn) {
+        closeBtn.addEventListener('click', function () { root.style.display = 'none'; });
+      }
+    })();
+  </script>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "キャンペーンバナー",
+  "settings": [
+    { "type": "select", "id": "condition_type", "label": "表示条件", "default": "cart_total",
+      "options": [
+        { "value": "cart_total", "label": "① カート合計金額が一定額以上" },
+        { "value": "product_in_cart", "label": "② 特定の商品がカートに入っている" },
+        { "value": "first_time", "label": "③ 初回利用（ログイン済み・注文回数0の会員のみ判定可）" },
+        { "value": "coupon_code", "label": "④ クーポンコードを案内する（条件判定なし・常に表示）" }
+      ]
+    },
+    { "type": "header", "content": "①カート合計金額の設定" },
+    { "type": "number", "id": "cart_total_threshold", "label": "しきい値（円）", "default": 300000 },
+    { "type": "header", "content": "②特定商品の設定" },
+    { "type": "product", "id": "target_product", "label": "対象商品" },
+    { "type": "header", "content": "④クーポンコードの設定" },
+    { "type": "text", "id": "coupon_code", "label": "クーポンコード（メッセージ内で{code}として差し込める）" },
+    { "type": "header", "content": "表示メッセージ" },
+    { "type": "text", "id": "message", "label": "メッセージ（{amount}=割引額、{code}=クーポンコードを差し込み可）", "default": "あなたは{amount}対象です" },
+    { "type": "text", "id": "discount_amount", "label": "割引額の文言（{amount}に差し込む文字列。例：3,000円引き）" },
+    { "type": "text", "id": "button_label", "label": "ボタン文言（空欄でボタン非表示）" },
+    { "type": "url", "id": "button_url", "label": "ボタンのリンク先" },
+    { "type": "color", "id": "bg_color", "label": "背景色", "default": "#B8860B" },
+    { "type": "color", "id": "text_color", "label": "文字色", "default": "#ffffff" }
+  ],
+  "presets": [{ "name": "キャンペーンバナー" }]
+}
+{% endschema %}

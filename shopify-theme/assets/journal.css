@@ -88,6 +88,14 @@
 }
 .article-content > *:first-child { margin-top: 0; }
 .article-content p { color: var(--text); margin: 0 0 1.6em; }
+/* 見出しの数字(「1日目」「4泊6日」等)がCormorant Garamond(見出し用serif)の
+   オールドスタイル数字でガタつくため、本文見出しはsans-serifで統一する */
+.article-content h2,
+.article-content h3,
+.article-content h4 {
+  font-family: var(--font-sans);
+  font-variant-numeric: lining-nums tabular-nums;
+}
 .article-content h2 { font-size: clamp(1.5rem, 3vw, 2rem); margin: 2em 0 0.8em; }
 .article-content h3 { font-size: clamp(1.2rem, 2.2vw, 1.45rem); margin: 1.8em 0 0.7em; }
 .article-content h4 { font-size: 1.05rem; color: var(--gold-dark); margin: 1.6em 0 0.6em; }
@@ -168,6 +176,11 @@
 .article-toc li.toc-h3 a { padding-left: 30px; font-size: 0.8rem; }
 @media (max-width: 960px) {
   .article-toc { position: static; margin-bottom: 40px; }
+}
+/* 2列表示はスマホの狭い画面幅だと右列がはみ出して切れて見える問題が
+   あったため、ある程度幅がある(タブレット寄りの)画面幅でだけ2列に
+   する。スマホ幅では1列のまま。 */
+@media (max-width: 960px) and (min-width: 560px) {
   .article-toc ol { columns: 2; }
 }
 

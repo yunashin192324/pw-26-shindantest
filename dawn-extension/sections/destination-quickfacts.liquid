@@ -1,0 +1,68 @@
+{%- comment -%}
+  destination-quickfacts — 飛行時間・時差・ベストシーズン・おすすめな人を
+  カード形式で一覧表示。Destination metaobjectの
+  flight_time / time_difference / best_season / recommended_for が
+  すべて未入力の間はセクションごと非表示になる。項目ごとにも、
+  未入力のものだけ個別に非表示になる。
+{%- endcomment -%}
+{%- comment -%}
+  where: 'slug.value', page.handle はこの環境ではネストしたプロパティの
+  絞り込みが効かないことがあるため、確実に動く明示的なfor+ifに置き換え。
+{%- endcomment -%}
+{%- assign all_destination_entries = shop.metaobjects.destination.values -%}
+{%- assign destination = blank -%}
+{%- for d in all_destination_entries -%}
+  {%- if d.slug.value == page.handle -%}{%- assign destination = d -%}{%- endif -%}
+{%- endfor -%}
+
+{%- assign has_facts = false -%}
+{%- if destination.flight_time.value != blank or destination.time_difference.value != blank or destination.best_season.value != blank or destination.recommended_for.value != blank -%}
+  {%- assign has_facts = true -%}
+{%- endif -%}
+
+{%- if destination and has_facts -%}
+<section{% if section.settings.bg_ivory %} class="dst-bg-ivory"{% endif %}>
+  <div class="dst-container">
+    <dl class="dst-facts-grid">
+      {%- if destination.flight_time.value != blank -%}
+        <div class="dst-fact-item dst-reveal">
+          <dt class="dst-fact-label">{{ section.settings.flight_time_label }}</dt>
+          <dd class="dst-fact-value">{{ destination.flight_time.value }}</dd>
+        </div>
+      {%- endif -%}
+      {%- if destination.time_difference.value != blank -%}
+        <div class="dst-fact-item dst-reveal">
+          <dt class="dst-fact-label">{{ section.settings.time_difference_label }}</dt>
+          <dd class="dst-fact-value">{{ destination.time_difference.value }}</dd>
+        </div>
+      {%- endif -%}
+      {%- if destination.best_season.value != blank -%}
+        <div class="dst-fact-item dst-reveal">
+          <dt class="dst-fact-label">{{ section.settings.best_season_label }}</dt>
+          <dd class="dst-fact-value">{{ destination.best_season.value }}</dd>
+        </div>
+      {%- endif -%}
+      {%- if destination.recommended_for.value != blank -%}
+        <div class="dst-fact-item dst-reveal">
+          <dt class="dst-fact-label">{{ section.settings.recommended_for_label }}</dt>
+          <dd class="dst-fact-value">{{ destination.recommended_for.value }}</dd>
+        </div>
+      {%- endif -%}
+    </dl>
+  </div>
+</section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "都市 早わかり情報",
+  "settings": [
+    { "type": "checkbox", "id": "bg_ivory", "label": "背景をアイボリーにする", "default": true },
+    { "type": "text", "id": "flight_time_label", "label": "「飛行時間」の表示名", "default": "飛行時間" },
+    { "type": "text", "id": "time_difference_label", "label": "「時差」の表示名", "default": "時差" },
+    { "type": "text", "id": "best_season_label", "label": "「ベストシーズン」の表示名", "default": "ベストシーズン" },
+    { "type": "text", "id": "recommended_for_label", "label": "「おすすめな人」の表示名", "default": "おすすめな人" }
+  ],
+  "presets": [{ "name": "都市 早わかり情報" }]
+}
+{% endschema %}

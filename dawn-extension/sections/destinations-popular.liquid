@@ -1,0 +1,43 @@
+{%- comment -%}
+  destinations-popular — 撮影地一覧ページの「人気の撮影地」。
+  Destination metaobjectの`popular`(チェックボックス)がONの都市だけを
+  カード表示する。1件もONが無ければセクションごと非表示。
+{%- endcomment -%}
+{%- assign all_destinations = shop.metaobjects.destination.values -%}
+{%- assign popular_count = 0 -%}
+{%- for d in all_destinations -%}
+  {%- if d.popular.value -%}{%- assign popular_count = popular_count | plus: 1 -%}{%- endif -%}
+{%- endfor -%}
+
+{%- if popular_count > 0 -%}
+<section>
+  <div class="dst-container">
+    <div class="dst-section-head dst-reveal">
+      <p class="dst-eyebrow">Popular</p>
+      <h2>{{ section.settings.heading }}</h2>
+      <hr class="dst-divider">
+      <p>{{ section.settings.description }}</p>
+    </div>
+    <div class="dst-region-grid">
+      {%- assign p_i = 0 -%}
+      {%- for d in all_destinations -%}
+        {%- if d.popular.value and p_i < 8 -%}
+          {% render 'destination-card', destination: d, show_badge: true %}
+          {%- assign p_i = p_i | plus: 1 -%}
+        {%- endif -%}
+      {%- endfor -%}
+    </div>
+  </div>
+</section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "撮影地一覧 人気の撮影地",
+  "settings": [
+    { "type": "text", "id": "heading", "label": "見出し", "default": "人気の撮影地" },
+    { "type": "textarea", "id": "description", "label": "説明文", "default": "多くのカップルに選ばれている撮影地です。" }
+  ],
+  "presets": [{ "name": "撮影地一覧 人気の撮影地" }]
+}
+{% endschema %}

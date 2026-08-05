@@ -1,0 +1,82 @@
+{%- comment -%}
+  destinations-hero — /pages/destinations の先頭セクション。
+  高さ70vh、世界観の伝わる1枚写真、見出しは固定文言だが
+  サブコピー/画像/CTAはすべて編集可能。
+
+  共通ヘッダー統一のため、このページ群は独自レイアウト
+  (theme.destinations)を使わず通常のtheme.liquidで表示する。
+  そのため専用CSS/JSをここで読み込み、.destinations-scopeクラスは
+  divで囲む代わりにJSでbodyに付与する(セクション単体でHTMLタグの
+  対応が閉じるようにするため。複数セクションにまたがってdivを
+  開閉するとShopifyのHTML検証で「壊れたHTML」と警告される)。
+{%- endcomment -%}
+{{ 'destinations.css' | asset_url | stylesheet_tag }}
+<script src="{{ 'destinations.js' | asset_url }}" defer></script>
+<script>document.body.classList.add('destinations-scope');</script>
+<section class="dst-hero">
+  <div class="dst-hero-media" style="background-color:#1a1a1a;">
+    {%- comment -%}
+      画像未設定の間も、見出しの白文字が白背景に消えて見えなくなら
+      ないよう、暗い背景色をフォールバックとして常に敷いておく。
+    {%- endcomment -%}
+    {%- if section.settings.image -%}
+      <img
+        src="{{ section.settings.image | image_url: width: 2400 }}"
+        srcset="{{ section.settings.image | image_url: width: 1200 }} 1200w, {{ section.settings.image | image_url: width: 1800 }} 1800w, {{ section.settings.image | image_url: width: 2400 }} 2400w"
+        sizes="100vw"
+        alt="{{ section.settings.image.alt | default: section.settings.heading | escape }}"
+        loading="eager"
+        fetchpriority="high"
+        width="2400" height="1350"
+      >
+    {%- endif -%}
+  </div>
+  <div class="dst-hero-content">
+    <p class="dst-eyebrow dst-reveal" style="color:{{ section.settings.eyebrow_color | default: '#ffffff' }};">{{ section.settings.eyebrow }}</p>
+    <h1 class="dst-reveal dst-reveal-1" style="color:{{ section.settings.heading_color | default: '#ffffff' }};font-size: clamp(2rem, 5vw, calc(var(--font-heading-scale, 1) * {{ section.settings.heading_size | default: 54 }}px));">{{ section.settings.heading | newline_to_br }}</h1>
+    <p class="dst-lede dst-reveal dst-reveal-2" style="color:{{ section.settings.description_color | default: 'rgba(255,255,255,0.86)' }};font-size: calc(var(--font-body-scale, 1) * {{ section.settings.description_size | default: 16 }}px);">{{ section.settings.description }}</p>
+    <div class="dst-cta-row dst-reveal dst-reveal-3">
+      {%- if section.settings.diagnosis_url != blank -%}
+        <a href="{{ section.settings.diagnosis_url }}" class="dst-btn dst-btn-gold">{{ section.settings.diagnosis_label }}</a>
+      {%- endif -%}
+      <a href="#dst-browse" class="dst-btn dst-btn-outline">{{ section.settings.search_label }}</a>
+    </div>
+  </div>
+</section>
+
+{%- comment -%}
+  撮影地診断フローティングボタン：画面右下に固定表示され、
+  スクロールしても常に追従する。TOPページ(korean-wedding-lp.liquid)の
+  フローティングボタンと同じ考え方。position:fixedなのでこの
+  セクション内のどこに置いても表示位置は変わらない。
+{%- endcomment -%}
+{%- if section.settings.show_floating_diagnosis -%}
+  <div class="dst-floating-btn">
+    <a href="{{ section.settings.floating_diagnosis_url | default: '#' }}" class="dst-floating-btn-link">{{ section.settings.floating_diagnosis_text }}</a>
+  </div>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "撮影地一覧 ヒーロー",
+  "settings": [
+    { "type": "image_picker", "id": "image", "label": "背景写真" },
+    { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "DESTINATIONS" },
+    { "type": "color", "id": "eyebrow_color", "label": "英字見出しの色", "default": "#ffffff" },
+    { "type": "textarea", "id": "heading", "label": "メイン見出し", "default": "世界中の撮影地から\nおふたりだけの物語を。" },
+    { "type": "color", "id": "heading_color", "label": "メイン見出しの色", "default": "#ffffff" },
+    { "type": "range", "id": "heading_size", "label": "メイン見出しの文字サイズ基準", "min": 32, "max": 80, "step": 2, "unit": "px", "default": 54 },
+    { "type": "textarea", "id": "description", "label": "サブコピー", "default": "120以上の撮影地から、おふたりらしい一枚が生まれる場所を見つけてください。" },
+    { "type": "color", "id": "description_color", "label": "サブコピーの色" },
+    { "type": "range", "id": "description_size", "label": "サブコピーの文字サイズ基準", "min": 10, "max": 24, "step": 1, "unit": "px", "default": 16 },
+    { "type": "text", "id": "diagnosis_label", "label": "診断ボタン文言", "default": "30秒診断" },
+    { "type": "url", "id": "diagnosis_url", "label": "診断ボタンリンク先", "info": "診断ページ公開まではリンク先を空欄にしておくとボタン自体が非表示になります。" },
+    { "type": "text", "id": "search_label", "label": "検索ボタン文言", "default": "撮影地を見る" },
+    { "type": "header", "content": "撮影地診断 フローティングボタン" },
+    { "type": "checkbox", "id": "show_floating_diagnosis", "label": "表示する", "default": false, "info": "画面右下に固定表示され、スクロールしても常についてくるボタンです。" },
+    { "type": "text", "id": "floating_diagnosis_text", "label": "ボタン文言", "default": "✨ 撮影地診断をする" },
+    { "type": "url", "id": "floating_diagnosis_url", "label": "リンク先" }
+  ],
+  "presets": [{ "name": "撮影地一覧 ヒーロー" }]
+}
+{% endschema %}

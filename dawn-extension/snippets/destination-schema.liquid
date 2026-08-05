@@ -1,0 +1,109 @@
+{%- comment -%}
+  destination-schema — 都市ページのJSON-LD構造化データ(SEO用)。
+  パンくずは表示側(destination-hero)に合わせ、地域を挟まず
+  TOP → 撮影地一覧 → 都市名 の3階層で統一している。
+  Params:
+    destination — required, Destination metaobjectの1件
+{%- endcomment -%}
+{%- comment -%}
+  早わかり情報(飛行時間/時差/ベストシーズン/おすすめな人)をadditional
+  Propertyとして構造化データにも出す。destination-quickfacts.liquidの
+  表示(dl/dt/dd)と同じ内容をAI検索・生成AI概要が直接抽出できるようにする
+  ため。表示側のUIは変えず、データだけ二重化して出力している。
+{%- endcomment -%}
+{%- assign fact_props = '' -%}
+{%- assign fact_count = 0 -%}
+{%- if destination.flight_time.value != blank -%}
+  {%- if fact_count > 0 -%}{%- assign fact_props = fact_props | append: ',' -%}{%- endif -%}
+  {%- capture fact_item -%}{ "@type": "PropertyValue", "name": "飛行時間", "value": {{ destination.flight_time.value | json }} }{%- endcapture -%}
+  {%- assign fact_props = fact_props | append: fact_item -%}
+  {%- assign fact_count = fact_count | plus: 1 -%}
+{%- endif -%}
+{%- if destination.time_difference.value != blank -%}
+  {%- if fact_count > 0 -%}{%- assign fact_props = fact_props | append: ',' -%}{%- endif -%}
+  {%- capture fact_item -%}{ "@type": "PropertyValue", "name": "時差", "value": {{ destination.time_difference.value | json }} }{%- endcapture -%}
+  {%- assign fact_props = fact_props | append: fact_item -%}
+  {%- assign fact_count = fact_count | plus: 1 -%}
+{%- endif -%}
+{%- if destination.best_season.value != blank -%}
+  {%- if fact_count > 0 -%}{%- assign fact_props = fact_props | append: ',' -%}{%- endif -%}
+  {%- capture fact_item -%}{ "@type": "PropertyValue", "name": "ベストシーズン", "value": {{ destination.best_season.value | json }} }{%- endcapture -%}
+  {%- assign fact_props = fact_props | append: fact_item -%}
+  {%- assign fact_count = fact_count | plus: 1 -%}
+{%- endif -%}
+{%- if destination.recommended_for.value != blank -%}
+  {%- if fact_count > 0 -%}{%- assign fact_props = fact_props | append: ',' -%}{%- endif -%}
+  {%- capture fact_item -%}{ "@type": "PropertyValue", "name": "おすすめな人", "value": {{ destination.recommended_for.value | json }} }{%- endcapture -%}
+  {%- assign fact_props = fact_props | append: fact_item -%}
+  {%- assign fact_count = fact_count | plus: 1 -%}
+{%- endif -%}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TouristAttraction",
+  "name": {{ destination.name_ja.value | json }},
+  "description": {{ destination.description.value | strip_html | truncate: 300 | json }},
+  {%- if destination.hero_image.value %}
+  "image": [{{ destination.hero_image.value | image_url: width: 1600 | prepend: "https:" | json }}],
+  {%- endif %}
+  {%- if destination.country.value != blank %}
+  "address": {
+    "@type": "PostalAddress",
+    "addressCountry": {{ destination.country.value | json }}
+  },
+  {%- endif %}
+  {%- if fact_count > 0 -%}
+  "additionalProperty": [{{ fact_props }}],
+  {%- endif -%}
+  "url": {{ canonical_url | json }}
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "TOP", "item": {{ shop.url | append: routes.root_url | json }} },
+    { "@type": "ListItem", "position": 2, "name": "撮影地一覧", "item": {{ shop.url | append: '/pages/destinations' | json }} },
+    { "@type": "ListItem", "position": 3, "name": {{ destination.name_ja.value | json }}, "item": {{ canonical_url | json }} }
+  ]
+}
+</script>
+{%- comment -%}
+  faqs：「FAQ Item」metaobjectの各エントリーがdestinationフィールドで
+  この都市を指しているものを集める(destination-faq.liquidと同じ
+  逆参照方式)。入力されていれば、AI検索・生成AI概要などが質問と
+  回答をそのまま抽出しやすいFAQPage構造化データも出力する。
+{%- endcomment -%}
+{%- assign schema_faq_source = shop.metaobjects.faq_item.values -%}
+{%- assign schema_faq_items = '' -%}
+{%- assign schema_faq_count = 0 -%}
+{%- for item in schema_faq_source -%}
+  {%- comment -%}
+    「撮影地」欄が単一参照ではなく参照リストで作成されている場合にも
+    対応できるよう、直接一致と配列ループの両方を試す
+    (destination-reasons.liquidと同じ対策)。
+  {%- endcomment -%}
+  {%- assign item_dest_match = false -%}
+  {%- if item.destination.value.slug.value == destination.slug.value -%}
+    {%- assign item_dest_match = true -%}
+  {%- endif -%}
+  {%- for id_ in item.destination.value -%}
+    {%- if id_.slug.value == destination.slug.value -%}{%- assign item_dest_match = true -%}{%- endif -%}
+  {%- endfor -%}
+  {%- if item_dest_match and item.question.value != blank and item.answer.value != blank -%}
+    {%- if schema_faq_count > 0 -%}{%- assign schema_faq_items = schema_faq_items | append: ',' -%}{%- endif -%}
+    {%- capture faq_item -%}{ "@type": "Question", "name": {{ item.question.value | json }}, "acceptedAnswer": { "@type": "Answer", "text": {{ item.answer.value | json }} } }{%- endcapture -%}
+    {%- assign schema_faq_items = schema_faq_items | append: faq_item -%}
+    {%- assign schema_faq_count = schema_faq_count | plus: 1 -%}
+  {%- endif -%}
+{%- endfor -%}
+{%- if schema_faq_count > 0 -%}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [{{ schema_faq_items }}]
+}
+</script>
+{%- endif -%}

@@ -1,0 +1,34 @@
+{
+  "sections": {
+    "destinations-hero": {
+      "type": "destinations-hero",
+      "settings": {
+        "eyebrow": "PHOTO",
+        "heading": "写真から探す",
+        "description": "海・教会・夕景など、気になる雰囲気の写真からお気に入りの1枚を見つけてください。",
+        "diagnosis_label": "30秒診断",
+        "search_label": "撮影地を見る"
+      }
+    },
+    "photo-search": {
+      "type": "photo-search",
+      "settings": {
+        "eyebrow": "PHOTO",
+        "heading": "写真から探す"
+      }
+    },
+    "destinations-cta": {
+      "type": "destinations-cta",
+      "settings": {
+        "subtle": true,
+        "heading": "あなたに合う撮影地を探す",
+        "button_label": "30秒診断"
+      }
+    }
+  },
+  "order": [
+    "destinations-hero",
+    "photo-search",
+    "destinations-cta"
+  ]
+}

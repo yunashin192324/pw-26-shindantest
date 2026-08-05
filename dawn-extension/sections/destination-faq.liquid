@@ -1,0 +1,128 @@
+{%- comment -%}
+  destination-faq — よくある質問 + その他の撮影地への導線。
+  「FAQ Item」metaobjectの各エントリーが`destination`フィールドで
+  都市を1つだけ指す方式(FAQ Item側がDestinationを指す一方向の参照)。
+  Destination側に「質問のリスト」を持たせる方式だと、全都市共通の
+  質問プールが都市を増やすたびに際限なく膨らみ、チェックボックスで
+  他都市の質問を誤選択できてしまう問題があったため、この向きに
+  変更した。未入力の間はFAQ部分のみ非表示（関連都市は独立して表示
+  される）。
+  関連都市は同じregionの他都市を優先抽出し、4件に満たない場合は
+  同じtheme(雰囲気)を持つ他地域の都市で補完する。
+{%- endcomment -%}
+{%- comment -%}
+  where: 'destination.value.slug.value', destination.slug.value はこの
+  環境ではネストしたプロパティの絞り込みが効かないことがあるため、
+  確実に動く明示的なfor+ifに置き換え。
+{%- endcomment -%}
+{%- assign all_destination_entries = shop.metaobjects.destination.values -%}
+{%- assign destination = blank -%}
+{%- for d in all_destination_entries -%}
+  {%- if d.slug.value == page.handle -%}{%- assign destination = d -%}{%- endif -%}
+{%- endfor -%}
+
+{%- assign all_faq_items = shop.metaobjects.faq_item.values -%}
+{%- assign faq_count = 0 -%}
+{%- capture faq_html -%}
+  {%- for item in all_faq_items -%}
+    {%- comment -%}
+      「撮影地」欄が単一参照ではなく参照リストで作成されている場合にも
+      対応できるよう、直接一致と配列ループの両方を試す
+      (destination-reasons.liquidと同じ対策)。
+    {%- endcomment -%}
+    {%- assign item_dest_match = false -%}
+    {%- if item.destination.value.slug.value == destination.slug.value -%}
+      {%- assign item_dest_match = true -%}
+    {%- endif -%}
+    {%- for id_ in item.destination.value -%}
+      {%- if id_.slug.value == destination.slug.value -%}{%- assign item_dest_match = true -%}{%- endif -%}
+    {%- endfor -%}
+    {%- if destination and item_dest_match -%}
+      <details class="dst-faq-item">
+        <summary class="dst-faq-question">{{ item.question.value }}</summary>
+        <p class="dst-faq-answer">{{ item.answer.value }}</p>
+      </details>
+      {%- assign faq_count = faq_count | plus: 1 -%}
+    {%- endif -%}
+  {%- endfor -%}
+{%- endcapture -%}
+
+{%- comment -%} 関連都市：同じregion優先、self除外、最大4件 {%- endcomment -%}
+{%- assign all_destinations = shop.metaobjects.destination.values -%}
+
+{%- if destination -%}
+  {%- if faq_count > 0 -%}
+  <section>
+    <div class="dst-container" style="max-width:760px;">
+      <div class="dst-section-head dst-reveal">
+        <p class="dst-eyebrow" style="color:{{ section.settings.eyebrow_color }};">{{ section.settings.eyebrow }}</p>
+        <h2 style="color:{{ section.settings.heading_color }};">{{ section.settings.heading }}</h2>
+        <hr class="dst-divider">
+      </div>
+      <div class="dst-faq-list">
+        {{ faq_html }}
+      </div>
+    </div>
+  </section>
+  {%- endif -%}
+
+  {%- comment -%}
+    関連都市の抽出：①同じ地域を優先、②4件に満たない場合は同じ
+    テーマ(themes配列の重複)を持つ都市で補完。「見ている人はこれも
+    見ています」に寄せた導線として、地域だけでなくテーマの近さも
+    考慮する。
+  {%- endcomment -%}
+  {%- assign related_count = 0 -%}
+  {%- assign my_themes = destination.themes.value -%}
+  {%- capture related_cards_html -%}
+    {%- for d in all_destinations -%}
+      {%- if related_count < 4 and d.slug.value != destination.slug.value and d.region.value == destination.region.value -%}
+        {% render 'destination-card', destination: d %}
+        {%- assign related_count = related_count | plus: 1 -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {%- if related_count < 4 -%}
+      {%- for d in all_destinations -%}
+        {%- if related_count < 4 and d.slug.value != destination.slug.value and d.region.value != destination.region.value -%}
+          {%- assign theme_match = false -%}
+          {%- for t in d.themes.value -%}
+            {%- if my_themes contains t -%}{%- assign theme_match = true -%}{%- endif -%}
+          {%- endfor -%}
+          {%- if theme_match -%}
+            {% render 'destination-card', destination: d %}
+            {%- assign related_count = related_count | plus: 1 -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+    {%- endif -%}
+  {%- endcapture -%}
+
+  {%- if related_count > 0 -%}
+  <section class="dst-bg-ivory">
+    <div class="dst-container">
+      <div class="dst-section-head dst-reveal">
+        <h2 style="color:{{ section.settings.related_heading_color }};">{{ section.settings.related_heading }}</h2>
+        <hr class="dst-divider">
+      </div>
+      <div class="dst-region-grid">
+        {{ related_cards_html }}
+      </div>
+    </div>
+  </section>
+  {%- endif -%}
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "都市 FAQ・関連都市",
+  "settings": [
+    { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "FAQ" },
+    { "type": "color", "id": "eyebrow_color", "label": "英字見出し色", "default": "#c9a96e" },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "よくある質問" },
+    { "type": "color", "id": "heading_color", "label": "見出し色", "default": "#1a1a1a" },
+    { "type": "text", "id": "related_heading", "label": "関連都市 見出し", "default": "その他の撮影地" },
+    { "type": "color", "id": "related_heading_color", "label": "関連都市 見出し色", "default": "#1a1a1a" }
+  ],
+  "presets": [{ "name": "都市 FAQ・関連都市" }]
+}
+{% endschema %}

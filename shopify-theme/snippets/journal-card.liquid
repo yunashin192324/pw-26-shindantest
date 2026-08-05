@@ -32,7 +32,7 @@
       <span class="dot">/</span>
       <span>{{ article.published_at | date: '%Y.%m.%d' }}</span>
     </div>
-    <h3 class="card-title">{{ article.title }}</h3>
+    <h3 class="card-title">{% render 'journal-title-break', title: article.title %}</h3>
     <p class="card-desc">{{ article.excerpt_or_content | strip_html | truncate: 78 }}</p>
     <span class="card-link">読む ＞</span>
   </div>

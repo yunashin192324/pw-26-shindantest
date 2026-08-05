@@ -1,0 +1,121 @@
+{%- comment -%}
+  testimonials-top — TOPページの「体験者の声」入口セクション。
+  ----------------------------------------------------------------
+  各都市ページに登録した体験談(Testimonial metaobject、destination-
+  testimonials.liquid参照)のうち、「TOPページに掲載」にチェックが
+  入ったものだけを抜粋してカード一覧表示する「各都市の体験者を集約した
+  入口」。カードをクリックすると、その体験談が実際に載っている都市
+  ページの「先輩カップルの声」セクション(id="testimonials")へ直接
+  ジャンプする。
+
+  実際の体験談データ(写真・お呼び名・Q&A等)は都市ページ側
+  (destination-testimonials.liquid)にしか無く、ここでは表紙となる
+  1枚目の写真と名前・都市名だけの「入口カード」を出す。
+
+  TOPページはdestinations.cssを読み込まないため、destination-quiz.liquid
+  と同じ方式でTailwindを自己インジェクションし、このセクション単体で
+  完結するようにしている。
+{%- endcomment -%}
+<script>
+  if (!document.getElementById('tw-config')) {
+    var twConfig = document.createElement('script');
+    twConfig.id = 'tw-config';
+    twConfig.innerHTML = "tailwind.config = { theme: { extend: { colors: { ivory: '#FAF8F5', gold: '#B8860B', 'gold-light': '#D4A843', dark: '#1a1a1a' }, fontFamily: { serif: ['var(--font-heading-family, serif)', 'serif'], sans: ['var(--font-body-family, sans-serif)', 'sans-serif'] } } } };";
+    document.head.appendChild(twConfig);
+  }
+  if (!document.getElementById('tw-cdn')) {
+    var twScript = document.createElement('script');
+    twScript.id = 'tw-cdn';
+    twScript.src = '{{ "tailwind-3.4.17.js" | asset_url }}';
+    document.head.appendChild(twScript);
+  }
+</script>
+
+{%- comment -%}
+  「体験談」メタオブジェクトの実際のタイプハンドルはtestimonialではなく
+  storyになっている(destination-testimonials.liquidと同じ理由)。
+{%- endcomment -%}
+{%- assign all_testimonials = shop.metaobjects.story.values -%}
+{%- assign featured_limit = section.settings.limit -%}
+{%- assign featured_count = 0 -%}
+{%- capture featured_cards_html -%}
+  {%- for t in all_testimonials -%}
+    {%- if t.featured.value and featured_count < featured_limit and t.destination.value != blank -%}
+      {%- assign t_photos = t.photos.value -%}
+      {%- comment -%}
+        1枚目の写真を取り出す。この環境はshop.metaobjects系の
+        .firstが機能しないことがあるため(3節⑮)、.firstではなく
+        limit:1のforループで確実に取り出す。
+      {%- endcomment -%}
+      {%- assign t_cover = blank -%}
+      {%- for p in t_photos limit: 1 -%}
+        {%- assign t_cover = p -%}
+      {%- endfor -%}
+      {%- assign t_cover_position = 'center' -%}
+      {%- if t_cover -%}
+        {%- assign t_cover_alt_source = t_cover.alt | default: t.name.value -%}
+        {%- assign t_cover_alt_parts = t_cover_alt_source | replace: '｜', '|' | replace: '￤', '|' | replace: '¦', '|' | replace: '│', '|' | replace: '‖', '|' | split: '|' -%}
+        {%- assign t_cover_position_key = t_cover_alt_parts[1] | strip -%}
+        {%- capture t_cover_pos_mapped -%}{% render 'destination-image-position', position_key: t_cover_position_key %}{%- endcapture -%}
+        {%- assign t_cover_pos_mapped = t_cover_pos_mapped | strip -%}
+        {%- if t_cover.presentation.focal_point -%}
+          {%- assign t_cover_position = t_cover.presentation.focal_point.x | append: '% ' | append: t_cover.presentation.focal_point.y | append: '%' -%}
+        {%- elsif t_cover_pos_mapped != blank -%}
+          {%- assign t_cover_position = t_cover_pos_mapped -%}
+        {%- elsif t_cover_position_key != blank -%}
+          {%- assign t_cover_position = t_cover_position_key -%}
+        {%- endif -%}
+      {%- endif -%}
+      <a href="/pages/{{ t.destination.value.slug.value }}#testimonials" class="testimonial-top-card group block rounded-lg overflow-hidden shadow-md bg-white">
+        {%- if t_cover -%}
+          <div class="w-full relative overflow-hidden" style="padding-top:110%;">
+            {%- capture t_cover_style -%}object-position: {{ t_cover_position | escape }};{%- endcapture -%}
+            {{ t_cover | image_url: width: 700 | image_tag: class: 'absolute top-0 left-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105', style: t_cover_style, loading: 'lazy', alt: t.name.value }}
+          </div>
+        {%- else -%}
+          <div class="w-full bg-gray-100" style="padding-top:110%;"></div>
+        {%- endif -%}
+        <div class="p-4">
+          {%- if t.name.value != blank -%}
+            <p class="font-bold text-sm mb-1">{{ t.name.value }}</p>
+          {%- endif -%}
+          <p class="text-xs" style="color:#B8860B;">{{ t.destination.value.name_ja.value }}</p>
+        </div>
+      </a>
+      {%- assign featured_count = featured_count | plus: 1 -%}
+    {%- endif -%}
+  {%- endfor -%}
+{%- endcapture -%}
+
+{%- if section.settings.show_section and featured_count > 0 -%}
+<div class="w-full" style="background:#ffffff;">
+  <section class="py-16 md:py-24 px-4">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center mb-14">
+        <p class="font-serif tracking-widest uppercase mb-2 text-sm" style="color:#B8860B;">{{ section.settings.eyebrow | default: 'VOICE' }}</p>
+        <h2 class="font-medium" style="font-size: calc(var(--font-heading-scale, 1) * 28px);">{{ section.settings.heading | default: '先輩カップルの声' }}</h2>
+        {%- if section.settings.description != blank -%}
+          <p class="text-sm mt-4" style="color:#666666;">{{ section.settings.description }}</p>
+        {%- endif -%}
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+        {{ featured_cards_html }}
+      </div>
+    </div>
+  </section>
+</div>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "体験者の声(TOP)",
+  "settings": [
+    { "type": "checkbox", "id": "show_section", "label": "このセクションを表示する", "default": true },
+    { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "VOICE" },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "先輩カップルの声" },
+    { "type": "textarea", "id": "description", "label": "説明文" },
+    { "type": "range", "id": "limit", "min": 4, "max": 20, "step": 1, "label": "表示する件数", "default": 8 }
+  ],
+  "presets": [{ "name": "体験者の声(TOP)" }]
+}
+{% endschema %}

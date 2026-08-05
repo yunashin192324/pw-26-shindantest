@@ -1,0 +1,78 @@
+{%- comment -%}
+  destination-reasons — 選ばれる理由。「Reason」metaobjectの各エントリーが
+  `destination`フィールドで都市を1つだけ指す方式(Reason側がDestinationを
+  指す一方向の参照)。Destination側に「理由のリスト」を持たせる方式だと、
+  全都市共通の理由プールが都市を増やすたびに際限なく膨らみ、チェック
+  ボックスで他都市の理由を誤選択できてしまう問題があったため、この
+  向きに変更した。Reasonを新規作成する時は「都市」欄で1つ選ぶだけで、
+  他の都市のエントリーが一覧に混ざって増え続けることはない。
+  該当するReasonが1件も無い間はセクションごと非表示になる。
+{%- endcomment -%}
+{%- comment -%}
+  where: 'destination.value.slug.value', destination.slug.value はこの
+  環境ではネストしたプロパティの絞り込みが効かないことがあるため、
+  確実に動く明示的なfor+ifに置き換え。
+{%- endcomment -%}
+{%- assign all_destination_entries = shop.metaobjects.destination.values -%}
+{%- assign destination = blank -%}
+{%- for d in all_destination_entries -%}
+  {%- if d.slug.value == page.handle -%}{%- assign destination = d -%}{%- endif -%}
+{%- endfor -%}
+
+{%- assign all_reasons = shop.metaobjects.reason.values -%}
+
+{%- assign reasons_count = 0 -%}
+{%- capture reasons_html -%}
+  {%- for r in all_reasons -%}
+    {%- comment -%}
+      「撮影地」欄が単一参照ではなく参照リスト(「リストにする」が
+      ONの状態)で作成されているため、r.destination.valueは1件でも
+      配列(MetaobjectListDrop)になっている。単一参照・リストの
+      どちらの作り方でも動くよう、直接一致と配列ループの両方を試す。
+    {%- endcomment -%}
+    {%- assign r_dest_match = false -%}
+    {%- if r.destination.value.slug.value == destination.slug.value -%}
+      {%- assign r_dest_match = true -%}
+    {%- endif -%}
+    {%- for rd in r.destination.value -%}
+      {%- if rd.slug.value == destination.slug.value -%}{%- assign r_dest_match = true -%}{%- endif -%}
+    {%- endfor -%}
+    {%- if destination and r_dest_match -%}
+      <div class="dst-reason-card dst-reveal">
+        {%- if r.heading.value != blank -%}
+          <h3 class="dst-reason-title">{% render 'safe-linebreak', text: r.heading.value %}</h3>
+        {%- endif -%}
+        {%- if r.body.value != blank -%}<p class="dst-reason-desc">{{ r.body.value }}</p>{%- endif -%}
+      </div>
+      {%- assign reasons_count = reasons_count | plus: 1 -%}
+    {%- endif -%}
+  {%- endfor -%}
+{%- endcapture -%}
+
+{%- if destination and reasons_count > 0 -%}
+<section{% if section.settings.bg_ivory %} class="dst-bg-ivory"{% endif %}>
+  <div class="dst-container">
+    <div class="dst-section-head dst-reveal">
+      <p class="dst-eyebrow" style="color:{{ section.settings.eyebrow_color }};">{{ section.settings.eyebrow }}</p>
+      <h2 style="color:{{ section.settings.heading_color }};">{{ section.settings.heading }}</h2>
+      <hr class="dst-divider">
+    </div>
+    <div class="dst-reasons-grid">
+      {{ reasons_html }}
+    </div>
+  </div>
+</section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "都市 選ばれる理由",
+  "settings": [
+    { "type": "checkbox", "id": "bg_ivory", "label": "背景をアイボリーにする", "default": false },
+    { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "Charm" },
+    { "type": "color", "id": "eyebrow_color", "label": "英字見出し色", "default": "#c9a96e" },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "選ばれる理由" },
+    { "type": "color", "id": "heading_color", "label": "見出し色", "default": "#1a1a1a" }
+  ]
+}
+{% endschema %}

@@ -1,0 +1,79 @@
+{%- comment -%}
+  destination-schedule — モデルスケジュール。「Schedule Item」metaobjectの
+  各エントリーが`destination`フィールドで都市を1つだけ指す方式
+  (Schedule Item側がDestinationを指す一方向の参照)。理由は
+  destination-reasons.liquidと同じ(共有プールが際限なく膨らむ問題の回避)。
+  該当するSchedule Itemが1件も無い間はセクションごと非表示になる。
+{%- endcomment -%}
+{%- comment -%}
+  where: 'destination.value.slug.value', destination.slug.value はこの
+  環境ではネストしたプロパティの絞り込みが効かないことがあるため、
+  確実に動く明示的なfor+ifに置き換え。
+{%- endcomment -%}
+{%- assign all_destination_entries = shop.metaobjects.destination.values -%}
+{%- assign destination = blank -%}
+{%- for d in all_destination_entries -%}
+  {%- if d.slug.value == page.handle -%}{%- assign destination = d -%}{%- endif -%}
+{%- endfor -%}
+
+{%- comment -%}
+  並び順は`sort_order`(数値・整数)欄で管理する。ハンドル名を書き換える
+  方式は正式なやり方ではなく、実際の表示順を保証しない(Shopifyの
+  管理画面上の一覧の並びだけがハンドル順に見えることがあるが、
+  shop.metaobjects.<type>.valuesが返す順序とは別物)。
+  この欄が全エントリーに入っていることが前提(空欄が混ざると
+  正しく並ばないことがある)。
+{%- endcomment -%}
+{%- assign all_schedule_items = shop.metaobjects.schedule_item.values | sort: 'sort_order.value' -%}
+{%- assign schedule_count = 0 -%}
+{%- capture schedule_html -%}
+  {%- for item in all_schedule_items -%}
+    {%- comment -%}
+      「撮影地」欄が単一参照ではなく参照リストで作成されている場合にも
+      対応できるよう、直接一致と配列ループの両方を試す
+      (destination-reasons.liquidと同じ対策)。
+    {%- endcomment -%}
+    {%- assign item_dest_match = false -%}
+    {%- if item.destination.value.slug.value == destination.slug.value -%}
+      {%- assign item_dest_match = true -%}
+    {%- endif -%}
+    {%- for id_ in item.destination.value -%}
+      {%- if id_.slug.value == destination.slug.value -%}{%- assign item_dest_match = true -%}{%- endif -%}
+    {%- endfor -%}
+    {%- if destination and item_dest_match -%}
+      <div class="dst-schedule-item dst-reveal">
+        <p class="dst-schedule-time">{{ item.time.value }}</p>
+        <p class="dst-schedule-desc">{{ item.body.value }}</p>
+      </div>
+      {%- assign schedule_count = schedule_count | plus: 1 -%}
+    {%- endif -%}
+  {%- endfor -%}
+{%- endcapture -%}
+
+{%- if destination and schedule_count > 0 -%}
+<section{% if section.settings.bg_ivory %} class="dst-bg-ivory"{% endif %}>
+  <div class="dst-container" style="max-width:760px;">
+    <div class="dst-section-head dst-reveal">
+      <p class="dst-eyebrow" style="color:{{ section.settings.eyebrow_color }};">{{ section.settings.eyebrow }}</p>
+      <h2 style="color:{{ section.settings.heading_color }};">{{ section.settings.heading }}</h2>
+      <hr class="dst-divider">
+    </div>
+    <div class="dst-schedule-list">
+      {{ schedule_html }}
+    </div>
+  </div>
+</section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "都市 モデルスケジュール",
+  "settings": [
+    { "type": "checkbox", "id": "bg_ivory", "label": "背景をアイボリーにする", "default": true },
+    { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "Schedule" },
+    { "type": "color", "id": "eyebrow_color", "label": "英字見出し色", "default": "#c9a96e" },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "モデルスケジュール" },
+    { "type": "color", "id": "heading_color", "label": "見出し色", "default": "#1a1a1a" }
+  ]
+}
+{% endschema %}

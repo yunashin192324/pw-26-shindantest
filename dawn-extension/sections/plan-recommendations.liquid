@@ -1,0 +1,43 @@
+{%- comment -%}
+  plan-recommendations — product-plan.liquidからJSのfetchで呼び出される
+  専用セクション。テーマの通常のテンプレートには組み込まない
+  (組み込まなくても、Shopifyの商品レコメンドAPI
+  routes.product_recommendations_url が ?section_id=plan-recommendations
+  を付けてこのファイルを直接レンダリングして返してくれる)。
+
+  recommendationsはこのAPI経由でアクセスした時だけ中身が入る特殊な
+  オブジェクトで、通常のページ表示では空。Shopifyが実際の閲覧・
+  購入データを学習して類似商品を返すため、ストア開設直後は
+  データ不足で「同じ商品タイプ/タグの商品」ベースの簡易的な結果に
+  なったり、該当なしで非表示になったりする。データが溜まるほど
+  精度が上がる。
+{%- endcomment -%}
+{%- if recommendations.performed and recommendations.products_count > 0 -%}
+<div class="plan-recs-inner max-w-5xl mx-auto px-6">
+  <h3 class="font-serif text-xl mb-6 text-center">{{ section.settings.heading | default: 'このプランを見ている人はこちらも見ています' }}</h3>
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+    {%- for rec_product in recommendations.products -%}
+      <a href="{{ rec_product.url }}" class="block rounded-lg overflow-hidden border border-gray-200 hover:shadow-md transition">
+        {%- if rec_product.featured_image != blank -%}
+          <div class="aspect-[4/5] overflow-hidden">
+            {{ rec_product.featured_image | image_url: width: 500 | image_tag: class: 'w-full h-full object-cover', loading: 'lazy', alt: rec_product.title }}
+          </div>
+        {%- endif -%}
+        <div class="p-4">
+          <h4 class="font-serif text-sm mb-1">{{ rec_product.title }}</h4>
+          <p class="text-sm font-bold" style="color:#B8860B;">{{ rec_product.price | money_without_currency }}<span class="text-xs font-normal">円〜</span></p>
+        </div>
+      </a>
+    {%- endfor -%}
+  </div>
+</div>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "プランのおすすめ(内部専用・追加不要)",
+  "settings": [
+    { "type": "text", "id": "heading", "label": "見出し", "default": "このプランを見ている人はこちらも見ています" }
+  ]
+}
+{% endschema %}

@@ -1,0 +1,236 @@
+{% comment %}
+  Shopify プロ仕様 コレクションLPビルダー（テーマ完全連動型）
+{% endcomment %}
+
+<script src="{{ 'tailwindcss-3.4.17.js' | asset_url }}" defer></script>
+<script>
+/* Tailwind CSSのフォント設定をShopifyテーマの共通変数に連動させる */
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        'gold': '#B8860B',
+        'light-gray': '#F9F9F9',
+        'dark-gray': '#333333'
+      },
+      fontFamily: {
+        /* Shopifyテーマのフォント設定を自動取得 */
+        serif: ['var(--font-heading-family)', 'serif'],
+        sans: ['var(--font-body-family)', 'sans-serif']
+      }
+    }
+  }
+}
+</script>
+
+<style>
+  /* Shopifyテーマの基準サイズとフォントを適用 */
+  .lp-container {
+    font-family: var(--font-body-family), sans-serif;
+    font-size: calc(var(--font-body-scale) * 100%);
+    color: #333333;
+  }
+  .lp-container .font-serif {
+    font-family: var(--font-heading-family), serif;
+  }
+  /* 小物セクションのドット背景用 */
+  .dot-bg {
+    background-image: radial-gradient(#d1d5db 1.5px, transparent 1.5px);
+    background-size: 24px 24px;
+  }
+</style>
+
+<div class="lp-container w-full min-h-screen bg-white relative pb-24" style="background-color: {{ section.settings.bg_color }};">
+  <div class="max-w-6xl mx-auto px-6 pt-12 md:pt-16">
+
+    {% for block in section.blocks %}
+      {% case block.type %}
+
+        {% comment %} --- 1. ヘッダーテキスト --- {% endcomment %}
+        {% when 'header' %}
+        <section class="mb-12" {{ block.shopify_attributes }}>
+          <h1 class="text-2xl md:text-3xl font-serif tracking-widest mb-6" style="color: {{ block.settings.title_color }};">
+            {{ block.settings.title }}
+          </h1>
+          {% if block.settings.sub_text != blank %}
+            <p class="text-sm md:text-base leading-relaxed mb-2" style="color: {{ block.settings.text_color }};">
+              {{ block.settings.sub_text | newline_to_br }}
+            </p>
+          {% endif %}
+          {% if block.settings.note_text != blank %}
+            <p class="text-xs" style="color: {{ block.settings.note_color }};">
+              {{ block.settings.note_text }}
+            </p>
+          {% endif %}
+        </section>
+
+        {% comment %}
+          --- 2. 商品ギャラリー（コレクション連携） ---
+          サムネイルをクリックしたら、そのドレスの商品詳細ページへ移動する
+          （以前ライトボックス表示に変更したが、詳細ページ側に「前/次の
+          ドレスへ」の矢印ナビゲーション(snippets/dress-prev-next-nav.liquid)
+          を追加する方針になったため、通常のリンクに戻した）。
+        {% endcomment %}
+        {% when 'gallery_grid' %}
+        <section class="mb-20" {{ block.shopify_attributes }}>
+          {% assign collection = collections[block.settings.collection] %}
+          {% assign limit = block.settings.limit %}
+
+          {% paginate collection.products by limit %}
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+              {% for product in collection.products %}
+                <a href="{{ product.url }}" class="group block cursor-pointer">
+                  <div class="w-full relative aspect-[3/4] overflow-hidden mb-3 bg-gray-100">
+                    {{ product.featured_image | image_url: width: 600 | image_tag: alt: product.title, class: 'absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105' }}
+                  </div>
+                  <h3 class="text-sm text-gray-800 transition-colors group-hover:text-gold">{{ product.title }}</h3>
+                </a>
+              {% else %}
+                {% comment %} コレクション未選択時のプレースホルダー {% endcomment %}
+                {% for i in (1..12) %}
+                  <div class="group block">
+                    <div class="w-full relative aspect-[3/4] overflow-hidden mb-3 bg-gray-100 flex items-center justify-center text-gray-400">
+                      画像 {{ i }}
+                    </div>
+                    <h3 class="text-sm text-gray-800">ドレス名 サンプル</h3>
+                  </div>
+                {% endfor %}
+              {% endfor %}
+            </div>
+
+            {% comment %} ページネーション {% endcomment %}
+            {% if paginate.pages > 1 %}
+              <div class="flex justify-center items-center mt-12 gap-6 text-sm font-serif text-gray-600">
+                {{ paginate | default_pagination: next: '>', previous: '<' }}
+              </div>
+            {% else %}
+              {% if collection == blank %}
+                <div class="flex justify-center items-center mt-12 gap-6 text-sm font-serif text-gray-600">
+                  <span class="border-b border-gray-800 text-gray-900 pb-1 px-1">1</span>
+                  <span class="px-1">2</span>
+                  <span class="px-1">3</span>
+                  <span class="px-1">&gt;</span>
+                </div>
+              {% endif %}
+            {% endif %}
+          {% endpaginate %}
+        </section>
+
+        {% comment %} --- 3. 基本衣裳小物 (画像1枚に変更) --- {% endcomment %}
+        {% when 'accessories' %}
+        <section class="mb-20" {{ block.shopify_attributes }}>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-10 items-stretch dot-bg p-6 md:p-10 rounded-sm">
+
+            {% comment %} 画像エリア (左側) {% endcomment %}
+            <div class="w-full h-full bg-gray-200">
+              {% if block.settings.image %}
+                {{ block.settings.image | image_url: width: 800 | image_tag: class: 'w-full h-full object-cover' }}
+              {% endif %}
+            </div>
+
+            {% comment %} テキストエリア (右側) {% endcomment %}
+            <div class="bg-white/95 p-8 flex flex-col justify-center">
+              <h2 class="text-xl font-serif mb-6 tracking-widest">{{ block.settings.title }}</h2>
+              <div class="text-sm leading-loose text-gray-700">
+                {{ block.settings.description | newline_to_br }}
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        {% comment %} --- 4. 注意事項・情報ボックス --- {% endcomment %}
+        {% when 'info_box' %}
+        <section class="mb-12" {{ block.shopify_attributes }}>
+          <h2 class="text-lg font-serif mb-4 tracking-widest">{{ block.settings.title }}</h2>
+          <div class="p-6 text-sm leading-relaxed" style="background-color: {{ block.settings.box_bg }}; color: {{ block.settings.box_text_color }};">
+            {{ block.settings.content | newline_to_br }}
+          </div>
+        </section>
+
+      {% endcase %}
+    {% endfor %}
+
+  </div>
+</div>
+
+{% schema %}
+{
+  "name": "コレクションLPセクション",
+  "settings": [
+    {
+      "type": "color",
+      "id": "bg_color",
+      "label": "全体の背景色",
+      "default": "#ffffff"
+    }
+  ],
+  "blocks": [
+    {
+      "type": "header",
+      "name": "ページ見出し",
+      "limit": 1,
+      "settings": [
+        { "type": "text", "id": "title", "label": "タイトル", "default": "ウェディングドレス＆タキシード" },
+        { "type": "color", "id": "title_color", "label": "タイトル色", "default": "#333333" },
+        { "type": "textarea", "id": "sub_text", "label": "サブテキスト", "default": "豊富なデザインのウェディングドレス＆タキシードをご用意" },
+        { "type": "color", "id": "text_color", "label": "テキスト色", "default": "#666666" },
+        { "type": "text", "id": "note_text", "label": "注釈テキスト", "default": "※画像は全てアップグレード衣裳（一例）" },
+        { "type": "color", "id": "note_color", "label": "注釈テキスト色", "default": "#005a9c" }
+      ]
+    },
+    {
+      "type": "gallery_grid",
+      "name": "商品ギャラリー(自動表示)",
+      "limit": 1,
+      "settings": [
+        { "type": "collection", "id": "collection", "label": "表示するコレクション" },
+        { "type": "range", "id": "limit", "min": 4, "max": 48, "step": 4, "label": "1ページの表示件数", "default": 12 }
+      ]
+    },
+    {
+      "type": "accessories",
+      "name": "基本衣裳小物",
+      "settings": [
+        { "type": "text", "id": "title", "label": "タイトル", "default": "基本衣裳小物" },
+        { "type": "textarea", "id": "description", "label": "説明文（改行可）", "default": "【新婦基本小物】ショートパールネックレス、一粒パールイヤリング、スパンショートグローブ、ショートベール（チュール）、ミュール（パンプス）※ベールは一部対象外\n\n【新郎基本小物】ポケットチーフ、サスペンダー、アームバンド、グローブ、カフスボタン、靴（新郎靴下はご持参）" },
+        { "type": "image_picker", "id": "image", "label": "画像" }
+      ]
+    },
+    {
+      "type": "info_box",
+      "name": "情報ボックス(延長料など)",
+      "settings": [
+        { "type": "text", "id": "title", "label": "見出し", "default": "延長料" },
+        { "type": "textarea", "id": "content", "label": "テキスト（改行可）", "default": "衣裳・小物の貸出期間は、貸出日より9日間とさせていただきます。期間内にご返却いただけない場合は、延長料金が発生いたしますのでご了承ください。\n・9日目以降1日につき 衣裳・小物代金の10％" },
+        { "type": "color", "id": "box_bg", "label": "ボックス背景色", "default": "#F7F7F7" },
+        { "type": "color", "id": "box_text_color", "label": "テキスト色", "default": "#333333" }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "コレクションLPセクション",
+      "blocks": [
+        { "type": "header" },
+        { "type": "gallery_grid" },
+        { "type": "accessories" },
+        {
+          "type": "info_box",
+          "settings": {
+            "title": "延長料",
+            "content": "衣裳・小物の貸出期間は、貸出日より9日間とさせていただきます。期間内にご返却いただけない場合は、延長料金が発生いたしますのでご了承ください。\n・9日目以降1日につき 衣裳・小物代金の10%"
+          }
+        },
+        {
+          "type": "info_box",
+          "settings": {
+            "title": "注意事項",
+            "content": "※空き状況・サイズ・お選びの時期等によってはご希望の衣裳がご用意できない場合もございます。あらかじめご了承ください。\n※お選びいただく衣裳・サイズにより追加代金が発生する場合がございます。"
+          }
+        }
+      ]
+    }
+  ]
+}
+{% endschema %}

@@ -1,0 +1,147 @@
+{%- comment -%}
+  destination-gallery — フォトギャラリー。Destination metaobjectの
+  `gallery_images`（画像のリストフィールド）が未入力の間はセクションごと
+  非表示になる。Metaobjectの「リスト」型フィールドはエントリー編集画面で
+  複数枚まとめて選択・アップロードできるため、area-lp.liquidのように
+  ブロックを1枚ずつ追加する必要がない。
+
+  各画像の代替テキスト(ALTテキスト)に「説明文｜位置」の形式で書くと、
+  その1枚だけトリミング位置を上書きできる(product-plan.liquidの商品
+  ギャラリーと同じ仕組み)。位置は上/下/左/右/中央/左上/右上/左下/右下、
+  またはtop/bottom/leftのような英語、30% 50%のような数値も可。
+  ｜が無ければセクション設定の既定値を使う。
+{%- endcomment -%}
+{%- comment -%}
+  where: 'slug.value', page.handle はこの環境ではネストしたプロパティの
+  絞り込みが効かないことがあるため、確実に動く明示的なfor+ifに置き換え。
+{%- endcomment -%}
+{%- assign all_destination_entries = shop.metaobjects.destination.values -%}
+{%- assign destination = blank -%}
+{%- for d in all_destination_entries -%}
+  {%- if d.slug.value == page.handle -%}{%- assign destination = d -%}{%- endif -%}
+{%- endfor -%}
+{%- assign gallery_images = destination.gallery_images.value -%}
+
+{%- if destination and gallery_images.size > 0 -%}
+<section style="background-color:{{ section.settings.bg_color }};padding-top:64px;padding-bottom:64px;">
+  <div class="dst-container">
+    <div class="dst-section-head dst-reveal" style="color:{{ section.settings.heading_color }};">
+      <p class="dst-eyebrow" style="color:{{ section.settings.eyebrow_color }};">{{ section.settings.eyebrow }}</p>
+      <h2 style="color:{{ section.settings.heading_color }};">{{ section.settings.heading }}</h2>
+      <hr class="dst-divider">
+    </div>
+    <div class="dst-gallery-grid" id="dst-gallery-{{ section.id }}">
+      {%- for image in gallery_images -%}
+        {%- assign gimg_alt_parts = image.alt | replace: '｜', '|' | replace: '￤', '|' | replace: '¦', '|' | replace: '│', '|' | replace: '‖', '|' | split: '|' -%}
+        {%- assign gimg_position_key = gimg_alt_parts[1] | strip -%}
+        {%- capture gimg_pos_mapped -%}{% render 'destination-image-position', position_key: gimg_position_key %}{%- endcapture -%}
+        {%- assign gimg_pos_mapped = gimg_pos_mapped | strip -%}
+        {%- if image.presentation.focal_point -%}
+          {%- assign gimg_position = image.presentation.focal_point.x | append: '% ' | append: image.presentation.focal_point.y | append: '%' -%}
+        {%- elsif gimg_pos_mapped != blank -%}
+          {%- assign gimg_position = gimg_pos_mapped -%}
+        {%- elsif gimg_position_key != blank -%}
+          {%- assign gimg_position = gimg_position_key -%}
+        {%- else -%}
+          {%- assign gimg_position = section.settings.img_position -%}
+        {%- endif -%}
+        {%- capture gallery_img_style -%}object-position: {{ gimg_position | escape }};{%- endcapture -%}
+        <div class="dst-gallery-item" data-full="{{ image | image_url: width: 1800 }}">
+          {{ image | image_url: width: 700 | image_tag: class: 'dst-gallery-img', loading: 'lazy', style: gallery_img_style, alt: gimg_alt_parts[0] | strip }}
+        </div>
+      {%- endfor -%}
+    </div>
+  </div>
+
+  {%- comment -%}
+    ギャラリーのライトボックス。タップで拡大表示、左右スワイプ/矢印/
+    キーボードで前後の画像に切り替え。product-plan.liquidの商品
+    ギャラリーと同じ仕組み(vanilla JS、section.idでスコープ)。
+  {%- endcomment -%}
+  <div id="dst-gallery-lightbox-{{ section.id }}" class="dst-gallery-lightbox" hidden>
+    <button type="button" class="dst-gallery-lightbox-close" aria-label="閉じる">×</button>
+    <button type="button" class="dst-gallery-lightbox-prev" aria-label="前の画像">‹</button>
+    <button type="button" class="dst-gallery-lightbox-next" aria-label="次の画像">›</button>
+    <div class="dst-gallery-lightbox-inner">
+      <img class="dst-gallery-lightbox-img" alt="">
+    </div>
+  </div>
+  <script>
+    (function () {
+      var root = document.getElementById('dst-gallery-{{ section.id }}');
+      var lightbox = document.getElementById('dst-gallery-lightbox-{{ section.id }}');
+      if (!root || !lightbox) return;
+      document.body.appendChild(lightbox);
+      var img = lightbox.querySelector('.dst-gallery-lightbox-img');
+      var items = Array.prototype.slice.call(root.querySelectorAll('.dst-gallery-item'));
+      var current = 0;
+      var touchStartX = null;
+
+      function show(i) {
+        if (items.length === 0) return;
+        current = (i + items.length) % items.length;
+        img.src = items[current].getAttribute('data-full');
+      }
+      function open(i) {
+        show(i);
+        lightbox.hidden = false;
+        document.body.style.overflow = 'hidden';
+      }
+      function close() {
+        lightbox.hidden = true;
+        document.body.style.overflow = '';
+      }
+
+      items.forEach(function (el, i) {
+        el.addEventListener('click', function () { open(i); });
+      });
+      lightbox.querySelector('.dst-gallery-lightbox-close').addEventListener('click', close);
+      lightbox.querySelector('.dst-gallery-lightbox-prev').addEventListener('click', function () { show(current - 1); });
+      lightbox.querySelector('.dst-gallery-lightbox-next').addEventListener('click', function () { show(current + 1); });
+      lightbox.addEventListener('click', function (e) {
+        if (e.target === lightbox) close();
+      });
+      document.addEventListener('keydown', function (e) {
+        if (lightbox.hidden) return;
+        if (e.key === 'Escape') close();
+        if (e.key === 'ArrowLeft') show(current - 1);
+        if (e.key === 'ArrowRight') show(current + 1);
+      });
+      lightbox.addEventListener('touchstart', function (e) {
+        touchStartX = e.changedTouches[0].clientX;
+      }, { passive: true });
+      lightbox.addEventListener('touchend', function (e) {
+        if (touchStartX === null) return;
+        var dx = e.changedTouches[0].clientX - touchStartX;
+        if (Math.abs(dx) > 40) {
+          if (dx < 0) { show(current + 1); } else { show(current - 1); }
+        }
+        touchStartX = null;
+      }, { passive: true });
+    })();
+  </script>
+</section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "都市 フォトギャラリー",
+  "settings": [
+    { "type": "color", "id": "bg_color", "label": "背景色", "default": "#1a1a1a" },
+    { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "Gallery" },
+    { "type": "color", "id": "eyebrow_color", "label": "英字見出し色", "default": "#c9a96e" },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "フォトギャラリー" },
+    { "type": "color", "id": "heading_color", "label": "見出し色", "default": "#ffffff" },
+    { "type": "select", "id": "img_position", "label": "画像トリミング位置", "default": "center",
+      "info": "全ての画像に同じ位置設定が適用されます。",
+      "options": [
+        { "value": "top", "label": "上" },
+        { "value": "center", "label": "中央" },
+        { "value": "bottom", "label": "下" },
+        { "value": "left", "label": "左" },
+        { "value": "right", "label": "右" }
+      ]
+    }
+  ]
+}
+{% endschema %}

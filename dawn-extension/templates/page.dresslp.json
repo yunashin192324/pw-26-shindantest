@@ -1,0 +1,85 @@
+/*
+ * ------------------------------------------------------------
+ * IMPORTANT: The contents of this file are auto-generated.
+ *
+ * This file may be updated by the Shopify admin theme editor
+ * or related systems. Please exercise caution as any changes
+ * made to this file may be overwritten.
+ * ------------------------------------------------------------
+ */
+{
+  "sections": {
+    "main": {
+      "type": "main-page",
+      "disabled": true,
+      "settings": {
+        "padding_top": 28,
+        "padding_bottom": 28
+      }
+    },
+    "custom_collection_lp_BMtjGQ": {
+      "type": "custom-collection-lp",
+      "blocks": {
+        "header_EY69Nb": {
+          "type": "header",
+          "settings": {
+            "title": "ウェディングドレス＆タキシード",
+            "title_color": "#333333",
+            "sub_text": "豊富なデザインのウェディングドレス＆タキシードをご用意",
+            "text_color": "#666666",
+            "note_text": "※画像は全てアップグレード衣裳（一例）",
+            "note_color": "#005a9c"
+          }
+        },
+        "gallery_grid_AUQaF9": {
+          "type": "gallery_grid",
+          "settings": {
+            "collection": "特集コレクション",
+            "limit": 12
+          }
+        },
+        "accessories_CnRk8Y": {
+          "type": "accessories",
+          "settings": {
+            "title": "基本衣裳小物",
+            "description": "【新婦基本小物】一連パールネックレス、一粒パールイヤリング、スパンショートグローブ、ショートベール（プレーン）、ミュール（3.0/7.0/12.0ヒール）M～XL\n\n【新郎基本小物】カフスボタン、ポケットチーフ、サスペンダー、アームバンド、グローブ、インソールシューズ（黒/白）S～L靴",
+            "image": "shopify://shop_images/9a9754a5e6be7294f361d9c0ef9afcfa.png"
+          }
+        },
+        "info_box_U3q3Qa": {
+          "type": "info_box",
+          "settings": {
+            "title": "延長料",
+            "content": "衣裳・小物の貸出期間は、貸出日より9日間とさせていただきます。期間内にご返却いただけない場合は、延長料金が発生いたしますのでご了承ください。\n・9日目以降1日につき 衣裳・小物代金の10%",
+            "box_bg": "#f7f7f7",
+            "box_text_color": "#333333"
+          }
+        },
+        "info_box_9kjexG": {
+          "type": "info_box",
+          "settings": {
+            "title": "注意事項",
+            "content": "※空き状況・サイズ・お選びの時期等によってはご希望の衣裳がご用意できない場合もございます。あらかじめご了承ください。\n※お選びいただく衣裳・サイズにより追加代金が発生する場合がございます。",
+            "box_bg": "#f7f7f7",
+            "box_text_color": "#333333"
+          }
+        }
+      },
+      "block_order": [
+        "header_EY69Nb",
+        "gallery_grid_AUQaF9",
+        "accessories_CnRk8Y",
+        "info_box_U3q3Qa",
+        "info_box_9kjexG"
+      ],
+      "name": "コレクションLPセクション",
+      "settings": {
+        "bg_color": "#ffffff"
+      }
+    }
+  },
+  "order": [
+    "main",
+    "custom_collection_lp_BMtjGQ"
+  ]
+}

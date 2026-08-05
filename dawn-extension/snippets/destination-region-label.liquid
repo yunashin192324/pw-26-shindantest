@@ -1,0 +1,37 @@
+{%- comment -%}
+  destination-region-label
+  ----------------------------------------------------------------
+  地域(region)は仕様書の指示により Metaobject化せずコード側で固定。
+  12の地域キーと表示ラベル(日本語表記。2026-07-26に英語表記から変更)の
+  対応はここ1箇所にのみ定義し、destinations-region-list / region-hero /
+  region-intro / 検索JSON などすべてがこのsnippetを参照する
+  （表記ゆれ防止・保守性のため）。
+
+  「america」は「north_america」に置き換え、「hawaii」
+  「micronesia」「south_pacific」「indian_ocean」を新設した
+  （ハワイをアメリカ本土から独立させるため）。既存のDestination
+  エントリーでregionが「america」になっているものは、該当する
+  新しいキー（多くは north_america、ハワイの都市なら hawaii）に
+  入力し直してください。
+
+  Params:
+    region_key — required, 例: 'north_america'
+  Usage:
+    {%- capture region_label -%}{% render 'destination-region-label', region_key: region_key %}{%- endcapture -%}
+    {%- assign region_label = region_label | strip -%}
+{%- endcomment -%}
+{%- case region_key -%}
+  {%- when 'hawaii' -%}ハワイ
+  {%- when 'micronesia' -%}ミクロネシア
+  {%- when 'south_pacific' -%}南太平洋
+  {%- when 'indian_ocean' -%}インド洋
+  {%- when 'oceania' -%}オセアニア
+  {%- when 'asia' -%}アジア
+  {%- when 'middle_east' -%}中東
+  {%- when 'europe' -%}ヨーロッパ
+  {%- when 'north_america' -%}北米
+  {%- when 'south_america' -%}南米
+  {%- when 'africa' -%}アフリカ
+  {%- when 'japan' -%}日本
+  {%- else -%}{{ region_key | replace: '_', ' ' | capitalize }}
+{%- endcase -%}

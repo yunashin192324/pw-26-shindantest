@@ -1,0 +1,177 @@
+{%- comment -%}
+  photo-search — 写真から探す（タグ絞り込みギャラリー）。
+  ----------------------------------------------------------------
+  全都市のフォトギャラリー画像(destination.gallery_images)を1箇所に
+  集約し、タグで絞り込んで探せる。新しい入力欄を増やすのではなく、
+  既存のALTテキスト規約「説明文｜位置」を拡張し、3つ目の区切りに
+  タグをカンマ区切りで書けるようにした(後方互換あり。3つ目が無ければ
+  タグ無し扱いになるだけで、既存の画像のALTテキストは書き直さなくても
+  壊れない)。
+
+  例: チャペル外観｜下｜教会,街並み
+
+  クリックするとdestination-gallery.liquidと同じライトボックスで
+  拡大表示し、その撮影地ページへのリンクも出す。
+{%- endcomment -%}
+{%- assign all_destinations = shop.metaobjects.destination.values -%}
+<script type="application/json" id="photo-search-data-{{ section.id }}">
+[
+  {%- assign photo_count = 0 -%}
+  {%- for d in all_destinations -%}
+    {%- assign gallery_images = d.gallery_images.value -%}
+    {%- for image in gallery_images -%}
+      {%- assign alt_parts = image.alt | replace: '｜', '|' | replace: '￤', '|' | replace: '¦', '|' | replace: '│', '|' | replace: '‖', '|' | split: '|' -%}
+      {%- assign tags_raw = alt_parts[2] | strip -%}
+      {%- assign tag_list = tags_raw | split: ',' -%}
+      {%- if photo_count > 0 -%},{%- endif -%}
+      {
+        "src": {{ image | image_url: width: 700 | json }},
+        "full": {{ image | image_url: width: 1800 | json }},
+        "alt": {{ alt_parts[0] | strip | json }},
+        "tags": [{% for t in tag_list %}{{ t | strip | json }}{% unless forloop.last %},{% endunless %}{% endfor %}],
+        "destination": {{ d.name_ja.value | json }},
+        "url": {{ '/pages/' | append: d.slug.value | json }}
+      }
+      {%- assign photo_count = photo_count | plus: 1 -%}
+    {%- endfor -%}
+  {%- endfor -%}
+]
+</script>
+
+<section>
+  <div class="dst-container">
+    <div class="dst-section-head dst-reveal">
+      <p class="dst-eyebrow">{{ section.settings.eyebrow | default: 'PHOTO' }}</p>
+      <h2>{{ section.settings.heading | default: '写真から探す' }}</h2>
+      {%- if section.settings.description != blank -%}
+        <p class="dst-lede">{{ section.settings.description }}</p>
+      {%- endif -%}
+    </div>
+
+    {%- if photo_count > 0 -%}
+      <div class="dst-filter-chips" id="photo-search-chips-{{ section.id }}" style="margin-bottom:24px;justify-content:center;"></div>
+      <div class="dst-gallery-grid" id="photo-search-grid-{{ section.id }}"></div>
+      <p id="photo-search-empty-{{ section.id }}" class="dst-text-center dst-text-muted" style="display:none;padding:40px 0;">該当する写真が見つかりませんでした。</p>
+    {%- else -%}
+      <p class="dst-text-center dst-text-muted" style="padding:40px 0;">
+        写真がまだ登録されていません。都市のフォトギャラリー画像のALTテキストに「説明文｜位置｜タグ」の形式でタグを追加すると、ここに表示されます。
+      </p>
+    {%- endif -%}
+  </div>
+
+  {%- comment -%} destination-gallery.liquidと同じライトボックス構成 {%- endcomment -%}
+  <div id="photo-search-lightbox-{{ section.id }}" class="dst-gallery-lightbox" hidden>
+    <button type="button" class="dst-gallery-lightbox-close" aria-label="閉じる">×</button>
+    <button type="button" class="dst-gallery-lightbox-prev" aria-label="前の写真">‹</button>
+    <button type="button" class="dst-gallery-lightbox-next" aria-label="次の写真">›</button>
+    <div class="dst-gallery-lightbox-inner">
+      <img class="dst-gallery-lightbox-img" alt="">
+    </div>
+    <a class="photo-search-lightbox-link" href="#" style="position:absolute;bottom:24px;left:50%;transform:translateX(-50%);color:#fff;font-size:0.85rem;text-decoration:underline;">この撮影地を見る ＞</a>
+  </div>
+</section>
+
+{%- if photo_count > 0 -%}
+<script>
+  (function () {
+    var dataEl = document.getElementById('photo-search-data-{{ section.id }}');
+    var grid = document.getElementById('photo-search-grid-{{ section.id }}');
+    var chipsWrap = document.getElementById('photo-search-chips-{{ section.id }}');
+    var emptyMsg = document.getElementById('photo-search-empty-{{ section.id }}');
+    var lightbox = document.getElementById('photo-search-lightbox-{{ section.id }}');
+    if (!dataEl || !grid || !lightbox) return;
+    document.body.appendChild(lightbox);
+
+    var photos = JSON.parse(dataEl.textContent || '[]');
+    var img = lightbox.querySelector('.dst-gallery-lightbox-img');
+    var linkEl = lightbox.querySelector('.photo-search-lightbox-link');
+    var visible = photos.slice();
+    var current = 0;
+
+    function renderGrid() {
+      grid.innerHTML = '';
+      visible.forEach(function (p, i) {
+        var div = document.createElement('div');
+        div.className = 'dst-gallery-item';
+        div.setAttribute('data-full', p.full);
+        div.innerHTML = '<img src="' + p.src + '" alt="' + p.alt + '" loading="lazy" class="dst-gallery-img">';
+        div.addEventListener('click', function () { open(i); });
+        grid.appendChild(div);
+      });
+      if (emptyMsg) emptyMsg.style.display = visible.length === 0 ? 'block' : 'none';
+    }
+
+    function show(i) {
+      if (visible.length === 0) return;
+      current = (i + visible.length) % visible.length;
+      var p = visible[current];
+      img.src = p.full;
+      linkEl.href = p.url;
+    }
+    function open(i) {
+      show(i);
+      lightbox.hidden = false;
+      document.body.style.overflow = 'hidden';
+    }
+    function close() {
+      lightbox.hidden = true;
+      document.body.style.overflow = '';
+    }
+    lightbox.querySelector('.dst-gallery-lightbox-close').addEventListener('click', close);
+    lightbox.querySelector('.dst-gallery-lightbox-prev').addEventListener('click', function () { show(current - 1); });
+    lightbox.querySelector('.dst-gallery-lightbox-next').addEventListener('click', function () { show(current + 1); });
+    lightbox.addEventListener('click', function (e) { if (e.target === lightbox) close(); });
+    document.addEventListener('keydown', function (e) {
+      if (lightbox.hidden) return;
+      if (e.key === 'Escape') close();
+      if (e.key === 'ArrowLeft') show(current - 1);
+      if (e.key === 'ArrowRight') show(current + 1);
+    });
+
+    var allTags = [];
+    photos.forEach(function (p) {
+      (p.tags || []).forEach(function (t) {
+        if (t && allTags.indexOf(t) === -1) allTags.push(t);
+      });
+    });
+
+    function applyFilter(tag) {
+      visible = tag ? photos.filter(function (p) { return (p.tags || []).indexOf(tag) !== -1; }) : photos.slice();
+      renderGrid();
+    }
+
+    function buildChip(label, tag, active) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'dst-filter-chip' + (active ? ' is-active' : '');
+      btn.textContent = label;
+      btn.addEventListener('click', function () {
+        Array.prototype.forEach.call(chipsWrap.querySelectorAll('.dst-filter-chip'), function (c) {
+          c.classList.remove('is-active');
+        });
+        btn.classList.add('is-active');
+        applyFilter(tag);
+      });
+      return btn;
+    }
+    if (chipsWrap) {
+      chipsWrap.appendChild(buildChip('すべて', null, true));
+      allTags.forEach(function (t) { chipsWrap.appendChild(buildChip(t, t, false)); });
+    }
+
+    renderGrid();
+  })();
+</script>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "写真から探す",
+  "settings": [
+    { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "PHOTO" },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "写真から探す" },
+    { "type": "textarea", "id": "description", "label": "説明文" }
+  ],
+  "presets": [{ "name": "写真から探す" }]
+}
+{% endschema %}

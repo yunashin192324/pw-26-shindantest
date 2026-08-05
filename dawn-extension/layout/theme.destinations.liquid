@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  {%- comment -%}
+    都市ページ(page.destination)専用のSEOタイトル/ディスクリプション自動生成。
+
+    Shopify管理画面の「検索エンジンリスティング」で手入力していれば
+    そちらを最優先で使う(page_title/page_descriptionにそのまま入る)。
+    未入力の場合、page_descriptionは空になり<meta name="description">
+    自体が出力されなくなってしまう(このページ群は本文=page.contentを
+    使わずセクションだけで組んでいるため、Shopifyの自動フォールバックが
+    効きにくい)。そこで、都市ごとに必ず存在するDestination metaobjectの
+    name_ja/descriptionから自動生成し、手入力が無いページでも最低限の
+    タイトル・ディスクリプションが必ず出るようにする。
+
+    page.handleとDestinationのslugを照合する処理は他の都市系セクション
+    (destination-hero等)と同じ、明示的なfor+ifパターン。
+  {%- endcomment -%}
+  {%- assign seo_destination = blank -%}
+  {%- if template.suffix == 'destination' -%}
+    {%- for d in shop.metaobjects.destination.values -%}
+      {%- if d.slug.value == page.handle -%}{%- assign seo_destination = d -%}{%- endif -%}
+    {%- endfor -%}
+  {%- endif -%}
+
+  {%- comment -%}
+    優先順位：①Shopifyページの「検索エンジンリスティング」(手入力)
+    →②Destinationメタオブジェクト自身の「SEOタイトル」「SEOの説明文」欄
+    (手入力、都市ごとに個別管理したい場合はこちらを使う)
+    →③どちらも空欄なら、name_ja/descriptionから自動生成。
+    ②のキーがstore側と異なる場合はここを調整すること
+    (想定キー: seo_title / seo_description)。
+  {%- endcomment -%}
+  {%- assign seo_title = page_title -%}
+  {%- assign seo_description = page_description -%}
+  {%- assign seo_image = settings.social_share_image -%}
+  {%- if seo_destination -%}
+    {%- if seo_title == blank or seo_title == seo_destination.name_ja.value -%}
+      {%- if seo_destination.seo_title.value != blank -%}
+        {%- assign seo_title = seo_destination.seo_title.value -%}
+      {%- else -%}
+        {%- capture seo_title -%}{{ seo_destination.name_ja.value }}フォトウェディング｜海外ロケーション撮影｜{{ shop.name }}{%- endcapture -%}
+      {%- endif -%}
+    {%- endif -%}
+    {%- if seo_description == blank -%}
+      {%- if seo_destination.seo_description.value != blank -%}
+        {%- assign seo_description = seo_destination.seo_description.value -%}
+      {%- else -%}
+        {%- assign dst_desc_source = seo_destination.description.value | strip_html | strip -%}
+        {%- capture seo_description -%}{{ seo_destination.name_ja.value }}での海外フォトウェディング。{{ dst_desc_source | truncate: 100 }}{%- endcapture -%}
+      {%- endif -%}
+    {%- endif -%}
+    {%- if seo_destination.hero_image.value != blank -%}
+      {%- assign seo_image = seo_destination.hero_image.value -%}
+    {%- endif -%}
+  {%- endif -%}
+
+  <title>{{ seo_title }} | {{ shop.name }}</title>
+  {% if seo_description %}
+    <meta name="description" content="{{ seo_description | escape }}">
+  {% endif %}
+  <link rel="canonical" href="{{ canonical_url }}">
+
+  <meta property="og:site_name" content="{{ shop.name }}">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="{{ seo_title | escape }}">
+  {% if seo_description %}<meta property="og:description" content="{{ seo_description | escape }}">{% endif %}
+  <meta property="og:url" content="{{ canonical_url }}">
+  {% if seo_image %}
+    <meta property="og:image" content="{{ seo_image | image_url: width: 1600 | prepend: 'https:' }}">
+  {% endif %}
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ seo_title | escape }}">
+  {% if seo_description %}<meta name="twitter:description" content="{{ seo_description | escape }}">{% endif %}
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+  {% if settings.favicon %}
+    <link rel="icon" href="{{ settings.favicon | image_url: width: 32 }}" type="image/png">
+  {% endif %}
+
+  {%- comment -%}
+    Independent from layout/theme.liquid on purpose: this page family
+    (撮影地一覧 / 地域 / 都市) ships its own header, footer, CSS and JS so
+    the existing TOP/JOURNAL build is never touched. See
+    shopify-theme/docs/destinations-metaobject-setup.md for the content
+    model this layout and its templates depend on.
+  {%- endcomment -%}
+  <link rel="stylesheet" href="{{ 'destinations.css' | asset_url }}">
+
+  {%- render 'site-schema' -%}
+
+  {{ content_for_header }}
+</head>
+<body class="destinations-scope">
+
+  {% section 'destinations-header' %}
+
+  {{ content_for_layout }}
+
+  {% section 'destinations-footer' %}
+
+  <script src="{{ 'destinations.js' | asset_url }}" defer></script>
+</body>
+</html>

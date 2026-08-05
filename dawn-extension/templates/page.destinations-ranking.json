@@ -1,0 +1,35 @@
+{
+  "sections": {
+    "destinations-hero": {
+      "type": "destinations-hero",
+      "settings": {
+        "eyebrow": "RANKING",
+        "heading": "撮影地 人気ランキング",
+        "description": "数ある撮影地の中から、特に人気の高い撮影地をランキング形式でご紹介します。",
+        "diagnosis_label": "30秒診断",
+        "search_label": "撮影地を見る"
+      }
+    },
+    "destinations-ranking": {
+      "type": "destinations-ranking",
+      "settings": {
+        "eyebrow": "RANKING",
+        "heading": "人気撮影地ランキング",
+        "limit": 10
+      }
+    },
+    "destinations-cta": {
+      "type": "destinations-cta",
+      "settings": {
+        "subtle": true,
+        "heading": "あなたに合う撮影地を探す",
+        "button_label": "30秒診断"
+      }
+    }
+  },
+  "order": [
+    "destinations-hero",
+    "destinations-ranking",
+    "destinations-cta"
+  ]
+}

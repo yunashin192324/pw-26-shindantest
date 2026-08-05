@@ -1,0 +1,60 @@
+{%- comment -%}
+  dress-prev-next-nav
+  --------------------------------------------------------------
+  衣装（ドレス）の商品詳細ページに「前のドレス／次のドレスへ」の
+  矢印リンクを表示するための断片。main-product.liquid（Shopify標準・
+  Dawnテーマそのまま）は直接編集せず、商品ページのテーマエディタで
+  「ブロックを追加 → Custom Liquid（カスタムLiquid）」を選び、この
+  ファイルの中身をそのまま貼り付けて使う想定。
+
+  「次のドレス」の判定は、この商品が属している最初のコレクション
+  (product.collections.first)の商品一覧の並び順を基準にする。
+  複数のコレクションに属している商品の場合、意図した並びと違う
+  コレクションが使われる可能性があるため、その場合はコレクション名を
+  教えてもらったうえで `collections['正しいハンドル']` に差し替える。
+{%- endcomment -%}
+{%- assign nav_collection = product.collections.first -%}
+{%- if nav_collection -%}
+  {%- assign nav_products = nav_collection.products -%}
+  {%- assign nav_total = nav_products.size -%}
+  {%- assign current_index = -1 -%}
+  {%- for p in nav_products -%}
+    {%- if p.id == product.id -%}{%- assign current_index = forloop.index0 -%}{%- endif -%}
+  {%- endfor -%}
+  {%- if current_index > -1 and nav_total > 1 -%}
+    {%- assign prev_index = current_index | minus: 1 -%}
+    {%- assign next_index = current_index | plus: 1 -%}
+    {%- if prev_index < 0 -%}{%- assign prev_index = nav_total | minus: 1 -%}{%- endif -%}
+    {%- if next_index >= nav_total -%}{%- assign next_index = 0 -%}{%- endif -%}
+    {%- assign prev_product = blank -%}
+    {%- assign next_product = blank -%}
+    {%- for p in nav_products -%}
+      {%- if forloop.index0 == prev_index -%}{%- assign prev_product = p -%}{%- endif -%}
+      {%- if forloop.index0 == next_index -%}{%- assign next_product = p -%}{%- endif -%}
+    {%- endfor -%}
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;margin-top:32px;padding-top:24px;border-top:1px solid #eee;">
+      {%- if prev_product -%}
+        <a href="{{ prev_product.url }}" style="display:flex;align-items:center;gap:8px;text-decoration:none;color:#1a1a1a;">
+          <span style="font-size:22px;line-height:1;">&#8592;</span>
+          <span>
+            <span style="display:block;font-size:11px;color:#999;letter-spacing:0.05em;">前のドレス</span>
+            <span style="font-size:13px;">{{ prev_product.title }}</span>
+          </span>
+        </a>
+      {%- else -%}
+        <span></span>
+      {%- endif -%}
+      {%- if next_product -%}
+        <a href="{{ next_product.url }}" style="display:flex;align-items:center;gap:8px;text-decoration:none;color:#1a1a1a;text-align:right;">
+          <span>
+            <span style="display:block;font-size:11px;color:#999;letter-spacing:0.05em;">次のドレス</span>
+            <span style="font-size:13px;">{{ next_product.title }}</span>
+          </span>
+          <span style="font-size:22px;line-height:1;">&#8594;</span>
+        </a>
+      {%- else -%}
+        <span></span>
+      {%- endif -%}
+    </div>
+  {%- endif -%}
+{%- endif -%}

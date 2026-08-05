@@ -1,0 +1,347 @@
+/*
+ * ------------------------------------------------------------
+ * IMPORTANT: The contents of this file are auto-generated.
+ *
+ * This file may be updated by the Shopify admin theme editor
+ * or related systems. Please exercise caution as any changes
+ * made to this file may be overwritten.
+ * ------------------------------------------------------------
+ */
+{
+  "sections": {
+    "main": {
+      "type": "main-page",
+      "disabled": true,
+      "settings": {
+        "padding_top": 0,
+        "padding_bottom": 0
+      }
+    },
+    "dress_lp_gV96C9": {
+      "type": "dress-lp",
+      "blocks": {
+        "hero_Ag7GNF": {
+          "type": "hero",
+          "settings": {
+            "image": "shopify://shop_images/dress.jpg",
+            "image_position": "top",
+            "overlay_opacity": 60,
+            "text_color": "#ffffff",
+            "subtitle": "WEDDING DRESS",
+            "sub_size": 14,
+            "title": "運命の一着に出会う",
+            "title_size": 48,
+            "desc": "試着した、その一着を。そのまま世界へ。\nフォーシスアンドカンパニーの上質な衣裳を、全国の提携サロンで試着してから撮影地へ。",
+            "desc_size": 16
+          }
+        },
+        "about_qKQHD3": {
+          "type": "about",
+          "settings": {
+            "bg_color": "#ffffff",
+            "image": "shopify://shop_images/BRESCIA__back.jpg",
+            "image_position": "center",
+            "image_alignment": "left",
+            "subtitle": "ABOUT OUR DRESS",
+            "sub_color": "#b8860b",
+            "sub_size": 14,
+            "title": "海外フォトウェディングに精通した衣裳ブランド",
+            "title_color": "#333333",
+            "title_size": 24,
+            "desc_color": "#666666",
+            "desc": "フォーシスアンドカンパニーは、ウェディングドレス・タキシードを専門に扱うブランドです。海外での撮影・移動・気候を熟知したうえで選定された衣裳ラインナップだから、写真映えはもちろん、長時間の撮影でも快適な着心地を実現します。"
+          }
+        },
+        "features_mgWE8T": {
+          "type": "features",
+          "settings": {
+            "bg_color": "#faf8f5",
+            "subtitle": "WHY IT MATTERS",
+            "sub_color": "#b8860b",
+            "sub_size": 14,
+            "title": "「事前に試着する」という安心",
+            "title_color": "#333333",
+            "title_size": 24,
+            "desc_color": "#666666",
+            "item_title_1": "日本全国で試着可能",
+            "item_desc_1": "全国の39店舗提携サロンで、実際に袖を通してからお選びいただけます。現地で初めて着る不安がありません。",
+            "item_title_2": "そのまま撮影地へ持参",
+            "item_desc_2": "試着で選んだ一着を、専用のケースでそのまま海外の撮影地までお持ちいただきます。",
+            "item_title_3": "品質保証",
+            "item_desc_3": "撮影当日までクリーニング・保管を徹底。万全のコンディションでお渡しします。"
+          }
+        },
+        "gallery_zXM7K8": {
+          "type": "gallery",
+          "settings": {
+            "bg_color": "#ffffff",
+            "subtitle": "GALLERY",
+            "sub_color": "#b8860b",
+            "sub_size": 14,
+            "title": "ドレス＆タキシード",
+            "title_color": "#333333",
+            "title_size": 24,
+            "image_1": "shopify://shop_images/BRESCIA__front.jpg",
+            "image_position_1": "center",
+            "image_2": "shopify://shop_images/1MB_96815080-ea21-44a9-964a-1389acd34dc8.jpg",
+            "image_position_2": "center",
+            "button_text": "もっと見る",
+            "button_link": "shopify://pages/dress-tuxedo",
+            "button_bg_color": "#b8860b",
+            "button_text_color": "#ffffff"
+          }
+        },
+        "flow_8PLGYN": {
+          "type": "flow",
+          "settings": {
+            "bg_color": "#ffffff",
+            "subtitle": "FLOW",
+            "sub_color": "#b8860b",
+            "sub_size": 14,
+            "title": "試着からご利用までの流れ",
+            "title_color": "#333333",
+            "title_size": 24,
+            "desc_color": "#666666",
+            "step_title_1": "サロン予約",
+            "step_desc_1": "予約後、衣裳店からご連絡させていただき試着日予約。",
+            "step_title_2": "試着当日",
+            "step_desc_2": "複数の衣裳を実際に試着して比較検討。",
+            "step_title_3": "決定・支払い",
+            "step_desc_3": "お気に入りの一着を決定。お選びいただいた衣裳によっては追加代金を支払い。",
+            "step_title_4": "お渡し",
+            "step_desc_4": "渡航前に衣裳一式をお渡し、そのまま海外へ。"
+          }
+        },
+        "cta_Uhiaiz": {
+          "type": "cta",
+          "settings": {
+            "bg_color": "#faf8f5",
+            "subtitle": "DIAGNOSIS",
+            "sub_color": "#b8860b",
+            "sub_size": 14,
+            "title": "あなたにぴったりの\nドレスを見つける",
+            "title_color": "#333333",
+            "title_size": 32,
+            "desc": "いくつかの簡単な質問に答えるだけで、あなたの魅力が最も引き立つドレスをご提案します。",
+            "desc_color": "#666666",
+            "button_text": "ドレス診断を始める",
+            "button_link": "shopify://pages/wedding-dress-diagnosis",
+            "button_bg_color": "#b8860b",
+            "button_text_color": "#ffffff"
+          }
+        }
+      },
+      "block_order": [
+        "hero_Ag7GNF",
+        "about_qKQHD3",
+        "features_mgWE8T",
+        "gallery_zXM7K8",
+        "flow_8PLGYN",
+        "cta_Uhiaiz"
+      ],
+      "name": "ドレスLP（編集可能版）",
+      "settings": {
+        "bg_color": "#ffffff",
+        "show_floating_btn": true,
+        "floating_btn_text": "✨ ドレス診断をする",
+        "floating_btn_link": "",
+        "floating_btn_bg": "#b8860b",
+        "floating_btn_color": "#ffffff"
+      }
+    },
+    "shop_list_custom_aVmbq6": {
+      "type": "shop-list-custom",
+      "blocks": {
+        "simple_shop_XeMNaF": {
+          "type": "simple_shop",
+          "settings": {
+            "area": "関東",
+            "badge": "東京",
+            "badge_bg_color": "#c9a96e",
+            "name": "CLASENCERE銀座",
+            "url": ""
+          }
+        },
+        "simple_shop_iLyDen": {
+          "type": "simple_shop",
+          "settings": {
+            "area": "関東",
+            "badge": "東京",
+            "badge_bg_color": "#c9a96e",
+            "name": "豊洲メゾン",
+            "url": ""
+          }
+        },
+        "simple_shop_E9qX9E": {
+          "type": "simple_shop",
+          "settings": {
+            "area": "関東",
+            "badge": "東京",
+            "badge_bg_color": "#c9a96e",
+            "name": "東京ドームホテルメゾン",
+            "url": ""
+          }
+        },
+        "simple_shop_xENUXA": {
+          "type": "simple_shop",
+          "settings": {
+            "area": "関東",
+            "badge": "東京",
+            "badge_bg_color": "#c9a96e",
+            "name": "立川メゾン",
+            "url": ""
+          }
+        },
+        "simple_shop_MK4bXH": {
+          "type": "simple_shop",
+          "settings": {
+            "area": "関東",
+            "badge": "神奈川・横浜",
+            "badge_bg_color": "#c9a96e",
+            "name": "ARMONIA.F",
+            "url": ""
+          }
+        },
+        "simple_shop_aczjyp": {
+          "type": "simple_shop",
+          "settings": {
+            "area": "関東",
+            "badge": "神奈川",
+            "badge_bg_color": "#c9a96e",
+            "name": "湘南メゾン",
+            "url": ""
+          }
+        },
+        "simple_shop_AacJJd": {
+          "type": "simple_shop",
+          "settings": {
+            "area": "関東",
+            "badge": "神奈川",
+            "badge_bg_color": "#c9a96e",
+            "name": "海老名メゾン",
+            "url": ""
+          }
+        },
+        "simple_shop_CJBTAE": {
+          "type": "simple_shop",
+          "settings": {
+            "area": "関東",
+            "badge": "東京",
+            "badge_bg_color": "#c9a96e",
+            "name": "ウエディングデスク渋谷",
+            "url": ""
+          }
+        },
+        "simple_shop_gKWhif": {
+          "type": "simple_shop",
+          "settings": {
+            "area": "関東",
+            "badge": "東京",
+            "badge_bg_color": "#c9a96e",
+            "name": "ウエディングデスク渋谷",
+            "url": ""
+          }
+        },
+        "featured_shop_fDPMFF": {
+          "type": "featured_shop",
+          "settings": {
+            "area": "関東",
+            "image": "shopify://shop_images/main-1-1024x761.jpg",
+            "image_position": "center",
+            "badge": "東京",
+            "badge_bg_color": "#c9a96e",
+            "name": "MAISON de FOURSIS",
+            "url": ""
+          }
+        },
+        "featured_shop_UUptK3": {
+          "type": "featured_shop",
+          "settings": {
+            "area": "関西",
+            "image": "shopify://shop_images/shop-nagoya-1024x762.jpg",
+            "image_position": "center",
+            "badge": "大阪・梅田",
+            "badge_bg_color": "#c9a96e",
+            "name": "FOURSIS GLOBAL LINE",
+            "url": ""
+          }
+        },
+        "featured_shop_Nj3dzm": {
+          "type": "featured_shop",
+          "settings": {
+            "area": "東海",
+            "image": "shopify://shop_images/Foursis_Osaka0006-1024x682.jpg",
+            "image_position": "center",
+            "badge": "愛知県",
+            "badge_bg_color": "#c9a96e",
+            "name": "MAISON de FOURSIS 名古屋",
+            "url": ""
+          }
+        },
+        "simple_shop_WriVt3": {
+          "type": "simple_shop",
+          "settings": {
+            "area": "関東",
+            "badge": "東京",
+            "badge_bg_color": "#c9a96e",
+            "name": "ウエディングデスク渋谷",
+            "url": ""
+          }
+        },
+        "simple_shop_RMJGWm": {
+          "type": "simple_shop",
+          "settings": {
+            "area": "関東",
+            "badge": "東京",
+            "badge_bg_color": "#c9a96e",
+            "name": "ウエディングデスク渋谷",
+            "url": ""
+          }
+        },
+        "simple_shop_HdWtLb": {
+          "type": "simple_shop",
+          "settings": {
+            "area": "関東",
+            "badge": "東京",
+            "badge_bg_color": "#c9a96e",
+            "name": "ウエディングデスク渋谷",
+            "url": ""
+          }
+        }
+      },
+      "block_order": [
+        "simple_shop_XeMNaF",
+        "simple_shop_iLyDen",
+        "simple_shop_E9qX9E",
+        "simple_shop_xENUXA",
+        "simple_shop_MK4bXH",
+        "simple_shop_aczjyp",
+        "simple_shop_AacJJd",
+        "simple_shop_CJBTAE",
+        "simple_shop_gKWhif",
+        "featured_shop_fDPMFF",
+        "featured_shop_UUptK3",
+        "featured_shop_Nj3dzm",
+        "simple_shop_WriVt3",
+        "simple_shop_RMJGWm",
+        "simple_shop_HdWtLb"
+      ],
+      "name": "店舗一覧（タブ絞り込み付）",
+      "settings": {
+        "bg_color": "#faf8f5",
+        "subtitle": "SHOP LIST",
+        "sub_color": "#b8860b",
+        "sub_size": 14,
+        "title": "店舗一覧",
+        "title_color": "#333333",
+        "title_size": 24,
+        "area_tabs": "東北,関東, 関西, 東海, 九州"
+      }
+    }
+  },
+  "order": [
+    "main",
+    "dress_lp_gV96C9",
+    "shop_list_custom_aVmbq6"
+  ]
+}
