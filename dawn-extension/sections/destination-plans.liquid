@@ -31,31 +31,6 @@
 {%- assign plan_products = destination.plans.value -%}
 {%- assign plan_blocks = section.blocks | where: 'type', 'plan' -%}
 
-{%- comment -%}
-  【一時デバッグ】どちらの方式が使われているか確認用。原因が分かり次第
-  この枠ごと削除します。
-{%- endcomment -%}
-<div style="border:3px solid red; background:#fff; color:#000; padding:16px; margin:16px; font-family:monospace; font-size:13px; white-space:pre-wrap;">
-【デバッグ】このページの判定結果
-page.handle = {{ page.handle }}
-destination 見つかった？ = {% if destination != blank %}はい（handle: {{ destination.system.handle }} / slug: {{ destination.slug.value }}）{% else %}いいえ（該当するDestinationメタオブジェクトが見つかりません）{% endif %}
-destination.plans（新方式）の件数 = {{ plan_products.size }}
-{%- if plan_products.size > 0 %}
-  新方式に登録されている商品:
-  {%- for p in plan_products %}
-  - {% if p.title != blank %}{{ p.title }}（公開中）{% else %}（商品名が空＝オンラインストア未公開/削除済みの可能性）{% endif %}
-  {%- endfor %}
-{%- endif %}
-旧ブロック方式（プランブロック）の件数 = {{ plan_blocks.size }}
-{%- if plan_blocks.size > 0 %}
-  旧ブロックに登録されている商品:
-  {%- for b in plan_blocks %}
-  - {{ b.settings.product.title | default: '（商品未選択）' }}
-  {%- endfor %}
-{%- endif %}
-→ 今このページは「{% if plan_products.size > 0 %}新方式（plans欄）{% elsif plan_blocks.size > 0 %}旧ブロック方式{% else %}どちらも空（何も表示されない）{% endif %}」を使っています
-</div>
-
 {%- if plan_products.size > 0 or plan_blocks.size > 0 -%}
 <section id="dst-plans"{% if section.settings.bg_ivory %} class="dst-bg-ivory"{% endif %}>
   <div class="dst-container">

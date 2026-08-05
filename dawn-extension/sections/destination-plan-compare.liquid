@@ -25,28 +25,6 @@
 
 {%- assign plan_products = destination.plans.value -%}
 
-{%- comment -%}
-  【一時デバッグ】このセクション自体がページに追加されているか／
-  compare_*メタフィールドの中身を確認用。原因が分かり次第削除します。
-{%- endcomment -%}
-<div style="border:3px solid blue; background:#fff; color:#000; padding:16px; margin:16px; font-family:monospace; font-size:13px; white-space:pre-wrap;">
-【デバッグ】比較表セクションの判定結果
-（この枠が見えている＝比較表セクション自体はページに追加されています）
-page.handle = {{ page.handle }}
-plan_products.size = {{ plan_products.size }}（2以上でないと表自体が出ません）
-{%- for p in plan_products %}
-
-商品: {{ p.title }}
-  compare_data_count = "{{ p.metafields.custom.compare_data_count.value }}"
-  compare_dress = "{{ p.metafields.custom.compare_dress.value }}"
-  compare_hair_makeup = "{{ p.metafields.custom.compare_hair_makeup.value }}"
-  compare_shooting_hours = "{{ p.metafields.custom.compare_shooting_hours.value }}"
-  compare_location_count = "{{ p.metafields.custom.compare_location_count.value }}"
-  compare_transfer = "{{ p.metafields.custom.compare_transfer.value }}"
-  compare_japanese_assistant = "{{ p.metafields.custom.compare_japanese_assistant.value }}"
-{%- endfor %}
-</div>
-
 {%- if plan_products.size > 1 -%}
 <section{% if section.settings.bg_ivory %} class="dst-bg-ivory"{% endif %}>
   <div class="dst-container">
