@@ -10,6 +10,8 @@
 const MONTH_CODES = ['12', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11'];
 const MONTH_LABELS = MONTH_CODES.map(function (c) { return (c.indexOf('0') === 0 ? c.substring(1) : c) + '月'; });
 const PAGE_SIZE = 50;
+const ALERT_THRESHOLD_DAYS = 7; // 対象年月日からこの日数以上経過してもSTS未入力（未対応）の場合にアラート対象とする
+const MULTILINE_COLUMNS = ['詳細', '備考', '次回ACT・進捗★手入力']; // インライン編集時にテキストエリアを使う列
 
 // ---- グローバル状態 ----------------------------------------------------------
 let allDataCache = [];              // getDashboardData() の統合生データ（超高速フィルタの元データ）
@@ -34,6 +36,7 @@ document.addEventListener('DOMContentLoaded', function () {
   initEmployeeEvents();
   initDataManagerEvents();
   initModalEvents();
+  initCsvImportEvents();
   loadAllData();
 });
 
@@ -180,6 +183,35 @@ function escapeHtml(str) {
 }
 
 // ============================================================================
+// 日付ユーティリティ（長期未対応アラート判定用）
+// ============================================================================
+function parseYyyymmdd(str) {
+  const s = String(str || '');
+  if (s.length < 8) return null;
+  const y = Number(s.substring(0, 4));
+  const m = Number(s.substring(4, 6));
+  const d = Number(s.substring(6, 8));
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d);
+}
+
+function daysSince(dateStr) {
+  const target = parseYyyymmdd(dateStr);
+  if (!target) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  target.setHours(0, 0, 0, 0);
+  return Math.floor((today.getTime() - target.getTime()) / 86400000);
+}
+
+// STSが未対応（空欄）のまま、対象年月日から ALERT_THRESHOLD_DAYS 日以上経過している行を「要フォロー」とみなす
+function isAlertRow(row) {
+  if (row['STS']) return false; // 失注／成約／リセール中いずれかが入っていれば対象外
+  const days = daysSince(row['対象年月日']);
+  return days !== null && days >= ALERT_THRESHOLD_DAYS;
+}
+
+// ============================================================================
 // マスタ反映（フィルタ／モーダルの各種セレクトボックス）
 // ============================================================================
 function populateAllMasterSelects() {
@@ -192,6 +224,12 @@ function populateAllMasterSelects() {
   fillSelectWithBlank('dm-filter-month', MONTH_CODES.map(function (c, i) { return MONTH_LABELS[i]; }), MONTH_CODES);
   fillSelectWithBlank('dm-filter-contact', metaMasters.contactMaster || []);
   fillSelectWithBlank('dm-filter-purpose', metaMasters.purposeMaster || []);
+
+  const employeeNames = (metaMasters.employeeList || [])
+    .map(function (e) { return e.employeeName; })
+    .filter(function (name, idx, arr) { return name && arr.indexOf(name) === idx; })
+    .sort(function (a, b) { return String(a).localeCompare(String(b), 'ja'); });
+  fillSelectWithBlank('dm-filter-employee', employeeNames);
 
   const modalShopSelect = document.querySelector('#register-form select[name="sheetName"]');
   modalShopSelect.innerHTML = '<option value="">選択してください</option>' +
@@ -284,6 +322,7 @@ function renderKpi(data) {
   const resaleAction = data.filter(function (r) { return r['リセール'] === '〇'; }).length;
   const resaleProgress = data.filter(function (r) { return r['STS'] === 'リセール中'; }).length;
   const resaleRate = resaleAction > 0 ? (contract / resaleAction) * 100 : 0;
+  const alertCount = data.filter(isAlertRow).length;
 
   document.getElementById('kpi-total').textContent = total.toLocaleString();
   document.getElementById('kpi-contract').textContent = contract.toLocaleString();
@@ -291,6 +330,7 @@ function renderKpi(data) {
   document.getElementById('kpi-resale-action').textContent = resaleAction.toLocaleString();
   document.getElementById('kpi-resale-progress').textContent = resaleProgress.toLocaleString();
   document.getElementById('kpi-resale-rate').textContent = resaleRate.toFixed(1) + '%';
+  document.getElementById('kpi-alert-count').textContent = alertCount.toLocaleString();
 }
 
 function renderChart1(data) {
@@ -512,7 +552,8 @@ function renderEmployeeTab() {
 // タブ3: 未成約相談データ管理（CRUD）
 // ============================================================================
 function initDataManagerEvents() {
-  ['dm-filter-shop', 'dm-filter-month', 'dm-filter-sts', 'dm-filter-contact', 'dm-filter-purpose'].forEach(function (id) {
+  ['dm-filter-shop', 'dm-filter-month', 'dm-filter-sts', 'dm-filter-contact', 'dm-filter-purpose',
+    'dm-filter-employee', 'dm-filter-date-from', 'dm-filter-date-to', 'dm-filter-alert-only'].forEach(function (id) {
     document.getElementById(id).addEventListener('change', function () {
       dmCurrentPage = 1;
       renderDataManagerTab();
@@ -533,13 +574,25 @@ function renderDataManagerTab() {
   const sts = document.getElementById('dm-filter-sts').value;
   const contact = document.getElementById('dm-filter-contact').value;
   const purpose = document.getElementById('dm-filter-purpose').value;
+  const employee = document.getElementById('dm-filter-employee').value;
+  const dateFrom = document.getElementById('dm-filter-date-from').value.replace(/-/g, '');
+  const dateTo = document.getElementById('dm-filter-date-to').value.replace(/-/g, '');
+  const alertOnly = document.getElementById('dm-filter-alert-only').checked;
 
   dmFilteredCache = allDataCache.filter(function (row) {
     if (shop && row.__sheetName !== shop) return false;
     if (month && String(row['月']) !== month) return false;
-    if (sts && row['STS'] !== sts) return false;
+    if (sts === '__blank__') {
+      if (row['STS']) return false;
+    } else if (sts && row['STS'] !== sts) {
+      return false;
+    }
     if (contact && row['接客方法'] !== contact) return false;
     if (purpose && row['旅行目的(小)'] !== purpose) return false;
+    if (employee && row['社員名'] !== employee) return false;
+    if (dateFrom && String(row['対象年月日']) < dateFrom) return false;
+    if (dateTo && String(row['対象年月日']) > dateTo) return false;
+    if (alertOnly && !isAlertRow(row)) return false;
     return true;
   });
 
@@ -570,10 +623,25 @@ function renderDataManagerGrid() {
     const stsOptions = ['失注', '成約', 'リセール中'].map(function (s) {
       return '<option value="' + s + '"' + (row['STS'] === s ? ' selected' : '') + '>' + s + '</option>';
     }).join('');
+    const resaleOptions = ['〇', '✖'].map(function (s) {
+      return '<option value="' + s + '"' + (row['リセール'] === s ? ' selected' : '') + '>' + s + '</option>';
+    }).join('');
 
-    return '<tr class="hover:bg-blue-50" data-rid="' + rid + '">' +
+    const alert = isAlertRow(row);
+    const rowClass = alert ? 'hover:bg-rose-100 bg-rose-50' : 'hover:bg-blue-50';
+    const alertDays = alert ? daysSince(row['対象年月日']) : null;
+    const alertCell = alert
+      ? '<td class="px-2 py-2 text-center text-rose-600" title="対象年月日から' + alertDays + '日経過・未対応です">🔔</td>'
+      : '<td class="px-2 py-2 text-center"></td>';
+
+    return '<tr class="' + rowClass + '" data-rid="' + rid + '">' +
+      alertCell +
       '<td class="px-3 py-2">' + escapeHtml(row.__sheetName) + '</td>' +
-      '<td class="px-3 py-2">' + escapeHtml(row['リセール']) + '</td>' +
+      '<td class="px-2 py-1">' +
+        '<select class="resale-select border border-slate-300 rounded px-1 py-1 text-xs" data-sheet="' + escapeHtml(row.__sheetName) + '" data-row="' + row.__rowIndex + '">' +
+          '<option value="">－</option>' + resaleOptions +
+        '</select>' +
+      '</td>' +
       '<td class="px-2 py-1">' +
         '<select class="sts-select border border-slate-300 rounded px-1 py-1 text-xs" data-sheet="' + escapeHtml(row.__sheetName) + '" data-row="' + row.__rowIndex + '">' +
           '<option value="">－</option>' + stsOptions +
@@ -587,23 +655,33 @@ function renderDataManagerGrid() {
       '<td class="px-3 py-2">' + escapeHtml(row['種別']) + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(row['旅行目的(小)']) + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(row['接客方法']) + '</td>' +
-      editableCellTd(row, '詳細', 'text') +
+      editableCellTd(row, '詳細', 'text', true) +
       editableCellTd(row, 'ACT日', 'text') +
       editableCellTd(row, 'ACT内容', 'text') +
       editableCellTd(row, '備考', 'text') +
+      editableCellTd(row, '次回ACT・進捗★手入力', 'text') +
       '</tr>';
   }).join('');
 
   bindGridEditEvents();
 }
 
-function editableCellTd(row, columnName, type) {
+function editableCellTd(row, columnName, type, isDetailColumn) {
   const val = row[columnName] !== undefined && row[columnName] !== null ? row[columnName] : '';
-  return '<td class="editable-cell px-3 py-2" data-column="' + escapeHtml(columnName) + '" data-type="' + type + '" data-sheet="' + escapeHtml(row.__sheetName) + '" data-row="' + row.__rowIndex + '">' +
+  const detailAttrs = isDetailColumn ? ' data-detail="1"' : '';
+  const truncateClass = isDetailColumn ? ' truncate' : '';
+  return '<td class="editable-cell px-3 py-2' + truncateClass + '" data-column="' + escapeHtml(columnName) + '" data-type="' + type + '" data-sheet="' + escapeHtml(row.__sheetName) + '" data-row="' + row.__rowIndex + '"' + detailAttrs + '>' +
     '<span class="cell-display">' + escapeHtml(val) + '</span></td>';
 }
 
 function bindGridEditEvents() {
+  // リセール：常時表示のセレクトボックスで即時更新
+  document.querySelectorAll('.resale-select').forEach(function (sel) {
+    sel.addEventListener('change', function () {
+      callUpdateCellValue(sel.dataset.sheet, sel.dataset.row, 'リセール', sel.value);
+    });
+  });
+
   // STS：常時表示のセレクトボックスで即時更新
   document.querySelectorAll('.sts-select').forEach(function (sel) {
     sel.addEventListener('change', function () {
@@ -624,16 +702,30 @@ function bindGridEditEvents() {
     });
   });
 
-  // テキストセル（成約PAX／詳細／ACT日／ACT内容／備考）：ダブルクリックでインライン編集
+  // 「詳細」列：カーソルを合わせると全文をポップアップ表示（長文対策）
+  document.querySelectorAll('.editable-cell[data-detail="1"]').forEach(function (td) {
+    td.addEventListener('mouseenter', function () {
+      if (td.querySelector('textarea, input')) return; // 編集中は出さない
+      const text = td.querySelector('.cell-display').textContent;
+      if (!text) return;
+      showDetailTooltip(td, text);
+    });
+    td.addEventListener('mouseleave', hideDetailTooltip);
+  });
+
+  // テキストセル（成約PAX／詳細／ACT日／ACT内容／備考／進捗メモ）：ダブルクリックでインライン編集
   document.querySelectorAll('.editable-cell').forEach(function (td) {
     td.addEventListener('dblclick', function () {
-      if (td.querySelector('input')) return;
+      if (td.querySelector('input, textarea')) return;
+      hideDetailTooltip();
       const span = td.querySelector('.cell-display');
       const currentVal = span.textContent;
       const type = td.dataset.type;
+      const columnName = td.dataset.column;
+      const isMultiline = MULTILINE_COLUMNS.indexOf(columnName) !== -1;
 
-      const input = document.createElement('input');
-      input.type = type === 'number' ? 'number' : 'text';
+      const input = document.createElement(isMultiline ? 'textarea' : 'input');
+      if (!isMultiline) { input.type = type === 'number' ? 'number' : 'text'; } else { input.rows = 3; }
       input.value = currentVal;
       input.className = 'w-full border border-blue-400 rounded px-1 py-0.5 text-sm';
 
@@ -664,11 +756,34 @@ function bindGridEditEvents() {
 
       input.addEventListener('blur', commit);
       input.addEventListener('keydown', function (ev) {
-        if (ev.key === 'Enter') { input.blur(); }
+        // 複数行入力（textarea）ではEnterは改行として使うため、Ctrl/Cmd+Enterのみ確定とする
+        if (ev.key === 'Enter' && (!isMultiline || ev.ctrlKey || ev.metaKey)) { input.blur(); }
         if (ev.key === 'Escape') { input.removeEventListener('blur', commit); renderDataManagerGrid(); }
       });
     });
   });
+}
+
+// ============================================================================
+// 「詳細」列ホバーポップアップ
+// ============================================================================
+function showDetailTooltip(targetEl, text) {
+  const tooltip = document.getElementById('detail-tooltip');
+  tooltip.textContent = text;
+  tooltip.classList.remove('hidden');
+
+  const rect = targetEl.getBoundingClientRect();
+  const tooltipWidth = 384; // max-w-md相当
+  let left = rect.left;
+  if (left + tooltipWidth > window.innerWidth - 16) {
+    left = Math.max(16, window.innerWidth - tooltipWidth - 16);
+  }
+  tooltip.style.left = left + 'px';
+  tooltip.style.top = (rect.bottom + 6) + 'px';
+}
+
+function hideDetailTooltip() {
+  document.getElementById('detail-tooltip').classList.add('hidden');
 }
 
 function callUpdateStatus(sheetName, rowIndex, newStatus, contractPax) {
@@ -793,5 +908,111 @@ function onSubmitRegisterForm(ev) {
       showToast('通信エラー（addUncontractedData）: ' + err.message, 'error');
     })
     .addUncontractedData(rowObject);
+}
+
+// ============================================================================
+// CSV一括インポート（営業日報からの抽出データ投入）
+// ============================================================================
+let selectedCsvFile = null;
+
+function initCsvImportEvents() {
+  document.getElementById('btn-open-csv-modal').addEventListener('click', openCsvModal);
+  document.getElementById('btn-close-csv-modal').addEventListener('click', closeCsvModal);
+  document.getElementById('btn-cancel-csv-modal').addEventListener('click', closeCsvModal);
+
+  document.getElementById('csv-file-input').addEventListener('change', function (ev) {
+    selectedCsvFile = ev.target.files && ev.target.files[0] ? ev.target.files[0] : null;
+    document.getElementById('btn-submit-csv').disabled = !selectedCsvFile;
+    document.getElementById('csv-import-result').classList.add('hidden');
+  });
+
+  document.getElementById('btn-submit-csv').addEventListener('click', onSubmitCsvImport);
+}
+
+function openCsvModal() {
+  document.getElementById('csv-import-modal').classList.remove('hidden');
+  document.getElementById('csv-import-modal').classList.add('flex');
+}
+
+function closeCsvModal() {
+  document.getElementById('csv-import-modal').classList.add('hidden');
+  document.getElementById('csv-import-modal').classList.remove('flex');
+  document.getElementById('csv-file-input').value = '';
+  document.getElementById('csv-import-result').classList.add('hidden');
+  document.getElementById('btn-submit-csv').disabled = true;
+  selectedCsvFile = null;
+}
+
+// CSVファイルをテキスト化する。営業日報エクスポートはUTF-8/Shift_JISいずれもあり得るため、
+// まずUTF-8として厳密デコードを試み、失敗した場合はShift_JISとして読み直す。
+function readCsvFileAsText(file) {
+  return file.arrayBuffer().then(function (buffer) {
+    try {
+      return new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+    } catch (e) {
+      return new TextDecoder('shift_jis').decode(buffer);
+    }
+  });
+}
+
+function onSubmitCsvImport() {
+  if (!selectedCsvFile) return;
+  const submitBtn = document.getElementById('btn-submit-csv');
+  submitBtn.disabled = true;
+  showLoading(true);
+
+  readCsvFileAsText(selectedCsvFile).then(function (csvText) {
+    google.script.run
+      .withSuccessHandler(function (res) {
+        showLoading(false);
+        submitBtn.disabled = false;
+        renderCsvImportResult(res);
+        if (res && res.success) {
+          if (res.importedCount > 0) {
+            showToast(res.importedCount + '件のデータを取り込みました。', 'success');
+            loadAllData();
+          } else {
+            showToast('取り込める新規データがありませんでした。', 'info');
+          }
+        } else {
+          showToast('CSVの取り込みに失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+        }
+      })
+      .withFailureHandler(function (err) {
+        showLoading(false);
+        submitBtn.disabled = false;
+        showToast('通信エラー（importUncontractedCsv）: ' + err.message, 'error');
+      })
+      .importUncontractedCsv(csvText);
+  }).catch(function (err) {
+    showLoading(false);
+    submitBtn.disabled = false;
+    showToast('CSVファイルの読み込みに失敗しました: ' + err.message, 'error');
+  });
+}
+
+function renderCsvImportResult(res) {
+  const box = document.getElementById('csv-import-result');
+  box.classList.remove('hidden');
+
+  if (!res || !res.success) {
+    box.innerHTML = '<p class="text-red-600 font-semibold">取り込みに失敗しました</p><p class="text-red-500">' + escapeHtml(res ? res.error : '不明なエラー') + '</p>';
+    return;
+  }
+
+  let html = '<p class="text-emerald-700 font-semibold">取り込み結果</p>';
+  html += '<p>取込件数：<b>' + res.importedCount + '</b> 件</p>';
+  html += '<p>重複スキップ：' + res.skippedDuplicateCount + ' 件</p>';
+  if (res.skippedBlankCount) html += '<p>対象年月日／営業所コード未入力によるスキップ：' + res.skippedBlankCount + ' 件</p>';
+  if (res.skippedUnknownOfficeCount) {
+    html += '<p class="text-amber-600">未登録の営業所コードによるスキップ：' + res.skippedUnknownOfficeCount + ' 件' +
+      (res.unknownOfficeCodes && res.unknownOfficeCodes.length ? '（' + res.unknownOfficeCodes.map(escapeHtml).join(', ') + '）' : '') + '</p>';
+  }
+  if (res.perSheetCounts && Object.keys(res.perSheetCounts).length) {
+    html += '<p class="mt-1 text-slate-500">内訳：' + Object.keys(res.perSheetCounts).map(function (k) {
+      return escapeHtml(k) + ' ' + res.perSheetCounts[k] + '件';
+    }).join(' / ') + '</p>';
+  }
+  box.innerHTML = html;
 }
 </script>

@@ -22,6 +22,20 @@ const SHOP_SHEET_NAMES = [
   '(旧)イオンモール甲府昭和'
 ];
 
+// ---- 営業所コード（店番）⇔店舗シート名のマスタ（CSV一括投入時の振り分けに使用） --
+const SHOP_LIST = [
+  { code: '046', name: '水戸コムボックス310' },
+  { code: '051', name: '高崎オーパ' },
+  { code: '053', name: 'イオンモール甲府昭和' },
+  { code: '054', name: '宇都宮' },
+  { code: '081', name: 'ららぽーと沼津' },
+  { code: '596', name: 'けやきウォーク前橋' },
+  { code: '717', name: 'イーアスつくば' },
+  { code: '763', name: 'MIDORI長野' },
+  { code: 'B66', name: 'イオンモール太田' },
+  { code: 'B79', name: '(旧)イオンモール甲府昭和' }
+];
+
 // ---- 店舗別データシート 共通27列ヘッダー（順序はシートの実列と完全一致） --
 const HEADERS_27 = [
   'リセール',
@@ -342,6 +356,180 @@ function addUncontractedData(rowObject) {
       sheetName: rowObject.sheetName,
       rowIndex: targetRowIndex,
       row: newRow
+    };
+  } catch (err) {
+    return { success: false, error: err.message + '\n' + err.stack };
+  }
+}
+
+/**
+ * 営業日報から抽出したCSVを一括投入する。
+ * ・CSVはメタ情報の行が先頭に含まれていても構わない（先頭セルが「対象年月日」の行をヘッダー行として自動検出）。
+ * ・「営業所コード」列の値から投入先の店舗シートを判定する。
+ * ・重複判定キー（対象年月日＋営業所コード＋社員番号＋都市コード＋出発年月）が完全一致する行は、
+ *   シート内の既存データ・および今回の取り込みバッチ内の両方に対してスキップする。
+ * ・「対象年月日」から「月」列を自動導出し、リセール／STS等の管理列は空欄（未対応）として投入する。
+ * @param {string} csvText CSVファイルの中身（テキスト）
+ */
+function importUncontractedCsv(csvText) {
+  try {
+    if (!csvText || typeof csvText !== 'string') {
+      throw new Error('CSVデータが空です。');
+    }
+
+    const rows = Utilities.parseCsv(csvText);
+    if (!rows || rows.length === 0) {
+      throw new Error('CSVの解析結果が空でした。');
+    }
+
+    // ヘッダー行（先頭セルが「対象年月日」の行）を自動検出する。
+    // 「理由別サマリ」等のメタ情報行が前段にあっても正しく本体のヘッダーを見つけられるようにするため。
+    let headerRowIndex = -1;
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i] && String(rows[i][0]).trim() === '対象年月日') {
+        headerRowIndex = i;
+        break;
+      }
+    }
+    if (headerRowIndex === -1) {
+      throw new Error('ヘッダー行（「対象年月日」列）が見つかりません。CSVの形式をご確認ください。');
+    }
+
+    const headerRow = rows[headerRowIndex].map(function (h) { return String(h).trim(); });
+    const colIndex = {};
+    headerRow.forEach(function (h, i) { colIndex[h] = i; });
+
+    ['対象年月日', '営業所コード'].forEach(function (h) {
+      if (colIndex[h] === undefined) {
+        throw new Error('CSVに必須列「' + h + '」がありません。');
+      }
+    });
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const officeCodeToSheetName = {};
+    SHOP_LIST.forEach(function (s) { officeCodeToSheetName[s.code] = s.name; });
+
+    const getVal = function (row, header) {
+      const idx = colIndex[header];
+      if (idx === undefined || idx >= row.length) return '';
+      const v = row[idx];
+      return v === undefined || v === null ? '' : String(v).trim();
+    };
+
+    const rowsBySheet = {}; // sheetName -> 27列配列の配列
+    let skippedDuplicateCount = 0;
+    let skippedUnknownOfficeCount = 0;
+    let skippedBlankCount = 0;
+    const unknownOfficeCodes = {};
+
+    for (let r = headerRowIndex + 1; r < rows.length; r++) {
+      const row = rows[r];
+      if (!row || row.every(function (c) { return String(c).trim() === ''; })) continue;
+
+      const targetDate = getVal(row, '対象年月日');
+      const officeCode = getVal(row, '営業所コード');
+
+      if (!targetDate || !officeCode) {
+        skippedBlankCount++;
+        continue;
+      }
+
+      const sheetName = officeCodeToSheetName[officeCode];
+      if (!sheetName) {
+        skippedUnknownOfficeCount++;
+        unknownOfficeCodes[officeCode] = true;
+        continue;
+      }
+
+      const monthCode = targetDate.length >= 6 ? targetDate.substring(4, 6) : '';
+
+      const newRow = [];
+      newRow[0] = '';                              // リセール（未対応）
+      newRow[1] = '';                              // STS（未対応）
+      newRow[2] = '';                              // 成約PAX
+      newRow[3] = monthCode;                        // 月（対象年月日から自動導出）
+      newRow[4] = targetDate;                       // 対象年月日
+      newRow[5] = officeCode;                       // 営業所コード
+      newRow[6] = getVal(row, '社員番号');
+      newRow[7] = getVal(row, '社員名');
+      newRow[8] = getVal(row, '未成約理由(大)');
+      newRow[9] = getVal(row, '都市コード');
+      newRow[10] = getVal(row, '種別');
+      newRow[11] = getVal(row, '出発年月');
+      newRow[12] = getVal(row, '旅行目的(小)');
+      newRow[13] = getVal(row, '接客方法');
+      newRow[14] = getVal(row, 'HIS利用歴');
+      newRow[15] = getVal(row, '詳細');
+      newRow[16] = '';                              // ACT日
+      newRow[17] = '';                              // ACT内容
+      newRow[18] = '';                              // 備考
+      newRow[19] = '';                              // 記録番号
+      newRow[20] = '';                              // 入力日
+      newRow[21] = '';                              // 対応状況
+      newRow[22] = getVal(row, '予約番号');
+      newRow[23] = '';                              // 次回ACT・進捗★手入力（進捗メモ）
+      newRow[24] = '';                              // 相談予約No☆自動反映
+      newRow[25] = '';                              // 名前☆自動反映
+      newRow[26] = '';                              // 連絡先☆自動反映
+
+      if (!rowsBySheet[sheetName]) rowsBySheet[sheetName] = [];
+      rowsBySheet[sheetName].push(newRow);
+    }
+
+    // 重複判定キー：対象年月日＋営業所コード＋社員番号＋都市コード＋出発年月
+    const buildKey = function (row) {
+      return [row[4], row[5], row[6], row[9], row[11]].join('｜');
+    };
+
+    Object.keys(rowsBySheet).forEach(function (sheetName) {
+      const sheet = ss.getSheetByName(sheetName);
+      if (!sheet) {
+        skippedUnknownOfficeCount += rowsBySheet[sheetName].length;
+        delete rowsBySheet[sheetName];
+        return;
+      }
+
+      const existingKeys = {};
+      const lastRow = sheet.getLastRow();
+      if (lastRow >= 2) {
+        const existingValues = sheet.getRange(2, 1, lastRow - 1, HEADERS_27.length).getValues();
+        existingValues.forEach(function (row) { existingKeys[buildKey(row)] = true; });
+      }
+
+      const uniqueRows = [];
+      rowsBySheet[sheetName].forEach(function (row) {
+        const key = buildKey(row);
+        if (existingKeys[key]) {
+          skippedDuplicateCount++;
+          return;
+        }
+        existingKeys[key] = true; // 同一バッチ内での重複投入も防ぐ
+        uniqueRows.push(row);
+      });
+      rowsBySheet[sheetName] = uniqueRows;
+    });
+
+    // 店舗（シート）ごとに一括書き込み（getRange().setValues() でAPI呼び出しを最小化）
+    const perSheetCounts = {};
+    let importedCount = 0;
+    Object.keys(rowsBySheet).forEach(function (sheetName) {
+      const newRows = rowsBySheet[sheetName];
+      if (newRows.length === 0) return;
+      const sheet = ss.getSheetByName(sheetName);
+      const startRow = sheet.getLastRow() + 1;
+      sheet.getRange(startRow, 1, newRows.length, HEADERS_27.length).setValues(newRows);
+      perSheetCounts[sheetName] = newRows.length;
+      importedCount += newRows.length;
+    });
+
+    return {
+      success: true,
+      importedCount: importedCount,
+      skippedDuplicateCount: skippedDuplicateCount,
+      skippedUnknownOfficeCount: skippedUnknownOfficeCount,
+      skippedBlankCount: skippedBlankCount,
+      unknownOfficeCodes: Object.keys(unknownOfficeCodes),
+      perSheetCounts: perSheetCounts
     };
   } catch (err) {
     return { success: false, error: err.message + '\n' + err.stack };
