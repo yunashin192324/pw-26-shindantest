@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <title>46期未成約ダッシュボード</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    body { font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif; background:#f3f4f6; }
+    .tab-btn.active { background:#1d4ed8; color:#ffffff; }
+    .tab-btn { transition: all .15s ease; }
+    .kpi-card { transition: transform .15s ease, box-shadow .15s ease; }
+    .kpi-card:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(29,78,216,.15); }
+    ::-webkit-scrollbar { height:8px; width:8px; }
+    ::-webkit-scrollbar-thumb { background:#93c5fd; border-radius:4px; }
+    .sortable:hover { background:#dbeafe; cursor:pointer; }
+    .toast { animation: slideIn .25s ease-out; }
+    @keyframes slideIn { from { opacity:0; transform:translateX(30px);} to {opacity:1; transform:translateX(0);} }
+    .editable-cell:hover { background:#eff6ff; cursor:text; }
+    .spinner { border-top-color:#1d4ed8; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body class="text-slate-800">
+
+  <!-- ローディングスピナー -->
+  <div id="loading-overlay" class="fixed inset-0 bg-white/80 z-50 flex flex-col items-center justify-center gap-4">
+    <div class="spinner w-14 h-14 rounded-full border-4 border-blue-100"></div>
+    <p class="text-blue-700 font-semibold">データを読み込んでいます...</p>
+  </div>
+
+  <!-- トースト通知コンテナ -->
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 w-80"></div>
+
+  <!-- 永続ヘッダー -->
+  <header class="sticky top-0 z-40 bg-white shadow-sm border-b border-slate-200">
+    <div class="max-w-[1600px] mx-auto px-4 py-3">
+      <div class="flex items-center justify-between mb-3">
+        <h1 class="text-xl font-bold text-blue-800 flex items-center gap-2">
+          <i class="fa-solid fa-chart-line"></i> 46期未成約リスト ダッシュボード
+        </h1>
+        <button id="btn-refresh" class="text-sm text-blue-700 border border-blue-200 rounded-lg px-3 py-1.5 hover:bg-blue-50">
+          <i class="fa-solid fa-rotate"></i> データ再読込
+        </button>
+      </div>
+
+      <!-- KPIサマリーカード -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="kpi-card bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-xl p-3 shadow">
+          <p class="text-xs opacity-80">未成約相談総数</p>
+          <p id="kpi-total" class="text-2xl font-bold">0</p>
+        </div>
+        <div class="kpi-card bg-gradient-to-br from-emerald-500 to-emerald-600 text-white rounded-xl p-3 shadow">
+          <p class="text-xs opacity-80">成約件数 / PAX数</p>
+          <p class="text-2xl font-bold"><span id="kpi-contract">0</span> <span class="text-base font-normal">件 /</span> <span id="kpi-pax">0</span> <span class="text-base font-normal">人</span></p>
+        </div>
+        <div class="kpi-card bg-gradient-to-br from-amber-500 to-amber-600 text-white rounded-xl p-3 shadow">
+          <p class="text-xs opacity-80">リセールアクション数 / リセール中</p>
+          <p class="text-2xl font-bold"><span id="kpi-resale-action">0</span> <span class="text-base font-normal">/</span> <span id="kpi-resale-progress">0</span></p>
+        </div>
+        <div class="kpi-card bg-gradient-to-br from-indigo-500 to-indigo-600 text-white rounded-xl p-3 shadow">
+          <p class="text-xs opacity-80">全体リセール成約率</p>
+          <p id="kpi-resale-rate" class="text-2xl font-bold">0.0%</p>
+        </div>
+      </div>
+
+      <!-- タブナビゲーション -->
+      <div class="flex gap-2 mt-4">
+        <button data-tab="dashboard" class="tab-btn active flex-1 md:flex-none px-4 py-2 rounded-lg text-sm font-semibold bg-slate-100 text-slate-600">
+          <i class="fa-solid fa-chart-pie"></i> 店舗分析ダッシュボード
+        </button>
+        <button data-tab="employee" class="tab-btn flex-1 md:flex-none px-4 py-2 rounded-lg text-sm font-semibold bg-slate-100 text-slate-600">
+          <i class="fa-solid fa-users"></i> 個人別サマリー
+        </button>
+        <button data-tab="data" class="tab-btn flex-1 md:flex-none px-4 py-2 rounded-lg text-sm font-semibold bg-slate-100 text-slate-600">
+          <i class="fa-solid fa-table-list"></i> 未成約相談データ管理
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-[1600px] mx-auto px-4 py-5">
+
+    <!-- ============ タブ1: 店舗分析ダッシュボード ============ -->
+    <section id="tab-panel-dashboard" class="tab-panel space-y-5">
+      <div class="bg-white rounded-xl shadow p-4 flex flex-wrap gap-4 items-end">
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">店舗</label>
+          <select id="filter-shop" multiple class="border border-slate-300 rounded-lg text-sm p-2 min-w-[220px] h-24"></select>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">月</label>
+          <select id="filter-month" multiple class="border border-slate-300 rounded-lg text-sm p-2 min-w-[160px] h-24"></select>
+        </div>
+        <button id="btn-clear-dashboard-filter" class="text-sm text-slate-500 hover:text-blue-700 px-3 py-2">
+          <i class="fa-solid fa-filter-circle-xmark"></i> フィルタ解除
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div class="bg-white rounded-xl shadow p-4">
+          <h2 class="font-bold text-slate-700 mb-2"><i class="fa-solid fa-chart-column text-blue-600"></i> 月次推移（未成約件数 / 成約件数）</h2>
+          <canvas id="chart1" height="220"></canvas>
+        </div>
+        <div class="bg-white rounded-xl shadow p-4">
+          <h2 class="font-bold text-slate-700 mb-2"><i class="fa-solid fa-chart-pie text-blue-600"></i> 未成約理由(大) 割合</h2>
+          <canvas id="chart2" height="220"></canvas>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl shadow p-4 overflow-x-auto">
+        <h2 class="font-bold text-slate-700 mb-2"><i class="fa-solid fa-ranking-star text-blue-600"></i> 店舗別ランキング</h2>
+        <table class="min-w-full text-sm">
+          <thead>
+            <tr class="bg-slate-100 text-slate-600">
+              <th class="sortable px-3 py-2 text-left" data-sort="shopName">店舗</th>
+              <th class="sortable px-3 py-2 text-right" data-sort="total">未成約数</th>
+              <th class="sortable px-3 py-2 text-right" data-sort="resaleAction">リセール数</th>
+              <th class="sortable px-3 py-2 text-right" data-sort="contract">成約数</th>
+              <th class="sortable px-3 py-2 text-right" data-sort="pax">PAX</th>
+              <th class="sortable px-3 py-2 text-right" data-sort="resaleRate">リセール成約率</th>
+            </tr>
+          </thead>
+          <tbody id="ranking-tbody" class="divide-y divide-slate-100"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ タブ2: 個人別サマリー ============ -->
+    <section id="tab-panel-employee" class="tab-panel hidden space-y-5">
+      <div class="bg-white rounded-xl shadow p-4 flex flex-wrap gap-3 items-center justify-between">
+        <div class="flex gap-2">
+          <button id="btn-emp-first" class="emp-toggle-btn px-4 py-2 rounded-lg text-sm font-semibold bg-blue-700 text-white">上期（12月〜4月）</button>
+          <button id="btn-emp-second" class="emp-toggle-btn px-4 py-2 rounded-lg text-sm font-semibold bg-slate-100 text-slate-600">下期（5月〜10月）</button>
+        </div>
+        <input id="emp-search" type="text" placeholder="社員名・社員番号・店舗名で検索" class="border border-slate-300 rounded-lg text-sm p-2 w-72">
+      </div>
+
+      <div class="bg-white rounded-xl shadow p-4 overflow-x-auto">
+        <table class="min-w-full text-sm whitespace-nowrap">
+          <thead id="employee-thead" class="bg-slate-100 text-slate-600"></thead>
+          <tbody id="employee-tbody" class="divide-y divide-slate-100"></tbody>
+        </table>
+        <p id="employee-empty" class="text-center text-slate-400 py-6 hidden">データがありません</p>
+      </div>
+    </section>
+
+    <!-- ============ タブ3: 未成約相談データ管理 ============ -->
+    <section id="tab-panel-data" class="tab-panel hidden space-y-5">
+      <div class="bg-white rounded-xl shadow p-4">
+        <div class="flex flex-wrap gap-3 items-end justify-between">
+          <div class="flex flex-wrap gap-3">
+            <div>
+              <label class="text-xs font-semibold text-slate-500 block mb-1">店舗</label>
+              <select id="dm-filter-shop" class="border border-slate-300 rounded-lg text-sm p-2 min-w-[160px]"><option value="">すべて</option></select>
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-slate-500 block mb-1">月</label>
+              <select id="dm-filter-month" class="border border-slate-300 rounded-lg text-sm p-2 min-w-[110px]"><option value="">すべて</option></select>
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-slate-500 block mb-1">STS</label>
+              <select id="dm-filter-sts" class="border border-slate-300 rounded-lg text-sm p-2 min-w-[120px]">
+                <option value="">すべて</option>
+                <option value="失注">失注</option>
+                <option value="成約">成約</option>
+                <option value="リセール中">リセール中</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-slate-500 block mb-1">接客方法</label>
+              <select id="dm-filter-contact" class="border border-slate-300 rounded-lg text-sm p-2 min-w-[140px]"><option value="">すべて</option></select>
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-slate-500 block mb-1">旅行目的(小)</label>
+              <select id="dm-filter-purpose" class="border border-slate-300 rounded-lg text-sm p-2 min-w-[160px]"><option value="">すべて</option></select>
+            </div>
+          </div>
+          <button id="btn-open-modal" class="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-4 py-2 text-sm font-semibold shadow">
+            <i class="fa-solid fa-circle-plus"></i> 新規相談登録
+          </button>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl shadow p-4 overflow-x-auto">
+        <table class="min-w-full text-sm whitespace-nowrap">
+          <thead class="bg-slate-100 text-slate-600">
+            <tr>
+              <th class="px-3 py-2 text-left">店舗</th>
+              <th class="px-3 py-2 text-left">リセール</th>
+              <th class="px-3 py-2 text-left">STS</th>
+              <th class="px-3 py-2 text-right">成約PAX</th>
+              <th class="px-3 py-2 text-left">対象年月日</th>
+              <th class="px-3 py-2 text-left">社員名</th>
+              <th class="px-3 py-2 text-left">未成約理由(大)</th>
+              <th class="px-3 py-2 text-left">都市コード</th>
+              <th class="px-3 py-2 text-left">種別</th>
+              <th class="px-3 py-2 text-left">旅行目的(小)</th>
+              <th class="px-3 py-2 text-left">接客方法</th>
+              <th class="px-3 py-2 text-left w-64">詳細</th>
+              <th class="px-3 py-2 text-left">ACT日</th>
+              <th class="px-3 py-2 text-left">ACT内容</th>
+              <th class="px-3 py-2 text-left">備考</th>
+            </tr>
+          </thead>
+          <tbody id="data-tbody" class="divide-y divide-slate-100"></tbody>
+        </table>
+        <p id="data-empty" class="text-center text-slate-400 py-6 hidden">データがありません</p>
+
+        <div class="flex items-center justify-between mt-3 text-sm">
+          <p id="pagination-info" class="text-slate-500"></p>
+          <div class="flex gap-2">
+            <button id="btn-prev-page" class="border border-slate-300 rounded-lg px-3 py-1.5 hover:bg-slate-50">
+              <i class="fa-solid fa-chevron-left"></i> 前へ
+            </button>
+            <button id="btn-next-page" class="border border-slate-300 rounded-lg px-3 py-1.5 hover:bg-slate-50">
+              次へ <i class="fa-solid fa-chevron-right"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============ 新規相談登録モーダル ============ -->
+  <div id="register-modal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 sticky top-0 bg-white rounded-t-2xl">
+        <h3 class="font-bold text-lg text-blue-800"><i class="fa-solid fa-circle-plus"></i> 新規相談登録</h3>
+        <button id="btn-close-modal" class="text-slate-400 hover:text-slate-700 text-xl">&times;</button>
+      </div>
+      <form id="register-form" class="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">店舗名 <span class="text-red-500">*</span></label>
+          <select name="sheetName" required class="w-full border border-slate-300 rounded-lg text-sm p-2"></select>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">対象年月日（相談対応日） <span class="text-red-500">*</span></label>
+          <input type="date" name="対象年月日" required class="w-full border border-slate-300 rounded-lg text-sm p-2">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">リセール</label>
+          <select name="リセール" class="w-full border border-slate-300 rounded-lg text-sm p-2">
+            <option value="">－</option><option value="〇">〇</option><option value="✖">✖</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">STS</label>
+          <select name="STS" class="w-full border border-slate-300 rounded-lg text-sm p-2">
+            <option value="">－</option><option value="失注">失注</option><option value="成約">成約</option><option value="リセール中">リセール中</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">成約PAX</label>
+          <input type="number" min="0" name="成約PAX" class="w-full border border-slate-300 rounded-lg text-sm p-2">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">営業所コード</label>
+          <input type="text" name="営業所コード" class="w-full border border-slate-300 rounded-lg text-sm p-2">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">社員番号</label>
+          <input type="text" name="社員番号" class="w-full border border-slate-300 rounded-lg text-sm p-2">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">社員名</label>
+          <input type="text" name="社員名" class="w-full border border-slate-300 rounded-lg text-sm p-2">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">未成約理由(大)</label>
+          <select name="未成約理由(大)" class="w-full border border-slate-300 rounded-lg text-sm p-2"><option value="">－</option></select>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">都市コード</label>
+          <input type="text" name="都市コード" placeholder="例: HNL" class="w-full border border-slate-300 rounded-lg text-sm p-2">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">種別</label>
+          <select name="種別" class="w-full border border-slate-300 rounded-lg text-sm p-2"><option value="">－</option></select>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">出発年月</label>
+          <input type="month" name="出発年月_month" class="w-full border border-slate-300 rounded-lg text-sm p-2">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">旅行目的(小)</label>
+          <select name="旅行目的(小)" class="w-full border border-slate-300 rounded-lg text-sm p-2"><option value="">－</option></select>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">接客方法</label>
+          <select name="接客方法" class="w-full border border-slate-300 rounded-lg text-sm p-2"><option value="">－</option></select>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">HIS利用歴</label>
+          <select name="HIS利用歴" class="w-full border border-slate-300 rounded-lg text-sm p-2">
+            <option value="">－</option><option value="有">有</option><option value="無">無</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">予約番号</label>
+          <input type="text" name="予約番号" class="w-full border border-slate-300 rounded-lg text-sm p-2">
+        </div>
+        <div class="md:col-span-2">
+          <label class="text-xs font-semibold text-slate-500 block mb-1">詳細</label>
+          <textarea name="詳細" rows="3" class="w-full border border-slate-300 rounded-lg text-sm p-2"></textarea>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">次回ACT日</label>
+          <input type="date" name="ACT日" class="w-full border border-slate-300 rounded-lg text-sm p-2">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">次回ACT内容</label>
+          <input type="text" name="ACT内容" class="w-full border border-slate-300 rounded-lg text-sm p-2">
+        </div>
+        <div class="md:col-span-2">
+          <label class="text-xs font-semibold text-slate-500 block mb-1">備考</label>
+          <textarea name="備考" rows="2" class="w-full border border-slate-300 rounded-lg text-sm p-2"></textarea>
+        </div>
+
+        <div class="md:col-span-2 flex justify-end gap-3 pt-2 border-t border-slate-100 mt-2">
+          <button type="button" id="btn-cancel-modal" class="px-4 py-2 rounded-lg text-sm font-semibold text-slate-500 hover:bg-slate-100">キャンセル</button>
+          <button type="submit" id="btn-submit-modal" class="px-5 py-2 rounded-lg text-sm font-semibold bg-blue-700 hover:bg-blue-800 text-white shadow">
+            <i class="fa-solid fa-floppy-disk"></i> 登録する
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <?!= include('Javascript'); ?>
+</body>
+</html>

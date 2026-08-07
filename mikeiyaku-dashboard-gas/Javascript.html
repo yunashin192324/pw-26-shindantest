@@ -1,0 +1,776 @@
+<script>
+/**
+ * ============================================================================
+ * Javascript.html
+ * 「46期未成約リスト」ダッシュボード - クライアントサイド制御ロジック
+ * ============================================================================
+ */
+
+// ---- 定数 ------------------------------------------------------------------
+const MONTH_CODES = ['12', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11'];
+const MONTH_LABELS = MONTH_CODES.map(function (c) { return (c.indexOf('0') === 0 ? c.substring(1) : c) + '月'; });
+const PAGE_SIZE = 50;
+
+// ---- グローバル状態 ----------------------------------------------------------
+let allDataCache = [];              // getDashboardData() の統合生データ（超高速フィルタの元データ）
+let metaMasters = {};                // getMetaMasters() のマスタ一式
+let employeeSummaryCache = { first_half: null, second_half: null };
+let currentEmployeePeriod = 'first_half';
+let myChart1 = null;
+let myChart2 = null;
+let dmCurrentPage = 1;
+let dmFilteredCache = [];
+let rankingSortState = { key: 'total', dir: 'desc' };
+let loadCompletedCount = 0;
+const LOAD_TARGET = 3;
+
+// ============================================================================
+// 初期化
+// ============================================================================
+document.addEventListener('DOMContentLoaded', function () {
+  initTabs();
+  initHeaderEvents();
+  initDashboardEvents();
+  initEmployeeEvents();
+  initDataManagerEvents();
+  initModalEvents();
+  loadAllData();
+});
+
+function loadAllData() {
+  showLoading(true);
+  loadCompletedCount = 0;
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (res && res.success) {
+        allDataCache = res.data;
+      } else {
+        showToast('ダッシュボードデータの取得に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+      onLoadStepComplete();
+    })
+    .withFailureHandler(function (err) {
+      showToast('通信エラー（getDashboardData）: ' + err.message, 'error');
+      onLoadStepComplete();
+    })
+    .getDashboardData();
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (res && res.success) {
+        metaMasters = res;
+        populateAllMasterSelects();
+      } else {
+        showToast('マスタデータの取得に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+      onLoadStepComplete();
+    })
+    .withFailureHandler(function (err) {
+      showToast('通信エラー（getMetaMasters）: ' + err.message, 'error');
+      onLoadStepComplete();
+    })
+    .getMetaMasters();
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (res && res.success) {
+        employeeSummaryCache.first_half = res;
+      } else {
+        showToast('個人別サマリ(上期)の取得に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+      onLoadStepComplete();
+    })
+    .withFailureHandler(function (err) {
+      showToast('通信エラー（getEmployeeSummary）: ' + err.message, 'error');
+      onLoadStepComplete();
+    })
+    .getEmployeeSummary('first_half');
+}
+
+function onLoadStepComplete() {
+  loadCompletedCount++;
+  if (loadCompletedCount >= LOAD_TARGET) {
+    showLoading(false);
+    renderDashboardTab();
+    renderEmployeeTab();
+    renderDataManagerTab();
+  }
+}
+
+function showLoading(flag) {
+  document.getElementById('loading-overlay').classList.toggle('hidden', !flag);
+}
+
+// ============================================================================
+// 共通UI（タブ・トースト・ヘッダー）
+// ============================================================================
+function initTabs() {
+  document.querySelectorAll('.tab-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('.tab-btn').forEach(function (b) {
+        b.classList.remove('active', 'bg-blue-700', 'text-white');
+        b.classList.add('bg-slate-100', 'text-slate-600');
+      });
+      btn.classList.add('active');
+      btn.classList.remove('bg-slate-100', 'text-slate-600');
+
+      document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.add('hidden'); });
+      document.getElementById('tab-panel-' + btn.dataset.tab).classList.remove('hidden');
+    });
+  });
+}
+
+function initHeaderEvents() {
+  document.getElementById('btn-refresh').addEventListener('click', function () {
+    loadAllData();
+  });
+}
+
+function showToast(message, type) {
+  const container = document.getElementById('toast-container');
+  const colors = {
+    success: 'bg-emerald-600',
+    error: 'bg-red-600',
+    info: 'bg-blue-600'
+  };
+  const icon = {
+    success: 'fa-circle-check',
+    error: 'fa-circle-exclamation',
+    info: 'fa-circle-info'
+  };
+  const t = type || 'info';
+
+  const div = document.createElement('div');
+  div.className = 'toast text-white text-sm rounded-lg shadow-lg px-4 py-3 flex items-start gap-2 ' + colors[t];
+  div.innerHTML = '<i class="fa-solid ' + icon[t] + ' mt-0.5"></i><span>' + escapeHtml(message) + '</span>';
+  container.appendChild(div);
+
+  setTimeout(function () {
+    div.style.opacity = '0';
+    div.style.transition = 'opacity .3s';
+    setTimeout(function () { div.remove(); }, 300);
+  }, 3200);
+}
+
+function escapeHtml(str) {
+  return String(str === undefined || str === null ? '' : str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ============================================================================
+// マスタ反映（フィルタ／モーダルの各種セレクトボックス）
+// ============================================================================
+function populateAllMasterSelects() {
+  const shopList = metaMasters.shopList || [];
+
+  fillOptions('filter-shop', shopList.map(function (s) { return { value: s, label: s }; }), true);
+  fillOptions('filter-month', MONTH_CODES.map(function (c, i) { return { value: c, label: MONTH_LABELS[i] }; }), true);
+
+  fillSelectWithBlank('dm-filter-shop', shopList);
+  fillSelectWithBlank('dm-filter-month', MONTH_CODES.map(function (c, i) { return MONTH_LABELS[i]; }), MONTH_CODES);
+  fillSelectWithBlank('dm-filter-contact', metaMasters.contactMaster || []);
+  fillSelectWithBlank('dm-filter-purpose', metaMasters.purposeMaster || []);
+
+  const modalShopSelect = document.querySelector('#register-form select[name="sheetName"]');
+  modalShopSelect.innerHTML = '<option value="">選択してください</option>' +
+    shopList.map(function (s) { return '<option value="' + escapeHtml(s) + '">' + escapeHtml(s) + '</option>'; }).join('');
+
+  fillSelectSimple('register-form select[name="未成約理由(大)"]', metaMasters.reasonMaster || []);
+  fillSelectSimple('register-form select[name="種別"]', metaMasters.typeMaster || []);
+  fillSelectSimple('register-form select[name="旅行目的(小)"]', metaMasters.purposeMaster || []);
+  fillSelectSimple('register-form select[name="接客方法"]', metaMasters.contactMaster || []);
+}
+
+function fillOptions(elId, items, multi) {
+  const el = document.getElementById(elId);
+  el.innerHTML = items.map(function (it) {
+    return '<option value="' + escapeHtml(it.value) + '">' + escapeHtml(it.label) + '</option>';
+  }).join('');
+}
+
+function fillSelectWithBlank(elId, labels, values) {
+  const el = document.getElementById(elId);
+  const opts = ['<option value="">すべて</option>'];
+  labels.forEach(function (label, i) {
+    const v = values ? values[i] : label;
+    opts.push('<option value="' + escapeHtml(v) + '">' + escapeHtml(label) + '</option>');
+  });
+  el.innerHTML = opts.join('');
+}
+
+function fillSelectSimple(selector, labels) {
+  const el = document.querySelector(selector);
+  const opts = ['<option value="">－</option>'];
+  labels.forEach(function (label) {
+    opts.push('<option value="' + escapeHtml(label) + '">' + escapeHtml(label) + '</option>');
+  });
+  el.innerHTML = opts.join('');
+}
+
+function getSelectedMultiValues(elId) {
+  return Array.from(document.getElementById(elId).selectedOptions).map(function (o) { return o.value; });
+}
+
+// ============================================================================
+// タブ1: 店舗分析ダッシュボード
+// ============================================================================
+function initDashboardEvents() {
+  document.getElementById('filter-shop').addEventListener('change', renderDashboardTab);
+  document.getElementById('filter-month').addEventListener('change', renderDashboardTab);
+  document.getElementById('btn-clear-dashboard-filter').addEventListener('click', function () {
+    Array.from(document.getElementById('filter-shop').options).forEach(function (o) { o.selected = false; });
+    Array.from(document.getElementById('filter-month').options).forEach(function (o) { o.selected = false; });
+    renderDashboardTab();
+  });
+  document.querySelectorAll('#tab-panel-dashboard .sortable').forEach(function (th) {
+    th.addEventListener('click', function () {
+      const key = th.dataset.sort;
+      if (rankingSortState.key === key) {
+        rankingSortState.dir = rankingSortState.dir === 'asc' ? 'desc' : 'asc';
+      } else {
+        rankingSortState = { key: key, dir: 'desc' };
+      }
+      renderRankingTable(getDashboardFilteredData());
+    });
+  });
+}
+
+function getDashboardFilteredData() {
+  const shops = getSelectedMultiValues('filter-shop');
+  const months = getSelectedMultiValues('filter-month');
+
+  return allDataCache.filter(function (row) {
+    if (shops.length && shops.indexOf(row.__sheetName) === -1) return false;
+    if (months.length && months.indexOf(String(row['月'])) === -1) return false;
+    return true;
+  });
+}
+
+function renderDashboardTab() {
+  const filtered = getDashboardFilteredData();
+  renderKpi(filtered);
+  renderChart1(filtered);
+  renderChart2(filtered);
+  renderRankingTable(filtered);
+}
+
+function renderKpi(data) {
+  const total = data.length;
+  const contractRows = data.filter(function (r) { return r['STS'] === '成約'; });
+  const contract = contractRows.length;
+  const pax = contractRows.reduce(function (sum, r) { return sum + (Number(r['成約PAX']) || 0); }, 0);
+  const resaleAction = data.filter(function (r) { return r['リセール'] === '〇'; }).length;
+  const resaleProgress = data.filter(function (r) { return r['STS'] === 'リセール中'; }).length;
+  const resaleRate = resaleAction > 0 ? (contract / resaleAction) * 100 : 0;
+
+  document.getElementById('kpi-total').textContent = total.toLocaleString();
+  document.getElementById('kpi-contract').textContent = contract.toLocaleString();
+  document.getElementById('kpi-pax').textContent = pax.toLocaleString();
+  document.getElementById('kpi-resale-action').textContent = resaleAction.toLocaleString();
+  document.getElementById('kpi-resale-progress').textContent = resaleProgress.toLocaleString();
+  document.getElementById('kpi-resale-rate').textContent = resaleRate.toFixed(1) + '%';
+}
+
+function renderChart1(data) {
+  const totalByMonth = MONTH_CODES.map(function (code) {
+    return data.filter(function (r) { return String(r['月']) === code; }).length;
+  });
+  const contractByMonth = MONTH_CODES.map(function (code) {
+    return data.filter(function (r) { return String(r['月']) === code && r['STS'] === '成約'; }).length;
+  });
+
+  const ctx = document.getElementById('chart1').getContext('2d');
+  if (myChart1) { myChart1.destroy(); }
+  myChart1 = new Chart(ctx, {
+    data: {
+      labels: MONTH_LABELS,
+      datasets: [
+        {
+          type: 'bar',
+          label: '未成約件数',
+          data: totalByMonth,
+          backgroundColor: '#93c5fd',
+          yAxisID: 'y'
+        },
+        {
+          type: 'line',
+          label: '成約件数',
+          data: contractByMonth,
+          borderColor: '#1d4ed8',
+          backgroundColor: '#1d4ed8',
+          tension: 0.3,
+          yAxisID: 'y1'
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        y: { type: 'linear', position: 'left', beginAtZero: true, title: { display: true, text: '未成約件数' } },
+        y1: { type: 'linear', position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: '成約件数' } }
+      }
+    }
+  });
+}
+
+function renderChart2(data) {
+  const counts = {};
+  data.forEach(function (r) {
+    const reason = r['未成約理由(大)'] || '未設定';
+    counts[reason] = (counts[reason] || 0) + 1;
+  });
+  const labels = Object.keys(counts);
+  const values = labels.map(function (l) { return counts[l]; });
+  const total = values.reduce(function (a, b) { return a + b; }, 0);
+  const palette = ['#1d4ed8', '#3b82f6', '#60a5fa', '#93c5fd', '#f59e0b', '#fbbf24', '#10b981', '#34d399', '#ef4444', '#f87171', '#8b5cf6', '#a78bfa'];
+
+  const ctx = document.getElementById('chart2').getContext('2d');
+  if (myChart2) { myChart2.destroy(); }
+  myChart2 = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: labels,
+      datasets: [{ data: values, backgroundColor: labels.map(function (_, i) { return palette[i % palette.length]; }) }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            label: function (ctx) {
+              const v = ctx.parsed;
+              const pct = total > 0 ? ((v / total) * 100).toFixed(1) : '0.0';
+              return ctx.label + ': ' + v + '件 (' + pct + '%)';
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+function renderRankingTable(data) {
+  const shopList = metaMasters.shopList || [];
+  const rows = shopList.map(function (shopName) {
+    const shopRows = data.filter(function (r) { return r.__sheetName === shopName; });
+    const total = shopRows.length;
+    const resaleAction = shopRows.filter(function (r) { return r['リセール'] === '〇'; }).length;
+    const contractRows = shopRows.filter(function (r) { return r['STS'] === '成約'; });
+    const contract = contractRows.length;
+    const pax = contractRows.reduce(function (sum, r) { return sum + (Number(r['成約PAX']) || 0); }, 0);
+    const resaleRate = resaleAction > 0 ? (contract / resaleAction) * 100 : 0;
+    return { shopName: shopName, total: total, resaleAction: resaleAction, contract: contract, pax: pax, resaleRate: resaleRate };
+  });
+
+  const key = rankingSortState.key;
+  const dir = rankingSortState.dir === 'asc' ? 1 : -1;
+  rows.sort(function (a, b) {
+    if (typeof a[key] === 'string') return a[key].localeCompare(b[key]) * dir;
+    return (a[key] - b[key]) * dir;
+  });
+
+  const tbody = document.getElementById('ranking-tbody');
+  tbody.innerHTML = rows.map(function (r) {
+    return '<tr class="hover:bg-blue-50">' +
+      '<td class="px-3 py-2">' + escapeHtml(r.shopName) + '</td>' +
+      '<td class="px-3 py-2 text-right">' + r.total.toLocaleString() + '</td>' +
+      '<td class="px-3 py-2 text-right">' + r.resaleAction.toLocaleString() + '</td>' +
+      '<td class="px-3 py-2 text-right">' + r.contract.toLocaleString() + '</td>' +
+      '<td class="px-3 py-2 text-right">' + r.pax.toLocaleString() + '</td>' +
+      '<td class="px-3 py-2 text-right">' + r.resaleRate.toFixed(1) + '%</td>' +
+      '</tr>';
+  }).join('');
+}
+
+// ============================================================================
+// タブ2: 個人別サマリー
+// ============================================================================
+function initEmployeeEvents() {
+  document.getElementById('btn-emp-first').addEventListener('click', function () { switchEmployeePeriod('first_half'); });
+  document.getElementById('btn-emp-second').addEventListener('click', function () { switchEmployeePeriod('second_half'); });
+  document.getElementById('emp-search').addEventListener('input', renderEmployeeTab);
+}
+
+function switchEmployeePeriod(period) {
+  currentEmployeePeriod = period;
+  document.getElementById('btn-emp-first').classList.toggle('bg-blue-700', period === 'first_half');
+  document.getElementById('btn-emp-first').classList.toggle('text-white', period === 'first_half');
+  document.getElementById('btn-emp-first').classList.toggle('bg-slate-100', period !== 'first_half');
+  document.getElementById('btn-emp-first').classList.toggle('text-slate-600', period !== 'first_half');
+
+  document.getElementById('btn-emp-second').classList.toggle('bg-blue-700', period === 'second_half');
+  document.getElementById('btn-emp-second').classList.toggle('text-white', period === 'second_half');
+  document.getElementById('btn-emp-second').classList.toggle('bg-slate-100', period !== 'second_half');
+  document.getElementById('btn-emp-second').classList.toggle('text-slate-600', period !== 'second_half');
+
+  if (employeeSummaryCache[period]) {
+    renderEmployeeTab();
+  } else {
+    showLoading(true);
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (res && res.success) {
+          employeeSummaryCache[period] = res;
+          renderEmployeeTab();
+        } else {
+          showToast('個人別サマリの取得に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+        }
+        showLoading(false);
+      })
+      .withFailureHandler(function (err) {
+        showToast('通信エラー（getEmployeeSummary）: ' + err.message, 'error');
+        showLoading(false);
+      })
+      .getEmployeeSummary(period);
+  }
+}
+
+function renderEmployeeTab() {
+  const cache = employeeSummaryCache[currentEmployeePeriod];
+  const thead = document.getElementById('employee-thead');
+  const tbody = document.getElementById('employee-tbody');
+  const emptyMsg = document.getElementById('employee-empty');
+
+  if (!cache) {
+    thead.innerHTML = '';
+    tbody.innerHTML = '';
+    return;
+  }
+
+  const blockOrder = cache.blockOrder;
+  const metrics = ['リセール数', 'リセール中', '成約件数', 'PAX数'];
+
+  let headRow1 = '<tr>' +
+    '<th rowspan="2" class="px-3 py-2 text-left border-r border-slate-200">営業所名</th>' +
+    '<th rowspan="2" class="px-3 py-2 text-left border-r border-slate-200">社員名</th>';
+  let headRow2 = '<tr>';
+  blockOrder.forEach(function (block) {
+    headRow1 += '<th colspan="4" class="px-3 py-2 text-center border-r border-slate-200">' + escapeHtml(block) + '</th>';
+    metrics.forEach(function (m) {
+      headRow2 += '<th class="px-2 py-1 text-right font-normal text-xs">' + m + '</th>';
+    });
+  });
+  headRow1 += '</tr>';
+  headRow2 += '</tr>';
+  thead.innerHTML = headRow1 + headRow2;
+
+  const keyword = document.getElementById('emp-search').value.trim().toLowerCase();
+  const employees = cache.employees.filter(function (e) {
+    if (!keyword) return true;
+    return String(e.employeeName).toLowerCase().indexOf(keyword) !== -1 ||
+      String(e.employeeNo).toLowerCase().indexOf(keyword) !== -1 ||
+      String(e.officeName).toLowerCase().indexOf(keyword) !== -1;
+  });
+
+  if (employees.length === 0) {
+    tbody.innerHTML = '';
+    emptyMsg.classList.remove('hidden');
+    return;
+  }
+  emptyMsg.classList.add('hidden');
+
+  tbody.innerHTML = employees.map(function (e) {
+    let row = '<tr class="hover:bg-blue-50">' +
+      '<td class="px-3 py-2 border-r border-slate-100">' + escapeHtml(e.officeName) + '</td>' +
+      '<td class="px-3 py-2 border-r border-slate-100">' + escapeHtml(e.employeeName) + '</td>';
+    blockOrder.forEach(function (block) {
+      const p = e.periods[block] || {};
+      metrics.forEach(function (m) {
+        row += '<td class="px-2 py-1 text-right">' + (p[m] !== undefined && p[m] !== '' ? p[m] : '－') + '</td>';
+      });
+    });
+    row += '</tr>';
+    return row;
+  }).join('');
+}
+
+// ============================================================================
+// タブ3: 未成約相談データ管理（CRUD）
+// ============================================================================
+function initDataManagerEvents() {
+  ['dm-filter-shop', 'dm-filter-month', 'dm-filter-sts', 'dm-filter-contact', 'dm-filter-purpose'].forEach(function (id) {
+    document.getElementById(id).addEventListener('change', function () {
+      dmCurrentPage = 1;
+      renderDataManagerTab();
+    });
+  });
+  document.getElementById('btn-prev-page').addEventListener('click', function () {
+    if (dmCurrentPage > 1) { dmCurrentPage--; renderDataManagerGrid(); }
+  });
+  document.getElementById('btn-next-page').addEventListener('click', function () {
+    const maxPage = Math.max(1, Math.ceil(dmFilteredCache.length / PAGE_SIZE));
+    if (dmCurrentPage < maxPage) { dmCurrentPage++; renderDataManagerGrid(); }
+  });
+}
+
+function renderDataManagerTab() {
+  const shop = document.getElementById('dm-filter-shop').value;
+  const month = document.getElementById('dm-filter-month').value;
+  const sts = document.getElementById('dm-filter-sts').value;
+  const contact = document.getElementById('dm-filter-contact').value;
+  const purpose = document.getElementById('dm-filter-purpose').value;
+
+  dmFilteredCache = allDataCache.filter(function (row) {
+    if (shop && row.__sheetName !== shop) return false;
+    if (month && String(row['月']) !== month) return false;
+    if (sts && row['STS'] !== sts) return false;
+    if (contact && row['接客方法'] !== contact) return false;
+    if (purpose && row['旅行目的(小)'] !== purpose) return false;
+    return true;
+  });
+
+  renderDataManagerGrid();
+}
+
+function renderDataManagerGrid() {
+  const tbody = document.getElementById('data-tbody');
+  const emptyMsg = document.getElementById('data-empty');
+  const maxPage = Math.max(1, Math.ceil(dmFilteredCache.length / PAGE_SIZE));
+  if (dmCurrentPage > maxPage) dmCurrentPage = maxPage;
+
+  const startIdx = (dmCurrentPage - 1) * PAGE_SIZE;
+  const pageRows = dmFilteredCache.slice(startIdx, startIdx + PAGE_SIZE);
+
+  document.getElementById('pagination-info').textContent =
+    dmFilteredCache.length === 0 ? '0 件' : (startIdx + 1) + ' - ' + Math.min(startIdx + PAGE_SIZE, dmFilteredCache.length) + ' 件 / 全 ' + dmFilteredCache.length + ' 件（' + dmCurrentPage + ' / ' + maxPage + ' ページ）';
+
+  if (pageRows.length === 0) {
+    tbody.innerHTML = '';
+    emptyMsg.classList.remove('hidden');
+    return;
+  }
+  emptyMsg.classList.add('hidden');
+
+  tbody.innerHTML = pageRows.map(function (row) {
+    const rid = row.__sheetName + '::' + row.__rowIndex;
+    const stsOptions = ['失注', '成約', 'リセール中'].map(function (s) {
+      return '<option value="' + s + '"' + (row['STS'] === s ? ' selected' : '') + '>' + s + '</option>';
+    }).join('');
+
+    return '<tr class="hover:bg-blue-50" data-rid="' + rid + '">' +
+      '<td class="px-3 py-2">' + escapeHtml(row.__sheetName) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(row['リセール']) + '</td>' +
+      '<td class="px-2 py-1">' +
+        '<select class="sts-select border border-slate-300 rounded px-1 py-1 text-xs" data-sheet="' + escapeHtml(row.__sheetName) + '" data-row="' + row.__rowIndex + '">' +
+          '<option value="">－</option>' + stsOptions +
+        '</select>' +
+      '</td>' +
+      editableCellTd(row, '成約PAX', 'number') +
+      '<td class="px-3 py-2">' + escapeHtml(row['対象年月日']) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(row['社員名']) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(row['未成約理由(大)']) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(row['都市コード']) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(row['種別']) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(row['旅行目的(小)']) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(row['接客方法']) + '</td>' +
+      editableCellTd(row, '詳細', 'text') +
+      editableCellTd(row, 'ACT日', 'text') +
+      editableCellTd(row, 'ACT内容', 'text') +
+      editableCellTd(row, '備考', 'text') +
+      '</tr>';
+  }).join('');
+
+  bindGridEditEvents();
+}
+
+function editableCellTd(row, columnName, type) {
+  const val = row[columnName] !== undefined && row[columnName] !== null ? row[columnName] : '';
+  return '<td class="editable-cell px-3 py-2" data-column="' + escapeHtml(columnName) + '" data-type="' + type + '" data-sheet="' + escapeHtml(row.__sheetName) + '" data-row="' + row.__rowIndex + '">' +
+    '<span class="cell-display">' + escapeHtml(val) + '</span></td>';
+}
+
+function bindGridEditEvents() {
+  // STS：常時表示のセレクトボックスで即時更新
+  document.querySelectorAll('.sts-select').forEach(function (sel) {
+    sel.addEventListener('change', function () {
+      const sheetName = sel.dataset.sheet;
+      const rowIndex = sel.dataset.row;
+      const newStatus = sel.value;
+      if (!newStatus) return;
+
+      let contractPax = '';
+      if (newStatus === '成約') {
+        const row = dmFilteredCache.find(function (r) { return r.__sheetName === sheetName && String(r.__rowIndex) === String(rowIndex); });
+        contractPax = row ? row['成約PAX'] : '';
+        contractPax = window.prompt('成約PAX数を入力してください', contractPax || 0);
+        if (contractPax === null) { renderDataManagerGrid(); return; }
+      }
+
+      callUpdateStatus(sheetName, rowIndex, newStatus, contractPax);
+    });
+  });
+
+  // テキストセル（成約PAX／詳細／ACT日／ACT内容／備考）：ダブルクリックでインライン編集
+  document.querySelectorAll('.editable-cell').forEach(function (td) {
+    td.addEventListener('dblclick', function () {
+      if (td.querySelector('input')) return;
+      const span = td.querySelector('.cell-display');
+      const currentVal = span.textContent;
+      const type = td.dataset.type;
+
+      const input = document.createElement('input');
+      input.type = type === 'number' ? 'number' : 'text';
+      input.value = currentVal;
+      input.className = 'w-full border border-blue-400 rounded px-1 py-0.5 text-sm';
+
+      td.innerHTML = '';
+      td.appendChild(input);
+      input.focus();
+      input.select();
+
+      const commit = function () {
+        const newVal = input.value;
+        const sheetName = td.dataset.sheet;
+        const rowIndex = td.dataset.row;
+        const columnName = td.dataset.column;
+
+        if (columnName === '成約PAX') {
+          const row = dmFilteredCache.find(function (r) { return r.__sheetName === sheetName && String(r.__rowIndex) === String(rowIndex); });
+          const currentSts = row ? row['STS'] : '';
+          if (currentSts !== '成約') {
+            showToast('成約PAXはSTSが「成約」の行のみ編集できます。', 'error');
+            renderDataManagerGrid();
+            return;
+          }
+          callUpdateStatus(sheetName, rowIndex, '成約', newVal);
+        } else {
+          callUpdateCellValue(sheetName, rowIndex, columnName, newVal);
+        }
+      };
+
+      input.addEventListener('blur', commit);
+      input.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter') { input.blur(); }
+        if (ev.key === 'Escape') { input.removeEventListener('blur', commit); renderDataManagerGrid(); }
+      });
+    });
+  });
+}
+
+function callUpdateStatus(sheetName, rowIndex, newStatus, contractPax) {
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false);
+      if (res && res.success) {
+        applyUpdatedRowToCache(res.data);
+        showToast('ステータスを更新しました（' + newStatus + '）', 'success');
+        renderKpi(getDashboardFilteredData());
+        renderRankingTable(getDashboardFilteredData());
+        renderDataManagerGrid();
+      } else {
+        showToast('更新に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+        renderDataManagerGrid();
+      }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false);
+      showToast('通信エラー（updateStatus）: ' + err.message, 'error');
+      renderDataManagerGrid();
+    })
+    .updateStatus(sheetName, rowIndex, newStatus, contractPax);
+}
+
+function callUpdateCellValue(sheetName, rowIndex, columnName, value) {
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (res && res.success) {
+        applyUpdatedRowToCache(res.data);
+        showToast('「' + columnName + '」を更新しました', 'success');
+      } else {
+        showToast('更新に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+      renderDataManagerGrid();
+    })
+    .withFailureHandler(function (err) {
+      showToast('通信エラー（updateCellValue）: ' + err.message, 'error');
+      renderDataManagerGrid();
+    })
+    .updateCellValue(sheetName, rowIndex, columnName, value);
+}
+
+function applyUpdatedRowToCache(updatedRow) {
+  const idx = allDataCache.findIndex(function (r) {
+    return r.__sheetName === updatedRow.__sheetName && String(r.__rowIndex) === String(updatedRow.__rowIndex);
+  });
+  if (idx !== -1) {
+    allDataCache[idx] = updatedRow;
+  }
+  const dmIdx = dmFilteredCache.findIndex(function (r) {
+    return r.__sheetName === updatedRow.__sheetName && String(r.__rowIndex) === String(updatedRow.__rowIndex);
+  });
+  if (dmIdx !== -1) {
+    dmFilteredCache[dmIdx] = updatedRow;
+  }
+}
+
+// ============================================================================
+// 新規相談登録モーダル
+// ============================================================================
+function initModalEvents() {
+  document.getElementById('btn-open-modal').addEventListener('click', openModal);
+  document.getElementById('btn-close-modal').addEventListener('click', closeModal);
+  document.getElementById('btn-cancel-modal').addEventListener('click', closeModal);
+  document.getElementById('register-form').addEventListener('submit', onSubmitRegisterForm);
+}
+
+function openModal() {
+  document.getElementById('register-modal').classList.remove('hidden');
+  document.getElementById('register-modal').classList.add('flex');
+}
+
+function closeModal() {
+  document.getElementById('register-modal').classList.add('hidden');
+  document.getElementById('register-modal').classList.remove('flex');
+  document.getElementById('register-form').reset();
+}
+
+function onSubmitRegisterForm(ev) {
+  ev.preventDefault();
+  const form = ev.target;
+  const formData = new FormData(form);
+
+  const rowObject = { sheetName: formData.get('sheetName') };
+  ['リセール', 'STS', '成約PAX', '営業所コード', '社員番号', '社員名', '未成約理由(大)', '都市コード', '種別',
+    '旅行目的(小)', '接客方法', 'HIS利用歴', '詳細', 'ACT日', 'ACT内容', '備考', '予約番号'].forEach(function (key) {
+    rowObject[key] = formData.get(key) || '';
+  });
+
+  const dateVal = formData.get('対象年月日');
+  rowObject['対象年月日'] = dateVal ? dateVal.replace(/-/g, '') : '';
+
+  const monthVal = formData.get('出発年月_month');
+  rowObject['出発年月'] = monthVal ? monthVal.replace('-', '') : '';
+
+  if (!rowObject.sheetName || !rowObject['対象年月日']) {
+    showToast('店舗名と対象年月日は必須です。', 'error');
+    return;
+  }
+
+  const submitBtn = document.getElementById('btn-submit-modal');
+  submitBtn.disabled = true;
+  showLoading(true);
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false);
+      submitBtn.disabled = false;
+      if (res && res.success) {
+        showToast('新規相談を登録しました。', 'success');
+        closeModal();
+        loadAllData();
+      } else {
+        showToast('登録に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false);
+      submitBtn.disabled = false;
+      showToast('通信エラー（addUncontractedData）: ' + err.message, 'error');
+    })
+    .addUncontractedData(rowObject);
+}
+</script>
