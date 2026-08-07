@@ -43,12 +43,17 @@ function loadAllData() {
 
   google.script.run
     .withSuccessHandler(function (res) {
-      if (res && res.success) {
-        allDataCache = res.data;
-      } else {
-        showToast('ダッシュボードデータの取得に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      try {
+        if (res && res.success) {
+          allDataCache = res.data;
+        } else {
+          showToast('ダッシュボードデータの取得に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+        }
+      } catch (e) {
+        showToast('ダッシュボードデータの処理中にエラーが発生しました: ' + e.message, 'error');
+      } finally {
+        onLoadStepComplete();
       }
-      onLoadStepComplete();
     })
     .withFailureHandler(function (err) {
       showToast('通信エラー（getDashboardData）: ' + err.message, 'error');
@@ -58,13 +63,18 @@ function loadAllData() {
 
   google.script.run
     .withSuccessHandler(function (res) {
-      if (res && res.success) {
-        metaMasters = res;
-        populateAllMasterSelects();
-      } else {
-        showToast('マスタデータの取得に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      try {
+        if (res && res.success) {
+          metaMasters = res;
+          populateAllMasterSelects();
+        } else {
+          showToast('マスタデータの取得に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+        }
+      } catch (e) {
+        showToast('マスタデータの処理中にエラーが発生しました: ' + e.message, 'error');
+      } finally {
+        onLoadStepComplete();
       }
-      onLoadStepComplete();
     })
     .withFailureHandler(function (err) {
       showToast('通信エラー（getMetaMasters）: ' + err.message, 'error');
@@ -74,12 +84,17 @@ function loadAllData() {
 
   google.script.run
     .withSuccessHandler(function (res) {
-      if (res && res.success) {
-        employeeSummaryCache.first_half = res;
-      } else {
-        showToast('個人別サマリ(上期)の取得に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      try {
+        if (res && res.success) {
+          employeeSummaryCache.first_half = res;
+        } else {
+          showToast('個人別サマリ(上期)の取得に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+        }
+      } catch (e) {
+        showToast('個人別サマリ(上期)の処理中にエラーが発生しました: ' + e.message, 'error');
+      } finally {
+        onLoadStepComplete();
       }
-      onLoadStepComplete();
     })
     .withFailureHandler(function (err) {
       showToast('通信エラー（getEmployeeSummary）: ' + err.message, 'error');
@@ -176,10 +191,10 @@ function populateAllMasterSelects() {
   modalShopSelect.innerHTML = '<option value="">選択してください</option>' +
     shopList.map(function (s) { return '<option value="' + escapeHtml(s) + '">' + escapeHtml(s) + '</option>'; }).join('');
 
-  fillSelectSimple('register-form select[name="未成約理由(大)"]', metaMasters.reasonMaster || []);
-  fillSelectSimple('register-form select[name="種別"]', metaMasters.typeMaster || []);
-  fillSelectSimple('register-form select[name="旅行目的(小)"]', metaMasters.purposeMaster || []);
-  fillSelectSimple('register-form select[name="接客方法"]', metaMasters.contactMaster || []);
+  fillSelectSimple('#register-form select[name="未成約理由(大)"]', metaMasters.reasonMaster || []);
+  fillSelectSimple('#register-form select[name="種別"]', metaMasters.typeMaster || []);
+  fillSelectSimple('#register-form select[name="旅行目的(小)"]', metaMasters.purposeMaster || []);
+  fillSelectSimple('#register-form select[name="接客方法"]', metaMasters.contactMaster || []);
 }
 
 function fillOptions(elId, items, multi) {
