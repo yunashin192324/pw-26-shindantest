@@ -132,6 +132,12 @@ function initTabs() {
 
       document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.add('hidden'); });
       document.getElementById('tab-panel-' + btn.dataset.tab).classList.remove('hidden');
+
+      // 非表示（display:none）だったcanvasはサイズを正しく測れないため、
+      // ダッシュボードタブに戻ってきたタイミングでグラフを再生成してレイアウト崩れを防ぐ
+      if (btn.dataset.tab === 'dashboard') {
+        renderDashboardTab();
+      }
     });
   });
 }
