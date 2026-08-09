@@ -12,7 +12,8 @@
   const DETAIL_TABS = [
     { key: 'message', label: 'メッセージ' },
     { key: 'reservation', label: '予約内容' },
-    { key: 'local', label: '現地記入欄' }
+    { key: 'local', label: '現地記入欄' },
+    { key: 'drive', label: 'ドライブ' }
   ];
 
   let session = null;
@@ -532,14 +533,18 @@
           </div>
           <p class="hint-text">この欄は現地運用向けです。保存のみ／変更＋メッセージ送信は「メッセージ」タブのボタンから行えます。</p>
         </div>
+      </div>`;
 
+    // ★要件：Driveフォルダ URLは現地記入欄から独立した4つ目のタブに（日本側からアップロードすることもあるため）
+    const driveTabHtml = `
+      <div class="tab-pane ${detailActiveTab === 'drive' ? '' : 'hidden'}" data-tab-pane="drive">
         <div class="section-card">
           <h3>Driveフォルダ URL（納品）</h3>
           <div class="msg-row">
             <input id="drive-url-input" type="text" value="${escapeAttr(d['DriveフォルダURL'] || '')}" placeholder="https://drive.google.com/...">
             <button class="send-btn" id="drive-url-submit">保存</button>
           </div>
-          <p class="hint-text">こちらは入力すると即座に相手へ通知されます（他の項目のような保留はありません）。</p>
+          <p class="hint-text">支店・日本側どちらからでも登録できます。入力すると即座に相手へ通知されます（他の項目のような保留はありません）。</p>
         </div>
       </div>`;
 
@@ -554,6 +559,7 @@
       ${messageTabHtml}
       ${reservationTabHtml}
       ${localTabHtml}
+      ${driveTabHtml}
     `;
 
     c.querySelectorAll('.tab-btn').forEach(btn => {
