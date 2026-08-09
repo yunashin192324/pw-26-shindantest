@@ -149,6 +149,23 @@
   .master-item-card .switch-sm.on { background: var(--color-primary); }
   .master-item-card .switch-sm.on::after { transform: translateX(14px); }
 
+  /* ★要件：要対応（相手からの未読メッセージ・変更あり）の案件は一目でわかるよう色を変えて上位に表示 */
+  .res-card.needs-action { border-left-color: #d97706; background: #fffbeb; }
+  .chip.needs-action-chip { background: #fef3c7; color: #b45309; font-weight: 700; }
+
+  /* 案件詳細のタブ切替（メッセージ／予約内容／現地記入欄） */
+  .tab-bar { display: flex; gap: 6px; margin-bottom: 12px; position: sticky; top: 54px; z-index: 5;
+    background: var(--color-bg); padding: 4px 0; }
+  .tab-btn { flex: 1; background: var(--color-card); border: 1px solid var(--color-border); color: var(--color-text);
+    padding: 10px 6px; border-radius: 10px; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+  .tab-btn.active { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
+
+  /* 統計ダッシュボード（JPのみ） */
+  .stats-total { font-size: 1.3rem; font-weight: 700; }
+  .stats-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 0.92rem;
+    border-bottom: 1px dashed var(--color-border); }
+  .stats-row:last-child { border-bottom: none; }
+
   @media (min-width: 640px) {
     .detail-grid { grid-template-columns: repeat(3, 1fr); }
   }

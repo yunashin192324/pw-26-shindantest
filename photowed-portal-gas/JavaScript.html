@@ -9,11 +9,19 @@
   // 支店側がSTS(支店側)を編集できる条件。キー＝対になるSTS(JP側)の現在値。
   // null=制限なし／配列=その中からのみ／キーなし=支店側は編集不可
   const BRANCH_EDIT_GATE = { 'NC': null, 'RQ': null, 'CHK': null, 'CR': ['CW', 'CF'] };
+  const DETAIL_TABS = [
+    { key: 'message', label: 'メッセージ' },
+    { key: 'reservation', label: '予約内容' },
+    { key: 'local', label: '現地記入欄' }
+  ];
 
   let session = null;
   let currentKanri = null;
+  let currentUserName = ''; // ★要件：Googleアカウント（氏名@his-world.com）から取れる実名
+  let detailActiveTab = 'message';
   let dashboardScope = { showAll: true, teams: [], branches: [] };
   let searchScope = { showAll: true, teams: [], branches: [] };
+  let statsScope = { showAll: true, teams: [], branches: [] };
   let branchesCache = [];      // 一覧/新規画面用（BRANCHロールのみに絞った支店一覧。JPログイン時に取得）
   let lastDashboardData = null; // キャンセル表示チェックボックスの再描画用にキャッシュ
   let pendingChanges = {}; // 「保存のみ／メッセージのみ送信／変更＋メッセージ送信」待ちの変更（既存予約の全項目が対象）
@@ -54,7 +62,8 @@
   async function loadCurrentUserName() {
     try {
       const res = await gsRun('apiGetCurrentUserName', session.token);
-      if (res.name) $('branch-badge').textContent += `・${res.name}`;
+      currentUserName = res.name || '';
+      if (currentUserName) $('branch-badge').textContent += `・${currentUserName}`;
     } catch (e) { /* 取得できなくても致命的ではないので無視 */ }
   }
 
@@ -94,6 +103,7 @@
     $('login-submit').addEventListener('click', doLogin);
     $('nav-dashboard').addEventListener('click', () => loadDashboard());
     $('nav-search').addEventListener('click', openSearchView);
+    $('nav-stats').addEventListener('click', () => loadStats());
     $('nav-new').addEventListener('click', openNewView);
     $('nav-logout').addEventListener('click', doLogout);
     $('detail-back').addEventListener('click', () => loadDashboard());
@@ -131,6 +141,7 @@
     if (session) gsRun('apiLogout', session.token).catch(() => {});
     localStorage.removeItem(STORAGE_KEY);
     session = null;
+    currentUserName = '';
     $('app-header').classList.add('hidden');
     $('login-branchcode').value = '';
     $('login-passcode').value = '';
@@ -143,6 +154,7 @@
     loadCurrentUserName();
     dashboardScope = { showAll: true, teams: [], branches: [] };
     searchScope = { showAll: true, teams: [], branches: [] };
+    statsScope = { showAll: true, teams: [], branches: [] };
     loadDashboard();
   }
 
@@ -227,12 +239,14 @@
 
   function buildReservationCard(r, role) {
     const card = document.createElement('div');
-    card.className = 'res-card';
+    // ★要件：相手からの未読メッセージ・変更がある案件は色を変えて一目でわかるように、一覧の上に来る（サーバ側でソート済み）
+    card.className = 'res-card' + (r.needsAction ? ' needs-action' : '');
     const cancelled = r.statusJp === 'CW' || r.statusBranch === 'CW';
     card.innerHTML = `
       <div class="res-card-top"><span>${r.kanriNo} ・ CHG: ${r.challengeNo || 'なし'}</span><span>${r.confirmedDate || '撮影日未定'}</span></div>
       <div class="res-card-names">${r.groomName || ''} ${r.brideName ? '／ ' + r.brideName : ''}</div>
       <div class="res-card-bottom">
+        ${r.needsAction ? '<span class="chip needs-action-chip">● 要対応</span>' : ''}
         <span class="chip branch">${r.branchName || r.branchCode}${role === 'JP' && r.city ? '・' + r.city : ''}</span>
         ${r.area ? `<span class="chip hq">担当: ${r.area}手配課</span>` : ''}
         ${r.statusJp ? `<span class="chip hq">STS JP: ${r.statusJp}</span>` : ''}
@@ -289,20 +303,61 @@
     } catch (e) { handleAuthError(e); }
   }
 
+  // ---------- 統計（JPのみ） ----------
+  async function loadStats() {
+    showView('stats');
+    try {
+      const data = await gsRun('apiGetStats', session.token, statsScope);
+      renderScopeSelector($('stats-scope'), statsScope, loadStats);
+      renderStats(data);
+    } catch (e) { handleAuthError(e); }
+  }
+
+  function renderStats(data) {
+    const statusLabel = { RQ: 'RQ（依頼中）', OK: 'OK（確定）', FN: 'FN（完了）' };
+    const listRows = (entries, totalForPct) => entries.map(e =>
+      `<div class="stats-row"><span>${escapeHtml(e.key)}</span><span>${e.count}件</span></div>`
+    ).join('') || '<p class="hint-text">データがありません。</p>';
+
+    $('stats-content').innerHTML = `
+      <div class="section-card">
+        <div class="stats-total">総件数：${data.total}件</div>
+      </div>
+      <div class="section-card">
+        <h3>ステータス別</h3>
+        ${Object.keys(statusLabel).map(k => `<div class="stats-row"><span>${statusLabel[k]}</span><span>${data.byStatus[k] || 0}件</span></div>`).join('')}
+      </div>
+      <div class="section-card">
+        <h3>月別件数（撮影日FIX基準）</h3>
+        ${listRows(data.byMonth)}
+      </div>
+      <div class="section-card">
+        <h3>国別件数</h3>
+        ${listRows(data.byCountry)}
+      </div>
+      <div class="section-card">
+        <h3>日本側店舗別件数</h3>
+        ${listRows(data.byJpShop)}
+      </div>
+    `;
+  }
+
   // ---------- 詳細 ----------
   async function openDetail(kanriNo) {
     if (kanriNo !== currentKanri) pendingChanges = {};
     currentKanri = kanriNo;
+    detailActiveTab = 'message'; // ★要件：開いたらまずメッセージ（未読の有無）が目に入るようにする
     showView('detail');
     $('detail-content').innerHTML = '<p class="hint-text">読み込み中...</p>';
     try {
       const detailRes = await gsRun('apiGetReservationDetail', session.token, kanriNo);
       const branchCode = detailRes.detail['支店コード'];
-      const [planList, optionList] = await Promise.all([
+      const [planList, optionList, locationList] = await Promise.all([
         gsRun('apiListPlans', session.token, branchCode),
-        gsRun('apiListOptionItems', session.token, branchCode)
+        gsRun('apiListOptionItems', session.token, branchCode),
+        gsRun('apiListLocations', session.token, branchCode)
       ]);
-      renderDetail(detailRes.detail, planList, optionList);
+      renderDetail(detailRes.detail, planList, optionList, locationList);
     } catch (e) { handleAuthError(e); }
   }
 
@@ -335,12 +390,16 @@
     return names;
   }
 
-  function renderDetail(d, planList, optionList) {
+  function renderDetail(d, planList, optionList, locationList) {
     const c = $('detail-content');
 
     const planNames = nameListWithCurrent(planList, d['プラン名']);
     const planSelect = `<select data-pending="プラン名"><option value="">未設定</option>${planNames.map(n =>
       `<option value="${escapeAttr(n)}" ${n === d['プラン名'] ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}</select>`;
+
+    // ★要件：撮影希望場所は各地で違うので必須の選択式にせず、任意入力＋マスターの候補（datalist）にする
+    const locationNames = nameListWithCurrent(locationList, d['撮影希望場所']);
+    const locationDatalist = `<datalist id="location-datalist">${locationNames.map(n => `<option value="${escapeAttr(n)}">`).join('')}</datalist>`;
 
     const mainGate = branchGateFor(d['STS JP']);
 
@@ -359,17 +418,128 @@
         </div>`;
     }).join('');
 
-    const historyHtml = d.history.map(h => `
-      <div class="history-item ${(!h.checkJp && !h.checkBranch) ? 'unread' : ''}">
-        <div class="history-meta"><span>${h.sender}</span><span>${h.datetime}</span></div>
+    // ★要件：メッセージ・変更のチェック（既読）は「誰が・いつ」確認したかも表示し、未読かどうか一目でわかるようにする
+    const historyHtml = d.history.map(h => {
+      const isFromCounterpart = h.senderRole && h.senderRole !== session.role;
+      const myChecked = session.role === 'JP' ? h.checkJp : h.checkBranch;
+      const unread = isFromCounterpart && !myChecked;
+      const jpCheckLabel = h.checkJp ? `JP確認済み：${escapeHtml(h.checkedByJp || '')}（${escapeHtml(h.dateJp || '')}）` : 'JP未確認';
+      const branchCheckLabel = h.checkBranch ? `支店確認済み：${escapeHtml(h.checkedByBranch || '')}（${escapeHtml(h.dateBranch || '')}）` : '支店未確認';
+      return `
+      <div class="history-item ${unread ? 'unread' : ''}">
+        <div class="history-meta"><span>${escapeHtml(h.sender)}</span><span>${h.datetime}</span></div>
         <div class="history-body">${escapeHtml(h.body)}</div>
         <div class="history-checks">
-          <label><input type="checkbox" data-hid="${h.id}" data-side="JP" ${h.checkJp ? 'checked' : ''} ${session.role !== 'JP' ? 'disabled' : ''}> JP確認</label>
-          <label><input type="checkbox" data-hid="${h.id}" data-side="BRANCH" ${h.checkBranch ? 'checked' : ''} ${session.role !== 'BRANCH' ? 'disabled' : ''}> 支店確認</label>
+          <label><input type="checkbox" data-hid="${h.id}" data-side="JP" ${h.checkJp ? 'checked' : ''} ${session.role !== 'JP' ? 'disabled' : ''}> ${jpCheckLabel}</label>
+          <label><input type="checkbox" data-hid="${h.id}" data-side="BRANCH" ${h.checkBranch ? 'checked' : ''} ${session.role !== 'BRANCH' ? 'disabled' : ''}> ${branchCheckLabel}</label>
         </div>
-      </div>`).join('') || '<p class="hint-text">やり取りはまだありません。</p>';
+      </div>`;
+    }).join('') || '<p class="hint-text">やり取りはまだありません。</p>';
 
     const pendingCount = Object.keys(pendingChanges).length;
+    const invoiceLabel = d.invoiceLabel || '請求番号';
+
+    const tabBarHtml = `
+      <div class="tab-bar">
+        ${DETAIL_TABS.map(t => `<button type="button" class="tab-btn ${detailActiveTab === t.key ? 'active' : ''}" data-tab="${t.key}">${t.label}</button>`).join('')}
+      </div>`;
+
+    const messageTabHtml = `
+      <div class="tab-pane ${detailActiveTab === 'message' ? '' : 'hidden'}" data-tab-pane="message">
+        <div class="section-card">
+          <h3>メッセージ・変更の送信</h3>
+          <p class="hint-text">送信者として記録されます：<strong>${escapeHtml(currentUserName || session.branchName)}</strong>${currentUserName ? `（${escapeHtml(session.branchName)}）` : ''}</p>
+          <p id="pending-indicator" class="hint-text ${pendingCount ? '' : 'hidden'}">未保存の変更: ${pendingCount}件（「予約内容」「現地記入欄」タブでの入力を含みます）</p>
+          <div class="msg-row"><textarea id="msg-input" placeholder="メッセージ（任意）"></textarea></div>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px;">
+            <button class="send-btn" id="btn-msg-only" style="width:100%;">メッセージのみ送信</button>
+            <button class="send-btn" id="btn-commit" style="width:100%;">変更（＋メッセージ）を決定して送信</button>
+            <button class="send-btn" id="btn-save-quiet" style="width:100%;background:var(--color-muted);">保存のみ（通知しない）</button>
+          </div>
+          <p class="hint-text" style="margin-top:8px;">
+            方向: ${session.role === 'JP' ? '日本 → 支店' : '支店 → 日本'}。
+            「メッセージのみ送信」はメッセージだけを、「変更（＋メッセージ）を決定して送信」は入力中の全ての変更（ステータス・オプション・現地記入欄含む）とメッセージをまとめて相手へ通知します。
+            「保存のみ」は通知せずに変更を保存します（共有メモなど相手に知らせる必要がない変更向け）。
+          </p>
+        </div>
+        <div class="section-card">
+          <h3>やり取り履歴（新しい順）</h3>
+          ${historyHtml}
+        </div>
+      </div>`;
+
+    const reservationTabHtml = `
+      <div class="tab-pane ${detailActiveTab === 'reservation' ? '' : 'hidden'}" data-tab-pane="reservation">
+        <div class="section-card">
+          <div class="detail-grid">
+            <div class="field-block"><label>新郎名（ローマ字）</label><input data-pending="新郎名（ローマ字）" value="${escapeAttr(d['新郎名（ローマ字）'])}"></div>
+            <div class="field-block"><label>新婦名（ローマ字）</label><input data-pending="新婦名（ローマ字）" value="${escapeAttr(d['新婦名（ローマ字）'])}"></div>
+            <div class="field-block"><label>CHG NO</label><input data-pending="CHG NO" value="${escapeAttr(d['CHG NO'])}"></div>
+            <div class="field-block"><label>撮影日FIX</label><input type="date" data-pending="撮影日FIX" value="${escapeAttr(d['撮影日FIX'])}"></div>
+            <div class="field-block"><label>挙式日FIX</label><input type="date" data-pending="挙式日FIX" value="${escapeAttr(d['挙式日FIX'])}"></div>
+            <div class="field-block"><label>希望日①</label><input data-pending="希望日①" value="${escapeAttr(d['希望日①'])}"></div>
+            <div class="field-block"><label>希望日②</label><input data-pending="希望日②" value="${escapeAttr(d['希望日②'])}"></div>
+            <div class="field-block"><label>希望日③</label><input data-pending="希望日③" value="${escapeAttr(d['希望日③'])}"></div>
+            <div class="field-block"><label>プラン名（マスタから選択）</label>${planSelect}</div>
+            <div class="field-block"><label>撮影希望場所（任意・候補から選択も可）</label>
+              <input data-pending="撮影希望場所" value="${escapeAttr(d['撮影希望場所'])}" list="location-datalist" placeholder="任意入力">
+              ${locationDatalist}
+            </div>
+            <div class="field-block"><label>準備場所</label><input data-pending="準備場所" value="${escapeAttr(d['準備場所'])}"></div>
+            <div class="field-block"><label>ホテル</label><input data-pending="ホテル" value="${escapeAttr(d['ホテル'])}"></div>
+            <div class="field-block"><label>管轄</label>
+              <select data-pending="管轄"><option value="">未定</option>${JP_TEAMS.map(t => `<option value="${t}" ${d['管轄'] === t ? 'selected' : ''}>${t}</option>`).join('')}</select>
+            </div>
+            <div class="field-block"><label>請求先</label>
+              <select data-pending="請求先"><option value="">未設定</option>${BILLING_REGIONS.map(r => `<option value="${r}" ${d['請求先'] === r ? 'selected' : ''}>${r}</option>`).join('')}</select>
+            </div>
+            <div class="field-block"><label>日本支店名</label><input data-pending="日本支店名" value="${escapeAttr(d['日本支店名'])}" placeholder="例）新宿西口店"></div>
+            <div class="field-block"><label>店舗／担当（現地）</label><input data-pending="店舗／担当（現地）" value="${escapeAttr(d['店舗／担当（現地）'])}"></div>
+            <div class="field-block" style="grid-column:1/-1;"><label>備考</label><input data-pending="備考" value="${escapeAttr(d['備考'])}"></div>
+          </div>
+        </div>
+
+        <div class="section-card">
+          <h3>ステータス</h3>
+          <div class="status-row">
+            <div class="status-card"><div class="who">STS JP</div>${statusCell('STS JP', d['STS JP'], session.role === 'JP', null)}</div>
+            <div class="status-card"><div class="who">STS 支店</div>${statusCell('STS 支店', d['STS 支店'], session.role === 'BRANCH' && mainGate.editable, mainGate.allowed, `STS JP: ${d['STS JP'] || '未設定'}`)}</div>
+          </div>
+          <h3>オプション（最大5件）</h3>
+          ${optionsHtml}
+        </div>
+
+        <div class="section-card">
+          <h3>共有メモ（支店・日本側どちらも自由に書けます）</h3>
+          <textarea data-pending="共有メモ" rows="4" placeholder="社内向けの自由メモ">${escapeHtml(d['共有メモ'])}</textarea>
+        </div>
+      </div>`;
+
+    const localTabHtml = `
+      <div class="tab-pane ${detailActiveTab === 'local' ? '' : 'hidden'}" data-tab-pane="local">
+        <div class="section-card">
+          <h3>現地運用情報</h3>
+          <div class="detail-grid">
+            <div class="field-block"><label>${escapeHtml(invoiceLabel)}</label><input data-pending="請求番号" value="${escapeAttr(d['請求番号'])}" placeholder="現地で使う番号"></div>
+            <div class="field-block"><label>当日の担当</label><input data-pending="当日の担当" value="${escapeAttr(d['当日の担当'])}"></div>
+            <div class="field-block"><label>ヘアメイク</label><input data-pending="ヘアメイク" value="${escapeAttr(d['ヘアメイク'])}"></div>
+            <div class="field-block"><label>カメラマン</label><input data-pending="カメラマン" value="${escapeAttr(d['カメラマン'])}"></div>
+            <div class="field-block"><label>アシスタント</label><input data-pending="アシスタント" value="${escapeAttr(d['アシスタント'])}"></div>
+            <div class="field-block"><label>配車時間</label><input data-pending="配車時間" value="${escapeAttr(d['配車時間'])}" placeholder="例）9:00"></div>
+            <div class="field-block" style="grid-column:1/-1;"><label>メモ（現地用）</label><input data-pending="メモ（現地用）" value="${escapeAttr(d['メモ（現地用）'])}"></div>
+          </div>
+          <p class="hint-text">この欄は現地運用向けです。保存のみ／変更＋メッセージ送信は「メッセージ」タブのボタンから行えます。</p>
+        </div>
+
+        <div class="section-card">
+          <h3>Driveフォルダ URL（納品）</h3>
+          <div class="msg-row">
+            <input id="drive-url-input" type="text" value="${escapeAttr(d['DriveフォルダURL'] || '')}" placeholder="https://drive.google.com/...">
+            <button class="send-btn" id="drive-url-submit">保存</button>
+          </div>
+          <p class="hint-text">こちらは入力すると即座に相手へ通知されます（他の項目のような保留はありません）。</p>
+        </div>
+      </div>`;
 
     c.innerHTML = `
       <div class="detail-header">
@@ -377,76 +547,20 @@
         <div class="kanri">${d.branchName}（${d['支店コード']}）${d.country ? ' ・ ' + d.country : ''}${d.city ? ' ／ ' + d.city : ''}</div>
         <div class="kanri">担当: ${d['管轄'] ? d['管轄'] + '手配課' : '未設定'}</div>
         <div class="names">新郎: ${d['新郎名（ローマ字）'] || ''}<br>新婦: ${d['新婦名（ローマ字）'] || ''}</div>
-        <div class="detail-grid">
-          <div class="field-block"><label>新郎名（ローマ字）</label><input data-pending="新郎名（ローマ字）" value="${escapeAttr(d['新郎名（ローマ字）'])}"></div>
-          <div class="field-block"><label>新婦名（ローマ字）</label><input data-pending="新婦名（ローマ字）" value="${escapeAttr(d['新婦名（ローマ字）'])}"></div>
-          <div class="field-block"><label>CHG NO</label><input data-pending="CHG NO" value="${escapeAttr(d['CHG NO'])}"></div>
-          <div class="field-block"><label>撮影日FIX</label><input type="date" data-pending="撮影日FIX" value="${escapeAttr(d['撮影日FIX'])}"></div>
-          <div class="field-block"><label>挙式日FIX</label><input type="date" data-pending="挙式日FIX" value="${escapeAttr(d['挙式日FIX'])}"></div>
-          <div class="field-block"><label>希望日①</label><input data-pending="希望日①" value="${escapeAttr(d['希望日①'])}"></div>
-          <div class="field-block"><label>希望日②</label><input data-pending="希望日②" value="${escapeAttr(d['希望日②'])}"></div>
-          <div class="field-block"><label>希望日③</label><input data-pending="希望日③" value="${escapeAttr(d['希望日③'])}"></div>
-          <div class="field-block"><label>プラン名（マスタから選択）</label>${planSelect}</div>
-          <div class="field-block"><label>撮影希望場所</label><input data-pending="撮影希望場所" value="${escapeAttr(d['撮影希望場所'])}"></div>
-          <div class="field-block"><label>準備場所</label><input data-pending="準備場所" value="${escapeAttr(d['準備場所'])}"></div>
-          <div class="field-block"><label>ホテル</label><input data-pending="ホテル" value="${escapeAttr(d['ホテル'])}"></div>
-          <div class="field-block"><label>管轄</label>
-            <select data-pending="管轄"><option value="">未定</option>${JP_TEAMS.map(t => `<option value="${t}" ${d['管轄'] === t ? 'selected' : ''}>${t}</option>`).join('')}</select>
-          </div>
-          <div class="field-block"><label>請求先</label>
-            <select data-pending="請求先"><option value="">未設定</option>${BILLING_REGIONS.map(r => `<option value="${r}" ${d['請求先'] === r ? 'selected' : ''}>${r}</option>`).join('')}</select>
-          </div>
-          <div class="field-block"><label>日本支店名</label><input data-pending="日本支店名" value="${escapeAttr(d['日本支店名'])}" placeholder="例）新宿西口店"></div>
-          <div class="field-block"><label>店舗／担当（現地）</label><input data-pending="店舗／担当（現地）" value="${escapeAttr(d['店舗／担当（現地）'])}"></div>
-          <div class="field-block" style="grid-column:1/-1;"><label>備考</label><input data-pending="備考" value="${escapeAttr(d['備考'])}"></div>
-        </div>
       </div>
-
-      <div class="section-card">
-        <h3>ステータス</h3>
-        <div class="status-row">
-          <div class="status-card"><div class="who">STS JP</div>${statusCell('STS JP', d['STS JP'], session.role === 'JP', null)}</div>
-          <div class="status-card"><div class="who">STS 支店</div>${statusCell('STS 支店', d['STS 支店'], session.role === 'BRANCH' && mainGate.editable, mainGate.allowed, `STS JP: ${d['STS JP'] || '未設定'}`)}</div>
-        </div>
-        <h3>オプション（最大5件）</h3>
-        ${optionsHtml}
-      </div>
-
-      <div class="section-card">
-        <h3>共有メモ（支店・日本側どちらも自由に書けます）</h3>
-        <textarea data-pending="共有メモ" rows="4" placeholder="社内向けの自由メモ">${escapeHtml(d['共有メモ'])}</textarea>
-      </div>
-
-      <div class="section-card">
-        <h3>Driveフォルダ URL</h3>
-        <div class="msg-row">
-          <input id="drive-url-input" type="text" value="${escapeAttr(d['DriveフォルダURL'] || '')}" placeholder="https://drive.google.com/...">
-          <button class="send-btn" id="drive-url-submit">保存</button>
-        </div>
-      </div>
-
-      <div class="section-card">
-        <h3>メッセージ・変更の送信</h3>
-        <p id="pending-indicator" class="hint-text ${pendingCount ? '' : 'hidden'}">未保存の変更: ${pendingCount}件</p>
-        <div class="msg-row"><textarea id="msg-input" placeholder="メッセージ（任意）"></textarea></div>
-        <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px;">
-          <button class="send-btn" id="btn-msg-only" style="width:100%;">メッセージのみ送信</button>
-          <button class="send-btn" id="btn-commit" style="width:100%;">変更（＋メッセージ）を決定して送信</button>
-          <button class="send-btn" id="btn-save-quiet" style="width:100%;background:var(--color-muted);">保存のみ（通知しない）</button>
-        </div>
-        <p class="hint-text" style="margin-top:8px;">
-          方向: ${session.role === 'JP' ? '日本 → 支店' : '支店 → 日本'}。
-          「メッセージのみ送信」はメッセージだけを、「変更（＋メッセージ）を決定して送信」は入力中の全ての変更（ステータス・オプション含む）とメッセージをまとめて相手へ通知します。
-          「保存のみ」は通知せずに変更を保存します（共有メモなど相手に知らせる必要がない変更向け）。
-          日本側はSTS 支店を、支店側はSTS JPを直接変更できません（STS JPがNC/RQ/CHKのとき支店側は自由に、CRのときはCW/CFのみ選べます）。
-        </p>
-      </div>
-
-      <div class="section-card">
-        <h3>やり取り履歴（新しい順）</h3>
-        ${historyHtml}
-      </div>
+      ${tabBarHtml}
+      ${messageTabHtml}
+      ${reservationTabHtml}
+      ${localTabHtml}
     `;
+
+    c.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        detailActiveTab = btn.dataset.tab;
+        c.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === detailActiveTab));
+        c.querySelectorAll('.tab-pane').forEach(p => p.classList.toggle('hidden', p.dataset.tabPane !== detailActiveTab));
+      });
+    });
 
     c.querySelectorAll('[data-pending]').forEach(el => {
       el.addEventListener('change', () => {
@@ -489,7 +603,7 @@
     const el = $('pending-indicator');
     if (!el) return;
     const n = Object.keys(pendingChanges).length;
-    el.textContent = `未保存の変更: ${n}件`;
+    el.textContent = `未保存の変更: ${n}件（「予約内容」「現地記入欄」タブでの入力を含みます）`;
     el.classList.toggle('hidden', n === 0);
   }
 

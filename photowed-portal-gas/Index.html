@@ -15,6 +15,7 @@
       <nav class="header-nav">
         <button id="nav-dashboard" class="nav-btn">案件一覧</button>
         <button id="nav-search" class="nav-btn">検索</button>
+        <button id="nav-stats" class="nav-btn jp-only hidden">統計</button>
         <button id="nav-new" class="nav-btn">＋新規案件</button>
         <button id="nav-logout" class="nav-btn nav-logout">ログアウト</button>
       </nav>
@@ -75,6 +76,13 @@
         <button id="search-submit" class="primary-btn">検索する</button>
         <div id="search-results" class="card-list" style="margin-top:14px;"></div>
         <p id="search-empty" class="empty-text hidden">条件に一致する案件がありません。</p>
+      </section>
+
+      <!-- 統計ダッシュボード（JPのみ） -->
+      <section id="view-stats" class="view hidden">
+        <h2>統計ダッシュボード</h2>
+        <div id="stats-scope" class="scope-box jp-only hidden"></div>
+        <div id="stats-content"></div>
       </section>
 
       <!-- 案件詳細 -->

@@ -20,6 +20,7 @@ const SPREADSHEET_ID = 'PUT_YOUR_SPREADSHEET_ID_HERE';
 const BRANCH_MASTER_SHEET_NAME = '支店マスタ';
 const PLAN_MASTER_SHEET_NAME = 'プランマスタ';
 const OPTION_MASTER_SHEET_NAME = 'オプションマスタ';
+const LOCATION_MASTER_SHEET_NAME = '撮影場所マスタ';
 const RESERVATION_SHEET_NAME = '予約一覧';
 const HISTORY_SHEET_NAME = 'やり取り履歴';
 const ARCHIVE_SHEET_NAME = '過去一覧';
@@ -40,7 +41,11 @@ const SESSION_TTL_SEC = 21600; // 6時間（CacheServiceの上限）
 // --- ステータスコード（"確定"等の和訳ラベルは使わず、コードそのものを運用する） ---
 const STATUS_CODES = ['RQ', 'OK', 'CHK', 'CR', 'FN', 'CW', 'NC', 'UC', 'CF'];
 const ALERT_COMPLETED_STATUS = 'FN';
-const ALERT_DAYS_BEFORE = 40;
+// ★要件：撮影日の45日前時点でSTSがFNになっていない場合に日本側へアラート
+const ALERT_DAYS_BEFORE = 45;
+// ★要件：撮影日から何日後までに納品(DriveフォルダURL登録)がないとアラートするか。
+// 国（支店）ごとに異なるため支店マスタの「納品期限日数」列で管理し、未設定ならこの値を使う
+const DELIVERY_ALERT_DEFAULT_DAYS = 30;
 
 // --- 支店側がSTS(支店側)を編集してよい条件（キー＝対になるSTS(JP側)の現在値） ---
 // null = 値の制限なし（STATUS_CODESから自由に選べる）／配列 = その中からのみ選べる／
@@ -78,7 +83,15 @@ const COL_HOTEL = 'ホテル';
 const COL_AREA = '管轄';
 const COL_BILLING_REGION = '請求先';
 const COL_JP_SHOP = '日本支店名';
+const COL_INVOICE_NO = '請求番号';   // ラベル名は支店マスタの「請求番号欄名称」で支店ごとに変更可能
 const COL_SHOP = '店舗／担当（現地）';
+// ★要件：当日の現地運用向け項目（現地記入欄）
+const COL_DAY_STAFF = '当日の担当';
+const COL_HAIR_MAKEUP = 'ヘアメイク';
+const COL_PHOTOGRAPHER = 'カメラマン';
+const COL_ASSISTANT = 'アシスタント';
+const COL_PICKUP_TIME = '配車時間';
+const COL_LOCAL_MEMO = 'メモ（現地用）';
 const COL_REMARKS = '備考';
 const COL_MEMO = '共有メモ';
 const COL_LAST_UPDATED = '最終更新日';
@@ -94,8 +107,9 @@ const RESERVATION_HEADERS = (() => {
     COL_BRANCH_CODE, COL_KANRI_NO, COL_CHALLENGE_NO, COL_STATUS_JP, COL_STATUS_BRANCH,
     COL_CONFIRMED_DATE, COL_CEREMONY_DATE, COL_HOPE1, COL_HOPE2, COL_HOPE3,
     COL_GROOM_NAME, COL_BRIDE_NAME, COL_PLAN, COL_LOCATION, COL_PREP, COL_HOTEL,
-    COL_AREA, COL_BILLING_REGION, COL_JP_SHOP, COL_SHOP, COL_REMARKS, COL_MEMO,
-    COL_LAST_UPDATED, COL_DRIVE_URL
+    COL_AREA, COL_BILLING_REGION, COL_JP_SHOP, COL_INVOICE_NO, COL_SHOP,
+    COL_DAY_STAFF, COL_HAIR_MAKEUP, COL_PHOTOGRAPHER, COL_ASSISTANT, COL_PICKUP_TIME, COL_LOCAL_MEMO,
+    COL_REMARKS, COL_MEMO, COL_LAST_UPDATED, COL_DRIVE_URL
   ];
   for (let n = 1; n <= OPTION_COUNT; n++) {
     base.push(opNameCol_(n), opStsJpCol_(n), opStsBranchCol_(n));
@@ -133,10 +147,12 @@ const BM_COL_TEAM = '手配チーム';               // JPロールのみ使用�
 const BM_COL_PASSCODE = 'ログインパスコード';
 const BM_COL_EMAIL = '通知先メール';
 const BM_COL_PREFIX = '案件番号プレフィックス';  // BRANCHロールのみ使用。支店ごとに一意
+const BM_COL_INVOICE_LABEL = '請求番号欄名称';   // BRANCHロールのみ使用。空欄なら「請求番号」を使用（支店が独自名称に変更可）
+const BM_COL_DELIVERY_DAYS = '納品期限日数';     // BRANCHロールのみ使用。空欄ならDELIVERY_ALERT_DEFAULT_DAYSを使用
 const BM_COL_ACTIVE = '有効';
 const BRANCH_MASTER_HEADERS = [
   BM_COL_CODE, BM_COL_NAME, BM_COL_COUNTRY, BM_COL_CITY, BM_COL_ROLE, BM_COL_TEAM,
-  BM_COL_PASSCODE, BM_COL_EMAIL, BM_COL_PREFIX, BM_COL_ACTIVE
+  BM_COL_PASSCODE, BM_COL_EMAIL, BM_COL_PREFIX, BM_COL_INVOICE_LABEL, BM_COL_DELIVERY_DAYS, BM_COL_ACTIVE
 ];
 
 // --- プラン／オプションマスタの列定義（支店ごとに管理） ---
@@ -155,15 +171,18 @@ const H_COL_GROOM_NAME = '新郎名（ローマ字）';
 const H_COL_BRIDE_NAME = '新婦名（ローマ字）';
 const H_COL_DATETIME = '日時';
 const H_COL_SENDER = '送信者';
+const H_COL_SENDER_ROLE = '送信者ロール'; // 'JP' or 'BRANCH'（未読＝要対応の判定に使用）
 const H_COL_BODY = '内容';
 const H_COL_CHECK_JP = 'CHECK JP';
 const H_COL_DATE_JP = 'DATE JP';
+const H_COL_CHECKED_BY_JP = 'CHECK JP 氏名';
 const H_COL_CHECK_BRANCH = 'CHECK 支店';
 const H_COL_DATE_BRANCH = 'DATE 支店';
+const H_COL_CHECKED_BY_BRANCH = 'CHECK 支店 氏名';
 const HISTORY_HEADERS = [
   H_COL_ID, H_COL_BRANCH_CODE, H_COL_KANRI, H_COL_CHALLENGE_NO, H_COL_CONFIRMED_DATE,
-  H_COL_GROOM_NAME, H_COL_BRIDE_NAME, H_COL_DATETIME, H_COL_SENDER, H_COL_BODY,
-  H_COL_CHECK_JP, H_COL_DATE_JP, H_COL_CHECK_BRANCH, H_COL_DATE_BRANCH
+  H_COL_GROOM_NAME, H_COL_BRIDE_NAME, H_COL_DATETIME, H_COL_SENDER, H_COL_SENDER_ROLE, H_COL_BODY,
+  H_COL_CHECK_JP, H_COL_DATE_JP, H_COL_CHECKED_BY_JP, H_COL_CHECK_BRANCH, H_COL_DATE_BRANCH, H_COL_CHECKED_BY_BRANCH
 ];
 
 // --- ステータス変更履歴（STS JP／STS 支店／各OPのSTSを「誰が・いつ・何から何に」変更したかの監査ログ） ---
@@ -199,6 +218,7 @@ function setupPortal() {
   ensureSheetWithHeaders_(ss, BRANCH_MASTER_SHEET_NAME, BRANCH_MASTER_HEADERS);
   ensureSheetWithHeaders_(ss, PLAN_MASTER_SHEET_NAME, MASTER_ITEM_HEADERS);
   ensureSheetWithHeaders_(ss, OPTION_MASTER_SHEET_NAME, MASTER_ITEM_HEADERS);
+  ensureSheetWithHeaders_(ss, LOCATION_MASTER_SHEET_NAME, MASTER_ITEM_HEADERS);
   ensureSheetWithHeaders_(ss, RESERVATION_SHEET_NAME, RESERVATION_HEADERS);
   ensureSheetWithHeaders_(ss, HISTORY_SHEET_NAME, HISTORY_HEADERS);
   ensureSheetWithHeaders_(ss, ARCHIVE_SHEET_NAME, RESERVATION_HEADERS);
@@ -207,40 +227,41 @@ function setupPortal() {
   const bm = ss.getSheetByName(BRANCH_MASTER_SHEET_NAME);
   if (bm.getLastRow() < 2) {
     const rows = [
-      // 支店コード, 支店名, 国, 都市, ロール, 手配チーム, パスコード, 通知先メール, 番号プレフィックス, 有効
-      ['KANTO', '関東手配課', '', '', JP_ROLE, '関東', 'CHANGE-ME-KANTO', 'tw-avanti@his-world.com', '', true],
-      ['KANSAI', '関西手配課', '', '', JP_ROLE, '関西', 'CHANGE-ME-KANSAI', 'o-avanti@his-world.com', '', true],
+      // 支店コード, 支店名, 国, 都市, ロール, 手配チーム, パスコード, 通知先メール, 番号プレフィックス, 請求番号欄名称, 納品期限日数, 有効
+      ['KANTO', '関東手配課', '', '', JP_ROLE, '関東', 'CHANGE-ME-KANTO', 'tw-avanti@his-world.com', '', '', '', true],
+      ['KANSAI', '関西手配課', '', '', JP_ROLE, '関西', 'CHANGE-ME-KANSAI', 'o-avanti@his-world.com', '', '', '', true],
       // ローマは既に「R-」採番で運用中のためプレフィックスは変更しない
-      ['ROW', 'ローマ支店', 'イタリア', 'ローマ', BRANCH_ROLE, '', 'CHANGE-ME-ROW', 'row-branch@his-world.com', 'R', true],
-      ['VIE', 'ウィーン支店', 'オーストリア', 'ウィーン', BRANCH_ROLE, '', 'CHANGE-ME-VIE', 'vienna-branch@his-world.com', 'VIE', true],
-      ['AMS', 'アムステルダム支店', 'オランダ', 'アムステルダム', BRANCH_ROLE, '', 'CHANGE-ME-AMS', 'amsterdam-branch@his-world.com', 'AMS', true],
-      ['GVA', 'ジュネーブ支店', 'スイス', 'ジュネーブ', BRANCH_ROLE, '', 'CHANGE-ME-GVA', 'geneva-branch@his-world.com', 'GVA', true],
-      ['ATH', 'アテネ支店', 'ギリシャ', 'アテネ', BRANCH_ROLE, '', 'CHANGE-ME-ATH', 'athens-branch@his-world.com', 'ATH', true],
-      ['IST', 'イスタンブール支店', 'トルコ', 'イスタンブール', BRANCH_ROLE, '', 'CHANGE-ME-IST', 'istanbul-branch@his-world.com', 'IST', true],
-      ['DXB', 'ドバイ支店', 'アラブ首長国連邦', 'ドバイ', BRANCH_ROLE, '', 'CHANGE-ME-DXB', 'dubai-branch@his-world.com', 'DXB', true],
-      ['CAI', 'カイロ支店', 'エジプト', 'カイロ', BRANCH_ROLE, '', 'CHANGE-ME-CAI', 'cairo-branch@his-world.com', 'CAI', true],
-      ['CAS', 'カサブランカ支店', 'モロッコ', 'カサブランカ', BRANCH_ROLE, '', 'CHANGE-ME-CAS', 'casablanca-branch@his-world.com', 'CAS', true],
-      ['LON', 'ロンドン支店', 'イギリス', 'ロンドン', BRANCH_ROLE, '', 'CHANGE-ME-LON', 'london-branch@his-world.com', 'LON', true],
-      ['FRA', 'フランクフルト支店', 'ドイツ', 'フランクフルト', BRANCH_ROLE, '', 'CHANGE-ME-FRA', 'frankfurt-branch@his-world.com', 'FRA', true],
-      ['NBO', 'ナイロビ支店', 'ケニア', 'ナイロビ', BRANCH_ROLE, '', 'CHANGE-ME-NBO', 'nairobi-branch@his-world.com', 'NBO', true],
-      ['CUN', 'カンクン支店', 'メキシコ', 'カンクン', BRANCH_ROLE, '', 'CHANGE-ME-CUN', 'cancun-branch@his-world.com', 'CUN', true],
-      ['YVR', 'バンクーバー支店', 'カナダ', 'バンクーバー', BRANCH_ROLE, '', 'CHANGE-ME-YVR', 'vancouver-branch@his-world.com', 'YVR', true],
-      ['LPB', 'ラパス支店', 'ボリビア', 'ラパス', BRANCH_ROLE, '', 'CHANGE-ME-LPB', 'lapaz-branch@his-world.com', 'LPB', true],
-      ['FIJ', 'フィジー支店', 'フィジー', '', BRANCH_ROLE, '', 'CHANGE-ME-FIJ', 'fiji-branch@his-world.com', 'FIJ', true],
-      ['AUS', 'オーストラリア支店', 'オーストラリア', '', BRANCH_ROLE, '', 'CHANGE-ME-AUS', 'australia-branch@his-world.com', 'AUS', true],
-      ['NZL', 'ニュージーランド支店', 'ニュージーランド', '', BRANCH_ROLE, '', 'CHANGE-ME-NZL', 'newzealand-branch@his-world.com', 'NZL', true],
-      ['DPS', 'デンパサール支店', 'インドネシア', 'デンパサール', BRANCH_ROLE, '', 'CHANGE-ME-DPS', 'denpasar-branch@his-world.com', 'DPS', true],
-      ['TPE', '台北支店', '台湾', '台北', BRANCH_ROLE, '', 'CHANGE-ME-TPE', 'taipei-branch@his-world.com', 'TPE', true],
-      ['SIN', 'シンガポール支店', 'シンガポール', 'シンガポール', BRANCH_ROLE, '', 'CHANGE-ME-SIN', 'singapore-branch@his-world.com', 'SIN', true],
-      ['REP', 'シェムリアップ支店', 'カンボジア', 'シェムリアップ', BRANCH_ROLE, '', 'CHANGE-ME-REP', 'siemreap-branch@his-world.com', 'REP', true],
-      ['TAS', 'タシケント支店', 'ウズベキスタン', 'タシケント', BRANCH_ROLE, '', 'CHANGE-ME-TAS', 'tashkent-branch@his-world.com', 'TAS', true],
-      ['JED', 'ジェッダ支店', 'サウジアラビア', 'ジェッダ', BRANCH_ROLE, '', 'CHANGE-ME-JED', 'jeddah-branch@his-world.com', 'JED', true]
+      ['ROW', 'ローマ支店', 'イタリア', 'ローマ', BRANCH_ROLE, '', 'CHANGE-ME-ROW', 'row-branch@his-world.com', 'R', '', '', true],
+      ['VIE', 'ウィーン支店', 'オーストリア', 'ウィーン', BRANCH_ROLE, '', 'CHANGE-ME-VIE', 'vienna-branch@his-world.com', 'VIE', '', '', true],
+      ['AMS', 'アムステルダム支店', 'オランダ', 'アムステルダム', BRANCH_ROLE, '', 'CHANGE-ME-AMS', 'amsterdam-branch@his-world.com', 'AMS', '', '', true],
+      ['GVA', 'ジュネーブ支店', 'スイス', 'ジュネーブ', BRANCH_ROLE, '', 'CHANGE-ME-GVA', 'geneva-branch@his-world.com', 'GVA', '', '', true],
+      ['ATH', 'アテネ支店', 'ギリシャ', 'アテネ', BRANCH_ROLE, '', 'CHANGE-ME-ATH', 'athens-branch@his-world.com', 'ATH', '', '', true],
+      ['IST', 'イスタンブール支店', 'トルコ', 'イスタンブール', BRANCH_ROLE, '', 'CHANGE-ME-IST', 'istanbul-branch@his-world.com', 'IST', '', '', true],
+      ['DXB', 'ドバイ支店', 'アラブ首長国連邦', 'ドバイ', BRANCH_ROLE, '', 'CHANGE-ME-DXB', 'dubai-branch@his-world.com', 'DXB', '', '', true],
+      ['CAI', 'カイロ支店', 'エジプト', 'カイロ', BRANCH_ROLE, '', 'CHANGE-ME-CAI', 'cairo-branch@his-world.com', 'CAI', '', '', true],
+      ['CAS', 'カサブランカ支店', 'モロッコ', 'カサブランカ', BRANCH_ROLE, '', 'CHANGE-ME-CAS', 'casablanca-branch@his-world.com', 'CAS', '', '', true],
+      ['LON', 'ロンドン支店', 'イギリス', 'ロンドン', BRANCH_ROLE, '', 'CHANGE-ME-LON', 'london-branch@his-world.com', 'LON', '', '', true],
+      ['FRA', 'フランクフルト支店', 'ドイツ', 'フランクフルト', BRANCH_ROLE, '', 'CHANGE-ME-FRA', 'frankfurt-branch@his-world.com', 'FRA', '', '', true],
+      ['NBO', 'ナイロビ支店', 'ケニア', 'ナイロビ', BRANCH_ROLE, '', 'CHANGE-ME-NBO', 'nairobi-branch@his-world.com', 'NBO', '', '', true],
+      ['CUN', 'カンクン支店', 'メキシコ', 'カンクン', BRANCH_ROLE, '', 'CHANGE-ME-CUN', 'cancun-branch@his-world.com', 'CUN', '', '', true],
+      ['YVR', 'バンクーバー支店', 'カナダ', 'バンクーバー', BRANCH_ROLE, '', 'CHANGE-ME-YVR', 'vancouver-branch@his-world.com', 'YVR', '', '', true],
+      ['LPB', 'ラパス支店', 'ボリビア', 'ラパス', BRANCH_ROLE, '', 'CHANGE-ME-LPB', 'lapaz-branch@his-world.com', 'LPB', '', '', true],
+      ['FIJ', 'フィジー支店', 'フィジー', '', BRANCH_ROLE, '', 'CHANGE-ME-FIJ', 'fiji-branch@his-world.com', 'FIJ', '', '', true],
+      ['AUS', 'オーストラリア支店', 'オーストラリア', '', BRANCH_ROLE, '', 'CHANGE-ME-AUS', 'australia-branch@his-world.com', 'AUS', '', '', true],
+      ['NZL', 'ニュージーランド支店', 'ニュージーランド', '', BRANCH_ROLE, '', 'CHANGE-ME-NZL', 'newzealand-branch@his-world.com', 'NZL', '', '', true],
+      ['DPS', 'デンパサール支店', 'インドネシア', 'デンパサール', BRANCH_ROLE, '', 'CHANGE-ME-DPS', 'denpasar-branch@his-world.com', 'DPS', '', '', true],
+      ['TPE', '台北支店', '台湾', '台北', BRANCH_ROLE, '', 'CHANGE-ME-TPE', 'taipei-branch@his-world.com', 'TPE', '', '', true],
+      ['SIN', 'シンガポール支店', 'シンガポール', 'シンガポール', BRANCH_ROLE, '', 'CHANGE-ME-SIN', 'singapore-branch@his-world.com', 'SIN', '', '', true],
+      ['REP', 'シェムリアップ支店', 'カンボジア', 'シェムリアップ', BRANCH_ROLE, '', 'CHANGE-ME-REP', 'siemreap-branch@his-world.com', 'REP', '', '', true],
+      ['TAS', 'タシケント支店', 'ウズベキスタン', 'タシケント', BRANCH_ROLE, '', 'CHANGE-ME-TAS', 'tashkent-branch@his-world.com', 'TAS', '', '', true],
+      ['JED', 'ジェッダ支店', 'サウジアラビア', 'ジェッダ', BRANCH_ROLE, '', 'CHANGE-ME-JED', 'jeddah-branch@his-world.com', 'JED', '', '', true]
     ];
     bm.getRange(2, 1, rows.length, BRANCH_MASTER_HEADERS.length).setValues(rows);
   }
   formatHeaderRow_(bm);
   formatHeaderRow_(ss.getSheetByName(PLAN_MASTER_SHEET_NAME));
   formatHeaderRow_(ss.getSheetByName(OPTION_MASTER_SHEET_NAME));
+  formatHeaderRow_(ss.getSheetByName(LOCATION_MASTER_SHEET_NAME));
 
   SpreadsheetApp.getUi().alert(
     'セットアップが完了しました。\n\n' +
@@ -389,6 +410,8 @@ function listBranchesRaw_() {
   return getRowsAsObjects_(sheet).map(r => ({
     code: r[BM_COL_CODE], name: r[BM_COL_NAME], country: r[BM_COL_COUNTRY], city: r[BM_COL_CITY],
     role: r[BM_COL_ROLE], team: r[BM_COL_TEAM], email: r[BM_COL_EMAIL], prefix: r[BM_COL_PREFIX],
+    invoiceLabel: r[BM_COL_INVOICE_LABEL] || '請求番号',
+    deliveryDays: Number(r[BM_COL_DELIVERY_DAYS]) || null,
     active: isActiveFlag_(r[BM_COL_ACTIVE])
     // ログインパスコードは一覧APIには返さない（画面表示上の漏洩防止）
   }));
@@ -506,6 +529,17 @@ function apiListOptionItems(token, branchCode) {
   const target = session.role === BRANCH_ROLE ? session.branchCode : String(branchCode || '').toUpperCase();
   return listMasterItems_(OPTION_MASTER_SHEET_NAME, target);
 }
+// 撮影希望場所：支店ごとのマスター候補一覧（任意入力の補助用。強制の選択式にはしない）
+function apiListLocations(token, branchCode) {
+  const session = requireSession_(token);
+  const target = session.role === BRANCH_ROLE ? session.branchCode : String(branchCode || '').toUpperCase();
+  return listMasterItems_(LOCATION_MASTER_SHEET_NAME, target);
+}
+function apiSaveLocationItem(token, branchCode, name, originalName, active) {
+  const session = requireSession_(token);
+  assertBranchAccess_(session, branchCode);
+  return saveMasterItem_(LOCATION_MASTER_SHEET_NAME, branchCode, name, originalName, active);
+}
 function apiSavePlanItem(token, branchCode, name, originalName, active) {
   const session = requireSession_(token);
   assertBranchAccess_(session, branchCode);
@@ -565,6 +599,7 @@ function apiGetDashboard(token, scope) {
   const sheet = getSpreadsheet_().getSheetByName(RESERVATION_SHEET_NAME);
   const rows = getRowsAsObjects_(sheet);
   const branchMeta = branchMetaMap_();
+  const needsActionMap = needsActionMap_(session);
 
   const scoped = rows.filter(r => rowInScope_(session, scope, r));
 
@@ -583,12 +618,17 @@ function apiGetDashboard(token, scope) {
     brideName: r[COL_BRIDE_NAME],
     plan: r[COL_PLAN],
     area: r[COL_AREA],
-    lastUpdated: formatMaybeDate_(r[COL_LAST_UPDATED])
+    lastUpdated: formatMaybeDate_(r[COL_LAST_UPDATED]),
+    // ★要件：相手側からの未読メッセージ／変更がある案件は一目でわかるように
+    needsAction: !!needsActionMap[String(r[COL_KANRI_NO])]
   }));
 
-  // ★要件：一覧は撮影日FIXが「今日に近い順」に並べる（未定は末尾）
+  // ★要件：まず要対応（未読あり）を最優先で上に、その中・その他はそれぞれ撮影日FIXが「今日に近い順」
   const todayStr = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd');
-  list.sort((a, b) => dayDistanceFromToday_(a.confirmedDate, todayStr) - dayDistanceFromToday_(b.confirmedDate, todayStr));
+  list.sort((a, b) => {
+    if (a.needsAction !== b.needsAction) return a.needsAction ? -1 : 1;
+    return dayDistanceFromToday_(a.confirmedDate, todayStr) - dayDistanceFromToday_(b.confirmedDate, todayStr);
+  });
 
   const result = { ok: true, role: session.role, branchCode: session.branchCode, branchName: session.branchName, team: session.team, reservations: list };
   if (session.role === JP_ROLE) {
@@ -596,6 +636,23 @@ function apiGetDashboard(token, scope) {
     result.teams = JP_TEAMS;
   }
   return result;
+}
+
+// 「自分側からみて未読の、相手側から来たメッセージ・変更」がある管理番号の集合を作る。
+// BRANCH側セッション → 送信者ロールがJPで、CHECK 支店が未チェックのものがあれば要対応
+// JP側セッション     → 送信者ロールがBRANCHで、CHECK JPが未チェックのものがあれば要対応
+function needsActionMap_(session) {
+  const hSheet = getSpreadsheet_().getSheetByName(HISTORY_SHEET_NAME);
+  const hRows = getRowsAsObjects_(hSheet);
+  const map = {};
+  const counterpartRole = session.role === BRANCH_ROLE ? JP_ROLE : BRANCH_ROLE;
+  const checkCol = session.role === BRANCH_ROLE ? H_COL_CHECK_BRANCH : H_COL_CHECK_JP;
+  hRows.forEach(r => {
+    if (r[H_COL_SENDER_ROLE] !== counterpartRole) return;
+    if (isActiveFlag_(r[checkCol])) return;
+    map[String(r[H_COL_KANRI])] = true;
+  });
+  return map;
 }
 
 function branchMetaMap_() {
@@ -619,6 +676,67 @@ function rowInScope_(session, scope, row) {
 }
 
 // =====================================================
+// ⑤-2 統計ダッシュボード（JPのみ）
+// =====================================================
+// ★要件：日本側だけの統計タブ。全体件数／月毎件数／RQ・OK・FN件数／国別件数／日本支店名（担当）別件数。
+// 関東／関西のチェックで絞り込み可能（ダッシュボードのスコープ選択と同じ仕組みを流用）。
+// 過去一覧（アーカイブ済み＝完了・キャンセル済み案件）も含めた全期間の実績として集計する。
+function apiGetStats(token, scope) {
+  const session = requireSession_(token);
+  assertJp_(session);
+  const branchMeta = branchMetaMap_();
+
+  const ss = getSpreadsheet_();
+  let rows = getRowsAsObjects_(ss.getSheetByName(RESERVATION_SHEET_NAME));
+  rows = rows.concat(getRowsAsObjects_(ss.getSheetByName(ARCHIVE_SHEET_NAME)));
+  rows = rows.filter(r => rowInScope_(session, scope, r));
+
+  const byMonth = {};
+  const byStatus = { RQ: 0, OK: 0, FN: 0 };
+  const byCountry = {};
+  const byJpShop = {};
+
+  rows.forEach(r => {
+    const meta = branchMeta[r[COL_BRANCH_CODE]] || {};
+    const country = meta.country || r[COL_BRANCH_CODE] || '(不明)';
+    byCountry[country] = (byCountry[country] || 0) + 1;
+
+    const jpShop = r[COL_JP_SHOP] || '(未設定)';
+    byJpShop[jpShop] = (byJpShop[jpShop] || 0) + 1;
+
+    const dVal = r[COL_CONFIRMED_DATE];
+    let monthKey = '未定';
+    if (dVal instanceof Date) {
+      monthKey = Utilities.formatDate(dVal, 'Asia/Tokyo', 'yyyy/MM');
+    } else {
+      const m = String(dVal || '').match(/^(\d{4}\/\d{1,2})\//);
+      if (m) monthKey = m[1];
+    }
+    byMonth[monthKey] = (byMonth[monthKey] || 0) + 1;
+
+    // ★要件：RQ/OK/FNがそれぞれ何件あるか（STS JP・STS 支店のどちらかがその値であればカウント）
+    ['RQ', 'OK', 'FN'].forEach(code => {
+      if (r[COL_STATUS_JP] === code || r[COL_STATUS_BRANCH] === code) byStatus[code]++;
+    });
+  });
+
+  const sortEntries = (obj) => Object.keys(obj).sort().map(k => ({ key: k, count: obj[k] }));
+  const sortEntriesByCountDesc = (obj) => Object.keys(obj).map(k => ({ key: k, count: obj[k] }))
+    .sort((a, b) => b.count - a.count);
+
+  return {
+    ok: true,
+    total: rows.length,
+    byMonth: sortEntries(byMonth),
+    byStatus,
+    byCountry: sortEntriesByCountDesc(byCountry),
+    byJpShop: sortEntriesByCountDesc(byJpShop),
+    teams: JP_TEAMS,
+    branches: listBranchesRaw_().filter(b => b.role === BRANCH_ROLE)
+  };
+}
+
+// =====================================================
 // ⑥ 予約詳細
 // =====================================================
 function apiGetReservationDetail(token, kanriNo) {
@@ -636,6 +754,8 @@ function apiGetReservationDetail(token, kanriNo) {
   detail.branchName = meta.name || getV(COL_BRANCH_CODE);
   detail.country = meta.country || '';
   detail.city = meta.city || '';
+  // ★要件：請求番号の欄名称は支店ごとに変えられる（支店マスタの「請求番号欄名称」、未設定なら「請求番号」）
+  detail.invoiceLabel = meta.invoiceLabel || '請求番号';
 
   const options = [];
   for (let n = 1; n <= OPTION_COUNT; n++) {
@@ -656,9 +776,14 @@ function apiGetReservationDetail(token, kanriNo) {
     id: r[H_COL_ID],
     datetime: formatMaybeDate_(r[H_COL_DATETIME]),
     sender: r[H_COL_SENDER],
+    senderRole: r[H_COL_SENDER_ROLE],
     body: r[H_COL_BODY],
     checkJp: isActiveFlag_(r[H_COL_CHECK_JP]),
-    checkBranch: isActiveFlag_(r[H_COL_CHECK_BRANCH])
+    checkedByJp: r[H_COL_CHECKED_BY_JP] || '',
+    dateJp: formatMaybeDate_(r[H_COL_DATE_JP]),
+    checkBranch: isActiveFlag_(r[H_COL_CHECK_BRANCH]),
+    checkedByBranch: r[H_COL_CHECKED_BY_BRANCH] || '',
+    dateBranch: formatMaybeDate_(r[H_COL_DATE_BRANCH])
   }));
 
   return { ok: true, role: session.role, detail };
@@ -777,7 +902,7 @@ function apiCommitChanges(token, kanriNo, changes, message) {
     const direction = session.role === JP_ROLE ? 'JP_TO_BRANCH' : 'BRANCH_TO_JP';
     const kind = summaryLines.length > 0 && message ? '変更＋メッセージ' : (summaryLines.length > 0 ? '変更内容' : 'メッセージ');
 
-    appendHistory_(headers, freshRow, who, body);
+    appendHistory_(headers, freshRow, who, body, session.role);
     sendDirectionalMail_(headers, freshRow, direction, session, body, kind);
   } finally {
     lock.releaseLock();
@@ -875,7 +1000,7 @@ function apiSetDriveUrl(token, kanriNo, url) {
     sheet.getRange(rowIndex, headers.indexOf(COL_LAST_UPDATED) + 1).setValue(new Date());
 
     const freshRow = sheet.getRange(rowIndex, 1, 1, headers.length).getValues()[0];
-    appendHistory_(headers, freshRow, senderLabel_(session), `[DriveフォルダURL更新]\n${trimmed}`);
+    appendHistory_(headers, freshRow, senderLabel_(session), `[DriveフォルダURL更新]\n${trimmed}`, session.role);
     sendDirectionalMail_(headers, freshRow, 'BOTH', session, trimmed, 'DriveフォルダURL');
   } finally {
     lock.releaseLock();
@@ -919,7 +1044,7 @@ function apiCreateReservation(token, branchCode, rawText) {
     sheet.getRange(newRowIndex, 1, 1, headers.length).setValues([newRowData]);
 
     const initMsg = parsed.remarks ? `新規手配依頼が追加されました。\n【備考】\n${parsed.remarks}` : '新規手配依頼が追加されました。';
-    appendHistory_(headers, newRowData, senderLabel_(session), `[新規案件作成]\n${initMsg}`);
+    appendHistory_(headers, newRowData, senderLabel_(session), `[新規案件作成]\n${initMsg}`, session.role);
     sendDirectionalMail_(headers, newRowData, 'BRANCH_TO_JP', session, initMsg, '新規案件');
 
     sortReservationSheet_(sheet);
@@ -990,6 +1115,7 @@ function apiToggleHistoryCheck(token, historyId, checked) {
   const isJp = session.role === JP_ROLE;
   const checkCol = isJp ? H_COL_CHECK_JP : H_COL_CHECK_BRANCH;
   const dateCol = isJp ? H_COL_DATE_JP : H_COL_DATE_BRANCH;
+  const checkedByCol = isJp ? H_COL_CHECKED_BY_JP : H_COL_CHECKED_BY_BRANCH;
 
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
@@ -1007,8 +1133,13 @@ function apiToggleHistoryCheck(token, historyId, checked) {
 
     sheet.getRange(targetRow, headers.indexOf(checkCol) + 1).setValue(checked);
     if (checked) {
+      // ★要件：既読チェックは「誰が・いつ」確認したかも記録する
       const ts = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss');
       sheet.getRange(targetRow, headers.indexOf(dateCol) + 1).setValue(ts);
+      sheet.getRange(targetRow, headers.indexOf(checkedByCol) + 1).setValue(senderLabel_(session));
+    } else {
+      sheet.getRange(targetRow, headers.indexOf(dateCol) + 1).setValue('');
+      sheet.getRange(targetRow, headers.indexOf(checkedByCol) + 1).setValue('');
     }
   } finally {
     lock.releaseLock();
@@ -1132,7 +1263,7 @@ function toSearchResult_(r, branchMeta, source) {
 // =====================================================
 // ⑬ 履歴追加・メール送信の共通処理
 // =====================================================
-function appendHistory_(headers, rowData, sender, body) {
+function appendHistory_(headers, rowData, sender, body, senderRole) {
   const h = getSpreadsheet_().getSheetByName(HISTORY_SHEET_NAME);
   const getV = (name) => rowData[headers.indexOf(name)];
   const dateVal = getV(COL_CONFIRMED_DATE);
@@ -1151,6 +1282,8 @@ function appendHistory_(headers, rowData, sender, body) {
   set(H_COL_BRIDE_NAME, getV(COL_BRIDE_NAME));
   set(H_COL_DATETIME, new Date());
   set(H_COL_SENDER, sender);
+  // ★要件：どちら側（JP／BRANCH）からのメッセージかを記録し、ダッシュボードの「要対応」判定に使う
+  set(H_COL_SENDER_ROLE, senderRole || '');
   set(H_COL_BODY, body);
 
   h.appendRow(row);
@@ -1221,9 +1354,50 @@ function checkAlerts() {
       if (incomplete.length > 0) {
         const area = row[headers.indexOf(COL_AREA)];
         const recipient = getJpTeamEmail_(area);
-        MailApp.sendEmail(recipient, `[要確認] 撮影40日前：${row[headers.indexOf(COL_KANRI_NO)]}（${row[headers.indexOf(COL_BRANCH_CODE)]}支店）`, '未完了ステータスがあります。ポータルをご確認ください。');
+        MailApp.sendEmail(recipient, `[要確認] 撮影${ALERT_DAYS_BEFORE}日前：${row[headers.indexOf(COL_KANRI_NO)]}（${row[headers.indexOf(COL_BRANCH_CODE)]}支店）`, '未完了ステータスがあります。ポータルをご確認ください。');
       }
     }
+  });
+}
+
+// ★要件：撮影日から一定日数（国・支店ごとに支店マスタ「納品期限日数」で設定、未設定なら既定30日）過ぎても
+// DriveフォルダURL（納品）が未登録の案件を日本側へメール通知する
+function checkDeliveryAlerts() {
+  const sheet = getSpreadsheet_().getSheetByName(RESERVATION_SHEET_NAME);
+  if (!sheet || sheet.getLastRow() < 2) return;
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
+  const branchMeta = branchMetaMap_();
+  const today = new Date();
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+  data.forEach(row => {
+    const driveUrl = String(row[headers.indexOf(COL_DRIVE_URL)] || '').trim();
+    if (driveUrl) return; // 既に納品済み
+
+    const dVal = row[headers.indexOf(COL_CONFIRMED_DATE)];
+    if (!(dVal instanceof Date)) return;
+    const shootMidnight = new Date(dVal.getFullYear(), dVal.getMonth(), dVal.getDate());
+    const daysPast = Math.round((todayMidnight.getTime() - shootMidnight.getTime()) / 86400000);
+    if (daysPast <= 0) return; // 未来日・当日はスキップ
+
+    const shootStr = Utilities.formatDate(dVal, 'Asia/Tokyo', 'yyyy/MM/dd');
+    const branchCode = row[headers.indexOf(COL_BRANCH_CODE)];
+    const meta = branchMeta[branchCode] || {};
+    const limitDays = meta.deliveryDays || DELIVERY_ALERT_DEFAULT_DAYS;
+    if (daysPast < limitDays) return;
+
+    // 毎日重複送信しないよう、期限当日のみ通知する
+    if (daysPast !== limitDays) return;
+
+    const area = row[headers.indexOf(COL_AREA)];
+    const recipient = getJpTeamEmail_(area);
+    const kanri = row[headers.indexOf(COL_KANRI_NO)];
+    MailApp.sendEmail(
+      recipient,
+      `[要確認] 納品未登録：${kanri}（${branchCode}支店・撮影日から${limitDays}日経過）`,
+      `撮影日から${limitDays}日が経過していますが、DriveフォルダURL（納品）が未登録です。ポータルをご確認ください。\n\n管理番号: ${kanri}\n撮影日: ${shootStr}`
+    );
   });
 }
 
@@ -1310,5 +1484,6 @@ function setupTriggers() {
   ScriptApp.getProjectTriggers().forEach(t => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('archivePastReservations').timeBased().everyDays(1).atHour(2).create();
   ScriptApp.newTrigger('checkAlerts').timeBased().everyDays(1).atHour(8).create();
-  SpreadsheetApp.getUi().alert('日次トリガー（アーカイブ・アラート）を再設定しました。');
+  ScriptApp.newTrigger('checkDeliveryAlerts').timeBased().everyDays(1).atHour(8).create();
+  SpreadsheetApp.getUi().alert('日次トリガー（アーカイブ・アラート・納品期限アラート）を再設定しました。');
 }
