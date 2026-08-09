@@ -3,9 +3,16 @@
   // PhotoWED 支店ポータル クライアントロジック
   // =====================================================
   const STORAGE_KEY = 'photowed_session';
+  const STATUS_CODES = ['RQ', 'OK', 'CHK', 'CR', 'FN', 'CW', 'NC'];
+  const JP_TEAMS = ['関東', '関西'];
+
   let session = null;
   let currentKanri = null;
-  let dashboardCache = null;
+  let dashboardScope = { showAll: true, teams: [], branches: [] };
+  let searchScope = { showAll: true, teams: [], branches: [] };
+  let branchesCache = [];   // 一覧/新規/マスタ画面用（BRANCHロールのみに絞った支店一覧）
+  let branchAdminCache = []; // 支店管理画面用（JPロールの2アカウントも含む全件）
+  let mastersBranch = '';   // プラン/オプション管理画面で選択中の支店コード
 
   function gsRun(fnName, ...args) {
     return new Promise((resolve, reject) => {
@@ -32,9 +39,11 @@
   }
 
   function applyRoleUI() {
-    const isHq = session && session.role === 'HQ';
-    document.querySelectorAll('.hq-only').forEach(el => el.classList.toggle('hidden', !isHq));
-    $('branch-badge').textContent = session ? `${session.branchName}（${isHq ? 'HQ' : session.branchCode}）` : '';
+    const isJp = session && session.role === 'JP';
+    document.querySelectorAll('.jp-only').forEach(el => el.classList.toggle('hidden', !isJp));
+    $('branch-badge').textContent = session
+      ? (isJp ? `${session.branchName}（${session.team}）` : `${session.branchName}（${session.branchCode}）`)
+      : '';
   }
 
   // ---------- 起動 ----------
@@ -52,13 +61,19 @@
   function bindEvents() {
     $('login-submit').addEventListener('click', doLogin);
     $('nav-dashboard').addEventListener('click', () => loadDashboard());
+    $('nav-search').addEventListener('click', openSearchView);
     $('nav-new').addEventListener('click', openNewView);
+    $('nav-masters').addEventListener('click', openMastersView);
     $('nav-branches').addEventListener('click', openBranchesView);
     $('nav-logout').addEventListener('click', doLogout);
     $('detail-back').addEventListener('click', () => loadDashboard());
-    $('branch-filter').addEventListener('change', () => loadDashboard($('branch-filter').value));
     $('new-submit').addEventListener('click', submitNewReservation);
     $('bm-submit').addEventListener('click', submitBranch);
+    $('bm-role').addEventListener('change', updateBranchFormVisibility);
+    $('search-submit').addEventListener('click', submitSearch);
+    $('plan-add').addEventListener('click', () => addMasterItem('plan'));
+    $('option-add').addEventListener('click', () => addMasterItem('option'));
+    $('masters-branch').addEventListener('change', () => { mastersBranch = $('masters-branch').value; loadMasters(); });
   }
 
   // ---------- ログイン ----------
@@ -99,6 +114,8 @@
   function afterLogin() {
     $('app-header').classList.remove('hidden');
     applyRoleUI();
+    dashboardScope = { showAll: true, teams: [], branches: [] };
+    searchScope = { showAll: true, teams: [], branches: [] };
     loadDashboard();
   }
 
@@ -107,47 +124,129 @@
     if (String(e.message || '').includes('セッション')) doLogout();
   }
 
+  // ---------- 表示範囲スコープ選択（全国／関東手配課／関西手配課／支店ごと） ----------
+  function renderScopeSelector(container, scope, onChange) {
+    if (session.role !== 'JP') { container.classList.add('hidden'); return; }
+    container.classList.remove('hidden');
+
+    const teamChips = JP_TEAMS.map(t => scopeChipHtml(
+      `${t}手配課`, 'team', t, !scope.showAll && scope.teams.includes(t)
+    )).join('');
+    const branchChips = branchesCache.filter(b => b.role !== 'JP').map(b => scopeChipHtml(
+      b.name, 'branch', b.code, !scope.showAll && scope.branches.includes(b.code)
+    )).join('');
+
+    container.innerHTML = `
+      <div class="scope-title">表示範囲</div>
+      <div class="scope-row">
+        ${scopeChipHtml('全国', 'all', '', scope.showAll)}
+        ${teamChips}
+        ${branchChips}
+      </div>`;
+
+    container.querySelectorAll('input[type=checkbox]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const role = cb.dataset.role;
+        const val = cb.dataset.val;
+        if (role === 'all') {
+          scope.showAll = cb.checked;
+          if (cb.checked) { scope.teams = []; scope.branches = []; }
+        } else {
+          scope.showAll = false;
+          const arr = role === 'team' ? scope.teams : scope.branches;
+          const idx = arr.indexOf(val);
+          if (cb.checked && idx === -1) arr.push(val);
+          if (!cb.checked && idx !== -1) arr.splice(idx, 1);
+          if (scope.teams.length === 0 && scope.branches.length === 0) scope.showAll = true;
+        }
+        renderScopeSelector(container, scope, onChange);
+        onChange();
+      });
+    });
+  }
+
+  function scopeChipHtml(label, role, val, checked) {
+    return `<label class="scope-chip ${checked ? 'active' : ''}">
+      <input type="checkbox" data-role="${role}" data-val="${val}" ${checked ? 'checked' : ''}>${escapeHtml(label)}
+    </label>`;
+  }
+
   // ---------- ダッシュボード ----------
-  async function loadDashboard(filterBranchCode) {
+  async function loadDashboard() {
     showView('dashboard');
     try {
-      const data = await gsRun('apiGetDashboard', session.token, filterBranchCode || '');
-      dashboardCache = data;
+      const data = await gsRun('apiGetDashboard', session.token, dashboardScope);
+      if (data.role === 'JP') branchesCache = data.branches;
       renderDashboard(data);
     } catch (e) { handleAuthError(e); }
   }
 
   function renderDashboard(data) {
-    $('dashboard-title').textContent = data.role === 'HQ' ? '案件一覧（全支店）' : `案件一覧（${data.branchName}）`;
-
-    if (data.role === 'HQ') {
-      const sel = $('branch-filter');
-      sel.classList.remove('hidden');
-      const current = sel.value;
-      sel.innerHTML = '<option value="">全支店</option>' +
-        data.branches.map(b => `<option value="${b.code}">${b.name}（${b.code}）</option>`).join('');
-      sel.value = current || '';
-    }
+    $('dashboard-title').textContent = data.role === 'JP' ? `案件一覧 — ${session.team}手配課` : `案件一覧（${data.branchName}）`;
+    renderScopeSelector($('scope-selector'), dashboardScope, loadDashboard);
 
     const list = $('reservation-list');
     list.innerHTML = '';
     $('dashboard-empty').classList.toggle('hidden', data.reservations.length > 0);
+    data.reservations.forEach(r => list.appendChild(buildReservationCard(r, data.role)));
+  }
 
-    data.reservations.forEach(r => {
-      const card = document.createElement('div');
-      card.className = 'res-card';
-      card.innerHTML = `
-        <div class="res-card-top"><span>${r.kanriNo}</span><span>${r.confirmedDate || '撮影日未定'}</span></div>
-        <div class="res-card-names">${r.name01 || ''} ${r.name02 ? '／ ' + r.name02 : ''}</div>
-        <div class="res-card-bottom">
-          <span class="chip">${r.branchCode || ''}</span>
-          ${r.statusHq ? `<span class="chip hq">HQ: ${r.statusHq}</span>` : ''}
-          ${r.statusBranch ? `<span class="chip branch">支店: ${r.statusBranch}</span>` : ''}
-          ${r.plan ? `<span class="chip">${r.plan}</span>` : ''}
-        </div>`;
-      card.addEventListener('click', () => openDetail(r.kanriNo));
-      list.appendChild(card);
-    });
+  function buildReservationCard(r, role) {
+    const card = document.createElement('div');
+    card.className = 'res-card';
+    card.innerHTML = `
+      <div class="res-card-top"><span>${r.kanriNo} ・ CHG: ${r.challengeNo || 'なし'}</span><span>${r.confirmedDate || '撮影日未定'}</span></div>
+      <div class="res-card-names">${r.groomName || ''} ${r.brideName ? '／ ' + r.brideName : ''}</div>
+      <div class="res-card-bottom">
+        <span class="chip branch">${r.branchName || r.branchCode}${role === 'JP' && r.city ? '・' + r.city : ''}</span>
+        ${r.statusJp ? `<span class="chip hq">STS JP: ${r.statusJp}</span>` : ''}
+        ${r.statusBranch ? `<span class="chip branch">STS 支店: ${r.statusBranch}</span>` : ''}
+        ${r.plan ? `<span class="chip">${r.plan}</span>` : ''}
+      </div>`;
+    card.addEventListener('click', () => openDetail(r.kanriNo));
+    return card;
+  }
+
+  // ---------- 検索 ----------
+  function openSearchView() {
+    showView('search');
+    renderScopeSelector($('search-scope'), searchScope, () => {});
+  }
+
+  async function submitSearch() {
+    const criteria = {
+      kanriNo: $('s-kanri').value.trim(),
+      challengeNo: $('s-challenge').value.trim(),
+      name: $('s-name').value.trim(),
+      country: $('s-country').value.trim(),
+      city: $('s-city').value.trim(),
+      dateField: $('s-datefield').value,
+      dateFrom: $('s-from').value,
+      dateTo: $('s-to').value,
+      includeArchive: $('s-archive').checked,
+      scope: searchScope
+    };
+    try {
+      const res = await gsRun('apiSearchReservations', session.token, criteria);
+      const list = $('search-results');
+      list.innerHTML = '';
+      $('search-empty').classList.toggle('hidden', res.results.length > 0);
+      res.results.forEach(r => {
+        const card = document.createElement('div');
+        card.className = 'res-card';
+        card.innerHTML = `
+          <div class="res-card-top"><span>${r.kanriNo} ・ CHG: ${r.challengeNo || 'なし'}</span><span>${r.confirmedDate || '撮影日未定'}</span></div>
+          <div class="res-card-names">${r.groomName || ''} ${r.brideName ? '／ ' + r.brideName : ''}</div>
+          <div class="res-card-bottom">
+            <span class="chip branch">${r.branchName}${r.city ? '・' + r.city : ''}</span>
+            <span class="chip">${r.source}</span>
+            ${r.statusJp ? `<span class="chip hq">STS JP: ${r.statusJp}</span>` : ''}
+            ${r.statusBranch ? `<span class="chip branch">STS 支店: ${r.statusBranch}</span>` : ''}
+          </div>`;
+        card.addEventListener('click', () => openDetail(r.kanriNo));
+        list.appendChild(card);
+      });
+    } catch (e) { handleAuthError(e); }
   }
 
   // ---------- 詳細 ----------
@@ -156,79 +255,107 @@
     showView('detail');
     $('detail-content').innerHTML = '<p class="hint-text">読み込み中...</p>';
     try {
-      const res = await gsRun('apiGetReservationDetail', session.token, kanriNo);
-      renderDetail(res.detail);
+      const detailRes = await gsRun('apiGetReservationDetail', session.token, kanriNo);
+      const branchCode = detailRes.detail['支店コード'];
+      const [planList, optionList] = await Promise.all([
+        gsRun('apiListPlans', session.token, branchCode),
+        gsRun('apiListOptionItems', session.token, branchCode)
+      ]);
+      renderDetail(detailRes.detail, planList, optionList);
     } catch (e) { handleAuthError(e); }
   }
 
-  function renderDetail(d) {
+  function renderDetail(d, planList, optionList) {
     const c = $('detail-content');
-    const optionsHtml = d.options.map(o => `
-      <div class="option-row">
-        <span>${o.name}</span>
-        <span>HQ: ${o.stsHq || '-'} ／ 支店: ${o.stsBranch || '-'}</span>
-      </div>`).join('') || '<p class="hint-text">オプションなし</p>';
+    const planDatalist = (planList || []).filter(p => p.active).map(p => `<option value="${escapeAttr(p.name)}">`).join('');
+    const optionDatalist = (optionList || []).filter(o => o.active).map(o => `<option value="${escapeAttr(o.name)}">`).join('');
 
+    const optionsHtml = d.options.map(o => `
+      <div class="option-row" style="flex-direction:column;align-items:stretch;gap:6px;">
+        <input list="option-master-list" data-opt-field="OP${o.n}" value="${escapeAttr(o.name)}" placeholder="オプション${o.n}（未使用なら空欄）">
+        <div style="display:flex;gap:8px;">
+          <select data-opt-field="OP${o.n} STS JP" style="flex:1;">${statusOptions(o.stsJp, true)}</select>
+          <select data-opt-field="OP${o.n} STS 支店" style="flex:1;">${statusOptions(o.stsBranch, true)}</select>
+        </div>
+      </div>`).join('');
+
+    // ★チェックは「自分側」のものしか押せない（サーバー側もログイン中のロールの列しか更新しないため、
+    //   相手側のチェックボックスは押せても意味がなく誤解を招く。ここで見た目上も無効化しておく）
     const historyHtml = d.history.map(h => `
-      <div class="history-item ${(!h.checkHq && !h.checkBranch) ? 'unread' : ''}">
+      <div class="history-item ${(!h.checkJp && !h.checkBranch) ? 'unread' : ''}">
         <div class="history-meta"><span>${h.sender}</span><span>${h.datetime}</span></div>
         <div class="history-body">${escapeHtml(h.body)}</div>
         <div class="history-checks">
-          <label><input type="checkbox" data-hid="${h.id}" data-side="HQ" ${h.checkHq ? 'checked' : ''}> HQ確認</label>
-          <label><input type="checkbox" data-hid="${h.id}" data-side="BRANCH" ${h.checkBranch ? 'checked' : ''}> 支店確認</label>
+          <label><input type="checkbox" data-hid="${h.id}" data-side="JP" ${h.checkJp ? 'checked' : ''} ${session.role !== 'JP' ? 'disabled' : ''}> JP確認</label>
+          <label><input type="checkbox" data-hid="${h.id}" data-side="BRANCH" ${h.checkBranch ? 'checked' : ''} ${session.role !== 'BRANCH' ? 'disabled' : ''}> 支店確認</label>
         </div>
       </div>`).join('') || '<p class="hint-text">やり取りはまだありません。</p>';
 
     c.innerHTML = `
+      <datalist id="option-master-list">${optionDatalist}</datalist>
       <div class="detail-header">
-        <div class="kanri">${d.detail['管理番号']} ｜ CHG: ${d.detail['CHG NO'] || 'なし'} ｜ 支店: ${d.detail['支店コード']}</div>
-        <div class="names">${d.detail['お名前01'] || ''} ${d.detail['お名前02'] ? '／ ' + d.detail['お名前02'] : ''}</div>
+        <div class="kanri">管理番号: ${d['管理番号']} ｜ CHG NO: ${d['CHG NO'] || 'なし'}</div>
+        <div class="kanri">${d.branchName}（${d['支店コード']}）${d.country ? ' ・ ' + d.country : ''}${d.city ? ' ／ ' + d.city : ''}</div>
+        <div class="names">新郎: ${d['新郎名（ローマ字）'] || ''}<br>新婦: ${d['新婦名（ローマ字）'] || ''}</div>
         <div class="detail-grid">
-          ${editableField('撮影日FIX', d.detail['撮影日FIX'], 'date')}
-          ${editableField('STS HQ', d.detail['STS HQ'])}
-          ${editableField('STS 支店', d.detail['STS 支店'])}
-          ${editableField('希望日①', d.detail['希望日①'], 'date')}
-          ${editableField('希望日②', d.detail['希望日②'], 'date')}
-          ${editableField('希望日③', d.detail['希望日③'], 'date')}
-          ${editableField('プラン名', d.detail['プラン名'])}
-          ${editableField('撮影希望場所', d.detail['撮影希望場所'])}
-          ${editableField('準備場所', d.detail['準備場所'])}
-          ${editableField('ホテル', d.detail['ホテル'])}
-          ${editableField('管轄', d.detail['管轄'])}
-          ${editableField('店舗／担当', d.detail['店舗／担当'])}
-          ${editableField('備考', d.detail['備考'])}
+          <div class="field-block"><label>新郎名（ローマ字）</label><input data-field="新郎名（ローマ字）" value="${escapeAttr(d['新郎名（ローマ字）'])}"></div>
+          <div class="field-block"><label>新婦名（ローマ字）</label><input data-field="新婦名（ローマ字）" value="${escapeAttr(d['新婦名（ローマ字）'])}"></div>
+          <div class="field-block"><label>CHG NO</label><input data-field="CHG NO" value="${escapeAttr(d['CHG NO'])}"></div>
+          <div class="field-block"><label>STS JP</label><select data-field="STS JP">${statusOptions(d['STS JP'])}</select></div>
+          <div class="field-block"><label>STS 支店</label><select data-field="STS 支店">${statusOptions(d['STS 支店'])}</select></div>
+          <div class="field-block"><label>管轄</label>
+            <select data-field="管轄"><option value="">未定</option>${JP_TEAMS.map(t => `<option value="${t}" ${d['管轄'] === t ? 'selected' : ''}>${t}</option>`).join('')}</select>
+          </div>
+          <div class="field-block"><label>撮影日FIX</label><input type="date" data-field="撮影日FIX" value="${escapeAttr(d['撮影日FIX'])}"></div>
+          <div class="field-block"><label>挙式日FIX</label><input type="date" data-field="挙式日FIX" value="${escapeAttr(d['挙式日FIX'])}"></div>
+          <div class="field-block"><label>希望日①</label><input data-field="希望日①" value="${escapeAttr(d['希望日①'])}"></div>
+          <div class="field-block"><label>希望日②</label><input data-field="希望日②" value="${escapeAttr(d['希望日②'])}"></div>
+          <div class="field-block"><label>希望日③</label><input data-field="希望日③" value="${escapeAttr(d['希望日③'])}"></div>
+          <div class="field-block"><label>プラン名</label><input list="plan-master-list" data-field="プラン名" value="${escapeAttr(d['プラン名'])}"></div>
+          <datalist id="plan-master-list">${planDatalist}</datalist>
+          <div class="field-block"><label>撮影希望場所</label><input data-field="撮影希望場所" value="${escapeAttr(d['撮影希望場所'])}"></div>
+          <div class="field-block"><label>準備場所</label><input data-field="準備場所" value="${escapeAttr(d['準備場所'])}"></div>
+          <div class="field-block"><label>ホテル</label><input data-field="ホテル" value="${escapeAttr(d['ホテル'])}"></div>
+          <div class="field-block"><label>店舗／担当</label><input data-field="店舗／担当" value="${escapeAttr(d['店舗／担当'])}"></div>
+          <div class="field-block" style="grid-column:1/-1;"><label>備考</label><input data-field="備考" value="${escapeAttr(d['備考'])}"></div>
         </div>
       </div>
 
       <div class="section-card">
-        <h3>オプション</h3>
+        <h3>オプション（最大5件・プラン/OP管理で登録したものが候補に出ます）</h3>
         ${optionsHtml}
+      </div>
+
+      <div class="section-card">
+        <h3>共有メモ（支店・日本側どちらも自由に書けます）</h3>
+        <textarea data-field="共有メモ" rows="4" placeholder="社内向けの自由メモ">${escapeHtml(d['共有メモ'])}</textarea>
       </div>
 
       <div class="section-card">
         <h3>Driveフォルダ URL</h3>
         <div class="msg-row">
-          <input id="drive-url-input" type="text" value="${escapeAttr(d.detail['DriveフォルダURL'] || '')}" placeholder="https://drive.google.com/...">
+          <input id="drive-url-input" type="text" value="${escapeAttr(d['DriveフォルダURL'] || '')}" placeholder="https://drive.google.com/...">
           <button class="send-btn" id="drive-url-submit">保存</button>
         </div>
       </div>
 
       <div class="section-card">
-        <h3>メッセージを送る（${session.role === 'HQ' ? 'HQ → 支店' : '支店 → HQ'}）</h3>
-        <div class="msg-row">
-          <textarea id="msg-input" placeholder="メッセージを入力"></textarea>
-        </div>
+        <h3>メッセージを送る（${session.role === 'JP' ? '日本 → 支店' : '支店 → 日本'}）</h3>
+        <div class="msg-row"><textarea id="msg-input" placeholder="メッセージを入力"></textarea></div>
         <button class="send-btn" id="msg-submit" style="margin-top:8px;width:100%;">送信</button>
       </div>
 
       <div class="section-card">
-        <h3>やり取り履歴</h3>
+        <h3>やり取り履歴（新しい順）</h3>
         ${historyHtml}
       </div>
     `;
 
-    c.querySelectorAll('.field-block input, .field-block select').forEach(el => {
+    c.querySelectorAll('[data-field]').forEach(el => {
       el.addEventListener('change', () => updateField(el.dataset.field, el.value));
+    });
+    c.querySelectorAll('[data-opt-field]').forEach(el => {
+      el.addEventListener('change', () => updateField(el.dataset.optField, el.value));
     });
     $('drive-url-submit').addEventListener('click', submitDriveUrl);
     $('msg-submit').addEventListener('click', submitMessage);
@@ -237,9 +364,9 @@
     });
   }
 
-  function editableField(name, value, type) {
-    return `<div class="field-block"><label>${name}</label>
-      <input type="${type || 'text'}" data-field="${name}" value="${escapeAttr(value || '')}"></div>`;
+  function statusOptions(current, allowBlank) {
+    const blank = allowBlank ? `<option value="" ${!current ? 'selected' : ''}>-</option>` : '';
+    return blank + STATUS_CODES.map(code => `<option value="${code}" ${code === current ? 'selected' : ''}>${code}</option>`).join('');
   }
 
   function escapeHtml(s) {
@@ -286,13 +413,9 @@
     $('new-error').classList.add('hidden');
     $('new-success').classList.add('hidden');
     $('new-rawtext').value = '';
-    if (session.role === 'HQ') {
-      const sel = $('new-branch');
-      if (!dashboardCache || !dashboardCache.branches) {
-        dashboardCache = await gsRun('apiGetDashboard', session.token, '');
-      }
-      sel.innerHTML = dashboardCache.branches
-        .filter(b => b.role !== 'HQ')
+    if (session.role === 'JP') {
+      if (!branchesCache.length) branchesCache = await gsRun('apiListBranches', session.token);
+      $('new-branch').innerHTML = branchesCache.filter(b => b.role !== 'JP' && b.active)
         .map(b => `<option value="${b.code}">${b.name}（${b.code}）</option>`).join('');
     }
   }
@@ -302,7 +425,7 @@
     $('new-error').classList.add('hidden');
     $('new-success').classList.add('hidden');
     if (!raw) { showFieldError('new-error', '手配依頼テキストを貼り付けてください。'); return; }
-    const branchCode = session.role === 'HQ' ? $('new-branch').value : session.branchCode;
+    const branchCode = session.role === 'JP' ? $('new-branch').value : session.branchCode;
     try {
       const res = await gsRun('apiCreateReservation', session.token, branchCode, raw);
       $('new-success').textContent = `案件 ${res.kanriNo} を作成しました。`;
@@ -318,11 +441,81 @@
     $(id).classList.remove('hidden');
   }
 
-  // ---------- 支店管理（HQ） ----------
+  // ---------- プラン・オプション管理 ----------
+  async function openMastersView() {
+    showView('masters');
+    if (session.role === 'JP') {
+      if (!branchesCache.length) branchesCache = await gsRun('apiListBranches', session.token);
+      const branches = branchesCache.filter(b => b.role !== 'JP');
+      $('masters-branch').innerHTML = branches.map(b => `<option value="${b.code}">${b.name}（${b.code}）</option>`).join('');
+      mastersBranch = branches[0] ? branches[0].code : '';
+      $('masters-branch').value = mastersBranch;
+    } else {
+      mastersBranch = session.branchCode;
+    }
+    loadMasters();
+  }
+
+  async function loadMasters() {
+    if (!mastersBranch) return;
+    try {
+      const [plans, options] = await Promise.all([
+        gsRun('apiListPlans', session.token, mastersBranch),
+        gsRun('apiListOptionItems', session.token, mastersBranch)
+      ]);
+      renderMasterList('plan-list', plans, 'plan');
+      renderMasterList('option-list', options, 'option');
+    } catch (e) { handleAuthError(e); }
+  }
+
+  function renderMasterList(containerId, items, kind) {
+    const el = $(containerId);
+    el.innerHTML = (items || []).map(it => `
+      <div class="master-item-card">
+        <span>${escapeHtml(it.name)}</span>
+        <button class="switch-sm ${it.active ? 'on' : ''}" data-name="${escapeAttr(it.name)}" data-kind="${kind}"></button>
+      </div>`).join('') || '<p class="hint-text">まだ登録がありません。</p>';
+    el.querySelectorAll('.switch-sm').forEach(btn => {
+      btn.addEventListener('click', () => toggleMasterItem(btn.dataset.kind, btn.dataset.name, !btn.classList.contains('on')));
+    });
+  }
+
+  async function addMasterItem(kind) {
+    const inputId = kind === 'plan' ? 'plan-new-name' : 'option-new-name';
+    const name = $(inputId).value.trim();
+    if (!name) return;
+    const fn = kind === 'plan' ? 'apiSavePlanItem' : 'apiSaveOptionItem';
+    try {
+      await gsRun(fn, session.token, mastersBranch, name, null, true);
+      $(inputId).value = '';
+      loadMasters();
+      showToast(`「${name}」を追加しました`);
+    } catch (e) { handleAuthError(e); }
+  }
+
+  async function toggleMasterItem(kind, name, active) {
+    const fn = kind === 'plan' ? 'apiSavePlanItem' : 'apiSaveOptionItem';
+    try {
+      await gsRun(fn, session.token, mastersBranch, name, name, active);
+      loadMasters();
+    } catch (e) { handleAuthError(e); }
+  }
+
+  // ---------- 支店管理（JP） ----------
+  function updateBranchFormVisibility() {
+    const isJpRole = $('bm-role').value === 'JP';
+    $('bm-team-wrap').classList.toggle('hidden', !isJpRole);
+    $('bm-prefix-wrap').classList.toggle('hidden', isJpRole);
+  }
+
   async function openBranchesView() {
     showView('branches');
+    updateBranchFormVisibility();
     try {
+      // 支店管理画面はJP/BRANCH両方を含む全件が必要なため、他画面で使う
+      // branchesCache（BRANCHロールのみに絞ったキャッシュ）とは別に保持する
       const branches = await gsRun('apiListBranches', session.token);
+      branchAdminCache = branches;
       renderBranchList(branches);
     } catch (e) { handleAuthError(e); }
   }
@@ -330,23 +523,30 @@
   function renderBranchList(branches) {
     const list = $('branch-list');
     list.innerHTML = branches.map(b => `
-      <div class="res-card" data-edit-code="${b.code}">
-        <div class="res-card-top"><span>${b.code}</span><span>${b.active ? '有効' : '無効'}</span></div>
+      <div class="res-card" data-code="${b.code}">
+        <div class="res-card-top"><span>${b.code}${b.prefix ? ' ・ 番号: ' + b.prefix + '-xxx' : ''}</span><span>${b.active ? '有効' : '無効'}</span></div>
         <div class="res-card-names">${b.name}</div>
         <div class="res-card-bottom">
-          <span class="chip ${b.role === 'HQ' ? 'hq' : 'branch'}">${b.role === 'HQ' ? 'HQ' : '支店'}</span>
+          <span class="chip ${b.role === 'JP' ? 'hq' : 'branch'}">${b.role === 'JP' ? (b.team + '手配課') : '支店'}</span>
+          ${b.country ? `<span class="chip">${b.country}${b.city ? '・' + b.city : ''}</span>` : ''}
           <span class="chip">${b.email || '通知先未設定'}</span>
         </div>
       </div>`).join('');
-    list.querySelectorAll('[data-edit-code]').forEach(el => {
-      el.addEventListener('click', () => {
-        const b = branches.find(x => x.code === el.dataset.editCode);
+
+    list.querySelectorAll('[data-code]').forEach(el => {
+      el.addEventListener('click', (evt) => {
+        const b = branches.find(x => x.code === el.dataset.code);
         $('bm-code').value = b.code;
         $('bm-name').value = b.name;
+        $('bm-country').value = b.country || '';
+        $('bm-city').value = b.city || '';
         $('bm-role').value = b.role;
+        $('bm-team').value = b.team || '関東';
+        $('bm-prefix').value = b.prefix || '';
         $('bm-passcode').value = '';
         $('bm-email').value = b.email || '';
         $('bm-active').checked = b.active;
+        updateBranchFormVisibility();
       });
     });
   }
@@ -357,7 +557,11 @@
     const branch = {
       code: $('bm-code').value.trim(),
       name: $('bm-name').value.trim(),
+      country: $('bm-country').value.trim(),
+      city: $('bm-city').value.trim(),
       role: $('bm-role').value,
+      team: $('bm-team').value,
+      prefix: $('bm-prefix').value.trim(),
       passcode: $('bm-passcode').value.trim(),
       email: $('bm-email').value.trim(),
       active: $('bm-active').checked
@@ -366,6 +570,7 @@
       await gsRun('apiSaveBranch', session.token, branch);
       $('bm-success').textContent = `支店「${branch.name}」を保存しました。`;
       $('bm-success').classList.remove('hidden');
+      branchesCache = []; // 一覧/新規/マスタ画面のキャッシュも無効化し、次回アクセス時に反映させる
       openBranchesView();
     } catch (e) {
       $('bm-error').textContent = e.message;

@@ -106,6 +106,34 @@
   .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: #111827; color: #fff;
     padding: 10px 18px; border-radius: 999px; font-size: 0.85rem; box-shadow: 0 4px 14px rgba(0,0,0,0.2); z-index: 50; }
 
+  /* 表示範囲スコープ選択（全国／関東／関西／支店） */
+  .scope-box { background: var(--color-card); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
+  .scope-title { font-size: 0.72rem; color: var(--color-muted); margin-bottom: 6px; }
+  .scope-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .scope-chip { display: inline-flex; align-items: center; gap: 5px; background: #eef2f7; border-radius: 999px;
+    padding: 5px 11px; font-size: 0.78rem; cursor: pointer; user-select: none; border: 1px solid transparent; }
+  .scope-chip input { width: auto; margin: 0; }
+  .scope-chip.active { background: var(--color-primary); color: #fff; }
+
+  /* 検索 */
+  .search-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  .search-grid .full { grid-column: 1 / -1; }
+  .search-grid label { font-size: 0.72rem; color: var(--color-muted); display: block; margin-bottom: 4px; }
+
+  /* プラン・オプション管理 */
+  .inline-form { display: flex; gap: 8px; margin-top: 8px; }
+  .inline-form input { flex: 1; }
+  .send-btn-sm { background: var(--color-primary); color: #fff; border: none; border-radius: 8px; padding: 0 14px;
+    font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .master-item-card { display: flex; justify-content: space-between; align-items: center; background: var(--color-card);
+    border-radius: 10px; padding: 9px 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); font-size: 0.88rem; }
+  .master-item-card .switch-sm { width: 34px; height: 20px; border-radius: 999px; background: #e2e5e9; position: relative;
+    border: none; cursor: pointer; flex: none; }
+  .master-item-card .switch-sm::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+    border-radius: 50%; background: #fff; transition: transform .15s ease; }
+  .master-item-card .switch-sm.on { background: var(--color-primary); }
+  .master-item-card .switch-sm.on::after { transform: translateX(14px); }
+
   @media (min-width: 640px) {
     .detail-grid { grid-template-columns: repeat(3, 1fr); }
   }
