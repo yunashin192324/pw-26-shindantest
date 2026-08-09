@@ -50,6 +50,14 @@
       : '';
   }
 
+  // ★要件：Googleアカウント（氏名@his-world.com）から実際の担当者名を取得して表示する
+  async function loadCurrentUserName() {
+    try {
+      const res = await gsRun('apiGetCurrentUserName', session.token);
+      if (res.name) $('branch-badge').textContent += `・${res.name}`;
+    } catch (e) { /* 取得できなくても致命的ではないので無視 */ }
+  }
+
   // ---------- 起動 ----------
   window.addEventListener('DOMContentLoaded', () => {
     bindEvents();
@@ -132,6 +140,7 @@
   function afterLogin() {
     $('app-header').classList.remove('hidden');
     applyRoleUI();
+    loadCurrentUserName();
     dashboardScope = { showAll: true, teams: [], branches: [] };
     searchScope = { showAll: true, teams: [], branches: [] };
     loadDashboard();
@@ -225,6 +234,7 @@
       <div class="res-card-names">${r.groomName || ''} ${r.brideName ? '／ ' + r.brideName : ''}</div>
       <div class="res-card-bottom">
         <span class="chip branch">${r.branchName || r.branchCode}${role === 'JP' && r.city ? '・' + r.city : ''}</span>
+        ${r.area ? `<span class="chip hq">担当: ${r.area}手配課</span>` : ''}
         ${r.statusJp ? `<span class="chip hq">STS JP: ${r.statusJp}</span>` : ''}
         ${r.statusBranch ? `<span class="chip branch">STS 支店: ${r.statusBranch}</span>` : ''}
         ${cancelled ? '<span class="chip" style="background:#fee2e2;color:#b91c1c;">キャンセル</span>' : ''}
@@ -268,6 +278,7 @@
           <div class="res-card-names">${r.groomName || ''} ${r.brideName ? '／ ' + r.brideName : ''}</div>
           <div class="res-card-bottom">
             <span class="chip branch">${r.branchName}${r.city ? '・' + r.city : ''}</span>
+            ${r.area ? `<span class="chip hq">担当: ${r.area}手配課</span>` : ''}
             <span class="chip">${r.source}</span>
             ${r.statusJp ? `<span class="chip hq">STS JP: ${r.statusJp}</span>` : ''}
             ${r.statusBranch ? `<span class="chip branch">STS 支店: ${r.statusBranch}</span>` : ''}
@@ -302,16 +313,20 @@
     return { editable: true, allowed: BRANCH_EDIT_GATE[key] };
   }
 
-  // STSセレクト（編集可なら<select data-pending>、不可なら読み取り専用表示）
-  function statusCell(fieldName, current, editableByMe, allowedValues) {
-    if (!editableByMe) {
-      return `<div class="val" style="font-family:ui-monospace,monospace;font-weight:700;">${current || '-'}</div>`;
-    }
-    const codes = allowedValues || STATUS_CODES;
-    const opts = ['<option value="">-</option>'].concat(
-      codes.map(c => `<option value="${c}" ${c === current ? 'selected' : ''}>${c}</option>`)
-    ).join('');
-    return `<select data-pending="${fieldName}">${opts}</select>`;
+  // STSセレクト（編集可なら<select data-pending>、不可なら読み取り専用表示）＋変更履歴リンク付き
+  function statusCell(fieldName, current, editableByMe, allowedValues, lockedReason) {
+    const control = editableByMe
+      ? (() => {
+          const codes = allowedValues || STATUS_CODES;
+          const opts = ['<option value="">-</option>'].concat(
+            codes.map(c => `<option value="${c}" ${c === current ? 'selected' : ''}>${c}</option>`)
+          ).join('');
+          return `<select data-pending="${fieldName}">${opts}</select>`;
+        })()
+      : `<div class="val locked-val">🔒 ${current || '-'}${lockedReason ? `<span class="hint-text"> (${lockedReason})</span>` : ''}</div>`;
+    const hid = 'fh-' + fieldName.replace(/[^A-Za-z0-9]/g, '_');
+    return `${control}<button type="button" class="history-link" data-history-field="${escapeAttr(fieldName)}" data-history-target="${hid}">履歴</button>
+      <div class="history-panel hidden" id="${hid}"></div>`;
   }
 
   function nameListWithCurrent(masterList, current) {
@@ -339,7 +354,7 @@
           ${nameSelect}
           <div style="display:flex;gap:8px;">
             <div style="flex:1;"><div class="hint-text" style="margin-bottom:2px;">STS JP</div>${statusCell('OP' + o.n + ' STS JP', o.stsJp, session.role === 'JP', null)}</div>
-            <div style="flex:1;"><div class="hint-text" style="margin-bottom:2px;">STS 支店${session.role === 'BRANCH' && !gate.editable ? '（変更不可）' : ''}</div>${statusCell('OP' + o.n + ' STS 支店', o.stsBranch, session.role === 'BRANCH' && gate.editable, gate.allowed)}</div>
+            <div style="flex:1;"><div class="hint-text" style="margin-bottom:2px;">STS 支店</div>${statusCell('OP' + o.n + ' STS 支店', o.stsBranch, session.role === 'BRANCH' && gate.editable, gate.allowed, `STS JP: ${o.stsJp || '未設定'}`)}</div>
           </div>
         </div>`;
     }).join('');
@@ -360,6 +375,7 @@
       <div class="detail-header">
         <div class="kanri">管理番号: ${d['管理番号']} ｜ CHG NO: ${d['CHG NO'] || 'なし'}</div>
         <div class="kanri">${d.branchName}（${d['支店コード']}）${d.country ? ' ・ ' + d.country : ''}${d.city ? ' ／ ' + d.city : ''}</div>
+        <div class="kanri">担当: ${d['管轄'] ? d['管轄'] + '手配課' : '未設定'}</div>
         <div class="names">新郎: ${d['新郎名（ローマ字）'] || ''}<br>新婦: ${d['新婦名（ローマ字）'] || ''}</div>
         <div class="detail-grid">
           <div class="field-block"><label>新郎名（ローマ字）</label><input data-pending="新郎名（ローマ字）" value="${escapeAttr(d['新郎名（ローマ字）'])}"></div>
@@ -390,7 +406,7 @@
         <h3>ステータス</h3>
         <div class="status-row">
           <div class="status-card"><div class="who">STS JP</div>${statusCell('STS JP', d['STS JP'], session.role === 'JP', null)}</div>
-          <div class="status-card"><div class="who">STS 支店${session.role === 'BRANCH' && !mainGate.editable ? '（変更不可）' : ''}</div>${statusCell('STS 支店', d['STS 支店'], session.role === 'BRANCH' && mainGate.editable, mainGate.allowed)}</div>
+          <div class="status-card"><div class="who">STS 支店</div>${statusCell('STS 支店', d['STS 支店'], session.role === 'BRANCH' && mainGate.editable, mainGate.allowed, `STS JP: ${d['STS JP'] || '未設定'}`)}</div>
         </div>
         <h3>オプション（最大5件）</h3>
         ${optionsHtml}
@@ -445,6 +461,28 @@
     c.querySelectorAll('input[data-hid]').forEach(el => {
       el.addEventListener('change', () => toggleHistoryCheck(el.dataset.hid, el.checked));
     });
+    c.querySelectorAll('[data-history-field]').forEach(btn => {
+      btn.addEventListener('click', () => toggleFieldHistory(btn.dataset.historyField, btn.dataset.historyTarget));
+    });
+  }
+
+  // ★要件：STSの値（OK/RQ等）を押すと「誰が・いつ変更したか」の履歴を確認できるようにする
+  async function toggleFieldHistory(field, targetId) {
+    const el = $(targetId);
+    if (!el) return;
+    if (!el.classList.contains('hidden')) { el.classList.add('hidden'); return; }
+    el.classList.remove('hidden');
+    if (el.dataset.loaded === '1') return;
+    el.innerHTML = '<p class="hint-text">読み込み中...</p>';
+    try {
+      const rows = await gsRun('apiGetFieldHistory', session.token, currentKanri, field);
+      el.dataset.loaded = '1';
+      el.innerHTML = rows.length
+        ? rows.map(r => `<div class="history-log-item">${escapeHtml(r.datetime)}　${escapeHtml(r.who)}：${escapeHtml(r.oldValue || '(未設定)')} → ${escapeHtml(r.newValue || '(未設定)')}</div>`).join('')
+        : '<p class="hint-text">変更履歴はまだありません。</p>';
+    } catch (e) {
+      el.innerHTML = '<p class="error-text">履歴の取得に失敗しました。</p>';
+    }
   }
 
   function updatePendingIndicator() {

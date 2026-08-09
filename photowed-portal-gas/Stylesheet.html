@@ -103,6 +103,21 @@
     border-bottom: 1px dashed var(--color-border); }
   .option-row:last-child { border-bottom: none; }
 
+  /* ステータス（STS JP／STS 支店） */
+  .status-row { display: flex; gap: 10px; margin-bottom: 4px; }
+  .status-card { flex: 1; background: #f9fafb; border: 1px solid var(--color-border); border-radius: 10px; padding: 10px 12px; }
+  .status-card .who { font-size: 0.72rem; color: var(--color-muted); text-transform: uppercase; letter-spacing: 0.02em;
+    margin-bottom: 4px; }
+  .status-card select { border: 1px solid var(--color-border); border-radius: 6px; padding: 8px; font-size: 1rem;
+    font-weight: 700; width: 100%; background: #fff; }
+  .val { font-size: 0.9rem; }
+  .val.locked-val { font-weight: 700; color: var(--color-muted); display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .history-link { display: block; background: none; border: none; color: var(--color-primary-dark); font-size: 0.72rem;
+    padding: 4px 0 0; cursor: pointer; text-decoration: underline; }
+  .history-panel { margin-top: 4px; background: #f3f4f6; border-radius: 8px; padding: 8px 10px; font-size: 0.78rem; }
+  .history-log-item { padding: 3px 0; border-bottom: 1px solid #e5e7eb; color: var(--color-text); }
+  .history-log-item:last-child { border-bottom: none; }
+
   .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: #111827; color: #fff;
     padding: 10px 18px; border-radius: 999px; font-size: 0.85rem; box-shadow: 0 4px 14px rgba(0,0,0,0.2); z-index: 50; }
 

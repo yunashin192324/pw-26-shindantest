@@ -23,6 +23,7 @@ const OPTION_MASTER_SHEET_NAME = 'オプションマスタ';
 const RESERVATION_SHEET_NAME = '予約一覧';
 const HISTORY_SHEET_NAME = 'やり取り履歴';
 const ARCHIVE_SHEET_NAME = '過去一覧';
+const STATUS_LOG_SHEET_NAME = 'ステータス変更履歴';
 
 // --- システムエラー通知先 ---
 const SYSTEM_ALERT_EMAIL = 'it-planning@his-world.com';
@@ -165,6 +166,15 @@ const HISTORY_HEADERS = [
   H_COL_CHECK_JP, H_COL_DATE_JP, H_COL_CHECK_BRANCH, H_COL_DATE_BRANCH
 ];
 
+// --- ステータス変更履歴（STS JP／STS 支店／各OPのSTSを「誰が・いつ・何から何に」変更したかの監査ログ） ---
+const SL_COL_KANRI = '管理番号';
+const SL_COL_FIELD = 'フィールド';
+const SL_COL_OLD = '変更前';
+const SL_COL_NEW = '変更後';
+const SL_COL_WHO = '変更者';
+const SL_COL_WHEN = '日時';
+const STATUS_LOG_HEADERS = [SL_COL_KANRI, SL_COL_FIELD, SL_COL_OLD, SL_COL_NEW, SL_COL_WHO, SL_COL_WHEN];
+
 // =====================================================
 // ⓪ Webアプリのエントリポイント
 // =====================================================
@@ -192,6 +202,7 @@ function setupPortal() {
   ensureSheetWithHeaders_(ss, RESERVATION_SHEET_NAME, RESERVATION_HEADERS);
   ensureSheetWithHeaders_(ss, HISTORY_SHEET_NAME, HISTORY_HEADERS);
   ensureSheetWithHeaders_(ss, ARCHIVE_SHEET_NAME, RESERVATION_HEADERS);
+  ensureSheetWithHeaders_(ss, STATUS_LOG_SHEET_NAME, STATUS_LOG_HEADERS);
 
   const bm = ss.getSheetByName(BRANCH_MASTER_SHEET_NAME);
   if (bm.getLastRow() < 2) {
@@ -334,6 +345,34 @@ function assertBranchAccess_(session, branchCode) {
   if (session.role === BRANCH_ROLE && session.branchCode !== String(branchCode).trim().toUpperCase()) {
     throw new Error('自分の支店以外のデータは操作できません。');
   }
+}
+
+// ★要件：メッセージ・変更履歴に個人名を残す。
+// 各拠点のGoogleアカウントは「氏名@his-world.com」形式で運用されている前提のため、
+// ログイン中のGoogleアカウントのメールアドレスからローカル部（氏名部分）を取り出す。
+// Webアプリを「アクセスしたユーザーとして実行」かつ組織内限定で公開している場合のみ取得できる。
+// 取得できない場合（デプロイ設定が異なる等）は空文字を返し、呼び出し側は支店名/チーム名にフォールバックする。
+function getActiveUserName_() {
+  try {
+    const email = Session.getActiveUser().getEmail();
+    if (email) return email.split('@')[0];
+  } catch (e) {
+    // ignore
+  }
+  return '';
+}
+
+// 履歴・メールに使う「送信者ラベル」。個人名が取得できれば「氏名（支店名/チーム名）」、
+// 取得できなければ従来どおり支店名/チーム名のみ。
+function senderLabel_(session) {
+  const personal = getActiveUserName_();
+  return personal ? `${personal}（${session.branchName}）` : session.branchName;
+}
+
+// ログイン中の実際の担当者名を画面表示用に返す（取得できなければ空文字）
+function apiGetCurrentUserName(token) {
+  requireSession_(token);
+  return { name: getActiveUserName_() };
 }
 
 // =====================================================
@@ -547,6 +586,10 @@ function apiGetDashboard(token, scope) {
     lastUpdated: formatMaybeDate_(r[COL_LAST_UPDATED])
   }));
 
+  // ★要件：一覧は撮影日FIXが「今日に近い順」に並べる（未定は末尾）
+  const todayStr = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd');
+  list.sort((a, b) => dayDistanceFromToday_(a.confirmedDate, todayStr) - dayDistanceFromToday_(b.confirmedDate, todayStr));
+
   const result = { ok: true, role: session.role, branchCode: session.branchCode, branchName: session.branchName, team: session.team, reservations: list };
   if (session.role === JP_ROLE) {
     result.branches = listBranchesRaw_().filter(b => b.role === BRANCH_ROLE);
@@ -676,6 +719,9 @@ function apiSaveFieldsQuiet(token, kanriNo, changes) {
     writes.forEach(w => sheet.getRange(rowIndex, w.colIdx).setValue(w.valueToStore));
     sheet.getRange(rowIndex, headers.indexOf(COL_LAST_UPDATED) + 1).setValue(new Date());
 
+    const who = senderLabel_(session);
+    writes.forEach(w => logStatusChangeIfApplicable_(kanriNo, w, who));
+
     if (Object.keys(changes).includes(COL_CONFIRMED_DATE)) sortReservationSheet_(sheet);
   } finally {
     lock.releaseLock();
@@ -715,9 +761,11 @@ function apiCommitChanges(token, kanriNo, changes, message) {
       return { ok: true, noChange: true };
     }
 
+    const who = senderLabel_(session);
     if (writes.length > 0) {
       writes.forEach(w => sheet.getRange(rowIndex, w.colIdx).setValue(w.valueToStore));
       sheet.getRange(rowIndex, headers.indexOf(COL_LAST_UPDATED) + 1).setValue(new Date());
+      writes.forEach(w => logStatusChangeIfApplicable_(kanriNo, w, who));
     }
     if (dateChanged) sortReservationSheet_(sheet);
 
@@ -729,7 +777,7 @@ function apiCommitChanges(token, kanriNo, changes, message) {
     const direction = session.role === JP_ROLE ? 'JP_TO_BRANCH' : 'BRANCH_TO_JP';
     const kind = summaryLines.length > 0 && message ? '変更＋メッセージ' : (summaryLines.length > 0 ? '変更内容' : 'メッセージ');
 
-    appendHistory_(headers, freshRow, session.branchName, body);
+    appendHistory_(headers, freshRow, who, body);
     sendDirectionalMail_(headers, freshRow, direction, session, body, kind);
   } finally {
     lock.releaseLock();
@@ -752,7 +800,16 @@ function prepareFieldWrite_(session, headers, rowData, field, value) {
   const newDisplay = isDateField ? (formatMaybeDate_(valueToStore) || '未定') : (valueToStore || '(未設定)');
   const changed = isDateField ? (oldDisplay !== newDisplay) : (String(rawOld || '') !== String(valueToStore));
 
-  return { colIdx: colIdx + 1, valueToStore, changed, summaryLine: `${field}: ${oldDisplay} → ${newDisplay}` };
+  return { field, colIdx: colIdx + 1, valueToStore, changed, oldDisplay, newDisplay, summaryLine: `${field}: ${oldDisplay} → ${newDisplay}` };
+}
+
+// STS(JP側)／STS(支店側)（メイン・オプション共通）の変更を「誰が・いつ・何から何に」変更したか記録する
+function logStatusChangeIfApplicable_(kanriNo, prepared, who) {
+  if (!prepared.changed) return;
+  if (!isJpStatusField_(prepared.field) && !isBranchStatusField_(prepared.field)) return;
+  const sheet = getSpreadsheet_().getSheetByName(STATUS_LOG_SHEET_NAME);
+  if (!sheet) return;
+  sheet.appendRow([kanriNo, prepared.field, prepared.oldDisplay, prepared.newDisplay, who, new Date()]);
 }
 
 function validateFieldPermission_(session, headers, rowData, field, value) {
@@ -818,7 +875,7 @@ function apiSetDriveUrl(token, kanriNo, url) {
     sheet.getRange(rowIndex, headers.indexOf(COL_LAST_UPDATED) + 1).setValue(new Date());
 
     const freshRow = sheet.getRange(rowIndex, 1, 1, headers.length).getValues()[0];
-    appendHistory_(headers, freshRow, session.branchName, `[DriveフォルダURL更新]\n${trimmed}`);
+    appendHistory_(headers, freshRow, senderLabel_(session), `[DriveフォルダURL更新]\n${trimmed}`);
     sendDirectionalMail_(headers, freshRow, 'BOTH', session, trimmed, 'DriveフォルダURL');
   } finally {
     lock.releaseLock();
@@ -862,7 +919,7 @@ function apiCreateReservation(token, branchCode, rawText) {
     sheet.getRange(newRowIndex, 1, 1, headers.length).setValues([newRowData]);
 
     const initMsg = parsed.remarks ? `新規手配依頼が追加されました。\n【備考】\n${parsed.remarks}` : '新規手配依頼が追加されました。';
-    appendHistory_(headers, newRowData, session.branchName, `[新規案件作成]\n${initMsg}`);
+    appendHistory_(headers, newRowData, senderLabel_(session), `[新規案件作成]\n${initMsg}`);
     sendDirectionalMail_(headers, newRowData, 'BRANCH_TO_JP', session, initMsg, '新規案件');
 
     sortReservationSheet_(sheet);
@@ -959,6 +1016,26 @@ function apiToggleHistoryCheck(token, historyId, checked) {
   return { ok: true };
 }
 
+// ★要件：STSの値（OK/RQ等）をタップしたら「誰が・いつ・何から何に変更したか」を確認できるようにする
+function apiGetFieldHistory(token, kanriNo, field) {
+  const session = requireSession_(token);
+  const { headers, rowIndex, rowData } = findReservationRow_(kanriNo);
+  if (rowIndex === -1) throw new Error('対象の予約が見つかりません。');
+  assertRowVisible_(session, headers, rowData);
+
+  const sheet = getSpreadsheet_().getSheetByName(STATUS_LOG_SHEET_NAME);
+  const rows = getRowsAsObjects_(sheet).filter(r =>
+    String(r[SL_COL_KANRI]) === String(kanriNo) && r[SL_COL_FIELD] === field
+  );
+  rows.sort((a, b) => new Date(b[SL_COL_WHEN]) - new Date(a[SL_COL_WHEN]));
+  return rows.map(r => ({
+    oldValue: r[SL_COL_OLD],
+    newValue: r[SL_COL_NEW],
+    who: r[SL_COL_WHO],
+    datetime: r[SL_COL_WHEN] instanceof Date ? Utilities.formatDate(r[SL_COL_WHEN], 'Asia/Tokyo', 'yyyy/MM/dd HH:mm') : r[SL_COL_WHEN]
+  }));
+}
+
 // =====================================================
 // ⑫ 検索
 // =====================================================
@@ -1021,6 +1098,16 @@ function toComparableDate_(val) {
   return null;
 }
 
+// "yyyy/MM/dd"形式の日付文字列と今日との差（日数の絶対値）を返す。未定・不正な値はInfinity（末尾に回す）
+function dayDistanceFromToday_(dateStr, todayStr) {
+  const m1 = String(dateStr || '').match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
+  if (!m1) return Infinity;
+  const m2 = String(todayStr || '').match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
+  const d1 = new Date(Number(m1[1]), Number(m1[2]) - 1, Number(m1[3]));
+  const d2 = m2 ? new Date(Number(m2[1]), Number(m2[2]) - 1, Number(m2[3])) : new Date();
+  return Math.abs(d1.getTime() - d2.getTime());
+}
+
 function toSearchResult_(r, branchMeta, source) {
   const meta = branchMeta[r[COL_BRANCH_CODE]] || {};
   return {
@@ -1035,6 +1122,7 @@ function toSearchResult_(r, branchMeta, source) {
     brideName: r[COL_BRIDE_NAME],
     statusJp: r[COL_STATUS_JP],
     statusBranch: r[COL_STATUS_BRANCH],
+    area: r[COL_AREA],
     confirmedDate: formatMaybeDate_(r[COL_CONFIRMED_DATE]),
     confirmedDateRaw: toComparableDate_(r[COL_CONFIRMED_DATE]),
     ceremonyDate: formatMaybeDate_(r[COL_CEREMONY_DATE])
@@ -1088,7 +1176,7 @@ function sendDirectionalMail_(headers, rowData, direction, session, message, kin
   if (!recipients) return;
 
   const subj = `[PhotoWED][${branchCode}] 【${kanri} ｜ ${chgNo}】${kind}のお知らせ`;
-  const body = `${session.branchName} から更新がありました。\n\n` +
+  const body = `${senderLabel_(session)} から更新がありました。\n\n` +
                `管理番号: ${kanri}\nChallenge No: ${chgNo}\n新郎: ${groom}\n新婦: ${bride}\n\n` +
                `--- ${kind} ---\n${message}\n\n` +
                `ポータルで確認する: (Webアプリのデプロイ後のURLをここに記載してください)`;
