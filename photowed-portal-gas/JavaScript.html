@@ -8,7 +8,7 @@
   const BILLING_REGIONS = ['北海道', '東北', '関東', '中部', '関西', '中四国', '九州'];
   // 支店側がSTS(支店側)を編集できる条件。キー＝対になるSTS(JP側)の現在値。
   // null=制限なし／配列=その中からのみ／キーなし=支店側は編集不可
-  const BRANCH_EDIT_GATE = { 'NC': null, 'RQ': null, 'CR': ['CW', 'CF'] };
+  const BRANCH_EDIT_GATE = { 'NC': null, 'RQ': null, 'CHK': null, 'CR': ['CW', 'CF'] };
 
   let session = null;
   let currentKanri = null;
@@ -16,7 +16,7 @@
   let searchScope = { showAll: true, teams: [], branches: [] };
   let branchesCache = [];      // 一覧/新規画面用（BRANCHロールのみに絞った支店一覧。JPログイン時に取得）
   let lastDashboardData = null; // キャンセル表示チェックボックスの再描画用にキャッシュ
-  let pendingStatusChanges = {}; // ステータス/オプションの「決定して送信」待ちの変更
+  let pendingChanges = {}; // 「保存のみ／メッセージのみ送信／変更＋メッセージ送信」待ちの変更（既存予約の全項目が対象）
 
   function gsRun(fnName, ...args) {
     return new Promise((resolve, reject) => {
@@ -280,7 +280,7 @@
 
   // ---------- 詳細 ----------
   async function openDetail(kanriNo) {
-    if (kanriNo !== currentKanri) pendingStatusChanges = {};
+    if (kanriNo !== currentKanri) pendingChanges = {};
     currentKanri = kanriNo;
     showView('detail');
     $('detail-content').innerHTML = '<p class="hint-text">読み込み中...</p>';
@@ -324,7 +324,7 @@
     const c = $('detail-content');
 
     const planNames = nameListWithCurrent(planList, d['プラン名']);
-    const planSelect = `<select data-field="プラン名"><option value="">未設定</option>${planNames.map(n =>
+    const planSelect = `<select data-pending="プラン名"><option value="">未設定</option>${planNames.map(n =>
       `<option value="${escapeAttr(n)}" ${n === d['プラン名'] ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}</select>`;
 
     const mainGate = branchGateFor(d['STS JP']);
@@ -354,7 +354,7 @@
         </div>
       </div>`).join('') || '<p class="hint-text">やり取りはまだありません。</p>';
 
-    const hasPending = Object.keys(pendingStatusChanges).length > 0;
+    const pendingCount = Object.keys(pendingChanges).length;
 
     c.innerHTML = `
       <div class="detail-header">
@@ -362,27 +362,27 @@
         <div class="kanri">${d.branchName}（${d['支店コード']}）${d.country ? ' ・ ' + d.country : ''}${d.city ? ' ／ ' + d.city : ''}</div>
         <div class="names">新郎: ${d['新郎名（ローマ字）'] || ''}<br>新婦: ${d['新婦名（ローマ字）'] || ''}</div>
         <div class="detail-grid">
-          <div class="field-block"><label>新郎名（ローマ字）</label><input data-field="新郎名（ローマ字）" value="${escapeAttr(d['新郎名（ローマ字）'])}"></div>
-          <div class="field-block"><label>新婦名（ローマ字）</label><input data-field="新婦名（ローマ字）" value="${escapeAttr(d['新婦名（ローマ字）'])}"></div>
-          <div class="field-block"><label>CHG NO</label><input data-field="CHG NO" value="${escapeAttr(d['CHG NO'])}"></div>
-          <div class="field-block"><label>撮影日FIX</label><input type="date" data-field="撮影日FIX" value="${escapeAttr(d['撮影日FIX'])}"></div>
-          <div class="field-block"><label>挙式日FIX</label><input type="date" data-field="挙式日FIX" value="${escapeAttr(d['挙式日FIX'])}"></div>
-          <div class="field-block"><label>希望日①</label><input data-field="希望日①" value="${escapeAttr(d['希望日①'])}"></div>
-          <div class="field-block"><label>希望日②</label><input data-field="希望日②" value="${escapeAttr(d['希望日②'])}"></div>
-          <div class="field-block"><label>希望日③</label><input data-field="希望日③" value="${escapeAttr(d['希望日③'])}"></div>
+          <div class="field-block"><label>新郎名（ローマ字）</label><input data-pending="新郎名（ローマ字）" value="${escapeAttr(d['新郎名（ローマ字）'])}"></div>
+          <div class="field-block"><label>新婦名（ローマ字）</label><input data-pending="新婦名（ローマ字）" value="${escapeAttr(d['新婦名（ローマ字）'])}"></div>
+          <div class="field-block"><label>CHG NO</label><input data-pending="CHG NO" value="${escapeAttr(d['CHG NO'])}"></div>
+          <div class="field-block"><label>撮影日FIX</label><input type="date" data-pending="撮影日FIX" value="${escapeAttr(d['撮影日FIX'])}"></div>
+          <div class="field-block"><label>挙式日FIX</label><input type="date" data-pending="挙式日FIX" value="${escapeAttr(d['挙式日FIX'])}"></div>
+          <div class="field-block"><label>希望日①</label><input data-pending="希望日①" value="${escapeAttr(d['希望日①'])}"></div>
+          <div class="field-block"><label>希望日②</label><input data-pending="希望日②" value="${escapeAttr(d['希望日②'])}"></div>
+          <div class="field-block"><label>希望日③</label><input data-pending="希望日③" value="${escapeAttr(d['希望日③'])}"></div>
           <div class="field-block"><label>プラン名（マスタから選択）</label>${planSelect}</div>
-          <div class="field-block"><label>撮影希望場所</label><input data-field="撮影希望場所" value="${escapeAttr(d['撮影希望場所'])}"></div>
-          <div class="field-block"><label>準備場所</label><input data-field="準備場所" value="${escapeAttr(d['準備場所'])}"></div>
-          <div class="field-block"><label>ホテル</label><input data-field="ホテル" value="${escapeAttr(d['ホテル'])}"></div>
+          <div class="field-block"><label>撮影希望場所</label><input data-pending="撮影希望場所" value="${escapeAttr(d['撮影希望場所'])}"></div>
+          <div class="field-block"><label>準備場所</label><input data-pending="準備場所" value="${escapeAttr(d['準備場所'])}"></div>
+          <div class="field-block"><label>ホテル</label><input data-pending="ホテル" value="${escapeAttr(d['ホテル'])}"></div>
           <div class="field-block"><label>管轄</label>
-            <select data-field="管轄"><option value="">未定</option>${JP_TEAMS.map(t => `<option value="${t}" ${d['管轄'] === t ? 'selected' : ''}>${t}</option>`).join('')}</select>
+            <select data-pending="管轄"><option value="">未定</option>${JP_TEAMS.map(t => `<option value="${t}" ${d['管轄'] === t ? 'selected' : ''}>${t}</option>`).join('')}</select>
           </div>
           <div class="field-block"><label>請求先</label>
-            <select data-field="請求先"><option value="">未設定</option>${BILLING_REGIONS.map(r => `<option value="${r}" ${d['請求先'] === r ? 'selected' : ''}>${r}</option>`).join('')}</select>
+            <select data-pending="請求先"><option value="">未設定</option>${BILLING_REGIONS.map(r => `<option value="${r}" ${d['請求先'] === r ? 'selected' : ''}>${r}</option>`).join('')}</select>
           </div>
-          <div class="field-block"><label>日本支店名</label><input data-field="日本支店名" value="${escapeAttr(d['日本支店名'])}" placeholder="例）新宿西口店"></div>
-          <div class="field-block"><label>店舗／担当（現地）</label><input data-field="店舗／担当（現地）" value="${escapeAttr(d['店舗／担当（現地）'])}"></div>
-          <div class="field-block" style="grid-column:1/-1;"><label>備考</label><input data-field="備考" value="${escapeAttr(d['備考'])}"></div>
+          <div class="field-block"><label>日本支店名</label><input data-pending="日本支店名" value="${escapeAttr(d['日本支店名'])}" placeholder="例）新宿西口店"></div>
+          <div class="field-block"><label>店舗／担当（現地）</label><input data-pending="店舗／担当（現地）" value="${escapeAttr(d['店舗／担当（現地）'])}"></div>
+          <div class="field-block" style="grid-column:1/-1;"><label>備考</label><input data-pending="備考" value="${escapeAttr(d['備考'])}"></div>
         </div>
       </div>
 
@@ -394,13 +394,11 @@
         </div>
         <h3>オプション（最大5件）</h3>
         ${optionsHtml}
-        <button class="send-btn ${hasPending ? '' : 'hidden'}" id="commit-status-btn" style="width:100%;margin-top:10px;">変更を決定して送信</button>
-        <p class="hint-text" style="margin-top:6px;">※ステータス・オプションの変更は「決定して送信」を押すまで相手に反映されません。日本側はSTS 支店を、支店側はSTS JPを直接変更することはできません（STS JPがNC/RQのとき支店側は自由に、CRのときはCW/CFのみ選べます）。</p>
       </div>
 
       <div class="section-card">
         <h3>共有メモ（支店・日本側どちらも自由に書けます）</h3>
-        <textarea data-field="共有メモ" rows="4" placeholder="社内向けの自由メモ">${escapeHtml(d['共有メモ'])}</textarea>
+        <textarea data-pending="共有メモ" rows="4" placeholder="社内向けの自由メモ">${escapeHtml(d['共有メモ'])}</textarea>
       </div>
 
       <div class="section-card">
@@ -412,9 +410,20 @@
       </div>
 
       <div class="section-card">
-        <h3>メッセージを送る（${session.role === 'JP' ? '日本 → 支店' : '支店 → 日本'}）</h3>
-        <div class="msg-row"><textarea id="msg-input" placeholder="メッセージを入力"></textarea></div>
-        <button class="send-btn" id="msg-submit" style="margin-top:8px;width:100%;">送信</button>
+        <h3>メッセージ・変更の送信</h3>
+        <p id="pending-indicator" class="hint-text ${pendingCount ? '' : 'hidden'}">未保存の変更: ${pendingCount}件</p>
+        <div class="msg-row"><textarea id="msg-input" placeholder="メッセージ（任意）"></textarea></div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px;">
+          <button class="send-btn" id="btn-msg-only" style="width:100%;">メッセージのみ送信</button>
+          <button class="send-btn" id="btn-commit" style="width:100%;">変更（＋メッセージ）を決定して送信</button>
+          <button class="send-btn" id="btn-save-quiet" style="width:100%;background:var(--color-muted);">保存のみ（通知しない）</button>
+        </div>
+        <p class="hint-text" style="margin-top:8px;">
+          方向: ${session.role === 'JP' ? '日本 → 支店' : '支店 → 日本'}。
+          「メッセージのみ送信」はメッセージだけを、「変更（＋メッセージ）を決定して送信」は入力中の全ての変更（ステータス・オプション含む）とメッセージをまとめて相手へ通知します。
+          「保存のみ」は通知せずに変更を保存します（共有メモなど相手に知らせる必要がない変更向け）。
+          日本側はSTS 支店を、支店側はSTS JPを直接変更できません（STS JPがNC/RQ/CHKのとき支店側は自由に、CRのときはCW/CFのみ選べます）。
+        </p>
       </div>
 
       <div class="section-card">
@@ -423,23 +432,27 @@
       </div>
     `;
 
-    c.querySelectorAll('[data-field]').forEach(el => {
-      el.addEventListener('change', () => updateField(el.dataset.field, el.value));
-    });
     c.querySelectorAll('[data-pending]').forEach(el => {
       el.addEventListener('change', () => {
-        pendingStatusChanges[el.dataset.pending] = el.value;
-        const btn = $('commit-status-btn');
-        if (btn) btn.classList.remove('hidden');
+        pendingChanges[el.dataset.pending] = el.value;
+        updatePendingIndicator();
       });
     });
-    const commitBtn = $('commit-status-btn');
-    if (commitBtn) commitBtn.addEventListener('click', commitStatusChanges);
+    $('btn-msg-only').addEventListener('click', sendMessageOnly);
+    $('btn-commit').addEventListener('click', commitChangesWithMessage);
+    $('btn-save-quiet').addEventListener('click', saveQuiet);
     $('drive-url-submit').addEventListener('click', submitDriveUrl);
-    $('msg-submit').addEventListener('click', submitMessage);
     c.querySelectorAll('input[data-hid]').forEach(el => {
       el.addEventListener('change', () => toggleHistoryCheck(el.dataset.hid, el.checked));
     });
+  }
+
+  function updatePendingIndicator() {
+    const el = $('pending-indicator');
+    if (!el) return;
+    const n = Object.keys(pendingChanges).length;
+    el.textContent = `未保存の変更: ${n}件`;
+    el.classList.toggle('hidden', n === 0);
   }
 
   function escapeHtml(s) {
@@ -447,29 +460,37 @@
   }
   function escapeAttr(s) { return escapeHtml(s); }
 
-  async function updateField(field, value) {
+  // メッセージのみ送信（保留中の変更フィールドはそのまま残る＝未保存のまま）
+  async function sendMessageOnly() {
+    const msg = $('msg-input').value.trim();
+    if (!msg) { showToast('メッセージを入力してください'); return; }
     try {
-      await gsRun('apiUpdateField', session.token, currentKanri, field, value);
-      showToast(`${field} を更新しました`);
-    } catch (e) { handleAuthError(e); }
-  }
-
-  async function commitStatusChanges() {
-    if (Object.keys(pendingStatusChanges).length === 0) return;
-    try {
-      const res = await gsRun('apiCommitStatusChanges', session.token, currentKanri, pendingStatusChanges);
-      pendingStatusChanges = {};
-      showToast(res.noChange ? '変更はありませんでした' : 'ステータスの変更を決定し、相手へ通知しました');
+      await gsRun('apiCommitChanges', session.token, currentKanri, {}, msg);
+      showToast('メッセージを送信しました');
+      $('msg-input').value = '';
       openDetail(currentKanri);
     } catch (e) { handleAuthError(e); }
   }
 
-  async function submitMessage() {
-    const val = $('msg-input').value.trim();
-    if (!val) return;
+  // 変更内容（＋任意でメッセージ）をまとめて決定・送信
+  async function commitChangesWithMessage() {
+    if (Object.keys(pendingChanges).length === 0) { showToast('変更内容がありません'); return; }
+    const msg = $('msg-input').value.trim();
     try {
-      await gsRun('apiSendMessage', session.token, currentKanri, val);
-      showToast('メッセージを送信しました');
+      const res = await gsRun('apiCommitChanges', session.token, currentKanri, pendingChanges, msg);
+      pendingChanges = {};
+      showToast(res.noChange ? '変更はありませんでした' : '変更を決定し、相手へ通知しました');
+      openDetail(currentKanri);
+    } catch (e) { handleAuthError(e); }
+  }
+
+  // 保存のみ（通知しない）
+  async function saveQuiet() {
+    if (Object.keys(pendingChanges).length === 0) { showToast('保存する変更がありません'); return; }
+    try {
+      await gsRun('apiSaveFieldsQuiet', session.token, currentKanri, pendingChanges);
+      pendingChanges = {};
+      showToast('変更を保存しました（通知は送信していません）');
       openDetail(currentKanri);
     } catch (e) { handleAuthError(e); }
   }

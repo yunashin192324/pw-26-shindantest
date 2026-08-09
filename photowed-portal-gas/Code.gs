@@ -43,10 +43,15 @@ const ALERT_DAYS_BEFORE = 40;
 
 // --- 支店側がSTS(支店側)を編集してよい条件（キー＝対になるSTS(JP側)の現在値） ---
 // null = 値の制限なし（STATUS_CODESから自由に選べる）／配列 = その中からのみ選べる／
-// キーが存在しない値（OK,CHK,FN,CW,UC,CFなど）のときは支店側は編集不可（ロック）
+// キーが存在しない値（OK,FN,CW,UC,CFなど）のときは支店側は編集不可（ロック）
+//  - NC/RQ/CHK：日本側からの依頼待ち・確認依頼中の状態。支店側は自由に回答できる
+//    （空きがなければ UC＝空きなし、を含めどのコードでも返せる）
+//  - CR：日本側が既存予約のキャンセルを依頼した状態。支店側は CW（チャージなしで取消）か
+//    CF（キャンセルチャージが発生）のいずれかで回答する
 const BRANCH_EDIT_GATE = {
   'NC': null,
   'RQ': null,
+  'CHK': null,
   'CR': ['CW', 'CF']
 };
 // 請求先（日本の地域区分）
@@ -97,24 +102,25 @@ const RESERVATION_HEADERS = (() => {
   return base;
 })();
 
-// STS(JP側)・STS(支店側)・オプション欄は、通常のフィールド更新(apiUpdateField)ではなく
-// 専用の決定フロー(apiCommitStatusChanges)でのみ変更できる（②相手への通知を確実に飛ばすため）
+// STS(JP側)・STS(支店側)・オプション欄は、日本側／支店側のどちらが書けるか・どの値まで選べるかに
+// 追加の検証（役割チェック・BRANCH_EDIT_GATE）が必要なフィールド
 const STATUS_COMMIT_FIELDS = (() => {
   const list = [COL_STATUS_JP, COL_STATUS_BRANCH];
   for (let n = 1; n <= OPTION_COUNT; n++) list.push(opNameCol_(n), opStsJpCol_(n), opStsBranchCol_(n));
   return list;
 })();
 
-// 支店・JPのどちらも編集してよい運用系フィールド（システム列・ステータス系の列は除く）
-const EDITABLE_FIELDS = RESERVATION_HEADERS.filter(h => ![
-  COL_BRANCH_CODE, COL_KANRI_NO, COL_LAST_UPDATED, COL_DRIVE_URL, ...STATUS_COMMIT_FIELDS
+// ★要件：既存予約の中の項目は「その場で自動保存」ではなく、まとめて
+// （a）保存のみ（通知しない）／（b）メッセージのみ送信／（c）変更内容＋メッセージを送信
+// のいずれかを選んで確定する。COMMITTABLE_FIELDS はその対象となる全フィールド
+// （システム列・DriveフォルダURLは専用フローがあるため除く）。
+const COMMITTABLE_FIELDS = RESERVATION_HEADERS.filter(h => ![
+  COL_BRANCH_CODE, COL_KANRI_NO, COL_LAST_UPDATED, COL_DRIVE_URL
 ].includes(h));
 
 // 日付として保存すべきフィールド（<input type="date">で受け渡しし、実Dateとして保存する）
 // checkAlerts/archivePastReservations/sortReservationSheet_ は撮影日FIXがDate型であることを前提にしている
 const DATE_FIELDS = [COL_CONFIRMED_DATE, COL_CEREMONY_DATE];
-// 変更時に自動で履歴ログ＋通知を残す日付フィールド
-const AUTO_LOG_DATE_FIELDS = [COL_CONFIRMED_DATE, COL_CEREMONY_DATE];
 
 // --- 支店マスタの列定義 ---
 const BM_COL_CODE = '支店コード';
@@ -645,19 +651,19 @@ function findReservationRow_(kanriNo) {
 }
 
 // =====================================================
-// ⑦ フィールド更新（ステータス・撮影日・挙式日・ホテル・共有メモ等）
+// ⑦ 予約フィールドの変更
 // =====================================================
-function apiUpdateField(token, kanriNo, fieldName, value) {
+// 既存予約内の項目（ステータス・撮影日・ホテル・共有メモ…ほぼ全項目）は、その場で自動保存せず、
+// まとめて次の3通りのいずれかで確定する：
+//   (a) apiSaveFieldsQuiet   … 保存のみ（履歴・メール通知なし）
+//   (b) apiCommitChanges（changes空）… メッセージのみ送信
+//   (c) apiCommitChanges（changes＋message）… 変更内容とメッセージをまとめて1回で相手に通知
+// changes は { フィールド名: 新しい値 } の集合（例: { "STS JP": "RQ", "OP3": "ドローン撮影" }）。
+
+// (a) 保存のみ：通知（履歴・メール）を発生させずに保存する
+function apiSaveFieldsQuiet(token, kanriNo, changes) {
   const session = requireSession_(token);
-  if (!EDITABLE_FIELDS.includes(fieldName)) {
-    throw new Error(`「${fieldName}」はこの方法では編集できません（ステータス系の項目は「変更を決定して送信」から操作してください）。`);
-  }
-  if (fieldName === COL_AREA && value && !JP_TEAMS.includes(value)) {
-    throw new Error(`管轄は ${JP_TEAMS.join('/')} のいずれかにしてください。`);
-  }
-  if (fieldName === COL_BILLING_REGION && value && !BILLING_REGIONS.includes(value)) {
-    throw new Error(`請求先は ${BILLING_REGIONS.join('/')} のいずれかにしてください。`);
-  }
+  if (!changes || Object.keys(changes).length === 0) throw new Error('保存する変更がありません。');
 
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
@@ -666,44 +672,26 @@ function apiUpdateField(token, kanriNo, fieldName, value) {
     if (rowIndex === -1) throw new Error('対象の予約が見つかりません。');
     assertRowVisible_(session, headers, rowData);
 
-    const isDateField = DATE_FIELDS.includes(fieldName);
-    const oldValue = rowData[headers.indexOf(fieldName)];
-    const oldDisplay = isDateField ? formatMaybeDate_(oldValue) : oldValue;
-    const valueToStore = isDateField ? parseDateFromInput_(value) : value;
-
-    const colIdx = headers.indexOf(fieldName) + 1;
-    sheet.getRange(rowIndex, colIdx).setValue(valueToStore);
+    const writes = Object.keys(changes).map(field => prepareFieldWrite_(session, headers, rowData, field, changes[field]));
+    writes.forEach(w => sheet.getRange(rowIndex, w.colIdx).setValue(w.valueToStore));
     sheet.getRange(rowIndex, headers.indexOf(COL_LAST_UPDATED) + 1).setValue(new Date());
 
-    if (fieldName === COL_CONFIRMED_DATE) {
-      sortReservationSheet_(sheet);
-    }
-
-    // ★要件：日付変更時は自動で履歴に変更ログを残し、双方に通知する
-    if (AUTO_LOG_DATE_FIELDS.includes(fieldName)) {
-      const newDisplay = formatMaybeDate_(valueToStore) || '未定';
-      if (String(oldDisplay || '未定') !== String(newDisplay)) {
-        const freshRow = sheet.getRange(rowIndex, 1, 1, headers.length).getValues()[0];
-        const msg = `[${fieldName}を変更]\n${oldDisplay || '未定'} → ${newDisplay}`;
-        appendHistory_(headers, freshRow, `${session.branchName}（${session.role === JP_ROLE ? session.team + '手配課' : '支店'}）`, msg);
-        sendDirectionalMail_(headers, freshRow, 'BOTH', session, msg, `${fieldName}変更`);
-      }
-    }
+    if (Object.keys(changes).includes(COL_CONFIRMED_DATE)) sortReservationSheet_(sheet);
   } finally {
     lock.releaseLock();
   }
   return { ok: true };
 }
 
-// =====================================================
-// ⑦-B ステータス変更の決定（STS JP／STS 支店／オプション欄。まとめて1回で相手に通知する）
-// =====================================================
-// changes: { "STS JP": "RQ", "OP3": "ドローン撮影", "OP3 STS JP": "RQ", ... } のような { フィールド名: 新しい値 } の集合。
-// 個々のフィールドをapiUpdateFieldのように即時保存せず、ここでまとめて検証・保存し、
-// 「決定して送信」ボタン1回につき履歴ログ1件・通知メール1通にまとめる。
-function apiCommitStatusChanges(token, kanriNo, changes) {
+// (b)/(c) メッセージのみ、または「変更内容＋メッセージ」をまとめて1回で相手に通知する。
+// changesが空ならメッセージのみの送信として扱う（履歴1件・メール1通）。
+function apiCommitChanges(token, kanriNo, changes, message) {
   const session = requireSession_(token);
-  if (!changes || Object.keys(changes).length === 0) throw new Error('変更内容がありません。');
+  changes = changes || {};
+  message = String(message || '').trim();
+  if (Object.keys(changes).length === 0 && !message) {
+    throw new Error('送信するメッセージまたは変更内容がありません。');
+  }
 
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
@@ -714,55 +702,86 @@ function apiCommitStatusChanges(token, kanriNo, changes) {
 
     const summaryLines = [];
     const writes = [];
+    let dateChanged = false;
 
     Object.keys(changes).forEach(field => {
-      if (!STATUS_COMMIT_FIELDS.includes(field)) {
-        throw new Error(`「${field}」はこの方法では変更できません。`);
-      }
-      const value = changes[field];
-      const colIdx = headers.indexOf(field);
-      const oldValue = rowData[colIdx] || '';
-
-      if (isJpStatusField_(field)) {
-        if (session.role !== JP_ROLE) throw new Error(`「${field}」は日本側のみ変更できます。`);
-        if (value && !STATUS_CODES.includes(value)) throw new Error(`STSの値は ${STATUS_CODES.join('/')} のいずれかにしてください。`);
-      } else if (isBranchStatusField_(field)) {
-        if (session.role !== BRANCH_ROLE) throw new Error(`「${field}」は支店側のみ変更できます。`);
-        const pairedField = pairedJpFieldFor_(field);
-        const pairedValue = pairedField ? (rowData[headers.indexOf(pairedField)] || '') : '';
-        if (!(pairedValue in BRANCH_EDIT_GATE)) {
-          throw new Error(`現在の${pairedField}（${pairedValue || '未設定'}）の状態では「${field}」は変更できません。`);
-        }
-        const allowed = BRANCH_EDIT_GATE[pairedValue];
-        if (allowed !== null && value && !allowed.includes(value)) {
-          throw new Error(`${pairedField}が${pairedValue}のときは「${field}」は ${allowed.join('/')} のいずれかにしてください。`);
-        }
-        if (value && !STATUS_CODES.includes(value)) throw new Error(`STSの値は ${STATUS_CODES.join('/')} のいずれかにしてください。`);
-      }
-      // オプション名(OPn)欄はどちらの役割でも変更可（ステータスではなく単なるラベルのため）
-
-      if (String(oldValue) !== String(value || '')) {
-        summaryLines.push(`${field}: ${oldValue || '(未設定)'} → ${value || '(未設定)'}`);
-      }
-      writes.push({ colIdx: colIdx + 1, value: value || '' });
+      const prepared = prepareFieldWrite_(session, headers, rowData, field, changes[field]);
+      if (prepared.changed) summaryLines.push(prepared.summaryLine);
+      writes.push(prepared);
+      if (field === COL_CONFIRMED_DATE) dateChanged = true;
     });
 
-    if (summaryLines.length === 0) {
+    if (summaryLines.length === 0 && !message) {
       return { ok: true, noChange: true };
     }
 
-    writes.forEach(w => sheet.getRange(rowIndex, w.colIdx).setValue(w.value));
-    sheet.getRange(rowIndex, headers.indexOf(COL_LAST_UPDATED) + 1).setValue(new Date());
+    if (writes.length > 0) {
+      writes.forEach(w => sheet.getRange(rowIndex, w.colIdx).setValue(w.valueToStore));
+      sheet.getRange(rowIndex, headers.indexOf(COL_LAST_UPDATED) + 1).setValue(new Date());
+    }
+    if (dateChanged) sortReservationSheet_(sheet);
 
     const freshRow = sheet.getRange(rowIndex, 1, 1, headers.length).getValues()[0];
-    const msg = `[ステータス変更]\n${summaryLines.join('\n')}`;
+    const bodyParts = [];
+    if (summaryLines.length > 0) bodyParts.push(`[変更内容]\n${summaryLines.join('\n')}`);
+    if (message) bodyParts.push(`[メッセージ]\n${message}`);
+    const body = bodyParts.join('\n\n');
     const direction = session.role === JP_ROLE ? 'JP_TO_BRANCH' : 'BRANCH_TO_JP';
-    appendHistory_(headers, freshRow, session.branchName, msg);
-    sendDirectionalMail_(headers, freshRow, direction, session, msg, 'ステータス変更');
+    const kind = summaryLines.length > 0 && message ? '変更＋メッセージ' : (summaryLines.length > 0 ? '変更内容' : 'メッセージ');
+
+    appendHistory_(headers, freshRow, session.branchName, body);
+    sendDirectionalMail_(headers, freshRow, direction, session, body, kind);
   } finally {
     lock.releaseLock();
   }
   return { ok: true };
+}
+
+// 1フィールド分の検証・保存準備（役割チェック・STSゲート・列挙値チェック・日付変換）を共通化したもの
+function prepareFieldWrite_(session, headers, rowData, field, value) {
+  if (!COMMITTABLE_FIELDS.includes(field)) {
+    throw new Error(`「${field}」はこの方法では変更できません。`);
+  }
+  validateFieldPermission_(session, headers, rowData, field, value);
+
+  const colIdx = headers.indexOf(field);
+  const isDateField = DATE_FIELDS.includes(field);
+  const rawOld = rowData[colIdx];
+  const oldDisplay = isDateField ? (formatMaybeDate_(rawOld) || '未定') : (rawOld || '(未設定)');
+  const valueToStore = isDateField ? parseDateFromInput_(value) : (value || '');
+  const newDisplay = isDateField ? (formatMaybeDate_(valueToStore) || '未定') : (valueToStore || '(未設定)');
+  const changed = isDateField ? (oldDisplay !== newDisplay) : (String(rawOld || '') !== String(valueToStore));
+
+  return { colIdx: colIdx + 1, valueToStore, changed, summaryLine: `${field}: ${oldDisplay} → ${newDisplay}` };
+}
+
+function validateFieldPermission_(session, headers, rowData, field, value) {
+  if (isJpStatusField_(field)) {
+    if (session.role !== JP_ROLE) throw new Error(`「${field}」は日本側のみ変更できます。`);
+    if (value && !STATUS_CODES.includes(value)) throw new Error(`STSの値は ${STATUS_CODES.join('/')} のいずれかにしてください。`);
+    return;
+  }
+  if (isBranchStatusField_(field)) {
+    if (session.role !== BRANCH_ROLE) throw new Error(`「${field}」は支店側のみ変更できます。`);
+    const pairedField = pairedJpFieldFor_(field);
+    const pairedValue = pairedField ? (rowData[headers.indexOf(pairedField)] || '') : '';
+    if (!(pairedValue in BRANCH_EDIT_GATE)) {
+      throw new Error(`現在の${pairedField}（${pairedValue || '未設定'}）の状態では「${field}」は変更できません。`);
+    }
+    const allowed = BRANCH_EDIT_GATE[pairedValue];
+    if (allowed !== null && value && !allowed.includes(value)) {
+      throw new Error(`${pairedField}が${pairedValue}のときは「${field}」は ${allowed.join('/')} のいずれかにしてください。`);
+    }
+    if (value && !STATUS_CODES.includes(value)) throw new Error(`STSの値は ${STATUS_CODES.join('/')} のいずれかにしてください。`);
+    return;
+  }
+  // オプション名(OPn)欄はどちらの役割でも変更可（ステータスではなく単なるラベルのため）
+  if (field === COL_AREA && value && !JP_TEAMS.includes(value)) {
+    throw new Error(`管轄は ${JP_TEAMS.join('/')} のいずれかにしてください。`);
+  }
+  if (field === COL_BILLING_REGION && value && !BILLING_REGIONS.includes(value)) {
+    throw new Error(`請求先は ${BILLING_REGIONS.join('/')} のいずれかにしてください。`);
+  }
 }
 
 function isJpStatusField_(field) {
@@ -777,32 +796,8 @@ function pairedJpFieldFor_(field) {
   return m ? `${m[1]} STS JP` : null;
 }
 
-// =====================================================
-// ⑧ メッセージ送信（JP⇔支店・双方向。履歴に直接記録する）
-// =====================================================
-function apiSendMessage(token, kanriNo, message) {
-  const session = requireSession_(token);
-  if (!message || !String(message).trim()) throw new Error('メッセージが空です。');
-
-  const lock = LockService.getScriptLock();
-  if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
-  try {
-    const { sheet, headers, rowIndex, rowData } = findReservationRow_(kanriNo);
-    if (rowIndex === -1) throw new Error('対象の予約が見つかりません。');
-    assertRowVisible_(session, headers, rowData);
-
-    sheet.getRange(rowIndex, headers.indexOf(COL_LAST_UPDATED) + 1).setValue(new Date());
-    const freshRow = sheet.getRange(rowIndex, 1, 1, headers.length).getValues()[0];
-
-    const direction = session.role === JP_ROLE ? 'JP_TO_BRANCH' : 'BRANCH_TO_JP';
-    const senderLabel = session.role === JP_ROLE ? `${session.branchName}` : session.branchName;
-    appendHistory_(headers, freshRow, senderLabel, `[${direction === 'JP_TO_BRANCH' ? '日本→支店' : '支店→日本'}]\n${message}`);
-    sendDirectionalMail_(headers, freshRow, direction, session, message, 'メッセージ');
-  } finally {
-    lock.releaseLock();
-  }
-  return { ok: true };
-}
+// メッセージ単体の送信は apiCommitChanges(token, kanriNo, {}, message) を使う
+// （「メッセージのみ送信」「変更内容＋メッセージを送信」「保存のみ」の3択を1つのAPI体系に統一するため）
 
 // =====================================================
 // ⑨ DriveフォルダURL通知
