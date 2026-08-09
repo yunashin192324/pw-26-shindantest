@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <?!= include('Stylesheet'); ?>
+</head>
+<body>
+  <div id="app">
+    <header id="app-header" class="app-header hidden">
+      <div class="header-left">
+        <span class="brand">📸 PhotoWED</span>
+        <span id="branch-badge" class="badge"></span>
+      </div>
+      <nav class="header-nav">
+        <button id="nav-dashboard" class="nav-btn">案件一覧</button>
+        <button id="nav-new" class="nav-btn">＋新規案件</button>
+        <button id="nav-branches" class="nav-btn hq-only hidden">支店管理</button>
+        <button id="nav-logout" class="nav-btn nav-logout">ログアウト</button>
+      </nav>
+    </header>
+
+    <main id="app-main" class="app-main">
+      <!-- ログイン画面 -->
+      <section id="view-login" class="view">
+        <div class="login-card">
+          <div class="login-logo">📸<br>PhotoWED 支店ポータル</div>
+          <p class="login-desc">支店コードとログインパスコードを入力してください。</p>
+          <label>支店コード</label>
+          <input id="login-branchcode" type="text" placeholder="例）VIE / IST / ROW / HQ" autocapitalize="characters">
+          <label>ログインパスコード</label>
+          <input id="login-passcode" type="password" placeholder="パスコード">
+          <button id="login-submit" class="primary-btn">ログイン</button>
+          <p id="login-error" class="error-text hidden"></p>
+        </div>
+      </section>
+
+      <!-- ダッシュボード -->
+      <section id="view-dashboard" class="view hidden">
+        <div class="view-toolbar">
+          <h2 id="dashboard-title">案件一覧</h2>
+          <select id="branch-filter" class="hq-only hidden"></select>
+        </div>
+        <div id="reservation-list" class="card-list"></div>
+        <p id="dashboard-empty" class="empty-text hidden">案件がありません。</p>
+      </section>
+
+      <!-- 案件詳細 -->
+      <section id="view-detail" class="view hidden">
+        <button id="detail-back" class="link-btn">← 一覧へ戻る</button>
+        <div id="detail-content"></div>
+      </section>
+
+      <!-- 新規案件作成 -->
+      <section id="view-new" class="view hidden">
+        <h2>新規案件作成</h2>
+        <label class="hq-only hidden">対象支店</label>
+        <select id="new-branch" class="hq-only hidden"></select>
+        <label>手配依頼テキストを貼り付け（自動解析）</label>
+        <textarea id="new-rawtext" rows="8" placeholder="日本側から届いた手配依頼テキストをそのまま貼り付けてください"></textarea>
+        <button id="new-submit" class="primary-btn">解析して作成</button>
+        <p id="new-error" class="error-text hidden"></p>
+        <p id="new-success" class="success-text hidden"></p>
+      </section>
+
+      <!-- 支店管理（HQのみ） -->
+      <section id="view-branches" class="view hidden">
+        <h2>支店管理</h2>
+        <p class="hint-text">支店を追加してもコードの変更・再デプロイは不要です。ここで1行追加するだけで、その支店はすぐにログインして利用できます。</p>
+        <div id="branch-list" class="card-list"></div>
+        <h3>支店を追加／編集</h3>
+        <label>支店コード</label>
+        <input id="bm-code" type="text" placeholder="例）VIE">
+        <label>支店名</label>
+        <input id="bm-name" type="text" placeholder="例）ウィーン支店">
+        <label>ロール</label>
+        <select id="bm-role">
+          <option value="BRANCH">支店</option>
+          <option value="HQ">HQ（日本手配課）</option>
+        </select>
+        <label>ログインパスコード</label>
+        <input id="bm-passcode" type="text" placeholder="共有する合言葉">
+        <label>通知先メール（カンマ区切り可）</label>
+        <input id="bm-email" type="text" placeholder="branch@example.com">
+        <label class="checkbox-label"><input id="bm-active" type="checkbox" checked> 有効にする</label>
+        <button id="bm-submit" class="primary-btn">保存</button>
+        <p id="bm-error" class="error-text hidden"></p>
+        <p id="bm-success" class="success-text hidden"></p>
+      </section>
+    </main>
+
+    <div id="toast" class="toast hidden"></div>
+  </div>
+
+  <?!= include('JavaScript'); ?>
+</body>
+</html>

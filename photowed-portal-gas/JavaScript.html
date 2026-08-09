@@ -1,0 +1,375 @@
+<script>
+  // =====================================================
+  // PhotoWED 支店ポータル クライアントロジック
+  // =====================================================
+  const STORAGE_KEY = 'photowed_session';
+  let session = null;
+  let currentKanri = null;
+  let dashboardCache = null;
+
+  function gsRun(fnName, ...args) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(err => reject(err))
+        [fnName](...args);
+    });
+  }
+
+  function $(id) { return document.getElementById(id); }
+
+  function showToast(msg) {
+    const t = $('toast');
+    t.textContent = msg;
+    t.classList.remove('hidden');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(() => t.classList.add('hidden'), 2600);
+  }
+
+  function showView(name) {
+    document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
+    $('view-' + name).classList.remove('hidden');
+  }
+
+  function applyRoleUI() {
+    const isHq = session && session.role === 'HQ';
+    document.querySelectorAll('.hq-only').forEach(el => el.classList.toggle('hidden', !isHq));
+    $('branch-badge').textContent = session ? `${session.branchName}（${isHq ? 'HQ' : session.branchCode}）` : '';
+  }
+
+  // ---------- 起動 ----------
+  window.addEventListener('DOMContentLoaded', () => {
+    bindEvents();
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      session = JSON.parse(saved);
+      afterLogin();
+    } else {
+      showView('login');
+    }
+  });
+
+  function bindEvents() {
+    $('login-submit').addEventListener('click', doLogin);
+    $('nav-dashboard').addEventListener('click', () => loadDashboard());
+    $('nav-new').addEventListener('click', openNewView);
+    $('nav-branches').addEventListener('click', openBranchesView);
+    $('nav-logout').addEventListener('click', doLogout);
+    $('detail-back').addEventListener('click', () => loadDashboard());
+    $('branch-filter').addEventListener('change', () => loadDashboard($('branch-filter').value));
+    $('new-submit').addEventListener('click', submitNewReservation);
+    $('bm-submit').addEventListener('click', submitBranch);
+  }
+
+  // ---------- ログイン ----------
+  async function doLogin() {
+    const branchCode = $('login-branchcode').value.trim();
+    const passcode = $('login-passcode').value;
+    $('login-error').classList.add('hidden');
+    if (!branchCode || !passcode) return;
+    $('login-submit').disabled = true;
+    try {
+      const res = await gsRun('apiLogin', branchCode, passcode);
+      if (!res.ok) {
+        $('login-error').textContent = res.error;
+        $('login-error').classList.remove('hidden');
+        return;
+      }
+      session = res.session;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+      afterLogin();
+    } catch (e) {
+      $('login-error').textContent = 'ログインに失敗しました：' + e.message;
+      $('login-error').classList.remove('hidden');
+    } finally {
+      $('login-submit').disabled = false;
+    }
+  }
+
+  function doLogout() {
+    if (session) gsRun('apiLogout', session.token).catch(() => {});
+    localStorage.removeItem(STORAGE_KEY);
+    session = null;
+    $('app-header').classList.add('hidden');
+    $('login-branchcode').value = '';
+    $('login-passcode').value = '';
+    showView('login');
+  }
+
+  function afterLogin() {
+    $('app-header').classList.remove('hidden');
+    applyRoleUI();
+    loadDashboard();
+  }
+
+  function handleAuthError(e) {
+    showToast(e.message || '通信エラーが発生しました');
+    if (String(e.message || '').includes('セッション')) doLogout();
+  }
+
+  // ---------- ダッシュボード ----------
+  async function loadDashboard(filterBranchCode) {
+    showView('dashboard');
+    try {
+      const data = await gsRun('apiGetDashboard', session.token, filterBranchCode || '');
+      dashboardCache = data;
+      renderDashboard(data);
+    } catch (e) { handleAuthError(e); }
+  }
+
+  function renderDashboard(data) {
+    $('dashboard-title').textContent = data.role === 'HQ' ? '案件一覧（全支店）' : `案件一覧（${data.branchName}）`;
+
+    if (data.role === 'HQ') {
+      const sel = $('branch-filter');
+      sel.classList.remove('hidden');
+      const current = sel.value;
+      sel.innerHTML = '<option value="">全支店</option>' +
+        data.branches.map(b => `<option value="${b.code}">${b.name}（${b.code}）</option>`).join('');
+      sel.value = current || '';
+    }
+
+    const list = $('reservation-list');
+    list.innerHTML = '';
+    $('dashboard-empty').classList.toggle('hidden', data.reservations.length > 0);
+
+    data.reservations.forEach(r => {
+      const card = document.createElement('div');
+      card.className = 'res-card';
+      card.innerHTML = `
+        <div class="res-card-top"><span>${r.kanriNo}</span><span>${r.confirmedDate || '撮影日未定'}</span></div>
+        <div class="res-card-names">${r.name01 || ''} ${r.name02 ? '／ ' + r.name02 : ''}</div>
+        <div class="res-card-bottom">
+          <span class="chip">${r.branchCode || ''}</span>
+          ${r.statusHq ? `<span class="chip hq">HQ: ${r.statusHq}</span>` : ''}
+          ${r.statusBranch ? `<span class="chip branch">支店: ${r.statusBranch}</span>` : ''}
+          ${r.plan ? `<span class="chip">${r.plan}</span>` : ''}
+        </div>`;
+      card.addEventListener('click', () => openDetail(r.kanriNo));
+      list.appendChild(card);
+    });
+  }
+
+  // ---------- 詳細 ----------
+  async function openDetail(kanriNo) {
+    currentKanri = kanriNo;
+    showView('detail');
+    $('detail-content').innerHTML = '<p class="hint-text">読み込み中...</p>';
+    try {
+      const res = await gsRun('apiGetReservationDetail', session.token, kanriNo);
+      renderDetail(res.detail);
+    } catch (e) { handleAuthError(e); }
+  }
+
+  function renderDetail(d) {
+    const c = $('detail-content');
+    const optionsHtml = d.options.map(o => `
+      <div class="option-row">
+        <span>${o.name}</span>
+        <span>HQ: ${o.stsHq || '-'} ／ 支店: ${o.stsBranch || '-'}</span>
+      </div>`).join('') || '<p class="hint-text">オプションなし</p>';
+
+    const historyHtml = d.history.map(h => `
+      <div class="history-item ${(!h.checkHq && !h.checkBranch) ? 'unread' : ''}">
+        <div class="history-meta"><span>${h.sender}</span><span>${h.datetime}</span></div>
+        <div class="history-body">${escapeHtml(h.body)}</div>
+        <div class="history-checks">
+          <label><input type="checkbox" data-hid="${h.id}" data-side="HQ" ${h.checkHq ? 'checked' : ''}> HQ確認</label>
+          <label><input type="checkbox" data-hid="${h.id}" data-side="BRANCH" ${h.checkBranch ? 'checked' : ''}> 支店確認</label>
+        </div>
+      </div>`).join('') || '<p class="hint-text">やり取りはまだありません。</p>';
+
+    c.innerHTML = `
+      <div class="detail-header">
+        <div class="kanri">${d.detail['管理番号']} ｜ CHG: ${d.detail['CHG NO'] || 'なし'} ｜ 支店: ${d.detail['支店コード']}</div>
+        <div class="names">${d.detail['お名前01'] || ''} ${d.detail['お名前02'] ? '／ ' + d.detail['お名前02'] : ''}</div>
+        <div class="detail-grid">
+          ${editableField('撮影日FIX', d.detail['撮影日FIX'], 'date')}
+          ${editableField('STS HQ', d.detail['STS HQ'])}
+          ${editableField('STS 支店', d.detail['STS 支店'])}
+          ${editableField('希望日①', d.detail['希望日①'], 'date')}
+          ${editableField('希望日②', d.detail['希望日②'], 'date')}
+          ${editableField('希望日③', d.detail['希望日③'], 'date')}
+          ${editableField('プラン名', d.detail['プラン名'])}
+          ${editableField('撮影希望場所', d.detail['撮影希望場所'])}
+          ${editableField('準備場所', d.detail['準備場所'])}
+          ${editableField('ホテル', d.detail['ホテル'])}
+          ${editableField('管轄', d.detail['管轄'])}
+          ${editableField('店舗／担当', d.detail['店舗／担当'])}
+          ${editableField('備考', d.detail['備考'])}
+        </div>
+      </div>
+
+      <div class="section-card">
+        <h3>オプション</h3>
+        ${optionsHtml}
+      </div>
+
+      <div class="section-card">
+        <h3>Driveフォルダ URL</h3>
+        <div class="msg-row">
+          <input id="drive-url-input" type="text" value="${escapeAttr(d.detail['DriveフォルダURL'] || '')}" placeholder="https://drive.google.com/...">
+          <button class="send-btn" id="drive-url-submit">保存</button>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <h3>メッセージを送る（${session.role === 'HQ' ? 'HQ → 支店' : '支店 → HQ'}）</h3>
+        <div class="msg-row">
+          <textarea id="msg-input" placeholder="メッセージを入力"></textarea>
+        </div>
+        <button class="send-btn" id="msg-submit" style="margin-top:8px;width:100%;">送信</button>
+      </div>
+
+      <div class="section-card">
+        <h3>やり取り履歴</h3>
+        ${historyHtml}
+      </div>
+    `;
+
+    c.querySelectorAll('.field-block input, .field-block select').forEach(el => {
+      el.addEventListener('change', () => updateField(el.dataset.field, el.value));
+    });
+    $('drive-url-submit').addEventListener('click', submitDriveUrl);
+    $('msg-submit').addEventListener('click', submitMessage);
+    c.querySelectorAll('input[data-hid]').forEach(el => {
+      el.addEventListener('change', () => toggleHistoryCheck(el.dataset.hid, el.checked));
+    });
+  }
+
+  function editableField(name, value, type) {
+    return `<div class="field-block"><label>${name}</label>
+      <input type="${type || 'text'}" data-field="${name}" value="${escapeAttr(value || '')}"></div>`;
+  }
+
+  function escapeHtml(s) {
+    return String(s || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+  function escapeAttr(s) { return escapeHtml(s); }
+
+  async function updateField(field, value) {
+    try {
+      await gsRun('apiUpdateField', session.token, currentKanri, field, value);
+      showToast(`${field} を更新しました`);
+    } catch (e) { handleAuthError(e); }
+  }
+
+  async function submitMessage() {
+    const val = $('msg-input').value.trim();
+    if (!val) return;
+    try {
+      await gsRun('apiSendMessage', session.token, currentKanri, val);
+      showToast('メッセージを送信しました');
+      openDetail(currentKanri);
+    } catch (e) { handleAuthError(e); }
+  }
+
+  async function submitDriveUrl() {
+    const val = $('drive-url-input').value.trim();
+    if (!val) return;
+    try {
+      await gsRun('apiSetDriveUrl', session.token, currentKanri, val);
+      showToast('DriveフォルダURLを通知しました');
+    } catch (e) { handleAuthError(e); }
+  }
+
+  async function toggleHistoryCheck(id, checked) {
+    try {
+      await gsRun('apiToggleHistoryCheck', session.token, id, checked);
+      openDetail(currentKanri);
+    } catch (e) { handleAuthError(e); }
+  }
+
+  // ---------- 新規案件 ----------
+  async function openNewView() {
+    showView('new');
+    $('new-error').classList.add('hidden');
+    $('new-success').classList.add('hidden');
+    $('new-rawtext').value = '';
+    if (session.role === 'HQ') {
+      const sel = $('new-branch');
+      if (!dashboardCache || !dashboardCache.branches) {
+        dashboardCache = await gsRun('apiGetDashboard', session.token, '');
+      }
+      sel.innerHTML = dashboardCache.branches
+        .filter(b => b.role !== 'HQ')
+        .map(b => `<option value="${b.code}">${b.name}（${b.code}）</option>`).join('');
+    }
+  }
+
+  async function submitNewReservation() {
+    const raw = $('new-rawtext').value.trim();
+    $('new-error').classList.add('hidden');
+    $('new-success').classList.add('hidden');
+    if (!raw) { showFieldError('new-error', '手配依頼テキストを貼り付けてください。'); return; }
+    const branchCode = session.role === 'HQ' ? $('new-branch').value : session.branchCode;
+    try {
+      const res = await gsRun('apiCreateReservation', session.token, branchCode, raw);
+      $('new-success').textContent = `案件 ${res.kanriNo} を作成しました。`;
+      $('new-success').classList.remove('hidden');
+      $('new-rawtext').value = '';
+    } catch (e) {
+      showFieldError('new-error', e.message);
+    }
+  }
+
+  function showFieldError(id, msg) {
+    $(id).textContent = msg;
+    $(id).classList.remove('hidden');
+  }
+
+  // ---------- 支店管理（HQ） ----------
+  async function openBranchesView() {
+    showView('branches');
+    try {
+      const branches = await gsRun('apiListBranches', session.token);
+      renderBranchList(branches);
+    } catch (e) { handleAuthError(e); }
+  }
+
+  function renderBranchList(branches) {
+    const list = $('branch-list');
+    list.innerHTML = branches.map(b => `
+      <div class="res-card" data-edit-code="${b.code}">
+        <div class="res-card-top"><span>${b.code}</span><span>${b.active ? '有効' : '無効'}</span></div>
+        <div class="res-card-names">${b.name}</div>
+        <div class="res-card-bottom">
+          <span class="chip ${b.role === 'HQ' ? 'hq' : 'branch'}">${b.role === 'HQ' ? 'HQ' : '支店'}</span>
+          <span class="chip">${b.email || '通知先未設定'}</span>
+        </div>
+      </div>`).join('');
+    list.querySelectorAll('[data-edit-code]').forEach(el => {
+      el.addEventListener('click', () => {
+        const b = branches.find(x => x.code === el.dataset.editCode);
+        $('bm-code').value = b.code;
+        $('bm-name').value = b.name;
+        $('bm-role').value = b.role;
+        $('bm-passcode').value = '';
+        $('bm-email').value = b.email || '';
+        $('bm-active').checked = b.active;
+      });
+    });
+  }
+
+  async function submitBranch() {
+    $('bm-error').classList.add('hidden');
+    $('bm-success').classList.add('hidden');
+    const branch = {
+      code: $('bm-code').value.trim(),
+      name: $('bm-name').value.trim(),
+      role: $('bm-role').value,
+      passcode: $('bm-passcode').value.trim(),
+      email: $('bm-email').value.trim(),
+      active: $('bm-active').checked
+    };
+    try {
+      await gsRun('apiSaveBranch', session.token, branch);
+      $('bm-success').textContent = `支店「${branch.name}」を保存しました。`;
+      $('bm-success').classList.remove('hidden');
+      openBranchesView();
+    } catch (e) {
+      $('bm-error').textContent = e.message;
+      $('bm-error').classList.remove('hidden');
+    }
+  }
+</script>
