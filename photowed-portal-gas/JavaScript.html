@@ -321,22 +321,24 @@
 
     $('stats-content').innerHTML = `
       <div class="section-card">
-        <div class="stats-total">総件数：${data.total}件</div>
+        <div class="stats-total">現在進行中：${data.total}件</div>
+        <p class="hint-text" style="margin-top:4px;">キャンセル（CW）・過去一覧（アーカイブ済み）を除く、今まさに動いている案件の件数です。</p>
+        <p class="hint-text" style="margin-top:6px;">累計（アーカイブ済み・キャンセル済みを含む全期間）：${data.cumulativeTotal}件</p>
       </div>
       <div class="section-card">
-        <h3>ステータス別</h3>
+        <h3>ステータス別（現在進行中のみ）</h3>
         ${Object.keys(statusLabel).map(k => `<div class="stats-row"><span>${statusLabel[k]}</span><span>${data.byStatus[k] || 0}件</span></div>`).join('')}
       </div>
       <div class="section-card">
-        <h3>月別件数（撮影日FIX基準）</h3>
+        <h3>月別件数（現在進行中・撮影日FIX基準）</h3>
         ${listRows(data.byMonth)}
       </div>
       <div class="section-card">
-        <h3>国別件数</h3>
+        <h3>国別件数（現在進行中）</h3>
         ${listRows(data.byCountry)}
       </div>
       <div class="section-card">
-        <h3>日本側店舗別件数</h3>
+        <h3>日本側店舗別件数（現在進行中）</h3>
         ${listRows(data.byJpShop)}
       </div>
     `;

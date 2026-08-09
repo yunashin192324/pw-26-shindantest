@@ -678,25 +678,30 @@ function rowInScope_(session, scope, row) {
 // =====================================================
 // ⑤-2 統計ダッシュボード（JPのみ）
 // =====================================================
-// ★要件：日本側だけの統計タブ。全体件数／月毎件数／RQ・OK・FN件数／国別件数／日本支店名（担当）別件数。
+// ★要件：日本側だけの統計タブ。「現在進行中（まだ生きている）」の案件だけを対象に、
+// 全体件数／月毎件数／RQ・OK・FN件数／国別件数／日本支店名（担当）別件数を表示する。
+// 「現在進行中」＝過去一覧（アーカイブ済み）に移っていない、かつ STS(JP側)・STS(支店側)ともに
+// CW（キャンセル成立）ではない案件。これとは別に、アーカイブ済みも含めた「累計」件数も返す
+// （「あと何件残っているか」が主目的だが、累計もわかるとよい、という要望のため）。
 // 関東／関西のチェックで絞り込み可能（ダッシュボードのスコープ選択と同じ仕組みを流用）。
-// 過去一覧（アーカイブ済み＝完了・キャンセル済み案件）も含めた全期間の実績として集計する。
 function apiGetStats(token, scope) {
   const session = requireSession_(token);
   assertJp_(session);
   const branchMeta = branchMetaMap_();
 
   const ss = getSpreadsheet_();
-  let rows = getRowsAsObjects_(ss.getSheetByName(RESERVATION_SHEET_NAME));
-  rows = rows.concat(getRowsAsObjects_(ss.getSheetByName(ARCHIVE_SHEET_NAME)));
-  rows = rows.filter(r => rowInScope_(session, scope, r));
+  const currentRows = getRowsAsObjects_(ss.getSheetByName(RESERVATION_SHEET_NAME)).filter(r => rowInScope_(session, scope, r));
+  const archiveRows = getRowsAsObjects_(ss.getSheetByName(ARCHIVE_SHEET_NAME)).filter(r => rowInScope_(session, scope, r));
+
+  // 「現在進行中」＝予約一覧に載っている、かつキャンセル成立（CW）でないもの
+  const liveRows = currentRows.filter(r => r[COL_STATUS_JP] !== 'CW' && r[COL_STATUS_BRANCH] !== 'CW');
 
   const byMonth = {};
   const byStatus = { RQ: 0, OK: 0, FN: 0 };
   const byCountry = {};
   const byJpShop = {};
 
-  rows.forEach(r => {
+  liveRows.forEach(r => {
     const meta = branchMeta[r[COL_BRANCH_CODE]] || {};
     const country = meta.country || r[COL_BRANCH_CODE] || '(不明)';
     byCountry[country] = (byCountry[country] || 0) + 1;
@@ -726,7 +731,8 @@ function apiGetStats(token, scope) {
 
   return {
     ok: true,
-    total: rows.length,
+    total: liveRows.length, // 現在進行中（生きている）件数
+    cumulativeTotal: currentRows.length + archiveRows.length, // 累計（アーカイブ済み・キャンセル済みも含む全期間）
     byMonth: sortEntries(byMonth),
     byStatus,
     byCountry: sortEntriesByCountDesc(byCountry),
