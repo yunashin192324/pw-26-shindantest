@@ -3,16 +3,20 @@
   // PhotoWED 支店ポータル クライアントロジック
   // =====================================================
   const STORAGE_KEY = 'photowed_session';
-  const STATUS_CODES = ['RQ', 'OK', 'CHK', 'CR', 'FN', 'CW', 'NC'];
+  const STATUS_CODES = ['RQ', 'OK', 'CHK', 'CR', 'FN', 'CW', 'NC', 'UC', 'CF'];
   const JP_TEAMS = ['関東', '関西'];
+  const BILLING_REGIONS = ['北海道', '東北', '関東', '中部', '関西', '中四国', '九州'];
+  // 支店側がSTS(支店側)を編集できる条件。キー＝対になるSTS(JP側)の現在値。
+  // null=制限なし／配列=その中からのみ／キーなし=支店側は編集不可
+  const BRANCH_EDIT_GATE = { 'NC': null, 'RQ': null, 'CR': ['CW', 'CF'] };
 
   let session = null;
   let currentKanri = null;
   let dashboardScope = { showAll: true, teams: [], branches: [] };
   let searchScope = { showAll: true, teams: [], branches: [] };
-  let branchesCache = [];   // 一覧/新規/マスタ画面用（BRANCHロールのみに絞った支店一覧）
-  let branchAdminCache = []; // 支店管理画面用（JPロールの2アカウントも含む全件）
-  let mastersBranch = '';   // プラン/オプション管理画面で選択中の支店コード
+  let branchesCache = [];      // 一覧/新規画面用（BRANCHロールのみに絞った支店一覧。JPログイン時に取得）
+  let lastDashboardData = null; // キャンセル表示チェックボックスの再描画用にキャッシュ
+  let pendingStatusChanges = {}; // ステータス/オプションの「決定して送信」待ちの変更
 
   function gsRun(fnName, ...args) {
     return new Promise((resolve, reject) => {
@@ -49,6 +53,9 @@
   // ---------- 起動 ----------
   window.addEventListener('DOMContentLoaded', () => {
     bindEvents();
+    populateLoginOptions();
+    populateStatusSelect('s-sts-jp');
+    populateStatusSelect('s-sts-branch');
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       session = JSON.parse(saved);
@@ -58,27 +65,38 @@
     }
   });
 
+  function populateStatusSelect(id) {
+    const sel = $(id);
+    if (!sel) return;
+    sel.innerHTML = '<option value="">指定なし</option>' + STATUS_CODES.map(c => `<option value="${c}">${c}</option>`).join('');
+  }
+
+  async function populateLoginOptions() {
+    try {
+      const options = await gsRun('apiListLoginOptions');
+      const sel = $('login-branchcode');
+      sel.innerHTML = '<option value="">選択してください</option>' +
+        options.map(o => `<option value="${o.code}">${o.name}${o.role === 'JP' ? '' : '（' + o.code + '）'}</option>`).join('');
+    } catch (e) {
+      $('login-branchcode').innerHTML = '<option value="">読み込みに失敗しました</option>';
+    }
+  }
+
   function bindEvents() {
     $('login-submit').addEventListener('click', doLogin);
     $('nav-dashboard').addEventListener('click', () => loadDashboard());
     $('nav-search').addEventListener('click', openSearchView);
     $('nav-new').addEventListener('click', openNewView);
-    $('nav-masters').addEventListener('click', openMastersView);
-    $('nav-branches').addEventListener('click', openBranchesView);
     $('nav-logout').addEventListener('click', doLogout);
     $('detail-back').addEventListener('click', () => loadDashboard());
     $('new-submit').addEventListener('click', submitNewReservation);
-    $('bm-submit').addEventListener('click', submitBranch);
-    $('bm-role').addEventListener('change', updateBranchFormVisibility);
     $('search-submit').addEventListener('click', submitSearch);
-    $('plan-add').addEventListener('click', () => addMasterItem('plan'));
-    $('option-add').addEventListener('click', () => addMasterItem('option'));
-    $('masters-branch').addEventListener('change', () => { mastersBranch = $('masters-branch').value; loadMasters(); });
+    $('show-cancelled').addEventListener('change', () => { if (lastDashboardData) renderDashboard(lastDashboardData); });
   }
 
   // ---------- ログイン ----------
   async function doLogin() {
-    const branchCode = $('login-branchcode').value.trim();
+    const branchCode = $('login-branchcode').value;
     const passcode = $('login-passcode').value;
     $('login-error').classList.add('hidden');
     if (!branchCode || !passcode) return;
@@ -124,7 +142,7 @@
     if (String(e.message || '').includes('セッション')) doLogout();
   }
 
-  // ---------- 表示範囲スコープ選択（全国／関東手配課／関西手配課／支店ごと） ----------
+  // ---------- 表示範囲スコープ（全国／関東手配課／関西手配課／支店ごと） ----------
   function renderScopeSelector(container, scope, onChange) {
     if (session.role !== 'JP') { container.classList.add('hidden'); return; }
     container.classList.remove('hidden');
@@ -177,6 +195,7 @@
     try {
       const data = await gsRun('apiGetDashboard', session.token, dashboardScope);
       if (data.role === 'JP') branchesCache = data.branches;
+      lastDashboardData = data;
       renderDashboard(data);
     } catch (e) { handleAuthError(e); }
   }
@@ -185,15 +204,22 @@
     $('dashboard-title').textContent = data.role === 'JP' ? `案件一覧 — ${session.team}手配課` : `案件一覧（${data.branchName}）`;
     renderScopeSelector($('scope-selector'), dashboardScope, loadDashboard);
 
-    const list = $('reservation-list');
-    list.innerHTML = '';
-    $('dashboard-empty').classList.toggle('hidden', data.reservations.length > 0);
-    data.reservations.forEach(r => list.appendChild(buildReservationCard(r, data.role)));
+    const showCancelled = $('show-cancelled').checked;
+    // ★要件：基本は生きてる（キャンセルでない）記録だけを表示し、チェックで両方表示に切り替える
+    const list = showCancelled
+      ? data.reservations
+      : data.reservations.filter(r => r.statusJp !== 'CW' && r.statusBranch !== 'CW');
+
+    const listEl = $('reservation-list');
+    listEl.innerHTML = '';
+    $('dashboard-empty').classList.toggle('hidden', list.length > 0);
+    list.forEach(r => listEl.appendChild(buildReservationCard(r, data.role)));
   }
 
   function buildReservationCard(r, role) {
     const card = document.createElement('div');
     card.className = 'res-card';
+    const cancelled = r.statusJp === 'CW' || r.statusBranch === 'CW';
     card.innerHTML = `
       <div class="res-card-top"><span>${r.kanriNo} ・ CHG: ${r.challengeNo || 'なし'}</span><span>${r.confirmedDate || '撮影日未定'}</span></div>
       <div class="res-card-names">${r.groomName || ''} ${r.brideName ? '／ ' + r.brideName : ''}</div>
@@ -201,6 +227,7 @@
         <span class="chip branch">${r.branchName || r.branchCode}${role === 'JP' && r.city ? '・' + r.city : ''}</span>
         ${r.statusJp ? `<span class="chip hq">STS JP: ${r.statusJp}</span>` : ''}
         ${r.statusBranch ? `<span class="chip branch">STS 支店: ${r.statusBranch}</span>` : ''}
+        ${cancelled ? '<span class="chip" style="background:#fee2e2;color:#b91c1c;">キャンセル</span>' : ''}
         ${r.plan ? `<span class="chip">${r.plan}</span>` : ''}
       </div>`;
     card.addEventListener('click', () => openDetail(r.kanriNo));
@@ -220,6 +247,8 @@
       name: $('s-name').value.trim(),
       country: $('s-country').value.trim(),
       city: $('s-city').value.trim(),
+      statusJp: $('s-sts-jp').value,
+      statusBranch: $('s-sts-branch').value,
       dateField: $('s-datefield').value,
       dateFrom: $('s-from').value,
       dateTo: $('s-to').value,
@@ -251,6 +280,7 @@
 
   // ---------- 詳細 ----------
   async function openDetail(kanriNo) {
+    if (kanriNo !== currentKanri) pendingStatusChanges = {};
     currentKanri = kanriNo;
     showView('detail');
     $('detail-content').innerHTML = '<p class="hint-text">読み込み中...</p>';
@@ -265,22 +295,55 @@
     } catch (e) { handleAuthError(e); }
   }
 
+  // 支店側がSTS(支店側)を編集できるかどうかを、対になるSTS(JP側)の現在値から判定する
+  function branchGateFor(jpValue) {
+    const key = jpValue || '';
+    if (!(key in BRANCH_EDIT_GATE)) return { editable: false, allowed: null };
+    return { editable: true, allowed: BRANCH_EDIT_GATE[key] };
+  }
+
+  // STSセレクト（編集可なら<select data-pending>、不可なら読み取り専用表示）
+  function statusCell(fieldName, current, editableByMe, allowedValues) {
+    if (!editableByMe) {
+      return `<div class="val" style="font-family:ui-monospace,monospace;font-weight:700;">${current || '-'}</div>`;
+    }
+    const codes = allowedValues || STATUS_CODES;
+    const opts = ['<option value="">-</option>'].concat(
+      codes.map(c => `<option value="${c}" ${c === current ? 'selected' : ''}>${c}</option>`)
+    ).join('');
+    return `<select data-pending="${fieldName}">${opts}</select>`;
+  }
+
+  function nameListWithCurrent(masterList, current) {
+    const names = (masterList || []).filter(x => x.active).map(x => x.name);
+    if (current && !names.includes(current)) names.push(current);
+    return names;
+  }
+
   function renderDetail(d, planList, optionList) {
     const c = $('detail-content');
-    const planDatalist = (planList || []).filter(p => p.active).map(p => `<option value="${escapeAttr(p.name)}">`).join('');
-    const optionDatalist = (optionList || []).filter(o => o.active).map(o => `<option value="${escapeAttr(o.name)}">`).join('');
 
-    const optionsHtml = d.options.map(o => `
-      <div class="option-row" style="flex-direction:column;align-items:stretch;gap:6px;">
-        <input list="option-master-list" data-opt-field="OP${o.n}" value="${escapeAttr(o.name)}" placeholder="オプション${o.n}（未使用なら空欄）">
-        <div style="display:flex;gap:8px;">
-          <select data-opt-field="OP${o.n} STS JP" style="flex:1;">${statusOptions(o.stsJp, true)}</select>
-          <select data-opt-field="OP${o.n} STS 支店" style="flex:1;">${statusOptions(o.stsBranch, true)}</select>
-        </div>
-      </div>`).join('');
+    const planNames = nameListWithCurrent(planList, d['プラン名']);
+    const planSelect = `<select data-field="プラン名"><option value="">未設定</option>${planNames.map(n =>
+      `<option value="${escapeAttr(n)}" ${n === d['プラン名'] ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}</select>`;
 
-    // ★チェックは「自分側」のものしか押せない（サーバー側もログイン中のロールの列しか更新しないため、
-    //   相手側のチェックボックスは押せても意味がなく誤解を招く。ここで見た目上も無効化しておく）
+    const mainGate = branchGateFor(d['STS JP']);
+
+    const optionsHtml = d.options.map(o => {
+      const gate = branchGateFor(o.stsJp);
+      const optNames = nameListWithCurrent(optionList, o.name);
+      const nameSelect = `<select data-pending="OP${o.n}"><option value="">（未使用）</option>${optNames.map(n =>
+        `<option value="${escapeAttr(n)}" ${n === o.name ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}</select>`;
+      return `
+        <div class="option-row" style="flex-direction:column;align-items:stretch;gap:6px;">
+          ${nameSelect}
+          <div style="display:flex;gap:8px;">
+            <div style="flex:1;"><div class="hint-text" style="margin-bottom:2px;">STS JP</div>${statusCell('OP' + o.n + ' STS JP', o.stsJp, session.role === 'JP', null)}</div>
+            <div style="flex:1;"><div class="hint-text" style="margin-bottom:2px;">STS 支店${session.role === 'BRANCH' && !gate.editable ? '（変更不可）' : ''}</div>${statusCell('OP' + o.n + ' STS 支店', o.stsBranch, session.role === 'BRANCH' && gate.editable, gate.allowed)}</div>
+          </div>
+        </div>`;
+    }).join('');
+
     const historyHtml = d.history.map(h => `
       <div class="history-item ${(!h.checkJp && !h.checkBranch) ? 'unread' : ''}">
         <div class="history-meta"><span>${h.sender}</span><span>${h.datetime}</span></div>
@@ -291,8 +354,9 @@
         </div>
       </div>`).join('') || '<p class="hint-text">やり取りはまだありません。</p>';
 
+    const hasPending = Object.keys(pendingStatusChanges).length > 0;
+
     c.innerHTML = `
-      <datalist id="option-master-list">${optionDatalist}</datalist>
       <div class="detail-header">
         <div class="kanri">管理番号: ${d['管理番号']} ｜ CHG NO: ${d['CHG NO'] || 'なし'}</div>
         <div class="kanri">${d.branchName}（${d['支店コード']}）${d.country ? ' ・ ' + d.country : ''}${d.city ? ' ／ ' + d.city : ''}</div>
@@ -301,29 +365,37 @@
           <div class="field-block"><label>新郎名（ローマ字）</label><input data-field="新郎名（ローマ字）" value="${escapeAttr(d['新郎名（ローマ字）'])}"></div>
           <div class="field-block"><label>新婦名（ローマ字）</label><input data-field="新婦名（ローマ字）" value="${escapeAttr(d['新婦名（ローマ字）'])}"></div>
           <div class="field-block"><label>CHG NO</label><input data-field="CHG NO" value="${escapeAttr(d['CHG NO'])}"></div>
-          <div class="field-block"><label>STS JP</label><select data-field="STS JP">${statusOptions(d['STS JP'])}</select></div>
-          <div class="field-block"><label>STS 支店</label><select data-field="STS 支店">${statusOptions(d['STS 支店'])}</select></div>
-          <div class="field-block"><label>管轄</label>
-            <select data-field="管轄"><option value="">未定</option>${JP_TEAMS.map(t => `<option value="${t}" ${d['管轄'] === t ? 'selected' : ''}>${t}</option>`).join('')}</select>
-          </div>
           <div class="field-block"><label>撮影日FIX</label><input type="date" data-field="撮影日FIX" value="${escapeAttr(d['撮影日FIX'])}"></div>
           <div class="field-block"><label>挙式日FIX</label><input type="date" data-field="挙式日FIX" value="${escapeAttr(d['挙式日FIX'])}"></div>
           <div class="field-block"><label>希望日①</label><input data-field="希望日①" value="${escapeAttr(d['希望日①'])}"></div>
           <div class="field-block"><label>希望日②</label><input data-field="希望日②" value="${escapeAttr(d['希望日②'])}"></div>
           <div class="field-block"><label>希望日③</label><input data-field="希望日③" value="${escapeAttr(d['希望日③'])}"></div>
-          <div class="field-block"><label>プラン名</label><input list="plan-master-list" data-field="プラン名" value="${escapeAttr(d['プラン名'])}"></div>
-          <datalist id="plan-master-list">${planDatalist}</datalist>
+          <div class="field-block"><label>プラン名（マスタから選択）</label>${planSelect}</div>
           <div class="field-block"><label>撮影希望場所</label><input data-field="撮影希望場所" value="${escapeAttr(d['撮影希望場所'])}"></div>
           <div class="field-block"><label>準備場所</label><input data-field="準備場所" value="${escapeAttr(d['準備場所'])}"></div>
           <div class="field-block"><label>ホテル</label><input data-field="ホテル" value="${escapeAttr(d['ホテル'])}"></div>
-          <div class="field-block"><label>店舗／担当</label><input data-field="店舗／担当" value="${escapeAttr(d['店舗／担当'])}"></div>
+          <div class="field-block"><label>管轄</label>
+            <select data-field="管轄"><option value="">未定</option>${JP_TEAMS.map(t => `<option value="${t}" ${d['管轄'] === t ? 'selected' : ''}>${t}</option>`).join('')}</select>
+          </div>
+          <div class="field-block"><label>請求先</label>
+            <select data-field="請求先"><option value="">未設定</option>${BILLING_REGIONS.map(r => `<option value="${r}" ${d['請求先'] === r ? 'selected' : ''}>${r}</option>`).join('')}</select>
+          </div>
+          <div class="field-block"><label>日本支店名</label><input data-field="日本支店名" value="${escapeAttr(d['日本支店名'])}" placeholder="例）新宿西口店"></div>
+          <div class="field-block"><label>店舗／担当（現地）</label><input data-field="店舗／担当（現地）" value="${escapeAttr(d['店舗／担当（現地）'])}"></div>
           <div class="field-block" style="grid-column:1/-1;"><label>備考</label><input data-field="備考" value="${escapeAttr(d['備考'])}"></div>
         </div>
       </div>
 
       <div class="section-card">
-        <h3>オプション（最大5件・プラン/OP管理で登録したものが候補に出ます）</h3>
+        <h3>ステータス</h3>
+        <div class="status-row">
+          <div class="status-card"><div class="who">STS JP</div>${statusCell('STS JP', d['STS JP'], session.role === 'JP', null)}</div>
+          <div class="status-card"><div class="who">STS 支店${session.role === 'BRANCH' && !mainGate.editable ? '（変更不可）' : ''}</div>${statusCell('STS 支店', d['STS 支店'], session.role === 'BRANCH' && mainGate.editable, mainGate.allowed)}</div>
+        </div>
+        <h3>オプション（最大5件）</h3>
         ${optionsHtml}
+        <button class="send-btn ${hasPending ? '' : 'hidden'}" id="commit-status-btn" style="width:100%;margin-top:10px;">変更を決定して送信</button>
+        <p class="hint-text" style="margin-top:6px;">※ステータス・オプションの変更は「決定して送信」を押すまで相手に反映されません。日本側はSTS 支店を、支店側はSTS JPを直接変更することはできません（STS JPがNC/RQのとき支店側は自由に、CRのときはCW/CFのみ選べます）。</p>
       </div>
 
       <div class="section-card">
@@ -354,19 +426,20 @@
     c.querySelectorAll('[data-field]').forEach(el => {
       el.addEventListener('change', () => updateField(el.dataset.field, el.value));
     });
-    c.querySelectorAll('[data-opt-field]').forEach(el => {
-      el.addEventListener('change', () => updateField(el.dataset.optField, el.value));
+    c.querySelectorAll('[data-pending]').forEach(el => {
+      el.addEventListener('change', () => {
+        pendingStatusChanges[el.dataset.pending] = el.value;
+        const btn = $('commit-status-btn');
+        if (btn) btn.classList.remove('hidden');
+      });
     });
+    const commitBtn = $('commit-status-btn');
+    if (commitBtn) commitBtn.addEventListener('click', commitStatusChanges);
     $('drive-url-submit').addEventListener('click', submitDriveUrl);
     $('msg-submit').addEventListener('click', submitMessage);
     c.querySelectorAll('input[data-hid]').forEach(el => {
       el.addEventListener('change', () => toggleHistoryCheck(el.dataset.hid, el.checked));
     });
-  }
-
-  function statusOptions(current, allowBlank) {
-    const blank = allowBlank ? `<option value="" ${!current ? 'selected' : ''}>-</option>` : '';
-    return blank + STATUS_CODES.map(code => `<option value="${code}" ${code === current ? 'selected' : ''}>${code}</option>`).join('');
   }
 
   function escapeHtml(s) {
@@ -378,6 +451,16 @@
     try {
       await gsRun('apiUpdateField', session.token, currentKanri, field, value);
       showToast(`${field} を更新しました`);
+    } catch (e) { handleAuthError(e); }
+  }
+
+  async function commitStatusChanges() {
+    if (Object.keys(pendingStatusChanges).length === 0) return;
+    try {
+      const res = await gsRun('apiCommitStatusChanges', session.token, currentKanri, pendingStatusChanges);
+      pendingStatusChanges = {};
+      showToast(res.noChange ? '変更はありませんでした' : 'ステータスの変更を決定し、相手へ通知しました');
+      openDetail(currentKanri);
     } catch (e) { handleAuthError(e); }
   }
 
@@ -439,142 +522,5 @@
   function showFieldError(id, msg) {
     $(id).textContent = msg;
     $(id).classList.remove('hidden');
-  }
-
-  // ---------- プラン・オプション管理 ----------
-  async function openMastersView() {
-    showView('masters');
-    if (session.role === 'JP') {
-      if (!branchesCache.length) branchesCache = await gsRun('apiListBranches', session.token);
-      const branches = branchesCache.filter(b => b.role !== 'JP');
-      $('masters-branch').innerHTML = branches.map(b => `<option value="${b.code}">${b.name}（${b.code}）</option>`).join('');
-      mastersBranch = branches[0] ? branches[0].code : '';
-      $('masters-branch').value = mastersBranch;
-    } else {
-      mastersBranch = session.branchCode;
-    }
-    loadMasters();
-  }
-
-  async function loadMasters() {
-    if (!mastersBranch) return;
-    try {
-      const [plans, options] = await Promise.all([
-        gsRun('apiListPlans', session.token, mastersBranch),
-        gsRun('apiListOptionItems', session.token, mastersBranch)
-      ]);
-      renderMasterList('plan-list', plans, 'plan');
-      renderMasterList('option-list', options, 'option');
-    } catch (e) { handleAuthError(e); }
-  }
-
-  function renderMasterList(containerId, items, kind) {
-    const el = $(containerId);
-    el.innerHTML = (items || []).map(it => `
-      <div class="master-item-card">
-        <span>${escapeHtml(it.name)}</span>
-        <button class="switch-sm ${it.active ? 'on' : ''}" data-name="${escapeAttr(it.name)}" data-kind="${kind}"></button>
-      </div>`).join('') || '<p class="hint-text">まだ登録がありません。</p>';
-    el.querySelectorAll('.switch-sm').forEach(btn => {
-      btn.addEventListener('click', () => toggleMasterItem(btn.dataset.kind, btn.dataset.name, !btn.classList.contains('on')));
-    });
-  }
-
-  async function addMasterItem(kind) {
-    const inputId = kind === 'plan' ? 'plan-new-name' : 'option-new-name';
-    const name = $(inputId).value.trim();
-    if (!name) return;
-    const fn = kind === 'plan' ? 'apiSavePlanItem' : 'apiSaveOptionItem';
-    try {
-      await gsRun(fn, session.token, mastersBranch, name, null, true);
-      $(inputId).value = '';
-      loadMasters();
-      showToast(`「${name}」を追加しました`);
-    } catch (e) { handleAuthError(e); }
-  }
-
-  async function toggleMasterItem(kind, name, active) {
-    const fn = kind === 'plan' ? 'apiSavePlanItem' : 'apiSaveOptionItem';
-    try {
-      await gsRun(fn, session.token, mastersBranch, name, name, active);
-      loadMasters();
-    } catch (e) { handleAuthError(e); }
-  }
-
-  // ---------- 支店管理（JP） ----------
-  function updateBranchFormVisibility() {
-    const isJpRole = $('bm-role').value === 'JP';
-    $('bm-team-wrap').classList.toggle('hidden', !isJpRole);
-    $('bm-prefix-wrap').classList.toggle('hidden', isJpRole);
-  }
-
-  async function openBranchesView() {
-    showView('branches');
-    updateBranchFormVisibility();
-    try {
-      // 支店管理画面はJP/BRANCH両方を含む全件が必要なため、他画面で使う
-      // branchesCache（BRANCHロールのみに絞ったキャッシュ）とは別に保持する
-      const branches = await gsRun('apiListBranches', session.token);
-      branchAdminCache = branches;
-      renderBranchList(branches);
-    } catch (e) { handleAuthError(e); }
-  }
-
-  function renderBranchList(branches) {
-    const list = $('branch-list');
-    list.innerHTML = branches.map(b => `
-      <div class="res-card" data-code="${b.code}">
-        <div class="res-card-top"><span>${b.code}${b.prefix ? ' ・ 番号: ' + b.prefix + '-xxx' : ''}</span><span>${b.active ? '有効' : '無効'}</span></div>
-        <div class="res-card-names">${b.name}</div>
-        <div class="res-card-bottom">
-          <span class="chip ${b.role === 'JP' ? 'hq' : 'branch'}">${b.role === 'JP' ? (b.team + '手配課') : '支店'}</span>
-          ${b.country ? `<span class="chip">${b.country}${b.city ? '・' + b.city : ''}</span>` : ''}
-          <span class="chip">${b.email || '通知先未設定'}</span>
-        </div>
-      </div>`).join('');
-
-    list.querySelectorAll('[data-code]').forEach(el => {
-      el.addEventListener('click', (evt) => {
-        const b = branches.find(x => x.code === el.dataset.code);
-        $('bm-code').value = b.code;
-        $('bm-name').value = b.name;
-        $('bm-country').value = b.country || '';
-        $('bm-city').value = b.city || '';
-        $('bm-role').value = b.role;
-        $('bm-team').value = b.team || '関東';
-        $('bm-prefix').value = b.prefix || '';
-        $('bm-passcode').value = '';
-        $('bm-email').value = b.email || '';
-        $('bm-active').checked = b.active;
-        updateBranchFormVisibility();
-      });
-    });
-  }
-
-  async function submitBranch() {
-    $('bm-error').classList.add('hidden');
-    $('bm-success').classList.add('hidden');
-    const branch = {
-      code: $('bm-code').value.trim(),
-      name: $('bm-name').value.trim(),
-      country: $('bm-country').value.trim(),
-      city: $('bm-city').value.trim(),
-      role: $('bm-role').value,
-      team: $('bm-team').value,
-      prefix: $('bm-prefix').value.trim(),
-      passcode: $('bm-passcode').value.trim(),
-      email: $('bm-email').value.trim(),
-      active: $('bm-active').checked
-    };
-    try {
-      await gsRun('apiSaveBranch', session.token, branch);
-      $('bm-success').textContent = `支店「${branch.name}」を保存しました。`;
-      $('bm-success').classList.remove('hidden');
-      branchesCache = []; // 一覧/新規/マスタ画面のキャッシュも無効化し、次回アクセス時に反映させる
-      openBranchesView();
-    } catch (e) {
-      $('bm-error').textContent = e.message;
-      $('bm-error').classList.remove('hidden');
-    }
   }
 </script>

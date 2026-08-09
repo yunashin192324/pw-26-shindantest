@@ -37,9 +37,20 @@ const JP_TEAMS = ['関東', '関西'];
 const SESSION_TTL_SEC = 21600; // 6時間（CacheServiceの上限）
 
 // --- ステータスコード（"確定"等の和訳ラベルは使わず、コードそのものを運用する） ---
-const STATUS_CODES = ['RQ', 'OK', 'CHK', 'CR', 'FN', 'CW', 'NC'];
+const STATUS_CODES = ['RQ', 'OK', 'CHK', 'CR', 'FN', 'CW', 'NC', 'UC', 'CF'];
 const ALERT_COMPLETED_STATUS = 'FN';
 const ALERT_DAYS_BEFORE = 40;
+
+// --- 支店側がSTS(支店側)を編集してよい条件（キー＝対になるSTS(JP側)の現在値） ---
+// null = 値の制限なし（STATUS_CODESから自由に選べる）／配列 = その中からのみ選べる／
+// キーが存在しない値（OK,CHK,FN,CW,UC,CFなど）のときは支店側は編集不可（ロック）
+const BRANCH_EDIT_GATE = {
+  'NC': null,
+  'RQ': null,
+  'CR': ['CW', 'CF']
+};
+// 請求先（日本の地域区分）
+const BILLING_REGIONS = ['北海道', '東北', '関東', '中部', '関西', '中四国', '九州'];
 
 // --- 予約一覧の列定義 ---
 const COL_BRANCH_CODE = '支店コード';
@@ -59,7 +70,9 @@ const COL_LOCATION = '撮影希望場所';
 const COL_PREP = '準備場所';
 const COL_HOTEL = 'ホテル';
 const COL_AREA = '管轄';
-const COL_SHOP = '店舗／担当';
+const COL_BILLING_REGION = '請求先';
+const COL_JP_SHOP = '日本支店名';
+const COL_SHOP = '店舗／担当（現地）';
 const COL_REMARKS = '備考';
 const COL_MEMO = '共有メモ';
 const COL_LAST_UPDATED = '最終更新日';
@@ -75,7 +88,8 @@ const RESERVATION_HEADERS = (() => {
     COL_BRANCH_CODE, COL_KANRI_NO, COL_CHALLENGE_NO, COL_STATUS_JP, COL_STATUS_BRANCH,
     COL_CONFIRMED_DATE, COL_CEREMONY_DATE, COL_HOPE1, COL_HOPE2, COL_HOPE3,
     COL_GROOM_NAME, COL_BRIDE_NAME, COL_PLAN, COL_LOCATION, COL_PREP, COL_HOTEL,
-    COL_AREA, COL_SHOP, COL_REMARKS, COL_MEMO, COL_LAST_UPDATED, COL_DRIVE_URL
+    COL_AREA, COL_BILLING_REGION, COL_JP_SHOP, COL_SHOP, COL_REMARKS, COL_MEMO,
+    COL_LAST_UPDATED, COL_DRIVE_URL
   ];
   for (let n = 1; n <= OPTION_COUNT; n++) {
     base.push(opNameCol_(n), opStsJpCol_(n), opStsBranchCol_(n));
@@ -83,9 +97,17 @@ const RESERVATION_HEADERS = (() => {
   return base;
 })();
 
-// 支店・JPのどちらも編集してよい運用系フィールド（システム列・専用APIで扱う列は除く）
+// STS(JP側)・STS(支店側)・オプション欄は、通常のフィールド更新(apiUpdateField)ではなく
+// 専用の決定フロー(apiCommitStatusChanges)でのみ変更できる（②相手への通知を確実に飛ばすため）
+const STATUS_COMMIT_FIELDS = (() => {
+  const list = [COL_STATUS_JP, COL_STATUS_BRANCH];
+  for (let n = 1; n <= OPTION_COUNT; n++) list.push(opNameCol_(n), opStsJpCol_(n), opStsBranchCol_(n));
+  return list;
+})();
+
+// 支店・JPのどちらも編集してよい運用系フィールド（システム列・ステータス系の列は除く）
 const EDITABLE_FIELDS = RESERVATION_HEADERS.filter(h => ![
-  COL_BRANCH_CODE, COL_KANRI_NO, COL_LAST_UPDATED, COL_DRIVE_URL
+  COL_BRANCH_CODE, COL_KANRI_NO, COL_LAST_UPDATED, COL_DRIVE_URL, ...STATUS_COMMIT_FIELDS
 ].includes(h));
 
 // 日付として保存すべきフィールド（<input type="date">で受け渡しし、実Dateとして保存する）
@@ -93,13 +115,6 @@ const EDITABLE_FIELDS = RESERVATION_HEADERS.filter(h => ![
 const DATE_FIELDS = [COL_CONFIRMED_DATE, COL_CEREMONY_DATE];
 // 変更時に自動で履歴ログ＋通知を残す日付フィールド
 const AUTO_LOG_DATE_FIELDS = [COL_CONFIRMED_DATE, COL_CEREMONY_DATE];
-
-// ステータス値の妥当性チェック対象フィールド
-const STATUS_FIELD_NAMES = (() => {
-  const list = [COL_STATUS_JP, COL_STATUS_BRANCH];
-  for (let n = 1; n <= OPTION_COUNT; n++) list.push(opStsJpCol_(n), opStsBranchCol_(n));
-  return list;
-})();
 
 // --- 支店マスタの列定義 ---
 const BM_COL_CODE = '支店コード';
@@ -249,6 +264,18 @@ function getSpreadsheet_() {
 // プレーンテキストで"TRUE"/"FALSE"のこともあるため、両対応で真偽判定する
 function isActiveFlag_(val) {
   return val === true || String(val).trim().toUpperCase() === 'TRUE';
+}
+
+// ログイン画面のプルダウンに出す一覧（未ログインでも呼べる。パスコード・メール等は含めない）
+function apiListLoginOptions() {
+  const sheet = getSpreadsheet_().getSheetByName(BRANCH_MASTER_SHEET_NAME);
+  return getRowsAsObjects_(sheet)
+    .filter(r => isActiveFlag_(r[BM_COL_ACTIVE]))
+    .map(r => ({
+      code: r[BM_COL_CODE],
+      name: r[BM_COL_NAME],
+      role: String(r[BM_COL_ROLE]).trim().toUpperCase() === JP_ROLE ? JP_ROLE : BRANCH_ROLE
+    }));
 }
 
 function apiLogin(branchCode, passcode) {
@@ -623,13 +650,13 @@ function findReservationRow_(kanriNo) {
 function apiUpdateField(token, kanriNo, fieldName, value) {
   const session = requireSession_(token);
   if (!EDITABLE_FIELDS.includes(fieldName)) {
-    throw new Error(`「${fieldName}」は直接編集できない項目です。`);
-  }
-  if (STATUS_FIELD_NAMES.includes(fieldName) && value && !STATUS_CODES.includes(value)) {
-    throw new Error(`STSの値は ${STATUS_CODES.join('/')} のいずれかにしてください。`);
+    throw new Error(`「${fieldName}」はこの方法では編集できません（ステータス系の項目は「変更を決定して送信」から操作してください）。`);
   }
   if (fieldName === COL_AREA && value && !JP_TEAMS.includes(value)) {
     throw new Error(`管轄は ${JP_TEAMS.join('/')} のいずれかにしてください。`);
+  }
+  if (fieldName === COL_BILLING_REGION && value && !BILLING_REGIONS.includes(value)) {
+    throw new Error(`請求先は ${BILLING_REGIONS.join('/')} のいずれかにしてください。`);
   }
 
   const lock = LockService.getScriptLock();
@@ -666,6 +693,88 @@ function apiUpdateField(token, kanriNo, fieldName, value) {
     lock.releaseLock();
   }
   return { ok: true };
+}
+
+// =====================================================
+// ⑦-B ステータス変更の決定（STS JP／STS 支店／オプション欄。まとめて1回で相手に通知する）
+// =====================================================
+// changes: { "STS JP": "RQ", "OP3": "ドローン撮影", "OP3 STS JP": "RQ", ... } のような { フィールド名: 新しい値 } の集合。
+// 個々のフィールドをapiUpdateFieldのように即時保存せず、ここでまとめて検証・保存し、
+// 「決定して送信」ボタン1回につき履歴ログ1件・通知メール1通にまとめる。
+function apiCommitStatusChanges(token, kanriNo, changes) {
+  const session = requireSession_(token);
+  if (!changes || Object.keys(changes).length === 0) throw new Error('変更内容がありません。');
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
+  try {
+    const { sheet, headers, rowIndex, rowData } = findReservationRow_(kanriNo);
+    if (rowIndex === -1) throw new Error('対象の予約が見つかりません。');
+    assertRowVisible_(session, headers, rowData);
+
+    const summaryLines = [];
+    const writes = [];
+
+    Object.keys(changes).forEach(field => {
+      if (!STATUS_COMMIT_FIELDS.includes(field)) {
+        throw new Error(`「${field}」はこの方法では変更できません。`);
+      }
+      const value = changes[field];
+      const colIdx = headers.indexOf(field);
+      const oldValue = rowData[colIdx] || '';
+
+      if (isJpStatusField_(field)) {
+        if (session.role !== JP_ROLE) throw new Error(`「${field}」は日本側のみ変更できます。`);
+        if (value && !STATUS_CODES.includes(value)) throw new Error(`STSの値は ${STATUS_CODES.join('/')} のいずれかにしてください。`);
+      } else if (isBranchStatusField_(field)) {
+        if (session.role !== BRANCH_ROLE) throw new Error(`「${field}」は支店側のみ変更できます。`);
+        const pairedField = pairedJpFieldFor_(field);
+        const pairedValue = pairedField ? (rowData[headers.indexOf(pairedField)] || '') : '';
+        if (!(pairedValue in BRANCH_EDIT_GATE)) {
+          throw new Error(`現在の${pairedField}（${pairedValue || '未設定'}）の状態では「${field}」は変更できません。`);
+        }
+        const allowed = BRANCH_EDIT_GATE[pairedValue];
+        if (allowed !== null && value && !allowed.includes(value)) {
+          throw new Error(`${pairedField}が${pairedValue}のときは「${field}」は ${allowed.join('/')} のいずれかにしてください。`);
+        }
+        if (value && !STATUS_CODES.includes(value)) throw new Error(`STSの値は ${STATUS_CODES.join('/')} のいずれかにしてください。`);
+      }
+      // オプション名(OPn)欄はどちらの役割でも変更可（ステータスではなく単なるラベルのため）
+
+      if (String(oldValue) !== String(value || '')) {
+        summaryLines.push(`${field}: ${oldValue || '(未設定)'} → ${value || '(未設定)'}`);
+      }
+      writes.push({ colIdx: colIdx + 1, value: value || '' });
+    });
+
+    if (summaryLines.length === 0) {
+      return { ok: true, noChange: true };
+    }
+
+    writes.forEach(w => sheet.getRange(rowIndex, w.colIdx).setValue(w.value));
+    sheet.getRange(rowIndex, headers.indexOf(COL_LAST_UPDATED) + 1).setValue(new Date());
+
+    const freshRow = sheet.getRange(rowIndex, 1, 1, headers.length).getValues()[0];
+    const msg = `[ステータス変更]\n${summaryLines.join('\n')}`;
+    const direction = session.role === JP_ROLE ? 'JP_TO_BRANCH' : 'BRANCH_TO_JP';
+    appendHistory_(headers, freshRow, session.branchName, msg);
+    sendDirectionalMail_(headers, freshRow, direction, session, msg, 'ステータス変更');
+  } finally {
+    lock.releaseLock();
+  }
+  return { ok: true };
+}
+
+function isJpStatusField_(field) {
+  return field === COL_STATUS_JP || /^OP\d+ STS JP$/.test(field);
+}
+function isBranchStatusField_(field) {
+  return field === COL_STATUS_BRANCH || /^OP\d+ STS 支店$/.test(field);
+}
+function pairedJpFieldFor_(field) {
+  if (field === COL_STATUS_BRANCH) return COL_STATUS_JP;
+  const m = field.match(/^(OP\d+) STS 支店$/);
+  return m ? `${m[1]} STS JP` : null;
 }
 
 // =====================================================
@@ -859,7 +968,7 @@ function apiToggleHistoryCheck(token, historyId, checked) {
 // ⑫ 検索
 // =====================================================
 // criteria: { kanriNo, challengeNo, name, dateField('shoot'|'ceremony'|'either'),
-//             dateFrom, dateTo, country, city, scope, includeArchive }
+//             dateFrom, dateTo, country, city, statusJp, statusBranch, scope, includeArchive }
 function apiSearchReservations(token, criteria) {
   const session = requireSession_(token);
   criteria = criteria || {};
@@ -895,6 +1004,8 @@ function matchesSearch_(r, c, branchMeta) {
   const meta = branchMeta[r[COL_BRANCH_CODE]] || {};
   if (c.country && !norm(meta.country).includes(norm(c.country))) return false;
   if (c.city && !norm(meta.city).includes(norm(c.city))) return false;
+  if (c.statusJp && r[COL_STATUS_JP] !== c.statusJp) return false;
+  if (c.statusBranch && r[COL_STATUS_BRANCH] !== c.statusBranch) return false;
 
   if (c.dateFrom || c.dateTo) {
     const shoot = toComparableDate_(r[COL_CONFIRMED_DATE]);
@@ -1043,15 +1154,18 @@ function archivePastReservations() {
   const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
   const todayStr = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd');
 
+  const asDateStr = (v) => v instanceof Date ? Utilities.formatDate(v, 'Asia/Tokyo', 'yyyy/MM/dd') : '';
+
   for (let i = values.length - 1; i >= 0; i--) {
     const row = values[i];
-    const dVal = row[headers.indexOf(COL_CONFIRMED_DATE)];
-    const dStr = dVal instanceof Date ? Utilities.formatDate(dVal, 'Asia/Tokyo', 'yyyy/MM/dd') : '';
+    const shootStr = asDateStr(row[headers.indexOf(COL_CONFIRMED_DATE)]);
+    const ceremonyStr = asDateStr(row[headers.indexOf(COL_CEREMONY_DATE)]);
     const stsJp = String(row[headers.indexOf(COL_STATUS_JP)]).trim();
     const stsBranch = String(row[headers.indexOf(COL_STATUS_BRANCH)]).trim();
     const isCW = (stsJp === 'CW' || stsBranch === 'CW');
-    const isFNAndPast = ((stsJp === 'FN' || stsBranch === 'FN') && dStr && dStr < todayStr);
-    if (isCW || isFNAndPast) {
+    // ★要件：ステータスに関わらず、撮影日または挙式日が過ぎたら過去一覧へ移動する
+    const isPastDate = (shootStr && shootStr < todayStr) || (ceremonyStr && ceremonyStr < todayStr);
+    if (isCW || isPastDate) {
       archive.appendRow(row);
       sheet.deleteRow(i + 2);
     }

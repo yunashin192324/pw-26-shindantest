@@ -16,8 +16,6 @@
         <button id="nav-dashboard" class="nav-btn">案件一覧</button>
         <button id="nav-search" class="nav-btn">検索</button>
         <button id="nav-new" class="nav-btn">＋新規案件</button>
-        <button id="nav-masters" class="nav-btn">プラン/OP管理</button>
-        <button id="nav-branches" class="nav-btn jp-only hidden">支店管理</button>
         <button id="nav-logout" class="nav-btn nav-logout">ログアウト</button>
       </nav>
     </header>
@@ -27,9 +25,9 @@
       <section id="view-login" class="view">
         <div class="login-card">
           <div class="login-logo">📸<br>PhotoWED 支店ポータル</div>
-          <p class="login-desc">支店コード（または関東手配課／関西手配課のログインコード）とパスコードを入力してください。</p>
-          <label>支店コード / ログインコード</label>
-          <input id="login-branchcode" type="text" placeholder="例）VIE / IST / ROW / KANTO / KANSAI" autocapitalize="characters">
+          <p class="login-desc">プルダウンから支店（または関東手配課／関西手配課）を選び、パスコードを入力してください。</p>
+          <label>支店 / ログインコード</label>
+          <select id="login-branchcode"><option value="">読み込み中...</option></select>
           <label>ログインパスコード</label>
           <input id="login-passcode" type="password" placeholder="パスコード">
           <button id="login-submit" class="primary-btn">ログイン</button>
@@ -43,6 +41,9 @@
           <h2 id="dashboard-title">案件一覧</h2>
         </div>
         <div id="scope-selector" class="scope-box jp-only hidden"></div>
+        <label class="checkbox-label" style="margin:4px 0 10px;">
+          <input id="show-cancelled" type="checkbox"> キャンセル（CW）済みも表示する
+        </label>
         <div id="reservation-list" class="card-list"></div>
         <p id="dashboard-empty" class="empty-text hidden">案件がありません。</p>
       </section>
@@ -57,6 +58,8 @@
           <div class="full"><label>お名前（ローマ字・新郎/新婦どちらでも）</label><input id="s-name" type="text" placeholder="例）Yamada"></div>
           <div class="jp-only hidden"><label>国</label><input id="s-country" type="text"></div>
           <div class="jp-only hidden"><label>都市</label><input id="s-city" type="text"></div>
+          <div><label>STS JP</label><select id="s-sts-jp"><option value="">指定なし</option></select></div>
+          <div><label>STS 支店</label><select id="s-sts-branch"><option value="">指定なし</option></select></div>
           <div><label>日付の種類</label>
             <select id="s-datefield">
               <option value="either">撮影日または挙式日</option>
@@ -90,68 +93,6 @@
         <button id="new-submit" class="primary-btn">解析して作成</button>
         <p id="new-error" class="error-text hidden"></p>
         <p id="new-success" class="success-text hidden"></p>
-      </section>
-
-      <!-- プラン・オプション管理 -->
-      <section id="view-masters" class="view hidden">
-        <h2>プラン・オプション管理</h2>
-        <p class="hint-text">プラン・オプションは支店ごとに内容が異なるため、支店ごとにマスタ登録します。</p>
-        <label class="jp-only hidden">対象支店</label>
-        <select id="masters-branch" class="jp-only hidden"></select>
-
-        <h3>プラン</h3>
-        <div id="plan-list" class="card-list"></div>
-        <div class="inline-form">
-          <input id="plan-new-name" type="text" placeholder="新しいプラン名">
-          <button id="plan-add" class="send-btn-sm">追加</button>
-        </div>
-
-        <h3>オプション</h3>
-        <div id="option-list" class="card-list"></div>
-        <div class="inline-form">
-          <input id="option-new-name" type="text" placeholder="新しいオプション名">
-          <button id="option-add" class="send-btn-sm">追加</button>
-        </div>
-      </section>
-
-      <!-- 支店管理（JPのみ） -->
-      <section id="view-branches" class="view hidden">
-        <h2>支店管理</h2>
-        <p class="hint-text">支店を追加してもコードの変更・再デプロイは不要です。ここで1行追加するだけで、その支店はすぐにログインして利用できます。案件番号プレフィックスは支店ごとに一意である必要があります。</p>
-        <div id="branch-list" class="card-list"></div>
-        <h3>支店を追加／編集</h3>
-        <label>支店コード</label>
-        <input id="bm-code" type="text" placeholder="例）VIE">
-        <label>支店名</label>
-        <input id="bm-name" type="text" placeholder="例）ウィーン支店">
-        <label>国</label>
-        <input id="bm-country" type="text" placeholder="例）オーストリア">
-        <label>都市</label>
-        <input id="bm-city" type="text" placeholder="例）ウィーン">
-        <label>ロール</label>
-        <select id="bm-role">
-          <option value="BRANCH">支店</option>
-          <option value="JP">JP（日本手配課）</option>
-        </select>
-        <div id="bm-team-wrap" class="hidden">
-          <label>手配チーム</label>
-          <select id="bm-team">
-            <option value="関東">関東</option>
-            <option value="関西">関西</option>
-          </select>
-        </div>
-        <div id="bm-prefix-wrap">
-          <label>案件番号プレフィックス（管理番号の先頭。支店ごとに一意）</label>
-          <input id="bm-prefix" type="text" placeholder="例）VIE（未入力の場合は支店コードを使用）">
-        </div>
-        <label>ログインパスコード</label>
-        <input id="bm-passcode" type="text" placeholder="共有する合言葉">
-        <label>通知先メール（カンマ区切り可）</label>
-        <input id="bm-email" type="text" placeholder="branch@example.com">
-        <label class="checkbox-label"><input id="bm-active" type="checkbox" checked> 有効にする</label>
-        <button id="bm-submit" class="primary-btn">保存</button>
-        <p id="bm-error" class="error-text hidden"></p>
-        <p id="bm-success" class="success-text hidden"></p>
       </section>
     </main>
 
