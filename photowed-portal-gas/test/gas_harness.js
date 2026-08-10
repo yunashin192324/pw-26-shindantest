@@ -101,6 +101,10 @@ function makeContext() {
   // vm コンテキスト生成後に「vm内のDateを作る関数」が入る（下の __newDate と同じもの）。
   // Utilities.parseDate から参照するため、先に宣言だけしておく。
   let mkDate = (y, m, d) => new Date(y, m, d);
+  let clockSec = 0;                 // CacheService の期限判定に使う擬似時計（秒）
+  let lockFailures = 0;             // 「次のN回は tryLock が失敗する」ための残り回数
+  let lockDepth = 0;                // 現在ロックを保持している数（再入・解放漏れの検出用）
+  let lockHeldBySomeoneElse = false;
   const ctx = {
     __ss: ss, __mail: sentMail, console,
     SpreadsheetApp: { openById: () => ss, getUi: () => ({ alert: () => {} }) },
@@ -122,10 +126,28 @@ function makeContext() {
         return mkDate(y, mo - 1, d);
       }
     },
+    // ★CacheService は有効期限(TTL)を持つ。実GASでは期限切れの値は取得できず null になるため、
+    // セッション切れの挙動を検証できるよう擬似的な時計（__advanceClock）で再現する。
     CacheService: { getScriptCache: () => ({
-      put: (k, v) => { cache[k] = v; }, get: (k) => (k in cache ? cache[k] : null), remove: (k) => { delete cache[k]; }
+      put: (k, v, ttlSec) => { cache[k] = { v, expiresAt: clockSec + (ttlSec || 600) }; },
+      get: (k) => {
+        const e = cache[k];
+        if (!e) return null;
+        if (e.expiresAt <= clockSec) { delete cache[k]; return null; } // 期限切れ
+        return e.v;
+      },
+      remove: (k) => { delete cache[k]; }
     }) },
-    LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock: () => {} }) },
+    // ★LockService：実運用では他の書き込みと競合して tryLock が false になり得る。
+    // __failNextLocks で「次のN回はロックが取れない」状況を再現できるようにする。
+    LockService: { getScriptLock: () => ({
+      tryLock: () => {
+        if (lockFailures > 0) { lockFailures--; lockHeldBySomeoneElse = true; return false; }
+        if (lockDepth > 0) return false; // 既に誰かが保持している（再入不可）
+        lockDepth++; return true;
+      },
+      releaseLock: () => { if (lockDepth > 0) lockDepth--; }
+    }) },
     MailApp: { sendEmail: (to, subj, body) => sentMail.push({ to, subj, body }) },
     Session: { getActiveUser: () => ({ getEmail: () => 'tanaka@his-world.com' }) },
     ScriptApp: { getProjectTriggers: () => [], deleteTrigger: () => {},
@@ -148,11 +170,11 @@ function makeContext() {
   const names = ['RESERVATION_HEADERS','HISTORY_HEADERS','BRANCH_MASTER_HEADERS','STATUS_LOG_HEADERS',
                  'MASTER_ITEM_HEADERS','STATUS_CODES','BILLING_REGIONS','JP_TEAMS',
                  'ALERT_DAYS_BEFORE','DELIVERY_ALERT_DEFAULT_DAYS','COMMITTABLE_FIELDS',
-                 'PHRASE_MASTER_HEADERS','UNANSWERED_REMIND_DEFAULT_DAYS'];
+                 'PHRASE_MASTER_HEADERS','UNANSWERED_REMIND_DEFAULT_DAYS','SESSION_TTL_SEC','CONSENT_DONE_VALUE','LOGIN_MAX_ATTEMPTS','LOGIN_LOCKOUT_SEC'];
   const vals = [RESERVATION_HEADERS,HISTORY_HEADERS,BRANCH_MASTER_HEADERS,STATUS_LOG_HEADERS,
                 MASTER_ITEM_HEADERS,STATUS_CODES,BILLING_REGIONS,JP_TEAMS,
                 ALERT_DAYS_BEFORE,DELIVERY_ALERT_DEFAULT_DAYS,COMMITTABLE_FIELDS,
-                PHRASE_MASTER_HEADERS,UNANSWERED_REMIND_DEFAULT_DAYS];
+                PHRASE_MASTER_HEADERS,UNANSWERED_REMIND_DEFAULT_DAYS,SESSION_TTL_SEC,CONSENT_DONE_VALUE,LOGIN_MAX_ATTEMPTS,LOGIN_LOCKOUT_SEC];
   names.forEach((n, i) => { this[n] = vals[i]; });
 }).call(this);`;
   vm.runInContext(src, ctx);
@@ -160,6 +182,11 @@ function makeContext() {
   // シートに入れる日付は必ずこのファクトリ経由で「vm内のDate」を作る。
   ctx.__newDate = vm.runInContext('(function (y, m, d) { return new Date(y, m, d); })', ctx);
   mkDate = ctx.__newDate; // Utilities.parseDate も vm 内の Date を返すようにする
+  // --- テストから環境の状態を操作するためのフック ---
+  ctx.__advanceClock = (sec) => { clockSec += sec; };            // セッション期限切れの再現
+  ctx.__failNextLocks = (n) => { lockFailures = n; };            // ロック競合の再現
+  ctx.__lockDepth = () => lockDepth;                             // ロック解放漏れの検出
+  ctx.__lockWasContended = () => lockHeldBySomeoneElse;
   ctx.__daysFromToday = vm.runInContext(
     '(function (n) { const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), t.getDate() + n); })', ctx);
   return ctx;

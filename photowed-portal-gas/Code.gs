@@ -40,6 +40,10 @@ const JP_TEAMS = ['関東', '関西'];
 
 // --- セッション設定 ---
 const SESSION_TTL_SEC = 21600; // 6時間（CacheServiceの上限）
+// ★セキュリティ：パスコードの総当たり対策。支店コード単位で連続失敗をこの回数まで許容し、
+// 超えたら LOGIN_LOCKOUT_SEC の間ログインを受け付けない（正規利用者の打ち間違いは救える回数にする）
+const LOGIN_MAX_ATTEMPTS = 10;
+const LOGIN_LOCKOUT_SEC = 900; // 15分
 
 // --- ステータスコード（"確定"等の和訳ラベルは使わず、コードそのものを運用する） ---
 const STATUS_CODES = ['RQ', 'OK', 'CHK', 'CR', 'FN', 'CW', 'NC', 'UC', 'CF'];
@@ -243,7 +247,10 @@ function doGet(e) {
     .evaluate()
     .setTitle('WEDLINK 支店ポータル')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    // ★セキュリティ：以前は ALLOWALL で、どんな外部サイトからでもiframeに埋め込めた。
+    // 埋め込んだ画面の上に透明な要素を重ねて誤操作させる手口（クリックジャッキング）を
+    // 防ぐため、既定（Googleのドメイン内のみ）に戻す。通常の利用に影響はない。
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
 }
 
 function include(filename) {
@@ -417,18 +424,33 @@ function apiListLoginOptions() {
 }
 
 function apiLogin(branchCode, passcode) {
+  const code = String(branchCode === null || branchCode === undefined ? '' : branchCode).trim().toUpperCase();
+  if (!code) return { ok: false, error: '支店を選択してください。' };
+
+  // ★セキュリティ：パスコードは短い合言葉のため、総当たりで試されると破られ得る。
+  // 支店コード単位で連続失敗回数を数え、一定回数を超えたら一時的にログインを止める。
+  const cache = CacheService.getScriptCache();
+  const failKey = 'loginfail_' + code;
+  const fails = Number(cache.get(failKey) || 0);
+  if (fails >= LOGIN_MAX_ATTEMPTS) {
+    return { ok: false, error: `ログインの失敗が続いたため、${Math.round(LOGIN_LOCKOUT_SEC / 60)}分ほどこの支店のログインを停止しています。時間をおいて再度お試しください。` };
+  }
+
   const sheet = getSpreadsheet_().getSheetByName(BRANCH_MASTER_SHEET_NAME);
   const rows = getRowsAsObjects_(sheet);
 
   const match = rows.find(r =>
-    String(r[BM_COL_CODE]).trim().toUpperCase() === String(branchCode).trim().toUpperCase() &&
-    String(r[BM_COL_PASSCODE]) === String(passcode) &&
+    String(r[BM_COL_CODE]).trim().toUpperCase() === code &&
+    String(r[BM_COL_PASSCODE]) === String(passcode === null || passcode === undefined ? '' : passcode) &&
     isActiveFlag_(r[BM_COL_ACTIVE])
   );
 
   if (!match) {
+    // 失敗回数を加算（LOGIN_LOCKOUT_SEC 経過すればキャッシュ失効で自動的に解除される）
+    cache.put(failKey, String(fails + 1), LOGIN_LOCKOUT_SEC);
     return { ok: false, error: '支店コードまたはパスコードが違います。' };
   }
+  cache.remove(failKey); // 成功したら失敗回数をリセット
 
   const role = String(match[BM_COL_ROLE]).trim().toUpperCase() === JP_ROLE ? JP_ROLE : BRANCH_ROLE;
   const token = Utilities.getUuid();
@@ -529,6 +551,10 @@ function listBranchesRaw_() {
 function apiSaveBranch(token, branch) {
   const session = requireSession_(token);
   assertJp_(session);
+  // ★引数そのものが欠けている場合にGAS内部の英語エラーが画面へ出ないようにする
+  if (!branch || typeof branch !== 'object' || Array.isArray(branch)) {
+    throw new Error('支店の情報が正しく送信されませんでした。入力内容を確認してください。');
+  }
   if (!branch.code || !branch.name) {
     throw new Error('支店コード・支店名は必須です。');
   }
@@ -794,7 +820,7 @@ function apiGetDashboard(token, scope) {
   const todayStr = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd');
   list.sort((a, b) => {
     if (a.needsAction !== b.needsAction) return a.needsAction ? -1 : 1;
-    return dayDistanceFromToday_(a.confirmedDate, todayStr) - dayDistanceFromToday_(b.confirmedDate, todayStr);
+    return dateDistanceMsFromToday_(a.confirmedDate, todayStr) - dateDistanceMsFromToday_(b.confirmedDate, todayStr);
   });
 
   const result = { ok: true, role: session.role, branchCode: session.branchCode, branchName: session.branchName, team: session.team, reservations: list };
@@ -1708,6 +1734,10 @@ function parseReservationText_(rawText) {
   let challengeNo = '', groomName = '', brideName = '', area = '';
   let hopeDates = [];
 
+  // ★文字列以外（未入力・数値・オブジェクト等）が渡ってもGAS内部の英語エラーにならないようにする。
+  // 解析できる情報が無いだけなので、空の解析結果として扱い、案件自体は作れるようにする。
+  rawText = (rawText === null || rawText === undefined) ? '' : String(rawText);
+
   const splitIndex = rawText.search(/^\s*(備考|ATTN:|＜NBINFO＞|お客様からの質問です|第1希望：)/m);
   const remarksText = splitIndex !== -1 ? rawText.substring(splitIndex).trim() : '';
   const mainText = splitIndex !== -1 ? rawText.substring(0, splitIndex) : rawText;
@@ -1894,8 +1924,10 @@ function toComparableDate_(val) {
   return null;
 }
 
-// "yyyy/MM/dd"形式の日付文字列と今日との差（日数の絶対値）を返す。未定・不正な値はInfinity（末尾に回す）
-function dayDistanceFromToday_(dateStr, todayStr) {
+// ★命名修正：戻り値は「日数」ではなくミリ秒差。並べ替えの比較にしか使わないため動作は正しいが、
+// 名前とコメントが実態とずれていて誤読を招くため、単位が分かる名前に改めた。
+// "yyyy/MM/dd"形式の日付文字列と今日との差（ミリ秒の絶対値）を返す。未定・不正な値はInfinity（末尾に回す）
+function dateDistanceMsFromToday_(dateStr, todayStr) {
   const m1 = String(dateStr || '').match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
   if (!m1) return Infinity;
   const m2 = String(todayStr || '').match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
@@ -2426,14 +2458,32 @@ function formatDateForInput_(val) {
 
 // <input type="date"> から届くISO形式(yyyy-MM-dd)の文字列を、シートに保存する実Dateへ変換する。
 // 空欄（日付クリア）はそのまま空文字として保存する。
+// ★不具合修正：以前は解析に失敗した値を「そのまま文字列で」保存していた。
+// 撮影日FIX・挙式日FIXは checkAlerts／archivePastReservations／当日表／統計のすべてが
+// `instanceof Date` を前提にしているため、文字列で入ってしまうと
+// 「画面には日付が入っているように見えるのに、アラートも過去一覧への移動も当日表も
+// 一切効かない案件」が静かに生まれてしまう（気づきようがない）。
+// 受け付けられない形式は保存せずエラーにして、その場で気づけるようにする。
 function parseDateFromInput_(val) {
-  const trimmed = String(val || '').trim();
-  if (!trimmed) return '';
-  try {
-    return Utilities.parseDate(trimmed, 'Asia/Tokyo', 'yyyy-MM-dd');
-  } catch (e) {
-    return trimmed; // 想定外フォーマットはそのまま文字列で保存（データ消失より安全側）
+  const trimmed = String(val === null || val === undefined ? '' : val).trim();
+  if (!trimmed) return ''; // 空欄＝日付のクリアは許可する
+  // <input type="date"> は必ず yyyy-MM-dd。手入力・貼り付けを考慮し yyyy/MM/dd も受ける。
+  const m = trimmed.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/);
+  if (m) {
+    const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
+    if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
+      const iso = `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      try {
+        const parsed = Utilities.parseDate(iso, 'Asia/Tokyo', 'yyyy-MM-dd');
+        // 2026-02-31 のような存在しない日付は繰り上がってしまうため、往復させて確認する
+        if (parsed instanceof Date &&
+            Utilities.formatDate(parsed, 'Asia/Tokyo', 'yyyy-MM-dd') === iso) {
+          return parsed;
+        }
+      } catch (e) { /* 下のエラーで通知する */ }
+    }
   }
+  throw new Error(`日付「${trimmed}」を認識できませんでした。カレンダーから選ぶか、2026-09-05 の形式で入力してください。`);
 }
 
 // =====================================================
