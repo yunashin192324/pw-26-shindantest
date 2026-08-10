@@ -679,7 +679,8 @@ function rowInScope_(session, scope, row) {
 // ⑤-2 統計ダッシュボード（JPのみ）
 // =====================================================
 // ★要件：日本側だけの統計タブ。「現在進行中（まだ生きている）」の案件だけを対象に、
-// 全体件数／月毎件数／RQ・OK・FN件数／国別件数／日本支店名（担当）別件数を表示する。
+// 今月から12ヶ月分を月別に「未対応／RQ／OK／FN」の内訳付きで表示する（直近3ヶ月は大きく、
+// 残り9ヶ月は小さく）。その下に国別件数・日本側店舗別件数も表示する。
 // 「現在進行中」＝過去一覧（アーカイブ済み）に移っていない、かつ STS(JP側)・STS(支店側)ともに
 // CW（キャンセル成立）ではない案件。これとは別に、アーカイブ済みも含めた「累計」件数も返す
 // （「あと何件残っているか」が主目的だが、累計もわかるとよい、という要望のため）。
@@ -688,6 +689,7 @@ function apiGetStats(token, scope) {
   const session = requireSession_(token);
   assertJp_(session);
   const branchMeta = branchMetaMap_();
+  const needsActionMap = needsActionMap_(session);
 
   const ss = getSpreadsheet_();
   const currentRows = getRowsAsObjects_(ss.getSheetByName(RESERVATION_SHEET_NAME)).filter(r => rowInScope_(session, scope, r));
@@ -696,8 +698,37 @@ function apiGetStats(token, scope) {
   // 「現在進行中」＝予約一覧に載っている、かつキャンセル成立（CW）でないもの
   const liveRows = currentRows.filter(r => r[COL_STATUS_JP] !== 'CW' && r[COL_STATUS_BRANCH] !== 'CW');
 
-  const byMonth = {};
-  const byStatus = { RQ: 0, OK: 0, FN: 0 };
+  // 1件につき「未対応／RQ／OK／FN」のいずれか1つだけに分類する（合計＝件数になるように排他的に判定）。
+  // 優先順位：①相手側からの未読メッセージ・変更があれば「未対応」／②FNで確定していれば「FN」／
+  // ③OKまで進んでいれば「OK」／④それ以外（RQ・CHK・CR・NC・UC・CFなど）はまとめて「RQ」
+  function bucketOf_(r) {
+    if (needsActionMap[String(r[COL_KANRI_NO])]) return 'needsAction';
+    if (r[COL_STATUS_JP] === 'FN' || r[COL_STATUS_BRANCH] === 'FN') return 'FN';
+    if (r[COL_STATUS_JP] === 'OK' || r[COL_STATUS_BRANCH] === 'OK') return 'OK';
+    return 'RQ';
+  }
+  function emptyBucket_() { return { total: 0, needsAction: 0, rq: 0, ok: 0, fn: 0 }; }
+  function addToBucket_(bucket, kind) {
+    bucket.total++;
+    if (kind === 'needsAction') bucket.needsAction++;
+    else if (kind === 'RQ') bucket.rq++;
+    else if (kind === 'OK') bucket.ok++;
+    else if (kind === 'FN') bucket.fn++;
+  }
+
+  // 今月から12ヶ月分の器を先に用意しておく（データが0件の月も表示するため）
+  const monthBuckets = {};
+  const monthOrder = [];
+  const tz = 'Asia/Tokyo';
+  const base = new Date();
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(base.getFullYear(), base.getMonth() + i, 1);
+    const key = Utilities.formatDate(d, tz, 'yyyy/MM');
+    monthOrder.push(key);
+    monthBuckets[key] = Object.assign({ key, label: `${d.getMonth() + 1}月` }, emptyBucket_());
+  }
+  const undated = Object.assign({ label: '撮影日未定' }, emptyBucket_());
+
   const byCountry = {};
   const byJpShop = {};
 
@@ -710,22 +741,23 @@ function apiGetStats(token, scope) {
     byJpShop[jpShop] = (byJpShop[jpShop] || 0) + 1;
 
     const dVal = r[COL_CONFIRMED_DATE];
-    let monthKey = '未定';
+    let monthKey = null;
     if (dVal instanceof Date) {
-      monthKey = Utilities.formatDate(dVal, 'Asia/Tokyo', 'yyyy/MM');
+      monthKey = Utilities.formatDate(dVal, tz, 'yyyy/MM');
     } else {
       const m = String(dVal || '').match(/^(\d{4}\/\d{1,2})\//);
-      if (m) monthKey = m[1];
+      if (m) monthKey = m[1].replace(/\/(\d)$/, '/0$1');
     }
-    byMonth[monthKey] = (byMonth[monthKey] || 0) + 1;
 
-    // ★要件：RQ/OK/FNがそれぞれ何件あるか（STS JP・STS 支店のどちらかがその値であればカウント）
-    ['RQ', 'OK', 'FN'].forEach(code => {
-      if (r[COL_STATUS_JP] === code || r[COL_STATUS_BRANCH] === code) byStatus[code]++;
-    });
+    const kind = bucketOf_(r);
+    if (monthKey && monthBuckets[monthKey]) {
+      addToBucket_(monthBuckets[monthKey], kind);
+    } else {
+      // 今月より前の月、13ヶ月より先、または日付未定はまとめて「撮影日未定／対象期間外」として扱う
+      addToBucket_(undated, kind);
+    }
   });
 
-  const sortEntries = (obj) => Object.keys(obj).sort().map(k => ({ key: k, count: obj[k] }));
   const sortEntriesByCountDesc = (obj) => Object.keys(obj).map(k => ({ key: k, count: obj[k] }))
     .sort((a, b) => b.count - a.count);
 
@@ -733,8 +765,8 @@ function apiGetStats(token, scope) {
     ok: true,
     total: liveRows.length, // 現在進行中（生きている）件数
     cumulativeTotal: currentRows.length + archiveRows.length, // 累計（アーカイブ済み・キャンセル済みも含む全期間）
-    byMonth: sortEntries(byMonth),
-    byStatus,
+    months: monthOrder.map(k => monthBuckets[k]), // 今月から12ヶ月分（先頭3件が「直近3ヶ月」）
+    undated,
     byCountry: sortEntriesByCountDesc(byCountry),
     byJpShop: sortEntriesByCountDesc(byJpShop),
     teams: JP_TEAMS,

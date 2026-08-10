@@ -166,6 +166,26 @@
     border-bottom: 1px dashed var(--color-border); }
   .stats-row:last-child { border-bottom: none; }
 
+  /* 統計：月カード（直近3ヶ月は大きく、残りの月は小さく下に） */
+  .stats-month-grid-lg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
+  .stats-month-card-lg { background: var(--color-card); border-radius: 14px; padding: 12px 10px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+  .stats-month-card-lg .stats-month-label { font-size: 0.76rem; color: var(--color-muted); }
+  .stats-month-card-lg .stats-month-total { font-size: 1.5rem; font-weight: 800; margin: 2px 0 8px; }
+  .stats-month-grid-sm { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 14px; }
+  .stats-month-card-sm { background: var(--color-card); border-radius: 10px; padding: 8px 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  .stats-month-card-sm .stats-month-label { font-size: 0.68rem; color: var(--color-muted); }
+  .stats-month-card-sm .stats-month-total { font-size: 1.05rem; font-weight: 700; margin: 1px 0 5px; }
+  .stats-status-line { display: flex; align-items: center; gap: 5px; font-size: 0.78rem; margin: 2px 0; }
+  .stats-status-line.sm { font-size: 0.66rem; gap: 3px; margin: 0; white-space: nowrap; }
+  .stats-dots-row { display: flex; flex-wrap: wrap; gap: 6px 8px; }
+  .stats-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .stats-dot.needs-action { background: #d03b3b; }
+  .stats-dot.rq { background: #2a78d6; }
+  .stats-dot.ok { background: #eb6834; }
+  .stats-dot.fn { background: #1baf7a; }
+
   @media (min-width: 640px) {
     .detail-grid { grid-template-columns: repeat(3, 1fr); }
   }

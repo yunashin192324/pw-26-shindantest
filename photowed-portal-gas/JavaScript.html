@@ -314,11 +314,40 @@
     } catch (e) { handleAuthError(e); }
   }
 
+  // 統計：月カード内の「未対応／RQ／OK／FN」内訳（色は常にテキストと併記＝色だけに頼らない）
+  function statsBreakdownLines(m, sizeClass, compactLabel) {
+    const naLabel = compactLabel ? '要' : '未対応';
+    return `
+      <div class="stats-status-line ${sizeClass}"><span class="stats-dot needs-action"></span>${naLabel} ${m.needsAction}</div>
+      <div class="stats-status-line ${sizeClass}"><span class="stats-dot rq"></span>RQ ${m.rq}</div>
+      <div class="stats-status-line ${sizeClass}"><span class="stats-dot ok"></span>OK ${m.ok}</div>
+      <div class="stats-status-line ${sizeClass}"><span class="stats-dot fn"></span>FN ${m.fn}</div>`;
+  }
+  // ★要件：直近3ヶ月は大きく
+  function statsMonthCardLg(m) {
+    return `<div class="stats-month-card-lg">
+      <div class="stats-month-label">${escapeHtml(m.label)}</div>
+      <div class="stats-month-total">${m.total}件</div>
+      ${statsBreakdownLines(m, '', false)}
+    </div>`;
+  }
+  // ★要件：残りの月は小さく下に並べる
+  function statsMonthCardSm(m) {
+    return `<div class="stats-month-card-sm">
+      <div class="stats-month-label">${escapeHtml(m.label)}</div>
+      <div class="stats-month-total">${m.total}件</div>
+      <div class="stats-dots-row">${statsBreakdownLines(m, 'sm', true)}</div>
+    </div>`;
+  }
+
   function renderStats(data) {
-    const statusLabel = { RQ: 'RQ（依頼中）', OK: 'OK（確定）', FN: 'FN（完了）' };
-    const listRows = (entries, totalForPct) => entries.map(e =>
+    const listRows = (entries) => entries.map(e =>
       `<div class="stats-row"><span>${escapeHtml(e.key)}</span><span>${e.count}件</span></div>`
     ).join('') || '<p class="hint-text">データがありません。</p>';
+
+    const months = data.months || [];
+    const bigMonths = months.slice(0, 3);
+    const smallTiles = months.slice(3).concat(data.undated ? [data.undated] : []);
 
     $('stats-content').innerHTML = `
       <div class="section-card">
@@ -326,14 +355,8 @@
         <p class="hint-text" style="margin-top:4px;">キャンセル（CW）・過去一覧（アーカイブ済み）を除く、今まさに動いている案件の件数です。</p>
         <p class="hint-text" style="margin-top:6px;">累計（アーカイブ済み・キャンセル済みを含む全期間）：${data.cumulativeTotal}件</p>
       </div>
-      <div class="section-card">
-        <h3>ステータス別（現在進行中のみ）</h3>
-        ${Object.keys(statusLabel).map(k => `<div class="stats-row"><span>${statusLabel[k]}</span><span>${data.byStatus[k] || 0}件</span></div>`).join('')}
-      </div>
-      <div class="section-card">
-        <h3>月別件数（現在進行中・撮影日FIX基準）</h3>
-        ${listRows(data.byMonth)}
-      </div>
+      <div class="stats-month-grid-lg">${bigMonths.map(statsMonthCardLg).join('')}</div>
+      <div class="stats-month-grid-sm">${smallTiles.map(statsMonthCardSm).join('')}</div>
       <div class="section-card">
         <h3>国別件数（現在進行中）</h3>
         ${listRows(data.byCountry)}
