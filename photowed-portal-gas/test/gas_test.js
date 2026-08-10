@@ -1190,6 +1190,219 @@ section('23. 同意書（機能④）・セール名（機能⑤）');
   try { ctx.apiSaveSaleItem(vie2.session.token, 'IST', 'こっそり割引', null, true); } catch (e) { err = e.message; }
   check('他支店のセールマスタは編集できない', err !== null, err);
 }
+{
+  // 同意書フォーム連携の細かい挙動（二重送信・タイムライン記録・別案件への誤爆防止）
+  const ctx = featureFixture();
+  addCase(ctx, '予約一覧', { '支店コード':'VIE','管理番号':'VIE-201','管轄':'関東','撮影日FIX': daysAhead(10) });
+  addCase(ctx, '予約一覧', { '支店コード':'IST','管理番号':'IST-201','管轄':'関西','撮影日FIX': daysAhead(3) });
+  const jp = ctx.apiLogin('KANTO','pw');
+
+  const e1 = [];
+  ctx.onConsentFormSubmitCore_({ namedValues: { '管理番号': ['VIE-201'] } }, e1);
+  const log = ctx.__ss.getSheetByName('ステータス変更履歴');
+  check('フォーム反映がステータス変更履歴に残る', log.getLastRow() === 2, `行数: ${log.getLastRow()}`);
+  const logRow = log.getRange(2,1,1,6).getValues()[0];
+  check('履歴の管理番号が正しい', logRow[0] === 'VIE-201', String(logRow[0]));
+  check('履歴の変更者がお客様（Googleフォーム）', String(logRow[4]).includes('Googleフォーム'), String(logRow[4]));
+
+  // 二重送信しても履歴が増えない（お客様が同じフォームを2回出すのはよくある）
+  const e2 = [];
+  ctx.onConsentFormSubmitCore_({ namedValues: { '管理番号': ['VIE-201'] } }, e2);
+  check('同じ案件へ2回送信しても履歴が二重にならない', log.getLastRow() === 2, `行数: ${log.getLastRow()}`);
+  check('二重送信はエラー扱いにしない', e2.length === 0);
+
+  // ★案件取り違えが起きていないこと（撮影日順の並べ替えで行位置が動く構造のため）
+  const other = ctx.apiGetReservationDetail(jp.session.token, 'IST-201').detail;
+  check('無関係な案件に同意書が付いていない', !other['同意書'], String(other['同意書']));
+
+  // タイムラインからも同意書の取得タイミングが追える
+  const tl = ctx.apiGetCaseTimeline(jp.session.token, 'VIE-201');
+  check('案件タイムラインに同意書の記録が出る',
+        tl.items.some(it => it.field === '同意書' && it.newValue === '済'),
+        JSON.stringify(tl.items.map(i => i.field)));
+}
+{
+  // 当日表（現地が撮影当日に見る画面）に同意書・セール名が出ること
+  const ctx = featureFixture();
+  const bm = ctx.__ss.getSheetByName('支店マスタ');
+  bm.appendRow(['ROW','ローマ支店','イタリア','ローマ','BRANCH','','rp','roma@his-world.com','ROW','','','',true,true]);
+  const shoot = daysAhead(2);
+  addCase(ctx, '予約一覧', { '支店コード':'ROW','管理番号':'R-301','管轄':'関東',
+    '撮影日FIX': shoot, '配車時間':'09:00', 'セール名':'春の特典' });
+  addCase(ctx, '予約一覧', { '支店コード':'ROW','管理番号':'R-302','管轄':'関東',
+    '撮影日FIX': shoot, '配車時間':'11:00', '同意書':'済' });
+  addCase(ctx, '予約一覧', { '支店コード':'VIE','管理番号':'VIE-301','管轄':'関東',
+    '撮影日FIX': shoot, '配車時間':'13:00' });
+
+  const jp = ctx.apiLogin('KANTO','pw');
+  const iso = `${shoot.getFullYear()}-${String(shoot.getMonth()+1).padStart(2,'0')}-${String(shoot.getDate()).padStart(2,'0')}`;
+  const day = ctx.apiGetDaySchedule(jp.session.token, iso, { showAll: true });
+  const byNo = {}; day.results.forEach(r => { byNo[r.kanriNo] = r; });
+
+  check('当日表にセール名が出る', byNo['R-301'].saleName === '春の特典', String(byNo['R-301'].saleName));
+  check('当日表に同意書必須フラグが出る（ローマ）', byNo['R-301'].consentRequired === true);
+  check('必須支店の未回収が判別できる', !byNo['R-301'].consent);
+  check('取得済みの案件は同意書に値が入る', byNo['R-302'].consent === '済');
+  check('必須でない支店は同意書必須=false', byNo['VIE-301'].consentRequired === false);
+}
+
+// ---------------------------------------------------------------
+section('24. setupPortal を実際に通す（初回セットアップ・再実行）');
+{
+  // ★これまでのテストは ensureSheetWithHeaders_ を個別に呼ぶだけで、setupPortal 自体を
+  // 一度も実行していなかった。列を1つ増やすたびにシード行との不整合が起きうるため、
+  // 「まっさらな状態から setupPortal が最後まで通ること」を必ず確認する。
+  const ctx = makeContext(); CTX = ctx;
+  const ss = ctx.__ss;
+  let err = null;
+  try { ctx.setupPortal(); } catch (e) { err = e.message; }
+  check('まっさらな状態から setupPortal が完走する', err === null, err);
+
+  const SHEETS = ['支店マスタ','プランマスタ','オプションマスタ','撮影場所マスタ','スタッフマスタ',
+                  '定型文マスタ','セールマスタ','予約一覧','やり取り履歴','過去一覧','ステータス変更履歴'];
+  SHEETS.forEach(n => check(`シート「${n}」が作られる`, !!ss.getSheetByName(n)));
+
+  const bm = ss.getSheetByName('支店マスタ');
+  const bmHead = bm.getRange(1,1,1,bm.getLastColumn()).getValues()[0];
+  check('支店マスタのヘッダーが定義どおり',
+        ctx.BRANCH_MASTER_HEADERS.every((h,i) => bmHead[i] === h),
+        `実際: ${bmHead.join(',')}`);
+  check('シード行が24支店＋関東関西の26行入る', bm.getLastRow() === 27, `実際: ${bm.getLastRow()}`);
+
+  // ★シード行が列とズレていると「有効」がFALSE扱いになり、全支店がログインできなくなる
+  const branches = ctx.listBranchesRaw_();
+  check('シード支店が全て有効（列ズレしていない）', branches.every(b => b.active === true),
+        '無効判定: ' + branches.filter(b => !b.active).map(b => b.code).join(','));
+  check('ローマ支店のプレフィックスが R のまま',
+        (branches.find(b => b.code === 'ROW') || {}).prefix === 'R');
+  check('関東手配課がJPロールで読める',
+        (branches.find(b => b.code === 'KANTO') || {}).role === 'JP');
+  check('シード直後は同意書必須がどの支店もfalse', branches.every(b => b.consentRequired === false));
+
+  // 実際にログインできる＝パスコード列もズレていない
+  // ★apiLogin は例外ではなく {ok:false} を返す仕様なので、必ず ok を見る
+  const seedLogin = ctx.apiLogin('ROW', 'CHANGE-ME-ROW');
+  check('シードのパスコードでログインできる（列ズレしていない）', seedLogin.ok === true, JSON.stringify(seedLogin));
+  check('シードログインで支店名・ロールが取れる',
+        seedLogin.ok && seedLogin.session.branchName === 'ローマ支店' && seedLogin.session.role === 'BRANCH');
+  check('誤ったパスコードは拒否される', ctx.apiLogin('ROW', 'WRONG').ok === false);
+  check('存在しない支店コードは拒否される', ctx.apiLogin('NOPE', 'CHANGE-ME-ROW').ok === false);
+
+  // 再実行しても壊れない（列も行も増えない）
+  const colsBefore = bm.getLastColumn(), rowsBefore = bm.getLastRow();
+  let err2 = null;
+  try { ctx.setupPortal(); } catch (e) { err2 = e.message; }
+  check('setupPortal を再実行しても完走する', err2 === null, err2);
+  check('再実行で列が増えない', bm.getLastColumn() === colsBefore, `${colsBefore} → ${bm.getLastColumn()}`);
+  check('再実行でシード行が重複しない', bm.getLastRow() === rowsBefore, `${rowsBefore} → ${bm.getLastRow()}`);
+}
+
+// ---------------------------------------------------------------
+section('25. 旧バージョンからのマイグレーション（同意書・セール名の列追加）');
+{
+  // 本番スプレッドシートは既に稼働中なので、「列が無い状態のシートへ新版コードを載せる」
+  // 経路が壊れていないかを確認する（実運用でいちばん危ないのはここ）
+  const ctx = makeContext(); CTX = ctx;
+  const ss = ctx.__ss;
+
+  // 旧スキーマ（同意書・セール名・同意書必須が無い）の支店マスタと予約一覧を用意する
+  const OLD_BM = ctx.BRANCH_MASTER_HEADERS.filter(h => h !== '同意書必須');
+  const bm = ss.insertSheet('支店マスタ');
+  bm.getRange(1,1,1,OLD_BM.length).setValues([OLD_BM]);
+  bm.appendRow(['KANTO','関東手配課','','','JP','関東','pw','kanto@his-world.com','','','','',true]);
+  bm.appendRow(['ROW','ローマ支店','イタリア','ローマ','BRANCH','','rp','roma@his-world.com','R','','','',true]);
+
+  const OLD_RES = ctx.RESERVATION_HEADERS.filter(h => h !== '同意書' && h !== 'セール名');
+  const res = ss.insertSheet('予約一覧');
+  res.getRange(1,1,1,OLD_RES.length).setValues([OLD_RES]);
+  const oldRow = new Array(OLD_RES.length).fill('');
+  oldRow[OLD_RES.indexOf('支店コード')] = 'ROW';
+  oldRow[OLD_RES.indexOf('管理番号')] = 'R-001';
+  oldRow[OLD_RES.indexOf('新郎名（ローマ字）')] = 'Existing Groom';
+  oldRow[OLD_RES.indexOf('ホテル')] = 'Hotel Roma';
+  res.appendRow(oldRow);
+
+  let err = null;
+  try { ctx.setupPortal(); } catch (e) { err = e.message; }
+  check('旧スキーマの上で setupPortal が完走する', err === null, err);
+
+  const bmHead = bm.getRange(1,1,1,bm.getLastColumn()).getValues()[0];
+  check('支店マスタに「同意書必須」列が追加される', bmHead.includes('同意書必須'));
+  const resHead = res.getRange(1,1,1,res.getLastColumn()).getValues()[0];
+  check('予約一覧に「同意書」列が追加される', resHead.includes('同意書'));
+  check('予約一覧に「セール名」列が追加される', resHead.includes('セール名'));
+
+  // 既存データが壊れていないこと（列追加はあくまで右端への追記）
+  const branches = ctx.listBranchesRaw_();
+  check('マイグレーション後も既存支店が有効のまま', branches.every(b => b.active === true),
+        '無効判定: ' + branches.filter(b => !b.active).map(b => b.code).join(','));
+  check('マイグレーション後もログインできる', ctx.apiLogin('ROW','rp').ok === true);
+
+  const jp = ctx.apiLogin('KANTO','pw');
+  const d = ctx.apiGetReservationDetail(jp.session.token, 'R-001').detail;
+  check('既存案件のデータが保持されている', d['新郎名（ローマ字）'] === 'Existing Groom' && d['ホテル'] === 'Hotel Roma',
+        JSON.stringify({ groom: d['新郎名（ローマ字）'], hotel: d['ホテル'] }));
+  check('新設の同意書欄は空で読める', !d['同意書']);
+  check('新設のセール名欄は空で読める', !d['セール名']);
+
+  // 追加された列にそのまま書き込める（列追加が中途半端だとここで落ちる）
+  let saveErr = null;
+  try { ctx.apiCommitChanges(jp.session.token, 'R-001', { '同意書':'済', 'セール名':'夏セール' }, ''); }
+  catch (e) { saveErr = e.message; }
+  check('マイグレーション後に同意書・セール名を保存できる', saveErr === null, saveErr);
+  const d2 = ctx.apiGetReservationDetail(jp.session.token, 'R-001').detail;
+  check('保存した同意書が読み戻せる', d2['同意書'] === '済');
+  check('保存したセール名が読み戻せる', d2['セール名'] === '夏セール');
+}
+
+// ---------------------------------------------------------------
+section('26. 画面から保存した日付が「日付」として後続処理で使えるか');
+{
+  // ★これまでハーネスの Utilities.parseDate が別realmのDateを返していたため、
+  // 「画面(<input type=date>)から保存した撮影日が、アーカイブ・アラート・当日表で
+  // 日付として認識されるか」という最重要経路が実質ノーチェックだった。
+  const ctx = featureFixture();
+  addCase(ctx, '予約一覧', { '支店コード':'VIE','管理番号':'VIE-401','管轄':'関東','STS JP':'RQ' });
+  const jp = ctx.apiLogin('KANTO','pw');
+
+  const past = daysAgo(3);
+  const pastIso = `${past.getFullYear()}-${String(past.getMonth()+1).padStart(2,'0')}-${String(past.getDate()).padStart(2,'0')}`;
+  ctx.apiCommitChanges(jp.session.token, 'VIE-401', { '撮影日FIX': pastIso }, '');
+
+  // シートに「文字列」ではなく実際の Date で入っていること
+  const sheet = ctx.__ss.getSheetByName('予約一覧');
+  const head = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0];
+  const stored = sheet.getRange(2, head.indexOf('撮影日FIX')+1).getValue();
+  check('画面から保存した撮影日がDate型で保存される',
+        Object.prototype.toString.call(stored) === '[object Date]',
+        `型: ${Object.prototype.toString.call(stored)} 値: ${stored}`);
+
+  // 撮影日を過ぎた案件が過去一覧へ移動すること（Date型でないと移動しない）
+  ctx.archivePastReservations();
+  const arch = ctx.__ss.getSheetByName('過去一覧');
+  check('画面から保存した撮影日でも過去一覧へ移動する', arch.getLastRow() === 2, `過去一覧の行数: ${arch.getLastRow()}`);
+  check('移動後は予約一覧から消える', sheet.getLastRow() === 1, `予約一覧の行数: ${sheet.getLastRow()}`);
+}
+{
+  // 撮影45日前アラートも、画面から保存した日付で発火すること
+  const ctx = featureFixture();
+  addCase(ctx, '予約一覧', { '支店コード':'VIE','管理番号':'VIE-402','管轄':'関東','STS JP':'RQ' });
+  const jp = ctx.apiLogin('KANTO','pw');
+  const ahead = daysAhead(ctx.ALERT_DAYS_BEFORE);
+  const iso = `${ahead.getFullYear()}-${String(ahead.getMonth()+1).padStart(2,'0')}-${String(ahead.getDate()).padStart(2,'0')}`;
+  ctx.apiCommitChanges(jp.session.token, 'VIE-402', { '撮影日FIX': iso }, '');
+  ctx.__mail.length = 0;
+  ctx.checkAlerts();
+  check('画面から保存した撮影日でも45日前アラートが飛ぶ',
+        ctx.__mail.some(m => m.subj.includes('VIE-402')),
+        JSON.stringify(ctx.__mail.map(m => m.subj)));
+
+  // 当日表でも同じ日付で引ける
+  const day = ctx.apiGetDaySchedule(jp.session.token, iso, { showAll: true });
+  check('画面から保存した撮影日で当日表に出る',
+        day.results.some(r => r.kanriNo === 'VIE-402'),
+        JSON.stringify(day.results.map(r => r.kanriNo)));
+}
 
 // ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);

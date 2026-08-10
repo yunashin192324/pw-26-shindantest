@@ -98,6 +98,9 @@ function makeContext() {
   const sentMail = [];
   const cache = {};
   let uuid = 0;
+  // vm コンテキスト生成後に「vm内のDateを作る関数」が入る（下の __newDate と同じもの）。
+  // Utilities.parseDate から参照するため、先に宣言だけしておく。
+  let mkDate = (y, m, d) => new Date(y, m, d);
   const ctx = {
     __ss: ss, __mail: sentMail, console,
     SpreadsheetApp: { openById: () => ss, getUi: () => ({ alert: () => {} }) },
@@ -109,7 +112,15 @@ function makeContext() {
         return fmt.replace('yyyy', Y).replace('MM', M).replace('dd', D)
                   .replace('HH', h).replace('mm', m).replace('ss', s);
       },
-      parseDate: (str) => { const [y, mo, d] = str.split('-').map(Number); return new Date(y, mo - 1, d); }
+      // ★重要：実GASの Utilities.parseDate は本物の Date を返し、Code.gs 側の
+      // `val instanceof Date` を通る。ここで Node 側の new Date を返すと
+      // vm が別realmのため instanceof が false になり、
+      // 「日付を保存 → 日付として読み直す」経路（当日表・アーカイブ・各アラート）が
+      // 実際には壊れていてもテストが素通りしてしまう。必ず vm 内の Date を作る。
+      parseDate: (str) => {
+        const [y, mo, d] = str.split('-').map(Number);
+        return mkDate(y, mo - 1, d);
+      }
     },
     CacheService: { getScriptCache: () => ({
       put: (k, v) => { cache[k] = v; }, get: (k) => (k in cache ? cache[k] : null), remove: (k) => { delete cache[k]; }
@@ -148,6 +159,7 @@ function makeContext() {
   // vm は別realmなので、Node側で作った Date は `instanceof Date` が false になる。
   // シートに入れる日付は必ずこのファクトリ経由で「vm内のDate」を作る。
   ctx.__newDate = vm.runInContext('(function (y, m, d) { return new Date(y, m, d); })', ctx);
+  mkDate = ctx.__newDate; // Utilities.parseDate も vm 内の Date を返すようにする
   ctx.__daysFromToday = vm.runInContext(
     '(function (n) { const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), t.getDate() + n); })', ctx);
   return ctx;

@@ -270,37 +270,52 @@ function setupPortal() {
 
   const bm = ss.getSheetByName(BRANCH_MASTER_SHEET_NAME);
   if (bm.getLastRow() < 2) {
-    const rows = [
-      // 支店コード, 支店名, 国, 都市, ロール, 手配チーム, パスコード, 通知先メール, 番号プレフィックス, 請求番号欄名称, 納品期限日数, 督促日数, 有効
-      ['KANTO', '関東手配課', '', '', JP_ROLE, '関東', 'CHANGE-ME-KANTO', 'tw-avanti@his-world.com', '', '', '', '', true],
-      ['KANSAI', '関西手配課', '', '', JP_ROLE, '関西', 'CHANGE-ME-KANSAI', 'o-avanti@his-world.com', '', '', '', '', true],
-      // ローマは既に「R-」採番で運用中のためプレフィックスは変更しない
-      ['ROW', 'ローマ支店', 'イタリア', 'ローマ', BRANCH_ROLE, '', 'CHANGE-ME-ROW', 'row-branch@his-world.com', 'R', '', '', '', true],
-      ['VIE', 'ウィーン支店', 'オーストリア', 'ウィーン', BRANCH_ROLE, '', 'CHANGE-ME-VIE', 'vienna-branch@his-world.com', 'VIE', '', '', '', true],
-      ['AMS', 'アムステルダム支店', 'オランダ', 'アムステルダム', BRANCH_ROLE, '', 'CHANGE-ME-AMS', 'amsterdam-branch@his-world.com', 'AMS', '', '', '', true],
-      ['GVA', 'ジュネーブ支店', 'スイス', 'ジュネーブ', BRANCH_ROLE, '', 'CHANGE-ME-GVA', 'geneva-branch@his-world.com', 'GVA', '', '', '', true],
-      ['ATH', 'アテネ支店', 'ギリシャ', 'アテネ', BRANCH_ROLE, '', 'CHANGE-ME-ATH', 'athens-branch@his-world.com', 'ATH', '', '', '', true],
-      ['IST', 'イスタンブール支店', 'トルコ', 'イスタンブール', BRANCH_ROLE, '', 'CHANGE-ME-IST', 'istanbul-branch@his-world.com', 'IST', '', '', '', true],
-      ['DXB', 'ドバイ支店', 'アラブ首長国連邦', 'ドバイ', BRANCH_ROLE, '', 'CHANGE-ME-DXB', 'dubai-branch@his-world.com', 'DXB', '', '', '', true],
-      ['CAI', 'カイロ支店', 'エジプト', 'カイロ', BRANCH_ROLE, '', 'CHANGE-ME-CAI', 'cairo-branch@his-world.com', 'CAI', '', '', '', true],
-      ['CAS', 'カサブランカ支店', 'モロッコ', 'カサブランカ', BRANCH_ROLE, '', 'CHANGE-ME-CAS', 'casablanca-branch@his-world.com', 'CAS', '', '', '', true],
-      ['LON', 'ロンドン支店', 'イギリス', 'ロンドン', BRANCH_ROLE, '', 'CHANGE-ME-LON', 'london-branch@his-world.com', 'LON', '', '', '', true],
-      ['FRA', 'フランクフルト支店', 'ドイツ', 'フランクフルト', BRANCH_ROLE, '', 'CHANGE-ME-FRA', 'frankfurt-branch@his-world.com', 'FRA', '', '', '', true],
-      ['NBO', 'ナイロビ支店', 'ケニア', 'ナイロビ', BRANCH_ROLE, '', 'CHANGE-ME-NBO', 'nairobi-branch@his-world.com', 'NBO', '', '', '', true],
-      ['CUN', 'カンクン支店', 'メキシコ', 'カンクン', BRANCH_ROLE, '', 'CHANGE-ME-CUN', 'cancun-branch@his-world.com', 'CUN', '', '', '', true],
-      ['YVR', 'バンクーバー支店', 'カナダ', 'バンクーバー', BRANCH_ROLE, '', 'CHANGE-ME-YVR', 'vancouver-branch@his-world.com', 'YVR', '', '', '', true],
-      ['LPB', 'ラパス支店', 'ボリビア', 'ラパス', BRANCH_ROLE, '', 'CHANGE-ME-LPB', 'lapaz-branch@his-world.com', 'LPB', '', '', '', true],
-      ['FIJ', 'フィジー支店', 'フィジー', '', BRANCH_ROLE, '', 'CHANGE-ME-FIJ', 'fiji-branch@his-world.com', 'FIJ', '', '', '', true],
-      ['AUS', 'オーストラリア支店', 'オーストラリア', '', BRANCH_ROLE, '', 'CHANGE-ME-AUS', 'australia-branch@his-world.com', 'AUS', '', '', '', true],
-      ['NZL', 'ニュージーランド支店', 'ニュージーランド', '', BRANCH_ROLE, '', 'CHANGE-ME-NZL', 'newzealand-branch@his-world.com', 'NZL', '', '', '', true],
-      ['DPS', 'デンパサール支店', 'インドネシア', 'デンパサール', BRANCH_ROLE, '', 'CHANGE-ME-DPS', 'denpasar-branch@his-world.com', 'DPS', '', '', '', true],
-      ['TPE', '台北支店', '台湾', '台北', BRANCH_ROLE, '', 'CHANGE-ME-TPE', 'taipei-branch@his-world.com', 'TPE', '', '', '', true],
-      ['SIN', 'シンガポール支店', 'シンガポール', 'シンガポール', BRANCH_ROLE, '', 'CHANGE-ME-SIN', 'singapore-branch@his-world.com', 'SIN', '', '', '', true],
-      ['REP', 'シェムリアップ支店', 'カンボジア', 'シェムリアップ', BRANCH_ROLE, '', 'CHANGE-ME-REP', 'siemreap-branch@his-world.com', 'REP', '', '', '', true],
-      ['TAS', 'タシケント支店', 'ウズベキスタン', 'タシケント', BRANCH_ROLE, '', 'CHANGE-ME-TAS', 'tashkent-branch@his-world.com', 'TAS', '', '', '', true],
-      ['JED', 'ジェッダ支店', 'サウジアラビア', 'ジェッダ', BRANCH_ROLE, '', 'CHANGE-ME-JED', 'jeddah-branch@his-world.com', 'JED', '', '', '', true]
+    // ★不具合修正：以前はここに支店マスタの全列を順番どおり並べていたため、
+    // 「同意書必須」のように列を1つ増やすたびにこのシード行もズレて、
+    // まっさらなスプレッドシートでの setupPortal が落ちる（＝新規導入が一切できない）状態になっていた。
+    // 下記は SEED_BRANCH_FIELDS の9項目だけを並べ、残りの列は列名基準で空欄（有効のみtrue）を埋める。
+    // 今後どれだけ列が増えても、この配列を直す必要はない。
+    const SEED_BRANCH_FIELDS = [
+      BM_COL_CODE, BM_COL_NAME, BM_COL_COUNTRY, BM_COL_CITY, BM_COL_ROLE,
+      BM_COL_TEAM, BM_COL_PASSCODE, BM_COL_EMAIL, BM_COL_PREFIX
     ];
-    bm.getRange(2, 1, rows.length, BRANCH_MASTER_HEADERS.length).setValues(rows);
+    const rows = [
+      // 支店コード, 支店名, 国, 都市, ロール, 手配チーム, パスコード, 通知先メール, 番号プレフィックス
+      ['KANTO', '関東手配課', '', '', JP_ROLE, '関東', 'CHANGE-ME-KANTO', 'tw-avanti@his-world.com', ''],
+      ['KANSAI', '関西手配課', '', '', JP_ROLE, '関西', 'CHANGE-ME-KANSAI', 'o-avanti@his-world.com', ''],
+      // ローマは既に「R-」採番で運用中のためプレフィックスは変更しない
+      ['ROW', 'ローマ支店', 'イタリア', 'ローマ', BRANCH_ROLE, '', 'CHANGE-ME-ROW', 'row-branch@his-world.com', 'R'],
+      ['VIE', 'ウィーン支店', 'オーストリア', 'ウィーン', BRANCH_ROLE, '', 'CHANGE-ME-VIE', 'vienna-branch@his-world.com', 'VIE'],
+      ['AMS', 'アムステルダム支店', 'オランダ', 'アムステルダム', BRANCH_ROLE, '', 'CHANGE-ME-AMS', 'amsterdam-branch@his-world.com', 'AMS'],
+      ['GVA', 'ジュネーブ支店', 'スイス', 'ジュネーブ', BRANCH_ROLE, '', 'CHANGE-ME-GVA', 'geneva-branch@his-world.com', 'GVA'],
+      ['ATH', 'アテネ支店', 'ギリシャ', 'アテネ', BRANCH_ROLE, '', 'CHANGE-ME-ATH', 'athens-branch@his-world.com', 'ATH'],
+      ['IST', 'イスタンブール支店', 'トルコ', 'イスタンブール', BRANCH_ROLE, '', 'CHANGE-ME-IST', 'istanbul-branch@his-world.com', 'IST'],
+      ['DXB', 'ドバイ支店', 'アラブ首長国連邦', 'ドバイ', BRANCH_ROLE, '', 'CHANGE-ME-DXB', 'dubai-branch@his-world.com', 'DXB'],
+      ['CAI', 'カイロ支店', 'エジプト', 'カイロ', BRANCH_ROLE, '', 'CHANGE-ME-CAI', 'cairo-branch@his-world.com', 'CAI'],
+      ['CAS', 'カサブランカ支店', 'モロッコ', 'カサブランカ', BRANCH_ROLE, '', 'CHANGE-ME-CAS', 'casablanca-branch@his-world.com', 'CAS'],
+      ['LON', 'ロンドン支店', 'イギリス', 'ロンドン', BRANCH_ROLE, '', 'CHANGE-ME-LON', 'london-branch@his-world.com', 'LON'],
+      ['FRA', 'フランクフルト支店', 'ドイツ', 'フランクフルト', BRANCH_ROLE, '', 'CHANGE-ME-FRA', 'frankfurt-branch@his-world.com', 'FRA'],
+      ['NBO', 'ナイロビ支店', 'ケニア', 'ナイロビ', BRANCH_ROLE, '', 'CHANGE-ME-NBO', 'nairobi-branch@his-world.com', 'NBO'],
+      ['CUN', 'カンクン支店', 'メキシコ', 'カンクン', BRANCH_ROLE, '', 'CHANGE-ME-CUN', 'cancun-branch@his-world.com', 'CUN'],
+      ['YVR', 'バンクーバー支店', 'カナダ', 'バンクーバー', BRANCH_ROLE, '', 'CHANGE-ME-YVR', 'vancouver-branch@his-world.com', 'YVR'],
+      ['LPB', 'ラパス支店', 'ボリビア', 'ラパス', BRANCH_ROLE, '', 'CHANGE-ME-LPB', 'lapaz-branch@his-world.com', 'LPB'],
+      ['FIJ', 'フィジー支店', 'フィジー', '', BRANCH_ROLE, '', 'CHANGE-ME-FIJ', 'fiji-branch@his-world.com', 'FIJ'],
+      ['AUS', 'オーストラリア支店', 'オーストラリア', '', BRANCH_ROLE, '', 'CHANGE-ME-AUS', 'australia-branch@his-world.com', 'AUS'],
+      ['NZL', 'ニュージーランド支店', 'ニュージーランド', '', BRANCH_ROLE, '', 'CHANGE-ME-NZL', 'newzealand-branch@his-world.com', 'NZL'],
+      ['DPS', 'デンパサール支店', 'インドネシア', 'デンパサール', BRANCH_ROLE, '', 'CHANGE-ME-DPS', 'denpasar-branch@his-world.com', 'DPS'],
+      ['TPE', '台北支店', '台湾', '台北', BRANCH_ROLE, '', 'CHANGE-ME-TPE', 'taipei-branch@his-world.com', 'TPE'],
+      ['SIN', 'シンガポール支店', 'シンガポール', 'シンガポール', BRANCH_ROLE, '', 'CHANGE-ME-SIN', 'singapore-branch@his-world.com', 'SIN'],
+      ['REP', 'シェムリアップ支店', 'カンボジア', 'シェムリアップ', BRANCH_ROLE, '', 'CHANGE-ME-REP', 'siemreap-branch@his-world.com', 'REP'],
+      ['TAS', 'タシケント支店', 'ウズベキスタン', 'タシケント', BRANCH_ROLE, '', 'CHANGE-ME-TAS', 'tashkent-branch@his-world.com', 'TAS'],
+      ['JED', 'ジェッダ支店', 'サウジアラビア', 'ジェッダ', BRANCH_ROLE, '', 'CHANGE-ME-JED', 'jeddah-branch@his-world.com', 'JED']
+    ];
+    const seedRows = rows.map(vals => {
+      const byName = {};
+      SEED_BRANCH_FIELDS.forEach((h, i) => { byName[h] = vals[i]; });
+      byName[BM_COL_ACTIVE] = true;
+      return BRANCH_MASTER_HEADERS.map(h => (h in byName ? byName[h] : ''));
+    });
+    bm.getRange(2, 1, seedRows.length, BRANCH_MASTER_HEADERS.length).setValues(seedRows);
   }
   [
     bm,
@@ -309,6 +324,7 @@ function setupPortal() {
     ss.getSheetByName(LOCATION_MASTER_SHEET_NAME),
     ss.getSheetByName(STAFF_MASTER_SHEET_NAME),
     ss.getSheetByName(PHRASE_MASTER_SHEET_NAME),
+    ss.getSheetByName(SALE_MASTER_SHEET_NAME),
     ss.getSheetByName(RESERVATION_SHEET_NAME),
     ss.getSheetByName(HISTORY_SHEET_NAME),
     ss.getSheetByName(ARCHIVE_SHEET_NAME),
@@ -1078,6 +1094,11 @@ function apiGetDaySchedule(token, dateStr, scope) {
         groomName: r[COL_GROOM_NAME],
         brideName: r[COL_BRIDE_NAME],
         plan: r[COL_PLAN],
+        saleName: r[COL_SALE_NAME] || '',
+        // ★要件：同意書は撮影当日までに回収されている必要があるため、当日表でも状態が分かるようにする。
+        // 必須の支店（例：ローマ）で未回収の場合は画面側で警告表示する
+        consent: r[COL_CONSENT] || '',
+        consentRequired: !!meta.consentRequired,
         location: r[COL_LOCATION],
         prep: r[COL_PREP],
         hotel: r[COL_HOTEL],
@@ -2452,6 +2473,8 @@ function setupTriggers() {
 // フォーム側で管理番号の入力ミスがあった場合は自動反映できないため、その場合は画面の
 // 「予約内容」タブから同意書欄を手動でチェックしてください（通常の3択保存の対象に含まれます）。
 const CONSENT_FORM_KANRI_QUESTION = '管理番号';
+// 同意書が取得済みであることを表す値（画面のチェックボックスもこの値で保存する）
+const CONSENT_DONE_VALUE = '済';
 
 function setupConsentFormTrigger() {
   ScriptApp.getProjectTriggers().forEach(t => {
@@ -2489,10 +2512,37 @@ function onConsentFormSubmitCore_(e, errors) {
     errors.push({ where: 'onConsentFormSubmit', message: '管理番号が空欄で送信されました。' });
     return;
   }
-  const { sheet, headers, rowIndex } = findReservationRow_(kanri);
-  if (rowIndex === -1) {
-    errors.push({ where: 'onConsentFormSubmit', message: `管理番号「${kanri}」の案件が見つかりません（入力ミスの可能性があります）。` });
+  // ★重要：ロックを取ってから行を探して書く。
+  // 撮影日FIXが変更されると sortReservationSheet_ で行の並びが変わるため、
+  // ロックなしで「行を探す → その行番号へ書く」を行うと、その隙に別の案件が
+  // その行番号に来て、まったく無関係な案件へ「同意書=済」を書き込む危険がある。
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) {
+    errors.push({ where: 'onConsentFormSubmit', message: `他の処理と競合したため、管理番号「${kanri}」の同意書を反映できませんでした。画面から手動でチェックしてください。` });
     return;
   }
-  sheet.getRange(rowIndex, colIndexOrThrow_(headers, COL_CONSENT)).setValue('済');
+  try {
+    const { sheet, headers, rowIndex, rowData } = findReservationRow_(kanri);
+    if (rowIndex === -1) {
+      errors.push({ where: 'onConsentFormSubmit', message: `管理番号「${kanri}」の案件が見つかりません（入力ミスの可能性があります）。` });
+      return;
+    }
+    // 同じお客様がフォームを2回送信しても、履歴が二重に増えないようにする
+    const before = String(rowData[headers.indexOf(COL_CONSENT)] || '').trim();
+    if (before === CONSENT_DONE_VALUE) return;
+
+    sheet.getRange(rowIndex, colIndexOrThrow_(headers, COL_CONSENT)).setValue(CONSENT_DONE_VALUE);
+    const lastUpdatedIdx = headers.indexOf(COL_LAST_UPDATED);
+    if (lastUpdatedIdx !== -1) sheet.getRange(rowIndex, lastUpdatedIdx + 1).setValue(new Date());
+
+    // ★日本側・支店側の双方が「いつ同意書が取れたか」を追えるように、案件タイムラインへ残す。
+    // メール通知や未読（要対応）にはしない：同意書の回収は定常業務で、件数も多いため、
+    // 通知にすると本当に対応が必要な案件が埋もれてしまう。
+    const logSheet = getSpreadsheet_().getSheetByName(STATUS_LOG_SHEET_NAME);
+    if (logSheet) {
+      logSheet.appendRow([kanri, COL_CONSENT, before || '(未回収)', CONSENT_DONE_VALUE, 'お客様（Googleフォーム）', new Date()]);
+    }
+  } finally {
+    lock.releaseLock();
+  }
 }

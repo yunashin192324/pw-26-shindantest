@@ -336,6 +336,15 @@
     loadDaySchedule();
   }
 
+  // ★要件：同意書は撮影当日までに必要なため、当日表でも状態が一目で分かるようにする。
+  // 必須の支店（例：ローマ）で未回収なら警告、取得済みなら控えめに表示する。
+  function consentChip(r) {
+    const done = !!String(r.consent || '').trim();
+    if (done) return `<div class="hint-text" style="margin-top:6px;">同意書：取得済み</div>`;
+    if (!r.consentRequired) return '';
+    return `<div class="conflict-box" style="margin-top:8px;">同意書が未回収です（この支店は必須）</div>`;
+  }
+
   async function loadDaySchedule() {
     const date = $('day-date').value;
     if (!date) { showToast('日付を選んでください'); return; }
@@ -356,8 +365,10 @@
           <div class="res-card-bottom">
             ${session.role === 'JP' ? `<span class="chip branch">${escapeHtml(r.branchName)}</span>` : ''}
             ${r.plan ? `<span class="chip">${escapeHtml(r.plan)}</span>` : ''}
+            ${r.saleName ? `<span class="chip">${escapeHtml(r.saleName)}</span>` : ''}
             ${r.statusBranch ? `<span class="chip branch">STS 支店: ${escapeHtml(r.statusBranch)}</span>` : ''}
           </div>
+          ${consentChip(r)}
           <div class="detail-grid" style="margin-top:8px;">
             <div class="field-block"><label>撮影希望場所</label><div class="val">${escapeHtml(r.location || '-')}</div></div>
             <div class="field-block"><label>準備場所</label><div class="val">${escapeHtml(r.prep || '-')}</div></div>
@@ -534,10 +545,15 @@
   }
 
   // ---------- 詳細 ----------
-  async function openDetail(kanriNo) {
+  // keepTab=true のときは今開いているタブを維持する。
+  // ★不具合修正：「予約内容」「現地記入欄」タブの下部ボタンで保存すると、再描画のたびに
+  // 「メッセージ」タブへ戻されてしまい、"メッセージタブに戻るのが面倒"という
+  // 追加要望そのものが解決しない状態だった。保存後の再描画では元のタブに留まる。
+  async function openDetail(kanriNo, keepTab) {
     if (kanriNo !== currentKanri) pendingChanges = {};
     currentKanri = kanriNo;
-    detailActiveTab = 'message'; // ★要件：開いたらまずメッセージ（未読の有無）が目に入るようにする
+    // ★要件：一覧から開いたときはまずメッセージ（未読の有無）が目に入るようにする
+    if (!keepTab) detailActiveTab = 'message';
     showView('detail');
     $('detail-content').innerHTML = '<p class="hint-text">読み込み中...</p>';
     try {
@@ -917,6 +933,9 @@
     c.querySelectorAll('[data-history-field]').forEach(btn => {
       btn.addEventListener('click', () => toggleFieldHistory(btn.dataset.historyField, btn.dataset.historyTarget));
     });
+    // 履歴タブを開いたまま再描画された場合、タブのクリックが起きないので
+    // ここで読み込まないと「読み込み中...」のまま止まってしまう
+    if (detailActiveTab === 'timeline') loadTimeline();
   }
 
   // ★機能：希望日のボタンを押すと、撮影日FIXへの反映・STS 支店＝OK・定型メッセージを1回で送信する。
@@ -1040,7 +1059,7 @@
       const res = await gsRun('apiCommitChanges', session.token, currentKanri, pendingChanges, msg);
       pendingChanges = {};
       showToast(res.noChange ? '変更はありませんでした' : '変更を決定し、相手へ通知しました');
-      openDetail(currentKanri);
+      openDetail(currentKanri, true); // 今開いているタブのまま留まる
     } catch (e) { handleAuthError(e); }
   }
 
@@ -1051,7 +1070,7 @@
       await gsRun('apiSaveFieldsQuiet', session.token, currentKanri, pendingChanges);
       pendingChanges = {};
       showToast('変更を保存しました（通知は送信していません）');
-      openDetail(currentKanri);
+      openDetail(currentKanri, true); // 今開いているタブのまま留まる
     } catch (e) { handleAuthError(e); }
   }
 
