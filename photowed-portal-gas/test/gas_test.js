@@ -234,6 +234,10 @@ section('6. 要対応（未読）判定');
   hrow[HH.indexOf('内容')] = '空き確認できました';
   hs.appendRow(hrow);
 
+  // 履歴を直接書き込んだ（＝既存データの移行と同じ状況）ため、未読フラグを一括再計算する
+  const rebuilt = ctx.rebuildUnreadFlags();
+  check('未読フラグの一括再計算が実行される', rebuilt.ok === true && rebuilt.rows === 2, `実際: ${JSON.stringify(rebuilt)}`);
+
   const jp = ctx.apiLogin('KANTO','pw');
   let dash = ctx.apiGetDashboard(jp.session.token, { showAll: true });
   check('JP側：支店からの未読がある案件が要対応になる',
@@ -664,6 +668,184 @@ section('17. 既読チェックの認可・新規作成時の支店コード検�
   check('無効化された支店では案件を作れない', bad('OLD') !== null, `実際: ${bad('OLD')}`);
   check('日本側チーム(KANTO)を支店として指定できない', bad('KANTO') !== null, `実際: ${bad('KANTO')}`);
   check('有効な支店なら作成できる', bad('VIE') === null);
+}
+
+
+// ---------------------------------------------------------------
+section('18. 未読フラグ方式（履歴の全件走査をやめた新方式）');
+function unreadFixture() {
+  const ctx = makeContext(); CTX = ctx;
+  const ss = ctx.__ss;
+  ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
+  const bm = ss.getSheetByName('支店マスタ');
+  bm.appendRow(['KANTO','関東手配課','','','JP','関東','pw','kanto@his-world.com','','','',true]);
+  bm.appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','vp','vie@his-world.com','VIE','','',true]);
+  ['予約一覧','過去一覧'].forEach(n => ctx.ensureSheetWithHeaders_(ss, n, ctx.RESERVATION_HEADERS));
+  ctx.ensureSheetWithHeaders_(ss, 'やり取り履歴', ctx.HISTORY_HEADERS);
+  ctx.ensureSheetWithHeaders_(ss, 'ステータス変更履歴', ctx.STATUS_LOG_HEADERS);
+  const res = ss.getSheetByName('予約一覧');
+  const H = ctx.RESERVATION_HEADERS;
+  const row = new Array(H.length).fill('');
+  row[H.indexOf('支店コード')] = 'VIE';
+  row[H.indexOf('管理番号')] = 'VIE-001';
+  row[H.indexOf('管轄')] = '関東';
+  row[H.indexOf('STS JP')] = 'NC';
+  res.appendRow(row);
+  return ctx;
+}
+{
+  const ctx = unreadFixture();
+  const ss = ctx.__ss;
+  const res = ss.getSheetByName('予約一覧');
+  const H = ctx.RESERVATION_HEADERS;
+  const flag = (name) => res.getRange(2, H.indexOf(name)+1, 1, 1).getValues()[0][0];
+
+  const jp = ctx.apiLogin('KANTO','pw');
+  const vie = ctx.apiLogin('VIE','vp');
+
+  check('初期状態はどちらも未読なし', flag('未読 JP') === '' && flag('未読 支店') === '');
+
+  // JP → 支店 へメッセージ
+  ctx.apiCommitChanges(jp.session.token, 'VIE-001', {}, '空き確認をお願いします');
+  check('JPが送ると「未読 支店」が立つ', flag('未読 支店') === true, `実際: ${flag('未読 支店')}`);
+  check('JPが送っても「未読 JP」は立たない', flag('未読 JP') !== true);
+
+  let bDash = ctx.apiGetDashboard(vie.session.token, {});
+  check('支店側の一覧で要対応になる', bDash.reservations[0].needsAction === true);
+  let jDash = ctx.apiGetDashboard(jp.session.token, { showAll: true });
+  check('JP側の一覧では要対応にならない', jDash.reservations[0].needsAction === false);
+
+  // 支店が既読にする
+  const hs = ss.getSheetByName('やり取り履歴');
+  const HH = ctx.HISTORY_HEADERS;
+  const hid = hs.getRange(2, HH.indexOf('__id')+1, 1, 1).getValues()[0][0];
+  ctx.apiToggleHistoryCheck(vie.session.token, hid, true);
+  check('支店が既読にすると「未読 支店」が下りる', flag('未読 支店') === false, `実際: ${flag('未読 支店')}`);
+  bDash = ctx.apiGetDashboard(vie.session.token, {});
+  check('既読後は支店側の一覧で要対応が解除される', bDash.reservations[0].needsAction === false);
+
+  // 未読に戻せる
+  ctx.apiToggleHistoryCheck(vie.session.token, hid, false);
+  check('チェックを外すと再び未読になる', flag('未読 支店') === true);
+}
+{
+  // 複数メッセージのうち1件だけ既読にしてもフラグは下りない
+  const ctx = unreadFixture();
+  const ss = ctx.__ss;
+  const res = ss.getSheetByName('予約一覧');
+  const H = ctx.RESERVATION_HEADERS;
+  const flag = (name) => res.getRange(2, H.indexOf(name)+1, 1, 1).getValues()[0][0];
+  const jp = ctx.apiLogin('KANTO','pw');
+  const vie = ctx.apiLogin('VIE','vp');
+
+  ctx.apiCommitChanges(jp.session.token, 'VIE-001', {}, '1通目');
+  ctx.apiCommitChanges(jp.session.token, 'VIE-001', {}, '2通目');
+  const hs = ss.getSheetByName('やり取り履歴');
+  const HH = ctx.HISTORY_HEADERS;
+  const id1 = hs.getRange(2, HH.indexOf('__id')+1, 1, 1).getValues()[0][0];
+  const id2 = hs.getRange(3, HH.indexOf('__id')+1, 1, 1).getValues()[0][0];
+
+  ctx.apiToggleHistoryCheck(vie.session.token, id1, true);
+  check('2通中1通だけ既読では未読フラグは残る', flag('未読 支店') === true, `実際: ${flag('未読 支店')}`);
+  ctx.apiToggleHistoryCheck(vie.session.token, id2, true);
+  check('全て既読にすると未読フラグが下りる', flag('未読 支店') === false);
+
+  // 支店→JP の方向も独立して動く
+  ctx.apiCommitChanges(vie.session.token, 'VIE-001', {}, '確認しました');
+  check('支店が送ると「未読 JP」が立つ', flag('未読 JP') === true);
+  check('支店が送っても「未読 支店」は立たない', flag('未読 支店') === false);
+}
+{
+  // ダッシュボードが履歴を読まずフラグ列を見ていることの確認
+  const ctx = unreadFixture();
+  const ss = ctx.__ss;
+  const jp = ctx.apiLogin('KANTO','pw');
+  const vie = ctx.apiLogin('VIE','vp');
+  ctx.apiCommitChanges(jp.session.token, 'VIE-001', {}, 'テスト');
+  // 履歴シートの中身を空にしてもフラグ列が残っていれば要対応のまま
+  const hs = ss.getSheetByName('やり取り履歴');
+  hs.deleteRow(2);
+  const bDash = ctx.apiGetDashboard(vie.session.token, {});
+  check('履歴を全件走査せずフラグ列で判定している', bDash.reservations[0].needsAction === true);
+}
+
+// ---------------------------------------------------------------
+section('19. 定期処理の例外処理とシステム通知');
+function triggerFixture() {
+  const ctx = makeContext(); CTX = ctx;
+  const ss = ctx.__ss;
+  ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
+  const bm = ss.getSheetByName('支店マスタ');
+  bm.appendRow(['KANTO','関東手配課','','','JP','関東','pw','kanto@his-world.com','','','',true]);
+  bm.appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','vp','vie@his-world.com','VIE','','',true]);
+  ['予約一覧','過去一覧'].forEach(n => ctx.ensureSheetWithHeaders_(ss, n, ctx.RESERVATION_HEADERS));
+  ctx.ensureSheetWithHeaders_(ss, 'やり取り履歴', ctx.HISTORY_HEADERS);
+  return ctx;
+}
+{
+  const ctx = triggerFixture();
+  const ss = ctx.__ss;
+  const res = ss.getSheetByName('予約一覧');
+  const H = ctx.RESERVATION_HEADERS;
+  const mk = (kanri, days) => {
+    const row = new Array(H.length).fill('');
+    row[H.indexOf('支店コード')] = 'VIE'; row[H.indexOf('管理番号')] = kanri;
+    row[H.indexOf('管轄')] = '関東'; row[H.indexOf('STS JP')] = 'RQ';
+    row[H.indexOf('撮影日FIX')] = daysAhead(days);
+    res.appendRow(row);
+  };
+  mk('VIE-A', 45); mk('VIE-B', 45); mk('VIE-C', 45);
+
+  // 2件目の送信だけ失敗させる（1件の異常で以降が止まらないことの確認）
+  let n = 0;
+  const realSend = ctx.MailApp.sendEmail;
+  ctx.MailApp.sendEmail = function (to, subj, body) {
+    n++;
+    if (n === 2) throw new Error('意図的な送信エラー');
+    return realSend(to, subj, body);
+  };
+  const result = ctx.checkAlerts();
+  ctx.MailApp.sendEmail = realSend;
+
+  check('1件失敗しても処理は継続する', result.errors === 1, `実際のエラー数: ${result.errors}`);
+  const caseMails = ctx.__mail.filter(m => m.subj.indexOf('撮影45日前') === 0 || m.subj.indexOf('[要確認]') === 0);
+  check('失敗した1件を除く2件は通知される', caseMails.length === 2, `実際: ${caseMails.length}`);
+  const sysMails = ctx.__mail.filter(m => m.to === 'it-planning@his-world.com');
+  check('システム管理者へ障害通知が届く', sysMails.length === 1, `実際: ${sysMails.length}`);
+  check('通知にエラー件数が含まれる', sysMails[0] && sysMails[0].subj.includes('1件'), sysMails[0] && sysMails[0].subj);
+  check('通知に失敗した案件の管理番号が含まれる',
+        sysMails[0] && sysMails[0].body.includes('VIE-B'), sysMails[0] && sysMails[0].body);
+  check('通知に原因のメッセージが含まれる',
+        sysMails[0] && sysMails[0].body.includes('意図的な送信エラー'));
+}
+{
+  // 正常時はシステム通知を送らない
+  const ctx = triggerFixture();
+  const result = ctx.checkAlerts();
+  check('正常終了時はエラー0件', result.ok === true && result.errors === 0);
+  check('正常時はシステム通知を送らない',
+        ctx.__mail.filter(m => m.to === 'it-planning@his-world.com').length === 0);
+}
+{
+  // 行単位ではなく「処理全体」が落ちるケースでも、握りつぶさず通知されること
+  const ctx = triggerFixture();
+  const realMeta = ctx.branchMetaMap_;
+  ctx.branchMetaMap_ = function () { throw new Error('支店マスタの読み込みに失敗'); };
+  const result = ctx.checkDeliveryAlerts();
+  ctx.branchMetaMap_ = realMeta;
+
+  const sys = ctx.__mail.filter(m => m.to === 'it-planning@his-world.com');
+  check('処理全体の例外も捕捉して通知する', result.ok === false && sys.length === 1,
+        `errors=${result.errors} sysMail=${sys.length}`);
+  check('通知に「処理全体」と原因が含まれる',
+        sys[0] && sys[0].body.includes('処理全体') && sys[0].body.includes('支店マスタの読み込みに失敗'),
+        sys[0] && sys[0].body.slice(0, 200));
+}
+{
+  // シートがまだ無い状態でも例外にせず正常終了すること（防御的な既定動作）
+  const ctx = makeContext(); CTX = ctx;
+  const result = ctx.checkDeliveryAlerts();
+  check('シート未作成でも落ちずに正常終了する', result.ok === true && result.errors === 0);
 }
 
 // ---------------------------------------------------------------

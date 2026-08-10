@@ -53,6 +53,11 @@ const DELIVERY_ALERT_REMIND_INTERVAL_DAYS = 7;
 // 期限日からこの日数を過ぎたら通知を打ち切る
 const DELIVERY_ALERT_REMIND_UNTIL_DAYS = 28;
 
+// ★性能：アーカイブは1行ずつ deleteRow するため件数に比例して遅くなる。
+// 長期間トリガーが止まっていた場合などに6分の実行時間制限へ達しないよう、1回あたりの上限を設ける。
+// 残りは翌日の実行で処理される（取りこぼしにはならない）。
+const ARCHIVE_MAX_ROWS_PER_RUN = 500;
+
 // --- 支店側がSTS(支店側)を編集してよい条件（キー＝対になるSTS(JP側)の現在値） ---
 // null = 値の制限なし（STATUS_CODESから自由に選べる）／配列 = その中からのみ選べる／
 // キーが存在しない値（OK,FN,CW,UC,CFなど）のときは支店側は編集不可（ロック）
@@ -102,6 +107,12 @@ const COL_REMARKS = '備考';
 const COL_MEMO = '共有メモ';
 const COL_LAST_UPDATED = '最終更新日';
 const COL_DRIVE_URL = 'DriveフォルダURL';
+// ★性能：相手側からの未読メッセージ・変更があるか（＝「要対応」）を予約一覧側に保持する。
+// 以前はダッシュボードを開くたびに「やり取り履歴」を全件走査して判定していたため、
+// 履歴が増え続けると一覧の表示が確実に遅くなっていた。履歴を書いた時と既読にした時だけ
+// この列を更新し、一覧は列を読むだけにする（システム列のため画面からは編集不可）。
+const COL_UNREAD_JP = '未読 JP';       // trueなら日本側に未読がある
+const COL_UNREAD_BRANCH = '未読 支店';  // trueなら支店側に未読がある
 
 const OPTION_COUNT = 5;
 function opNameCol_(n) { return `OP${n}`; }
@@ -115,7 +126,8 @@ const RESERVATION_HEADERS = (() => {
     COL_GROOM_NAME, COL_BRIDE_NAME, COL_PLAN, COL_LOCATION, COL_PREP, COL_HOTEL,
     COL_AREA, COL_BILLING_REGION, COL_JP_SHOP, COL_INVOICE_NO, COL_SHOP,
     COL_DAY_STAFF, COL_HAIR_MAKEUP, COL_PHOTOGRAPHER, COL_ASSISTANT, COL_PICKUP_TIME, COL_LOCAL_MEMO,
-    COL_REMARKS, COL_MEMO, COL_LAST_UPDATED, COL_DRIVE_URL
+    COL_REMARKS, COL_MEMO, COL_LAST_UPDATED, COL_DRIVE_URL,
+    COL_UNREAD_JP, COL_UNREAD_BRANCH
   ];
   for (let n = 1; n <= OPTION_COUNT; n++) {
     base.push(opNameCol_(n), opStsJpCol_(n), opStsBranchCol_(n));
@@ -128,7 +140,8 @@ const RESERVATION_HEADERS = (() => {
 // のいずれかを選んで確定する。COMMITTABLE_FIELDS はその対象となる全フィールド
 // （システム列・DriveフォルダURLは専用フローがあるため除く）。
 const COMMITTABLE_FIELDS = RESERVATION_HEADERS.filter(h => ![
-  COL_BRANCH_CODE, COL_KANRI_NO, COL_LAST_UPDATED, COL_DRIVE_URL
+  COL_BRANCH_CODE, COL_KANRI_NO, COL_LAST_UPDATED, COL_DRIVE_URL,
+  COL_UNREAD_JP, COL_UNREAD_BRANCH
 ].includes(h));
 
 // 日付として保存すべきフィールド（<input type="date">で受け渡しし、実Dateとして保存する）
@@ -266,6 +279,9 @@ function setupPortal() {
     ss.getSheetByName(ARCHIVE_SHEET_NAME),
     ss.getSheetByName(STATUS_LOG_SHEET_NAME)
   ].forEach(formatHeaderRow_);
+
+  // 未読フラグ列を追加した直後は全て空欄になるため、履歴から実態を計算して反映する
+  rebuildUnreadFlags();
 
   SpreadsheetApp.getUi().alert(
     'セットアップが完了しました。\n\n' +
@@ -645,7 +661,14 @@ function apiGetDashboard(token, scope) {
   const sheet = getSpreadsheet_().getSheetByName(RESERVATION_SHEET_NAME);
   const rows = getRowsAsObjects_(sheet);
   const branchMeta = branchMetaMap_();
-  const needsActionMap = needsActionMap_(session);
+  // ★性能改善：未読判定は予約一覧の列を読むだけで済ませる（履歴の全件走査をやめた）。
+  // 列がまだ無い旧シートのときだけ、従来どおり履歴を走査するフォールバックに切り替える。
+  const unreadCol = unreadColFor_(session.role);
+  const hasUnreadCol = rows.length > 0 && Object.prototype.hasOwnProperty.call(rows[0], unreadCol);
+  const fallbackMap = hasUnreadCol ? null : needsActionMap_(session);
+  const isNeedsAction = (r) => hasUnreadCol
+    ? isActiveFlag_(r[unreadCol])
+    : !!fallbackMap[String(r[COL_KANRI_NO])];
 
   const scoped = rows.filter(r => rowInScope_(session, scope, r));
 
@@ -666,7 +689,7 @@ function apiGetDashboard(token, scope) {
     area: r[COL_AREA],
     lastUpdated: formatMaybeDate_(r[COL_LAST_UPDATED]),
     // ★要件：相手側からの未読メッセージ／変更がある案件は一目でわかるように
-    needsAction: !!needsActionMap[String(r[COL_KANRI_NO])]
+    needsAction: isNeedsAction(r)
   }));
 
   // ★要件：まず要対応（未読あり）を最優先で上に、その中・その他はそれぞれ撮影日FIXが「今日に近い順」
@@ -684,9 +707,33 @@ function apiGetDashboard(token, scope) {
   return result;
 }
 
+// --- 「要対応（未読）」フラグの読み書き -------------------------------------
+// 自分のロールから見た相手側のロールを返す
+function counterpartRole_(role) { return role === JP_ROLE ? BRANCH_ROLE : JP_ROLE; }
+
+// そのロールから見た未読フラグの列名
+function unreadColFor_(role) { return role === JP_ROLE ? COL_UNREAD_JP : COL_UNREAD_BRANCH; }
+
+// 予約一覧（または過去一覧）の1行に、指定ロール側の未読フラグを立てる／下ろす。
+// 列が無い旧シートでは何もしない（呼び出し側が履歴走査にフォールバックする）。
+function setUnreadFlag_(sheet, headers, rowIndex, targetRole, value) {
+  const idx = headers.indexOf(unreadColFor_(targetRole));
+  if (idx === -1) return;
+  sheet.getRange(rowIndex, idx + 1).setValue(!!value);
+}
+
+// メッセージ・変更を送信したときに、相手側の未読フラグを立てる
+function markUnreadForCounterpart_(sheet, headers, rowIndex, senderRole) {
+  setUnreadFlag_(sheet, headers, rowIndex, counterpartRole_(senderRole), true);
+}
+
 // 「自分側からみて未読の、相手側から来たメッセージ・変更」がある管理番号の集合を作る。
 // BRANCH側セッション → 送信者ロールがJPで、CHECK 支店が未チェックのものがあれば要対応
 // JP側セッション     → 送信者ロールがBRANCHで、CHECK JPが未チェックのものがあれば要対応
+//
+// ★注意：これは履歴シートの全件走査を伴う重い処理。通常は予約一覧の未読フラグ列を使い、
+// この関数は「フラグ列がまだ無い旧シート」でのフォールバック、および
+// rebuildUnreadFlags() による一括再計算のときだけ使う。
 function needsActionMap_(session) {
   const hSheet = getSpreadsheet_().getSheetByName(HISTORY_SHEET_NAME);
   const hRows = getRowsAsObjects_(hSheet);
@@ -699,6 +746,56 @@ function needsActionMap_(session) {
     map[String(r[H_COL_KANRI])] = true;
   });
   return map;
+}
+
+// ★性能改善に伴う移行用：やり取り履歴から全案件の未読フラグを一括で計算し直す。
+// 既存スプレッドシートに未読フラグ列を追加した直後は全て空欄（＝未読なし）になってしまうため、
+// setupPortal() の最後に呼んで実態に合わせる。単体でも安全に再実行できる。
+// 書き込みは列ごとに setValues で一括して行い、行単位の書き込みを避けている。
+function rebuildUnreadFlags() {
+  const ss = getSpreadsheet_();
+  const jpUnread = {};
+  const branchUnread = {};
+
+  const hSheet = ss.getSheetByName(HISTORY_SHEET_NAME);
+  if (hSheet && hSheet.getLastRow() >= 2) {
+    const hHeaders = hSheet.getRange(1, 1, 1, hSheet.getLastColumn()).getValues()[0];
+    const hValues = hSheet.getRange(2, 1, hSheet.getLastRow() - 1, hHeaders.length).getValues();
+    const kanriIdx = hHeaders.indexOf(H_COL_KANRI);
+    const roleIdx = hHeaders.indexOf(H_COL_SENDER_ROLE);
+    const jpCheckIdx = hHeaders.indexOf(H_COL_CHECK_JP);
+    const brCheckIdx = hHeaders.indexOf(H_COL_CHECK_BRANCH);
+    if (kanriIdx !== -1 && roleIdx !== -1 && jpCheckIdx !== -1 && brCheckIdx !== -1) {
+      hValues.forEach(v => {
+        const kanri = String(v[kanriIdx]);
+        if (!kanri) return;
+        const role = String(v[roleIdx]).trim().toUpperCase();
+        // 支店が送ったものが日本側で未チェック → 日本側に未読あり
+        if (role === BRANCH_ROLE && !isActiveFlag_(v[jpCheckIdx])) jpUnread[kanri] = true;
+        // 日本側が送ったものが支店側で未チェック → 支店側に未読あり
+        if (role === JP_ROLE && !isActiveFlag_(v[brCheckIdx])) branchUnread[kanri] = true;
+      });
+    }
+  }
+
+  let updated = 0;
+  [RESERVATION_SHEET_NAME, ARCHIVE_SHEET_NAME].forEach(name => {
+    const sheet = ss.getSheetByName(name);
+    if (!sheet || sheet.getLastRow() < 2) return;
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const jpIdx = headers.indexOf(COL_UNREAD_JP);
+    const brIdx = headers.indexOf(COL_UNREAD_BRANCH);
+    const kanriIdx = headers.indexOf(COL_KANRI_NO);
+    if (jpIdx === -1 || brIdx === -1 || kanriIdx === -1) return;
+
+    const n = sheet.getLastRow() - 1;
+    const kanris = sheet.getRange(2, kanriIdx + 1, n, 1).getValues();
+    sheet.getRange(2, jpIdx + 1, n, 1).setValues(kanris.map(k => [!!jpUnread[String(k[0])]]));
+    sheet.getRange(2, brIdx + 1, n, 1).setValues(kanris.map(k => [!!branchUnread[String(k[0])]]));
+    updated += n;
+  });
+  console.log(`[rebuildUnreadFlags] ${updated} 行の未読フラグを再計算しました`);
+  return { ok: true, rows: updated };
 }
 
 function branchMetaMap_() {
@@ -735,7 +832,6 @@ function apiGetStats(token, scope) {
   const session = requireSession_(token);
   assertJp_(session);
   const branchMeta = branchMetaMap_();
-  const needsActionMap = needsActionMap_(session);
 
   const ss = getSpreadsheet_();
   const currentRows = getRowsAsObjects_(ss.getSheetByName(RESERVATION_SHEET_NAME)).filter(r => rowInScope_(session, scope, r));
@@ -747,8 +843,14 @@ function apiGetStats(token, scope) {
   // 1件につき「未対応／RQ／OK／FN」のいずれか1つだけに分類する（合計＝件数になるように排他的に判定）。
   // 優先順位：①相手側からの未読メッセージ・変更があれば「未対応」／②FNで確定していれば「FN」／
   // ③OKまで進んでいれば「OK」／④それ以外（RQ・CHK・CR・NC・UC・CFなど）はまとめて「RQ」
+  // ★性能改善：未読判定はダッシュボードと同じく予約一覧の列を使う（履歴の全件走査をやめた）
+  const unreadCol = unreadColFor_(session.role);
+  const hasUnreadCol = currentRows.length > 0 && Object.prototype.hasOwnProperty.call(currentRows[0], unreadCol);
+  const fallbackMap = hasUnreadCol ? null : needsActionMap_(session);
+
   function bucketOf_(r) {
-    if (needsActionMap[String(r[COL_KANRI_NO])]) return 'needsAction';
+    const unread = hasUnreadCol ? isActiveFlag_(r[unreadCol]) : !!fallbackMap[String(r[COL_KANRI_NO])];
+    if (unread) return 'needsAction';
     if (r[COL_STATUS_JP] === 'FN' || r[COL_STATUS_BRANCH] === 'FN') return 'FN';
     if (r[COL_STATUS_JP] === 'OK' || r[COL_STATUS_BRANCH] === 'OK') return 'OK';
     return 'RQ';
@@ -992,6 +1094,7 @@ function apiCommitChanges(token, kanriNo, changes, message) {
     const kind = summaryLines.length > 0 && message ? '変更＋メッセージ' : (summaryLines.length > 0 ? '変更内容' : 'メッセージ');
 
     appendHistory_(headers, freshRow, who, body, session.role);
+    markUnreadForCounterpart_(sheet, headers, rowIndex, session.role);
     sendDirectionalMail_(headers, freshRow, direction, session, body, kind);
 
     if (dateChanged) sortReservationSheet_(sheet);
@@ -1104,6 +1207,7 @@ function apiSetDriveUrl(token, kanriNo, url) {
 
     const freshRow = sheet.getRange(rowIndex, 1, 1, headers.length).getValues()[0];
     appendHistory_(headers, freshRow, senderLabel_(session), `[DriveフォルダURL更新]\n${trimmed}`, session.role);
+    markUnreadForCounterpart_(sheet, headers, rowIndex, session.role);
     sendDirectionalMail_(headers, freshRow, 'BOTH', session, trimmed, 'DriveフォルダURL');
   } finally {
     lock.releaseLock();
@@ -1154,6 +1258,7 @@ function apiCreateReservation(token, branchCode, rawText) {
 
     const initMsg = parsed.remarks ? `新規手配依頼が追加されました。\n【備考】\n${parsed.remarks}` : '新規手配依頼が追加されました。';
     appendHistory_(headers, newRowData, senderLabel_(session), `[新規案件作成]\n${initMsg}`, session.role);
+    markUnreadForCounterpart_(sheet, headers, newRowIndex, session.role);
     // ★不具合修正：以前は作成者が誰であっても 'BRANCH_TO_JP'（＝日本側へ通知）で固定していたため、
     // 日本側が支店の案件を新規作成した場合、通知が自分たち宛てに飛ぶだけで
     // 肝心の支店には新規案件が来たことが一切通知されなかった。
@@ -1241,13 +1346,20 @@ function apiToggleHistoryCheck(token, historyId, checked) {
     // 存在しない履歴IDへの操作として、分かりやすいエラーメッセージを返すようにする。
     if (lastRow < 2) throw new Error('対象の履歴が見つかりません。');
     const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    // 履歴の読み取りはこの1回だけ。対象行の特定と、更新後に「その案件に自分側の未読が
+    // まだ残っているか」の判定を、同じ読み取り結果から行う。
+    const values = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
     const idColIdx = headers.indexOf(H_COL_ID);
-    const ids = sheet.getRange(2, idColIdx + 1, lastRow - 1, 1).getValues();
-    let targetRow = -1;
-    for (let i = 0; i < ids.length; i++) {
-      if (String(ids[i][0]) === String(historyId)) { targetRow = i + 2; break; }
+    const kanriColIdx = headers.indexOf(H_COL_KANRI);
+    const roleColIdx = headers.indexOf(H_COL_SENDER_ROLE);
+    const checkColIdx = headers.indexOf(checkCol);
+
+    let targetIdx = -1;
+    for (let i = 0; i < values.length; i++) {
+      if (String(values[i][idColIdx]) === String(historyId)) { targetIdx = i; break; }
     }
-    if (targetRow === -1) throw new Error('対象の履歴が見つかりません。');
+    if (targetIdx === -1) throw new Error('対象の履歴が見つかりません。');
+    const targetRow = targetIdx + 2;
 
     // ★不具合修正（認可漏れ）：以前はセッションの有無しか見ておらず、履歴IDさえ分かれば
     // 他支店のメッセージにも既読チェックを付けられた。既読にすると相手側の「要対応」表示が
@@ -1256,7 +1368,7 @@ function apiToggleHistoryCheck(token, historyId, checked) {
     if (session.role === BRANCH_ROLE) {
       const branchColIdx = headers.indexOf(H_COL_BRANCH_CODE);
       const rowBranch = branchColIdx === -1
-        ? '' : String(sheet.getRange(targetRow, branchColIdx + 1).getValue()).trim().toUpperCase();
+        ? '' : String(values[targetIdx][branchColIdx]).trim().toUpperCase();
       if (rowBranch !== session.branchCode) {
         throw new Error('この履歴を操作する権限がありません。');
       }
@@ -1271,6 +1383,25 @@ function apiToggleHistoryCheck(token, historyId, checked) {
     } else {
       sheet.getRange(targetRow, colIndexOrThrow_(headers, dateCol)).setValue('');
       sheet.getRange(targetRow, colIndexOrThrow_(headers, checkedByCol)).setValue('');
+    }
+
+    // ★性能改善：予約一覧の未読フラグを更新する。
+    // この案件について「相手側が送った未読のメッセージ」がまだ残っているかを、
+    // 上で読んだ履歴データ（メモリ上で今回の変更を反映）から判定する。
+    if (kanriColIdx !== -1 && roleColIdx !== -1 && checkColIdx !== -1) {
+      values[targetIdx][checkColIdx] = checked;
+      const kanriNo = String(values[targetIdx][kanriColIdx]);
+      const fromRole = counterpartRole_(session.role);
+      let stillUnread = false;
+      for (let i = 0; i < values.length; i++) {
+        if (String(values[i][kanriColIdx]) !== kanriNo) continue;
+        if (String(values[i][roleColIdx]).trim().toUpperCase() !== fromRole) continue;
+        if (!isActiveFlag_(values[i][checkColIdx])) { stillUnread = true; break; }
+      }
+      const target = findReservationRow_(kanriNo);
+      if (target.rowIndex !== -1) {
+        setUnreadFlag_(target.sheet, target.headers, target.rowIndex, session.role, stillUnread);
+      }
     }
   } finally {
     lock.releaseLock();
@@ -1471,9 +1602,66 @@ function getJpTeamEmail_(teamLabel) {
 }
 
 // =====================================================
-// ⑭ アラート・アーカイブ（全支店横断・支店マスタのメールへ自動振り分け）
+// ⑭ 定期処理の共通ランナー（ログ・例外通知）
 // =====================================================
-function checkAlerts() {
+// ★改善：以前は定期処理に例外処理もログ出力も無く、
+//   ・1行でも不正なデータがあるとその時点で処理が止まり、以降の案件のアラートが送られない
+//   ・失敗しても誰にも通知されず、アラートが止まったことに気づけない
+// という状態だった。ここで全体を包み、失敗を SYSTEM_ALERT_EMAIL へ通知する。
+// あわせて各処理の中では「行単位」でも例外を捕まえ、1件の異常で全体が止まらないようにする。
+function runTrigger_(name, coreFn) {
+  const startedAt = new Date();
+  const errors = [];
+  try {
+    coreFn(errors);
+  } catch (e) {
+    errors.push({ where: '処理全体', message: errorMessage_(e), stack: e && e.stack ? String(e.stack) : '' });
+  }
+  const elapsedMs = new Date().getTime() - startedAt.getTime();
+  if (errors.length > 0) {
+    console.error(`[${name}] ${errors.length}件のエラーで終了（${elapsedMs}ms）`);
+    errors.forEach(er => console.error(`[${name}] ${er.where}: ${er.message}`));
+    notifySystemError_(name, errors, elapsedMs);
+  } else {
+    console.log(`[${name}] 正常終了（${elapsedMs}ms）`);
+  }
+  return { ok: errors.length === 0, errors: errors.length };
+}
+
+function errorMessage_(e) {
+  return (e && e.message) ? e.message : String(e);
+}
+
+// システム管理者へ障害を通知する。通知自体の失敗で定期処理を落とさないよう内側でも捕捉する。
+function notifySystemError_(name, errors, elapsedMs) {
+  try {
+    if (!SYSTEM_ALERT_EMAIL) return;
+    const shown = errors.slice(0, 20)
+      .map((er, i) => `${i + 1}. [${er.where}] ${er.message}`).join('\n');
+    const rest = errors.length > 20 ? `\n…ほか ${errors.length - 20} 件` : '';
+    const firstStack = errors[0] && errors[0].stack
+      ? `\n--- 先頭のスタックトレース ---\n${errors[0].stack}\n` : '';
+    MailApp.sendEmail(
+      SYSTEM_ALERT_EMAIL,
+      `[PhotoWED][システムエラー] ${name}：${errors.length}件`,
+      `定期処理「${name}」でエラーが発生しました。\n` +
+      `他の案件の処理は続行しています（1件の異常で全体を止めない設計です）。\n\n` +
+      `発生日時: ${Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss')}\n` +
+      `処理時間: ${elapsedMs} ms\n` +
+      `エラー件数: ${errors.length}\n\n` +
+      `--- 内容 ---\n${shown}${rest}\n${firstStack}`
+    );
+  } catch (e) {
+    console.error(`[${name}] システムエラー通知の送信に失敗: ${errorMessage_(e)}`);
+  }
+}
+
+// =====================================================
+// ⑮ アラート・アーカイブ（全支店横断・支店マスタのメールへ自動振り分け）
+// =====================================================
+function checkAlerts() { return runTrigger_('checkAlerts', checkAlertsCore_); }
+
+function checkAlertsCore_(errors) {
   const sheet = getSpreadsheet_().getSheetByName(RESERVATION_SHEET_NAME);
   if (!sheet || sheet.getLastRow() < 2) return;
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
@@ -1483,20 +1671,34 @@ function checkAlerts() {
   const statusCols = [COL_STATUS_JP, COL_STATUS_BRANCH];
   for (let n = 1; n <= OPTION_COUNT; n++) statusCols.push(opStsJpCol_(n), opStsBranchCol_(n));
 
-  data.forEach(row => {
-    const dVal = row[headers.indexOf(COL_CONFIRMED_DATE)];
-    if (dVal instanceof Date && Utilities.formatDate(dVal, 'Asia/Tokyo', 'yyyy/MM/dd') === targetDateStr) {
+  let sent = 0;
+  data.forEach((row, i) => {
+    // 1件の異常で以降の案件が処理されなくならないよう、行単位で捕捉する
+    try {
+      const dVal = row[headers.indexOf(COL_CONFIRMED_DATE)];
+      if (!(dVal instanceof Date)) return;
+      if (Utilities.formatDate(dVal, 'Asia/Tokyo', 'yyyy/MM/dd') !== targetDateStr) return;
       const incomplete = statusCols.filter(c => {
         const v = row[headers.indexOf(c)];
         return v && v !== ALERT_COMPLETED_STATUS;
       });
-      if (incomplete.length > 0) {
-        const area = row[headers.indexOf(COL_AREA)];
-        const recipient = getJpTeamEmail_(area);
-        MailApp.sendEmail(recipient, `[要確認] 撮影${ALERT_DAYS_BEFORE}日前：${row[headers.indexOf(COL_KANRI_NO)]}（${row[headers.indexOf(COL_BRANCH_CODE)]}支店）`, '未完了ステータスがあります。ポータルをご確認ください。');
-      }
+      if (incomplete.length === 0) return;
+      const area = row[headers.indexOf(COL_AREA)];
+      const recipient = getJpTeamEmail_(area);
+      MailApp.sendEmail(
+        recipient,
+        `[要確認] 撮影${ALERT_DAYS_BEFORE}日前：${row[headers.indexOf(COL_KANRI_NO)]}（${row[headers.indexOf(COL_BRANCH_CODE)]}支店）`,
+        '未完了ステータスがあります。ポータルをご確認ください。'
+      );
+      sent++;
+    } catch (e) {
+      errors.push({
+        where: `${RESERVATION_SHEET_NAME} ${i + 2}行目（${row[headers.indexOf(COL_KANRI_NO)] || '管理番号不明'}）`,
+        message: errorMessage_(e), stack: e && e.stack ? String(e.stack) : ''
+      });
     }
   });
+  console.log(`[checkAlerts] ${data.length}件を確認、${sent}件を通知`);
 }
 
 // ★要件：撮影日から一定日数（国・支店ごとに支店マスタ「納品期限日数」で設定、未設定なら既定30日）過ぎても
@@ -1506,11 +1708,14 @@ function checkAlerts() {
 // archivePastReservations() は撮影日を過ぎた案件を「翌日」には過去一覧へ移動させる仕様のため、
 // 「撮影日から30日後」を判定しようとした時点で、その案件はとっくに予約一覧から消えている。
 // 納品状況は撮影後（＝アーカイブ後）に確定するものなので、必ず過去一覧も走査する必要がある。
-function checkDeliveryAlerts() {
+function checkDeliveryAlerts() { return runTrigger_('checkDeliveryAlerts', checkDeliveryAlertsCore_); }
+
+function checkDeliveryAlertsCore_(errors) {
   const ss = getSpreadsheet_();
   const branchMeta = branchMetaMap_();
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  let sent = 0;
 
   [RESERVATION_SHEET_NAME, ARCHIVE_SHEET_NAME].forEach(sheetName => {
     const sheet = ss.getSheetByName(sheetName);
@@ -1518,7 +1723,8 @@ function checkDeliveryAlerts() {
     const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
     const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
 
-    data.forEach(row => {
+    data.forEach((row, i) => {
+     try {
       const driveUrl = String(row[headers.indexOf(COL_DRIVE_URL)] || '').trim();
       if (driveUrl) return; // 既に納品済み
 
@@ -1562,11 +1768,21 @@ function checkDeliveryAlerts() {
         `撮影日から${daysPast}日が経過していますが、DriveフォルダURL（納品）が未登録です。ポータルをご確認ください。\n\n` +
         `管理番号: ${kanri}\n撮影日: ${shootStr}\nこの支店の納品期限: 撮影日から${limitDays}日`
       );
+      sent++;
+     } catch (e) {
+      errors.push({
+        where: `${sheetName} ${i + 2}行目（${row[headers.indexOf(COL_KANRI_NO)] || '管理番号不明'}）`,
+        message: errorMessage_(e), stack: e && e.stack ? String(e.stack) : ''
+      });
+     }
     });
   });
+  console.log(`[checkDeliveryAlerts] ${sent}件を通知`);
 }
 
-function archivePastReservations() {
+function archivePastReservations() { return runTrigger_('archivePastReservations', archivePastReservationsCore_); }
+
+function archivePastReservationsCore_(errors) {
   const ss = getSpreadsheet_();
   const sheet = ss.getSheetByName(RESERVATION_SHEET_NAME);
   if (!sheet || sheet.getLastRow() < 2) return;
@@ -1585,24 +1801,41 @@ function archivePastReservations() {
 
   const asDateStr = (v) => v instanceof Date ? Utilities.formatDate(v, 'Asia/Tokyo', 'yyyy/MM/dd') : '';
 
+  let moved = 0;
   for (let i = values.length - 1; i >= 0; i--) {
+    // ★性能：1行ずつ deleteRow するため件数に比例して遅くなる。実行時間制限に達しないよう
+    // 1回あたりの上限で打ち切り、残りは翌日の実行に回す（取りこぼしにはならない）。
+    if (moved >= ARCHIVE_MAX_ROWS_PER_RUN) {
+      console.log(`[archivePastReservations] 上限${ARCHIVE_MAX_ROWS_PER_RUN}件に達したため中断。残りは次回実行で処理します。`);
+      break;
+    }
     const row = values[i];
-    const shootStr = asDateStr(row[headers.indexOf(COL_CONFIRMED_DATE)]);
-    const ceremonyStr = asDateStr(row[headers.indexOf(COL_CEREMONY_DATE)]);
-    const stsJp = String(row[headers.indexOf(COL_STATUS_JP)]).trim();
-    const stsBranch = String(row[headers.indexOf(COL_STATUS_BRANCH)]).trim();
-    const isCW = (stsJp === 'CW' || stsBranch === 'CW');
-    // ★要件：ステータスに関わらず、撮影日または挙式日が過ぎたら過去一覧へ移動する
-    const isPastDate = (shootStr && shootStr < todayStr) || (ceremonyStr && ceremonyStr < todayStr);
-    if (isCW || isPastDate) {
+    // 1件の異常で以降の行が処理されなくならないよう、行単位で捕捉する
+    try {
+      const shootStr = asDateStr(row[headers.indexOf(COL_CONFIRMED_DATE)]);
+      const ceremonyStr = asDateStr(row[headers.indexOf(COL_CEREMONY_DATE)]);
+      const stsJp = String(row[headers.indexOf(COL_STATUS_JP)]).trim();
+      const stsBranch = String(row[headers.indexOf(COL_STATUS_BRANCH)]).trim();
+      const isCW = (stsJp === 'CW' || stsBranch === 'CW');
+      // ★要件：ステータスに関わらず、撮影日または挙式日が過ぎたら過去一覧へ移動する
+      const isPastDate = (shootStr && shootStr < todayStr) || (ceremonyStr && ceremonyStr < todayStr);
+      if (!(isCW || isPastDate)) continue;
+
       const mapped = archiveHeaders.map(h => {
         const idx = headers.indexOf(h);
         return idx === -1 ? '' : row[idx];
       });
       archive.appendRow(mapped);
       sheet.deleteRow(i + 2);
+      moved++;
+    } catch (e) {
+      errors.push({
+        where: `${RESERVATION_SHEET_NAME} ${i + 2}行目（${row[headers.indexOf(COL_KANRI_NO)] || '管理番号不明'}）`,
+        message: errorMessage_(e), stack: e && e.stack ? String(e.stack) : ''
+      });
     }
   }
+  console.log(`[archivePastReservations] ${moved}件を過去一覧へ移動`);
 }
 
 function sortReservationSheet_(sheet) {
