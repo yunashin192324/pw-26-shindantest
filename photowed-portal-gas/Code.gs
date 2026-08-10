@@ -296,6 +296,18 @@ function isActiveFlag_(val) {
   return val === true || String(val).trim().toUpperCase() === 'TRUE';
 }
 
+// 支店マスタの「納品期限日数」等、任意入力の整数列を安全にパースする。
+// 未入力は null（呼び出し側でデフォルト値にフォールバック）。
+// ★不具合修正：単純に `Number(val) || null` にすると 0 が falsy 判定でnull扱いになり、
+// 「0日（撮影当日から即アラート）」を設定できなくなる。また小数（例: "30.5"）が入っていると
+// 後続の日数比較・7日おき再送の剰余判定が永久に一致せず、アラートが一切飛ばなくなるため、
+// 必ず整数に丸めてから返す。
+function parseIntOrNull_(val) {
+  if (val === '' || val === null || val === undefined) return null;
+  const n = Math.round(Number(val));
+  return isNaN(n) ? null : n;
+}
+
 // ログイン画面のプルダウンに出す一覧（未ログインでも呼べる。パスコード・メール等は含めない）
 function apiListLoginOptions() {
   const sheet = getSpreadsheet_().getSheetByName(BRANCH_MASTER_SHEET_NAME);
@@ -410,7 +422,7 @@ function listBranchesRaw_() {
     role: String(r[BM_COL_ROLE] || '').trim().toUpperCase() === JP_ROLE ? JP_ROLE : BRANCH_ROLE,
     team: String(r[BM_COL_TEAM] || '').trim(), email: r[BM_COL_EMAIL], prefix: r[BM_COL_PREFIX],
     invoiceLabel: r[BM_COL_INVOICE_LABEL] || '請求番号',
-    deliveryDays: Number(r[BM_COL_DELIVERY_DAYS]) || null,
+    deliveryDays: parseIntOrNull_(r[BM_COL_DELIVERY_DAYS]),
     active: isActiveFlag_(r[BM_COL_ACTIVE])
     // ログインパスコードは一覧APIには返さない（画面表示上の漏洩防止）
   }));
@@ -1431,7 +1443,10 @@ function checkDeliveryAlerts() {
     const shootStr = Utilities.formatDate(dVal, 'Asia/Tokyo', 'yyyy/MM/dd');
     const branchCode = row[headers.indexOf(COL_BRANCH_CODE)];
     const meta = branchMeta[branchCode] || {};
-    const limitDays = meta.deliveryDays || DELIVERY_ALERT_DEFAULT_DAYS;
+    // ★不具合修正：`meta.deliveryDays || DEFAULT` だと0（即日アラート設定）が消えてデフォルトに
+    // フォールバックしてしまうため、未設定（null）のときだけデフォルトを使うようにする。
+    const limitDays = (meta.deliveryDays === null || meta.deliveryDays === undefined)
+      ? DELIVERY_ALERT_DEFAULT_DAYS : meta.deliveryDays;
     if (daysPast < limitDays) return;
 
     // ★不具合修正：「期限当日のみ通知」だと、その日にトリガーが何らかの理由（クォータ超過・

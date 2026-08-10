@@ -94,7 +94,8 @@
       const options = await gsRun('apiListLoginOptions');
       const sel = $('login-branchcode');
       sel.innerHTML = '<option value="">選択してください</option>' +
-        options.map(o => `<option value="${o.code}">${o.name}${o.role === 'JP' ? '' : '（' + o.code + '）'}</option>`).join('');
+        // ★不具合修正：支店マスタ由来の値も念のためエスケープ（未ログインの公開画面のため特に）
+        options.map(o => `<option value="${escapeAttr(o.code)}">${escapeHtml(o.name)}${o.role === 'JP' ? '' : '（' + escapeHtml(o.code) + '）'}</option>`).join('');
     } catch (e) {
       $('login-branchcode').innerHTML = '<option value="">読み込みに失敗しました</option>';
     }
@@ -243,17 +244,20 @@
     // ★要件：相手からの未読メッセージ・変更がある案件は色を変えて一目でわかるように、一覧の上に来る（サーバ側でソート済み）
     card.className = 'res-card' + (r.needsAction ? ' needs-action' : '');
     const cancelled = r.statusJp === 'CW' || r.statusBranch === 'CW';
+    // ★不具合修正：新郎名・新婦名・CHG NO・プラン名などは各拠点の担当者が自由に入力できる項目のため、
+    // エスケープせずinnerHTMLへ差し込むと保存型XSS（悪意あるHTMLをそのまま実行）につながる。
+    // ダッシュボードはログイン直後に必ず表示される画面なので、ここでのエスケープ漏れは特に危険。
     card.innerHTML = `
-      <div class="res-card-top"><span>${r.kanriNo} ・ CHG: ${r.challengeNo || 'なし'}</span><span>${r.confirmedDate || '撮影日未定'}</span></div>
-      <div class="res-card-names">${r.groomName || ''} ${r.brideName ? '／ ' + r.brideName : ''}</div>
+      <div class="res-card-top"><span>${escapeHtml(r.kanriNo)} ・ CHG: ${escapeHtml(r.challengeNo || 'なし')}</span><span>${escapeHtml(r.confirmedDate || '撮影日未定')}</span></div>
+      <div class="res-card-names">${escapeHtml(r.groomName || '')} ${r.brideName ? '／ ' + escapeHtml(r.brideName) : ''}</div>
       <div class="res-card-bottom">
         ${r.needsAction ? '<span class="chip needs-action-chip">● 要対応</span>' : ''}
-        <span class="chip branch">${r.branchName || r.branchCode}${role === 'JP' && r.city ? '・' + r.city : ''}</span>
-        ${r.area ? `<span class="chip hq">担当: ${r.area}手配課</span>` : ''}
-        ${r.statusJp ? `<span class="chip hq">STS JP: ${r.statusJp}</span>` : ''}
-        ${r.statusBranch ? `<span class="chip branch">STS 支店: ${r.statusBranch}</span>` : ''}
+        <span class="chip branch">${escapeHtml(r.branchName || r.branchCode)}${role === 'JP' && r.city ? '・' + escapeHtml(r.city) : ''}</span>
+        ${r.area ? `<span class="chip hq">担当: ${escapeHtml(r.area)}手配課</span>` : ''}
+        ${r.statusJp ? `<span class="chip hq">STS JP: ${escapeHtml(r.statusJp)}</span>` : ''}
+        ${r.statusBranch ? `<span class="chip branch">STS 支店: ${escapeHtml(r.statusBranch)}</span>` : ''}
         ${cancelled ? '<span class="chip" style="background:#fee2e2;color:#b91c1c;">キャンセル</span>' : ''}
-        ${r.plan ? `<span class="chip">${r.plan}</span>` : ''}
+        ${r.plan ? `<span class="chip">${escapeHtml(r.plan)}</span>` : ''}
       </div>`;
     card.addEventListener('click', () => openDetail(r.kanriNo));
     return card;
@@ -288,15 +292,16 @@
       res.results.forEach(r => {
         const card = document.createElement('div');
         card.className = 'res-card';
+        // ★不具合修正：検索結果も自由入力の値をエスケープせず描画していたため保存型XSSの経路になっていた
         card.innerHTML = `
-          <div class="res-card-top"><span>${r.kanriNo} ・ CHG: ${r.challengeNo || 'なし'}</span><span>${r.confirmedDate || '撮影日未定'}</span></div>
-          <div class="res-card-names">${r.groomName || ''} ${r.brideName ? '／ ' + r.brideName : ''}</div>
+          <div class="res-card-top"><span>${escapeHtml(r.kanriNo)} ・ CHG: ${escapeHtml(r.challengeNo || 'なし')}</span><span>${escapeHtml(r.confirmedDate || '撮影日未定')}</span></div>
+          <div class="res-card-names">${escapeHtml(r.groomName || '')} ${r.brideName ? '／ ' + escapeHtml(r.brideName) : ''}</div>
           <div class="res-card-bottom">
-            <span class="chip branch">${r.branchName}${r.city ? '・' + r.city : ''}</span>
-            ${r.area ? `<span class="chip hq">担当: ${r.area}手配課</span>` : ''}
-            <span class="chip">${r.source}</span>
-            ${r.statusJp ? `<span class="chip hq">STS JP: ${r.statusJp}</span>` : ''}
-            ${r.statusBranch ? `<span class="chip branch">STS 支店: ${r.statusBranch}</span>` : ''}
+            <span class="chip branch">${escapeHtml(r.branchName)}${r.city ? '・' + escapeHtml(r.city) : ''}</span>
+            ${r.area ? `<span class="chip hq">担当: ${escapeHtml(r.area)}手配課</span>` : ''}
+            <span class="chip">${escapeHtml(r.source)}</span>
+            ${r.statusJp ? `<span class="chip hq">STS JP: ${escapeHtml(r.statusJp)}</span>` : ''}
+            ${r.statusBranch ? `<span class="chip branch">STS 支店: ${escapeHtml(r.statusBranch)}</span>` : ''}
           </div>`;
         card.addEventListener('click', () => openDetail(r.kanriNo));
         list.appendChild(card);
@@ -404,7 +409,9 @@
           ).join('');
           return `<select data-pending="${fieldName}">${opts}</select>`;
         })()
-      : `<div class="val locked-val">🔒 ${current || '-'}${lockedReason ? `<span class="hint-text"> (${lockedReason})</span>` : ''}</div>`;
+      // ★不具合修正：STSの値は本来アプリ経由ならSTATUS_CODESの範囲内だが、スプレッドシートを
+      // 直接編集された場合は任意の文字列になり得るため、読み取り専用表示でもエスケープする
+      : `<div class="val locked-val">🔒 ${escapeHtml(current || '-')}${lockedReason ? `<span class="hint-text"> (${escapeHtml(lockedReason)})</span>` : ''}</div>`;
     const hid = 'fh-' + fieldName.replace(/[^A-Za-z0-9]/g, '_');
     return `${control}<button type="button" class="history-link" data-history-field="${escapeAttr(fieldName)}" data-history-target="${hid}">履歴</button>
       <div class="history-panel hidden" id="${hid}"></div>`;
@@ -571,12 +578,14 @@
         </div>
       </div>`;
 
+    // ★不具合修正：管理番号・CHG NO・支店名・国／都市・管轄・新郎新婦名は自由入力（または
+    // スプレッドシート管理者による設定）が可能な値のため、エスケープせずに描画すると保存型XSSになる
     c.innerHTML = `
       <div class="detail-header">
-        <div class="kanri">管理番号: ${d['管理番号']} ｜ CHG NO: ${d['CHG NO'] || 'なし'}</div>
-        <div class="kanri">${d.branchName}（${d['支店コード']}）${d.country ? ' ・ ' + d.country : ''}${d.city ? ' ／ ' + d.city : ''}</div>
-        <div class="kanri">担当: ${d['管轄'] ? d['管轄'] + '手配課' : '未設定'}</div>
-        <div class="names">新郎: ${d['新郎名（ローマ字）'] || ''}<br>新婦: ${d['新婦名（ローマ字）'] || ''}</div>
+        <div class="kanri">管理番号: ${escapeHtml(d['管理番号'])} ｜ CHG NO: ${escapeHtml(d['CHG NO'] || 'なし')}</div>
+        <div class="kanri">${escapeHtml(d.branchName)}（${escapeHtml(d['支店コード'])}）${d.country ? ' ・ ' + escapeHtml(d.country) : ''}${d.city ? ' ／ ' + escapeHtml(d.city) : ''}</div>
+        <div class="kanri">担当: ${d['管轄'] ? escapeHtml(d['管轄']) + '手配課' : '未設定'}</div>
+        <div class="names">新郎: ${escapeHtml(d['新郎名（ローマ字）'] || '')}<br>新婦: ${escapeHtml(d['新婦名（ローマ字）'] || '')}</div>
       </div>
       ${tabBarHtml}
       ${messageTabHtml}
@@ -703,7 +712,7 @@
     if (session.role === 'JP') {
       if (!branchesCache.length) branchesCache = await gsRun('apiListBranches', session.token);
       $('new-branch').innerHTML = branchesCache.filter(b => b.role !== 'JP' && b.active)
-        .map(b => `<option value="${b.code}">${b.name}（${b.code}）</option>`).join('');
+        .map(b => `<option value="${escapeAttr(b.code)}">${escapeHtml(b.name)}（${escapeHtml(b.code)}）</option>`).join('');
     }
   }
 
