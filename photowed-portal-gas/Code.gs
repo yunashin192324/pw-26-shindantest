@@ -117,14 +117,6 @@ const RESERVATION_HEADERS = (() => {
   return base;
 })();
 
-// STS(JP側)・STS(支店側)・オプション欄は、日本側／支店側のどちらが書けるか・どの値まで選べるかに
-// 追加の検証（役割チェック・BRANCH_EDIT_GATE）が必要なフィールド
-const STATUS_COMMIT_FIELDS = (() => {
-  const list = [COL_STATUS_JP, COL_STATUS_BRANCH];
-  for (let n = 1; n <= OPTION_COUNT; n++) list.push(opNameCol_(n), opStsJpCol_(n), opStsBranchCol_(n));
-  return list;
-})();
-
 // ★要件：既存予約の中の項目は「その場で自動保存」ではなく、まとめて
 // （a）保存のみ（通知しない）／（b）メッセージのみ送信／（c）変更内容＋メッセージを送信
 // のいずれかを選んで確定する。COMMITTABLE_FIELDS はその対象となる全フィールド
@@ -408,8 +400,15 @@ function apiListBranches(token) {
 function listBranchesRaw_() {
   const sheet = getSpreadsheet_().getSheetByName(BRANCH_MASTER_SHEET_NAME);
   return getRowsAsObjects_(sheet).map(r => ({
-    code: r[BM_COL_CODE], name: r[BM_COL_NAME], country: r[BM_COL_COUNTRY], city: r[BM_COL_CITY],
-    role: r[BM_COL_ROLE], team: r[BM_COL_TEAM], email: r[BM_COL_EMAIL], prefix: r[BM_COL_PREFIX],
+    // ★不具合修正：支店コード・ロールはスプレッドシート上の表記ゆれ（大文字小文字・前後の空白）に関わらず
+    // 常に正規化して返す。他の全ての判定（apiLogin・セッション・JP側メール振り分け等）は
+    // 正規化済みの値（大文字の支店コード、"BRANCH"/"JP"）を前提にしているため、ここで揺れを残すと
+    // 「スプレッドシート上のロール表記が少し崩れただけで、その支店がJP側の一覧・新規案件の選択肢・
+    // メール送信先候補から静かに消える」という気づきにくい不具合につながる。
+    code: String(r[BM_COL_CODE] || '').trim().toUpperCase(),
+    name: r[BM_COL_NAME], country: r[BM_COL_COUNTRY], city: r[BM_COL_CITY],
+    role: String(r[BM_COL_ROLE] || '').trim().toUpperCase() === JP_ROLE ? JP_ROLE : BRANCH_ROLE,
+    team: String(r[BM_COL_TEAM] || '').trim(), email: r[BM_COL_EMAIL], prefix: r[BM_COL_PREFIX],
     invoiceLabel: r[BM_COL_INVOICE_LABEL] || '請求番号',
     deliveryDays: Number(r[BM_COL_DELIVERY_DAYS]) || null,
     active: isActiveFlag_(r[BM_COL_ACTIVE])
@@ -438,6 +437,7 @@ function apiSaveBranch(token, branch) {
     const passcodeColIdx = headers.indexOf(BM_COL_PASSCODE);
     let targetRow = -1;
     let existingPasscode = '';
+    let existingRowValues = null;
 
     if (lastRow > 1) {
       const existing = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
@@ -446,6 +446,7 @@ function apiSaveBranch(token, branch) {
         if (rowCode === code) {
           targetRow = i + 2;
           existingPasscode = existing[i][passcodeColIdx];
+          existingRowValues = existing[i];
           continue;
         }
         // 案件番号プレフィックスの重複チェック（支店が増えても番号が破綻しないための必須制約）
@@ -463,7 +464,7 @@ function apiSaveBranch(token, branch) {
     }
     const finalPasscode = passcode || existingPasscode;
 
-    const rowData = headers.map(h => {
+    const rowData = headers.map((h, idx) => {
       switch (h) {
         case BM_COL_CODE: return code;
         case BM_COL_NAME: return branch.name;
@@ -475,7 +476,11 @@ function apiSaveBranch(token, branch) {
         case BM_COL_EMAIL: return branch.email || '';
         case BM_COL_PREFIX: return prefix;
         case BM_COL_ACTIVE: return branch.active !== false;
-        default: return '';
+        // ★不具合修正：このAPIが直接扱わない列（請求番号欄名称・納品期限日数など、今後追加される
+        // 列も含む）は、新規行なら空欄、既存行の編集なら元の値をそのまま維持する。
+        // 以前は無条件に空文字で上書きしていたため、このAPI経由で支店情報を保存すると
+        // スプレッドシート側で個別に設定していた値が消えてしまう不具合があった。
+        default: return existingRowValues ? existingRowValues[idx] : '';
       }
     });
     if (targetRow === -1) {
@@ -1159,8 +1164,12 @@ function apiToggleHistoryCheck(token, historyId, checked) {
   if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
   try {
     const sheet = getSpreadsheet_().getSheetByName(HISTORY_SHEET_NAME);
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
     const lastRow = sheet.getLastRow();
+    // ★不具合修正：履歴が1件もない（ヘッダーのみ）状態で呼ばれると、以前は
+    // getRange(2, ..., 0, 1) がApps Script側の「範囲の行数は1以上」エラーで落ちていた。
+    // 存在しない履歴IDへの操作として、分かりやすいエラーメッセージを返すようにする。
+    if (lastRow < 2) throw new Error('対象の履歴が見つかりません。');
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
     const idColIdx = headers.indexOf(H_COL_ID);
     const ids = sheet.getRange(2, idColIdx + 1, lastRow - 1, 1).getValues();
     let targetRow = -1;
@@ -1425,8 +1434,12 @@ function checkDeliveryAlerts() {
     const limitDays = meta.deliveryDays || DELIVERY_ALERT_DEFAULT_DAYS;
     if (daysPast < limitDays) return;
 
-    // 毎日重複送信しないよう、期限当日のみ通知する
-    if (daysPast !== limitDays) return;
+    // ★不具合修正：「期限当日のみ通知」だと、その日にトリガーが何らかの理由（クォータ超過・
+    // 一時的なデプロイ不整合等）で実行できなかった場合、以後ずっとdaysPastが期限日を上回り続けるため
+    // 二度と通知されなくなってしまう（サイレントに永久スキップされる）。
+    // 期限当日に加えて、未納品が続く限り7日おきに再通知することで、1回の実行失敗で
+    // アラートが完全に消えてしまわないようにする（かつ毎日は送らないので通知過多にもならない）。
+    if (daysPast !== limitDays && (daysPast - limitDays) % 7 !== 0) return;
 
     const area = row[headers.indexOf(COL_AREA)];
     const recipient = getJpTeamEmail_(area);
