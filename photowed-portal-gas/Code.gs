@@ -976,8 +976,13 @@ function apiCommitChanges(token, kanriNo, changes, message) {
       sheet.getRange(rowIndex, colIndexOrThrow_(headers, COL_LAST_UPDATED)).setValue(new Date());
       writes.forEach(w => logStatusChangeIfApplicable_(kanriNo, w, who));
     }
-    if (dateChanged) sortReservationSheet_(sheet);
-
+    // ★不具合修正（重大）：以前はここで先に sortReservationSheet_() を呼んでいた。
+    // 並べ替えを行うと行の位置が変わるため、直後に rowIndex で読み直していた freshRow が
+    // 「別の案件の行」になってしまい、
+    //   ・やり取り履歴が別案件の管理番号で記録される
+    //   ・変更通知メールが別支店へ送られる（＝他支店に案件情報が漏れる）
+    // という事故が起きていた（撮影日FIXを変更したときに発生）。
+    // 行の位置に依存する読み取りを全て終えてから、最後に並べ替える。
     const freshRow = sheet.getRange(rowIndex, 1, 1, headers.length).getValues()[0];
     const bodyParts = [];
     if (summaryLines.length > 0) bodyParts.push(`[変更内容]\n${summaryLines.join('\n')}`);
@@ -988,6 +993,8 @@ function apiCommitChanges(token, kanriNo, changes, message) {
 
     appendHistory_(headers, freshRow, who, body, session.role);
     sendDirectionalMail_(headers, freshRow, direction, session, body, kind);
+
+    if (dateChanged) sortReservationSheet_(sheet);
   } finally {
     lock.releaseLock();
   }
@@ -1109,8 +1116,14 @@ function apiSetDriveUrl(token, kanriNo, url) {
 // =====================================================
 function apiCreateReservation(token, branchCode, rawText) {
   const session = requireSession_(token);
-  const targetBranch = session.role === JP_ROLE ? String(branchCode).toUpperCase() : session.branchCode;
+  const targetBranch = session.role === JP_ROLE ? String(branchCode || '').trim().toUpperCase() : session.branchCode;
   if (!targetBranch) throw new Error('支店コードを指定してください。');
+  // ★不具合修正：以前は支店コードの実在チェックが無かったため、存在しないコードでも案件を作れてしまい、
+  // その案件は「どの支店からもログインして見られない・通知先メールも無い」迷子データになっていた。
+  const targetMeta = branchMetaMap_()[targetBranch];
+  if (!targetMeta || targetMeta.role !== BRANCH_ROLE || !targetMeta.active) {
+    throw new Error(`支店コード「${targetBranch}」は支店マスタに存在しないか、無効になっています。`);
+  }
 
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
@@ -1235,6 +1248,19 @@ function apiToggleHistoryCheck(token, historyId, checked) {
       if (String(ids[i][0]) === String(historyId)) { targetRow = i + 2; break; }
     }
     if (targetRow === -1) throw new Error('対象の履歴が見つかりません。');
+
+    // ★不具合修正（認可漏れ）：以前はセッションの有無しか見ておらず、履歴IDさえ分かれば
+    // 他支店のメッセージにも既読チェックを付けられた。既読にすると相手側の「要対応」表示が
+    // 消えるため、他支店が対応すべき案件を見落とす原因になり得る。
+    // 支店ロールの場合は、その履歴が自支店の案件のものかを必ず確認する。
+    if (session.role === BRANCH_ROLE) {
+      const branchColIdx = headers.indexOf(H_COL_BRANCH_CODE);
+      const rowBranch = branchColIdx === -1
+        ? '' : String(sheet.getRange(targetRow, branchColIdx + 1).getValue()).trim().toUpperCase();
+      if (rowBranch !== session.branchCode) {
+        throw new Error('この履歴を操作する権限がありません。');
+      }
+    }
 
     sheet.getRange(targetRow, colIndexOrThrow_(headers, checkCol)).setValue(checked);
     if (checked) {

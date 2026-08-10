@@ -27,6 +27,7 @@ class Range {
     }
     return this;
   }
+  getValue() { return this.sheet._get(this.row, this.col); }
   setValue(v) {
     if (this.row < 1 || this.col < 1) throw new Error(`getRange out of bounds: row=${this.row} col=${this.col}`);
     this.sheet._set(this.row, this.col, v); return this;
