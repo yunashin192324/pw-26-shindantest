@@ -13,7 +13,8 @@
     { key: 'message', label: 'メッセージ' },
     { key: 'reservation', label: '予約内容' },
     { key: 'local', label: '現地記入欄' },
-    { key: 'drive', label: 'ドライブ' }
+    { key: 'drive', label: 'ドライブ' },
+    { key: 'timeline', label: '履歴' }
   ];
 
   let session = null;
@@ -23,6 +24,9 @@
   let dashboardScope = { showAll: true, teams: [], branches: [] };
   let searchScope = { showAll: true, teams: [], branches: [] };
   let statsScope = { showAll: true, teams: [], branches: [] };
+  let dayScope = { showAll: true, teams: [], branches: [] };
+  let deliveryScope = { showAll: true, teams: [], branches: [] };
+  let currentDetail = null;    // 開いている案件の詳細（ワンタップ回答・重複検知で参照）
   let branchesCache = [];      // 一覧/新規画面用（BRANCHロールのみに絞った支店一覧。JPログイン時に取得）
   let lastDashboardData = null; // キャンセル表示チェックボックスの再描画用にキャッシュ
   let pendingChanges = {}; // 「保存のみ／メッセージのみ送信／変更＋メッセージ送信」待ちの変更（既存予約の全項目が対象）
@@ -106,11 +110,16 @@
     $('nav-dashboard').addEventListener('click', () => loadDashboard());
     $('nav-search').addEventListener('click', openSearchView);
     $('nav-stats').addEventListener('click', () => loadStats());
+    $('nav-day').addEventListener('click', openDayView);
+    $('nav-delivery').addEventListener('click', () => loadPendingDeliveries());
     $('nav-new').addEventListener('click', openNewView);
     $('nav-logout').addEventListener('click', doLogout);
     $('detail-back').addEventListener('click', () => loadDashboard());
     $('new-submit').addEventListener('click', submitNewReservation);
     $('search-submit').addEventListener('click', submitSearch);
+    $('export-submit').addEventListener('click', submitExport);
+    $('day-submit').addEventListener('click', loadDaySchedule);
+    $('billing-submit').addEventListener('click', loadBillingGaps);
     $('show-cancelled').addEventListener('change', () => { if (lastDashboardData) renderDashboard(lastDashboardData); });
   }
 
@@ -157,6 +166,8 @@
     dashboardScope = { showAll: true, teams: [], branches: [] };
     searchScope = { showAll: true, teams: [], branches: [] };
     statsScope = { showAll: true, teams: [], branches: [] };
+    dayScope = { showAll: true, teams: [], branches: [] };
+    deliveryScope = { showAll: true, teams: [], branches: [] };
     loadDashboard();
   }
 
@@ -269,8 +280,9 @@
     renderScopeSelector($('search-scope'), searchScope, () => {});
   }
 
-  async function submitSearch() {
-    const criteria = {
+  // 検索画面の入力内容を条件オブジェクトにまとめる（検索と書き出しで共通利用）
+  function currentSearchCriteria() {
+    return {
       kanriNo: $('s-kanri').value.trim(),
       challengeNo: $('s-challenge').value.trim(),
       name: $('s-name').value.trim(),
@@ -284,6 +296,10 @@
       includeArchive: $('s-archive').checked,
       scope: searchScope
     };
+  }
+
+  async function submitSearch() {
+    const criteria = currentSearchCriteria();
     try {
       const res = await gsRun('apiSearchReservations', session.token, criteria);
       const list = $('search-results');
@@ -307,6 +323,150 @@
         list.appendChild(card);
       });
     } catch (e) { handleAuthError(e); }
+  }
+
+  // ---------- 当日スケジュール表 ----------
+  function openDayView() {
+    showView('day');
+    renderScopeSelector($('day-scope'), dayScope, () => { if ($('day-date').value) loadDaySchedule(); });
+    if (!$('day-date').value) {
+      const t = new Date();
+      $('day-date').value = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
+    }
+    loadDaySchedule();
+  }
+
+  async function loadDaySchedule() {
+    const date = $('day-date').value;
+    if (!date) { showToast('日付を選んでください'); return; }
+    $('day-content').innerHTML = '<p class="hint-text">読み込み中...</p>';
+    try {
+      const res = await gsRun('apiGetDaySchedule', session.token, date, dayScope);
+      if (!res.results.length) {
+        $('day-content').innerHTML = '<p class="empty-text">この日の撮影はありません。</p>';
+        return;
+      }
+      $('day-content').innerHTML = res.results.map(r => `
+        <div class="section-card day-card" data-open="${escapeAttr(r.kanriNo)}">
+          <div class="day-card-top">
+            <span class="day-time">${escapeHtml(r.pickupTime || '配車時間 未定')}</span>
+            <span class="hint-text">${escapeHtml(r.kanriNo)}</span>
+          </div>
+          <div class="res-card-names">${escapeHtml(r.groomName || '')} ${r.brideName ? '／ ' + escapeHtml(r.brideName) : ''}</div>
+          <div class="res-card-bottom">
+            ${session.role === 'JP' ? `<span class="chip branch">${escapeHtml(r.branchName)}</span>` : ''}
+            ${r.plan ? `<span class="chip">${escapeHtml(r.plan)}</span>` : ''}
+            ${r.statusBranch ? `<span class="chip branch">STS 支店: ${escapeHtml(r.statusBranch)}</span>` : ''}
+          </div>
+          <div class="detail-grid" style="margin-top:8px;">
+            <div class="field-block"><label>撮影希望場所</label><div class="val">${escapeHtml(r.location || '-')}</div></div>
+            <div class="field-block"><label>準備場所</label><div class="val">${escapeHtml(r.prep || '-')}</div></div>
+            <div class="field-block"><label>ホテル</label><div class="val">${escapeHtml(r.hotel || '-')}</div></div>
+            <div class="field-block"><label>当日の担当</label><div class="val">${escapeHtml(r.dayStaff || '-')}</div></div>
+            <div class="field-block"><label>ヘアメイク</label><div class="val">${escapeHtml(r.hairMakeup || '-')}</div></div>
+            <div class="field-block"><label>カメラマン</label><div class="val">${escapeHtml(r.photographer || '-')}</div></div>
+            <div class="field-block"><label>アシスタント</label><div class="val">${escapeHtml(r.assistant || '-')}</div></div>
+            ${r.localMemo ? `<div class="field-block" style="grid-column:1/-1;"><label>メモ（現地用）</label><div class="val">${escapeHtml(r.localMemo)}</div></div>` : ''}
+          </div>
+        </div>`).join('');
+      $('day-content').querySelectorAll('[data-open]').forEach(el =>
+        el.addEventListener('click', () => openDetail(el.dataset.open)));
+    } catch (e) { handleAuthError(e); }
+  }
+
+  // ---------- 納品待ち ----------
+  async function loadPendingDeliveries() {
+    showView('delivery');
+    $('delivery-content').innerHTML = '<p class="hint-text">読み込み中...</p>';
+    try {
+      const res = await gsRun('apiGetPendingDeliveries', session.token, deliveryScope);
+      renderScopeSelector($('delivery-scope'), deliveryScope, loadPendingDeliveries);
+      if (!res.results.length) {
+        $('delivery-content').innerHTML = '<p class="empty-text">納品待ちの案件はありません。</p>';
+        return;
+      }
+      $('delivery-content').innerHTML = `<div class="card-list">` + res.results.map(r => `
+        <div class="res-card needs-action" data-open="${escapeAttr(r.kanriNo)}">
+          <div class="res-card-top">
+            <span>${escapeHtml(r.kanriNo)}</span>
+            <span>撮影日: ${escapeHtml(r.confirmedDate || '-')}</span>
+          </div>
+          <div class="res-card-names">${escapeHtml(r.groomName || '')} ${r.brideName ? '／ ' + escapeHtml(r.brideName) : ''}</div>
+          <div class="res-card-bottom">
+            <span class="chip needs-action-chip">撮影から${r.daysPast}日経過</span>
+            <span class="chip">期限 ${r.limitDays}日</span>
+            ${session.role === 'JP' ? `<span class="chip branch">${escapeHtml(r.branchName)}</span>` : ''}
+            ${r.area ? `<span class="chip hq">担当: ${escapeHtml(r.area)}手配課</span>` : ''}
+          </div>
+          ${session.role === 'JP' ? `<button type="button" class="send-btn remind-btn" data-remind="${escapeAttr(r.kanriNo)}" style="margin-top:8px;padding:8px 14px;">納品を督促する</button>` : ''}
+        </div>`).join('') + `</div>`;
+      $('delivery-content').querySelectorAll('[data-open]').forEach(el => {
+        el.addEventListener('click', (ev) => {
+          if (ev.target.closest('[data-remind]')) return;   // 督促ボタンは詳細を開かない
+          openDetail(el.dataset.open);
+        });
+      });
+      $('delivery-content').querySelectorAll('[data-remind]').forEach(btn => {
+        btn.addEventListener('click', () => sendDeliveryReminder(btn.dataset.remind, btn));
+      });
+    } catch (e) { handleAuthError(e); }
+  }
+
+  // ★機能：納品督促のワンタップ送信（既存のメッセージ送信APIをそのまま利用）
+  async function sendDeliveryReminder(kanriNo, btn) {
+    btn.disabled = true;
+    try {
+      await gsRun('apiCommitChanges', session.token, kanriNo, {},
+        '撮影データ（DriveフォルダURL）のご登録をお願いします。ポータルの「ドライブ」タブから登録できます。');
+      showToast(`${kanriNo} へ督促を送信しました`);
+      btn.textContent = '督促済み';
+    } catch (e) {
+      btn.disabled = false;
+      handleAuthError(e);
+    }
+  }
+
+  // ---------- 請求不備チェック（JPのみ） ----------
+  async function loadBillingGaps() {
+    const month = $('billing-month').value;
+    if (!month) { showToast('対象月を選んでください'); return; }
+    $('billing-content').innerHTML = '<p class="hint-text">確認中...</p>';
+    try {
+      const res = await gsRun('apiGetBillingGaps', session.token, month);
+      if (!res.results.length) {
+        $('billing-content').innerHTML = '<p class="hint-text" style="margin-top:10px;">この月に不備はありません。</p>';
+        return;
+      }
+      $('billing-content').innerHTML =
+        `<p class="hint-text" style="margin:10px 0 6px;">${res.results.length}件の不備があります。</p>` +
+        `<div class="card-list">` + res.results.map(r => `
+          <div class="res-card" data-open="${escapeAttr(r.kanriNo)}">
+            <div class="res-card-top"><span>${escapeHtml(r.kanriNo)}</span><span>${escapeHtml(r.confirmedDate || '-')}</span></div>
+            <div class="res-card-names">${escapeHtml(r.groomName || '')} ${r.brideName ? '／ ' + escapeHtml(r.brideName) : ''}</div>
+            <div class="res-card-bottom">
+              <span class="chip branch">${escapeHtml(r.branchName)}</span>
+              ${r.missing.map(m => `<span class="chip needs-action-chip">${escapeHtml(m)} 未入力</span>`).join('')}
+            </div>
+          </div>`).join('') + `</div>`;
+      $('billing-content').querySelectorAll('[data-open]').forEach(el =>
+        el.addEventListener('click', () => openDetail(el.dataset.open)));
+    } catch (e) { handleAuthError(e); }
+  }
+
+  // ---------- 書き出し（JPのみ・検索条件をそのまま利用） ----------
+  async function submitExport() {
+    const btn = $('export-submit');
+    btn.disabled = true;
+    $('export-result').classList.add('hidden');
+    try {
+      const res = await gsRun('apiExportReservations', session.token, currentSearchCriteria());
+      $('export-result').textContent = `「${res.sheetName}」シートに${res.count}件を書き出しました。スプレッドシートをご確認ください。`;
+      $('export-result').classList.remove('hidden');
+    } catch (e) {
+      showToast(e.message || '書き出しに失敗しました');
+    } finally {
+      btn.disabled = false;
+    }
   }
 
   // ---------- 統計（JPのみ） ----------
@@ -383,12 +543,15 @@
     try {
       const detailRes = await gsRun('apiGetReservationDetail', session.token, kanriNo);
       const branchCode = detailRes.detail['支店コード'];
-      const [planList, optionList, locationList] = await Promise.all([
+      const [planList, optionList, locationList, staffList, phraseList] = await Promise.all([
         gsRun('apiListPlans', session.token, branchCode),
         gsRun('apiListOptionItems', session.token, branchCode),
-        gsRun('apiListLocations', session.token, branchCode)
+        gsRun('apiListLocations', session.token, branchCode),
+        gsRun('apiListStaff', session.token, branchCode),
+        gsRun('apiListPhrases', session.token, branchCode)
       ]);
-      renderDetail(detailRes.detail, planList, optionList, locationList);
+      currentDetail = detailRes.detail;
+      renderDetail(detailRes.detail, planList, optionList, locationList, staffList, phraseList);
     } catch (e) { handleAuthError(e); }
   }
 
@@ -423,7 +586,14 @@
     return names;
   }
 
-  function renderDetail(d, planList, optionList, locationList) {
+  // 「2026/12/3」「2026-12-03」等を <input type="date"> 用の yyyy-MM-dd に変換（不正ならnull）
+  function toIsoDate(v) {
+    const m = String(v || '').trim().match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+    if (!m) return null;
+    return `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
+  }
+
+  function renderDetail(d, planList, optionList, locationList, staffList, phraseList) {
     const c = $('detail-content');
 
     const planNames = nameListWithCurrent(planList, d['プラン名']);
@@ -433,6 +603,24 @@
     // ★要件：撮影希望場所は各地で違うので必須の選択式にせず、任意入力＋マスターの候補（datalist）にする
     const locationNames = nameListWithCurrent(locationList, d['撮影希望場所']);
     const locationDatalist = `<datalist id="location-datalist">${locationNames.map(n => `<option value="${escapeAttr(n)}">`).join('')}</datalist>`;
+
+    // ★機能：スタッフ名の入力候補（表記ゆれを抑えてダブルブッキング検知の精度を上げる）
+    const staffNames = (staffList || []).filter(x => x.active).map(x => x.name);
+    const staffDatalist = `<datalist id="staff-datalist">${staffNames.map(n => `<option value="${escapeAttr(n)}">`).join('')}</datalist>`;
+
+    // ★機能：希望日からのワンタップ回答（支店側が STS 支店 を編集できる状態のときだけ表示）
+    const hopeButtons = ['希望日①', '希望日②', '希望日③'].map((f, i) => {
+      const iso = toIsoDate(d[f]);
+      if (!iso) return '';
+      const gate = branchGateFor(d['STS JP']);
+      const canAnswer = session.role === 'BRANCH' && gate.editable &&
+        (gate.allowed === null || gate.allowed.indexOf('OK') !== -1);
+      if (!canAnswer) return '';
+      return `<button type="button" class="hope-btn" data-hope-iso="${iso}" data-hope-label="${escapeAttr(f)}">${escapeHtml(f)}（${escapeHtml(d[f])}）で確定</button>`;
+    }).filter(Boolean).join('');
+    const hopeBlock = hopeButtons
+      ? `<div class="hope-box"><div class="hint-text" style="margin-bottom:6px;">希望日から確定する（撮影日FIXへ反映し、STS 支店をOKにして日本側へ通知します）</div>${hopeButtons}</div>`
+      : '';
 
     const mainGate = branchGateFor(d['STS JP']);
 
@@ -483,6 +671,12 @@
           <h3>メッセージ・変更の送信</h3>
           <p class="hint-text">送信者として記録されます：<strong>${escapeHtml(currentUserName || session.branchName)}</strong>${currentUserName ? `（${escapeHtml(session.branchName)}）` : ''}</p>
           <p id="pending-indicator" class="hint-text ${pendingCount ? '' : 'hidden'}">未保存の変更: ${pendingCount}件（「予約内容」「現地記入欄」タブでの入力を含みます）</p>
+          ${(phraseList && phraseList.length) ? `
+          <label style="margin-top:10px;">定型文から挿入</label>
+          <select id="phrase-select">
+            <option value="">選択してください</option>
+            ${phraseList.map((p, i) => `<option value="${i}">${escapeHtml(p.name)}${p.shared ? '（共通）' : ''}</option>`).join('')}
+          </select>` : ''}
           <div class="msg-row"><textarea id="msg-input" placeholder="メッセージ（任意）"></textarea></div>
           <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px;">
             <button class="send-btn" id="btn-msg-only" style="width:100%;">メッセージのみ送信</button>
@@ -513,6 +707,7 @@
             <div class="field-block"><label>希望日①</label><input data-pending="希望日①" value="${escapeAttr(d['希望日①'])}"></div>
             <div class="field-block"><label>希望日②</label><input data-pending="希望日②" value="${escapeAttr(d['希望日②'])}"></div>
             <div class="field-block"><label>希望日③</label><input data-pending="希望日③" value="${escapeAttr(d['希望日③'])}"></div>
+            <div class="field-block" style="grid-column:1/-1;">${hopeBlock}</div>
             <div class="field-block"><label>プラン名（マスタから選択）</label>${planSelect}</div>
             <div class="field-block"><label>撮影希望場所（任意・候補から選択も可）</label>
               <input data-pending="撮影希望場所" value="${escapeAttr(d['撮影希望場所'])}" list="location-datalist" placeholder="任意入力">
@@ -554,13 +749,15 @@
           <h3>現地運用情報</h3>
           <div class="detail-grid">
             <div class="field-block"><label>${escapeHtml(invoiceLabel)}</label><input data-pending="請求番号" value="${escapeAttr(d['請求番号'])}" placeholder="現地で使う番号"></div>
-            <div class="field-block"><label>当日の担当</label><input data-pending="当日の担当" value="${escapeAttr(d['当日の担当'])}"></div>
-            <div class="field-block"><label>ヘアメイク</label><input data-pending="ヘアメイク" value="${escapeAttr(d['ヘアメイク'])}"></div>
-            <div class="field-block"><label>カメラマン</label><input data-pending="カメラマン" value="${escapeAttr(d['カメラマン'])}"></div>
-            <div class="field-block"><label>アシスタント</label><input data-pending="アシスタント" value="${escapeAttr(d['アシスタント'])}"></div>
+            <div class="field-block"><label>当日の担当</label><input data-pending="当日の担当" data-staff="1" list="staff-datalist" value="${escapeAttr(d['当日の担当'])}"></div>
+            <div class="field-block"><label>ヘアメイク</label><input data-pending="ヘアメイク" data-staff="1" list="staff-datalist" value="${escapeAttr(d['ヘアメイク'])}"></div>
+            <div class="field-block"><label>カメラマン</label><input data-pending="カメラマン" data-staff="1" list="staff-datalist" value="${escapeAttr(d['カメラマン'])}"></div>
+            <div class="field-block"><label>アシスタント</label><input data-pending="アシスタント" data-staff="1" list="staff-datalist" value="${escapeAttr(d['アシスタント'])}"></div>
             <div class="field-block"><label>配車時間</label><input data-pending="配車時間" value="${escapeAttr(d['配車時間'])}" placeholder="例）9:00"></div>
             <div class="field-block" style="grid-column:1/-1;"><label>メモ（現地用）</label><input data-pending="メモ（現地用）" value="${escapeAttr(d['メモ（現地用）'])}"></div>
           </div>
+          ${staffDatalist}
+          <div id="staff-conflict" class="conflict-box hidden"></div>
           <p class="hint-text">この欄は現地運用向けです。保存のみ／変更＋メッセージ送信は「メッセージ」タブのボタンから行えます。</p>
         </div>
       </div>`;
@@ -578,6 +775,16 @@
         </div>
       </div>`;
 
+    // ★機能：ステータス変更履歴とやり取り履歴を時系列にマージした「案件タイムライン」
+    const timelineTabHtml = `
+      <div class="tab-pane ${detailActiveTab === 'timeline' ? '' : 'hidden'}" data-tab-pane="timeline">
+        <div class="section-card">
+          <h3>案件の履歴（新しい順）</h3>
+          <p class="hint-text">メッセージとステータス変更を1本の流れで表示します。引き継ぎや経緯の確認にお使いください。</p>
+          <div id="timeline-content"><p class="hint-text">読み込み中...</p></div>
+        </div>
+      </div>`;
+
     // ★不具合修正：管理番号・CHG NO・支店名・国／都市・管轄・新郎新婦名は自由入力（または
     // スプレッドシート管理者による設定）が可能な値のため、エスケープせずに描画すると保存型XSSになる
     c.innerHTML = `
@@ -592,6 +799,7 @@
       ${reservationTabHtml}
       ${localTabHtml}
       ${driveTabHtml}
+      ${timelineTabHtml}
     `;
 
     c.querySelectorAll('.tab-btn').forEach(btn => {
@@ -599,7 +807,32 @@
         detailActiveTab = btn.dataset.tab;
         c.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === detailActiveTab));
         c.querySelectorAll('.tab-pane').forEach(p => p.classList.toggle('hidden', p.dataset.tabPane !== detailActiveTab));
+        if (detailActiveTab === 'timeline') loadTimeline();
       });
+    });
+
+    // ★機能：定型文の挿入
+    const phraseSel = $('phrase-select');
+    if (phraseSel) {
+      phraseSel.addEventListener('change', () => {
+        const idx = phraseSel.value;
+        if (idx === '') return;
+        const body = (phraseList[Number(idx)] || {}).body || '';
+        const ta = $('msg-input');
+        ta.value = ta.value ? `${ta.value}\n${body}` : body;
+        phraseSel.value = '';
+        ta.focus();
+      });
+    }
+
+    // ★機能：希望日からのワンタップ回答
+    c.querySelectorAll('[data-hope-iso]').forEach(btn => {
+      btn.addEventListener('click', () => answerWithHopeDate(btn.dataset.hopeIso, btn.dataset.hopeLabel));
+    });
+
+    // ★機能：スタッフのダブルブッキング検知（入力を変えたタイミングで確認）
+    c.querySelectorAll('[data-staff]').forEach(el => {
+      el.addEventListener('change', () => checkStaffConflict());
     });
 
     // ★不具合修正：「メッセージのみ送信」の直後など、未保存の変更（pendingChanges）を保持したまま
@@ -627,6 +860,75 @@
     c.querySelectorAll('[data-history-field]').forEach(btn => {
       btn.addEventListener('click', () => toggleFieldHistory(btn.dataset.historyField, btn.dataset.historyTarget));
     });
+  }
+
+  // ★機能：希望日のボタンを押すと、撮影日FIXへの反映・STS 支店＝OK・定型メッセージを1回で送信する。
+  // これまでは支店がメッセージ本文で「②でOK」と伝え、日本側が撮影日FIXへ手入力していたため、
+  // 転記ミスと往復1回ぶんが毎案件で発生していた。
+  async function answerWithHopeDate(iso, label) {
+    const shown = iso.replace(/-/g, '/');
+    if (!confirm(`${label}（${shown}）で確定し、日本側へ通知します。よろしいですか？`)) return;
+    try {
+      await gsRun('apiCommitChanges', session.token, currentKanri,
+        { '撮影日FIX': iso, 'STS 支店': 'OK' },
+        `${label}（${shown}）で確定します。`);
+      pendingChanges = {};
+      showToast(`${shown} で確定し、日本側へ通知しました`);
+      openDetail(currentKanri);
+    } catch (e) { handleAuthError(e); }
+  }
+
+  // ★機能：同じ支店・同じ撮影日に同名スタッフが既に割り当てられていないか確認して警告する。
+  // 保存はブロックせず、あくまで気づきのための表示にとどめる。
+  async function checkStaffConflict() {
+    const box = $('staff-conflict');
+    if (!box || !currentDetail) return;
+    const fields = ['当日の担当', 'ヘアメイク', 'カメラマン', 'アシスタント'];
+    const names = {};
+    fields.forEach(f => {
+      const el = document.querySelector(`[data-pending="${f}"]`);
+      if (el && el.value.trim()) names[f] = el.value.trim();
+    });
+    const dateEl = document.querySelector('[data-pending="撮影日FIX"]');
+    const date = (dateEl && dateEl.value) || currentDetail['撮影日FIX'];
+    if (!date || Object.keys(names).length === 0) { box.classList.add('hidden'); return; }
+    try {
+      const res = await gsRun('apiCheckStaffConflict', session.token, currentKanri, date, names);
+      if (!res.conflicts.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+      box.innerHTML = `<strong>同じ日に重複しています</strong>` +
+        res.conflicts.map(cf =>
+          `<div>${escapeHtml(cf.staff)} … ${escapeHtml(cf.kanriNo)}（${escapeHtml(cf.groomName || '')}${cf.brideName ? ' / ' + escapeHtml(cf.brideName) : ''}）の「${escapeHtml(cf.conflictField)}」に割り当て済み</div>`
+        ).join('') +
+        `<div class="hint-text" style="margin-top:6px;">保存は可能です。意図した割り当てかご確認ください。</div>`;
+      box.classList.remove('hidden');
+    } catch (e) { /* 検知は補助機能のため、失敗しても操作は妨げない */ }
+  }
+
+  // ★機能：案件タイムライン（やり取り履歴＋ステータス変更履歴のマージ表示）
+  async function loadTimeline() {
+    const el = $('timeline-content');
+    if (!el) return;
+    if (el.dataset.loaded === '1') return;
+    try {
+      const res = await gsRun('apiGetCaseTimeline', session.token, currentKanri);
+      el.dataset.loaded = '1';
+      if (!res.items.length) { el.innerHTML = '<p class="hint-text">履歴はまだありません。</p>'; return; }
+      el.innerHTML = res.items.map(it => {
+        const side = it.role === 'JP' ? '日本側' : (it.role === 'BRANCH' ? '支店' : '');
+        if (it.type === 'message') {
+          return `<div class="tl-item tl-msg">
+            <div class="tl-meta"><span>${escapeHtml(it.datetime)}</span><span>${escapeHtml(it.who || '')}${side ? '・' + side : ''}</span></div>
+            <div class="tl-body">${escapeHtml(it.body)}</div>
+          </div>`;
+        }
+        return `<div class="tl-item tl-sts">
+          <div class="tl-meta"><span>${escapeHtml(it.datetime)}</span><span>${escapeHtml(it.who || '')}</span></div>
+          <div class="tl-body"><strong>${escapeHtml(it.field)}</strong>：${escapeHtml(it.oldValue || '(未設定)')} → ${escapeHtml(it.newValue || '(未設定)')}</div>
+        </div>`;
+      }).join('');
+    } catch (e) {
+      el.innerHTML = '<p class="error-text">履歴の取得に失敗しました。</p>';
+    }
   }
 
   // ★要件：STSの値（OK/RQ等）を押すと「誰が・いつ変更したか」の履歴を確認できるようにする

@@ -21,6 +21,8 @@ const BRANCH_MASTER_SHEET_NAME = '支店マスタ';
 const PLAN_MASTER_SHEET_NAME = 'プランマスタ';
 const OPTION_MASTER_SHEET_NAME = 'オプションマスタ';
 const LOCATION_MASTER_SHEET_NAME = '撮影場所マスタ';
+const STAFF_MASTER_SHEET_NAME = 'スタッフマスタ';   // 現地スタッフ（カメラマン・ヘアメイク等）の入力候補
+const PHRASE_MASTER_SHEET_NAME = '定型文マスタ';    // メッセージのテンプレート
 const RESERVATION_SHEET_NAME = '予約一覧';
 const HISTORY_SHEET_NAME = 'やり取り履歴';
 const ARCHIVE_SHEET_NAME = '過去一覧';
@@ -57,6 +59,12 @@ const DELIVERY_ALERT_REMIND_UNTIL_DAYS = 28;
 // 長期間トリガーが止まっていた場合などに6分の実行時間制限へ達しないよう、1回あたりの上限を設ける。
 // 残りは翌日の実行で処理される（取りこぼしにはならない）。
 const ARCHIVE_MAX_ROWS_PER_RUN = 500;
+
+// ★機能追加：相手からのメッセージが何日未読なら督促メールを送るか（支店マスタ「督促日数」未設定時の既定）
+const UNANSWERED_REMIND_DEFAULT_DAYS = 3;
+// 書き出し（apiExportReservations）の1回あたり最大件数。setValuesで一括書き込みするが、
+// 極端に大量だと実行時間・メモリを圧迫するため上限を設ける
+const EXPORT_MAX_ROWS = 5000;
 
 // --- 支店側がSTS(支店側)を編集してよい条件（キー＝対になるSTS(JP側)の現在値） ---
 // null = 値の制限なし（STATUS_CODESから自由に選べる）／配列 = その中からのみ選べる／
@@ -160,17 +168,29 @@ const BM_COL_EMAIL = '通知先メール';
 const BM_COL_PREFIX = '案件番号プレフィックス';  // BRANCHロールのみ使用。支店ごとに一意
 const BM_COL_INVOICE_LABEL = '請求番号欄名称';   // BRANCHロールのみ使用。空欄なら「請求番号」を使用（支店が独自名称に変更可）
 const BM_COL_DELIVERY_DAYS = '納品期限日数';     // BRANCHロールのみ使用。空欄ならDELIVERY_ALERT_DEFAULT_DAYSを使用
+// ★機能追加：相手からのメッセージが何日未読なら督促するか。空欄ならUNANSWERED_REMIND_DEFAULT_DAYS
+const BM_COL_REMIND_DAYS = '督促日数';
 const BM_COL_ACTIVE = '有効';
 const BRANCH_MASTER_HEADERS = [
   BM_COL_CODE, BM_COL_NAME, BM_COL_COUNTRY, BM_COL_CITY, BM_COL_ROLE, BM_COL_TEAM,
-  BM_COL_PASSCODE, BM_COL_EMAIL, BM_COL_PREFIX, BM_COL_INVOICE_LABEL, BM_COL_DELIVERY_DAYS, BM_COL_ACTIVE
+  BM_COL_PASSCODE, BM_COL_EMAIL, BM_COL_PREFIX, BM_COL_INVOICE_LABEL, BM_COL_DELIVERY_DAYS,
+  BM_COL_REMIND_DAYS, BM_COL_ACTIVE
 ];
 
-// --- プラン／オプションマスタの列定義（支店ごとに管理） ---
+// --- プラン／オプション／撮影場所／スタッフマスタの列定義（支店ごとに管理） ---
 const MM_COL_BRANCH = '支店コード';
 const MM_COL_NAME = '名称';
 const MM_COL_ACTIVE = '有効';
 const MASTER_ITEM_HEADERS = [MM_COL_BRANCH, MM_COL_NAME, MM_COL_ACTIVE];
+
+// --- 定型文マスタの列定義 ---
+// 支店コードに ALL を入れると全支店・日本側の共通テンプレートとして使える
+const PH_COL_BRANCH = '支店コード';
+const PH_COL_NAME = '表示名';
+const PH_COL_BODY = '本文';
+const PH_COL_ACTIVE = '有効';
+const PHRASE_MASTER_HEADERS = [PH_COL_BRANCH, PH_COL_NAME, PH_COL_BODY, PH_COL_ACTIVE];
+const PHRASE_SHARED_CODE = 'ALL';
 
 // --- 履歴シートの列定義 ---
 const H_COL_ID = '__id';
@@ -230,6 +250,8 @@ function setupPortal() {
   ensureSheetWithHeaders_(ss, PLAN_MASTER_SHEET_NAME, MASTER_ITEM_HEADERS);
   ensureSheetWithHeaders_(ss, OPTION_MASTER_SHEET_NAME, MASTER_ITEM_HEADERS);
   ensureSheetWithHeaders_(ss, LOCATION_MASTER_SHEET_NAME, MASTER_ITEM_HEADERS);
+  ensureSheetWithHeaders_(ss, STAFF_MASTER_SHEET_NAME, MASTER_ITEM_HEADERS);
+  ensureSheetWithHeaders_(ss, PHRASE_MASTER_SHEET_NAME, PHRASE_MASTER_HEADERS);
   ensureSheetWithHeaders_(ss, RESERVATION_SHEET_NAME, RESERVATION_HEADERS);
   ensureSheetWithHeaders_(ss, HISTORY_SHEET_NAME, HISTORY_HEADERS);
   ensureSheetWithHeaders_(ss, ARCHIVE_SHEET_NAME, RESERVATION_HEADERS);
@@ -238,34 +260,34 @@ function setupPortal() {
   const bm = ss.getSheetByName(BRANCH_MASTER_SHEET_NAME);
   if (bm.getLastRow() < 2) {
     const rows = [
-      // 支店コード, 支店名, 国, 都市, ロール, 手配チーム, パスコード, 通知先メール, 番号プレフィックス, 請求番号欄名称, 納品期限日数, 有効
-      ['KANTO', '関東手配課', '', '', JP_ROLE, '関東', 'CHANGE-ME-KANTO', 'tw-avanti@his-world.com', '', '', '', true],
-      ['KANSAI', '関西手配課', '', '', JP_ROLE, '関西', 'CHANGE-ME-KANSAI', 'o-avanti@his-world.com', '', '', '', true],
+      // 支店コード, 支店名, 国, 都市, ロール, 手配チーム, パスコード, 通知先メール, 番号プレフィックス, 請求番号欄名称, 納品期限日数, 督促日数, 有効
+      ['KANTO', '関東手配課', '', '', JP_ROLE, '関東', 'CHANGE-ME-KANTO', 'tw-avanti@his-world.com', '', '', '', '', true],
+      ['KANSAI', '関西手配課', '', '', JP_ROLE, '関西', 'CHANGE-ME-KANSAI', 'o-avanti@his-world.com', '', '', '', '', true],
       // ローマは既に「R-」採番で運用中のためプレフィックスは変更しない
-      ['ROW', 'ローマ支店', 'イタリア', 'ローマ', BRANCH_ROLE, '', 'CHANGE-ME-ROW', 'row-branch@his-world.com', 'R', '', '', true],
-      ['VIE', 'ウィーン支店', 'オーストリア', 'ウィーン', BRANCH_ROLE, '', 'CHANGE-ME-VIE', 'vienna-branch@his-world.com', 'VIE', '', '', true],
-      ['AMS', 'アムステルダム支店', 'オランダ', 'アムステルダム', BRANCH_ROLE, '', 'CHANGE-ME-AMS', 'amsterdam-branch@his-world.com', 'AMS', '', '', true],
-      ['GVA', 'ジュネーブ支店', 'スイス', 'ジュネーブ', BRANCH_ROLE, '', 'CHANGE-ME-GVA', 'geneva-branch@his-world.com', 'GVA', '', '', true],
-      ['ATH', 'アテネ支店', 'ギリシャ', 'アテネ', BRANCH_ROLE, '', 'CHANGE-ME-ATH', 'athens-branch@his-world.com', 'ATH', '', '', true],
-      ['IST', 'イスタンブール支店', 'トルコ', 'イスタンブール', BRANCH_ROLE, '', 'CHANGE-ME-IST', 'istanbul-branch@his-world.com', 'IST', '', '', true],
-      ['DXB', 'ドバイ支店', 'アラブ首長国連邦', 'ドバイ', BRANCH_ROLE, '', 'CHANGE-ME-DXB', 'dubai-branch@his-world.com', 'DXB', '', '', true],
-      ['CAI', 'カイロ支店', 'エジプト', 'カイロ', BRANCH_ROLE, '', 'CHANGE-ME-CAI', 'cairo-branch@his-world.com', 'CAI', '', '', true],
-      ['CAS', 'カサブランカ支店', 'モロッコ', 'カサブランカ', BRANCH_ROLE, '', 'CHANGE-ME-CAS', 'casablanca-branch@his-world.com', 'CAS', '', '', true],
-      ['LON', 'ロンドン支店', 'イギリス', 'ロンドン', BRANCH_ROLE, '', 'CHANGE-ME-LON', 'london-branch@his-world.com', 'LON', '', '', true],
-      ['FRA', 'フランクフルト支店', 'ドイツ', 'フランクフルト', BRANCH_ROLE, '', 'CHANGE-ME-FRA', 'frankfurt-branch@his-world.com', 'FRA', '', '', true],
-      ['NBO', 'ナイロビ支店', 'ケニア', 'ナイロビ', BRANCH_ROLE, '', 'CHANGE-ME-NBO', 'nairobi-branch@his-world.com', 'NBO', '', '', true],
-      ['CUN', 'カンクン支店', 'メキシコ', 'カンクン', BRANCH_ROLE, '', 'CHANGE-ME-CUN', 'cancun-branch@his-world.com', 'CUN', '', '', true],
-      ['YVR', 'バンクーバー支店', 'カナダ', 'バンクーバー', BRANCH_ROLE, '', 'CHANGE-ME-YVR', 'vancouver-branch@his-world.com', 'YVR', '', '', true],
-      ['LPB', 'ラパス支店', 'ボリビア', 'ラパス', BRANCH_ROLE, '', 'CHANGE-ME-LPB', 'lapaz-branch@his-world.com', 'LPB', '', '', true],
-      ['FIJ', 'フィジー支店', 'フィジー', '', BRANCH_ROLE, '', 'CHANGE-ME-FIJ', 'fiji-branch@his-world.com', 'FIJ', '', '', true],
-      ['AUS', 'オーストラリア支店', 'オーストラリア', '', BRANCH_ROLE, '', 'CHANGE-ME-AUS', 'australia-branch@his-world.com', 'AUS', '', '', true],
-      ['NZL', 'ニュージーランド支店', 'ニュージーランド', '', BRANCH_ROLE, '', 'CHANGE-ME-NZL', 'newzealand-branch@his-world.com', 'NZL', '', '', true],
-      ['DPS', 'デンパサール支店', 'インドネシア', 'デンパサール', BRANCH_ROLE, '', 'CHANGE-ME-DPS', 'denpasar-branch@his-world.com', 'DPS', '', '', true],
-      ['TPE', '台北支店', '台湾', '台北', BRANCH_ROLE, '', 'CHANGE-ME-TPE', 'taipei-branch@his-world.com', 'TPE', '', '', true],
-      ['SIN', 'シンガポール支店', 'シンガポール', 'シンガポール', BRANCH_ROLE, '', 'CHANGE-ME-SIN', 'singapore-branch@his-world.com', 'SIN', '', '', true],
-      ['REP', 'シェムリアップ支店', 'カンボジア', 'シェムリアップ', BRANCH_ROLE, '', 'CHANGE-ME-REP', 'siemreap-branch@his-world.com', 'REP', '', '', true],
-      ['TAS', 'タシケント支店', 'ウズベキスタン', 'タシケント', BRANCH_ROLE, '', 'CHANGE-ME-TAS', 'tashkent-branch@his-world.com', 'TAS', '', '', true],
-      ['JED', 'ジェッダ支店', 'サウジアラビア', 'ジェッダ', BRANCH_ROLE, '', 'CHANGE-ME-JED', 'jeddah-branch@his-world.com', 'JED', '', '', true]
+      ['ROW', 'ローマ支店', 'イタリア', 'ローマ', BRANCH_ROLE, '', 'CHANGE-ME-ROW', 'row-branch@his-world.com', 'R', '', '', '', true],
+      ['VIE', 'ウィーン支店', 'オーストリア', 'ウィーン', BRANCH_ROLE, '', 'CHANGE-ME-VIE', 'vienna-branch@his-world.com', 'VIE', '', '', '', true],
+      ['AMS', 'アムステルダム支店', 'オランダ', 'アムステルダム', BRANCH_ROLE, '', 'CHANGE-ME-AMS', 'amsterdam-branch@his-world.com', 'AMS', '', '', '', true],
+      ['GVA', 'ジュネーブ支店', 'スイス', 'ジュネーブ', BRANCH_ROLE, '', 'CHANGE-ME-GVA', 'geneva-branch@his-world.com', 'GVA', '', '', '', true],
+      ['ATH', 'アテネ支店', 'ギリシャ', 'アテネ', BRANCH_ROLE, '', 'CHANGE-ME-ATH', 'athens-branch@his-world.com', 'ATH', '', '', '', true],
+      ['IST', 'イスタンブール支店', 'トルコ', 'イスタンブール', BRANCH_ROLE, '', 'CHANGE-ME-IST', 'istanbul-branch@his-world.com', 'IST', '', '', '', true],
+      ['DXB', 'ドバイ支店', 'アラブ首長国連邦', 'ドバイ', BRANCH_ROLE, '', 'CHANGE-ME-DXB', 'dubai-branch@his-world.com', 'DXB', '', '', '', true],
+      ['CAI', 'カイロ支店', 'エジプト', 'カイロ', BRANCH_ROLE, '', 'CHANGE-ME-CAI', 'cairo-branch@his-world.com', 'CAI', '', '', '', true],
+      ['CAS', 'カサブランカ支店', 'モロッコ', 'カサブランカ', BRANCH_ROLE, '', 'CHANGE-ME-CAS', 'casablanca-branch@his-world.com', 'CAS', '', '', '', true],
+      ['LON', 'ロンドン支店', 'イギリス', 'ロンドン', BRANCH_ROLE, '', 'CHANGE-ME-LON', 'london-branch@his-world.com', 'LON', '', '', '', true],
+      ['FRA', 'フランクフルト支店', 'ドイツ', 'フランクフルト', BRANCH_ROLE, '', 'CHANGE-ME-FRA', 'frankfurt-branch@his-world.com', 'FRA', '', '', '', true],
+      ['NBO', 'ナイロビ支店', 'ケニア', 'ナイロビ', BRANCH_ROLE, '', 'CHANGE-ME-NBO', 'nairobi-branch@his-world.com', 'NBO', '', '', '', true],
+      ['CUN', 'カンクン支店', 'メキシコ', 'カンクン', BRANCH_ROLE, '', 'CHANGE-ME-CUN', 'cancun-branch@his-world.com', 'CUN', '', '', '', true],
+      ['YVR', 'バンクーバー支店', 'カナダ', 'バンクーバー', BRANCH_ROLE, '', 'CHANGE-ME-YVR', 'vancouver-branch@his-world.com', 'YVR', '', '', '', true],
+      ['LPB', 'ラパス支店', 'ボリビア', 'ラパス', BRANCH_ROLE, '', 'CHANGE-ME-LPB', 'lapaz-branch@his-world.com', 'LPB', '', '', '', true],
+      ['FIJ', 'フィジー支店', 'フィジー', '', BRANCH_ROLE, '', 'CHANGE-ME-FIJ', 'fiji-branch@his-world.com', 'FIJ', '', '', '', true],
+      ['AUS', 'オーストラリア支店', 'オーストラリア', '', BRANCH_ROLE, '', 'CHANGE-ME-AUS', 'australia-branch@his-world.com', 'AUS', '', '', '', true],
+      ['NZL', 'ニュージーランド支店', 'ニュージーランド', '', BRANCH_ROLE, '', 'CHANGE-ME-NZL', 'newzealand-branch@his-world.com', 'NZL', '', '', '', true],
+      ['DPS', 'デンパサール支店', 'インドネシア', 'デンパサール', BRANCH_ROLE, '', 'CHANGE-ME-DPS', 'denpasar-branch@his-world.com', 'DPS', '', '', '', true],
+      ['TPE', '台北支店', '台湾', '台北', BRANCH_ROLE, '', 'CHANGE-ME-TPE', 'taipei-branch@his-world.com', 'TPE', '', '', '', true],
+      ['SIN', 'シンガポール支店', 'シンガポール', 'シンガポール', BRANCH_ROLE, '', 'CHANGE-ME-SIN', 'singapore-branch@his-world.com', 'SIN', '', '', '', true],
+      ['REP', 'シェムリアップ支店', 'カンボジア', 'シェムリアップ', BRANCH_ROLE, '', 'CHANGE-ME-REP', 'siemreap-branch@his-world.com', 'REP', '', '', '', true],
+      ['TAS', 'タシケント支店', 'ウズベキスタン', 'タシケント', BRANCH_ROLE, '', 'CHANGE-ME-TAS', 'tashkent-branch@his-world.com', 'TAS', '', '', '', true],
+      ['JED', 'ジェッダ支店', 'サウジアラビア', 'ジェッダ', BRANCH_ROLE, '', 'CHANGE-ME-JED', 'jeddah-branch@his-world.com', 'JED', '', '', '', true]
     ];
     bm.getRange(2, 1, rows.length, BRANCH_MASTER_HEADERS.length).setValues(rows);
   }
@@ -274,6 +296,8 @@ function setupPortal() {
     ss.getSheetByName(PLAN_MASTER_SHEET_NAME),
     ss.getSheetByName(OPTION_MASTER_SHEET_NAME),
     ss.getSheetByName(LOCATION_MASTER_SHEET_NAME),
+    ss.getSheetByName(STAFF_MASTER_SHEET_NAME),
+    ss.getSheetByName(PHRASE_MASTER_SHEET_NAME),
     ss.getSheetByName(RESERVATION_SHEET_NAME),
     ss.getSheetByName(HISTORY_SHEET_NAME),
     ss.getSheetByName(ARCHIVE_SHEET_NAME),
@@ -468,6 +492,7 @@ function listBranchesRaw_() {
     team: String(r[BM_COL_TEAM] || '').trim(), email: r[BM_COL_EMAIL], prefix: r[BM_COL_PREFIX],
     invoiceLabel: r[BM_COL_INVOICE_LABEL] || '請求番号',
     deliveryDays: parseIntOrNull_(r[BM_COL_DELIVERY_DAYS]),
+    remindDays: parseIntOrNull_(r[BM_COL_REMIND_DAYS]),
     active: isActiveFlag_(r[BM_COL_ACTIVE])
     // ログインパスコードは一覧APIには返さない（画面表示上の漏洩防止）
   }));
@@ -597,6 +622,38 @@ function apiListLocations(token, branchCode) {
   const target = session.role === BRANCH_ROLE ? session.branchCode : String(branchCode || '').toUpperCase();
   return listMasterItems_(LOCATION_MASTER_SHEET_NAME, target);
 }
+// ★機能追加：現地スタッフ（カメラマン・ヘアメイク等）の入力候補。
+// 自由入力の表記ゆれ（"M.Gruber" と "Gruber"）はダブルブッキング検知の精度を落とすため、
+// 候補から選べるようにして表記を揃える狙い。
+function apiListStaff(token, branchCode) {
+  const session = requireSession_(token);
+  const target = session.role === BRANCH_ROLE ? session.branchCode : String(branchCode || '').toUpperCase();
+  return listMasterItems_(STAFF_MASTER_SHEET_NAME, target);
+}
+function apiSaveStaffItem(token, branchCode, name, originalName, active) {
+  const session = requireSession_(token);
+  assertBranchAccess_(session, branchCode);
+  return saveMasterItem_(STAFF_MASTER_SHEET_NAME, branchCode, name, originalName, active);
+}
+
+// ★機能追加：メッセージの定型文。支店コードに ALL を入れた行は全員が使える共通テンプレート。
+function apiListPhrases(token, branchCode) {
+  const session = requireSession_(token);
+  const target = session.role === BRANCH_ROLE ? session.branchCode : String(branchCode || '').toUpperCase();
+  const sheet = getSpreadsheet_().getSheetByName(PHRASE_MASTER_SHEET_NAME);
+  return getRowsAsObjects_(sheet)
+    .filter(r => {
+      if (!isActiveFlag_(r[PH_COL_ACTIVE])) return false;
+      const code = String(r[PH_COL_BRANCH]).trim().toUpperCase();
+      return code === PHRASE_SHARED_CODE || code === String(target).trim().toUpperCase();
+    })
+    .map(r => ({
+      name: r[PH_COL_NAME] || r[PH_COL_BODY],
+      body: r[PH_COL_BODY] || r[PH_COL_NAME],
+      shared: String(r[PH_COL_BRANCH]).trim().toUpperCase() === PHRASE_SHARED_CODE
+    }));
+}
+
 function apiSaveLocationItem(token, branchCode, name, originalName, active) {
   const session = requireSession_(token);
   assertBranchAccess_(session, branchCode);
@@ -920,6 +977,304 @@ function apiGetStats(token, scope) {
     teams: JP_TEAMS,
     branches: listBranchesRaw_().filter(b => b.role === BRANCH_ROLE)
   };
+}
+
+// =====================================================
+// ⑤-3 納品待ち一覧（機能④）
+// =====================================================
+// ★機能追加：納品期限アラートは日本側へのメールだけだったため、支店は自分の納品が
+// 遅れていることをポータル上で確認できなかった。撮影日を過ぎた案件は翌日に過去一覧へ移るので、
+// 予約一覧と過去一覧の両方から「撮影済み・未納品」を集めて表示する。
+// 一覧を開くたびの処理ではなく、専用画面を開いたときだけ実行する（過去一覧は増え続けるため）。
+function apiGetPendingDeliveries(token, scope) {
+  const session = requireSession_(token);
+  const ss = getSpreadsheet_();
+  const branchMeta = branchMetaMap_();
+  const today = new Date();
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+  const results = [];
+  [RESERVATION_SHEET_NAME, ARCHIVE_SHEET_NAME].forEach(sheetName => {
+    getRowsAsObjects_(ss.getSheetByName(sheetName)).forEach(r => {
+      if (!rowInScope_(session, scope, r)) return;
+      const info = deliveryOverdueInfo_({
+        driveUrl: r[COL_DRIVE_URL], stsJp: r[COL_STATUS_JP], stsBranch: r[COL_STATUS_BRANCH],
+        confirmedDate: r[COL_CONFIRMED_DATE], branchCode: r[COL_BRANCH_CODE]
+      }, branchMeta, todayMidnight);
+      if (!info || !info.overdue) return;
+      const meta = branchMeta[r[COL_BRANCH_CODE]] || {};
+      results.push({
+        kanriNo: r[COL_KANRI_NO],
+        challengeNo: r[COL_CHALLENGE_NO],
+        branchCode: r[COL_BRANCH_CODE],
+        branchName: meta.name || r[COL_BRANCH_CODE],
+        country: meta.country || '',
+        groomName: r[COL_GROOM_NAME],
+        brideName: r[COL_BRIDE_NAME],
+        area: r[COL_AREA],
+        confirmedDate: formatMaybeDate_(r[COL_CONFIRMED_DATE]),
+        daysPast: info.daysPast,
+        limitDays: info.limitDays,
+        overdueDays: info.daysPast - info.firstAlertDay,
+        source: sheetName === ARCHIVE_SHEET_NAME ? '過去一覧' : '予約一覧'
+      });
+    });
+  });
+  // 遅れが大きい順
+  results.sort((a, b) => b.daysPast - a.daysPast);
+  return { ok: true, role: session.role, results };
+}
+
+// =====================================================
+// ⑤-4 当日スケジュール表（機能⑤）
+// =====================================================
+// ★機能追加：現地記入欄は案件を1件ずつ開かないと見えなかったため、
+// 撮影日を指定してその日の全案件の現地情報を1画面にまとめる。
+function apiGetDaySchedule(token, dateStr, scope) {
+  const session = requireSession_(token);
+  const target = toComparableDate_(String(dateStr || '').replace(/-/g, '/')) || String(dateStr || '').trim();
+  if (!target) throw new Error('日付を指定してください。');
+
+  const ss = getSpreadsheet_();
+  const branchMeta = branchMetaMap_();
+  const results = [];
+  // 撮影日の翌日には過去一覧へ移るため、当日ぶんを見たい場合も両方を対象にする
+  [RESERVATION_SHEET_NAME, ARCHIVE_SHEET_NAME].forEach(sheetName => {
+    getRowsAsObjects_(ss.getSheetByName(sheetName)).forEach(r => {
+      if (!rowInScope_(session, scope, r)) return;
+      if (toComparableDate_(r[COL_CONFIRMED_DATE]) !== target) return;
+      // キャンセル成立の案件は当日表に出さない
+      if (r[COL_STATUS_JP] === 'CW' || r[COL_STATUS_BRANCH] === 'CW') return;
+      const meta = branchMeta[r[COL_BRANCH_CODE]] || {};
+      results.push({
+        kanriNo: r[COL_KANRI_NO],
+        branchCode: r[COL_BRANCH_CODE],
+        branchName: meta.name || r[COL_BRANCH_CODE],
+        groomName: r[COL_GROOM_NAME],
+        brideName: r[COL_BRIDE_NAME],
+        plan: r[COL_PLAN],
+        location: r[COL_LOCATION],
+        prep: r[COL_PREP],
+        hotel: r[COL_HOTEL],
+        pickupTime: r[COL_PICKUP_TIME],
+        dayStaff: r[COL_DAY_STAFF],
+        hairMakeup: r[COL_HAIR_MAKEUP],
+        photographer: r[COL_PHOTOGRAPHER],
+        assistant: r[COL_ASSISTANT],
+        localMemo: r[COL_LOCAL_MEMO],
+        statusJp: r[COL_STATUS_JP],
+        statusBranch: r[COL_STATUS_BRANCH]
+      });
+    });
+  });
+  // 配車時間の昇順（未入力は末尾）
+  results.sort((a, b) => String(a.pickupTime || '9999').localeCompare(String(b.pickupTime || '9999')));
+  return { ok: true, date: target.replace(/-/g, '/'), results };
+}
+
+// =====================================================
+// ⑤-5 スタッフのダブルブッキング検知（機能⑧）
+// =====================================================
+// ★機能追加：カメラマン・ヘアメイクは自由入力のため、同じ日に同じ人を2案件へ
+// 割り当てても気づけなかった。保存を止めはせず「警告」として返す。
+// staffNames: { '当日の担当': 'x', 'ヘアメイク': 'y', ... }
+function apiCheckStaffConflict(token, kanriNo, dateStr, staffNames) {
+  const session = requireSession_(token);
+  const { headers, rowIndex, rowData } = findReservationRow_(kanriNo);
+  if (rowIndex === -1) throw new Error('対象の予約が見つかりません。');
+  assertRowVisible_(session, headers, rowData);
+
+  const branchCode = String(rowData[headers.indexOf(COL_BRANCH_CODE)]).toUpperCase();
+  const target = toComparableDate_(String(dateStr || '').replace(/-/g, '/'));
+  const names = staffNames || {};
+  const wanted = {};
+  Object.keys(names).forEach(field => {
+    const v = String(names[field] || '').trim();
+    if (v) wanted[normalizeStaffName_(v)] = { field, raw: v };
+  });
+  if (!target || Object.keys(wanted).length === 0) return { ok: true, conflicts: [] };
+
+  const staffCols = [COL_DAY_STAFF, COL_HAIR_MAKEUP, COL_PHOTOGRAPHER, COL_ASSISTANT];
+  const conflicts = [];
+  const ss = getSpreadsheet_();
+  [RESERVATION_SHEET_NAME, ARCHIVE_SHEET_NAME].forEach(sheetName => {
+    getRowsAsObjects_(ss.getSheetByName(sheetName)).forEach(r => {
+      if (String(r[COL_KANRI_NO]) === String(kanriNo)) return;              // 自分自身は除く
+      if (String(r[COL_BRANCH_CODE]).toUpperCase() !== branchCode) return;  // 同一支店のみ
+      if (r[COL_STATUS_JP] === 'CW' || r[COL_STATUS_BRANCH] === 'CW') return;
+      if (toComparableDate_(r[COL_CONFIRMED_DATE]) !== target) return;
+      staffCols.forEach(col => {
+        const key = normalizeStaffName_(r[col]);
+        if (!key || !wanted[key]) return;
+        conflicts.push({
+          staff: wanted[key].raw,
+          field: wanted[key].field,
+          conflictField: col,
+          kanriNo: r[COL_KANRI_NO],
+          groomName: r[COL_GROOM_NAME],
+          brideName: r[COL_BRIDE_NAME]
+        });
+      });
+    });
+  });
+  return { ok: true, conflicts };
+}
+
+// スタッフ名の表記ゆれをある程度吸収する（大文字小文字・空白・記号を無視して比較）。
+// 完全ではないため、精度を上げたい場合は「スタッフマスタ」から選んで表記を揃える運用を推奨。
+function normalizeStaffName_(v) {
+  return String(v || '').trim().toLowerCase().replace(/[\s.,・\-_]/g, '');
+}
+
+// =====================================================
+// ⑤-6 案件タイムライン（機能⑦）
+// =====================================================
+// ★機能追加：ステータス変更履歴はフィールド単位でしか見られず、やり取り履歴とも画面が分かれていた。
+// 両方を時系列にマージして「この案件で何が起きたか」を1本の流れで見せる。
+function apiGetCaseTimeline(token, kanriNo) {
+  const session = requireSession_(token);
+  const { headers, rowIndex, rowData } = findReservationRow_(kanriNo);
+  if (rowIndex === -1) throw new Error('対象の予約が見つかりません。');
+  assertRowVisible_(session, headers, rowData);
+
+  const ss = getSpreadsheet_();
+  const items = [];
+
+  getRowsAsObjects_(ss.getSheetByName(HISTORY_SHEET_NAME))
+    .filter(r => String(r[H_COL_KANRI]) === String(kanriNo))
+    .forEach(r => {
+      items.push({
+        type: 'message',
+        at: r[H_COL_DATETIME] instanceof Date ? r[H_COL_DATETIME].getTime() : Date.parse(r[H_COL_DATETIME]) || 0,
+        datetime: formatDateTime_(r[H_COL_DATETIME]),
+        who: r[H_COL_SENDER],
+        role: r[H_COL_SENDER_ROLE],
+        body: r[H_COL_BODY]
+      });
+    });
+
+  getRowsAsObjects_(ss.getSheetByName(STATUS_LOG_SHEET_NAME))
+    .filter(r => String(r[SL_COL_KANRI]) === String(kanriNo))
+    .forEach(r => {
+      items.push({
+        type: 'status',
+        at: r[SL_COL_WHEN] instanceof Date ? r[SL_COL_WHEN].getTime() : Date.parse(r[SL_COL_WHEN]) || 0,
+        datetime: formatDateTime_(r[SL_COL_WHEN]),
+        who: r[SL_COL_WHO],
+        field: r[SL_COL_FIELD],
+        oldValue: r[SL_COL_OLD],
+        newValue: r[SL_COL_NEW]
+      });
+    });
+
+  items.sort((a, b) => b.at - a.at);   // 新しい順
+  return { ok: true, items };
+}
+
+function formatDateTime_(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, 'Asia/Tokyo', 'yyyy/MM/dd HH:mm');
+  return String(v || '');
+}
+
+// =====================================================
+// ⑤-7 請求不備チェック（機能⑥・JPのみ）
+// =====================================================
+// ★機能追加：請求先・請求番号・日本支店名は入力欄があるだけで、未入力を検出する仕組みが無かった。
+// 月を指定して「撮影済みなのに必須項目が空」の案件を洗い出す。
+function apiGetBillingGaps(token, month) {
+  const session = requireSession_(token);
+  assertJp_(session);
+  const m = String(month || '').trim().replace(/\//g, '-');   // 'yyyy-MM' を想定
+  // 月は01〜12のみ受け付ける（`\d{2}` だけだと 2026-13 のような値が通ってしまう）
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(m)) {
+    throw new Error('対象月は yyyy-MM の形式（月は01〜12）で指定してください。');
+  }
+
+  const ss = getSpreadsheet_();
+  const branchMeta = branchMetaMap_();
+  const today = new Date();
+  const todayIso = Utilities.formatDate(today, 'Asia/Tokyo', 'yyyy-MM-dd');
+
+  const results = [];
+  [RESERVATION_SHEET_NAME, ARCHIVE_SHEET_NAME].forEach(sheetName => {
+    getRowsAsObjects_(ss.getSheetByName(sheetName)).forEach(r => {
+      // ★GAS制約：過去一覧は増え続けるため、まず対象月で絞ってから中身を評価する
+      const iso = toComparableDate_(r[COL_CONFIRMED_DATE]);
+      if (!iso || iso.slice(0, 7) !== m) return;
+      if (iso > todayIso) return;                                          // 未実施はまだ不備ではない
+      if (r[COL_STATUS_JP] === 'CW' || r[COL_STATUS_BRANCH] === 'CW') return;
+
+      const missing = [];
+      if (!String(r[COL_BILLING_REGION] || '').trim()) missing.push(COL_BILLING_REGION);
+      if (!String(r[COL_JP_SHOP] || '').trim()) missing.push(COL_JP_SHOP);
+      if (!String(r[COL_INVOICE_NO] || '').trim()) missing.push(COL_INVOICE_NO);
+      if (!String(r[COL_DRIVE_URL] || '').trim()) missing.push(COL_DRIVE_URL);
+      if (missing.length === 0) return;
+
+      const meta = branchMeta[r[COL_BRANCH_CODE]] || {};
+      results.push({
+        kanriNo: r[COL_KANRI_NO],
+        branchCode: r[COL_BRANCH_CODE],
+        branchName: meta.name || r[COL_BRANCH_CODE],
+        groomName: r[COL_GROOM_NAME],
+        brideName: r[COL_BRIDE_NAME],
+        area: r[COL_AREA],
+        confirmedDate: formatMaybeDate_(r[COL_CONFIRMED_DATE]),
+        missing
+      });
+    });
+  });
+  results.sort((a, b) => String(a.confirmedDate).localeCompare(String(b.confirmedDate)));
+  return { ok: true, month: m, results };
+}
+
+// =====================================================
+// ⑤-8 実績データの書き出し（機能⑩・JPのみ）
+// =====================================================
+// ★機能追加：統計は画面表示のみで、経理へ渡すには手作業の転記が必要だった。
+// 検索と同じ条件指定で、同じスプレッドシート内の新規シートへ明細を書き出す。
+function apiExportReservations(token, criteria) {
+  const session = requireSession_(token);
+  assertJp_(session);
+  criteria = criteria || {};
+  const branchMeta = branchMetaMap_();
+
+  const sheetNames = [RESERVATION_SHEET_NAME];
+  if (criteria.includeArchive) sheetNames.push(ARCHIVE_SHEET_NAME);
+
+  const ss = getSpreadsheet_();
+  const picked = [];
+  sheetNames.forEach(sheetName => {
+    getRowsAsObjects_(ss.getSheetByName(sheetName)).forEach(r => {
+      if (!rowInScope_(session, criteria.scope, r)) return;
+      if (!matchesSearch_(r, criteria, branchMeta)) return;      // 検索と同じ判定を再利用
+      picked.push({ row: r, source: sheetName === ARCHIVE_SHEET_NAME ? '過去一覧' : '予約一覧' });
+    });
+  });
+  if (picked.length === 0) throw new Error('条件に一致する案件がありません。');
+  if (picked.length > EXPORT_MAX_ROWS) {
+    throw new Error(`対象が${picked.length}件と多すぎます（上限${EXPORT_MAX_ROWS}件）。期間や支店で絞り込んでください。`);
+  }
+
+  const exportHeaders = ['区分', '支店名', '国'].concat(RESERVATION_HEADERS);
+  const values = picked.map(p => {
+    const meta = branchMeta[p.row[COL_BRANCH_CODE]] || {};
+    const base = [p.source, meta.name || p.row[COL_BRANCH_CODE], meta.country || ''];
+    return base.concat(RESERVATION_HEADERS.map(h => {
+      const v = p.row[h];
+      return v instanceof Date ? Utilities.formatDate(v, 'Asia/Tokyo', 'yyyy/MM/dd') : (v === undefined ? '' : v);
+    }));
+  });
+
+  const stamp = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyyMMdd_HHmmss');
+  const outName = `書き出し_${stamp}`;
+  const out = ss.insertSheet(outName);
+  // ★GAS制約：1行ずつ appendRow すると件数に比例して遅くなり6分制限に達するため、必ず一括で書き込む
+  out.getRange(1, 1, 1, exportHeaders.length).setValues([exportHeaders]);
+  out.getRange(2, 1, values.length, exportHeaders.length).setValues(values);
+  formatHeaderRow_(out);
+
+  return { ok: true, sheetName: outName, count: values.length };
 }
 
 // =====================================================
@@ -1708,6 +2063,28 @@ function checkAlertsCore_(errors) {
 // archivePastReservations() は撮影日を過ぎた案件を「翌日」には過去一覧へ移動させる仕様のため、
 // 「撮影日から30日後」を判定しようとした時点で、その案件はとっくに予約一覧から消えている。
 // 納品状況は撮影後（＝アーカイブ後）に確定するものなので、必ず過去一覧も走査する必要がある。
+// 納品遅延の判定を1箇所にまとめる。納品期限アラート（メール）と
+// 「納品待ち」画面の両方で同じ基準を使うため。
+// 返り値 null = 判定対象外（納品済み／キャンセル／撮影日未定／撮影日が未来）
+function deliveryOverdueInfo_(o, branchMeta, todayMidnight) {
+  if (String(o.driveUrl || '').trim()) return null;                       // 既に納品済み
+  const stsJp = String(o.stsJp || '').trim();
+  const stsBranch = String(o.stsBranch || '').trim();
+  if (stsJp === 'CW' || stsBranch === 'CW') return null;                  // キャンセルは納品自体が無い
+  const dVal = o.confirmedDate;
+  if (!(dVal instanceof Date)) return null;
+  const shootMidnight = new Date(dVal.getFullYear(), dVal.getMonth(), dVal.getDate());
+  const daysPast = Math.round((todayMidnight.getTime() - shootMidnight.getTime()) / 86400000);
+  if (daysPast <= 0) return null;                                          // 未来日・当日
+  const meta = branchMeta[o.branchCode] || {};
+  // ★不具合修正：`meta.deliveryDays || DEFAULT` だと0（即日設定）が消えるため、未設定のときだけ既定値を使う
+  const limitDays = (meta.deliveryDays === null || meta.deliveryDays === undefined)
+    ? DELIVERY_ALERT_DEFAULT_DAYS : meta.deliveryDays;
+  // 納品期限日数に0（＝撮影当日納品）を設定した場合でも、初回通知は最短で撮影翌日になるよう下限を1日に揃える
+  const firstAlertDay = Math.max(limitDays, 1);
+  return { daysPast, limitDays, firstAlertDay, overdue: daysPast >= firstAlertDay };
+}
+
 function checkDeliveryAlerts() { return runTrigger_('checkDeliveryAlerts', checkDeliveryAlertsCore_); }
 
 function checkDeliveryAlertsCore_(errors) {
@@ -1725,36 +2102,22 @@ function checkDeliveryAlertsCore_(errors) {
 
     data.forEach((row, i) => {
      try {
-      const driveUrl = String(row[headers.indexOf(COL_DRIVE_URL)] || '').trim();
-      if (driveUrl) return; // 既に納品済み
-
-      // キャンセル成立（CW）の案件は納品自体が発生しないため対象外
-      const stsJp = String(row[headers.indexOf(COL_STATUS_JP)] || '').trim();
-      const stsBranch = String(row[headers.indexOf(COL_STATUS_BRANCH)] || '').trim();
-      if (stsJp === 'CW' || stsBranch === 'CW') return;
-
+      const info = deliveryOverdueInfo_({
+        driveUrl: row[headers.indexOf(COL_DRIVE_URL)],
+        stsJp: row[headers.indexOf(COL_STATUS_JP)],
+        stsBranch: row[headers.indexOf(COL_STATUS_BRANCH)],
+        confirmedDate: row[headers.indexOf(COL_CONFIRMED_DATE)],
+        branchCode: row[headers.indexOf(COL_BRANCH_CODE)]
+      }, branchMeta, todayMidnight);
+      if (!info || !info.overdue) return;
+      const daysPast = info.daysPast;
+      const limitDays = info.limitDays;
       const dVal = row[headers.indexOf(COL_CONFIRMED_DATE)];
-      if (!(dVal instanceof Date)) return;
-      const shootMidnight = new Date(dVal.getFullYear(), dVal.getMonth(), dVal.getDate());
-      const daysPast = Math.round((todayMidnight.getTime() - shootMidnight.getTime()) / 86400000);
-      if (daysPast <= 0) return; // 未来日・当日はスキップ
-
-      const branchCode = row[headers.indexOf(COL_BRANCH_CODE)];
-      const meta = branchMeta[branchCode] || {};
-      // ★不具合修正：`meta.deliveryDays || DEFAULT` だと0（即日アラート設定）が消えてデフォルトに
-      // フォールバックしてしまうため、未設定（null）のときだけデフォルトを使う。
-      const limitDays = (meta.deliveryDays === null || meta.deliveryDays === undefined)
-        ? DELIVERY_ALERT_DEFAULT_DAYS : meta.deliveryDays;
 
       // 期限日に1通。その後も未納品が続く場合は7日おきに再通知する
       // （期限当日にトリガーが実行できなかった場合でもアラートが消えないようにするため）。
       // ただし無期限に送り続けると、過去の未納品案件から延々とメールが飛ぶので上限を設ける。
-      // ★不具合修正：納品期限日数に0（＝撮影当日納品）を設定した場合、撮影当日は上の
-      // 「daysPast <= 0 はスキップ」で除外されるため、そのままだと初回通知が7日後まで
-      // 飛ばなかった。初回通知日は最短でも撮影翌日になるよう下限を1日に揃える。
-      const firstAlertDay = Math.max(limitDays, 1);
-      if (daysPast < firstAlertDay) return;
-      const over = daysPast - firstAlertDay;
+      const over = daysPast - info.firstAlertDay;
       if (over > DELIVERY_ALERT_REMIND_UNTIL_DAYS) return;
       if (over % DELIVERY_ALERT_REMIND_INTERVAL_DAYS !== 0) return;
 
@@ -1762,6 +2125,7 @@ function checkDeliveryAlertsCore_(errors) {
       const area = row[headers.indexOf(COL_AREA)];
       const recipient = getJpTeamEmail_(area);
       const kanri = row[headers.indexOf(COL_KANRI_NO)];
+      const branchCode = row[headers.indexOf(COL_BRANCH_CODE)];
       MailApp.sendEmail(
         recipient,
         `[要確認] 納品未登録：${kanri}（${branchCode}支店・撮影日から${daysPast}日経過）`,
@@ -1778,6 +2142,144 @@ function checkDeliveryAlertsCore_(errors) {
     });
   });
   console.log(`[checkDeliveryAlerts] ${sent}件を通知`);
+}
+
+// ★機能追加：未返信リマインド（放置案件の自動督促）
+// 「要対応」は画面のハイライトだけで、ポータルを開かない限り誰も気づかなかった。
+// メール通知も送信の瞬間の1通だけで、読まれず放置された場合の再通知が無かった。
+// 相手からのメッセージが一定日数まだ未読の案件を毎朝集計し、
+// 支店ごと・手配課ごとに「1通のダイジェスト」で督促する（案件ごとに送ると受信箱が埋まるため）。
+function checkUnansweredAlerts() { return runTrigger_('checkUnansweredAlerts', checkUnansweredAlertsCore_); }
+
+function checkUnansweredAlertsCore_(errors) {
+  const ss = getSpreadsheet_();
+  const branchMeta = branchMetaMap_();
+  const today = new Date();
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+  // 1) 履歴を1回だけ読み、案件ごと・受け手側ごとに「最も古い未読の日時」を求める
+  //    （日次トリガーのため全件走査は許容範囲。画面表示では未読フラグ列を使っている）
+  const oldestUnread = {};   // `${kanriNo}\t${受け手ロール}` -> Date
+  const hSheet = ss.getSheetByName(HISTORY_SHEET_NAME);
+  if (hSheet && hSheet.getLastRow() >= 2) {
+    const hHeaders = hSheet.getRange(1, 1, 1, hSheet.getLastColumn()).getValues()[0];
+    const hValues = hSheet.getRange(2, 1, hSheet.getLastRow() - 1, hHeaders.length).getValues();
+    const kanriIdx = hHeaders.indexOf(H_COL_KANRI);
+    const roleIdx = hHeaders.indexOf(H_COL_SENDER_ROLE);
+    const whenIdx = hHeaders.indexOf(H_COL_DATETIME);
+    const jpCheckIdx = hHeaders.indexOf(H_COL_CHECK_JP);
+    const brCheckIdx = hHeaders.indexOf(H_COL_CHECK_BRANCH);
+    if (kanriIdx !== -1 && roleIdx !== -1 && whenIdx !== -1 && jpCheckIdx !== -1 && brCheckIdx !== -1) {
+      hValues.forEach(v => {
+        const kanri = String(v[kanriIdx]);
+        if (!kanri) return;
+        const senderRole = String(v[roleIdx]).trim().toUpperCase();
+        const when = v[whenIdx] instanceof Date ? v[whenIdx] : null;
+        if (!when) return;
+        // 支店が送った未読 → 受け手は日本側 ／ 日本側が送った未読 → 受け手は支店
+        let receiver = null;
+        if (senderRole === BRANCH_ROLE && !isActiveFlag_(v[jpCheckIdx])) receiver = JP_ROLE;
+        else if (senderRole === JP_ROLE && !isActiveFlag_(v[brCheckIdx])) receiver = BRANCH_ROLE;
+        if (!receiver) return;
+        const key = `${kanri}\t${receiver}`;
+        if (!oldestUnread[key] || when < oldestUnread[key]) oldestUnread[key] = when;
+      });
+    }
+  }
+
+  // 2) 進行中の案件だけを対象に、未読フラグが立っていて放置日数を超えたものを集める
+  const digests = {};   // 宛先メール -> { label, items: [] }
+  const addItem = (email, label, item) => {
+    if (!email) return;
+    if (!digests[email]) digests[email] = { label, items: [] };
+    digests[email].items.push(item);
+  };
+
+  const sheet = ss.getSheetByName(RESERVATION_SHEET_NAME);
+  if (!sheet || sheet.getLastRow() < 2) return;
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
+
+  data.forEach((row, i) => {
+    try {
+      const stsJp = String(row[headers.indexOf(COL_STATUS_JP)] || '').trim();
+      const stsBranch = String(row[headers.indexOf(COL_STATUS_BRANCH)] || '').trim();
+      if (stsJp === 'CW' || stsBranch === 'CW') return;   // キャンセル済みは督促しない
+
+      const kanri = String(row[headers.indexOf(COL_KANRI_NO)] || '');
+      if (!kanri) return;
+      const branchCode = String(row[headers.indexOf(COL_BRANCH_CODE)] || '').toUpperCase();
+      const area = row[headers.indexOf(COL_AREA)];
+      const meta = branchMeta[branchCode] || {};
+
+      [JP_ROLE, BRANCH_ROLE].forEach(receiver => {
+        const flagIdx = headers.indexOf(unreadColFor_(receiver));
+        if (flagIdx === -1 || !isActiveFlag_(row[flagIdx])) return;
+
+        const when = oldestUnread[`${kanri}\t${receiver}`];
+        if (!when) return;   // フラグはあるが履歴が見つからない（整合が取れるまで待つ）
+        const whenMidnight = new Date(when.getFullYear(), when.getMonth(), when.getDate());
+        const waitingDays = Math.round((todayMidnight.getTime() - whenMidnight.getTime()) / 86400000);
+
+        // 督促日数：受け手が支店ならその支店の設定、日本側なら担当チームの設定を使う
+        const settingRow = receiver === BRANCH_ROLE ? meta : (jpTeamMeta_(area) || {});
+        const remindDays = (settingRow.remindDays === null || settingRow.remindDays === undefined)
+          ? UNANSWERED_REMIND_DEFAULT_DAYS : settingRow.remindDays;
+        if (waitingDays < Math.max(remindDays, 1)) return;
+
+        const item = {
+          kanriNo: kanri,
+          names: `${row[headers.indexOf(COL_GROOM_NAME)] || ''} / ${row[headers.indexOf(COL_BRIDE_NAME)] || ''}`,
+          branchName: meta.name || branchCode,
+          waitingDays,
+          shootDate: formatMaybeDate_(row[headers.indexOf(COL_CONFIRMED_DATE)]) || '撮影日未定'
+        };
+        if (receiver === BRANCH_ROLE) {
+          addItem(getBranchEmail_(branchCode), meta.name || branchCode, item);
+        } else {
+          addItem(getJpTeamEmail_(area), `${area || ''}手配課`, item);
+        }
+      });
+    } catch (e) {
+      errors.push({
+        where: `${RESERVATION_SHEET_NAME} ${i + 2}行目（${row[headers.indexOf(COL_KANRI_NO)] || '管理番号不明'}）`,
+        message: errorMessage_(e), stack: e && e.stack ? String(e.stack) : ''
+      });
+    }
+  });
+
+  // 3) 宛先ごとに1通ずつ送る
+  let sent = 0;
+  Object.keys(digests).forEach(email => {
+    try {
+      const d = digests[email];
+      d.items.sort((a, b) => b.waitingDays - a.waitingDays);
+      const lines = d.items.map(it =>
+        `・${it.kanriNo}（${it.branchName}）${it.names}　撮影日: ${it.shootDate}　※${it.waitingDays}日 未確認`
+      ).join('\n');
+      MailApp.sendEmail(
+        email,
+        `[PhotoWED] 未返信のお知らせ：${d.items.length}件`,
+        `${d.label} ご担当者さま\n\n` +
+        `相手側から届いたメッセージ・変更のうち、まだ確認（既読チェック）されていない案件が ${d.items.length} 件あります。\n` +
+        `ポータルで内容をご確認のうえ、ご対応をお願いします。\n\n` +
+        `--- 対象案件 ---\n${lines}\n\n` +
+        `※このメールは未確認の案件がある間、毎日お送りします。ポータルで既読にすると対象から外れます。`
+      );
+      sent++;
+    } catch (e) {
+      errors.push({ where: `督促メール送信（${email}）`, message: errorMessage_(e), stack: e && e.stack ? String(e.stack) : '' });
+    }
+  });
+  console.log(`[checkUnansweredAlerts] ${sent}通のダイジェストを送信`);
+}
+
+// 管轄（関東/関西）に対応する日本側チームの支店マスタ行を返す
+function jpTeamMeta_(teamLabel) {
+  const rows = listBranchesRaw_();
+  return rows.find(r => r.role === JP_ROLE && r.team === teamLabel)
+      || rows.find(r => r.role === JP_ROLE && r.team === '関東')
+      || null;
 }
 
 function archivePastReservations() { return runTrigger_('archivePastReservations', archivePastReservationsCore_); }
@@ -1894,5 +2396,6 @@ function setupTriggers() {
   ScriptApp.newTrigger('archivePastReservations').timeBased().everyDays(1).atHour(2).create();
   ScriptApp.newTrigger('checkAlerts').timeBased().everyDays(1).atHour(8).create();
   ScriptApp.newTrigger('checkDeliveryAlerts').timeBased().everyDays(1).atHour(8).create();
-  SpreadsheetApp.getUi().alert('日次トリガー（アーカイブ・アラート・納品期限アラート）を再設定しました。');
+  ScriptApp.newTrigger('checkUnansweredAlerts').timeBased().everyDays(1).atHour(9).create();
+  SpreadsheetApp.getUi().alert('日次トリガー（アーカイブ・撮影前アラート・納品期限アラート・未返信リマインド）を再設定しました。');
 }

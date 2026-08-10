@@ -186,6 +186,31 @@
   .stats-dot.ok { background: #eb6834; }
   .stats-dot.fn { background: #1baf7a; }
 
+  /* 希望日からのワンタップ回答 */
+  .hope-box { background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 10px; padding: 10px 12px; }
+  .hope-btn { display: block; width: 100%; margin-top: 6px; background: var(--color-primary); color: #fff;
+    border: none; border-radius: 8px; padding: 10px; font-size: 0.86rem; font-weight: 600; cursor: pointer; }
+  .hope-btn:active { background: var(--color-primary-dark); }
+
+  /* スタッフのダブルブッキング警告 */
+  .conflict-box { margin-top: 10px; background: #fef3c7; border: 1px solid #fcd34d; border-radius: 10px;
+    padding: 10px 12px; font-size: 0.85rem; color: #92400e; }
+  .conflict-box strong { display: block; margin-bottom: 4px; }
+
+  /* 当日スケジュール表 */
+  .day-card { cursor: pointer; }
+  .day-card:active { background: #f0fdfa; }
+  .day-card-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .day-time { font-size: 1.1rem; font-weight: 800; color: var(--color-primary-dark); }
+
+  /* 案件タイムライン */
+  .tl-item { border-left: 2px solid var(--color-border); padding: 8px 0 8px 12px; margin-left: 4px; }
+  .tl-item.tl-sts { border-left-color: var(--color-hq); }
+  .tl-item.tl-msg { border-left-color: var(--color-primary); }
+  .tl-meta { display: flex; justify-content: space-between; gap: 8px; font-size: 0.72rem;
+    color: var(--color-muted); margin-bottom: 3px; flex-wrap: wrap; }
+  .tl-body { font-size: 0.88rem; white-space: pre-wrap; }
+
   @media (min-width: 640px) {
     .detail-grid { grid-template-columns: repeat(3, 1fr); }
   }

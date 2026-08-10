@@ -14,6 +14,8 @@
       </div>
       <nav class="header-nav">
         <button id="nav-dashboard" class="nav-btn">案件一覧</button>
+        <button id="nav-day" class="nav-btn">当日表</button>
+        <button id="nav-delivery" class="nav-btn">納品待ち</button>
         <button id="nav-search" class="nav-btn">検索</button>
         <button id="nav-stats" class="nav-btn jp-only hidden">統計</button>
         <button id="nav-new" class="nav-btn">＋新規案件</button>
@@ -74,8 +76,32 @@
           <div class="full checkbox-label"><label><input id="s-archive" type="checkbox"> 過去一覧（アーカイブ済み案件）も含める</label></div>
         </div>
         <button id="search-submit" class="primary-btn">検索する</button>
+        <button id="export-submit" class="primary-btn jp-only hidden" style="background:var(--color-muted);margin-top:8px;">この条件でスプレッドシートに書き出す</button>
+        <p id="export-result" class="success-text hidden"></p>
         <div id="search-results" class="card-list" style="margin-top:14px;"></div>
         <p id="search-empty" class="empty-text hidden">条件に一致する案件がありません。</p>
+      </section>
+
+      <!-- 当日スケジュール表 -->
+      <section id="view-day" class="view hidden">
+        <h2>当日スケジュール表</h2>
+        <div id="day-scope" class="scope-box jp-only hidden"></div>
+        <div class="view-toolbar">
+          <div style="flex:1;min-width:180px;">
+            <label>撮影日</label>
+            <input id="day-date" type="date">
+          </div>
+          <button id="day-submit" class="send-btn" style="height:44px;">表示</button>
+        </div>
+        <div id="day-content"></div>
+      </section>
+
+      <!-- 納品待ち一覧 -->
+      <section id="view-delivery" class="view hidden">
+        <h2>納品待ち</h2>
+        <p class="hint-text">撮影日を過ぎてもDriveフォルダURLが登録されていない案件です（キャンセル案件を除く）。</p>
+        <div id="delivery-scope" class="scope-box jp-only hidden"></div>
+        <div id="delivery-content"></div>
       </section>
 
       <!-- 統計ダッシュボード（JPのみ） -->
@@ -83,6 +109,18 @@
         <h2>統計ダッシュボード</h2>
         <div id="stats-scope" class="scope-box jp-only hidden"></div>
         <div id="stats-content"></div>
+        <div class="section-card" style="margin-top:16px;">
+          <h3>請求不備チェック（月次締め用）</h3>
+          <p class="hint-text">撮影済みなのに請求先・請求番号・日本支店名・DriveフォルダURLが未入力の案件を洗い出します。</p>
+          <div class="view-toolbar" style="margin-top:10px;">
+            <div style="flex:1;min-width:160px;">
+              <label>対象月</label>
+              <input id="billing-month" type="month">
+            </div>
+            <button id="billing-submit" class="send-btn" style="height:44px;">チェック</button>
+          </div>
+          <div id="billing-content"></div>
+        </div>
       </section>
 
       <!-- 案件詳細 -->
