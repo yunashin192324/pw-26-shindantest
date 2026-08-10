@@ -118,7 +118,13 @@ function makeContext() {
     MailApp: { sendEmail: (to, subj, body) => sentMail.push({ to, subj, body }) },
     Session: { getActiveUser: () => ({ getEmail: () => 'tanaka@his-world.com' }) },
     ScriptApp: { getProjectTriggers: () => [], deleteTrigger: () => {},
-      newTrigger: () => ({ timeBased: () => ({ everyDays: () => ({ atHour: () => ({ create: () => {} }) }) }) }) },
+      newTrigger: (fnName) => {
+        const created = () => ({ getUniqueId: () => `trg-${fnName}`, getHandlerFunction: () => fnName });
+        return {
+          timeBased: () => ({ everyDays: () => ({ atHour: () => ({ create: created }) }) }),
+          forSpreadsheet: () => ({ onFormSubmit: () => ({ create: created }) })
+        };
+      } },
     HtmlService: { createTemplateFromFile: () => ({ evaluate: () => ({ setTitle: () => ({ addMetaTag: () => ({ setXFrameOptionsMode: () => ({}) }) }) }) }),
       createHtmlOutputFromFile: () => ({ getContent: () => '' }), XFrameOptionsMode: { ALLOWALL: 1 } }
   };

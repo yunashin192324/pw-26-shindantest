@@ -76,8 +76,8 @@ function deliveryScenario(opts) {
   const ss = ctx.__ss;
   ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
   const bm = ss.getSheetByName('支店マスタ');
-  bm.appendRow(['KANTO','関東手配課','','','JP','関東','p','kanto@his-world.com','','','','',true]);
-  bm.appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','p','vie@his-world.com','VIE','', opts.deliveryDays === undefined ? '' : opts.deliveryDays, '', true]);
+  bm.appendRow(['KANTO','関東手配課','','','JP','関東','p','kanto@his-world.com','','','','', '', true]);
+  bm.appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','p','vie@his-world.com','VIE','', opts.deliveryDays === undefined ? '' : opts.deliveryDays, '', '', true]);
 
   ctx.ensureSheetWithHeaders_(ss, '予約一覧', ctx.RESERVATION_HEADERS);
   const target = ctx.ensureSheetWithHeaders_(ss, opts.sheet, ctx.RESERVATION_HEADERS);
@@ -159,8 +159,8 @@ section('5. 統計：内訳の合計が件数と一致するか');
   const ctx = makeContext(); CTX = ctx;
   const ss = ctx.__ss;
   ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
-  ss.getSheetByName('支店マスタ').appendRow(['KANTO','関東手配課','','','JP','関東','pw','k@his-world.com','','','','',true]);
-  ss.getSheetByName('支店マスタ').appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','pw','v@his-world.com','VIE','','','',true]);
+  ss.getSheetByName('支店マスタ').appendRow(['KANTO','関東手配課','','','JP','関東','pw','k@his-world.com','','','','', '', true]);
+  ss.getSheetByName('支店マスタ').appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','pw','v@his-world.com','VIE','','','', '', true]);
   ctx.ensureSheetWithHeaders_(ss, '予約一覧', ctx.RESERVATION_HEADERS);
   ctx.ensureSheetWithHeaders_(ss, '過去一覧', ctx.RESERVATION_HEADERS);
   ctx.ensureSheetWithHeaders_(ss, 'やり取り履歴', ctx.HISTORY_HEADERS);
@@ -207,8 +207,8 @@ section('6. 要対応（未読）判定');
   const ss = ctx.__ss;
   ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
   const bm = ss.getSheetByName('支店マスタ');
-  bm.appendRow(['KANTO','関東手配課','','','JP','関東','pw','k@his-world.com','','','','',true]);
-  bm.appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','vp','v@his-world.com','VIE','','','',true]);
+  bm.appendRow(['KANTO','関東手配課','','','JP','関東','pw','k@his-world.com','','','','', '', true]);
+  bm.appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','vp','v@his-world.com','VIE','','','', '', true]);
   ctx.ensureSheetWithHeaders_(ss, '予約一覧', ctx.RESERVATION_HEADERS);
   ctx.ensureSheetWithHeaders_(ss, '過去一覧', ctx.RESERVATION_HEADERS);
   ctx.ensureSheetWithHeaders_(ss, 'やり取り履歴', ctx.HISTORY_HEADERS);
@@ -272,8 +272,8 @@ section('7. ステータス権限ゲート');
   const ss = ctx.__ss;
   ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
   const bm = ss.getSheetByName('支店マスタ');
-  bm.appendRow(['KANTO','関東手配課','','','JP','関東','pw','k@his-world.com','','','','',true]);
-  bm.appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','vp','v@his-world.com','VIE','','','',true]);
+  bm.appendRow(['KANTO','関東手配課','','','JP','関東','pw','k@his-world.com','','','','', '', true]);
+  bm.appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','vp','v@his-world.com','VIE','','','', '', true]);
   ['予約一覧','過去一覧'].forEach(n => ctx.ensureSheetWithHeaders_(ss, n, ctx.RESERVATION_HEADERS));
   ctx.ensureSheetWithHeaders_(ss, 'やり取り履歴', ctx.HISTORY_HEADERS);
   ctx.ensureSheetWithHeaders_(ss, 'ステータス変更履歴', ctx.STATUS_LOG_HEADERS);
@@ -322,8 +322,8 @@ section('8. 支店のデータ分離');
   const ss = ctx.__ss;
   ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
   const bm = ss.getSheetByName('支店マスタ');
-  bm.appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','vp','v@his-world.com','VIE','','','',true]);
-  bm.appendRow(['IST','イスタンブール支店','トルコ','イスタンブール','BRANCH','','ip','i@his-world.com','IST','','','',true]);
+  bm.appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','vp','v@his-world.com','VIE','','','', '', true]);
+  bm.appendRow(['IST','イスタンブール支店','トルコ','イスタンブール','BRANCH','','ip','i@his-world.com','IST','','','', '', true]);
   ['予約一覧','過去一覧'].forEach(n => ctx.ensureSheetWithHeaders_(ss, n, ctx.RESERVATION_HEADERS));
   ctx.ensureSheetWithHeaders_(ss, 'やり取り履歴', ctx.HISTORY_HEADERS);
   const res = ss.getSheetByName('予約一覧');
@@ -356,8 +356,8 @@ section('9. 新規案件の採番と通知先');
   const ss = ctx.__ss;
   ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
   const bm = ss.getSheetByName('支店マスタ');
-  bm.appendRow(['KANTO','関東手配課','','','JP','関東','pw','kanto@his-world.com','','','','',true]);
-  bm.appendRow(['ROW','ローマ支店','イタリア','ローマ','BRANCH','','rp','roma@his-world.com','R','','','',true]);
+  bm.appendRow(['KANTO','関東手配課','','','JP','関東','pw','kanto@his-world.com','','','','', '', true]);
+  bm.appendRow(['ROW','ローマ支店','イタリア','ローマ','BRANCH','','rp','roma@his-world.com','R','','','', '', true]);
   ['予約一覧','過去一覧'].forEach(n => ctx.ensureSheetWithHeaders_(ss, n, ctx.RESERVATION_HEADERS));
   ctx.ensureSheetWithHeaders_(ss, 'やり取り履歴', ctx.HISTORY_HEADERS);
 
@@ -398,7 +398,7 @@ section('10. 現地記入欄・請求番号のカスタム名称');
   const ss = ctx.__ss;
   ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
   ss.getSheetByName('支店マスタ').appendRow(
-    ['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','vp','v@his-world.com','VIE','Rechnungsnummer','21','',true]);
+    ['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','vp','v@his-world.com','VIE','Rechnungsnummer','21','','',true]);
   ['予約一覧','過去一覧'].forEach(n => ctx.ensureSheetWithHeaders_(ss, n, ctx.RESERVATION_HEADERS));
   ctx.ensureSheetWithHeaders_(ss, 'やり取り履歴', ctx.HISTORY_HEADERS);
   ctx.ensureSheetWithHeaders_(ss, 'ステータス変更履歴', ctx.STATUS_LOG_HEADERS);
@@ -430,8 +430,8 @@ section('11. 3択（保存のみ／メッセージのみ／変更＋メッセー
   const ss = ctx.__ss;
   ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
   const bm = ss.getSheetByName('支店マスタ');
-  bm.appendRow(['KANTO','関東手配課','','','JP','関東','pw','kanto@his-world.com','','','','',true]);
-  bm.appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','vp','vie@his-world.com','VIE','','','',true]);
+  bm.appendRow(['KANTO','関東手配課','','','JP','関東','pw','kanto@his-world.com','','','','', '', true]);
+  bm.appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','vp','vie@his-world.com','VIE','','','', '', true]);
   ['予約一覧','過去一覧'].forEach(n => ctx.ensureSheetWithHeaders_(ss, n, ctx.RESERVATION_HEADERS));
   ctx.ensureSheetWithHeaders_(ss, 'やり取り履歴', ctx.HISTORY_HEADERS);
   ctx.ensureSheetWithHeaders_(ss, 'ステータス変更履歴', ctx.STATUS_LOG_HEADERS);
@@ -475,7 +475,7 @@ section('12. 45日前アラート');
   const ctx = makeContext(); CTX = ctx;
   const ss = ctx.__ss;
   ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
-  ss.getSheetByName('支店マスタ').appendRow(['KANTO','関東手配課','','','JP','関東','pw','kanto@his-world.com','','','','',true]);
+  ss.getSheetByName('支店マスタ').appendRow(['KANTO','関東手配課','','','JP','関東','pw','kanto@his-world.com','','','','', '', true]);
   ctx.ensureSheetWithHeaders_(ss, '予約一覧', ctx.RESERVATION_HEADERS);
   const res = ss.getSheetByName('予約一覧');
   const H = ctx.RESERVATION_HEADERS;
@@ -504,8 +504,8 @@ section('13. 支店マスタの表記ゆれ耐性');
   ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
   const bm = ss.getSheetByName('支店マスタ');
   // ロールが小文字＋空白、支店コードが小文字
-  bm.appendRow(['kanto ','関東手配課','','',' jp ','関東','pw','kanto@his-world.com','','','','',true]);
-  bm.appendRow([' vie','ウィーン支店','オーストリア','ウィーン',' branch ','','vp','vie@his-world.com','VIE','','','',true]);
+  bm.appendRow(['kanto ','関東手配課','','',' jp ','関東','pw','kanto@his-world.com','','','','', '', true]);
+  bm.appendRow([' vie','ウィーン支店','オーストリア','ウィーン',' branch ','','vp','vie@his-world.com','VIE','','','', '', true]);
   ['予約一覧','過去一覧'].forEach(n => ctx.ensureSheetWithHeaders_(ss, n, ctx.RESERVATION_HEADERS));
   ctx.ensureSheetWithHeaders_(ss, 'やり取り履歴', ctx.HISTORY_HEADERS);
 
@@ -528,8 +528,8 @@ section('14. apiSaveBranch が他の列を消さない');
   const ss = ctx.__ss;
   ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
   const bm = ss.getSheetByName('支店マスタ');
-  bm.appendRow(['KANTO','関東手配課','','','JP','関東','pw','k@his-world.com','','','','',true]);
-  bm.appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','vp','v@his-world.com','VIE','Rechnungsnummer','21','',true]);
+  bm.appendRow(['KANTO','関東手配課','','','JP','関東','pw','k@his-world.com','','','','', '', true]);
+  bm.appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','vp','v@his-world.com','VIE','Rechnungsnummer','21','', '', true]);
   const jp = ctx.apiLogin('KANTO','pw');
   ctx.apiSaveBranch(jp.session.token, { code:'VIE', name:'ウィーン支店(改)', role:'BRANCH',
     country:'オーストリア', city:'ウィーン', email:'v2@his-world.com', prefix:'VIE', active:true });
@@ -548,7 +548,7 @@ section('15. 列が無い場合のエラーメッセージ');
   const ctx = makeContext(); CTX = ctx;
   const ss = ctx.__ss;
   ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
-  ss.getSheetByName('支店マスタ').appendRow(['VIE','ウィーン支店','','','BRANCH','','vp','v@his-world.com','VIE','','','',true]);
+  ss.getSheetByName('支店マスタ').appendRow(['VIE','ウィーン支店','','','BRANCH','','vp','v@his-world.com','VIE','','','', '', true]);
   // 旧スキーマ（請求番号などが無い）予約一覧
   const res = ss.insertSheet('予約一覧');
   const OLD = ['支店コード','管理番号','CHG NO','STS JP','STS 支店','撮影日FIX','最終更新日'];
@@ -572,9 +572,9 @@ section('16. 撮影日変更時に履歴・メールが正しい案件に紐づ�
   const ss = ctx.__ss;
   ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
   const bm = ss.getSheetByName('支店マスタ');
-  bm.appendRow(['KANTO','関東手配課','','','JP','関東','pw','kanto@his-world.com','','','','',true]);
-  bm.appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','vp','vie@his-world.com','VIE','','','',true]);
-  bm.appendRow(['IST','イスタンブール支店','トルコ','イスタンブール','BRANCH','','ip','ist@his-world.com','IST','','','',true]);
+  bm.appendRow(['KANTO','関東手配課','','','JP','関東','pw','kanto@his-world.com','','','','', '', true]);
+  bm.appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','vp','vie@his-world.com','VIE','','','', '', true]);
+  bm.appendRow(['IST','イスタンブール支店','トルコ','イスタンブール','BRANCH','','ip','ist@his-world.com','IST','','','', '', true]);
   ['予約一覧','過去一覧'].forEach(n => ctx.ensureSheetWithHeaders_(ss, n, ctx.RESERVATION_HEADERS));
   ctx.ensureSheetWithHeaders_(ss, 'やり取り履歴', ctx.HISTORY_HEADERS);
   ctx.ensureSheetWithHeaders_(ss, 'ステータス変更履歴', ctx.STATUS_LOG_HEADERS);
@@ -626,10 +626,10 @@ section('17. 既読チェックの認可・新規作成時の支店コード検�
   const ss = ctx.__ss;
   ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
   const bm = ss.getSheetByName('支店マスタ');
-  bm.appendRow(['KANTO','関東手配課','','','JP','関東','pw','kanto@his-world.com','','','','',true]);
-  bm.appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','vp','vie@his-world.com','VIE','','','',true]);
-  bm.appendRow(['IST','イスタンブール支店','トルコ','イスタンブール','BRANCH','','ip','ist@his-world.com','IST','','','',true]);
-  bm.appendRow(['OLD','閉鎖済み支店','','','BRANCH','','op','old@his-world.com','OLD','','','',false]);
+  bm.appendRow(['KANTO','関東手配課','','','JP','関東','pw','kanto@his-world.com','','','','', '', true]);
+  bm.appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','vp','vie@his-world.com','VIE','','','', '', true]);
+  bm.appendRow(['IST','イスタンブール支店','トルコ','イスタンブール','BRANCH','','ip','ist@his-world.com','IST','','','', '', true]);
+  bm.appendRow(['OLD','閉鎖済み支店','','','BRANCH','','op','old@his-world.com','OLD','','','', '', false]);
   ['予約一覧','過去一覧'].forEach(n => ctx.ensureSheetWithHeaders_(ss, n, ctx.RESERVATION_HEADERS));
   ctx.ensureSheetWithHeaders_(ss, 'やり取り履歴', ctx.HISTORY_HEADERS);
 
@@ -678,8 +678,8 @@ function unreadFixture() {
   const ss = ctx.__ss;
   ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
   const bm = ss.getSheetByName('支店マスタ');
-  bm.appendRow(['KANTO','関東手配課','','','JP','関東','pw','kanto@his-world.com','','','','',true]);
-  bm.appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','vp','vie@his-world.com','VIE','','','',true]);
+  bm.appendRow(['KANTO','関東手配課','','','JP','関東','pw','kanto@his-world.com','','','','', '', true]);
+  bm.appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','vp','vie@his-world.com','VIE','','','', '', true]);
   ['予約一覧','過去一覧'].forEach(n => ctx.ensureSheetWithHeaders_(ss, n, ctx.RESERVATION_HEADERS));
   ctx.ensureSheetWithHeaders_(ss, 'やり取り履歴', ctx.HISTORY_HEADERS);
   ctx.ensureSheetWithHeaders_(ss, 'ステータス変更履歴', ctx.STATUS_LOG_HEADERS);
@@ -776,8 +776,8 @@ function triggerFixture() {
   const ss = ctx.__ss;
   ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
   const bm = ss.getSheetByName('支店マスタ');
-  bm.appendRow(['KANTO','関東手配課','','','JP','関東','pw','kanto@his-world.com','','','','',true]);
-  bm.appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','vp','vie@his-world.com','VIE','','','',true]);
+  bm.appendRow(['KANTO','関東手配課','','','JP','関東','pw','kanto@his-world.com','','','','', '', true]);
+  bm.appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','vp','vie@his-world.com','VIE','','','', '', true]);
   ['予約一覧','過去一覧'].forEach(n => ctx.ensureSheetWithHeaders_(ss, n, ctx.RESERVATION_HEADERS));
   ctx.ensureSheetWithHeaders_(ss, 'やり取り履歴', ctx.HISTORY_HEADERS);
   return ctx;
@@ -856,8 +856,8 @@ function remindFixture(remindDays) {
   const ss = ctx.__ss;
   ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
   const bm = ss.getSheetByName('支店マスタ');
-  bm.appendRow(['KANTO','関東手配課','','','JP','関東','pw','kanto@his-world.com','','','', remindDays === undefined ? '' : remindDays, true]);
-  bm.appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','vp','vie@his-world.com','VIE','','', remindDays === undefined ? '' : remindDays, true]);
+  bm.appendRow(['KANTO','関東手配課','','','JP','関東','pw','kanto@his-world.com','','','', remindDays === undefined ? '' : remindDays, '', true]);
+  bm.appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','vp','vie@his-world.com','VIE','','', remindDays === undefined ? '' : remindDays, '', true]);
   ['予約一覧','過去一覧'].forEach(n => ctx.ensureSheetWithHeaders_(ss, n, ctx.RESERVATION_HEADERS));
   ctx.ensureSheetWithHeaders_(ss, 'やり取り履歴', ctx.HISTORY_HEADERS);
   ctx.ensureSheetWithHeaders_(ss, 'ステータス変更履歴', ctx.STATUS_LOG_HEADERS);
@@ -960,13 +960,13 @@ function featureFixture() {
   const ss = ctx.__ss;
   ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
   const bm = ss.getSheetByName('支店マスタ');
-  bm.appendRow(['KANTO','関東手配課','','','JP','関東','pw','kanto@his-world.com','','','','',true]);
-  bm.appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','vp','vie@his-world.com','VIE','','','',true]);
-  bm.appendRow(['IST','イスタンブール支店','トルコ','イスタンブール','BRANCH','','ip','ist@his-world.com','IST','','','',true]);
+  bm.appendRow(['KANTO','関東手配課','','','JP','関東','pw','kanto@his-world.com','','','','', '', true]);
+  bm.appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','vp','vie@his-world.com','VIE','','','', '', true]);
+  bm.appendRow(['IST','イスタンブール支店','トルコ','イスタンブール','BRANCH','','ip','ist@his-world.com','IST','','','', '', true]);
   ['予約一覧','過去一覧'].forEach(n => ctx.ensureSheetWithHeaders_(ss, n, ctx.RESERVATION_HEADERS));
   ctx.ensureSheetWithHeaders_(ss, 'やり取り履歴', ctx.HISTORY_HEADERS);
   ctx.ensureSheetWithHeaders_(ss, 'ステータス変更履歴', ctx.STATUS_LOG_HEADERS);
-  ['撮影場所マスタ','スタッフマスタ'].forEach(n => ctx.ensureSheetWithHeaders_(ss, n, ctx.MASTER_ITEM_HEADERS));
+  ['撮影場所マスタ','スタッフマスタ','セールマスタ'].forEach(n => ctx.ensureSheetWithHeaders_(ss, n, ctx.MASTER_ITEM_HEADERS));
   ctx.ensureSheetWithHeaders_(ss, '定型文マスタ', ctx.PHRASE_MASTER_HEADERS);
   return ctx;
 }
@@ -1136,6 +1136,59 @@ section('22. 追加機能：ダブルブッキング検知・請求不備チェ�
   const staff = ctx.apiListStaff(vie.session.token, 'VIE');
   check('スタッフマスタが取れる', staff.length === 2 && staff[0].name === 'M.Gruber');
   check('無効なスタッフは active=false で返る', staff.find(s=>s.name==='L.Hofer').active === false);
+}
+
+// ---------------------------------------------------------------
+section('23. 同意書（機能④）・セール名（機能⑤）');
+{
+  const ctx = featureFixture();
+  const bm = ctx.__ss.getSheetByName('支店マスタ');
+  // ローマ支店は同意書必須（支店マスタ「同意書必須」列にTRUE）
+  bm.appendRow(['ROW','ローマ支店','イタリア','ローマ','BRANCH','','rp','roma@his-world.com','ROW','','','',true,true]);
+
+  addCase(ctx, '予約一覧', { '支店コード':'VIE','管理番号':'VIE-101','管轄':'関東', '新郎名（ローマ字）':'A' });
+  addCase(ctx, '予約一覧', { '支店コード':'ROW','管理番号':'ROW-101','管轄':'関東', '新郎名（ローマ字）':'B' });
+
+  const jp = ctx.apiLogin('KANTO','pw');
+  const vieDetail = ctx.apiGetReservationDetail(jp.session.token, 'VIE-101').detail;
+  check('通常支店は同意書必須=false', vieDetail.consentRequired === false);
+  const rowDetail = ctx.apiGetReservationDetail(jp.session.token, 'ROW-101').detail;
+  check('ローマ支店は同意書必須=true', rowDetail.consentRequired === true);
+  check('初期状態は同意書が未回収', !rowDetail['同意書']);
+
+  // 通常の3択保存フロー（変更＋メッセージ）で同意書欄を更新できる（手動でのマークも可能）
+  ctx.apiCommitChanges(jp.session.token, 'ROW-101', { '同意書': '済' }, '同意書を確認しました。');
+  const afterManual = ctx.apiGetReservationDetail(jp.session.token, 'ROW-101').detail;
+  check('通常フローで同意書を更新できる', afterManual['同意書'] === '済');
+
+  // Googleフォーム連携（onConsentFormSubmitCore_）：フォーム回答から自動で反映される
+  const errors1 = [];
+  ctx.onConsentFormSubmitCore_({ namedValues: { '管理番号': ['VIE-101'] } }, errors1);
+  const afterForm = ctx.apiGetReservationDetail(jp.session.token, 'VIE-101').detail;
+  check('フォーム回答で同意書が自動的に「済」になる', afterForm['同意書'] === '済');
+  check('フォーム連携はエラーなしで終わる', errors1.length === 0);
+
+  const errors2 = [];
+  ctx.onConsentFormSubmitCore_({ namedValues: { '管理番号': ['NOTFOUND'] } }, errors2);
+  check('存在しない管理番号はエラーとして記録される（処理全体は止まらない）', errors2.length === 1);
+
+  const errors3 = [];
+  ctx.onConsentFormSubmitCore_({ namedValues: { '別の質問': ['x'] } }, errors3);
+  check('管理番号の質問が見つからない場合もエラーとして記録される', errors3.length === 1);
+
+  // セール名マスタ：事前登録した候補＋自由入力の両方が使える（プランマスタと同じ運用）
+  ctx.apiSaveSaleItem(jp.session.token, 'VIE', '夏のセール2026', null, true);
+  const sales = ctx.apiListSales(jp.session.token, 'VIE');
+  check('セールマスタに登録できる', sales.length === 1 && sales[0].name === '夏のセール2026');
+
+  ctx.apiCommitChanges(jp.session.token, 'VIE-101', { 'セール名': '夏のセール2026（自由入力の特典付き）' }, '');
+  const afterSale = ctx.apiGetReservationDetail(jp.session.token, 'VIE-101').detail;
+  check('セール名は自由入力でも保存できる', afterSale['セール名'] === '夏のセール2026（自由入力の特典付き）');
+
+  const vie2 = ctx.apiLogin('VIE','vp');
+  let err = null;
+  try { ctx.apiSaveSaleItem(vie2.session.token, 'IST', 'こっそり割引', null, true); } catch (e) { err = e.message; }
+  check('他支店のセールマスタは編集できない', err !== null, err);
 }
 
 // ---------------------------------------------------------------

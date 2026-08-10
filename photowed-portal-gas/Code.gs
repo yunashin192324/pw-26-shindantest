@@ -1,5 +1,5 @@
 // =====================================================
-// ★PhotoWED 統合ポータル：全支店横断WEBアプリ版 (Code.gs)
+// ★WEDLINK 統合ポータル：全支店横断WEBアプリ版 (Code.gs)
 // ROW支店専用スクリプト(ROW_fixed.gs)を、世界中の支店へコード改修なしで横展開できる
 // 「1つのWebアプリ + 支店マスタ」構成に再設計したもの。
 //
@@ -23,6 +23,7 @@ const OPTION_MASTER_SHEET_NAME = 'オプションマスタ';
 const LOCATION_MASTER_SHEET_NAME = '撮影場所マスタ';
 const STAFF_MASTER_SHEET_NAME = 'スタッフマスタ';   // 現地スタッフ（カメラマン・ヘアメイク等）の入力候補
 const PHRASE_MASTER_SHEET_NAME = '定型文マスタ';    // メッセージのテンプレート
+const SALE_MASTER_SHEET_NAME = 'セールマスタ';      // セール名の入力候補（支店ごと。自由入力も可）
 const RESERVATION_SHEET_NAME = '予約一覧';
 const HISTORY_SHEET_NAME = 'やり取り履歴';
 const ARCHIVE_SHEET_NAME = '過去一覧';
@@ -95,7 +96,13 @@ const COL_HOPE2 = '希望日②';
 const COL_HOPE3 = '希望日③';
 const COL_GROOM_NAME = '新郎名（ローマ字）';
 const COL_BRIDE_NAME = '新婦名（ローマ字）';
+// ★機能追加：お客様がGoogleフォームで記入する『同意書』の記入有無を案件に反映する（機能④）。
+// 支店マスタの「同意書必須」が有効な支店（例：ローマ）では未回収を目立たせる。
+const COL_CONSENT = '同意書';
 const COL_PLAN = 'プラン名';
+// ★機能追加：セールは頻度が高く名称も毎回変わるため、プラン名とは別の欄にする（機能⑤）。
+// セールマスタに事前登録した候補から選ぶか、自由入力もできる（撮影希望場所と同じ運用）
+const COL_SALE_NAME = 'セール名';
 const COL_LOCATION = '撮影希望場所';
 const COL_PREP = '準備場所';
 const COL_HOTEL = 'ホテル';
@@ -131,7 +138,7 @@ const RESERVATION_HEADERS = (() => {
   const base = [
     COL_BRANCH_CODE, COL_KANRI_NO, COL_CHALLENGE_NO, COL_STATUS_JP, COL_STATUS_BRANCH,
     COL_CONFIRMED_DATE, COL_CEREMONY_DATE, COL_HOPE1, COL_HOPE2, COL_HOPE3,
-    COL_GROOM_NAME, COL_BRIDE_NAME, COL_PLAN, COL_LOCATION, COL_PREP, COL_HOTEL,
+    COL_GROOM_NAME, COL_BRIDE_NAME, COL_CONSENT, COL_PLAN, COL_SALE_NAME, COL_LOCATION, COL_PREP, COL_HOTEL,
     COL_AREA, COL_BILLING_REGION, COL_JP_SHOP, COL_INVOICE_NO, COL_SHOP,
     COL_DAY_STAFF, COL_HAIR_MAKEUP, COL_PHOTOGRAPHER, COL_ASSISTANT, COL_PICKUP_TIME, COL_LOCAL_MEMO,
     COL_REMARKS, COL_MEMO, COL_LAST_UPDATED, COL_DRIVE_URL,
@@ -170,11 +177,14 @@ const BM_COL_INVOICE_LABEL = '請求番号欄名称';   // BRANCHロールのみ
 const BM_COL_DELIVERY_DAYS = '納品期限日数';     // BRANCHロールのみ使用。空欄ならDELIVERY_ALERT_DEFAULT_DAYSを使用
 // ★機能追加：相手からのメッセージが何日未読なら督促するか。空欄ならUNANSWERED_REMIND_DEFAULT_DAYS
 const BM_COL_REMIND_DAYS = '督促日数';
+// ★機能追加：Googleフォームの『同意書』を必須とする支店ではTRUEにする（例：ローマ支店）。
+// 未設定／FALSEの支店は任意扱い（同意書欄自体は全支店で入力・確認できる）
+const BM_COL_CONSENT_REQUIRED = '同意書必須';
 const BM_COL_ACTIVE = '有効';
 const BRANCH_MASTER_HEADERS = [
   BM_COL_CODE, BM_COL_NAME, BM_COL_COUNTRY, BM_COL_CITY, BM_COL_ROLE, BM_COL_TEAM,
   BM_COL_PASSCODE, BM_COL_EMAIL, BM_COL_PREFIX, BM_COL_INVOICE_LABEL, BM_COL_DELIVERY_DAYS,
-  BM_COL_REMIND_DAYS, BM_COL_ACTIVE
+  BM_COL_REMIND_DAYS, BM_COL_CONSENT_REQUIRED, BM_COL_ACTIVE
 ];
 
 // --- プラン／オプション／撮影場所／スタッフマスタの列定義（支店ごとに管理） ---
@@ -231,7 +241,7 @@ const STATUS_LOG_HEADERS = [SL_COL_KANRI, SL_COL_FIELD, SL_COL_OLD, SL_COL_NEW, 
 function doGet(e) {
   return HtmlService.createTemplateFromFile('Index')
     .evaluate()
-    .setTitle('PhotoWED 支店ポータル')
+    .setTitle('WEDLINK 支店ポータル')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
@@ -252,6 +262,7 @@ function setupPortal() {
   ensureSheetWithHeaders_(ss, LOCATION_MASTER_SHEET_NAME, MASTER_ITEM_HEADERS);
   ensureSheetWithHeaders_(ss, STAFF_MASTER_SHEET_NAME, MASTER_ITEM_HEADERS);
   ensureSheetWithHeaders_(ss, PHRASE_MASTER_SHEET_NAME, PHRASE_MASTER_HEADERS);
+  ensureSheetWithHeaders_(ss, SALE_MASTER_SHEET_NAME, MASTER_ITEM_HEADERS);
   ensureSheetWithHeaders_(ss, RESERVATION_SHEET_NAME, RESERVATION_HEADERS);
   ensureSheetWithHeaders_(ss, HISTORY_SHEET_NAME, HISTORY_HEADERS);
   ensureSheetWithHeaders_(ss, ARCHIVE_SHEET_NAME, RESERVATION_HEADERS);
@@ -493,6 +504,7 @@ function listBranchesRaw_() {
     invoiceLabel: r[BM_COL_INVOICE_LABEL] || '請求番号',
     deliveryDays: parseIntOrNull_(r[BM_COL_DELIVERY_DAYS]),
     remindDays: parseIntOrNull_(r[BM_COL_REMIND_DAYS]),
+    consentRequired: isActiveFlag_(r[BM_COL_CONSENT_REQUIRED]),
     active: isActiveFlag_(r[BM_COL_ACTIVE])
     // ログインパスコードは一覧APIには返さない（画面表示上の漏洩防止）
   }));
@@ -634,6 +646,19 @@ function apiSaveStaffItem(token, branchCode, name, originalName, active) {
   const session = requireSession_(token);
   assertBranchAccess_(session, branchCode);
   return saveMasterItem_(STAFF_MASTER_SHEET_NAME, branchCode, name, originalName, active);
+}
+
+// ★機能追加：セール名（機能⑤）。プランマスタと同じく支店ごとの事前登録＋自由入力の両対応。
+// セールは頻度が高く名称も毎回変わるため、必須の選択式にはしない（撮影希望場所と同じ運用）
+function apiListSales(token, branchCode) {
+  const session = requireSession_(token);
+  const target = session.role === BRANCH_ROLE ? session.branchCode : String(branchCode || '').toUpperCase();
+  return listMasterItems_(SALE_MASTER_SHEET_NAME, target);
+}
+function apiSaveSaleItem(token, branchCode, name, originalName, active) {
+  const session = requireSession_(token);
+  assertBranchAccess_(session, branchCode);
+  return saveMasterItem_(SALE_MASTER_SHEET_NAME, branchCode, name, originalName, active);
 }
 
 // ★機能追加：メッセージの定型文。支店コードに ALL を入れた行は全員が使える共通テンプレート。
@@ -1297,6 +1322,8 @@ function apiGetReservationDetail(token, kanriNo) {
   detail.city = meta.city || '';
   // ★要件：請求番号の欄名称は支店ごとに変えられる（支店マスタの「請求番号欄名称」、未設定なら「請求番号」）
   detail.invoiceLabel = meta.invoiceLabel || '請求番号';
+  // ★機能追加：同意書必須の支店（例：ローマ）かどうか。画面側で未回収を目立たせるために使う
+  detail.consentRequired = !!meta.consentRequired;
 
   const options = [];
   for (let n = 1; n <= OPTION_COUNT; n++) {
@@ -1933,7 +1960,7 @@ function sendDirectionalMail_(headers, rowData, direction, session, message, kin
 
   if (!recipients) return;
 
-  const subj = `[PhotoWED][${branchCode}] 【${kanri} ｜ ${chgNo}】${kind}のお知らせ`;
+  const subj = `[WEDLINK][${branchCode}] 【${kanri} ｜ ${chgNo}】${kind}のお知らせ`;
   const body = `${senderLabel_(session)} から更新がありました。\n\n` +
                `管理番号: ${kanri}\nChallenge No: ${chgNo}\n新郎: ${groom}\n新婦: ${bride}\n\n` +
                `--- ${kind} ---\n${message}\n\n` +
@@ -1998,7 +2025,7 @@ function notifySystemError_(name, errors, elapsedMs) {
       ? `\n--- 先頭のスタックトレース ---\n${errors[0].stack}\n` : '';
     MailApp.sendEmail(
       SYSTEM_ALERT_EMAIL,
-      `[PhotoWED][システムエラー] ${name}：${errors.length}件`,
+      `[WEDLINK][システムエラー] ${name}：${errors.length}件`,
       `定期処理「${name}」でエラーが発生しました。\n` +
       `他の案件の処理は続行しています（1件の異常で全体を止めない設計です）。\n\n` +
       `発生日時: ${Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss')}\n` +
@@ -2259,7 +2286,7 @@ function checkUnansweredAlertsCore_(errors) {
       ).join('\n');
       MailApp.sendEmail(
         email,
-        `[PhotoWED] 未返信のお知らせ：${d.items.length}件`,
+        `[WEDLINK] 未返信のお知らせ：${d.items.length}件`,
         `${d.label} ご担当者さま\n\n` +
         `相手側から届いたメッセージ・変更のうち、まだ確認（既読チェック）されていない案件が ${d.items.length} 件あります。\n` +
         `ポータルで内容をご確認のうえ、ご対応をお願いします。\n\n` +
@@ -2391,11 +2418,81 @@ function parseDateFromInput_(val) {
 // =====================================================
 // ⑯ トリガー設定
 // =====================================================
+// ★不具合修正：以前は無条件に全トリガーを削除していたため、setupConsentFormTriggerで
+// 設定した『同意書』フォームの自動反映トリガーも、setupTriggersを再実行すると消えてしまっていた。
+// このスクリプトが管理する日次トリガーだけを削除・再作成し、他のトリガーには触れないようにする。
+const MANAGED_DAILY_TRIGGERS = ['archivePastReservations', 'checkAlerts', 'checkDeliveryAlerts', 'checkUnansweredAlerts'];
 function setupTriggers() {
-  ScriptApp.getProjectTriggers().forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.getProjectTriggers().forEach(t => {
+    if (MANAGED_DAILY_TRIGGERS.includes(t.getHandlerFunction())) ScriptApp.deleteTrigger(t);
+  });
   ScriptApp.newTrigger('archivePastReservations').timeBased().everyDays(1).atHour(2).create();
   ScriptApp.newTrigger('checkAlerts').timeBased().everyDays(1).atHour(8).create();
   ScriptApp.newTrigger('checkDeliveryAlerts').timeBased().everyDays(1).atHour(8).create();
   ScriptApp.newTrigger('checkUnansweredAlerts').timeBased().everyDays(1).atHour(9).create();
-  SpreadsheetApp.getUi().alert('日次トリガー（アーカイブ・撮影前アラート・納品期限アラート・未返信リマインド）を再設定しました。');
+  SpreadsheetApp.getUi().alert('日次トリガー（アーカイブ・撮影前アラート・納品期限アラート・未返信リマインド）を再設定しました。\n（同意書フォームのトリガーを設定済みの場合はそのまま残ります）');
+}
+
+// =====================================================
+// ⑰ 同意書フォーム連携（機能④）
+// =====================================================
+// お客様がGoogleフォームで記入する『同意書』の回答結果を、案件の「同意書」欄へ自動反映する。
+// ★要件：ローマ支店など一部支店では必須。他支店は任意だが、日本側も可能なら把握したい。
+//
+// 事前準備（スプレッドシート管理者が1回だけ行う）：
+//   1. Googleフォームを作成し、質問の1つに管理番号を入力してもらう項目を用意する
+//      （質問文はCONSENT_FORM_KANRI_QUESTIONの値と完全に一致させること。既定は「管理番号」）
+//   2. フォームの「回答」タブ → スプレッドシートのアイコン →
+//      「既存のスプレッドシートを選択」で、このポータルのスプレッドシートを選ぶ
+//      （回答用の新しいシートが自動追加されるが、シート名は何でもよい。ここでは読まない）
+//   3. スプレッドシートのメニュー「拡張機能 → Apps Script」からこのプロジェクトを開き、
+//      関数一覧から setupConsentFormTrigger を選んで実行する（以後、フォーム送信時に自動反映される）
+//   4. 支店ごとに必須にしたい場合は、支店マスタの「同意書必須」列にTRUEを入れる（例：ローマ支店）
+//
+// フォーム側で管理番号の入力ミスがあった場合は自動反映できないため、その場合は画面の
+// 「予約内容」タブから同意書欄を手動でチェックしてください（通常の3択保存の対象に含まれます）。
+const CONSENT_FORM_KANRI_QUESTION = '管理番号';
+
+function setupConsentFormTrigger() {
+  ScriptApp.getProjectTriggers().forEach(t => {
+    if (t.getHandlerFunction() === 'onConsentFormSubmit_') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('onConsentFormSubmit_')
+    .forSpreadsheet(getSpreadsheet_())
+    .onFormSubmit()
+    .create();
+  SpreadsheetApp.getUi().alert('同意書フォームの自動反映トリガーを設定しました。以後、フォーム回答時に「同意書」欄が自動で更新されます。');
+}
+
+function onConsentFormSubmit_(e) {
+  const errors = [];
+  try {
+    onConsentFormSubmitCore_(e, errors);
+  } catch (err) {
+    errors.push({ where: '処理全体', message: errorMessage_(err), stack: err && err.stack ? String(err.stack) : '' });
+  }
+  if (errors.length > 0) {
+    console.error(`[onConsentFormSubmit] ${errors.length}件のエラー`);
+    errors.forEach(er => console.error(`[onConsentFormSubmit] ${er.where}: ${er.message}`));
+    notifySystemError_('onConsentFormSubmit', errors, 0);
+  }
+}
+
+function onConsentFormSubmitCore_(e, errors) {
+  const named = e && e.namedValues;
+  if (!named || !named[CONSENT_FORM_KANRI_QUESTION]) {
+    errors.push({ where: 'onConsentFormSubmit', message: `フォームの回答に「${CONSENT_FORM_KANRI_QUESTION}」という質問が見つかりません。質問文を確認してください。` });
+    return;
+  }
+  const kanri = String(named[CONSENT_FORM_KANRI_QUESTION][0] || '').trim();
+  if (!kanri) {
+    errors.push({ where: 'onConsentFormSubmit', message: '管理番号が空欄で送信されました。' });
+    return;
+  }
+  const { sheet, headers, rowIndex } = findReservationRow_(kanri);
+  if (rowIndex === -1) {
+    errors.push({ where: 'onConsentFormSubmit', message: `管理番号「${kanri}」の案件が見つかりません（入力ミスの可能性があります）。` });
+    return;
+  }
+  sheet.getRange(rowIndex, colIndexOrThrow_(headers, COL_CONSENT)).setValue('済');
 }

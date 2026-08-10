@@ -1,6 +1,6 @@
 <script>
   // =====================================================
-  // PhotoWED 支店ポータル クライアントロジック
+  // WEDLINK 支店ポータル クライアントロジック
   // =====================================================
   const STORAGE_KEY = 'photowed_session';
   const STATUS_CODES = ['RQ', 'OK', 'CHK', 'CR', 'FN', 'CW', 'NC', 'UC', 'CF'];
@@ -543,15 +543,16 @@
     try {
       const detailRes = await gsRun('apiGetReservationDetail', session.token, kanriNo);
       const branchCode = detailRes.detail['支店コード'];
-      const [planList, optionList, locationList, staffList, phraseList] = await Promise.all([
+      const [planList, optionList, locationList, staffList, phraseList, saleList] = await Promise.all([
         gsRun('apiListPlans', session.token, branchCode),
         gsRun('apiListOptionItems', session.token, branchCode),
         gsRun('apiListLocations', session.token, branchCode),
         gsRun('apiListStaff', session.token, branchCode),
-        gsRun('apiListPhrases', session.token, branchCode)
+        gsRun('apiListPhrases', session.token, branchCode),
+        gsRun('apiListSales', session.token, branchCode)
       ]);
       currentDetail = detailRes.detail;
-      renderDetail(detailRes.detail, planList, optionList, locationList, staffList, phraseList);
+      renderDetail(detailRes.detail, planList, optionList, locationList, staffList, phraseList, saleList);
     } catch (e) { handleAuthError(e); }
   }
 
@@ -593,16 +594,32 @@
     return `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
   }
 
-  function renderDetail(d, planList, optionList, locationList, staffList, phraseList) {
+  function renderDetail(d, planList, optionList, locationList, staffList, phraseList, saleList) {
     const c = $('detail-content');
 
     const planNames = nameListWithCurrent(planList, d['プラン名']);
     const planSelect = `<select data-pending="プラン名"><option value="">未設定</option>${planNames.map(n =>
       `<option value="${escapeAttr(n)}" ${n === d['プラン名'] ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}</select>`;
 
+    // ★機能：セールは頻度が高く名称も毎回変わるため、プラン名とは別の欄にする（機能⑤）。
+    // マスターに事前登録した候補（datalist）から選べる＋自由入力もできる（撮影希望場所と同じ運用）
+    const saleNames = nameListWithCurrent(saleList, d['セール名']);
+    const saleDatalist = `<datalist id="sale-datalist">${saleNames.map(n => `<option value="${escapeAttr(n)}">`).join('')}</datalist>`;
+
     // ★要件：撮影希望場所は各地で違うので必須の選択式にせず、任意入力＋マスターの候補（datalist）にする
     const locationNames = nameListWithCurrent(locationList, d['撮影希望場所']);
     const locationDatalist = `<datalist id="location-datalist">${locationNames.map(n => `<option value="${escapeAttr(n)}">`).join('')}</datalist>`;
+
+    // ★機能：お客様のGoogleフォーム『同意書』回答を反映する欄（機能④）。
+    // 支店マスタで「同意書必須」の支店（例：ローマ）は、未回収のとき赤字で警告を出す
+    const consentDone = !!String(d['同意書'] || '').trim();
+    const consentWarn = d.consentRequired && !consentDone;
+    const consentBlock = `
+      <label class="checkbox-label" style="${consentWarn ? 'color:var(--color-danger,#c0392b);font-weight:bold;' : ''}">
+        <input type="checkbox" data-pending="同意書" data-consent-checkbox="1" ${consentDone ? 'checked' : ''}>
+        同意書取得済み${d.consentRequired ? '（この支店は必須）' : '（任意）'}${consentWarn ? ' ─ 未回収です' : ''}
+      </label>
+      <p class="hint-text">Googleフォームで回答があると自動でチェックが付きます。手動でもチェック可能です（通常の保存の3択で確定してください）。</p>`;
 
     // ★機能：スタッフ名の入力候補（表記ゆれを抑えてダブルブッキング検知の精度を上げる）
     const staffNames = (staffList || []).filter(x => x.active).map(x => x.name);
@@ -660,6 +677,19 @@
     const pendingCount = Object.keys(pendingChanges).length;
     const invoiceLabel = d.invoiceLabel || '請求番号';
 
+    // ★機能：メッセージタブに戻らなくても、予約内容・現地記入欄の下からそのまま確定できるようにする。
+    // 「メッセージのみ送信」はメッセージ本文が必須なのでここには置かず、他の2択のみ複製する。
+    // メッセージタブのボタン（btn-commit/btn-save-quiet）と挙動は同じ（メッセージタブのmsg-inputは
+    // 非表示でもDOM上には存在するため、入力済みならそのまま一緒に送信される）
+    const quickActionsHtml = `
+      <div class="section-card">
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <button type="button" class="send-btn quick-commit-btn" style="width:100%;">変更（＋メッセージ）を決定して送信</button>
+          <button type="button" class="send-btn quick-save-btn" style="width:100%;background:var(--color-muted);">保存のみ（通知しない）</button>
+        </div>
+        <p class="hint-text" style="margin-top:8px;">「メッセージ」タブに戻らずここから直接確定できます（メッセージ欄に入力済みの内容があれば一緒に送られます）。</p>
+      </div>`;
+
     const tabBarHtml = `
       <div class="tab-bar">
         ${DETAIL_TABS.map(t => `<button type="button" class="tab-btn ${detailActiveTab === t.key ? 'active' : ''}" data-tab="${t.key}">${t.label}</button>`).join('')}
@@ -709,6 +739,10 @@
             <div class="field-block"><label>希望日③</label><input data-pending="希望日③" value="${escapeAttr(d['希望日③'])}"></div>
             <div class="field-block" style="grid-column:1/-1;">${hopeBlock}</div>
             <div class="field-block"><label>プラン名（マスタから選択）</label>${planSelect}</div>
+            <div class="field-block"><label>セール名（候補から選択・自由入力も可）</label>
+              <input data-pending="セール名" value="${escapeAttr(d['セール名'])}" list="sale-datalist" placeholder="任意入力">
+              ${saleDatalist}
+            </div>
             <div class="field-block"><label>撮影希望場所（任意・候補から選択も可）</label>
               <input data-pending="撮影希望場所" value="${escapeAttr(d['撮影希望場所'])}" list="location-datalist" placeholder="任意入力">
               ${locationDatalist}
@@ -728,6 +762,11 @@
         </div>
 
         <div class="section-card">
+          <h3>同意書</h3>
+          ${consentBlock}
+        </div>
+
+        <div class="section-card">
           <h3>ステータス</h3>
           <div class="status-row">
             <div class="status-card"><div class="who">STS JP</div>${statusCell('STS JP', d['STS JP'], session.role === 'JP', null)}</div>
@@ -741,6 +780,8 @@
           <h3>共有メモ（支店・日本側どちらも自由に書けます）</h3>
           <textarea data-pending="共有メモ" rows="4" placeholder="社内向けの自由メモ">${escapeHtml(d['共有メモ'])}</textarea>
         </div>
+
+        ${quickActionsHtml}
       </div>`;
 
     const localTabHtml = `
@@ -758,15 +799,16 @@
           </div>
           ${staffDatalist}
           <div id="staff-conflict" class="conflict-box hidden"></div>
-          <p class="hint-text">この欄は現地運用向けです。保存のみ／変更＋メッセージ送信は「メッセージ」タブのボタンから行えます。</p>
         </div>
+
+        ${quickActionsHtml}
       </div>`;
 
     // ★要件：Driveフォルダ URLは現地記入欄から独立した4つ目のタブに（日本側からアップロードすることもあるため）
     const driveTabHtml = `
       <div class="tab-pane ${detailActiveTab === 'drive' ? '' : 'hidden'}" data-tab-pane="drive">
         <div class="section-card">
-          <h3>Driveフォルダ URL（納品）</h3>
+          <h3>Driveフォルダ URL</h3>
           <div class="msg-row">
             <input id="drive-url-input" type="text" value="${escapeAttr(d['DriveフォルダURL'] || '')}" placeholder="https://drive.google.com/...">
             <button class="send-btn" id="drive-url-submit">保存</button>
@@ -842,6 +884,18 @@
     // 再描画後も入力欄に未保存の値を復元して、表示と実際に送信される内容を一致させる。
     c.querySelectorAll('[data-pending]').forEach(el => {
       const field = el.dataset.pending;
+      // ★機能：同意書チェックボックスは他のdata-pending項目と違いvalueではなくcheckedで持つため、
+      // 「済／未」の文字列と相互変換する（サーバー側は文字列で保存しているため）
+      if (el.dataset.consentCheckbox) {
+        if (Object.prototype.hasOwnProperty.call(pendingChanges, field)) {
+          el.checked = !!pendingChanges[field];
+        }
+        el.addEventListener('change', () => {
+          pendingChanges[field] = el.checked ? '済' : '';
+          updatePendingIndicator();
+        });
+        return;
+      }
       if (Object.prototype.hasOwnProperty.call(pendingChanges, field)) {
         el.value = pendingChanges[field];
       }
@@ -853,6 +907,9 @@
     $('btn-msg-only').addEventListener('click', sendMessageOnly);
     $('btn-commit').addEventListener('click', commitChangesWithMessage);
     $('btn-save-quiet').addEventListener('click', saveQuiet);
+    // ★機能：予約内容・現地記入欄タブ下部の複製ボタン（メッセージタブへ戻らず確定できるように）
+    c.querySelectorAll('.quick-commit-btn').forEach(btn => btn.addEventListener('click', commitChangesWithMessage));
+    c.querySelectorAll('.quick-save-btn').forEach(btn => btn.addEventListener('click', saveQuiet));
     $('drive-url-submit').addEventListener('click', submitDriveUrl);
     c.querySelectorAll('input[data-hid]').forEach(el => {
       el.addEventListener('change', () => toggleHistoryCheck(el.dataset.hid, el.checked));
