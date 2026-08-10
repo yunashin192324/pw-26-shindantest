@@ -208,7 +208,7 @@
 
   function scopeChipHtml(label, role, val, checked) {
     return `<label class="scope-chip ${checked ? 'active' : ''}">
-      <input type="checkbox" data-role="${role}" data-val="${val}" ${checked ? 'checked' : ''}>${escapeHtml(label)}
+      <input type="checkbox" data-role="${escapeAttr(role)}" data-val="${escapeAttr(val)}" ${checked ? 'checked' : ''}>${escapeHtml(label)}
     </label>`;
   }
 
@@ -460,11 +460,11 @@
       const branchCheckLabel = h.checkBranch ? `支店確認済み：${escapeHtml(h.checkedByBranch || '')}（${escapeHtml(h.dateBranch || '')}）` : '支店未確認';
       return `
       <div class="history-item ${unread ? 'unread' : ''}">
-        <div class="history-meta"><span>${escapeHtml(h.sender)}</span><span>${h.datetime}</span></div>
+        <div class="history-meta"><span>${escapeHtml(h.sender)}</span><span>${escapeHtml(h.datetime)}</span></div>
         <div class="history-body">${escapeHtml(h.body)}</div>
         <div class="history-checks">
-          <label><input type="checkbox" data-hid="${h.id}" data-side="JP" ${h.checkJp ? 'checked' : ''} ${session.role !== 'JP' ? 'disabled' : ''}> ${jpCheckLabel}</label>
-          <label><input type="checkbox" data-hid="${h.id}" data-side="BRANCH" ${h.checkBranch ? 'checked' : ''} ${session.role !== 'BRANCH' ? 'disabled' : ''}> ${branchCheckLabel}</label>
+          <label><input type="checkbox" data-hid="${escapeAttr(h.id)}" data-side="JP" ${h.checkJp ? 'checked' : ''} ${session.role !== 'JP' ? 'disabled' : ''}> ${jpCheckLabel}</label>
+          <label><input type="checkbox" data-hid="${escapeAttr(h.id)}" data-side="BRANCH" ${h.checkBranch ? 'checked' : ''} ${session.role !== 'BRANCH' ? 'disabled' : ''}> ${branchCheckLabel}</label>
         </div>
       </div>`;
     }).join('') || '<p class="hint-text">やり取りはまだありません。</p>';
@@ -602,7 +602,16 @@
       });
     });
 
+    // ★不具合修正：「メッセージのみ送信」の直後など、未保存の変更（pendingChanges）を保持したまま
+    // 画面を再描画する場面がある。以前はサーバーの値で入力欄が上書きされてしまい、
+    // 「未保存の変更: 1件」と出ているのに画面上はどこが変更中なのか分からず、
+    // そのまま「変更を決定して送信」を押すと画面に見えていない値が送信される状態だった。
+    // 再描画後も入力欄に未保存の値を復元して、表示と実際に送信される内容を一致させる。
     c.querySelectorAll('[data-pending]').forEach(el => {
+      const field = el.dataset.pending;
+      if (Object.prototype.hasOwnProperty.call(pendingChanges, field)) {
+        el.value = pendingChanges[field];
+      }
       el.addEventListener('change', () => {
         pendingChanges[el.dataset.pending] = el.value;
         updatePendingIndicator();

@@ -1,0 +1,565 @@
+const { makeContext } = require('./gas_harness');
+
+let pass = 0, fail = 0;
+function check(name, cond, extra) {
+  if (cond) { pass++; console.log(`  PASS  ${name}`); }
+  else { fail++; console.log(`  FAIL  ${name}${extra ? '\n        → ' + extra : ''}`); }
+}
+function section(t) { console.log(`\n=== ${t} ===`); }
+
+// 日付は必ず vm 内の Date で作る（instanceof Date を通すため）
+let CTX = null;
+function daysAgo(n) { return CTX.__daysFromToday(-n); }
+function daysAhead(n) { return CTX.__daysFromToday(n); }
+
+// ---------------------------------------------------------------
+section('1. 既存シートへの列追加（マイグレーション）');
+{
+  const ctx = makeContext(); CTX = ctx;
+  const ss = ctx.__ss;
+  // 旧スキーマのやり取り履歴シート（送信者ロール・氏名列がない）を作る
+  const h = ss.insertSheet('やり取り履歴');
+  const OLD = ['__id','支店コード','管理番号','CHG NO','撮影日FIX','新郎名（ローマ字）','新婦名（ローマ字）',
+               '日時','送信者','内容','CHECK JP','DATE JP','CHECK 支店','DATE 支店'];
+  h.getRange(1,1,1,OLD.length).setValues([OLD]);
+  h.appendRow(['old-1','VIE','VIE-001','','','','','2026/01/01','旧データ','既存の本文','','','','']);
+
+  ctx.ensureSheetWithHeaders_(ss, 'やり取り履歴', ctx.HISTORY_HEADERS);
+  const after = h.getRange(1,1,1,h.getLastColumn()).getValues()[0];
+
+  check('旧列の並びが保持されている', OLD.every((c,i) => after[i] === c));
+  check('新列（送信者ロール）が追加された', after.includes('送信者ロール'));
+  check('新列（CHECK JP 氏名）が追加された', after.includes('CHECK JP 氏名'));
+  check('新列（CHECK 支店 氏名）が追加された', after.includes('CHECK 支店 氏名'));
+  check('既存データが壊れていない', h.getRange(2,10,1,1).getValues()[0][0] === '既存の本文');
+  check('列がすべて揃った', ctx.HISTORY_HEADERS.every(c => after.includes(c)),
+        '不足: ' + ctx.HISTORY_HEADERS.filter(c => !after.includes(c)).join(','));
+
+  // 2回実行しても重複しない
+  ctx.ensureSheetWithHeaders_(ss, 'やり取り履歴', ctx.HISTORY_HEADERS);
+  const after2 = h.getRange(1,1,1,h.getLastColumn()).getValues()[0];
+  check('再実行しても列が重複しない', after2.length === after.length, `${after.length} → ${after2.length}`);
+}
+
+// ---------------------------------------------------------------
+section('2. 履歴の書き込みが「列名基準」で正しい位置に入る');
+{
+  const ctx = makeContext(); CTX = ctx;
+  const ss = ctx.__ss;
+  const h = ss.insertSheet('やり取り履歴');
+  // わざとコード側の定数と違う並び順にする
+  const SHUFFLED = ['内容','__id','送信者ロール','送信者','日時','管理番号','支店コード','CHG NO',
+                    '撮影日FIX','新郎名（ローマ字）','新婦名（ローマ字）','CHECK JP','DATE JP',
+                    'CHECK JP 氏名','CHECK 支店','DATE 支店','CHECK 支店 氏名'];
+  h.getRange(1,1,1,SHUFFLED.length).setValues([SHUFFLED]);
+
+  const resHeaders = ctx.RESERVATION_HEADERS;
+  const rowData = new Array(resHeaders.length).fill('');
+  rowData[resHeaders.indexOf('支店コード')] = 'VIE';
+  rowData[resHeaders.indexOf('管理番号')] = 'VIE-014';
+  rowData[resHeaders.indexOf('新郎名（ローマ字）')] = 'Yuma Tanaka';
+
+  ctx.appendHistory_(resHeaders, rowData, 'Tanaka（関東手配課）', 'テスト本文', 'JP');
+
+  const written = h.getRange(2,1,1,SHUFFLED.length).getValues()[0];
+  const at = (name) => written[SHUFFLED.indexOf(name)];
+  check('内容が「内容」列に入る', at('内容') === 'テスト本文', `実際: ${at('内容')}`);
+  check('送信者ロールが正しい列に入る', at('送信者ロール') === 'JP', `実際: ${at('送信者ロール')}`);
+  check('管理番号が正しい列に入る', at('管理番号') === 'VIE-014', `実際: ${at('管理番号')}`);
+  check('新郎名が正しい列に入る', at('新郎名（ローマ字）') === 'Yuma Tanaka', `実際: ${at('新郎名（ローマ字）')}`);
+}
+
+// ---------------------------------------------------------------
+section('3. 納品期限アラート（過去一覧も走査されるか）');
+function deliveryScenario(opts) {
+  const ctx = makeContext(); CTX = ctx;
+  const ss = ctx.__ss;
+  ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
+  const bm = ss.getSheetByName('支店マスタ');
+  bm.appendRow(['KANTO','関東手配課','','','JP','関東','p','kanto@his-world.com','','','',true]);
+  bm.appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','p','vie@his-world.com','VIE','', opts.deliveryDays === undefined ? '' : opts.deliveryDays, true]);
+
+  ctx.ensureSheetWithHeaders_(ss, '予約一覧', ctx.RESERVATION_HEADERS);
+  const target = ctx.ensureSheetWithHeaders_(ss, opts.sheet, ctx.RESERVATION_HEADERS);
+  const H = ctx.RESERVATION_HEADERS;
+  const row = new Array(H.length).fill('');
+  row[H.indexOf('支店コード')] = 'VIE';
+  row[H.indexOf('管理番号')] = 'VIE-014';
+  row[H.indexOf('管轄')] = '関東';
+  row[H.indexOf('撮影日FIX')] = daysAgo(opts.daysPast);
+  row[H.indexOf('DriveフォルダURL')] = opts.drive || '';
+  if (opts.stsJp) row[H.indexOf('STS JP')] = opts.stsJp;
+  target.appendRow(row);
+
+  ctx.checkDeliveryAlerts();
+  return ctx.__mail;
+}
+{
+  check('過去一覧の案件・撮影30日後・未納品 → アラートが飛ぶ',
+        deliveryScenario({ sheet: '過去一覧', daysPast: 30 }).length === 1);
+  check('予約一覧の案件でも飛ぶ',
+        deliveryScenario({ sheet: '予約一覧', daysPast: 30 }).length === 1);
+  check('29日後（期限前）は飛ばない',
+        deliveryScenario({ sheet: '過去一覧', daysPast: 29 }).length === 0);
+  check('納品済み（Drive URLあり）は飛ばない',
+        deliveryScenario({ sheet: '過去一覧', daysPast: 30, drive: 'https://drive.google.com/x' }).length === 0);
+  check('キャンセル(CW)案件は飛ばない',
+        deliveryScenario({ sheet: '過去一覧', daysPast: 30, stsJp: 'CW' }).length === 0);
+  check('期限日から7日後にも再通知される（実行漏れ対策）',
+        deliveryScenario({ sheet: '過去一覧', daysPast: 37 }).length === 1);
+  check('期限日から8日後には送らない（毎日送信しない）',
+        deliveryScenario({ sheet: '過去一覧', daysPast: 38 }).length === 0);
+  check('期限日から29日以上経ったら打ち切る（無限送信しない）',
+        deliveryScenario({ sheet: '過去一覧', daysPast: 30 + 35 }).length === 0);
+  check('支店ごとの納品期限日数（21日）が効く',
+        deliveryScenario({ sheet: '過去一覧', daysPast: 21, deliveryDays: 21 }).length === 1);
+  check('納品期限日数21日設定時、30日はデフォルトで誤爆しない',
+        deliveryScenario({ sheet: '過去一覧', daysPast: 30, deliveryDays: 21 }).length === 0,
+        '21+7=28, 21+14=35 のため30日は対象外が正しい');
+  const m0 = deliveryScenario({ sheet: '過去一覧', daysPast: 1, deliveryDays: 0 });
+  check('納品期限日数0（翌日から即アラート）が設定できる', m0.length === 1);
+  check('アラート宛先が管轄チーム（関東）になっている',
+        deliveryScenario({ sheet: '過去一覧', daysPast: 30 })[0].to === 'kanto@his-world.com');
+}
+
+// ---------------------------------------------------------------
+section('4. 過去一覧への移動で列がずれないか');
+{
+  const ctx = makeContext(); CTX = ctx;
+  const ss = ctx.__ss;
+  ctx.ensureSheetWithHeaders_(ss, '予約一覧', ctx.RESERVATION_HEADERS);
+  const res = ss.getSheetByName('予約一覧');
+  // 過去一覧はわざと列順を変えて作る
+  const arch = ss.insertSheet('過去一覧');
+  const REV = ctx.RESERVATION_HEADERS.slice().reverse();
+  arch.getRange(1,1,1,REV.length).setValues([REV]);
+
+  const H = ctx.RESERVATION_HEADERS;
+  const row = new Array(H.length).fill('');
+  row[H.indexOf('支店コード')] = 'VIE';
+  row[H.indexOf('管理番号')] = 'VIE-099';
+  row[H.indexOf('新郎名（ローマ字）')] = 'Past Groom';
+  row[H.indexOf('撮影日FIX')] = daysAgo(3);
+  res.appendRow(row);
+
+  ctx.archivePastReservations();
+
+  check('予約一覧から消えた', res.getLastRow() === 1);
+  const aHead = arch.getRange(1,1,1,arch.getLastColumn()).getValues()[0];
+  const aRow = arch.getRange(2,1,1,aHead.length).getValues()[0];
+  check('管理番号が過去一覧の正しい列に入る', aRow[aHead.indexOf('管理番号')] === 'VIE-099',
+        `実際: ${aRow[aHead.indexOf('管理番号')]}`);
+  check('新郎名が過去一覧の正しい列に入る', aRow[aHead.indexOf('新郎名（ローマ字）')] === 'Past Groom',
+        `実際: ${aRow[aHead.indexOf('新郎名（ローマ字）')]}`);
+}
+
+// ---------------------------------------------------------------
+section('5. 統計：内訳の合計が件数と一致するか');
+{
+  const ctx = makeContext(); CTX = ctx;
+  const ss = ctx.__ss;
+  ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
+  ss.getSheetByName('支店マスタ').appendRow(['KANTO','関東手配課','','','JP','関東','pw','k@his-world.com','','','',true]);
+  ss.getSheetByName('支店マスタ').appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','pw','v@his-world.com','VIE','','',true]);
+  ctx.ensureSheetWithHeaders_(ss, '予約一覧', ctx.RESERVATION_HEADERS);
+  ctx.ensureSheetWithHeaders_(ss, '過去一覧', ctx.RESERVATION_HEADERS);
+  ctx.ensureSheetWithHeaders_(ss, 'やり取り履歴', ctx.HISTORY_HEADERS);
+  const res = ss.getSheetByName('予約一覧');
+  const H = ctx.RESERVATION_HEADERS;
+  const add = (kanri, stsJp, stsBranch, when) => {
+    const row = new Array(H.length).fill('');
+    row[H.indexOf('支店コード')] = 'VIE';
+    row[H.indexOf('管理番号')] = kanri;
+    row[H.indexOf('管轄')] = '関東';
+    row[H.indexOf('日本支店名')] = '新宿西口店';
+    row[H.indexOf('STS JP')] = stsJp;
+    row[H.indexOf('STS 支店')] = stsBranch;
+    if (when) row[H.indexOf('撮影日FIX')] = when;
+    res.appendRow(row);
+  };
+  add('VIE-001','RQ','NC', daysAhead(10));
+  add('VIE-002','OK','OK', daysAhead(40));
+  add('VIE-003','FN','FN', daysAhead(70));
+  add('VIE-004','CW','CW', daysAhead(20));   // キャンセル → 除外
+  add('VIE-005','RQ','NC', null);            // 撮影日未定
+  add('VIE-006','CHK','NC', daysAgo(400));   // 対象期間外
+
+  const login = ctx.apiLogin('KANTO','pw');
+  const stats = ctx.apiGetStats(login.session.token, { showAll: true });
+
+  check('現在進行中の件数がCWを除いた5件', stats.total === 5, `実際: ${stats.total}`);
+  const sum = stats.months.reduce((a,m) => a + m.total, 0) + stats.undated.total;
+  check('月別＋未定の合計＝現在進行中の件数', sum === stats.total, `合計 ${sum} vs total ${stats.total}`);
+  const breakdownSum = stats.months.concat([stats.undated])
+    .reduce((a,m) => a + m.needsAction + m.rq + m.ok + m.fn, 0);
+  check('未対応/RQ/OK/FN の内訳合計＝件数', breakdownSum === stats.total, `内訳合計 ${breakdownSum} vs ${stats.total}`);
+  check('月カードが12ヶ月分ある', stats.months.length === 12, `実際: ${stats.months.length}`);
+  check('先頭が当月', stats.months[0].label === `${new Date().getMonth()+1}月`, `実際: ${stats.months[0].label}`);
+  check('撮影日未定・期間外が undated に入る', stats.undated.total === 2, `実際: ${stats.undated.total}`);
+  check('国別集計が出る', stats.byCountry.length === 1 && stats.byCountry[0].key === 'オーストリア');
+  check('日本側店舗別集計が出る', stats.byJpShop.length === 1 && stats.byJpShop[0].key === '新宿西口店');
+}
+
+// ---------------------------------------------------------------
+section('6. 要対応（未読）判定');
+{
+  const ctx = makeContext(); CTX = ctx;
+  const ss = ctx.__ss;
+  ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
+  const bm = ss.getSheetByName('支店マスタ');
+  bm.appendRow(['KANTO','関東手配課','','','JP','関東','pw','k@his-world.com','','','',true]);
+  bm.appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','vp','v@his-world.com','VIE','','',true]);
+  ctx.ensureSheetWithHeaders_(ss, '予約一覧', ctx.RESERVATION_HEADERS);
+  ctx.ensureSheetWithHeaders_(ss, '過去一覧', ctx.RESERVATION_HEADERS);
+  ctx.ensureSheetWithHeaders_(ss, 'やり取り履歴', ctx.HISTORY_HEADERS);
+  const res = ss.getSheetByName('予約一覧');
+  const H = ctx.RESERVATION_HEADERS;
+  ['VIE-001','VIE-002'].forEach((k, i) => {
+    const row = new Array(H.length).fill('');
+    row[H.indexOf('支店コード')] = 'VIE';
+    row[H.indexOf('管理番号')] = k;
+    row[H.indexOf('管轄')] = '関東';
+    row[H.indexOf('STS JP')] = 'RQ';
+    row[H.indexOf('撮影日FIX')] = daysAhead(i === 0 ? 60 : 5); // VIE-002 の方が近い
+    res.appendRow(row);
+  });
+  // VIE-001 に支店からの未読メッセージを作る
+  const hs = ss.getSheetByName('やり取り履歴');
+  const HH = ctx.HISTORY_HEADERS;
+  const hrow = new Array(HH.length).fill('');
+  hrow[HH.indexOf('__id')] = 'h1';
+  hrow[HH.indexOf('管理番号')] = 'VIE-001';
+  hrow[HH.indexOf('送信者ロール')] = 'BRANCH';
+  hrow[HH.indexOf('日時')] = new Date();
+  hrow[HH.indexOf('内容')] = '空き確認できました';
+  hs.appendRow(hrow);
+
+  const jp = ctx.apiLogin('KANTO','pw');
+  let dash = ctx.apiGetDashboard(jp.session.token, { showAll: true });
+  check('JP側：支店からの未読がある案件が要対応になる',
+        dash.reservations.find(r => r.kanriNo === 'VIE-001').needsAction === true);
+  check('JP側：未読のない案件は要対応にならない',
+        dash.reservations.find(r => r.kanriNo === 'VIE-002').needsAction === false);
+  check('要対応の案件が撮影日が近い案件より上に来る',
+        dash.reservations[0].kanriNo === 'VIE-001', `先頭: ${dash.reservations[0].kanriNo}`);
+
+  const br = ctx.apiLogin('VIE','vp');
+  const bdash = ctx.apiGetDashboard(br.session.token, { showAll: true });
+  check('支店側：自分が送ったメッセージは要対応にならない',
+        bdash.reservations.every(r => r.needsAction === false));
+
+  // JPが既読にすると要対応が解除され、元の並び順に戻る
+  ctx.apiToggleHistoryCheck(jp.session.token, 'h1', true);
+  dash = ctx.apiGetDashboard(jp.session.token, { showAll: true });
+  check('既読にすると要対応が解除される',
+        dash.reservations.find(r => r.kanriNo === 'VIE-001').needsAction === false);
+  check('解除後は撮影日が近い順（VIE-002が上）に戻る',
+        dash.reservations[0].kanriNo === 'VIE-002', `先頭: ${dash.reservations[0].kanriNo}`);
+  const checkedRow = hs.getRange(2,1,1,HH.length).getValues()[0];
+  check('既読者の氏名が記録される', checkedRow[HH.indexOf('CHECK JP 氏名')] === 'tanaka（関東手配課）',
+        `実際: ${checkedRow[HH.indexOf('CHECK JP 氏名')]}`);
+  check('既読日時が記録される', String(checkedRow[HH.indexOf('DATE JP')]).length > 0);
+}
+
+// ---------------------------------------------------------------
+section('7. ステータス権限ゲート');
+{
+  const ctx = makeContext(); CTX = ctx;
+  const ss = ctx.__ss;
+  ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
+  const bm = ss.getSheetByName('支店マスタ');
+  bm.appendRow(['KANTO','関東手配課','','','JP','関東','pw','k@his-world.com','','','',true]);
+  bm.appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','vp','v@his-world.com','VIE','','',true]);
+  ['予約一覧','過去一覧'].forEach(n => ctx.ensureSheetWithHeaders_(ss, n, ctx.RESERVATION_HEADERS));
+  ctx.ensureSheetWithHeaders_(ss, 'やり取り履歴', ctx.HISTORY_HEADERS);
+  ctx.ensureSheetWithHeaders_(ss, 'ステータス変更履歴', ctx.STATUS_LOG_HEADERS);
+  const res = ss.getSheetByName('予約一覧');
+  const H = ctx.RESERVATION_HEADERS;
+  const row = new Array(H.length).fill('');
+  row[H.indexOf('支店コード')] = 'VIE';
+  row[H.indexOf('管理番号')] = 'VIE-001';
+  row[H.indexOf('管轄')] = '関東';
+  row[H.indexOf('STS JP')] = 'RQ';
+  res.appendRow(row);
+
+  const jp = ctx.apiLogin('KANTO','pw');
+  const br = ctx.apiLogin('VIE','vp');
+  const tryIt = (token, changes) => {
+    try { ctx.apiCommitChanges(token, 'VIE-001', changes, ''); return null; }
+    catch (e) { return e.message; }
+  };
+
+  check('日本側はSTS 支店を変更できない', tryIt(jp.session.token, {'STS 支店':'OK'}) !== null);
+  check('支店側はSTS JPを変更できない', tryIt(br.session.token, {'STS JP':'OK'}) !== null);
+  check('STS JP=RQ のとき支店はUCで回答できる', tryIt(br.session.token, {'STS 支店':'UC'}) === null);
+  // STS JP を CR にする
+  tryIt(jp.session.token, {'STS JP':'CR'});
+  check('STS JP=CR のとき支店はCFで回答できる', tryIt(br.session.token, {'STS 支店':'CF'}) === null);
+  check('STS JP=CR のとき支店はOKにできない', tryIt(br.session.token, {'STS 支店':'OK'}) !== null);
+  // STS JP を FN にする → 支店はロック
+  tryIt(jp.session.token, {'STS JP':'FN'});
+  check('STS JP=FN のとき支店側はロックされる', tryIt(br.session.token, {'STS 支店':'OK'}) !== null);
+  check('不正なSTSコードは弾かれる', tryIt(jp.session.token, {'STS JP':'ZZ'}) !== null);
+  check('不正な請求先は弾かれる', tryIt(jp.session.token, {'請求先':'近畿'}) !== null);
+  check('正しい請求先は通る', tryIt(jp.session.token, {'請求先':'関西'}) === null);
+
+  const log = ss.getSheetByName('ステータス変更履歴');
+  check('ステータス変更履歴に記録される', log.getLastRow() > 1);
+  const SL = ctx.STATUS_LOG_HEADERS;
+  const first = log.getRange(2,1,1,SL.length).getValues()[0];
+  check('変更者に個人名が記録される', String(first[SL.indexOf('変更者')]).includes('tanaka'),
+        `実際: ${first[SL.indexOf('変更者')]}`);
+}
+
+// ---------------------------------------------------------------
+section('8. 支店のデータ分離');
+{
+  const ctx = makeContext(); CTX = ctx;
+  const ss = ctx.__ss;
+  ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
+  const bm = ss.getSheetByName('支店マスタ');
+  bm.appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','vp','v@his-world.com','VIE','','',true]);
+  bm.appendRow(['IST','イスタンブール支店','トルコ','イスタンブール','BRANCH','','ip','i@his-world.com','IST','','',true]);
+  ['予約一覧','過去一覧'].forEach(n => ctx.ensureSheetWithHeaders_(ss, n, ctx.RESERVATION_HEADERS));
+  ctx.ensureSheetWithHeaders_(ss, 'やり取り履歴', ctx.HISTORY_HEADERS);
+  const res = ss.getSheetByName('予約一覧');
+  const H = ctx.RESERVATION_HEADERS;
+  [['VIE','VIE-001'],['IST','IST-001']].forEach(([b,k]) => {
+    const row = new Array(H.length).fill('');
+    row[H.indexOf('支店コード')] = b; row[H.indexOf('管理番号')] = k;
+    res.appendRow(row);
+  });
+  const vie = ctx.apiLogin('VIE','vp');
+  const dash = ctx.apiGetDashboard(vie.session.token, {});
+  check('支店は自分の案件しか見えない',
+        dash.reservations.length === 1 && dash.reservations[0].kanriNo === 'VIE-001');
+  let err = null;
+  try { ctx.apiGetReservationDetail(vie.session.token, 'IST-001'); } catch (e) { err = e.message; }
+  check('他支店の案件詳細は開けない', err !== null);
+  let statsErr = null;
+  try { ctx.apiGetStats(vie.session.token, {}); } catch (e) { statsErr = e.message; }
+  check('支店は統計ダッシュボードを使えない（JP専用）', statsErr !== null);
+  check('パスコードが違うとログインできない', ctx.apiLogin('VIE','wrong').ok === false);
+  check('無効なトークンは拒否される', (() => {
+    try { ctx.apiGetDashboard('bogus', {}); return false; } catch (e) { return true; }
+  })());
+}
+
+// ---------------------------------------------------------------
+section('9. 新規案件の採番と通知先');
+{
+  const ctx = makeContext(); CTX = ctx;
+  const ss = ctx.__ss;
+  ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
+  const bm = ss.getSheetByName('支店マスタ');
+  bm.appendRow(['KANTO','関東手配課','','','JP','関東','pw','kanto@his-world.com','','','',true]);
+  bm.appendRow(['ROW','ローマ支店','イタリア','ローマ','BRANCH','','rp','roma@his-world.com','R','','',true]);
+  ['予約一覧','過去一覧'].forEach(n => ctx.ensureSheetWithHeaders_(ss, n, ctx.RESERVATION_HEADERS));
+  ctx.ensureSheetWithHeaders_(ss, 'やり取り履歴', ctx.HISTORY_HEADERS);
+
+  // 過去一覧に R-005 がある状態で採番が衝突しないか
+  const arch = ss.getSheetByName('過去一覧');
+  const H = ctx.RESERVATION_HEADERS;
+  const old = new Array(H.length).fill('');
+  old[H.indexOf('支店コード')] = 'ROW'; old[H.indexOf('管理番号')] = 'R-005';
+  arch.appendRow(old);
+
+  const jp = ctx.apiLogin('KANTO','pw');
+  const created = ctx.apiCreateReservation(jp.session.token, 'ROW',
+    '01 Taro Tanaka\n02 Hanako Tanaka\nRQ 2026/12/03\n担当者：アバンティ＆オアシス業務チーム');
+  check('アーカイブ済み番号と衝突せず R-006 が採番される', created.kanriNo === 'R-006', `実際: ${created.kanriNo}`);
+  check('ローマ支店のプレフィックス R が維持される', created.kanriNo.startsWith('R-'));
+  check('日本側が作成した新規案件は「支店」へ通知される',
+        ctx.__mail.length === 1 && ctx.__mail[0].to === 'roma@his-world.com',
+        `実際の宛先: ${ctx.__mail.map(m => m.to).join(',')}`);
+
+  const detail = ctx.apiGetReservationDetail(jp.session.token, 'R-006').detail;
+  check('新郎名が解析されている', detail['新郎名（ローマ字）'] === 'Taro Tanaka', `実際: ${detail['新郎名（ローマ字）']}`);
+  check('管轄が解析されている', detail['管轄'] === '関東', `実際: ${detail['管轄']}`);
+  check('請求番号欄の名称が返る', detail.invoiceLabel === '請求番号', `実際: ${detail.invoiceLabel}`);
+
+  // 支店側が作成した場合は日本側へ
+  ctx.__mail.length = 0;
+  const rome = ctx.apiLogin('ROW','rp');
+  ctx.apiCreateReservation(rome.session.token, 'ROW', '01 A B\n02 C D');
+  check('支店が作成した新規案件は「日本側」へ通知される',
+        ctx.__mail.length === 1 && ctx.__mail[0].to === 'kanto@his-world.com',
+        `実際の宛先: ${ctx.__mail.map(m => m.to).join(',')}`);
+}
+
+// ---------------------------------------------------------------
+section('10. 現地記入欄・請求番号のカスタム名称');
+{
+  const ctx = makeContext(); CTX = ctx;
+  const ss = ctx.__ss;
+  ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
+  ss.getSheetByName('支店マスタ').appendRow(
+    ['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','vp','v@his-world.com','VIE','Rechnungsnummer','21',true]);
+  ['予約一覧','過去一覧'].forEach(n => ctx.ensureSheetWithHeaders_(ss, n, ctx.RESERVATION_HEADERS));
+  ctx.ensureSheetWithHeaders_(ss, 'やり取り履歴', ctx.HISTORY_HEADERS);
+  ctx.ensureSheetWithHeaders_(ss, 'ステータス変更履歴', ctx.STATUS_LOG_HEADERS);
+  const res = ss.getSheetByName('予約一覧');
+  const H = ctx.RESERVATION_HEADERS;
+  const row = new Array(H.length).fill('');
+  row[H.indexOf('支店コード')] = 'VIE'; row[H.indexOf('管理番号')] = 'VIE-001';
+  res.appendRow(row);
+
+  const br = ctx.apiLogin('VIE','vp');
+  ctx.apiSaveFieldsQuiet(br.session.token, 'VIE-001', {
+    '請求番号':'AT-2026-0142','当日の担当':'M.Gruber','ヘアメイク':'L.Hofer',
+    'カメラマン':'M.Gruber','アシスタント':'J.Brandt','配車時間':'9:00','メモ（現地用）':'雨天時は屋内'
+  });
+  const d = ctx.apiGetReservationDetail(br.session.token, 'VIE-001').detail;
+  check('請求番号が保存される', d['請求番号'] === 'AT-2026-0142');
+  check('現地記入欄6項目が保存される',
+        d['当日の担当']==='M.Gruber' && d['ヘアメイク']==='L.Hofer' && d['カメラマン']==='M.Gruber' &&
+        d['アシスタント']==='J.Brandt' && d['配車時間']==='9:00' && d['メモ（現地用）']==='雨天時は屋内');
+  check('請求番号欄の名称が支店ごとに変わる', d.invoiceLabel === 'Rechnungsnummer', `実際: ${d.invoiceLabel}`);
+  check('保存のみでは通知メールが飛ばない', ctx.__mail.length === 0);
+  check('保存のみでは履歴が増えない', ss.getSheetByName('やり取り履歴').getLastRow() === 1);
+}
+
+// ---------------------------------------------------------------
+section('11. 3択（保存のみ／メッセージのみ／変更＋メッセージ）の挙動');
+{
+  const ctx = makeContext(); CTX = ctx;
+  const ss = ctx.__ss;
+  ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
+  const bm = ss.getSheetByName('支店マスタ');
+  bm.appendRow(['KANTO','関東手配課','','','JP','関東','pw','kanto@his-world.com','','','',true]);
+  bm.appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','vp','vie@his-world.com','VIE','','',true]);
+  ['予約一覧','過去一覧'].forEach(n => ctx.ensureSheetWithHeaders_(ss, n, ctx.RESERVATION_HEADERS));
+  ctx.ensureSheetWithHeaders_(ss, 'やり取り履歴', ctx.HISTORY_HEADERS);
+  ctx.ensureSheetWithHeaders_(ss, 'ステータス変更履歴', ctx.STATUS_LOG_HEADERS);
+  const res = ss.getSheetByName('予約一覧');
+  const H = ctx.RESERVATION_HEADERS;
+  const row = new Array(H.length).fill('');
+  row[H.indexOf('支店コード')] = 'VIE'; row[H.indexOf('管理番号')] = 'VIE-001';
+  row[H.indexOf('管轄')] = '関東'; row[H.indexOf('STS JP')] = 'NC';
+  res.appendRow(row);
+  const jp = ctx.apiLogin('KANTO','pw');
+  const hs = ss.getSheetByName('やり取り履歴');
+
+  ctx.apiCommitChanges(jp.session.token, 'VIE-001', {}, 'メッセージだけ送ります');
+  check('メッセージのみ：履歴1件・メール1通', hs.getLastRow() === 2 && ctx.__mail.length === 1);
+  check('メッセージのみ：宛先は支店', ctx.__mail[0].to === 'vie@his-world.com');
+
+  ctx.__mail.length = 0;
+  ctx.apiCommitChanges(jp.session.token, 'VIE-001', {'STS JP':'RQ','ホテル':'Hotel Sacher'}, 'よろしくお願いします');
+  check('変更＋メッセージ：まとめて履歴1件・メール1通', hs.getLastRow() === 3 && ctx.__mail.length === 1);
+  const body = hs.getRange(3, ctx.HISTORY_HEADERS.indexOf('内容')+1, 1, 1).getValues()[0][0];
+  check('本文に変更内容が含まれる', body.includes('STS JP') && body.includes('ホテル'), body);
+  check('本文にメッセージが含まれる', body.includes('よろしくお願いします'));
+  check('送信者に個人名が入る',
+        String(hs.getRange(3, ctx.HISTORY_HEADERS.indexOf('送信者')+1,1,1).getValues()[0][0]).includes('tanaka'));
+  check('送信者ロールが記録される',
+        hs.getRange(3, ctx.HISTORY_HEADERS.indexOf('送信者ロール')+1,1,1).getValues()[0][0] === 'JP');
+
+  ctx.__mail.length = 0;
+  ctx.apiSaveFieldsQuiet(jp.session.token, 'VIE-001', {'共有メモ':'社内メモ'});
+  check('保存のみ：履歴もメールも増えない', hs.getLastRow() === 3 && ctx.__mail.length === 0);
+  check('保存のみでも値は保存される',
+        ctx.apiGetReservationDetail(jp.session.token,'VIE-001').detail['共有メモ'] === '社内メモ');
+
+  let noChange = ctx.apiCommitChanges(jp.session.token, 'VIE-001', {'ホテル':'Hotel Sacher'}, '');
+  check('変更がない場合は noChange を返す', noChange.noChange === true);
+}
+
+// ---------------------------------------------------------------
+section('12. 45日前アラート');
+{
+  const ctx = makeContext(); CTX = ctx;
+  const ss = ctx.__ss;
+  ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
+  ss.getSheetByName('支店マスタ').appendRow(['KANTO','関東手配課','','','JP','関東','pw','kanto@his-world.com','','','',true]);
+  ctx.ensureSheetWithHeaders_(ss, '予約一覧', ctx.RESERVATION_HEADERS);
+  const res = ss.getSheetByName('予約一覧');
+  const H = ctx.RESERVATION_HEADERS;
+  const mk = (kanri, days, sts) => {
+    const row = new Array(H.length).fill('');
+    row[H.indexOf('支店コード')] = 'VIE'; row[H.indexOf('管理番号')] = kanri;
+    row[H.indexOf('管轄')] = '関東'; row[H.indexOf('STS JP')] = sts;
+    row[H.indexOf('撮影日FIX')] = daysAhead(days);
+    res.appendRow(row);
+  };
+  mk('VIE-A', 45, 'RQ');  // 45日前・未完了 → アラート
+  mk('VIE-B', 45, 'FN');  // 45日前・完了 → 飛ばない
+  mk('VIE-C', 44, 'RQ');  // 対象日でない → 飛ばない
+  ctx.checkAlerts();
+  check('撮影45日前・未完了の案件にだけアラートが飛ぶ',
+        ctx.__mail.length === 1 && ctx.__mail[0].subj.includes('VIE-A'),
+        `件数=${ctx.__mail.length} 件名=${ctx.__mail.map(m=>m.subj).join(' / ')}`);
+  check('アラート件名が45日前になっている', ctx.__mail[0].subj.includes('45日前'), ctx.__mail[0].subj);
+}
+
+// ---------------------------------------------------------------
+section('13. 支店マスタの表記ゆれ耐性');
+{
+  const ctx = makeContext(); CTX = ctx;
+  const ss = ctx.__ss;
+  ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
+  const bm = ss.getSheetByName('支店マスタ');
+  // ロールが小文字＋空白、支店コードが小文字
+  bm.appendRow(['kanto ','関東手配課','','',' jp ','関東','pw','kanto@his-world.com','','','',true]);
+  bm.appendRow([' vie','ウィーン支店','オーストリア','ウィーン',' branch ','','vp','vie@his-world.com','VIE','','',true]);
+  ['予約一覧','過去一覧'].forEach(n => ctx.ensureSheetWithHeaders_(ss, n, ctx.RESERVATION_HEADERS));
+  ctx.ensureSheetWithHeaders_(ss, 'やり取り履歴', ctx.HISTORY_HEADERS);
+
+  const branches = ctx.listBranchesRaw_();
+  check('ロールの表記ゆれが正規化される', branches[0].role === 'JP' && branches[1].role === 'BRANCH',
+        JSON.stringify(branches.map(b => b.role)));
+  check('支店コードの表記ゆれが正規化される', branches[0].code === 'KANTO' && branches[1].code === 'VIE');
+  check('JP側メール振り分けが表記ゆれでも動く', ctx.getJpTeamEmail_('関東') === 'kanto@his-world.com');
+  const jp = ctx.apiLogin('kanto','pw');
+  check('小文字コードでログインできる', jp.ok === true && jp.session.role === 'JP');
+  const dash = ctx.apiGetDashboard(jp.session.token, { showAll: true });
+  check('JP側の支店選択肢に表記ゆれ支店が出る',
+        dash.branches.length === 1 && dash.branches[0].code === 'VIE');
+}
+
+// ---------------------------------------------------------------
+section('14. apiSaveBranch が他の列を消さない');
+{
+  const ctx = makeContext(); CTX = ctx;
+  const ss = ctx.__ss;
+  ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
+  const bm = ss.getSheetByName('支店マスタ');
+  bm.appendRow(['KANTO','関東手配課','','','JP','関東','pw','k@his-world.com','','','',true]);
+  bm.appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','vp','v@his-world.com','VIE','Rechnungsnummer','21',true]);
+  const jp = ctx.apiLogin('KANTO','pw');
+  ctx.apiSaveBranch(jp.session.token, { code:'VIE', name:'ウィーン支店(改)', role:'BRANCH',
+    country:'オーストリア', city:'ウィーン', email:'v2@his-world.com', prefix:'VIE', active:true });
+  const after = ctx.listBranchesRaw_().find(b => b.code === 'VIE');
+  check('支店名が更新される', after.name === 'ウィーン支店(改)');
+  check('請求番号欄名称が消えない', after.invoiceLabel === 'Rechnungsnummer', `実際: ${after.invoiceLabel}`);
+  check('納品期限日数が消えない', after.deliveryDays === 21, `実際: ${after.deliveryDays}`);
+  const BM = ctx.BRANCH_MASTER_HEADERS;
+  const raw = bm.getRange(3,1,1,BM.length).getValues()[0];
+  check('パスコードが維持される（未入力時）', raw[BM.indexOf('ログインパスコード')] === 'vp');
+}
+
+// ---------------------------------------------------------------
+section('15. 列が無い場合のエラーメッセージ');
+{
+  const ctx = makeContext(); CTX = ctx;
+  const ss = ctx.__ss;
+  ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
+  ss.getSheetByName('支店マスタ').appendRow(['VIE','ウィーン支店','','','BRANCH','','vp','v@his-world.com','VIE','','',true]);
+  // 旧スキーマ（請求番号などが無い）予約一覧
+  const res = ss.insertSheet('予約一覧');
+  const OLD = ['支店コード','管理番号','CHG NO','STS JP','STS 支店','撮影日FIX','最終更新日'];
+  res.getRange(1,1,1,OLD.length).setValues([OLD]);
+  res.appendRow(['VIE','VIE-001','','NC','','','']);
+  ctx.ensureSheetWithHeaders_(ss, '過去一覧', ctx.RESERVATION_HEADERS);
+  ctx.ensureSheetWithHeaders_(ss, 'やり取り履歴', ctx.HISTORY_HEADERS);
+
+  const br = ctx.apiLogin('VIE','vp');
+  let msg = null;
+  try { ctx.apiSaveFieldsQuiet(br.session.token, 'VIE-001', {'請求番号':'X-1'}); }
+  catch (e) { msg = e.message; }
+  check('列が無いとき分かりやすいエラーになる', msg !== null && msg.includes('setupPortal'), `実際: ${msg}`);
+}
+
+// ---------------------------------------------------------------
+console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
+process.exit(fail === 0 ? 0 : 1);

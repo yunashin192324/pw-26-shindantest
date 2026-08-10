@@ -46,6 +46,12 @@ const ALERT_DAYS_BEFORE = 45;
 // ★要件：撮影日から何日後までに納品(DriveフォルダURL登録)がないとアラートするか。
 // 国（支店）ごとに異なるため支店マスタの「納品期限日数」列で管理し、未設定ならこの値を使う
 const DELIVERY_ALERT_DEFAULT_DAYS = 30;
+// 納品期限を過ぎても未納品の場合、この日数おきに再通知する（期限当日にトリガーが
+// 実行できなかった場合でもアラートが消えてしまわないようにするため）
+const DELIVERY_ALERT_REMIND_INTERVAL_DAYS = 7;
+// ただし無期限に再通知すると過去の未納品案件から延々メールが飛ぶため、
+// 期限日からこの日数を過ぎたら通知を打ち切る
+const DELIVERY_ALERT_REMIND_UNTIL_DAYS = 28;
 
 // --- 支店側がSTS(支店側)を編集してよい条件（キー＝対になるSTS(JP側)の現在値） ---
 // null = 値の制限なし（STATUS_CODESから自由に選べる）／配列 = その中からのみ選べる／
@@ -250,17 +256,25 @@ function setupPortal() {
     ];
     bm.getRange(2, 1, rows.length, BRANCH_MASTER_HEADERS.length).setValues(rows);
   }
-  formatHeaderRow_(bm);
-  formatHeaderRow_(ss.getSheetByName(PLAN_MASTER_SHEET_NAME));
-  formatHeaderRow_(ss.getSheetByName(OPTION_MASTER_SHEET_NAME));
-  formatHeaderRow_(ss.getSheetByName(LOCATION_MASTER_SHEET_NAME));
+  [
+    bm,
+    ss.getSheetByName(PLAN_MASTER_SHEET_NAME),
+    ss.getSheetByName(OPTION_MASTER_SHEET_NAME),
+    ss.getSheetByName(LOCATION_MASTER_SHEET_NAME),
+    ss.getSheetByName(RESERVATION_SHEET_NAME),
+    ss.getSheetByName(HISTORY_SHEET_NAME),
+    ss.getSheetByName(ARCHIVE_SHEET_NAME),
+    ss.getSheetByName(STATUS_LOG_SHEET_NAME)
+  ].forEach(formatHeaderRow_);
 
   SpreadsheetApp.getUi().alert(
     'セットアップが完了しました。\n\n' +
     '「支店マスタ」シートで各行のログインパスコード・通知先メールを実際の値に書き換えてから、\n' +
     'デプロイ（ウェブアプリとして導入）してください。\n' +
     '支店を追加したいときは「支店マスタ」シートに1行追加するだけでOKです（コード変更不要）。\n' +
-    '案件番号プレフィックスは支店ごとに一意である必要があります（ローマ支店は既存運用のため "R" のまま変更しないでください）。'
+    '案件番号プレフィックスは支店ごとに一意である必要があります（ローマ支店は既存運用のため "R" のまま変更しないでください）。\n\n' +
+    '※この関数は何度でも安全に実行できます。コードを新しい版に差し替えたあとに再実行すると、\n' +
+    '　新しく増えた列だけが各シートの右端に追加されます（既存のデータや入力済みの値は消えません）。'
   );
 }
 
@@ -269,6 +283,21 @@ function ensureSheetWithHeaders_(ss, name, headers) {
   if (!sheet) sheet = ss.insertSheet(name);
   if (sheet.getLastRow() === 0) {
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    return sheet;
+  }
+  // ★不具合修正（重大）：以前は「シートが空のときだけヘッダーを書く」実装だったため、
+  // 機能追加で列が増えても既存シートには反映されなかった。その状態で運用すると
+  //  ・請求番号／現地記入欄などの新項目を保存しようとするとエラーになる
+  //  ・やり取り履歴の書き込み位置がずれてデータが壊れる
+  // といった問題が起きる。既存シートに不足している列を末尾へ追加して追従させる。
+  // （列の削除・並べ替えは行わないので、既存データは一切失われない）
+  const lastCol = sheet.getLastColumn();
+  const existing = lastCol > 0
+    ? sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim())
+    : [];
+  const missing = headers.filter(h => existing.indexOf(h) === -1);
+  if (missing.length > 0) {
+    sheet.getRange(1, existing.length + 1, 1, missing.length).setValues([missing]);
   }
   return sheet;
 }
@@ -897,7 +926,7 @@ function apiSaveFieldsQuiet(token, kanriNo, changes) {
 
     const writes = Object.keys(changes).map(field => prepareFieldWrite_(session, headers, rowData, field, changes[field]));
     writes.forEach(w => sheet.getRange(rowIndex, w.colIdx).setValue(w.valueToStore));
-    sheet.getRange(rowIndex, headers.indexOf(COL_LAST_UPDATED) + 1).setValue(new Date());
+    sheet.getRange(rowIndex, colIndexOrThrow_(headers, COL_LAST_UPDATED)).setValue(new Date());
 
     const who = senderLabel_(session);
     writes.forEach(w => logStatusChangeIfApplicable_(kanriNo, w, who));
@@ -944,7 +973,7 @@ function apiCommitChanges(token, kanriNo, changes, message) {
     const who = senderLabel_(session);
     if (writes.length > 0) {
       writes.forEach(w => sheet.getRange(rowIndex, w.colIdx).setValue(w.valueToStore));
-      sheet.getRange(rowIndex, headers.indexOf(COL_LAST_UPDATED) + 1).setValue(new Date());
+      sheet.getRange(rowIndex, colIndexOrThrow_(headers, COL_LAST_UPDATED)).setValue(new Date());
       writes.forEach(w => logStatusChangeIfApplicable_(kanriNo, w, who));
     }
     if (dateChanged) sortReservationSheet_(sheet);
@@ -965,6 +994,18 @@ function apiCommitChanges(token, kanriNo, changes, message) {
   return { ok: true };
 }
 
+// シート上の列位置（1始まり）を返す。列が無ければ「原因と対処」が分かるエラーにする。
+// ★不具合修正：以前は indexOf の -1 をそのまま使っていたため、列が存在しないと
+// getRange(row, 0) という不正な呼び出しになり、Apps Scriptの意味不明な内部エラーで落ちていた。
+// （機能追加で増えた列が既存スプレッドシートに無いときに実際に発生する）
+function colIndexOrThrow_(headers, name) {
+  const i = headers.indexOf(name);
+  if (i === -1) {
+    throw new Error(`スプレッドシートに「${name}」列がありません。スプレッドシートのメニューから setupPortal を一度実行して、不足している列を追加してください。`);
+  }
+  return i + 1;
+}
+
 // 1フィールド分の検証・保存準備（役割チェック・STSゲート・列挙値チェック・日付変換）を共通化したもの
 function prepareFieldWrite_(session, headers, rowData, field, value) {
   if (!COMMITTABLE_FIELDS.includes(field)) {
@@ -972,7 +1013,7 @@ function prepareFieldWrite_(session, headers, rowData, field, value) {
   }
   validateFieldPermission_(session, headers, rowData, field, value);
 
-  const colIdx = headers.indexOf(field);
+  const colIdx = colIndexOrThrow_(headers, field) - 1;
   const isDateField = DATE_FIELDS.includes(field);
   const rawOld = rowData[colIdx];
   const oldDisplay = isDateField ? (formatMaybeDate_(rawOld) || '未定') : (rawOld || '(未設定)');
@@ -1051,8 +1092,8 @@ function apiSetDriveUrl(token, kanriNo, url) {
     if (rowIndex === -1) throw new Error('対象の予約が見つかりません。');
     assertRowVisible_(session, headers, rowData);
 
-    sheet.getRange(rowIndex, headers.indexOf(COL_DRIVE_URL) + 1).setValue(trimmed);
-    sheet.getRange(rowIndex, headers.indexOf(COL_LAST_UPDATED) + 1).setValue(new Date());
+    sheet.getRange(rowIndex, colIndexOrThrow_(headers, COL_DRIVE_URL)).setValue(trimmed);
+    sheet.getRange(rowIndex, colIndexOrThrow_(headers, COL_LAST_UPDATED)).setValue(new Date());
 
     const freshRow = sheet.getRange(rowIndex, 1, 1, headers.length).getValues()[0];
     appendHistory_(headers, freshRow, senderLabel_(session), `[DriveフォルダURL更新]\n${trimmed}`, session.role);
@@ -1100,7 +1141,12 @@ function apiCreateReservation(token, branchCode, rawText) {
 
     const initMsg = parsed.remarks ? `新規手配依頼が追加されました。\n【備考】\n${parsed.remarks}` : '新規手配依頼が追加されました。';
     appendHistory_(headers, newRowData, senderLabel_(session), `[新規案件作成]\n${initMsg}`, session.role);
-    sendDirectionalMail_(headers, newRowData, 'BRANCH_TO_JP', session, initMsg, '新規案件');
+    // ★不具合修正：以前は作成者が誰であっても 'BRANCH_TO_JP'（＝日本側へ通知）で固定していたため、
+    // 日本側が支店の案件を新規作成した場合、通知が自分たち宛てに飛ぶだけで
+    // 肝心の支店には新規案件が来たことが一切通知されなかった。
+    // メッセージ送信と同じく「相手側へ通知する」ルールに揃える。
+    const newCaseDirection = session.role === JP_ROLE ? 'JP_TO_BRANCH' : 'BRANCH_TO_JP';
+    sendDirectionalMail_(headers, newRowData, newCaseDirection, session, initMsg, '新規案件');
 
     sortReservationSheet_(sheet);
     return { ok: true, kanriNo: newNo };
@@ -1190,15 +1236,15 @@ function apiToggleHistoryCheck(token, historyId, checked) {
     }
     if (targetRow === -1) throw new Error('対象の履歴が見つかりません。');
 
-    sheet.getRange(targetRow, headers.indexOf(checkCol) + 1).setValue(checked);
+    sheet.getRange(targetRow, colIndexOrThrow_(headers, checkCol)).setValue(checked);
     if (checked) {
       // ★要件：既読チェックは「誰が・いつ」確認したかも記録する
       const ts = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss');
-      sheet.getRange(targetRow, headers.indexOf(dateCol) + 1).setValue(ts);
-      sheet.getRange(targetRow, headers.indexOf(checkedByCol) + 1).setValue(senderLabel_(session));
+      sheet.getRange(targetRow, colIndexOrThrow_(headers, dateCol)).setValue(ts);
+      sheet.getRange(targetRow, colIndexOrThrow_(headers, checkedByCol)).setValue(senderLabel_(session));
     } else {
-      sheet.getRange(targetRow, headers.indexOf(dateCol) + 1).setValue('');
-      sheet.getRange(targetRow, headers.indexOf(checkedByCol) + 1).setValue('');
+      sheet.getRange(targetRow, colIndexOrThrow_(headers, dateCol)).setValue('');
+      sheet.getRange(targetRow, colIndexOrThrow_(headers, checkedByCol)).setValue('');
     }
   } finally {
     lock.releaseLock();
@@ -1330,8 +1376,16 @@ function appendHistory_(headers, rowData, sender, body, senderRole) {
     ? Utilities.formatDate(dateVal, 'Asia/Tokyo', 'yyyy/MM/dd')
     : (dateVal || '未定');
 
-  const row = new Array(HISTORY_HEADERS.length).fill('');
-  const set = (name, val) => { row[HISTORY_HEADERS.indexOf(name)] = val; };
+  // ★不具合修正：以前は定数HISTORY_HEADERSの並び順で行を組み立てて追記していたため、
+  // 実際のシートの列順・列数がコード側の定数と少しでも食い違うと、値が別の列に書き込まれて
+  // 履歴データが壊れていた（列を追加した直後などに発生）。実シートのヘッダーを読んで
+  // 「列名で」書き込み位置を決めるようにする。
+  const hLastCol = h.getLastColumn();
+  const hHeaders = hLastCol > 0
+    ? h.getRange(1, 1, 1, hLastCol).getValues()[0].map(x => String(x).trim())
+    : HISTORY_HEADERS.slice();
+  const row = new Array(hHeaders.length).fill('');
+  const set = (name, val) => { const i = hHeaders.indexOf(name); if (i !== -1) row[i] = val; };
   set(H_COL_ID, Utilities.getUuid());
   set(H_COL_BRANCH_CODE, getV(COL_BRANCH_CODE));
   set(H_COL_KANRI, getV(COL_KANRI_NO));
@@ -1420,62 +1474,88 @@ function checkAlerts() {
 }
 
 // ★要件：撮影日から一定日数（国・支店ごとに支店マスタ「納品期限日数」で設定、未設定なら既定30日）過ぎても
-// DriveフォルダURL（納品）が未登録の案件を日本側へメール通知する
+// DriveフォルダURL（納品）が未登録の案件を日本側へメール通知する。
+//
+// ★不具合修正（重大）：以前はこの関数が「予約一覧」しか見ていなかったため、アラートが1通も飛ばなかった。
+// archivePastReservations() は撮影日を過ぎた案件を「翌日」には過去一覧へ移動させる仕様のため、
+// 「撮影日から30日後」を判定しようとした時点で、その案件はとっくに予約一覧から消えている。
+// 納品状況は撮影後（＝アーカイブ後）に確定するものなので、必ず過去一覧も走査する必要がある。
 function checkDeliveryAlerts() {
-  const sheet = getSpreadsheet_().getSheetByName(RESERVATION_SHEET_NAME);
-  if (!sheet || sheet.getLastRow() < 2) return;
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
+  const ss = getSpreadsheet_();
   const branchMeta = branchMetaMap_();
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
-  data.forEach(row => {
-    const driveUrl = String(row[headers.indexOf(COL_DRIVE_URL)] || '').trim();
-    if (driveUrl) return; // 既に納品済み
+  [RESERVATION_SHEET_NAME, ARCHIVE_SHEET_NAME].forEach(sheetName => {
+    const sheet = ss.getSheetByName(sheetName);
+    if (!sheet || sheet.getLastRow() < 2) return;
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
 
-    const dVal = row[headers.indexOf(COL_CONFIRMED_DATE)];
-    if (!(dVal instanceof Date)) return;
-    const shootMidnight = new Date(dVal.getFullYear(), dVal.getMonth(), dVal.getDate());
-    const daysPast = Math.round((todayMidnight.getTime() - shootMidnight.getTime()) / 86400000);
-    if (daysPast <= 0) return; // 未来日・当日はスキップ
+    data.forEach(row => {
+      const driveUrl = String(row[headers.indexOf(COL_DRIVE_URL)] || '').trim();
+      if (driveUrl) return; // 既に納品済み
 
-    const shootStr = Utilities.formatDate(dVal, 'Asia/Tokyo', 'yyyy/MM/dd');
-    const branchCode = row[headers.indexOf(COL_BRANCH_CODE)];
-    const meta = branchMeta[branchCode] || {};
-    // ★不具合修正：`meta.deliveryDays || DEFAULT` だと0（即日アラート設定）が消えてデフォルトに
-    // フォールバックしてしまうため、未設定（null）のときだけデフォルトを使うようにする。
-    const limitDays = (meta.deliveryDays === null || meta.deliveryDays === undefined)
-      ? DELIVERY_ALERT_DEFAULT_DAYS : meta.deliveryDays;
-    if (daysPast < limitDays) return;
+      // キャンセル成立（CW）の案件は納品自体が発生しないため対象外
+      const stsJp = String(row[headers.indexOf(COL_STATUS_JP)] || '').trim();
+      const stsBranch = String(row[headers.indexOf(COL_STATUS_BRANCH)] || '').trim();
+      if (stsJp === 'CW' || stsBranch === 'CW') return;
 
-    // ★不具合修正：「期限当日のみ通知」だと、その日にトリガーが何らかの理由（クォータ超過・
-    // 一時的なデプロイ不整合等）で実行できなかった場合、以後ずっとdaysPastが期限日を上回り続けるため
-    // 二度と通知されなくなってしまう（サイレントに永久スキップされる）。
-    // 期限当日に加えて、未納品が続く限り7日おきに再通知することで、1回の実行失敗で
-    // アラートが完全に消えてしまわないようにする（かつ毎日は送らないので通知過多にもならない）。
-    if (daysPast !== limitDays && (daysPast - limitDays) % 7 !== 0) return;
+      const dVal = row[headers.indexOf(COL_CONFIRMED_DATE)];
+      if (!(dVal instanceof Date)) return;
+      const shootMidnight = new Date(dVal.getFullYear(), dVal.getMonth(), dVal.getDate());
+      const daysPast = Math.round((todayMidnight.getTime() - shootMidnight.getTime()) / 86400000);
+      if (daysPast <= 0) return; // 未来日・当日はスキップ
 
-    const area = row[headers.indexOf(COL_AREA)];
-    const recipient = getJpTeamEmail_(area);
-    const kanri = row[headers.indexOf(COL_KANRI_NO)];
-    MailApp.sendEmail(
-      recipient,
-      `[要確認] 納品未登録：${kanri}（${branchCode}支店・撮影日から${limitDays}日経過）`,
-      `撮影日から${limitDays}日が経過していますが、DriveフォルダURL（納品）が未登録です。ポータルをご確認ください。\n\n管理番号: ${kanri}\n撮影日: ${shootStr}`
-    );
+      const branchCode = row[headers.indexOf(COL_BRANCH_CODE)];
+      const meta = branchMeta[branchCode] || {};
+      // ★不具合修正：`meta.deliveryDays || DEFAULT` だと0（即日アラート設定）が消えてデフォルトに
+      // フォールバックしてしまうため、未設定（null）のときだけデフォルトを使う。
+      const limitDays = (meta.deliveryDays === null || meta.deliveryDays === undefined)
+        ? DELIVERY_ALERT_DEFAULT_DAYS : meta.deliveryDays;
+
+      // 期限日に1通。その後も未納品が続く場合は7日おきに再通知する
+      // （期限当日にトリガーが実行できなかった場合でもアラートが消えないようにするため）。
+      // ただし無期限に送り続けると、過去の未納品案件から延々とメールが飛ぶので上限を設ける。
+      // ★不具合修正：納品期限日数に0（＝撮影当日納品）を設定した場合、撮影当日は上の
+      // 「daysPast <= 0 はスキップ」で除外されるため、そのままだと初回通知が7日後まで
+      // 飛ばなかった。初回通知日は最短でも撮影翌日になるよう下限を1日に揃える。
+      const firstAlertDay = Math.max(limitDays, 1);
+      if (daysPast < firstAlertDay) return;
+      const over = daysPast - firstAlertDay;
+      if (over > DELIVERY_ALERT_REMIND_UNTIL_DAYS) return;
+      if (over % DELIVERY_ALERT_REMIND_INTERVAL_DAYS !== 0) return;
+
+      const shootStr = Utilities.formatDate(dVal, 'Asia/Tokyo', 'yyyy/MM/dd');
+      const area = row[headers.indexOf(COL_AREA)];
+      const recipient = getJpTeamEmail_(area);
+      const kanri = row[headers.indexOf(COL_KANRI_NO)];
+      MailApp.sendEmail(
+        recipient,
+        `[要確認] 納品未登録：${kanri}（${branchCode}支店・撮影日から${daysPast}日経過）`,
+        `撮影日から${daysPast}日が経過していますが、DriveフォルダURL（納品）が未登録です。ポータルをご確認ください。\n\n` +
+        `管理番号: ${kanri}\n撮影日: ${shootStr}\nこの支店の納品期限: 撮影日から${limitDays}日`
+      );
+    });
   });
 }
 
 function archivePastReservations() {
   const ss = getSpreadsheet_();
   const sheet = ss.getSheetByName(RESERVATION_SHEET_NAME);
-  const archive = ss.getSheetByName(ARCHIVE_SHEET_NAME) || ss.insertSheet(ARCHIVE_SHEET_NAME);
-  if (sheet.getLastRow() < 2) return;
+  if (!sheet || sheet.getLastRow() < 2) return;
+  // 過去一覧が無い／ヘッダーが未作成の場合もここで必ず整える（列ずれ防止のため）
+  const archive = ensureSheetWithHeaders_(ss, ARCHIVE_SHEET_NAME, RESERVATION_HEADERS);
 
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
   const todayStr = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd');
+
+  // ★不具合修正：以前は予約一覧の行をそのまま archive.appendRow(row) していたため、
+  // 予約一覧と過去一覧で列の並び・数が少しでも違うと、値が別の列に入って静かにデータが壊れていた。
+  // 過去一覧側のヘッダーを読み、「列名で」対応付けてから書き込む。
+  const archiveHeaders = archive.getRange(1, 1, 1, archive.getLastColumn()).getValues()[0]
+    .map(h => String(h).trim());
 
   const asDateStr = (v) => v instanceof Date ? Utilities.formatDate(v, 'Asia/Tokyo', 'yyyy/MM/dd') : '';
 
@@ -1489,7 +1569,11 @@ function archivePastReservations() {
     // ★要件：ステータスに関わらず、撮影日または挙式日が過ぎたら過去一覧へ移動する
     const isPastDate = (shootStr && shootStr < todayStr) || (ceremonyStr && ceremonyStr < todayStr);
     if (isCW || isPastDate) {
-      archive.appendRow(row);
+      const mapped = archiveHeaders.map(h => {
+        const idx = headers.indexOf(h);
+        return idx === -1 ? '' : row[idx];
+      });
+      archive.appendRow(mapped);
       sheet.deleteRow(i + 2);
     }
   }
