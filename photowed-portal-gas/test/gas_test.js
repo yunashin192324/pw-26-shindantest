@@ -1426,18 +1426,25 @@ section('27. 日本側専用の社内進行管理欄（フォトブリッジ登�
   check('フォトブリッジ登録がチェックできる', after['フォトブリッジ登録'] === '済');
   check('入力者が自動反映される（フォトブリッジ登録者）', after['フォトブリッジ登録者'].includes('tanaka'),
         String(after['フォトブリッジ登録者']));
+  check('チェック日時も自動反映される（フォトブリッジ登録日時）',
+        /^\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}$/.test(after['フォトブリッジ登録日時']),
+        String(after['フォトブリッジ登録日時']));
   check('データアップロードがチェックできる', after['データアップロード'] === '済');
   check('入力者が自動反映される（データアップロード者）', after['データアップロード者'].includes('tanaka'),
         String(after['データアップロード者']));
+  check('チェック日時も自動反映される（データアップロード日時）',
+        /^\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}$/.test(after['データアップロード日時']),
+        String(after['データアップロード日時']));
   check('AI加工がチェックできる', after['AI加工'] === '有');
-  check('AI加工には入力者欄が無い（仕様どおり）', !('AI加工者' in after));
+  check('AI加工には入力者・日時欄が無い（仕様どおり）', !('AI加工者' in after) && !('AI加工日時' in after));
   check('早期納品がチェックできる', after['早期納品'] === '有');
 
-  // チェックを外すと入力者欄もクリアされる
+  // チェックを外すと入力者欄・日時欄もクリアされる
   ctx.apiSetInternalFlag(t, 'VIE-501', 'フォトブリッジ登録', false);
   const after2 = ctx.apiGetReservationDetail(t, 'VIE-501').detail;
   check('チェックを外すと未に戻る', !after2['フォトブリッジ登録']);
   check('チェックを外すと入力者欄もクリアされる', !after2['フォトブリッジ登録者']);
+  check('チェックを外すと日時欄もクリアされる', !after2['フォトブリッジ登録日時']);
 
   // 支店側からは存在しない扱い（値が返らない・操作もできない）
   const vie = ctx.apiLogin('VIE','vp');
@@ -1446,9 +1453,22 @@ section('27. 日本側専用の社内進行管理欄（フォトブリッジ登�
   check('支店側のレスポンスにAI加工が含まれない', !('AI加工' in branchDetail));
   check('支店側のレスポンスにデータアップロードが含まれない', !('データアップロード' in branchDetail));
   check('支店側のレスポンスに早期納品が含まれない', !('早期納品' in branchDetail));
+  check('支店側のレスポンスにフォトブリッジ登録日時も含まれない', !('フォトブリッジ登録日時' in branchDetail));
+  check('支店側のレスポンスにデータアップロード日時も含まれない', !('データアップロード日時' in branchDetail));
   let branchErr = null;
   try { ctx.apiSetInternalFlag(vie.session.token, 'VIE-501', 'AI加工', true); } catch (e) { branchErr = e.message; }
   check('支店側は社内進行管理欄を操作できない', branchErr !== null, String(branchErr));
+
+  // 参考：既存の「変更履歴」（STS等のステータス変更履歴）も日時（時刻まで）が入る
+  ctx.apiCommitChanges(t, 'VIE-501', { 'STS JP': 'OK' }, '');
+  const fieldHist = ctx.apiGetFieldHistory(t, 'VIE-501', 'STS JP');
+  check('ステータス変更履歴には日時（時刻まで）が入る',
+        fieldHist.length > 0 && /^\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}$/.test(fieldHist[0].datetime),
+        JSON.stringify(fieldHist[0]));
+  const tlAfterSts = ctx.apiGetCaseTimeline(t, 'VIE-501');
+  check('案件タイムラインのステータス変更にも日時が入る',
+        tlAfterSts.items.some(it => it.type === 'status' && /^\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}$/.test(it.datetime)),
+        JSON.stringify(tlAfterSts.items.slice(0, 2)));
 
   // 通常の3択（メッセージ・変更通知）には一切乗らない＝支店に見える履歴・メールに混ざらない
   ctx.apiSetInternalFlag(t, 'VIE-501', 'データアップロード', true);

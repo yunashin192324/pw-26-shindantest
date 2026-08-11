@@ -717,7 +717,7 @@
           <input type="checkbox" data-internal-flag="フォトブリッジ登録" ${d['フォトブリッジ登録'] === '済' ? 'checked' : ''}>
           フォトブリッジ登録（${d['フォトブリッジ登録'] === '済' ? '済' : '未'}）
         </label>
-        <p class="hint-text" style="margin:0 0 10px 26px;">${d['フォトブリッジ登録者'] ? `登録者: ${escapeHtml(d['フォトブリッジ登録者'])}` : ''}</p>
+        <p class="hint-text" style="margin:0 0 10px 26px;">${d['フォトブリッジ登録者'] ? `登録者: ${escapeHtml(d['フォトブリッジ登録者'])}${d['フォトブリッジ登録日時'] ? `（${escapeHtml(d['フォトブリッジ登録日時'])}）` : ''}` : ''}</p>
 
         <label class="checkbox-label">
           <input type="checkbox" data-internal-flag="AI加工" ${d['AI加工'] === '有' ? 'checked' : ''}>
@@ -728,13 +728,13 @@
           <input type="checkbox" data-internal-flag="データアップロード" ${d['データアップロード'] === '済' ? 'checked' : ''}>
           データアップロード（${d['データアップロード'] === '済' ? '済' : '未'}）
         </label>
-        <p class="hint-text" style="margin:0 0 10px 26px;">${d['データアップロード者'] ? `アップロード者: ${escapeHtml(d['データアップロード者'])}` : ''}</p>
+        <p class="hint-text" style="margin:0 0 10px 26px;">${d['データアップロード者'] ? `アップロード者: ${escapeHtml(d['データアップロード者'])}${d['データアップロード日時'] ? `（${escapeHtml(d['データアップロード日時'])}）` : ''}` : ''}</p>
 
         <label class="checkbox-label">
           <input type="checkbox" data-internal-flag="早期納品" ${d['早期納品'] === '有' ? 'checked' : ''}>
           早期納品（${d['早期納品'] === '有' ? '有' : '無'}）
         </label>
-        <p class="hint-text" style="margin-top:8px;">チェックすると即座に保存されます（フォトブリッジ登録・データアップロードは担当者名が自動で記録されます）。</p>
+        <p class="hint-text" style="margin-top:8px;">チェックすると即座に保存されます（フォトブリッジ登録・データアップロードは担当者名と日時が自動で記録されます）。</p>
       </div>`;
     })();
 

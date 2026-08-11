@@ -331,6 +331,9 @@ function visiblePane(document) {
         activeTab(document) === 'reservation', `実際: ${activeTab(document)}`);
   check('入力者名が画面に表示される（自動反映）',
         document.querySelector('[data-tab-pane="reservation"]').textContent.includes('登録者:'));
+  check('チェック日時も画面に表示される（自動反映）',
+        /登録者:.*\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}/.test(document.querySelector('[data-tab-pane="reservation"]').textContent),
+        document.querySelector('[data-tab-pane="reservation"]').textContent.match(/登録者:[^\n]*/)?.[0]);
 
   // 支店（ローマ）としてログインし直すと、この欄自体が画面に存在しないこと
   document.getElementById('nav-logout').click();

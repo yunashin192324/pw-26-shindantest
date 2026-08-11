@@ -126,12 +126,14 @@ const COL_REMARKS = '備考';
 const COL_MEMO = '共有メモ';
 // ★機能追加：日本の手配課側のみが見る社内進行管理欄（支店には一切表示しない）。
 // フォトブリッジ登録・データアップロードは「済／未」のチェックボックスで、チェックした
-// 担当者名を自動で記録する（ベースは未＝未チェック）。AI加工・早期納品は有無だけのチェックボックス。
+// 担当者名と日時を自動で記録する（ベースは未＝未チェック）。AI加工・早期納品は有無だけのチェックボックス。
 const COL_PHOTOBRIDGE = 'フォトブリッジ登録';
-const COL_PHOTOBRIDGE_BY = 'フォトブリッジ登録者';   // 自動反映。画面から直接編集はさせない
+const COL_PHOTOBRIDGE_BY = 'フォトブリッジ登録者';     // 自動反映。画面から直接編集はさせない
+const COL_PHOTOBRIDGE_AT = 'フォトブリッジ登録日時';   // 自動反映。画面から直接編集はさせない
 const COL_AI_EDIT = 'AI加工';
 const COL_DATA_UPLOAD = 'データアップロード';
-const COL_DATA_UPLOAD_BY = 'データアップロード者';   // 自動反映。画面から直接編集はさせない
+const COL_DATA_UPLOAD_BY = 'データアップロード者';     // 自動反映。画面から直接編集はさせない
+const COL_DATA_UPLOAD_AT = 'データアップロード日時';   // 自動反映。画面から直接編集はさせない
 const COL_EARLY_DELIVERY = '早期納品';
 const COL_LAST_UPDATED = '最終更新日';
 const COL_DRIVE_URL = 'DriveフォルダURL';
@@ -155,7 +157,8 @@ const RESERVATION_HEADERS = (() => {
     COL_AREA, COL_BILLING_REGION, COL_JP_SHOP, COL_INVOICE_NO, COL_SHOP,
     COL_DAY_STAFF, COL_HAIR_MAKEUP, COL_PHOTOGRAPHER, COL_ASSISTANT, COL_PICKUP_TIME, COL_LOCAL_MEMO,
     COL_REMARKS, COL_MEMO,
-    COL_PHOTOBRIDGE, COL_PHOTOBRIDGE_BY, COL_AI_EDIT, COL_DATA_UPLOAD, COL_DATA_UPLOAD_BY, COL_EARLY_DELIVERY,
+    COL_PHOTOBRIDGE, COL_PHOTOBRIDGE_BY, COL_PHOTOBRIDGE_AT, COL_AI_EDIT,
+    COL_DATA_UPLOAD, COL_DATA_UPLOAD_BY, COL_DATA_UPLOAD_AT, COL_EARLY_DELIVERY,
     COL_LAST_UPDATED, COL_DRIVE_URL,
     COL_UNREAD_JP, COL_UNREAD_BRANCH
   ];
@@ -170,14 +173,16 @@ const RESERVATION_HEADERS = (() => {
 // 理由：これらの項目を通常フローに乗せると、「変更＋メッセージ」を選んだ際の要約行や
 // 通知メールに項目名・変更内容が入ってしまい、支店から見える履歴に漏れてしまうため。
 const JP_INTERNAL_FIELDS = [
-  COL_PHOTOBRIDGE, COL_PHOTOBRIDGE_BY, COL_AI_EDIT, COL_DATA_UPLOAD, COL_DATA_UPLOAD_BY, COL_EARLY_DELIVERY
+  COL_PHOTOBRIDGE, COL_PHOTOBRIDGE_BY, COL_PHOTOBRIDGE_AT, COL_AI_EDIT,
+  COL_DATA_UPLOAD, COL_DATA_UPLOAD_BY, COL_DATA_UPLOAD_AT, COL_EARLY_DELIVERY
 ];
-// フィールドごとの仕様：doneValue=チェック時に保存する値／byField=担当者名を自動記録する相方の列（無ければnull）
+// フィールドごとの仕様：doneValue=チェック時に保存する値／byField=担当者名を自動記録する相方の列／
+// atField=チェックした日時を自動記録する相方の列（どちらも無ければnull）
 const INTERNAL_FLAG_SPECS = {
-  [COL_PHOTOBRIDGE]: { doneValue: '済', byField: COL_PHOTOBRIDGE_BY },
-  [COL_DATA_UPLOAD]: { doneValue: '済', byField: COL_DATA_UPLOAD_BY },
-  [COL_AI_EDIT]: { doneValue: '有', byField: null },
-  [COL_EARLY_DELIVERY]: { doneValue: '有', byField: null }
+  [COL_PHOTOBRIDGE]: { doneValue: '済', byField: COL_PHOTOBRIDGE_BY, atField: COL_PHOTOBRIDGE_AT },
+  [COL_DATA_UPLOAD]: { doneValue: '済', byField: COL_DATA_UPLOAD_BY, atField: COL_DATA_UPLOAD_AT },
+  [COL_AI_EDIT]: { doneValue: '有', byField: null, atField: null },
+  [COL_EARLY_DELIVERY]: { doneValue: '有', byField: null, atField: null }
 };
 
 // ★要件：既存予約の中の項目は「その場で自動保存」ではなく、まとめて
@@ -192,6 +197,8 @@ const COMMITTABLE_FIELDS = RESERVATION_HEADERS.filter(h => ![
 // 日付として保存すべきフィールド（<input type="date">で受け渡しし、実Dateとして保存する）
 // checkAlerts/archivePastReservations/sortReservationSheet_ は撮影日FIXがDate型であることを前提にしている
 const DATE_FIELDS = [COL_CONFIRMED_DATE, COL_CEREMONY_DATE];
+// 日付だけでなく時刻まで表示したいフィールド（社内進行管理欄のチェック日時など）
+const DATETIME_FIELDS = [COL_PHOTOBRIDGE_AT, COL_DATA_UPLOAD_AT];
 
 // --- 支店マスタの列定義 ---
 const BM_COL_CODE = '支店コード';
@@ -1390,6 +1397,9 @@ function apiGetReservationDetail(token, kanriNo) {
     // ★機能追加：日本側専用の社内進行管理欄（フォトブリッジ登録・AI加工など）は、
     // 支店ロールのレスポンスには一切含めない（画面を作り込むだけでなく、値そのものを渡さない）
     if (session.role !== JP_ROLE && JP_INTERNAL_FIELDS.includes(h)) return;
+    // ★要件：フォトブリッジ登録・データアップロードのチェック日時は「日付」ではなく
+    // 「日時（時刻まで）」を見せたいため、他の日付欄（撮影日FIX等）と別扱いにする
+    if (DATETIME_FIELDS.includes(h)) { detail[h] = formatDateTime_(rowData[i]); return; }
     detail[h] = DATE_FIELDS.includes(h) ? formatDateForInput_(rowData[i]) : formatMaybeDate_(rowData[i]);
   });
   const meta = branchMetaMap_()[getV(COL_BRANCH_CODE)] || {};
@@ -1697,6 +1707,11 @@ function apiSetInternalFlag(token, kanriNo, field, checked) {
       // ベースは未（未チェック）。チェックを入れた瞬間の担当者名を自動反映し、外したら空に戻す
       sheet.getRange(rowIndex, colIndexOrThrow_(headers, spec.byField))
         .setValue(checked ? senderLabel_(session) : '');
+    }
+    if (spec.atField) {
+      // ★要件：担当者名だけでなく、チェックした日時も自動で記録する
+      sheet.getRange(rowIndex, colIndexOrThrow_(headers, spec.atField))
+        .setValue(checked ? new Date() : '');
     }
     sheet.getRange(rowIndex, colIndexOrThrow_(headers, COL_LAST_UPDATED)).setValue(new Date());
   } finally {
