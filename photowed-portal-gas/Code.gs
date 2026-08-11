@@ -124,6 +124,15 @@ const COL_PICKUP_TIME = '配車時間';
 const COL_LOCAL_MEMO = 'メモ（現地用）';
 const COL_REMARKS = '備考';
 const COL_MEMO = '共有メモ';
+// ★機能追加：日本の手配課側のみが見る社内進行管理欄（支店には一切表示しない）。
+// フォトブリッジ登録・データアップロードは「済／未」のチェックボックスで、チェックした
+// 担当者名を自動で記録する（ベースは未＝未チェック）。AI加工・早期納品は有無だけのチェックボックス。
+const COL_PHOTOBRIDGE = 'フォトブリッジ登録';
+const COL_PHOTOBRIDGE_BY = 'フォトブリッジ登録者';   // 自動反映。画面から直接編集はさせない
+const COL_AI_EDIT = 'AI加工';
+const COL_DATA_UPLOAD = 'データアップロード';
+const COL_DATA_UPLOAD_BY = 'データアップロード者';   // 自動反映。画面から直接編集はさせない
+const COL_EARLY_DELIVERY = '早期納品';
 const COL_LAST_UPDATED = '最終更新日';
 const COL_DRIVE_URL = 'DriveフォルダURL';
 // ★性能：相手側からの未読メッセージ・変更があるか（＝「要対応」）を予約一覧側に保持する。
@@ -145,7 +154,9 @@ const RESERVATION_HEADERS = (() => {
     COL_GROOM_NAME, COL_BRIDE_NAME, COL_CONSENT, COL_PLAN, COL_SALE_NAME, COL_LOCATION, COL_PREP, COL_HOTEL,
     COL_AREA, COL_BILLING_REGION, COL_JP_SHOP, COL_INVOICE_NO, COL_SHOP,
     COL_DAY_STAFF, COL_HAIR_MAKEUP, COL_PHOTOGRAPHER, COL_ASSISTANT, COL_PICKUP_TIME, COL_LOCAL_MEMO,
-    COL_REMARKS, COL_MEMO, COL_LAST_UPDATED, COL_DRIVE_URL,
+    COL_REMARKS, COL_MEMO,
+    COL_PHOTOBRIDGE, COL_PHOTOBRIDGE_BY, COL_AI_EDIT, COL_DATA_UPLOAD, COL_DATA_UPLOAD_BY, COL_EARLY_DELIVERY,
+    COL_LAST_UPDATED, COL_DRIVE_URL,
     COL_UNREAD_JP, COL_UNREAD_BRANCH
   ];
   for (let n = 1; n <= OPTION_COUNT; n++) {
@@ -154,13 +165,28 @@ const RESERVATION_HEADERS = (() => {
   return base;
 })();
 
+// ★機能追加：日本の手配課側のみが見る社内進行管理欄。専用API（apiSetInternalFlag）で
+// 扱い、通常の3択（保存のみ／メッセージのみ／変更＋メッセージ）には一切乗せない。
+// 理由：これらの項目を通常フローに乗せると、「変更＋メッセージ」を選んだ際の要約行や
+// 通知メールに項目名・変更内容が入ってしまい、支店から見える履歴に漏れてしまうため。
+const JP_INTERNAL_FIELDS = [
+  COL_PHOTOBRIDGE, COL_PHOTOBRIDGE_BY, COL_AI_EDIT, COL_DATA_UPLOAD, COL_DATA_UPLOAD_BY, COL_EARLY_DELIVERY
+];
+// フィールドごとの仕様：doneValue=チェック時に保存する値／byField=担当者名を自動記録する相方の列（無ければnull）
+const INTERNAL_FLAG_SPECS = {
+  [COL_PHOTOBRIDGE]: { doneValue: '済', byField: COL_PHOTOBRIDGE_BY },
+  [COL_DATA_UPLOAD]: { doneValue: '済', byField: COL_DATA_UPLOAD_BY },
+  [COL_AI_EDIT]: { doneValue: '有', byField: null },
+  [COL_EARLY_DELIVERY]: { doneValue: '有', byField: null }
+};
+
 // ★要件：既存予約の中の項目は「その場で自動保存」ではなく、まとめて
 // （a）保存のみ（通知しない）／（b）メッセージのみ送信／（c）変更内容＋メッセージを送信
 // のいずれかを選んで確定する。COMMITTABLE_FIELDS はその対象となる全フィールド
-// （システム列・DriveフォルダURLは専用フローがあるため除く）。
+// （システム列・DriveフォルダURL・JP内部進行管理欄は専用フローがあるため除く）。
 const COMMITTABLE_FIELDS = RESERVATION_HEADERS.filter(h => ![
   COL_BRANCH_CODE, COL_KANRI_NO, COL_LAST_UPDATED, COL_DRIVE_URL,
-  COL_UNREAD_JP, COL_UNREAD_BRANCH
+  COL_UNREAD_JP, COL_UNREAD_BRANCH, ...JP_INTERNAL_FIELDS
 ].includes(h));
 
 // 日付として保存すべきフィールド（<input type="date">で受け渡しし、実Dateとして保存する）
@@ -1361,6 +1387,9 @@ function apiGetReservationDetail(token, kanriNo) {
   const getV = (name) => rowData[headers.indexOf(name)];
   const detail = {};
   headers.forEach((h, i) => {
+    // ★機能追加：日本側専用の社内進行管理欄（フォトブリッジ登録・AI加工など）は、
+    // 支店ロールのレスポンスには一切含めない（画面を作り込むだけでなく、値そのものを渡さない）
+    if (session.role !== JP_ROLE && JP_INTERNAL_FIELDS.includes(h)) return;
     detail[h] = DATE_FIELDS.includes(h) ? formatDateForInput_(rowData[i]) : formatMaybeDate_(rowData[i]);
   });
   const meta = branchMetaMap_()[getV(COL_BRANCH_CODE)] || {};
@@ -1638,6 +1667,38 @@ function apiSetDriveUrl(token, kanriNo, url) {
     appendHistory_(headers, freshRow, senderLabel_(session), `[DriveフォルダURL更新]\n${trimmed}`, session.role);
     markUnreadForCounterpart_(sheet, headers, rowIndex, session.role);
     sendDirectionalMail_(headers, freshRow, 'BOTH', session, trimmed, 'DriveフォルダURL');
+  } finally {
+    lock.releaseLock();
+  }
+  return { ok: true };
+}
+
+// =====================================================
+// ⑨-2 日本側専用の社内進行管理欄（フォトブリッジ登録・AI加工・データアップロード・早期納品）
+// =====================================================
+// ★要件：日本の手配課側のみが見る項目。通常の3択（保存のみ／メッセージのみ／変更＋メッセージ）には
+// 乗せず、専用APIで直接トグルする（支店に見える履歴・通知メールへは絶対に混ざらない設計にするため）。
+// フォトブリッジ登録・データアップロードはチェックした担当者名を自動で記録する。
+function apiSetInternalFlag(token, kanriNo, field, checked) {
+  const session = requireSession_(token);
+  assertJp_(session); // ★この関数自体が「日本側専用」の境界。支店ロールはここで必ず拒否される
+  const spec = INTERNAL_FLAG_SPECS[String(field)];
+  if (!spec) throw new Error(`「${field}」は社内進行管理欄として扱えません。`);
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
+  try {
+    const { sheet, headers, rowIndex, rowData } = findReservationRow_(kanriNo);
+    if (rowIndex === -1) throw new Error('対象の予約が見つかりません。');
+    assertRowVisible_(session, headers, rowData);
+
+    sheet.getRange(rowIndex, colIndexOrThrow_(headers, field)).setValue(checked ? spec.doneValue : '');
+    if (spec.byField) {
+      // ベースは未（未チェック）。チェックを入れた瞬間の担当者名を自動反映し、外したら空に戻す
+      sheet.getRange(rowIndex, colIndexOrThrow_(headers, spec.byField))
+        .setValue(checked ? senderLabel_(session) : '');
+    }
+    sheet.getRange(rowIndex, colIndexOrThrow_(headers, COL_LAST_UPDATED)).setValue(new Date());
   } finally {
     lock.releaseLock();
   }

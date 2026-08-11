@@ -706,6 +706,38 @@
         <p class="hint-text" style="margin-top:8px;">「メッセージ」タブに戻らずここから直接確定できます（メッセージ欄に入力済みの内容があれば一緒に送られます）。</p>
       </div>`;
 
+    // ★機能：日本の手配課側のみが見る社内進行管理欄。支店には一切表示しない（値もサーバーから届かない）。
+    // 通常の3択（保存のみ／メッセージ／変更＋メッセージ）とは別に、チェックした瞬間に単独で保存する
+    // （支店に見える履歴・通知メールへ絶対に混ざらないようにするため）。
+    const internalFlagsHtml = session.role !== 'JP' ? '' : (() => {
+      return `
+      <div class="section-card jp-only">
+        <h3>社内進行管理（日本側のみ表示）</h3>
+        <label class="checkbox-label">
+          <input type="checkbox" data-internal-flag="フォトブリッジ登録" ${d['フォトブリッジ登録'] === '済' ? 'checked' : ''}>
+          フォトブリッジ登録（${d['フォトブリッジ登録'] === '済' ? '済' : '未'}）
+        </label>
+        <p class="hint-text" style="margin:0 0 10px 26px;">${d['フォトブリッジ登録者'] ? `登録者: ${escapeHtml(d['フォトブリッジ登録者'])}` : ''}</p>
+
+        <label class="checkbox-label">
+          <input type="checkbox" data-internal-flag="AI加工" ${d['AI加工'] === '有' ? 'checked' : ''}>
+          AI加工（${d['AI加工'] === '有' ? '有' : '無'}）
+        </label>
+
+        <label class="checkbox-label" style="margin-top:10px;">
+          <input type="checkbox" data-internal-flag="データアップロード" ${d['データアップロード'] === '済' ? 'checked' : ''}>
+          データアップロード（${d['データアップロード'] === '済' ? '済' : '未'}）
+        </label>
+        <p class="hint-text" style="margin:0 0 10px 26px;">${d['データアップロード者'] ? `アップロード者: ${escapeHtml(d['データアップロード者'])}` : ''}</p>
+
+        <label class="checkbox-label">
+          <input type="checkbox" data-internal-flag="早期納品" ${d['早期納品'] === '有' ? 'checked' : ''}>
+          早期納品（${d['早期納品'] === '有' ? '有' : '無'}）
+        </label>
+        <p class="hint-text" style="margin-top:8px;">チェックすると即座に保存されます（フォトブリッジ登録・データアップロードは担当者名が自動で記録されます）。</p>
+      </div>`;
+    })();
+
     const tabBarHtml = `
       <div class="tab-bar">
         ${DETAIL_TABS.map(t => `<button type="button" class="tab-btn ${detailActiveTab === t.key ? 'active' : ''}" data-tab="${t.key}">${t.label}</button>`).join('')}
@@ -797,6 +829,7 @@
           <textarea data-pending="共有メモ" rows="4" placeholder="社内向けの自由メモ">${escapeHtml(d['共有メモ'])}</textarea>
         </div>
 
+        ${internalFlagsHtml}
         ${quickActionsHtml}
       </div>`;
 
@@ -926,6 +959,10 @@
     // ★機能：予約内容・現地記入欄タブ下部の複製ボタン（メッセージタブへ戻らず確定できるように）
     c.querySelectorAll('.quick-commit-btn').forEach(btn => btn.addEventListener('click', commitChangesWithMessage));
     c.querySelectorAll('.quick-save-btn').forEach(btn => btn.addEventListener('click', saveQuiet));
+    // ★機能：社内進行管理欄（日本側のみ）。チェックした瞬間に単独で保存する（3択の対象外）
+    c.querySelectorAll('[data-internal-flag]').forEach(el => {
+      el.addEventListener('change', () => setInternalFlag(el.dataset.internalFlag, el.checked));
+    });
     $('drive-url-submit').addEventListener('click', submitDriveUrl);
     c.querySelectorAll('input[data-hid]').forEach(el => {
       el.addEventListener('change', () => toggleHistoryCheck(el.dataset.hid, el.checked));
@@ -1080,6 +1117,15 @@
     try {
       await gsRun('apiSetDriveUrl', session.token, currentKanri, val);
       showToast('DriveフォルダURLを通知しました');
+    } catch (e) { handleAuthError(e); }
+  }
+
+  // ★機能：社内進行管理欄（日本側のみ）。3択（保存のみ／メッセージ／変更＋メッセージ）とは別に、
+  // チェックした瞬間に単独で保存する（支店に見える履歴・通知メールへ絶対に混ざらないようにするため）
+  async function setInternalFlag(field, checked) {
+    try {
+      await gsRun('apiSetInternalFlag', session.token, currentKanri, field, checked);
+      openDetail(currentKanri, true); // 開いているタブのまま留まる
     } catch (e) { handleAuthError(e); }
   }
 

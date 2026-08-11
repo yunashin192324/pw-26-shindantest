@@ -301,6 +301,58 @@ function visiblePane(document) {
   check('メッセージタブからの保存も従来どおり動く',
         ctx.apiGetReservationDetail(tok, 'R-001').detail['共有メモ'] === 'あとで確定するメモ');
 
+  // ---------------------------------------------------------------
+  section('U10. 社内進行管理欄（日本側のみ）');
+  // ここまでは支店（ローマ）としてログインしていたため、まず日本側（関東手配課）でログインし直す
+  document.getElementById('nav-logout').click();
+  await settle();
+  await login(dom, 'KANTO', 'CHANGE-ME-KANTO');
+  document.querySelector('#reservation-list .res-card').click();
+  await settle();
+  [...document.querySelectorAll('.tab-btn')].find(b => b.dataset.tab === 'reservation').click();
+  await settle();
+  const pbCheckbox = document.querySelector('[data-internal-flag="フォトブリッジ登録"]');
+  check('日本側にはフォトブリッジ登録のチェックボックスが出る', !!pbCheckbox);
+  check('ベースは未チェック', pbCheckbox.checked === false);
+  const aiCheckbox = document.querySelector('[data-internal-flag="AI加工"]');
+  const dataCheckbox = document.querySelector('[data-internal-flag="データアップロード"]');
+  const earlyCheckbox = document.querySelector('[data-internal-flag="早期納品"]');
+  check('AI加工・データアップロード・早期納品も表示される',
+        !!aiCheckbox && !!dataCheckbox && !!earlyCheckbox);
+
+  const jpTok = ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+  pbCheckbox.click();
+  await settle();
+  check('チェックすると即座に保存される（画面を離れずに反映）',
+        ctx.apiGetReservationDetail(jpTok, 'R-001').detail['フォトブリッジ登録'] === '済');
+  const pbAfter = document.querySelector('[data-internal-flag="フォトブリッジ登録"]');
+  check('チェック状態が再描画後も維持される', pbAfter.checked === true);
+  check('保存後も予約内容タブに留まる（他の操作と同じ挙動）',
+        activeTab(document) === 'reservation', `実際: ${activeTab(document)}`);
+  check('入力者名が画面に表示される（自動反映）',
+        document.querySelector('[data-tab-pane="reservation"]').textContent.includes('登録者:'));
+
+  // 支店（ローマ）としてログインし直すと、この欄自体が画面に存在しないこと
+  document.getElementById('nav-logout').click();
+  await settle();
+  await login(dom, 'ROW', 'CHANGE-ME-ROW');
+  document.querySelector('#reservation-list .res-card').click();
+  await settle();
+  [...document.querySelectorAll('.tab-btn')].find(b => b.dataset.tab === 'reservation').click();
+  await settle();
+  check('支店側の画面には社内進行管理欄のチェックボックスが一切出ない',
+        !document.querySelector('[data-internal-flag]'));
+  // ★注意：document.body.innerHTML には<script>タグの中身（JSソースコード自体）も含まれるため、
+  // フィールド名の文字列リテラルが常に含まれてしまう。実際に利用者へ表示されるのは
+  // #detail-content の中身だけなので、そこだけを見て「値として漏れていないか」を確認する
+  const branchDetailHtml = document.getElementById('detail-content').innerHTML;
+  check('支店側の画面のどこにも「フォトブリッジ」の文字列が出ない',
+        !branchDetailHtml.includes('フォトブリッジ'));
+  check('支店側の画面のどこにも「データアップロード」の文字列が出ない',
+        !branchDetailHtml.includes('データアップロード'));
+  check('支店側の画面のどこにも「AI加工」の文字列が出ない',
+        !branchDetailHtml.includes('AI加工'));
+
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error('テストが異常終了しました:', e); process.exit(1); });

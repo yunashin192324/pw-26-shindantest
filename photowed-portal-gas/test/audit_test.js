@@ -85,6 +85,7 @@ const API_SPECS = [
   { fn: 'apiCheckStaffConflict',   scope: 'any', args: (t) => [t, 'VIE-001', '2026-09-05', { 'カメラマン': 'X' }], target: 'VIE', reads: true },
   { fn: 'apiSaveFieldsQuiet',      scope: 'any', args: (t) => [t, 'VIE-001', { 'ホテル': '侵入' }], target: 'VIE', writes: true },
   { fn: 'apiCommitChanges',        scope: 'any', args: (t) => [t, 'VIE-001', { 'ホテル': '侵入' }, ''], target: 'VIE', writes: true },
+  { fn: 'apiSetInternalFlag',      scope: 'jp',  args: (t) => [t, 'VIE-001', 'フォトブリッジ登録', true], target: 'VIE', writes: true },
   { fn: 'apiSetDriveUrl',          scope: 'any', args: (t) => [t, 'VIE-001', 'https://drive.google.com/x'], target: 'VIE', writes: true },
   // 支店ロールでは指定した支店コードは無視され、必ず自支店の案件になる（下で個別に検証する）
   { fn: 'apiCreateReservation',    scope: 'any', args: (t) => [t, 'VIE', '新郎名: A\n新婦名: B'], writes: true },

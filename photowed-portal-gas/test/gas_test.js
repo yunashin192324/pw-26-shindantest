@@ -1405,5 +1405,68 @@ section('26. 画面から保存した日付が「日付」として後続処理�
 }
 
 // ---------------------------------------------------------------
+section('27. 日本側専用の社内進行管理欄（フォトブリッジ登録・AI加工・データアップロード・早期納品）');
+{
+  const ctx = featureFixture();
+  addCase(ctx, '予約一覧', { '支店コード':'VIE','管理番号':'VIE-501','管轄':'関東','新郎名（ローマ字）':'A' });
+  const jp = ctx.apiLogin('KANTO','pw');
+  const t = jp.session.token;
+
+  const before = ctx.apiGetReservationDetail(t, 'VIE-501').detail;
+  check('ベースは未チェック（フォトブリッジ登録）', !before['フォトブリッジ登録']);
+  check('ベースは未チェック（データアップロード）', !before['データアップロード']);
+  check('ベースは未チェック（AI加工）', !before['AI加工']);
+  check('ベースは未チェック（早期納品）', !before['早期納品']);
+
+  ctx.apiSetInternalFlag(t, 'VIE-501', 'フォトブリッジ登録', true);
+  ctx.apiSetInternalFlag(t, 'VIE-501', 'AI加工', true);
+  ctx.apiSetInternalFlag(t, 'VIE-501', 'データアップロード', true);
+  ctx.apiSetInternalFlag(t, 'VIE-501', '早期納品', true);
+  const after = ctx.apiGetReservationDetail(t, 'VIE-501').detail;
+  check('フォトブリッジ登録がチェックできる', after['フォトブリッジ登録'] === '済');
+  check('入力者が自動反映される（フォトブリッジ登録者）', after['フォトブリッジ登録者'].includes('tanaka'),
+        String(after['フォトブリッジ登録者']));
+  check('データアップロードがチェックできる', after['データアップロード'] === '済');
+  check('入力者が自動反映される（データアップロード者）', after['データアップロード者'].includes('tanaka'),
+        String(after['データアップロード者']));
+  check('AI加工がチェックできる', after['AI加工'] === '有');
+  check('AI加工には入力者欄が無い（仕様どおり）', !('AI加工者' in after));
+  check('早期納品がチェックできる', after['早期納品'] === '有');
+
+  // チェックを外すと入力者欄もクリアされる
+  ctx.apiSetInternalFlag(t, 'VIE-501', 'フォトブリッジ登録', false);
+  const after2 = ctx.apiGetReservationDetail(t, 'VIE-501').detail;
+  check('チェックを外すと未に戻る', !after2['フォトブリッジ登録']);
+  check('チェックを外すと入力者欄もクリアされる', !after2['フォトブリッジ登録者']);
+
+  // 支店側からは存在しない扱い（値が返らない・操作もできない）
+  const vie = ctx.apiLogin('VIE','vp');
+  const branchDetail = ctx.apiGetReservationDetail(vie.session.token, 'VIE-501').detail;
+  check('支店側のレスポンスにフォトブリッジ登録が含まれない', !('フォトブリッジ登録' in branchDetail));
+  check('支店側のレスポンスにAI加工が含まれない', !('AI加工' in branchDetail));
+  check('支店側のレスポンスにデータアップロードが含まれない', !('データアップロード' in branchDetail));
+  check('支店側のレスポンスに早期納品が含まれない', !('早期納品' in branchDetail));
+  let branchErr = null;
+  try { ctx.apiSetInternalFlag(vie.session.token, 'VIE-501', 'AI加工', true); } catch (e) { branchErr = e.message; }
+  check('支店側は社内進行管理欄を操作できない', branchErr !== null, String(branchErr));
+
+  // 通常の3択（メッセージ・変更通知）には一切乗らない＝支店に見える履歴・メールに混ざらない
+  ctx.apiSetInternalFlag(t, 'VIE-501', 'データアップロード', true);
+  let leakErr = null;
+  try { ctx.apiCommitChanges(t, 'VIE-501', { 'データアップロード': '済' }, ''); } catch (e) { leakErr = e.message; }
+  check('通常の3択フローでは社内進行管理欄を変更できない（履歴・メールへの混入防止）',
+        leakErr !== null, String(leakErr));
+  check('社内進行管理欄のチェックは共有の履歴に出ない',
+        !ctx.apiGetCaseTimeline(t, 'VIE-501').items.some(it => String(it.field || '').includes('フォトブリッジ')));
+  check('社内進行管理欄のチェックはメールを送らない（直前の操作でメールが増えていない）',
+        !ctx.__mail.some(m => /フォトブリッジ|データアップロード/.test(m.subj + m.body)));
+
+  // 未知のフィールド名は拒否する
+  let badField = null;
+  try { ctx.apiSetInternalFlag(t, 'VIE-501', 'STS JP', true); } catch (e) { badField = e.message; }
+  check('社内進行管理欄以外は apiSetInternalFlag で変更できない', badField !== null, String(badField));
+}
+
+// ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
 process.exit(fail === 0 ? 0 : 1);
