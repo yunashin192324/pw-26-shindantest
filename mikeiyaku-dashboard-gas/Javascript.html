@@ -37,6 +37,7 @@ document.addEventListener('DOMContentLoaded', function () {
   initDataManagerEvents();
   initModalEvents();
   initCsvImportEvents();
+  initAdminEvents();
   loadAllData();
 });
 
@@ -140,6 +141,10 @@ function initTabs() {
       // ダッシュボードタブに戻ってきたタイミングでグラフを再生成してレイアウト崩れを防ぐ
       if (btn.dataset.tab === 'dashboard') {
         renderDashboardTab();
+      }
+      // 店舗・スタッフ管理タブは開くたびに最新状態を取得する（頻繁に変わる画面ではないため）
+      if (btn.dataset.tab === 'admin') {
+        loadAdminData();
       }
     });
   });
@@ -1014,5 +1019,351 @@ function renderCsvImportResult(res) {
     }).join(' / ') + '</p>';
   }
   box.innerHTML = html;
+}
+
+// ============================================================================
+// 店舗・スタッフ管理
+// ============================================================================
+let shopMasterCache = [];
+let staffMasterCache = [];
+
+function initAdminEvents() {
+  document.querySelectorAll('[data-close-modal]').forEach(function (btn) {
+    btn.addEventListener('click', function () { closeAdminModal(btn.dataset.closeModal); });
+  });
+
+  document.getElementById('btn-open-shop-modal').addEventListener('click', function () { openShopModal('add'); });
+  document.getElementById('shop-form').addEventListener('submit', onSubmitShopForm);
+
+  document.getElementById('btn-open-staff-modal').addEventListener('click', function () { openStaffModal('add'); });
+  document.getElementById('staff-form').addEventListener('submit', onSubmitStaffForm);
+}
+
+function openAdminModal(id) {
+  document.getElementById(id).classList.remove('hidden');
+  document.getElementById(id).classList.add('flex');
+}
+function closeAdminModal(id) {
+  document.getElementById(id).classList.add('hidden');
+  document.getElementById(id).classList.remove('flex');
+}
+
+function loadAdminData() {
+  showLoading(true);
+  let doneCount = 0;
+  const onEachDone = function () {
+    doneCount++;
+    if (doneCount >= 2) showLoading(false);
+  };
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (res && res.success) {
+        shopMasterCache = res.shops;
+        renderShopMasterTable();
+        populateStaffShopSelect();
+      } else {
+        showToast('店舗マスタの取得に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+      onEachDone();
+    })
+    .withFailureHandler(function (err) {
+      showToast('通信エラー（getShopMasterList）: ' + err.message, 'error');
+      onEachDone();
+    })
+    .getShopMasterList();
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (res && res.success) {
+        staffMasterCache = res.staff;
+        renderStaffMasterTable(res.unregistered || []);
+      } else {
+        showToast('スタッフマスタの取得に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+      onEachDone();
+    })
+    .withFailureHandler(function (err) {
+      showToast('通信エラー（getStaffMasterList）: ' + err.message, 'error');
+      onEachDone();
+    })
+    .getStaffMasterList();
+}
+
+// ---- 店舗管理 ---------------------------------------------------------------
+function renderShopMasterTable() {
+  const tbody = document.getElementById('shop-master-tbody');
+  tbody.innerHTML = shopMasterCache.map(function (shop) {
+    const statusBadge = shop.active
+      ? '<span class="inline-block px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold">有効</span>'
+      : '<span class="inline-block px-2 py-0.5 rounded-full bg-slate-200 text-slate-500 text-xs font-semibold">無効</span>';
+
+    return '<tr class="hover:bg-blue-50' + (shop.active ? '' : ' opacity-60') + '">' +
+      '<td class="px-3 py-2">' + escapeHtml(shop.code) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(shop.name) + '</td>' +
+      '<td class="px-3 py-2 text-center">' + statusBadge + '</td>' +
+      '<td class="px-3 py-2 text-right whitespace-nowrap">' +
+        '<button class="text-blue-600 hover:underline text-xs mr-2" data-shop-edit="' + escapeHtml(shop.code) + '">編集</button>' +
+        '<button class="text-amber-600 hover:underline text-xs mr-2" data-shop-toggle="' + escapeHtml(shop.code) + '">' + (shop.active ? '無効化' : '有効化') + '</button>' +
+        '<button class="text-red-600 hover:underline text-xs" data-shop-delete="' + escapeHtml(shop.code) + '">削除</button>' +
+      '</td></tr>';
+  }).join('');
+
+  tbody.querySelectorAll('[data-shop-edit]').forEach(function (btn) {
+    btn.addEventListener('click', function () { openShopModal('edit', btn.dataset.shopEdit); });
+  });
+  tbody.querySelectorAll('[data-shop-toggle]').forEach(function (btn) {
+    btn.addEventListener('click', function () { onToggleShopActive(btn.dataset.shopToggle); });
+  });
+  tbody.querySelectorAll('[data-shop-delete]').forEach(function (btn) {
+    btn.addEventListener('click', function () { onDeleteShop(btn.dataset.shopDelete); });
+  });
+}
+
+function openShopModal(mode, code) {
+  document.getElementById('shop-form-mode').value = mode;
+  const codeInput = document.getElementById('shop-form-code');
+  const nameInput = document.getElementById('shop-form-name');
+
+  if (mode === 'edit') {
+    const shop = shopMasterCache.find(function (s) { return s.code === code; });
+    document.getElementById('shop-modal-title').textContent = '店舗名を編集';
+    codeInput.value = shop ? shop.code : '';
+    codeInput.disabled = true;
+    nameInput.value = shop ? shop.name : '';
+  } else {
+    document.getElementById('shop-modal-title').textContent = '店舗を追加';
+    codeInput.value = '';
+    codeInput.disabled = false;
+    nameInput.value = '';
+  }
+  openAdminModal('shop-modal');
+}
+
+function onSubmitShopForm(ev) {
+  ev.preventDefault();
+  const mode = document.getElementById('shop-form-mode').value;
+  const code = document.getElementById('shop-form-code').value.trim();
+  const name = document.getElementById('shop-form-name').value.trim();
+  if (!code || !name) { showToast('店番と店舗名は必須です。', 'error'); return; }
+
+  showLoading(true);
+  const runner = google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false);
+      if (res && res.success) {
+        showToast(mode === 'edit' ? '店舗名を更新しました。' : '店舗を追加しました。', 'success');
+        closeAdminModal('shop-modal');
+        loadAdminData();
+        loadAllData(); // 店舗一覧が変わるため、ダッシュボード側のマスタ・データも再取得する
+      } else {
+        showToast('保存に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false);
+      showToast('通信エラー: ' + err.message, 'error');
+    });
+
+  if (mode === 'edit') {
+    runner.renameShopMaster(code, name);
+  } else {
+    runner.addShopMaster(code, name);
+  }
+}
+
+function onToggleShopActive(code) {
+  const shop = shopMasterCache.find(function (s) { return s.code === code; });
+  if (!shop) return;
+  const nextActive = !shop.active;
+
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false);
+      if (res && res.success) {
+        showToast('店舗を' + (nextActive ? '有効化' : '無効化') + 'しました。', 'success');
+        loadAdminData();
+        loadAllData();
+      } else {
+        showToast('更新に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false);
+      showToast('通信エラー: ' + err.message, 'error');
+    })
+    .setShopActive(code, nextActive);
+}
+
+function onDeleteShop(code) {
+  const shop = shopMasterCache.find(function (s) { return s.code === code; });
+  const label = shop ? shop.name : code;
+  if (!window.confirm('店舗「' + label + '」を削除します。よろしいですか？\n（データが残っている店舗は削除できません）')) return;
+
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false);
+      if (res && res.success) {
+        showToast('店舗を削除しました。', 'success');
+        loadAdminData();
+        loadAllData();
+      } else {
+        showToast('削除に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false);
+      showToast('通信エラー: ' + err.message, 'error');
+    })
+    .deleteShopMaster(code);
+}
+
+// ---- スタッフ管理 -------------------------------------------------------------
+function populateStaffShopSelect() {
+  const select = document.getElementById('staff-form-shop');
+  select.innerHTML = '<option value="">選択してください</option>' +
+    shopMasterCache.filter(function (s) { return s.active; }).map(function (s) {
+      return '<option value="' + escapeHtml(s.code) + '">' + escapeHtml(s.name) + '</option>';
+    }).join('');
+}
+
+function renderStaffMasterTable(unregistered) {
+  const tbody = document.getElementById('staff-master-tbody');
+  tbody.innerHTML = staffMasterCache.map(function (s) {
+    return '<tr class="hover:bg-blue-50">' +
+      '<td class="px-3 py-2">' + escapeHtml(s.officeName) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(s.employeeNo) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(s.employeeName) + '</td>' +
+      '<td class="px-3 py-2 text-right whitespace-nowrap">' +
+        '<button class="text-blue-600 hover:underline text-xs mr-2" data-staff-edit="' + s.rowIndex + '">編集</button>' +
+        '<button class="text-red-600 hover:underline text-xs" data-staff-delete="' + s.rowIndex + '">削除</button>' +
+      '</td></tr>';
+  }).join('');
+
+  tbody.querySelectorAll('[data-staff-edit]').forEach(function (btn) {
+    btn.addEventListener('click', function () { openStaffModal('edit', Number(btn.dataset.staffEdit)); });
+  });
+  tbody.querySelectorAll('[data-staff-delete]').forEach(function (btn) {
+    btn.addEventListener('click', function () { onDeleteStaff(Number(btn.dataset.staffDelete)); });
+  });
+
+  const box = document.getElementById('staff-unregistered-box');
+  const list = document.getElementById('staff-unregistered-list');
+  if (!unregistered || unregistered.length === 0) {
+    box.classList.add('hidden');
+    list.innerHTML = '';
+    return;
+  }
+  box.classList.remove('hidden');
+  list.innerHTML = unregistered.map(function (u) {
+    return '<div class="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 text-xs">' +
+      '<span>' + escapeHtml(u.officeName) + ' ・ ' + escapeHtml(u.employeeName) + (u.employeeNo ? '（' + escapeHtml(u.employeeNo) + '）' : '') + '</span>' +
+      '<button class="text-blue-600 hover:underline font-semibold" data-quick-add="' + escapeHtml(JSON.stringify(u)) + '">マスタに登録</button>' +
+      '</div>';
+  }).join('');
+  list.querySelectorAll('[data-quick-add]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      const u = JSON.parse(btn.dataset.quickAdd);
+      quickAddStaff(u.officeCode, u.employeeNo, u.employeeName);
+    });
+  });
+}
+
+function openStaffModal(mode, rowIndex) {
+  document.getElementById('staff-form-rowindex').value = mode === 'edit' ? rowIndex : '';
+  const shopSelect = document.getElementById('staff-form-shop');
+  const empNoInput = document.getElementById('staff-form-empno');
+  const empNameInput = document.getElementById('staff-form-empname');
+
+  if (mode === 'edit') {
+    const staff = staffMasterCache.find(function (s) { return s.rowIndex === rowIndex; });
+    document.getElementById('staff-modal-title').textContent = 'スタッフを編集';
+    shopSelect.value = staff ? staff.officeCode : '';
+    empNoInput.value = staff ? staff.employeeNo : '';
+    empNameInput.value = staff ? staff.employeeName : '';
+  } else {
+    document.getElementById('staff-modal-title').textContent = 'スタッフを追加';
+    shopSelect.value = '';
+    empNoInput.value = '';
+    empNameInput.value = '';
+  }
+  openAdminModal('staff-modal');
+}
+
+function onSubmitStaffForm(ev) {
+  ev.preventDefault();
+  const rowIndexRaw = document.getElementById('staff-form-rowindex').value;
+  const officeCode = document.getElementById('staff-form-shop').value;
+  const empNo = document.getElementById('staff-form-empno').value.trim();
+  const empName = document.getElementById('staff-form-empname').value.trim();
+  if (!officeCode || !empName) { showToast('所属店舗と社員名は必須です。', 'error'); return; }
+
+  showLoading(true);
+  const runner = google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false);
+      if (res && res.success) {
+        showToast(rowIndexRaw ? 'スタッフ情報を更新しました。' : 'スタッフを追加しました。', 'success');
+        closeAdminModal('staff-modal');
+        loadAdminData();
+        loadAllData(); // フィルタ等の社員一覧を最新化
+      } else {
+        showToast('保存に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false);
+      showToast('通信エラー: ' + err.message, 'error');
+    });
+
+  if (rowIndexRaw) {
+    runner.updateStaffMaster(Number(rowIndexRaw), officeCode, empNo, empName);
+  } else {
+    runner.addStaffMaster(officeCode, empNo, empName);
+  }
+}
+
+function onDeleteStaff(rowIndex) {
+  const staff = staffMasterCache.find(function (s) { return s.rowIndex === rowIndex; });
+  const label = staff ? staff.employeeName : rowIndex;
+  if (!window.confirm('スタッフ「' + label + '」をマスタから削除します。よろしいですか？\n（過去の実績データは削除されません）')) return;
+
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false);
+      if (res && res.success) {
+        showToast('スタッフを削除しました。', 'success');
+        loadAdminData();
+      } else {
+        showToast('削除に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false);
+      showToast('通信エラー: ' + err.message, 'error');
+    })
+    .deleteStaffMaster(rowIndex);
+}
+
+function quickAddStaff(officeCode, employeeNo, employeeName) {
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false);
+      if (res && res.success) {
+        showToast('スタッフをマスタに登録しました。', 'success');
+        loadAdminData();
+      } else {
+        showToast('登録に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false);
+      showToast('通信エラー: ' + err.message, 'error');
+    })
+    .addStaffMaster(officeCode, employeeNo, employeeName);
 }
 </script>

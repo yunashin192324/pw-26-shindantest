@@ -84,6 +84,9 @@
         <button data-tab="data" class="tab-btn flex-1 md:flex-none px-4 py-2 rounded-lg text-sm font-semibold bg-slate-100 text-slate-600">
           <i class="fa-solid fa-table-list"></i> 未成約相談データ管理
         </button>
+        <button data-tab="admin" class="tab-btn flex-1 md:flex-none px-4 py-2 rounded-lg text-sm font-semibold bg-slate-100 text-slate-600">
+          <i class="fa-solid fa-gear"></i> 店舗・スタッフ管理
+        </button>
       </div>
     </div>
   </header>
@@ -265,6 +268,63 @@
         </div>
       </div>
     </section>
+
+    <!-- ============ タブ4: 店舗・スタッフ管理 ============ -->
+    <section id="tab-panel-admin" class="tab-panel hidden space-y-5">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <!-- 店舗管理 -->
+        <div class="bg-white rounded-xl shadow p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-base font-bold text-slate-800"><i class="fa-solid fa-store text-blue-600"></i> 店舗管理</h2>
+            <button id="btn-open-shop-modal" class="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-1.5 text-xs font-semibold shadow">
+              <i class="fa-solid fa-circle-plus"></i> 店舗を追加
+            </button>
+          </div>
+          <div class="overflow-auto max-h-[50vh]">
+            <table class="min-w-full text-sm">
+              <thead class="bg-slate-100 text-slate-600 sticky top-0 z-10">
+                <tr>
+                  <th class="px-3 py-2 text-left">店番</th>
+                  <th class="px-3 py-2 text-left">店舗名</th>
+                  <th class="px-3 py-2 text-center">状態</th>
+                  <th class="px-3 py-2 text-right">操作</th>
+                </tr>
+              </thead>
+              <tbody id="shop-master-tbody" class="divide-y divide-slate-100"></tbody>
+            </table>
+          </div>
+          <p class="text-xs text-slate-400 mt-2">店番はあとから変更できません。削除はデータが0件の店舗のみ可能です（データがある店舗は「無効化」をご利用ください）。</p>
+        </div>
+
+        <!-- スタッフ管理 -->
+        <div class="bg-white rounded-xl shadow p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-base font-bold text-slate-800"><i class="fa-solid fa-user text-blue-600"></i> スタッフ管理</h2>
+            <button id="btn-open-staff-modal" class="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-1.5 text-xs font-semibold shadow">
+              <i class="fa-solid fa-circle-plus"></i> スタッフを追加
+            </button>
+          </div>
+          <div class="overflow-auto max-h-[50vh]">
+            <table class="min-w-full text-sm">
+              <thead class="bg-slate-100 text-slate-600 sticky top-0 z-10">
+                <tr>
+                  <th class="px-3 py-2 text-left">所属店舗</th>
+                  <th class="px-3 py-2 text-left">社員番号</th>
+                  <th class="px-3 py-2 text-left">社員名</th>
+                  <th class="px-3 py-2 text-right">操作</th>
+                </tr>
+              </thead>
+              <tbody id="staff-master-tbody" class="divide-y divide-slate-100"></tbody>
+            </table>
+          </div>
+
+          <div id="staff-unregistered-box" class="mt-4 hidden">
+            <p class="text-xs font-semibold text-amber-600 mb-2"><i class="fa-solid fa-circle-exclamation"></i> 実績はあるがマスタ未登録のスタッフ</p>
+            <div id="staff-unregistered-list" class="space-y-1"></div>
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
 
   <!-- ============ 新規相談登録モーダル ============ -->
@@ -398,6 +458,64 @@
           </button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- ============ 店舗 追加・編集モーダル ============ -->
+  <div id="shop-modal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+        <h3 id="shop-modal-title" class="font-bold text-lg text-blue-800"><i class="fa-solid fa-store"></i> 店舗を追加</h3>
+        <button type="button" data-close-modal="shop-modal" class="text-slate-400 hover:text-slate-700 text-xl">&times;</button>
+      </div>
+      <form id="shop-form" class="p-6 space-y-4">
+        <input type="hidden" id="shop-form-mode" value="add">
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">店番 <span class="text-red-500">*</span></label>
+          <input type="text" id="shop-form-code" required class="w-full border border-slate-300 rounded-lg text-sm p-2">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">店舗名 <span class="text-red-500">*</span></label>
+          <input type="text" id="shop-form-name" required class="w-full border border-slate-300 rounded-lg text-sm p-2">
+        </div>
+        <div class="flex justify-end gap-3 pt-2 border-t border-slate-100">
+          <button type="button" data-close-modal="shop-modal" class="px-4 py-2 rounded-lg text-sm font-semibold text-slate-500 hover:bg-slate-100">キャンセル</button>
+          <button type="submit" class="px-5 py-2 rounded-lg text-sm font-semibold bg-blue-700 hover:bg-blue-800 text-white shadow">
+            <i class="fa-solid fa-floppy-disk"></i> 保存する
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============ スタッフ 追加・編集モーダル ============ -->
+  <div id="staff-modal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+        <h3 id="staff-modal-title" class="font-bold text-lg text-blue-800"><i class="fa-solid fa-user"></i> スタッフを追加</h3>
+        <button type="button" data-close-modal="staff-modal" class="text-slate-400 hover:text-slate-700 text-xl">&times;</button>
+      </div>
+      <form id="staff-form" class="p-6 space-y-4">
+        <input type="hidden" id="staff-form-rowindex" value="">
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">所属店舗 <span class="text-red-500">*</span></label>
+          <select id="staff-form-shop" required class="w-full border border-slate-300 rounded-lg text-sm p-2"></select>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">社員番号</label>
+          <input type="text" id="staff-form-empno" class="w-full border border-slate-300 rounded-lg text-sm p-2">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">社員名 <span class="text-red-500">*</span></label>
+          <input type="text" id="staff-form-empname" required class="w-full border border-slate-300 rounded-lg text-sm p-2">
+        </div>
+        <div class="flex justify-end gap-3 pt-2 border-t border-slate-100">
+          <button type="button" data-close-modal="staff-modal" class="px-4 py-2 rounded-lg text-sm font-semibold text-slate-500 hover:bg-slate-100">キャンセル</button>
+          <button type="submit" class="px-5 py-2 rounded-lg text-sm font-semibold bg-blue-700 hover:bg-blue-800 text-white shadow">
+            <i class="fa-solid fa-floppy-disk"></i> 保存する
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 

@@ -7,6 +7,7 @@
  *   ① 店舗別データシート（10枚・27列共通ヘッダー）
  *   ② 店舗別サマリシート（46期累計＋月別12ブロックの集計テンプレート）
  *   ③ 個人別サマリ(上期) / 個人別サマリ(下期) シート（2段ヘッダーのダミーレイアウト）
+ *   ④ 店舗マスタ / スタッフマスタ シート（Webアプリの「店舗・スタッフ管理」タブが読み書きする台帳）
  * を自動構築します。既存のシートは上書きせず、スキップされます。
  * ============================================================================
  */
@@ -82,6 +83,8 @@ function setupAllSheets() {
   createShopSummarySheet_(ss, SHOP_LIST, MONTH_CODES_FULL);
   createEmployeeSummarySheet_(ss, '個人別サマリ(上期)', FIRST_HALF_CODES);
   createEmployeeSummarySheet_(ss, '個人別サマリ(下期)', SECOND_HALF_CODES);
+  createShopMasterSheet_(ss, SHOP_LIST);
+  createStaffMasterSheet_(ss);
 
   SpreadsheetApp.getUi().alert('シート構築が完了しました。\n（既存シートはスキップされています）');
 }
@@ -264,6 +267,57 @@ function createEmployeeSummarySheet_(ss, sheetName, monthCodes) {
   sheet.setFrozenRows(2);
   sheet.setFrozenColumns(4);
   sheet.setColumnWidths(1, totalCols, 95);
+}
+
+/**
+ * ④-a 「店舗マスタ」シートを作成する。
+ * Webアプリの「店舗・スタッフ管理」タブが読み書きする店舗台帳（店番・店舗名・有効フラグ）。
+ * 既存10店舗を初期データとしてシードする。
+ */
+function createShopMasterSheet_(ss, shopList) {
+  const sheetName = '店舗マスタ';
+  const existing = ss.getSheetByName(sheetName);
+  if (existing) {
+    Logger.log('シート「' + sheetName + '」は既に存在するためスキップしました。');
+    return;
+  }
+
+  const sheet = ss.insertSheet(sheetName);
+  const headers = ['店番', '店舗名', '有効'];
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  sheet.getRange(1, 1, 1, headers.length)
+    .setFontWeight('bold').setBackground('#1c4587').setFontColor('#ffffff').setHorizontalAlignment('center');
+
+  const rows = shopList.map(function (shop) { return [shop.code, shop.name, true]; });
+  sheet.getRange(2, 1, rows.length, 3).setValues(rows);
+
+  sheet.setFrozenRows(1);
+  sheet.setColumnWidths(1, 3, 140);
+}
+
+/**
+ * ④-b 「スタッフマスタ」シートを作成する。
+ * Webアプリの「店舗・スタッフ管理」タブが読み書きするスタッフ台帳
+ * （営業所コード・社員番号・社員名・有効フラグ）。実績データとは独立して、
+ * 相談実績がまだ無いスタッフも事前に登録できるようにするための台帳。
+ * 初期状態では空（運用しながら画面から登録していく）。
+ */
+function createStaffMasterSheet_(ss) {
+  const sheetName = 'スタッフマスタ';
+  const existing = ss.getSheetByName(sheetName);
+  if (existing) {
+    Logger.log('シート「' + sheetName + '」は既に存在するためスキップしました。');
+    return;
+  }
+
+  const sheet = ss.insertSheet(sheetName);
+  const headers = ['営業所コード', '社員番号', '社員名', '有効'];
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  sheet.getRange(1, 1, 1, headers.length)
+    .setFontWeight('bold').setBackground('#1c4587').setFontColor('#ffffff').setHorizontalAlignment('center');
+
+  sheet.setFrozenRows(1);
+  sheet.setColumnWidths(1, 4, 140);
 }
 
 /**
