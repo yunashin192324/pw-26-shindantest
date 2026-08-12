@@ -414,13 +414,27 @@ function getAvailablePeriods() {
 }
 
 /**
+ * 指定した期（上期／下期）の開始日を "YYYYMMDD" で返す。
+ * ・上期は その期の開始暦年の11月1日（例：46期上期 → 2025-11-01）
+ * ・下期は その翌暦年の5月1日   （例：46期下期 → 2026-05-01）
+ */
+function periodStartDate_(periodNumber, half) {
+  const fiscalStartCalYear = FISCAL_BASE_START_CAL_YEAR + (periodNumber - FISCAL_BASE_PERIOD);
+  return half === 'first_half'
+    ? fiscalStartCalYear + '1101'
+    : (fiscalStartCalYear + 1) + '0501';
+}
+
+/**
  * 保存対象期間（直近2年）の開始日を "YYYYMMDD" で返す。この日付より前の対象年月日は
  * リセールリスト・個人別サマリのいずれからも対象外とする。
+ * 最古の期が下期の場合（今日が上期＝11月〜4月のとき）は、その下期の開始日である
+ * 5月1日が境界になる。ここを常に11月1日にしてしまうと、期タブに存在しない半年分の
+ * データがリセールリストにだけ残り、両画面の「直近2年」がずれてしまう。
  */
 function getRetentionCutoffDate_() {
   const oldest = getRecentPeriods_()[0];
-  const fiscalStartCalYear = FISCAL_BASE_START_CAL_YEAR + (oldest.periodNumber - FISCAL_BASE_PERIOD);
-  return fiscalStartCalYear + '1101'; // その期の開始日（11月1日）
+  return periodStartDate_(oldest.periodNumber, oldest.half);
 }
 
 /**
@@ -578,6 +592,24 @@ function getEmployeeSummary(periodKey) {
 }
 
 /**
+ * 対象の店舗シートを、現在のユーザーが閲覧・編集してよいかを検証する。
+ * 一般スタッフは自店舗のみ操作できる（管理者・マスタ管理は全店舗可）。
+ * 画面上は他店舗の行がそもそも表示されないが、google.script.run は
+ * ブラウザから直接呼び出せてしまうため、サーバー側でも必ず検証する。
+ */
+function assertShopInScope_(sheetName) {
+  const shopList = getShopList_();
+  const shop = shopList.filter(function (s) { return s.name === sheetName; })[0];
+  if (!shop) {
+    throw new Error('不正な店舗名です: ' + sheetName);
+  }
+  const ctx = getCurrentUserContext_();
+  if (!ctx.canViewAllStores && ctx.officeCode && shop.code !== ctx.officeCode) {
+    throw new Error('他店舗のデータは操作できません（自店舗のみ操作可能です）: ' + sheetName);
+  }
+}
+
+/**
  * ⑤ 新規相談登録フォームから送信されたデータを、対象店舗シートへ1行追記する。
  * @param {Object} rowObject 27列ヘッダー名をキーとするオブジェクト + sheetName（登録先店舗）
  */
@@ -586,10 +618,7 @@ function addUncontractedData(rowObject) {
     if (!rowObject || !rowObject.sheetName) {
       throw new Error('店舗名（sheetName）が指定されていません。');
     }
-    const shopList = getShopList_();
-    if (!shopList.some(function (s) { return s.name === rowObject.sheetName; })) {
-      throw new Error('不正な店舗名です: ' + rowObject.sheetName);
-    }
+    assertShopInScope_(rowObject.sheetName);
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(rowObject.sheetName);
@@ -864,10 +893,7 @@ function autoRegisterShop_(ss, officeCode) {
  */
 function updateStatus(sheetName, rowIndex, newStatus, contractPax) {
   try {
-    const shopList = getShopList_();
-    if (!shopList.some(function (s) { return s.name === sheetName; })) {
-      throw new Error('不正な店舗名です: ' + sheetName);
-    }
+    assertShopInScope_(sheetName);
 
     const rIdx = parseInt(rowIndex, 10);
     if (isNaN(rIdx) || rIdx < 2) {
@@ -934,10 +960,7 @@ const EDITABLE_COLUMNS = ['成約PAX', 'ACT日', 'ACT内容', '次回ACT・進�
  */
 function updateCellValue(sheetName, rowIndex, columnName, value) {
   try {
-    const shopList = getShopList_();
-    if (!shopList.some(function (s) { return s.name === sheetName; })) {
-      throw new Error('不正な店舗名です: ' + sheetName);
-    }
+    assertShopInScope_(sheetName);
 
     const rIdx = parseInt(rowIndex, 10);
     if (isNaN(rIdx) || rIdx < 2) {
