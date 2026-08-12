@@ -169,9 +169,14 @@ function getShopList_() {
   return rows.filter(function (s) { return s.active; }).map(function (s) { return { code: s.code, name: s.name }; });
 }
 
+// ---- 権限レベル（スタッフマスタ「権限レベル」列に格納する文字列） -----------
+const ROLE_GENERAL = '一般';       // 自店舗のみ閲覧
+const ROLE_MANAGER = '管理者';     // 所長・チーフ：全店舗を閲覧（CSV・マスタ編集は不可）
+const ROLE_MASTER = 'マスタ管理';  // 全店舗閲覧＋CSVインポート＋店舗・スタッフマスタの編集/追加
+
 /**
  * 「スタッフマスタ」シートの全行を返す。
- * 列構成: 営業所コード / 社員番号 / 社員名 / Googleアカウント / 管理者権限 / 有効
+ * 列構成: 営業所コード / 社員番号 / 社員名 / Googleアカウント / 権限レベル / 有効
  */
 function getStaffMasterRows_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -188,7 +193,7 @@ function getStaffMasterRows_() {
     const empNo = row[1];
     const empName = String(row[2] || '').trim();
     const googleAccount = String(row[3] || '').trim();
-    const isManager = row[4] === true || String(row[4]).trim().toUpperCase() === 'TRUE';
+    const role = normalizeRole_(row[4]);
     if (!empName && (empNo === '' || empNo === null)) return;
     list.push({
       rowIndex: i + 2,
@@ -196,7 +201,7 @@ function getStaffMasterRows_() {
       employeeNo: empNo,
       employeeName: empName,
       googleAccount: googleAccount,
-      isManager: isManager,
+      role: role,
       active: row[5] !== false
     });
   });
@@ -204,13 +209,27 @@ function getStaffMasterRows_() {
 }
 
 /**
+ * スタッフマスタ「権限レベル」列の値を、既知の3値（一般／管理者／マスタ管理）に正規化する。
+ * 空欄・不明な値は「一般」として扱う。旧バージョンのTRUE/FALSE（管理者権限チェックボックス）が
+ * 残っている場合は、後方互換のためTRUE→管理者として読み替える。
+ */
+function normalizeRole_(rawValue) {
+  const v = String(rawValue === undefined || rawValue === null ? '' : rawValue).trim();
+  if (v === ROLE_MASTER) return ROLE_MASTER;
+  if (v === ROLE_MANAGER) return ROLE_MANAGER;
+  if (v.toUpperCase() === 'TRUE') return ROLE_MANAGER; // 旧仕様（管理者権限チェックボックス）からの後方互換
+  return ROLE_GENERAL;
+}
+
+/**
  * ログイン中ユーザーの権限コンテキストを解決する。
  * Session.getActiveUser().getEmail() で取得したメールアドレスを「スタッフマスタ」の
- * Googleアカウント列と照合し、一致すればその人の店舗・管理者権限を返す。
- * ・管理者権限（所長・チーフ）＝ isManager: true → 全店舗のデータを閲覧可能
- * ・一般スタッフ（isManager: false）→ officeCode で自店舗のデータのみに絞り込む
+ * Googleアカウント列と照合し、一致すればその人の権限レベル・所属店舗を返す。
+ * ・マスタ管理　　　　＝ 全店舗閲覧＋CSVインポート＋店舗/スタッフマスタの編集・追加
+ * ・管理者（所長・チーフ）＝ 全店舗閲覧のみ（CSV・マスタ編集は不可）
+ * ・一般　　　　　　　＝ officeCode で自店舗のデータのみに絞り込む
  * ・メール取得不可、またはスタッフマスタに未登録（導入初期の未登録ユーザー等）の場合は
- *   フェイルオープン（＝管理者相当として全店舗を表示）とする。締め出しを避けるため。
+ *   フェイルオープン（＝マスタ管理相当）とする。締め出しを避けるため。
  */
 function getCurrentUserContext_() {
   let email = '';
@@ -229,26 +248,33 @@ function getCurrentUserContext_() {
     }) || null;
   }
 
+  let role, officeCode, officeName, employeeName, identified;
   if (matched) {
     const shopList = getShopList_();
     const shop = shopList.find(function (s) { return s.code === matched.officeCode; });
-    return {
-      email: email,
-      identified: true,
-      isManager: !!matched.isManager,
-      officeCode: matched.officeCode,
-      officeName: shop ? shop.name : matched.officeCode,
-      employeeName: matched.employeeName
-    };
+    role = matched.role;
+    officeCode = matched.officeCode;
+    officeName = shop ? shop.name : matched.officeCode;
+    employeeName = matched.employeeName;
+    identified = true;
+  } else {
+    role = ROLE_MASTER; // フェイルオープン：未登録ユーザーの締め出しを避けるため最上位権限扱い
+    officeCode = null;
+    officeName = null;
+    employeeName = null;
+    identified = false;
   }
 
   return {
     email: email,
-    identified: false,
-    isManager: true,
-    officeCode: null,
-    officeName: null,
-    employeeName: null
+    identified: identified,
+    role: role,
+    officeCode: officeCode,
+    officeName: officeName,
+    employeeName: employeeName,
+    canViewAllStores: role === ROLE_MANAGER || role === ROLE_MASTER,
+    canImportCsv: role === ROLE_MASTER,
+    canManageMaster: role === ROLE_MASTER
   };
 }
 
@@ -270,7 +296,7 @@ function getMetaMasters() {
   try {
     const ctx = getCurrentUserContext_();
     let shopList = getShopList_();
-    if (!ctx.isManager && ctx.officeCode) {
+    if (!ctx.canViewAllStores && ctx.officeCode) {
       shopList = shopList.filter(function (s) { return s.code === ctx.officeCode; });
     }
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -280,7 +306,7 @@ function getMetaMasters() {
     // （一般スタッフは自店舗のスタッフのみに絞り込む）
     getStaffMasterRows_().forEach(function (s) {
       if (!s.active) return;
-      if (!ctx.isManager && ctx.officeCode && s.officeCode !== ctx.officeCode) return;
+      if (!ctx.canViewAllStores && ctx.officeCode && s.officeCode !== ctx.officeCode) return;
       const key = String(s.employeeNo) + '_' + String(s.employeeName);
       employeeMap[key] = { employeeNo: s.employeeNo, employeeName: s.employeeName, officeCode: s.officeCode };
     });
@@ -325,20 +351,94 @@ function getMetaMasters() {
   }
 }
 
+// ============================================================================
+// 会計期ヘルパー（46期は2025年11月始まり・10月終わり。以降は1期ずつスライド）
+// ============================================================================
+const FISCAL_BASE_PERIOD = 46;
+const FISCAL_BASE_START_CAL_YEAR = 2025; // 46期の開始暦年（2025年11月に開始）
+const RETENTION_PERIOD_COUNT = 4;        // 保存対象：直近4半期（＝過去2年）
+
+/**
+ * "YYYYMMDD" 形式の対象年月日から、その日付が属する会計期・上期/下期を算出する。
+ * @return {{periodNumber:number, half:'first_half'|'second_half'}|null}
+ */
+function getFiscalPeriodInfo_(yyyymmdd) {
+  const s = String(yyyymmdd || '');
+  if (s.length < 6) return null;
+  const y = parseInt(s.substring(0, 4), 10);
+  const m = parseInt(s.substring(4, 6), 10);
+  if (!y || !m) return null;
+  const fiscalStartCalYear = (m >= 11) ? y : y - 1;
+  const periodNumber = FISCAL_BASE_PERIOD + (fiscalStartCalYear - FISCAL_BASE_START_CAL_YEAR);
+  const half = (m >= 11 || m <= 4) ? 'first_half' : 'second_half';
+  return { periodNumber: periodNumber, half: half };
+}
+
+function periodKey_(periodNumber, half) {
+  return periodNumber + '_' + half;
+}
+function periodLabel_(periodNumber, half) {
+  return periodNumber + '期' + (half === 'first_half' ? '上期' : '下期');
+}
+
+/**
+ * 指定日時点（省略時は現在時刻）を基準に、直近 RETENTION_PERIOD_COUNT 半期分
+ * （＝過去2年）の期を古い順に並べて返す。個人別サマリのタブ一覧・データ保存期間の
+ * 両方で同じ「直近2年」の定義を共有するための唯一の基準関数。
+ */
+function getRecentPeriods_(referenceDate) {
+  const now = referenceDate || new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth() + 1;
+  let p = FISCAL_BASE_PERIOD + (((m >= 11) ? y : y - 1) - FISCAL_BASE_START_CAL_YEAR);
+  let h = (m >= 11 || m <= 4) ? 'first_half' : 'second_half';
+
+  const seq = [];
+  for (let i = 0; i < RETENTION_PERIOD_COUNT; i++) {
+    seq.push({ periodNumber: p, half: h, key: periodKey_(p, h), label: periodLabel_(p, h) });
+    if (h === 'second_half') { h = 'first_half'; } else { h = 'second_half'; p = p - 1; }
+  }
+  seq.reverse(); // 古い→新しい順
+  return seq;
+}
+
+/**
+ * フロントエンドから呼び出す、個人別サマリのタブに表示する直近2年分の期一覧API。
+ */
+function getAvailablePeriods() {
+  try {
+    return { success: true, periods: getRecentPeriods_() };
+  } catch (err) {
+    return { success: false, error: err.message + '\n' + err.stack };
+  }
+}
+
+/**
+ * 保存対象期間（直近2年）の開始日を "YYYYMMDD" で返す。この日付より前の対象年月日は
+ * リセールリスト・個人別サマリのいずれからも対象外とする。
+ */
+function getRetentionCutoffDate_() {
+  const oldest = getRecentPeriods_()[0];
+  const fiscalStartCalYear = FISCAL_BASE_START_CAL_YEAR + (oldest.periodNumber - FISCAL_BASE_PERIOD);
+  return fiscalStartCalYear + '1101'; // その期の開始日（11月1日）
+}
+
 /**
  * ③ 全店舗シートの生データを統合・クリーニングして返す（ダッシュボードの主データソース）。
+ * 直近2年（＝保存期間）より前の対象年月日の行は除外する。
  */
 function getDashboardData() {
   try {
     const ctx = getCurrentUserContext_();
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     let shopList = getShopList_();
-    if (!ctx.isManager && ctx.officeCode) {
+    if (!ctx.canViewAllStores && ctx.officeCode) {
       shopList = shopList.filter(function (s) { return s.code === ctx.officeCode; });
     }
     const result = [];
     const errorTokens = ['#NUM!', '#REF!', '#N/A', '#VALUE!', '#DIV/0!', '#NAME?', '#NULL!', '#ERROR!'];
     const lastCol = HEADERS_27.length;
+    const cutoffDate = getRetentionCutoffDate_();
 
     shopList.forEach(function (shop) {
       const sheet = ss.getSheetByName(shop.name);
@@ -359,6 +459,10 @@ function getDashboardData() {
           return typeof cell === 'string' && errorTokens.indexOf(cell) !== -1;
         });
         if (hasError) continue;
+
+        // 保存期間（直近2年）より前のデータは対象外
+        const targetDate = String(row[4] || ''); // 対象年月日（5列目）
+        if (targetDate && targetDate < cutoffDate) continue;
 
         const obj = {};
         for (let c = 0; c < lastCol; c++) {
@@ -393,22 +497,21 @@ function accumulateEmployeeStats_(bucket, resale, sts, pax) {
 }
 
 /**
- * ④ 個人別サマリ（上期/下期）を店舗データ＋スタッフマスタから動的に集計して返す。
- * （「個人別サマリ(上期)」「個人別サマリ(下期)」シートはヘッダーのみのテンプレートで
- *   実データ行を持たないため、Webアプリ側では読み取らずその場で再計算する）
- * @param {string} period "first_half"（上期）または "second_half"（下期）
+ * ④ 個人別サマリを店舗データ＋スタッフマスタから動的に集計して返す。
+ * 表示可能な期は直近2年（4半期）に限定される（getAvailablePeriods() 参照）。
+ * 各社員の集計値は選択された期（1半期）のみを対象にしたシンプルな値（月次内訳なし）で返す。
+ * @param {string} periodKey "46_first_half" のような "<期番号>_first_half|second_half" 形式
  */
-function getEmployeeSummary(period) {
+function getEmployeeSummary(periodKey) {
   try {
     const ctx = getCurrentUserContext_();
-    // 46期は11月始まり・10月終わり：上期＝11月～4月、下期＝5月～10月
-    const monthCodes = period === 'second_half'
-      ? ['05', '06', '07', '08', '09', '10']
-      : ['11', '12', '01', '02', '03', '04'];
-    const blockLabels = ['累計'].concat(monthCodes.map(monthLabel_));
+
+    const recentPeriods = getRecentPeriods_();
+    const target = recentPeriods.filter(function (p) { return p.key === periodKey; })[0]
+      || recentPeriods[recentPeriods.length - 1]; // 不正・未指定の場合は最新期にフォールバック
 
     let shopList = getShopList_();
-    if (!ctx.isManager && ctx.officeCode) {
+    if (!ctx.canViewAllStores && ctx.officeCode) {
       shopList = shopList.filter(function (s) { return s.code === ctx.officeCode; });
     }
     const shopNameByCode = {};
@@ -420,16 +523,12 @@ function getEmployeeSummary(period) {
     const ensureEmployee = function (officeCode, empNo, empName) {
       const key = String(empNo) + '_' + String(empName);
       if (!employeesByKey[key]) {
-        const periods = {};
-        blockLabels.forEach(function (label) {
-          periods[label] = { '未成約数': 0, 'リセール数': 0, 'リセール中': 0, '成約件数': 0, 'PAX数': 0 };
-        });
         employeesByKey[key] = {
           officeCode: officeCode,
           officeName: shopNameByCode[officeCode] || officeCode,
           employeeNo: empNo,
           employeeName: empName,
-          periods: periods
+          stats: { '未成約数': 0, 'リセール数': 0, 'リセール中': 0, '成約件数': 0, 'PAX数': 0 }
         };
         order.push(key);
       }
@@ -440,7 +539,7 @@ function getEmployeeSummary(period) {
     // （一般スタッフは自店舗のスタッフのみに絞り込む）
     getStaffMasterRows_().forEach(function (s) {
       if (!s.active) return;
-      if (!ctx.isManager && ctx.officeCode && s.officeCode !== ctx.officeCode) return;
+      if (!ctx.canViewAllStores && ctx.officeCode && s.officeCode !== ctx.officeCode) return;
       ensureEmployee(s.officeCode, s.employeeNo, s.employeeName);
     });
 
@@ -457,27 +556,22 @@ function getEmployeeSummary(period) {
         const resale = row[0];
         const sts = row[1];
         const pax = row[2];
-        const monthCode = String(row[3] || '');
+        const targetDate = String(row[4] || ''); // 対象年月日（実際の年を含む。会計期の判定に使用）
         const empNo = row[6];
         const empName = row[7];
         if ((empNo === '' || empNo === null) && (empName === '' || empName === null)) return;
 
+        const info = getFiscalPeriodInfo_(targetDate);
+        if (!info || info.periodNumber !== target.periodNumber || info.half !== target.half) return;
+
         const emp = ensureEmployee(shop.code, empNo, empName);
-
-        accumulateEmployeeStats_(emp.periods['累計'], resale, sts, pax);
-
-        if (monthCodes.indexOf(monthCode) !== -1) {
-          const monthKey = monthLabel_(monthCode);
-          if (emp.periods[monthKey]) {
-            accumulateEmployeeStats_(emp.periods[monthKey], resale, sts, pax);
-          }
-        }
+        accumulateEmployeeStats_(emp.stats, resale, sts, pax);
       });
     });
 
     const employees = order.map(function (key) { return employeesByKey[key]; });
 
-    return { success: true, blockOrder: blockLabels, employees: employees, userContext: ctx };
+    return { success: true, period: { key: target.key, label: target.label }, availablePeriods: recentPeriods, employees: employees, userContext: ctx };
   } catch (err) {
     return { success: false, error: err.message + '\n' + err.stack };
   }
@@ -531,9 +625,11 @@ function addUncontractedData(rowObject) {
 }
 
 /**
- * 営業日報から抽出したCSVを一括投入する。
+ * 営業日報から抽出したCSVを一括投入する（マスタ管理者のみ実行可能）。
  * ・CSVはメタ情報の行が先頭に含まれていても構わない（先頭セルが「対象年月日」の行をヘッダー行として自動検出）。
- * ・「営業所コード」列の値から投入先の店舗シートを判定する。
+ * ・「営業所コード」列の値から投入先の店舗シートを判定する。未登録の営業所コードは
+ *   仮の店舗名で店舗マスタへ自動登録される（店舗・スタッフの登録は基本CSVインポートから行う運用のため）。
+ * ・社員番号＋社員名の組み合わせがスタッフマスタに無い場合も、一般権限で自動登録する。
  * ・重複判定キー（対象年月日＋営業所コード＋社員番号＋都市コード＋出発年月）が完全一致する行は、
  *   シート内の既存データ・および今回の取り込みバッチ内の両方に対してスキップする。
  * ・「対象年月日」から「月」列を自動導出し、リセール／STS等の管理列は空欄（未対応）として投入する。
@@ -542,8 +638,8 @@ function addUncontractedData(rowObject) {
 function importUncontractedCsv(csvText) {
   try {
     const ctx = getCurrentUserContext_();
-    if (!ctx.isManager) {
-      throw new Error('CSVインポートは管理者権限（所長・チーフ）を持つユーザーのみ実行できます。');
+    if (!ctx.canImportCsv) {
+      throw new Error('CSVインポートはマスタ管理権限を持つユーザーのみ実行できます。');
     }
 
     if (!csvText || typeof csvText !== 'string') {
@@ -582,6 +678,17 @@ function importUncontractedCsv(csvText) {
     const officeCodeToSheetName = {};
     getShopList_().forEach(function (s) { officeCodeToSheetName[s.code] = s.name; });
 
+    // スタッフマスタの既存キー（社員番号_社員名）を先に読み込んでおく（自動登録の重複防止）
+    const staffMasterKeys = {};
+    getStaffMasterRows_().forEach(function (s) {
+      staffMasterKeys[String(s.employeeNo) + '_' + String(s.employeeName)] = true;
+    });
+    const staffMasterSheet = ss.getSheetByName(STAFF_MASTER_SHEET_NAME);
+    const newStaffRows = []; // スタッフマスタへ追記する行（[営業所コード, 社員番号, 社員名, '', '一般', true]）
+    let autoRegisteredStaffCount = 0;
+
+    const autoRegisteredShopCodes = [];
+
     const getVal = function (row, header) {
       const idx = colIndex[header];
       if (idx === undefined || idx >= row.length) return '';
@@ -591,9 +698,7 @@ function importUncontractedCsv(csvText) {
 
     const rowsBySheet = {}; // sheetName -> 27列配列の配列
     let skippedDuplicateCount = 0;
-    let skippedUnknownOfficeCount = 0;
     let skippedBlankCount = 0;
-    const unknownOfficeCodes = {};
 
     for (let r = headerRowIndex + 1; r < rows.length; r++) {
       const row = rows[r];
@@ -607,11 +712,24 @@ function importUncontractedCsv(csvText) {
         continue;
       }
 
-      const sheetName = officeCodeToSheetName[officeCode];
+      // 未登録の営業所コードは、仮の店舗名で店舗マスタへ自動登録する
+      // （店舗・スタッフの登録は基本CSVインポートから読み取る運用のため）
+      let sheetName = officeCodeToSheetName[officeCode];
       if (!sheetName) {
-        skippedUnknownOfficeCount++;
-        unknownOfficeCodes[officeCode] = true;
-        continue;
+        sheetName = autoRegisterShop_(ss, officeCode);
+        officeCodeToSheetName[officeCode] = sheetName;
+        autoRegisteredShopCodes.push(officeCode);
+      }
+
+      const empNo = getVal(row, '社員番号');
+      const empName = getVal(row, '社員名');
+      if (empName || empNo) {
+        const staffKey = String(empNo) + '_' + String(empName);
+        if (!staffMasterKeys[staffKey]) {
+          staffMasterKeys[staffKey] = true;
+          newStaffRows.push([officeCode, empNo, empName, '', ROLE_GENERAL, true]);
+          autoRegisteredStaffCount++;
+        }
       }
 
       const monthCode = targetDate.length >= 6 ? targetDate.substring(4, 6) : '';
@@ -623,8 +741,8 @@ function importUncontractedCsv(csvText) {
       newRow[3] = monthCode;                        // 月（対象年月日から自動導出）
       newRow[4] = targetDate;                       // 対象年月日
       newRow[5] = officeCode;                       // 営業所コード
-      newRow[6] = getVal(row, '社員番号');
-      newRow[7] = getVal(row, '社員名');
+      newRow[6] = empNo;
+      newRow[7] = empName;
       newRow[8] = getVal(row, '未成約理由(大)');
       newRow[9] = getVal(row, '都市コード');
       newRow[10] = getVal(row, '種別');
@@ -649,6 +767,10 @@ function importUncontractedCsv(csvText) {
       rowsBySheet[sheetName].push(newRow);
     }
 
+    if (newStaffRows.length > 0 && staffMasterSheet) {
+      staffMasterSheet.getRange(staffMasterSheet.getLastRow() + 1, 1, newStaffRows.length, 6).setValues(newStaffRows);
+    }
+
     // 重複判定キー：対象年月日＋営業所コード＋社員番号＋都市コード＋出発年月
     const buildKey = function (row) {
       return [row[4], row[5], row[6], row[9], row[11]].join('｜');
@@ -657,7 +779,6 @@ function importUncontractedCsv(csvText) {
     Object.keys(rowsBySheet).forEach(function (sheetName) {
       const sheet = ss.getSheetByName(sheetName);
       if (!sheet) {
-        skippedUnknownOfficeCount += rowsBySheet[sheetName].length;
         delete rowsBySheet[sheetName];
         return;
       }
@@ -699,14 +820,31 @@ function importUncontractedCsv(csvText) {
       success: true,
       importedCount: importedCount,
       skippedDuplicateCount: skippedDuplicateCount,
-      skippedUnknownOfficeCount: skippedUnknownOfficeCount,
       skippedBlankCount: skippedBlankCount,
-      unknownOfficeCodes: Object.keys(unknownOfficeCodes),
+      autoRegisteredShopCodes: autoRegisteredShopCodes,
+      autoRegisteredStaffCount: autoRegisteredStaffCount,
       perSheetCounts: perSheetCounts
     };
   } catch (err) {
     return { success: false, error: err.message + '\n' + err.stack };
   }
+}
+
+/**
+ * 未登録の営業所コードを、仮の店舗名で店舗マスタへ自動登録する（CSVインポート専用の内部ヘルパー）。
+ * 店番のみ分かって正式な店舗名が分からない状態のため、マスタ管理者が後から
+ * 「店舗・スタッフ管理」画面で正式名称にリネームできるよう、識別しやすい仮名称を付与する。
+ * @return {string} 作成された店舗のシート名（＝仮の店舗名）
+ */
+function autoRegisterShop_(ss, officeCode) {
+  const placeholderName = '未設定(' + officeCode + ')';
+  const masterSheet = ss.getSheetByName(SHOP_MASTER_SHEET_NAME);
+  if (masterSheet) {
+    masterSheet.appendRow([officeCode, placeholderName, true]);
+  }
+  createShopSheets_(ss, [{ code: officeCode, name: placeholderName }], HEADERS_27);
+  appendShopRowToSummary_(ss, { code: officeCode, name: placeholderName });
+  return placeholderName;
 }
 
 /**
@@ -772,12 +910,18 @@ function updateStatus(sheetName, rowIndex, newStatus, contractPax) {
   }
 }
 
+// ---- リセールリストでスタッフが編集できる列（それ以外はCSV由来の読み取り専用） ---
+// 「リセール」「STS」は専用API（updateStatus）で更新するため、ここには含めない。
+const EDITABLE_COLUMNS = ['成約PAX', 'ACT日', 'ACT内容', '次回ACT・進捗★手入力'];
+
 /**
- * データグリッドのテキストセル（成約PAX／詳細／ACT日／ACT内容／備考／予約番号 等）の
+ * データグリッドのテキストセル（成約PAX／ACT日／ACT内容／進捗メモ）の
  * ダブルクリック→インライン編集での即時同期保存に対応する汎用セル更新API。
+ * 未成約理由・都市コード・詳細等、営業日報CSVから取り込む列はここでは更新できない
+ * （EDITABLE_COLUMNS に無い列名を指定するとエラーになる）。
  * @param {string} sheetName 対象店舗シート名
  * @param {number} rowIndex シート上の物理行番号（整数）
- * @param {string} columnName HEADERS_27 に含まれる列名
+ * @param {string} columnName HEADERS_27 に含まれる列名（EDITABLE_COLUMNSのいずれかのみ）
  * @param {*} value 更新後の値
  */
 function updateCellValue(sheetName, rowIndex, columnName, value) {
@@ -790,6 +934,10 @@ function updateCellValue(sheetName, rowIndex, columnName, value) {
     const rIdx = parseInt(rowIndex, 10);
     if (isNaN(rIdx) || rIdx < 2) {
       throw new Error('不正な行番号です: ' + rowIndex);
+    }
+
+    if (EDITABLE_COLUMNS.indexOf(columnName) === -1) {
+      throw new Error('この列はスタッフによる編集ができません（CSV由来の読み取り専用列です）: ' + columnName);
     }
 
     const colIdx = HEADERS_27.indexOf(columnName);
@@ -831,10 +979,20 @@ function updateCellValue(sheetName, rowIndex, columnName, value) {
 // ============================================================================
 
 /**
- * 店舗マスタの全件（有効・無効を問わず）を返す。
+ * マスタ管理権限が無い場合はエラーを投げる（店舗・スタッフ管理系API共通のガード）。
+ */
+function assertCanManageMaster_() {
+  if (!getCurrentUserContext_().canManageMaster) {
+    throw new Error('店舗・スタッフマスタの管理はマスタ管理権限を持つユーザーのみ実行できます。');
+  }
+}
+
+/**
+ * 店舗マスタの全件（有効・無効を問わず）を返す。マスタ管理者のみ利用可能。
  */
 function getShopMasterList() {
   try {
+    assertCanManageMaster_();
     const rows = getAllShopMasterRows_();
     if (rows === null) {
       throw new Error('「店舗マスタ」シートが見つかりません。InitSheet.gs の setupAllSheets() を実行してください。');
@@ -851,6 +1009,7 @@ function getShopMasterList() {
  */
 function addShopMaster(code, name) {
   try {
+    assertCanManageMaster_();
     code = String(code || '').trim();
     name = String(name || '').trim();
     if (!code || !name) {
@@ -890,6 +1049,7 @@ function addShopMaster(code, name) {
  */
 function renameShopMaster(code, newName) {
   try {
+    assertCanManageMaster_();
     code = String(code || '').trim();
     newName = String(newName || '').trim();
     if (!code || !newName) {
@@ -936,6 +1096,7 @@ function renameShopMaster(code, newName) {
  */
 function setShopActive(code, active) {
   try {
+    assertCanManageMaster_();
     code = String(code || '').trim();
     const rows = getAllShopMasterRows_();
     if (rows === null) {
@@ -962,6 +1123,7 @@ function setShopActive(code, active) {
  */
 function deleteShopMaster(code) {
   try {
+    assertCanManageMaster_();
     code = String(code || '').trim();
     const rows = getAllShopMasterRows_();
     if (rows === null) {
@@ -1110,9 +1272,11 @@ function removeShopRowFromSummary_(ss, code) {
 
 /**
  * スタッフマスタの全件と、実績データはあるがマスタ未登録のスタッフ（登録候補）を返す。
+ * マスタ管理者のみ利用可能。
  */
 function getStaffMasterList() {
   try {
+    assertCanManageMaster_();
     const master = getStaffMasterRows_();
     const shopList = getShopList_();
     const shopNameByCode = {};
@@ -1153,7 +1317,7 @@ function getStaffMasterList() {
           employeeNo: s.employeeNo,
           employeeName: s.employeeName,
           googleAccount: s.googleAccount,
-          isManager: s.isManager,
+          role: s.role,
           active: s.active
         };
       }),
@@ -1165,18 +1329,22 @@ function getStaffMasterList() {
 }
 
 /**
- * スタッフマスタへ新しいスタッフを1件追加する（実績の有無に関わらず事前登録できる）。
- * @param {string} googleAccount ログイン権限判定に使うGoogleアカウント（gmail等）。所長・チーフは必須。
- * @param {boolean} isManager 管理者権限（所長・チーフ）フラグ。trueの場合、全店舗のデータを閲覧できる。
+ * スタッフマスタへ新しいスタッフを1件追加する（実績の有無に関わらず事前登録できる）。マスタ管理者のみ利用可能。
+ * @param {string} googleAccount ログイン権限判定に使うGoogleアカウント（gmail等）。管理者・マスタ管理は必須。
+ * @param {string} role 権限レベル（'一般' | '管理者' | 'マスタ管理'）。
  */
-function addStaffMaster(officeCode, employeeNo, employeeName, googleAccount, isManager) {
+function addStaffMaster(officeCode, employeeNo, employeeName, googleAccount, role) {
   try {
+    assertCanManageMaster_();
     officeCode = String(officeCode || '').trim();
     employeeName = String(employeeName || '').trim();
     googleAccount = String(googleAccount || '').trim();
-    isManager = !!isManager;
+    role = normalizeRole_(role);
     if (!officeCode || !employeeName) {
       throw new Error('所属店舗と社員名は必須です。');
+    }
+    if (role !== ROLE_GENERAL && !googleAccount) {
+      throw new Error('管理者・マスタ管理権限を付与する場合、Googleアカウントの登録が必須です。');
     }
 
     const shopList = getShopList_();
@@ -1197,7 +1365,7 @@ function addStaffMaster(officeCode, employeeNo, employeeName, googleAccount, isM
     if (!sheet) {
       throw new Error('「スタッフマスタ」シートが見つかりません。InitSheet.gs の setupAllSheets() を実行してください。');
     }
-    sheet.appendRow([officeCode, employeeNo === undefined || employeeNo === null ? '' : employeeNo, employeeName, googleAccount, isManager, true]);
+    sheet.appendRow([officeCode, employeeNo === undefined || employeeNo === null ? '' : employeeNo, employeeName, googleAccount, role, true]);
 
     return { success: true };
   } catch (err) {
@@ -1206,10 +1374,11 @@ function addStaffMaster(officeCode, employeeNo, employeeName, googleAccount, isM
 }
 
 /**
- * スタッフマスタの既存行を更新する（rowIndexで対象行を特定）。
+ * スタッフマスタの既存行を更新する（rowIndexで対象行を特定）。マスタ管理者のみ利用可能。
  */
-function updateStaffMaster(rowIndex, officeCode, employeeNo, employeeName, googleAccount, isManager) {
+function updateStaffMaster(rowIndex, officeCode, employeeNo, employeeName, googleAccount, role) {
   try {
+    assertCanManageMaster_();
     const rIdx = parseInt(rowIndex, 10);
     if (isNaN(rIdx) || rIdx < 2) {
       throw new Error('不正な行番号です: ' + rowIndex);
@@ -1217,9 +1386,12 @@ function updateStaffMaster(rowIndex, officeCode, employeeNo, employeeName, googl
     officeCode = String(officeCode || '').trim();
     employeeName = String(employeeName || '').trim();
     googleAccount = String(googleAccount || '').trim();
-    isManager = !!isManager;
+    role = normalizeRole_(role);
     if (!officeCode || !employeeName) {
       throw new Error('所属店舗と社員名は必須です。');
+    }
+    if (role !== ROLE_GENERAL && !googleAccount) {
+      throw new Error('管理者・マスタ管理権限を付与する場合、Googleアカウントの登録が必須です。');
     }
 
     const shopList = getShopList_();
@@ -1237,7 +1409,7 @@ function updateStaffMaster(rowIndex, officeCode, employeeNo, employeeName, googl
     if (!sheet) {
       throw new Error('「スタッフマスタ」シートが見つかりません。');
     }
-    sheet.getRange(rIdx, 1, 1, 5).setValues([[officeCode, employeeNo === undefined || employeeNo === null ? '' : employeeNo, employeeName, googleAccount, isManager]]);
+    sheet.getRange(rIdx, 1, 1, 5).setValues([[officeCode, employeeNo === undefined || employeeNo === null ? '' : employeeNo, employeeName, googleAccount, role]]);
 
     return { success: true };
   } catch (err) {
@@ -1246,10 +1418,11 @@ function updateStaffMaster(rowIndex, officeCode, employeeNo, employeeName, googl
 }
 
 /**
- * スタッフマスタの行を削除する（過去の実績データ自体は削除されない）。
+ * スタッフマスタの行を削除する（過去の実績データ自体は削除されない）。マスタ管理者のみ利用可能。
  */
 function deleteStaffMaster(rowIndex) {
   try {
+    assertCanManageMaster_();
     const rIdx = parseInt(rowIndex, 10);
     if (isNaN(rIdx) || rIdx < 2) {
       throw new Error('不正な行番号です: ' + rowIndex);

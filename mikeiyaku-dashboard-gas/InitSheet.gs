@@ -298,9 +298,12 @@ function createShopMasterSheet_(ss, shopList) {
 /**
  * ④-b 「スタッフマスタ」シートを作成する。
  * Webアプリの「店舗・スタッフ管理」タブが読み書きするスタッフ台帳
- * （営業所コード・社員番号・社員名・有効フラグ）。実績データとは独立して、
- * 相談実績がまだ無いスタッフも事前に登録できるようにするための台帳。
- * 初期状態では空（運用しながら画面から登録していく）。
+ * （営業所コード・社員番号・社員名・Googleアカウント・権限レベル・有効フラグ）。
+ * 実績データとは独立して、相談実績がまだ無いスタッフも事前に登録できるようにするための台帳。
+ * ・権限レベルは「一般」「管理者」「マスタ管理」の3段階（空欄は「一般」扱い）。
+ *   一般＝自店舗のみ閲覧／管理者（所長・チーフ）＝全店舗閲覧／マスタ管理＝全店舗閲覧＋
+ *   CSVインポート＋店舗・スタッフマスタの編集追加。
+ * 初期状態では空（基本は営業日報CSVインポート時に自動登録され、手動登録も可能）。
  */
 function createStaffMasterSheet_(ss) {
   const sheetName = 'スタッフマスタ';
@@ -311,7 +314,7 @@ function createStaffMasterSheet_(ss) {
   }
 
   const sheet = ss.insertSheet(sheetName);
-  const headers = ['営業所コード', '社員番号', '社員名', 'Googleアカウント', '管理者権限', '有効'];
+  const headers = ['営業所コード', '社員番号', '社員名', 'Googleアカウント', '権限レベル', '有効'];
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
   sheet.getRange(1, 1, 1, headers.length)
     .setFontWeight('bold').setBackground('#1c4587').setFontColor('#ffffff').setHorizontalAlignment('center');
@@ -320,6 +323,13 @@ function createStaffMasterSheet_(ss) {
   sheet.setColumnWidths(1, 3, 140);
   sheet.setColumnWidth(4, 220);
   sheet.setColumnWidths(5, 2, 110);
+
+  // 「権限レベル」列に一般／管理者／マスタ管理のドロップダウンを設定（直接シート編集する場合の誤入力防止）
+  const roleRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['一般', '管理者', 'マスタ管理'], true)
+    .setAllowInvalid(true)
+    .build();
+  sheet.getRange(2, 5, 998, 1).setDataValidation(roleRule);
 }
 
 /**

@@ -12,13 +12,14 @@ const MONTH_CODES = ['11', '12', '01', '02', '03', '04', '05', '06', '07', '08',
 const MONTH_LABELS = MONTH_CODES.map(function (c) { return (c.indexOf('0') === 0 ? c.substring(1) : c) + '月'; });
 const PAGE_SIZE = 50;
 const ALERT_THRESHOLD_DAYS = 7; // 前回アクション（最終アクション日）からこの日数以上経過してもSTS未入力（未対応）の場合にアラート対象とする
-const MULTILINE_COLUMNS = ['詳細', '備考', '次回ACT・進捗★手入力']; // インライン編集時にテキストエリアを使う列
+const MULTILINE_COLUMNS = ['次回ACT・進捗★手入力']; // インライン編集時にテキストエリアを使う列（メモのみ）
 
 // ---- グローバル状態 ----------------------------------------------------------
-let allDataCache = [];              // getDashboardData() の統合生データ（超高速フィルタの元データ）
+let allDataCache = [];              // getDashboardData() の統合生データ（超高速フィルタの元データ・直近2年分）
 let metaMasters = {};                // getMetaMasters() のマスタ一式
-let employeeSummaryCache = { first_half: null, second_half: null };
-let currentEmployeePeriod = 'first_half';
+let employeeSummaryCache = {};       // periodKey（例: "46_second_half"）をキーに取得結果をキャッシュ
+let availablePeriods = [];           // getAvailablePeriods() が返す直近2年（4半期）の期一覧
+let currentEmployeePeriod = null;    // 現在選択中の期キー
 let myChart1 = null;
 let myChart2 = null;
 let dmCurrentPage = 1;
@@ -26,7 +27,10 @@ let dmFilteredCache = [];
 let rankingSortState = { key: 'total', dir: 'desc' };
 let loadCompletedCount = 0;
 const LOAD_TARGET = 4;
-let currentUserContext = { email: '', identified: false, isManager: true, officeCode: null, officeName: null, employeeName: null };
+let currentUserContext = {
+  email: '', identified: false, role: 'マスタ管理', officeCode: null, officeName: null, employeeName: null,
+  canViewAllStores: true, canImportCsv: true, canManageMaster: true
+};
 
 // ============================================================================
 // 初期化
@@ -92,21 +96,25 @@ function loadAllData() {
     .withSuccessHandler(function (res) {
       try {
         if (res && res.success) {
-          employeeSummaryCache.first_half = res;
+          availablePeriods = res.periods;
+          renderEmpPeriodTabs();
+          if (availablePeriods.length) {
+            currentEmployeePeriod = availablePeriods[availablePeriods.length - 1].key; // 直近（最新）の期を初期選択
+          }
         } else {
-          showToast('個人別サマリ(上期)の取得に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+          showToast('対象期間の取得に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
         }
       } catch (e) {
-        showToast('個人別サマリ(上期)の処理中にエラーが発生しました: ' + e.message, 'error');
+        showToast('対象期間の処理中にエラーが発生しました: ' + e.message, 'error');
       } finally {
         onLoadStepComplete();
       }
     })
     .withFailureHandler(function (err) {
-      showToast('通信エラー（getEmployeeSummary）: ' + err.message, 'error');
+      showToast('通信エラー（getAvailablePeriods）: ' + err.message, 'error');
       onLoadStepComplete();
     })
-    .getEmployeeSummary('first_half');
+    .getAvailablePeriods();
 
   google.script.run
     .withSuccessHandler(function (res) {
@@ -130,16 +138,23 @@ function loadAllData() {
     .getCurrentUserContext();
 }
 
-// ログイン中ユーザーの権限（管理者／一般スタッフ・自店舗スコープ）をUIへ反映する。
-// ・管理者（所長・チーフ）：CSVインポートボタンを表示
-// ・一般スタッフ：CSVインポートボタンを非表示にし、閲覧スコープ（自店舗）をヘッダーに表示
+// ログイン中ユーザーの権限（マスタ管理／管理者（所長・チーフ）／一般）をUIへ反映する。
+// ・マスタ管理：CSVインポートボタン・「店舗・スタッフ管理」タブを表示
+// ・管理者（所長・チーフ）：全店舗閲覧はできるがCSV・マスタ管理タブは非表示
+// ・一般：CSVインポート・マスタ管理タブを非表示にし、閲覧スコープ（自店舗）をヘッダーに表示
 function applyUserContextToUi() {
   const csvBtn = document.getElementById('btn-open-csv-modal');
-  csvBtn.classList.toggle('hidden', !currentUserContext.isManager);
+  csvBtn.classList.toggle('hidden', !currentUserContext.canImportCsv);
+
+  const adminTabBtn = document.getElementById('tab-btn-admin');
+  adminTabBtn.classList.toggle('hidden', !currentUserContext.canManageMaster);
+  if (!currentUserContext.canManageMaster && adminTabBtn.classList.contains('active')) {
+    document.querySelector('.tab-btn[data-tab="dashboard"]').click();
+  }
 
   const badge = document.getElementById('user-scope-badge');
   const badgeText = document.getElementById('user-scope-badge-text');
-  if (!currentUserContext.isManager && currentUserContext.officeName) {
+  if (!currentUserContext.canViewAllStores && currentUserContext.officeName) {
     badgeText.textContent = '表示範囲：' + currentUserContext.officeName + '（自店舗のみ）';
     badge.classList.remove('hidden');
   } else {
@@ -152,8 +167,8 @@ function onLoadStepComplete() {
   if (loadCompletedCount >= LOAD_TARGET) {
     showLoading(false);
     renderDashboardTab();
-    renderEmployeeTab();
     renderDataManagerTab();
+    ensureEmployeeSummaryLoaded();
   }
 }
 
@@ -504,43 +519,58 @@ function renderRankingTable(data) {
 // タブ2: 個人別サマリー
 // ============================================================================
 function initEmployeeEvents() {
-  document.getElementById('btn-emp-first').addEventListener('click', function () { switchEmployeePeriod('first_half'); });
-  document.getElementById('btn-emp-second').addEventListener('click', function () { switchEmployeePeriod('second_half'); });
   document.getElementById('emp-search').addEventListener('input', renderEmployeeTab);
 }
 
-function switchEmployeePeriod(period) {
-  currentEmployeePeriod = period;
-  document.getElementById('btn-emp-first').classList.toggle('bg-blue-700', period === 'first_half');
-  document.getElementById('btn-emp-first').classList.toggle('text-white', period === 'first_half');
-  document.getElementById('btn-emp-first').classList.toggle('bg-slate-100', period !== 'first_half');
-  document.getElementById('btn-emp-first').classList.toggle('text-slate-600', period !== 'first_half');
+// 直近2年（4半期）分のタブボタンを動的に生成する（例: 45期上期・45期下期・46期上期・46期下期）
+function renderEmpPeriodTabs() {
+  const container = document.getElementById('emp-period-tabs');
+  container.innerHTML = availablePeriods.map(function (p) {
+    const active = p.key === currentEmployeePeriod;
+    return '<button type="button" class="emp-toggle-btn px-4 py-2 rounded-lg text-sm font-semibold ' +
+      (active ? 'bg-blue-700 text-white' : 'bg-slate-100 text-slate-600') + '" data-period-key="' + escapeHtml(p.key) + '">' +
+      escapeHtml(p.label) + '</button>';
+  }).join('');
+  container.querySelectorAll('[data-period-key]').forEach(function (btn) {
+    btn.addEventListener('click', function () { selectEmployeePeriod(btn.dataset.periodKey); });
+  });
+}
 
-  document.getElementById('btn-emp-second').classList.toggle('bg-blue-700', period === 'second_half');
-  document.getElementById('btn-emp-second').classList.toggle('text-white', period === 'second_half');
-  document.getElementById('btn-emp-second').classList.toggle('bg-slate-100', period !== 'second_half');
-  document.getElementById('btn-emp-second').classList.toggle('text-slate-600', period !== 'second_half');
+function selectEmployeePeriod(periodKey) {
+  currentEmployeePeriod = periodKey;
+  document.querySelectorAll('#emp-period-tabs [data-period-key]').forEach(function (btn) {
+    const active = btn.dataset.periodKey === periodKey;
+    btn.classList.toggle('bg-blue-700', active);
+    btn.classList.toggle('text-white', active);
+    btn.classList.toggle('bg-slate-100', !active);
+    btn.classList.toggle('text-slate-600', !active);
+  });
+  ensureEmployeeSummaryLoaded();
+}
 
-  if (employeeSummaryCache[period]) {
+// 選択中の期のデータがキャッシュに無ければ取得してから描画する（初回ロード・タブ切替の両方で使う）
+function ensureEmployeeSummaryLoaded() {
+  if (!currentEmployeePeriod) return;
+  if (employeeSummaryCache[currentEmployeePeriod]) {
     renderEmployeeTab();
-  } else {
-    showLoading(true);
-    google.script.run
-      .withSuccessHandler(function (res) {
-        if (res && res.success) {
-          employeeSummaryCache[period] = res;
-          renderEmployeeTab();
-        } else {
-          showToast('個人別サマリの取得に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
-        }
-        showLoading(false);
-      })
-      .withFailureHandler(function (err) {
-        showToast('通信エラー（getEmployeeSummary）: ' + err.message, 'error');
-        showLoading(false);
-      })
-      .getEmployeeSummary(period);
+    return;
   }
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false);
+      if (res && res.success) {
+        employeeSummaryCache[res.period.key] = res;
+        renderEmployeeTab();
+      } else {
+        showToast('個人別サマリの取得に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false);
+      showToast('通信エラー（getEmployeeSummary）: ' + err.message, 'error');
+    })
+    .getEmployeeSummary(currentEmployeePeriod);
 }
 
 function renderEmployeeTab() {
@@ -555,23 +585,16 @@ function renderEmployeeTab() {
     return;
   }
 
-  const blockOrder = cache.blockOrder;
-  const metrics = ['リセール数', 'リセール中', '⭐継続率', '成約件数', 'PAX数'];
-
-  let headRow1 = '<tr>' +
-    '<th rowspan="2" class="px-3 py-2 text-left border-r border-slate-200">営業所名</th>' +
-    '<th rowspan="2" class="px-3 py-2 text-left border-r border-slate-200">社員名</th>';
-  let headRow2 = '<tr>';
-  blockOrder.forEach(function (block) {
-    headRow1 += '<th colspan="' + metrics.length + '" class="px-3 py-2 text-center border-r border-slate-200">' + escapeHtml(block) + '</th>';
-    metrics.forEach(function (m) {
-      const cls = m === '⭐継続率' ? ' bg-indigo-50 text-indigo-700 font-semibold' : '';
-      headRow2 += '<th class="px-2 py-1 text-right font-normal text-xs' + cls + '" title="⭐継続率＝リセール継続率（リセール数÷未成約数）">' + m + '</th>';
-    });
-  });
-  headRow1 += '</tr>';
-  headRow2 += '</tr>';
-  thead.innerHTML = headRow1 + headRow2;
+  thead.innerHTML = '<tr>' +
+    '<th class="px-3 py-2 text-left">営業所名</th>' +
+    '<th class="px-3 py-2 text-left">社員名</th>' +
+    '<th class="px-3 py-2 text-right">未成約数</th>' +
+    '<th class="px-3 py-2 text-right">リセール数</th>' +
+    '<th class="px-3 py-2 text-right">リセール中</th>' +
+    '<th class="px-3 py-2 text-right bg-indigo-50 text-indigo-700" title="⭐継続率＝リセール継続率（リセール数÷未成約数）">⭐ 継続率</th>' +
+    '<th class="px-3 py-2 text-right">成約件数</th>' +
+    '<th class="px-3 py-2 text-right">PAX数</th>' +
+    '</tr>';
 
   const keyword = document.getElementById('emp-search').value.trim().toLowerCase();
   const employees = cache.employees.filter(function (e) {
@@ -589,28 +612,24 @@ function renderEmployeeTab() {
   emptyMsg.classList.add('hidden');
 
   tbody.innerHTML = employees.map(function (e) {
-    let row = '<tr class="hover:bg-blue-50">' +
-      '<td class="px-3 py-2 border-r border-slate-100">' + escapeHtml(e.officeName) + '</td>' +
-      '<td class="px-3 py-2 border-r border-slate-100">' +
+    const s = e.stats;
+    const denom = Number(s['未成約数']) || 0;
+    const numer = Number(s['リセール数']) || 0;
+    const rate = denom > 0 ? (numer / denom) * 100 : 0;
+    return '<tr class="hover:bg-blue-50">' +
+      '<td class="px-3 py-2">' + escapeHtml(e.officeName) + '</td>' +
+      '<td class="px-3 py-2">' +
         '<button type="button" class="text-blue-700 hover:underline font-semibold emp-detail-link" data-emp-no="' + escapeHtml(e.employeeNo) + '" data-emp-name="' + escapeHtml(e.employeeName) + '">' +
           escapeHtml(e.employeeName) +
         '</button>' +
-      '</td>';
-    blockOrder.forEach(function (block) {
-      const p = e.periods[block] || {};
-      metrics.forEach(function (m) {
-        if (m === '⭐継続率') {
-          const denom = Number(p['未成約数']) || 0;
-          const numer = Number(p['リセール数']) || 0;
-          const rate = denom > 0 ? (numer / denom) * 100 : 0;
-          row += '<td class="px-2 py-1 text-right bg-indigo-50/50 text-indigo-700 font-semibold">' + (denom > 0 ? rate.toFixed(1) + '%' : '－') + '</td>';
-        } else {
-          row += '<td class="px-2 py-1 text-right">' + (p[m] !== undefined && p[m] !== '' ? p[m] : '－') + '</td>';
-        }
-      });
-    });
-    row += '</tr>';
-    return row;
+      '</td>' +
+      '<td class="px-3 py-2 text-right">' + denom + '</td>' +
+      '<td class="px-3 py-2 text-right">' + (s['リセール数'] || 0) + '</td>' +
+      '<td class="px-3 py-2 text-right">' + (s['リセール中'] || 0) + '</td>' +
+      '<td class="px-3 py-2 text-right bg-indigo-50/50 text-indigo-700 font-semibold">' + (denom > 0 ? rate.toFixed(1) + '%' : '－') + '</td>' +
+      '<td class="px-3 py-2 text-right">' + (s['成約件数'] || 0) + '</td>' +
+      '<td class="px-3 py-2 text-right">' + (s['PAX数'] || 0) + '</td>' +
+      '</tr>';
   }).join('');
 
   tbody.querySelectorAll('.emp-detail-link').forEach(function (btn) {
@@ -765,17 +784,17 @@ function renderDataManagerGrid() {
 
     return '<tr class="' + rowClass + '" data-rid="' + rid + '">' +
       alertCell +
-      '<td class="px-3 py-2">' + escapeHtml(row['対象年月日']) + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(row.__sheetName) + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(row['社員名']) + '</td>' +
-      '<td class="px-2 py-1">' +
-        '<select class="sts-select border border-slate-300 rounded px-1 py-1 text-xs" data-sheet="' + escapeHtml(row.__sheetName) + '" data-row="' + row.__rowIndex + '">' +
-          '<option value="">－</option>' + stsOptions +
-        '</select>' +
-      '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(row['対象年月日']) + '</td>' +
       '<td class="px-2 py-1">' +
         '<select class="resale-select border border-slate-300 rounded px-1 py-1 text-xs" data-sheet="' + escapeHtml(row.__sheetName) + '" data-row="' + row.__rowIndex + '">' +
           '<option value="">－</option>' + resaleOptions +
+        '</select>' +
+      '</td>' +
+      '<td class="px-2 py-1">' +
+        '<select class="sts-select border border-slate-300 rounded px-1 py-1 text-xs" data-sheet="' + escapeHtml(row.__sheetName) + '" data-row="' + row.__rowIndex + '">' +
+          '<option value="">－</option>' + stsOptions +
         '</select>' +
       '</td>' +
       editableCellTd(row, '成約PAX', 'number') +
@@ -784,10 +803,9 @@ function renderDataManagerGrid() {
       '<td class="px-3 py-2">' + escapeHtml(row['種別']) + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(row['旅行目的(小)']) + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(row['接客方法']) + '</td>' +
+      readonlyDetailTd(row, '詳細') +
       editableCellTd(row, 'ACT日', 'text') +
       editableCellTd(row, 'ACT内容', 'text') +
-      editableCellTd(row, '詳細', 'text', true) +
-      editableCellTd(row, '備考', 'text') +
       editableCellTd(row, '次回ACT・進捗★手入力', 'text') +
       '</tr>';
   }).join('');
@@ -795,11 +813,16 @@ function renderDataManagerGrid() {
   bindGridEditEvents();
 }
 
-function editableCellTd(row, columnName, type, isDetailColumn) {
+function editableCellTd(row, columnName, type) {
   const val = row[columnName] !== undefined && row[columnName] !== null ? row[columnName] : '';
-  const detailAttrs = isDetailColumn ? ' data-detail="1"' : '';
-  const truncateClass = isDetailColumn ? ' truncate' : '';
-  return '<td class="editable-cell px-3 py-2' + truncateClass + '" data-column="' + escapeHtml(columnName) + '" data-type="' + type + '" data-sheet="' + escapeHtml(row.__sheetName) + '" data-row="' + row.__rowIndex + '"' + detailAttrs + '>' +
+  return '<td class="editable-cell px-3 py-2" data-column="' + escapeHtml(columnName) + '" data-type="' + type + '" data-sheet="' + escapeHtml(row.__sheetName) + '" data-row="' + row.__rowIndex + '">' +
+    '<span class="cell-display">' + escapeHtml(val) + '</span></td>';
+}
+
+// 「詳細」列：CSV由来の読み取り専用列。ホバーで全文ポップアップ表示はできるが編集はできない。
+function readonlyDetailTd(row, columnName) {
+  const val = row[columnName] !== undefined && row[columnName] !== null ? row[columnName] : '';
+  return '<td class="detail-cell px-3 py-2 truncate w-64" data-detail="1">' +
     '<span class="cell-display">' + escapeHtml(val) + '</span></td>';
 }
 
@@ -831,8 +854,8 @@ function bindGridEditEvents() {
     });
   });
 
-  // 「詳細」列：カーソルを合わせると全文をポップアップ表示（長文対策）
-  document.querySelectorAll('.editable-cell[data-detail="1"]').forEach(function (td) {
+  // 「詳細」列：カーソルを合わせると全文をポップアップ表示（長文対策、読み取り専用列）
+  document.querySelectorAll('[data-detail="1"]').forEach(function (td) {
     td.addEventListener('mouseenter', function () {
       if (td.querySelector('textarea, input')) return; // 編集中は出さない
       const text = td.querySelector('.cell-display').textContent;
@@ -1133,9 +1156,13 @@ function renderCsvImportResult(res) {
   html += '<p>取込件数：<b>' + res.importedCount + '</b> 件</p>';
   html += '<p>重複スキップ：' + res.skippedDuplicateCount + ' 件</p>';
   if (res.skippedBlankCount) html += '<p>対象年月日／営業所コード未入力によるスキップ：' + res.skippedBlankCount + ' 件</p>';
-  if (res.skippedUnknownOfficeCount) {
-    html += '<p class="text-amber-600">未登録の営業所コードによるスキップ：' + res.skippedUnknownOfficeCount + ' 件' +
-      (res.unknownOfficeCodes && res.unknownOfficeCodes.length ? '（' + res.unknownOfficeCodes.map(escapeHtml).join(', ') + '）' : '') + '</p>';
+  if (res.autoRegisteredStaffCount) {
+    html += '<p class="text-blue-600">スタッフマスタへ自動登録：<b>' + res.autoRegisteredStaffCount + '</b> 名</p>';
+  }
+  if (res.autoRegisteredShopCodes && res.autoRegisteredShopCodes.length) {
+    html += '<p class="text-amber-600">未登録の営業所コードを仮店舗名で自動登録：' +
+      res.autoRegisteredShopCodes.map(escapeHtml).join(', ') +
+      '（「店舗・スタッフ管理」で正式名称に変更してください）</p>';
   }
   if (res.perSheetCounts && Object.keys(res.perSheetCounts).length) {
     html += '<p class="mt-1 text-slate-500">内訳：' + Object.keys(res.perSheetCounts).map(function (k) {
@@ -1353,12 +1380,18 @@ function populateStaffShopSelect() {
     }).join('');
 }
 
+const ROLE_BADGE_CLASSES = {
+  'マスタ管理': 'bg-purple-100 text-purple-700',
+  '管理者': 'bg-indigo-100 text-indigo-700',
+  '一般': 'bg-slate-100 text-slate-500'
+};
+
 function renderStaffMasterTable(unregistered) {
   const tbody = document.getElementById('staff-master-tbody');
   tbody.innerHTML = staffMasterCache.map(function (s) {
-    const roleBadge = s.isManager
-      ? '<span class="inline-block px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold">管理者</span>'
-      : '<span class="inline-block px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-xs">一般</span>';
+    const role = s.role || '一般';
+    const roleBadge = '<span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold ' +
+      (ROLE_BADGE_CLASSES[role] || ROLE_BADGE_CLASSES['一般']) + '">' + escapeHtml(role) + '</span>';
     return '<tr class="hover:bg-blue-50">' +
       '<td class="px-3 py-2">' + escapeHtml(s.officeName) + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(s.employeeNo) + '</td>' +
@@ -1406,7 +1439,7 @@ function openStaffModal(mode, rowIndex) {
   const empNoInput = document.getElementById('staff-form-empno');
   const empNameInput = document.getElementById('staff-form-empname');
   const googleAccountInput = document.getElementById('staff-form-google-account');
-  const isManagerInput = document.getElementById('staff-form-is-manager');
+  const roleSelect = document.getElementById('staff-form-role');
 
   if (mode === 'edit') {
     const staff = staffMasterCache.find(function (s) { return s.rowIndex === rowIndex; });
@@ -1415,14 +1448,14 @@ function openStaffModal(mode, rowIndex) {
     empNoInput.value = staff ? staff.employeeNo : '';
     empNameInput.value = staff ? staff.employeeName : '';
     googleAccountInput.value = staff ? staff.googleAccount : '';
-    isManagerInput.checked = !!(staff && staff.isManager);
+    roleSelect.value = staff ? (staff.role || '一般') : '一般';
   } else {
     document.getElementById('staff-modal-title').textContent = 'スタッフを追加';
     shopSelect.value = '';
     empNoInput.value = '';
     empNameInput.value = '';
     googleAccountInput.value = '';
-    isManagerInput.checked = false;
+    roleSelect.value = '一般';
   }
   openAdminModal('staff-modal');
 }
@@ -1434,9 +1467,9 @@ function onSubmitStaffForm(ev) {
   const empNo = document.getElementById('staff-form-empno').value.trim();
   const empName = document.getElementById('staff-form-empname').value.trim();
   const googleAccount = document.getElementById('staff-form-google-account').value.trim();
-  const isManager = document.getElementById('staff-form-is-manager').checked;
+  const role = document.getElementById('staff-form-role').value;
   if (!officeCode || !empName) { showToast('所属店舗と社員名は必須です。', 'error'); return; }
-  if (isManager && !googleAccount) { showToast('管理者権限を付与するスタッフは、Googleアカウントの登録が必須です。', 'error'); return; }
+  if (role !== '一般' && !googleAccount) { showToast('管理者・マスタ管理権限を付与するスタッフは、Googleアカウントの登録が必須です。', 'error'); return; }
 
   showLoading(true);
   const runner = google.script.run
@@ -1457,9 +1490,9 @@ function onSubmitStaffForm(ev) {
     });
 
   if (rowIndexRaw) {
-    runner.updateStaffMaster(Number(rowIndexRaw), officeCode, empNo, empName, googleAccount, isManager);
+    runner.updateStaffMaster(Number(rowIndexRaw), officeCode, empNo, empName, googleAccount, role);
   } else {
-    runner.addStaffMaster(officeCode, empNo, empName, googleAccount, isManager);
+    runner.addStaffMaster(officeCode, empNo, empName, googleAccount, role);
   }
 }
 
