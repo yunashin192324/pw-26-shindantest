@@ -64,7 +64,7 @@ function setupAllSheets() {
     'ACT内容',                     // 18
     '備考',                       // 19
     '記録番号',                   // 20
-    '入力日',                     // 21
+    '最終アクション日',           // 21
     '対応状況',                   // 22
     '予約番号',                   // 23
     '次回ACT・進捗★手入力',       // 24
@@ -73,10 +73,10 @@ function setupAllSheets() {
     '連絡先☆自動反映'             // 27
   ];
 
-  // ---- 46期の月順（12月始まり・11月終わり）------------------------------
-  const MONTH_CODES_FULL = ['12', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11'];
-  // ---- 個人別サマリ 上期・下期の対象月 ------------------------------------
-  const FIRST_HALF_CODES = ['12', '01', '02', '03', '04'];
+  // ---- 46期の月順（11月始まり・10月終わり）------------------------------
+  const MONTH_CODES_FULL = ['11', '12', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10'];
+  // ---- 個人別サマリ 上期（11月～4月）・下期（5月～10月）の対象月 ----------
+  const FIRST_HALF_CODES = ['11', '12', '01', '02', '03', '04'];
   const SECOND_HALF_CODES = ['05', '06', '07', '08', '09', '10'];
 
   createShopSheets_(ss, SHOP_LIST, HEADERS_27);
@@ -116,7 +116,7 @@ function createShopSheets_(ss, shopList, headers) {
 /**
  * ② 「店舗別サマリ」シートを作成する。
  * ・A~J列: 46期累計パート
- * ・L列以降: 12月〜11月の月別パート（同じ10列構成のブロックを右方向に展開）
+ * ・L列以降: 11月〜10月の月別パート（同じ10列構成のブロックを右方向に展開）
  * ・1行目: ブロックラベル（結合セル）、2行目: サブヘッダー
  * ・3行目以降: 10店舗分の店番・店舗名（マスター行）＋ 各種集計式（COUNTIFS/SUMIFS）
  */
@@ -311,13 +311,15 @@ function createStaffMasterSheet_(ss) {
   }
 
   const sheet = ss.insertSheet(sheetName);
-  const headers = ['営業所コード', '社員番号', '社員名', '有効'];
+  const headers = ['営業所コード', '社員番号', '社員名', 'Googleアカウント', '管理者権限', '有効'];
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
   sheet.getRange(1, 1, 1, headers.length)
     .setFontWeight('bold').setBackground('#1c4587').setFontColor('#ffffff').setHorizontalAlignment('center');
 
   sheet.setFrozenRows(1);
-  sheet.setColumnWidths(1, 4, 140);
+  sheet.setColumnWidths(1, 3, 140);
+  sheet.setColumnWidth(4, 220);
+  sheet.setColumnWidths(5, 2, 110);
 }
 
 /**

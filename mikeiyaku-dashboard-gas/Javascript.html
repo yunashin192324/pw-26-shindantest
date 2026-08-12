@@ -7,10 +7,11 @@
  */
 
 // ---- 定数 ------------------------------------------------------------------
-const MONTH_CODES = ['12', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11'];
+// 46期は11月始まり・10月終わり
+const MONTH_CODES = ['11', '12', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10'];
 const MONTH_LABELS = MONTH_CODES.map(function (c) { return (c.indexOf('0') === 0 ? c.substring(1) : c) + '月'; });
 const PAGE_SIZE = 50;
-const ALERT_THRESHOLD_DAYS = 7; // 対象年月日からこの日数以上経過してもSTS未入力（未対応）の場合にアラート対象とする
+const ALERT_THRESHOLD_DAYS = 7; // 前回アクション（最終アクション日）からこの日数以上経過してもSTS未入力（未対応）の場合にアラート対象とする
 const MULTILINE_COLUMNS = ['詳細', '備考', '次回ACT・進捗★手入力']; // インライン編集時にテキストエリアを使う列
 
 // ---- グローバル状態 ----------------------------------------------------------
@@ -24,7 +25,8 @@ let dmCurrentPage = 1;
 let dmFilteredCache = [];
 let rankingSortState = { key: 'total', dir: 'desc' };
 let loadCompletedCount = 0;
-const LOAD_TARGET = 3;
+const LOAD_TARGET = 4;
+let currentUserContext = { email: '', identified: false, isManager: true, officeCode: null, officeName: null, employeeName: null };
 
 // ============================================================================
 // 初期化
@@ -105,6 +107,44 @@ function loadAllData() {
       onLoadStepComplete();
     })
     .getEmployeeSummary('first_half');
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      try {
+        if (res && res.success) {
+          currentUserContext = res.context;
+          applyUserContextToUi();
+        } else {
+          showToast('権限情報の取得に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+        }
+      } catch (e) {
+        showToast('権限情報の処理中にエラーが発生しました: ' + e.message, 'error');
+      } finally {
+        onLoadStepComplete();
+      }
+    })
+    .withFailureHandler(function (err) {
+      showToast('通信エラー（getCurrentUserContext）: ' + err.message, 'error');
+      onLoadStepComplete();
+    })
+    .getCurrentUserContext();
+}
+
+// ログイン中ユーザーの権限（管理者／一般スタッフ・自店舗スコープ）をUIへ反映する。
+// ・管理者（所長・チーフ）：CSVインポートボタンを表示
+// ・一般スタッフ：CSVインポートボタンを非表示にし、閲覧スコープ（自店舗）をヘッダーに表示
+function applyUserContextToUi() {
+  const csvBtn = document.getElementById('btn-open-csv-modal');
+  csvBtn.classList.toggle('hidden', !currentUserContext.isManager);
+
+  const badge = document.getElementById('user-scope-badge');
+  const badgeText = document.getElementById('user-scope-badge-text');
+  if (!currentUserContext.isManager && currentUserContext.officeName) {
+    badgeText.textContent = '表示範囲：' + currentUserContext.officeName + '（自店舗のみ）';
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+  }
 }
 
 function onLoadStepComplete() {
@@ -209,10 +249,15 @@ function daysSince(dateStr) {
   return Math.floor((today.getTime() - target.getTime()) / 86400000);
 }
 
-// STSが未対応（空欄）のまま、対象年月日から ALERT_THRESHOLD_DAYS 日以上経過している行を「要フォロー」とみなす
+// STSが未対応（空欄）のまま、前回アクション（最終アクション日）から ALERT_THRESHOLD_DAYS 日以上経過している行を
+// 「要フォロー」とみなす。まだ一度もアクションしていない行は、最終アクション日が空欄のため対象年月日を基準にする。
+function alertBasisDate(row) {
+  return row['最終アクション日'] || row['対象年月日'];
+}
+
 function isAlertRow(row) {
   if (row['STS']) return false; // 失注／成約／リセール中いずれかが入っていれば対象外
-  const days = daysSince(row['対象年月日']);
+  const days = daysSince(alertBasisDate(row));
   return days !== null && days >= ALERT_THRESHOLD_DAYS;
 }
 
@@ -326,7 +371,8 @@ function renderKpi(data) {
   const pax = contractRows.reduce(function (sum, r) { return sum + (Number(r['成約PAX']) || 0); }, 0);
   const resaleAction = data.filter(function (r) { return r['リセール'] === '〇'; }).length;
   const resaleProgress = data.filter(function (r) { return r['STS'] === 'リセール中'; }).length;
-  const resaleRate = resaleAction > 0 ? (contract / resaleAction) * 100 : 0;
+  // リセール継続率 = リセールアクション数 ÷ 未成約件数（リセールをしない場合＝失注）。最重要KPI。
+  const resaleContinueRate = total > 0 ? (resaleAction / total) * 100 : 0;
   const alertCount = data.filter(isAlertRow).length;
 
   document.getElementById('kpi-total').textContent = total.toLocaleString();
@@ -334,7 +380,7 @@ function renderKpi(data) {
   document.getElementById('kpi-pax').textContent = pax.toLocaleString();
   document.getElementById('kpi-resale-action').textContent = resaleAction.toLocaleString();
   document.getElementById('kpi-resale-progress').textContent = resaleProgress.toLocaleString();
-  document.getElementById('kpi-resale-rate').textContent = resaleRate.toFixed(1) + '%';
+  document.getElementById('kpi-resale-rate').textContent = resaleContinueRate.toFixed(1) + '%';
   document.getElementById('kpi-alert-count').textContent = alertCount.toLocaleString();
 }
 
@@ -342,8 +388,8 @@ function renderChart1(data) {
   const totalByMonth = MONTH_CODES.map(function (code) {
     return data.filter(function (r) { return String(r['月']) === code; }).length;
   });
-  const contractByMonth = MONTH_CODES.map(function (code) {
-    return data.filter(function (r) { return String(r['月']) === code && r['STS'] === '成約'; }).length;
+  const resaleActionByMonth = MONTH_CODES.map(function (code) {
+    return data.filter(function (r) { return String(r['月']) === code && r['リセール'] === '〇'; }).length;
   });
 
   const ctx = document.getElementById('chart1').getContext('2d');
@@ -354,17 +400,17 @@ function renderChart1(data) {
       datasets: [
         {
           type: 'bar',
-          label: '未成約件数',
+          label: '未成約数',
           data: totalByMonth,
           backgroundColor: '#93c5fd',
           yAxisID: 'y'
         },
         {
           type: 'line',
-          label: '成約件数',
-          data: contractByMonth,
-          borderColor: '#1d4ed8',
-          backgroundColor: '#1d4ed8',
+          label: 'リセール実施数',
+          data: resaleActionByMonth,
+          borderColor: '#4f46e5',
+          backgroundColor: '#4f46e5',
           tension: 0.3,
           yAxisID: 'y1'
         }
@@ -374,8 +420,8 @@ function renderChart1(data) {
       responsive: true,
       interaction: { mode: 'index', intersect: false },
       scales: {
-        y: { type: 'linear', position: 'left', beginAtZero: true, title: { display: true, text: '未成約件数' } },
-        y1: { type: 'linear', position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: '成約件数' } }
+        y: { type: 'linear', position: 'left', beginAtZero: true, title: { display: true, text: '未成約数' } },
+        y1: { type: 'linear', position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: 'リセール実施数' } }
       }
     }
   });
@@ -428,7 +474,9 @@ function renderRankingTable(data) {
     const contract = contractRows.length;
     const pax = contractRows.reduce(function (sum, r) { return sum + (Number(r['成約PAX']) || 0); }, 0);
     const resaleRate = resaleAction > 0 ? (contract / resaleAction) * 100 : 0;
-    return { shopName: shopName, total: total, resaleAction: resaleAction, contract: contract, pax: pax, resaleRate: resaleRate };
+    // リセール継続率：どの営業所がリセールをちゃんとやっているか（未成約のうちリセールしている割合）
+    const resaleContinueRate = total > 0 ? (resaleAction / total) * 100 : 0;
+    return { shopName: shopName, total: total, resaleAction: resaleAction, contract: contract, pax: pax, resaleRate: resaleRate, resaleContinueRate: resaleContinueRate };
   });
 
   const key = rankingSortState.key;
@@ -444,6 +492,7 @@ function renderRankingTable(data) {
       '<td class="px-3 py-2">' + escapeHtml(r.shopName) + '</td>' +
       '<td class="px-3 py-2 text-right">' + r.total.toLocaleString() + '</td>' +
       '<td class="px-3 py-2 text-right">' + r.resaleAction.toLocaleString() + '</td>' +
+      '<td class="px-3 py-2 text-right font-semibold text-indigo-700 bg-indigo-50">' + r.resaleContinueRate.toFixed(1) + '%</td>' +
       '<td class="px-3 py-2 text-right">' + r.contract.toLocaleString() + '</td>' +
       '<td class="px-3 py-2 text-right">' + r.pax.toLocaleString() + '</td>' +
       '<td class="px-3 py-2 text-right">' + r.resaleRate.toFixed(1) + '%</td>' +
@@ -507,16 +556,17 @@ function renderEmployeeTab() {
   }
 
   const blockOrder = cache.blockOrder;
-  const metrics = ['リセール数', 'リセール中', '成約件数', 'PAX数'];
+  const metrics = ['リセール数', 'リセール中', '⭐継続率', '成約件数', 'PAX数'];
 
   let headRow1 = '<tr>' +
     '<th rowspan="2" class="px-3 py-2 text-left border-r border-slate-200">営業所名</th>' +
     '<th rowspan="2" class="px-3 py-2 text-left border-r border-slate-200">社員名</th>';
   let headRow2 = '<tr>';
   blockOrder.forEach(function (block) {
-    headRow1 += '<th colspan="4" class="px-3 py-2 text-center border-r border-slate-200">' + escapeHtml(block) + '</th>';
+    headRow1 += '<th colspan="' + metrics.length + '" class="px-3 py-2 text-center border-r border-slate-200">' + escapeHtml(block) + '</th>';
     metrics.forEach(function (m) {
-      headRow2 += '<th class="px-2 py-1 text-right font-normal text-xs">' + m + '</th>';
+      const cls = m === '⭐継続率' ? ' bg-indigo-50 text-indigo-700 font-semibold' : '';
+      headRow2 += '<th class="px-2 py-1 text-right font-normal text-xs' + cls + '" title="⭐継続率＝リセール継続率（リセール数÷未成約数）">' + m + '</th>';
     });
   });
   headRow1 += '</tr>';
@@ -541,20 +591,94 @@ function renderEmployeeTab() {
   tbody.innerHTML = employees.map(function (e) {
     let row = '<tr class="hover:bg-blue-50">' +
       '<td class="px-3 py-2 border-r border-slate-100">' + escapeHtml(e.officeName) + '</td>' +
-      '<td class="px-3 py-2 border-r border-slate-100">' + escapeHtml(e.employeeName) + '</td>';
+      '<td class="px-3 py-2 border-r border-slate-100">' +
+        '<button type="button" class="text-blue-700 hover:underline font-semibold emp-detail-link" data-emp-no="' + escapeHtml(e.employeeNo) + '" data-emp-name="' + escapeHtml(e.employeeName) + '">' +
+          escapeHtml(e.employeeName) +
+        '</button>' +
+      '</td>';
     blockOrder.forEach(function (block) {
       const p = e.periods[block] || {};
       metrics.forEach(function (m) {
-        row += '<td class="px-2 py-1 text-right">' + (p[m] !== undefined && p[m] !== '' ? p[m] : '－') + '</td>';
+        if (m === '⭐継続率') {
+          const denom = Number(p['未成約数']) || 0;
+          const numer = Number(p['リセール数']) || 0;
+          const rate = denom > 0 ? (numer / denom) * 100 : 0;
+          row += '<td class="px-2 py-1 text-right bg-indigo-50/50 text-indigo-700 font-semibold">' + (denom > 0 ? rate.toFixed(1) + '%' : '－') + '</td>';
+        } else {
+          row += '<td class="px-2 py-1 text-right">' + (p[m] !== undefined && p[m] !== '' ? p[m] : '－') + '</td>';
+        }
       });
     });
     row += '</tr>';
     return row;
   }).join('');
+
+  tbody.querySelectorAll('.emp-detail-link').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      openEmployeeDetailModal(btn.dataset.empNo, btn.dataset.empName);
+    });
+  });
 }
 
 // ============================================================================
-// タブ3: 未成約相談データ管理（CRUD）
+// 個人詳細ドリルダウン（都市コード別／未成約理由別の内訳）
+// ============================================================================
+function openEmployeeDetailModal(employeeNo, employeeName) {
+  // 期間（上期/下期）の縛りを受けず、全期間のデータから該当社員の行を横断的に抽出する
+  const rows = allDataCache.filter(function (r) {
+    return String(r['社員番号']) === String(employeeNo) && r['社員名'] === employeeName;
+  });
+
+  document.getElementById('employee-detail-name').textContent = employeeName;
+
+  const total = rows.length;
+  const resaleAction = rows.filter(function (r) { return r['リセール'] === '〇'; }).length;
+  const contract = rows.filter(function (r) { return r['STS'] === '成約'; }).length;
+  const continueRate = total > 0 ? (resaleAction / total) * 100 : 0;
+
+  const kpiHtml = [
+    { label: '未成約数', value: total.toLocaleString(), cls: 'bg-blue-50 text-blue-700' },
+    { label: 'リセール数', value: resaleAction.toLocaleString(), cls: 'bg-amber-50 text-amber-700' },
+    { label: '⭐ リセール継続率', value: continueRate.toFixed(1) + '%', cls: 'bg-indigo-50 text-indigo-700' },
+    { label: '成約件数', value: contract.toLocaleString(), cls: 'bg-emerald-50 text-emerald-700' }
+  ].map(function (k) {
+    return '<div class="rounded-lg p-3 text-center ' + k.cls + '"><p class="text-xs font-semibold opacity-80">' + k.label + '</p><p class="text-xl font-bold">' + k.value + '</p></div>';
+  }).join('');
+  document.getElementById('employee-detail-kpis').innerHTML = kpiHtml;
+
+  renderEmployeeDetailBreakdown('employee-detail-city-list', rows, '都市コード');
+  renderEmployeeDetailBreakdown('employee-detail-reason-list', rows, '未成約理由(大)');
+
+  openAdminModal('employee-detail-modal');
+}
+
+function renderEmployeeDetailBreakdown(containerId, rows, columnName) {
+  const counts = {};
+  rows.forEach(function (r) {
+    const key = r[columnName] || '未設定';
+    counts[key] = (counts[key] || 0) + 1;
+  });
+  const total = rows.length;
+  const entries = Object.keys(counts).map(function (k) { return { label: k, count: counts[k] }; })
+    .sort(function (a, b) { return b.count - a.count; });
+
+  const container = document.getElementById(containerId);
+  if (entries.length === 0) {
+    container.innerHTML = '<p class="text-slate-400">データがありません</p>';
+    return;
+  }
+  container.innerHTML = entries.map(function (e) {
+    const pct = total > 0 ? ((e.count / total) * 100).toFixed(1) : '0.0';
+    return '<div class="flex items-center gap-2">' +
+      '<span class="flex-1 truncate">' + escapeHtml(e.label) + '</span>' +
+      '<span class="w-24 bg-slate-100 rounded-full h-2 overflow-hidden"><span class="block h-2 bg-blue-500" style="width:' + pct + '%"></span></span>' +
+      '<span class="w-20 text-right text-slate-500">' + e.count + '件（' + pct + '%）</span>' +
+      '</div>';
+  }).join('');
+}
+
+// ============================================================================
+// タブ3: リセールリスト（CRUD）
 // ============================================================================
 function initDataManagerEvents() {
   ['dm-filter-shop', 'dm-filter-month', 'dm-filter-sts', 'dm-filter-contact', 'dm-filter-purpose',
@@ -634,35 +758,35 @@ function renderDataManagerGrid() {
 
     const alert = isAlertRow(row);
     const rowClass = alert ? 'hover:bg-rose-100 bg-rose-50' : 'hover:bg-blue-50';
-    const alertDays = alert ? daysSince(row['対象年月日']) : null;
+    const alertDays = alert ? daysSince(alertBasisDate(row)) : null;
     const alertCell = alert
-      ? '<td class="px-2 py-2 text-center text-rose-600" title="対象年月日から' + alertDays + '日経過・未対応です">🔔</td>'
+      ? '<td class="px-2 py-2 text-center text-rose-600" title="前回アクションから' + alertDays + '日経過・未対応です">🔔</td>'
       : '<td class="px-2 py-2 text-center"></td>';
 
     return '<tr class="' + rowClass + '" data-rid="' + rid + '">' +
       alertCell +
+      '<td class="px-3 py-2">' + escapeHtml(row['対象年月日']) + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(row.__sheetName) + '</td>' +
-      '<td class="px-2 py-1">' +
-        '<select class="resale-select border border-slate-300 rounded px-1 py-1 text-xs" data-sheet="' + escapeHtml(row.__sheetName) + '" data-row="' + row.__rowIndex + '">' +
-          '<option value="">－</option>' + resaleOptions +
-        '</select>' +
-      '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(row['社員名']) + '</td>' +
       '<td class="px-2 py-1">' +
         '<select class="sts-select border border-slate-300 rounded px-1 py-1 text-xs" data-sheet="' + escapeHtml(row.__sheetName) + '" data-row="' + row.__rowIndex + '">' +
           '<option value="">－</option>' + stsOptions +
         '</select>' +
       '</td>' +
+      '<td class="px-2 py-1">' +
+        '<select class="resale-select border border-slate-300 rounded px-1 py-1 text-xs" data-sheet="' + escapeHtml(row.__sheetName) + '" data-row="' + row.__rowIndex + '">' +
+          '<option value="">－</option>' + resaleOptions +
+        '</select>' +
+      '</td>' +
       editableCellTd(row, '成約PAX', 'number') +
-      '<td class="px-3 py-2">' + escapeHtml(row['対象年月日']) + '</td>' +
-      '<td class="px-3 py-2">' + escapeHtml(row['社員名']) + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(row['未成約理由(大)']) + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(row['都市コード']) + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(row['種別']) + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(row['旅行目的(小)']) + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(row['接客方法']) + '</td>' +
-      editableCellTd(row, '詳細', 'text', true) +
       editableCellTd(row, 'ACT日', 'text') +
       editableCellTd(row, 'ACT内容', 'text') +
+      editableCellTd(row, '詳細', 'text', true) +
       editableCellTd(row, '備考', 'text') +
       editableCellTd(row, '次回ACT・進捗★手入力', 'text') +
       '</tr>';
@@ -1232,10 +1356,15 @@ function populateStaffShopSelect() {
 function renderStaffMasterTable(unregistered) {
   const tbody = document.getElementById('staff-master-tbody');
   tbody.innerHTML = staffMasterCache.map(function (s) {
+    const roleBadge = s.isManager
+      ? '<span class="inline-block px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold">管理者</span>'
+      : '<span class="inline-block px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-xs">一般</span>';
     return '<tr class="hover:bg-blue-50">' +
       '<td class="px-3 py-2">' + escapeHtml(s.officeName) + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(s.employeeNo) + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(s.employeeName) + '</td>' +
+      '<td class="px-3 py-2 text-slate-500">' + escapeHtml(s.googleAccount) + '</td>' +
+      '<td class="px-3 py-2 text-center">' + roleBadge + '</td>' +
       '<td class="px-3 py-2 text-right whitespace-nowrap">' +
         '<button class="text-blue-600 hover:underline text-xs mr-2" data-staff-edit="' + s.rowIndex + '">編集</button>' +
         '<button class="text-red-600 hover:underline text-xs" data-staff-delete="' + s.rowIndex + '">削除</button>' +
@@ -1276,6 +1405,8 @@ function openStaffModal(mode, rowIndex) {
   const shopSelect = document.getElementById('staff-form-shop');
   const empNoInput = document.getElementById('staff-form-empno');
   const empNameInput = document.getElementById('staff-form-empname');
+  const googleAccountInput = document.getElementById('staff-form-google-account');
+  const isManagerInput = document.getElementById('staff-form-is-manager');
 
   if (mode === 'edit') {
     const staff = staffMasterCache.find(function (s) { return s.rowIndex === rowIndex; });
@@ -1283,11 +1414,15 @@ function openStaffModal(mode, rowIndex) {
     shopSelect.value = staff ? staff.officeCode : '';
     empNoInput.value = staff ? staff.employeeNo : '';
     empNameInput.value = staff ? staff.employeeName : '';
+    googleAccountInput.value = staff ? staff.googleAccount : '';
+    isManagerInput.checked = !!(staff && staff.isManager);
   } else {
     document.getElementById('staff-modal-title').textContent = 'スタッフを追加';
     shopSelect.value = '';
     empNoInput.value = '';
     empNameInput.value = '';
+    googleAccountInput.value = '';
+    isManagerInput.checked = false;
   }
   openAdminModal('staff-modal');
 }
@@ -1298,7 +1433,10 @@ function onSubmitStaffForm(ev) {
   const officeCode = document.getElementById('staff-form-shop').value;
   const empNo = document.getElementById('staff-form-empno').value.trim();
   const empName = document.getElementById('staff-form-empname').value.trim();
+  const googleAccount = document.getElementById('staff-form-google-account').value.trim();
+  const isManager = document.getElementById('staff-form-is-manager').checked;
   if (!officeCode || !empName) { showToast('所属店舗と社員名は必須です。', 'error'); return; }
+  if (isManager && !googleAccount) { showToast('管理者権限を付与するスタッフは、Googleアカウントの登録が必須です。', 'error'); return; }
 
   showLoading(true);
   const runner = google.script.run
@@ -1308,7 +1446,7 @@ function onSubmitStaffForm(ev) {
         showToast(rowIndexRaw ? 'スタッフ情報を更新しました。' : 'スタッフを追加しました。', 'success');
         closeAdminModal('staff-modal');
         loadAdminData();
-        loadAllData(); // フィルタ等の社員一覧を最新化
+        loadAllData(); // フィルタ等の社員一覧・権限コンテキストを最新化
       } else {
         showToast('保存に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
       }
@@ -1319,9 +1457,9 @@ function onSubmitStaffForm(ev) {
     });
 
   if (rowIndexRaw) {
-    runner.updateStaffMaster(Number(rowIndexRaw), officeCode, empNo, empName);
+    runner.updateStaffMaster(Number(rowIndexRaw), officeCode, empNo, empName, googleAccount, isManager);
   } else {
-    runner.addStaffMaster(officeCode, empNo, empName);
+    runner.addStaffMaster(officeCode, empNo, empName, googleAccount, isManager);
   }
 }
 

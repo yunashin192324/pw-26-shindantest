@@ -49,25 +49,29 @@
         </button>
       </div>
 
-      <!-- KPIサマリーカード -->
+      <!-- KPIサマリーカード（総数→リセール状況→リセール継続率(最重要)→成約/PAX→アラート の順） -->
+      <div id="user-scope-badge" class="hidden mb-2 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-1.5 inline-flex items-center gap-1.5 w-fit">
+        <i class="fa-solid fa-store"></i> <span id="user-scope-badge-text"></span>
+      </div>
       <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
         <div class="kpi-card bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-xl p-3 shadow">
           <p class="text-xs opacity-80">未成約相談総数</p>
           <p id="kpi-total" class="text-2xl font-bold">0</p>
         </div>
-        <div class="kpi-card bg-gradient-to-br from-emerald-500 to-emerald-600 text-white rounded-xl p-3 shadow">
-          <p class="text-xs opacity-80">成約件数 / PAX数</p>
-          <p class="text-2xl font-bold"><span id="kpi-contract">0</span> <span class="text-base font-normal">件 /</span> <span id="kpi-pax">0</span> <span class="text-base font-normal">人</span></p>
-        </div>
         <div class="kpi-card bg-gradient-to-br from-amber-500 to-amber-600 text-white rounded-xl p-3 shadow">
           <p class="text-xs opacity-80">リセールアクション数 / リセール中</p>
           <p class="text-2xl font-bold"><span id="kpi-resale-action">0</span> <span class="text-base font-normal">/</span> <span id="kpi-resale-progress">0</span></p>
         </div>
-        <div class="kpi-card bg-gradient-to-br from-indigo-500 to-indigo-600 text-white rounded-xl p-3 shadow">
-          <p class="text-xs opacity-80">全体リセール成約率</p>
-          <p id="kpi-resale-rate" class="text-2xl font-bold">0.0%</p>
+        <div class="kpi-card kpi-card-main relative bg-gradient-to-br from-indigo-600 via-indigo-600 to-purple-700 text-white rounded-xl p-3 shadow-lg ring-2 ring-indigo-300" title="リセール継続率 = リセールアクション数 ÷ 未成約件数（リセールをしない場合＝失注）">
+          <p class="absolute top-1.5 right-2 text-[10px] font-bold bg-white/20 rounded px-1.5 py-0.5">MAIN KPI</p>
+          <p class="text-xs opacity-90">⭐ リセール継続率</p>
+          <p id="kpi-resale-rate" class="text-3xl font-extrabold">0.0%</p>
         </div>
-        <div class="kpi-card bg-gradient-to-br from-rose-500 to-rose-600 text-white rounded-xl p-3 shadow" title="対象年月日から一定日数を過ぎてもSTS未入力（未対応）の件数">
+        <div class="kpi-card bg-gradient-to-br from-emerald-500 to-emerald-600 text-white rounded-xl p-3 shadow">
+          <p class="text-xs opacity-80">成約件数 / PAX数</p>
+          <p class="text-2xl font-bold"><span id="kpi-contract">0</span> <span class="text-base font-normal">件 /</span> <span id="kpi-pax">0</span> <span class="text-base font-normal">人</span></p>
+        </div>
+        <div class="kpi-card bg-gradient-to-br from-rose-500 to-rose-600 text-white rounded-xl p-3 shadow" title="前回アクション日（最終アクション日）から一定日数を過ぎてもSTS未入力（未対応）の件数">
           <p class="text-xs opacity-80">🔔 長期未対応アラート</p>
           <p id="kpi-alert-count" class="text-2xl font-bold">0</p>
         </div>
@@ -82,7 +86,7 @@
           <i class="fa-solid fa-users"></i> 個人別サマリー
         </button>
         <button data-tab="data" class="tab-btn flex-1 md:flex-none px-4 py-2 rounded-lg text-sm font-semibold bg-slate-100 text-slate-600">
-          <i class="fa-solid fa-table-list"></i> 未成約相談データ管理
+          <i class="fa-solid fa-table-list"></i> リセールリスト
         </button>
         <button data-tab="admin" class="tab-btn flex-1 md:flex-none px-4 py-2 rounded-lg text-sm font-semibold bg-slate-100 text-slate-600">
           <i class="fa-solid fa-gear"></i> 店舗・スタッフ管理
@@ -111,7 +115,7 @@
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div class="bg-white rounded-xl shadow p-4">
-          <h2 class="font-bold text-slate-700 mb-2"><i class="fa-solid fa-chart-column text-blue-600"></i> 月次推移（未成約件数 / 成約件数）</h2>
+          <h2 class="font-bold text-slate-700 mb-2"><i class="fa-solid fa-chart-column text-blue-600"></i> 月次推移（未成約数 / リセール実施数）</h2>
           <canvas id="chart1" height="220"></canvas>
         </div>
         <div class="bg-white rounded-xl shadow p-4">
@@ -128,6 +132,7 @@
               <th class="sortable px-3 py-2 text-left" data-sort="shopName">店舗</th>
               <th class="sortable px-3 py-2 text-right" data-sort="total">未成約数</th>
               <th class="sortable px-3 py-2 text-right" data-sort="resaleAction">リセール数</th>
+              <th class="sortable px-3 py-2 text-right bg-indigo-50" data-sort="resaleContinueRate">⭐ リセール継続率</th>
               <th class="sortable px-3 py-2 text-right" data-sort="contract">成約数</th>
               <th class="sortable px-3 py-2 text-right" data-sort="pax">PAX</th>
               <th class="sortable px-3 py-2 text-right" data-sort="resaleRate">リセール成約率</th>
@@ -142,13 +147,14 @@
     <section id="tab-panel-employee" class="tab-panel hidden space-y-5">
       <div class="bg-white rounded-xl shadow p-4 flex flex-wrap gap-3 items-center justify-between">
         <div class="flex gap-2">
-          <button id="btn-emp-first" class="emp-toggle-btn px-4 py-2 rounded-lg text-sm font-semibold bg-blue-700 text-white">上期（12月〜4月）</button>
+          <button id="btn-emp-first" class="emp-toggle-btn px-4 py-2 rounded-lg text-sm font-semibold bg-blue-700 text-white">上期（11月〜4月）</button>
           <button id="btn-emp-second" class="emp-toggle-btn px-4 py-2 rounded-lg text-sm font-semibold bg-slate-100 text-slate-600">下期（5月〜10月）</button>
         </div>
         <input id="emp-search" type="text" placeholder="社員名・社員番号・店舗名で検索" class="border border-slate-300 rounded-lg text-sm p-2 w-72">
       </div>
 
       <div class="bg-white rounded-xl shadow p-4">
+        <p class="text-xs text-slate-500 mb-2"><i class="fa-solid fa-circle-info"></i> 社員名をクリックすると、その方の未成約理由・都市コード別の詳細内訳が見られます。</p>
         <div class="overflow-auto max-h-[65vh]">
           <table class="min-w-full text-sm whitespace-nowrap">
             <thead id="employee-thead" class="bg-slate-100 text-slate-600 sticky top-0 z-10"></thead>
@@ -159,16 +165,16 @@
       </div>
     </section>
 
-    <!-- ============ タブ3: 未成約相談データ管理 ============ -->
+    <!-- ============ タブ3: リセールリスト ============ -->
     <section id="tab-panel-data" class="tab-panel hidden space-y-5">
       <!-- データ登録の入口（新規登録・CSVインポート）はここに集約 -->
       <div class="bg-white rounded-xl shadow p-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 class="text-base font-bold text-slate-800"><i class="fa-solid fa-table-list text-blue-600"></i> 未成約相談データ管理</h2>
+          <h2 class="text-base font-bold text-slate-800"><i class="fa-solid fa-table-list text-blue-600"></i> リセールリスト</h2>
           <p class="text-xs text-slate-500 mt-0.5">新しい相談の登録・営業日報CSVの取り込みはこちらから行います。</p>
         </div>
         <div class="flex gap-2">
-          <button id="btn-open-csv-modal" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-semibold shadow">
+          <button id="btn-open-csv-modal" class="hidden bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-semibold shadow" title="CSVインポートは管理者権限（所長・チーフ）のみ利用できます">
             <i class="fa-solid fa-file-csv"></i> CSVインポート
           </button>
           <button id="btn-open-modal" class="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-4 py-2 text-sm font-semibold shadow">
@@ -232,20 +238,20 @@
             <thead class="bg-slate-100 text-slate-600 sticky top-0 z-10">
               <tr>
                 <th class="px-2 py-2 text-center" title="長期未対応アラート">🔔</th>
-                <th class="px-3 py-2 text-left">店舗</th>
-                <th class="px-3 py-2 text-left">リセール</th>
-                <th class="px-3 py-2 text-left">STS</th>
-                <th class="px-3 py-2 text-right">成約PAX</th>
                 <th class="px-3 py-2 text-left">対象年月日</th>
+                <th class="px-3 py-2 text-left">店舗</th>
                 <th class="px-3 py-2 text-left">社員名</th>
+                <th class="px-3 py-2 text-left">STS</th>
+                <th class="px-3 py-2 text-left">リセール</th>
+                <th class="px-3 py-2 text-right">成約PAX</th>
                 <th class="px-3 py-2 text-left">未成約理由(大)</th>
                 <th class="px-3 py-2 text-left">都市コード</th>
                 <th class="px-3 py-2 text-left">種別</th>
                 <th class="px-3 py-2 text-left">旅行目的(小)</th>
                 <th class="px-3 py-2 text-left">接客方法</th>
-                <th class="px-3 py-2 text-left w-64">詳細</th>
                 <th class="px-3 py-2 text-left">ACT日</th>
                 <th class="px-3 py-2 text-left">ACT内容</th>
+                <th class="px-3 py-2 text-left w-64">詳細</th>
                 <th class="px-3 py-2 text-left">備考</th>
                 <th class="px-3 py-2 text-left w-48">進捗メモ</th>
               </tr>
@@ -311,6 +317,8 @@
                   <th class="px-3 py-2 text-left">所属店舗</th>
                   <th class="px-3 py-2 text-left">社員番号</th>
                   <th class="px-3 py-2 text-left">社員名</th>
+                  <th class="px-3 py-2 text-left">Googleアカウント</th>
+                  <th class="px-3 py-2 text-center">権限</th>
                   <th class="px-3 py-2 text-right">操作</th>
                 </tr>
               </thead>
@@ -509,6 +517,18 @@
           <label class="text-xs font-semibold text-slate-500 block mb-1">社員名 <span class="text-red-500">*</span></label>
           <input type="text" id="staff-form-empname" required class="w-full border border-slate-300 rounded-lg text-sm p-2">
         </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">Googleアカウント（gmail等）</label>
+          <input type="email" id="staff-form-google-account" placeholder="example@gmail.com" class="w-full border border-slate-300 rounded-lg text-sm p-2">
+          <p class="text-xs text-slate-400 mt-1">ログイン時にここに登録したアカウントで本人を識別します。所長・チーフは必ず登録してください。</p>
+        </div>
+        <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+          <label class="flex items-center gap-2 text-sm font-semibold text-indigo-800 cursor-pointer select-none">
+            <input type="checkbox" id="staff-form-is-manager" class="w-4 h-4 accent-indigo-700">
+            管理者権限（所長・チーフ）を付与する
+          </label>
+          <p class="text-xs text-indigo-600 mt-1 ml-6">オンにすると、全店舗のデータ閲覧・CSVインポートが可能になります。オフの場合は自店舗のデータのみ閲覧できます。</p>
+        </div>
         <div class="flex justify-end gap-3 pt-2 border-t border-slate-100">
           <button type="button" data-close-modal="staff-modal" class="px-4 py-2 rounded-lg text-sm font-semibold text-slate-500 hover:bg-slate-100">キャンセル</button>
           <button type="submit" class="px-5 py-2 rounded-lg text-sm font-semibold bg-blue-700 hover:bg-blue-800 text-white shadow">
@@ -516,6 +536,29 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- ============ 個人詳細ドリルダウンモーダル ============ -->
+  <div id="employee-detail-modal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 sticky top-0 bg-white rounded-t-2xl">
+        <h3 class="font-bold text-lg text-blue-800"><i class="fa-solid fa-magnifying-glass"></i> <span id="employee-detail-name">－</span> さんの詳細</h3>
+        <button type="button" data-close-modal="employee-detail-modal" class="text-slate-400 hover:text-slate-700 text-xl">&times;</button>
+      </div>
+      <div class="p-6 space-y-5">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="employee-detail-kpis"></div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div>
+            <h4 class="font-bold text-slate-700 mb-2 text-sm"><i class="fa-solid fa-city text-blue-600"></i> 都市コード別 未成約件数</h4>
+            <div id="employee-detail-city-list" class="space-y-1.5 text-sm max-h-64 overflow-auto pr-1"></div>
+          </div>
+          <div>
+            <h4 class="font-bold text-slate-700 mb-2 text-sm"><i class="fa-solid fa-circle-question text-blue-600"></i> 未成約理由(大) 別件数</h4>
+            <div id="employee-detail-reason-list" class="space-y-1.5 text-sm max-h-64 overflow-auto pr-1"></div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 

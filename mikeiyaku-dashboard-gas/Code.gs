@@ -48,7 +48,7 @@ const HEADERS_27 = [
   'ACT内容',
   '備考',
   '記録番号',
-  '入力日',
+  '最終アクション日',
   '対応状況',
   '予約番号',
   '次回ACT・進捗★手入力',
@@ -171,6 +171,7 @@ function getShopList_() {
 
 /**
  * 「スタッフマスタ」シートの全行を返す。
+ * 列構成: 営業所コード / 社員番号 / 社員名 / Googleアカウント / 管理者権限 / 有効
  */
 function getStaffMasterRows_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -180,16 +181,86 @@ function getStaffMasterRows_() {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
 
-  const values = sheet.getRange(2, 1, lastRow - 1, 4).getValues();
+  const values = sheet.getRange(2, 1, lastRow - 1, 6).getValues();
   const list = [];
   values.forEach(function (row, i) {
     const officeCode = String(row[0] || '').trim();
     const empNo = row[1];
     const empName = String(row[2] || '').trim();
+    const googleAccount = String(row[3] || '').trim();
+    const isManager = row[4] === true || String(row[4]).trim().toUpperCase() === 'TRUE';
     if (!empName && (empNo === '' || empNo === null)) return;
-    list.push({ rowIndex: i + 2, officeCode: officeCode, employeeNo: empNo, employeeName: empName, active: row[3] !== false });
+    list.push({
+      rowIndex: i + 2,
+      officeCode: officeCode,
+      employeeNo: empNo,
+      employeeName: empName,
+      googleAccount: googleAccount,
+      isManager: isManager,
+      active: row[5] !== false
+    });
   });
   return list;
+}
+
+/**
+ * ログイン中ユーザーの権限コンテキストを解決する。
+ * Session.getActiveUser().getEmail() で取得したメールアドレスを「スタッフマスタ」の
+ * Googleアカウント列と照合し、一致すればその人の店舗・管理者権限を返す。
+ * ・管理者権限（所長・チーフ）＝ isManager: true → 全店舗のデータを閲覧可能
+ * ・一般スタッフ（isManager: false）→ officeCode で自店舗のデータのみに絞り込む
+ * ・メール取得不可、またはスタッフマスタに未登録（導入初期の未登録ユーザー等）の場合は
+ *   フェイルオープン（＝管理者相当として全店舗を表示）とする。締め出しを避けるため。
+ */
+function getCurrentUserContext_() {
+  let email = '';
+  try {
+    email = Session.getActiveUser().getEmail() || '';
+  } catch (e) {
+    email = '';
+  }
+
+  const staff = getStaffMasterRows_();
+  let matched = null;
+  if (email) {
+    const emailLower = email.trim().toLowerCase();
+    matched = staff.find(function (s) {
+      return s.googleAccount && s.googleAccount.trim().toLowerCase() === emailLower;
+    }) || null;
+  }
+
+  if (matched) {
+    const shopList = getShopList_();
+    const shop = shopList.find(function (s) { return s.code === matched.officeCode; });
+    return {
+      email: email,
+      identified: true,
+      isManager: !!matched.isManager,
+      officeCode: matched.officeCode,
+      officeName: shop ? shop.name : matched.officeCode,
+      employeeName: matched.employeeName
+    };
+  }
+
+  return {
+    email: email,
+    identified: false,
+    isManager: true,
+    officeCode: null,
+    officeName: null,
+    employeeName: null
+  };
+}
+
+/**
+ * フロントエンドから呼び出す、ログイン中ユーザーの権限コンテキスト取得API。
+ */
+function getCurrentUserContext() {
+  try {
+    return { success: true, context: getCurrentUserContext_() };
+  } catch (err) {
+    return { success: false, error: err.message + '\n' + err.stack };
+  }
 }
 
 /**
@@ -197,13 +268,19 @@ function getStaffMasterRows_() {
  */
 function getMetaMasters() {
   try {
-    const shopList = getShopList_();
+    const ctx = getCurrentUserContext_();
+    let shopList = getShopList_();
+    if (!ctx.isManager && ctx.officeCode) {
+      shopList = shopList.filter(function (s) { return s.code === ctx.officeCode; });
+    }
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const employeeMap = {};
 
     // スタッフマスタに登録済みの社員（まだ実績が無いスタッフも含む）を先に反映
+    // （一般スタッフは自店舗のスタッフのみに絞り込む）
     getStaffMasterRows_().forEach(function (s) {
       if (!s.active) return;
+      if (!ctx.isManager && ctx.officeCode && s.officeCode !== ctx.officeCode) return;
       const key = String(s.employeeNo) + '_' + String(s.employeeName);
       employeeMap[key] = { employeeNo: s.employeeNo, employeeName: s.employeeName, officeCode: s.officeCode };
     });
@@ -240,7 +317,8 @@ function getMetaMasters() {
       typeMaster: TYPE_MASTER.slice(),
       purposeMaster: PURPOSE_MASTER.slice(),
       contactMaster: CONTACT_MASTER.slice(),
-      employeeList: Object.keys(employeeMap).map(function (k) { return employeeMap[k]; })
+      employeeList: Object.keys(employeeMap).map(function (k) { return employeeMap[k]; }),
+      userContext: ctx
     };
   } catch (err) {
     return { success: false, error: err.message + '\n' + err.stack };
@@ -252,8 +330,12 @@ function getMetaMasters() {
  */
 function getDashboardData() {
   try {
+    const ctx = getCurrentUserContext_();
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const shopList = getShopList_();
+    let shopList = getShopList_();
+    if (!ctx.isManager && ctx.officeCode) {
+      shopList = shopList.filter(function (s) { return s.code === ctx.officeCode; });
+    }
     const result = [];
     const errorTokens = ['#NUM!', '#REF!', '#N/A', '#VALUE!', '#DIV/0!', '#NAME?', '#NULL!', '#ERROR!'];
     const lastCol = HEADERS_27.length;
@@ -289,16 +371,19 @@ function getDashboardData() {
       }
     });
 
-    return { success: true, data: result, count: result.length };
+    return { success: true, data: result, count: result.length, userContext: ctx };
   } catch (err) {
     return { success: false, error: err.message + '\n' + err.stack };
   }
 }
 
 /**
- * 統計値（リセール数／リセール中／成約件数／PAX数）を1行分のデータからバケットへ加算する。
+ * 統計値（未成約数／リセール数／リセール中／成約件数／PAX数）を1行分のデータからバケットへ加算する。
+ * ・未成約数：このバケットに属する全行数（＝分母。リセール継続率＝リセール数÷未成約数の算出に使用）
+ * ・リセール数：リセール列が「〇」の行数（＝リセールアクション数）
  */
 function accumulateEmployeeStats_(bucket, resale, sts, pax) {
+  bucket['未成約数'] += 1;
   if (resale === '〇') bucket['リセール数'] += 1;
   if (sts === 'リセール中') bucket['リセール中'] += 1;
   if (sts === '成約') {
@@ -315,12 +400,17 @@ function accumulateEmployeeStats_(bucket, resale, sts, pax) {
  */
 function getEmployeeSummary(period) {
   try {
+    const ctx = getCurrentUserContext_();
+    // 46期は11月始まり・10月終わり：上期＝11月～4月、下期＝5月～10月
     const monthCodes = period === 'second_half'
       ? ['05', '06', '07', '08', '09', '10']
-      : ['12', '01', '02', '03', '04'];
+      : ['11', '12', '01', '02', '03', '04'];
     const blockLabels = ['累計'].concat(monthCodes.map(monthLabel_));
 
-    const shopList = getShopList_();
+    let shopList = getShopList_();
+    if (!ctx.isManager && ctx.officeCode) {
+      shopList = shopList.filter(function (s) { return s.code === ctx.officeCode; });
+    }
     const shopNameByCode = {};
     shopList.forEach(function (s) { shopNameByCode[s.code] = s.name; });
 
@@ -332,7 +422,7 @@ function getEmployeeSummary(period) {
       if (!employeesByKey[key]) {
         const periods = {};
         blockLabels.forEach(function (label) {
-          periods[label] = { 'リセール数': 0, 'リセール中': 0, '成約件数': 0, 'PAX数': 0 };
+          periods[label] = { '未成約数': 0, 'リセール数': 0, 'リセール中': 0, '成約件数': 0, 'PAX数': 0 };
         });
         employeesByKey[key] = {
           officeCode: officeCode,
@@ -347,8 +437,10 @@ function getEmployeeSummary(period) {
     };
 
     // スタッフマスタ登録分は、実績が無くても一覧に表示されるよう先に確保しておく
+    // （一般スタッフは自店舗のスタッフのみに絞り込む）
     getStaffMasterRows_().forEach(function (s) {
       if (!s.active) return;
+      if (!ctx.isManager && ctx.officeCode && s.officeCode !== ctx.officeCode) return;
       ensureEmployee(s.officeCode, s.employeeNo, s.employeeName);
     });
 
@@ -385,7 +477,7 @@ function getEmployeeSummary(period) {
 
     const employees = order.map(function (key) { return employeesByKey[key]; });
 
-    return { success: true, blockOrder: blockLabels, employees: employees };
+    return { success: true, blockOrder: blockLabels, employees: employees, userContext: ctx };
   } catch (err) {
     return { success: false, error: err.message + '\n' + err.stack };
   }
@@ -449,6 +541,11 @@ function addUncontractedData(rowObject) {
  */
 function importUncontractedCsv(csvText) {
   try {
+    const ctx = getCurrentUserContext_();
+    if (!ctx.isManager) {
+      throw new Error('CSVインポートは管理者権限（所長・チーフ）を持つユーザーのみ実行できます。');
+    }
+
     if (!csvText || typeof csvText !== 'string') {
       throw new Error('CSVデータが空です。');
     }
@@ -540,7 +637,7 @@ function importUncontractedCsv(csvText) {
       newRow[17] = '';                              // ACT内容
       newRow[18] = '';                              // 備考
       newRow[19] = '';                              // 記録番号
-      newRow[20] = '';                              // 入力日
+      newRow[20] = '';                              // 最終アクション日
       newRow[21] = '';                              // 対応状況
       newRow[22] = getVal(row, '予約番号');
       newRow[23] = '';                              // 次回ACT・進捗★手入力（進捗メモ）
@@ -657,6 +754,10 @@ function updateStatus(sheetName, rowIndex, newStatus, contractPax) {
       sheet.getRange(rIdx, 3).clearContent(); // 成約PAXをクリア
     }
 
+    // アラート判定の基準日として、ステータス変更のたびに「最終アクション日」（21列目）を今日の日付で更新する
+    const todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    sheet.getRange(rIdx, 21).setValue(todayStr);
+
     const updatedValues = sheet.getRange(rIdx, 1, 1, HEADERS_27.length).getValues()[0];
     const updatedObj = {};
     for (let c = 0; c < HEADERS_27.length; c++) {
@@ -703,6 +804,13 @@ function updateCellValue(sheetName, rowIndex, columnName, value) {
     }
 
     sheet.getRange(rIdx, colIdx + 1).setValue(value);
+
+    // アラート判定の基準日として、セル編集のたびに「最終アクション日」（21列目）を今日の日付で更新する
+    // （最終アクション日そのものを手動編集した場合は、その値を尊重してここでは上書きしない）
+    if (colIdx + 1 !== 21) {
+      const todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      sheet.getRange(rIdx, 21).setValue(todayStr);
+    }
 
     const updatedValues = sheet.getRange(rIdx, 1, 1, HEADERS_27.length).getValues()[0];
     const updatedObj = {};
@@ -915,7 +1023,7 @@ function appendShopRowToSummary_(ss, shop) {
   const sheet = ss.getSheetByName(SUMMARY_SHEET_NAME);
   if (!sheet) return;
 
-  const MONTH_CODES_FULL = ['12', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11'];
+  const MONTH_CODES_FULL = ['11', '12', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10'];
   const blockLabels = ['46期累計'].concat(MONTH_CODES_FULL.map(monthLabel_));
   const blockStartCols = [];
   let cursor = 1;
@@ -1044,6 +1152,8 @@ function getStaffMasterList() {
           officeName: shopNameByCode[s.officeCode] || s.officeCode,
           employeeNo: s.employeeNo,
           employeeName: s.employeeName,
+          googleAccount: s.googleAccount,
+          isManager: s.isManager,
           active: s.active
         };
       }),
@@ -1056,11 +1166,15 @@ function getStaffMasterList() {
 
 /**
  * スタッフマスタへ新しいスタッフを1件追加する（実績の有無に関わらず事前登録できる）。
+ * @param {string} googleAccount ログイン権限判定に使うGoogleアカウント（gmail等）。所長・チーフは必須。
+ * @param {boolean} isManager 管理者権限（所長・チーフ）フラグ。trueの場合、全店舗のデータを閲覧できる。
  */
-function addStaffMaster(officeCode, employeeNo, employeeName) {
+function addStaffMaster(officeCode, employeeNo, employeeName, googleAccount, isManager) {
   try {
     officeCode = String(officeCode || '').trim();
     employeeName = String(employeeName || '').trim();
+    googleAccount = String(googleAccount || '').trim();
+    isManager = !!isManager;
     if (!officeCode || !employeeName) {
       throw new Error('所属店舗と社員名は必須です。');
     }
@@ -1074,13 +1188,16 @@ function addStaffMaster(officeCode, employeeNo, employeeName) {
     if (existing.some(function (s) { return String(s.employeeNo) === String(employeeNo) && s.employeeName === employeeName; })) {
       throw new Error('同じ社員番号・社員名のスタッフが既に登録されています。');
     }
+    if (googleAccount && existing.some(function (s) { return s.googleAccount && s.googleAccount.toLowerCase() === googleAccount.toLowerCase(); })) {
+      throw new Error('同じGoogleアカウントが既に別のスタッフに登録されています。');
+    }
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(STAFF_MASTER_SHEET_NAME);
     if (!sheet) {
       throw new Error('「スタッフマスタ」シートが見つかりません。InitSheet.gs の setupAllSheets() を実行してください。');
     }
-    sheet.appendRow([officeCode, employeeNo === undefined || employeeNo === null ? '' : employeeNo, employeeName, true]);
+    sheet.appendRow([officeCode, employeeNo === undefined || employeeNo === null ? '' : employeeNo, employeeName, googleAccount, isManager, true]);
 
     return { success: true };
   } catch (err) {
@@ -1091,7 +1208,7 @@ function addStaffMaster(officeCode, employeeNo, employeeName) {
 /**
  * スタッフマスタの既存行を更新する（rowIndexで対象行を特定）。
  */
-function updateStaffMaster(rowIndex, officeCode, employeeNo, employeeName) {
+function updateStaffMaster(rowIndex, officeCode, employeeNo, employeeName, googleAccount, isManager) {
   try {
     const rIdx = parseInt(rowIndex, 10);
     if (isNaN(rIdx) || rIdx < 2) {
@@ -1099,6 +1216,8 @@ function updateStaffMaster(rowIndex, officeCode, employeeNo, employeeName) {
     }
     officeCode = String(officeCode || '').trim();
     employeeName = String(employeeName || '').trim();
+    googleAccount = String(googleAccount || '').trim();
+    isManager = !!isManager;
     if (!officeCode || !employeeName) {
       throw new Error('所属店舗と社員名は必須です。');
     }
@@ -1108,12 +1227,17 @@ function updateStaffMaster(rowIndex, officeCode, employeeNo, employeeName) {
       throw new Error('不正な店舗（営業所コード）です: ' + officeCode);
     }
 
+    const existing = getStaffMasterRows_();
+    if (googleAccount && existing.some(function (s) { return s.rowIndex !== rIdx && s.googleAccount && s.googleAccount.toLowerCase() === googleAccount.toLowerCase(); })) {
+      throw new Error('同じGoogleアカウントが既に別のスタッフに登録されています。');
+    }
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(STAFF_MASTER_SHEET_NAME);
     if (!sheet) {
       throw new Error('「スタッフマスタ」シートが見つかりません。');
     }
-    sheet.getRange(rIdx, 1, 1, 3).setValues([[officeCode, employeeNo === undefined || employeeNo === null ? '' : employeeNo, employeeName]]);
+    sheet.getRange(rIdx, 1, 1, 5).setValues([[officeCode, employeeNo === undefined || employeeNo === null ? '' : employeeNo, employeeName, googleAccount, isManager]]);
 
     return { success: true };
   } catch (err) {
