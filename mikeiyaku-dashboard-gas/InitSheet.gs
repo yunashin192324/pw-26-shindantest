@@ -4,7 +4,7 @@
  * 「46期未成約リスト」ダッシュボード - データベース（スプレッドシート）初期化スクリプト
  * ----------------------------------------------------------------------------
  * このファイルをGoogle Apps Scriptエディタに貼り付け、setupAllSheets() を実行するだけで、
- *   ① 店舗別データシート（10枚・27列共通ヘッダー）
+ *   ① 店舗別データシート（10枚・28列共通ヘッダー）
  *   ② 店舗別サマリシート（46期累計＋月別12ブロックの集計テンプレート）
  *   ③ 個人別サマリ(上期) / 個人別サマリ(下期) シート（2段ヘッダーのダミーレイアウト）
  *   ④ 店舗マスタ / スタッフマスタ シート（Webアプリの「店舗・スタッフ管理」タブが読み書きする台帳）
@@ -43,8 +43,8 @@ function setupAllSheets() {
     { code: 'B79', name: '(旧)イオンモール甲府昭和' }
   ];
 
-  // ---- 店舗別データシート 共通27列ヘッダー ------------------------------
-  const HEADERS_27 = [
+  // ---- 店舗別データシート 共通ヘッダー（28列） --------------------------
+  const HEADERS_MAIN = [
     'リセール',                  // 1
     'STS',                        // 2
     '成約PAX',                    // 3
@@ -71,7 +71,8 @@ function setupAllSheets() {
     '次回ACT・進捗★手入力',       // 24
     '相談予約No☆自動反映',        // 25
     '名前☆自動反映',              // 26
-    '連絡先☆自動反映'             // 27
+    '連絡先☆自動反映',            // 27
+    '方面'                        // 28（後から追加した列。既存データを壊さないため末尾に置く）
   ];
 
   // ---- 46期の月順（11月始まり・10月終わり）------------------------------
@@ -80,7 +81,7 @@ function setupAllSheets() {
   const FIRST_HALF_CODES = ['11', '12', '01', '02', '03', '04'];
   const SECOND_HALF_CODES = ['05', '06', '07', '08', '09', '10'];
 
-  createShopSheets_(ss, SHOP_LIST, HEADERS_27);
+  createShopSheets_(ss, SHOP_LIST, HEADERS_MAIN);
   createShopSummarySheet_(ss, SHOP_LIST, MONTH_CODES_FULL);
   createEmployeeSummarySheet_(ss, '個人別サマリ(上期)', FIRST_HALF_CODES);
   createEmployeeSummarySheet_(ss, '個人別サマリ(下期)', SECOND_HALF_CODES);
@@ -91,18 +92,21 @@ function setupAllSheets() {
 }
 
 /**
- * ① 店舗別データシート（10枚）を作成し、27列の共通ヘッダーを書き込む。
- * 既存シートがある場合はスキップ（上書きしない）。
+ * ① 店舗別データシート（10枚）を作成し、共通ヘッダーを書き込む。
+ * 既存シートがある場合はデータを残したまま、不足している列（後から追加した「方面」など）だけを補修する。
  */
 function createShopSheets_(ss, shopList, headers) {
   shopList.forEach(function (shop) {
     const existing = ss.getSheetByName(shop.name);
     if (existing) {
-      Logger.log('シート「' + shop.name + '」は既に存在するためスキップしました。');
+      // 既存シートはデータを保持したまま、見出しの不足分だけを補う
+      repairShopSheetHeaders_(existing, headers);
+      Logger.log('シート「' + shop.name + '」は既存のため、見出しの不足分のみ補修しました。');
       return;
     }
 
     const sheet = ss.insertSheet(shop.name);
+    ensureColumnCount_(sheet, headers.length);
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     sheet.setFrozenRows(1);
     sheet.getRange(1, 1, 1, headers.length)
@@ -112,6 +116,37 @@ function createShopSheets_(ss, shopList, headers) {
       .setHorizontalAlignment('center');
     sheet.setColumnWidths(1, headers.length, 110);
   });
+}
+
+/**
+ * シートの列数が必要数に満たない場合に列を追加する。
+ * 新規シートの既定列数（26列）より多い見出しを書き込む際に必要。
+ */
+function ensureColumnCount_(sheet, needed) {
+  const current = sheet.getMaxColumns();
+  if (current < needed) {
+    sheet.insertColumnsAfter(current, needed - current);
+  }
+}
+
+/**
+ * 既存の店舗別データシートに、後から追加した列（「方面」など）の見出しが無い場合に補う。
+ * 既存の行データはそのまま残り、追加された列は空欄になる。何度実行しても安全。
+ */
+function repairShopSheetHeaders_(sheet, headers) {
+  ensureColumnCount_(sheet, headers.length);
+  const current = sheet.getRange(1, 1, 1, headers.length).getValues()[0];
+  let changed = false;
+  const next = headers.map(function (h, i) {
+    const cur = String(current[i] === undefined || current[i] === null ? '' : current[i]).trim();
+    if (cur === '') { changed = true; return h; }
+    return current[i];
+  });
+  if (changed) {
+    sheet.getRange(1, 1, 1, headers.length).setValues([next]);
+    sheet.getRange(1, 1, 1, headers.length)
+      .setFontWeight('bold').setBackground('#1c4587').setFontColor('#ffffff').setHorizontalAlignment('center');
+  }
 }
 
 /**

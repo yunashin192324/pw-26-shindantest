@@ -22,6 +22,8 @@ let availablePeriods = [];           // getAvailablePeriods() が返す直近2�
 let currentEmployeePeriod = null;    // 現在選択中の期キー
 let myChart1 = null;
 let myChart2 = null;
+// 方面・接客方法・旅行目的(小) の内訳グラフ
+const breakdownCharts = { 'chart-direction': null, 'chart-contact': null, 'chart-purpose': null };
 let dmCurrentPage = 1;
 let dmFilteredCache = [];
 let rankingSortState = { key: 'total', dir: 'desc' };
@@ -493,6 +495,23 @@ function buildAiSummaryText() {
   L.push('');
 
   // ---- 接客方法別 ----
+  const directionCounts = {};
+  data.forEach(function (r) {
+    const k = r['方面'] || '(未設定)';
+    if (!directionCounts[k]) directionCounts[k] = { total: 0, resale: 0, contract: 0 };
+    directionCounts[k].total++;
+    if (r['リセール'] === '〇') directionCounts[k].resale++;
+    if (r['STS'] === '成約') directionCounts[k].contract++;
+  });
+  L.push('## 方面別');
+  L.push('方面\t未成約数\t構成比%\tリセール継続率%\t成約数');
+  Object.keys(directionCounts).sort(function (a, b) { return directionCounts[b].total - directionCounts[a].total; })
+    .forEach(function (k) {
+      const c = directionCounts[k];
+      L.push([k, c.total, pct(c.total, all.total), pct(c.resale, c.total), c.contract].join('\t'));
+    });
+  L.push('');
+
   const contactCounts = {};
   data.forEach(function (r) {
     const k = r['接客方法'] || '(未設定)';
@@ -513,7 +532,7 @@ function buildAiSummaryText() {
   L.push('## お願いしたい分析');
   L.push('上のデータをもとに、次の点を日本語で分析してください。');
   L.push('1. リセール継続率が低い店舗はどこか。全体平均と比べてどれくらい差があるか。');
-  L.push('2. 継続率が低い店舗は、未成約理由や接客方法に偏りがあるか。');
+  L.push('2. 継続率が低い店舗は、未成約理由・方面・接客方法・旅行目的に偏りがあるか。');
   L.push('3. 期や月をまたいで継続率が落ちている時期はあるか。季節要因か、フォロー漏れか。');
   L.push('4. 長期未対応が多い店舗はどこか。件数だけでなく未成約数に対する比率でも見てほしい。');
   L.push('5. 明日から店舗で実行できる改善策を、優先度の高い順に3つ提案してほしい。');
@@ -571,7 +590,80 @@ function renderDashboardTab() {
   renderKpi(filtered);
   renderChart1(filtered);
   renderChart2(filtered);
+  renderBreakdownChart('chart-direction', filtered, '方面');
+  renderBreakdownChart('chart-contact', filtered, '接客方法');
+  renderBreakdownChart('chart-purpose', filtered, '旅行目的(小)');
   renderRankingTable(filtered);
+}
+
+/**
+ * 指定した列（方面・接客方法・旅行目的(小)など）ごとの内訳グラフを描く。
+ * 棒＝未成約数、折れ線＝リセール継続率(%)。件数の多い順に上位10区分を表示する。
+ * 「どの区分でフォローが手薄か」を1枚で読み取れるようにするのが狙い。
+ */
+function renderBreakdownChart(canvasId, data, columnName) {
+  const counts = {};
+  data.forEach(function (r) {
+    const key = String(r[columnName] || '').trim() || '(未設定)';
+    if (!counts[key]) counts[key] = { total: 0, resale: 0 };
+    counts[key].total += 1;
+    if (r['リセール'] === '〇') counts[key].resale += 1;
+  });
+
+  const labels = Object.keys(counts)
+    .sort(function (a, b) { return counts[b].total - counts[a].total; })
+    .slice(0, 10);
+  const totals = labels.map(function (l) { return counts[l].total; });
+  const rates = labels.map(function (l) {
+    return counts[l].total > 0 ? Number(((counts[l].resale / counts[l].total) * 100).toFixed(1)) : 0;
+  });
+
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  if (breakdownCharts[canvasId]) { breakdownCharts[canvasId].destroy(); }
+
+  // データが1件も無い場合は空のグラフを描いて「該当なし」を明示する
+  breakdownCharts[canvasId] = new Chart(canvas.getContext('2d'), {
+    data: {
+      labels: labels.length ? labels : ['該当なし'],
+      datasets: [
+        {
+          type: 'bar', label: '未成約数', data: labels.length ? totals : [0],
+          backgroundColor: '#93c5fd', borderRadius: 4, yAxisID: 'y', order: 2
+        },
+        {
+          type: 'line', label: 'リセール継続率(%)', data: labels.length ? rates : [0],
+          borderColor: '#4338ca', backgroundColor: '#4338ca', borderWidth: 2,
+          tension: 0.3, pointRadius: 3, yAxisID: 'y1', order: 1
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top', labels: { boxWidth: 10, font: { size: 10 } } },
+        tooltip: {
+          callbacks: {
+            label: function (c) {
+              if (c.dataset.type === 'line') return 'リセール継続率: ' + c.parsed.y + '%';
+              return '未成約数: ' + c.parsed.y + '件';
+            }
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { font: { size: 9 }, maxRotation: 60, minRotation: 30, autoSkip: false } },
+        y: { beginAtZero: true, position: 'left', ticks: { precision: 0, font: { size: 9 } }, title: { display: false } },
+        y1: {
+          beginAtZero: true, max: 100, position: 'right',
+          grid: { drawOnChartArea: false },
+          ticks: { font: { size: 9 }, callback: function (v) { return v + '%'; } }
+        }
+      }
+    }
+  });
 }
 
 function renderKpi(data) {
@@ -977,11 +1069,9 @@ function renderDataManagerGrid() {
       ? '<td class="px-2 py-2 text-center text-rose-600" title="前回アクションから' + alertDays + '日経過・未対応です">🔔</td>'
       : '<td class="px-2 py-2 text-center"></td>';
 
+    // 列順：スタッフが毎日触る編集項目（リセール〜メモ）を左端にまとめ、
+    // 参照用のCSV由来項目をその右に並べる
     return '<tr class="' + rowClass + '" data-rid="' + rid + '">' +
-      alertCell +
-      '<td class="px-3 py-2">' + escapeHtml(row.__sheetName) + '</td>' +
-      '<td class="px-3 py-2">' + escapeHtml(row['社員名']) + '</td>' +
-      '<td class="px-3 py-2">' + escapeHtml(row['対象年月日']) + '</td>' +
       '<td class="px-2 py-1">' +
         '<select class="resale-select border border-slate-300 rounded px-1 py-1 text-xs" data-sheet="' + escapeHtml(row.__sheetName) + '" data-row="' + row.__rowIndex + '">' +
           '<option value="">－</option>' + resaleOptions +
@@ -993,15 +1083,20 @@ function renderDataManagerGrid() {
         '</select>' +
       '</td>' +
       editableCellTd(row, '成約PAX', 'number') +
-      '<td class="px-3 py-2">' + escapeHtml(row['未成約理由(大)']) + '</td>' +
-      '<td class="px-3 py-2">' + escapeHtml(row['都市コード']) + '</td>' +
-      '<td class="px-3 py-2">' + escapeHtml(row['種別']) + '</td>' +
-      '<td class="px-3 py-2">' + escapeHtml(row['旅行目的(小)']) + '</td>' +
-      '<td class="px-3 py-2">' + escapeHtml(row['接客方法']) + '</td>' +
-      readonlyDetailTd(row, '詳細') +
       editableCellTd(row, 'ACT日', 'text') +
       editableCellTd(row, 'ACT内容', 'text') +
       editableCellTd(row, '次回ACT・進捗★手入力', 'text') +
+      alertCell +
+      '<td class="px-3 py-2">' + escapeHtml(row.__sheetName) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(row['社員名']) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(row['対象年月日']) + '</td>' +
+      readonlyDetailTd(row, '詳細') +
+      '<td class="px-3 py-2">' + escapeHtml(row['未成約理由(大)']) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(row['都市コード']) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(row['方面']) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(row['種別']) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(row['旅行目的(小)']) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(row['接客方法']) + '</td>' +
       '</tr>';
   }).join('');
 

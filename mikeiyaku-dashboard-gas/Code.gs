@@ -26,8 +26,8 @@ const DEFAULT_SHOP_LIST = [
   { code: 'B79', name: '(旧)イオンモール甲府昭和' }
 ];
 
-// ---- 店舗別データシート 共通27列ヘッダー（順序はシートの実列と完全一致） --
-const HEADERS_27 = [
+// ---- 店舗別データシート 共通ヘッダー28列（順序はシートの実列と完全一致） --
+const HEADERS_MAIN = [
   'リセール',
   'STS',
   '成約PAX',
@@ -54,7 +54,8 @@ const HEADERS_27 = [
   '次回ACT・進捗★手入力',
   '相談予約No☆自動反映',
   '名前☆自動反映',
-  '連絡先☆自動反映'
+  '連絡先☆自動反映',
+  '方面'   // 28列目（後から追加。既存データを壊さないため末尾に置いている）
 ];
 
 // ---- 各種ドロップダウンマスタ（固定選択肢） -------------------------------
@@ -319,7 +320,7 @@ function getMetaMasters() {
       const lastRow = sheet.getLastRow();
       if (lastRow < 2) return;
 
-      const values = sheet.getRange(2, 1, lastRow - 1, HEADERS_27.length).getValues();
+      const values = sheet.getRange(2, 1, lastRow - 1, HEADERS_MAIN.length).getValues();
       values.forEach(function (row) {
         const empNo = row[6];  // 社員番号（7列目）
         const empName = row[7]; // 社員名（8列目）
@@ -451,7 +452,7 @@ function getDashboardData() {
     }
     const result = [];
     const errorTokens = ['#NUM!', '#REF!', '#N/A', '#VALUE!', '#DIV/0!', '#NAME?', '#NULL!', '#ERROR!'];
-    const lastCol = HEADERS_27.length;
+    const lastCol = HEADERS_MAIN.length;
     const cutoffDate = getRetentionCutoffDate_();
 
     shopList.forEach(function (shop) {
@@ -480,7 +481,7 @@ function getDashboardData() {
 
         const obj = {};
         for (let c = 0; c < lastCol; c++) {
-          obj[HEADERS_27[c]] = serializeCellValue_(row[c]);
+          obj[HEADERS_MAIN[c]] = serializeCellValue_(row[c]);
         }
         obj.__sheetName = shop.name;
         obj.__rowIndex = i + 2; // スプレッドシート上の物理行番号（2行目スタート）
@@ -565,7 +566,7 @@ function getEmployeeSummary(periodKey) {
       const lastRow = sheet.getLastRow();
       if (lastRow < 2) return;
 
-      const values = sheet.getRange(2, 1, lastRow - 1, HEADERS_27.length).getValues();
+      const values = sheet.getRange(2, 1, lastRow - 1, HEADERS_MAIN.length).getValues();
       values.forEach(function (row) {
         const resale = row[0];
         const sts = row[1];
@@ -627,7 +628,7 @@ function addUncontractedData(rowObject) {
     }
 
     // 27列の共通カラム順に、送信オブジェクトの値をマッピングして1次元配列を作成
-    const newRow = HEADERS_27.map(function (header) {
+    const newRow = HEADERS_MAIN.map(function (header) {
       const v = rowObject[header];
       return (v === undefined || v === null) ? '' : v;
     });
@@ -640,7 +641,7 @@ function addUncontractedData(rowObject) {
 
     const lastRow = sheet.getLastRow();
     const targetRowIndex = lastRow + 1;
-    sheet.getRange(targetRowIndex, 1, 1, HEADERS_27.length).setValues([newRow]);
+    sheet.getRange(targetRowIndex, 1, 1, HEADERS_MAIN.length).setValues([newRow]);
 
     return {
       success: true,
@@ -657,12 +658,12 @@ function addUncontractedData(rowObject) {
  * 営業日報から抽出したCSVを一括投入する（マスタ管理者のみ実行可能）。
  * ・CSVはメタ情報の行が先頭に含まれていても構わない（先頭セルが「対象年月日」の行をヘッダー行として自動検出）。
  * ・実際の営業日報CSVは以下の33列を含むが、ヘッダー名で参照するため列の並び順やCSV側の
- *   追加列（未成約理由(小)・方面・国名・都市名・エージェント・出発日・キャリア・ホテル・
+ *   追加列（未成約理由(小)・国名・都市名・エージェント・出発日・キャリア・ホテル・
  *   媒体カテゴリ名・媒体名・旅行目的(大)・大学名・企業名・本部コード・本部名・エリアコード・
  *   エリア名・営業所名・班コード・班名など）があっても影響を受けない。
- *   このシステムが実際に取り込むのは次の12列のみ：
+ *   このシステムが実際に取り込むのは次の13列のみ：
  *     対象年月日・営業所コード・社員番号・社員名・未成約理由(大)・都市コード・種別・
- *     出発年月・旅行目的(小)・接客方法・HIS利用歴・詳細
+ *     出発年月・旅行目的(小)・接客方法・HIS利用歴・詳細・方面
  *   （「予約番号」はCSVからは取り込まず、成約時に「新規相談登録」画面等から手入力する運用）
  * ・「営業所コード」列の値から投入先の店舗シートを判定する。未登録の営業所コードは
  *   仮の店舗名で店舗マスタへ自動登録される（店舗・スタッフの登録は基本CSVインポートから行う運用のため）。
@@ -799,6 +800,7 @@ function importUncontractedCsv(csvText) {
       newRow[24] = '';                              // 相談予約No☆自動反映
       newRow[25] = '';                              // 名前☆自動反映
       newRow[26] = '';                              // 連絡先☆自動反映
+      newRow[27] = getVal(row, '方面');             // 方面（ダッシュボードの方面別グラフで使用）
 
       if (!rowsBySheet[sheetName]) rowsBySheet[sheetName] = [];
       rowsBySheet[sheetName].push(newRow);
@@ -823,7 +825,7 @@ function importUncontractedCsv(csvText) {
       const existingKeys = {};
       const lastRow = sheet.getLastRow();
       if (lastRow >= 2) {
-        const existingValues = sheet.getRange(2, 1, lastRow - 1, HEADERS_27.length).getValues();
+        const existingValues = sheet.getRange(2, 1, lastRow - 1, HEADERS_MAIN.length).getValues();
         existingValues.forEach(function (row) { existingKeys[buildKey(row)] = true; });
       }
 
@@ -848,7 +850,7 @@ function importUncontractedCsv(csvText) {
       if (newRows.length === 0) return;
       const sheet = ss.getSheetByName(sheetName);
       const startRow = sheet.getLastRow() + 1;
-      sheet.getRange(startRow, 1, newRows.length, HEADERS_27.length).setValues(newRows);
+      sheet.getRange(startRow, 1, newRows.length, HEADERS_MAIN.length).setValues(newRows);
       perSheetCounts[sheetName] = newRows.length;
       importedCount += newRows.length;
     });
@@ -879,7 +881,7 @@ function autoRegisterShop_(ss, officeCode) {
   if (masterSheet) {
     masterSheet.appendRow([officeCode, placeholderName, true]);
   }
-  createShopSheets_(ss, [{ code: officeCode, name: placeholderName }], HEADERS_27);
+  createShopSheets_(ss, [{ code: officeCode, name: placeholderName }], HEADERS_MAIN);
   appendShopRowToSummary_(ss, { code: officeCode, name: placeholderName });
   return placeholderName;
 }
@@ -930,10 +932,10 @@ function updateStatus(sheetName, rowIndex, newStatus, contractPax) {
     const todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
     sheet.getRange(rIdx, 21).setValue(todayStr);
 
-    const updatedValues = sheet.getRange(rIdx, 1, 1, HEADERS_27.length).getValues()[0];
+    const updatedValues = sheet.getRange(rIdx, 1, 1, HEADERS_MAIN.length).getValues()[0];
     const updatedObj = {};
-    for (let c = 0; c < HEADERS_27.length; c++) {
-      updatedObj[HEADERS_27[c]] = serializeCellValue_(updatedValues[c]);
+    for (let c = 0; c < HEADERS_MAIN.length; c++) {
+      updatedObj[HEADERS_MAIN[c]] = serializeCellValue_(updatedValues[c]);
     }
     updatedObj.__sheetName = sheetName;
     updatedObj.__rowIndex = rIdx;
@@ -955,7 +957,7 @@ const EDITABLE_COLUMNS = ['成約PAX', 'ACT日', 'ACT内容', '次回ACT・進�
  * （EDITABLE_COLUMNS に無い列名を指定するとエラーになる）。
  * @param {string} sheetName 対象店舗シート名
  * @param {number} rowIndex シート上の物理行番号（整数）
- * @param {string} columnName HEADERS_27 に含まれる列名（EDITABLE_COLUMNSのいずれかのみ）
+ * @param {string} columnName HEADERS_MAIN に含まれる列名（EDITABLE_COLUMNSのいずれかのみ）
  * @param {*} value 更新後の値
  */
 function updateCellValue(sheetName, rowIndex, columnName, value) {
@@ -971,7 +973,7 @@ function updateCellValue(sheetName, rowIndex, columnName, value) {
       throw new Error('この列はスタッフによる編集ができません（CSV由来の読み取り専用列です）: ' + columnName);
     }
 
-    const colIdx = HEADERS_27.indexOf(columnName);
+    const colIdx = HEADERS_MAIN.indexOf(columnName);
     if (colIdx === -1) {
       throw new Error('不正な列名です: ' + columnName);
     }
@@ -991,10 +993,10 @@ function updateCellValue(sheetName, rowIndex, columnName, value) {
       sheet.getRange(rIdx, 21).setValue(todayStr);
     }
 
-    const updatedValues = sheet.getRange(rIdx, 1, 1, HEADERS_27.length).getValues()[0];
+    const updatedValues = sheet.getRange(rIdx, 1, 1, HEADERS_MAIN.length).getValues()[0];
     const updatedObj = {};
-    for (let c = 0; c < HEADERS_27.length; c++) {
-      updatedObj[HEADERS_27[c]] = serializeCellValue_(updatedValues[c]);
+    for (let c = 0; c < HEADERS_MAIN.length; c++) {
+      updatedObj[HEADERS_MAIN[c]] = serializeCellValue_(updatedValues[c]);
     }
     updatedObj.__sheetName = sheetName;
     updatedObj.__rowIndex = rIdx;
@@ -1065,7 +1067,7 @@ function addShopMaster(code, name) {
     }
 
     masterSheet.appendRow([code, name, true]);
-    createShopSheets_(ss, [{ code: code, name: name }], HEADERS_27);
+    createShopSheets_(ss, [{ code: code, name: name }], HEADERS_MAIN);
     appendShopRowToSummary_(ss, { code: code, name: name });
 
     return { success: true, code: code, name: name };
@@ -1511,7 +1513,7 @@ function buildAiAnalysisSheet() {
     if (!sheet) return;
     const lastRow = sheet.getLastRow();
     if (lastRow < 2) return;
-    const values = sheet.getRange(2, 1, lastRow - 1, HEADERS_27.length).getValues();
+    const values = sheet.getRange(2, 1, lastRow - 1, HEADERS_MAIN.length).getValues();
     values.forEach(function (r) {
       const targetDate = String(r[4] || '');
       if (!targetDate || targetDate < cutoff) return;
@@ -1523,6 +1525,7 @@ function buildAiAnalysisSheet() {
         pax: Number(r[2]) || 0,
         month: String(r[3] || ''),
         reason: String(r[8] || '') || '(未設定)',
+        direction: String(r[27] || '') || '(未設定)',
         contact: String(r[13] || '') || '(未設定)',
         purpose: String(r[12] || '') || '(未設定)',
         periodLabel: info ? periodLabel_(info.periodNumber, info.half) : '(期不明)'
@@ -1549,6 +1552,7 @@ function buildAiAnalysisSheet() {
     push('全体', '全体', r);
     push('店舗別', r.shopName, r);
     push('未成約理由(大)別', r.reason, r);
+    push('方面別', r.direction, r);
     push('接客方法別', r.contact, r);
     push('旅行目的(小)別', r.purpose, r);
     push('期別', r.periodLabel, r);
@@ -1580,7 +1584,7 @@ function buildAiAnalysisSheet() {
   sheet.getRange(headerRow, 1, 1, header.length).setValues([header])
     .setFontWeight('bold').setBackground('#1d4ed8').setFontColor('#ffffff');
 
-  const categoryOrder = ['全体', '期別', '店舗別', '店舗×期別', '未成約理由(大)別', '接客方法別', '旅行目的(小)別', '月別'];
+  const categoryOrder = ['全体', '期別', '店舗別', '店舗×期別', '未成約理由(大)別', '方面別', '接客方法別', '旅行目的(小)別', '月別'];
   const body = Object.keys(buckets).map(function (k) { return buckets[k]; });
   body.sort(function (a, b) {
     const ca = categoryOrder.indexOf(a.category), cb = categoryOrder.indexOf(b.category);
