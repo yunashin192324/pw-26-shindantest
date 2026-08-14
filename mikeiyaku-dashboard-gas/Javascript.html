@@ -404,6 +404,7 @@ function buildAiSummaryText() {
   const data = getDashboardFilteredData();
   const selectedShops = getSelectedMultiValues('filter-shop');
   const selectedMonths = getSelectedMultiValues('filter-month');
+  const isSingleShop = selectedShops.length === 1; // 1店舗だけに絞っているか（依頼文の出し分けに使う）
   const all = aggregateRows(data);
   const L = [];
 
@@ -531,15 +532,71 @@ function buildAiSummaryText() {
     });
   L.push('');
 
+  // ---- 旅行目的(小)別 ----
+  const purposeCounts = {};
+  data.forEach(function (r) {
+    const k = r['旅行目的(小)'] || '(未設定)';
+    if (!purposeCounts[k]) purposeCounts[k] = { total: 0, resale: 0, contract: 0 };
+    purposeCounts[k].total++;
+    if (r['リセール'] === '〇') purposeCounts[k].resale++;
+    if (r['STS'] === '成約') purposeCounts[k].contract++;
+  });
+  L.push('## 旅行目的(小)別');
+  L.push('旅行目的\t未成約数\t構成比%\tリセール継続率%\t成約数');
+  Object.keys(purposeCounts).sort(function (a, b) { return purposeCounts[b].total - purposeCounts[a].total; })
+    .forEach(function (k) {
+      const c = purposeCounts[k];
+      L.push([k, c.total, pct(c.total, all.total), pct(c.resale, c.total), c.contract].join('\t'));
+    });
+  L.push('');
+
+  // ---- 社員別（店舗単位で見るときに「誰のフォローが手薄か」を判断するための内訳） ----
+  const empCounts = {};
+  data.forEach(function (r) {
+    const name = String(r['社員名'] || '').trim();
+    if (!name) return;
+    const k = isSingleShop ? name : (r.__sheetName + ' / ' + name);
+    if (!empCounts[k]) empCounts[k] = { total: 0, resale: 0, progress: 0, contract: 0, pax: 0 };
+    const c = empCounts[k];
+    c.total++;
+    if (r['リセール'] === '〇') c.resale++;
+    if (r['STS'] === 'リセール中') c.progress++;
+    if (r['STS'] === '成約') { c.contract++; c.pax += Number(r['成約PAX']) || 0; }
+  });
+  const empKeys = Object.keys(empCounts)
+    .sort(function (a, b) { return empCounts[b].total - empCounts[a].total; })
+    .slice(0, 20);
+  if (empKeys.length) {
+    L.push('## 社員別（未成約数の多い順・上位' + empKeys.length + '名）');
+    L.push((isSingleShop ? '社員名' : '店舗 / 社員名') + '\t未成約数\tリセール数\t継続率%\tリセール中\t成約数\tPAX');
+    empKeys.forEach(function (k) {
+      const c = empCounts[k];
+      L.push([k, c.total, c.resale, pct(c.resale, c.total), c.progress, c.contract, c.pax].join('\t'));
+    });
+    L.push('');
+  }
+
+  // ---- 依頼文は絞り込みの粒度に合わせて変える（1店舗なら店舗内の課題として聞く） ----
   L.push('## お願いしたい分析');
   L.push('上のデータをもとに、次の点を日本語で分析してください。');
-  L.push('1. リセール継続率が低い店舗はどこか。全体平均と比べてどれくらい差があるか。');
-  L.push('2. 継続率が低い店舗は、未成約理由・都市コード・接客方法・旅行目的に偏りがあるか。');
-  L.push('3. 期や月をまたいで継続率が落ちている時期はあるか。季節要因か、フォロー漏れか。');
-  L.push('4. 長期未対応が多い店舗はどこか。件数だけでなく未成約数に対する比率でも見てほしい。');
-  L.push('5. 明日から店舗で実行できる改善策を、優先度の高い順に3つ提案してほしい。');
+  if (isSingleShop) {
+    L.push('※これは「' + selectedShops[0] + '」1店舗だけのデータです。店舗内の課題として分析してください。');
+    L.push('1. この店舗のリセール継続率は、期や月で見てどう推移しているか。落ち込んでいる時期はあるか。');
+    L.push('2. 継続率が低いのはどの未成約理由・都市コード・接客方法・旅行目的か。偏りがあれば指摘してほしい。');
+    L.push('3. 社員によって継続率に差はあるか。差が大きい場合、どこに原因がありそうか。');
+    L.push('4. 長期未対応は未成約数に対してどのくらいの比率か。多いなら要因の仮説がほしい。');
+    L.push('5. この店舗が明日から実行できる改善策を、優先度の高い順に3つ提案してほしい。');
+  } else {
+    L.push('1. リセール継続率が低い店舗はどこか。全体平均と比べてどれくらい差があるか。');
+    L.push('2. 継続率が低い店舗は、未成約理由・都市コード・接客方法・旅行目的に偏りがあるか。');
+    L.push('3. 期や月をまたいで継続率が落ちている時期はあるか。季節要因か、フォロー漏れか。');
+    L.push('4. 長期未対応が多い店舗はどこか。件数だけでなく未成約数に対する比率でも見てほしい。');
+    L.push('5. 社員別に見て継続率が特に低い人・高い人はいるか。高い人のやり方から学べる点はあるか。');
+    L.push('6. 明日から店舗で実行できる改善策を、優先度の高い順に3つ提案してほしい。');
+  }
   L.push('');
-  L.push('※このサマリは集計値のみです。お客様個人が特定される情報は含まれていません。');
+  L.push('※このサマリは集計値のみで、お客様の個人情報（お名前・相談内容）は含まれていません。');
+  L.push('※社員別の集計には社内の社員名が含まれます。');
 
   return L.join('\n');
 }
