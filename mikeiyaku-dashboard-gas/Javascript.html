@@ -22,8 +22,8 @@ let availablePeriods = [];           // getAvailablePeriods() が返す直近2�
 let currentEmployeePeriod = null;    // 現在選択中の期キー
 let myChart1 = null;
 let myChart2 = null;
-// 方面・接客方法・旅行目的(小) の内訳グラフ
-const breakdownCharts = { 'chart-direction': null, 'chart-contact': null, 'chart-purpose': null };
+// 都市コード・接客方法・旅行目的(小) の内訳グラフ
+const breakdownCharts = { 'chart-city': null, 'chart-contact': null, 'chart-purpose': null };
 let dmCurrentPage = 1;
 let dmFilteredCache = [];
 let rankingSortState = { key: 'total', dir: 'desc' };
@@ -495,19 +495,19 @@ function buildAiSummaryText() {
   L.push('');
 
   // ---- 接客方法別 ----
-  const directionCounts = {};
+  const cityCounts = {};
   data.forEach(function (r) {
-    const k = r['方面'] || '(未設定)';
-    if (!directionCounts[k]) directionCounts[k] = { total: 0, resale: 0, contract: 0 };
-    directionCounts[k].total++;
-    if (r['リセール'] === '〇') directionCounts[k].resale++;
-    if (r['STS'] === '成約') directionCounts[k].contract++;
+    const k = r['都市コード'] || '(未設定)';
+    if (!cityCounts[k]) cityCounts[k] = { total: 0, resale: 0, contract: 0 };
+    cityCounts[k].total++;
+    if (r['リセール'] === '〇') cityCounts[k].resale++;
+    if (r['STS'] === '成約') cityCounts[k].contract++;
   });
-  L.push('## 方面別');
-  L.push('方面\t未成約数\t構成比%\tリセール継続率%\t成約数');
-  Object.keys(directionCounts).sort(function (a, b) { return directionCounts[b].total - directionCounts[a].total; })
+  L.push('## 都市コード別');
+  L.push('都市コード\t未成約数\t構成比%\tリセール継続率%\t成約数');
+  Object.keys(cityCounts).sort(function (a, b) { return cityCounts[b].total - cityCounts[a].total; })
     .forEach(function (k) {
-      const c = directionCounts[k];
+      const c = cityCounts[k];
       L.push([k, c.total, pct(c.total, all.total), pct(c.resale, c.total), c.contract].join('\t'));
     });
   L.push('');
@@ -532,7 +532,7 @@ function buildAiSummaryText() {
   L.push('## お願いしたい分析');
   L.push('上のデータをもとに、次の点を日本語で分析してください。');
   L.push('1. リセール継続率が低い店舗はどこか。全体平均と比べてどれくらい差があるか。');
-  L.push('2. 継続率が低い店舗は、未成約理由・方面・接客方法・旅行目的に偏りがあるか。');
+  L.push('2. 継続率が低い店舗は、未成約理由・都市コード・接客方法・旅行目的に偏りがあるか。');
   L.push('3. 期や月をまたいで継続率が落ちている時期はあるか。季節要因か、フォロー漏れか。');
   L.push('4. 長期未対応が多い店舗はどこか。件数だけでなく未成約数に対する比率でも見てほしい。');
   L.push('5. 明日から店舗で実行できる改善策を、優先度の高い順に3つ提案してほしい。');
@@ -590,14 +590,14 @@ function renderDashboardTab() {
   renderKpi(filtered);
   renderChart1(filtered);
   renderChart2(filtered);
-  renderBreakdownChart('chart-direction', filtered, '方面');
+  renderBreakdownChart('chart-city', filtered, '都市コード');
   renderBreakdownChart('chart-contact', filtered, '接客方法');
   renderBreakdownChart('chart-purpose', filtered, '旅行目的(小)');
   renderRankingTable(filtered);
 }
 
 /**
- * 指定した列（方面・接客方法・旅行目的(小)など）ごとの内訳グラフを描く。
+ * 指定した列（都市コード・接客方法・旅行目的(小)など）ごとの内訳グラフを描く。
  * 棒＝未成約数、折れ線＝リセール継続率(%)。件数の多い順に上位10区分を表示する。
  * 「どの区分でフォローが手薄か」を1枚で読み取れるようにするのが狙い。
  */
@@ -1093,7 +1093,6 @@ function renderDataManagerGrid() {
       readonlyDetailTd(row, '詳細') +
       '<td class="px-3 py-2">' + escapeHtml(row['未成約理由(大)']) + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(row['都市コード']) + '</td>' +
-      '<td class="px-3 py-2">' + escapeHtml(row['方面']) + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(row['種別']) + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(row['旅行目的(小)']) + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(row['接客方法']) + '</td>' +

@@ -26,7 +26,7 @@ const DEFAULT_SHOP_LIST = [
   { code: 'B79', name: '(旧)イオンモール甲府昭和' }
 ];
 
-// ---- 店舗別データシート 共通ヘッダー28列（順序はシートの実列と完全一致） --
+// ---- 店舗別データシート 共通27列ヘッダー（順序はシートの実列と完全一致） --
 const HEADERS_MAIN = [
   'リセール',
   'STS',
@@ -54,8 +54,7 @@ const HEADERS_MAIN = [
   '次回ACT・進捗★手入力',
   '相談予約No☆自動反映',
   '名前☆自動反映',
-  '連絡先☆自動反映',
-  '方面'   // 28列目（後から追加。既存データを壊さないため末尾に置いている）
+  '連絡先☆自動反映'
 ];
 
 // ---- 各種ドロップダウンマスタ（固定選択肢） -------------------------------
@@ -658,12 +657,12 @@ function addUncontractedData(rowObject) {
  * 営業日報から抽出したCSVを一括投入する（マスタ管理者のみ実行可能）。
  * ・CSVはメタ情報の行が先頭に含まれていても構わない（先頭セルが「対象年月日」の行をヘッダー行として自動検出）。
  * ・実際の営業日報CSVは以下の33列を含むが、ヘッダー名で参照するため列の並び順やCSV側の
- *   追加列（未成約理由(小)・国名・都市名・エージェント・出発日・キャリア・ホテル・
+ *   追加列（未成約理由(小)・方面・国名・都市名・エージェント・出発日・キャリア・ホテル・
  *   媒体カテゴリ名・媒体名・旅行目的(大)・大学名・企業名・本部コード・本部名・エリアコード・
  *   エリア名・営業所名・班コード・班名など）があっても影響を受けない。
- *   このシステムが実際に取り込むのは次の13列のみ：
+ *   このシステムが実際に取り込むのは次の12列のみ：
  *     対象年月日・営業所コード・社員番号・社員名・未成約理由(大)・都市コード・種別・
- *     出発年月・旅行目的(小)・接客方法・HIS利用歴・詳細・方面
+ *     出発年月・旅行目的(小)・接客方法・HIS利用歴・詳細
  *   （「予約番号」はCSVからは取り込まず、成約時に「新規相談登録」画面等から手入力する運用）
  * ・「営業所コード」列の値から投入先の店舗シートを判定する。未登録の営業所コードは
  *   仮の店舗名で店舗マスタへ自動登録される（店舗・スタッフの登録は基本CSVインポートから行う運用のため）。
@@ -800,7 +799,6 @@ function importUncontractedCsv(csvText) {
       newRow[24] = '';                              // 相談予約No☆自動反映
       newRow[25] = '';                              // 名前☆自動反映
       newRow[26] = '';                              // 連絡先☆自動反映
-      newRow[27] = getVal(row, '方面');             // 方面（ダッシュボードの方面別グラフで使用）
 
       if (!rowsBySheet[sheetName]) rowsBySheet[sheetName] = [];
       rowsBySheet[sheetName].push(newRow);
@@ -1525,7 +1523,7 @@ function buildAiAnalysisSheet() {
         pax: Number(r[2]) || 0,
         month: String(r[3] || ''),
         reason: String(r[8] || '') || '(未設定)',
-        direction: String(r[27] || '') || '(未設定)',
+        city: String(r[9] || '') || '(未設定)',
         contact: String(r[13] || '') || '(未設定)',
         purpose: String(r[12] || '') || '(未設定)',
         periodLabel: info ? periodLabel_(info.periodNumber, info.half) : '(期不明)'
@@ -1552,7 +1550,7 @@ function buildAiAnalysisSheet() {
     push('全体', '全体', r);
     push('店舗別', r.shopName, r);
     push('未成約理由(大)別', r.reason, r);
-    push('方面別', r.direction, r);
+    push('都市コード別', r.city, r);
     push('接客方法別', r.contact, r);
     push('旅行目的(小)別', r.purpose, r);
     push('期別', r.periodLabel, r);
@@ -1584,7 +1582,7 @@ function buildAiAnalysisSheet() {
   sheet.getRange(headerRow, 1, 1, header.length).setValues([header])
     .setFontWeight('bold').setBackground('#1d4ed8').setFontColor('#ffffff');
 
-  const categoryOrder = ['全体', '期別', '店舗別', '店舗×期別', '未成約理由(大)別', '方面別', '接客方法別', '旅行目的(小)別', '月別'];
+  const categoryOrder = ['全体', '期別', '店舗別', '店舗×期別', '未成約理由(大)別', '都市コード別', '接客方法別', '旅行目的(小)別', '月別'];
   const body = Object.keys(buckets).map(function (k) { return buckets[k]; });
   body.sort(function (a, b) {
     const ca = categoryOrder.indexOf(a.category), cb = categoryOrder.indexOf(b.category);
