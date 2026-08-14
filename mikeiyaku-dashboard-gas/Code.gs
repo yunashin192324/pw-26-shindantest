@@ -1627,3 +1627,94 @@ function buildAiAnalysisSheetFromMenu() {
     SpreadsheetApp.getUi().alert('AI分析用サマリの作成に失敗しました:\n' + err.message);
   }
 }
+
+// ============================================================================
+// AI分析レポート（Geminiの回答をダッシュボード上に保存・共有する）
+// ----------------------------------------------------------------------------
+// 外部APIを使わないため分析文の生成そのものはGemini側で行うが、その回答を
+// この画面に貼り戻して保存しておくことで、全員が同じ所見をダッシュボード上で
+// 見られるようにする。誰がいつ・どの範囲で分析したかも一緒に残す。
+// ============================================================================
+const AI_REPORT_SHEET_NAME = 'AI分析レポート';
+
+/**
+ * 「AI分析レポート」シートを取得する。無ければ作成する（初期化の再実行は不要）。
+ */
+function ensureAiReportSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(AI_REPORT_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(AI_REPORT_SHEET_NAME);
+    const headers = ['保存日時', '作成者', '対象範囲', '本文'];
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers])
+      .setFontWeight('bold').setBackground('#5b21b6').setFontColor('#ffffff');
+    sheet.setFrozenRows(1);
+    sheet.setColumnWidths(1, 3, 140);
+    sheet.setColumnWidth(4, 700);
+  }
+  return sheet;
+}
+
+/**
+ * Geminiの分析結果をダッシュボードへ保存する（全店舗を見られる権限＝所長・チーフ以上）。
+ * @param {string} scopeLabel この分析がどの範囲を対象にしたか（例: 「全店舗 / 46期下期」）
+ * @param {string} body Geminiが出力した分析文
+ */
+function saveAiReport(scopeLabel, body) {
+  try {
+    const ctx = getCurrentUserContext_();
+    if (!ctx.canViewAllStores) {
+      throw new Error('分析レポートの保存は所長・チーフ以上の権限が必要です。');
+    }
+    body = String(body || '').trim();
+    if (!body) {
+      throw new Error('分析結果が空です。Geminiの回答を貼り付けてください。');
+    }
+    if (body.length > 20000) {
+      throw new Error('分析結果が長すぎます（20,000文字以内にしてください）。');
+    }
+
+    const sheet = ensureAiReportSheet_();
+    const savedAt = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm');
+    const author = ctx.employeeName || ctx.email || '（未登録ユーザー）';
+    // 新しいものが上に来るよう、ヘッダーの直下へ挿入する
+    sheet.insertRowAfter(1);
+    sheet.getRange(2, 1, 1, 4).setValues([[savedAt, author, String(scopeLabel || ''), body]]);
+    sheet.getRange(2, 4).setWrap(true);
+
+    return { success: true, report: { savedAt: savedAt, author: author, scope: String(scopeLabel || ''), body: body } };
+  } catch (err) {
+    return { success: false, error: err.message + '\n' + err.stack };
+  }
+}
+
+/**
+ * 保存済みの分析レポートを新しい順に返す（閲覧は全員可）。
+ * @param {number} limit 取得件数（既定5件）
+ */
+function getAiReports(limit) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(AI_REPORT_SHEET_NAME);
+    if (!sheet) return { success: true, reports: [] };
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: true, reports: [] };
+
+    const max = Math.min(lastRow - 1, Math.max(1, parseInt(limit, 10) || 5));
+    const values = sheet.getRange(2, 1, max, 4).getValues();
+    const reports = values
+      .filter(function (r) { return String(r[3] || '').trim() !== ''; })
+      .map(function (r) {
+        return {
+          savedAt: serializeCellValue_(r[0]),
+          author: String(r[1] || ''),
+          scope: String(r[2] || ''),
+          body: String(r[3] || '')
+        };
+      });
+    return { success: true, reports: reports, canSave: getCurrentUserContext_().canViewAllStores };
+  } catch (err) {
+    return { success: false, error: err.message + '\n' + err.stack };
+  }
+}

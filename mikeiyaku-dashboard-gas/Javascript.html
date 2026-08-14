@@ -171,6 +171,7 @@ function onLoadStepComplete() {
     renderDashboardTab();
     renderDataManagerTab();
     ensureEmployeeSummaryLoaded();
+    loadAiReports();
   }
 }
 
@@ -362,6 +363,7 @@ function initDashboardEvents() {
   });
   document.getElementById('btn-open-ai-summary').addEventListener('click', openAiSummaryModal);
   document.getElementById('btn-copy-ai-summary').addEventListener('click', copyAiSummaryToClipboard);
+  document.getElementById('btn-save-ai-report').addEventListener('click', onSaveAiReport);
 }
 
 // ============================================================================
@@ -542,7 +544,93 @@ function buildAiSummaryText() {
   return L.join('\n');
 }
 
+// この分析がどの範囲を対象にしているか（保存時の記録用）
+function currentScopeLabel() {
+  const shops = getSelectedMultiValues('filter-shop');
+  const months = getSelectedMultiValues('filter-month');
+  return (shops.length ? shops.join('・') : '全店舗') + ' / ' + (months.length ? months.join('・') + '月' : '全期間');
+}
+
+// ---- AI分析レポート（Geminiの回答をこの画面に保存して共有する） ----------------
+function loadAiReports() {
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (res && res.success) renderAiReports(res.reports || []);
+    })
+    .withFailureHandler(function () { /* レポートは補助情報のため、取得失敗時は黙って空表示にする */ })
+    .getAiReports(5);
+}
+
+function renderAiReports(reports) {
+  const bodyEl = document.getElementById('ai-report-body');
+  const metaEl = document.getElementById('ai-report-meta');
+  const histBox = document.getElementById('ai-report-history');
+  const histList = document.getElementById('ai-report-history-list');
+
+  if (!reports.length) {
+    bodyEl.innerHTML = '<p class="text-slate-400 text-sm">まだ分析レポートはありません。'
+      + '右上の「Geminiで分析する」から、集計サマリをGeminiに渡して所見をもらい、'
+      + 'その回答をこの画面に保存すると、ここに表示され全員が確認できるようになります。</p>';
+    metaEl.textContent = '';
+    histBox.classList.add('hidden');
+    return;
+  }
+
+  const latest = reports[0];
+  bodyEl.textContent = latest.body;
+  metaEl.textContent = latest.savedAt + '　' + latest.author + '　（対象：' + latest.scope + '）';
+
+  const past = reports.slice(1);
+  if (past.length === 0) { histBox.classList.add('hidden'); return; }
+  histBox.classList.remove('hidden');
+  histList.innerHTML = past.map(function (r, i) {
+    return '<details class="text-xs text-slate-600">' +
+      '<summary class="cursor-pointer hover:text-violet-700">' + escapeHtml(r.savedAt) + '　' +
+      escapeHtml(r.author) + '　（対象：' + escapeHtml(r.scope) + '）</summary>' +
+      '<div class="whitespace-pre-wrap mt-1 pl-3 border-l-2 border-slate-200 leading-relaxed">' +
+      escapeHtml(r.body) + '</div></details>';
+  }).join('');
+}
+
+function onSaveAiReport() {
+  const input = document.getElementById('ai-report-input');
+  const body = input.value.trim();
+  if (!body) { showToast('Geminiの回答を貼り付けてください。', 'error'); return; }
+
+  const btn = document.getElementById('btn-save-ai-report');
+  btn.disabled = true;
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false);
+      btn.disabled = false;
+      if (res && res.success) {
+        input.value = '';
+        closeAiSummaryModal();
+        showToast('分析レポートを保存しました。ダッシュボードに表示されます。', 'success');
+        loadAiReports();
+      } else {
+        showToast('保存に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false);
+      btn.disabled = false;
+      showToast('通信エラー（saveAiReport）: ' + err.message, 'error');
+    })
+    .saveAiReport(currentScopeLabel(), body);
+}
+
+function closeAiSummaryModal() {
+  const modal = document.getElementById('ai-summary-modal');
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+}
+
 function openAiSummaryModal() {
+  // 分析レポートの保存は全店舗を見られる権限（所長・チーフ以上）に限る
+  const pasteSection = document.getElementById('ai-paste-section');
+  if (pasteSection) pasteSection.classList.toggle('hidden', !currentUserContext.canViewAllStores);
   document.getElementById('ai-summary-text').value = buildAiSummaryText();
   document.getElementById('ai-summary-copy-status').classList.add('hidden');
   const modal = document.getElementById('ai-summary-modal');
