@@ -914,7 +914,7 @@ function updateStatus(sheetName, rowIndex, newStatus, contractPax) {
     sheet.getRange(rIdx, 2).setValue(newStatus); // STS（2列目）
 
     if (newStatus === '成約') {
-      sheet.getRange(rIdx, 3).setValue(contractPax === undefined || contractPax === null ? '' : contractPax); // 成約PAX（3列目）
+      sheet.getRange(rIdx, 3).setValue(normalizeContractPax_(contractPax)); // 成約PAX（3列目）
 
       // ガードレール：成約になった際、リセール列（1列目）が空白なら自動で初期値を補完する
       const resaleCell = sheet.getRange(rIdx, 1);
@@ -953,6 +953,25 @@ const EDITABLE_COLUMNS = ['リセール', '成約PAX', 'ACT日', 'ACT内容', '�
 const RESALE_VALUES = ['〇', '✖', ''];
 
 /**
+ * 成約PAXを検証して正規化する（空欄、または0以上の整数のみ許可）。
+ * この列は店舗別サマリのSUMIFSで合計されるため、文字列が混ざると集計から
+ * 黙って除外され、PAX数が過少に見えてしまう。入口で弾いて防ぐ。
+ * @return {number|string} 数値、または空欄を表す空文字
+ */
+function normalizeContractPax_(value) {
+  if (value === undefined || value === null || String(value).trim() === '') return '';
+  const s = String(value).trim();
+  if (!/^[0-9]+$/.test(s)) {
+    throw new Error('成約PAXは0以上の半角数字で入力してください（入力値: ' + value + '）');
+  }
+  const n = parseInt(s, 10);
+  if (n > 999) {
+    throw new Error('成約PAXの値が大きすぎます（入力値: ' + value + '）');
+  }
+  return n;
+}
+
+/**
  * データグリッドのテキストセル（成約PAX／ACT日／ACT内容／進捗メモ）の
  * ダブルクリック→インライン編集での即時同期保存に対応する汎用セル更新API。
  * 未成約理由・都市コード・詳細等、営業日報CSVから取り込む列はここでは更新できない
@@ -976,6 +995,9 @@ function updateCellValue(sheetName, rowIndex, columnName, value) {
     }
     if (columnName === 'リセール' && RESALE_VALUES.indexOf(String(value === undefined || value === null ? '' : value)) === -1) {
       throw new Error('リセール列には「〇」「✖」または空欄のみ設定できます: ' + value);
+    }
+    if (columnName === '成約PAX') {
+      value = normalizeContractPax_(value);
     }
 
     const colIdx = HEADERS_MAIN.indexOf(columnName);
@@ -1696,22 +1718,44 @@ function saveAiReport(scopeLabel, body) {
 }
 
 /**
- * 保存済みの分析レポートを新しい順に返す（閲覧は全員可）。
+ * 分析レポートの対象範囲（「水戸コムボックス310 / 全期間」形式）が、
+ * 指定した店舗ただ1店舗だけを対象にしているかを判定する。
+ * 一般スタッフに他店舗の数字を含む文章を見せないための絞り込みに使う。
+ */
+function isReportLimitedToShop_(scope, officeName) {
+  if (!officeName) return false;
+  const shopPart = String(scope || '').split('/')[0].trim();
+  if (!shopPart || shopPart === '全店舗') return false;
+  const shops = shopPart.split('・').map(function (x) { return x.trim(); }).filter(function (x) { return x; });
+  return shops.length === 1 && shops[0] === officeName;
+}
+
+/**
+ * 保存済みの分析レポートを新しい順に返す。
+ * 一般スタッフには「自店舗のみを対象に作成されたレポート」だけを返す。
+ * （全店舗を対象にしたレポートは本文に他店舗の数字が含まれるため、
+ *   閲覧範囲＝自店舗のみという権限設定に合わせて除外する）
  * @param {number} limit 取得件数（既定5件）
  */
 function getAiReports(limit) {
   try {
+    const ctx = getCurrentUserContext_();
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(AI_REPORT_SHEET_NAME);
-    if (!sheet) return { success: true, reports: [] };
+    if (!sheet) return { success: true, reports: [], canSave: ctx.canViewAllStores };
 
     const lastRow = sheet.getLastRow();
-    if (lastRow < 2) return { success: true, reports: [] };
+    if (lastRow < 2) return { success: true, reports: [], canSave: ctx.canViewAllStores };
 
-    const max = Math.min(lastRow - 1, Math.max(1, parseInt(limit, 10) || 5));
-    const values = sheet.getRange(2, 1, max, 4).getValues();
+    const want = Math.max(1, parseInt(limit, 10) || 5);
+    const values = sheet.getRange(2, 1, lastRow - 1, 4).getValues();
     const reports = values
       .filter(function (r) { return String(r[3] || '').trim() !== ''; })
+      .filter(function (r) {
+        if (ctx.canViewAllStores) return true;
+        return isReportLimitedToShop_(String(r[2] || ''), ctx.officeName);
+      })
+      .slice(0, want)
       .map(function (r) {
         return {
           savedAt: serializeCellValue_(r[0]),
@@ -1720,7 +1764,7 @@ function getAiReports(limit) {
           body: String(r[3] || '')
         };
       });
-    return { success: true, reports: reports, canSave: getCurrentUserContext_().canViewAllStores };
+    return { success: true, reports: reports, canSave: ctx.canViewAllStores };
   } catch (err) {
     return { success: false, error: err.message + '\n' + err.stack };
   }
