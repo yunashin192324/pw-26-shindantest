@@ -945,8 +945,12 @@ function updateStatus(sheetName, rowIndex, newStatus, contractPax) {
 }
 
 // ---- リセールリストでスタッフが編集できる列（それ以外はCSV由来の読み取り専用） ---
-// 「リセール」「STS」は専用API（updateStatus）で更新するため、ここには含めない。
-const EDITABLE_COLUMNS = ['成約PAX', 'ACT日', 'ACT内容', '次回ACT・進捗★手入力'];
+// 一般スタッフ（店舗スタッフ）も自店舗の行であればこれらを編集できる。
+// 「STS」だけは成約PAXのクリアやリセール補完を伴うため専用API（updateStatus）で更新する。
+const EDITABLE_COLUMNS = ['リセール', '成約PAX', 'ACT日', 'ACT内容', '次回ACT・進捗★手入力'];
+
+// 「リセール」列に入れてよい値（〇＝フォロー対応中／✖＝対象外／空欄＝未選択）
+const RESALE_VALUES = ['〇', '✖', ''];
 
 /**
  * データグリッドのテキストセル（成約PAX／ACT日／ACT内容／進捗メモ）の
@@ -969,6 +973,9 @@ function updateCellValue(sheetName, rowIndex, columnName, value) {
 
     if (EDITABLE_COLUMNS.indexOf(columnName) === -1) {
       throw new Error('この列はスタッフによる編集ができません（CSV由来の読み取り専用列です）: ' + columnName);
+    }
+    if (columnName === 'リセール' && RESALE_VALUES.indexOf(String(value === undefined || value === null ? '' : value)) === -1) {
+      throw new Error('リセール列には「〇」「✖」または空欄のみ設定できます: ' + value);
     }
 
     const colIdx = HEADERS_MAIN.indexOf(columnName);
