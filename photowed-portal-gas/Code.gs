@@ -28,6 +28,12 @@ const RESERVATION_SHEET_NAME = '予約一覧';
 const HISTORY_SHEET_NAME = 'やり取り履歴';
 const ARCHIVE_SHEET_NAME = '過去一覧';
 const STATUS_LOG_SHEET_NAME = 'ステータス変更履歴';
+// ★機能追加：共有メモ・現地用メモ・お客様アンケート回答を「積み上げ式」で記録するログ
+// （機能：メモの追記化・アンケート回答連携）
+const MEMO_LOG_SHEET_NAME = 'メモ履歴';
+// ★機能追加：カメラマン・ヘアメイク等の現地スタッフ手配リクエストを送った履歴
+// （機能：現地スタッフ手配メール）
+const ARRANGEMENT_LOG_SHEET_NAME = '手配履歴';
 
 // --- システムエラー通知先 ---
 const SYSTEM_ALERT_EMAIL = 'it-planning@his-world.com';
@@ -124,6 +130,15 @@ const COL_PICKUP_TIME = '配車時間';
 const COL_LOCAL_MEMO = 'メモ（現地用）';
 const COL_REMARKS = '備考';
 const COL_MEMO = '共有メモ';
+// ★機能追加：共有メモ・メモ（現地用）は「上書き」ではなく「積み上げ」で記録する（メモ履歴シート）。
+// 上の COL_MEMO / COL_LOCAL_MEMO の2列は、この機能を追加する前からある案件の
+// 「移行前の最後のメモ」を表示するためだけに残しており、新しい書き込みはメモ履歴シートへ行う。
+const MEMO_TYPE_SHARED = COL_MEMO;          // '共有メモ'
+const MEMO_TYPE_LOCAL = COL_LOCAL_MEMO;     // 'メモ（現地用）'
+const MEMO_TYPE_SURVEY = 'アンケート回答';   // お客様がGoogleフォームで回答した内容（自動反映・追記のみ）
+const MEMO_TYPES = [MEMO_TYPE_SHARED, MEMO_TYPE_LOCAL, MEMO_TYPE_SURVEY];
+// お客様入力（Googleフォーム）である目印。手入力のメモと見分けるために使う
+const MEMO_AUTHOR_CUSTOMER = 'お客様（Googleフォーム）';
 // ★機能追加：日本の手配課側のみが見る社内進行管理欄（支店には一切表示しない）。
 // フォトブリッジ登録・データアップロードは「済／未」のチェックボックスで、チェックした
 // 担当者名と日時を自動で記録する（ベースは未＝未チェック）。AI加工・早期納品は有無だけのチェックボックス。
@@ -200,6 +215,20 @@ const DATE_FIELDS = [COL_CONFIRMED_DATE, COL_CEREMONY_DATE];
 // 日付だけでなく時刻まで表示したいフィールド（社内進行管理欄のチェック日時など）
 const DATETIME_FIELDS = [COL_PHOTOBRIDGE_AT, COL_DATA_UPLOAD_AT];
 
+// ★機能追加：現地スタッフ手配メール（機能：スタッフ手配）
+// カメラマン・ヘアメイク等、押すボタンごとに「宛先（名前・メール）」を支店マスタに持つ。
+// 同じ宛先を複数カテゴリに設定すれば「ヘアメイクさんに頼めばカメラマンも手配してもらえる」
+// 「現地の委託会社1件に全部頼む」といった支店ごとの実態にそのまま対応できる。
+const ARRANGEMENT_CATEGORIES = [
+  { key: 'photographer', label: 'カメラマン' },
+  { key: 'hairMakeup', label: 'ヘアメイク' },
+  { key: 'assistant', label: 'アシスタント' },
+  { key: 'florist', label: '花屋さん' },
+  { key: 'transport', label: '送迎車' }
+];
+function arrNameCol_(label) { return `手配先名-${label}`; }
+function arrEmailCol_(label) { return `手配先メール-${label}`; }
+
 // --- 支店マスタの列定義 ---
 const BM_COL_CODE = '支店コード';
 const BM_COL_NAME = '支店名';
@@ -217,11 +246,19 @@ const BM_COL_REMIND_DAYS = '督促日数';
 // ★機能追加：Googleフォームの『同意書』を必須とする支店ではTRUEにする（例：ローマ支店）。
 // 未設定／FALSEの支店は任意扱い（同意書欄自体は全支店で入力・確認できる）
 const BM_COL_CONSENT_REQUIRED = '同意書必須';
+// ★機能追加：現地スタッフ手配メール機能を使うかどうか（支店ごとに任意。既定は無効＝使わない）
+const BM_COL_ARRANGEMENT_ENABLED = '手配メール機能';
 const BM_COL_ACTIVE = '有効';
+// ★不具合防止：既存のテスト・運用スプレッドシートは「有効」列が支店マスタの最後尾にある前提で
+// 位置決め打ちの行を作っている場合がある。新しい列（手配メール機能まわり）は、その並びを崩さないよう
+// 必ず「有効」の後ろに追加する（ensureSheetWithHeaders_ が既存シートの末尾へ列を追加するのと同じ考え方）。
 const BRANCH_MASTER_HEADERS = [
   BM_COL_CODE, BM_COL_NAME, BM_COL_COUNTRY, BM_COL_CITY, BM_COL_ROLE, BM_COL_TEAM,
   BM_COL_PASSCODE, BM_COL_EMAIL, BM_COL_PREFIX, BM_COL_INVOICE_LABEL, BM_COL_DELIVERY_DAYS,
-  BM_COL_REMIND_DAYS, BM_COL_CONSENT_REQUIRED, BM_COL_ACTIVE
+  BM_COL_REMIND_DAYS, BM_COL_CONSENT_REQUIRED, BM_COL_ACTIVE,
+  BM_COL_ARRANGEMENT_ENABLED,
+  // カテゴリごとの手配先（名前・メール）。同じ宛先を複数カテゴリに入れれば「まとめて1件に依頼」にできる
+  ...ARRANGEMENT_CATEGORIES.flatMap(c => [arrNameCol_(c.label), arrEmailCol_(c.label)])
 ];
 
 // --- プラン／オプション／撮影場所／スタッフマスタの列定義（支店ごとに管理） ---
@@ -272,6 +309,27 @@ const SL_COL_WHO = '変更者';
 const SL_COL_WHEN = '日時';
 const STATUS_LOG_HEADERS = [SL_COL_KANRI, SL_COL_FIELD, SL_COL_OLD, SL_COL_NEW, SL_COL_WHO, SL_COL_WHEN];
 
+// --- メモ履歴（共有メモ／メモ（現地用）／アンケート回答を積み上げ式で記録） ---
+const ML_COL_KANRI = '管理番号';
+const ML_COL_TYPE = '種別';       // MEMO_TYPES のいずれか
+const ML_COL_BODY = '内容';
+const ML_COL_WHO = '記入者';      // 自動反映（お客様アンケートの場合は MEMO_AUTHOR_CUSTOMER）
+const ML_COL_WHEN = '日時';       // 自動反映
+const MEMO_LOG_HEADERS = [ML_COL_KANRI, ML_COL_TYPE, ML_COL_BODY, ML_COL_WHO, ML_COL_WHEN];
+
+// --- 手配履歴（現地スタッフ手配メールの送信履歴） ---
+const AL_COL_KANRI = '管理番号';
+const AL_COL_CATEGORY = 'カテゴリ';       // ARRANGEMENT_CATEGORIES の label
+const AL_COL_TO_NAME = '宛先名';
+const AL_COL_TO_EMAIL = '宛先メール';
+const AL_COL_SUBJECT = '件名';
+const AL_COL_BODY = '本文';
+const AL_COL_WHO = '送信者';              // 自動反映
+const AL_COL_WHEN = '日時';               // 自動反映
+const ARRANGEMENT_LOG_HEADERS = [
+  AL_COL_KANRI, AL_COL_CATEGORY, AL_COL_TO_NAME, AL_COL_TO_EMAIL, AL_COL_SUBJECT, AL_COL_BODY, AL_COL_WHO, AL_COL_WHEN
+];
+
 // =====================================================
 // ⓪ Webアプリのエントリポイント
 // =====================================================
@@ -307,6 +365,8 @@ function setupPortal() {
   ensureSheetWithHeaders_(ss, HISTORY_SHEET_NAME, HISTORY_HEADERS);
   ensureSheetWithHeaders_(ss, ARCHIVE_SHEET_NAME, RESERVATION_HEADERS);
   ensureSheetWithHeaders_(ss, STATUS_LOG_SHEET_NAME, STATUS_LOG_HEADERS);
+  ensureSheetWithHeaders_(ss, MEMO_LOG_SHEET_NAME, MEMO_LOG_HEADERS);
+  ensureSheetWithHeaders_(ss, ARRANGEMENT_LOG_SHEET_NAME, ARRANGEMENT_LOG_HEADERS);
 
   const bm = ss.getSheetByName(BRANCH_MASTER_SHEET_NAME);
   if (bm.getLastRow() < 2) {
@@ -368,7 +428,9 @@ function setupPortal() {
     ss.getSheetByName(RESERVATION_SHEET_NAME),
     ss.getSheetByName(HISTORY_SHEET_NAME),
     ss.getSheetByName(ARCHIVE_SHEET_NAME),
-    ss.getSheetByName(STATUS_LOG_SHEET_NAME)
+    ss.getSheetByName(STATUS_LOG_SHEET_NAME),
+    ss.getSheetByName(MEMO_LOG_SHEET_NAME),
+    ss.getSheetByName(ARRANGEMENT_LOG_SHEET_NAME)
   ].forEach(formatHeaderRow_);
 
   // 未読フラグ列を追加した直後は全て空欄になるため、履歴から実態を計算して反映する
@@ -1166,7 +1228,7 @@ function apiGetDaySchedule(token, dateStr, scope) {
         hairMakeup: r[COL_HAIR_MAKEUP],
         photographer: r[COL_PHOTOGRAPHER],
         assistant: r[COL_ASSISTANT],
-        localMemo: r[COL_LOCAL_MEMO],
+        localMemo: latestLocalMemo_(r[COL_KANRI_NO], r[COL_LOCAL_MEMO]),
         statusJp: r[COL_STATUS_JP],
         statusBranch: r[COL_STATUS_BRANCH]
       });
@@ -1439,6 +1501,17 @@ function apiGetReservationDetail(token, kanriNo) {
     checkedByBranch: r[H_COL_CHECKED_BY_BRANCH] || '',
     dateBranch: formatMaybeDate_(r[H_COL_DATE_BRANCH])
   }));
+
+  // ★機能追加：共有メモ／メモ（現地用）／アンケート回答（積み上げ式）
+  detail.memoLog = getMemoLog_(kanriNo);
+
+  // ★機能追加：現地スタッフ手配メール。宛先メールアドレス自体はここでは返さない
+  // （送信時に改ざんできないよう、下書き作成・送信の両方でサーバー側が都度解決するため）。
+  // 画面側はボタンの有効／無効の判定にだけ使う。
+  const arrMeta = getArrangementMeta_(getV(COL_BRANCH_CODE));
+  detail.arrangementEnabled = arrMeta.enabled;
+  detail.arrangementCategories = arrMeta.categories.map(c => ({ key: c.key, label: c.label, available: !!c.email }));
+  detail.arrangementLog = getArrangementLog_(kanriNo);
 
   return { ok: true, role: session.role, detail };
 }
@@ -1717,6 +1790,236 @@ function apiSetInternalFlag(token, kanriNo, field, checked) {
   } finally {
     lock.releaseLock();
   }
+  return { ok: true };
+}
+
+// =====================================================
+// ⑨-3 メモ履歴（共有メモ・メモ（現地用）・アンケート回答を積み上げ式で記録）
+// =====================================================
+// ★要件：共有メモ／メモ（現地用）は「上書き」ではなく「追記」にする。日付・担当者は自動、
+// 内容だけ手入力。3択保存（保存のみ／メッセージ／変更＋メッセージ）の対象外で、即時保存する
+// （社内進行管理欄のチェックボックスと同じ考え方）。
+function getMemoLog_(kanriNo) {
+  const sheet = getSpreadsheet_().getSheetByName(MEMO_LOG_SHEET_NAME);
+  const rows = getRowsAsObjects_(sheet)
+    .filter(r => String(r[ML_COL_KANRI]) === String(kanriNo))
+    .map(r => ({
+      type: r[ML_COL_TYPE],
+      body: r[ML_COL_BODY],
+      who: r[ML_COL_WHO],
+      at: r[ML_COL_WHEN] instanceof Date ? r[ML_COL_WHEN].getTime() : (Date.parse(r[ML_COL_WHEN]) || 0),
+      datetime: formatDateTime_(r[ML_COL_WHEN])
+    }));
+  // 新しい順。短時間に連続で追加すると同じ日時（ミリ秒まで一致）になり得るため、
+  // 先にシート内の並び順（＝追記順）を反転させてから安定ソートし、同時刻は後から追記した方を先に出す
+  rows.reverse();
+  rows.sort((a, b) => b.at - a.at);
+  return rows;
+}
+
+// 現地スタッフ手配メールの下書きに、直近のメモ（現地用）を1件添えるための小さなヘルパー。
+// メモ履歴に1件も無い（＝この機能を追加する前からある案件）場合は、旧・単一項目の値にフォールバックする。
+function latestLocalMemo_(kanriNo, legacyValue) {
+  const found = getMemoLog_(kanriNo).find(m => m.type === MEMO_TYPE_LOCAL);
+  return found ? found.body : (legacyValue || '');
+}
+
+function apiAddMemo(token, kanriNo, memoType, body) {
+  const session = requireSession_(token);
+  if (memoType !== MEMO_TYPE_SHARED && memoType !== MEMO_TYPE_LOCAL) {
+    throw new Error('種別が正しくありません。');
+  }
+  const text = String(body || '').trim();
+  if (!text) throw new Error('内容を入力してください。');
+
+  const { headers, rowIndex, rowData } = findReservationRow_(kanriNo);
+  if (rowIndex === -1) throw new Error('対象の予約が見つかりません。');
+  assertRowVisible_(session, headers, rowData);
+
+  const sheet = getSpreadsheet_().getSheetByName(MEMO_LOG_SHEET_NAME);
+  sheet.appendRow([kanriNo, memoType, text, senderLabel_(session), new Date()]);
+  return { ok: true };
+}
+
+// =====================================================
+// ⑨-4 現地スタッフ手配メール（機能：スタッフ手配）
+// =====================================================
+// ★要件：カメラマン・ヘアメイク・アシスタント・花屋さん・送迎車のカテゴリごとに、
+// 支店マスタへ事前登録した宛先へ手配メールの下書きを自動生成し、担当者は内容を確認・
+// 必要なら編集してから送信する（宛先は下書き作成時にサーバー側で確定させ、送信APIでは
+// クライアントから任意の宛先を指定できないようにしている＝送信先の改ざん防止）。
+// 同じ宛先を複数カテゴリに設定すれば「1件の委託先にまとめて依頼」にも対応できる。
+// 支店ごとに使う／使わないを選べる（支店マスタの「手配メール機能」列。既定は無効）。
+function getArrangementMeta_(branchCode) {
+  const code = String(branchCode || '').trim().toUpperCase();
+  const sheet = getSpreadsheet_().getSheetByName(BRANCH_MASTER_SHEET_NAME);
+  const row = getRowsAsObjects_(sheet).find(r => String(r[BM_COL_CODE] || '').trim().toUpperCase() === code);
+  const categoriesOf = (r) => ARRANGEMENT_CATEGORIES.map(c => ({
+    key: c.key, label: c.label,
+    name: r ? (r[arrNameCol_(c.label)] || '') : '',
+    email: r ? (r[arrEmailCol_(c.label)] || '') : ''
+  }));
+  return { enabled: row ? isActiveFlag_(row[BM_COL_ARRANGEMENT_ENABLED]) : false, categories: categoriesOf(row) };
+}
+
+function getArrangementLog_(kanriNo) {
+  const sheet = getSpreadsheet_().getSheetByName(ARRANGEMENT_LOG_SHEET_NAME);
+  const rows = getRowsAsObjects_(sheet)
+    .filter(r => String(r[AL_COL_KANRI]) === String(kanriNo))
+    .map(r => ({
+      category: r[AL_COL_CATEGORY],
+      toName: r[AL_COL_TO_NAME],
+      toEmail: r[AL_COL_TO_EMAIL],
+      subject: r[AL_COL_SUBJECT],
+      body: r[AL_COL_BODY],
+      who: r[AL_COL_WHO],
+      at: r[AL_COL_WHEN] instanceof Date ? r[AL_COL_WHEN].getTime() : (Date.parse(r[AL_COL_WHEN]) || 0),
+      datetime: formatDateTime_(r[AL_COL_WHEN])
+    }));
+  // 新しい順（同時刻のタイブレークは getMemoLog_ と同じ考え方）
+  rows.reverse();
+  rows.sort((a, b) => b.at - a.at);
+  return rows;
+}
+
+// 設定の閲覧・保存は「自支店 or JP」（プラン／オプションマスタと同じ運用）：
+// 現地側でウェブアプリ上から編集できるのが基本だが、難しければ日本側からも設定できる。
+function apiGetArrangementSettings(token, branchCode) {
+  const session = requireSession_(token);
+  const target = session.role === BRANCH_ROLE ? session.branchCode : String(branchCode || '').trim().toUpperCase();
+  assertBranchAccess_(session, target);
+  const meta = getArrangementMeta_(target);
+  return { ok: true, branchCode: target, enabled: meta.enabled, categories: meta.categories };
+}
+
+function apiSaveArrangementSettings(token, branchCode, settings) {
+  const session = requireSession_(token);
+  // ★不具合防止：読み取り系（apiGetArrangementSettings等）と違い、書き込みは「支店ロールなら
+  // 渡されたbranchCodeを黙って自分の支店へ読み替える」のではなく、他支店を指定したこと自体を
+  // 明確に拒否する（apiSaveStaffItem等の他の書き込みAPIと同じ方針。誤って他支店を指定した操作を
+  // こちらの支店へ静かにすり替えて保存してしまうのを防ぐため）。
+  assertBranchAccess_(session, branchCode);
+  const target = String(branchCode || '').trim().toUpperCase();
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
+    throw new Error('設定内容が正しく送信されませんでした。');
+  }
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
+  try {
+    const sheet = getSpreadsheet_().getSheetByName(BRANCH_MASTER_SHEET_NAME);
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const lastRow = sheet.getLastRow();
+    const codeColIdx = headers.indexOf(BM_COL_CODE);
+    let targetRow = -1;
+    if (lastRow > 1) {
+      const codes = sheet.getRange(2, codeColIdx + 1, lastRow - 1, 1).getValues();
+      for (let i = 0; i < codes.length; i++) {
+        if (String(codes[i][0]).trim().toUpperCase() === target) { targetRow = i + 2; break; }
+      }
+    }
+    if (targetRow === -1) throw new Error('対象の支店が見つかりません。');
+
+    sheet.getRange(targetRow, colIndexOrThrow_(headers, BM_COL_ARRANGEMENT_ENABLED)).setValue(!!settings.enabled);
+    const categories = (settings.categories && typeof settings.categories === 'object') ? settings.categories : {};
+    ARRANGEMENT_CATEGORIES.forEach(c => {
+      const v = categories[c.key] || {};
+      sheet.getRange(targetRow, colIndexOrThrow_(headers, arrNameCol_(c.label))).setValue(String(v.name || '').trim());
+      sheet.getRange(targetRow, colIndexOrThrow_(headers, arrEmailCol_(c.label))).setValue(String(v.email || '').trim());
+    });
+  } finally {
+    lock.releaseLock();
+  }
+  return { ok: true };
+}
+
+// 下書きを作る（宛先はここでサーバー側が確定する。クライアントは件名・本文だけを編集できる）
+function apiBuildArrangementDraft(token, kanriNo, categoryKey) {
+  const session = requireSession_(token);
+  const category = ARRANGEMENT_CATEGORIES.find(c => c.key === categoryKey);
+  if (!category) throw new Error('手配カテゴリが正しくありません。');
+
+  const { headers, rowIndex, rowData } = findReservationRow_(kanriNo);
+  if (rowIndex === -1) throw new Error('対象の予約が見つかりません。');
+  assertRowVisible_(session, headers, rowData);
+
+  const getV = (name) => rowData[headers.indexOf(name)] || '';
+  const branchCode = getV(COL_BRANCH_CODE);
+  const arr = getArrangementMeta_(branchCode);
+  if (!arr.enabled) throw new Error('この支店では現地スタッフ手配メール機能が無効になっています。設定画面から有効にしてください。');
+  const contact = arr.categories.find(c => c.key === categoryKey);
+  if (!contact || !contact.email) {
+    throw new Error(`「${category.label}」の手配先メールアドレスが設定されていません。設定画面から登録してください。`);
+  }
+
+  const kanri = getV(COL_KANRI_NO);
+  const chgNo = getV(COL_CHALLENGE_NO) || 'なし';
+  const groom = getV(COL_GROOM_NAME);
+  const bride = getV(COL_BRIDE_NAME);
+  const hopeDates = [getV(COL_HOPE1), getV(COL_HOPE2), getV(COL_HOPE3)].filter(Boolean);
+  const dateDisplay = formatMaybeDate_(getV(COL_CONFIRMED_DATE)) ||
+    (hopeDates.length ? `未定（希望日: ${hopeDates.join(' / ')}）` : '未定');
+  const branchMeta = branchMetaMap_()[branchCode] || {};
+  const localMemo = latestLocalMemo_(kanri, getV(COL_LOCAL_MEMO));
+
+  const bodyLines = [
+    `${contact.name ? contact.name + ' 様' : 'ご担当者様'}`,
+    '',
+    `いつもお世話になっております。${branchMeta.name || branchCode}です。`,
+    `以下の内容で${category.label}の手配をお願いいたします。`,
+    '',
+    `お客様名: ${groom}${bride ? ' ／ ' + bride : ''}`,
+    `管理番号: ${kanri}（CHG: ${chgNo}）`,
+    `撮影希望日: ${dateDisplay}`,
+    getV(COL_LOCATION) ? `撮影希望場所: ${getV(COL_LOCATION)}` : '',
+    getV(COL_HOTEL) ? `ホテル: ${getV(COL_HOTEL)}` : '',
+    getV(COL_PLAN) ? `プラン: ${getV(COL_PLAN)}` : '',
+    localMemo ? `現地メモ: ${localMemo}` : '',
+    '',
+    'お手数をおかけしますが、可否のご連絡をお願いいたします。'
+  ].filter(line => line !== '');
+
+  return {
+    ok: true,
+    category: category.label,
+    recipientName: contact.name || '',
+    recipientEmail: contact.email,
+    subject: `[WEDLINK][${branchCode}] ${category.label}手配のお願い（${kanri}）`,
+    body: bodyLines.join('\n')
+  };
+}
+
+// 送信する（宛先はクライアントから受け取らず、ここで再度サーバー側の設定から解決し直す）
+function apiSendArrangementRequest(token, kanriNo, categoryKey, subject, body) {
+  const session = requireSession_(token);
+  const category = ARRANGEMENT_CATEGORIES.find(c => c.key === categoryKey);
+  if (!category) throw new Error('手配カテゴリが正しくありません。');
+
+  const { headers, rowIndex, rowData } = findReservationRow_(kanriNo);
+  if (rowIndex === -1) throw new Error('対象の予約が見つかりません。');
+  assertRowVisible_(session, headers, rowData);
+
+  const getV = (name) => rowData[headers.indexOf(name)] || '';
+  const branchCode = getV(COL_BRANCH_CODE);
+  const arr = getArrangementMeta_(branchCode);
+  if (!arr.enabled) throw new Error('この支店では現地スタッフ手配メール機能が無効になっています。');
+  const contact = arr.categories.find(c => c.key === categoryKey);
+  if (!contact || !contact.email) {
+    throw new Error(`「${category.label}」の手配先メールアドレスが設定されていません。`);
+  }
+
+  const subj = String(subject || '').trim() || `${category.label}手配のお願い（${kanriNo}）`;
+  const text = String(body || '').trim();
+  if (!text) throw new Error('本文を入力してください。');
+
+  const mailOptions = { to: contact.email, subject: subj, body: text };
+  const branchEmail = getBranchEmail_(branchCode);
+  if (branchEmail) mailOptions.replyTo = branchEmail;
+  MailApp.sendEmail(mailOptions);
+
+  const logSheet = getSpreadsheet_().getSheetByName(ARRANGEMENT_LOG_SHEET_NAME);
+  logSheet.appendRow([kanriNo, category.label, contact.name || '', contact.email, subj, text, senderLabel_(session), new Date()]);
+
   return { ok: true };
 }
 
@@ -2601,6 +2904,11 @@ function setupTriggers() {
 const CONSENT_FORM_KANRI_QUESTION = '管理番号';
 // 同意書が取得済みであることを表す値（画面のチェックボックスもこの値で保存する）
 const CONSENT_DONE_VALUE = '済';
+// ★機能追加：このスプレッドシートに『アンケート』フォーム（機能：アンケート回答の反映）など
+// 他のGoogleフォームも連携する場合のみ設定する。回答が届いたシート名がここと一致する時だけ
+// 同意書として処理する（他フォームの回答で誤って「同意書＝済」にしてしまう事故を防ぐ）。
+// 1つのフォームしか連携しない場合は空欄のままでよい（従来どおり全ての回答を対象にする）。
+const CONSENT_FORM_RESPONSE_SHEET_NAME = '';
 
 function setupConsentFormTrigger() {
   ScriptApp.getProjectTriggers().forEach(t => {
@@ -2628,6 +2936,12 @@ function onConsentFormSubmit_(e) {
 }
 
 function onConsentFormSubmitCore_(e, errors) {
+  // 他のGoogleフォーム（アンケート等）とこのスプレッドシートを共有している場合、回答が届いた
+  // シート名で「自分（同意書）宛の回答か」を判定する（CONSENT_FORM_RESPONSE_SHEET_NAME未設定なら判定しない＝従来どおり）
+  if (CONSENT_FORM_RESPONSE_SHEET_NAME && e && e.range && typeof e.range.getSheet === 'function' &&
+      e.range.getSheet().getName() !== CONSENT_FORM_RESPONSE_SHEET_NAME) {
+    return;
+  }
   const named = e && e.namedValues;
   if (!named || !named[CONSENT_FORM_KANRI_QUESTION]) {
     errors.push({ where: 'onConsentFormSubmit', message: `フォームの回答に「${CONSENT_FORM_KANRI_QUESTION}」という質問が見つかりません。質問文を確認してください。` });
@@ -2671,4 +2985,92 @@ function onConsentFormSubmitCore_(e, errors) {
   } finally {
     lock.releaseLock();
   }
+}
+
+// =====================================================
+// ⑱ アンケートフォーム連携（機能：アンケート回答の反映）
+// =====================================================
+// 挙式・撮影当日の髪型やメイクの希望、参考写真などをお客様がGoogleフォームで回答する運用向け。
+// 回答内容を、質問と回答のペアのまま案件の「メモ履歴」（種別＝アンケート回答）へ自動で積み上げる。
+// 質問文をこちらで決め打ちにしていないため、フォームの質問を後から増減・変更しても
+// コード側の修正なしにそのまま反映される。
+//
+// 事前準備（スプレッドシート管理者が1回だけ行う）：
+//   1. Googleフォームを作成し、質問の1つに管理番号を入力してもらう項目を用意する
+//      （質問文はSURVEY_FORM_KANRI_QUESTIONの値と完全に一致させること。既定は「管理番号」）
+//   2. フォームの「回答」タブ → スプレッドシートのアイコン →
+//      「既存のスプレッドシートを選択」で、このポータルのスプレッドシートを選ぶ
+//   3. スプレッドシートのメニュー「拡張機能 → Apps Script」からこのプロジェクトを開き、
+//      関数一覧から setupSurveyFormTrigger を選んで実行する（以後、フォーム送信時に自動反映される）
+//   4. 【重要】このスプレッドシートに『同意書』フォームなど他のGoogleフォームも連携している場合、
+//      片方の回答でもう片方のハンドラが誤発火しないよう、下記2つの定数にそれぞれの回答用シート名
+//      （フォーム連携時に自動追加されるシートの名前）を設定してください：
+//        ・CONSENT_FORM_RESPONSE_SHEET_NAME（このファイルの少し上）… 同意書フォームの回答シート名
+//        ・SURVEY_FORM_RESPONSE_SHEET_NAME（すぐ下）… このアンケートフォームの回答シート名
+//      1つのフォームしか連携しない場合はどちらも空欄のままで構いません。
+//
+// フォーム側で管理番号の入力ミスがあった場合は自動反映できません（システムエラー通知が飛びます）。
+const SURVEY_FORM_KANRI_QUESTION = '管理番号';
+// 上記4.参照。他フォームと共有しない場合は空欄のままでよい
+const SURVEY_FORM_RESPONSE_SHEET_NAME = '';
+
+function setupSurveyFormTrigger() {
+  ScriptApp.getProjectTriggers().forEach(t => {
+    if (t.getHandlerFunction() === 'onSurveyFormSubmit_') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('onSurveyFormSubmit_')
+    .forSpreadsheet(getSpreadsheet_())
+    .onFormSubmit()
+    .create();
+  SpreadsheetApp.getUi().alert('アンケートフォームの自動反映トリガーを設定しました。以後、フォーム回答時に案件の「メモ履歴」（アンケート回答）へ自動で追記されます。');
+}
+
+function onSurveyFormSubmit_(e) {
+  const errors = [];
+  try {
+    onSurveyFormSubmitCore_(e, errors);
+  } catch (err) {
+    errors.push({ where: '処理全体', message: errorMessage_(err), stack: err && err.stack ? String(err.stack) : '' });
+  }
+  if (errors.length > 0) {
+    console.error(`[onSurveyFormSubmit] ${errors.length}件のエラー`);
+    errors.forEach(er => console.error(`[onSurveyFormSubmit] ${er.where}: ${er.message}`));
+    notifySystemError_('onSurveyFormSubmit', errors, 0);
+  }
+}
+
+function onSurveyFormSubmitCore_(e, errors) {
+  // 他のGoogleフォーム（同意書等）とこのスプレッドシートを共有している場合、回答が届いたシート名で
+  // 「自分（アンケート）宛の回答か」を判定する（SURVEY_FORM_RESPONSE_SHEET_NAME未設定なら判定しない）
+  if (SURVEY_FORM_RESPONSE_SHEET_NAME && e && e.range && typeof e.range.getSheet === 'function' &&
+      e.range.getSheet().getName() !== SURVEY_FORM_RESPONSE_SHEET_NAME) {
+    return;
+  }
+  const named = e && e.namedValues;
+  if (!named || !named[SURVEY_FORM_KANRI_QUESTION]) {
+    errors.push({ where: 'onSurveyFormSubmit', message: `フォームの回答に「${SURVEY_FORM_KANRI_QUESTION}」という質問が見つかりません。質問文を確認してください。` });
+    return;
+  }
+  const kanri = String(named[SURVEY_FORM_KANRI_QUESTION][0] || '').trim();
+  if (!kanri) {
+    errors.push({ where: 'onSurveyFormSubmit', message: '管理番号が空欄で送信されました。' });
+    return;
+  }
+  const { rowIndex } = findReservationRow_(kanri);
+  if (rowIndex === -1) {
+    errors.push({ where: 'onSurveyFormSubmit', message: `管理番号「${kanri}」の案件が見つかりません（入力ミスの可能性があります）。` });
+    return;
+  }
+
+  // 管理番号の質問以外を「質問: 回答」の形でそのまま記録する（フォームの質問構成が変わっても追従できる）
+  const lines = Object.keys(named)
+    .filter(q => q !== SURVEY_FORM_KANRI_QUESTION)
+    .map(q => `${q}: ${(named[q] || []).join(', ')}`);
+  if (lines.length === 0) {
+    errors.push({ where: 'onSurveyFormSubmit', message: `管理番号「${kanri}」：管理番号以外の回答が無いフォーム送信でした。` });
+    return;
+  }
+
+  const sheet = getSpreadsheet_().getSheetByName(MEMO_LOG_SHEET_NAME);
+  sheet.appendRow([kanri, MEMO_TYPE_SURVEY, lines.join('\n'), MEMO_AUTHOR_CUSTOMER, new Date()]);
 }

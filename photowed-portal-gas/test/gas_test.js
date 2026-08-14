@@ -968,6 +968,8 @@ function featureFixture() {
   ctx.ensureSheetWithHeaders_(ss, 'ステータス変更履歴', ctx.STATUS_LOG_HEADERS);
   ['撮影場所マスタ','スタッフマスタ','セールマスタ'].forEach(n => ctx.ensureSheetWithHeaders_(ss, n, ctx.MASTER_ITEM_HEADERS));
   ctx.ensureSheetWithHeaders_(ss, '定型文マスタ', ctx.PHRASE_MASTER_HEADERS);
+  ctx.ensureSheetWithHeaders_(ss, 'メモ履歴', ctx.MEMO_LOG_HEADERS);
+  ctx.ensureSheetWithHeaders_(ss, '手配履歴', ctx.ARRANGEMENT_LOG_HEADERS);
   return ctx;
 }
 function addCase(ctx, sheetName, o) {
@@ -1485,6 +1487,186 @@ section('27. 日本側専用の社内進行管理欄（フォトブリッジ登�
   let badField = null;
   try { ctx.apiSetInternalFlag(t, 'VIE-501', 'STS JP', true); } catch (e) { badField = e.message; }
   check('社内進行管理欄以外は apiSetInternalFlag で変更できない', badField !== null, String(badField));
+}
+
+// ---------------------------------------------------------------
+section('28. メモ履歴（共有メモ・メモ（現地用）の積み上げ記録）');
+{
+  const ctx = featureFixture();
+  addCase(ctx, '予約一覧', { '支店コード':'VIE','管理番号':'VIE-601','管轄':'関東' });
+  const jp = ctx.apiLogin('KANTO','pw');
+  const vie = ctx.apiLogin('VIE','vp');
+
+  // 追加すると即座に反映され、日付・記入者は自動で入る（3択保留の対象外）
+  ctx.apiAddMemo(jp.session.token, 'VIE-601', '共有メモ', '請求書は月末締めで発行予定');
+  const afterFirst = ctx.apiGetReservationDetail(jp.session.token, 'VIE-601').detail;
+  check('追加した内容が入る', afterFirst.memoLog[0].body === '請求書は月末締めで発行予定');
+  check('種別が共有メモになっている', afterFirst.memoLog[0].type === '共有メモ');
+  check('記入者が自動で入る（Googleアカウントの氏名）', afterFirst.memoLog[0].who.includes('tanaka'),
+        afterFirst.memoLog[0].who);
+  check('日時が自動で入る', /^\d{4}\/\d{2}\/\d{2}/.test(afterFirst.memoLog[0].datetime), afterFirst.memoLog[0].datetime);
+
+  // 積み上げ式：追加するたびに増え、新しい順で返る
+  ctx.apiAddMemo(vie.session.token, 'VIE-601', '共有メモ', '請求書は届いています');
+  ctx.apiAddMemo(vie.session.token, 'VIE-601', 'メモ（現地用）', '雨天時は屋内スタジオへ変更');
+  const afterThree = ctx.apiGetReservationDetail(jp.session.token, 'VIE-601').detail;
+  const sharedOnly = afterThree.memoLog.filter(m => m.type === '共有メモ');
+  const localOnly = afterThree.memoLog.filter(m => m.type === 'メモ（現地用）');
+  check('共有メモが2件積み上がっている', sharedOnly.length === 2, JSON.stringify(sharedOnly));
+  check('新しい順（最新が先頭）', sharedOnly[0].body === '請求書は届いています', JSON.stringify(sharedOnly));
+  check('古い方も消えずに残っている', sharedOnly[1].body === '請求書は月末締めで発行予定');
+  check('メモ（現地用）は種別で分かれて1件だけ', localOnly.length === 1 && localOnly[0].body === '雨天時は屋内スタジオへ変更');
+
+  // 空欄・不正な種別は拒否する
+  let emptyErr = null;
+  try { ctx.apiAddMemo(jp.session.token, 'VIE-601', '共有メモ', '   '); } catch (e) { emptyErr = e.message; }
+  check('空欄のメモは追加できない', emptyErr !== null, String(emptyErr));
+  let typeErr = null;
+  try { ctx.apiAddMemo(jp.session.token, 'VIE-601', 'アンケート回答', '手入力で紛れ込ませようとする内容'); } catch (e) { typeErr = e.message; }
+  check('種別「アンケート回答」は手入力では追加できない（Googleフォーム専用）', typeErr !== null, String(typeErr));
+
+  // 他支店の案件へは追加できない
+  const ist = ctx.apiLogin('IST','ip');
+  let crossErr = null;
+  try { ctx.apiAddMemo(ist.session.token, 'VIE-601', '共有メモ', '侵入'); } catch (e) { crossErr = e.message; }
+  check('他支店の案件へメモを追加できない', crossErr !== null, String(crossErr));
+
+  // 過去（移行前）のメモは、まだ1件も無いときだけフォールバックとして表示される
+  addCase(ctx, '予約一覧', { '支店コード':'VIE','管理番号':'VIE-602','管轄':'関東', '共有メモ':'旧方式で保存されていたメモ' });
+  const legacy = ctx.apiGetReservationDetail(jp.session.token, 'VIE-602').detail;
+  check('メモ履歴が空でも旧方式の値がフォールバック表示される', legacy['共有メモ'] === '旧方式で保存されていたメモ');
+  check('メモ履歴自体は空のまま（フォールバックは画面側の責務）', legacy.memoLog.length === 0);
+  ctx.apiAddMemo(jp.session.token, 'VIE-602', '共有メモ', '新方式の1件目');
+  const afterMigrate = ctx.apiGetReservationDetail(jp.session.token, 'VIE-602').detail;
+  check('新しく追加すればメモ履歴に乗る', afterMigrate.memoLog.some(m => m.body === '新方式の1件目'));
+}
+
+// ---------------------------------------------------------------
+section('29. 現地スタッフ手配メール');
+{
+  const ctx = featureFixture();
+  addCase(ctx, '予約一覧', { '支店コード':'VIE','管理番号':'VIE-701','管轄':'関東',
+    '新郎名（ローマ字）':'Yuma Tanaka','新婦名（ローマ字）':'Sophie Bauer',
+    '撮影日FIX': daysAhead(30), '撮影希望場所':'シェーンブルン宮殿', 'ホテル':'Hotel Sacher', 'プラン名':'定番プラン' });
+  const jp = ctx.apiLogin('KANTO','pw');
+  const vie = ctx.apiLogin('VIE','vp');
+
+  // 未設定のうちは「機能が無効」で弾かれる
+  let disabledErr = null;
+  try { ctx.apiBuildArrangementDraft(vie.session.token, 'VIE-701', 'photographer'); } catch (e) { disabledErr = e.message; }
+  check('機能を有効にするまでは下書きも作れない', disabledErr !== null && disabledErr.includes('無効'), String(disabledErr));
+
+  // 設定画面から有効化＋カメラマンとヘアメイクを同じ宛先にする（1件の委託先へまとめて依頼できることの確認）
+  const saved = ctx.apiSaveArrangementSettings(vie.session.token, 'VIE', {
+    enabled: true,
+    categories: {
+      photographer: { name: 'M.Gruber', email: 'gruber@example.com' },
+      hairMakeup: { name: 'M.Gruber', email: 'gruber@example.com' },
+      florist: { name: '', email: '' }
+    }
+  });
+  check('設定の保存が成功する', saved.ok === true);
+
+  const settings = ctx.apiGetArrangementSettings(jp.session.token, 'VIE');
+  check('保存した設定が読み返せる（JP側からも）', settings.enabled === true);
+  const photoCat = settings.categories.find(c => c.key === 'photographer');
+  const hmCat = settings.categories.find(c => c.key === 'hairMakeup');
+  const floristCat = settings.categories.find(c => c.key === 'florist');
+  check('カメラマンの宛先が保存されている', photoCat.email === 'gruber@example.com');
+  check('ヘアメイクも同じ宛先＝1件にまとめて依頼できる設定になっている', hmCat.email === 'gruber@example.com');
+  check('未設定の花屋さんは空のまま', floristCat.email === '');
+
+  // 下書き作成：宛先はサーバー側で確定し、案件情報が本文に入る
+  const draft = ctx.apiBuildArrangementDraft(vie.session.token, 'VIE-701', 'photographer');
+  check('下書きの宛先が設定どおり', draft.recipientEmail === 'gruber@example.com');
+  check('下書きにお客様名が入る', draft.body.includes('Yuma Tanaka') && draft.body.includes('Sophie Bauer'));
+  check('下書きに管理番号が入る', draft.body.includes('VIE-701'));
+  check('下書きに撮影希望場所が入る', draft.body.includes('シェーンブルン宮殿'));
+  check('下書きの件名にカテゴリ名が入る', draft.subject.includes('カメラマン'));
+
+  // 未設定カテゴリはエラーになる
+  let missingErr = null;
+  try { ctx.apiBuildArrangementDraft(vie.session.token, 'VIE-701', 'florist'); } catch (e) { missingErr = e.message; }
+  check('宛先未設定のカテゴリは下書きも作れない', missingErr !== null, String(missingErr));
+
+  // 送信：実際にメールが飛び、履歴に残る（宛先はクライアントから指定できない＝改ざん不可）
+  const beforeMailCount = ctx.__mail.length;
+  const sendRes = ctx.apiSendArrangementRequest(vie.session.token, 'VIE-701', 'photographer', draft.subject, '編集後の本文です。よろしくお願いします。');
+  check('送信が成功する', sendRes.ok === true);
+  check('メールが1通送られる', ctx.__mail.length === beforeMailCount + 1);
+  const sentMail = ctx.__mail[ctx.__mail.length - 1];
+  check('宛先が設定どおり（クライアントの指定を無視してサーバー側の設定で決まる）', sentMail.to === 'gruber@example.com');
+  check('編集した本文がそのまま送られる', sentMail.body === '編集後の本文です。よろしくお願いします。');
+  check('支店の通知先メールへ返信が届くようreplyToが設定される', sentMail.replyTo === 'vie@his-world.com');
+
+  const afterSend = ctx.apiGetReservationDetail(jp.session.token, 'VIE-701').detail;
+  check('手配履歴が1件残る', afterSend.arrangementLog.length === 1);
+  check('手配履歴にカテゴリが残る', afterSend.arrangementLog[0].category === 'カメラマン');
+  check('手配履歴に宛先が残る', afterSend.arrangementLog[0].toEmail === 'gruber@example.com');
+
+  // 画面側はボタンの有効／無効判定にだけ使う想定なので、宛先メール自体は案件詳細に含めない
+  check('案件詳細のレスポンスに手配先メールが直接は含まれない（送信時にサーバー側で解決する設計）',
+        !JSON.stringify(afterSend.arrangementCategories).includes('gruber@example.com'));
+  const photoAvail = afterSend.arrangementCategories.find(c => c.key === 'photographer');
+  const floristAvail = afterSend.arrangementCategories.find(c => c.key === 'florist');
+  check('設定済みカテゴリは available=true', photoAvail.available === true);
+  check('未設定カテゴリは available=false', floristAvail.available === false);
+
+  // 支店ロールは自支店以外の設定を操作できない
+  const ist = ctx.apiLogin('IST','ip');
+  let crossSaveErr = null;
+  try { ctx.apiSaveArrangementSettings(ist.session.token, 'VIE', { enabled: true, categories: {} }); } catch (e) { crossSaveErr = e.message; }
+  check('他支店の手配設定は保存できない', crossSaveErr !== null, String(crossSaveErr));
+  let crossSendErr = null;
+  try { ctx.apiSendArrangementRequest(ist.session.token, 'VIE-701', 'photographer', '件名', '本文'); } catch (e) { crossSendErr = e.message; }
+  check('他支店の案件へは手配メールを送れない', crossSendErr !== null, String(crossSendErr));
+}
+
+// ---------------------------------------------------------------
+section('30. アンケートフォーム連携（お客様の回答をメモ履歴へ反映）');
+{
+  const ctx = featureFixture();
+  addCase(ctx, '予約一覧', { '支店コード':'VIE','管理番号':'VIE-801','管轄':'関東' });
+  addCase(ctx, '予約一覧', { '支店コード':'IST','管理番号':'IST-801','管轄':'関西' });
+  const jp = ctx.apiLogin('KANTO','pw');
+
+  const e1 = [];
+  ctx.onSurveyFormSubmitCore_({ namedValues: {
+    '管理番号': ['VIE-801'],
+    '当日の髪型のご希望': ['ゆるふわ巻き'],
+    '参考写真': ['https://drive.google.com/file/d/xxxx']
+  } }, e1);
+  check('アンケート連携はエラーなしで終わる', e1.length === 0, JSON.stringify(e1));
+
+  const detail = ctx.apiGetReservationDetail(jp.session.token, 'VIE-801').detail;
+  const survey = detail.memoLog.filter(m => m.type === 'アンケート回答');
+  check('アンケート回答がメモ履歴に1件反映される', survey.length === 1, JSON.stringify(survey));
+  check('質問と回答がそのまま記録される（質問文をコード側で決め打ちしない）',
+        survey[0].body.includes('当日の髪型のご希望: ゆるふわ巻き') && survey[0].body.includes('参考写真: https://drive.google.com/file/d/xxxx'),
+        survey[0].body);
+  check('管理番号の質問自体は回答内容に含めない', !survey[0].body.includes('管理番号:'));
+  check('記入者はお客様（Googleフォーム）', survey[0].who.includes('Googleフォーム'), survey[0].who);
+
+  // 無関係な案件（IST-801）には反映されない
+  const other = ctx.apiGetReservationDetail(jp.session.token, 'IST-801').detail;
+  check('無関係な案件にはアンケート回答が付かない', other.memoLog.filter(m => m.type === 'アンケート回答').length === 0);
+
+  // 管理番号の質問が無い・空欄・存在しない番号はエラーとして記録される（処理は止まらない）
+  const e2 = [];
+  ctx.onSurveyFormSubmitCore_({ namedValues: { '別の質問': ['x'] } }, e2);
+  check('管理番号の質問が無いとエラーになる', e2.length === 1);
+  const e3 = [];
+  ctx.onSurveyFormSubmitCore_({ namedValues: { '管理番号': ['NOTFOUND'] } }, e3);
+  check('存在しない管理番号はエラーになる', e3.length === 1);
+  const e4 = [];
+  ctx.onSurveyFormSubmitCore_({ namedValues: { '管理番号': ['VIE-801'] } }, e4);
+  check('管理番号だけで他の回答が無い場合もエラーになる', e4.length === 1);
+
+  // 複数回回答すれば積み上がる（お客様が途中で回答をやり直すケースなど）
+  ctx.onSurveyFormSubmitCore_({ namedValues: { '管理番号': ['VIE-801'], 'メイクのご希望': ['ナチュラル'] } }, []);
+  const detail2 = ctx.apiGetReservationDetail(jp.session.token, 'VIE-801').detail;
+  const survey2 = detail2.memoLog.filter(m => m.type === 'アンケート回答');
+  check('2回目の回答は積み上げで残る（上書きしない）', survey2.length === 2, JSON.stringify(survey2));
 }
 
 // ---------------------------------------------------------------

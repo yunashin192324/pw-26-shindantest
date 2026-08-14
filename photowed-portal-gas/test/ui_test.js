@@ -287,9 +287,11 @@ function visiblePane(document) {
   await settle();
   [...document.querySelectorAll('.tab-btn')].find(b => b.dataset.tab === 'reservation').click();
   await settle();
-  const memoEl = document.querySelector('[data-pending="共有メモ"]');
-  memoEl.value = 'あとで確定するメモ';
-  memoEl.dispatchEvent(new dom.window.Event('change'));
+  // ★機能追加：共有メモ／メモ（現地用）は積み上げ式（memoLog）に変わり、3択保留の対象外になったため、
+  // ここでは引き続き3択保留の対象である「備考」で「タブをまたいでも未保存の変更が残る」ことを確認する
+  const remarksEl = document.querySelector('[data-pending="備考"]');
+  remarksEl.value = 'あとで確定する備考';
+  remarksEl.dispatchEvent(new dom.window.Event('change'));
   [...document.querySelectorAll('.tab-btn')].find(b => b.dataset.tab === 'message').click();
   await settle();
   const indicator = document.getElementById('pending-indicator');
@@ -299,7 +301,7 @@ function visiblePane(document) {
   document.getElementById('btn-save-quiet').click();
   await settle();
   check('メッセージタブからの保存も従来どおり動く',
-        ctx.apiGetReservationDetail(tok, 'R-001').detail['共有メモ'] === 'あとで確定するメモ');
+        ctx.apiGetReservationDetail(tok, 'R-001').detail['備考'] === 'あとで確定する備考');
 
   // ---------------------------------------------------------------
   section('U10. 社内進行管理欄（日本側のみ）');
@@ -355,6 +357,102 @@ function visiblePane(document) {
         !branchDetailHtml.includes('データアップロード'));
   check('支店側の画面のどこにも「AI加工」の文字列が出ない',
         !branchDetailHtml.includes('AI加工'));
+
+  // ---------------------------------------------------------------
+  section('U11. メモ履歴（共有メモ・メモ（現地用）を画面から追記できる）');
+  // 直前のセクションで支店（ローマ）としてログイン済み・案件詳細の「予約内容」タブを開いている
+  {
+    const memoInput = document.querySelector('[data-memo-input="共有メモ"]');
+    check('共有メモの入力欄がある', !!memoInput);
+    memoInput.value = '請求書を発送しました';
+    document.querySelector('[data-memo-add="共有メモ"]').click();
+    await settle();
+    const pane = document.querySelector('[data-tab-pane="reservation"]');
+    check('追加した内容がすぐ画面に反映される', pane.textContent.includes('請求書を発送しました'));
+    check('保存後も予約内容タブに留まる', activeTab(document) === 'reservation', `実際: ${activeTab(document)}`);
+
+    // 現地記入欄タブでも同様に追記できる（種別が別れて保存される）
+    [...document.querySelectorAll('.tab-btn')].find(b => b.dataset.tab === 'local').click();
+    await settle();
+    const localInput = document.querySelector('[data-memo-input="メモ（現地用）"]');
+    localInput.value = '雨天時は屋内スタジオへ変更';
+    document.querySelector('[data-memo-add="メモ（現地用）"]').click();
+    await settle();
+    const localPane = document.querySelector('[data-tab-pane="local"]');
+    check('現地記入欄タブにも追記した内容が出る', localPane.textContent.includes('雨天時は屋内スタジオへ変更'));
+    check('種別が分かれるので共有メモ欄には現地用メモが出ない',
+          !document.querySelector('[data-tab-pane="reservation"]').textContent.includes('雨天時は屋内スタジオへ変更'));
+  }
+
+  // ---------------------------------------------------------------
+  section('U12. 現地スタッフ手配メール（下書き確認 → 送信）');
+  {
+    const rowTok = ctx.apiLogin('ROW', 'CHANGE-ME-ROW').session.token;
+    // 画面の「設定」を経由せず直接APIで有効化しておく（設定画面自体はU13で確認する）
+    ctx.apiSaveArrangementSettings(rowTok, 'ROW', {
+      enabled: true,
+      categories: { photographer: { name: 'L.Conti', email: 'conti@example.com' } }
+    });
+    document.getElementById('nav-dashboard').click();
+    await settle();
+    document.querySelector('#reservation-list .res-card').click();
+    await settle();
+    [...document.querySelectorAll('.tab-btn')].find(b => b.dataset.tab === 'arrangement').click();
+    await settle();
+
+    const photoBtn = document.querySelector('[data-arrangement-category="photographer"]');
+    check('宛先が設定済みのカテゴリはボタンが有効', !!photoBtn && !photoBtn.disabled);
+    const floristBtn = document.querySelector('[data-arrangement-category="florist"]');
+    check('宛先が未設定のカテゴリはボタンが無効', !!floristBtn && floristBtn.disabled);
+
+    photoBtn.click();
+    await settle();
+    check('下書きモーダルが開く', !document.getElementById('arrangement-modal').classList.contains('hidden'));
+    check('宛先が表示される', document.getElementById('arrangement-modal-to').textContent.includes('conti@example.com'));
+    const bodyEl = document.getElementById('arrangement-modal-body');
+    check('本文に案件情報が入った状態で開く', bodyEl.value.includes('R-001'));
+
+    bodyEl.value = bodyEl.value + '\n（編集済み）';
+    document.getElementById('arrangement-modal-send').click();
+    await settle();
+    check('送信後はモーダルが閉じる', document.getElementById('arrangement-modal').classList.contains('hidden'));
+    check('送信したメールが記録される', ctx.__mail.some(m => m.to === 'conti@example.com' && m.body.includes('（編集済み）')));
+    const arrPane = document.querySelector('[data-tab-pane="arrangement"]');
+    check('手配履歴に送信内容が表示される', arrPane.textContent.includes('カメラマン'));
+  }
+
+  // ---------------------------------------------------------------
+  section('U13. 設定画面（現地スタッフ手配メールの宛先を編集）');
+  {
+    document.getElementById('nav-settings').click();
+    await settle();
+    check('支店ロールでは対象支店の選択欄が出ない',
+          document.getElementById('settings-branch-select').classList.contains('hidden'));
+    const emailInput = document.querySelector('[data-arr-email="florist"]');
+    check('花屋さんの宛先欄がある（前セクションでは未設定）', !!emailInput && emailInput.value === '');
+    emailInput.value = 'florist@example.com';
+    const nameInput = document.querySelector('[data-arr-name="florist"]');
+    nameInput.value = 'Fiori Roma';
+    document.getElementById('settings-save').click();
+    await settle();
+
+    const rowTok2 = ctx.apiLogin('ROW', 'CHANGE-ME-ROW').session.token;
+    const saved = ctx.apiGetArrangementSettings(rowTok2, 'ROW');
+    const floristSaved = saved.categories.find(c => c.key === 'florist');
+    check('画面から保存した宛先がサーバーに反映される', floristSaved.email === 'florist@example.com', JSON.stringify(floristSaved));
+    check('宛先名も反映される', floristSaved.name === 'Fiori Roma');
+
+    // JP側は対象支店を選べる
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'KANTO', 'CHANGE-ME-KANTO');
+    document.getElementById('nav-settings').click();
+    await settle();
+    check('JP側では対象支店の選択欄が出る',
+          !document.getElementById('settings-branch-select').classList.contains('hidden'));
+    const opts = [...document.getElementById('settings-branch-select').options].map(o => o.value);
+    check('選択肢に支店が入っている（JPロール自身は含まない）', opts.includes('ROW') && !opts.includes('KANTO'), opts.join(','));
+  }
 
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
   process.exit(fail === 0 ? 0 : 1);

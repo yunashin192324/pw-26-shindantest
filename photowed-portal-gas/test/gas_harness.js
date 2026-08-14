@@ -148,7 +148,17 @@ function makeContext() {
       },
       releaseLock: () => { if (lockDepth > 0) lockDepth--; }
     }) },
-    MailApp: { sendEmail: (to, subj, body) => sentMail.push({ to, subj, body }) },
+    // 実際のMailAppは sendEmail(to, subject, body) と sendEmail({to, subject, body, replyTo, ...}) の
+    // どちらの呼び出し方も受け付けるため、モックも両方を同じ形に正規化して記録する
+    MailApp: { sendEmail: (...args) => {
+      if (args.length === 1 && args[0] && typeof args[0] === 'object') {
+        const m = args[0];
+        sentMail.push({ to: m.to, subj: m.subject, body: m.body, replyTo: m.replyTo });
+      } else {
+        const [to, subj, body] = args;
+        sentMail.push({ to, subj, body });
+      }
+    } },
     Session: { getActiveUser: () => ({ getEmail: () => 'tanaka@his-world.com' }) },
     ScriptApp: { getProjectTriggers: () => [], deleteTrigger: () => {},
       newTrigger: (fnName) => {
@@ -170,11 +180,13 @@ function makeContext() {
   const names = ['RESERVATION_HEADERS','HISTORY_HEADERS','BRANCH_MASTER_HEADERS','STATUS_LOG_HEADERS',
                  'MASTER_ITEM_HEADERS','STATUS_CODES','BILLING_REGIONS','JP_TEAMS',
                  'ALERT_DAYS_BEFORE','DELIVERY_ALERT_DEFAULT_DAYS','COMMITTABLE_FIELDS',
-                 'PHRASE_MASTER_HEADERS','UNANSWERED_REMIND_DEFAULT_DAYS','SESSION_TTL_SEC','CONSENT_DONE_VALUE','LOGIN_MAX_ATTEMPTS','LOGIN_LOCKOUT_SEC'];
+                 'PHRASE_MASTER_HEADERS','UNANSWERED_REMIND_DEFAULT_DAYS','SESSION_TTL_SEC','CONSENT_DONE_VALUE','LOGIN_MAX_ATTEMPTS','LOGIN_LOCKOUT_SEC',
+                 'MEMO_LOG_HEADERS','ARRANGEMENT_LOG_HEADERS','ARRANGEMENT_CATEGORIES','MEMO_TYPE_SHARED','MEMO_TYPE_LOCAL','MEMO_TYPE_SURVEY'];
   const vals = [RESERVATION_HEADERS,HISTORY_HEADERS,BRANCH_MASTER_HEADERS,STATUS_LOG_HEADERS,
                 MASTER_ITEM_HEADERS,STATUS_CODES,BILLING_REGIONS,JP_TEAMS,
                 ALERT_DAYS_BEFORE,DELIVERY_ALERT_DEFAULT_DAYS,COMMITTABLE_FIELDS,
-                PHRASE_MASTER_HEADERS,UNANSWERED_REMIND_DEFAULT_DAYS,SESSION_TTL_SEC,CONSENT_DONE_VALUE,LOGIN_MAX_ATTEMPTS,LOGIN_LOCKOUT_SEC];
+                PHRASE_MASTER_HEADERS,UNANSWERED_REMIND_DEFAULT_DAYS,SESSION_TTL_SEC,CONSENT_DONE_VALUE,LOGIN_MAX_ATTEMPTS,LOGIN_LOCKOUT_SEC,
+                MEMO_LOG_HEADERS,ARRANGEMENT_LOG_HEADERS,ARRANGEMENT_CATEGORIES,MEMO_TYPE_SHARED,MEMO_TYPE_LOCAL,MEMO_TYPE_SURVEY];
   names.forEach((n, i) => { this[n] = vals[i]; });
 }).call(this);`;
   vm.runInContext(src, ctx);

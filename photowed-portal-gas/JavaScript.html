@@ -13,9 +13,22 @@
     { key: 'message', label: 'メッセージ' },
     { key: 'reservation', label: '予約内容' },
     { key: 'local', label: '現地記入欄' },
+    { key: 'arrangement', label: '手配' },
     { key: 'drive', label: 'ドライブ' },
     { key: 'timeline', label: '履歴' }
   ];
+  // 現地スタッフ手配メールのカテゴリ（Code.gs の ARRANGEMENT_CATEGORIES と一致させる）
+  const ARRANGEMENT_CATEGORIES = [
+    { key: 'photographer', label: 'カメラマン' },
+    { key: 'hairMakeup', label: 'ヘアメイク' },
+    { key: 'assistant', label: 'アシスタント' },
+    { key: 'florist', label: '花屋さん' },
+    { key: 'transport', label: '送迎車' }
+  ];
+  // メモ履歴の種別（Code.gs の MEMO_TYPE_* と一致させる）
+  const MEMO_TYPE_SHARED = '共有メモ';
+  const MEMO_TYPE_LOCAL = 'メモ（現地用）';
+  const MEMO_TYPE_SURVEY = 'アンケート回答';
 
   let session = null;
   let currentKanri = null;
@@ -32,6 +45,8 @@
   let branchesCache = [];      // 一覧/新規画面用（BRANCHロールのみに絞った支店一覧。JPログイン時に取得）
   let lastDashboardData = null; // キャンセル表示チェックボックスの再描画用にキャッシュ
   let pendingChanges = {}; // 「保存のみ／メッセージのみ送信／変更＋メッセージ送信」待ちの変更（既存予約の全項目が対象）
+  let settingsBranchCode = ''; // 「設定」画面で編集対象にしている支店コード（JPは選べる／支店は自分の支店固定）
+  let arrangementDraft = null; // 手配メールの下書き（確認モーダル表示中の内容）
 
   function gsRun(fnName, ...args) {
     return new Promise((resolve, reject) => {
@@ -115,6 +130,7 @@
     $('nav-day').addEventListener('click', openDayView);
     $('nav-delivery').addEventListener('click', () => loadPendingDeliveries());
     $('nav-new').addEventListener('click', openNewView);
+    $('nav-settings').addEventListener('click', openSettingsView);
     $('nav-logout').addEventListener('click', doLogout);
     $('detail-back').addEventListener('click', () => loadDashboard());
     $('new-submit').addEventListener('click', submitNewReservation);
@@ -129,6 +145,10 @@
     });
     $('view-mode-card').addEventListener('click', () => setDashboardViewMode('card'));
     $('view-mode-table').addEventListener('click', () => setDashboardViewMode('table'));
+    $('arrangement-modal-cancel').addEventListener('click', closeArrangementModal);
+    $('arrangement-modal-send').addEventListener('click', sendArrangementRequest);
+    $('settings-branch-select').addEventListener('change', () => loadSettings($('settings-branch-select').value));
+    $('settings-save').addEventListener('click', saveArrangementSettings);
   }
 
   // ---------- ログイン ----------
@@ -659,6 +679,86 @@
       <div class="history-panel hidden" id="${hid}"></div>`;
   }
 
+  // ★機能：共有メモ／メモ（現地用）を「積み上げ式」で表示する。日付・記入者は自動、内容だけ手入力。
+  // 追加すると即座に保存される（社内進行管理欄のチェックボックスと同じ考え方で、3択保留の対象外）。
+  function memoLogSectionHtml(d, memoType, title, placeholder, legacyValue) {
+    const tlItem = (who, when, body) => `
+      <div class="tl-item">
+        <div class="tl-meta"><span>${escapeHtml(who)}</span><span>${escapeHtml(when)}</span></div>
+        <div class="tl-body">${escapeHtml(body)}</div>
+      </div>`;
+    const entries = (d.memoLog || []).filter(m => m.type === memoType);
+    const listHtml = entries.length
+      ? entries.map(m => tlItem(m.who, m.datetime, m.body)).join('')
+      : (legacyValue ? tlItem('（この機能を追加する前の記録）', '', legacyValue) : '<p class="hint-text">まだ記録はありません。</p>');
+    return `
+      <div class="section-card">
+        <h3>${escapeHtml(title)}</h3>
+        <div class="msg-row">
+          <textarea data-memo-input="${escapeAttr(memoType)}" rows="2" placeholder="${escapeAttr(placeholder)}"></textarea>
+          <button type="button" class="send-btn" data-memo-add="${escapeAttr(memoType)}">追加</button>
+        </div>
+        <p class="hint-text" style="margin:4px 0 0;">日付・記入者は自動で記録されます。追加すると即座に保存されます（他の項目のような保留はありません）。</p>
+        <div style="margin-top:10px;">${listHtml}</div>
+      </div>`;
+  }
+
+  // ★機能：お客様がGoogleフォームで回答したアンケート内容を、案件ごとに時系列で表示する（読み取り専用）
+  function surveyLogSectionHtml(d) {
+    const entries = (d.memoLog || []).filter(m => m.type === MEMO_TYPE_SURVEY);
+    const listHtml = entries.length
+      ? entries.map(m => `
+          <div class="tl-item">
+            <div class="tl-meta"><span>${escapeHtml(m.who)}</span><span>${escapeHtml(m.datetime)}</span></div>
+            <div class="tl-body">${escapeHtml(m.body)}</div>
+          </div>`).join('')
+      : '<p class="hint-text">まだ回答はありません（Googleフォームの回答が届くと自動で表示されます）。</p>';
+    return `
+      <div class="section-card">
+        <h3>アンケート回答（お客様がGoogleフォームで回答した内容）</h3>
+        <div style="margin-top:4px;">${listHtml}</div>
+      </div>`;
+  }
+
+  // ★機能：現地スタッフ手配メール。カテゴリごとのボタン＋送信履歴。
+  function arrangementTabHtml(d) {
+    if (!d.arrangementEnabled) {
+      return `
+        <div class="tab-pane ${detailActiveTab === 'arrangement' ? '' : 'hidden'}" data-tab-pane="arrangement">
+          <div class="section-card">
+            <h3>スタッフ手配</h3>
+            <p class="hint-text">この支店では現地スタッフ手配メール機能が無効になっています。使う場合は「設定」画面から有効にしてください。</p>
+          </div>
+          ${surveyLogSectionHtml(d)}
+        </div>`;
+    }
+    const buttonsHtml = (d.arrangementCategories || []).map(c => `
+      <button type="button" class="send-btn arrangement-btn" data-arrangement-category="${escapeAttr(c.key)}"
+        style="width:100%;${c.available ? '' : 'background:var(--color-muted);'}" ${c.available ? '' : 'disabled'}>
+        ${escapeHtml(c.label)}${c.available ? 'を手配依頼' : '（未設定）'}
+      </button>`).join('');
+    const logHtml = (d.arrangementLog || []).length
+      ? d.arrangementLog.map(a => `
+          <div class="tl-item">
+            <div class="tl-meta"><span>${escapeHtml(a.category)} 宛: ${escapeHtml(a.toName || a.toEmail)} ・ ${escapeHtml(a.who)}</span><span>${escapeHtml(a.datetime)}</span></div>
+            <div class="tl-body">${escapeHtml(a.subject)}</div>
+          </div>`).join('')
+      : '<p class="hint-text">まだ手配依頼を送っていません。</p>';
+    return `
+      <div class="tab-pane ${detailActiveTab === 'arrangement' ? '' : 'hidden'}" data-tab-pane="arrangement">
+        <div class="section-card">
+          <h3>スタッフ手配</h3>
+          <p class="hint-text" style="margin-bottom:10px;">ボタンを押すと宛先・内容を確認できる下書きが開きます。内容を確認・編集してから送信してください（宛先は「設定」画面の登録内容から自動で決まります）。</p>
+          <div style="display:flex;flex-direction:column;gap:8px;">${buttonsHtml}</div>
+        </div>
+        <div class="section-card">
+          <h3>手配履歴（新しい順）</h3>
+          ${logHtml}
+        </div>
+        ${surveyLogSectionHtml(d)}
+      </div>`;
+  }
+
   function nameListWithCurrent(masterList, current) {
     const names = (masterList || []).filter(x => x.active).map(x => x.name);
     if (current && !names.includes(current)) names.push(current);
@@ -886,10 +986,7 @@
           ${optionsHtml}
         </div>
 
-        <div class="section-card">
-          <h3>共有メモ（支店・日本側どちらも自由に書けます）</h3>
-          <textarea data-pending="共有メモ" rows="4" placeholder="社内向けの自由メモ">${escapeHtml(d['共有メモ'])}</textarea>
-        </div>
+        ${memoLogSectionHtml(d, MEMO_TYPE_SHARED, '共有メモ（支店・日本側どちらも自由に書けます）', '社内向けの自由メモを入力', d['共有メモ'])}
 
         ${internalFlagsHtml}
         ${quickActionsHtml}
@@ -906,11 +1003,12 @@
             <div class="field-block"><label>カメラマン</label><input data-pending="カメラマン" data-staff="1" list="staff-datalist" value="${escapeAttr(d['カメラマン'])}"></div>
             <div class="field-block"><label>アシスタント</label><input data-pending="アシスタント" data-staff="1" list="staff-datalist" value="${escapeAttr(d['アシスタント'])}"></div>
             <div class="field-block"><label>配車時間</label><input data-pending="配車時間" value="${escapeAttr(d['配車時間'])}" placeholder="例）9:00"></div>
-            <div class="field-block" style="grid-column:1/-1;"><label>メモ（現地用）</label><input data-pending="メモ（現地用）" value="${escapeAttr(d['メモ（現地用）'])}"></div>
           </div>
           ${staffDatalist}
           <div id="staff-conflict" class="conflict-box hidden"></div>
         </div>
+
+        ${memoLogSectionHtml(d, MEMO_TYPE_LOCAL, 'メモ（現地用）', '現地スタッフ向けのメモを入力', d['メモ（現地用）'])}
 
         ${quickActionsHtml}
       </div>`;
@@ -951,6 +1049,7 @@
       ${messageTabHtml}
       ${reservationTabHtml}
       ${localTabHtml}
+      ${arrangementTabHtml(d)}
       ${driveTabHtml}
       ${timelineTabHtml}
     `;
@@ -1031,6 +1130,14 @@
     });
     c.querySelectorAll('[data-history-field]').forEach(btn => {
       btn.addEventListener('click', () => toggleFieldHistory(btn.dataset.historyField, btn.dataset.historyTarget));
+    });
+    // ★機能：共有メモ／メモ（現地用）の追記ボタン
+    c.querySelectorAll('[data-memo-add]').forEach(btn => {
+      btn.addEventListener('click', () => addMemo(btn.dataset.memoAdd));
+    });
+    // ★機能：現地スタッフ手配メール。カテゴリのボタンを押すと下書きモーダルを開く
+    c.querySelectorAll('[data-arrangement-category]').forEach(btn => {
+      btn.addEventListener('click', () => openArrangementDraft(btn.dataset.arrangementCategory));
     });
     // 履歴タブを開いたまま再描画された場合、タブのクリックが起きないので
     // ここで読み込まないと「読み込み中...」のまま止まってしまう
@@ -1198,6 +1305,54 @@
     } catch (e) { handleAuthError(e); }
   }
 
+  // ★機能：共有メモ／メモ（現地用）の追記。3択保留の対象外で、押した瞬間に単独保存する
+  async function addMemo(memoType) {
+    const el = document.querySelector(`[data-memo-input="${cssEscape_(memoType)}"]`);
+    if (!el) return;
+    const text = el.value.trim();
+    if (!text) { showToast('内容を入力してください'); return; }
+    try {
+      await gsRun('apiAddMemo', session.token, currentKanri, memoType, text);
+      openDetail(currentKanri, true); // 開いているタブのまま留まる
+    } catch (e) { handleAuthError(e); }
+  }
+  // data-属性のセレクタに日本語の値をそのまま使うため、CSS.escape相当の簡易版を用意
+  function cssEscape_(s) {
+    if (window.CSS && CSS.escape) return CSS.escape(s);
+    return String(s).replace(/["\\\]]/g, (ch) => '\\' + ch);
+  }
+
+  // ★機能：現地スタッフ手配メール。ボタンを押すと下書きを取得してモーダルで確認・編集できるようにする
+  async function openArrangementDraft(categoryKey) {
+    try {
+      const draft = await gsRun('apiBuildArrangementDraft', session.token, currentKanri, categoryKey);
+      arrangementDraft = { categoryKey };
+      $('arrangement-modal-title').textContent = `${draft.category}の手配依頼`;
+      $('arrangement-modal-to').textContent = draft.recipientName ? `${draft.recipientName}（${draft.recipientEmail}）` : draft.recipientEmail;
+      $('arrangement-modal-subject').value = draft.subject;
+      $('arrangement-modal-body').value = draft.body;
+      $('arrangement-modal').classList.remove('hidden');
+    } catch (e) { handleAuthError(e); }
+  }
+
+  function closeArrangementModal() {
+    $('arrangement-modal').classList.add('hidden');
+    arrangementDraft = null;
+  }
+
+  async function sendArrangementRequest() {
+    if (!arrangementDraft) return;
+    const subject = $('arrangement-modal-subject').value.trim();
+    const body = $('arrangement-modal-body').value.trim();
+    if (!body) { showToast('本文を入力してください'); return; }
+    try {
+      await gsRun('apiSendArrangementRequest', session.token, currentKanri, arrangementDraft.categoryKey, subject, body);
+      closeArrangementModal();
+      showToast('手配依頼を送信しました');
+      openDetail(currentKanri, true);
+    } catch (e) { handleAuthError(e); }
+  }
+
   // ---------- 新規案件 ----------
   async function openNewView() {
     showView('new');
@@ -1230,5 +1385,67 @@
   function showFieldError(id, msg) {
     $(id).textContent = msg;
     $(id).classList.remove('hidden');
+  }
+
+  // ---------- 設定（現地スタッフ手配メール。自支店 or JPが編集可能） ----------
+  async function openSettingsView() {
+    showView('settings');
+    if (session.role === 'JP') {
+      if (!branchesCache.length) branchesCache = await gsRun('apiListBranches', session.token);
+      const branchOnly = branchesCache.filter(b => b.role !== 'JP' && b.active);
+      $('settings-branch-select').innerHTML = branchOnly
+        .map(b => `<option value="${escapeAttr(b.code)}">${escapeHtml(b.name)}（${escapeHtml(b.code)}）</option>`).join('');
+      if (!settingsBranchCode && branchOnly.length) settingsBranchCode = branchOnly[0].code;
+      $('settings-branch-select').value = settingsBranchCode;
+    } else {
+      settingsBranchCode = session.branchCode;
+    }
+    await loadSettings(settingsBranchCode);
+  }
+
+  async function loadSettings(branchCode) {
+    if (!branchCode) return;
+    settingsBranchCode = branchCode;
+    $('settings-content').innerHTML = '<p class="hint-text">読み込み中...</p>';
+    try {
+      const res = await gsRun('apiGetArrangementSettings', session.token, branchCode);
+      renderSettings(res);
+    } catch (e) { handleAuthError(e); }
+  }
+
+  function renderSettings(res) {
+    $('settings-content').innerHTML = `
+      <div class="section-card">
+        <h3>現地スタッフ手配メール</h3>
+        <p class="hint-text">カメラマン・ヘアメイクなどのボタンを案件詳細の「手配」タブで押すと、
+          ここで登録した宛先へ手配メールの下書きが自動作成されます。担当者が内容を確認・編集してから送信します。
+          同じ宛先を複数カテゴリに登録すれば「1件の委託先へまとめて依頼」にもできます。空欄のカテゴリはボタンが無効になります。</p>
+        <label class="checkbox-label" style="margin-top:12px;">
+          <input type="checkbox" id="settings-enabled" ${res.enabled ? 'checked' : ''}> この機能を使う
+        </label>
+        <div style="margin-top:14px;display:flex;flex-direction:column;gap:12px;">
+          ${res.categories.map(c => `
+            <div class="field-block">
+              <label>${escapeHtml(c.label)}</label>
+              <input data-arr-name="${escapeAttr(c.key)}" placeholder="宛先名（任意）" value="${escapeAttr(c.name)}" style="margin-bottom:6px;">
+              <input data-arr-email="${escapeAttr(c.key)}" placeholder="メールアドレス" value="${escapeAttr(c.email)}" type="email">
+            </div>`).join('')}
+        </div>
+      </div>`;
+  }
+
+  async function saveArrangementSettings() {
+    if (!$('settings-enabled')) return;
+    const enabled = $('settings-enabled').checked;
+    const categories = {};
+    ARRANGEMENT_CATEGORIES.forEach(c => {
+      const nameEl = document.querySelector(`[data-arr-name="${cssEscape_(c.key)}"]`);
+      const emailEl = document.querySelector(`[data-arr-email="${cssEscape_(c.key)}"]`);
+      categories[c.key] = { name: nameEl ? nameEl.value.trim() : '', email: emailEl ? emailEl.value.trim() : '' };
+    });
+    try {
+      await gsRun('apiSaveArrangementSettings', session.token, settingsBranchCode, { enabled, categories });
+      showToast('設定を保存しました');
+    } catch (e) { handleAuthError(e); }
   }
 </script>

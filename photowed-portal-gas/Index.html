@@ -19,6 +19,7 @@
         <button id="nav-search" class="nav-btn">検索</button>
         <button id="nav-stats" class="nav-btn jp-only hidden">統計</button>
         <button id="nav-new" class="nav-btn">＋新規案件</button>
+        <button id="nav-settings" class="nav-btn">設定</button>
         <button id="nav-logout" class="nav-btn nav-logout">ログアウト</button>
       </nav>
     </header>
@@ -162,9 +163,34 @@
         <p id="new-error" class="error-text hidden"></p>
         <p id="new-success" class="success-text hidden"></p>
       </section>
+
+      <!-- 設定（現地スタッフ手配メール。自支店 or JPが編集可能） -->
+      <section id="view-settings" class="view hidden">
+        <h2>設定</h2>
+        <label id="settings-branch-label" class="jp-only hidden">対象支店</label>
+        <select id="settings-branch-select" class="jp-only hidden"></select>
+        <div id="settings-content"></div>
+        <button id="settings-save" class="primary-btn">この内容で保存</button>
+      </section>
     </main>
 
     <div id="toast" class="toast hidden"></div>
+
+    <!-- 現地スタッフ手配メールの下書き確認モーダル -->
+    <div id="arrangement-modal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <h3 id="arrangement-modal-title">スタッフ手配</h3>
+        <p class="hint-text">宛先: <strong id="arrangement-modal-to"></strong></p>
+        <label>件名</label>
+        <input id="arrangement-modal-subject" type="text">
+        <label>本文</label>
+        <textarea id="arrangement-modal-body" rows="10"></textarea>
+        <div style="display:flex;gap:8px;margin-top:12px;">
+          <button type="button" id="arrangement-modal-cancel" class="send-btn" style="background:var(--color-muted);flex:1;">キャンセル</button>
+          <button type="button" id="arrangement-modal-send" class="send-btn" style="flex:1;">この内容で送信</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <?!= include('JavaScript'); ?>

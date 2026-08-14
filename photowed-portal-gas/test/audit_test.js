@@ -42,6 +42,18 @@ function fixture() {
     '新郎名（ローマ字）': 'Jiro', 'STS JP': 'RQ', '撮影日FIX': ctx.__daysFromToday(20) });
   ss.getSheetByName('セールマスタ').appendRow(['ROW', '春セール', true]);
   ss.getSheetByName('スタッフマスタ').appendRow(['ROW', 'L.Conti', true]);
+
+  // 手配メール機能：無効のままだと apiBuildArrangementDraft / apiSendArrangementRequest が
+  // 「機能が無効」で即エラーになり、認可・ロックまわりの監査が意味を持たなくなる。
+  // VIEを実際に有効化＋カメラマンの宛先を設定し、他の書き込みAPIと同じ土俵で監査できるようにする。
+  const bm = ss.getSheetByName('支店マスタ');
+  const bmHead = bm.getRange(1, 1, 1, bm.getLastColumn()).getValues()[0];
+  const codeCol = bmHead.indexOf('支店コード') + 1;
+  const codes = bm.getRange(2, codeCol, bm.getLastRow() - 1, 1).getValues();
+  const vieRow = codes.findIndex(r => String(r[0]) === 'VIE') + 2;
+  bm.getRange(vieRow, bmHead.indexOf('手配メール機能') + 1).setValue(true);
+  bm.getRange(vieRow, bmHead.indexOf('手配先名-カメラマン') + 1).setValue('M.Gruber');
+  bm.getRange(vieRow, bmHead.indexOf('手配先メール-カメラマン') + 1).setValue('photographer@example.com');
   return ctx;
 }
 
@@ -89,7 +101,19 @@ const API_SPECS = [
   { fn: 'apiSetDriveUrl',          scope: 'any', args: (t) => [t, 'VIE-001', 'https://drive.google.com/x'], target: 'VIE', writes: true },
   // 支店ロールでは指定した支店コードは無視され、必ず自支店の案件になる（下で個別に検証する）
   { fn: 'apiCreateReservation',    scope: 'any', args: (t) => [t, 'VIE', '新郎名: A\n新婦名: B'], writes: true },
-  { fn: 'apiToggleHistoryCheck',   scope: 'any', args: (t, ctx) => [t, ctx.__someHistoryId || 'none', true], target: 'VIE', writes: true }
+  { fn: 'apiToggleHistoryCheck',   scope: 'any', args: (t, ctx) => [t, ctx.__someHistoryId || 'none', true], target: 'VIE', writes: true },
+
+  // メモ履歴（共有メモ／メモ（現地用）の積み上げ記録）
+  { fn: 'apiAddMemo', scope: 'any', args: (t) => [t, 'VIE-001', '共有メモ', '侵入テスト'], target: 'VIE', writes: true },
+
+  // 現地スタッフ手配メール（fixture()でVIEのカメラマン宛先のみ有効化済み）
+  { fn: 'apiGetArrangementSettings',  scope: 'any', args: (t) => [t, 'VIE'], target: 'VIE', reads: true },
+  { fn: 'apiSaveArrangementSettings', scope: 'any',
+    args: (t) => [t, 'VIE', { enabled: true, categories: { photographer: { name: '侵入', email: 'x@example.com' } } }],
+    target: 'VIE', writes: true },
+  { fn: 'apiBuildArrangementDraft',   scope: 'any', args: (t) => [t, 'VIE-001', 'photographer'], target: 'VIE', reads: true },
+  { fn: 'apiSendArrangementRequest',  scope: 'any', args: (t) => [t, 'VIE-001', 'photographer', '侵入件名', '侵入本文'],
+    target: 'VIE', writes: true }
 ];
 
 // -----------------------------------------------------------------
@@ -127,7 +151,8 @@ section('A1. 認可マトリクス：保護の書き忘れを機械的に検出'
 
   // 案件を特定して読み書きするAPIは、行の可視性チェックが必要
   const caseApis = ['apiGetReservationDetail','apiGetCaseTimeline','apiGetFieldHistory',
-                    'apiCheckStaffConflict','apiSaveFieldsQuiet','apiCommitChanges','apiSetDriveUrl'];
+                    'apiCheckStaffConflict','apiSaveFieldsQuiet','apiCommitChanges','apiSetDriveUrl',
+                    'apiAddMemo','apiBuildArrangementDraft','apiSendArrangementRequest'];
   const noVisible = caseApis.filter(f => !/assertRowVisible_/.test(bodyOf(f)));
   check('案件を指定するAPIは全て assertRowVisible_ を通している',
         noVisible.length === 0, '可視性チェックなし: ' + noVisible.join(', '));
@@ -135,7 +160,8 @@ section('A1. 認可マトリクス：保護の書き忘れを機械的に検出'
   // 書き込みAPIは排他ロックが必要（読み取り専用は不要）
   const mustLock = ['apiSaveBranch','apiSetBranchActive','apiSaveFieldsQuiet','apiCommitChanges',
                     'apiSetDriveUrl','apiCreateReservation','apiToggleHistoryCheck',
-                    'apiSaveStaffItem','apiSaveSaleItem','apiSavePlanItem','apiSaveOptionItem','apiSaveLocationItem'];
+                    'apiSaveStaffItem','apiSaveSaleItem','apiSavePlanItem','apiSaveOptionItem','apiSaveLocationItem',
+                    'apiSaveArrangementSettings'];
   const noLock = mustLock.filter(f => {
     const b = bodyOf(f);
     return !/getScriptLock/.test(b) && !/saveMasterItem_/.test(b);
