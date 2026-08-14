@@ -358,6 +358,201 @@ function initDashboardEvents() {
       renderRankingTable(getDashboardFilteredData());
     });
   });
+  document.getElementById('btn-open-ai-summary').addEventListener('click', openAiSummaryModal);
+  document.getElementById('btn-copy-ai-summary').addEventListener('click', copyAiSummaryToClipboard);
+}
+
+// ============================================================================
+// Gemini分析用サマリ（外部APIは使わず、集計値をテキスト化して貼り付けてもらう方式）
+// ============================================================================
+
+// 対象年月日(YYYYMMDD)から会計期を判定する。サーバー側 getFiscalPeriodInfo_() と同じ規則。
+function fiscalPeriodLabelOf(yyyymmdd) {
+  const s = String(yyyymmdd || '');
+  if (s.length < 6) return null;
+  const y = parseInt(s.substring(0, 4), 10);
+  const m = parseInt(s.substring(4, 6), 10);
+  if (!y || !m) return null;
+  const startYear = (m >= 11) ? y : y - 1;
+  return (46 + (startYear - 2025)) + '期' + ((m >= 11 || m <= 4) ? '上期' : '下期');
+}
+
+function pct(numerator, denominator) {
+  return denominator > 0 ? ((numerator / denominator) * 100).toFixed(1) : '0.0';
+}
+
+// 1グループ分の集計（未成約数・リセール数・継続率・成約・PAX）を求める
+function aggregateRows(rows) {
+  const contractRows = rows.filter(function (r) { return r['STS'] === '成約'; });
+  const resaleAction = rows.filter(function (r) { return r['リセール'] === '〇'; }).length;
+  return {
+    total: rows.length,
+    resaleAction: resaleAction,
+    resaleProgress: rows.filter(function (r) { return r['STS'] === 'リセール中'; }).length,
+    lost: rows.filter(function (r) { return r['STS'] === '失注'; }).length,
+    contract: contractRows.length,
+    pax: contractRows.reduce(function (s, r) { return s + (Number(r['成約PAX']) || 0); }, 0),
+    alert: rows.filter(isAlertRow).length
+  };
+}
+
+function buildAiSummaryText() {
+  const data = getDashboardFilteredData();
+  const selectedShops = getSelectedMultiValues('filter-shop');
+  const selectedMonths = getSelectedMultiValues('filter-month');
+  const all = aggregateRows(data);
+  const L = [];
+
+  const now = new Date();
+  const pad = function (n) { return String(n).padStart(2, '0'); };
+  L.push('# 未成約リセール 傾向分析用サマリ');
+  L.push('作成日時: ' + now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()));
+  L.push('閲覧範囲: ' + (currentUserContext.canViewAllStores ? '全店舗' : (currentUserContext.officeName || '自店舗') + 'のみ'));
+  L.push('表示期間: 直近2年（' + availablePeriods.map(function (p) { return p.label; }).join('・') + '）');
+  L.push('絞り込み: 店舗=' + (selectedShops.length ? selectedShops.join('/') : 'すべて') +
+    ' , 月=' + (selectedMonths.length ? selectedMonths.join('/') : 'すべて'));
+  L.push('');
+  L.push('## 用語');
+  L.push('- 未成約: その場で成約に至らなかった相談（失注ではない）');
+  L.push('- リセール: 未成約案件への再提案・フォローの実施');
+  L.push('- リセール継続率 = リセール数 ÷ 未成約数（最重要指標。低いほどフォローされず失注していく）');
+  L.push('- リセール成約率 = 成約数 ÷ リセール数');
+  L.push('  ※リセールをしていない案件がお客様都合で成約することもあるため、この値は100%を超える場合があります。');
+  L.push('  その場合は「リセール以外の経路で成約した案件が多い」と解釈してください。');
+  L.push('');
+  L.push('## 全体');
+  L.push('- 未成約相談総数: ' + all.total + ' 件');
+  L.push('- リセール実施数: ' + all.resaleAction + ' 件');
+  L.push('- リセール継続率: ' + pct(all.resaleAction, all.total) + ' %');
+  L.push('- リセール中: ' + all.resaleProgress + ' 件 / 失注: ' + all.lost + ' 件');
+  L.push('- 成約: ' + all.contract + ' 件 / PAX: ' + all.pax);
+  L.push('- 長期未対応（' + ALERT_THRESHOLD_DAYS + '日以上フォローなし）: ' + all.alert + ' 件');
+  L.push('');
+
+  // ---- 店舗別 ----
+  const shopNames = (metaMasters.shopList || []).slice();
+  const shopStats = shopNames.map(function (name) {
+    const s = aggregateRows(data.filter(function (r) { return r.__sheetName === name; }));
+    s.name = name;
+    return s;
+  }).filter(function (s) { return s.total > 0; });
+  shopStats.sort(function (a, b) { return b.total - a.total; });
+
+  L.push('## 店舗別（未成約数の多い順）');
+  L.push('店舗\t未成約数\tリセール数\t継続率%\t成約数\tPAX\tリセール成約率%\t長期未対応');
+  shopStats.forEach(function (s) {
+    L.push([s.name, s.total, s.resaleAction, pct(s.resaleAction, s.total), s.contract, s.pax,
+      pct(s.contract, s.resaleAction), s.alert].join('\t'));
+  });
+  L.push('');
+
+  // ---- 未成約理由 ----
+  const reasonCounts = {};
+  data.forEach(function (r) {
+    const k = r['未成約理由(大)'] || '(未設定)';
+    if (!reasonCounts[k]) reasonCounts[k] = { total: 0, resale: 0, contract: 0 };
+    reasonCounts[k].total++;
+    if (r['リセール'] === '〇') reasonCounts[k].resale++;
+    if (r['STS'] === '成約') reasonCounts[k].contract++;
+  });
+  L.push('## 未成約理由(大)の内訳');
+  L.push('理由\t件数\t構成比%\tリセール継続率%\t成約数');
+  Object.keys(reasonCounts).sort(function (a, b) { return reasonCounts[b].total - reasonCounts[a].total; })
+    .forEach(function (k) {
+      const c = reasonCounts[k];
+      L.push([k, c.total, pct(c.total, all.total), pct(c.resale, c.total), c.contract].join('\t'));
+    });
+  L.push('');
+
+  // ---- 期別 ----
+  const periodMap = {};
+  data.forEach(function (r) {
+    const label = fiscalPeriodLabelOf(r['対象年月日']);
+    if (!label) return;
+    if (!periodMap[label]) periodMap[label] = [];
+    periodMap[label].push(r);
+  });
+  L.push('## 期別の推移（46期は2025年11月始まり。上期=11〜4月 / 下期=5〜10月）');
+  L.push('期\t未成約数\tリセール数\t継続率%\t成約数\tPAX');
+  availablePeriods.forEach(function (p) {
+    const rows = periodMap[p.label] || [];
+    const s = aggregateRows(rows);
+    L.push([p.label, s.total, s.resaleAction, pct(s.resaleAction, s.total), s.contract, s.pax].join('\t'));
+  });
+  L.push('');
+
+  // ---- 月別 ----
+  L.push('## 月別の推移');
+  L.push('月\t未成約数\tリセール数\t継続率%\t成約数');
+  MONTH_CODES.forEach(function (code, i) {
+    const rows = data.filter(function (r) { return String(r['月']) === code; });
+    if (rows.length === 0) return;
+    const s = aggregateRows(rows);
+    L.push([MONTH_LABELS[i], s.total, s.resaleAction, pct(s.resaleAction, s.total), s.contract].join('\t'));
+  });
+  L.push('');
+
+  // ---- 接客方法別 ----
+  const contactCounts = {};
+  data.forEach(function (r) {
+    const k = r['接客方法'] || '(未設定)';
+    if (!contactCounts[k]) contactCounts[k] = { total: 0, resale: 0, contract: 0 };
+    contactCounts[k].total++;
+    if (r['リセール'] === '〇') contactCounts[k].resale++;
+    if (r['STS'] === '成約') contactCounts[k].contract++;
+  });
+  L.push('## 接客方法別');
+  L.push('接客方法\t未成約数\t継続率%\t成約数');
+  Object.keys(contactCounts).sort(function (a, b) { return contactCounts[b].total - contactCounts[a].total; })
+    .forEach(function (k) {
+      const c = contactCounts[k];
+      L.push([k, c.total, pct(c.resale, c.total), c.contract].join('\t'));
+    });
+  L.push('');
+
+  L.push('## お願いしたい分析');
+  L.push('上のデータをもとに、次の点を日本語で分析してください。');
+  L.push('1. リセール継続率が低い店舗はどこか。全体平均と比べてどれくらい差があるか。');
+  L.push('2. 継続率が低い店舗は、未成約理由や接客方法に偏りがあるか。');
+  L.push('3. 期や月をまたいで継続率が落ちている時期はあるか。季節要因か、フォロー漏れか。');
+  L.push('4. 長期未対応が多い店舗はどこか。件数だけでなく未成約数に対する比率でも見てほしい。');
+  L.push('5. 明日から店舗で実行できる改善策を、優先度の高い順に3つ提案してほしい。');
+  L.push('');
+  L.push('※このサマリは集計値のみです。お客様個人が特定される情報は含まれていません。');
+
+  return L.join('\n');
+}
+
+function openAiSummaryModal() {
+  document.getElementById('ai-summary-text').value = buildAiSummaryText();
+  document.getElementById('ai-summary-copy-status').classList.add('hidden');
+  const modal = document.getElementById('ai-summary-modal');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+}
+
+function copyAiSummaryToClipboard() {
+  const ta = document.getElementById('ai-summary-text');
+  const status = document.getElementById('ai-summary-copy-status');
+  const done = function (ok) {
+    if (ok) {
+      status.classList.remove('hidden');
+      showToast('サマリをコピーしました。Geminiに貼り付けてください。', 'success');
+    } else {
+      showToast('自動コピーできませんでした。枠内を選択してCtrl+C（Macは⌘+C）でコピーしてください。', 'info');
+    }
+  };
+  // GASのWebアプリはiframe内で動くため、まず execCommand を試し、駄目なら Clipboard API を使う
+  ta.focus();
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  if (ok) { done(true); return; }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(ta.value).then(function () { done(true); }, function () { done(false); });
+    return;
+  }
+  done(false);
 }
 
 function getDashboardFilteredData() {

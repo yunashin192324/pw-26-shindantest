@@ -19,6 +19,7 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('46期未成約ダッシュボード')
     .addItem('① 全シートを初期化（InitSheet）', 'setupAllSheets')
+    .addItem('② AI分析用サマリを作成／更新（Gemini用）', 'buildAiAnalysisSheetFromMenu')
     .addToUi();
 }
 

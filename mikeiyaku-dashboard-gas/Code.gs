@@ -1482,3 +1482,146 @@ function serializeCellValue_(value) {
   if (value === null || value === undefined) return '';
   return value;
 }
+
+// ============================================================================
+// Gemini（Workspace版）でスプレッドシート上から傾向分析するための集計シート
+// ----------------------------------------------------------------------------
+// 外部APIは使わない。店舗別データは10シートに分かれていて生データのままでは
+// Geminiが読み取りにくいため、集計済みの縦持ちテーブルを1枚にまとめて出力する。
+// このシートを開いた状態でサイドパネルのGeminiに質問すると傾向分析ができる。
+// 個人が特定される情報（詳細・お客様名等）は出力しない。
+// ============================================================================
+const AI_SUMMARY_SHEET_NAME = 'AI分析用サマリ';
+
+/**
+ * 「AI分析用サマリ」シートを最新のデータで作り直す。スプレッドシートのメニューから実行する。
+ */
+function buildAiAnalysisSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const shopList = getShopList_();
+  const cutoff = getRetentionCutoffDate_();
+  const periods = getRecentPeriods_();
+  const periodKeys = {};
+  periods.forEach(function (p) { periodKeys[p.key] = p.label; });
+
+  // ---- 生データを読み込む（保存期間内のみ） ----
+  const rows = [];
+  shopList.forEach(function (shop) {
+    const sheet = ss.getSheetByName(shop.name);
+    if (!sheet) return;
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return;
+    const values = sheet.getRange(2, 1, lastRow - 1, HEADERS_27.length).getValues();
+    values.forEach(function (r) {
+      const targetDate = String(r[4] || '');
+      if (!targetDate || targetDate < cutoff) return;
+      const info = getFiscalPeriodInfo_(targetDate);
+      rows.push({
+        shopName: shop.name,
+        resale: r[0],
+        sts: r[1],
+        pax: Number(r[2]) || 0,
+        month: String(r[3] || ''),
+        reason: String(r[8] || '') || '(未設定)',
+        contact: String(r[13] || '') || '(未設定)',
+        purpose: String(r[12] || '') || '(未設定)',
+        periodLabel: info ? periodLabel_(info.periodNumber, info.half) : '(期不明)'
+      });
+    });
+  });
+
+  // ---- 集計ヘルパー（区分ごとに未成約数・リセール数・継続率などを積む） ----
+  const buckets = {};
+  const push = function (category, name, row) {
+    const key = category + '｜' + name;
+    if (!buckets[key]) {
+      buckets[key] = { category: category, name: name, total: 0, resale: 0, progress: 0, lost: 0, contract: 0, pax: 0 };
+    }
+    const b = buckets[key];
+    b.total += 1;
+    if (row.resale === '〇') b.resale += 1;
+    if (row.sts === 'リセール中') b.progress += 1;
+    if (row.sts === '失注') b.lost += 1;
+    if (row.sts === '成約') { b.contract += 1; b.pax += row.pax; }
+  };
+
+  rows.forEach(function (r) {
+    push('全体', '全体', r);
+    push('店舗別', r.shopName, r);
+    push('未成約理由(大)別', r.reason, r);
+    push('接客方法別', r.contact, r);
+    push('旅行目的(小)別', r.purpose, r);
+    push('期別', r.periodLabel, r);
+    push('月別', (r.month.indexOf('0') === 0 ? r.month.substring(1) : r.month) + '月', r);
+    push('店舗×期別', r.shopName + ' / ' + r.periodLabel, r);
+  });
+
+  // ---- シートへ書き出し ----
+  let sheet = ss.getSheetByName(AI_SUMMARY_SHEET_NAME);
+  if (sheet) {
+    sheet.clear();
+  } else {
+    sheet = ss.insertSheet(AI_SUMMARY_SHEET_NAME);
+  }
+
+  const note = [
+    ['このシートは「AI分析用サマリ」です（メニューから再作成できます）'],
+    ['集計対象: 直近2年（' + periods.map(function (p) { return p.label; }).join('・') + '） / 基準日 ' + cutoff + ' 以降'],
+    ['用語: 未成約=その場で成約に至らなかった相談 / リセール=再提案・フォローの実施'],
+    ['リセール継続率 = リセール数 ÷ 未成約数（最重要指標） / リセール成約率 = 成約数 ÷ リセール数'],
+    ['お客様個人が特定される情報は含めていません'],
+    ['']
+  ];
+  sheet.getRange(1, 1, note.length, 1).setValues(note);
+  sheet.getRange(1, 1).setFontWeight('bold');
+
+  const header = ['区分', '名称', '未成約数', 'リセール数', 'リセール継続率%', 'リセール中', '失注', '成約数', 'PAX数', 'リセール成約率%'];
+  const headerRow = note.length + 1;
+  sheet.getRange(headerRow, 1, 1, header.length).setValues([header])
+    .setFontWeight('bold').setBackground('#1d4ed8').setFontColor('#ffffff');
+
+  const categoryOrder = ['全体', '期別', '店舗別', '店舗×期別', '未成約理由(大)別', '接客方法別', '旅行目的(小)別', '月別'];
+  const body = Object.keys(buckets).map(function (k) { return buckets[k]; });
+  body.sort(function (a, b) {
+    const ca = categoryOrder.indexOf(a.category), cb = categoryOrder.indexOf(b.category);
+    if (ca !== cb) return ca - cb;
+    return b.total - a.total;
+  });
+
+  const values = body.map(function (b) {
+    return [
+      b.category, b.name, b.total, b.resale,
+      b.total > 0 ? Math.round((b.resale / b.total) * 1000) / 10 : 0,
+      b.progress, b.lost, b.contract, b.pax,
+      b.resale > 0 ? Math.round((b.contract / b.resale) * 1000) / 10 : 0
+    ];
+  });
+
+  if (values.length > 0) {
+    sheet.getRange(headerRow + 1, 1, values.length, header.length).setValues(values);
+  }
+  sheet.setFrozenRows(headerRow);
+  sheet.autoResizeColumns(1, header.length);
+
+  return { success: true, rowCount: values.length, sourceRowCount: rows.length };
+}
+
+/**
+ * メニューから実行したときに、完了メッセージをダイアログで知らせる。
+ */
+function buildAiAnalysisSheetFromMenu() {
+  try {
+    const res = buildAiAnalysisSheet();
+    SpreadsheetApp.getUi().alert(
+      '「' + AI_SUMMARY_SHEET_NAME + '」シートを更新しました。\n\n' +
+      '元データ ' + res.sourceRowCount + ' 件から ' + res.rowCount + ' 行の集計を作成しました。\n' +
+      'このシートを開いた状態で、サイドパネルのGeminiに質問すると傾向分析ができます。\n\n' +
+      '質問例：\n' +
+      '・リセール継続率が低い店舗はどこ？全体平均と比べてどれくらい差がある？\n' +
+      '・継続率が低い店舗で多い未成約理由は？\n' +
+      '・期をまたいで継続率が落ちている店舗はある？'
+    );
+  } catch (err) {
+    SpreadsheetApp.getUi().alert('AI分析用サマリの作成に失敗しました:\n' + err.message);
+  }
+}
