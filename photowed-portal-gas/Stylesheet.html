@@ -33,6 +33,8 @@
   .nav-logout { background: rgba(220,38,38,0.35); }
 
   /* Main */
+  /* ★要件：現地側はスマホで見ることが多い一方、日本側はほぼPC専用のため、
+     スマホ幅はそのまま維持しつつ、PC相当の広い画面ではもっと横幅を使えるようにする（下の @media (min-width: 960px) 参照） */
   .app-main { flex: 1; max-width: 720px; width: 100%; margin: 0 auto; padding: 14px; }
   .view h2 { margin: 4px 0 12px; font-size: 1.15rem; }
   .view h3 { margin: 18px 0 8px; font-size: 1rem; }
@@ -213,5 +215,19 @@
 
   @media (min-width: 640px) {
     .detail-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+
+  /* ★要件：PCでの利用が中心のため、広い画面ではコンテンツ幅を広げて余白を有効活用する。
+     スマホ〜タブレット幅（960px未満）は従来どおりの1カラム表示のまま変更しない。 */
+  @media (min-width: 960px) {
+    .app-main { max-width: 1120px; padding: 22px 28px; }
+    /* 一覧系（案件一覧・検索結果・納品待ち・請求不備チェック）はカードを並べて表示する */
+    .card-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+    .search-grid { grid-template-columns: repeat(3, 1fr); }
+    .detail-grid { grid-template-columns: repeat(4, 1fr); }
+    .stats-month-grid-lg { grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .stats-month-grid-sm { grid-template-columns: repeat(6, 1fr); }
+    /* メッセージ本文・入力欄は横幅いっぱいに伸ばすと逆に読みにくくなるため、読みやすい幅で頭打ちにする */
+    #view-detail .tab-pane[data-tab-pane="message"] .section-card { max-width: 760px; }
   }
 </style>
