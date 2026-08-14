@@ -22,6 +22,8 @@
   let currentUserName = ''; // ★要件：Googleアカウント（氏名@his-world.com）から取れる実名
   let detailActiveTab = 'message';
   let dashboardScope = { showAll: true, teams: [], branches: [] };
+  let dashboardSortKey = 'default';  // 案件一覧の並び替え
+  let dashboardViewMode = 'card';    // 案件一覧の表示形式：'card'（カード）／'table'（表）
   let searchScope = { showAll: true, teams: [], branches: [] };
   let statsScope = { showAll: true, teams: [], branches: [] };
   let dayScope = { showAll: true, teams: [], branches: [] };
@@ -121,6 +123,12 @@
     $('day-submit').addEventListener('click', loadDaySchedule);
     $('billing-submit').addEventListener('click', loadBillingGaps);
     $('show-cancelled').addEventListener('change', () => { if (lastDashboardData) renderDashboard(lastDashboardData); });
+    $('dashboard-sort').addEventListener('change', () => {
+      dashboardSortKey = $('dashboard-sort').value;
+      if (lastDashboardData) renderDashboard(lastDashboardData);
+    });
+    $('view-mode-card').addEventListener('click', () => setDashboardViewMode('card'));
+    $('view-mode-table').addEventListener('click', () => setDashboardViewMode('table'));
   }
 
   // ---------- ログイン ----------
@@ -240,17 +248,71 @@
 
     const showCancelled = $('show-cancelled').checked;
     // ★要件：基本は生きてる（キャンセルでない）記録だけを表示し、チェックで両方表示に切り替える
-    const list = showCancelled
+    let list = showCancelled
       ? data.reservations
       : data.reservations.filter(r => r.statusJp !== 'CW' && r.statusBranch !== 'CW');
+    list = sortReservations(list, dashboardSortKey);
 
-    const listEl = $('reservation-list');
-    listEl.innerHTML = '';
     $('dashboard-empty').classList.toggle('hidden', list.length > 0);
-    list.forEach(r => listEl.appendChild(buildReservationCard(r, data.role)));
+
+    if (dashboardViewMode === 'table') {
+      $('reservation-list').classList.add('hidden');
+      $('reservation-table-wrap').classList.toggle('hidden', list.length === 0);
+      renderReservationTable(list);
+    } else {
+      $('reservation-table-wrap').classList.add('hidden');
+      $('reservation-list').classList.remove('hidden');
+      const listEl = $('reservation-list');
+      listEl.innerHTML = '';
+      list.forEach(r => listEl.appendChild(buildReservationCard(r)));
+    }
   }
 
-  function buildReservationCard(r, role) {
+  // ★要件：案件一覧を並び替えられるように。日付は 'yyyy/MM/dd' 文字列で来るのでDate化して比較する
+  function sortReservations(list, key) {
+    const dateMs = (r) => r.confirmedDate ? new Date(r.confirmedDate.replace(/\//g, '-')).getTime() : Infinity;
+    const arr = list.slice();
+    switch (key) {
+      case 'dateAsc': arr.sort((a, b) => dateMs(a) - dateMs(b)); break;
+      case 'dateDesc': arr.sort((a, b) => dateMs(b) - dateMs(a)); break;
+      case 'updated': arr.sort((a, b) => String(b.lastUpdated || '').localeCompare(String(a.lastUpdated || ''))); break;
+      case 'name': arr.sort((a, b) => String(a.groomName || '').localeCompare(String(b.groomName || ''), 'ja')); break;
+      case 'kanri': arr.sort((a, b) => String(a.kanriNo || '').localeCompare(String(b.kanriNo || ''), undefined, { numeric: true })); break;
+      default: break; // 既定：サーバ側で組んだ「要対応優先→撮影日が近い順」のまま
+    }
+    return arr;
+  }
+
+  // ★要件：カード表示／表（一覧表）表示を切り替えられるように
+  function setDashboardViewMode(mode) {
+    dashboardViewMode = mode;
+    $('view-mode-card').classList.toggle('active', mode === 'card');
+    $('view-mode-table').classList.toggle('active', mode === 'table');
+    if (lastDashboardData) renderDashboard(lastDashboardData);
+  }
+
+  // ★要件：一覧表では、日付・都市・チャレンジ番号・お名前・予約番号（管理番号）・プラン名を一目で見られるように
+  function renderReservationTable(list) {
+    const body = $('reservation-table-body');
+    body.innerHTML = '';
+    list.forEach(r => {
+      const cancelled = r.statusJp === 'CW' || r.statusBranch === 'CW';
+      const tr = document.createElement('tr');
+      tr.className = r.needsAction ? 'needs-action-row' : '';
+      // ★不具合修正：カード表示と同様、自由入力項目はエスケープしてから差し込む（保存型XSS対策）
+      tr.innerHTML = `
+        <td class="res-table-date">${escapeHtml(r.confirmedDate || '撮影日未定')}</td>
+        <td>${escapeHtml(r.city || '-')}</td>
+        <td>${escapeHtml(r.challengeNo || 'なし')}</td>
+        <td>${escapeHtml(r.groomName || '')}${r.brideName ? '／' + escapeHtml(r.brideName) : ''}${r.needsAction ? ' ●' : ''}${cancelled ? '（キャンセル）' : ''}</td>
+        <td>${escapeHtml(r.kanriNo)}</td>
+        <td>${escapeHtml(r.plan || '-')}</td>`;
+      tr.addEventListener('click', () => openDetail(r.kanriNo));
+      body.appendChild(tr);
+    });
+  }
+
+  function buildReservationCard(r) {
     const card = document.createElement('div');
     // ★要件：相手からの未読メッセージ・変更がある案件は色を変えて一目でわかるように、一覧の上に来る（サーバ側でソート済み）
     card.className = 'res-card' + (r.needsAction ? ' needs-action' : '');
@@ -263,7 +325,7 @@
       <div class="res-card-names">${escapeHtml(r.groomName || '')} ${r.brideName ? '／ ' + escapeHtml(r.brideName) : ''}</div>
       <div class="res-card-bottom">
         ${r.needsAction ? '<span class="chip needs-action-chip">● 要対応</span>' : ''}
-        <span class="chip branch">${escapeHtml(r.branchName || r.branchCode)}${role === 'JP' && r.city ? '・' + escapeHtml(r.city) : ''}</span>
+        <span class="chip branch">${escapeHtml(r.branchName || r.branchCode)}${r.city ? '・' + escapeHtml(r.city) : ''}</span>
         ${r.area ? `<span class="chip hq">担当: ${escapeHtml(r.area)}手配課</span>` : ''}
         ${r.statusJp ? `<span class="chip hq">STS JP: ${escapeHtml(r.statusJp)}</span>` : ''}
         ${r.statusBranch ? `<span class="chip branch">STS 支店: ${escapeHtml(r.statusBranch)}</span>` : ''}

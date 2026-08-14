@@ -64,6 +64,14 @@
   /* Toolbar */
   .view-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
   #branch-filter { max-width: 180px; }
+  .toolbar-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .sort-select { width: auto; padding: 8px 10px; font-size: 0.82rem; border: 1px solid var(--color-border);
+    border-radius: 8px; background: #fff; color: var(--color-text); }
+  .view-toggle { display: flex; border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden; flex: none; }
+  .view-toggle-btn { background: #fff; border: none; padding: 8px 12px; font-size: 0.82rem; cursor: pointer;
+    color: var(--color-text); }
+  .view-toggle-btn + .view-toggle-btn { border-left: 1px solid var(--color-border); }
+  .view-toggle-btn.active { background: var(--color-primary); color: #fff; }
 
   /* Cards */
   .card-list { display: flex; flex-direction: column; gap: 10px; }
@@ -71,12 +79,26 @@
     cursor: pointer; border-left: 4px solid var(--color-primary); }
   .res-card:active { background: #f0fdfa; }
   .res-card-top { display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; color: var(--color-muted); }
-  .res-card-names { font-size: 1.02rem; font-weight: 600; margin: 4px 0; }
+  /* ★要件：一覧の日付はお名前より大きく、パッと見て日付がわかるようにする */
+  .res-card-top span:last-child { font-size: 1.12rem; font-weight: 700; color: var(--color-text); }
+  .res-card-names { font-size: 1rem; font-weight: 600; margin: 4px 0; }
   .res-card-bottom { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
   .chip { font-size: 0.72rem; padding: 3px 8px; border-radius: 999px; background: #eef2f7; color: var(--color-text); }
   .chip.hq { background: #ede9fe; color: var(--color-hq); }
   .chip.branch { background: #ccfbf1; color: var(--color-branch); }
   .empty-text { color: var(--color-muted); text-align: center; margin-top: 30px; }
+
+  /* 案件一覧の「表」表示（並び替え・都市/チャレンジ番号/プラン名などを一目で見たいとき用） */
+  .table-wrap { overflow-x: auto; background: var(--color-card); border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+  .res-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; white-space: nowrap; }
+  .res-table th, .res-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--color-border); }
+  .res-table th { font-size: 0.72rem; font-weight: 700; color: var(--color-muted); background: #f9fafb; }
+  .res-table tbody tr { cursor: pointer; }
+  .res-table tbody tr:last-child td { border-bottom: none; }
+  .res-table tbody tr:hover, .res-table tbody tr:active { background: #f0fdfa; }
+  .res-table tbody tr.needs-action-row { background: #fffbeb; }
+  .res-table tbody tr.needs-action-row:hover { background: #fef3c7; }
+  .res-table td.res-table-date { font-weight: 700; }
 
   /* Detail */
   .detail-header { background: var(--color-card); border-radius: 12px; padding: 14px; margin-bottom: 14px; }
