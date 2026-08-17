@@ -1568,6 +1568,7 @@ function initCsvImportEvents() {
     selectedCsvFile = ev.target.files && ev.target.files[0] ? ev.target.files[0] : null;
     document.getElementById('btn-submit-csv').disabled = !selectedCsvFile;
     document.getElementById('csv-import-result').classList.add('hidden');
+    previewSelectedCsv();
   });
 
   document.getElementById('btn-submit-csv').addEventListener('click', onSubmitCsvImport);
@@ -1584,6 +1585,10 @@ function closeCsvModal() {
   document.getElementById('csv-file-input').value = '';
   document.getElementById('csv-import-result').classList.add('hidden');
   document.getElementById('btn-submit-csv').disabled = true;
+  document.getElementById('csv-file-summary').classList.add('hidden');
+  if (csvProgressTimer) { clearInterval(csvProgressTimer); csvProgressTimer = null; }
+  document.getElementById('csv-progress').classList.add('hidden');
+  csvEstimatedRows = 0;
   selectedCsvFile = null;
 }
 
@@ -1625,16 +1630,88 @@ function readCsvFileAsText(file) {
   });
 }
 
+// ---- 取り込みの進行状況表示 -------------------------------------------------
+// サーバー側の処理は1回の呼び出しで完結するため、途中経過は取得できない。
+// そのため「何件を処理中か」「何秒経ったか」を示し、止まっていないことが分かるようにする。
+let csvProgressTimer = null;
+let csvEstimatedRows = 0;
+
+/** 選択されたファイルの行数を先に数えて表示する（取り込み前の確認用） */
+function previewSelectedCsv() {
+  const box = document.getElementById('csv-file-summary');
+  csvEstimatedRows = 0;
+  if (!selectedCsvFile) { box.classList.add('hidden'); return; }
+
+  box.classList.remove('hidden');
+  box.textContent = 'ファイルを確認しています…';
+  readCsvFileAsText(selectedCsvFile).then(function (text) {
+    // ヘッダー行を含む、内容のある行を数える（正確な件数はサーバー側で判定される）
+    const lines = text.split(/\r\n|\r|\n/).filter(function (l) { return l.trim() !== ''; });
+    let headerIdx = -1;
+    for (let i = 0; i < lines.length && i < 100; i++) {
+      if (lines[i].indexOf('対象年月日') !== -1) { headerIdx = i; break; }
+    }
+    csvEstimatedRows = headerIdx === -1 ? 0 : lines.length - headerIdx - 1;
+    const sizeKb = Math.max(1, Math.round(selectedCsvFile.size / 1024));
+    box.textContent = headerIdx === -1
+      ? selectedCsvFile.name + '（' + sizeKb + 'KB）：見出し行が見つかりませんでした。取り込むと詳しい理由が表示されます。'
+      : selectedCsvFile.name + '（' + sizeKb + 'KB）：データ ' + csvEstimatedRows + ' 行を検出しました。'
+        + 'このうち、取り込み済みと重なる行は自動でスキップされます。';
+  }).catch(function (err) {
+    box.textContent = '確認できませんでした：' + err.message;
+  });
+}
+
+function startCsvProgress() {
+  const wrap = document.getElementById('csv-progress');
+  const bar = document.getElementById('csv-progress-bar');
+  const label = document.getElementById('csv-progress-label');
+  const time = document.getElementById('csv-progress-time');
+  wrap.classList.remove('hidden');
+  label.textContent = csvEstimatedRows > 0
+    ? csvEstimatedRows + ' 行を取り込んでいます…'
+    : '取り込んでいます…';
+
+  // 経過時間の目安（1000行あたり約10秒）。あくまで目安なので95%で頭打ちにする
+  const estimatedSec = Math.max(5, Math.ceil((csvEstimatedRows || 200) / 100));
+  const startedAt = Date.now();
+  bar.style.width = '2%';
+  time.textContent = '0秒';
+
+  csvProgressTimer = setInterval(function () {
+    const elapsed = (Date.now() - startedAt) / 1000;
+    time.textContent = Math.floor(elapsed) + '秒';
+    const ratio = Math.min(0.95, elapsed / estimatedSec);
+    bar.style.width = Math.round(ratio * 100) + '%';
+    if (elapsed > estimatedSec) {
+      label.textContent = '取り込んでいます…（件数が多いため時間がかかっています）';
+    }
+  }, 250);
+}
+
+function finishCsvProgress() {
+  if (csvProgressTimer) { clearInterval(csvProgressTimer); csvProgressTimer = null; }
+  const bar = document.getElementById('csv-progress-bar');
+  bar.style.width = '100%';
+  setTimeout(function () {
+    document.getElementById('csv-progress').classList.add('hidden');
+    bar.style.width = '0%';
+  }, 600);
+}
+
 function onSubmitCsvImport() {
   if (!selectedCsvFile) return;
   const submitBtn = document.getElementById('btn-submit-csv');
   submitBtn.disabled = true;
+  document.getElementById('csv-import-result').classList.add('hidden');
+  startCsvProgress();
   showLoading(true);
 
   readCsvFileAsText(selectedCsvFile).then(function (csvText) {
     google.script.run
       .withSuccessHandler(function (res) {
         showLoading(false);
+        finishCsvProgress();
         submitBtn.disabled = false;
         renderCsvImportResult(res);
         if (res && res.success) {
@@ -1650,12 +1727,15 @@ function onSubmitCsvImport() {
       })
       .withFailureHandler(function (err) {
         showLoading(false);
+        finishCsvProgress();
         submitBtn.disabled = false;
+        renderCsvImportResult({ success: false, error: '通信エラーが発生しました：' + err.message });
         showToast('通信エラー（importUncontractedCsv）: ' + err.message, 'error');
       })
       .importUncontractedCsv(csvText);
   }).catch(function (err) {
     showLoading(false);
+    finishCsvProgress();
     submitBtn.disabled = false;
     // 対処手順を含む複数行のメッセージになるため、消えるトーストではなく結果欄に残す
     renderCsvImportResult({ success: false, error: err.message });
@@ -1715,6 +1795,98 @@ function initAdminEvents() {
 
   document.getElementById('btn-open-staff-modal').addEventListener('click', function () { openStaffModal('add'); });
   document.getElementById('staff-form').addEventListener('submit', onSubmitStaffForm);
+
+  document.getElementById('btn-check-duplicates').addEventListener('click', function () { runDuplicateCleanup(true); });
+  document.getElementById('btn-remove-duplicates').addEventListener('click', function () { runDuplicateCleanup(false); });
+  document.getElementById('btn-clear-all-data').addEventListener('click', onClearAllImportedData);
+}
+
+// ---- 取り込み済みデータの整理 -----------------------------------------------
+
+/** @param {boolean} dryRun trueなら件数を数えるだけ */
+function runDuplicateCleanup(dryRun) {
+  const box = document.getElementById('duplicate-result');
+  const buttons = ['btn-check-duplicates', 'btn-remove-duplicates'].map(function (id) { return document.getElementById(id); });
+
+  if (!dryRun && !window.confirm('重複した行を削除します。よろしいですか？\n（スタッフが入力した内容がある行は残ります）')) return;
+
+  buttons.forEach(function (b) { b.disabled = true; });
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false);
+      buttons.forEach(function (b) { b.disabled = false; });
+      box.classList.remove('hidden');
+      if (!res || !res.success) {
+        box.className = 'text-xs mt-2 text-red-600';
+        box.textContent = '失敗しました：' + (res ? res.error : '不明なエラー');
+        return;
+      }
+      if (res.removedCount === 0) {
+        box.className = 'text-xs mt-2 text-slate-500';
+        box.textContent = '重複した行はありませんでした。';
+        return;
+      }
+      const breakdown = Object.keys(res.perSheetCounts).map(function (k) {
+        return k + ' ' + res.perSheetCounts[k] + '件';
+      }).join(' / ');
+      if (res.dryRun) {
+        box.className = 'text-xs mt-2 text-amber-700';
+        box.textContent = '重複が ' + res.removedCount + ' 件見つかりました（内訳：' + breakdown +
+          '）。「重複を削除する」を押すと削除されます。';
+      } else {
+        box.className = 'text-xs mt-2 text-emerald-700';
+        box.textContent = res.removedCount + ' 件の重複を削除しました（内訳：' + breakdown + '）。';
+        loadAllData();
+      }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false);
+      buttons.forEach(function (b) { b.disabled = false; });
+      box.classList.remove('hidden');
+      box.className = 'text-xs mt-2 text-red-600';
+      box.textContent = '通信エラー：' + err.message;
+    })
+    .removeDuplicateRows(dryRun);
+}
+
+function onClearAllImportedData() {
+  const input = document.getElementById('clear-confirm-input');
+  const box = document.getElementById('clear-result');
+  const btn = document.getElementById('btn-clear-all-data');
+  const confirmText = input.value.trim();
+
+  box.classList.remove('hidden');
+  if (confirmText !== '削除') {
+    box.className = 'text-xs mt-2 text-red-600';
+    box.textContent = '確認のため、左の欄に「削除」と入力してください。';
+    return;
+  }
+  if (!window.confirm('全店舗の取り込み済みデータを削除します。\nスタッフが入力した内容も消え、元に戻せません。\n本当に実行しますか？')) return;
+
+  btn.disabled = true;
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false);
+      btn.disabled = false;
+      input.value = '';
+      if (res && res.success) {
+        box.className = 'text-xs mt-2 text-emerald-700';
+        box.textContent = res.clearedCount + ' 行を削除しました。CSVを入れ直せます。';
+        loadAllData();
+      } else {
+        box.className = 'text-xs mt-2 text-red-600';
+        box.textContent = '失敗しました：' + (res ? res.error : '不明なエラー');
+      }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false);
+      btn.disabled = false;
+      box.className = 'text-xs mt-2 text-red-600';
+      box.textContent = '通信エラー：' + err.message;
+    })
+    .clearAllImportedData(confirmText);
 }
 
 function openAdminModal(id) {

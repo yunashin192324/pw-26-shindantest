@@ -140,6 +140,36 @@ function include(filename) {
  * 「店舗マスタ」シートの全行（有効・無効を問わず）を返す。
  * シートが存在しない場合は null（＝旧環境。呼び出し側は DEFAULT_SHOP_LIST にフォールバックする）。
  */
+/** 営業所コードの桁数（HISの営業所コードは「046」「B66」など3桁） */
+const OFFICE_CODE_LENGTH = 3;
+
+/**
+ * 営業所コードを正規化する。
+ * 「046」のような先頭0付きのコードは、スプレッドシートに書き込むと数値46として
+ * 保存されてしまい、読み戻したときに「46」になる。そのままではCSVの「046」と
+ * 一致せず、店舗の判定にも重複判定にも失敗するため、読み取り時に3桁へ戻す。
+ * 英字を含むコード（B66など）や4桁以上のコードはそのまま返す。
+ */
+function normalizeOfficeCode_(value) {
+  const s = String(value === null || value === undefined ? '' : value).trim();
+  if (s === '') return '';
+  if (/^\d+$/.test(s) && s.length < OFFICE_CODE_LENGTH) {
+    return ('0000' + s).slice(-OFFICE_CODE_LENGTH);
+  }
+  return s;
+}
+
+/**
+ * 重複判定に使う値を、表記の揺れを吸収した形にそろえる。
+ * スプレッドシートは「046」を数値46として保存するため、CSV側の文字列と
+ * そのまま比べると別物になってしまう。数字だけの値は先頭の0を落として比べる。
+ */
+function canonicalKeyPart_(value) {
+  const s = String(value === null || value === undefined ? '' : value).trim();
+  if (/^\d+$/.test(s)) return String(parseInt(s, 10));
+  return s;
+}
+
 function getAllShopMasterRows_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHOP_MASTER_SHEET_NAME);
@@ -151,7 +181,7 @@ function getAllShopMasterRows_() {
   const values = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
   const list = [];
   values.forEach(function (row, i) {
-    const code = String(row[0] || '').trim();
+    const code = normalizeOfficeCode_(row[0]);
     const name = String(row[1] || '').trim();
     if (!code && !name) return;
     list.push({ rowIndex: i + 2, code: code, name: name, active: row[2] !== false });
@@ -882,7 +912,8 @@ function importUncontractedCsv(csvText) {
       if (!row || row.every(function (c) { return String(c).trim() === ''; })) continue;
 
       const targetDate = getVal(row, '対象年月日');
-      const officeCode = getVal(row, '営業所コード');
+      // CSV側が「46」と桁落ちしていても「046」として扱えるようそろえる
+      const officeCode = normalizeOfficeCode_(getVal(row, '営業所コード'));
 
       if (!targetDate || !officeCode) {
         skippedBlankCount++;
@@ -951,8 +982,9 @@ function importUncontractedCsv(csvText) {
     }
 
     // 重複判定キー：対象年月日＋営業所コード＋社員番号＋都市コード＋出発年月
+    // シート上では「046」が数値46として保存されるため、必ず正規化してから突き合わせる
     const buildKey = function (row) {
-      return [row[4], row[5], row[6], row[9], row[11]].join('｜');
+      return [row[4], row[5], row[6], row[9], row[11]].map(canonicalKeyPart_).join('｜');
     };
 
     Object.keys(rowsBySheet).forEach(function (sheetName) {
@@ -1023,8 +1055,12 @@ function autoRegisterShop_(ss, officeCode) {
   if (masterSheet) {
     masterSheet.appendRow([officeCode, placeholderName, true]);
   }
-  createShopSheets_(ss, [{ code: officeCode, name: placeholderName }], HEADERS_MAIN);
-  appendShopRowToSummary_(ss, { code: officeCode, name: placeholderName });
+  const newShop = { code: officeCode, name: placeholderName };
+  createShopSheets_(ss, [newShop], HEADERS_MAIN);
+  // 新しく作ったシートにも、コード列を文字列として保持する書式を適用する
+  // （これを忘れると「046」「08」などが数値化され、重複判定と集計がずれる）
+  repairOfficeCodeFormatting_(ss, [newShop]);
+  appendShopRowToSummary_(ss, newShop);
   return placeholderName;
 }
 
@@ -1203,6 +1239,120 @@ function ensureRowCapacity_(sheet, needed) {
   const current = sheet.getMaxRows();
   if (current < needed) {
     sheet.insertRowsAfter(current, (needed - current) + 200);
+  }
+}
+
+/**
+ * 取り込み済みデータの重複行を削除する（マスタ管理者のみ）。
+ * 「046」が数値46として保存されていた影響で重複判定がすり抜け、同じCSVを
+ * 取り込むたびに行が増えてしまった分を後から掃除するための処理。
+ *
+ * ・重複判定はCSV取込と同じキー（対象年月日＋営業所コード＋社員番号＋都市コード＋出発年月）
+ * ・同じキーの行が複数ある場合、スタッフが入力した内容（リセール／STS／成約PAX／
+ *   ACT日／ACT内容／メモ）が入っている行を優先して残す。どれも空なら最初の1行を残す。
+ * @param {boolean} dryRun trueなら件数を数えるだけで削除しない
+ */
+function removeDuplicateRows(dryRun) {
+  try {
+    assertCanManageMaster_();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const shops = getShopList_();
+    const perSheet = {};
+    let totalRemoved = 0;
+    let totalKept = 0;
+
+    // スタッフの入力が入っている行を優先して残すための判定
+    const editedColumns = [0, 1, 2, 16, 17, 23]; // リセール/STS/成約PAX/ACT日/ACT内容/メモ
+    const hasStaffInput = function (row) {
+      return editedColumns.some(function (i) {
+        return String(row[i] === null || row[i] === undefined ? '' : row[i]).trim() !== '';
+      });
+    };
+    const buildKey = function (row) {
+      return [row[4], row[5], row[6], row[9], row[11]].map(canonicalKeyPart_).join('｜');
+    };
+
+    shops.forEach(function (shop) {
+      const sheet = ss.getSheetByName(shop.name);
+      if (!sheet) return;
+      const lastRow = sheet.getLastRow();
+      if (lastRow < 3) return; // 見出し＋1行以下なら重複しようがない
+
+      const values = sheet.getRange(2, 1, lastRow - 1, HEADERS_MAIN.length).getValues();
+
+      // キーごとに「残す1行」を決める
+      const bestByKey = {};
+      values.forEach(function (row, idx) {
+        const key = buildKey(row);
+        const current = bestByKey[key];
+        if (current === undefined) {
+          bestByKey[key] = idx;
+          return;
+        }
+        // 既に選ばれている行に入力が無く、こちらに入力があるなら乗り換える
+        if (!hasStaffInput(values[current]) && hasStaffInput(row)) {
+          bestByKey[key] = idx;
+        }
+      });
+
+      const keepIdx = {};
+      Object.keys(bestByKey).forEach(function (k) { keepIdx[bestByKey[k]] = true; });
+
+      const kept = values.filter(function (row, idx) { return keepIdx[idx]; });
+      const removed = values.length - kept.length;
+      if (removed <= 0) return;
+
+      perSheet[shop.name] = removed;
+      totalRemoved += removed;
+      totalKept += kept.length;
+
+      if (!dryRun) {
+        // 残す行を先頭から詰めて書き直し、余った行は内容を消す
+        sheet.getRange(2, 1, kept.length, HEADERS_MAIN.length).setValues(kept);
+        const surplus = values.length - kept.length;
+        if (surplus > 0) {
+          sheet.getRange(2 + kept.length, 1, surplus, HEADERS_MAIN.length).clearContent();
+        }
+      }
+    });
+
+    return {
+      success: true,
+      dryRun: !!dryRun,
+      removedCount: totalRemoved,
+      keptCount: totalKept,
+      perSheetCounts: perSheet
+    };
+  } catch (err) {
+    return { success: false, error: err.message, detail: err.stack };
+  }
+}
+
+/**
+ * 取り込み済みのデータ行をすべて削除する（マスタ管理者のみ／取り消せない）。
+ * 見出し行と、店舗マスタ・スタッフマスタは残す。
+ * 誤操作を防ぐため、確認文字列の一致を必須にしている。
+ * @param {string} confirmText 利用者が入力した確認文字列
+ */
+function clearAllImportedData(confirmText) {
+  try {
+    assertCanManageMaster_();
+    if (String(confirmText || '').trim() !== '削除') {
+      throw new Error('確認のため「削除」と入力してください。データは削除していません。');
+    }
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let cleared = 0;
+    getShopList_().forEach(function (shop) {
+      const sheet = ss.getSheetByName(shop.name);
+      if (!sheet) return;
+      const lastRow = sheet.getLastRow();
+      if (lastRow < 2) return;
+      sheet.getRange(2, 1, lastRow - 1, HEADERS_MAIN.length).clearContent();
+      cleared += lastRow - 1;
+    });
+    return { success: true, clearedCount: cleared };
+  } catch (err) {
+    return { success: false, error: err.message, detail: err.stack };
   }
 }
 

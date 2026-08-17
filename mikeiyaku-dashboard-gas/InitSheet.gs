@@ -97,6 +97,87 @@ function buildAllSheets_() {
   createEmployeeSummarySheet_(ss, '個人別サマリ(下期)', SECOND_HALF_CODES);
   createShopMasterSheet_(ss, SHOP_LIST);
   createStaffMasterSheet_(ss);
+
+  // 「046」が数値46として保存されてしまった既存データを直し、
+  // 以後は文字列として保持されるように書式を整える（何度実行しても安全）
+  repairOfficeCodeFormatting_(ss, SHOP_LIST);
+}
+
+/**
+ * 営業所コード・社員番号を「文字列」として扱うようにシートを整える。
+ * これらは「046」のように先頭が0のコードがあり、既定の書式のままでは
+ * 数値46として保存され、先頭の0が失われてしまう。
+ * ・該当列の表示形式を「書式なしテキスト（@）」にする
+ * ・すでに桁落ちしている値は、3桁のコードとして書き戻す
+ * 何度実行しても安全（既に正しい値は書き換えない）。
+ */
+function repairOfficeCodeFormatting_(ss, shopList) {
+  // ① 店舗マスタ：A列（店番／3桁）
+  const master = ss.getSheetByName('店舗マスタ');
+  if (master) {
+    master.getRange(1, 1, master.getMaxRows(), 1).setNumberFormat('@');
+    repairCodeColumn_(master, 1, 2, 3);
+  }
+
+  // ② スタッフマスタ：A列（営業所コード／3桁）・B列（社員番号／桁数不定）
+  const staff = ss.getSheetByName('スタッフマスタ');
+  if (staff) {
+    staff.getRange(1, 1, staff.getMaxRows(), 2).setNumberFormat('@');
+    repairCodeColumn_(staff, 1, 2, 3);
+    repairCodeColumn_(staff, 2, 2, 0);
+  }
+
+  // ③ 店舗別データシート
+  //    D列 月（2桁）／E列 対象年月日（8桁）／F列 営業所コード（3桁）／
+  //    G列 社員番号（桁数不定）／L列 出発年月（6桁）
+  //    いずれも「08」「202612」のように数値化されると桁が落ちたり、
+  //    集計式の条件（文字列）と一致しなくなるため、文字列として保持する。
+  const codeColumns = [
+    { col: 4, width: 2 },  // 月
+    { col: 5, width: 8 },  // 対象年月日
+    { col: 6, width: 3 },  // 営業所コード
+    { col: 7, width: 0 },  // 社員番号（桁数が決まっていないため桁合わせはしない）
+    { col: 12, width: 6 }  // 出発年月
+  ];
+  shopList.forEach(function (shop) {
+    const sheet = ss.getSheetByName(shop.name);
+    if (!sheet) return;
+    codeColumns.forEach(function (c) {
+      sheet.getRange(1, c.col, sheet.getMaxRows(), 1).setNumberFormat('@');
+      repairCodeColumn_(sheet, c.col, 2, c.width);
+    });
+  });
+}
+
+/**
+ * 指定した列の値を、桁を揃えた文字列に戻す（数値化されてしまった値だけを書き換える）。
+ * @param {Sheet} sheet 対象シート
+ * @param {number} col 対象の列番号
+ * @param {number} startRow 見出しを除いた開始行
+ * @param {number} width 期待する桁数（0なら桁合わせせず、文字列化のみ）
+ */
+function repairCodeColumn_(sheet, col, startRow, width) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < startRow) return;
+
+  const range = sheet.getRange(startRow, col, lastRow - startRow + 1, 1);
+  const values = range.getValues();
+  let changed = false;
+  const next = values.map(function (row) {
+    const raw = row[0];
+    if (raw === null || raw === undefined || raw === '') return [''];
+    const s = String(raw).trim();
+    // 元から文字列で入っているものは触らない
+    if (typeof raw !== 'number' && !(width > 0 && /^\d+$/.test(s) && s.length < width)) {
+      return [s];
+    }
+    changed = true;
+    if (width > 0 && /^\d+$/.test(s) && s.length < width) {
+      return [(new Array(width + 1).join('0') + s).slice(-width)];
+    }
+    return [s];
+  });
+  if (changed) range.setValues(next);
 }
 
 /**

@@ -384,6 +384,47 @@
           </div>
         </div>
       </div>
+
+      <!-- ============ 取り込み済みデータの整理 ============ -->
+      <div class="bg-white rounded-xl shadow p-4">
+        <h2 class="text-base font-bold text-slate-800 mb-1"><i class="fa-solid fa-broom text-slate-500"></i> 取り込み済みデータの整理</h2>
+        <p class="text-xs text-slate-500 mb-4">同じCSVを重ねて取り込んだために増えてしまった行を整理します。</p>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div class="border border-slate-200 rounded-lg p-3">
+            <p class="text-sm font-semibold text-slate-700">重複した行を削除する</p>
+            <p class="text-xs text-slate-500 mt-1 mb-3">
+              対象年月日・営業所コード・社員番号・都市コード・出発年月が同じ行を1件にまとめます。
+              スタッフが入力した内容（リセール／STS／成約PAX／ACT日／ACT内容／メモ）がある行を優先して残します。
+            </p>
+            <div class="flex gap-2">
+              <button id="btn-check-duplicates" class="bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg px-3 py-1.5 text-xs font-semibold">
+                <i class="fa-solid fa-magnifying-glass"></i> 件数を確認する
+              </button>
+              <button id="btn-remove-duplicates" class="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-1.5 text-xs font-semibold shadow">
+                <i class="fa-solid fa-broom"></i> 重複を削除する
+              </button>
+            </div>
+            <p id="duplicate-result" class="hidden text-xs mt-2"></p>
+          </div>
+
+          <div class="border border-red-200 bg-red-50/40 rounded-lg p-3">
+            <p class="text-sm font-semibold text-red-700">取り込んだデータをすべて削除する</p>
+            <p class="text-xs text-slate-500 mt-1 mb-3">
+              全店舗のリセールリストのデータ行を消して、CSVを入れ直せる状態に戻します。
+              スタッフが入力した内容も消えます。<b class="text-red-600">元に戻せません。</b>
+              店舗マスタ・スタッフマスタは残ります。
+            </p>
+            <div class="flex gap-2 items-center">
+              <input type="text" id="clear-confirm-input" placeholder="削除 と入力" class="border border-slate-300 rounded-lg text-xs p-1.5 w-28">
+              <button id="btn-clear-all-data" class="bg-red-600 hover:bg-red-700 text-white rounded-lg px-3 py-1.5 text-xs font-semibold shadow">
+                <i class="fa-solid fa-trash"></i> すべて削除する
+              </button>
+            </div>
+            <p id="clear-result" class="hidden text-xs mt-2"></p>
+          </div>
+        </div>
+      </div>
     </section>
   </main>
 
@@ -514,6 +555,19 @@
           <input type="file" id="csv-file-input" accept=".csv,.txt,.tsv,text/csv,text/plain" class="w-full border border-slate-300 rounded-lg text-sm p-2 bg-white">
           <p class="text-xs text-slate-400 mt-1">UTF-8 / Shift_JIS のいずれのエンコードにも対応しています。カンマ区切り・タブ区切りのどちらでも取り込めます。</p>
           <p class="text-xs text-amber-600 mt-1">Excelのブック（.xls / .xlsx）は取り込めません。Excelで開き「名前を付けて保存」→ファイルの種類「CSV UTF-8（コンマ区切り）」で保存し直してください。</p>
+          <p id="csv-file-summary" class="hidden text-xs text-slate-600 mt-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"></p>
+        </div>
+
+        <!-- 取り込み中の進行状況（サーバー処理は分割できないため、経過時間と目安を示す） -->
+        <div id="csv-progress" class="hidden">
+          <div class="flex items-center justify-between text-xs text-slate-600 mb-1">
+            <span id="csv-progress-label">取り込んでいます…</span>
+            <span id="csv-progress-time" class="tabular-nums">0秒</span>
+          </div>
+          <div class="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+            <div id="csv-progress-bar" class="h-full bg-emerald-500 rounded-full" style="width:0%; transition:width .4s ease;"></div>
+          </div>
+          <p class="text-xs text-slate-400 mt-1">この画面を閉じたり再読み込みしたりせずにお待ちください。</p>
         </div>
         <div id="csv-import-result" class="hidden text-sm bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1"></div>
         <div class="flex justify-end gap-3 pt-2 border-t border-slate-100">
