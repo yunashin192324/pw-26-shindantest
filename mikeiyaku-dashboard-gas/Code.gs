@@ -224,10 +224,35 @@ function getAllShopMasterRows_() {
  * 現在有効な店舗一覧（{code, name}の配列）を返す。ダッシュボードデータ取得・
  * 新規登録・CSVインポート等、アプリ全体から店舗を横断参照する処理はすべてこれを使う。
  */
+/** 仮登録の店舗名（「未設定(046)」など）かどうか */
+function isPlaceholderShopName_(name) {
+  return /^未設定\(.*\)$/.test(String(name || '').trim());
+}
+
 function getShopList_() {
   const rows = getAllShopMasterRows_();
   if (rows === null) return DEFAULT_SHOP_LIST.slice(); // 「店舗マスタ」未作成の旧環境向けフォールバック
-  return rows.filter(function (s) { return s.active; }).map(function (s) { return { code: s.code, name: s.name }; });
+
+  // 同じ店番の行が複数ある場合は1件にまとめる。
+  // 過去に店番の桁落ちで「未設定(046)」が重複登録された環境があり、
+  // 後の行を採用すると正式名称の店舗が仮登録側に上書きされてしまうため、
+  // 正式名称のほうを必ず優先する。
+  const byCode = {};
+  const order = [];
+  rows.filter(function (s) { return s.active; }).forEach(function (s) {
+    const current = byCode[s.code];
+    if (!current) {
+      byCode[s.code] = s;
+      order.push(s.code);
+      return;
+    }
+    if (isPlaceholderShopName_(current.name) && !isPlaceholderShopName_(s.name)) {
+      byCode[s.code] = s; // 仮登録より正式名称を優先
+    }
+  });
+  return order.map(function (code) {
+    return { code: byCode[code].code, name: byCode[code].name };
+  });
 }
 
 // ---- 権限レベル（スタッフマスタ「権限レベル」列に格納する文字列） -----------
@@ -1081,7 +1106,10 @@ function importParsedRows_(rows) {
       if (!sheetName) {
         sheetName = autoRegisterShop_(ss, officeCode);
         officeCodeToSheetName[officeCode] = sheetName;
-        autoRegisteredShopCodes.push(officeCode);
+        // 既存店舗を使い回した場合は「仮登録した」とは報告しない
+        if (isPlaceholderShopName_(sheetName)) {
+          autoRegisteredShopCodes.push(officeCode);
+        }
       }
 
       const empNo = normalizeEmployeeNo_(getVal(row, '社員番号'));
@@ -1205,8 +1233,27 @@ function importParsedRows_(rows) {
  * @return {string} 作成された店舗のシート名（＝仮の店舗名）
  */
 function autoRegisterShop_(ss, officeCode) {
-  const placeholderName = '未設定(' + officeCode + ')';
   const masterSheet = ss.getSheetByName(SHOP_MASTER_SHEET_NAME);
+
+  // 既に同じ店番の行がある場合は、行を増やさずにその店舗を使う。
+  // （無効化されている店舗のコードでCSVが来た場合など。ここで新しい行を足すと
+  //   同じ店番が二重に並び、以後の取り込みが仮登録側へ流れてしまう）
+  const existing = (getAllShopMasterRows_() || []).filter(function (s) {
+    return s.code === officeCode;
+  });
+  if (existing.length > 0) {
+    // 正式名称の行があればそれを、無ければ先頭の行を使う
+    const preferred = existing.filter(function (s) { return !isPlaceholderShopName_(s.name); })[0] || existing[0];
+    if (masterSheet && !preferred.active) {
+      masterSheet.getRange(preferred.rowIndex, 3).setValue(true); // 取り込み対象にするため有効へ戻す
+    }
+    const shop = { code: preferred.code, name: preferred.name };
+    createShopSheets_(ss, [shop], HEADERS_MAIN); // シートが無ければ作る（既にあれば見出しの補修のみ）
+    repairOfficeCodeFormatting_(ss, [shop]);
+    return preferred.name;
+  }
+
+  const placeholderName = '未設定(' + officeCode + ')';
   if (masterSheet) {
     masterSheet.appendRow([officeCode, placeholderName, true]);
   }
@@ -1534,6 +1581,104 @@ function removeDuplicateStaffRows_(ss, dryRun) {
   sheet.getRange(2, 1, kept.length, 6).setValues(kept);
   sheet.getRange(2 + kept.length, 1, removed, 6).clearContent();
   return removed;
+}
+
+/**
+ * 「未設定(店番)」として仮登録された店舗を、同じ店番の正式な店舗へ統合する（マスタ管理者のみ）。
+ * 店番の桁落ち不具合により、正式な店舗があるのに仮登録が重複して作られてしまった
+ * 環境を元に戻すための処理。
+ * ・仮登録シートのデータを正式な店舗シートへ移す（重複する行は移さない）
+ * ・スタッフが入力した内容はそのまま保持する
+ * ・移し終えた仮登録シートは削除し、店舗マスタからも行を取り除く
+ * ・同じ店番に正式な店舗が無い仮登録は、そのまま残す（消すと実績が失われるため）
+ */
+function mergePlaceholderShops() {
+  try {
+    assertCanManageMaster_();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const rows = getAllShopMasterRows_();
+    if (rows === null) throw new Error(setupRequiredMessage_('店舗マスタ'));
+
+    // 店番ごとに「正式な店舗」と「仮登録」を仕分ける
+    const realByCode = {};
+    rows.forEach(function (s) {
+      if (!isPlaceholderShopName_(s.name)) realByCode[s.code] = s;
+    });
+    const placeholders = rows.filter(function (s) {
+      return isPlaceholderShopName_(s.name) && realByCode[s.code];
+    });
+
+    const buildKey = function (row) {
+      return [row[4], row[5], row[6], row[9], row[11]].map(canonicalKeyPart_).join('｜');
+    };
+
+    let mergedCount = 0;
+    let movedRowCount = 0;
+    const details = [];
+    const removeRowIndexes = [];
+
+    placeholders.forEach(function (ph) {
+      const target = realByCode[ph.code];
+      const fromSheet = ss.getSheetByName(ph.name);
+      const toSheet = ss.getSheetByName(target.name);
+      if (!toSheet) return; // 移動先が無ければ触らない
+
+      let moved = 0;
+      if (fromSheet) {
+        const lastRow = fromSheet.getLastRow();
+        if (lastRow >= 2) {
+          const values = fromSheet.getRange(2, 1, lastRow - 1, HEADERS_MAIN.length).getValues();
+
+          // 移動先に既にある行は移さない（重複を増やさないため）
+          const existingKeys = {};
+          const toLastRow = toSheet.getLastRow();
+          if (toLastRow >= 2) {
+            toSheet.getRange(2, 1, toLastRow - 1, HEADERS_MAIN.length).getValues()
+              .forEach(function (r) { existingKeys[buildKey(r)] = true; });
+          }
+
+          const toMove = values.filter(function (r) {
+            const hasContent = r.some(function (c) { return String(c === null || c === undefined ? '' : c).trim() !== ''; });
+            if (!hasContent) return false;
+            const key = buildKey(r);
+            if (existingKeys[key]) return false;
+            existingKeys[key] = true;
+            return true;
+          });
+
+          if (toMove.length > 0) {
+            const startRow = toSheet.getLastRow() + 1;
+            ensureRowCapacity_(toSheet, startRow + toMove.length - 1);
+            toSheet.getRange(startRow, 1, toMove.length, HEADERS_MAIN.length).setValues(toMove);
+            moved = toMove.length;
+          }
+        }
+        ss.deleteSheet(fromSheet);
+      }
+
+      removeRowIndexes.push(ph.rowIndex);
+      mergedCount++;
+      movedRowCount += moved;
+      details.push(ph.name + ' → ' + target.name + '（' + moved + '件）');
+    });
+
+    // 店舗マスタから仮登録の行を取り除く（行番号のずれを避けるため後ろから消す）
+    if (removeRowIndexes.length > 0) {
+      const masterSheet = ss.getSheetByName(SHOP_MASTER_SHEET_NAME);
+      removeRowIndexes.sort(function (a, b) { return b - a; }).forEach(function (rowIndex) {
+        masterSheet.deleteRow(rowIndex);
+      });
+    }
+
+    return {
+      success: true,
+      mergedCount: mergedCount,
+      movedRowCount: movedRowCount,
+      details: details
+    };
+  } catch (err) {
+    return { success: false, error: err.message, detail: err.stack };
+  }
 }
 
 /**
