@@ -97,6 +97,25 @@
 
   <main class="max-w-[1600px] mx-auto px-4 py-5">
 
+    <!-- ============ Code.gsの更新漏れを検出したときだけ出る案内バー ============ -->
+    <div id="version-banner" class="hidden mb-5 bg-red-50 border border-red-300 rounded-xl p-4">
+      <div class="flex flex-wrap items-start gap-3">
+        <i class="fa-solid fa-triangle-exclamation text-red-500 text-xl mt-0.5"></i>
+        <div class="flex-1 min-w-0">
+          <p class="font-bold text-red-800">サーバー側（Code.gs）の更新が終わっていません</p>
+          <p class="text-sm text-red-700 mt-1">
+            画面のファイル（Index.html / Javascript.html）だけが新しく、Code.gs が古いままです。
+            この状態では、CSV取り込みなど一部の機能がエラーになります。
+          </p>
+          <p class="text-sm text-red-700 mt-2">
+            <b>1.</b> Apps Scriptで <code class="bg-white px-1 rounded">Code.gs</code> を最新のものに貼り替えて保存する<br>
+            <b>2.</b> <b>デプロイを管理</b> → 鉛筆マーク → バージョンで <b>新バージョン</b> を選んでデプロイする
+          </p>
+          <p id="version-banner-detail" class="text-xs text-red-500 mt-2"></p>
+        </div>
+      </div>
+    </div>
+
     <!-- ============ 初期セットアップ未実行のときだけ出る案内バー ============ -->
     <div id="setup-banner" class="hidden mb-5 bg-amber-50 border border-amber-300 rounded-xl p-4">
       <div class="flex flex-wrap items-start gap-3">

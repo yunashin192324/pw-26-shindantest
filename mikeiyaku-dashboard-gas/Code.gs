@@ -884,6 +884,22 @@ function importUncontractedCsv(csvText) {
   }
 }
 
+/**
+ * サーバー側（このファイル）の版数。画面ファイルと対で更新する。
+ * 画面だけ新しくしてCode.gsが古いままだと、新機能の呼び出しが
+ * 「is not a function」という分かりにくいエラーになるため、
+ * 画面側から版数を確認できるようにしている。
+ */
+const SERVER_VERSION = '2026-08-17';
+
+/**
+ * サーバー側の版数を返す。画面側は、自分が期待する版数と一致するかを起動時に確認する。
+ * 権限に関係なく呼べる（更新漏れは誰の画面でも起こりうるため）。
+ */
+function getServerVersion() {
+  return { success: true, version: SERVER_VERSION };
+}
+
 /** CSV取込の権限チェック（テキスト・Excelブックの両方から使う） */
 function assertCanImportCsv_() {
   if (!getCurrentUserContext_().canImportCsv) {

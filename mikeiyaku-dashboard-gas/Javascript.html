@@ -47,9 +47,46 @@ document.addEventListener('DOMContentLoaded', function () {
   initCsvImportEvents();
   initAdminEvents();
   initSetupEvents();
+  checkServerVersion();
   checkSetupStatus();
   loadAllData();
 });
+
+// 画面側が前提としているサーバー（Code.gs）の版数。Code.gs の SERVER_VERSION と対で更新する。
+const REQUIRED_SERVER_VERSION = '2026-08-17';
+
+/**
+ * Code.gs が画面と同じ版数まで更新されているか確認する。
+ * 古いままだと新機能の呼び出しが「is not a function」という分かりにくいエラーになるため、
+ * 起動時に気づけるようにする。
+ */
+function checkServerVersion() {
+  const banner = document.getElementById('version-banner');
+  const detail = document.getElementById('version-banner-detail');
+
+  const showMismatch = function (serverVersion) {
+    banner.classList.remove('hidden');
+    detail.textContent = '画面が必要とする版数：' + REQUIRED_SERVER_VERSION +
+      ' ／ サーバー側の版数：' + (serverVersion || '（この版数より前）');
+  };
+
+  // 古いCode.gsには getServerVersion 自体が無いため、その場合も更新漏れとみなす
+  if (typeof google.script.run.getServerVersion !== 'function') {
+    showMismatch(null);
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (res && res.success && res.version === REQUIRED_SERVER_VERSION) {
+        banner.classList.add('hidden');
+      } else {
+        showMismatch(res && res.version);
+      }
+    })
+    .withFailureHandler(function () { showMismatch(null); })
+    .getServerVersion();
+}
 
 // ============================================================================
 // 初期セットアップ（店舗マスタ・スタッフマスタが未作成のときの案内）
@@ -1761,6 +1798,26 @@ function onSubmitCsvImport() {
 
     // Excelブックはサーバー側でスプレッドシートに変換してから取り込む
     if (payload.kind === 'workbook') {
+      // google.script.run は、サーバー側（Code.gs）に実在する関数だけを持つ。
+      // 画面側だけ新しくてCode.gsが古いと、ここで「is not a function」になるため、
+      // 原因が分かる案内に置き換える。
+      if (typeof runner.importUncontractedWorkbook !== 'function') {
+        showLoading(false);
+        finishCsvProgress();
+        submitBtn.disabled = false;
+        renderCsvImportResult({
+          success: false,
+          error: 'Excelブックの取り込み機能が、サーバー側（Code.gs）に見つかりません。\n' +
+            '画面のファイルだけが新しく、Code.gs が古いままの可能性があります。\n' +
+            '次の順にご確認ください。\n' +
+            '1. Apps Scriptの「Code.gs」を最新のものに貼り替えて保存する\n' +
+            '2. 「デプロイを管理」→ 鉛筆マーク → バージョンで「新バージョン」を選んでデプロイする\n' +
+            '（保存しただけでは、公開中の画面には反映されません）\n' +
+            'お急ぎの場合は、Excelで「CSV UTF-8（コンマ区切り）」として保存し直したファイルをお使いください。'
+        });
+        showToast('サーバー側の更新が必要です。詳しくは画面の説明をご覧ください。', 'error');
+        return;
+      }
       runner.importUncontractedWorkbook(payload.base64, payload.fileName, payload.mimeType);
     } else {
       runner.importUncontractedCsv(payload.text);
