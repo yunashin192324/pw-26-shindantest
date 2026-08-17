@@ -27,6 +27,8 @@ const breakdownCharts = { 'chart-city': null, 'chart-contact': null, 'chart-purp
 let dmCurrentPage = 1;
 let dmFilteredCache = [];
 let rankingSortState = { key: 'total', dir: 'desc' };
+// リセールリストの並べ替え（既定は対象年月日の新しい順）
+let dmSortState = { key: '対象年月日', dir: 'desc' };
 let loadCompletedCount = 0;
 const LOAD_TARGET = 4;
 let currentUserContext = {
@@ -43,6 +45,7 @@ document.addEventListener('DOMContentLoaded', function () {
   initDashboardEvents();
   initEmployeeEvents();
   initDataManagerEvents();
+  initDataManagerSort();
   initModalEvents();
   initCsvImportEvents();
   initAdminEvents();
@@ -1271,7 +1274,86 @@ function renderDataManagerTab() {
     return true;
   });
 
+  sortDataManagerRows();
   renderDataManagerGrid();
+}
+
+// 五十音順に並べるため、日本語を考慮した比較を行う（ブラウザの照合順序に任せる）
+const dmCollator = (typeof Intl !== 'undefined' && Intl.Collator)
+  ? new Intl.Collator('ja', { numeric: true, sensitivity: 'base' })
+  : null;
+
+/** 並べ替えに使う値を取り出す（空欄は常に最後になるよう扱う） */
+function dmSortValue(row, key) {
+  if (key === '店舗') return String(row.__sheetName || row['店舗'] || '');
+  const v = row[key];
+  return (v === null || v === undefined) ? '' : v;
+}
+
+function sortDataManagerRows() {
+  const key = dmSortState.key;
+  const dir = dmSortState.dir === 'asc' ? 1 : -1;
+  const numericKeys = { '成約PAX': true };
+
+  dmFilteredCache.sort(function (a, b) {
+    const va = dmSortValue(a, key);
+    const vb = dmSortValue(b, key);
+
+    // 空欄は並び順に関わらず末尾へ送る（未入力が上に来ると探しにくいため）
+    const aEmpty = String(va).trim() === '';
+    const bEmpty = String(vb).trim() === '';
+    if (aEmpty && bEmpty) return 0;
+    if (aEmpty) return 1;
+    if (bEmpty) return -1;
+
+    let cmp;
+    if (numericKeys[key]) {
+      cmp = (Number(va) || 0) - (Number(vb) || 0);
+    } else if (dmCollator) {
+      cmp = dmCollator.compare(String(va), String(vb));
+    } else {
+      cmp = String(va) < String(vb) ? -1 : (String(va) > String(vb) ? 1 : 0);
+    }
+    if (cmp !== 0) return cmp * dir;
+
+    // 同値のときは対象年月日の新しい順で安定させる
+    return String(dmSortValue(b, '対象年月日')).localeCompare(String(dmSortValue(a, '対象年月日')));
+  });
+}
+
+/** 見出しのクリックで並べ替えを切り替える */
+function initDataManagerSort() {
+  document.querySelectorAll('#tab-panel-data .dm-sortable').forEach(function (th) {
+    th.addEventListener('click', function () {
+      const key = th.dataset.sort;
+      if (dmSortState.key === key) {
+        dmSortState.dir = dmSortState.dir === 'asc' ? 'desc' : 'asc';
+      } else {
+        dmSortState.key = key;
+        // 日付は新しい順、それ以外は五十音・昇順から始めるのが自然
+        dmSortState.dir = (key === '対象年月日' || key === 'ACT日') ? 'desc' : 'asc';
+      }
+      dmCurrentPage = 1; // 並べ替えたら1ページ目に戻す
+      sortDataManagerRows();
+      renderDataManagerGrid();
+      renderDataManagerSortMarks();
+    });
+  });
+  renderDataManagerSortMarks();
+}
+
+/** 見出しに現在の並び順（▲▼）を表示する */
+function renderDataManagerSortMarks() {
+  document.querySelectorAll('#tab-panel-data .dm-sortable').forEach(function (th) {
+    const mark = th.querySelector('.sort-mark');
+    if (mark) mark.remove();
+    if (th.dataset.sort === dmSortState.key) {
+      const span = document.createElement('span');
+      span.className = 'sort-mark';
+      span.textContent = dmSortState.dir === 'asc' ? '▲' : '▼';
+      th.appendChild(span);
+    }
+  });
 }
 
 function renderDataManagerGrid() {

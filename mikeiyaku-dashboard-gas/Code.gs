@@ -57,6 +57,18 @@ const HEADERS_MAIN = [
   '連絡先☆自動反映'
 ];
 
+// 画面が読み取らない列。ダッシュボードへ送るデータから除いて通信量を抑える。
+// （書き込みは従来どおり行うため、シート上の列構成は変わらない）
+const PAYLOAD_SKIP_COLUMNS = {
+  '備考': true,
+  '記録番号': true,
+  '対応状況': true,
+  '予約番号': true,
+  '相談予約No☆自動反映': true,
+  '名前☆自動反映': true,
+  '連絡先☆自動反映': true
+};
+
 // ---- 各種ドロップダウンマスタ（固定選択肢） -------------------------------
 const REASON_MASTER = [
   '料金のみ／旅行・日程検討中',
@@ -583,6 +595,8 @@ function getDashboardData() {
 
         const obj = {};
         for (let c = 0; c < lastCol; c++) {
+          // 画面で使わない列は送らない（件数が増えるほど通信量に効く）
+          if (PAYLOAD_SKIP_COLUMNS[HEADERS_MAIN[c]]) continue;
           obj[HEADERS_MAIN[c]] = serializeCellValue_(row[c]);
         }
         obj.__sheetName = shop.name;

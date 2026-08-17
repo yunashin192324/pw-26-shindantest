@@ -16,6 +16,9 @@
     ::-webkit-scrollbar { height:8px; width:8px; }
     ::-webkit-scrollbar-thumb { background:#93c5fd; border-radius:4px; }
     .sortable:hover { background:#dbeafe; cursor:pointer; }
+    .dm-sortable { cursor:pointer; user-select:none; }
+    .dm-sortable:hover { background:#dbeafe; }
+    .dm-sortable .sort-mark { color:#1d4ed8; font-size:10px; margin-left:2px; }
     .toast { animation: slideIn .25s ease-out; }
     @keyframes slideIn { from { opacity:0; transform:translateX(30px);} to {opacity:1; transform:translateX(0);} }
     .editable-cell:hover { background:#eff6ff; cursor:text; }
@@ -309,22 +312,22 @@
           <table class="min-w-full text-sm whitespace-nowrap">
             <thead class="bg-slate-100 text-slate-600 sticky top-0 z-10">
               <tr>
-                <th class="px-3 py-2 text-left bg-amber-50" title="編集可">リセール</th>
-                <th class="px-3 py-2 text-left bg-amber-50" title="編集可">STS</th>
-                <th class="px-3 py-2 text-right bg-amber-50" title="編集可">成約PAX</th>
-                <th class="px-3 py-2 text-left bg-amber-50" title="編集可">ACT日</th>
+                <th class="dm-sortable px-3 py-2 text-left bg-amber-50" data-sort="リセール" title="編集可（クリックで並べ替え）">リセール</th>
+                <th class="dm-sortable px-3 py-2 text-left bg-amber-50" data-sort="STS" title="編集可（クリックで並べ替え）">STS</th>
+                <th class="dm-sortable px-3 py-2 text-right bg-amber-50" data-sort="成約PAX" title="編集可（クリックで並べ替え）">成約PAX</th>
+                <th class="dm-sortable px-3 py-2 text-left bg-amber-50" data-sort="ACT日" title="編集可（クリックで並べ替え）">ACT日</th>
                 <th class="px-3 py-2 text-left bg-amber-50" title="編集可">ACT内容</th>
                 <th class="px-3 py-2 text-left w-48 bg-amber-50" title="編集可">メモ</th>
                 <th class="px-2 py-2 text-center" title="長期未対応アラート">🔔</th>
-                <th class="px-3 py-2 text-left">店舗</th>
-                <th class="px-3 py-2 text-left">社員名</th>
-                <th class="px-3 py-2 text-left">対象年月日</th>
+                <th class="dm-sortable px-3 py-2 text-left" data-sort="店舗" title="クリックで五十音順に並べ替え">店舗</th>
+                <th class="dm-sortable px-3 py-2 text-left" data-sort="社員名" title="クリックで五十音順に並べ替え">社員名</th>
+                <th class="dm-sortable px-3 py-2 text-left" data-sort="対象年月日" title="クリックで日付順に並べ替え">対象年月日</th>
                 <th class="px-3 py-2 text-left w-64">詳細</th>
-                <th class="px-3 py-2 text-left">未成約理由(大)</th>
-                <th class="px-3 py-2 text-left">都市コード</th>
-                <th class="px-3 py-2 text-left">種別</th>
-                <th class="px-3 py-2 text-left">旅行目的(小)</th>
-                <th class="px-3 py-2 text-left">接客方法</th>
+                <th class="dm-sortable px-3 py-2 text-left" data-sort="未成約理由(大)" title="クリックで並べ替え">未成約理由(大)</th>
+                <th class="dm-sortable px-3 py-2 text-left" data-sort="都市コード" title="クリックで並べ替え">都市コード</th>
+                <th class="dm-sortable px-3 py-2 text-left" data-sort="種別" title="クリックで並べ替え">種別</th>
+                <th class="dm-sortable px-3 py-2 text-left" data-sort="旅行目的(小)" title="クリックで並べ替え">旅行目的(小)</th>
+                <th class="dm-sortable px-3 py-2 text-left" data-sort="接客方法" title="クリックで並べ替え">接客方法</th>
               </tr>
             </thead>
             <tbody id="data-tbody" class="divide-y divide-slate-100"></tbody>
