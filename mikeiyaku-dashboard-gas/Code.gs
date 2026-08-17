@@ -224,6 +224,22 @@ function getAllShopMasterRows_() {
  * 現在有効な店舗一覧（{code, name}の配列）を返す。ダッシュボードデータ取得・
  * 新規登録・CSVインポート等、アプリ全体から店舗を横断参照する処理はすべてこれを使う。
  */
+/**
+ * CSVの「営業所名」を店舗名として使える形にそろえる。
+ * 営業日報の営業所名は「イーアスつくば 営業所」「水戸コムボックス310営業所」のように
+ * 末尾に「営業所」が付き、間の空白も揺れる。既存の店舗名と一致させるため、
+ * 空白を詰めて末尾の「営業所」を取り除く。
+ * @return {string} 店舗名（使えない場合は空文字）
+ */
+function shopNameFromCsv_(value) {
+  let s = String(value === null || value === undefined ? '' : value).trim();
+  if (s === '') return '';
+  s = s.replace(/[\u3000\s]+/g, ' ').trim();   // 全角空白も半角1つに
+  s = s.replace(/[\s]*営業所$/, '').trim();      // 末尾の「営業所」を除く
+  s = s.replace(/[\s]+/g, '');                  // 店舗名の途中の空白は詰める
+  return s;
+}
+
 /** 仮登録の店舗名（「未設定(046)」など）かどうか */
 function isPlaceholderShopName_(name) {
   return /^未設定\(.*\)$/.test(String(name || '').trim());
@@ -878,8 +894,9 @@ function htmlCellToText_(cell) {
  *   媒体カテゴリ名・媒体名・旅行目的(大)・大学名・企業名・本部コード・本部名・エリアコード・
  *   エリア名・営業所名・班コード・班名など）があっても影響を受けない。
  *   このシステムが実際に取り込むのは次の12列のみ：
- *     対象年月日・営業所コード・社員番号・社員名・未成約理由(大)・都市コード・種別・
- *     出発年月・旅行目的(小)・接客方法・HIS利用歴・詳細
+ *     対象年月日・営業所コード・営業所名・社員番号・社員名・未成約理由(大)・都市コード・
+ *     種別・出発年月・旅行目的(小)・接客方法・HIS利用歴・詳細
+ *   （営業所名は店舗マスタの店舗名として使う。行データには保存しない）
  *   （「予約番号」はCSVからは取り込まず、成約時に「新規相談登録」画面等から手入力する運用）
  * ・「営業所コード」列の値から投入先の店舗シートを判定する。未登録の営業所コードは
  *   仮の店舗名で店舗マスタへ自動登録される（店舗・スタッフの登録は基本CSVインポートから行う運用のため）。
@@ -1075,6 +1092,7 @@ function importParsedRows_(rows) {
     let autoRegisteredStaffCount = 0;
 
     const autoRegisteredShopCodes = [];
+    const renamedShopNames = []; // CSVの営業所名で「未設定(店番)」から直した店舗
 
     const getVal = function (row, header) {
       const idx = colIndex[header];
@@ -1094,6 +1112,8 @@ function importParsedRows_(rows) {
       const targetDate = getVal(row, '対象年月日');
       // CSV側が「46」と桁落ちしていても「046」として扱えるようそろえる
       const officeCode = normalizeOfficeCode_(getVal(row, '営業所コード'));
+      // CSVに営業所名があれば、それをそのまま店舗名として使う
+      const csvShopName = shopNameFromCsv_(getVal(row, '営業所名'));
 
       if (!targetDate || !officeCode) {
         skippedBlankCount++;
@@ -1104,11 +1124,19 @@ function importParsedRows_(rows) {
       // （店舗・スタッフの登録は基本CSVインポートから読み取る運用のため）
       let sheetName = officeCodeToSheetName[officeCode];
       if (!sheetName) {
-        sheetName = autoRegisterShop_(ss, officeCode);
+        sheetName = autoRegisterShop_(ss, officeCode, csvShopName);
         officeCodeToSheetName[officeCode] = sheetName;
-        // 既存店舗を使い回した場合は「仮登録した」とは報告しない
+        // CSVから名前が分からず仮登録になった場合だけ「仮登録した」と報告する
         if (isPlaceholderShopName_(sheetName)) {
           autoRegisteredShopCodes.push(officeCode);
+        }
+      } else if (csvShopName && isPlaceholderShopName_(sheetName)) {
+        // 以前「未設定(店番)」で登録された店舗は、CSVの営業所名で正しい名前に直す
+        const renamed = renameShopIfPlaceholder_(ss, officeCode, sheetName, csvShopName);
+        if (renamed) {
+          officeCodeToSheetName[officeCode] = renamed;
+          sheetName = renamed;
+          renamedShopNames.push(sheetName);
         }
       }
 
@@ -1217,6 +1245,7 @@ function importParsedRows_(rows) {
       skippedDuplicateCount: skippedDuplicateCount,
       skippedBlankCount: skippedBlankCount,
       autoRegisteredShopCodes: autoRegisteredShopCodes,
+      renamedShopNames: renamedShopNames,
       autoRegisteredStaffCount: autoRegisteredStaffCount,
       perSheetCounts: perSheetCounts
     };
@@ -1232,7 +1261,7 @@ function importParsedRows_(rows) {
  * 「店舗・スタッフ管理」画面で正式名称にリネームできるよう、識別しやすい仮名称を付与する。
  * @return {string} 作成された店舗のシート名（＝仮の店舗名）
  */
-function autoRegisterShop_(ss, officeCode) {
+function autoRegisterShop_(ss, officeCode, csvShopName) {
   const masterSheet = ss.getSheetByName(SHOP_MASTER_SHEET_NAME);
 
   // 既に同じ店番の行がある場合は、行を増やさずにその店舗を使う。
@@ -1253,7 +1282,12 @@ function autoRegisterShop_(ss, officeCode) {
     return preferred.name;
   }
 
-  const placeholderName = '未設定(' + officeCode + ')';
+  // CSVに営業所名があればそれを店舗名にする。無いときだけ仮の名前を付ける。
+  const existingNames = {};
+  (getAllShopMasterRows_() || []).forEach(function (s) { existingNames[s.name] = true; });
+  const placeholderName = (csvShopName && !existingNames[csvShopName])
+    ? csvShopName
+    : '未設定(' + officeCode + ')';
   if (masterSheet) {
     masterSheet.appendRow([officeCode, placeholderName, true]);
   }
@@ -1687,6 +1721,32 @@ function mergePlaceholderShops() {
   } catch (err) {
     return { success: false, error: err.message, detail: err.stack };
   }
+}
+
+/**
+ * 店舗名が「未設定(店番)」のままなら、CSVの営業所名で正しい名前に直す。
+ * 店舗マスタの行・データシート名・店舗別サマリの表記をまとめて更新する。
+ * @return {string} 直した後の店舗名（直さなかった場合は空文字）
+ */
+function renameShopIfPlaceholder_(ss, officeCode, currentName, newName) {
+  if (!newName || !isPlaceholderShopName_(currentName)) return '';
+
+  const rows = getAllShopMasterRows_() || [];
+  // 同じ名前が他の店舗で使われている場合は変えない（名前の重複を作らない）
+  if (rows.some(function (s) { return s.code !== officeCode && s.name === newName; })) return '';
+  if (ss.getSheetByName(newName)) return ''; // 同名シートがある場合も触らない
+
+  const target = rows.filter(function (s) { return s.code === officeCode; })[0];
+  if (!target) return '';
+
+  const dataSheet = ss.getSheetByName(currentName);
+  if (dataSheet) dataSheet.setName(newName); // 集計式の参照はGoogleシートが自動で追従する
+
+  const masterSheet = ss.getSheetByName(SHOP_MASTER_SHEET_NAME);
+  if (masterSheet) masterSheet.getRange(target.rowIndex, 2).setValue(newName);
+  updateShopNameInSummary_(ss, officeCode, newName);
+
+  return newName;
 }
 
 /**
