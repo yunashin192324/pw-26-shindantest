@@ -1529,10 +1529,36 @@ function closeCsvModal() {
   selectedCsvFile = null;
 }
 
+// 拡張子ではなくファイルの中身の先頭バイトを見て、Excelのブック形式かどうかを判定する。
+// 営業日報の抽出ファイルは拡張子が .xls でも中身はタブ区切りテキストという場合があるため、
+// 「拡張子が .xls だから駄目」ではなく「中身がバイナリだから駄目」と判断する必要がある。
+function detectBinaryWorkbook(buffer) {
+  const bytes = new Uint8Array(buffer);
+  if (bytes.length >= 4 &&
+      bytes[0] === 0x50 && bytes[1] === 0x4B &&
+      (bytes[2] === 0x03 || bytes[2] === 0x05 || bytes[2] === 0x07)) {
+    return '.xlsx';
+  }
+  // .xls（OLE2複合ドキュメント）のシグネチャ
+  if (bytes.length >= 8 &&
+      bytes[0] === 0xD0 && bytes[1] === 0xCF && bytes[2] === 0x11 && bytes[3] === 0xE0) {
+    return '.xls';
+  }
+  return null;
+}
+
 // CSVファイルをテキスト化する。営業日報エクスポートはUTF-8/Shift_JISいずれもあり得るため、
 // まずUTF-8として厳密デコードを試み、失敗した場合はShift_JISとして読み直す。
 function readCsvFileAsText(file) {
   return file.arrayBuffer().then(function (buffer) {
+    const workbookType = detectBinaryWorkbook(buffer);
+    if (workbookType) {
+      throw new Error(
+        'このファイルはExcelのブック形式（' + workbookType + '）のため、そのままでは取り込めません。\n' +
+        'Excelで開いたあと「ファイル」→「名前を付けて保存」と進み、ファイルの種類で\n' +
+        '「CSV UTF-8（コンマ区切り）(*.csv)」を選んで保存し直してから、その .csv を取り込んでください。'
+      );
+    }
     try {
       return new TextDecoder('utf-8', { fatal: true }).decode(buffer);
     } catch (e) {
@@ -1573,7 +1599,9 @@ function onSubmitCsvImport() {
   }).catch(function (err) {
     showLoading(false);
     submitBtn.disabled = false;
-    showToast('CSVファイルの読み込みに失敗しました: ' + err.message, 'error');
+    // 対処手順を含む複数行のメッセージになるため、消えるトーストではなく結果欄に残す
+    renderCsvImportResult({ success: false, error: err.message });
+    showToast('ファイルを読み込めませんでした。詳しくは画面の説明をご覧ください。', 'error');
   });
 }
 
@@ -1582,7 +1610,14 @@ function renderCsvImportResult(res) {
   box.classList.remove('hidden');
 
   if (!res || !res.success) {
-    box.innerHTML = '<p class="text-red-600 font-semibold">取り込みに失敗しました</p><p class="text-red-500">' + escapeHtml(res ? res.error : '不明なエラー') + '</p>';
+    // エラー文は複数行で手順を案内することがあるため、改行をそのまま表示する
+    let html = '<p class="text-red-600 font-semibold">取り込みに失敗しました</p>' +
+      '<p class="text-red-500 whitespace-pre-line">' + escapeHtml(res ? res.error : '不明なエラー') + '</p>';
+    if (res && res.detail) {
+      html += '<details class="mt-2"><summary class="text-xs text-slate-400 cursor-pointer">技術的な詳細</summary>' +
+        '<pre class="text-xs text-slate-400 whitespace-pre-wrap mt-1">' + escapeHtml(res.detail) + '</pre></details>';
+    }
+    box.innerHTML = html;
     return;
   }
 
@@ -1806,12 +1841,66 @@ function onDeleteShop(code) {
 }
 
 // ---- スタッフ管理 -------------------------------------------------------------
+/**
+ * スタッフ登録フォームの「所属店舗」プルダウンを店舗マスタから作り直す。
+ * @return {number} 選択肢として並べた有効店舗の件数
+ */
 function populateStaffShopSelect() {
   const select = document.getElementById('staff-form-shop');
+  const activeShops = shopMasterCache.filter(function (s) { return s.active; });
   select.innerHTML = '<option value="">選択してください</option>' +
-    shopMasterCache.filter(function (s) { return s.active; }).map(function (s) {
+    activeShops.map(function (s) {
       return '<option value="' + escapeHtml(s.code) + '">' + escapeHtml(s.name) + '</option>';
     }).join('');
+  return activeShops.length;
+}
+
+/** 所属店舗プルダウンの下に出す案内文を切り替える */
+function setStaffShopHint(message, tone) {
+  const hint = document.getElementById('staff-form-shop-hint');
+  if (!hint) return;
+  if (!message) {
+    hint.classList.add('hidden');
+    hint.textContent = '';
+    return;
+  }
+  hint.classList.remove('hidden');
+  hint.textContent = message;
+  hint.className = 'text-xs mt-1 ' + (tone === 'error' ? 'text-red-600' : 'text-slate-400');
+}
+
+/**
+ * 店舗マスタの取得が終わる前にフォームを開いた場合、プルダウンが空のままになってしまうため、
+ * 空だったときはこの場で取得し直してから選択肢を並べる。
+ * @param {string} keepValue 取得後に選択状態へ戻したい店番（編集時に使う）
+ */
+function ensureStaffShopOptions(keepValue) {
+  if (populateStaffShopSelect() > 0) {
+    setStaffShopHint('');
+    if (keepValue) document.getElementById('staff-form-shop').value = keepValue;
+    return;
+  }
+
+  setStaffShopHint('店舗マスタを読み込んでいます…');
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (res && res.success) {
+        shopMasterCache = res.shops;
+        const count = populateStaffShopSelect();
+        if (count > 0) {
+          setStaffShopHint('');
+          if (keepValue) document.getElementById('staff-form-shop').value = keepValue;
+        } else {
+          setStaffShopHint('選択できる店舗がありません。先に「店舗を追加」から店舗を登録してください。', 'error');
+        }
+      } else {
+        setStaffShopHint('店舗マスタを読み込めませんでした: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+    })
+    .withFailureHandler(function (err) {
+      setStaffShopHint('店舗マスタの読み込みで通信エラーが発生しました: ' + err.message, 'error');
+    })
+    .getShopMasterList();
 }
 
 const ROLE_BADGE_CLASSES = {
@@ -1878,6 +1967,8 @@ function openStaffModal(mode, rowIndex) {
   if (mode === 'edit') {
     const staff = staffMasterCache.find(function (s) { return s.rowIndex === rowIndex; });
     document.getElementById('staff-modal-title').textContent = 'スタッフを編集';
+    // 選択肢を先に並べてから値を入れないと、value指定が空振りしてしまう
+    ensureStaffShopOptions(staff ? staff.officeCode : '');
     shopSelect.value = staff ? staff.officeCode : '';
     empNoInput.value = staff ? staff.employeeNo : '';
     empNameInput.value = staff ? staff.employeeName : '';
@@ -1885,6 +1976,7 @@ function openStaffModal(mode, rowIndex) {
     roleSelect.value = staff ? (staff.role || '一般') : '一般';
   } else {
     document.getElementById('staff-modal-title').textContent = 'スタッフを追加';
+    ensureStaffShopOptions('');
     shopSelect.value = '';
     empNoInput.value = '';
     empNameInput.value = '';

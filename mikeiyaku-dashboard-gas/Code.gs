@@ -653,6 +653,134 @@ function addUncontractedData(rowObject) {
   }
 }
 
+// ---- 取り込みファイルの形式判定・解析 ---------------------------------------
+
+/**
+ * ヘッダー名の表記ゆれを吸収する。営業日報のエクスポートは環境によって
+ * 前後の空白・全角空白・BOM・引用符が混ざることがあるため、比較前に取り除く。
+ */
+function normalizeHeaderName_(value) {
+  return String(value === null || value === undefined ? '' : value)
+    .replace(/^﻿/, '')       // 先頭のBOM
+    .replace(/[　\s]+/g, '')  // 全角・半角の空白
+    .replace(/^["']|["']$/g, '')  // 前後の引用符
+    .trim();
+}
+
+/** 行のいずれかのセルが指定のヘッダー名と一致するか */
+function rowContainsHeader_(row, headerName) {
+  if (!row || !row.length) return false;
+  for (let i = 0; i < row.length; i++) {
+    if (normalizeHeaderName_(row[i]) === headerName) return true;
+  }
+  return false;
+}
+
+/** エラーメッセージ用に、実際に読み取れた行の先頭数セルを短く表示する */
+function summarizeRowForError_(row) {
+  if (!row || !row.length) return '（空）';
+  const cells = row.slice(0, 6).map(function (c) {
+    const s = String(c === null || c === undefined ? '' : c).trim();
+    return s.length > 20 ? s.substring(0, 20) + '…' : (s || '（空）');
+  });
+  return cells.join(' / ') + (row.length > 6 ? ' …（全' + row.length + '列）' : '');
+}
+
+/**
+ * Excelのブック形式（バイナリ）をテキストとして読み込んでしまった場合に、
+ * 「ヘッダーが見つかりません」ではなく原因が分かるメッセージで止める。
+ * .xls は OLE2 複合ドキュメント、.xlsx は ZIP なので、先頭のシグネチャで判別できる。
+ */
+function assertNotBinaryWorkbook_(text) {
+  const str = String(text);
+  const head = str.substring(0, 4);
+
+  // .xlsx / .zip は先頭が "PK"。ASCII文字なのでどの文字コードで読んでもそのまま残る。
+  const isZip = head.charCodeAt(0) === 0x50 && head.charCodeAt(1) === 0x4B &&
+                (head.charCodeAt(2) === 0x03 || head.charCodeAt(2) === 0x05 || head.charCodeAt(2) === 0x07);
+
+  // .xls（OLE2複合ドキュメント）は先頭バイトの化け方が文字コードによって変わるため、
+  // より確実な特徴で判定する。バイナリには必ずNUL文字が含まれ、テキストのCSVには含まれない。
+  const isBinary = str.substring(0, 4096).indexOf('\u0000') !== -1;
+
+  if (isZip || isBinary) {
+    throw new Error(
+      'このファイルはExcelのブック形式（' + (isZip ? '.xlsx' : '.xls') + '）など、' +
+      'テキストではないファイルのようです。そのままでは取り込めません。\n' +
+      'Excelで開いたあと「ファイル」→「名前を付けて保存」と進み、\n' +
+      'ファイルの種類で「CSV UTF-8（コンマ区切り）(*.csv)」を選んで保存し直してから、\n' +
+      'その .csv ファイルを取り込んでください。'
+    );
+  }
+}
+
+/**
+ * 取り込みファイルのテキストを行の配列に変換する。
+ * 営業日報のエクスポートは環境によって次のいずれの形式にもなり得るため、中身を見て自動判別する。
+ *   ・カンマ区切り（一般的なCSV）
+ *   ・タブ区切り（「Excel出力」で拡張子が .xls のままタブ区切りテキストが出力される場合）
+ *   ・セミコロン区切り
+ *   ・HTMLの<table>（同じく拡張子が .xls のままHTMLが出力される場合）
+ */
+function parseImportTable_(text) {
+  if (/<\s*table[\s>]/i.test(text)) {
+    return parseHtmlTable_(text);
+  }
+  const delimiter = detectDelimiter_(text);
+  return Utilities.parseCsv(text, delimiter);
+}
+
+/** ヘッダー行を手がかりに区切り文字（カンマ／タブ／セミコロン）を推定する */
+function detectDelimiter_(text) {
+  const lines = String(text).split(/\r\n|\r|\n/);
+  let sample = '';
+  for (let i = 0; i < lines.length && i < 100; i++) {
+    if (lines[i].indexOf('対象年月日') !== -1) { sample = lines[i]; break; }
+  }
+  if (!sample) {
+    // ヘッダーが見つからない場合は、内容のある先頭数行をまとめて判定材料にする
+    sample = lines.filter(function (l) { return l.trim() !== ''; }).slice(0, 5).join('\n');
+  }
+  let best = ',';
+  let bestCount = 0;
+  [',', '\t', ';'].forEach(function (d) {
+    const count = sample.split(d).length - 1;
+    if (count > bestCount) { bestCount = count; best = d; }
+  });
+  return best;
+}
+
+/** HTML形式（<table>）のエクスポートを行の配列に変換する */
+function parseHtmlTable_(html) {
+  const rows = [];
+  const trRe = /<\s*tr[^>]*>([\s\S]*?)<\s*\/\s*tr\s*>/gi;
+  let trMatch;
+  while ((trMatch = trRe.exec(html)) !== null) {
+    const cells = [];
+    const tdRe = /<\s*(td|th)[^>]*>([\s\S]*?)<\s*\/\s*(?:td|th)\s*>/gi;
+    let tdMatch;
+    while ((tdMatch = tdRe.exec(trMatch[1])) !== null) {
+      cells.push(htmlCellToText_(tdMatch[2]));
+    }
+    if (cells.length > 0) rows.push(cells);
+  }
+  return rows;
+}
+
+/** HTMLのセル内容からタグと実体参照を取り除いてテキストにする */
+function htmlCellToText_(cell) {
+  return String(cell)
+    .replace(/<\s*br\s*\/?\s*>/gi, ' ')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/gi, '&') // 実体参照の二重展開を避けるため最後に処理する
+    .trim();
+}
+
 /**
  * 営業日報から抽出したCSVを一括投入する（マスタ管理者のみ実行可能）。
  * ・CSVはメタ情報の行が先頭に含まれていても構わない（先頭セルが「対象年月日」の行をヘッダー行として自動検出）。
@@ -683,25 +811,36 @@ function importUncontractedCsv(csvText) {
       throw new Error('CSVデータが空です。');
     }
 
-    const rows = Utilities.parseCsv(csvText);
+    assertNotBinaryWorkbook_(csvText);
+
+    const rows = parseImportTable_(csvText);
     if (!rows || rows.length === 0) {
-      throw new Error('CSVの解析結果が空でした。');
+      throw new Error('ファイルの解析結果が空でした。');
     }
 
-    // ヘッダー行（先頭セルが「対象年月日」の行）を自動検出する。
-    // 「理由別サマリ」等のメタ情報行が前段にあっても正しく本体のヘッダーを見つけられるようにするため。
+    // ヘッダー行（「対象年月日」というセルを含む行）を自動検出する。
+    // 「理由別サマリ」等のメタ情報行が前段にあっても、また左端に空列や連番列が
+    // 付いていても、正しく本体のヘッダーを見つけられるようにするため行全体を走査する。
     let headerRowIndex = -1;
     for (let i = 0; i < rows.length; i++) {
-      if (rows[i] && String(rows[i][0]).trim() === '対象年月日') {
+      if (rowContainsHeader_(rows[i], '対象年月日')) {
         headerRowIndex = i;
         break;
       }
     }
     if (headerRowIndex === -1) {
-      throw new Error('ヘッダー行（「対象年月日」列）が見つかりません。CSVの形式をご確認ください。');
+      throw new Error(
+        'ヘッダー行（「対象年月日」列）が見つかりません。\n' +
+        '次のいずれかに当てはまっていないかご確認ください。\n' +
+        '・Excel形式（.xls / .xlsx）のまま取り込もうとしている' +
+        '（Excelで開き「名前を付けて保存」→「CSV UTF-8（コンマ区切り）」で保存し直してください）\n' +
+        '・「対象年月日」の列がある表とは別のファイルを選んでいる\n' +
+        '・ヘッダーの文字が「対象年月日」と異なる（全角／半角や空白の違いを含む）\n' +
+        '実際に読み取れた1行目：' + summarizeRowForError_(rows[0])
+      );
     }
 
-    const headerRow = rows[headerRowIndex].map(function (h) { return String(h).trim(); });
+    const headerRow = rows[headerRowIndex].map(function (h) { return normalizeHeaderName_(h); });
     const colIndex = {};
     headerRow.forEach(function (h, i) { colIndex[h] = i; });
 
@@ -863,7 +1002,8 @@ function importUncontractedCsv(csvText) {
       perSheetCounts: perSheetCounts
     };
   } catch (err) {
-    return { success: false, error: err.message + '\n' + err.stack };
+    // 画面には原因と対処だけを出し、スタックトレースは「技術的な詳細」に畳んで表示する
+    return { success: false, error: err.message, detail: err.stack };
   }
 }
 

@@ -493,8 +493,9 @@
         </p>
         <div>
           <label class="text-xs font-semibold text-slate-500 block mb-1">CSVファイル</label>
-          <input type="file" id="csv-file-input" accept=".csv" class="w-full border border-slate-300 rounded-lg text-sm p-2 bg-white">
-          <p class="text-xs text-slate-400 mt-1">UTF-8 / Shift_JIS のいずれのエンコードにも対応しています。</p>
+          <input type="file" id="csv-file-input" accept=".csv,.txt,.tsv,text/csv,text/plain" class="w-full border border-slate-300 rounded-lg text-sm p-2 bg-white">
+          <p class="text-xs text-slate-400 mt-1">UTF-8 / Shift_JIS のいずれのエンコードにも対応しています。カンマ区切り・タブ区切りのどちらでも取り込めます。</p>
+          <p class="text-xs text-amber-600 mt-1">Excelのブック（.xls / .xlsx）は取り込めません。Excelで開き「名前を付けて保存」→ファイルの種類「CSV UTF-8（コンマ区切り）」で保存し直してください。</p>
         </div>
         <div id="csv-import-result" class="hidden text-sm bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1"></div>
         <div class="flex justify-end gap-3 pt-2 border-t border-slate-100">
@@ -546,6 +547,7 @@
         <div>
           <label class="text-xs font-semibold text-slate-500 block mb-1">所属店舗 <span class="text-red-500">*</span></label>
           <select id="staff-form-shop" required class="w-full border border-slate-300 rounded-lg text-sm p-2"></select>
+          <p id="staff-form-shop-hint" class="text-xs mt-1 text-slate-400 hidden"></p>
         </div>
         <div>
           <label class="text-xs font-semibold text-slate-500 block mb-1">社員番号</label>
