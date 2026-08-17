@@ -11,12 +11,18 @@
   const BRANCH_EDIT_GATE = { 'NC': null, 'RQ': null, 'CHK': null, 'CR': ['CW', 'CF'] };
   const DETAIL_TABS = [
     { key: 'message', label: 'メッセージ' },
+    { key: 'customer', label: 'お客様情報' },
     { key: 'reservation', label: '予約内容' },
+    { key: 'jpEntry', label: '日本記入欄', jpOnly: true },
     { key: 'local', label: '現地記入欄' },
     { key: 'arrangement', label: '手配' },
     { key: 'drive', label: 'ドライブ' },
     { key: 'timeline', label: '履歴' }
   ];
+  // 日本記入欄：AI加工の選択肢（Code.gs の AI_EDIT_OPTIONS と一致させる）
+  const AI_EDIT_OPTIONS = ['美肌・小顔・痩身加工', '美肌加工'];
+  // 予約内容：準備場所の選択肢（イタリアの支店のみ表示。Code.gs の PREP_CHOICES と一致させる）
+  const PREP_CHOICES = ['ホテル', 'サロン'];
   // 現地スタッフ手配メールのカテゴリ（Code.gs の ARRANGEMENT_CATEGORIES と一致させる）
   const ARRANGEMENT_CATEGORIES = [
     { key: 'photographer', label: 'カメラマン' },
@@ -790,21 +796,27 @@
 
     // ★機能：お客様のGoogleフォーム『同意書』回答を反映する欄（機能④）。
     // 支店マスタで「同意書必須」の支店（例：ローマ）は、未回収のとき赤字で警告を出す
+    // ★要件：表示は日本側、またはイタリアの支店のみ（他支店には出さない）
     const consentDone = !!String(d['同意書'] || '').trim();
     const consentWarn = d.consentRequired && !consentDone;
-    const consentBlock = `
-      <label class="checkbox-label" style="${consentWarn ? 'color:var(--color-danger,#c0392b);font-weight:bold;' : ''}">
-        <input type="checkbox" data-pending="同意書" data-consent-checkbox="1" ${consentDone ? 'checked' : ''}>
-        同意書取得済み${d.consentRequired ? '（この支店は必須）' : '（任意）'}${consentWarn ? ' ─ 未回収です' : ''}
-      </label>
-      <p class="hint-text">Googleフォームで回答があると自動でチェックが付きます。手動でもチェック可能です（通常の保存の3択で確定してください）。</p>`;
+    const showConsent = session.role === 'JP' || d.isItaly;
+    const consentBlock = !showConsent ? '' : `
+      <div class="section-card">
+        <h3>同意書</h3>
+        <label class="checkbox-label" style="${consentWarn ? 'color:var(--color-danger,#c0392b);font-weight:bold;' : ''}">
+          <input type="checkbox" data-pending="同意書" data-consent-checkbox="1" ${consentDone ? 'checked' : ''}>
+          同意書取得済み${d.consentRequired ? '（この支店は必須）' : '（任意）'}${consentWarn ? ' ─ 未回収です' : ''}
+        </label>
+        <p class="hint-text">Googleフォームで回答があると自動でチェックが付きます。手動でもチェック可能です（通常の保存の3択で確定してください）。</p>
+      </div>`;
 
     // ★機能：スタッフ名の入力候補（表記ゆれを抑えてダブルブッキング検知の精度を上げる）
     const staffNames = (staffList || []).filter(x => x.active).map(x => x.name);
     const staffDatalist = `<datalist id="staff-datalist">${staffNames.map(n => `<option value="${escapeAttr(n)}">`).join('')}</datalist>`;
 
     // ★機能：希望日からのワンタップ回答（支店側が STS 支店 を編集できる状態のときだけ表示）
-    const hopeButtons = ['希望日①', '希望日②', '希望日③'].map((f, i) => {
+    const HOPE_FIELDS = ['希望日①', '希望日②', '希望日③', '希望日④', '希望日⑤'];
+    const hopeButtons = HOPE_FIELDS.map((f, i) => {
       const iso = toIsoDate(d[f]);
       if (!iso) return '';
       const gate = branchGateFor(d['STS JP']);
@@ -816,8 +828,32 @@
     const hopeBlock = hopeButtons
       ? `<div class="hope-box"><div class="hint-text" style="margin-bottom:6px;">希望日から確定する（撮影日FIXへ反映し、STS 支店をOKにして日本側へ通知します）</div>${hopeButtons}</div>`
       : '';
+    const hopeFieldsHtml = HOPE_FIELDS.map(f =>
+      `<div class="field-block"><label>${escapeHtml(f)}</label><input data-pending="${escapeAttr(f)}" value="${escapeAttr(d[f])}"></div>`).join('');
+
+    // ★要件：「空きだけ確認」にチェックを入れて確定すると、STS JPが自動でCHK（確認依頼中）になり、
+    // 撮影日FIXではなく上の希望日①〜⑤の空き状況を現地へ確認する依頼になる（日本側のみ操作）
+    const inquiryDone = !!String(d['空き確認のみ'] || '').trim();
+    const inquiryBlock = session.role !== 'JP' ? '' : `
+      <label class="checkbox-label">
+        <input type="checkbox" data-pending="空き確認のみ" data-consent-checkbox="1" ${inquiryDone ? 'checked' : ''}>
+        空きだけ確認する（予約ではなく、下の希望日で空きがあるか現地へ確認する依頼になります）
+      </label>
+      <p class="hint-text">チェックして「変更（＋メッセージ）を決定して送信」すると、STS JPが自動でCHKになり現地へ確認依頼が届きます。現地はUC（空きなし）で回答するか、メッセージで空き状況を返信します。</p>`;
 
     const mainGate = branchGateFor(d['STS JP']);
+    const statusRowHtml = `
+      <div class="status-row">
+        <div class="status-card"><div class="who">STS JP</div>${statusCell('STS JP', d['STS JP'], session.role === 'JP', null)}</div>
+        <div class="status-card"><div class="who">STS 支店</div>${statusCell('STS 支店', d['STS 支店'], session.role === 'BRANCH' && mainGate.editable, mainGate.allowed, `STS JP: ${d['STS JP'] || '未設定'}`)}</div>
+      </div>`;
+
+    // ★要件：準備場所はイタリアの支店のみ表示し、ホテル／サロンの選択式にする（他支店は非表示）
+    const prepFieldHtml = !d.isItaly ? '' : `
+      <div class="field-block"><label>準備場所</label>
+        <select data-pending="準備場所"><option value="">未設定</option>${PREP_CHOICES.map(p =>
+          `<option value="${escapeAttr(p)}" ${d['準備場所'] === p ? 'selected' : ''}>${escapeHtml(p)}</option>`).join('')}</select>
+      </div>`;
 
     const optionsHtml = d.options.map(o => {
       const gate = branchGateFor(o.stsJp);
@@ -868,41 +904,50 @@
         <p class="hint-text" style="margin-top:8px;">「メッセージ」タブに戻らずここから直接確定できます（メッセージ欄に入力済みの内容があれば一緒に送られます）。</p>
       </div>`;
 
-    // ★機能：日本の手配課側のみが見る社内進行管理欄。支店には一切表示しない（値もサーバーから届かない）。
-    // 通常の3択（保存のみ／メッセージ／変更＋メッセージ）とは別に、チェックした瞬間に単独で保存する
+    // ★機能：日本の手配課側のみが見る「日本記入欄」タブ。支店には一切表示しない（値もサーバーから届かない）。
+    // 通常の3択（保存のみ／メッセージ／変更＋メッセージ）とは別に、変更した瞬間に単独で保存する
     // （支店に見える履歴・通知メールへ絶対に混ざらないようにするため）。
-    const internalFlagsHtml = session.role !== 'JP' ? '' : (() => {
-      return `
-      <div class="section-card jp-only">
-        <h3>社内進行管理（日本側のみ表示）</h3>
-        <label class="checkbox-label">
-          <input type="checkbox" data-internal-flag="フォトブリッジ登録" ${d['フォトブリッジ登録'] === '済' ? 'checked' : ''}>
-          フォトブリッジ登録（${d['フォトブリッジ登録'] === '済' ? '済' : '未'}）
-        </label>
-        <p class="hint-text" style="margin:0 0 10px 26px;">${d['フォトブリッジ登録者'] ? `登録者: ${escapeHtml(d['フォトブリッジ登録者'])}${d['フォトブリッジ登録日時'] ? `（${escapeHtml(d['フォトブリッジ登録日時'])}）` : ''}` : ''}</p>
+    const jpEntryTabHtml = session.role !== 'JP' ? '' : `
+      <div class="tab-pane ${detailActiveTab === 'jpEntry' ? '' : 'hidden'}" data-tab-pane="jpEntry">
+        <div class="section-card">
+          <h3>管轄</h3>
+          <select data-pending="管轄"><option value="">未定</option>${JP_TEAMS.map(t => `<option value="${t}" ${d['管轄'] === t ? 'selected' : ''}>${t}</option>`).join('')}</select>
+          <p class="hint-text">担当する手配課（関東／関西）です。通常の保存の3択で確定してください。</p>
+        </div>
+        <div class="section-card">
+          <h3>日本記入欄</h3>
+          <label class="checkbox-label">
+            <input type="checkbox" data-internal-flag="フォトブリッジ登録" ${d['フォトブリッジ登録'] === '済' ? 'checked' : ''}>
+            フォトブリッジ登録（${d['フォトブリッジ登録'] === '済' ? '済' : '未'}）
+          </label>
+          <p class="hint-text" style="margin:0 0 10px 26px;">${d['フォトブリッジ登録者'] ? `登録者: ${escapeHtml(d['フォトブリッジ登録者'])}${d['フォトブリッジ登録日時'] ? `（${escapeHtml(d['フォトブリッジ登録日時'])}）` : ''}` : ''}</p>
 
-        <label class="checkbox-label">
-          <input type="checkbox" data-internal-flag="AI加工" ${d['AI加工'] === '有' ? 'checked' : ''}>
-          AI加工（${d['AI加工'] === '有' ? '有' : '無'}）
-        </label>
+          <label>AI加工</label>
+          <select data-internal-value="AI加工"><option value="">未設定</option>${AI_EDIT_OPTIONS.map(o =>
+            `<option value="${escapeAttr(o)}" ${d['AI加工'] === o ? 'selected' : ''}>${escapeHtml(o)}</option>`).join('')}</select>
 
-        <label class="checkbox-label" style="margin-top:10px;">
-          <input type="checkbox" data-internal-flag="データアップロード" ${d['データアップロード'] === '済' ? 'checked' : ''}>
-          データアップロード（${d['データアップロード'] === '済' ? '済' : '未'}）
-        </label>
-        <p class="hint-text" style="margin:0 0 10px 26px;">${d['データアップロード者'] ? `アップロード者: ${escapeHtml(d['データアップロード者'])}${d['データアップロード日時'] ? `（${escapeHtml(d['データアップロード日時'])}）` : ''}` : ''}</p>
+          <label class="checkbox-label" style="margin-top:10px;">
+            <input type="checkbox" data-internal-flag="データアップロード" ${d['データアップロード'] === '済' ? 'checked' : ''}>
+            データアップロード（${d['データアップロード'] === '済' ? '済' : '未'}）
+          </label>
+          <p class="hint-text" style="margin:0 0 10px 26px;">${d['データアップロード者'] ? `アップロード者: ${escapeHtml(d['データアップロード者'])}${d['データアップロード日時'] ? `（${escapeHtml(d['データアップロード日時'])}）` : ''}` : ''}</p>
 
-        <label class="checkbox-label">
-          <input type="checkbox" data-internal-flag="早期納品" ${d['早期納品'] === '有' ? 'checked' : ''}>
-          早期納品（${d['早期納品'] === '有' ? '有' : '無'}）
-        </label>
-        <p class="hint-text" style="margin-top:8px;">チェックすると即座に保存されます（フォトブリッジ登録・データアップロードは担当者名と日時が自動で記録されます）。</p>
+          <label>納品先メールアドレス</label>
+          <input type="email" data-internal-value="納品先メールアドレス" value="${escapeAttr(d['納品先メールアドレス'])}" placeholder="delivery@example.com">
+
+          <label class="checkbox-label" style="margin-top:10px;">
+            <input type="checkbox" data-internal-flag="早期納品" ${d['早期納品'] === '有' ? 'checked' : ''}>
+            早期納品（${d['早期納品'] === '有' ? '有' : '無'}）
+          </label>
+          <p class="hint-text" style="margin-top:8px;">チェックする・選ぶ・入力すると即座に保存されます（フォトブリッジ登録・データアップロードは担当者名と日時が自動で記録されます）。</p>
+        </div>
+        ${quickActionsHtml}
       </div>`;
-    })();
 
     const tabBarHtml = `
       <div class="tab-bar">
-        ${DETAIL_TABS.map(t => `<button type="button" class="tab-btn ${detailActiveTab === t.key ? 'active' : ''}" data-tab="${t.key}">${t.label}</button>`).join('')}
+        ${DETAIL_TABS.filter(t => !t.jpOnly || session.role === 'JP').map(t =>
+          `<button type="button" class="tab-btn ${detailActiveTab === t.key ? 'active' : ''}" data-tab="${t.key}">${t.label}</button>`).join('')}
       </div>`;
 
     const messageTabHtml = `
@@ -910,7 +955,7 @@
         <div class="section-card">
           <h3>メッセージ・変更の送信</h3>
           <p class="hint-text">送信者として記録されます：<strong>${escapeHtml(currentUserName || session.branchName)}</strong>${currentUserName ? `（${escapeHtml(session.branchName)}）` : ''}</p>
-          <p id="pending-indicator" class="hint-text ${pendingCount ? '' : 'hidden'}">未保存の変更: ${pendingCount}件（「予約内容」「現地記入欄」タブでの入力を含みます）</p>
+          <p id="pending-indicator" class="hint-text ${pendingCount ? '' : 'hidden'}">未保存の変更: ${pendingCount}件（「お客様情報」「予約内容」「現地記入欄」タブでの入力を含みます）</p>
           ${(phraseList && phraseList.length) ? `
           <label style="margin-top:10px;">定型文から挿入</label>
           <select id="phrase-select">
@@ -935,6 +980,29 @@
         </div>
       </div>`;
 
+    // ★要件：お客様情報タブ。予約内容タブから移した項目（滞在先・請求関連・同意書）＋新設項目。
+    // パスポート番号は支店マスタでパスポート番号欄がON（例：イスタンブール支店）の支店のみ表示する。
+    const customerTabHtml = `
+      <div class="tab-pane ${detailActiveTab === 'customer' ? '' : 'hidden'}" data-tab-pane="customer">
+        <div class="section-card">
+          <div class="detail-grid">
+            ${!d.passportRequired ? '' : `<div class="field-block"><label>パスポート番号</label><input data-pending="パスポート番号" value="${escapeAttr(d['パスポート番号'])}"></div>`}
+            <div class="field-block"><label>現地で連絡可能なメールアドレス</label><input type="email" data-pending="現地連絡先メール" value="${escapeAttr(d['現地連絡先メール'])}"></div>
+            <div class="field-block"><label>現地で連絡可能な電話番号</label><input data-pending="現地連絡先電話" value="${escapeAttr(d['現地連絡先電話'])}"></div>
+            <div class="field-block"><label>滞在ホテル名</label><input data-pending="ホテル" value="${escapeAttr(d['ホテル'])}"></div>
+            <div class="field-block"><label>ホテル住所</label><input data-pending="ホテル住所" value="${escapeAttr(d['ホテル住所'])}"></div>
+            <div class="field-block" style="grid-column:1/-1;"><label>フライト情報</label><input data-pending="フライト情報" value="${escapeAttr(d['フライト情報'])}" placeholder="例）JL123 8/20 10:00羽田発 → 14:00現地着"></div>
+            <div class="field-block"><label>請求先</label>
+              <select data-pending="請求先"><option value="">未設定</option>${BILLING_REGIONS.map(r => `<option value="${r}" ${d['請求先'] === r ? 'selected' : ''}>${r}</option>`).join('')}</select>
+            </div>
+            <div class="field-block"><label>日本支店名</label><input data-pending="日本支店名" value="${escapeAttr(d['日本支店名'])}" placeholder="例）新宿西口店"></div>
+          </div>
+        </div>
+
+        ${consentBlock}
+        ${quickActionsHtml}
+      </div>`;
+
     const reservationTabHtml = `
       <div class="tab-pane ${detailActiveTab === 'reservation' ? '' : 'hidden'}" data-tab-pane="reservation">
         <div class="section-card">
@@ -942,12 +1010,25 @@
             <div class="field-block"><label>新郎名（ローマ字）</label><input data-pending="新郎名（ローマ字）" value="${escapeAttr(d['新郎名（ローマ字）'])}"></div>
             <div class="field-block"><label>新婦名（ローマ字）</label><input data-pending="新婦名（ローマ字）" value="${escapeAttr(d['新婦名（ローマ字）'])}"></div>
             <div class="field-block"><label>CHG NO</label><input data-pending="CHG NO" value="${escapeAttr(d['CHG NO'])}"></div>
+          </div>
+        </div>
+
+        <div class="section-card">
+          ${inquiryBlock}
+          <div class="detail-grid" style="margin-top:10px;">${hopeFieldsHtml}</div>
+          ${hopeBlock}
+        </div>
+
+        <div class="section-card">
+          <div class="detail-grid">
             <div class="field-block"><label>撮影日FIX</label><input type="date" data-pending="撮影日FIX" value="${escapeAttr(d['撮影日FIX'])}"></div>
             <div class="field-block"><label>挙式日FIX</label><input type="date" data-pending="挙式日FIX" value="${escapeAttr(d['挙式日FIX'])}"></div>
-            <div class="field-block"><label>希望日①</label><input data-pending="希望日①" value="${escapeAttr(d['希望日①'])}"></div>
-            <div class="field-block"><label>希望日②</label><input data-pending="希望日②" value="${escapeAttr(d['希望日②'])}"></div>
-            <div class="field-block"><label>希望日③</label><input data-pending="希望日③" value="${escapeAttr(d['希望日③'])}"></div>
-            <div class="field-block" style="grid-column:1/-1;">${hopeBlock}</div>
+          </div>
+          ${statusRowHtml}
+        </div>
+
+        <div class="section-card">
+          <div class="detail-grid">
             <div class="field-block"><label>プラン名（マスタから選択）</label>${planSelect}</div>
             <div class="field-block"><label>セール名（候補から選択・自由入力も可）</label>
               <input data-pending="セール名" value="${escapeAttr(d['セール名'])}" list="sale-datalist" placeholder="任意入力">
@@ -957,38 +1038,18 @@
               <input data-pending="撮影希望場所" value="${escapeAttr(d['撮影希望場所'])}" list="location-datalist" placeholder="任意入力">
               ${locationDatalist}
             </div>
-            <div class="field-block"><label>準備場所</label><input data-pending="準備場所" value="${escapeAttr(d['準備場所'])}"></div>
-            <div class="field-block"><label>ホテル</label><input data-pending="ホテル" value="${escapeAttr(d['ホテル'])}"></div>
-            <div class="field-block"><label>管轄</label>
-              <select data-pending="管轄"><option value="">未定</option>${JP_TEAMS.map(t => `<option value="${t}" ${d['管轄'] === t ? 'selected' : ''}>${t}</option>`).join('')}</select>
-            </div>
-            <div class="field-block"><label>請求先</label>
-              <select data-pending="請求先"><option value="">未設定</option>${BILLING_REGIONS.map(r => `<option value="${r}" ${d['請求先'] === r ? 'selected' : ''}>${r}</option>`).join('')}</select>
-            </div>
-            <div class="field-block"><label>日本支店名</label><input data-pending="日本支店名" value="${escapeAttr(d['日本支店名'])}" placeholder="例）新宿西口店"></div>
-            <div class="field-block"><label>店舗／担当（現地）</label><input data-pending="店舗／担当（現地）" value="${escapeAttr(d['店舗／担当（現地）'])}"></div>
+            ${prepFieldHtml}
             <div class="field-block" style="grid-column:1/-1;"><label>備考</label><input data-pending="備考" value="${escapeAttr(d['備考'])}"></div>
           </div>
         </div>
 
         <div class="section-card">
-          <h3>同意書</h3>
-          ${consentBlock}
-        </div>
-
-        <div class="section-card">
-          <h3>ステータス</h3>
-          <div class="status-row">
-            <div class="status-card"><div class="who">STS JP</div>${statusCell('STS JP', d['STS JP'], session.role === 'JP', null)}</div>
-            <div class="status-card"><div class="who">STS 支店</div>${statusCell('STS 支店', d['STS 支店'], session.role === 'BRANCH' && mainGate.editable, mainGate.allowed, `STS JP: ${d['STS JP'] || '未設定'}`)}</div>
-          </div>
-          <h3>オプション（最大5件）</h3>
+          <h3 style="margin-top:0;">オプション（最大5件）</h3>
           ${optionsHtml}
         </div>
 
         ${memoLogSectionHtml(d, MEMO_TYPE_SHARED, '共有メモ（支店・日本側どちらも自由に書けます）', '社内向けの自由メモを入力', d['共有メモ'])}
 
-        ${internalFlagsHtml}
         ${quickActionsHtml}
       </div>`;
 
@@ -1000,9 +1061,12 @@
             <div class="field-block"><label>${escapeHtml(invoiceLabel)}</label><input data-pending="請求番号" value="${escapeAttr(d['請求番号'])}" placeholder="現地で使う番号"></div>
             <div class="field-block"><label>当日の担当</label><input data-pending="当日の担当" data-staff="1" list="staff-datalist" value="${escapeAttr(d['当日の担当'])}"></div>
             <div class="field-block"><label>ヘアメイク</label><input data-pending="ヘアメイク" data-staff="1" list="staff-datalist" value="${escapeAttr(d['ヘアメイク'])}"></div>
+            <div class="field-block"><label>ヘアメイク開始時間</label><input data-pending="ヘアメイク開始時間" value="${escapeAttr(d['ヘアメイク開始時間'])}" placeholder="例）8:00"></div>
             <div class="field-block"><label>カメラマン</label><input data-pending="カメラマン" data-staff="1" list="staff-datalist" value="${escapeAttr(d['カメラマン'])}"></div>
+            <div class="field-block"><label>撮影開始時間</label><input data-pending="撮影開始時間" value="${escapeAttr(d['撮影開始時間'])}" placeholder="例）9:00"></div>
             <div class="field-block"><label>アシスタント</label><input data-pending="アシスタント" data-staff="1" list="staff-datalist" value="${escapeAttr(d['アシスタント'])}"></div>
             <div class="field-block"><label>配車時間</label><input data-pending="配車時間" value="${escapeAttr(d['配車時間'])}" placeholder="例）9:00"></div>
+            <div class="field-block"><label>店舗／担当（現地）</label><input data-pending="店舗／担当（現地）" value="${escapeAttr(d['店舗／担当（現地）'])}"></div>
           </div>
           ${staffDatalist}
           <div id="staff-conflict" class="conflict-box hidden"></div>
@@ -1040,14 +1104,16 @@
     // スプレッドシート管理者による設定）が可能な値のため、エスケープせずに描画すると保存型XSSになる
     c.innerHTML = `
       <div class="detail-header">
-        <div class="kanri">管理番号: ${escapeHtml(d['管理番号'])} ｜ CHG NO: ${escapeHtml(d['CHG NO'] || 'なし')}</div>
+        <div class="kanri">管理番号: ${escapeHtml(d['管理番号'])} ｜ CHG NO: <span class="chg-no">${escapeHtml(d['CHG NO'] || 'なし')}</span></div>
         <div class="kanri">${escapeHtml(d.branchName)}（${escapeHtml(d['支店コード'])}）${d.country ? ' ・ ' + escapeHtml(d.country) : ''}${d.city ? ' ／ ' + escapeHtml(d.city) : ''}</div>
         <div class="kanri">担当: ${d['管轄'] ? escapeHtml(d['管轄']) + '手配課' : '未設定'}</div>
         <div class="names">新郎: ${escapeHtml(d['新郎名（ローマ字）'] || '')}<br>新婦: ${escapeHtml(d['新婦名（ローマ字）'] || '')}</div>
       </div>
       ${tabBarHtml}
       ${messageTabHtml}
+      ${customerTabHtml}
       ${reservationTabHtml}
+      ${jpEntryTabHtml}
       ${localTabHtml}
       ${arrangementTabHtml(d)}
       ${driveTabHtml}
@@ -1120,9 +1186,14 @@
     // ★機能：予約内容・現地記入欄タブ下部の複製ボタン（メッセージタブへ戻らず確定できるように）
     c.querySelectorAll('.quick-commit-btn').forEach(btn => btn.addEventListener('click', commitChangesWithMessage));
     c.querySelectorAll('.quick-save-btn').forEach(btn => btn.addEventListener('click', saveQuiet));
-    // ★機能：社内進行管理欄（日本側のみ）。チェックした瞬間に単独で保存する（3択の対象外）
+    // ★機能：日本記入欄（日本側のみ）。チェックした瞬間に単独で保存する（3択の対象外）
     c.querySelectorAll('[data-internal-flag]').forEach(el => {
       el.addEventListener('change', () => setInternalFlag(el.dataset.internalFlag, el.checked));
+    });
+    // ★機能：日本記入欄のうちチェックボックスでない項目（AI加工の選択・納品先メールアドレス）。
+    // 選ぶ・入力すると即座に単独で保存する（3択の対象外）
+    c.querySelectorAll('[data-internal-value]').forEach(el => {
+      el.addEventListener('change', () => setInternalValue(el.dataset.internalValue, el.value));
     });
     $('drive-url-submit').addEventListener('click', submitDriveUrl);
     c.querySelectorAll('input[data-hid]').forEach(el => {
@@ -1289,11 +1360,19 @@
     } catch (e) { handleAuthError(e); }
   }
 
-  // ★機能：社内進行管理欄（日本側のみ）。3択（保存のみ／メッセージ／変更＋メッセージ）とは別に、
+  // ★機能：日本記入欄（日本側のみ）。3択（保存のみ／メッセージ／変更＋メッセージ）とは別に、
   // チェックした瞬間に単独で保存する（支店に見える履歴・通知メールへ絶対に混ざらないようにするため）
   async function setInternalFlag(field, checked) {
     try {
       await gsRun('apiSetInternalFlag', session.token, currentKanri, field, checked);
+      openDetail(currentKanri, true); // 開いているタブのまま留まる
+    } catch (e) { handleAuthError(e); }
+  }
+
+  // ★機能：日本記入欄のうちチェックボックスでない項目（AI加工の選択・納品先メールアドレス）を保存する
+  async function setInternalValue(field, value) {
+    try {
+      await gsRun('apiSetInternalValue', session.token, currentKanri, field, value);
       openDetail(currentKanri, true); // 開いているタブのまま留まる
     } catch (e) { handleAuthError(e); }
   }

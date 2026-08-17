@@ -92,6 +92,9 @@ const BRANCH_EDIT_GATE = {
 };
 // 請求先（日本の地域区分）
 const BILLING_REGIONS = ['北海道', '東北', '関東', '中部', '関西', '中四国', '九州'];
+// ★要件：準備場所の選択式表示・同意書欄の表示は「イタリアの支店」だけに絞る（他支店は非表示）。
+// 支店マスタの「国」列の値で判定する（新しくイタリアの支店が増えても自動的に対象になる）
+const ITALY_COUNTRY_NAME = 'イタリア';
 
 // --- 予約一覧の列定義 ---
 const COL_BRANCH_CODE = '支店コード';
@@ -104,18 +107,34 @@ const COL_CEREMONY_DATE = '挙式日FIX';
 const COL_HOPE1 = '希望日①';
 const COL_HOPE2 = '希望日②';
 const COL_HOPE3 = '希望日③';
+const COL_HOPE4 = '希望日④';
+const COL_HOPE5 = '希望日⑤';
+// ★機能追加：「空き確認のみ」にチェックを入れて確定すると、STS JPが自動でCHK（確認依頼中）になり、
+// 撮影日FIXの確定ではなく「上の希望日①〜⑤の中で空きがあるか」を現地へ確認する依頼になる。
+const COL_INQUIRY_ONLY = '空き確認のみ';
 const COL_GROOM_NAME = '新郎名（ローマ字）';
 const COL_BRIDE_NAME = '新婦名（ローマ字）';
 // ★機能追加：お客様がGoogleフォームで記入する『同意書』の記入有無を案件に反映する（機能④）。
 // 支店マスタの「同意書必須」が有効な支店（例：ローマ）では未回収を目立たせる。
+// ★要件：「お客様情報」タブに移動。表示は日本側、またはイタリアの支店のみ（他支店は非表示）。
 const COL_CONSENT = '同意書';
 const COL_PLAN = 'プラン名';
 // ★機能追加：セールは頻度が高く名称も毎回変わるため、プラン名とは別の欄にする（機能⑤）。
 // セールマスタに事前登録した候補から選ぶか、自由入力もできる（撮影希望場所と同じ運用）
 const COL_SALE_NAME = 'セール名';
 const COL_LOCATION = '撮影希望場所';
+// ★要件：準備場所はイタリアの支店のみ表示し、ホテル／サロンの選択式にする（他支店は非表示）
 const COL_PREP = '準備場所';
-const COL_HOTEL = 'ホテル';
+const PREP_CHOICES = ['ホテル', 'サロン'];
+// --- お客様情報（新設タブ） ---
+// ★要件：パスポート番号はイスタンブール支店など「支店マスタのパスポート番号欄がON」の支店だけに出す。
+// 日本側・現地側どちらからも入力できる（日本側が入れる想定）。
+const COL_PASSPORT_NO = 'パスポート番号';
+const COL_LOCAL_EMAIL = '現地連絡先メール';
+const COL_LOCAL_PHONE = '現地連絡先電話';
+const COL_HOTEL = 'ホテル'; // 画面表示名は「滞在ホテル名」（列名は既存互換のため変更しない）
+const COL_HOTEL_ADDRESS = 'ホテル住所';
+const COL_FLIGHT_INFO = 'フライト情報';
 const COL_AREA = '管轄';
 const COL_BILLING_REGION = '請求先';
 const COL_JP_SHOP = '日本支店名';
@@ -124,7 +143,9 @@ const COL_SHOP = '店舗／担当（現地）';
 // ★要件：当日の現地運用向け項目（現地記入欄）
 const COL_DAY_STAFF = '当日の担当';
 const COL_HAIR_MAKEUP = 'ヘアメイク';
+const COL_HAIR_START_TIME = 'ヘアメイク開始時間'; // ★要件：ヘアメイクのすぐ近くに開始時間欄
 const COL_PHOTOGRAPHER = 'カメラマン';
+const COL_PHOTO_START_TIME = '撮影開始時間';       // ★要件：カメラマンのすぐ近くに撮影開始時間欄
 const COL_ASSISTANT = 'アシスタント';
 const COL_PICKUP_TIME = '配車時間';
 const COL_LOCAL_MEMO = 'メモ（現地用）';
@@ -139,16 +160,19 @@ const MEMO_TYPE_SURVEY = 'アンケート回答';   // お客様がGoogleフォ�
 const MEMO_TYPES = [MEMO_TYPE_SHARED, MEMO_TYPE_LOCAL, MEMO_TYPE_SURVEY];
 // お客様入力（Googleフォーム）である目印。手入力のメモと見分けるために使う
 const MEMO_AUTHOR_CUSTOMER = 'お客様（Googleフォーム）';
-// ★機能追加：日本の手配課側のみが見る社内進行管理欄（支店には一切表示しない）。
+// ★機能追加：日本の手配課側のみが見る「日本記入欄」タブ（支店には一切表示しない）。
 // フォトブリッジ登録・データアップロードは「済／未」のチェックボックスで、チェックした
-// 担当者名と日時を自動で記録する（ベースは未＝未チェック）。AI加工・早期納品は有無だけのチェックボックス。
+// 担当者名と日時を自動で記録する（ベースは未＝未チェック）。早期納品は有無だけのチェックボックス。
+// AI加工は「有／無」ではなく、加工内容そのものを選択式で記録する（AI_EDIT_OPTIONS参照）。
 const COL_PHOTOBRIDGE = 'フォトブリッジ登録';
 const COL_PHOTOBRIDGE_BY = 'フォトブリッジ登録者';     // 自動反映。画面から直接編集はさせない
 const COL_PHOTOBRIDGE_AT = 'フォトブリッジ登録日時';   // 自動反映。画面から直接編集はさせない
 const COL_AI_EDIT = 'AI加工';
+const AI_EDIT_OPTIONS = ['美肌・小顔・痩身加工', '美肌加工'];
 const COL_DATA_UPLOAD = 'データアップロード';
 const COL_DATA_UPLOAD_BY = 'データアップロード者';     // 自動反映。画面から直接編集はさせない
 const COL_DATA_UPLOAD_AT = 'データアップロード日時';   // 自動反映。画面から直接編集はさせない
+const COL_DELIVERY_EMAIL = '納品先メールアドレス';
 const COL_EARLY_DELIVERY = '早期納品';
 const COL_LAST_UPDATED = '最終更新日';
 const COL_DRIVE_URL = 'DriveフォルダURL';
@@ -167,13 +191,16 @@ function opStsBranchCol_(n) { return `OP${n} STS 支店`; }
 const RESERVATION_HEADERS = (() => {
   const base = [
     COL_BRANCH_CODE, COL_KANRI_NO, COL_CHALLENGE_NO, COL_STATUS_JP, COL_STATUS_BRANCH,
-    COL_CONFIRMED_DATE, COL_CEREMONY_DATE, COL_HOPE1, COL_HOPE2, COL_HOPE3,
-    COL_GROOM_NAME, COL_BRIDE_NAME, COL_CONSENT, COL_PLAN, COL_SALE_NAME, COL_LOCATION, COL_PREP, COL_HOTEL,
+    COL_CONFIRMED_DATE, COL_CEREMONY_DATE, COL_INQUIRY_ONLY,
+    COL_HOPE1, COL_HOPE2, COL_HOPE3, COL_HOPE4, COL_HOPE5,
+    COL_GROOM_NAME, COL_BRIDE_NAME, COL_CONSENT, COL_PLAN, COL_SALE_NAME, COL_LOCATION, COL_PREP,
+    COL_PASSPORT_NO, COL_LOCAL_EMAIL, COL_LOCAL_PHONE, COL_HOTEL, COL_HOTEL_ADDRESS, COL_FLIGHT_INFO,
     COL_AREA, COL_BILLING_REGION, COL_JP_SHOP, COL_INVOICE_NO, COL_SHOP,
-    COL_DAY_STAFF, COL_HAIR_MAKEUP, COL_PHOTOGRAPHER, COL_ASSISTANT, COL_PICKUP_TIME, COL_LOCAL_MEMO,
+    COL_DAY_STAFF, COL_HAIR_MAKEUP, COL_HAIR_START_TIME, COL_PHOTOGRAPHER, COL_PHOTO_START_TIME,
+    COL_ASSISTANT, COL_PICKUP_TIME, COL_LOCAL_MEMO,
     COL_REMARKS, COL_MEMO,
     COL_PHOTOBRIDGE, COL_PHOTOBRIDGE_BY, COL_PHOTOBRIDGE_AT, COL_AI_EDIT,
-    COL_DATA_UPLOAD, COL_DATA_UPLOAD_BY, COL_DATA_UPLOAD_AT, COL_EARLY_DELIVERY,
+    COL_DATA_UPLOAD, COL_DATA_UPLOAD_BY, COL_DATA_UPLOAD_AT, COL_DELIVERY_EMAIL, COL_EARLY_DELIVERY,
     COL_LAST_UPDATED, COL_DRIVE_URL,
     COL_UNREAD_JP, COL_UNREAD_BRANCH
   ];
@@ -183,21 +210,29 @@ const RESERVATION_HEADERS = (() => {
   return base;
 })();
 
-// ★機能追加：日本の手配課側のみが見る社内進行管理欄。専用API（apiSetInternalFlag）で
-// 扱い、通常の3択（保存のみ／メッセージのみ／変更＋メッセージ）には一切乗せない。
+// ★機能追加：日本の手配課側のみが見る「日本記入欄」タブ。専用API（apiSetInternalFlag／
+// apiSetInternalValue）で扱い、通常の3択（保存のみ／メッセージのみ／変更＋メッセージ）には一切乗せない。
 // 理由：これらの項目を通常フローに乗せると、「変更＋メッセージ」を選んだ際の要約行や
 // 通知メールに項目名・変更内容が入ってしまい、支店から見える履歴に漏れてしまうため。
+// ★要件：「管轄」は日本記入欄タブへ移したが、支店側の画面（案件一覧・詳細ヘッダーの「担当」表示）にも
+// 引き続き見せる必要があるため、ここには含めない（COMMITTABLE_FIELDSのまま・編集は日本側のみに制限）。
 const JP_INTERNAL_FIELDS = [
   COL_PHOTOBRIDGE, COL_PHOTOBRIDGE_BY, COL_PHOTOBRIDGE_AT, COL_AI_EDIT,
-  COL_DATA_UPLOAD, COL_DATA_UPLOAD_BY, COL_DATA_UPLOAD_AT, COL_EARLY_DELIVERY
+  COL_DATA_UPLOAD, COL_DATA_UPLOAD_BY, COL_DATA_UPLOAD_AT, COL_DELIVERY_EMAIL, COL_EARLY_DELIVERY
 ];
 // フィールドごとの仕様：doneValue=チェック時に保存する値／byField=担当者名を自動記録する相方の列／
 // atField=チェックした日時を自動記録する相方の列（どちらも無ければnull）
 const INTERNAL_FLAG_SPECS = {
   [COL_PHOTOBRIDGE]: { doneValue: '済', byField: COL_PHOTOBRIDGE_BY, atField: COL_PHOTOBRIDGE_AT },
   [COL_DATA_UPLOAD]: { doneValue: '済', byField: COL_DATA_UPLOAD_BY, atField: COL_DATA_UPLOAD_AT },
-  [COL_AI_EDIT]: { doneValue: '有', byField: null, atField: null },
   [COL_EARLY_DELIVERY]: { doneValue: '有', byField: null, atField: null }
+};
+// ★要件：AI加工は有無だけでなく「何を加工したか」を選択式で記録する（apiSetInternalValueで扱う）。
+// 納品先メールアドレスは自由入力のテキスト項目（値の形式チェックはしない：担当者が把握している
+// 納品先を書ける自由記述欄として運用する想定のため）。
+const INTERNAL_VALUE_SPECS = {
+  [COL_AI_EDIT]: { type: 'select', options: AI_EDIT_OPTIONS },
+  [COL_DELIVERY_EMAIL]: { type: 'text' }
 };
 
 // ★要件：既存予約の中の項目は「その場で自動保存」ではなく、まとめて
@@ -248,6 +283,9 @@ const BM_COL_REMIND_DAYS = '督促日数';
 const BM_COL_CONSENT_REQUIRED = '同意書必須';
 // ★機能追加：現地スタッフ手配メール機能を使うかどうか（支店ごとに任意。既定は無効＝使わない）
 const BM_COL_ARRANGEMENT_ENABLED = '手配メール機能';
+// ★機能追加：パスポート番号欄を「お客様情報」タブに出すかどうか（例：イスタンブール支店）。
+// 未設定／FALSEの支店では非表示（同意書必須と同じ運用）
+const BM_COL_PASSPORT_REQUIRED = 'パスポート番号欄';
 const BM_COL_ACTIVE = '有効';
 // ★不具合防止：既存のテスト・運用スプレッドシートは「有効」列が支店マスタの最後尾にある前提で
 // 位置決め打ちの行を作っている場合がある。新しい列（手配メール機能まわり）は、その並びを崩さないよう
@@ -256,7 +294,7 @@ const BRANCH_MASTER_HEADERS = [
   BM_COL_CODE, BM_COL_NAME, BM_COL_COUNTRY, BM_COL_CITY, BM_COL_ROLE, BM_COL_TEAM,
   BM_COL_PASSCODE, BM_COL_EMAIL, BM_COL_PREFIX, BM_COL_INVOICE_LABEL, BM_COL_DELIVERY_DAYS,
   BM_COL_REMIND_DAYS, BM_COL_CONSENT_REQUIRED, BM_COL_ACTIVE,
-  BM_COL_ARRANGEMENT_ENABLED,
+  BM_COL_ARRANGEMENT_ENABLED, BM_COL_PASSPORT_REQUIRED,
   // カテゴリごとの手配先（名前・メール）。同じ宛先を複数カテゴリに入れれば「まとめて1件に依頼」にできる
   ...ARRANGEMENT_CATEGORIES.flatMap(c => [arrNameCol_(c.label), arrEmailCol_(c.label)])
 ];
@@ -638,6 +676,7 @@ function listBranchesRaw_() {
     deliveryDays: parseIntOrNull_(r[BM_COL_DELIVERY_DAYS]),
     remindDays: parseIntOrNull_(r[BM_COL_REMIND_DAYS]),
     consentRequired: isActiveFlag_(r[BM_COL_CONSENT_REQUIRED]),
+    passportRequired: isActiveFlag_(r[BM_COL_PASSPORT_REQUIRED]),
     active: isActiveFlag_(r[BM_COL_ACTIVE])
     // ログインパスコードは一覧APIには返さない（画面表示上の漏洩防止）
   }));
@@ -1472,6 +1511,10 @@ function apiGetReservationDetail(token, kanriNo) {
   detail.invoiceLabel = meta.invoiceLabel || '請求番号';
   // ★機能追加：同意書必須の支店（例：ローマ）かどうか。画面側で未回収を目立たせるために使う
   detail.consentRequired = !!meta.consentRequired;
+  // ★要件：パスポート番号欄はこのフラグが立っている支店（例：イスタンブール）だけ表示する
+  detail.passportRequired = !!meta.passportRequired;
+  // ★要件：準備場所の選択式表示・同意書欄の表示はイタリアの支店だけに絞る
+  detail.isItaly = detail.country === ITALY_COUNTRY_NAME;
 
   const options = [];
   for (let n = 1; n <= OPTION_COUNT; n++) {
@@ -1566,6 +1609,7 @@ function apiSaveFieldsQuiet(token, kanriNo, changes) {
     const { sheet, headers, rowIndex, rowData } = findReservationRow_(kanriNo);
     if (rowIndex === -1) throw new Error('対象の予約が見つかりません。');
     assertRowVisible_(session, headers, rowData);
+    changes = withInquiryOnlyCascade_(session, headers, rowData, changes);
 
     const writes = Object.keys(changes).map(field => prepareFieldWrite_(session, headers, rowData, field, changes[field]));
     writes.forEach(w => sheet.getRange(rowIndex, w.colIdx).setValue(w.valueToStore));
@@ -1573,6 +1617,7 @@ function apiSaveFieldsQuiet(token, kanriNo, changes) {
 
     const who = senderLabel_(session);
     writes.forEach(w => logStatusChangeIfApplicable_(kanriNo, w, who));
+    applyStatusCascade_(sheet, headers, rowIndex, kanriNo, writes);
 
     if (Object.keys(changes).includes(COL_CONFIRMED_DATE)) sortReservationSheet_(sheet);
   } finally {
@@ -1597,6 +1642,7 @@ function apiCommitChanges(token, kanriNo, changes, message) {
     const { sheet, headers, rowIndex, rowData } = findReservationRow_(kanriNo);
     if (rowIndex === -1) throw new Error('対象の予約が見つかりません。');
     assertRowVisible_(session, headers, rowData);
+    changes = withInquiryOnlyCascade_(session, headers, rowData, changes);
 
     const summaryLines = [];
     const writes = [];
@@ -1618,6 +1664,7 @@ function apiCommitChanges(token, kanriNo, changes, message) {
       writes.forEach(w => sheet.getRange(rowIndex, w.colIdx).setValue(w.valueToStore));
       sheet.getRange(rowIndex, colIndexOrThrow_(headers, COL_LAST_UPDATED)).setValue(new Date());
       writes.forEach(w => logStatusChangeIfApplicable_(kanriNo, w, who));
+      applyStatusCascade_(sheet, headers, rowIndex, kanriNo, writes);
     }
     // ★不具合修正（重大）：以前はここで先に sortReservationSheet_() を呼んでいた。
     // 並べ替えを行うと行の位置が変わるため、直後に rowIndex で読み直していた freshRow が
@@ -1684,6 +1731,38 @@ function logStatusChangeIfApplicable_(kanriNo, prepared, who) {
   sheet.appendRow([kanriNo, prepared.field, prepared.oldDisplay, prepared.newDisplay, who, new Date()]);
 }
 
+// ★要件：「空き確認のみ」にチェックを入れて確定すると、STS JPを自動でCHK（確認依頼中）にする。
+// 呼び出し側（JP）がSTS JPを別途明示していれば、そちらを優先して何もしない。
+// すでにチェック済みの案件を再送しても何度もSTS JPを巻き戻さないよう、チェックが「新たに入った」時だけ動く。
+function withInquiryOnlyCascade_(session, headers, rowData, changes) {
+  if (session.role !== JP_ROLE) return changes; // 支店側の操作では連動しない
+  if (changes[COL_INQUIRY_ONLY] !== '済') return changes;
+  if (COL_STATUS_JP in changes) return changes;
+  const before = rowData[headers.indexOf(COL_INQUIRY_ONLY)];
+  if (before === '済') return changes; // 既にチェック済み（再送）なら何もしない
+  return Object.assign({}, changes, { [COL_STATUS_JP]: 'CHK' });
+}
+
+// ★要件：支店が「CR（キャンセル依頼中）」にCWで回答したら日本側も自動でCWにする。
+// 「RQ（依頼中）」にUC（空きなし）で回答したら日本側も自動でUCにする。
+// 支店が正しく回答しているのに日本側のSTSだけ古いまま気づかれない、という事故を防ぐための自動連動。
+const STATUS_AUTO_CASCADE = [
+  { whenJpIs: 'CR', branchValue: 'CW', setJpTo: 'CW' },
+  { whenJpIs: 'RQ', branchValue: 'UC', setJpTo: 'UC' }
+];
+function applyStatusCascade_(sheet, headers, rowIndex, kanriNo, writes) {
+  const branchWrite = writes.find(w => w.field === COL_STATUS_BRANCH);
+  if (!branchWrite || !branchWrite.changed) return;
+  if (writes.some(w => w.field === COL_STATUS_JP)) return; // 同時にJP側も明示変更しているなら自動連動しない
+  const jpColIdx = colIndexOrThrow_(headers, COL_STATUS_JP);
+  const currentJp = sheet.getRange(rowIndex, jpColIdx).getValue();
+  const rule = STATUS_AUTO_CASCADE.find(r => r.whenJpIs === currentJp && r.branchValue === branchWrite.valueToStore);
+  if (!rule || rule.setJpTo === currentJp) return;
+  sheet.getRange(rowIndex, jpColIdx).setValue(rule.setJpTo);
+  const logSheet = getSpreadsheet_().getSheetByName(STATUS_LOG_SHEET_NAME);
+  if (logSheet) logSheet.appendRow([kanriNo, COL_STATUS_JP, currentJp, rule.setJpTo, '自動反映（ステータス連動）', new Date()]);
+}
+
 function validateFieldPermission_(session, headers, rowData, field, value) {
   if (isJpStatusField_(field)) {
     if (session.role !== JP_ROLE) throw new Error(`「${field}」は日本側のみ変更できます。`);
@@ -1705,8 +1784,11 @@ function validateFieldPermission_(session, headers, rowData, field, value) {
     return;
   }
   // オプション名(OPn)欄はどちらの役割でも変更可（ステータスではなく単なるラベルのため）
-  if (field === COL_AREA && value && !JP_TEAMS.includes(value)) {
-    throw new Error(`管轄は ${JP_TEAMS.join('/')} のいずれかにしてください。`);
+  // ★要件：管轄（担当手配課）は「日本記入欄」タブに移した内部的な割り当てのため、日本側のみ変更できる
+  // （支店側の画面にも「担当：◯◯手配課」として表示はするが、編集用の入力欄は出さない）
+  if (field === COL_AREA) {
+    if (session.role !== JP_ROLE) throw new Error('管轄は日本側のみ変更できます。');
+    if (value && !JP_TEAMS.includes(value)) throw new Error(`管轄は ${JP_TEAMS.join('/')} のいずれかにしてください。`);
   }
   if (field === COL_BILLING_REGION && value && !BILLING_REGIONS.includes(value)) {
     throw new Error(`請求先は ${BILLING_REGIONS.join('/')} のいずれかにしてください。`);
@@ -1757,16 +1839,16 @@ function apiSetDriveUrl(token, kanriNo, url) {
 }
 
 // =====================================================
-// ⑨-2 日本側専用の社内進行管理欄（フォトブリッジ登録・AI加工・データアップロード・早期納品）
+// ⑨-2 日本記入欄（フォトブリッジ登録・AI加工・データアップロード・納品先メールアドレス・早期納品）
 // =====================================================
 // ★要件：日本の手配課側のみが見る項目。通常の3択（保存のみ／メッセージのみ／変更＋メッセージ）には
-// 乗せず、専用APIで直接トグルする（支店に見える履歴・通知メールへは絶対に混ざらない設計にするため）。
+// 乗せず、専用APIで直接保存する（支店に見える履歴・通知メールへは絶対に混ざらない設計にするため）。
 // フォトブリッジ登録・データアップロードはチェックした担当者名を自動で記録する。
 function apiSetInternalFlag(token, kanriNo, field, checked) {
   const session = requireSession_(token);
   assertJp_(session); // ★この関数自体が「日本側専用」の境界。支店ロールはここで必ず拒否される
   const spec = INTERNAL_FLAG_SPECS[String(field)];
-  if (!spec) throw new Error(`「${field}」は社内進行管理欄として扱えません。`);
+  if (!spec) throw new Error(`「${field}」はこの方法では変更できません。`);
 
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
@@ -1786,6 +1868,34 @@ function apiSetInternalFlag(token, kanriNo, field, checked) {
       sheet.getRange(rowIndex, colIndexOrThrow_(headers, spec.atField))
         .setValue(checked ? new Date() : '');
     }
+    sheet.getRange(rowIndex, colIndexOrThrow_(headers, COL_LAST_UPDATED)).setValue(new Date());
+  } finally {
+    lock.releaseLock();
+  }
+  return { ok: true };
+}
+
+// ★要件：AI加工（加工内容の選択）・納品先メールアドレス（自由入力）など、チェックボックスではなく
+// 値そのものを持つ日本記入欄の項目を保存する。apiSetInternalFlagと同じく即時保存・日本側専用。
+function apiSetInternalValue(token, kanriNo, field, value) {
+  const session = requireSession_(token);
+  assertJp_(session);
+  const spec = INTERNAL_VALUE_SPECS[String(field)];
+  if (!spec) throw new Error(`「${field}」はこの方法では変更できません。`);
+
+  const text = String(value || '').trim();
+  if (spec.type === 'select' && text && !spec.options.includes(text)) {
+    throw new Error(`「${field}」は ${spec.options.join('/')} のいずれかにしてください。`);
+  }
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
+  try {
+    const { sheet, headers, rowIndex, rowData } = findReservationRow_(kanriNo);
+    if (rowIndex === -1) throw new Error('対象の予約が見つかりません。');
+    assertRowVisible_(session, headers, rowData);
+
+    sheet.getRange(rowIndex, colIndexOrThrow_(headers, field)).setValue(text);
     sheet.getRange(rowIndex, colIndexOrThrow_(headers, COL_LAST_UPDATED)).setValue(new Date());
   } finally {
     lock.releaseLock();
@@ -1956,7 +2066,7 @@ function apiBuildArrangementDraft(token, kanriNo, categoryKey) {
   const chgNo = getV(COL_CHALLENGE_NO) || 'なし';
   const groom = getV(COL_GROOM_NAME);
   const bride = getV(COL_BRIDE_NAME);
-  const hopeDates = [getV(COL_HOPE1), getV(COL_HOPE2), getV(COL_HOPE3)].filter(Boolean);
+  const hopeDates = [getV(COL_HOPE1), getV(COL_HOPE2), getV(COL_HOPE3), getV(COL_HOPE4), getV(COL_HOPE5)].filter(Boolean);
   const dateDisplay = formatMaybeDate_(getV(COL_CONFIRMED_DATE)) ||
     (hopeDates.length ? `未定（希望日: ${hopeDates.join(' / ')}）` : '未定');
   const branchMeta = branchMetaMap_()[branchCode] || {};

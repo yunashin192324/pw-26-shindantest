@@ -1407,7 +1407,7 @@ section('26. 画面から保存した日付が「日付」として後続処理�
 }
 
 // ---------------------------------------------------------------
-section('27. 日本側専用の社内進行管理欄（フォトブリッジ登録・AI加工・データアップロード・早期納品）');
+section('27. 日本記入欄（管轄・フォトブリッジ登録・AI加工・データアップロード・納品先メールアドレス・早期納品）');
 {
   const ctx = featureFixture();
   addCase(ctx, '予約一覧', { '支店コード':'VIE','管理番号':'VIE-501','管轄':'関東','新郎名（ローマ字）':'A' });
@@ -1417,12 +1417,14 @@ section('27. 日本側専用の社内進行管理欄（フォトブリッジ登�
   const before = ctx.apiGetReservationDetail(t, 'VIE-501').detail;
   check('ベースは未チェック（フォトブリッジ登録）', !before['フォトブリッジ登録']);
   check('ベースは未チェック（データアップロード）', !before['データアップロード']);
-  check('ベースは未チェック（AI加工）', !before['AI加工']);
+  check('ベースは未設定（AI加工）', !before['AI加工']);
   check('ベースは未チェック（早期納品）', !before['早期納品']);
+  check('ベースは空欄（納品先メールアドレス）', !before['納品先メールアドレス']);
 
   ctx.apiSetInternalFlag(t, 'VIE-501', 'フォトブリッジ登録', true);
-  ctx.apiSetInternalFlag(t, 'VIE-501', 'AI加工', true);
+  ctx.apiSetInternalValue(t, 'VIE-501', 'AI加工', ctx.AI_EDIT_OPTIONS[0]);
   ctx.apiSetInternalFlag(t, 'VIE-501', 'データアップロード', true);
+  ctx.apiSetInternalValue(t, 'VIE-501', '納品先メールアドレス', 'delivery@example.com');
   ctx.apiSetInternalFlag(t, 'VIE-501', '早期納品', true);
   const after = ctx.apiGetReservationDetail(t, 'VIE-501').detail;
   check('フォトブリッジ登録がチェックできる', after['フォトブリッジ登録'] === '済');
@@ -1437,9 +1439,15 @@ section('27. 日本側専用の社内進行管理欄（フォトブリッジ登�
   check('チェック日時も自動反映される（データアップロード日時）',
         /^\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}$/.test(after['データアップロード日時']),
         String(after['データアップロード日時']));
-  check('AI加工がチェックできる', after['AI加工'] === '有');
+  check('AI加工は加工内容を選択式で記録する', after['AI加工'] === ctx.AI_EDIT_OPTIONS[0], String(after['AI加工']));
   check('AI加工には入力者・日時欄が無い（仕様どおり）', !('AI加工者' in after) && !('AI加工日時' in after));
   check('早期納品がチェックできる', after['早期納品'] === '有');
+  check('納品先メールアドレスが保存できる', after['納品先メールアドレス'] === 'delivery@example.com');
+
+  // AI加工は選択肢以外を拒否する
+  let badOption = null;
+  try { ctx.apiSetInternalValue(t, 'VIE-501', 'AI加工', '侵入テスト'); } catch (e) { badOption = e.message; }
+  check('AI加工は選択肢以外を拒否する', badOption !== null, String(badOption));
 
   // チェックを外すと入力者欄・日時欄もクリアされる
   ctx.apiSetInternalFlag(t, 'VIE-501', 'フォトブリッジ登録', false);
@@ -1448,18 +1456,30 @@ section('27. 日本側専用の社内進行管理欄（フォトブリッジ登�
   check('チェックを外すと入力者欄もクリアされる', !after2['フォトブリッジ登録者']);
   check('チェックを外すと日時欄もクリアされる', !after2['フォトブリッジ登録日時']);
 
+  // 管轄は日本記入欄に移り、通常の3択（保存のみ）で日本側だけが変更できる
+  ctx.apiSaveFieldsQuiet(t, 'VIE-501', { '管轄': '関西' });
+  check('管轄は通常の保存フローで変更できる（日本側）', ctx.apiGetReservationDetail(t, 'VIE-501').detail['管轄'] === '関西');
+
   // 支店側からは存在しない扱い（値が返らない・操作もできない）
   const vie = ctx.apiLogin('VIE','vp');
   const branchDetail = ctx.apiGetReservationDetail(vie.session.token, 'VIE-501').detail;
   check('支店側のレスポンスにフォトブリッジ登録が含まれない', !('フォトブリッジ登録' in branchDetail));
   check('支店側のレスポンスにAI加工が含まれない', !('AI加工' in branchDetail));
   check('支店側のレスポンスにデータアップロードが含まれない', !('データアップロード' in branchDetail));
+  check('支店側のレスポンスに納品先メールアドレスが含まれない', !('納品先メールアドレス' in branchDetail));
   check('支店側のレスポンスに早期納品が含まれない', !('早期納品' in branchDetail));
   check('支店側のレスポンスにフォトブリッジ登録日時も含まれない', !('フォトブリッジ登録日時' in branchDetail));
   check('支店側のレスポンスにデータアップロード日時も含まれない', !('データアップロード日時' in branchDetail));
+  check('支店側にも管轄は見える（担当表示用）', branchDetail['管轄'] === '関西');
   let branchErr = null;
-  try { ctx.apiSetInternalFlag(vie.session.token, 'VIE-501', 'AI加工', true); } catch (e) { branchErr = e.message; }
-  check('支店側は社内進行管理欄を操作できない', branchErr !== null, String(branchErr));
+  try { ctx.apiSetInternalValue(vie.session.token, 'VIE-501', 'AI加工', ctx.AI_EDIT_OPTIONS[0]); } catch (e) { branchErr = e.message; }
+  check('支店側は日本記入欄を操作できない（AI加工）', branchErr !== null, String(branchErr));
+  let branchFlagErr = null;
+  try { ctx.apiSetInternalFlag(vie.session.token, 'VIE-501', 'フォトブリッジ登録', true); } catch (e) { branchFlagErr = e.message; }
+  check('支店側は日本記入欄を操作できない（チェックボックス）', branchFlagErr !== null, String(branchFlagErr));
+  let branchAreaErr = null;
+  try { ctx.apiSaveFieldsQuiet(vie.session.token, 'VIE-501', { '管轄': '関東' }); } catch (e) { branchAreaErr = e.message; }
+  check('支店側は管轄を変更できない', branchAreaErr !== null, String(branchAreaErr));
 
   // 参考：既存の「変更履歴」（STS等のステータス変更履歴）も日時（時刻まで）が入る
   ctx.apiCommitChanges(t, 'VIE-501', { 'STS JP': 'OK' }, '');
@@ -1476,17 +1496,20 @@ section('27. 日本側専用の社内進行管理欄（フォトブリッジ登�
   ctx.apiSetInternalFlag(t, 'VIE-501', 'データアップロード', true);
   let leakErr = null;
   try { ctx.apiCommitChanges(t, 'VIE-501', { 'データアップロード': '済' }, ''); } catch (e) { leakErr = e.message; }
-  check('通常の3択フローでは社内進行管理欄を変更できない（履歴・メールへの混入防止）',
+  check('通常の3択フローでは日本記入欄を変更できない（履歴・メールへの混入防止）',
         leakErr !== null, String(leakErr));
-  check('社内進行管理欄のチェックは共有の履歴に出ない',
+  check('日本記入欄のチェックは共有の履歴に出ない',
         !ctx.apiGetCaseTimeline(t, 'VIE-501').items.some(it => String(it.field || '').includes('フォトブリッジ')));
-  check('社内進行管理欄のチェックはメールを送らない（直前の操作でメールが増えていない）',
+  check('日本記入欄のチェックはメールを送らない（直前の操作でメールが増えていない）',
         !ctx.__mail.some(m => /フォトブリッジ|データアップロード/.test(m.subj + m.body)));
 
   // 未知のフィールド名は拒否する
   let badField = null;
   try { ctx.apiSetInternalFlag(t, 'VIE-501', 'STS JP', true); } catch (e) { badField = e.message; }
-  check('社内進行管理欄以外は apiSetInternalFlag で変更できない', badField !== null, String(badField));
+  check('日本記入欄以外は apiSetInternalFlag で変更できない', badField !== null, String(badField));
+  let badValueField = null;
+  try { ctx.apiSetInternalValue(t, 'VIE-501', 'STS JP', 'RQ'); } catch (e) { badValueField = e.message; }
+  check('日本記入欄以外は apiSetInternalValue で変更できない', badValueField !== null, String(badValueField));
 }
 
 // ---------------------------------------------------------------
@@ -1667,6 +1690,131 @@ section('30. アンケートフォーム連携（お客様の回答をメモ履�
   const detail2 = ctx.apiGetReservationDetail(jp.session.token, 'VIE-801').detail;
   const survey2 = detail2.memoLog.filter(m => m.type === 'アンケート回答');
   check('2回目の回答は積み上げで残る（上書きしない）', survey2.length === 2, JSON.stringify(survey2));
+}
+
+// ---------------------------------------------------------------
+section('31. お客様情報タブの新項目（パスポート番号欄・準備場所・同意書の表示制御）');
+{
+  const ctx = featureFixture();
+  const ss = ctx.__ss;
+  const bm = ss.getSheetByName('支店マスタ');
+  bm.appendRow(['ROW', 'ローマ支店', 'イタリア', 'ローマ', 'BRANCH', '', 'rp', 'row@his-world.com', 'R', '', '', '', '', true]);
+  // イスタンブール支店だけ「パスポート番号欄」をON（ローマはイタリアだが対象外のまま）
+  const head = bm.getRange(1, 1, 1, bm.getLastColumn()).getValues()[0];
+  const codeCol = head.indexOf('支店コード');
+  const passCol = head.indexOf('パスポート番号欄') + 1;
+  const bmRows = bm.getRange(2, 1, bm.getLastRow() - 1, bm.getLastColumn()).getValues();
+  bmRows.forEach((r, i) => { if (r[codeCol] === 'IST') bm.getRange(i + 2, passCol).setValue(true); });
+
+  addCase(ctx, '予約一覧', { '支店コード': 'VIE', '管理番号': 'VIE-601', '管轄': '関東', '新郎名（ローマ字）': 'A' });
+  addCase(ctx, '予約一覧', { '支店コード': 'IST', '管理番号': 'IST-601', '管轄': '関西', '新郎名（ローマ字）': 'B' });
+  addCase(ctx, '予約一覧', { '支店コード': 'ROW', '管理番号': 'R-601', '管轄': '関東', '新郎名（ローマ字）': 'C' });
+
+  const jp = ctx.apiLogin('KANTO', 'pw');
+  const t = jp.session.token;
+
+  const vieDetail = ctx.apiGetReservationDetail(t, 'VIE-601').detail;
+  check('ウィーン支店はパスポート番号欄が非表示扱い', vieDetail.passportRequired === false);
+  check('ウィーン支店はisItalyもfalse', vieDetail.isItaly === false);
+  const istDetail = ctx.apiGetReservationDetail(t, 'IST-601').detail;
+  check('イスタンブール支店はパスポート番号欄が表示扱い', istDetail.passportRequired === true);
+  check('イスタンブール支店はイタリアではないのでisItalyはfalse', istDetail.isItaly === false);
+  const rowDetail = ctx.apiGetReservationDetail(t, 'R-601').detail;
+  check('ローマ支店はパスポート番号欄フラグは別物なので非表示のまま', rowDetail.passportRequired === false);
+  check('ローマ支店は国がイタリアなのでisItaly=true', rowDetail.isItaly === true);
+
+  // パスポート番号は表示フラグに関わらず、日本側・現地（支店）側どちらからも保存できる通常項目
+  ctx.apiSaveFieldsQuiet(t, 'IST-601', { 'パスポート番号': 'AB1234567' });
+  check('日本側からパスポート番号を保存できる', ctx.apiGetReservationDetail(t, 'IST-601').detail['パスポート番号'] === 'AB1234567');
+  const ist = ctx.apiLogin('IST', 'ip');
+  ctx.apiSaveFieldsQuiet(ist.session.token, 'IST-601', { 'パスポート番号': 'CD7654321' });
+  check('現地（支店）側からもパスポート番号を保存できる', ctx.apiGetReservationDetail(t, 'IST-601').detail['パスポート番号'] === 'CD7654321');
+
+  // 準備場所（イタリアのみ画面に出す想定だが、データはどの支店でも保存できる＝表示制御は画面側の責務）
+  ctx.apiSaveFieldsQuiet(t, 'R-601', { '準備場所': ctx.PREP_CHOICES[1] });
+  check('準備場所（サロン）が保存できる', ctx.apiGetReservationDetail(t, 'R-601').detail['準備場所'] === ctx.PREP_CHOICES[1]);
+
+  // 希望日①～⑤（第一～第五希望）
+  ctx.apiSaveFieldsQuiet(t, 'VIE-601', {
+    '希望日①': '2026-09-01', '希望日②': '2026-09-02', '希望日③': '2026-09-03',
+    '希望日④': '2026-09-04', '希望日⑤': '2026-09-05'
+  });
+  const hopeAfter = ctx.apiGetReservationDetail(t, 'VIE-601').detail;
+  check('希望日①～⑤が5件とも保存・読み出しできる',
+        ['①','②','③','④','⑤'].every((m, idx) => hopeAfter[`希望日${m}`] === `2026-09-0${idx + 1}`),
+        JSON.stringify(['①','②','③','④','⑤'].map(m => hopeAfter[`希望日${m}`])));
+}
+
+// ---------------------------------------------------------------
+section('32. 「空きだけ確認」チェックでSTS JPが自動でCHKになる連動');
+{
+  const ctx = featureFixture();
+  addCase(ctx, '予約一覧', { '支店コード': 'VIE', '管理番号': 'VIE-701', '管轄': '関東', '新郎名（ローマ字）': 'A' });
+  const jp = ctx.apiLogin('KANTO', 'pw');
+  const t = jp.session.token;
+
+  ctx.apiSaveFieldsQuiet(t, 'VIE-701', { '空き確認のみ': '済' });
+  const after = ctx.apiGetReservationDetail(t, 'VIE-701').detail;
+  check('空き確認のみにチェックすると自動でSTS JPがCHKになる', after['STS JP'] === 'CHK', String(after['STS JP']));
+  check('空き確認のみ自体も保存される', after['空き確認のみ'] === '済');
+
+  // 明示的にSTS JPも同時指定した場合は、そちらを優先して自動上書きしない
+  addCase(ctx, '予約一覧', { '支店コード': 'VIE', '管理番号': 'VIE-702', '管轄': '関東', '新郎名（ローマ字）': 'B' });
+  ctx.apiSaveFieldsQuiet(t, 'VIE-702', { '空き確認のみ': '済', 'STS JP': 'RQ' });
+  check('STS JPを同時に明示していれば自動連動しない',
+        ctx.apiGetReservationDetail(t, 'VIE-702').detail['STS JP'] === 'RQ');
+
+  // 既にチェック済みの案件へ同じ内容を再送しても、STS JPを巻き戻さない
+  ctx.apiSaveFieldsQuiet(t, 'VIE-701', { 'STS JP': 'OK' }); // 一旦別の値に手動で変える
+  ctx.apiSaveFieldsQuiet(t, 'VIE-701', { '空き確認のみ': '済' }); // 再送（既にチェック済みなので変化なし）
+  check('チェック済みの再送では自動連動が再発火しない',
+        ctx.apiGetReservationDetail(t, 'VIE-701').detail['STS JP'] === 'OK');
+
+  // 支店側の操作では連動しない（空き確認のみ自体は書けても、STS JPの自動更新はJP側の操作限定）
+  addCase(ctx, '予約一覧', { '支店コード': 'VIE', '管理番号': 'VIE-703', '管轄': '関東', '新郎名（ローマ字）': 'C' });
+  const vie = ctx.apiLogin('VIE', 'vp');
+  ctx.apiSaveFieldsQuiet(vie.session.token, 'VIE-703', { '空き確認のみ': '済' });
+  check('支店側の操作ではSTS JPが自動連動しない',
+        !ctx.apiGetReservationDetail(t, 'VIE-703').detail['STS JP']);
+}
+
+// ---------------------------------------------------------------
+section('33. STSの自動連動（日本CR＋支店CW→日本もCW／日本RQ＋支店UC→日本もUC）');
+{
+  const ctx = featureFixture();
+  addCase(ctx, '予約一覧', { '支店コード': 'VIE', '管理番号': 'VIE-711', '管轄': '関東', '新郎名（ローマ字）': 'A' });
+  const jp = ctx.apiLogin('KANTO', 'pw');
+  const t = jp.session.token;
+  const vie = ctx.apiLogin('VIE', 'vp');
+  const vt = vie.session.token;
+
+  // 日本側がCR（キャンセル依頼中）、現地がCWで回答 → 日本側も自動でCWになる
+  ctx.apiSaveFieldsQuiet(t, 'VIE-711', { 'STS JP': 'CR' });
+  ctx.apiSaveFieldsQuiet(vt, 'VIE-711', { 'STS 支店': 'CW' });
+  const after1 = ctx.apiGetReservationDetail(t, 'VIE-711').detail;
+  check('現地がCWに回答すると日本側も自動でCWになる', after1['STS JP'] === 'CW', String(after1['STS JP']));
+  check('支店側の表示もCWのまま（自分で入れた値）', after1['STS 支店'] === 'CW');
+  const cascadeLog1 = ctx.apiGetFieldHistory(t, 'VIE-711', 'STS JP');
+  check('自動連動もSTS JPの変更履歴に残る（自動反映（ステータス連動）が担当者名）',
+        cascadeLog1.some(h => h.who === '自動反映（ステータス連動）'), JSON.stringify(cascadeLog1));
+
+  // 日本側がRQ（依頼中）、現地がUC（空きなし）で回答 → 日本側も自動でUCになる
+  addCase(ctx, '予約一覧', { '支店コード': 'VIE', '管理番号': 'VIE-712', '管轄': '関東', '新郎名（ローマ字）': 'B' });
+  ctx.apiSaveFieldsQuiet(t, 'VIE-712', { 'STS JP': 'RQ' });
+  ctx.apiSaveFieldsQuiet(vt, 'VIE-712', { 'STS 支店': 'UC' });
+  const after2 = ctx.apiGetReservationDetail(t, 'VIE-712').detail;
+  check('現地がUCに回答すると日本側も自動でUCになる', after2['STS JP'] === 'UC', String(after2['STS JP']));
+
+  // ルールに当てはまらない組み合わせでは連動しない（例：日本側がNCのまま支店だけCWにする）
+  addCase(ctx, '予約一覧', { '支店コード': 'VIE', '管理番号': 'VIE-713', '管轄': '関東', '新郎名（ローマ字）': 'C' });
+  ctx.apiSaveFieldsQuiet(t, 'VIE-713', { 'STS JP': 'NC' });
+  ctx.apiSaveFieldsQuiet(vt, 'VIE-713', { 'STS 支店': 'CW' });
+  check('対象外の組み合わせでは日本側のSTSは変わらない（NCのまま）',
+        ctx.apiGetReservationDetail(t, 'VIE-713').detail['STS JP'] === 'NC');
+
+  // 通知メールは飛ばない（自動連動は監査ログのみで、メッセージ通知には乗らない）
+  check('自動連動そのものはメールを増やさない（直前の3件の保存はいずれも apiSaveFieldsQuiet）',
+        !ctx.__mail.some(m => /VIE-711|VIE-712/.test(m.subj + m.body)));
 }
 
 // ---------------------------------------------------------------

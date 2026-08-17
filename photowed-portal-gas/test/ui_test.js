@@ -162,15 +162,15 @@ function visiblePane(document) {
   check('現地記入欄タブにも両ボタンがある',
         !!localPane.querySelector('.quick-commit-btn') && !!localPane.querySelector('.quick-save-btn'));
 
-  // 予約内容タブでホテル名を書き換え、そのタブの「保存のみ」で確定する
-  const hotel = resPane.querySelector('[data-pending="ホテル"]');
-  hotel.value = 'Hotel Nuovo';
-  hotel.dispatchEvent(new dom.window.Event('change'));
+  // 予約内容タブで備考を書き換え、そのタブの「保存のみ」で確定する
+  const remarks = resPane.querySelector('[data-pending="備考"]');
+  remarks.value = '会場までの送迎希望';
+  remarks.dispatchEvent(new dom.window.Event('change'));
   resPane.querySelector('.quick-save-btn').click();
   await settle();
 
   check('保存のみでサーバーに反映される',
-        ctx.apiGetReservationDetail(ctx.apiLogin('ROW','CHANGE-ME-ROW').session.token, 'R-001').detail['ホテル'] === 'Hotel Nuovo');
+        ctx.apiGetReservationDetail(ctx.apiLogin('ROW','CHANGE-ME-ROW').session.token, 'R-001').detail['備考'] === '会場までの送迎希望');
   // ★これが今回の要望の肝：保存後にメッセージタブへ飛ばされないこと
   check('保存後も「予約内容」タブに留まる（メッセージタブに戻らない）',
         activeTab(document) === 'reservation', `実際: ${activeTab(document)}`);
@@ -304,23 +304,25 @@ function visiblePane(document) {
         ctx.apiGetReservationDetail(tok, 'R-001').detail['備考'] === 'あとで確定する備考');
 
   // ---------------------------------------------------------------
-  section('U10. 社内進行管理欄（日本側のみ）');
+  section('U10. 日本記入欄（日本側のみ）');
   // ここまでは支店（ローマ）としてログインしていたため、まず日本側（関東手配課）でログインし直す
   document.getElementById('nav-logout').click();
   await settle();
   await login(dom, 'KANTO', 'CHANGE-ME-KANTO');
   document.querySelector('#reservation-list .res-card').click();
   await settle();
-  [...document.querySelectorAll('.tab-btn')].find(b => b.dataset.tab === 'reservation').click();
+  check('日本側には「日本記入欄」タブが出る',
+        !![...document.querySelectorAll('.tab-btn')].find(b => b.dataset.tab === 'jpEntry'));
+  [...document.querySelectorAll('.tab-btn')].find(b => b.dataset.tab === 'jpEntry').click();
   await settle();
   const pbCheckbox = document.querySelector('[data-internal-flag="フォトブリッジ登録"]');
   check('日本側にはフォトブリッジ登録のチェックボックスが出る', !!pbCheckbox);
   check('ベースは未チェック', pbCheckbox.checked === false);
-  const aiCheckbox = document.querySelector('[data-internal-flag="AI加工"]');
+  const aiSelect = document.querySelector('[data-internal-value="AI加工"]');
   const dataCheckbox = document.querySelector('[data-internal-flag="データアップロード"]');
   const earlyCheckbox = document.querySelector('[data-internal-flag="早期納品"]');
-  check('AI加工・データアップロード・早期納品も表示される',
-        !!aiCheckbox && !!dataCheckbox && !!earlyCheckbox);
+  check('AI加工（選択式）・データアップロード・早期納品も表示される',
+        !!aiSelect && !!dataCheckbox && !!earlyCheckbox);
 
   const jpTok = ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
   pbCheckbox.click();
@@ -329,13 +331,13 @@ function visiblePane(document) {
         ctx.apiGetReservationDetail(jpTok, 'R-001').detail['フォトブリッジ登録'] === '済');
   const pbAfter = document.querySelector('[data-internal-flag="フォトブリッジ登録"]');
   check('チェック状態が再描画後も維持される', pbAfter.checked === true);
-  check('保存後も予約内容タブに留まる（他の操作と同じ挙動）',
-        activeTab(document) === 'reservation', `実際: ${activeTab(document)}`);
+  check('保存後も日本記入欄タブに留まる（他の操作と同じ挙動）',
+        activeTab(document) === 'jpEntry', `実際: ${activeTab(document)}`);
   check('入力者名が画面に表示される（自動反映）',
-        document.querySelector('[data-tab-pane="reservation"]').textContent.includes('登録者:'));
+        document.querySelector('[data-tab-pane="jpEntry"]').textContent.includes('登録者:'));
   check('チェック日時も画面に表示される（自動反映）',
-        /登録者:.*\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}/.test(document.querySelector('[data-tab-pane="reservation"]').textContent),
-        document.querySelector('[data-tab-pane="reservation"]').textContent.match(/登録者:[^\n]*/)?.[0]);
+        /登録者:.*\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}/.test(document.querySelector('[data-tab-pane="jpEntry"]').textContent),
+        document.querySelector('[data-tab-pane="jpEntry"]').textContent.match(/登録者:[^\n]*/)?.[0]);
 
   // 支店（ローマ）としてログインし直すと、この欄自体が画面に存在しないこと
   document.getElementById('nav-logout').click();
@@ -343,8 +345,8 @@ function visiblePane(document) {
   await login(dom, 'ROW', 'CHANGE-ME-ROW');
   document.querySelector('#reservation-list .res-card').click();
   await settle();
-  [...document.querySelectorAll('.tab-btn')].find(b => b.dataset.tab === 'reservation').click();
-  await settle();
+  check('支店側には「日本記入欄」タブ自体が出ない',
+        ![...document.querySelectorAll('.tab-btn')].find(b => b.dataset.tab === 'jpEntry'));
   check('支店側の画面には社内進行管理欄のチェックボックスが一切出ない',
         !document.querySelector('[data-internal-flag]'));
   // ★注意：document.body.innerHTML には<script>タグの中身（JSソースコード自体）も含まれるため、
@@ -357,6 +359,10 @@ function visiblePane(document) {
         !branchDetailHtml.includes('データアップロード'));
   check('支店側の画面のどこにも「AI加工」の文字列が出ない',
         !branchDetailHtml.includes('AI加工'));
+
+  // 予約内容タブへ戻しておく（以降のセクションが予約内容タブを前提にしているため）
+  [...document.querySelectorAll('.tab-btn')].find(b => b.dataset.tab === 'reservation').click();
+  await settle();
 
   // ---------------------------------------------------------------
   section('U11. メモ履歴（共有メモ・メモ（現地用）を画面から追記できる）');
@@ -452,6 +458,51 @@ function visiblePane(document) {
           !document.getElementById('settings-branch-select').classList.contains('hidden'));
     const opts = [...document.getElementById('settings-branch-select').options].map(o => o.value);
     check('選択肢に支店が入っている（JPロール自身は含まない）', opts.includes('ROW') && !opts.includes('KANTO'), opts.join(','));
+  }
+
+  // ---------------------------------------------------------------
+  section('U14. お客様情報タブ・現地記入欄の新項目（同意書はイタリア以外は非表示／ヘアメイク・撮影の開始時間）');
+  {
+    // ウィーン支店（オーストリア＝イタリアではない）の案件を1件追加
+    const H = ctx.RESERVATION_HEADERS;
+    const row = new Array(H.length).fill('');
+    const set = (k, v) => { const i = H.indexOf(k); if (i !== -1) row[i] = v; };
+    set('支店コード', 'VIE'); set('管理番号', 'VIE-901'); set('管轄', '関東');
+    set('新郎名（ローマ字）', 'Franz Gruber');
+    ctx.__ss.getSheetByName('予約一覧').appendRow(row);
+
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'VIE', 'CHANGE-ME-VIE');
+    document.querySelector('#reservation-list .res-card').click();
+    await settle();
+    [...document.querySelectorAll('.tab-btn')].find(b => b.dataset.tab === 'customer').click();
+    await settle();
+    const custPane = document.querySelector('[data-tab-pane="customer"]');
+    check('お客様情報タブに現地連絡先メールの入力欄がある', !!custPane.querySelector('[data-pending="現地連絡先メール"]'));
+    check('お客様情報タブにホテル住所の入力欄がある', !!custPane.querySelector('[data-pending="ホテル住所"]'));
+    check('お客様情報タブにフライト情報の入力欄がある', !!custPane.querySelector('[data-pending="フライト情報"]'));
+    check('パスポート番号欄が未設定の支店ではパスポート番号欄が出ない', !custPane.querySelector('[data-pending="パスポート番号"]'));
+    check('イタリアではないウィーン支店では同意書欄が出ない（JPでもないため）', !custPane.querySelector('[data-consent-checkbox]'));
+
+    [...document.querySelectorAll('.tab-btn')].find(b => b.dataset.tab === 'local').click();
+    await settle();
+    const localPane = document.querySelector('[data-tab-pane="local"]');
+    check('現地記入欄にヘアメイク開始時間欄がある', !!localPane.querySelector('[data-pending="ヘアメイク開始時間"]'));
+    check('現地記入欄に撮影開始時間欄がある', !!localPane.querySelector('[data-pending="撮影開始時間"]'));
+
+    const hairTime = localPane.querySelector('[data-pending="ヘアメイク開始時間"]');
+    hairTime.value = '9:00';
+    hairTime.dispatchEvent(new dom.window.Event('change'));
+    const photoTime = localPane.querySelector('[data-pending="撮影開始時間"]');
+    photoTime.value = '10:30';
+    photoTime.dispatchEvent(new dom.window.Event('change'));
+    localPane.querySelector('.quick-save-btn').click();
+    await settle();
+    const vieTok = ctx.apiLogin('VIE', 'CHANGE-ME-VIE').session.token;
+    const savedDetail = ctx.apiGetReservationDetail(vieTok, 'VIE-901').detail;
+    check('ヘアメイク開始時間が保存できる', savedDetail['ヘアメイク開始時間'] === '9:00');
+    check('撮影開始時間が保存できる', savedDetail['撮影開始時間'] === '10:30');
   }
 
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
