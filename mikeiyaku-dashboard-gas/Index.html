@@ -552,9 +552,9 @@
         </p>
         <div>
           <label class="text-xs font-semibold text-slate-500 block mb-1">CSVファイル</label>
-          <input type="file" id="csv-file-input" accept=".csv,.txt,.tsv,text/csv,text/plain" class="w-full border border-slate-300 rounded-lg text-sm p-2 bg-white">
-          <p class="text-xs text-slate-400 mt-1">UTF-8 / Shift_JIS のいずれのエンコードにも対応しています。カンマ区切り・タブ区切りのどちらでも取り込めます。</p>
-          <p class="text-xs text-amber-600 mt-1">Excelのブック（.xls / .xlsx）は取り込めません。Excelで開き「名前を付けて保存」→ファイルの種類「CSV UTF-8（コンマ区切り）」で保存し直してください。</p>
+          <input type="file" id="csv-file-input" accept=".csv,.txt,.tsv,.xls,.xlsx,text/csv,text/plain,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="w-full border border-slate-300 rounded-lg text-sm p-2 bg-white">
+          <p class="text-xs text-slate-400 mt-1">CSV・タブ区切り・Excelブック（.xls / .xlsx）のいずれでも取り込めます。文字コードは UTF-8 / Shift_JIS どちらでも構いません。</p>
+          <p class="text-xs text-slate-400 mt-1">Excelブックは取り込み時に自動でスプレッドシート形式へ変換します（変換用の一時ファイルは処理後に削除されます）。事前にCSVへ保存し直す必要はありません。</p>
           <p id="csv-file-summary" class="hidden text-xs text-slate-600 mt-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"></p>
         </div>
 

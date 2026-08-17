@@ -124,7 +124,7 @@ function repairOfficeCodeFormatting_(ss, shopList) {
   if (staff) {
     staff.getRange(1, 1, staff.getMaxRows(), 2).setNumberFormat('@');
     repairCodeColumn_(staff, 1, 2, 3);
-    repairCodeColumn_(staff, 2, 2, 0);
+    repairCodeColumn_(staff, 2, 2, 5); // 社員番号は5桁（01234のように0で始まる人がいる）
   }
 
   // ③ 店舗別データシート
@@ -136,7 +136,7 @@ function repairOfficeCodeFormatting_(ss, shopList) {
     { col: 4, width: 2 },  // 月
     { col: 5, width: 8 },  // 対象年月日
     { col: 6, width: 3 },  // 営業所コード
-    { col: 7, width: 0 },  // 社員番号（桁数が決まっていないため桁合わせはしない）
+    { col: 7, width: 5 },  // 社員番号（5桁。01234のように0で始まる人がいる）
     { col: 12, width: 6 }  // 出発年月
   ];
   shopList.forEach(function (shop) {

@@ -160,14 +160,45 @@ function normalizeOfficeCode_(value) {
 }
 
 /**
+ * 社員番号の桁数。営業日報の社員番号は5桁で、「01234」のように0で始まる人がいる。
+ * 桁数が変わった場合はここを直せば全体に反映される。
+ */
+const EMPLOYEE_NO_LENGTH = 5;
+
+/**
+ * 社員番号を正規化する。営業所コードと同じく、スプレッドシートに書き込むと
+ * 「01234」が数値1234として保存され、先頭の0が失われる。
+ * 同じ人が「01234」と「1234」に分かれてしまわないよう、読み取り時に5桁へ戻す。
+ * 英字を含む番号や5桁以上の番号はそのまま返す。
+ */
+function normalizeEmployeeNo_(value) {
+  const s = String(value === null || value === undefined ? '' : value).trim();
+  if (s === '') return '';
+  if (/^\d+$/.test(s) && s.length < EMPLOYEE_NO_LENGTH) {
+    return (new Array(EMPLOYEE_NO_LENGTH + 1).join('0') + s).slice(-EMPLOYEE_NO_LENGTH);
+  }
+  return s;
+}
+
+/**
  * 重複判定に使う値を、表記の揺れを吸収した形にそろえる。
  * スプレッドシートは「046」を数値46として保存するため、CSV側の文字列と
  * そのまま比べると別物になってしまう。数字だけの値は先頭の0を落として比べる。
+ * これにより「046」と「46」、「01234」と「1234」が同じものとして扱われる。
  */
 function canonicalKeyPart_(value) {
   const s = String(value === null || value === undefined ? '' : value).trim();
   if (/^\d+$/.test(s)) return String(parseInt(s, 10));
   return s;
+}
+
+/**
+ * 社員を一意に識別するキー。社員番号の桁落ちがあっても同一人物とみなす。
+ * これを使わないと、同じ人が個人別サマリで2人に分かれたり、
+ * スタッフマスタへ重複して自動登録されたりする。
+ */
+function employeeKey_(empNo, empName) {
+  return canonicalKeyPart_(empNo) + '_' + String(empName === null || empName === undefined ? '' : empName).trim();
 }
 
 function getAllShopMasterRows_() {
@@ -219,8 +250,8 @@ function getStaffMasterRows_() {
   const values = sheet.getRange(2, 1, lastRow - 1, 6).getValues();
   const list = [];
   values.forEach(function (row, i) {
-    const officeCode = String(row[0] || '').trim();
-    const empNo = row[1];
+    const officeCode = normalizeOfficeCode_(row[0]);
+    const empNo = normalizeEmployeeNo_(row[1]);
     const empName = String(row[2] || '').trim();
     const googleAccount = String(row[3] || '').trim();
     const role = normalizeRole_(row[4]);
@@ -355,10 +386,11 @@ function getMetaMasters() {
         const empName = row[7]; // 社員名（8列目）
         if ((empNo === '' || empNo === null) && (empName === '' || empName === null)) return;
 
-        const key = String(empNo) + '_' + String(empName);
+        // 桁落ちした社員番号でも同一人物としてまとめる
+        const key = employeeKey_(empNo, empName);
         if (!employeeMap[key]) {
           employeeMap[key] = {
-            employeeNo: empNo,
+            employeeNo: normalizeEmployeeNo_(empNo),
             employeeName: empName,
             officeCode: row[5] // 営業所コード（6列目）
           };
@@ -565,12 +597,13 @@ function getEmployeeSummary(periodKey) {
     const order = [];
 
     const ensureEmployee = function (officeCode, empNo, empName) {
-      const key = String(empNo) + '_' + String(empName);
+      // 社員番号が桁落ちしていても同一人物としてまとめる（01234 と 1234 を分けない）
+      const key = employeeKey_(empNo, empName);
       if (!employeesByKey[key]) {
         employeesByKey[key] = {
-          officeCode: officeCode,
-          officeName: shopNameByCode[officeCode] || officeCode,
-          employeeNo: empNo,
+          officeCode: normalizeOfficeCode_(officeCode),
+          officeName: shopNameByCode[normalizeOfficeCode_(officeCode)] || officeCode,
+          employeeNo: normalizeEmployeeNo_(empNo),
           employeeName: empName,
           stats: { '未成約数': 0, 'リセール数': 0, 'リセール中': 0, '成約件数': 0, 'PAX数': 0 }
         };
@@ -833,10 +866,7 @@ function htmlCellToText_(cell) {
  */
 function importUncontractedCsv(csvText) {
   try {
-    const ctx = getCurrentUserContext_();
-    if (!ctx.canImportCsv) {
-      throw new Error('CSVインポートはマスタ管理権限を持つユーザーのみ実行できます。');
-    }
+    assertCanImportCsv_();
 
     if (!csvText || typeof csvText !== 'string') {
       throw new Error('CSVデータが空です。');
@@ -848,6 +878,115 @@ function importUncontractedCsv(csvText) {
     if (!rows || rows.length === 0) {
       throw new Error('ファイルの解析結果が空でした。');
     }
+    return importParsedRows_(rows);
+  } catch (err) {
+    return { success: false, error: err.message, detail: err.stack };
+  }
+}
+
+/** CSV取込の権限チェック（テキスト・Excelブックの両方から使う） */
+function assertCanImportCsv_() {
+  if (!getCurrentUserContext_().canImportCsv) {
+    throw new Error('CSVインポートはマスタ管理権限を持つユーザーのみ実行できます。');
+  }
+}
+
+/**
+ * Excelのブック（.xls / .xlsx）をそのまま取り込む（マスタ管理者のみ）。
+ * 営業日報の抽出ファイルがExcel形式で配布される場合があるため、
+ * Googleドライブでスプレッドシートへ変換してから、CSVと同じ処理に流す。
+ * @param {string} base64Data ファイルの中身（Base64）
+ * @param {string} fileName ファイル名（変換後の一時ファイル名に使う）
+ * @param {string} mimeType ファイルのMIMEタイプ
+ */
+function importUncontractedWorkbook(base64Data, fileName, mimeType) {
+  try {
+    assertCanImportCsv_();
+    if (!base64Data) {
+      throw new Error('ファイルの中身が空です。');
+    }
+    const rows = readWorkbookRows_(base64Data, fileName, mimeType);
+    if (!rows || rows.length === 0) {
+      throw new Error('Excelブックの中身が空でした。1枚目のシートにデータが入っているかご確認ください。');
+    }
+    return importParsedRows_(rows);
+  } catch (err) {
+    return { success: false, error: err.message, detail: err.stack };
+  }
+}
+
+/**
+ * Excelブックをドライブ経由でスプレッドシートに変換し、1枚目のシートを行配列として返す。
+ * 変換に使った一時ファイルは必ず削除する。
+ */
+function readWorkbookRows_(base64Data, fileName, mimeType) {
+  if (typeof Drive === 'undefined' || !Drive.Files) {
+    throw new Error(
+      'Excelブック（.xls / .xlsx）を取り込むには、Apps Scriptで「Drive API」を有効にする必要があります。\n' +
+      '【一度だけの設定】Apps Scriptを開き、左側メニューの「サービス」の＋ を押し、\n' +
+      '一覧から「Drive API」を選んで「追加」してください。追加後、この画面を開き直せば取り込めます。\n' +
+      '（設定できない場合は、Excelで「名前を付けて保存」→「CSV UTF-8（コンマ区切り）」で保存し直したファイルをお使いください）'
+    );
+  }
+
+  const safeName = '【一時】取込用_' + (fileName || 'workbook') + '_' + new Date().getTime();
+  const blob = Utilities.newBlob(
+    Utilities.base64Decode(base64Data),
+    mimeType || 'application/vnd.ms-excel',
+    fileName || 'workbook.xls'
+  );
+
+  let tempFileId = null;
+  try {
+    tempFileId = convertToSpreadsheet_(blob, safeName);
+    const converted = SpreadsheetApp.openById(tempFileId);
+    const sheet = converted.getSheets()[0];
+    if (!sheet) throw new Error('Excelブックにシートが見つかりませんでした。');
+    const values = sheet.getDataRange().getValues();
+    return values.map(function (row) { return row.map(workbookCellToText_); });
+  } finally {
+    // 変換用の一時ファイルはドライブに残さない
+    if (tempFileId) {
+      try { DriveApp.getFileById(tempFileId).setTrashed(true); } catch (e) { /* 消せなくても取り込みは続行 */ }
+    }
+  }
+}
+
+/** ブックをスプレッドシート形式へ変換する（Drive APIのv3・v2どちらでも動くようにする） */
+function convertToSpreadsheet_(blob, name) {
+  if (typeof Drive.Files.create === 'function') { // Drive API v3
+    const file = Drive.Files.create({ name: name, mimeType: MimeType.GOOGLE_SHEETS }, blob);
+    return file.id;
+  }
+  if (typeof Drive.Files.insert === 'function') { // Drive API v2
+    const file = Drive.Files.insert({ title: name, mimeType: MimeType.GOOGLE_SHEETS }, blob, { convert: true });
+    return file.id;
+  }
+  throw new Error('Drive APIの形式を判別できませんでした。Apps Scriptの「サービス」でDrive APIを追加し直してください。');
+}
+
+/**
+ * 変換後のセルを、CSVで読んだときと同じ文字列にそろえる。
+ * Excel側で「20260801」が数値に、日付列が日付型になっていることがあるため。
+ */
+function workbookCellToText_(value) {
+  if (value === null || value === undefined) return '';
+  if (Object.prototype.toString.call(value) === '[object Date]') {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyyMMdd');
+  }
+  if (typeof value === 'number') {
+    // 小数でない限り、指数表記にならない形の文字列にする
+    return (value === Math.floor(value)) ? String(Math.floor(value)) : String(value);
+  }
+  return String(value).trim();
+}
+
+/**
+ * 解析済みの行配列（1行目以降に見出し行を含む）を店舗シートへ投入する。
+ * CSVからでもExcelブックからでも、ここから先の処理は共通。
+ */
+function importParsedRows_(rows) {
+  try {
 
     // ヘッダー行（「対象年月日」というセルを含む行）を自動検出する。
     // 「理由別サマリ」等のメタ情報行が前段にあっても、また左端に空列や連番列が
@@ -888,7 +1027,7 @@ function importUncontractedCsv(csvText) {
     // スタッフマスタの既存キー（社員番号_社員名）を先に読み込んでおく（自動登録の重複防止）
     const staffMasterKeys = {};
     getStaffMasterRows_().forEach(function (s) {
-      staffMasterKeys[String(s.employeeNo) + '_' + String(s.employeeName)] = true;
+      staffMasterKeys[employeeKey_(s.employeeNo, s.employeeName)] = true;
     });
     const staffMasterSheet = ss.getSheetByName(STAFF_MASTER_SHEET_NAME);
     const newStaffRows = []; // スタッフマスタへ追記する行（[営業所コード, 社員番号, 社員名, '', '一般', true]）
@@ -929,10 +1068,10 @@ function importUncontractedCsv(csvText) {
         autoRegisteredShopCodes.push(officeCode);
       }
 
-      const empNo = getVal(row, '社員番号');
+      const empNo = normalizeEmployeeNo_(getVal(row, '社員番号'));
       const empName = getVal(row, '社員名');
       if (empName || empNo) {
-        const staffKey = String(empNo) + '_' + String(empName);
+        const staffKey = employeeKey_(empNo, empName);
         if (!staffMasterKeys[staffKey]) {
           staffMasterKeys[staffKey] = true;
           newStaffRows.push([officeCode, empNo, empName, '', ROLE_GENERAL, true]);
@@ -1316,16 +1455,69 @@ function removeDuplicateRows(dryRun) {
       }
     });
 
+    // スタッフマスタ側の重複（社員番号の桁落ちで同じ人が二重登録された分）も掃除する
+    const staffRemoved = removeDuplicateStaffRows_(ss, dryRun);
+
     return {
       success: true,
       dryRun: !!dryRun,
       removedCount: totalRemoved,
       keptCount: totalKept,
-      perSheetCounts: perSheet
+      perSheetCounts: perSheet,
+      staffRemovedCount: staffRemoved
     };
   } catch (err) {
     return { success: false, error: err.message, detail: err.stack };
   }
+}
+
+/**
+ * スタッフマスタの重複行（同一人物が二重登録されたもの）を削除する。
+ * 社員番号の桁落ちで「01234」と「1234」が別人として登録されてしまった分を掃除する。
+ * Googleアカウントや権限レベルが設定されている行を優先して残す。
+ * @param {Spreadsheet} ss 対象のスプレッドシート
+ * @param {boolean} dryRun trueなら件数を数えるだけ
+ * @return {number} 削除した（または削除できる）行数
+ */
+function removeDuplicateStaffRows_(ss, dryRun) {
+  const sheet = ss.getSheetByName(STAFF_MASTER_SHEET_NAME);
+  if (!sheet) return 0;
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 3) return 0;
+
+  const values = sheet.getRange(2, 1, lastRow - 1, 6).getValues();
+  // 設定が入っている行ほど残す価値が高い
+  const weight = function (row) {
+    let w = 0;
+    if (String(row[3] || '').trim() !== '') w += 2;              // Googleアカウント
+    if (normalizeRole_(row[4]) !== ROLE_GENERAL) w += 1;         // 一般以外の権限
+    return w;
+  };
+
+  const bestByKey = {};
+  values.forEach(function (row, idx) {
+    const key = employeeKey_(row[1], row[2]);
+    if (key === '_') return; // 空行は対象外
+    const current = bestByKey[key];
+    if (current === undefined || weight(row) > weight(values[current])) {
+      bestByKey[key] = idx;
+    }
+  });
+
+  const keepIdx = {};
+  Object.keys(bestByKey).forEach(function (k) { keepIdx[bestByKey[k]] = true; });
+  // 空行はそのまま残す（判定対象外のため）
+  values.forEach(function (row, idx) {
+    if (employeeKey_(row[1], row[2]) === '_') keepIdx[idx] = true;
+  });
+
+  const kept = values.filter(function (row, idx) { return keepIdx[idx]; });
+  const removed = values.length - kept.length;
+  if (removed <= 0 || dryRun) return removed;
+
+  sheet.getRange(2, 1, kept.length, 6).setValues(kept);
+  sheet.getRange(2 + kept.length, 1, removed, 6).clearContent();
+  return removed;
 }
 
 /**
@@ -1706,7 +1898,7 @@ function getStaffMasterList() {
     shopList.forEach(function (s) { shopNameByCode[s.code] = s.name; });
 
     const masterKeys = {};
-    master.forEach(function (s) { masterKeys[String(s.employeeNo) + '_' + String(s.employeeName)] = true; });
+    master.forEach(function (s) { masterKeys[employeeKey_(s.employeeNo, s.employeeName)] = true; });
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const unregisteredMap = {};
@@ -1722,10 +1914,10 @@ function getStaffMasterList() {
         const empName = row[1];
         if ((empNo === '' || empNo === null) && (empName === '' || empName === null)) return;
 
-        const key = String(empNo) + '_' + String(empName);
+        const key = employeeKey_(empNo, empName);
         if (masterKeys[key]) return;
         if (!unregisteredMap[key]) {
-          unregisteredMap[key] = { officeCode: shop.code, officeName: shop.name, employeeNo: empNo, employeeName: empName };
+          unregisteredMap[key] = { officeCode: shop.code, officeName: shop.name, employeeNo: normalizeEmployeeNo_(empNo), employeeName: empName };
         }
       });
     });
@@ -1776,7 +1968,8 @@ function addStaffMaster(officeCode, employeeNo, employeeName, googleAccount, rol
     }
 
     const existing = getStaffMasterRows_();
-    if (existing.some(function (s) { return String(s.employeeNo) === String(employeeNo) && s.employeeName === employeeName; })) {
+    // 社員番号の桁落ちがあっても同一人物として検出する
+    if (existing.some(function (s) { return employeeKey_(s.employeeNo, s.employeeName) === employeeKey_(employeeNo, employeeName); })) {
       throw new Error('同じ社員番号・社員名のスタッフが既に登録されています。');
     }
     if (googleAccount && existing.some(function (s) { return s.googleAccount && s.googleAccount.toLowerCase() === googleAccount.toLowerCase(); })) {
@@ -1788,7 +1981,7 @@ function addStaffMaster(officeCode, employeeNo, employeeName, googleAccount, rol
     if (!sheet) {
       throw new Error(setupRequiredMessage_('スタッフマスタ'));
     }
-    sheet.appendRow([officeCode, employeeNo === undefined || employeeNo === null ? '' : employeeNo, employeeName, googleAccount, role, true]);
+    sheet.appendRow([officeCode, normalizeEmployeeNo_(employeeNo), employeeName, googleAccount, role, true]);
 
     return { success: true };
   } catch (err) {

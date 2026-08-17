@@ -1610,23 +1610,41 @@ function detectBinaryWorkbook(buffer) {
   return null;
 }
 
-// CSVファイルをテキスト化する。営業日報エクスポートはUTF-8/Shift_JISいずれもあり得るため、
-// まずUTF-8として厳密デコードを試み、失敗した場合はShift_JISとして読み直す。
-function readCsvFileAsText(file) {
+/** ArrayBufferをBase64文字列にする（Excelブックをサーバーへ送るため） */
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunk = 0x8000; // 一度に渡す量が多すぎると環境によっては失敗するため分割する
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+// 選択されたファイルを読み込み、取り込み方法を判定する。
+// ・Excelのブック（.xls / .xlsx）→ Base64のまま送り、サーバー側でスプレッドシートに変換する
+// ・テキスト（CSV/TSV）→ UTF-8で厳密デコードし、失敗した場合はShift_JISで読み直す
+function readImportFile(file) {
   return file.arrayBuffer().then(function (buffer) {
     const workbookType = detectBinaryWorkbook(buffer);
     if (workbookType) {
-      throw new Error(
-        'このファイルはExcelのブック形式（' + workbookType + '）のため、そのままでは取り込めません。\n' +
-        'Excelで開いたあと「ファイル」→「名前を付けて保存」と進み、ファイルの種類で\n' +
-        '「CSV UTF-8（コンマ区切り）(*.csv)」を選んで保存し直してから、その .csv を取り込んでください。'
-      );
+      return {
+        kind: 'workbook',
+        extension: workbookType,
+        base64: arrayBufferToBase64(buffer),
+        fileName: file.name,
+        mimeType: file.type || (workbookType === '.xlsx'
+          ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+          : 'application/vnd.ms-excel')
+      };
     }
+    let text;
     try {
-      return new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+      text = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
     } catch (e) {
-      return new TextDecoder('shift_jis').decode(buffer);
+      text = new TextDecoder('shift_jis').decode(buffer);
     }
+    return { kind: 'text', text: text };
   });
 }
 
@@ -1644,15 +1662,23 @@ function previewSelectedCsv() {
 
   box.classList.remove('hidden');
   box.textContent = 'ファイルを確認しています…';
-  readCsvFileAsText(selectedCsvFile).then(function (text) {
+  readImportFile(selectedCsvFile).then(function (payload) {
+    const sizeKb = Math.max(1, Math.round(selectedCsvFile.size / 1024));
+
+    if (payload.kind === 'workbook') {
+      // Excelブックは中身を開かないと行数が分からないため、件数は取り込み時に判明する
+      box.textContent = selectedCsvFile.name + '（' + sizeKb + 'KB）：Excelブック（' + payload.extension + '）です。'
+        + '取り込み時にスプレッドシート形式へ自動変換します。CSVに変換しておく必要はありません。';
+      return;
+    }
+
     // ヘッダー行を含む、内容のある行を数える（正確な件数はサーバー側で判定される）
-    const lines = text.split(/\r\n|\r|\n/).filter(function (l) { return l.trim() !== ''; });
+    const lines = payload.text.split(/\r\n|\r|\n/).filter(function (l) { return l.trim() !== ''; });
     let headerIdx = -1;
     for (let i = 0; i < lines.length && i < 100; i++) {
       if (lines[i].indexOf('対象年月日') !== -1) { headerIdx = i; break; }
     }
     csvEstimatedRows = headerIdx === -1 ? 0 : lines.length - headerIdx - 1;
-    const sizeKb = Math.max(1, Math.round(selectedCsvFile.size / 1024));
     box.textContent = headerIdx === -1
       ? selectedCsvFile.name + '（' + sizeKb + 'KB）：見出し行が見つかりませんでした。取り込むと詳しい理由が表示されます。'
       : selectedCsvFile.name + '（' + sizeKb + 'KB）：データ ' + csvEstimatedRows + ' 行を検出しました。'
@@ -1707,8 +1733,8 @@ function onSubmitCsvImport() {
   startCsvProgress();
   showLoading(true);
 
-  readCsvFileAsText(selectedCsvFile).then(function (csvText) {
-    google.script.run
+  readImportFile(selectedCsvFile).then(function (payload) {
+    const runner = google.script.run
       .withSuccessHandler(function (res) {
         showLoading(false);
         finishCsvProgress();
@@ -1730,9 +1756,15 @@ function onSubmitCsvImport() {
         finishCsvProgress();
         submitBtn.disabled = false;
         renderCsvImportResult({ success: false, error: '通信エラーが発生しました：' + err.message });
-        showToast('通信エラー（importUncontractedCsv）: ' + err.message, 'error');
-      })
-      .importUncontractedCsv(csvText);
+        showToast('通信エラー（CSVインポート）: ' + err.message, 'error');
+      });
+
+    // Excelブックはサーバー側でスプレッドシートに変換してから取り込む
+    if (payload.kind === 'workbook') {
+      runner.importUncontractedWorkbook(payload.base64, payload.fileName, payload.mimeType);
+    } else {
+      runner.importUncontractedCsv(payload.text);
+    }
   }).catch(function (err) {
     showLoading(false);
     finishCsvProgress();
