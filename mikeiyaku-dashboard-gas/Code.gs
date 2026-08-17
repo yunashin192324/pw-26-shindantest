@@ -1819,10 +1819,17 @@ function clearAllImportedData(confirmText) {
       throw new Error('確認のため「削除」と入力してください。データは削除していません。');
     }
     const ss = SpreadsheetApp.getActiveSpreadsheet();
+    // 「無効」にした店舗のシートにもデータが残るため、有効な店舗だけを見る
+    // getShopList_() ではなく店舗マスタの全行を対象にする。
+    const rows = getAllShopMasterRows_();
+    const shops = (rows === null) ? DEFAULT_SHOP_LIST.slice() : rows;
     let cleared = 0;
-    getShopList_().forEach(function (shop) {
+    const clearedSheets = {};
+    shops.forEach(function (shop) {
+      if (!shop.name || clearedSheets[shop.name]) return;
       const sheet = ss.getSheetByName(shop.name);
       if (!sheet) return;
+      clearedSheets[shop.name] = true;
       const lastRow = sheet.getLastRow();
       if (lastRow < 2) return;
       sheet.getRange(2, 1, lastRow - 1, HEADERS_MAIN.length).clearContent();
