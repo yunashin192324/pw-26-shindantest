@@ -46,8 +46,66 @@ document.addEventListener('DOMContentLoaded', function () {
   initModalEvents();
   initCsvImportEvents();
   initAdminEvents();
+  initSetupEvents();
+  checkSetupStatus();
   loadAllData();
 });
+
+// ============================================================================
+// 初期セットアップ（店舗マスタ・スタッフマスタが未作成のときの案内）
+// ============================================================================
+function initSetupEvents() {
+  document.getElementById('btn-run-setup').addEventListener('click', onRunInitialSetup);
+}
+
+/** シートが揃っているか確認し、未完了なら画面上部に案内バーを出す */
+function checkSetupStatus() {
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success || res.ready) {
+        document.getElementById('setup-banner').classList.add('hidden');
+        return;
+      }
+      const banner = document.getElementById('setup-banner');
+      banner.classList.remove('hidden');
+      document.getElementById('setup-banner-detail').textContent =
+        '未作成のシート：' + res.missingSheets.join('、');
+      // マスタ管理権限が無い人はボタンを押せないため、担当者への依頼を促す
+      document.getElementById('btn-run-setup').classList.toggle('hidden', !res.canRunSetup);
+      document.getElementById('setup-banner-note').textContent = res.canRunSetup
+        ? 'このボタンは何度押しても安全です。既にあるシートのデータが消えることはありません。'
+        : 'マスタ管理権限を持つ担当者に、初期セットアップの実行を依頼してください。';
+    })
+    .withFailureHandler(function () {
+      // 状態確認そのものが失敗した場合は、通常のエラー表示に任せる
+    })
+    .getSetupStatus();
+}
+
+function onRunInitialSetup() {
+  const btn = document.getElementById('btn-run-setup');
+  btn.disabled = true;
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false);
+      btn.disabled = false;
+      if (res && res.success) {
+        document.getElementById('setup-banner').classList.add('hidden');
+        showToast('初期セットアップが完了しました（' + res.shopCount + '店舗を登録）。', 'success');
+        loadAllData();
+        loadAdminData();
+      } else {
+        showToast('初期セットアップに失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false);
+      btn.disabled = false;
+      showToast('通信エラー（runInitialSetup）: ' + err.message, 'error');
+    })
+    .runInitialSetup();
+}
 
 function loadAllData() {
   showLoading(true);

@@ -24,9 +24,20 @@ function onOpen() {
 }
 
 /**
- * メイン実行関数。全シートを初期化する。
+ * メイン実行関数。全シートを初期化する（スプレッドシートのメニューから実行する用）。
+ * 完了メッセージの表示にUIを使うため、ウェブアプリ側からは呼べない。
+ * ウェブアプリからは buildAllSheets_() を直接呼ぶこと。
  */
 function setupAllSheets() {
+  buildAllSheets_();
+  SpreadsheetApp.getUi().alert('シート構築が完了しました。\n（既存シートはスキップされています）');
+}
+
+/**
+ * シート構築の本体。UIを一切使わないため、メニューからでもウェブアプリからでも実行できる。
+ * 何度実行しても安全（既存シートは中身を残し、足りない見出しだけを補う）。
+ */
+function buildAllSheets_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
   // ---- 10店舗マスタ（店番・店舗名） ------------------------------------
@@ -86,8 +97,6 @@ function setupAllSheets() {
   createEmployeeSummarySheet_(ss, '個人別サマリ(下期)', SECOND_HALF_CODES);
   createShopMasterSheet_(ss, SHOP_LIST);
   createStaffMasterSheet_(ss);
-
-  SpreadsheetApp.getUi().alert('シート構築が完了しました。\n（既存シートはスキップされています）');
 }
 
 /**

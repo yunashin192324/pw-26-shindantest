@@ -1188,6 +1188,59 @@ function assertCanManageMaster_() {
 }
 
 /**
+ * 初期セットアップがまだ済んでいないときの案内文。
+ * 「setupAllSheets() を実行」では何をすればよいか伝わらないため、
+ * 画面上のボタンとスプレッドシート側のメニュー、両方の手順を示す。
+ */
+function setupRequiredMessage_(sheetName) {
+  return '「' + sheetName + '」シートがまだ作られていません（初期セットアップが未実行です）。\n' +
+    'この画面の上部に出ている「初期セットアップを実行する」ボタンを押してください。\n' +
+    'ボタンが出ていない場合は、元のスプレッドシートを開き、メニューバーの\n' +
+    '「46期未成約ダッシュボード」→「① 全シートを初期化（InitSheet）」を実行してください。';
+}
+
+/**
+ * 初期セットアップが済んでいるか（店舗マスタ・スタッフマスタが存在するか）を返す。
+ * 画面側は、未完了ならセットアップ用のボタンを出す。
+ */
+function getSetupStatus() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const missing = [SHOP_MASTER_SHEET_NAME, STAFF_MASTER_SHEET_NAME].filter(function (name) {
+      return !ss.getSheetByName(name);
+    });
+    return {
+      success: true,
+      ready: missing.length === 0,
+      missingSheets: missing,
+      canRunSetup: getCurrentUserContext_().canManageMaster
+    };
+  } catch (err) {
+    return { success: false, error: err.message, detail: err.stack };
+  }
+}
+
+/**
+ * ウェブアプリ側から初期セットアップ（全シート構築）を実行する。
+ * スプレッドシートのメニューを開かなくても導入を完了できるようにするためのもの。
+ * 何度実行しても安全で、既存シートのデータは失われない。
+ */
+function runInitialSetup() {
+  try {
+    assertCanManageMaster_();
+    buildAllSheets_();
+    const status = getSetupStatus();
+    if (!status.ready) {
+      throw new Error('セットアップを実行しましたが、次のシートが作成されていません: ' +
+        status.missingSheets.join('、'));
+    }
+    return { success: true, shopCount: getShopList_().length };
+  } catch (err) {
+    return { success: false, error: err.message, detail: err.stack };
+  }
+}
+
+/**
  * 店舗マスタの全件（有効・無効を問わず）を返す。マスタ管理者のみ利用可能。
  */
 function getShopMasterList() {
@@ -1195,7 +1248,7 @@ function getShopMasterList() {
     assertCanManageMaster_();
     const rows = getAllShopMasterRows_();
     if (rows === null) {
-      throw new Error('「店舗マスタ」シートが見つかりません。InitSheet.gs の setupAllSheets() を実行してください。');
+      throw new Error(setupRequiredMessage_('店舗マスタ'));
     }
     return { success: true, shops: rows };
   } catch (err) {
@@ -1219,7 +1272,7 @@ function addShopMaster(code, name) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const masterSheet = ss.getSheetByName(SHOP_MASTER_SHEET_NAME);
     if (!masterSheet) {
-      throw new Error('「店舗マスタ」シートが見つかりません。InitSheet.gs の setupAllSheets() を実行してください。');
+      throw new Error(setupRequiredMessage_('店舗マスタ'));
     }
 
     const existing = getAllShopMasterRows_() || [];
@@ -1563,7 +1616,7 @@ function addStaffMaster(officeCode, employeeNo, employeeName, googleAccount, rol
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(STAFF_MASTER_SHEET_NAME);
     if (!sheet) {
-      throw new Error('「スタッフマスタ」シートが見つかりません。InitSheet.gs の setupAllSheets() を実行してください。');
+      throw new Error(setupRequiredMessage_('スタッフマスタ'));
     }
     sheet.appendRow([officeCode, employeeNo === undefined || employeeNo === null ? '' : employeeNo, employeeName, googleAccount, role, true]);
 

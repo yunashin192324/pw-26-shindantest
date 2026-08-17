@@ -97,6 +97,24 @@
 
   <main class="max-w-[1600px] mx-auto px-4 py-5">
 
+    <!-- ============ 初期セットアップ未実行のときだけ出る案内バー ============ -->
+    <div id="setup-banner" class="hidden mb-5 bg-amber-50 border border-amber-300 rounded-xl p-4">
+      <div class="flex flex-wrap items-start gap-3">
+        <i class="fa-solid fa-triangle-exclamation text-amber-500 text-xl mt-0.5"></i>
+        <div class="flex-1 min-w-0">
+          <p class="font-bold text-amber-800">初期セットアップがまだ完了していません</p>
+          <p class="text-sm text-amber-700 mt-1">
+            データを保存するシート（店舗マスタ・スタッフマスタなど）が作られていないため、画面が正しく動きません。
+          </p>
+          <p id="setup-banner-detail" class="text-xs text-amber-600 mt-1"></p>
+          <p id="setup-banner-note" class="text-xs text-amber-600 mt-1"></p>
+        </div>
+        <button id="btn-run-setup" class="bg-amber-600 hover:bg-amber-700 text-white rounded-lg px-4 py-2 text-sm font-semibold shadow whitespace-nowrap">
+          <i class="fa-solid fa-wand-magic-sparkles"></i> 初期セットアップを実行する
+        </button>
+      </div>
+    </div>
+
     <!-- ============ タブ1: 店舗分析ダッシュボード ============ -->
     <section id="tab-panel-dashboard" class="tab-panel space-y-5">
       <div class="bg-white rounded-xl shadow p-4 flex flex-wrap gap-4 items-end">
