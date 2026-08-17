@@ -138,6 +138,26 @@ function ensureColumnCount_(sheet, needed) {
 }
 
 /**
+ * シートの行数が必要数に満たない場合に行を追加する。
+ * 新規シートの既定行数（1000行）を超える表を書き込む際に必要。
+ */
+function ensureRowCount_(sheet, needed) {
+  const current = sheet.getMaxRows();
+  if (current < needed) {
+    sheet.insertRowsAfter(current, needed - current);
+  }
+}
+
+/**
+ * シートに中身が無いか（作りかけで放置された状態か）を判定する。
+ * 途中でエラーになったシートを「既にある」と見なして永久にスキップしてしまうと、
+ * 空のサマリシートが残り続けてしまうため、再実行時に作り直せるようにする。
+ */
+function isSheetEmpty_(sheet) {
+  return sheet.getLastRow() === 0 && sheet.getLastColumn() === 0;
+}
+
+/**
  * 既存の店舗別データシートに、見出しが欠けている列がある場合に補う。
  * 既存の行データはそのまま残る。何度実行しても安全。
  */
@@ -167,12 +187,13 @@ function repairShopSheetHeaders_(sheet, headers) {
 function createShopSummarySheet_(ss, shopList, monthCodesFull) {
   const sheetName = '店舗別サマリ';
   const existing = ss.getSheetByName(sheetName);
-  if (existing) {
+  if (existing && !isSheetEmpty_(existing)) {
     Logger.log('シート「' + sheetName + '」は既に存在するためスキップしました。');
     return;
   }
 
-  const sheet = ss.insertSheet(sheetName);
+  // 中身が空のシートが残っている場合は、作りかけの状態なのでそのまま作り直す
+  const sheet = existing || ss.insertSheet(sheetName);
 
   const subHeaders = ['店番', '店舗', '未成約件数', 'リセールアクション数', '成約件数', 'PAX数', 'リセール中', '失注数', 'リセール率', 'リセール成約率'];
   const blockLabels = ['46期累計'].concat(monthCodesFull.map(monthLabel_));
@@ -185,6 +206,10 @@ function createShopSummarySheet_(ss, shopList, monthCodesFull) {
     cursor += 11;
   });
   const lastUsedCol = blockStartCols[blockStartCols.length - 1] + 9;
+
+  // 新規シートは既定26列しかないため、書き込む前に必要な列数まで広げる
+  ensureColumnCount_(sheet, lastUsedCol);
+  ensureRowCount_(sheet, 2 + shopList.length);
 
   // 1行目（ブロックラベル・結合セル）・2行目（サブヘッダー）
   blockLabels.forEach(function (label, idx) {
@@ -275,31 +300,34 @@ function createShopSummarySheet_(ss, shopList, monthCodesFull) {
  */
 function createEmployeeSummarySheet_(ss, sheetName, monthCodes) {
   const existing = ss.getSheetByName(sheetName);
-  if (existing) {
+  if (existing && !isSheetEmpty_(existing)) {
     Logger.log('シート「' + sheetName + '」は既に存在するためスキップしました。');
     return;
   }
 
-  const sheet = ss.insertSheet(sheetName);
+  // 中身が空のシートが残っている場合は、作りかけの状態なのでそのまま作り直す
+  const sheet = existing || ss.insertSheet(sheetName);
 
   const basicHeaders = ['営業所コード', '営業所名', '社員番号', '社員名'];
+  const metricHeaders = ['リセール数', 'リセール中', '成約件数', 'PAX数'];
+  const blockLabels = ['累計'].concat(monthCodes.map(monthLabel_));
+  const lastBlockStart = 5 + (blockLabels.length - 1) * 5;
+  const totalCols = lastBlockStart + 3;
+
+  // 新規シートは既定26列しかないため、書き込む前に必要な列数まで広げる
+  ensureColumnCount_(sheet, totalCols);
+
   basicHeaders.forEach(function (label, idx) {
     const col = idx + 1;
     sheet.getRange(1, col, 2, 1).merge();
     sheet.getRange(1, col).setValue(label);
   });
 
-  const metricHeaders = ['リセール数', 'リセール中', '成約件数', 'PAX数'];
-  const blockLabels = ['累計'].concat(monthCodes.map(monthLabel_));
-
   blockLabels.forEach(function (label, idx) {
     const startCol = 5 + idx * 5;
     sheet.getRange(1, startCol, 1, 4).merge().setValue(label);
     sheet.getRange(2, startCol, 1, 4).setValues([metricHeaders]);
   });
-
-  const lastBlockStart = 5 + (blockLabels.length - 1) * 5;
-  const totalCols = lastBlockStart + 3;
 
   sheet.getRange(1, 1, 2, totalCols)
     .setFontWeight('bold')

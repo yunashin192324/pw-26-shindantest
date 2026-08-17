@@ -640,6 +640,7 @@ function addUncontractedData(rowObject) {
 
     const lastRow = sheet.getLastRow();
     const targetRowIndex = lastRow + 1;
+    ensureRowCapacity_(sheet, targetRowIndex);
     sheet.getRange(targetRowIndex, 1, 1, HEADERS_MAIN.length).setValues([newRow]);
 
     return {
@@ -944,7 +945,9 @@ function importUncontractedCsv(csvText) {
     }
 
     if (newStaffRows.length > 0 && staffMasterSheet) {
-      staffMasterSheet.getRange(staffMasterSheet.getLastRow() + 1, 1, newStaffRows.length, 6).setValues(newStaffRows);
+      const staffStartRow = staffMasterSheet.getLastRow() + 1;
+      ensureRowCapacity_(staffMasterSheet, staffStartRow + newStaffRows.length - 1);
+      staffMasterSheet.getRange(staffStartRow, 1, newStaffRows.length, 6).setValues(newStaffRows);
     }
 
     // 重複判定キー：対象年月日＋営業所コード＋社員番号＋都市コード＋出発年月
@@ -987,6 +990,7 @@ function importUncontractedCsv(csvText) {
       if (newRows.length === 0) return;
       const sheet = ss.getSheetByName(sheetName);
       const startRow = sheet.getLastRow() + 1;
+      ensureRowCapacity_(sheet, startRow + newRows.length - 1);
       sheet.getRange(startRow, 1, newRows.length, HEADERS_MAIN.length).setValues(newRows);
       perSheetCounts[sheetName] = newRows.length;
       importedCount += newRows.length;
@@ -1184,6 +1188,21 @@ function updateCellValue(sheetName, rowIndex, columnName, value) {
 function assertCanManageMaster_() {
   if (!getCurrentUserContext_().canManageMaster) {
     throw new Error('店舗・スタッフマスタの管理はマスタ管理権限を持つユーザーのみ実行できます。');
+  }
+}
+
+/**
+ * 書き込み先の行数が足りない場合に行を追加する。
+ * シートの既定は1000行で自動では増えないため、これを怠ると行が埋まった時点で
+ * 「範囲の座標がシートのサイズから外れています」というエラーになる。
+ * 追加のたびに呼ばれるのを避けるため、必要数より少し多めに確保する。
+ * @param {Sheet} sheet 対象シート
+ * @param {number} needed 必要な行数（最終行の行番号）
+ */
+function ensureRowCapacity_(sheet, needed) {
+  const current = sheet.getMaxRows();
+  if (current < needed) {
+    sheet.insertRowsAfter(current, (needed - current) + 200);
   }
 }
 
@@ -1445,6 +1464,7 @@ function appendShopRowToSummary_(ss, shop) {
   blockLabels.forEach(function () { blockStartCols.push(cursor); cursor += 11; });
 
   const rowNum = sheet.getLastRow() + 1;
+  ensureRowCapacity_(sheet, rowNum);
   const shopName = shop.name;
 
   blockLabels.forEach(function (label, blockIdx) {
