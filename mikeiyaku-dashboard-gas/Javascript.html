@@ -1909,14 +1909,22 @@ function onMergePlaceholderShops() {
         box.textContent = '失敗しました：' + (res ? res.error : '不明なエラー');
         return;
       }
-      if (res.mergedCount === 0) {
+      const renamed = res.renamedCount || 0;
+      if (res.mergedCount === 0 && renamed === 0) {
         box.className = 'text-xs mt-2 text-slate-500';
-        box.textContent = 'まとめる対象の「未設定」店舗はありませんでした。';
+        box.textContent = '直す対象の「未設定」店舗はありませんでした。';
         return;
       }
+      const messages = [];
+      if (renamed > 0) {
+        messages.push(renamed + '件の店舗名を復元しました（' + res.renamedDetails.join(' / ') + '）。');
+      }
+      if (res.mergedCount > 0) {
+        messages.push(res.mergedCount + '件の店舗をまとめ、' + res.movedRowCount +
+          '件のデータを移しました（' + res.details.join(' / ') + '）。');
+      }
       box.className = 'text-xs mt-2 text-emerald-700';
-      box.textContent = res.mergedCount + '件の店舗をまとめ、' + res.movedRowCount +
-        '件のデータを移しました（' + res.details.join(' / ') + '）。';
+      box.textContent = messages.join(' ');
       loadAllData();
       loadAdminData();
     })

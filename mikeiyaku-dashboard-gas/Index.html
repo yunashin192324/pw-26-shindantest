@@ -411,14 +411,20 @@
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div class="border border-slate-200 rounded-lg p-3 lg:col-span-2">
-            <p class="text-sm font-semibold text-slate-700">「未設定(店番)」を正式な店舗にまとめる</p>
+            <p class="text-sm font-semibold text-slate-700">「未設定(店番)」を正しい店舗名に直す</p>
             <p class="text-xs text-slate-500 mt-1 mb-3">
-              同じ店番で「未設定(046)」のような仮の店舗が二重にできてしまった場合に、正式な店舗へ統合します。
-              仮の店舗に入ったデータは正式な店舗へ移し（重複する行は移しません）、スタッフが入力した内容もそのまま残ります。
-              同じ店番の正式な店舗が無い「未設定」は、実績が失われないようそのまま残します。
+              店舗名が「未設定(046)」のようになってしまった場合に、次の2つをまとめて行います。
+            </p>
+            <ul class="text-xs text-slate-500 mb-3 list-disc pl-5 space-y-1">
+              <li><b>名前の復元</b>：店番から分かる店舗（046＝水戸コムボックス310 など）は、正しい店舗名に戻します。データはそのまま引き継がれます。</li>
+              <li><b>重複の統合</b>：同じ店番で正式な店舗と仮の店舗が二重にある場合、仮の店舗のデータを正式な店舗へ移して1つにまとめます（重複する行は移しません）。</li>
+            </ul>
+            <p class="text-xs text-slate-500 mb-3">
+              いずれもスタッフが入力した内容（リセール／STS／成約PAX／ACT日／ACT内容／メモ）は保持されます。
+              店番が分からない「未設定」は、実績が失われないようそのまま残します（店舗名は「編集」から手で直せます）。
             </p>
             <button id="btn-merge-placeholders" class="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-1.5 text-xs font-semibold shadow">
-              <i class="fa-solid fa-object-group"></i> 未設定の店舗をまとめる
+              <i class="fa-solid fa-wand-magic-sparkles"></i> 未設定の店舗名を直す
             </button>
             <p id="merge-result" class="hidden text-xs mt-2"></p>
           </div>

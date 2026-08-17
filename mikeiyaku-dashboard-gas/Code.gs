@@ -1596,6 +1596,12 @@ function mergePlaceholderShops() {
   try {
     assertCanManageMaster_();
     const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    // まず、店番から正式名称が分かる仮登録は名前を戻す。
+    // （初期の10店舗が登録される前にCSVを取り込むと、全店が「未設定(店番)」として
+    //   仮登録されてしまい、統合先の正式な店舗が存在しない状態になる）
+    const restored = restoreKnownShopNames_(ss);
+
     const rows = getAllShopMasterRows_();
     if (rows === null) throw new Error(setupRequiredMessage_('店舗マスタ'));
 
@@ -1674,11 +1680,56 @@ function mergePlaceholderShops() {
       success: true,
       mergedCount: mergedCount,
       movedRowCount: movedRowCount,
-      details: details
+      details: details,
+      renamedCount: restored.renamedCount,
+      renamedDetails: restored.details
     };
   } catch (err) {
     return { success: false, error: err.message, detail: err.stack };
   }
+}
+
+/**
+ * 「未設定(店番)」のうち、店番から正式名称が分かるものを正しい店舗名へ戻す。
+ * 初期10店舗が登録される前にCSVを取り込むと、全店舗が仮登録になってしまうため、
+ * 既知の店番については名前を復元する。
+ * ・同じ名前の店舗が既にある場合は触らない（統合の対象として扱う）
+ * ・店番が既知の一覧に無い場合はそのまま（本当に新しい店舗の可能性があるため）
+ * @return {{renamedCount:number, details:string[]}}
+ */
+function restoreKnownShopNames_(ss) {
+  const masterSheet = ss.getSheetByName(SHOP_MASTER_SHEET_NAME);
+  const rows = getAllShopMasterRows_();
+  if (!masterSheet || rows === null) return { renamedCount: 0, details: [] };
+
+  const knownNameByCode = {};
+  DEFAULT_SHOP_LIST.forEach(function (s) { knownNameByCode[s.code] = s.name; });
+
+  const usedNames = {};
+  rows.forEach(function (r) { usedNames[r.name] = true; });
+
+  let renamedCount = 0;
+  const details = [];
+
+  rows.forEach(function (r) {
+    if (!isPlaceholderShopName_(r.name)) return;
+    const properName = knownNameByCode[r.code];
+    if (!properName || usedNames[properName]) return;
+
+    const dataSheet = ss.getSheetByName(r.name);
+    if (dataSheet) {
+      dataSheet.setName(properName); // 集計式の参照はGoogleシートが自動で追従する
+    }
+    masterSheet.getRange(r.rowIndex, 2).setValue(properName);
+    updateShopNameInSummary_(ss, r.code, properName);
+
+    delete usedNames[r.name];
+    usedNames[properName] = true;
+    renamedCount++;
+    details.push(r.name + ' → ' + properName);
+  });
+
+  return { renamedCount: renamedCount, details: details };
 }
 
 /**
