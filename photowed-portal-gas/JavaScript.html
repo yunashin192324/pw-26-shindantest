@@ -80,7 +80,12 @@
 
   function applyRoleUI() {
     const isJp = session && session.role === 'JP';
+    const isShop = session && session.role === 'SHOP';
     document.querySelectorAll('.jp-only').forEach(el => el.classList.toggle('hidden', !isJp));
+    // ★機能追加：店舗ロールには通常の一覧系画面（検索・当日表・納品待ち・設定・通常の新規案件作成）を
+    // 出さない代わりに、店舗専用の「＋新規依頼」を出す
+    document.querySelectorAll('.non-shop').forEach(el => el.classList.toggle('hidden', isShop));
+    document.querySelectorAll('.shop-only').forEach(el => el.classList.toggle('hidden', !isShop));
     $('branch-badge').textContent = session
       ? (isJp ? `${session.branchName}（${session.team}）` : `${session.branchName}（${session.branchCode}）`)
       : '';
@@ -136,6 +141,9 @@
     $('nav-day').addEventListener('click', openDayView);
     $('nav-delivery').addEventListener('click', () => loadPendingDeliveries());
     $('nav-new').addEventListener('click', openNewView);
+    $('nav-shop-new').addEventListener('click', openShopNewView);
+    $('shop-new-branch').addEventListener('change', loadShopPlanCandidates);
+    $('shop-new-submit').addEventListener('click', submitShopNewRequest);
     $('nav-settings').addEventListener('click', openSettingsView);
     $('nav-logout').addEventListener('click', doLogout);
     $('detail-back').addEventListener('click', () => loadDashboard());
@@ -262,7 +270,7 @@
     showView('dashboard');
     try {
       const data = await gsRun('apiGetDashboard', session.token, dashboardScope);
-      if (data.role === 'JP') branchesCache = data.branches;
+      if (data.role === 'JP' || data.role === 'SHOP') branchesCache = data.branches;
       lastDashboardData = data;
       renderDashboard(data);
     } catch (e) { handleAuthError(e); }
@@ -645,6 +653,15 @@
     showView('detail');
     $('detail-content').innerHTML = '<p class="hint-text">読み込み中...</p>';
     try {
+      // ★機能追加：店舗ロールは項目編集・現地スタッフ手配・日本記入欄など一切使わないため、
+      // JP／支店向けの巨大なrenderDetail（マスタ一覧の取得込み）を通さず、
+      // メッセージのやり取りに必要な最小限だけを専用の描画関数で表示する
+      if (session.role === 'SHOP') {
+        const shopDetailRes = await gsRun('apiGetReservationDetail', session.token, kanriNo);
+        currentDetail = shopDetailRes.detail;
+        renderShopDetail(shopDetailRes.detail);
+        return;
+      }
       const detailRes = await gsRun('apiGetReservationDetail', session.token, kanriNo);
       const branchCode = detailRes.detail['支店コード'];
       const [planList, optionList, locationList, staffList, phraseList, saleList] = await Promise.all([
@@ -658,6 +675,55 @@
       currentDetail = detailRes.detail;
       renderDetail(detailRes.detail, planList, optionList, locationList, staffList, phraseList, saleList);
     } catch (e) { handleAuthError(e); }
+  }
+
+  // ★機能追加：店舗ロール向けの案件詳細（依頼状況の確認＋メッセージのやり取りのみ）
+  function renderShopDetail(d) {
+    const c = $('detail-content');
+    const historyHtml = (d.history || []).length === 0
+      ? '<p class="hint-text">まだやり取りがありません。</p>'
+      : d.history.map(h => `
+        <div class="history-item">
+          <div class="history-meta"><span>${escapeHtml(h.sender)}</span><span>${escapeHtml(h.datetime)}</span></div>
+          <div class="history-body">${escapeHtml(h.body)}</div>
+        </div>`).join('');
+
+    c.innerHTML = `
+      <div class="detail-header">
+        <div class="kanri">管理番号: ${escapeHtml(d['管理番号'])}</div>
+        <div class="chg-no">CHG NO: ${escapeHtml(d['CHG NO'] || 'なし')}</div>
+      </div>
+      <div class="section-card">
+        <h3>依頼状況</h3>
+        <div class="detail-grid">
+          <div class="field-block"><label>依頼先支店</label><div>${escapeHtml(d.branchName || '')}（${escapeHtml(d.country || '')}/${escapeHtml(d.city || '')}）</div></div>
+          <div class="field-block"><label>該当の手配課</label><div>${escapeHtml(d['管轄'] || '未定')}</div></div>
+          <div class="field-block"><label>STS JP</label><div>${escapeHtml(d['STS JP'] || '未設定')}</div></div>
+          <div class="field-block"><label>STS 支店</label><div>${escapeHtml(d['STS 支店'] || '未設定')}</div></div>
+          <div class="field-block"><label>希望日</label><div>${escapeHtml(d['希望日①'] || '未定')}</div></div>
+          <div class="field-block"><label>撮影日FIX</label><div>${escapeHtml(d['撮影日FIX'] || '未定')}</div></div>
+          <div class="field-block"><label>プラン</label><div>${escapeHtml(d['プラン名'] || '未定')}</div></div>
+        </div>
+      </div>
+      <div class="section-card">
+        <h3>メッセージ・変更の送信</h3>
+        <p class="hint-text">送信者として記録されます：<strong>${escapeHtml(currentUserName || session.branchName)}</strong></p>
+        <div class="msg-row"><textarea id="msg-input" placeholder="メッセージ（任意）"></textarea></div>
+        <button class="send-btn" id="btn-msg-only" style="width:100%;margin-top:10px;">メッセージのみ送信</button>
+      </div>
+      <div class="section-card">
+        <h3>やり取り履歴（新しい順）</h3>
+        ${historyHtml}
+      </div>`;
+
+    $('btn-msg-only').addEventListener('click', sendMessageOnly);
+
+    // ★開いた時点で、自分宛の未読メッセージをまとめて既読にする（店舗向けには個別チェックUIを設けていない）
+    (d.history || []).forEach(h => {
+      if (h.senderRole !== 'SHOP' && !h.checkShop) {
+        gsRun('apiToggleHistoryCheck', session.token, h.id, true).catch(() => {});
+      }
+    });
   }
 
   // 支店側がSTS(支店側)を編集できるかどうかを、対になるSTS(JP側)の現在値から判定する
@@ -950,10 +1016,32 @@
           `<button type="button" class="tab-btn ${detailActiveTab === t.key ? 'active' : ''}" data-tab="${t.key}">${t.label}</button>`).join('')}
       </div>`;
 
+    // ★機能追加：店舗が起票した案件は、宛先が固定の2択（JP⇔支店）ではなくなる。
+    // 支店マスタの「店舗直接やり取り許可」がOFFの間は、日本側（JP）が「支店へ」「店舗へ」を
+    // 選んで送る（＝現地の回答を店舗の画面へ中継する操作）。ONなら支店⇔店舗が直接やり取りするため
+    // 選択は不要（JPは従来どおり支店へ）。
+    const shopBanner = !d.originShop ? '' : `
+      <p class="hint-text" style="background:var(--color-bg-soft,#f4f4f8);padding:8px 10px;border-radius:6px;">
+        この案件は店舗「${escapeHtml(d.originShopName || d.originShop)}」からの依頼です。
+        ${d.shopDirect ? '現地支店と店舗が直接やり取りします。' : '現地支店とのやり取りは日本の手配課が店舗へ中継します。'}
+      </p>`;
+    const showRecipientSelect = session.role === 'JP' && d.originShop && !d.shopDirect;
+    const recipientSelectHtml = !showRecipientSelect ? '' : `
+      <label style="margin-top:10px;">宛先</label>
+      <select id="msg-recipient">
+        <option value="BRANCH">支店へ</option>
+        <option value="SHOP">店舗へ（現地からの回答を中継する）</option>
+      </select>`;
+    const directionLabel = !d.originShop
+      ? (session.role === 'JP' ? '日本 → 支店' : '支店 → 日本')
+      : (session.role === 'SHOP' ? (d.shopDirect ? '店舗 → 支店' : '店舗 → 日本')
+        : session.role === 'BRANCH' ? (d.shopDirect ? '支店 → 店舗' : '支店 → 日本')
+        : (d.shopDirect ? '日本 → 支店' : '日本 → 支店／店舗（宛先で選択）'));
     const messageTabHtml = `
       <div class="tab-pane ${detailActiveTab === 'message' ? '' : 'hidden'}" data-tab-pane="message">
         <div class="section-card">
           <h3>メッセージ・変更の送信</h3>
+          ${shopBanner}
           <p class="hint-text">送信者として記録されます：<strong>${escapeHtml(currentUserName || session.branchName)}</strong>${currentUserName ? `（${escapeHtml(session.branchName)}）` : ''}</p>
           <p id="pending-indicator" class="hint-text ${pendingCount ? '' : 'hidden'}">未保存の変更: ${pendingCount}件（「お客様情報」「予約内容」「現地記入欄」タブでの入力を含みます）</p>
           ${(phraseList && phraseList.length) ? `
@@ -962,6 +1050,7 @@
             <option value="">選択してください</option>
             ${phraseList.map((p, i) => `<option value="${i}">${escapeHtml(p.name)}${p.shared ? '（共通）' : ''}</option>`).join('')}
           </select>` : ''}
+          ${recipientSelectHtml}
           <div class="msg-row"><textarea id="msg-input" placeholder="メッセージ（任意）"></textarea></div>
           <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px;">
             <button class="send-btn" id="btn-msg-only" style="width:100%;">メッセージのみ送信</button>
@@ -969,7 +1058,7 @@
             <button class="send-btn" id="btn-save-quiet" style="width:100%;background:var(--color-muted);">保存のみ（通知しない）</button>
           </div>
           <p class="hint-text" style="margin-top:8px;">
-            方向: ${session.role === 'JP' ? '日本 → 支店' : '支店 → 日本'}。
+            方向: ${directionLabel}。
             「メッセージのみ送信」はメッセージだけを、「変更（＋メッセージ）を決定して送信」は入力中の全ての変更（ステータス・オプション・現地記入欄含む）とメッセージをまとめて相手へ通知します。
             「保存のみ」は通知せずに変更を保存します（共有メモなど相手に知らせる必要がない変更向け）。
           </p>
@@ -1316,12 +1405,18 @@
   }
   function escapeAttr(s) { return escapeHtml(s); }
 
+  // ★機能追加：店舗が起票した案件で、日本側が「支店へ」「店舗へ」を選べる場合の宛先
+  function currentMsgRecipient() {
+    const sel = $('msg-recipient');
+    return sel ? sel.value : undefined;
+  }
+
   // メッセージのみ送信（保留中の変更フィールドはそのまま残る＝未保存のまま）
   async function sendMessageOnly() {
     const msg = $('msg-input').value.trim();
     if (!msg) { showToast('メッセージを入力してください'); return; }
     try {
-      await gsRun('apiCommitChanges', session.token, currentKanri, {}, msg);
+      await gsRun('apiCommitChanges', session.token, currentKanri, {}, msg, currentMsgRecipient());
       showToast('メッセージを送信しました');
       $('msg-input').value = '';
       openDetail(currentKanri);
@@ -1333,7 +1428,7 @@
     if (Object.keys(pendingChanges).length === 0) { showToast('変更内容がありません'); return; }
     const msg = $('msg-input').value.trim();
     try {
-      const res = await gsRun('apiCommitChanges', session.token, currentKanri, pendingChanges, msg);
+      const res = await gsRun('apiCommitChanges', session.token, currentKanri, pendingChanges, msg, currentMsgRecipient());
       pendingChanges = {};
       showToast(res.noChange ? '変更はありませんでした' : '変更を決定し、相手へ通知しました');
       openDetail(currentKanri, true); // 今開いているタブのまま留まる
@@ -1464,6 +1559,57 @@
   function showFieldError(id, msg) {
     $(id).textContent = msg;
     $(id).classList.remove('hidden');
+  }
+
+  // ---------- 新規依頼（店舗ロール専用） ----------
+  async function openShopNewView() {
+    showView('shop-new');
+    $('shop-new-error').classList.add('hidden');
+    $('shop-new-success').classList.add('hidden');
+    $('shop-new-customer').value = '';
+    $('shop-new-hopedate').value = '';
+    $('shop-new-plan').value = '';
+    if (!branchesCache.length) {
+      const data = await gsRun('apiGetDashboard', session.token, { showAll: true });
+      branchesCache = data.branches || [];
+    }
+    $('shop-new-branch').innerHTML = branchesCache
+      .map(b => `<option value="${escapeAttr(b.code)}">${escapeHtml(b.name)}（${escapeHtml(b.country || '')}/${escapeHtml(b.city || '')}）</option>`).join('');
+    $('shop-new-team').innerHTML = JP_TEAMS.map(t => `<option value="${escapeAttr(t)}">${escapeHtml(t)}手配課</option>`).join('');
+    loadShopPlanCandidates();
+  }
+
+  // 支店（都市）を選ぶと、その支店のプラン候補をdatalistへ反映する
+  async function loadShopPlanCandidates() {
+    const branchCode = $('shop-new-branch').value;
+    if (!branchCode) return;
+    try {
+      const plans = await gsRun('apiListPlans', session.token, branchCode);
+      $('shop-new-plan-datalist').innerHTML = plans.map(p => `<option value="${escapeAttr(p.name)}">`).join('');
+    } catch (e) { /* 候補が取れなくても入力自体は続けられる */ }
+  }
+
+  async function submitShopNewRequest() {
+    $('shop-new-error').classList.add('hidden');
+    $('shop-new-success').classList.add('hidden');
+    const payload = {
+      branchCode: $('shop-new-branch').value,
+      team: $('shop-new-team').value,
+      customerName: $('shop-new-customer').value.trim(),
+      hopeDate: $('shop-new-hopedate').value,
+      plan: $('shop-new-plan').value.trim()
+    };
+    if (!payload.customerName) { showFieldError('shop-new-error', 'お客様名を入力してください。'); return; }
+    try {
+      const res = await gsRun('apiShopCreateRequest', session.token, payload);
+      $('shop-new-success').textContent = `依頼 ${res.kanriNo} を送信しました。日本の該当手配課と現地支店に通知が届きます。`;
+      $('shop-new-success').classList.remove('hidden');
+      $('shop-new-customer').value = '';
+      $('shop-new-hopedate').value = '';
+      $('shop-new-plan').value = '';
+    } catch (e) {
+      showFieldError('shop-new-error', e.message);
+    }
   }
 
   // ---------- 設定（現地スタッフ手配メール。自支店 or JPが編集可能） ----------

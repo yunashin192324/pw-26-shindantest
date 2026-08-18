@@ -978,6 +978,27 @@ function addCase(ctx, sheetName, o) {
   Object.keys(o).forEach(k => { const i = H.indexOf(k); if (i !== -1) row[i] = o[k]; });
   ctx.__ss.getSheetByName(sheetName).appendRow(row);
 }
+// 支店マスタへ列名基準で1行追加する（列位置がずれても壊れない）
+function addBranchRow(ctx, o) {
+  const bm = ctx.__ss.getSheetByName('支店マスタ');
+  const head = bm.getRange(1, 1, 1, bm.getLastColumn()).getValues()[0];
+  const rowIdx = bm.getLastRow() + 1;
+  Object.keys(o).forEach(k => {
+    const i = head.indexOf(k);
+    if (i !== -1) bm.getRange(rowIdx, i + 1).setValue(o[k]);
+  });
+}
+// 既存の支店マスタ行の1列だけ値を書き換える（列名基準）
+function setBranchField(ctx, branchCode, field, value) {
+  const bm = ctx.__ss.getSheetByName('支店マスタ');
+  const head = bm.getRange(1, 1, 1, bm.getLastColumn()).getValues()[0];
+  const codeCol = head.indexOf('支店コード');
+  const fieldCol = head.indexOf(field);
+  const rows = bm.getRange(2, 1, bm.getLastRow() - 1, bm.getLastColumn()).getValues();
+  for (let i = 0; i < rows.length; i++) {
+    if (String(rows[i][codeCol]) === branchCode) { bm.getRange(i + 2, fieldCol + 1).setValue(value); return; }
+  }
+}
 {
   const ctx = featureFixture();
   // 過去一覧に未納品（35日経過）、予約一覧に納品済み、キャンセル済みを置く
@@ -1815,6 +1836,169 @@ section('33. STSの自動連動（日本CR＋支店CW→日本もCW／日本RQ�
   // 通知メールは飛ばない（自動連動は監査ログのみで、メッセージ通知には乗らない）
   check('自動連動そのものはメールを増やさない（直前の3件の保存はいずれも apiSaveFieldsQuiet）',
         !ctx.__mail.some(m => /VIE-711|VIE-712/.test(m.subj + m.body)));
+}
+
+// ---------------------------------------------------------------
+section('34. 店舗発の新規依頼（起票・通知・メッセージのやり取り）');
+function shopFixture() {
+  const ctx = featureFixture();
+  addBranchRow(ctx, { '支店コード': 'SHOP1', '支店名': '新宿店', 'ロール': 'SHOP', 'ログインパスコード': 'sp', '通知先メール': 'shop1@example.com', '有効': true });
+  addBranchRow(ctx, { '支店コード': 'SHOP2', '支店名': '渋谷店', 'ロール': 'SHOP', 'ログインパスコード': 'sp2', '通知先メール': 'shop2@example.com', '有効': true });
+  return ctx;
+}
+{
+  const ctx = shopFixture();
+  const shop = ctx.apiLogin('SHOP1', 'sp');
+  check('店舗ロールでログインできる', shop.ok === true && shop.session.role === 'SHOP', JSON.stringify(shop));
+  const shopToken = shop.session.token;
+  const jp = ctx.apiLogin('KANTO', 'pw');
+  const jpToken = jp.session.token;
+  const vie = ctx.apiLogin('VIE', 'vp');
+  const vieToken = vie.session.token;
+
+  // --- 入力チェック ---
+  let err;
+  err = null; try { ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', customerName: '' }); } catch (e) { err = e.message; }
+  check('お客様名が無いと作成できない', err !== null, String(err));
+  err = null; try { ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '北海道', customerName: 'A' }); } catch (e) { err = e.message; }
+  check('該当の手配課が不正だと作成できない', err !== null, String(err));
+  err = null; try { ctx.apiShopCreateRequest(shopToken, { branchCode: 'NOPE', team: '関東', customerName: 'A' }); } catch (e) { err = e.message; }
+  check('存在しない支店コードだと作成できない', err !== null, String(err));
+  err = null; try { ctx.apiShopCreateRequest(jpToken, { branchCode: 'VIE', team: '関東', customerName: 'A' }); } catch (e) { err = e.message; }
+  check('店舗ロール以外は起票できない（JP）', err !== null, String(err));
+  err = null; try { ctx.apiShopCreateRequest(vieToken, { branchCode: 'VIE', team: '関東', customerName: 'A' }); } catch (e) { err = e.message; }
+  check('店舗ロール以外は起票できない（支店）', err !== null, String(err));
+
+  // --- 起票 ---
+  const created = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'VIE', team: '関東', customerName: 'Ahmet Yilmaz', hopeDate: '2026-09-10', plan: 'プランA'
+  });
+  check('起票が成功する', created.ok === true && !!created.kanriNo, JSON.stringify(created));
+  check('採番は対象支店（VIE）のプレフィックスになる', String(created.kanriNo).startsWith('VIE-'), created.kanriNo);
+  const kanri = created.kanriNo;
+
+  const jpDetail = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+  check('STS JPはRQで作成される', jpDetail['STS JP'] === 'RQ');
+  check('STS 支店はNCで作成される', jpDetail['STS 支店'] === 'NC');
+  check('管轄は指定した手配課になる', jpDetail['管轄'] === '関東');
+  check('お客様名が入る', jpDetail['新郎名（ローマ字）'] === 'Ahmet Yilmaz');
+  check('希望日①が入る', jpDetail['希望日①'] === '2026-09-10');
+  check('プランが入る', jpDetail['プラン名'] === 'プランA');
+  check('起票元店舗が記録される', jpDetail.originShop === 'SHOP1');
+  check('起票元店舗名も返る', jpDetail.originShopName === '新宿店');
+
+  check('日本の該当手配課へ通知メールが飛ぶ', ctx.__mail.some(m => m.to.includes('kanto@his-world.com') && m.body.includes('Ahmet Yilmaz')));
+  check('現地支店へも通知メールが飛ぶ', ctx.__mail.some(m => m.to.includes('vie@his-world.com') && m.body.includes('Ahmet Yilmaz')));
+
+  check('日本側は要対応（未読）になる', ctx.apiGetDashboard(jpToken, { showAll: true }).reservations.find(r => r.kanriNo === kanri).needsAction === true);
+  check('支店側も要対応（未読）になる', ctx.apiGetDashboard(vieToken, { showAll: true }).reservations.find(r => r.kanriNo === kanri).needsAction === true);
+
+  // --- 店舗自身から見える案件詳細（項目は最小限） ---
+  const shopDetail = ctx.apiGetReservationDetail(shopToken, kanri).detail;
+  check('店舗自身は自分の起票した案件を見られる', shopDetail['管理番号'] === kanri);
+  check('店舗向けの詳細にはSTSが入る', shopDetail['STS JP'] === 'RQ' && shopDetail['STS 支店'] === 'NC');
+  check('店舗向けの詳細には請求先など内部項目は含まれない', !('請求先' in shopDetail) && !('ホテル' in shopDetail));
+  check('店舗の一覧にも自分の起票した案件が出る（自分の依頼状況確認）',
+        ctx.apiGetDashboard(shopToken, { showAll: true }).reservations.some(r => r.kanriNo === kanri));
+
+  // --- 他の店舗・他の案件は見えない ---
+  const shop2 = ctx.apiLogin('SHOP2', 'sp2');
+  err = null; try { ctx.apiGetReservationDetail(shop2.session.token, kanri); } catch (e) { err = e.message; }
+  check('他の店舗が起票した案件は見られない', err !== null, String(err));
+  addCase(ctx, '予約一覧', { '支店コード': 'VIE', '管理番号': 'VIE-901', '管轄': '関東', '新郎名（ローマ字）': 'X' });
+  err = null; try { ctx.apiGetReservationDetail(shopToken, 'VIE-901'); } catch (e) { err = e.message; }
+  check('店舗が起票していない通常の案件は見られない', err !== null, String(err));
+
+  // --- 店舗は項目を編集できない（メッセージのみ） ---
+  err = null; try { ctx.apiSaveFieldsQuiet(shopToken, kanri, { 'プラン名': '侵入' }); } catch (e) { err = e.message; }
+  check('店舗はapiSaveFieldsQuietで項目を変更できない', err !== null, String(err));
+  err = null; try { ctx.apiCommitChanges(shopToken, kanri, { 'プラン名': '侵入' }, ''); } catch (e) { err = e.message; }
+  check('店舗はapiCommitChangesでも項目を変更できない', err !== null, String(err));
+
+  // --- 通常モード（店舗直接やり取り許可＝OFF）でのメッセージのやり取り ---
+  ctx.apiCommitChanges(shopToken, kanri, {}, '内装の希望を伝えたいです');
+  check('店舗からのメッセージは日本側を未読にする（既定は手配課経由）',
+        ctx.apiGetDashboard(jpToken, { showAll: true }).reservations.find(r => r.kanriNo === kanri).needsAction === true);
+  const afterShopMsg_branch = ctx.apiGetReservationDetail(vieToken, kanri).detail;
+  check('支店側には店舗↔JPのやり取りが見えない（既定モード）',
+        !afterShopMsg_branch.history.some(h => h.body.includes('内装の希望')));
+  const afterShopMsg_jp = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+  check('日本側には店舗からのメッセージが見える', afterShopMsg_jp.history.some(h => h.body.includes('内装の希望')));
+  const afterShopMsg_shop = ctx.apiGetReservationDetail(shopToken, kanri).detail;
+  check('店舗自身にも自分の送ったメッセージが見える', afterShopMsg_shop.history.some(h => h.body.includes('内装の希望')));
+
+  // 手配課が支店へ通常どおり確認（recipient省略＝従来どおり支店へ）
+  ctx.apiCommitChanges(jpToken, kanri, {}, '空き状況を確認します');
+  const toBranch = ctx.apiGetReservationDetail(vieToken, kanri).detail;
+  check('recipient省略時のJPメッセージは支店に届く（従来どおり）',
+        toBranch.history.some(h => h.body.includes('空き状況を確認します')));
+  const toBranchFromShop = ctx.apiGetReservationDetail(shopToken, kanri).detail;
+  check('支店宛のJPメッセージは店舗には見えない',
+        !toBranchFromShop.history.some(h => h.body.includes('空き状況を確認します')));
+
+  // 支店の回答（既定モードではJPへ届く。店舗には届かない）
+  ctx.apiCommitChanges(vieToken, kanri, {}, '9/10は空いています');
+  check('支店の回答は日本側を未読にする',
+        ctx.apiGetDashboard(jpToken, { showAll: true }).reservations.find(r => r.kanriNo === kanri).needsAction === true);
+  const branchReplySeenByShop = ctx.apiGetReservationDetail(shopToken, kanri).detail;
+  check('既定モードでは支店の回答が店舗には見えない（手配課の中継が必要）',
+        !branchReplySeenByShop.history.some(h => h.body.includes('9/10は空いています')));
+
+  // 手配課が店舗へ中継（recipient='SHOP'を明示）
+  ctx.apiCommitChanges(jpToken, kanri, {}, '9/10で空きが確認できました', 'SHOP');
+  check('recipient="SHOP"を指定すると店舗が未読になる',
+        ctx.apiGetDashboard(shopToken, { showAll: true }).reservations.find(r => r.kanriNo === kanri).needsAction === true);
+  const relayed = ctx.apiGetReservationDetail(shopToken, kanri).detail;
+  check('中継したメッセージが店舗に届く', relayed.history.some(h => h.body.includes('9/10で空きが確認できました')));
+  const relayedSeenByBranch = ctx.apiGetReservationDetail(vieToken, kanri).detail;
+  check('店舗への中継は支店には見えない（別チャネル）',
+        !relayedSeenByBranch.history.some(h => h.body.includes('9/10で空きが確認できました')));
+
+  const jpSeesAll = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+  check('日本側は店舗↔JP・JP↔支店どちらの履歴も全て見える（横断的な監督役）',
+        jpSeesAll.history.some(h => h.body.includes('内装の希望')) &&
+        jpSeesAll.history.some(h => h.body.includes('9/10は空いています')) &&
+        jpSeesAll.history.some(h => h.body.includes('9/10で空きが確認できました')));
+
+  // --- 直結モード（店舗直接やり取り許可＝ON）---
+  setBranchField(ctx, 'VIE', '店舗直接やり取り許可', true);
+  ctx.apiCommitChanges(shopToken, kanri, {}, '直結モードでの質問です');
+  check('直結モードでは店舗のメッセージが支店を未読にする',
+        ctx.apiGetDashboard(vieToken, { showAll: true }).reservations.find(r => r.kanriNo === kanri).needsAction === true);
+  const directToBranch = ctx.apiGetReservationDetail(vieToken, kanri).detail;
+  check('直結モードでは支店に店舗のメッセージが直接届く',
+        directToBranch.history.some(h => h.body.includes('直結モードでの質問です')));
+
+  ctx.apiCommitChanges(vieToken, kanri, {}, '直結モードでの回答です');
+  check('直結モードでは支店の回答が店舗を未読にする',
+        ctx.apiGetDashboard(shopToken, { showAll: true }).reservations.find(r => r.kanriNo === kanri).needsAction === true);
+  const directToShop = ctx.apiGetReservationDetail(shopToken, kanri).detail;
+  check('直結モードでは店舗に支店の回答が直接届く',
+        directToShop.history.some(h => h.body.includes('直結モードでの回答です')));
+
+  const jpDuringDirect = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+  check('直結モードでも日本側は履歴を監督用に閲覧できる',
+        jpDuringDirect.history.some(h => h.body.includes('直結モードでの質問です')) &&
+        jpDuringDirect.history.some(h => h.body.includes('直結モードでの回答です')));
+
+  // JPからのメッセージは、直結モードでは（recipient指定に関わらず）支店へ届く
+  ctx.apiCommitChanges(jpToken, kanri, {}, '直結モード中のJPからの確認', 'SHOP');
+  const stillToBranch = ctx.apiGetReservationDetail(vieToken, kanri).detail;
+  check('直結モードではrecipient="SHOP"指定でもJPのメッセージは支店へ届く（店舗とは直接やり取りする設計のため）',
+        stillToBranch.history.some(h => h.body.includes('直結モード中のJPからの確認')));
+
+  // --- 既読チェック（店舗ロール分） ---
+  const shopHistId = ctx.apiGetReservationDetail(shopToken, kanri).detail.history.find(h => h.body.includes('直結モードでの回答です')).id;
+  ctx.apiToggleHistoryCheck(shopToken, shopHistId, true);
+  check('店舗が自分の案件の既読チェックを付けられる', true); // 例外なく終わればOK
+  err = null;
+  const branchOnlyHist = ctx.apiGetReservationDetail(vieToken, kanri).detail.history[0].id;
+  try { ctx.apiToggleHistoryCheck(shop2.session.token, branchOnlyHist, true); } catch (e) { err = e.message; }
+  check('他の店舗は他の案件の履歴を既読にできない', err !== null, String(err));
+
+  // --- 支店マスタの安全確認：SHOPロールは自支店以外の管理系APIを操作できない ---
+  err = null; try { ctx.apiGetArrangementSettings(shopToken, 'VIE'); } catch (e) { err = e.message; }
+  check('店舗ロールは他支店の手配設定を閲覧できない（assertBranchAccess_の安全確認）', err !== null, String(err));
 }
 
 // ---------------------------------------------------------------

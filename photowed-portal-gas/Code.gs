@@ -41,6 +41,10 @@ const SYSTEM_ALERT_EMAIL = 'it-planning@his-world.com';
 // --- ロール ---
 const BRANCH_ROLE = 'BRANCH';
 const JP_ROLE = 'JP';
+// ★機能追加：日本の店舗スタッフが新規の撮影依頼を起票するための第三のロール。
+// 支店マスタに ロール=SHOP の行を追加してログインできるようにする（支店・JPと同じ仕組みを流用）。
+// 起票した案件だけを閲覧・メッセージでき、通常の案件の項目は一切編集できない（prepareFieldWrite_で遮断）。
+const SHOP_ROLE = 'SHOP';
 // 日本側の手配チーム（固定2チーム。"管轄"列の値と一致させる）
 const JP_TEAMS = ['関東', '関西'];
 
@@ -182,6 +186,10 @@ const COL_DRIVE_URL = 'DriveフォルダURL';
 // この列を更新し、一覧は列を読むだけにする（システム列のため画面からは編集不可）。
 const COL_UNREAD_JP = '未読 JP';       // trueなら日本側に未読がある
 const COL_UNREAD_BRANCH = '未読 支店';  // trueなら支店側に未読がある
+// ★機能追加：店舗ロールが起票した案件かどうか（起票元の店舗コード。手入力の案件は空欄のまま）。
+// 空欄なら従来どおりJP⇔支店だけの案件として扱う（挙動は一切変わらない）。
+const COL_ORIGIN_SHOP = '起票元店舗';
+const COL_UNREAD_SHOP = '未読 店舗';    // trueなら店舗側に未読がある（起票元店舗が設定されている案件のみ使う）
 
 const OPTION_COUNT = 5;
 function opNameCol_(n) { return `OP${n}`; }
@@ -201,8 +209,8 @@ const RESERVATION_HEADERS = (() => {
     COL_REMARKS, COL_MEMO,
     COL_PHOTOBRIDGE, COL_PHOTOBRIDGE_BY, COL_PHOTOBRIDGE_AT, COL_AI_EDIT,
     COL_DATA_UPLOAD, COL_DATA_UPLOAD_BY, COL_DATA_UPLOAD_AT, COL_DELIVERY_EMAIL, COL_EARLY_DELIVERY,
-    COL_LAST_UPDATED, COL_DRIVE_URL,
-    COL_UNREAD_JP, COL_UNREAD_BRANCH
+    COL_LAST_UPDATED, COL_DRIVE_URL, COL_ORIGIN_SHOP,
+    COL_UNREAD_JP, COL_UNREAD_BRANCH, COL_UNREAD_SHOP
   ];
   for (let n = 1; n <= OPTION_COUNT; n++) {
     base.push(opNameCol_(n), opStsJpCol_(n), opStsBranchCol_(n));
@@ -240,8 +248,8 @@ const INTERNAL_VALUE_SPECS = {
 // のいずれかを選んで確定する。COMMITTABLE_FIELDS はその対象となる全フィールド
 // （システム列・DriveフォルダURL・JP内部進行管理欄は専用フローがあるため除く）。
 const COMMITTABLE_FIELDS = RESERVATION_HEADERS.filter(h => ![
-  COL_BRANCH_CODE, COL_KANRI_NO, COL_LAST_UPDATED, COL_DRIVE_URL,
-  COL_UNREAD_JP, COL_UNREAD_BRANCH, ...JP_INTERNAL_FIELDS
+  COL_BRANCH_CODE, COL_KANRI_NO, COL_LAST_UPDATED, COL_DRIVE_URL, COL_ORIGIN_SHOP,
+  COL_UNREAD_JP, COL_UNREAD_BRANCH, COL_UNREAD_SHOP, ...JP_INTERNAL_FIELDS
 ].includes(h));
 
 // 日付として保存すべきフィールド（<input type="date">で受け渡しし、実Dateとして保存する）
@@ -286,6 +294,10 @@ const BM_COL_ARRANGEMENT_ENABLED = '手配メール機能';
 // ★機能追加：パスポート番号欄を「お客様情報」タブに出すかどうか（例：イスタンブール支店）。
 // 未設定／FALSEの支店では非表示（同意書必須と同じ運用）
 const BM_COL_PASSPORT_REQUIRED = 'パスポート番号欄';
+// ★機能追加：店舗発の依頼（ロール=SHOPの行が起票した案件）について、支店とのやり取りを
+// 手配課を通さず直接行えるようにするかどうか。BRANCHロールの行だけに意味がある設定で、
+// 「日本の手配課側があらかじめマスタで決める」という要件どおり、支店マスタの編集はJPのみ可能。
+const BM_COL_SHOP_DIRECT = '店舗直接やり取り許可';
 const BM_COL_ACTIVE = '有効';
 // ★不具合防止：既存のテスト・運用スプレッドシートは「有効」列が支店マスタの最後尾にある前提で
 // 位置決め打ちの行を作っている場合がある。新しい列（手配メール機能まわり）は、その並びを崩さないよう
@@ -294,7 +306,7 @@ const BRANCH_MASTER_HEADERS = [
   BM_COL_CODE, BM_COL_NAME, BM_COL_COUNTRY, BM_COL_CITY, BM_COL_ROLE, BM_COL_TEAM,
   BM_COL_PASSCODE, BM_COL_EMAIL, BM_COL_PREFIX, BM_COL_INVOICE_LABEL, BM_COL_DELIVERY_DAYS,
   BM_COL_REMIND_DAYS, BM_COL_CONSENT_REQUIRED, BM_COL_ACTIVE,
-  BM_COL_ARRANGEMENT_ENABLED, BM_COL_PASSPORT_REQUIRED,
+  BM_COL_ARRANGEMENT_ENABLED, BM_COL_PASSPORT_REQUIRED, BM_COL_SHOP_DIRECT,
   // カテゴリごとの手配先（名前・メール）。同じ宛先を複数カテゴリに入れれば「まとめて1件に依頼」にできる
   ...ARRANGEMENT_CATEGORIES.flatMap(c => [arrNameCol_(c.label), arrEmailCol_(c.label)])
 ];
@@ -324,7 +336,7 @@ const H_COL_GROOM_NAME = '新郎名（ローマ字）';
 const H_COL_BRIDE_NAME = '新婦名（ローマ字）';
 const H_COL_DATETIME = '日時';
 const H_COL_SENDER = '送信者';
-const H_COL_SENDER_ROLE = '送信者ロール'; // 'JP' or 'BRANCH'（未読＝要対応の判定に使用）
+const H_COL_SENDER_ROLE = '送信者ロール'; // 'JP' / 'BRANCH' / 'SHOP'（未読＝要対応の判定に使用）
 const H_COL_BODY = '内容';
 const H_COL_CHECK_JP = 'CHECK JP';
 const H_COL_DATE_JP = 'DATE JP';
@@ -332,10 +344,21 @@ const H_COL_CHECKED_BY_JP = 'CHECK JP 氏名';
 const H_COL_CHECK_BRANCH = 'CHECK 支店';
 const H_COL_DATE_BRANCH = 'DATE 支店';
 const H_COL_CHECKED_BY_BRANCH = 'CHECK 支店 氏名';
+// ★機能追加：店舗ロールが関わるメッセージの既読チェック用（起票元店舗が無い通常の案件では使わない）
+const H_COL_CHECK_SHOP = 'CHECK 店舗';
+const H_COL_DATE_SHOP = 'DATE 店舗';
+const H_COL_CHECKED_BY_SHOP = 'CHECK 店舗 氏名';
+// ★機能追加：起票元店舗が絡む案件は「送信者」だけでは相手（宛先）が一意に決まらないため
+// （JP⇔支店・JP⇔店舗・支店⇔店舗の3通りがあり得る）、宛先ロールもそのまま記録しておく。
+// 起票元店舗が無い通常の案件・この機能追加より前のデータでは空欄のままになる
+// （読み取り側は空欄なら送信者ロールから相手を推定する＝従来の2者間ロジックにフォールバックする）。
+const H_COL_RECIPIENT_ROLE = '宛先ロール';
+const H_COL_ORIGIN_SHOP = '起票元店舗';
 const HISTORY_HEADERS = [
   H_COL_ID, H_COL_BRANCH_CODE, H_COL_KANRI, H_COL_CHALLENGE_NO, H_COL_CONFIRMED_DATE,
   H_COL_GROOM_NAME, H_COL_BRIDE_NAME, H_COL_DATETIME, H_COL_SENDER, H_COL_SENDER_ROLE, H_COL_BODY,
-  H_COL_CHECK_JP, H_COL_DATE_JP, H_COL_CHECKED_BY_JP, H_COL_CHECK_BRANCH, H_COL_DATE_BRANCH, H_COL_CHECKED_BY_BRANCH
+  H_COL_CHECK_JP, H_COL_DATE_JP, H_COL_CHECKED_BY_JP, H_COL_CHECK_BRANCH, H_COL_DATE_BRANCH, H_COL_CHECKED_BY_BRANCH,
+  H_COL_CHECK_SHOP, H_COL_DATE_SHOP, H_COL_CHECKED_BY_SHOP, H_COL_RECIPIENT_ROLE, H_COL_ORIGIN_SHOP
 ];
 
 // --- ステータス変更履歴（STS JP／STS 支店／各OPのSTSを「誰が・いつ・何から何に」変更したかの監査ログ） ---
@@ -552,7 +575,7 @@ function apiListLoginOptions() {
     .map(r => ({
       code: r[BM_COL_CODE],
       name: r[BM_COL_NAME],
-      role: String(r[BM_COL_ROLE]).trim().toUpperCase() === JP_ROLE ? JP_ROLE : BRANCH_ROLE
+      role: normalizeRole_(r[BM_COL_ROLE])
     }));
 }
 
@@ -585,10 +608,12 @@ function apiLogin(branchCode, passcode) {
   }
   cache.remove(failKey); // 成功したら失敗回数をリセット
 
-  const role = String(match[BM_COL_ROLE]).trim().toUpperCase() === JP_ROLE ? JP_ROLE : BRANCH_ROLE;
+  const role = normalizeRole_(match[BM_COL_ROLE]);
   const token = Utilities.getUuid();
   const session = {
     token,
+    // ★店舗ロールもこのフィールドをそのまま「自分のコード」として使う（支店コードと同じ扱い）。
+    // 案件側の起票元店舗（COL_ORIGIN_SHOP）もこのコードで一致判定する。
     branchCode: String(match[BM_COL_CODE]).trim().toUpperCase(),
     branchName: match[BM_COL_NAME],
     role,
@@ -618,9 +643,14 @@ function assertJp_(session) {
 }
 
 function assertBranchAccess_(session, branchCode) {
-  if (session.role === BRANCH_ROLE && session.branchCode !== String(branchCode).trim().toUpperCase()) {
-    throw new Error('自分の支店以外のデータは操作できません。');
-  }
+  // ★不具合防止：以前は「BRANCHロールで自支店以外」だけを拒否し、それ以外（＝JPロール）は
+  // 素通りさせていた。ロールがJP／BRANCHの2種類しか無かった間は問題なかったが、
+  // 店舗ロール（SHOP）を追加したことで「BRANCHロールではない＝無条件で許可」という前提が崩れる
+  // （支店マスタ・プラン等の管理APIを店舗ロールが呼べてしまう）。許可する条件を明示し、
+  // それ以外は必ず拒否する形に直す。
+  if (session.role === JP_ROLE) return;
+  if (session.role === BRANCH_ROLE && session.branchCode === String(branchCode).trim().toUpperCase()) return;
+  throw new Error('自分の支店以外のデータは操作できません。');
 }
 
 // ★要件：メッセージ・変更履歴に個人名を残す。
@@ -660,19 +690,31 @@ function apiListBranches(token) {
   return listBranchesRaw_();
 }
 
+// 支店マスタの「ロール」列を正規化する（JP／SHOP／それ以外はBRANCHとして扱う）。
+// listBranchesRaw_・apiLogin・apiListLoginOptions で必ずこれを通す：どれか1箇所だけ
+// 表記ゆれに寛容な独自ロジックを持つと、ロールごとの判定がずれる不具合につながるため。
+function normalizeRole_(raw) {
+  const v = String(raw || '').trim().toUpperCase();
+  if (v === JP_ROLE) return JP_ROLE;
+  if (v === SHOP_ROLE) return SHOP_ROLE;
+  return BRANCH_ROLE;
+}
+
 function listBranchesRaw_() {
   const sheet = getSpreadsheet_().getSheetByName(BRANCH_MASTER_SHEET_NAME);
   return getRowsAsObjects_(sheet).map(r => ({
     // ★不具合修正：支店コード・ロールはスプレッドシート上の表記ゆれ（大文字小文字・前後の空白）に関わらず
     // 常に正規化して返す。他の全ての判定（apiLogin・セッション・JP側メール振り分け等）は
-    // 正規化済みの値（大文字の支店コード、"BRANCH"/"JP"）を前提にしているため、ここで揺れを残すと
+    // 正規化済みの値（大文字の支店コード、"BRANCH"/"JP"/"SHOP"）を前提にしているため、ここで揺れを残すと
     // 「スプレッドシート上のロール表記が少し崩れただけで、その支店がJP側の一覧・新規案件の選択肢・
     // メール送信先候補から静かに消える」という気づきにくい不具合につながる。
     code: String(r[BM_COL_CODE] || '').trim().toUpperCase(),
     name: r[BM_COL_NAME], country: r[BM_COL_COUNTRY], city: r[BM_COL_CITY],
-    role: String(r[BM_COL_ROLE] || '').trim().toUpperCase() === JP_ROLE ? JP_ROLE : BRANCH_ROLE,
+    role: normalizeRole_(r[BM_COL_ROLE]),
     team: String(r[BM_COL_TEAM] || '').trim(), email: r[BM_COL_EMAIL], prefix: r[BM_COL_PREFIX],
     invoiceLabel: r[BM_COL_INVOICE_LABEL] || '請求番号',
+    // ★機能追加：店舗直接やり取り許可（BRANCHロールの行のみ意味を持つ）
+    shopDirect: isActiveFlag_(r[BM_COL_SHOP_DIRECT]),
     deliveryDays: parseIntOrNull_(r[BM_COL_DELIVERY_DAYS]),
     remindDays: parseIntOrNull_(r[BM_COL_REMIND_DAYS]),
     consentRequired: isActiveFlag_(r[BM_COL_CONSENT_REQUIRED]),
@@ -961,16 +1003,21 @@ function apiGetDashboard(token, scope) {
   if (session.role === JP_ROLE) {
     result.branches = listBranchesRaw_().filter(b => b.role === BRANCH_ROLE);
     result.teams = JP_TEAMS;
+  } else if (session.role === SHOP_ROLE) {
+    // ★機能追加：新規依頼フォーム用に、選択できる支店（＝都市）と手配課の一覧を返す
+    result.branches = listBranchesRaw_().filter(b => b.role === BRANCH_ROLE && b.active);
+    result.teams = JP_TEAMS;
   }
   return result;
 }
 
 // --- 「要対応（未読）」フラグの読み書き -------------------------------------
-// 自分のロールから見た相手側のロールを返す
-function counterpartRole_(role) { return role === JP_ROLE ? BRANCH_ROLE : JP_ROLE; }
-
 // そのロールから見た未読フラグの列名
-function unreadColFor_(role) { return role === JP_ROLE ? COL_UNREAD_JP : COL_UNREAD_BRANCH; }
+function unreadColFor_(role) {
+  if (role === JP_ROLE) return COL_UNREAD_JP;
+  if (role === SHOP_ROLE) return COL_UNREAD_SHOP;
+  return COL_UNREAD_BRANCH;
+}
 
 // 予約一覧（または過去一覧）の1行に、指定ロール側の未読フラグを立てる／下ろす。
 // 列が無い旧シートでは何もしない（呼び出し側が履歴走査にフォールバックする）。
@@ -980,9 +1027,107 @@ function setUnreadFlag_(sheet, headers, rowIndex, targetRole, value) {
   sheet.getRange(rowIndex, idx + 1).setValue(!!value);
 }
 
-// メッセージ・変更を送信したときに、相手側の未読フラグを立てる
-function markUnreadForCounterpart_(sheet, headers, rowIndex, senderRole) {
-  setUnreadFlag_(sheet, headers, rowIndex, counterpartRole_(senderRole), true);
+// ★機能追加：店舗ロールが起票した案件は、相手が「支店」か「日本の手配課」かが固定の
+// 2択ではなくなる（通常はJP、支店マスタの「店舗直接やり取り許可」がONなら支店）ため、
+// 送信者ロールだけからは相手が決められない。メッセージ送信のたびに resolveMessageDirection_ で
+// 実際の宛先（'JP_TO_BRANCH' 等の向き）を確定させ、その結果を使って未読フラグを立てる。
+// 起票元店舗が無い通常の案件では、従来どおりJP⇔支店の単純な向きになる。
+function recipientRoleForDirection_(direction) {
+  const map = {
+    JP_TO_BRANCH: BRANCH_ROLE, BRANCH_TO_JP: JP_ROLE,
+    JP_TO_SHOP: SHOP_ROLE, SHOP_TO_JP: JP_ROLE,
+    BRANCH_TO_SHOP: SHOP_ROLE, SHOP_TO_BRANCH: BRANCH_ROLE
+  };
+  return map[direction] || null;
+}
+function markUnreadForDirection_(sheet, headers, rowIndex, direction) {
+  const role = recipientRoleForDirection_(direction);
+  if (!role) return;
+  setUnreadFlag_(sheet, headers, rowIndex, role, true);
+}
+
+// 案件の行データから、通常の送信者ロール判定に「店舗」を加味した向き（direction）を決める。
+// - 起票元店舗が無い案件：従来どおり JP_TO_BRANCH／BRANCH_TO_JP のみ（挙動は一切変わらない）。
+// - 起票元店舗がある案件：
+//   ・店舗からの送信 → 支店マスタの「店舗直接やり取り許可」がONならSHOP_TO_BRANCH、OFFならSHOP_TO_JP
+//   ・支店からの送信 → 同フラグがONならBRANCH_TO_SHOP、OFFなら従来どおりBRANCH_TO_JP
+//   ・JPからの送信   → 同フラグがONならJP_TO_BRANCH（店舗とは支店が直接やり取りするため）、
+//                       OFFなら明示された宛先（recipient='SHOP'なら店舗へ中継、それ以外は従来どおり支店へ）
+function resolveMessageDirection_(session, headers, rowData, recipient) {
+  const originShop = String(rowData[headers.indexOf(COL_ORIGIN_SHOP)] || '').trim();
+  if (!originShop) {
+    return session.role === JP_ROLE ? 'JP_TO_BRANCH' : 'BRANCH_TO_JP';
+  }
+  const branchCode = String(rowData[headers.indexOf(COL_BRANCH_CODE)] || '').toUpperCase();
+  const direct = !!(branchMetaMap_()[branchCode] || {}).shopDirect;
+
+  if (session.role === SHOP_ROLE) return direct ? 'SHOP_TO_BRANCH' : 'SHOP_TO_JP';
+  if (session.role === BRANCH_ROLE) return direct ? 'BRANCH_TO_SHOP' : 'BRANCH_TO_JP';
+  // JPロール
+  if (direct) return 'JP_TO_BRANCH';
+  return recipient === 'SHOP' ? 'JP_TO_SHOP' : 'JP_TO_BRANCH';
+}
+
+// 旧データ（宛先ロール列が無かった頃）は必ずJP⇔支店の2者間だったので、送信者ロールから
+// 相手側を推定する。新しいデータは宛先ロールをそのまま使う。
+function effectiveRecipientRole_(senderRole, recipientRoleRaw) {
+  if (recipientRoleRaw) return recipientRoleRaw;
+  if (senderRole === JP_ROLE) return BRANCH_ROLE;
+  if (senderRole === BRANCH_ROLE) return JP_ROLE;
+  return '';
+}
+
+// あるメッセージ（送信者ロール・宛先ロール）が viewerRole から見えてよいかどうか。
+// JPは常に全て閲覧可（横断的な監督役のため）。それ以外は「自分が送った、または自分宛」のものだけ。
+// 起票元店舗が無い通常の案件では宛先ロールが常にJP／BRANCHのどちらかになるため、
+// BRANCH視点では全件が「自分が送った、または自分宛」に該当し、従来どおり全件見える。
+function visibleToRole_(viewerRole, senderRole, recipientRoleRaw) {
+  if (viewerRole === JP_ROLE) return true;
+  if (senderRole === viewerRole) return true;
+  const recip = String(recipientRoleRaw || '').trim().toUpperCase();
+  // ★機能追加：店舗が新規依頼を起票した直後の通知だけは宛先を1つに絞らず、
+  // 日本の手配課・現地支店の両方に見せる（apiShopCreateRequest 参照）
+  if (senderRole === SHOP_ROLE && !recip) return viewerRole === BRANCH_ROLE;
+  return effectiveRecipientRole_(senderRole, recip) === viewerRole;
+}
+
+// 店舗ロール向けの案件詳細：一般の項目（請求先・ホテル等）は含めず、依頼状況の確認と
+// メッセージのやり取りに必要な最小限の情報だけを返す。
+function buildShopReservationDetail_(session, kanriNo, headers, rowData) {
+  const getV = (name) => rowData[headers.indexOf(name)];
+  const meta = branchMetaMap_()[getV(COL_BRANCH_CODE)] || {};
+  const detail = {
+    [COL_KANRI_NO]: getV(COL_KANRI_NO),
+    [COL_CHALLENGE_NO]: getV(COL_CHALLENGE_NO),
+    [COL_STATUS_JP]: getV(COL_STATUS_JP),
+    [COL_STATUS_BRANCH]: getV(COL_STATUS_BRANCH),
+    [COL_CONFIRMED_DATE]: formatDateForInput_(getV(COL_CONFIRMED_DATE)),
+    [COL_CEREMONY_DATE]: formatDateForInput_(getV(COL_CEREMONY_DATE)),
+    [COL_GROOM_NAME]: getV(COL_GROOM_NAME),
+    [COL_PLAN]: getV(COL_PLAN),
+    [COL_HOPE1]: getV(COL_HOPE1),
+    [COL_AREA]: getV(COL_AREA),
+    branchName: meta.name || getV(COL_BRANCH_CODE),
+    country: meta.country || '',
+    city: meta.city || '',
+    originShop: getV(COL_ORIGIN_SHOP) || ''
+  };
+
+  const hSheet = getSpreadsheet_().getSheetByName(HISTORY_SHEET_NAME);
+  let hRows = getRowsAsObjects_(hSheet).filter(r => String(r[H_COL_KANRI]) === String(kanriNo));
+  hRows = hRows.filter(r => visibleToRole_(session.role, r[H_COL_SENDER_ROLE], r[H_COL_RECIPIENT_ROLE]));
+  hRows.sort((a, b) => new Date(b[H_COL_DATETIME]) - new Date(a[H_COL_DATETIME]));
+  detail.history = hRows.map(r => ({
+    id: r[H_COL_ID],
+    datetime: formatMaybeDate_(r[H_COL_DATETIME]),
+    sender: r[H_COL_SENDER],
+    senderRole: r[H_COL_SENDER_ROLE],
+    body: r[H_COL_BODY],
+    // ★画面側が「自分宛でまだ未読のものだけ」既読チェックを送ればよいようにしておく
+    checkShop: isActiveFlag_(r[H_COL_CHECK_SHOP])
+  }));
+
+  return { ok: true, role: session.role, detail };
 }
 
 // 「自分側からみて未読の、相手側から来たメッセージ・変更」がある管理番号の集合を作る。
@@ -1063,6 +1208,10 @@ function branchMetaMap_() {
 }
 
 function rowInScope_(session, scope, row) {
+  if (session.role === SHOP_ROLE) {
+    // ★機能追加：店舗ロールは自分が起票した案件だけが対象（一覧・検索・納品待ち等、共通で使う）
+    return String(row[COL_ORIGIN_SHOP] || '').toUpperCase() === session.branchCode;
+  }
   if (session.role === BRANCH_ROLE) {
     return String(row[COL_BRANCH_CODE]).toUpperCase() === session.branchCode;
   }
@@ -1490,6 +1639,11 @@ function apiGetReservationDetail(token, kanriNo) {
   const session = requireSession_(token);
   const { headers, rowIndex, rowData } = findReservationRow_(kanriNo);
   if (rowIndex === -1) throw new Error('対象の予約が見つかりません。');
+
+  if (session.role === SHOP_ROLE) {
+    assertShopOwnRow_(session, headers, rowData);
+    return buildShopReservationDetail_(session, kanriNo, headers, rowData);
+  }
   assertRowVisible_(session, headers, rowData);
 
   const getV = (name) => rowData[headers.indexOf(name)];
@@ -1515,6 +1669,11 @@ function apiGetReservationDetail(token, kanriNo) {
   detail.passportRequired = !!meta.passportRequired;
   // ★要件：準備場所の選択式表示・同意書欄の表示はイタリアの支店だけに絞る
   detail.isItaly = detail.country === ITALY_COUNTRY_NAME;
+  // ★機能追加：店舗が起票した案件かどうか（支店・JP双方の画面で「店舗発の依頼」であることを示す）。
+  // 現地とのやり取りが直結モードかどうかも合わせて返す（JPの「宛先」選択、支店側の案内表示に使う）。
+  detail.originShop = getV(COL_ORIGIN_SHOP) || '';
+  detail.originShopName = detail.originShop ? ((branchMetaMap_()[detail.originShop] || {}).name || detail.originShop) : '';
+  detail.shopDirect = !!meta.shopDirect;
 
   const options = [];
   for (let n = 1; n <= OPTION_COUNT; n++) {
@@ -1528,7 +1687,11 @@ function apiGetReservationDetail(token, kanriNo) {
   detail.options = options;
 
   const hSheet = getSpreadsheet_().getSheetByName(HISTORY_SHEET_NAME);
-  const hRows = getRowsAsObjects_(hSheet).filter(r => String(r[H_COL_KANRI]) === String(kanriNo));
+  let hRows = getRowsAsObjects_(hSheet).filter(r => String(r[H_COL_KANRI]) === String(kanriNo));
+  // ★機能追加：店舗が起票した案件は、日本側（JP）以外には「自分が送った、または自分宛の」
+  // メッセージだけを見せる（支店には店舗↔JPのやり取りを、店舗には支店↔JPのやり取りを見せない）。
+  // 起票元店舗が無い通常の案件では visibleToRole_ は常にtrueを返すため、挙動は一切変わらない。
+  hRows = hRows.filter(r => visibleToRole_(session.role, r[H_COL_SENDER_ROLE], r[H_COL_RECIPIENT_ROLE]));
   // ★要件：メッセージは新しい日付が上（降順）
   hRows.sort((a, b) => new Date(b[H_COL_DATETIME]) - new Date(a[H_COL_DATETIME]));
   detail.history = hRows.map(r => ({
@@ -1559,10 +1722,27 @@ function apiGetReservationDetail(token, kanriNo) {
   return { ok: true, role: session.role, detail };
 }
 
+// ★セキュリティ：店舗ロールは既定で「拒否」にする（許可は例外的に個別のAPIだけで与える）。
+// 通常の予約項目編集・現地スタッフ手配・社内進行管理欄など、店舗が使う想定の無い既存APIの
+// 大半はこの関数を経由しているため、ここでJPロール・BRANCHロールと同列にSHOPロールも
+// 「自分の案件なら通す」形にしてしまうと、そうした既存APIまで意図せず店舗に開いてしまう。
+// 店舗に見せてよい範囲（案件詳細の閲覧・メッセージ送受信）は assertShopOwnRow_ を個別に使う。
 function assertRowVisible_(session, headers, rowData) {
   if (session.role === JP_ROLE) return;
+  if (session.role === SHOP_ROLE) {
+    throw new Error('この案件を閲覧・操作する権限がありません。');
+  }
   const branchOfRow = String(rowData[headers.indexOf(COL_BRANCH_CODE)]).toUpperCase();
   if (branchOfRow !== session.branchCode) {
+    throw new Error('この案件を閲覧・操作する権限がありません。');
+  }
+}
+
+// ★機能追加：店舗ロールに個別に許可するAPI（案件詳細の閲覧、メッセージ送受信、既読チェック）専用の
+// 可視性チェック。「自分（自店舗）が起票した案件か」だけを見る。
+function assertShopOwnRow_(session, headers, rowData) {
+  const origin = String(rowData[headers.indexOf(COL_ORIGIN_SHOP)] || '').toUpperCase();
+  if (session.role !== SHOP_ROLE || !origin || origin !== session.branchCode) {
     throw new Error('この案件を閲覧・操作する権限がありません。');
   }
 }
@@ -1628,12 +1808,21 @@ function apiSaveFieldsQuiet(token, kanriNo, changes) {
 
 // (b)/(c) メッセージのみ、または「変更内容＋メッセージ」をまとめて1回で相手に通知する。
 // changesが空ならメッセージのみの送信として扱う（履歴1件・メール1通）。
-function apiCommitChanges(token, kanriNo, changes, message) {
+// recipient：店舗が起票した案件で、日本側（JP）が「支店へ」／「店舗へ」のどちらに送るかを
+// 明示するためだけの引数（'SHOP' を指定すると店舗へ中継。それ以外・省略時は従来どおり支店へ）。
+// 通常の案件・JP以外のロールでは無視される。
+function apiCommitChanges(token, kanriNo, changes, message, recipient) {
   const session = requireSession_(token);
   changes = changes || {};
   message = String(message || '').trim();
   if (Object.keys(changes).length === 0 && !message) {
     throw new Error('送信するメッセージまたは変更内容がありません。');
+  }
+  // ★機能追加：店舗ロールは案件の項目を変更できない（メッセージのみ）。ここで明示的に弾いておくと、
+  // 「メッセージのみお送りいただけます」というSHOP向けの分かりやすいエラーで止まる
+  // （何もしなければ prepareFieldWrite_ の汎用エラーで止まるだけで、実害はないが分かりにくい）。
+  if (session.role === SHOP_ROLE && Object.keys(changes).length > 0) {
+    throw new Error('店舗ロールでは案件の項目を変更できません。メッセージのみお送りいただけます。');
   }
 
   const lock = LockService.getScriptLock();
@@ -1641,7 +1830,8 @@ function apiCommitChanges(token, kanriNo, changes, message) {
   try {
     const { sheet, headers, rowIndex, rowData } = findReservationRow_(kanriNo);
     if (rowIndex === -1) throw new Error('対象の予約が見つかりません。');
-    assertRowVisible_(session, headers, rowData);
+    if (session.role === SHOP_ROLE) assertShopOwnRow_(session, headers, rowData);
+    else assertRowVisible_(session, headers, rowData);
     changes = withInquiryOnlyCascade_(session, headers, rowData, changes);
 
     const summaryLines = [];
@@ -1678,11 +1868,11 @@ function apiCommitChanges(token, kanriNo, changes, message) {
     if (summaryLines.length > 0) bodyParts.push(`[変更内容]\n${summaryLines.join('\n')}`);
     if (message) bodyParts.push(`[メッセージ]\n${message}`);
     const body = bodyParts.join('\n\n');
-    const direction = session.role === JP_ROLE ? 'JP_TO_BRANCH' : 'BRANCH_TO_JP';
+    const direction = resolveMessageDirection_(session, headers, freshRow, recipient);
     const kind = summaryLines.length > 0 && message ? '変更＋メッセージ' : (summaryLines.length > 0 ? '変更内容' : 'メッセージ');
 
-    appendHistory_(headers, freshRow, who, body, session.role);
-    markUnreadForCounterpart_(sheet, headers, rowIndex, session.role);
+    appendHistory_(headers, freshRow, who, body, session.role, recipientRoleForDirection_(direction));
+    markUnreadForDirection_(sheet, headers, rowIndex, direction);
     sendDirectionalMail_(headers, freshRow, direction, session, body, kind);
 
     if (dateChanged) sortReservationSheet_(sheet);
@@ -1706,6 +1896,10 @@ function colIndexOrThrow_(headers, name) {
 
 // 1フィールド分の検証・保存準備（役割チェック・STSゲート・列挙値チェック・日付変換）を共通化したもの
 function prepareFieldWrite_(session, headers, rowData, field, value) {
+  // ★機能追加：店舗ロールは案件の項目を一切編集できない（メッセージの送受信のみ）
+  if (session.role === SHOP_ROLE) {
+    throw new Error('店舗ロールでは案件の項目を変更できません。メッセージのみお送りいただけます。');
+  }
   if (!COMMITTABLE_FIELDS.includes(field)) {
     throw new Error(`「${field}」はこの方法では変更できません。`);
   }
@@ -2175,14 +2369,87 @@ function apiCreateReservation(token, branchCode, rawText) {
     sheet.getRange(newRowIndex, 1, 1, headers.length).setValues([newRowData]);
 
     const initMsg = parsed.remarks ? `新規手配依頼が追加されました。\n【備考】\n${parsed.remarks}` : '新規手配依頼が追加されました。';
-    appendHistory_(headers, newRowData, senderLabel_(session), `[新規案件作成]\n${initMsg}`, session.role);
-    markUnreadForCounterpart_(sheet, headers, newRowIndex, session.role);
     // ★不具合修正：以前は作成者が誰であっても 'BRANCH_TO_JP'（＝日本側へ通知）で固定していたため、
     // 日本側が支店の案件を新規作成した場合、通知が自分たち宛てに飛ぶだけで
     // 肝心の支店には新規案件が来たことが一切通知されなかった。
     // メッセージ送信と同じく「相手側へ通知する」ルールに揃える。
-    const newCaseDirection = session.role === JP_ROLE ? 'JP_TO_BRANCH' : 'BRANCH_TO_JP';
+    // ★このAPIは店舗ロールでは呼べない（下のtargetMetaチェックで必ず拒否される）ため、
+    // resolveMessageDirection_ を通しても常にJP⇔支店の2択にしかならない。
+    const newCaseDirection = resolveMessageDirection_(session, headers, newRowData);
+    appendHistory_(headers, newRowData, senderLabel_(session), `[新規案件作成]\n${initMsg}`, session.role, recipientRoleForDirection_(newCaseDirection));
+    markUnreadForDirection_(sheet, headers, newRowIndex, newCaseDirection);
     sendDirectionalMail_(headers, newRowData, newCaseDirection, session, initMsg, '新規案件');
+
+    sortReservationSheet_(sheet);
+    return { ok: true, kanriNo: newNo };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// =====================================================
+// ⑩-2 店舗発の新規依頼（機能：店舗スタッフからの起票）
+// =====================================================
+// ★機能追加：日本の店舗スタッフが、希望日・お客様名・支店（＝都市）・プラン・該当の手配課を
+// 選んで送信すると、新規案件として作成され、日本の該当手配課と現地支店の両方に通知が届く。
+// 店舗が起票したことが分かるよう起票元店舗（COL_ORIGIN_SHOP）を記録し、以後のメッセージは
+// 支店マスタの「店舗直接やり取り許可」がONの支店なら現地と直接、OFFなら日本の手配課を介して行う
+// （resolveMessageDirection_ が案件ごとに毎回この設定を見て向きを決める）。
+function apiShopCreateRequest(token, payload) {
+  const session = requireSession_(token);
+  if (session.role !== SHOP_ROLE) throw new Error('この操作は店舗ロールのみ実行できます。');
+  payload = payload || {};
+
+  const branchCode = String(payload.branchCode || '').trim().toUpperCase();
+  if (!branchCode) throw new Error('支店（都市）を選択してください。');
+  const targetMeta = branchMetaMap_()[branchCode];
+  if (!targetMeta || targetMeta.role !== BRANCH_ROLE || !targetMeta.active) {
+    throw new Error(`支店コード「${branchCode}」は支店マスタに存在しないか、無効になっています。`);
+  }
+  const team = String(payload.team || '').trim();
+  if (!JP_TEAMS.includes(team)) throw new Error(`該当の手配課は ${JP_TEAMS.join('/')} のいずれかにしてください。`);
+  const customerName = String(payload.customerName || '').trim();
+  if (!customerName) throw new Error('お客様名を入力してください。');
+  const hopeDate = String(payload.hopeDate || '').trim();
+  const plan = String(payload.plan || '').trim();
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
+  try {
+    const sheet = getSpreadsheet_().getSheetByName(RESERVATION_SHEET_NAME);
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const newNo = nextKanriNo_(branchCode);
+    const newRowIndex = sheet.getLastRow() + 1;
+
+    const newRowData = new Array(headers.length).fill('');
+    const setV = (name, val) => { const i = headers.indexOf(name); if (i !== -1 && val) newRowData[i] = val; };
+    setV(COL_BRANCH_CODE, branchCode);
+    setV(COL_KANRI_NO, newNo);
+    setV(COL_LAST_UPDATED, new Date());
+    setV(COL_STATUS_JP, 'RQ');
+    setV(COL_STATUS_BRANCH, 'NC');
+    setV(COL_GROOM_NAME, customerName);
+    setV(COL_HOPE1, hopeDate);
+    setV(COL_PLAN, plan);
+    setV(COL_AREA, team);
+    setV(COL_ORIGIN_SHOP, session.branchCode);
+
+    sheet.getRange(newRowIndex, 1, 1, headers.length).setValues([newRowData]);
+
+    const initMsg = [
+      `店舗（${session.branchName}）からの新規依頼です。`,
+      `お客様名: ${customerName}`,
+      hopeDate ? `希望日: ${hopeDate}` : '',
+      plan ? `プラン: ${plan}` : '',
+      `該当の手配課: ${team}手配課`
+    ].filter(Boolean).join('\n');
+
+    // ★店舗自身の送信という扱いにする（appendHistory_のsenderRoleにSHOPを記録）。
+    // 宛先は「日本の該当手配課・現地支店の両方」（新規案件通知の定型、sendDirectionalMail_の既定fallback）。
+    appendHistory_(headers, newRowData, senderLabel_(session), `[新規依頼（店舗より）]\n${initMsg}`, SHOP_ROLE, '');
+    setUnreadFlag_(sheet, headers, newRowIndex, JP_ROLE, true);
+    setUnreadFlag_(sheet, headers, newRowIndex, BRANCH_ROLE, true);
+    sendDirectionalMail_(headers, newRowData, 'SHOP_NEW_CASE', session, initMsg, '店舗からの新規依頼');
 
     sortReservationSheet_(sheet);
     return { ok: true, kanriNo: newNo };
@@ -2253,10 +2520,12 @@ function parseReservationText_(rawText) {
 // =====================================================
 function apiToggleHistoryCheck(token, historyId, checked) {
   const session = requireSession_(token);
-  const isJp = session.role === JP_ROLE;
-  const checkCol = isJp ? H_COL_CHECK_JP : H_COL_CHECK_BRANCH;
-  const dateCol = isJp ? H_COL_DATE_JP : H_COL_DATE_BRANCH;
-  const checkedByCol = isJp ? H_COL_CHECKED_BY_JP : H_COL_CHECKED_BY_BRANCH;
+  const checkCol = session.role === JP_ROLE ? H_COL_CHECK_JP
+    : session.role === SHOP_ROLE ? H_COL_CHECK_SHOP : H_COL_CHECK_BRANCH;
+  const dateCol = session.role === JP_ROLE ? H_COL_DATE_JP
+    : session.role === SHOP_ROLE ? H_COL_DATE_SHOP : H_COL_DATE_BRANCH;
+  const checkedByCol = session.role === JP_ROLE ? H_COL_CHECKED_BY_JP
+    : session.role === SHOP_ROLE ? H_COL_CHECKED_BY_SHOP : H_COL_CHECKED_BY_BRANCH;
 
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
@@ -2295,6 +2564,15 @@ function apiToggleHistoryCheck(token, historyId, checked) {
         throw new Error('この履歴を操作する権限がありません。');
       }
     }
+    // ★機能追加：店舗ロールは、自分が起票した案件の履歴だけを操作できる
+    if (session.role === SHOP_ROLE) {
+      const originColIdx = headers.indexOf(H_COL_ORIGIN_SHOP);
+      const rowOrigin = originColIdx === -1
+        ? '' : String(values[targetIdx][originColIdx]).trim().toUpperCase();
+      if (!rowOrigin || rowOrigin !== session.branchCode) {
+        throw new Error('この履歴を操作する権限がありません。');
+      }
+    }
 
     sheet.getRange(targetRow, colIndexOrThrow_(headers, checkCol)).setValue(checked);
     if (checked) {
@@ -2313,11 +2591,14 @@ function apiToggleHistoryCheck(token, historyId, checked) {
     if (kanriColIdx !== -1 && roleColIdx !== -1 && checkColIdx !== -1) {
       values[targetIdx][checkColIdx] = checked;
       const kanriNo = String(values[targetIdx][kanriColIdx]);
-      const fromRole = counterpartRole_(session.role);
+      const recipColIdx = headers.indexOf(H_COL_RECIPIENT_ROLE);
       let stillUnread = false;
       for (let i = 0; i < values.length; i++) {
         if (String(values[i][kanriColIdx]) !== kanriNo) continue;
-        if (String(values[i][roleColIdx]).trim().toUpperCase() !== fromRole) continue;
+        const senderRole = String(values[i][roleColIdx]).trim().toUpperCase();
+        if (senderRole === session.role) continue; // 自分が送ったものは対象外
+        const recipRaw = recipColIdx === -1 ? '' : String(values[i][recipColIdx]).trim().toUpperCase();
+        if (effectiveRecipientRole_(senderRole, recipRaw) !== session.role) continue;
         if (!isActiveFlag_(values[i][checkColIdx])) { stillUnread = true; break; }
       }
       const target = findReservationRow_(kanriNo);
@@ -2449,7 +2730,7 @@ function toSearchResult_(r, branchMeta, source) {
 // =====================================================
 // ⑬ 履歴追加・メール送信の共通処理
 // =====================================================
-function appendHistory_(headers, rowData, sender, body, senderRole) {
+function appendHistory_(headers, rowData, sender, body, senderRole, recipientRole) {
   const h = getSpreadsheet_().getSheetByName(HISTORY_SHEET_NAME);
   const getV = (name) => rowData[headers.indexOf(name)];
   const dateVal = getV(COL_CONFIRMED_DATE);
@@ -2476,9 +2757,12 @@ function appendHistory_(headers, rowData, sender, body, senderRole) {
   set(H_COL_BRIDE_NAME, getV(COL_BRIDE_NAME));
   set(H_COL_DATETIME, new Date());
   set(H_COL_SENDER, sender);
-  // ★要件：どちら側（JP／BRANCH）からのメッセージかを記録し、ダッシュボードの「要対応」判定に使う
+  // ★要件：どちら側（JP／BRANCH／SHOP）からのメッセージかを記録し、ダッシュボードの「要対応」判定に使う
   set(H_COL_SENDER_ROLE, senderRole || '');
   set(H_COL_BODY, body);
+  // ★機能追加：店舗が絡む案件の宛先ロール・起票元店舗（可視性フィルタ・既読チェックの認可に使う）
+  set(H_COL_RECIPIENT_ROLE, recipientRole || '');
+  set(H_COL_ORIGIN_SHOP, getV(COL_ORIGIN_SHOP) || '');
 
   h.appendRow(row);
 }
@@ -2494,10 +2778,17 @@ function sendDirectionalMail_(headers, rowData, direction, session, message, kin
 
   const jpEmail = getJpTeamEmail_(area);
   const branchEmail = getBranchEmail_(branchCode);
+  // ★機能追加：起票元店舗が絡む案件だけで使う（それ以外の案件では起票元店舗が空欄のため常に空文字）
+  const shopEmail = getShopEmail_(getV(COL_ORIGIN_SHOP));
 
   let recipients;
   if (direction === 'JP_TO_BRANCH') recipients = branchEmail;
   else if (direction === 'BRANCH_TO_JP') recipients = jpEmail;
+  else if (direction === 'JP_TO_SHOP') recipients = shopEmail;
+  else if (direction === 'SHOP_TO_JP') recipients = jpEmail;
+  else if (direction === 'BRANCH_TO_SHOP') recipients = shopEmail;
+  else if (direction === 'SHOP_TO_BRANCH') recipients = branchEmail;
+  // 新規案件通知など：日本の該当手配課・現地支店の両方に知らせる
   else recipients = [jpEmail, branchEmail].filter(Boolean).join(',');
 
   if (!recipients) return;
@@ -2513,6 +2804,13 @@ function sendDirectionalMail_(headers, rowData, direction, session, message, kin
 
 function getBranchEmail_(branchCode) {
   const meta = branchMetaMap_()[branchCode];
+  return meta ? meta.email : '';
+}
+
+// ★機能追加：起票元店舗コードから通知先メールを引く（支店マスタの ロール=SHOP の行）
+function getShopEmail_(shopCode) {
+  if (!shopCode) return '';
+  const meta = branchMetaMap_()[String(shopCode).toUpperCase()];
   return meta ? meta.email : '';
 }
 

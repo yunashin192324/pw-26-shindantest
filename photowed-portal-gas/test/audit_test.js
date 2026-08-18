@@ -54,6 +54,16 @@ function fixture() {
   bm.getRange(vieRow, bmHead.indexOf('手配メール機能') + 1).setValue(true);
   bm.getRange(vieRow, bmHead.indexOf('手配先名-カメラマン') + 1).setValue('M.Gruber');
   bm.getRange(vieRow, bmHead.indexOf('手配先メール-カメラマン') + 1).setValue('photographer@example.com');
+
+  // ★機能追加：店舗ロール（SHOP）の監査対象として1店舗を追加しておく
+  const shopRowIdx = bm.getLastRow() + 1;
+  const setBm = (name, val) => bm.getRange(shopRowIdx, bmHead.indexOf(name) + 1).setValue(val);
+  setBm('支店コード', 'SHOP1');
+  setBm('支店名', '新宿店');
+  setBm('ロール', 'SHOP');
+  setBm('ログインパスコード', 'CHANGE-ME-SHOP1');
+  setBm('通知先メール', 'shop1@example.com');
+  setBm('有効', true);
   return ctx;
 }
 
@@ -102,6 +112,8 @@ const API_SPECS = [
   { fn: 'apiSetDriveUrl',          scope: 'any', args: (t) => [t, 'VIE-001', 'https://drive.google.com/x'], target: 'VIE', writes: true },
   // 支店ロールでは指定した支店コードは無視され、必ず自支店の案件になる（下で個別に検証する）
   { fn: 'apiCreateReservation',    scope: 'any', args: (t) => [t, 'VIE', '新郎名: A\n新婦名: B'], writes: true },
+  { fn: 'apiShopCreateRequest',    scope: 'shop',
+    args: (t) => [t, { branchCode: 'VIE', team: '関東', customerName: '侵入テスト', hopeDate: '', plan: '' }], writes: true },
   { fn: 'apiToggleHistoryCheck',   scope: 'any', args: (t, ctx) => [t, ctx.__someHistoryId || 'none', true], target: 'VIE', writes: true },
 
   // メモ履歴（共有メモ／メモ（現地用）の積み上げ記録）
@@ -160,7 +172,7 @@ section('A1. 認可マトリクス：保護の書き忘れを機械的に検出'
 
   // 書き込みAPIは排他ロックが必要（読み取り専用は不要）
   const mustLock = ['apiSaveBranch','apiSetBranchActive','apiSaveFieldsQuiet','apiCommitChanges',
-                    'apiSetDriveUrl','apiCreateReservation','apiToggleHistoryCheck',
+                    'apiSetDriveUrl','apiCreateReservation','apiShopCreateRequest','apiToggleHistoryCheck',
                     'apiSaveStaffItem','apiSaveSaleItem','apiSavePlanItem','apiSaveOptionItem','apiSaveLocationItem',
                     'apiSaveArrangementSettings'];
   const noLock = mustLock.filter(f => {
@@ -290,11 +302,15 @@ section('A5. ロック競合：同時書き込みでも壊れず、分かりや�
   const jp = ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO');
   const t = jp.session.token;
   const writers = API_SPECS.filter(s => s.writes && s.scope !== 'public');
+  // ★機能追加：店舗ロール専用のAPIはJPトークンでは（ロールチェックの時点で）ロックまで到達しないため、
+  // このロック競合テストだけは店舗としてログインしたトークンを使う
+  const shopToken = ctx.apiLogin('SHOP1', 'CHANGE-ME-SHOP1').session.token;
 
   writers.forEach(spec => {
+    const actorToken = spec.scope === 'shop' ? shopToken : t;
     ctx.__failNextLocks(1); // 他の処理がロックを握っている状況を作る
     let msg = null, threw = false;
-    try { ctx[spec.fn](...spec.args(t, ctx)); }
+    try { ctx[spec.fn](...spec.args(actorToken, ctx)); }
     catch (e) { threw = true; msg = e.message; }
     // ロックが取れない場合は「失敗した」と分かる形で終わること（黙って壊れない）
     const ok = !threw || /実行中|待って|再試行|競合/.test(msg || '');

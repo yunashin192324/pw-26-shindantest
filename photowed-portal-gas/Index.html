@@ -14,12 +14,13 @@
       </div>
       <nav class="header-nav">
         <button id="nav-dashboard" class="nav-btn">案件一覧</button>
-        <button id="nav-day" class="nav-btn">当日表</button>
-        <button id="nav-delivery" class="nav-btn">納品待ち</button>
-        <button id="nav-search" class="nav-btn">検索</button>
+        <button id="nav-day" class="nav-btn non-shop">当日表</button>
+        <button id="nav-delivery" class="nav-btn non-shop">納品待ち</button>
+        <button id="nav-search" class="nav-btn non-shop">検索</button>
         <button id="nav-stats" class="nav-btn jp-only hidden">統計</button>
-        <button id="nav-new" class="nav-btn">＋新規案件</button>
-        <button id="nav-settings" class="nav-btn">設定</button>
+        <button id="nav-new" class="nav-btn non-shop">＋新規案件</button>
+        <button id="nav-shop-new" class="nav-btn shop-only hidden">＋新規依頼</button>
+        <button id="nav-settings" class="nav-btn non-shop">設定</button>
         <button id="nav-logout" class="nav-btn nav-logout">ログアウト</button>
       </nav>
     </header>
@@ -162,6 +163,26 @@
         <button id="new-submit" class="primary-btn">解析して作成</button>
         <p id="new-error" class="error-text hidden"></p>
         <p id="new-success" class="success-text hidden"></p>
+      </section>
+
+      <!-- 新規依頼（店舗ロール専用） -->
+      <section id="view-shop-new" class="view hidden">
+        <h2>新規依頼</h2>
+        <p class="hint-text">送信すると、日本の該当手配課と現地支店の両方に通知が届きます。</p>
+        <label>支店（都市）</label>
+        <select id="shop-new-branch"></select>
+        <label>該当の手配課</label>
+        <select id="shop-new-team"></select>
+        <label>お客様名</label>
+        <input id="shop-new-customer" type="text" placeholder="例）Ahmet Yilmaz">
+        <label>希望日</label>
+        <input id="shop-new-hopedate" type="date">
+        <label>プラン</label>
+        <input id="shop-new-plan" type="text" list="shop-new-plan-datalist" placeholder="任意入力">
+        <datalist id="shop-new-plan-datalist"></datalist>
+        <button id="shop-new-submit" class="primary-btn">この内容で送信</button>
+        <p id="shop-new-error" class="error-text hidden"></p>
+        <p id="shop-new-success" class="success-text hidden"></p>
       </section>
 
       <!-- 設定（現地スタッフ手配メール。自支店 or JPが編集可能） -->

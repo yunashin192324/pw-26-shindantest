@@ -44,6 +44,16 @@ function makeServer() {
   // セールマスタに候補を1件登録
   ss.getSheetByName('セールマスタ').appendRow(['ROW', '春の特典フェア', true]);
 
+  // ★機能追加：店舗ロールのログインを1件用意する
+  const shopRowIdx = bm.getLastRow() + 1;
+  const setBm = (name, val) => bm.getRange(shopRowIdx, head.indexOf(name) + 1).setValue(val);
+  setBm('支店コード', 'SHOP1');
+  setBm('支店名', '新宿店');
+  setBm('ロール', 'SHOP');
+  setBm('ログインパスコード', 'CHANGE-ME-SHOP1');
+  setBm('通知先メール', 'shop1@example.com');
+  setBm('有効', true);
+
   // 案件を1件作る
   const H = ctx.RESERVATION_HEADERS;
   const row = new Array(H.length).fill('');
@@ -503,6 +513,72 @@ function visiblePane(document) {
     const savedDetail = ctx.apiGetReservationDetail(vieTok, 'VIE-901').detail;
     check('ヘアメイク開始時間が保存できる', savedDetail['ヘアメイク開始時間'] === '9:00');
     check('撮影開始時間が保存できる', savedDetail['撮影開始時間'] === '10:30');
+  }
+
+  // ---------------------------------------------------------------
+  section('U15. 店舗ロール（新規依頼フォーム → 一覧・詳細 → 手配課からの中継）');
+  {
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'SHOP1', 'CHANGE-ME-SHOP1');
+    check('店舗ロールには一覧系メニュー（検索・当日表・納品待ち・設定・通常の新規案件）が出ない',
+          document.getElementById('nav-search').classList.contains('hidden') &&
+          document.getElementById('nav-day').classList.contains('hidden') &&
+          document.getElementById('nav-delivery').classList.contains('hidden') &&
+          document.getElementById('nav-settings').classList.contains('hidden') &&
+          document.getElementById('nav-new').classList.contains('hidden'));
+    check('店舗ロールには「＋新規依頼」が出る', !document.getElementById('nav-shop-new').classList.contains('hidden'));
+
+    document.getElementById('nav-shop-new').click();
+    await settle();
+    const branchOpts = [...document.getElementById('shop-new-branch').options].map(o => o.value);
+    check('依頼先の支店（都市）が選べる', branchOpts.includes('VIE'), branchOpts.join(','));
+    document.getElementById('shop-new-branch').value = 'VIE';
+    document.getElementById('shop-new-team').value = '関東';
+    document.getElementById('shop-new-customer').value = 'Ahmet Yilmaz';
+    document.getElementById('shop-new-hopedate').value = '2026-09-10';
+    document.getElementById('shop-new-plan').value = 'プランA';
+    document.getElementById('shop-new-submit').click();
+    await settle();
+    check('依頼を送信できる', !document.getElementById('shop-new-success').classList.contains('hidden'),
+          document.getElementById('shop-new-error').textContent);
+    const createdKanri = document.getElementById('shop-new-success').textContent.match(/依頼\s*(\S+)\s*を送信/)[1];
+
+    document.getElementById('nav-dashboard').click();
+    await settle();
+    check('店舗の一覧に自分の依頼が出る',
+          document.getElementById('reservation-list').innerHTML.includes(createdKanri));
+
+    document.querySelector('#reservation-list .res-card').click();
+    await settle();
+    check('店舗向け詳細に管理番号が表示される',
+          document.getElementById('detail-content').innerHTML.includes(createdKanri));
+    check('店舗向け詳細には請求先など内部項目の入力欄が出ない（メッセージ以外は読み取り専用）',
+          !document.querySelector('[data-pending]'));
+
+    // 手配課（JP）が支店とのやり取りを経て、店舗へ中継する
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'KANTO', 'CHANGE-ME-KANTO');
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(createdKanri)).click();
+    await settle();
+    check('日本側の詳細に「店舗からの依頼」の案内が出る',
+          document.getElementById('detail-content').innerHTML.includes('新宿店'));
+    check('日本側には宛先（支店へ／店舗へ）の選択欄が出る（店舗直接やり取り許可がOFFのため）',
+          !!document.getElementById('msg-recipient'));
+    document.getElementById('msg-recipient').value = 'SHOP';
+    document.getElementById('msg-input').value = '9/10で空きが確認できました';
+    document.getElementById('btn-msg-only').click();
+    await settle();
+
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'SHOP1', 'CHANGE-ME-SHOP1');
+    document.querySelector('#reservation-list .res-card').click();
+    await settle();
+    check('手配課が中継したメッセージが店舗の画面に届く',
+          document.getElementById('detail-content').innerHTML.includes('9/10で空きが確認できました'));
   }
 
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
