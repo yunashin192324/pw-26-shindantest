@@ -44,8 +44,7 @@ Google Sites埋め込み用に単一HTML化する際、`@babel/standalone` を�
 1. **`CRITERIA` の `weight`（重み）が実際には使われていない**
    `location`, `composition` などに `weight: 2` 等が定義されていますが、`totalScore` はAIが独自に返す値をそのまま信頼しているだけで、この重みを使ってアプリ側で再計算する処理がどこにもありません。設計意図通りに「重み付き合計」をアプリ側でも検証・再計算するか、不要ならフィールド自体を削除するのが良いと思います。
 
-2. **APIキーが空文字列 (`apiKey = ""`)**
-   Google AI Studio の Canvas 環境向けの実装（実行時にランタイムがキーを注入する前提）だと思われますが、単体のReactアプリとしてそのまま動かす場合は必ず401/403で失敗します。実運用に転用する場合は、環境変数やサーバーサイドのプロキシ経由でAPIキーを渡す設計に変更してください（**フロントエンドに直接APIキーを埋め込むのは、たとえCanvas想定でも本番運用では避けるべき**です）。
+2. ~~**APIキーが空文字列 (`apiKey = ""`)**~~ → **対応済み**。会社利用の要望を受け、`index.html` はGemini APIキーを一切持たず、Google Apps Scriptのプロキシ（`apps-script/Code.gs`）経由でAPIキーをサーバー側に隠す構成に変更しました。詳細は下記「Apps Scriptプロキシのセットアップ」を参照してください。
 
 3. **写真の削除（個別）ができない**
    誤ってアップロードした写真を1枚だけ取り除く手段がなく、「全データ消去」しかありません。サムネイルにホバーで削除ボタンを出すなど、個別削除機能があると実用性が上がります。
@@ -65,28 +64,53 @@ Google Sites埋め込み用に単一HTML化する際、`@babel/standalone` を�
 
 `App.jsx` の内容をベースに、ビルド不要でそのままブラウザ実行できる単一HTMLファイル `index.html` を用意しました。React / ReactDOM / Babel standalone / Tailwind CSS をすべてCDNから読み込む構成です（npm installやwebpack/vite等のビルド工程は不要）。ローカルで実際にブラウザ実行して動作確認済みです。
 
-### 使い方（Google Sitesへの埋め込み手順）
+**会社での利用を想定し、`index.html` はGemini APIキーを一切持ちません。** 代わりに `apps-script/Code.gs` を Google Apps Script のWebアプリとしてデプロイし、APIキーはそちら側の「スクリプトのプロパティ」にだけ保存します。ブラウザは常にこのApps Scriptを経由してGeminiを呼び出すため、ページのソースを見てもAPIキーは一切出てきません。
 
-1. **APIキーを設定する**
-   `index.html` を開き、`GEMINI_API_KEY` という定数（ファイル冒頭のコメント付近）に、[Google AI Studio](https://aistudio.google.com/apikey) で発行したご自身のGemini APIキーを貼り付けてください。
-   ```js
-   const GEMINI_API_KEY = "ここにAPIキーを貼り付け";
-   ```
-   > ⚠️ **重要**: このファイルはブラウザ上でそのまま動く静的HTMLのため、ここに書いたAPIキーは、ページを開いた人なら誰でも「ページのソースを表示」等で閲覧・抜き取り・悪用（あなたの請求で使用）できてしまいます。社内限定・自分専用など閲覧者を完全に信頼できる用途に限定してください。不特定多数に公開するページに埋め込む場合は、Google Apps ScriptのWebアプリ等でAPIキーをサーバー側に隠すプロキシ構成への変更をおすすめします（必要であればサポートします）。
+```
+[ブラウザ (index.html)] --(APIキーなし)--> [Apps Script プロキシ] --(APIキー付き)--> [Gemini API]
+```
 
-2. **どこかにホスティングする**
-   Google Sites自体はHTMLファイルを直接アップロードできないため、`index.html` をどこかの公開URLに置く必要があります。候補:
-   - GitHub Pages（このリポジトリの `ai-photo-curator/` フォルダをそのまま公開する等）
-   - Firebase Hosting
-   - Google Apps Script の Web アプリとして公開（`doGet` で `index.html` のHTMLを返す）
+### 手順①: Apps Scriptプロキシをデプロイする
 
-3. **Google Sitesに埋め込む**
-   Google Sitesの編集画面で「挿入」→「埋め込み」→「埋め込みコード」を選び、次のようなiframeタグを貼り付けます（URLは手順2で発行された公開URLに置き換えてください）。
-   ```html
-   <iframe src="https://your-hosting-url/index.html" style="width:100%; height:900px; border:0;"></iframe>
-   ```
-   高さはお好みで調整してください（写真一覧が縦に伸びるため900px以上を推奨）。
+1. [script.google.com](https://script.google.com/) を開き、「新しいプロジェクト」を作成（社用のGoogleアカウントで）。
+2. デフォルトの `Code.gs` の中身を全て削除し、このリポジトリの `apps-script/Code.gs` の内容を貼り付ける。
+3. 左メニューの歯車アイコン「プロジェクトの設定」→「スクリプト プロパティ」→「スクリプト プロパティを追加」で、次を登録:
+   - `GEMINI_API_KEY` … [Google AI Studio](https://aistudio.google.com/apikey) で発行したAPIキー
+   - `SHARED_SECRET`（任意・推奨）… 好きな合言葉文字列。設定すると、この文字列を知らない相手はプロキシURLを知っていても呼び出せなくなる、追加の防御になります。
+4. 右上「デプロイ」→「新しいデプロイ」→ 種類の選択で歯車アイコンから「ウェブアプリ」を選択。
+   - **実行するユーザー**: 自分（Me）
+   - **アクセスできるユーザー**: 会社のGoogle Workspaceなら **「〇〇（組織名）内のユーザー」を強く推奨**（ログイン中の社員だけが呼び出せる＝実質、社外からは使えなくなります）。この選択肢が出ない個人アカウントの場合は「全員」を選ばざるを得ませんが、その場合は手順3の `SHARED_SECRET` を必ず設定してください。
+5. 「デプロイ」をクリックし、承認を求められたら自分のアカウントで許可。発行された **ウェブアプリのURL**（`.../exec` で終わるもの）をコピーしておく。
+6. **Code.gsを後から編集した場合**は、保存しただけでは公開URLに反映されません。「デプロイを管理」→ 対象デプロイの鉛筆アイコン →「新しいバージョン」を選んで再デプロイしてください（Apps Scriptあるあるの落とし穴です）。
+
+### 手順②: `index.html` にプロキシURLを設定する
+
+`index.html` 冒頭付近の以下の定数を書き換えます。
+
+```js
+const PROXY_URL = "ここにApps ScriptのWebアプリURLを貼り付け"; // 手順①で発行されたURL
+const PROXY_SHARED_SECRET = ""; // 手順①でSHARED_SECRETを設定した場合は同じ文字列を入れる
+```
+
+### 手順③: `index.html` をホスティングする
+
+Google Sites自体はHTMLファイルを直接アップロードできないため、`index.html` をどこかの公開URLに置く必要があります。候補:
+- GitHub Pages（このリポジトリの `ai-photo-curator/` フォルダをそのまま公開する等）
+- Firebase Hosting
+- 別のApps ScriptをWebアプリとして公開し、`doGet` で `index.html` のHTML文字列を返す
+
+### 手順④: Google Sitesに埋め込む
+
+Google Sitesの編集画面で「挿入」→「埋め込み」→「埋め込みコード」を選び、次のようなiframeタグを貼り付けます（URLは手順③で発行された公開URLに置き換えてください）。
+```html
+<iframe src="https://your-hosting-url/index.html" style="width:100%; height:900px; border:0;"></iframe>
+```
+高さはお好みで調整してください（写真一覧が縦に伸びるため900px以上を推奨）。
 
 ### 既知の制約
+- **APIキーの請求責任は依然として会社のGoogle Cloudプロジェクトにあります。** プロキシ化によって「キーが漏れて誰でも使い放題」というリスクはなくなりますが、社内の利用量自体（Gemini API呼び出し回数）に応じた課金は発生します。アクセス制御を「組織内のユーザー」にしておけば、少なくとも社外からの不正利用は防げます。
+- **Apps ScriptのWebアプリはCORSのプリフライト(OPTIONS)に正しく応答できない**という既知の制約があるため、`index.html` 側は意図的に `Content-Type: text/plain` でPOSTしてプリフライトを回避しています（本文は引き続きJSON文字列です）。この構成自体を変更する必要はありませんが、もし将来手を入れる場合はご注意ください。
+- **Apps ScriptのWebアプリは無料利用枠に1日あたりの実行回数上限があります**（Google Workspaceの契約種別により変動）。大量の写真を毎日処理するような使い方だと上限に達する可能性があるため、様子を見ながら運用してください。
 - **Tailwind CDN（Play CDN）を使用**しているため、実行時にCSSを生成する簡易版です。アクセスが多い本番サイトで長期運用する場合は、Vite等での事前ビルドに切り替えることを推奨します。
 - **IndexedDBによる自動保存はブラウザのタブ内ローカルストレージ**です。Google Sitesにiframeとして埋め込むと「サードパーティコンテキスト」になるため、ブラウザ（特にSafariやプライバシー設定を厳しくしたブラウザ）によってはストレージが分離・制限され、期待通りに保存が効かない場合があります。重要なデータは都度ZIPでダウンロードして保存する運用を推奨します。
+- **この `apps-script/Code.gs` は実際にApps Scriptへデプロイしての動作確認はできていません**（このセッションの環境からはApps Scriptプロジェクトを作成・デプロイできないため）。doPost + ContentService + text/plain送信によるCORS回避は広く使われている実績のあるパターンですが、実際にデプロイした際にCORSエラー等が出た場合は、アクセス権限の設定やデプロイURLが最新版になっているか（手順①-6）をまずご確認ください。

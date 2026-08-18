@@ -63,18 +63,23 @@
 const { useState, useCallback, useRef, useEffect } = React;
 
 // ==========================================
-// ⚠️ Gemini APIキー設定
+// 🔒 Gemini API 呼び出し設定（Apps Script プロキシ経由）
 // ==========================================
-// ここに Google AI Studio で発行したご自身の Gemini APIキーを入力してください。
-// https://aistudio.google.com/apikey
+// このファイル自体はGemini APIキーを一切持ちません。
+// 代わりに、社内のGoogleアカウントで動く Google Apps Script の
+// Webアプリ（プロキシ）にリクエストを送り、APIキーはそのApps Script側の
+// 「スクリプトのプロパティ」にだけ保存します。ブラウザの「ページのソースを
+// 表示」を見てもAPIキーは一切出てこないため、社内利用でも安全です。
 //
-// 重要な注意: このファイルはブラウザ上でそのまま実行される静的HTMLのため、
-// ここに書いたAPIキーはページを開いた人なら誰でも「ページのソースを表示」等で
-// 閲覧・抜き取り・悪用（あなたの請求で使用）できてしまいます。
-// 社内限定・自分専用など閲覧者を完全に信頼できる用途に限定するか、
-// 本番公開する場合は Google Apps Script の Web アプリ等でAPIキーを
-// サーバー側に隠すプロキシ構成に変更することを強く推奨します。
-const GEMINI_API_KEY = "ここにAPIキーを貼り付け";
+// セットアップ手順は README.md を参照してください。
+// デプロイ後に発行される Web アプリURL（.../exec で終わるURL）を
+// ここに貼り付けます。
+const PROXY_URL = "ここにApps ScriptのWebアプリURLを貼り付け";
+
+// （任意・推奨）Apps Script側で SHARED_SECRET を設定した場合は、
+// 同じ文字列をここにも設定すると、プロキシURLが漏れても
+// この合言葉を知らない相手からは呼び出せなくなります。
+const PROXY_SHARED_SECRET = "";
 
 // ==========================================
 // 定数定義
@@ -278,9 +283,72 @@ const compressImageForAI = (file) =>
     img.src = url;
   });
 
-const analyzePhotoWithAPI = async (base64) => {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`;
+// Gemini APIへの実際のリクエストはすべてこの関数を経由してApps Scriptプロキシに送る。
+// payload（contents/generationConfig）はGeminiにそのまま渡す形をクライアント側で組み立て、
+// APIキーの付与だけをサーバー側（Apps Script）に任せる。
+//
+// 注意: Apps ScriptのWebアプリはHTTPステータスコードを自由に返せない仕様のため、
+// 成功・失敗の判定はレスポンスJSON本体の中身（error フィールドの有無）で行う。
+// また、"application/json" でPOSTするとブラウザがCORSプリフライト(OPTIONS)を送出し、
+// Apps Scriptはこれに正しく応答できずエラーになるため、意図的に
+// "text/plain" として送信している（本文は引き続きJSON文字列）。
+const callGeminiViaProxy = async (payload) => {
+  if (!PROXY_URL || PROXY_URL.includes("ここに")) {
+    throw new Error("プロキシURLが未設定です。index.html 冒頭の PROXY_URL を設定してください（README参照）。");
+  }
 
+  const delays = [1000, 2000, 4000, 8000, 16000];
+
+  for (let i = 0; i < 5; i++) {
+    try {
+      const response = await fetch(PROXY_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ payload, secret: PROXY_SHARED_SECRET })
+      });
+
+      if (!response.ok) {
+        throw new Error(`プロキシへの接続に失敗しました: HTTP ${response.status}`);
+      }
+
+      const raw = await response.text();
+      let data;
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        throw new Error("プロキシから予期しない応答がありました。Apps Scriptのデプロイ設定（アクセス権限・ログイン状態）をご確認ください。");
+      }
+
+      if (data.error) {
+        const errInfo = data.error;
+        const msg = typeof errInfo === "string" ? errInfo : (errInfo.message || JSON.stringify(errInfo));
+        const permanentErr = new Error(msg);
+        permanentErr.permanent =
+          errInfo.code === 401 || errInfo.code === 403 ||
+          errInfo.status === "PERMISSION_DENIED" || errInfo.status === "UNAUTHENTICATED";
+        throw permanentErr;
+      }
+
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) {
+        throw new Error("APIレスポンスの形式が異常です（テキストが見つかりません）");
+      }
+
+      return JSON.parse(text);
+    } catch (error) {
+      if (error.permanent || i === 4) {
+        if (error.permanent) {
+          throw new Error("サーバー側（Apps Script）のAPIキー設定に問題があります。管理者にご連絡ください。\n\nデータはブラウザに安全に保存されていますので、右下の「ページを再読み込み」ボタンを押しても消えません。");
+        }
+        console.error("API呼び出しが上限回数失敗しました:", error);
+        throw error;
+      }
+      await new Promise(resolve => setTimeout(resolve, delays[i]));
+    }
+  }
+};
+
+const analyzePhotoWithAPI = async (base64) => {
   const payload = {
     contents: [{
       role: "user",
@@ -313,47 +381,10 @@ const analyzePhotoWithAPI = async (base64) => {
     }
   };
 
-  const delays = [1000, 2000, 4000, 8000, 16000];
-
-  for (let i = 0; i < 5; i++) {
-    try {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-         const errorText = await response.text();
-         const errObj = new Error(`APIリクエスト失敗: HTTP ${response.status} ${errorText}`);
-         errObj.status = response.status;
-         throw errObj;
-      }
-
-      const data = await response.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-      if (!text) {
-         throw new Error("APIレスポンスの形式が異常です（テキストが見つかりません）");
-      }
-
-      return JSON.parse(text);
-    } catch (error) {
-      if (i === 4) {
-        if (error.status === 401 || error.status === 403) {
-          throw new Error("認証エラー (HTTP 401/403) が発生しました。\n\nAPIキーが未設定または無効な可能性があります。ファイル冒頭の GEMINI_API_KEY を確認してください。データはブラウザに安全に保存されていますので、右下の「ページを再読み込み」ボタンを押しても消えません。");
-        }
-        console.error("API呼び出しが上限回数失敗しました:", error);
-        throw error;
-      }
-      await new Promise(resolve => setTimeout(resolve, delays[i]));
-    }
-  }
+  return callGeminiViaProxy(payload);
 };
 
 const selectOptimalPhotosWithAI = async (candidates, targetSlots) => {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`;
-
   const prompt = `あなたはウェディング写真のアルバム構成ディレクターです。
 以下のJSONデータは、一次評価を終えた写真の候補リストです。
 この中から、指定された「${targetSlots}枠」を埋める最適な写真のIDリストを選出してください。
@@ -401,42 +432,7 @@ ${JSON.stringify(candidates)}
     }
   };
 
-  const delays = [1000, 2000, 4000, 8000, 16000];
-
-  for (let i = 0; i < 5; i++) {
-    try {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        const errObj = new Error(`最終選考APIエラー: HTTP ${response.status} - ${errorText}`);
-        errObj.status = response.status;
-        throw errObj;
-      }
-
-      const data = await response.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-      if (!text) {
-         throw new Error("APIレスポンスの形式が異常です（テキストが見つかりません）");
-      }
-
-      return JSON.parse(text);
-    } catch (error) {
-      if (i === 4) {
-        if (error.status === 401 || error.status === 403) {
-          throw new Error("認証エラー (HTTP 401/403) が発生しました。\n\nAPIキーが未設定または無効な可能性があります。ファイル冒頭の GEMINI_API_KEY を確認してください。データはブラウザに安全に保存されていますので、右下の「ページを再読み込み」ボタンを押しても消えません。");
-        }
-        console.error("最終選考APIの呼び出しが上限回数失敗しました:", error);
-        throw error;
-      }
-      await new Promise(resolve => setTimeout(resolve, delays[i]));
-    }
-  }
+  return callGeminiViaProxy(payload);
 };
 
 const formatRemainingTime = (ms) => {
