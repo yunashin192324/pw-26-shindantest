@@ -946,7 +946,7 @@ function importUncontractedCsv(csvText) {
  * 「is not a function」という分かりにくいエラーになるため、
  * 画面側から版数を確認できるようにしている。
  */
-const SERVER_VERSION = '2026-08-17';
+const SERVER_VERSION = '2026-08-18';
 
 /**
  * サーバー側の版数を返す。画面側は、自分が期待する版数と一致するかを起動時に確認する。
@@ -1330,8 +1330,10 @@ function updateStatus(sheetName, rowIndex, newStatus, contractPax) {
       throw new Error('不正な行番号です: ' + rowIndex);
     }
 
-    const validStatuses = ['失注', '成約', 'リセール中'];
-    if (validStatuses.indexOf(newStatus) === -1) {
+    // 空文字は「未対応（－）に戻す」操作。選び間違いを取り消せるよう許可する。
+    const status = String(newStatus === null || newStatus === undefined ? '' : newStatus).trim();
+    const validStatuses = ['', '失注', '成約', 'リセール中'];
+    if (validStatuses.indexOf(status) === -1) {
       throw new Error('不正なステータスです: ' + newStatus);
     }
 
@@ -1341,9 +1343,13 @@ function updateStatus(sheetName, rowIndex, newStatus, contractPax) {
       throw new Error('シートが見つかりません: ' + sheetName);
     }
 
-    sheet.getRange(rIdx, 2).setValue(newStatus); // STS（2列目）
+    if (status === '') {
+      sheet.getRange(rIdx, 2).clearContent(); // STSを未対応（空欄）に戻す
+    } else {
+      sheet.getRange(rIdx, 2).setValue(status); // STS（2列目）
+    }
 
-    if (newStatus === '成約') {
+    if (status === '成約') {
       sheet.getRange(rIdx, 3).setValue(normalizeContractPax_(contractPax)); // 成約PAX（3列目）
 
       // ガードレール：成約になった際、リセール列（1列目）が空白なら自動で初期値を補完する
@@ -1352,13 +1358,13 @@ function updateStatus(sheetName, rowIndex, newStatus, contractPax) {
       if (resaleValue === '' || resaleValue === null) {
         resaleCell.setValue('✖');
       }
-    } else if (newStatus === '失注' || newStatus === 'リセール中') {
-      sheet.getRange(rIdx, 3).clearContent(); // 成約PAXをクリア
+    } else {
+      sheet.getRange(rIdx, 3).clearContent(); // 成約以外は成約PAXをクリア（未対応に戻した場合も含む）
     }
 
     // アラート判定の基準日として、ステータス変更のたびに「最終アクション日」（21列目）を今日の日付で更新する
     const todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-    sheet.getRange(rIdx, 21).setValue(todayStr);
+    setTextCell_(sheet, rIdx, 21, todayStr);
 
     const updatedValues = sheet.getRange(rIdx, 1, 1, HEADERS_MAIN.length).getValues()[0];
     const updatedObj = {};
@@ -1378,6 +1384,34 @@ function updateStatus(sheetName, rowIndex, newStatus, contractPax) {
 // 一般スタッフ（店舗スタッフ）も自店舗の行であればこれらを編集できる。
 // 「STS」だけは成約PAXのクリアやリセール補完を伴うため専用API（updateStatus）で更新する。
 const EDITABLE_COLUMNS = ['リセール', '成約PAX', 'ACT日', 'ACT内容', '次回ACT・進捗★手入力'];
+
+// 文字列として保存する列。スプレッドシートは「0120」「08」のように数値に見える
+// 入力を数値へ変換してしまい、先頭の0が消える（「0」だけの入力も0として扱われる）。
+// 書き込みの直前にセルの表示形式を「書式なしテキスト（@）」にして防ぐ。
+// 成約PAXは集計に使う数値なのでここには入れない。
+const TEXT_CELL_COLUMNS = {
+  'リセール': true,
+  'ACT日': true,
+  'ACT内容': true,
+  '次回ACT・進捗★手入力': true,
+  '最終アクション日': true
+};
+
+/**
+ * セルを「書式なしテキスト」にしたうえで文字列として書き込む。
+ * 初期セットアップをやり直していない既存シートでも桁落ちしないよう、
+ * 書き込みのたびに表示形式を整える。
+ */
+function setTextCell_(sheet, rowIndex, colIndex, value) {
+  const cell = sheet.getRange(rowIndex, colIndex);
+  cell.setNumberFormat('@');
+  const s = (value === null || value === undefined) ? '' : String(value);
+  if (s === '') {
+    cell.clearContent();
+  } else {
+    cell.setValue(s);
+  }
+}
 
 // 「リセール」列に入れてよい値（〇＝フォロー対応中／✖＝対象外／空欄＝未選択）
 const RESALE_VALUES = ['〇', '✖', ''];
@@ -1441,13 +1475,17 @@ function updateCellValue(sheetName, rowIndex, columnName, value) {
       throw new Error('シートが見つかりません: ' + sheetName);
     }
 
-    sheet.getRange(rIdx, colIdx + 1).setValue(value);
+    if (TEXT_CELL_COLUMNS[columnName]) {
+      setTextCell_(sheet, rIdx, colIdx + 1, value);
+    } else {
+      sheet.getRange(rIdx, colIdx + 1).setValue(value);
+    }
 
     // アラート判定の基準日として、セル編集のたびに「最終アクション日」（21列目）を今日の日付で更新する
     // （最終アクション日そのものを手動編集した場合は、その値を尊重してここでは上書きしない）
     if (colIdx + 1 !== 21) {
       const todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-      sheet.getRange(rIdx, 21).setValue(todayStr);
+      setTextCell_(sheet, rIdx, 21, todayStr);
     }
 
     const updatedValues = sheet.getRange(rIdx, 1, 1, HEADERS_MAIN.length).getValues()[0];

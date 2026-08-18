@@ -132,12 +132,19 @@ function repairOfficeCodeFormatting_(ss, shopList) {
   //    G列 社員番号（桁数不定）／L列 出発年月（6桁）
   //    いずれも「08」「202612」のように数値化されると桁が落ちたり、
   //    集計式の条件（文字列）と一致しなくなるため、文字列として保持する。
+  //    Q列 ACT日／R列 ACT内容／U列 最終アクション日／X列 次回ACT・進捗★手入力は
+  //    スタッフが手入力する欄で、「0120…」「08」のように数値化されると先頭の0が
+  //    消えてしまう。桁合わせはせず（width:0）、文字列として保持するだけにする。
   const codeColumns = [
     { col: 4, width: 2 },  // 月
     { col: 5, width: 8 },  // 対象年月日
     { col: 6, width: 3 },  // 営業所コード
     { col: 7, width: 5 },  // 社員番号（5桁。01234のように0で始まる人がいる）
-    { col: 12, width: 6 }  // 出発年月
+    { col: 12, width: 6 }, // 出発年月
+    { col: 17, width: 0 }, // ACT日
+    { col: 18, width: 0 }, // ACT内容
+    { col: 21, width: 0 }, // 最終アクション日
+    { col: 24, width: 0 }  // 次回ACT・進捗★手入力（メモ）
   ];
   shopList.forEach(function (shop) {
     const sheet = ss.getSheetByName(shop.name);
@@ -166,6 +173,12 @@ function repairCodeColumn_(sheet, col, startRow, width) {
   const next = values.map(function (row) {
     const raw = row[0];
     if (raw === null || raw === undefined || raw === '') return [''];
+    // 日付として保存されているセル（ACT日・最終アクション日）は、そのまま文字列化すると
+    // 「Sat Aug 01 2026 ...」になってしまうため、yyyy-MM-dd に整えてから扱う
+    if (Object.prototype.toString.call(raw) === '[object Date]') {
+      changed = true;
+      return [Utilities.formatDate(raw, Session.getScriptTimeZone(), 'yyyy-MM-dd')];
+    }
     const s = String(raw).trim();
     // 元から文字列で入っているものは触らない
     if (typeof raw !== 'number' && !(width > 0 && /^\d+$/.test(s) && s.length < width)) {

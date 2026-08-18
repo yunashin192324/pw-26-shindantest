@@ -49,6 +49,7 @@ document.addEventListener('DOMContentLoaded', function () {
   initModalEvents();
   initCsvImportEvents();
   initAdminEvents();
+  initStaffMasterControls();
   initSetupEvents();
   checkServerVersion();
   checkSetupStatus();
@@ -56,7 +57,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // 画面側が前提としているサーバー（Code.gs）の版数。Code.gs の SERVER_VERSION と対で更新する。
-const REQUIRED_SERVER_VERSION = '2026-08-17';
+const REQUIRED_SERVER_VERSION = '2026-08-18';
 
 /**
  * Code.gs が画面と同じ版数まで更新されているか確認する。
@@ -346,14 +347,33 @@ function escapeHtml(str) {
 // ============================================================================
 // 日付ユーティリティ（長期未対応アラート判定用）
 // ============================================================================
+// 日付として読み取る。CSV由来は「20260801」、画面から入力した日付やシステムが
+// 記録する最終アクション日は「2026-08-01」と表記が混在するため、どちらも受け付ける。
 function parseYyyymmdd(str) {
-  const s = String(str || '');
+  const s = String(str === null || str === undefined ? '' : str).trim();
+  if (!s) return null;
+
+  // 「2026-08-01」「2026/8/1」のように区切り記号があるもの
+  const sep = s.match(/^(\d{4})\D(\d{1,2})\D(\d{1,2})/);
+  if (sep) return buildDate(Number(sep[1]), Number(sep[2]), Number(sep[3]));
+
+  // 「20260801」のように区切りが無いもの
   if (s.length < 8) return null;
-  const y = Number(s.substring(0, 4));
-  const m = Number(s.substring(4, 6));
-  const d = Number(s.substring(6, 8));
-  if (!y || !m || !d) return null;
+  return buildDate(Number(s.substring(0, 4)), Number(s.substring(4, 6)), Number(s.substring(6, 8)));
+}
+
+function buildDate(y, m, d) {
+  if (!y || !m || !d || m > 12 || d > 31) return null;
   return new Date(y, m - 1, d);
+}
+
+// <input type="date"> に渡せる「yyyy-MM-dd」に変換する。読み取れない場合は空文字。
+function toDateInputValue(value) {
+  const date = parseYyyymmdd(value);
+  if (!date) return '';
+  return date.getFullYear() + '-' +
+    String(date.getMonth() + 1).padStart(2, '0') + '-' +
+    String(date.getDate()).padStart(2, '0');
 }
 
 function daysSince(dateStr) {
@@ -1405,7 +1425,7 @@ function renderDataManagerGrid() {
         '</select>' +
       '</td>' +
       editableCellTd(row, '成約PAX', 'number') +
-      editableCellTd(row, 'ACT日', 'text') +
+      editableCellTd(row, 'ACT日', 'date') +
       editableCellTd(row, 'ACT内容', 'text') +
       editableCellTd(row, '次回ACT・進捗★手入力', 'text') +
       alertCell +
@@ -1451,7 +1471,7 @@ function bindGridEditEvents() {
       const sheetName = sel.dataset.sheet;
       const rowIndex = sel.dataset.row;
       const newStatus = sel.value;
-      if (!newStatus) return;
+      // 空欄（－）は「未対応に戻す」操作。選び間違えたときに取り消せるようにする。
 
       let contractPax = '';
       if (newStatus === '成約') {
@@ -1487,9 +1507,20 @@ function bindGridEditEvents() {
       const columnName = td.dataset.column;
       const isMultiline = MULTILINE_COLUMNS.indexOf(columnName) !== -1;
 
+      // ACT日はカレンダーから選べるようにする（絞り込み検索の日付欄と同じ操作感）。
+      // ただし既存の値が日付として読み取れない場合は、消えてしまわないよう文字入力にする。
+      const dateValue = type === 'date' ? toDateInputValue(currentVal) : '';
+      const useDatePicker = type === 'date' && (currentVal === '' || dateValue !== '');
+
       const input = document.createElement(isMultiline ? 'textarea' : 'input');
-      if (!isMultiline) { input.type = type === 'number' ? 'number' : 'text'; } else { input.rows = 3; }
-      input.value = currentVal;
+      if (isMultiline) {
+        input.rows = 3;
+      } else if (useDatePicker) {
+        input.type = 'date';
+      } else {
+        input.type = type === 'number' ? 'number' : 'text';
+      }
+      input.value = useDatePicker ? dateValue : currentVal;
       input.className = 'w-full border border-blue-400 rounded px-1 py-0.5 text-sm';
 
       td.innerHTML = '';
@@ -1518,6 +1549,10 @@ function bindGridEditEvents() {
       };
 
       input.addEventListener('blur', commit);
+      // カレンダーで日付を選んだ時点で確定させる（別のセルをクリックしなくても保存される）
+      if (useDatePicker) {
+        input.addEventListener('change', function () { input.blur(); });
+      }
       input.addEventListener('keydown', function (ev) {
         // 複数行入力（textarea）ではEnterは改行として使うため、Ctrl/Cmd+Enterのみ確定とする
         if (ev.key === 'Enter' && (!isMultiline || ev.ctrlKey || ev.metaKey)) { input.blur(); }
@@ -1556,7 +1591,9 @@ function callUpdateStatus(sheetName, rowIndex, newStatus, contractPax) {
       showLoading(false);
       if (res && res.success) {
         applyUpdatedRowToCache(res.data);
-        showToast('ステータスを更新しました（' + newStatus + '）', 'success');
+        showToast(newStatus
+          ? 'ステータスを更新しました（' + newStatus + '）'
+          : 'ステータスを未対応に戻しました', 'success');
         renderKpi(getDashboardFilteredData());
         renderRankingTable(getDashboardFilteredData());
         renderDataManagerGrid();
@@ -2358,9 +2395,111 @@ const ROLE_BADGE_CLASSES = {
   '一般': 'bg-slate-100 text-slate-500'
 };
 
+// ---- スタッフ管理の絞り込み・並べ替え -------------------------------------
+// 初期表示は所属店舗の五十音順（同じ店舗内は社員名の五十音順）。
+let staffSortState = { key: 'officeName', dir: 'asc' };
+let staffUnregisteredCache = [];
+
+// 権限は「重い順」に並ぶほうが分かりやすいので、五十音ではなく段階の順で比較する
+const ROLE_ORDER = { 'マスタ管理': 0, '管理者': 1, '一般': 2 };
+
+/** 検索欄・権限セレクトの条件でスタッフを絞り込む */
+function filterStaffRows(rows) {
+  const searchEl = document.getElementById('staff-search');
+  const roleEl = document.getElementById('staff-filter-role');
+  const keyword = searchEl ? searchEl.value.trim().toLowerCase() : '';
+  const role = roleEl ? roleEl.value : '';
+
+  return rows.filter(function (s) {
+    if (role && (s.role || '一般') !== role) return false;
+    if (!keyword) return true;
+    // 社員番号は「01234」「1234」どちらの入力でも見つかるようにする
+    const empNo = String(s.employeeNo || '');
+    const haystack = [
+      s.officeName, s.employeeNo, s.employeeName, s.googleAccount,
+      empNo.replace(/^0+/, '')
+    ].join(' ').toLowerCase();
+    return haystack.indexOf(keyword) !== -1;
+  });
+}
+
+/** 選択中の列で並べ替える（五十音順は個人別サマリーと同じ照合順を使う） */
+function sortStaffRows(rows) {
+  const key = staffSortState.key;
+  const sign = staffSortState.dir === 'desc' ? -1 : 1;
+
+  return rows.slice().sort(function (a, b) {
+    let diff;
+    if (key === 'role') {
+      const ra = ROLE_ORDER[a.role || '一般'];
+      const rb = ROLE_ORDER[b.role || '一般'];
+      diff = (ra === undefined ? 99 : ra) - (rb === undefined ? 99 : rb);
+    } else {
+      const va = String(a[key] === null || a[key] === undefined ? '' : a[key]);
+      const vb = String(b[key] === null || b[key] === undefined ? '' : b[key]);
+      if (va === '' && vb !== '') return 1;   // 空欄は並び順に関わらず末尾へ
+      if (vb === '' && va !== '') return -1;
+      diff = dmCollator ? dmCollator.compare(va, vb) : (va < vb ? -1 : va > vb ? 1 : 0);
+    }
+    if (diff !== 0) return diff * sign;
+
+    // 同順位は「店舗 → 社員名」の五十音順で安定させる
+    const sa = String(a.officeName || '') + ' ' + String(a.employeeName || '');
+    const sb = String(b.officeName || '') + ' ' + String(b.employeeName || '');
+    return dmCollator ? dmCollator.compare(sa, sb) : (sa < sb ? -1 : sa > sb ? 1 : 0);
+  });
+}
+
+function renderStaffSortMarks() {
+  document.querySelectorAll('.staff-sortable').forEach(function (th) {
+    const mark = th.querySelector('.sort-mark');
+    if (mark) mark.remove();
+    if (th.dataset.sort !== staffSortState.key) return;
+    const span = document.createElement('span');
+    span.className = 'sort-mark';
+    span.textContent = staffSortState.dir === 'asc' ? '▲' : '▼';
+    th.appendChild(span);
+  });
+}
+
+function initStaffMasterControls() {
+  const search = document.getElementById('staff-search');
+  const role = document.getElementById('staff-filter-role');
+  if (search) search.addEventListener('input', function () { renderStaffMasterTable(); });
+  if (role) role.addEventListener('change', function () { renderStaffMasterTable(); });
+
+  document.querySelectorAll('.staff-sortable').forEach(function (th) {
+    th.addEventListener('click', function () {
+      const key = th.dataset.sort;
+      if (staffSortState.key === key) {
+        staffSortState.dir = staffSortState.dir === 'asc' ? 'desc' : 'asc';
+      } else {
+        staffSortState = { key: key, dir: 'asc' };
+      }
+      renderStaffMasterTable();
+    });
+  });
+}
+
 function renderStaffMasterTable(unregistered) {
+  // 検索・並べ替えの再描画では引数が無いため、前回の未登録リストを引き継ぐ
+  if (unregistered !== undefined) staffUnregisteredCache = unregistered || [];
+  unregistered = staffUnregisteredCache;
+
   const tbody = document.getElementById('staff-master-tbody');
-  tbody.innerHTML = staffMasterCache.map(function (s) {
+  const visibleRows = sortStaffRows(filterStaffRows(staffMasterCache));
+
+  const countEl = document.getElementById('staff-count');
+  if (countEl) {
+    countEl.textContent = visibleRows.length === staffMasterCache.length
+      ? staffMasterCache.length + '名'
+      : visibleRows.length + '名 / 全' + staffMasterCache.length + '名';
+  }
+  const emptyMsg = document.getElementById('staff-empty-msg');
+  if (emptyMsg) emptyMsg.classList.toggle('hidden', visibleRows.length !== 0);
+  renderStaffSortMarks();
+
+  tbody.innerHTML = visibleRows.map(function (s) {
     const role = s.role || '一般';
     const roleBadge = '<span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold ' +
       (ROLE_BADGE_CLASSES[role] || ROLE_BADGE_CLASSES['一般']) + '">' + escapeHtml(role) + '</span>';
