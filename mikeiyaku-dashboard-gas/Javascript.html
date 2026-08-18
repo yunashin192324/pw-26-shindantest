@@ -57,7 +57,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // 画面側が前提としているサーバー（Code.gs）の版数。Code.gs の SERVER_VERSION と対で更新する。
-const REQUIRED_SERVER_VERSION = '2026-08-18';
+const REQUIRED_SERVER_VERSION = '2026-08-18b';
 
 /**
  * Code.gs が画面と同じ版数まで更新されているか確認する。
@@ -246,6 +246,13 @@ function loadAllData() {
 function applyUserContextToUi() {
   const csvBtn = document.getElementById('btn-open-csv-modal');
   csvBtn.classList.toggle('hidden', !currentUserContext.canImportCsv);
+
+  // Geminiの回答をダッシュボードへ保存する欄（全員の画面に出る全社共有の掲示物にあたるため
+  // マスタ管理権限のみ）。読むこと・Geminiに渡すサマリを作ることは従来どおり誰でもできる。
+  const pasteSection = document.getElementById('ai-paste-section');
+  const pasteNote = document.getElementById('ai-paste-readonly-note');
+  if (pasteSection) pasteSection.classList.toggle('hidden', !currentUserContext.canManageMaster);
+  if (pasteNote) pasteNote.classList.toggle('hidden', !!currentUserContext.canManageMaster);
 
   const adminTabBtn = document.getElementById('tab-btn-admin');
   adminTabBtn.classList.toggle('hidden', !currentUserContext.canManageMaster);
@@ -743,9 +750,12 @@ function renderAiReports(reports) {
   const histList = document.getElementById('ai-report-history-list');
 
   if (!reports.length) {
-    bodyEl.innerHTML = '<p class="text-slate-400 text-sm">まだ分析レポートはありません。'
-      + '右上の「Geminiで分析する」から、集計サマリをGeminiに渡して所見をもらい、'
-      + 'その回答をこの画面に保存すると、ここに表示され全員が確認できるようになります。</p>';
+    bodyEl.innerHTML = currentUserContext.canManageMaster
+      ? '<p class="text-slate-400 text-sm">まだ分析レポートはありません。'
+        + '右上の「Geminiで分析する」から、集計サマリをGeminiに渡して所見をもらい、'
+        + 'その回答をこの画面に保存すると、ここに表示され全員が確認できるようになります。</p>'
+      : '<p class="text-slate-400 text-sm">まだ分析レポートはありません。'
+        + 'マスタ管理者が分析結果を保存すると、ここに表示されます。</p>';
     metaEl.textContent = '';
     histBox.classList.add('hidden');
     return;
@@ -803,9 +813,12 @@ function closeAiSummaryModal() {
 }
 
 function openAiSummaryModal() {
-  // 分析レポートの保存は全店舗を見られる権限（所長・チーフ以上）に限る
+  // 分析レポートの保存はマスタ管理権限のみ（全員の画面に出る全社共有の掲示物のため）。
+  // 権限が変わったあとに開き直しても正しく切り替わるよう、開くたびに判定する。
   const pasteSection = document.getElementById('ai-paste-section');
-  if (pasteSection) pasteSection.classList.toggle('hidden', !currentUserContext.canViewAllStores);
+  const pasteNote = document.getElementById('ai-paste-readonly-note');
+  if (pasteSection) pasteSection.classList.toggle('hidden', !currentUserContext.canManageMaster);
+  if (pasteNote) pasteNote.classList.toggle('hidden', !!currentUserContext.canManageMaster);
   document.getElementById('ai-summary-text').value = buildAiSummaryText();
   document.getElementById('ai-summary-copy-status').classList.add('hidden');
   const modal = document.getElementById('ai-summary-modal');
@@ -2337,7 +2350,10 @@ function populateStaffShopSelect() {
   select.innerHTML = '<option value="">選択してください</option>' +
     activeShops.map(function (s) {
       return '<option value="' + escapeHtml(s.code) + '">' + escapeHtml(s.name) + '</option>';
-    }).join('');
+    }).join('') +
+    // 本部の社員はCSVに出てこないため店舗マスタにも載らない。
+    // どの店舗にも属さない所属として選べるようにしておく。
+    '<option value="HQ">本部（店舗に属さない）</option>';
   return activeShops.length;
 }
 
@@ -2584,6 +2600,10 @@ function onSubmitStaffForm(ev) {
   const role = document.getElementById('staff-form-role').value;
   if (!officeCode || !empName) { showToast('所属店舗と社員名は必須です。', 'error'); return; }
   if (role !== '一般' && !googleAccount) { showToast('管理者・マスタ管理権限を付与するスタッフは、Googleアカウントの登録が必須です。', 'error'); return; }
+  if (officeCode === 'HQ' && role === '一般') {
+    showToast('本部の所属で登録できるのは「管理者」「マスタ管理」のみです。本部は担当店舗を持たないため、「一般」権限では表示できるデータがありません。', 'error');
+    return;
+  }
 
   showLoading(true);
   const runner = google.script.run

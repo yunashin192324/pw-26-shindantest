@@ -283,6 +283,25 @@ function getShopList_() {
   });
 }
 
+// ---- 本部（店舗に属さないスタッフ）用の擬似所属 -----------------------------
+// 本部の社員は営業日報のCSVに出てこないため、店舗マスタにも実績データにも現れない。
+// 店舗マスタには登録せず（データシートも作られない）、スタッフマスタの
+// 「営業所コード」にこの値を入れることで、どの店舗にも属さない扱いにする。
+// 自店舗しか見られない「一般」権限では見るものが無くなるため、本部は
+// 「管理者」「マスタ管理」のみ設定できる。
+const HQ_OFFICE_CODE = 'HQ';
+const HQ_OFFICE_NAME = '本部';
+
+function isHqOfficeCode_(code) {
+  return String(code === null || code === undefined ? '' : code).trim().toUpperCase() === HQ_OFFICE_CODE;
+}
+
+/** 営業所コードに対応する表示名を返す（本部・未登録コードも扱えるようにする） */
+function officeNameForCode_(code, shopNameByCode) {
+  if (isHqOfficeCode_(code)) return HQ_OFFICE_NAME;
+  return (shopNameByCode && shopNameByCode[code]) || code;
+}
+
 // ---- 権限レベル（スタッフマスタ「権限レベル」列に格納する文字列） -----------
 const ROLE_GENERAL = '一般';       // 自店舗のみ閲覧
 const ROLE_MANAGER = '管理者';     // 所長・チーフ：全店舗を閲覧（CSV・マスタ編集は不可）
@@ -368,7 +387,9 @@ function getCurrentUserContext_() {
     const shop = shopList.find(function (s) { return s.code === matched.officeCode; });
     role = matched.role;
     officeCode = matched.officeCode;
-    officeName = shop ? shop.name : matched.officeCode;
+    officeName = isHqOfficeCode_(matched.officeCode)
+      ? HQ_OFFICE_NAME
+      : (shop ? shop.name : matched.officeCode);
     employeeName = matched.employeeName;
     identified = true;
   } else {
@@ -946,7 +967,7 @@ function importUncontractedCsv(csvText) {
  * 「is not a function」という分かりにくいエラーになるため、
  * 画面側から版数を確認できるようにしている。
  */
-const SERVER_VERSION = '2026-08-18';
+const SERVER_VERSION = '2026-08-18b';
 
 /**
  * サーバー側の版数を返す。画面側は、自分が期待する版数と一致するかを起動時に確認する。
@@ -2259,7 +2280,7 @@ function getStaffMasterList() {
         return {
           rowIndex: s.rowIndex,
           officeCode: s.officeCode,
-          officeName: shopNameByCode[s.officeCode] || s.officeCode,
+          officeName: officeNameForCode_(s.officeCode, shopNameByCode),
           employeeNo: s.employeeNo,
           employeeName: s.employeeName,
           googleAccount: s.googleAccount,
@@ -2293,9 +2314,18 @@ function addStaffMaster(officeCode, employeeNo, employeeName, googleAccount, rol
       throw new Error('管理者・マスタ管理権限を付与する場合、Googleアカウントの登録が必須です。');
     }
 
-    const shopList = getShopList_();
-    if (!shopList.some(function (s) { return s.code === officeCode; })) {
-      throw new Error('不正な店舗（営業所コード）です: ' + officeCode);
+    if (isHqOfficeCode_(officeCode)) {
+      // 本部は店舗を持たないため、自店舗しか見られない「一般」では画面に何も出せない
+      if (role === ROLE_GENERAL) {
+        throw new Error('本部の所属で登録できるのは「管理者」「マスタ管理」のみです。' +
+          '（本部は担当店舗を持たないため、自店舗のみ閲覧する「一般」権限では表示できるデータがありません）');
+      }
+      officeCode = HQ_OFFICE_CODE;
+    } else {
+      const shopList = getShopList_();
+      if (!shopList.some(function (s) { return s.code === officeCode; })) {
+        throw new Error('不正な店舗（営業所コード）です: ' + officeCode);
+      }
     }
 
     const existing = getStaffMasterRows_();
@@ -2341,9 +2371,18 @@ function updateStaffMaster(rowIndex, officeCode, employeeNo, employeeName, googl
       throw new Error('管理者・マスタ管理権限を付与する場合、Googleアカウントの登録が必須です。');
     }
 
-    const shopList = getShopList_();
-    if (!shopList.some(function (s) { return s.code === officeCode; })) {
-      throw new Error('不正な店舗（営業所コード）です: ' + officeCode);
+    if (isHqOfficeCode_(officeCode)) {
+      // 本部は店舗を持たないため、自店舗しか見られない「一般」では画面に何も出せない
+      if (role === ROLE_GENERAL) {
+        throw new Error('本部の所属で登録できるのは「管理者」「マスタ管理」のみです。' +
+          '（本部は担当店舗を持たないため、自店舗のみ閲覧する「一般」権限では表示できるデータがありません）');
+      }
+      officeCode = HQ_OFFICE_CODE;
+    } else {
+      const shopList = getShopList_();
+      if (!shopList.some(function (s) { return s.code === officeCode; })) {
+        throw new Error('不正な店舗（営業所コード）です: ' + officeCode);
+      }
     }
 
     const existing = getStaffMasterRows_();
@@ -2572,15 +2611,17 @@ function ensureAiReportSheet_() {
 }
 
 /**
- * Geminiの分析結果をダッシュボードへ保存する（全店舗を見られる権限＝所長・チーフ以上）。
+ * Geminiの分析結果をダッシュボードへ保存する（マスタ管理権限のみ）。
+ * 保存した内容は全員のダッシュボードに出る全社共有の掲示物にあたるため、
+ * 閲覧範囲（canViewAllStores）ではなく管理権限（canManageMaster）で判定する。
  * @param {string} scopeLabel この分析がどの範囲を対象にしたか（例: 「全店舗 / 46期下期」）
  * @param {string} body Geminiが出力した分析文
  */
 function saveAiReport(scopeLabel, body) {
   try {
     const ctx = getCurrentUserContext_();
-    if (!ctx.canViewAllStores) {
-      throw new Error('分析レポートの保存は所長・チーフ以上の権限が必要です。');
+    if (!ctx.canManageMaster) {
+      throw new Error('分析レポートの保存はマスタ管理権限を持つユーザーのみ実行できます。');
     }
     body = String(body || '').trim();
     if (!body) {
@@ -2629,10 +2670,10 @@ function getAiReports(limit) {
     const ctx = getCurrentUserContext_();
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(AI_REPORT_SHEET_NAME);
-    if (!sheet) return { success: true, reports: [], canSave: ctx.canViewAllStores };
+    if (!sheet) return { success: true, reports: [], canSave: ctx.canManageMaster };
 
     const lastRow = sheet.getLastRow();
-    if (lastRow < 2) return { success: true, reports: [], canSave: ctx.canViewAllStores };
+    if (lastRow < 2) return { success: true, reports: [], canSave: ctx.canManageMaster };
 
     const want = Math.max(1, parseInt(limit, 10) || 5);
     const values = sheet.getRange(2, 1, lastRow - 1, 4).getValues();
@@ -2651,7 +2692,7 @@ function getAiReports(limit) {
           body: String(r[3] || '')
         };
       });
-    return { success: true, reports: reports, canSave: ctx.canViewAllStores };
+    return { success: true, reports: reports, canSave: ctx.canManageMaster };
   } catch (err) {
     return { success: false, error: err.message + '\n' + err.stack };
   }

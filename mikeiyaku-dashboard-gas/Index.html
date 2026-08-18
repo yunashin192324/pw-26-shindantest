@@ -771,6 +771,13 @@
           </a>
         </div>
 
+        <!-- マスタ管理権限が無い人には保存欄の代わりにこの案内を出す -->
+        <p id="ai-paste-readonly-note" class="hidden border-t border-slate-200 pt-4 text-xs text-slate-500">
+          <i class="fa-solid fa-circle-info text-slate-400"></i>
+          Geminiの回答をダッシュボードに保存できるのは<b>マスタ管理権限のユーザーのみ</b>です。
+          分析そのものは誰でも実行できますので、共有したい所見があればマスタ管理者にお伝えください。
+        </p>
+
         <div id="ai-paste-section" class="border-t border-slate-200 pt-4 space-y-2">
           <h4 class="font-bold text-sm text-slate-700"><i class="fa-solid fa-paste text-violet-600"></i> Geminiの回答をダッシュボードに保存する</h4>
           <p class="text-xs text-slate-500">
