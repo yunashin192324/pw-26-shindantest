@@ -581,6 +581,48 @@ function visiblePane(document) {
           document.getElementById('detail-content').innerHTML.includes('9/10で空きが確認できました'));
   }
 
+  // ---------------------------------------------------------------
+  section('U16. 一覧表（表示形式が表）にSTSが出る／STSで検索できる');
+  {
+    // STSがはっきり異なる案件を2件追加しておく
+    const H = ctx.RESERVATION_HEADERS;
+    const addCase = (o) => {
+      const row = new Array(H.length).fill('');
+      Object.keys(o).forEach(k => { const i = H.indexOf(k); if (i !== -1) row[i] = o[k]; });
+      ctx.__ss.getSheetByName('予約一覧').appendRow(row);
+    };
+    addCase({ '支店コード': 'ROW', '管理番号': 'R-951', '管轄': '関東', '新郎名（ローマ字）': 'Sts Ok', 'STS JP': 'OK', 'STS 支店': 'OK' });
+    addCase({ '支店コード': 'ROW', '管理番号': 'R-952', '管轄': '関東', '新郎名（ローマ字）': 'Sts Fn', 'STS JP': 'FN', 'STS 支店': 'FN' });
+
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'KANTO', 'CHANGE-ME-KANTO');
+    document.getElementById('nav-dashboard').click();
+    await settle();
+
+    document.getElementById('view-mode-table').click();
+    await settle();
+    check('表示形式を「表」に切り替えられる', !document.getElementById('reservation-table-wrap').classList.contains('hidden'));
+    const headerText = document.querySelector('#reservation-table-wrap thead').textContent;
+    check('表のヘッダーにSTS JP・STS 支店の列がある', headerText.includes('STS JP') && headerText.includes('STS 支店'));
+    const rows = [...document.querySelectorAll('#reservation-table-body tr')];
+    const okRow = rows.find(r => r.textContent.includes('R-951'));
+    check('表の行に案件ごとのSTS JP・STS 支店の値が入る（R-951はOK/OK）',
+          !!okRow && okRow.textContent.includes('OK'), okRow ? okRow.textContent : 'not found');
+    const fnRow = rows.find(r => r.textContent.includes('R-952'));
+    check('別の案件は別のSTSが表示される（R-952はFN/FN）',
+          !!fnRow && fnRow.textContent.includes('FN'), fnRow ? fnRow.textContent : 'not found');
+
+    // STSで検索
+    document.getElementById('nav-search').click();
+    await settle();
+    document.getElementById('s-sts-jp').value = 'FN';
+    document.getElementById('search-submit').click();
+    await settle();
+    const searchHtml = document.getElementById('search-results').innerHTML;
+    check('STS JPを指定して検索すると該当案件だけ出る', searchHtml.includes('R-952') && !searchHtml.includes('R-951'));
+  }
+
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error('テストが異常終了しました:', e); process.exit(1); });

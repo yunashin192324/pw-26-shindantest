@@ -325,7 +325,8 @@
     if (lastDashboardData) renderDashboard(lastDashboardData);
   }
 
-  // ★要件：一覧表では、日付・都市・チャレンジ番号・お名前・予約番号（管理番号）・プラン名を一目で見られるように
+  // ★要件：一覧表では、日付・都市・チャレンジ番号・お名前・STS JP・STS 支店・予約番号（管理番号）・
+  // プラン名を一目で見られるように（カード表示では既にSTSがチップ表示されていたが、表側には無かった）
   function renderReservationTable(list) {
     const body = $('reservation-table-body');
     body.innerHTML = '';
@@ -339,6 +340,8 @@
         <td>${escapeHtml(r.city || '-')}</td>
         <td>${escapeHtml(r.challengeNo || 'なし')}</td>
         <td>${escapeHtml(r.groomName || '')}${r.brideName ? '／' + escapeHtml(r.brideName) : ''}${r.needsAction ? ' ●' : ''}${cancelled ? '（キャンセル）' : ''}</td>
+        <td>${r.statusJp ? `<span class="chip hq">${escapeHtml(r.statusJp)}</span>` : '-'}</td>
+        <td>${r.statusBranch ? `<span class="chip branch">${escapeHtml(r.statusBranch)}</span>` : '-'}</td>
         <td>${escapeHtml(r.kanriNo)}</td>
         <td>${escapeHtml(r.plan || '-')}</td>`;
       tr.addEventListener('click', () => openDetail(r.kanriNo));

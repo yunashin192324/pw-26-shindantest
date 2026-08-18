@@ -2002,5 +2002,36 @@ function shopFixture() {
 }
 
 // ---------------------------------------------------------------
+section('35. 検索：STSでの絞り込み・一覧表（表示形式が表）に返るSTS');
+{
+  const ctx = featureFixture();
+  addCase(ctx, '予約一覧', { '支店コード': 'VIE', '管理番号': 'VIE-801', '管轄': '関東', '新郎名（ローマ字）': 'A', 'STS JP': 'RQ', 'STS 支店': 'NC' });
+  addCase(ctx, '予約一覧', { '支店コード': 'VIE', '管理番号': 'VIE-802', '管轄': '関東', '新郎名（ローマ字）': 'B', 'STS JP': 'OK', 'STS 支店': 'OK' });
+  addCase(ctx, '予約一覧', { '支店コード': 'IST', '管理番号': 'IST-801', '管轄': '関西', '新郎名（ローマ字）': 'C', 'STS JP': 'OK', 'STS 支店': 'NC' });
+  const jp = ctx.apiLogin('KANTO', 'pw');
+  const t = jp.session.token;
+
+  const byStsJp = ctx.apiSearchReservations(t, { scope: { showAll: true }, statusJp: 'OK' }).results;
+  check('STS JPで絞り込める', byStsJp.map(r => r.kanriNo).sort().join(',') === 'IST-801,VIE-802',
+        JSON.stringify(byStsJp.map(r => r.kanriNo)));
+
+  const byStsBranch = ctx.apiSearchReservations(t, { scope: { showAll: true }, statusBranch: 'NC' }).results;
+  check('STS 支店で絞り込める', byStsBranch.map(r => r.kanriNo).sort().join(',') === 'IST-801,VIE-801',
+        JSON.stringify(byStsBranch.map(r => r.kanriNo)));
+
+  const byBoth = ctx.apiSearchReservations(t, { scope: { showAll: true }, statusJp: 'OK', statusBranch: 'OK' }).results;
+  check('STS JP・STS 支店を両方指定するとAND条件になる', byBoth.map(r => r.kanriNo).join(',') === 'VIE-802',
+        JSON.stringify(byBoth.map(r => r.kanriNo)));
+
+  const all = ctx.apiSearchReservations(t, { scope: { showAll: true } }).results;
+  check('STS未指定なら絞り込まれない', all.length === 3, String(all.length));
+
+  // 一覧（表示形式が表）でもSTSの値が取れるようになっているか（apiGetDashboardの返却値）
+  const dash = ctx.apiGetDashboard(t, { showAll: true }).reservations.find(r => r.kanriNo === 'VIE-801');
+  check('一覧のレスポンスにSTS JPが入る（表表示のSTS列用）', dash.statusJp === 'RQ');
+  check('一覧のレスポンスにSTS 支店が入る（表表示のSTS列用）', dash.statusBranch === 'NC');
+}
+
+// ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
 process.exit(fail === 0 ? 0 : 1);
