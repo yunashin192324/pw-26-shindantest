@@ -3,12 +3,24 @@
   // WEDLINK 支店ポータル クライアントロジック
   // =====================================================
   const STORAGE_KEY = 'photowed_session';
-  const STATUS_CODES = ['RQ', 'OK', 'CHK', 'CR', 'FN', 'CW', 'NC', 'UC', 'CF'];
+  // ★機能追加（拡張要望3章）：DC（日付変更依頼）・PC（プラン・式場変更依頼）を追加。
+  // NCは意味が「依頼なし・状態リセット」から「ネームチェンジ」に変わったが、コード上の扱いは変わらない。
+  const STATUS_CODES = ['RQ', 'OK', 'CHK', 'CR', 'FN', 'CW', 'NC', 'UC', 'CF', 'DC', 'PC'];
   const JP_TEAMS = ['関東', '関西'];
   const BILLING_REGIONS = ['北海道', '東北', '関東', '中部', '関西', '中四国', '九州'];
   // 支店側がSTS(支店側)を編集できる条件。キー＝対になるSTS(JP側)の現在値。
   // null=制限なし／配列=その中からのみ／キーなし=支店側は編集不可
-  const BRANCH_EDIT_GATE = { 'NC': null, 'RQ': null, 'CHK': null, 'CR': ['CW', 'CF'] };
+  // ★機能追加（拡張要望3-2章）：DC/PCへの支店側の応答（OK/UC）はSTS(JP側)にもそのまま反映される
+  // （Code.gsのSTATUS_AUTO_CASCADE参照）。
+  const BRANCH_EDIT_GATE = { 'NC': null, 'RQ': null, 'CHK': null, 'CR': ['CW', 'CF'], 'DC': ['OK', 'UC'], 'PC': ['OK', 'UC'] };
+  // ★機能追加（拡張要望3章）：店舗が案件作成後に設定できるSTS(JP側)（Code.gsのSHOP_STATUS_TARGETSと一致）
+  const SHOP_STATUS_TARGETS = ['FN', 'CR', 'NC', 'DC', 'PC'];
+  const SHOP_STATUS_LABELS = { FN: 'FN（最終確定）', CR: 'CR（キャンセル依頼）', NC: 'NC（ネームチェンジ）',
+    DC: 'DC（日付変更依頼）', PC: 'PC（プラン・式場変更依頼）' };
+  // 必要書類チェックリスト（Code.gsのCHECKLIST_ITEMSと一致させる）
+  const CHECKLIST_ITEMS = ['ヘアメイク画像', '衣裳画像', '撮影指示書', '着付け指示書'];
+  // ドライブアップロードの書類種別（Code.gsのSHOP_UPLOAD_DOC_TYPESと一致させる）
+  const SHOP_UPLOAD_DOC_TYPES = ['ヘアメイク画像', '衣裳画像', '撮影指示書', '着付け指示書'];
   const DETAIL_TABS = [
     { key: 'message', label: 'メッセージ' },
     { key: 'customer', label: 'お客様情報' },
@@ -142,7 +154,7 @@
     $('nav-delivery').addEventListener('click', () => loadPendingDeliveries());
     $('nav-new').addEventListener('click', openNewView);
     $('nav-shop-new').addEventListener('click', openShopNewView);
-    $('shop-new-branch').addEventListener('change', loadShopPlanCandidates);
+    $('shop-new-branch').addEventListener('change', onShopNewBranchChange);
     $('shop-new-submit').addEventListener('click', submitShopNewRequest);
     $('nav-settings').addEventListener('click', openSettingsView);
     $('nav-logout').addEventListener('click', doLogout);
@@ -680,7 +692,9 @@
     } catch (e) { handleAuthError(e); }
   }
 
-  // ★機能追加：店舗ロール向けの案件詳細（依頼状況の確認＋メッセージのやり取りのみ）
+  // ★機能追加：店舗ロール向けの案件詳細（依頼状況の確認・許可された項目の編集・メッセージのやり取り）
+  // 拡張要望2章・3章に対応し、当初の「読み取り専用＋メッセージのみ」から、
+  // 通常の3択（保存のみ／メッセージのみ／変更＋メッセージ）で編集できる画面へ拡張した。
   function renderShopDetail(d) {
     const c = $('detail-content');
     const historyHtml = (d.history || []).length === 0
@@ -690,6 +704,25 @@
           <div class="history-meta"><span>${escapeHtml(h.sender)}</span><span>${escapeHtml(h.datetime)}</span></div>
           <div class="history-body">${escapeHtml(h.body)}</div>
         </div>`).join('');
+
+    const optionsHtml = (d.options || []).map(o => o.name ? `
+      <div class="field-block"><label>オプション${o.n}</label>
+        <input data-pending="OP${o.n}" value="${escapeAttr(o.name)}">
+      </div>` : `
+      <div class="field-block"><label>オプション${o.n}</label>
+        <input data-pending="OP${o.n}" value="" placeholder="未設定">
+      </div>`).join('');
+
+    const checklistHtml = (d.checklist || []).map(c2 => `
+      <label class="checkbox-label">
+        <input type="checkbox" data-pending="${escapeAttr('必要書類チェック:' + c2.item)}" data-bool-checkbox="1" ${c2.checked ? 'checked' : ''}>
+        ${escapeHtml(c2.item)}
+      </label>`).join('');
+
+    // ★機能追加（拡張要望3章）：店舗が設定できるSTS(JP側)（FN/CR/NC/DC/PC）。
+    // DC・PCを選んだ時だけ「チャージ規定は各自ご確認ください」の警告を表示する（3-2）。
+    const statusOptions = ['<option value="">-（変更しない）</option>']
+      .concat(SHOP_STATUS_TARGETS.map(v => `<option value="${v}">${escapeHtml(SHOP_STATUS_LABELS[v])}</option>`)).join('');
 
     c.innerHTML = `
       <div class="detail-header">
@@ -703,9 +736,71 @@
           <div class="field-block"><label>該当の手配課</label><div>${escapeHtml(d['管轄'] || '未定')}</div></div>
           <div class="field-block"><label>STS JP</label><div>${escapeHtml(d['STS JP'] || '未設定')}</div></div>
           <div class="field-block"><label>STS 支店</label><div>${escapeHtml(d['STS 支店'] || '未設定')}</div></div>
-          <div class="field-block"><label>希望日</label><div>${escapeHtml(d['希望日①'] || '未定')}</div></div>
           <div class="field-block"><label>撮影日FIX</label><div>${escapeHtml(d['撮影日FIX'] || '未定')}</div></div>
-          <div class="field-block"><label>プラン</label><div>${escapeHtml(d['プラン名'] || '未定')}</div></div>
+          ${!d.shopBilling ? '' : `<div class="field-block"><label>請求先</label><div>${escapeHtml(d.shopBilling)}</div></div>`}
+        </div>
+      </div>
+      <div class="section-card">
+        <h3>お客様情報</h3>
+        <div class="detail-grid">
+          <div class="field-block"><label>新郎名（ローマ字）</label><input data-pending="新郎名（ローマ字）" value="${escapeAttr(d['新郎名（ローマ字）'])}"></div>
+          <div class="field-block"><label>新婦名（ローマ字）</label><input data-pending="新婦名（ローマ字）" value="${escapeAttr(d['新婦名（ローマ字）'])}"></div>
+          ${!('パスポート番号' in d) ? '' : `<div class="field-block"><label>パスポート番号</label><input data-pending="パスポート番号" value="${escapeAttr(d['パスポート番号'])}"></div>`}
+        </div>
+      </div>
+      <div class="section-card">
+        <h3>予約内容</h3>
+        <div class="detail-grid">
+          <div class="field-block"><label>プラン</label><input data-pending="プラン名" value="${escapeAttr(d['プラン名'])}"></div>
+          <div class="field-block"><label>セール名</label><input data-pending="セール名" value="${escapeAttr(d['セール名'])}"></div>
+          <div class="field-block"><label>撮影希望場所</label><input data-pending="撮影希望場所" value="${escapeAttr(d['撮影希望場所'])}"></div>
+          ${!d.isItaly ? '' : `<div class="field-block"><label>準備場所</label>
+            <select data-pending="準備場所"><option value="">未設定</option>${PREP_CHOICES.map(p =>
+              `<option value="${escapeAttr(p)}" ${d['準備場所'] === p ? 'selected' : ''}>${escapeHtml(p)}</option>`).join('')}</select></div>`}
+          <div class="field-block"><label>希望日①</label><input type="date" data-pending="希望日①" value="${escapeAttr(toIsoDate(d['希望日①']))}"></div>
+          <div class="field-block"><label>希望日②</label><input type="date" data-pending="希望日②" value="${escapeAttr(toIsoDate(d['希望日②']))}"></div>
+          <div class="field-block"><label>希望日③</label><input type="date" data-pending="希望日③" value="${escapeAttr(toIsoDate(d['希望日③']))}"></div>
+          <div class="field-block"><label>希望日④</label><input type="date" data-pending="希望日④" value="${escapeAttr(toIsoDate(d['希望日④']))}"></div>
+          <div class="field-block"><label>希望日⑤</label><input type="date" data-pending="希望日⑤" value="${escapeAttr(toIsoDate(d['希望日⑤']))}"></div>
+        </div>
+      </div>
+      <div class="section-card">
+        <h3 style="margin-top:0;">オプション（最大5件）</h3>
+        <div class="detail-grid">${optionsHtml}</div>
+      </div>
+      <div class="section-card">
+        <h3>必要書類チェックリスト</h3>
+        <p class="hint-text">現地(支店)とチェック状況を共有します（双方向）。</p>
+        ${checklistHtml}
+      </div>
+      <div class="section-card">
+        <h3>ステータス変更（最終確定・キャンセル依頼・ネームチェンジ・日付変更依頼・プラン/式場変更依頼）</h3>
+        <label>STS JP を変更</label>
+        <select id="shop-status-select">${statusOptions}</select>
+        <p id="shop-status-warning" class="error-text hidden">⚠️ チャージ規定は各自ご確認ください。内容を確認のうえ送信してください。</p>
+        <p class="hint-text">選択すると、下の「変更＋メッセージを決定して送信」または「保存のみ」で確定します。</p>
+      </div>
+      <div class="section-card">
+        <h3>お客様提供画像・指示書のアップロード</h3>
+        <div class="detail-grid">
+          <div class="field-block"><label>書類種別</label>
+            <select id="shop-upload-doctype">${SHOP_UPLOAD_DOC_TYPES.map(t => `<option value="${escapeAttr(t)}">${escapeHtml(t)}</option>`).join('')}</select>
+          </div>
+          <div class="field-block"><label>ファイル</label><input type="file" id="shop-upload-file"></div>
+        </div>
+        <button class="send-btn" id="shop-upload-submit" style="margin-top:8px;">アップロード</button>
+        <p id="shop-upload-error" class="error-text hidden"></p>
+        <div id="shop-upload-list" style="margin-top:10px;"><p class="hint-text">読み込み中...</p></div>
+      </div>
+      <div class="section-card">
+        <h3>同意書・アンケートのご案内URL</h3>
+        <p class="hint-text">お客様にお送りください（管理番号が自動で入力された状態で開きます）。</p>
+        <div id="shop-form-urls"><p class="hint-text">読み込み中...</p></div>
+      </div>
+      <div class="section-card">
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <button type="button" class="send-btn" id="btn-commit" style="width:100%;">変更（＋メッセージ）を決定して送信</button>
+          <button type="button" class="send-btn" id="btn-save-quiet" style="width:100%;background:var(--color-muted);">保存のみ（通知しない）</button>
         </div>
       </div>
       <div class="section-card">
@@ -719,7 +814,23 @@
         ${historyHtml}
       </div>`;
 
+    wirePendingInputs(c);
     $('btn-msg-only').addEventListener('click', sendMessageOnly);
+    $('btn-commit').addEventListener('click', commitChangesWithMessage);
+    $('btn-save-quiet').addEventListener('click', saveQuiet);
+
+    const statusSel = $('shop-status-select');
+    statusSel.value = pendingChanges['STS JP'] || '';
+    statusSel.addEventListener('change', () => {
+      const v = statusSel.value;
+      $('shop-status-warning').classList.toggle('hidden', v !== 'DC' && v !== 'PC');
+      if (v) pendingChanges['STS JP'] = v; else delete pendingChanges['STS JP'];
+      updatePendingIndicator();
+    });
+
+    $('shop-upload-submit').addEventListener('click', submitShopUpload);
+    loadShopUploadedDocsInto('shop-upload-list');
+    loadShopFormUrls();
 
     // ★開いた時点で、自分宛の未読メッセージをまとめて既読にする（店舗向けには個別チェックUIを設けていない）
     (d.history || []).forEach(h => {
@@ -727,6 +838,44 @@
         gsRun('apiToggleHistoryCheck', session.token, h.id, true).catch(() => {});
       }
     });
+  }
+
+  // ★機能追加（拡張要望8章）：店舗が選んだファイルをBase64にしてアップロードする
+  async function submitShopUpload() {
+    $('shop-upload-error').classList.add('hidden');
+    const fileInput = $('shop-upload-file');
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) { showFieldError('shop-upload-error', 'ファイルを選択してください。'); return; }
+    const docType = $('shop-upload-doctype').value;
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(',').pop());
+        reader.onerror = () => reject(new Error('ファイルの読み込みに失敗しました。'));
+        reader.readAsDataURL(file);
+      });
+      await gsRun('apiShopUploadDocument', session.token, currentKanri, docType, file.name, file.type, base64);
+      fileInput.value = '';
+      showToast('アップロードしました');
+      loadShopUploadedDocsInto('shop-upload-list');
+    } catch (e) {
+      showFieldError('shop-upload-error', e.message);
+    }
+  }
+
+  // ★機能追加（拡張要望10章）：同意書・アンケートフォームの事前入力済みURLを取得して表示する
+  async function loadShopFormUrls() {
+    const el = $('shop-form-urls');
+    if (!el) return;
+    try {
+      const res = await gsRun('apiGetPrefilledFormUrls', session.token, currentKanri);
+      const rows = [];
+      if (res.consentFormUrl) rows.push(`<div><a href="${escapeAttr(res.consentFormUrl)}" target="_blank" rel="noopener">同意書フォームを開く</a></div>`);
+      if (res.surveyFormUrl) rows.push(`<div><a href="${escapeAttr(res.surveyFormUrl)}" target="_blank" rel="noopener">アンケートフォームを開く</a></div>`);
+      el.innerHTML = rows.length ? rows.join('') : '<p class="hint-text">フォームが未設定です（管理者へお問い合わせください）。</p>';
+    } catch (e) {
+      el.innerHTML = `<p class="error-text">${escapeHtml(e.message)}</p>`;
+    }
   }
 
   // 支店側がSTS(支店側)を編集できるかどうかを、対になるSTS(JP側)の現在値から判定する
@@ -922,6 +1071,23 @@
       <div class="field-block"><label>準備場所</label>
         <select data-pending="準備場所"><option value="">未設定</option>${PREP_CHOICES.map(p =>
           `<option value="${escapeAttr(p)}" ${d['準備場所'] === p ? 'selected' : ''}>${escapeHtml(p)}</option>`).join('')}</select>
+      </div>`;
+
+    // ★機能追加（拡張要望9章）：必要書類チェックリスト（店舗・現地の双方向チェック）
+    const checklistHtml = (d.checklist || []).map(c => `
+      <label class="checkbox-label">
+        <input type="checkbox" data-pending="${escapeAttr('必要書類チェック:' + c.item)}" data-bool-checkbox="1" ${c.checked ? 'checked' : ''}>
+        ${escapeHtml(c.item)}
+      </label>`).join('');
+
+    // ★機能追加（拡張要望6章）：店舗発の案件だけ、起票した店舗の請求先（営業本部）を表示する
+    const shopBillingBlock = !d.originShop ? '' : `
+      <div class="section-card">
+        <h3>店舗発の依頼情報</h3>
+        <div class="detail-grid">
+          <div class="field-block"><label>起票元店舗</label><div>${escapeHtml(d.originShopName || d.originShop)}</div></div>
+          ${!d.shopBilling ? '' : `<div class="field-block"><label>請求先（店舗の営業本部）</label><div>${escapeHtml(d.shopBilling)}</div></div>`}
+        </div>
       </div>`;
 
     const optionsHtml = d.options.map(o => {
@@ -1140,6 +1306,14 @@
           ${optionsHtml}
         </div>
 
+        ${shopBillingBlock}
+
+        <div class="section-card">
+          <h3>必要書類チェックリスト</h3>
+          <p class="hint-text">店舗・現地(支店)のどちらからでもチェックできます（双方向）。他の項目と同じく、下の3択（保存のみ／メッセージ／変更＋メッセージ）で確定してください。</p>
+          ${checklistHtml}
+        </div>
+
         ${memoLogSectionHtml(d, MEMO_TYPE_SHARED, '共有メモ（支店・日本側どちらも自由に書けます）', '社内向けの自由メモを入力', d['共有メモ'])}
 
         ${quickActionsHtml}
@@ -1180,6 +1354,12 @@
           </div>
           <p class="hint-text">支店・日本側どちらからでも登録できます。入力すると即座に相手へ通知されます（他の項目のような保留はありません）。</p>
         </div>
+        ${!d.originShop ? '' : `
+        <div class="section-card">
+          <h3>店舗アップロード（お客様提供画像・指示書）</h3>
+          <p class="hint-text">店舗（${escapeHtml(d.originShopName || d.originShop)}）がアップロードした書類です。既定では手配課のみ閲覧できます（支店マスタの設定で現地にも公開できます）。</p>
+          <div id="shop-upload-list"><p class="hint-text">読み込み中...</p></div>
+        </div>`}
       </div>`;
 
     // ★機能：ステータス変更履歴とやり取り履歴を時系列にマージした「案件タイムライン」
@@ -1218,6 +1398,7 @@
         c.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === detailActiveTab));
         c.querySelectorAll('.tab-pane').forEach(p => p.classList.toggle('hidden', p.dataset.tabPane !== detailActiveTab));
         if (detailActiveTab === 'timeline') loadTimeline();
+        if (detailActiveTab === 'drive') loadShopUploadedDocsInto('shop-upload-list');
       });
     });
 
@@ -1245,33 +1426,7 @@
       el.addEventListener('change', () => checkStaffConflict());
     });
 
-    // ★不具合修正：「メッセージのみ送信」の直後など、未保存の変更（pendingChanges）を保持したまま
-    // 画面を再描画する場面がある。以前はサーバーの値で入力欄が上書きされてしまい、
-    // 「未保存の変更: 1件」と出ているのに画面上はどこが変更中なのか分からず、
-    // そのまま「変更を決定して送信」を押すと画面に見えていない値が送信される状態だった。
-    // 再描画後も入力欄に未保存の値を復元して、表示と実際に送信される内容を一致させる。
-    c.querySelectorAll('[data-pending]').forEach(el => {
-      const field = el.dataset.pending;
-      // ★機能：同意書チェックボックスは他のdata-pending項目と違いvalueではなくcheckedで持つため、
-      // 「済／未」の文字列と相互変換する（サーバー側は文字列で保存しているため）
-      if (el.dataset.consentCheckbox) {
-        if (Object.prototype.hasOwnProperty.call(pendingChanges, field)) {
-          el.checked = !!pendingChanges[field];
-        }
-        el.addEventListener('change', () => {
-          pendingChanges[field] = el.checked ? '済' : '';
-          updatePendingIndicator();
-        });
-        return;
-      }
-      if (Object.prototype.hasOwnProperty.call(pendingChanges, field)) {
-        el.value = pendingChanges[field];
-      }
-      el.addEventListener('change', () => {
-        pendingChanges[el.dataset.pending] = el.value;
-        updatePendingIndicator();
-      });
-    });
+    wirePendingInputs(c);
     $('btn-msg-only').addEventListener('click', sendMessageOnly);
     $('btn-commit').addEventListener('click', commitChangesWithMessage);
     $('btn-save-quiet').addEventListener('click', saveQuiet);
@@ -1305,6 +1460,31 @@
     // 履歴タブを開いたまま再描画された場合、タブのクリックが起きないので
     // ここで読み込まないと「読み込み中...」のまま止まってしまう
     if (detailActiveTab === 'timeline') loadTimeline();
+    if (detailActiveTab === 'drive' && $('shop-upload-list')) loadShopUploadedDocsInto('shop-upload-list');
+  }
+
+  // ★機能追加（拡張要望8章）：店舗アップロード済みの書類一覧を取得して描画する（JP・支店の閲覧用）
+  async function loadShopUploadedDocsInto(elId) {
+    const el = $(elId);
+    if (!el) return;
+    try {
+      const res = await gsRun('apiListShopUploadedDocuments', session.token, currentKanri);
+      if (!res.visible) {
+        el.innerHTML = '<p class="hint-text">現地への公開が許可されていないため、この画面では表示されません。</p>';
+        return;
+      }
+      const nonEmpty = (res.folders || []).filter(f => f.files.length > 0);
+      if (!nonEmpty.length) { el.innerHTML = '<p class="hint-text">まだアップロードはありません。</p>'; return; }
+      el.innerHTML = nonEmpty.map(f => `
+        <div style="margin-bottom:8px;">
+          <strong>${escapeHtml(f.docType)}</strong>
+          <ul style="margin:4px 0 0 18px;">
+            ${f.files.map(file => `<li><a href="${escapeAttr(file.url)}" target="_blank" rel="noopener">${escapeHtml(file.name)}</a>（${escapeHtml(file.updatedAt || '')}）</li>`).join('')}
+          </ul>
+        </div>`).join('');
+    } catch (e) {
+      el.innerHTML = `<p class="error-text">${escapeHtml(e.message)}</p>`;
+    }
   }
 
   // ★機能：希望日のボタンを押すと、撮影日FIXへの反映・STS 支店＝OK・定型メッセージを1回で送信する。
@@ -1393,6 +1573,49 @@
     } catch (e) {
       el.innerHTML = '<p class="error-text">履歴の取得に失敗しました。</p>';
     }
+  }
+
+  // ★不具合修正：「メッセージのみ送信」の直後など、未保存の変更（pendingChanges）を保持したまま
+  // 画面を再描画する場面がある。以前はサーバーの値で入力欄が上書きされてしまい、
+  // 「未保存の変更: 1件」と出ているのに画面上はどこが変更中なのか分からず、
+  // そのまま「変更を決定して送信」を押すと画面に見えていない値が送信される状態だった。
+  // 再描画後も入力欄に未保存の値を復元して、表示と実際に送信される内容を一致させる。
+  // ★機能追加（拡張要望）：店舗ロール向けのrenderShopDetailからも共通利用できるよう独立した関数にした。
+  function wirePendingInputs(container) {
+    container.querySelectorAll('[data-pending]').forEach(el => {
+      const field = el.dataset.pending;
+      // ★機能：同意書チェックボックスは他のdata-pending項目と違いvalueではなくcheckedで持つため、
+      // 「済／未」の文字列と相互変換する（サーバー側は文字列で保存しているため）
+      if (el.dataset.consentCheckbox) {
+        if (Object.prototype.hasOwnProperty.call(pendingChanges, field)) {
+          el.checked = !!pendingChanges[field];
+        }
+        el.addEventListener('change', () => {
+          pendingChanges[field] = el.checked ? '済' : '';
+          updatePendingIndicator();
+        });
+        return;
+      }
+      // ★機能追加（拡張要望9章）：必要書類チェックリストは「済／未」ではなくTRUE/空欄で保存する
+      // （Code.gs側のisActiveFlag_と一致させるため）
+      if (el.dataset.boolCheckbox) {
+        if (Object.prototype.hasOwnProperty.call(pendingChanges, field)) {
+          el.checked = !!pendingChanges[field];
+        }
+        el.addEventListener('change', () => {
+          pendingChanges[field] = el.checked ? 'TRUE' : '';
+          updatePendingIndicator();
+        });
+        return;
+      }
+      if (Object.prototype.hasOwnProperty.call(pendingChanges, field)) {
+        el.value = pendingChanges[field];
+      }
+      el.addEventListener('change', () => {
+        pendingChanges[el.dataset.pending] = el.value;
+        updatePendingIndicator();
+      });
+    });
   }
 
   function updatePendingIndicator() {
@@ -1564,14 +1787,17 @@
     $(id).classList.remove('hidden');
   }
 
-  // ---------- 新規依頼（店舗ロール専用） ----------
+  // ---------- 新規依頼（店舗ロール専用。拡張要望2章） ----------
+  const SHOP_NEW_TEXT_FIELDS = ['groom', 'bride', 'plan', 'sale', 'location', 'passport',
+    'option1', 'option2', 'option3', 'option4', 'option5'];
+  const SHOP_NEW_DATE_FIELDS = ['hope1', 'hope2', 'hope3', 'hope4', 'hope5'];
   async function openShopNewView() {
     showView('shop-new');
     $('shop-new-error').classList.add('hidden');
     $('shop-new-success').classList.add('hidden');
-    $('shop-new-customer').value = '';
-    $('shop-new-hopedate').value = '';
-    $('shop-new-plan').value = '';
+    SHOP_NEW_TEXT_FIELDS.forEach(k => { $('shop-new-' + k).value = ''; });
+    SHOP_NEW_DATE_FIELDS.forEach(k => { $('shop-new-' + k).value = ''; });
+    $('shop-new-initial-status').value = 'RQ';
     if (!branchesCache.length) {
       const data = await gsRun('apiGetDashboard', session.token, { showAll: true });
       branchesCache = data.branches || [];
@@ -1579,16 +1805,28 @@
     $('shop-new-branch').innerHTML = branchesCache
       .map(b => `<option value="${escapeAttr(b.code)}">${escapeHtml(b.name)}（${escapeHtml(b.country || '')}/${escapeHtml(b.city || '')}）</option>`).join('');
     $('shop-new-team').innerHTML = JP_TEAMS.map(t => `<option value="${escapeAttr(t)}">${escapeHtml(t)}手配課</option>`).join('');
-    loadShopPlanCandidates();
+    $('shop-new-prep').innerHTML = '<option value="">-</option>' +
+      PREP_CHOICES.map(p => `<option value="${escapeAttr(p)}">${escapeHtml(p)}</option>`).join('');
+    onShopNewBranchChange();
   }
 
-  // 支店（都市）を選ぶと、その支店のプラン候補をdatalistへ反映する
-  async function loadShopPlanCandidates() {
+  // 支店（都市）を選ぶと、その支店のプラン・セール・撮影希望場所の候補をdatalistへ反映し、
+  // 準備場所（イタリアのみ）・パスポート番号（必須の支店のみ）の表示を切り替える
+  async function onShopNewBranchChange() {
     const branchCode = $('shop-new-branch').value;
     if (!branchCode) return;
+    const meta = branchesCache.find(b => b.code === branchCode) || {};
+    $('shop-new-prep-block').classList.toggle('hidden', meta.country !== 'イタリア');
+    $('shop-new-passport-block').classList.toggle('hidden', !meta.passportRequired);
     try {
-      const plans = await gsRun('apiListPlans', session.token, branchCode);
+      const [plans, sales, locations] = await Promise.all([
+        gsRun('apiListPlans', session.token, branchCode),
+        gsRun('apiListSales', session.token, branchCode),
+        gsRun('apiListLocations', session.token, branchCode)
+      ]);
       $('shop-new-plan-datalist').innerHTML = plans.map(p => `<option value="${escapeAttr(p.name)}">`).join('');
+      $('shop-new-sale-datalist').innerHTML = sales.map(p => `<option value="${escapeAttr(p.name)}">`).join('');
+      $('shop-new-location-datalist').innerHTML = locations.map(p => `<option value="${escapeAttr(p.name)}">`).join('');
     } catch (e) { /* 候補が取れなくても入力自体は続けられる */ }
   }
 
@@ -1598,18 +1836,29 @@
     const payload = {
       branchCode: $('shop-new-branch').value,
       team: $('shop-new-team').value,
-      customerName: $('shop-new-customer').value.trim(),
-      hopeDate: $('shop-new-hopedate').value,
-      plan: $('shop-new-plan').value.trim()
+      initialStatus: $('shop-new-initial-status').value,
+      groomName: $('shop-new-groom').value.trim(),
+      brideName: $('shop-new-bride').value.trim(),
+      plan: $('shop-new-plan').value.trim(),
+      saleName: $('shop-new-sale').value.trim(),
+      location: $('shop-new-location').value.trim(),
+      prep: $('shop-new-prep-block').classList.contains('hidden') ? '' : $('shop-new-prep').value,
+      passportNumber: $('shop-new-passport-block').classList.contains('hidden') ? '' : $('shop-new-passport').value.trim(),
+      hope1: $('shop-new-hope1').value, hope2: $('shop-new-hope2').value, hope3: $('shop-new-hope3').value,
+      hope4: $('shop-new-hope4').value, hope5: $('shop-new-hope5').value,
+      option1: $('shop-new-option1').value.trim(), option2: $('shop-new-option2').value.trim(),
+      option3: $('shop-new-option3').value.trim(), option4: $('shop-new-option4').value.trim(),
+      option5: $('shop-new-option5').value.trim()
     };
-    if (!payload.customerName) { showFieldError('shop-new-error', 'お客様名を入力してください。'); return; }
+    if (!payload.groomName) { showFieldError('shop-new-error', '新郎名（ローマ字）を入力してください。'); return; }
+    if (!payload.hope1) { showFieldError('shop-new-error', '希望日（第一希望）を入力してください。'); return; }
     try {
       const res = await gsRun('apiShopCreateRequest', session.token, payload);
       $('shop-new-success').textContent = `依頼 ${res.kanriNo} を送信しました。日本の該当手配課と現地支店に通知が届きます。`;
       $('shop-new-success').classList.remove('hidden');
-      $('shop-new-customer').value = '';
-      $('shop-new-hopedate').value = '';
-      $('shop-new-plan').value = '';
+      SHOP_NEW_TEXT_FIELDS.forEach(k => { $('shop-new-' + k).value = ''; });
+      SHOP_NEW_DATE_FIELDS.forEach(k => { $('shop-new-' + k).value = ''; });
+      $('shop-new-initial-status').value = 'RQ';
     } catch (e) {
       showFieldError('shop-new-error', e.message);
     }

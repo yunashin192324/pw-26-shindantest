@@ -168,19 +168,54 @@
       <!-- 新規依頼（店舗ロール専用） -->
       <section id="view-shop-new" class="view hidden">
         <h2>新規依頼</h2>
-        <p class="hint-text">送信すると、日本の該当手配課と現地支店の両方に通知が届きます。</p>
+        <p class="hint-text">送信すると、日本の該当手配課と現地支店に通知が届きます（支店の設定によっては手配課への通知メールが省略される場合があります）。</p>
         <label>支店（都市）</label>
         <select id="shop-new-branch"></select>
         <label>該当の手配課</label>
         <select id="shop-new-team"></select>
-        <label>お客様名</label>
-        <input id="shop-new-customer" type="text" placeholder="例）Ahmet Yilmaz">
-        <label>希望日</label>
-        <input id="shop-new-hopedate" type="date">
+        <label>新規作成時のSTS(JP側)</label>
+        <select id="shop-new-initial-status">
+          <option value="RQ">RQ（予約依頼）</option>
+          <option value="CHK">CHK（空き確認のみ）</option>
+        </select>
+        <label>新郎名（ローマ字）</label>
+        <input id="shop-new-groom" type="text" placeholder="例）Ahmet Yilmaz">
+        <label>新婦名（ローマ字）</label>
+        <input id="shop-new-bride" type="text" placeholder="任意入力">
         <label>プラン</label>
         <input id="shop-new-plan" type="text" list="shop-new-plan-datalist" placeholder="任意入力">
         <datalist id="shop-new-plan-datalist"></datalist>
-        <button id="shop-new-submit" class="primary-btn">この内容で送信</button>
+        <label>セール名</label>
+        <input id="shop-new-sale" type="text" list="shop-new-sale-datalist" placeholder="任意入力">
+        <datalist id="shop-new-sale-datalist"></datalist>
+        <label>撮影希望場所</label>
+        <input id="shop-new-location" type="text" list="shop-new-location-datalist" placeholder="任意入力">
+        <datalist id="shop-new-location-datalist"></datalist>
+        <div id="shop-new-prep-block" class="hidden">
+          <label>準備場所</label>
+          <select id="shop-new-prep"><option value="">-</option></select>
+        </div>
+        <label>希望日（第一希望）</label>
+        <input id="shop-new-hope1" type="date">
+        <label>希望日（第二希望）</label>
+        <input id="shop-new-hope2" type="date">
+        <label>希望日（第三希望）</label>
+        <input id="shop-new-hope3" type="date">
+        <label>希望日（第四希望）</label>
+        <input id="shop-new-hope4" type="date">
+        <label>希望日（第五希望）</label>
+        <input id="shop-new-hope5" type="date">
+        <div id="shop-new-passport-block" class="hidden">
+          <label>パスポート番号</label>
+          <input id="shop-new-passport" type="text" placeholder="任意入力">
+        </div>
+        <h3 style="margin-top:14px;">オプション（任意・最大5件）</h3>
+        <input id="shop-new-option1" type="text" placeholder="オプション①">
+        <input id="shop-new-option2" type="text" placeholder="オプション②">
+        <input id="shop-new-option3" type="text" placeholder="オプション③">
+        <input id="shop-new-option4" type="text" placeholder="オプション④">
+        <input id="shop-new-option5" type="text" placeholder="オプション⑤">
+        <button id="shop-new-submit" class="primary-btn" style="margin-top:14px;">この内容で送信</button>
         <p id="shop-new-error" class="error-text hidden"></p>
         <p id="shop-new-success" class="success-text hidden"></p>
       </section>

@@ -535,8 +535,8 @@ function visiblePane(document) {
     check('依頼先の支店（都市）が選べる', branchOpts.includes('VIE'), branchOpts.join(','));
     document.getElementById('shop-new-branch').value = 'VIE';
     document.getElementById('shop-new-team').value = '関東';
-    document.getElementById('shop-new-customer').value = 'Ahmet Yilmaz';
-    document.getElementById('shop-new-hopedate').value = '2026-09-10';
+    document.getElementById('shop-new-groom').value = 'Ahmet Yilmaz';
+    document.getElementById('shop-new-hope1').value = '2026-09-10';
     document.getElementById('shop-new-plan').value = 'プランA';
     document.getElementById('shop-new-submit').click();
     await settle();
@@ -553,8 +553,10 @@ function visiblePane(document) {
     await settle();
     check('店舗向け詳細に管理番号が表示される',
           document.getElementById('detail-content').innerHTML.includes(createdKanri));
-    check('店舗向け詳細には請求先など内部項目の入力欄が出ない（メッセージ以外は読み取り専用）',
-          !document.querySelector('[data-pending]'));
+    check('店舗向け詳細でも許可された項目（プラン等）は編集できる（拡張要望2章・3-1）',
+          !!document.querySelector('[data-pending="プラン名"]'));
+    check('店舗向け詳細には請求先など内部項目の入力欄が出ない',
+          !document.querySelector('[data-pending="請求先"]') && !document.querySelector('[data-pending="ホテル"]'));
 
     // 手配課（JP）が支店とのやり取りを経て、店舗へ中継する
     document.getElementById('nav-logout').click();
@@ -621,6 +623,99 @@ function visiblePane(document) {
     await settle();
     const searchHtml = document.getElementById('search-results').innerHTML;
     check('STS JPを指定して検索すると該当案件だけ出る', searchHtml.includes('R-952') && !searchHtml.includes('R-951'));
+  }
+
+  // ---------------------------------------------------------------
+  section('U17. 店舗発注の拡張要望（新規依頼フォーム拡張・DC/PC警告・チェックリスト・ドライブ連携・請求先）');
+  {
+    // 支店マスタに請求先を設定しておく（拡張要望6章）
+    const bm = ctx.__ss.getSheetByName('支店マスタ');
+    const head = bm.getRange(1, 1, 1, bm.getLastColumn()).getValues()[0];
+    const codeCol = head.indexOf('支店コード') + 1;
+    const billingCol = head.indexOf('請求先') + 1;
+    const codes = bm.getRange(2, codeCol, bm.getLastRow() - 1, 1).getValues();
+    for (let i = 0; i < codes.length; i++) {
+      if (String(codes[i][0]) === 'SHOP1') bm.getRange(i + 2, billingCol).setValue('関東営業本部');
+    }
+
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'SHOP1', 'CHANGE-ME-SHOP1');
+    // ★U16で「表」表示に切り替えたままなので、カード表示に戻しておく（#reservation-listで検索するため）
+    document.getElementById('view-mode-card').click();
+    document.getElementById('nav-shop-new').click();
+    await settle();
+    document.getElementById('shop-new-branch').value = 'VIE';
+    document.getElementById('shop-new-team').value = '関東';
+    document.getElementById('shop-new-groom').value = 'Extended Groom';
+    document.getElementById('shop-new-bride').value = 'Extended Bride';
+    document.getElementById('shop-new-hope1').value = '2026-10-01';
+    document.getElementById('shop-new-initial-status').value = 'CHK';
+    document.getElementById('shop-new-submit').click();
+    await settle();
+    check('拡張フォームでも依頼を送信できる', !document.getElementById('shop-new-success').classList.contains('hidden'),
+          document.getElementById('shop-new-error').textContent);
+    const kanri2 = document.getElementById('shop-new-success').textContent.match(/依頼\s*(\S+)\s*を送信/)[1];
+
+    const jpTokenForCheck = ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    check('選んだ初期STS(JP側)（CHK）で作成される（拡張要望2章）',
+          ctx.apiGetReservationDetail(jpTokenForCheck, kanri2).detail['STS JP'] === 'CHK');
+
+    document.getElementById('nav-dashboard').click();
+    await settle();
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanri2)).click();
+    await settle();
+
+    // DC/PCを選ぶとチャージ規定の警告が出る（拡張要望3-2章）
+    const statusSel = document.getElementById('shop-status-select');
+    statusSel.value = 'DC'; statusSel.dispatchEvent(new dom.window.Event('change'));
+    check('DCを選ぶとチャージ規定の警告が表示される',
+          !document.getElementById('shop-status-warning').classList.contains('hidden'));
+    statusSel.value = 'FN'; statusSel.dispatchEvent(new dom.window.Event('change'));
+    check('FNを選ぶと警告は消える', document.getElementById('shop-status-warning').classList.contains('hidden'));
+    statusSel.value = ''; statusSel.dispatchEvent(new dom.window.Event('change'));
+
+    // 必要書類チェックリストのチェック（拡張要望9章）
+    const checklistBox = [...document.querySelectorAll('.checkbox-label input[type=checkbox]')]
+      .find(el => el.closest('.checkbox-label').textContent.includes('ヘアメイク画像'));
+    checklistBox.checked = true;
+    checklistBox.dispatchEvent(new dom.window.Event('change'));
+    document.getElementById('btn-save-quiet').click();
+    await settle();
+    check('店舗がチェックリストにチェックを入れて保存できる',
+          ctx.apiGetReservationDetail(jpTokenForCheck, kanri2).detail.checklist.find(c => c.item === 'ヘアメイク画像').checked === true);
+
+    // ドライブアップロード一覧・フォームURL欄が表示される（ファイル選択のシミュレーションはjsdomでは行わず、
+    // サーバー側APIを直接呼んでから一覧の再読み込みだけを検証する）
+    ctx.apiShopUploadDocument(ctx.apiLogin('SHOP1', 'CHANGE-ME-SHOP1').session.token, kanri2,
+      'ヘアメイク画像', 'hair.jpg', 'image/jpeg', Buffer.from('dummy').toString('base64'));
+    document.getElementById('nav-dashboard').click();
+    await settle();
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanri2)).click();
+    await settle();
+    check('アップロード済みの書類一覧が店舗の画面に表示される',
+          document.getElementById('shop-upload-list').innerHTML.includes('hair.jpg'));
+    check('同意書・アンケートURL欄が表示される（未設定案内）',
+          document.getElementById('shop-form-urls').textContent.includes('未設定'));
+
+    // JP側：請求先の表示・ドライブタブでのアップロード一覧の閲覧（拡張要望6章・8章）
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'KANTO', 'CHANGE-ME-KANTO');
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanri2)).click();
+    await settle();
+    check('日本側の詳細に、起票した店舗の請求先が表示される（拡張要望6章）',
+          document.getElementById('detail-content').innerHTML.includes('関東営業本部'));
+    check('日本側の予約内容タブに必要書類チェックリストが表示され、店舗のチェックが反映されている',
+          [...document.querySelectorAll('.checkbox-label')].some(l => l.textContent.includes('ヘアメイク画像') && l.querySelector('input').checked));
+
+    document.querySelector('[data-tab="drive"]').click();
+    await settle();
+    check('日本側のドライブタブに店舗アップロードの一覧が表示される（拡張要望8章）',
+          document.getElementById('shop-upload-list').innerHTML.includes('hair.jpg'));
   }
 
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
