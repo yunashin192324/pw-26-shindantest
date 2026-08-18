@@ -1909,11 +1909,14 @@ function shopFixture() {
   err = null; try { ctx.apiGetReservationDetail(shopToken, 'VIE-901'); } catch (e) { err = e.message; }
   check('店舗が起票していない通常の案件は見られない', err !== null, String(err));
 
-  // --- 店舗は項目を編集できない（メッセージのみ） ---
-  err = null; try { ctx.apiSaveFieldsQuiet(shopToken, kanri, { 'プラン名': '侵入' }); } catch (e) { err = e.message; }
-  check('店舗はapiSaveFieldsQuietで項目を変更できない', err !== null, String(err));
-  err = null; try { ctx.apiCommitChanges(shopToken, kanri, { 'プラン名': '侵入' }, ''); } catch (e) { err = e.message; }
-  check('店舗はapiCommitChangesでも項目を変更できない', err !== null, String(err));
+  // --- 店舗編集できる項目・できない項目の境界（詳細は別セクションで検証） ---
+  ctx.apiSaveFieldsQuiet(shopToken, kanri, { 'プラン名': 'プランB' });
+  check('店舗はプラン名など許可された項目は変更できる（拡張要望2章・3-1）',
+        ctx.apiGetReservationDetail(jpToken, kanri).detail['プラン名'] === 'プランB');
+  err = null; try { ctx.apiSaveFieldsQuiet(shopToken, kanri, { '請求先': '関東' }); } catch (e) { err = e.message; }
+  check('店舗は許可されていない項目（請求先）は変更できない', err !== null, String(err));
+  err = null; try { ctx.apiCommitChanges(shopToken, kanri, { 'STS 支店': 'OK' }, ''); } catch (e) { err = e.message; }
+  check('店舗はSTS 支店を変更できない', err !== null, String(err));
 
   // --- 通常モード（店舗直接やり取り許可＝OFF）でのメッセージのやり取り ---
   ctx.apiCommitChanges(shopToken, kanri, {}, '内装の希望を伝えたいです');
@@ -2051,6 +2054,281 @@ section('36. DriveフォルダURL登録（不具合修正の回帰テスト）')
   const vie = ctx.apiLogin('VIE', 'vp');
   check('支店側も未読になる（通知が届く）',
         ctx.apiGetDashboard(vie.session.token, { showAll: true }).reservations.find(r => r.kanriNo === 'VIE-901').needsAction === true);
+}
+
+// ---------------------------------------------------------------
+section('37. 店舗発の新規依頼フォーム拡張（拡張要望2章）');
+{
+  const ctx = shopFixture();
+  setBranchField(ctx, 'IST', 'パスポート番号欄', true);
+  const shop = ctx.apiLogin('SHOP1', 'sp');
+  const shopToken = shop.session.token;
+  const jp = ctx.apiLogin('KANTO', 'pw');
+  const jpToken = jp.session.token;
+
+  // --- 希望日（第一希望）が必須 ---
+  let err = null;
+  try { ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'A' }); } catch (e) { err = e.message; }
+  check('希望日（第一希望）が無いと作成できない', err !== null, String(err));
+
+  // --- 新規作成時のSTS(JP側)選択（RQ／CHK） ---
+  err = null;
+  try { ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'A', hope1: '2026-09-10', initialStatus: 'OK' }); } catch (e) { err = e.message; }
+  check('初期STS(JP側)にRQ/CHK以外を指定すると作成できない', err !== null, String(err));
+
+  // --- フル項目での作成（イスタンブール＝パスポート必須） ---
+  const created = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'IST', team: '関西', groomName: 'Kenji Sato', brideName: 'Yui Sato',
+    plan: 'プランA', saleName: '春の特別セール', location: '旧市街の教会', prep: 'サロン',
+    hope1: '2026-09-10', hope2: '2026-09-11', hope3: '2026-09-12', hope4: '2026-09-13', hope5: '2026-09-14',
+    option1: '追加アルバム', option2: 'アクセサリーレンタル',
+    passportNumber: 'TR1234567', initialStatus: 'CHK'
+  });
+  check('拡張項目つきで起票が成功する', created.ok === true && !!created.kanriNo, JSON.stringify(created));
+  const kanri = created.kanriNo;
+  const detail = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+  check('新郎名が入る', detail['新郎名（ローマ字）'] === 'Kenji Sato');
+  check('新婦名が入る', detail['新婦名（ローマ字）'] === 'Yui Sato');
+  check('セール名が入る', detail['セール名'] === '春の特別セール');
+  check('撮影希望場所が入る', detail['撮影希望場所'] === '旧市街の教会');
+  check('準備場所が入る', detail['準備場所'] === 'サロン');
+  check('希望日が第五希望まで入る', ['希望日①','希望日②','希望日③','希望日④','希望日⑤'].map((k,i) => detail[k] === `2026-09-1${i}`).every(Boolean),
+        JSON.stringify(['希望日①','希望日②','希望日③','希望日④','希望日⑤'].map(k => detail[k])));
+  check('オプション名が入る', detail.options[0].name === '追加アルバム' && detail.options[1].name === 'アクセサリーレンタル');
+  check('パスポート必須支店ではパスポート番号が保存される', detail['パスポート番号'] === 'TR1234567');
+  check('選択した初期STS(JP側)（CHK）で作成される', detail['STS JP'] === 'CHK');
+
+  // --- パスポート非必須支店では指定しても無視される（表示条件を作成時にも踏襲） ---
+  const created2 = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'VIE', team: '関東', groomName: 'B', hope1: '2026-10-01', passportNumber: 'SHOULD-BE-IGNORED'
+  });
+  const detail2 = ctx.apiGetReservationDetail(jpToken, created2.kanriNo).detail;
+  check('パスポート非必須支店ではパスポート番号は保存されない', !detail2['パスポート番号']);
+  check('initialStatus省略時は既定のRQで作成される', detail2['STS JP'] === 'RQ');
+}
+
+// ---------------------------------------------------------------
+section('38. 案件作成後の店舗による変更：DC/PC/NC（拡張要望3章）');
+{
+  const ctx = shopFixture();
+  const shop = ctx.apiLogin('SHOP1', 'sp');
+  const shopToken = shop.session.token;
+  const jp = ctx.apiLogin('KANTO', 'pw');
+  const jpToken = jp.session.token;
+  const vie = ctx.apiLogin('VIE', 'vp');
+  const vieToken = vie.session.token;
+
+  const created = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'A', hope1: '2026-09-10' });
+  const kanri = created.kanriNo;
+  // OKまで進める（前提条件：FNはOKからのみ）
+  ctx.apiSaveFieldsQuiet(jpToken, kanri, { 'STS JP': 'OK' });
+
+  // --- 日付変更依頼（DC） ---
+  ctx.apiCommitChanges(shopToken, kanri, { 'STS JP': 'DC' }, '日程を変更したいです。チャージ規定は確認済みです。');
+  check('店舗がSTS(JP側)をDCに変更できる', ctx.apiGetReservationDetail(jpToken, kanri).detail['STS JP'] === 'DC');
+  // 支店がOKで応答 → JP側・支店側の両方に反映される（3-2の特例）
+  ctx.apiSaveFieldsQuiet(vieToken, kanri, { 'STS 支店': 'OK' });
+  const afterDcOk = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+  check('支店のOK応答でSTS(支店側)がOKになる', afterDcOk['STS 支店'] === 'OK');
+  check('支店のOK応答でSTS(JP側)もOKになる（DC/PCだけの特例）', afterDcOk['STS JP'] === 'OK');
+
+  // --- プラン・式場変更依頼（PC）→ 支店がUC（対応不可）で応答 ---
+  ctx.apiCommitChanges(shopToken, kanri, { 'STS JP': 'PC' }, 'プランを変更したいです。チャージ規定は確認済みです。');
+  ctx.apiSaveFieldsQuiet(vieToken, kanri, { 'STS 支店': 'UC' });
+  const afterPcUc = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+  check('支店のUC応答でSTS(支店側)がUCになる', afterPcUc['STS 支店'] === 'UC');
+  check('支店のUC応答でSTS(JP側)もUCになる（対応不可＝店舗が直接リブッキング）', afterPcUc['STS JP'] === 'UC');
+
+  // --- オプションは全案件共通仕様の対象外（DC/PCの影響を受けない・従来どおり） ---
+  let err = null;
+  try { ctx.apiSaveFieldsQuiet(shopToken, kanri, { 'OP1 STS JP': 'DC' }); } catch (e) { err = e.message; }
+  check('オプションのSTSはDC/PCの対象外（店舗はオプションのSTSを変更できない）', err !== null, String(err));
+
+  // --- ネームチェンジ（NC）：旧仕様（依頼なし・リセット）から意味を変更 ---
+  ctx.apiSaveFieldsQuiet(jpToken, kanri, { 'STS JP': 'OK' });
+  ctx.apiCommitChanges(shopToken, kanri, { 'STS JP': 'NC' }, 'ネームチェンジをお願いします。');
+  check('店舗がOKの状態からNC（ネームチェンジ）を設定できる', ctx.apiGetReservationDetail(jpToken, kanri).detail['STS JP'] === 'NC');
+  // 支店側は「STS JPがNCのとき」STS 支店を自由に編集できる（既存のBRANCH_EDIT_GATE仕様のまま）
+  ctx.apiSaveFieldsQuiet(vieToken, kanri, { 'STS 支店': 'OK' });
+  check('支店がNCの状態でSTS(支店側)を自由に更新できる（対応完了の意味で使う）',
+        ctx.apiGetReservationDetail(jpToken, kanri).detail['STS 支店'] === 'OK');
+
+  // --- FNの前提条件：OKの状態からのみ ---
+  const created2 = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'B', hope1: '2026-11-01' });
+  err = null;
+  try { ctx.apiCommitChanges(shopToken, created2.kanriNo, { 'STS JP': 'FN' }, ''); } catch (e) { err = e.message; }
+  check('STS(JP側)がRQのままではFN（最終確定）にできない', err !== null, String(err));
+  ctx.apiSaveFieldsQuiet(jpToken, created2.kanriNo, { 'STS JP': 'OK' });
+  ctx.apiCommitChanges(shopToken, created2.kanriNo, { 'STS JP': 'FN' }, '');
+  check('OKの状態からはFN（最終確定）にできる', ctx.apiGetReservationDetail(jpToken, created2.kanriNo).detail['STS JP'] === 'FN');
+
+  // --- 店舗が設定できるSTS(JP側)以外の値は拒否される ---
+  err = null;
+  try { ctx.apiSaveFieldsQuiet(shopToken, created2.kanriNo, { 'STS JP': 'CW' }); } catch (e) { err = e.message; }
+  check('店舗はCW等、許可されていないSTS(JP側)には変更できない', err !== null, String(err));
+}
+
+// ---------------------------------------------------------------
+section('39. 手配課通知トグル・請求先マスタ（拡張要望5章・6章）');
+{
+  const ctx = shopFixture();
+  setBranchField(ctx, 'SHOP1', '請求先', '関東営業本部');
+  const shop = ctx.apiLogin('SHOP1', 'sp');
+  const shopToken = shop.session.token;
+  const jp = ctx.apiLogin('KANTO', 'pw');
+  const jpToken = jp.session.token;
+  const vie = ctx.apiLogin('VIE', 'vp');
+  const vieToken = vie.session.token;
+
+  // --- 既定（未設定）は従来どおり手配課・支店の両方に通知 ---
+  const created1 = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'A', hope1: '2026-09-10' });
+  check('通知トグル未設定なら手配課にも通知メールが飛ぶ（既定＝ON）', ctx.__mail.some(m => m.to.includes('kanto@his-world.com')));
+
+  // --- 通知トグルをOFFにした支店は手配課宛メールだけ止まる（可視性は変わらない） ---
+  setBranchField(ctx, 'VIE', '店舗依頼の手配課通知', false);
+  ctx.__mail.length = 0;
+  const created2 = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'B', hope1: '2026-09-11' });
+  check('通知OFFの支店では手配課宛メールが飛ばない', !ctx.__mail.some(m => m.to.includes('kanto@his-world.com')));
+  check('通知OFFでも現地支店へのメールは飛ぶ', ctx.__mail.some(m => m.to.includes('vie@his-world.com')));
+  check('通知OFFでも手配課側の一覧には表示され、未読（要対応）になる（閲覧権限自体は変えない）',
+        ctx.apiGetDashboard(jpToken, { showAll: true }).reservations.find(r => r.kanriNo === created2.kanriNo).needsAction === true);
+
+  // --- 請求先（店舗自身の営業本部）が店舗発の案件の詳細に反映される ---
+  const jpDetail = ctx.apiGetReservationDetail(jpToken, created1.kanriNo).detail;
+  check('JP側の詳細に、起票した店舗の請求先が表示される', jpDetail.shopBilling === '関東営業本部');
+  const shopDetail = ctx.apiGetReservationDetail(shopToken, created1.kanriNo).detail;
+  check('店舗自身の詳細にも自分の請求先が表示される', shopDetail.shopBilling === '関東営業本部');
+
+  addCase(ctx, '予約一覧', { '支店コード': 'VIE', '管理番号': 'VIE-950', '管轄': '関東', '新郎名（ローマ字）': 'X' });
+  const nonShopDetail = ctx.apiGetReservationDetail(jpToken, 'VIE-950').detail;
+  check('店舗発でない案件は請求先が空欄', nonShopDetail.shopBilling === '');
+}
+
+// ---------------------------------------------------------------
+section('40. 必要書類チェックリスト（拡張要望9章：双方向）');
+{
+  const ctx = shopFixture();
+  const shop = ctx.apiLogin('SHOP1', 'sp');
+  const shopToken = shop.session.token;
+  const jp = ctx.apiLogin('KANTO', 'pw');
+  const jpToken = jp.session.token;
+  const vie = ctx.apiLogin('VIE', 'vp');
+  const vieToken = vie.session.token;
+
+  const created = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'A', hope1: '2026-09-10' });
+  const kanri = created.kanriNo;
+
+  const initial = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+  check('作成直後はチェックリストが全て未チェック', initial.checklist.every(c => c.checked === false), JSON.stringify(initial.checklist));
+
+  // 店舗がチェック
+  ctx.apiSaveFieldsQuiet(shopToken, kanri, { '必要書類チェック:ヘアメイク画像': 'TRUE' });
+  check('店舗がチェックを入れられる',
+        ctx.apiGetReservationDetail(jpToken, kanri).detail.checklist.find(c => c.item === 'ヘアメイク画像').checked === true);
+  const shopSideView = ctx.apiGetReservationDetail(shopToken, kanri).detail;
+  check('店舗自身の画面にも自分が入れたチェックが反映される',
+        shopSideView.checklist.find(c => c.item === 'ヘアメイク画像').checked === true);
+
+  // 現地(支店)がチェック（双方向）
+  ctx.apiSaveFieldsQuiet(vieToken, kanri, { '必要書類チェック:衣裳画像': 'TRUE' });
+  const afterBranchCheck = ctx.apiGetReservationDetail(shopToken, kanri).detail;
+  check('現地(支店)が入れたチェックが店舗側にも反映される（双方向）',
+        afterBranchCheck.checklist.find(c => c.item === '衣裳画像').checked === true);
+
+  // チェックを外す
+  ctx.apiSaveFieldsQuiet(shopToken, kanri, { '必要書類チェック:ヘアメイク画像': '' });
+  check('チェックを外すこともできる',
+        ctx.apiGetReservationDetail(jpToken, kanri).detail.checklist.find(c => c.item === 'ヘアメイク画像').checked === false);
+}
+
+// ---------------------------------------------------------------
+section('41. ドライブ連携：お客様提供画像・指示書のアップロード（拡張要望8章）');
+{
+  const ctx = shopFixture();
+  const shop = ctx.apiLogin('SHOP1', 'sp');
+  const shopToken = shop.session.token;
+  const shop2 = ctx.apiLogin('SHOP2', 'sp2');
+  const jp = ctx.apiLogin('KANTO', 'pw');
+  const jpToken = jp.session.token;
+  const vie = ctx.apiLogin('VIE', 'vp');
+  const vieToken = vie.session.token;
+
+  const created = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'A', hope1: '2026-09-10' });
+  const kanri = created.kanriNo;
+  const b64 = Buffer.from('dummy-image-bytes').toString('base64');
+
+  let err = null;
+  try { ctx.apiShopUploadDocument(shopToken, kanri, '存在しない種別', 'a.jpg', 'image/jpeg', b64); } catch (e) { err = e.message; }
+  check('未定義の書類種別は拒否される', err !== null, String(err));
+
+  const up1 = ctx.apiShopUploadDocument(shopToken, kanri, 'ヘアメイク画像', 'hair1.jpg', 'image/jpeg', b64);
+  check('アップロードが成功する', up1.ok === true && !!up1.fileUrl, JSON.stringify(up1));
+  const detailAfterUpload = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+  check('案件にフォルダURLが自動で紐づく（8-1）', !!detailAfterUpload.shopUploadFolderUrl);
+  check('DriveフォルダURL（最終納品先）欄にも同じフォルダが反映される（8-2：同じ親フォルダを使い回す）',
+        detailAfterUpload['DriveフォルダURL'] === detailAfterUpload.shopUploadFolderUrl);
+  const folderId = detailAfterUpload.shopUploadFolderUrl.split('/').pop();
+  const folderName = ctx.__driveFolders[folderId] && ctx.__driveFolders[folderId].name;
+  check('フォルダ名にチャレンジ番号と管理番号の両方が含まれる（8-1）',
+        folderName === `NoCH_${kanri}`, folderName);
+  check('やり取り履歴にアップロードが記録される',
+        detailAfterUpload.history.some(h => h.body.includes('ヘアメイク画像') && h.body.includes('hair1.jpg')));
+
+  // 2件目（同じ書類種別のフォルダへの追加）
+  const up2 = ctx.apiShopUploadDocument(shopToken, kanri, 'ヘアメイク画像', 'hair2.jpg', 'image/jpeg', b64);
+  check('同じ書類種別へ複数アップロードできる', up2.ok === true);
+  const up3 = ctx.apiShopUploadDocument(shopToken, kanri, '衣裳画像', 'dress1.jpg', 'image/jpeg', b64);
+  check('別の書類種別にもアップロードできる', up3.ok === true);
+
+  // --- 閲覧（8-3：既定は手配課のみ、支店マスタのトグルで現地にも公開） ---
+  const jpList = ctx.apiListShopUploadedDocuments(jpToken, kanri);
+  check('手配課は既定で一覧を閲覧できる', jpList.visible === true);
+  check('ヘアメイク画像フォルダに2件入っている',
+        jpList.folders.find(f => f.docType === 'ヘアメイク画像').files.length === 2);
+  check('衣裳画像フォルダに1件入っている',
+        jpList.folders.find(f => f.docType === '衣裳画像').files.length === 1);
+
+  const branchListBefore = ctx.apiListShopUploadedDocuments(vieToken, kanri);
+  check('現地(支店)は既定では閲覧できない（8-3）', branchListBefore.visible === false);
+
+  setBranchField(ctx, 'VIE', '店舗アップロードの現地公開', true);
+  const branchListAfter = ctx.apiListShopUploadedDocuments(vieToken, kanri);
+  check('支店マスタのトグルをONにすると現地(支店)も閲覧できる', branchListAfter.visible === true);
+  check('公開後は現地からも同じ内容が見える',
+        branchListAfter.folders.find(f => f.docType === 'ヘアメイク画像').files.length === 2);
+
+  const shopOwnList = ctx.apiListShopUploadedDocuments(shopToken, kanri);
+  check('店舗自身は常に自分の案件のアップロード一覧を見られる', shopOwnList.visible === true);
+
+  err = null;
+  try { ctx.apiShopUploadDocument(shop2.session.token, kanri, 'ヘアメイク画像', 'x.jpg', 'image/jpeg', b64); } catch (e) { err = e.message; }
+  check('他の店舗は他の案件へアップロードできない', err !== null, String(err));
+  err = null;
+  try { ctx.apiListShopUploadedDocuments(shop2.session.token, kanri); } catch (e) { err = e.message; }
+  check('他の店舗は他の案件の一覧を見られない', err !== null, String(err));
+}
+
+// ---------------------------------------------------------------
+section('42. 同意書・アンケートフォームの事前入力済みURL（拡張要望10章）');
+{
+  const ctx = shopFixture();
+  const shop = ctx.apiLogin('SHOP1', 'sp');
+  const shopToken = shop.session.token;
+
+  const created = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'A', hope1: '2026-09-10' });
+  const kanri = created.kanriNo;
+
+  // URL生成ロジック単体（entry IDが未設定＝実運用フォーム未設定の状態）
+  const urls = ctx.apiGetPrefilledFormUrls(shopToken, kanri);
+  check('フォームのentry ID未設定時は空文字を返す（画面側は案内しない）',
+        urls.consentFormUrl === '' && urls.surveyFormUrl === '');
+
+  // URL生成ロジック単体テスト（実際にentry IDが設定されている想定）
+  const built = ctx.buildPrefilledFormUrl_('https://docs.google.com/forms/d/e/abc/viewform', 'entry.123456789', kanri);
+  check('管理番号を埋め込んだURLが生成される', built === `https://docs.google.com/forms/d/e/abc/viewform?entry.123456789=${encodeURIComponent(kanri)}`, built);
+  const builtWithQuery = ctx.buildPrefilledFormUrl_('https://example.com/form?usp=pp_url', 'entry.1', kanri);
+  check('既に?が含まれるURLには&で連結する', builtWithQuery.includes('&entry.1='), builtWithQuery);
+  check('baseUrlが空なら空文字を返す', ctx.buildPrefilledFormUrl_('', 'entry.1', kanri) === '');
 }
 
 // ---------------------------------------------------------------

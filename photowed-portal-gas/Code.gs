@@ -56,7 +56,12 @@ const LOGIN_MAX_ATTEMPTS = 10;
 const LOGIN_LOCKOUT_SEC = 900; // 15分
 
 // --- ステータスコード（"確定"等の和訳ラベルは使わず、コードそのものを運用する） ---
-const STATUS_CODES = ['RQ', 'OK', 'CHK', 'CR', 'FN', 'CW', 'NC', 'UC', 'CF'];
+// ★機能追加（店舗拡張）：NC は従来「依頼なし・状態リセット」の意味だったが、
+// 今後は「ネームチェンジ」専用のコードとして再定義する（値そのものは変えない。
+// 支店側の編集ロック挙動＝NCは支店が自由に回答できる、という既存ルールは変えない）。
+// DC（日付変更依頼）・PC（プラン・式場変更依頼）は新設。どちらもチャージが発生し得る
+// 重要な変更のため、専用のステータスコードで管理する（詳細は STATUS_AUTO_CASCADE 付近を参照）。
+const STATUS_CODES = ['RQ', 'OK', 'CHK', 'CR', 'FN', 'CW', 'NC', 'UC', 'CF', 'DC', 'PC'];
 const ALERT_COMPLETED_STATUS = 'FN';
 // ★要件：撮影日の45日前時点でSTSがFNになっていない場合に日本側へアラート
 const ALERT_DAYS_BEFORE = 45;
@@ -88,11 +93,16 @@ const EXPORT_MAX_ROWS = 5000;
 //    （空きがなければ UC＝空きなし、を含めどのコードでも返せる）
 //  - CR：日本側が既存予約のキャンセルを依頼した状態。支店側は CW（チャージなしで取消）か
 //    CF（キャンセルチャージが発生）のいずれかで回答する
+//  - DC／PC：日付変更・プラン/式場変更の依頼中。支店側は OK（対応可）か UC（対応不可）で回答する
+//    （このOK／UCの回答だけは、通常の「支店側はSTS(支店側)のみ編集できる」の例外として
+//    STS(JP側)にも同じ値がそのまま反映される。STATUS_AUTO_CASCADE 参照）
 const BRANCH_EDIT_GATE = {
   'NC': null,
   'RQ': null,
   'CHK': null,
-  'CR': ['CW', 'CF']
+  'CR': ['CW', 'CF'],
+  'DC': ['OK', 'UC'],
+  'PC': ['OK', 'UC']
 };
 // 請求先（日本の地域区分）
 const BILLING_REGIONS = ['北海道', '東北', '関東', '中部', '関西', '中四国', '九州'];
@@ -190,11 +200,24 @@ const COL_UNREAD_BRANCH = '未読 支店';  // trueなら支店側に未読が�
 // 空欄なら従来どおりJP⇔支店だけの案件として扱う（挙動は一切変わらない）。
 const COL_ORIGIN_SHOP = '起票元店舗';
 const COL_UNREAD_SHOP = '未読 店舗';    // trueなら店舗側に未読がある（起票元店舗が設定されている案件のみ使う）
+// ★機能追加（拡張要望8章）：店舗がお客様提供画像・指示書をアップロードするための自動作成フォルダ。
+// COL_DRIVE_URL（最終的な撮影データ納品先）と同じ親フォルダを使い回す（8-2）ため、
+// 未登録なら新規作成したフォルダのURLをこの列とCOL_DRIVE_URLの両方に入れる（ensureShopUploadFolder_参照）。
+// システム列のため画面から直接編集はさせない（COMMITTABLE_FIELDSの対象外）。
+const COL_SHOP_UPLOAD_FOLDER_URL = '店舗アップロード用フォルダURL';
 
 const OPTION_COUNT = 5;
 function opNameCol_(n) { return `OP${n}`; }
 function opStsJpCol_(n) { return `OP${n} STS JP`; }
 function opStsBranchCol_(n) { return `OP${n} STS 支店`; }
+
+// ★機能追加（拡張要望9章）：必要書類チェックリスト。店舗スタッフ（主）・現地(支店)のどちらからでも
+// チェックでき、どちらの変更も双方に反映される（＝どちらのロールにとっても普通のCOMMITTABLE_FIELDS）。
+// 通知アラートの要否は要望書自体が「未確定」としているため、今回はあえて何も送らない
+// （＝チェックの保存はapiSaveFieldsQuietの「保存のみ」を使う想定。メッセージを添えたい時は
+// 従来どおりapiCommitChangesで変更内容として送ればよい）。
+const CHECKLIST_ITEMS = ['ヘアメイク画像', '衣裳画像', '撮影指示書', '着付け指示書'];
+function checklistCol_(item) { return `必要書類チェック:${item}`; }
 
 const RESERVATION_HEADERS = (() => {
   const base = [
@@ -209,8 +232,9 @@ const RESERVATION_HEADERS = (() => {
     COL_REMARKS, COL_MEMO,
     COL_PHOTOBRIDGE, COL_PHOTOBRIDGE_BY, COL_PHOTOBRIDGE_AT, COL_AI_EDIT,
     COL_DATA_UPLOAD, COL_DATA_UPLOAD_BY, COL_DATA_UPLOAD_AT, COL_DELIVERY_EMAIL, COL_EARLY_DELIVERY,
-    COL_LAST_UPDATED, COL_DRIVE_URL, COL_ORIGIN_SHOP,
-    COL_UNREAD_JP, COL_UNREAD_BRANCH, COL_UNREAD_SHOP
+    COL_LAST_UPDATED, COL_DRIVE_URL, COL_SHOP_UPLOAD_FOLDER_URL, COL_ORIGIN_SHOP,
+    COL_UNREAD_JP, COL_UNREAD_BRANCH, COL_UNREAD_SHOP,
+    ...CHECKLIST_ITEMS.map(checklistCol_)
   ];
   for (let n = 1; n <= OPTION_COUNT; n++) {
     base.push(opNameCol_(n), opStsJpCol_(n), opStsBranchCol_(n));
@@ -248,9 +272,27 @@ const INTERNAL_VALUE_SPECS = {
 // のいずれかを選んで確定する。COMMITTABLE_FIELDS はその対象となる全フィールド
 // （システム列・DriveフォルダURL・JP内部進行管理欄は専用フローがあるため除く）。
 const COMMITTABLE_FIELDS = RESERVATION_HEADERS.filter(h => ![
-  COL_BRANCH_CODE, COL_KANRI_NO, COL_LAST_UPDATED, COL_DRIVE_URL, COL_ORIGIN_SHOP,
+  COL_BRANCH_CODE, COL_KANRI_NO, COL_LAST_UPDATED, COL_DRIVE_URL, COL_SHOP_UPLOAD_FOLDER_URL, COL_ORIGIN_SHOP,
   COL_UNREAD_JP, COL_UNREAD_BRANCH, COL_UNREAD_SHOP, ...JP_INTERNAL_FIELDS
 ].includes(h));
+
+// ★機能追加（店舗拡張）：店舗ロールが自分の起票した案件について、通常の3択フロー
+// （保存のみ／メッセージのみ／変更＋メッセージ）で変更できる項目。新規予約フォーム
+// （apiShopCreateRequest）で入力できる項目と揃えている（オプションは「名前」だけで、
+// STS(JP側)／STS(支店側)は含めない＝オプションの状態管理は現行のまま手配課・支店のもの）。
+// ★機能追加（拡張要望9章）：必要書類チェックリストは店舗・現地(支店)どちらからでもチェックできる
+// （双方向）ため、店舗の編集可能項目にも含める。
+const SHOP_EDITABLE_FIELDS = [
+  COL_GROOM_NAME, COL_BRIDE_NAME, COL_PLAN, COL_SALE_NAME, COL_LOCATION, COL_PREP,
+  COL_HOPE1, COL_HOPE2, COL_HOPE3, COL_HOPE4, COL_HOPE5, COL_PASSPORT_NO,
+  ...Array.from({ length: OPTION_COUNT }, (_, i) => opNameCol_(i + 1)),
+  ...CHECKLIST_ITEMS.map(checklistCol_)
+];
+// ★機能追加（店舗拡張）：店舗が案件作成後にSTS(JP側)を変更できる先。新規作成時のRQ／CHKの
+// 選択は apiShopCreateRequest 側で扱うため、ここには含めない（作成後の変更だけを対象にする）。
+// FN（最終確定）だけは「OKの状態から」という前提条件があるため、validateFieldPermission_側で
+// 別途チェックする。
+const SHOP_STATUS_TARGETS = ['FN', 'CR', 'NC', 'DC', 'PC'];
 
 // 日付として保存すべきフィールド（<input type="date">で受け渡しし、実Dateとして保存する）
 // checkAlerts/archivePastReservations/sortReservationSheet_ は撮影日FIXがDate型であることを前提にしている
@@ -298,6 +340,17 @@ const BM_COL_PASSPORT_REQUIRED = 'パスポート番号欄';
 // 手配課を通さず直接行えるようにするかどうか。BRANCHロールの行だけに意味がある設定で、
 // 「日本の手配課側があらかじめマスタで決める」という要件どおり、支店マスタの編集はJPのみ可能。
 const BM_COL_SHOP_DIRECT = '店舗直接やり取り許可';
+// ★機能追加（店舗拡張）：店舗発の新規依頼で、日本の該当手配課への通知メールを送るかどうか
+// （支店ごとに切り替え）。既定（未設定）はON＝送る。店舗直接やり取り許可の支店で、
+// 手配課への通知が不要な場合にOFFにする想定。案件の可視性・未読フラグには影響しない
+// （日本側は常に監督のため案件を閲覧できる。あくまでメール通知だけを止める）。
+const BM_COL_SHOP_NOTIFY_HQ = '店舗依頼の手配課通知';
+// ★機能追加（店舗拡張）：SHOPロールの行だけに意味を持つ列。店舗発の案件の請求先（店舗の
+// 営業本部）として扱う。予約一覧側の「請求先」（日本の地域区分）とは別物。
+const BM_COL_SHOP_BILLING = '請求先';
+// ★機能追加（店舗拡張）：店舗がアップロードした書類（8章）を現地支店にも見せるかどうか。
+// 既定（未設定）はOFF＝手配課のみ閲覧可。
+const BM_COL_SHOP_UPLOAD_VISIBLE_TO_BRANCH = '店舗アップロードの現地公開';
 const BM_COL_ACTIVE = '有効';
 // ★不具合防止：既存のテスト・運用スプレッドシートは「有効」列が支店マスタの最後尾にある前提で
 // 位置決め打ちの行を作っている場合がある。新しい列（手配メール機能まわり）は、その並びを崩さないよう
@@ -307,6 +360,7 @@ const BRANCH_MASTER_HEADERS = [
   BM_COL_PASSCODE, BM_COL_EMAIL, BM_COL_PREFIX, BM_COL_INVOICE_LABEL, BM_COL_DELIVERY_DAYS,
   BM_COL_REMIND_DAYS, BM_COL_CONSENT_REQUIRED, BM_COL_ACTIVE,
   BM_COL_ARRANGEMENT_ENABLED, BM_COL_PASSPORT_REQUIRED, BM_COL_SHOP_DIRECT,
+  BM_COL_SHOP_NOTIFY_HQ, BM_COL_SHOP_BILLING, BM_COL_SHOP_UPLOAD_VISIBLE_TO_BRANCH,
   // カテゴリごとの手配先（名前・メール）。同じ宛先を複数カテゴリに入れれば「まとめて1件に依頼」にできる
   ...ARRANGEMENT_CATEGORIES.flatMap(c => [arrNameCol_(c.label), arrEmailCol_(c.label)])
 ];
@@ -555,6 +609,12 @@ function isActiveFlag_(val) {
   return val === true || String(val).trim().toUpperCase() === 'TRUE';
 }
 
+// ★機能追加（店舗拡張）：一部の設定は「未設定＝ON」を既定にしたい（例：店舗依頼の手配課通知）。
+// 明示的にFALSEと書かれた場合だけOFF扱いにする（isActiveFlag_の逆＝既定値だけが違う）。
+function isActiveFlagDefaultTrue_(val) {
+  return String(val).trim().toUpperCase() !== 'FALSE';
+}
+
 // 支店マスタの「納品期限日数」等、任意入力の整数列を安全にパースする。
 // 未入力は null（呼び出し側でデフォルト値にフォールバック）。
 // ★不具合修正：単純に `Number(val) || null` にすると 0 が falsy 判定でnull扱いになり、
@@ -715,6 +775,12 @@ function listBranchesRaw_() {
     invoiceLabel: r[BM_COL_INVOICE_LABEL] || '請求番号',
     // ★機能追加：店舗直接やり取り許可（BRANCHロールの行のみ意味を持つ）
     shopDirect: isActiveFlag_(r[BM_COL_SHOP_DIRECT]),
+    // ★機能追加（店舗拡張）：店舗発の新規依頼で日本の手配課へメール通知するか（既定ON）
+    shopNotifyHq: isActiveFlagDefaultTrue_(r[BM_COL_SHOP_NOTIFY_HQ]),
+    // ★機能追加（店舗拡張）：SHOPロールの行のみ意味を持つ、店舗の営業本部（請求先表示用）
+    shopBilling: r[BM_COL_SHOP_BILLING] || '',
+    // ★機能追加（店舗拡張）：店舗がアップロードした書類を現地支店にも公開するか（既定OFF）
+    shopUploadVisibleToBranch: isActiveFlag_(r[BM_COL_SHOP_UPLOAD_VISIBLE_TO_BRANCH]),
     deliveryDays: parseIntOrNull_(r[BM_COL_DELIVERY_DAYS]),
     remindDays: parseIntOrNull_(r[BM_COL_REMIND_DAYS]),
     consentRequired: isActiveFlag_(r[BM_COL_CONSENT_REQUIRED]),
@@ -1096,6 +1162,7 @@ function visibleToRole_(viewerRole, senderRole, recipientRoleRaw) {
 function buildShopReservationDetail_(session, kanriNo, headers, rowData) {
   const getV = (name) => rowData[headers.indexOf(name)];
   const meta = branchMetaMap_()[getV(COL_BRANCH_CODE)] || {};
+  const ownMeta = branchMetaMap_()[session.branchCode] || {};
   const detail = {
     [COL_KANRI_NO]: getV(COL_KANRI_NO),
     [COL_CHALLENGE_NO]: getV(COL_CHALLENGE_NO),
@@ -1104,14 +1171,45 @@ function buildShopReservationDetail_(session, kanriNo, headers, rowData) {
     [COL_CONFIRMED_DATE]: formatDateForInput_(getV(COL_CONFIRMED_DATE)),
     [COL_CEREMONY_DATE]: formatDateForInput_(getV(COL_CEREMONY_DATE)),
     [COL_GROOM_NAME]: getV(COL_GROOM_NAME),
+    [COL_BRIDE_NAME]: getV(COL_BRIDE_NAME),
     [COL_PLAN]: getV(COL_PLAN),
+    [COL_SALE_NAME]: getV(COL_SALE_NAME),
+    [COL_LOCATION]: getV(COL_LOCATION),
+    [COL_PREP]: getV(COL_PREP),
     [COL_HOPE1]: getV(COL_HOPE1),
+    [COL_HOPE2]: getV(COL_HOPE2),
+    [COL_HOPE3]: getV(COL_HOPE3),
+    [COL_HOPE4]: getV(COL_HOPE4),
+    [COL_HOPE5]: getV(COL_HOPE5),
     [COL_AREA]: getV(COL_AREA),
     branchName: meta.name || getV(COL_BRANCH_CODE),
     country: meta.country || '',
     city: meta.city || '',
-    originShop: getV(COL_ORIGIN_SHOP) || ''
+    originShop: getV(COL_ORIGIN_SHOP) || '',
+    // ★要件：パスポート番号欄・準備場所は、対象支店の表示条件をそのまま踏襲する
+    passportRequired: !!meta.passportRequired,
+    isItaly: meta.country === ITALY_COUNTRY_NAME,
+    // ★要件：店舗発の案件の請求先表示は、店舗自身の支店マスタ行の「請求先」（営業本部）を使う
+    shopBilling: ownMeta.shopBilling || ''
   };
+  if (detail.passportRequired) detail[COL_PASSPORT_NO] = getV(COL_PASSPORT_NO);
+
+  // ★機能追加（拡張要望9章）：必要書類チェックリストは店舗側にも見せる（双方向でチェックできる）
+  detail.checklist = CHECKLIST_ITEMS.map(item => ({ item, checked: isActiveFlag_(getV(checklistCol_(item))) }));
+  detail.shopUploadFolderUrl = getV(COL_SHOP_UPLOAD_FOLDER_URL) || '';
+
+  detail.options = [];
+  for (let n = 1; n <= OPTION_COUNT; n++) {
+    detail.options.push({
+      n, name: getV(opNameCol_(n)) || '',
+      stsJp: getV(opStsJpCol_(n)),
+      stsBranch: getV(opStsBranchCol_(n))
+    });
+  }
+
+  // ★要件：店舗が追加できる「共有メモ」は自分でも見えるようにする（メモ（現地用）・
+  // アンケート回答は支店・手配課側の運用情報のため店舗には見せない）
+  detail.memoLog = getMemoLog_(kanriNo).filter(m => m.type === MEMO_TYPE_SHARED);
 
   const hSheet = getSpreadsheet_().getSheetByName(HISTORY_SHEET_NAME);
   let hRows = getRowsAsObjects_(hSheet).filter(r => String(r[H_COL_KANRI]) === String(kanriNo));
@@ -1674,6 +1772,13 @@ function apiGetReservationDetail(token, kanriNo) {
   detail.originShop = getV(COL_ORIGIN_SHOP) || '';
   detail.originShopName = detail.originShop ? ((branchMetaMap_()[detail.originShop] || {}).name || detail.originShop) : '';
   detail.shopDirect = !!meta.shopDirect;
+  // ★機能追加（拡張要望6章）：店舗発の案件の請求先表示は、起票した店舗自身の支店マスタ行の
+  // 「請求先」（＝店舗の営業本部）を使う。店舗発でない案件では常に空欄。
+  detail.shopBilling = detail.originShop ? ((branchMetaMap_()[detail.originShop] || {}).shopBilling || '') : '';
+  // ★機能追加（拡張要望9章）：必要書類チェックリストの現在値を、画面が扱いやすい配列でも返す
+  // （個々の値は上のheaders.forEachループでdetail['必要書類チェック:◯◯']としても入っている）。
+  detail.checklist = CHECKLIST_ITEMS.map(item => ({ item, checked: isActiveFlag_(getV(checklistCol_(item))) }));
+  detail.shopUploadFolderUrl = getV(COL_SHOP_UPLOAD_FOLDER_URL) || '';
 
   const options = [];
   for (let n = 1; n <= OPTION_COUNT; n++) {
@@ -1788,7 +1893,8 @@ function apiSaveFieldsQuiet(token, kanriNo, changes) {
   try {
     const { sheet, headers, rowIndex, rowData } = findReservationRow_(kanriNo);
     if (rowIndex === -1) throw new Error('対象の予約が見つかりません。');
-    assertRowVisible_(session, headers, rowData);
+    if (session.role === SHOP_ROLE) assertShopOwnRow_(session, headers, rowData);
+    else assertRowVisible_(session, headers, rowData);
     changes = withInquiryOnlyCascade_(session, headers, rowData, changes);
 
     const writes = Object.keys(changes).map(field => prepareFieldWrite_(session, headers, rowData, field, changes[field]));
@@ -1818,13 +1924,6 @@ function apiCommitChanges(token, kanriNo, changes, message, recipient) {
   if (Object.keys(changes).length === 0 && !message) {
     throw new Error('送信するメッセージまたは変更内容がありません。');
   }
-  // ★機能追加：店舗ロールは案件の項目を変更できない（メッセージのみ）。ここで明示的に弾いておくと、
-  // 「メッセージのみお送りいただけます」というSHOP向けの分かりやすいエラーで止まる
-  // （何もしなければ prepareFieldWrite_ の汎用エラーで止まるだけで、実害はないが分かりにくい）。
-  if (session.role === SHOP_ROLE && Object.keys(changes).length > 0) {
-    throw new Error('店舗ロールでは案件の項目を変更できません。メッセージのみお送りいただけます。');
-  }
-
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
   try {
@@ -1896,9 +1995,11 @@ function colIndexOrThrow_(headers, name) {
 
 // 1フィールド分の検証・保存準備（役割チェック・STSゲート・列挙値チェック・日付変換）を共通化したもの
 function prepareFieldWrite_(session, headers, rowData, field, value) {
-  // ★機能追加：店舗ロールは案件の項目を一切編集できない（メッセージの送受信のみ）
-  if (session.role === SHOP_ROLE) {
-    throw new Error('店舗ロールでは案件の項目を変更できません。メッセージのみお送りいただけます。');
+  // ★機能追加（店舗拡張）：店舗ロールは自分が起票した案件について、SHOP_EDITABLE_FIELDS と
+  // STS(JP側)（許可される値は validateFieldPermission_ 側でチェック）だけ変更できる。
+  // それ以外（請求先・オプションのステータス・現地記入欄など）は従来どおり変更できない。
+  if (session.role === SHOP_ROLE && field !== COL_STATUS_JP && !SHOP_EDITABLE_FIELDS.includes(field)) {
+    throw new Error(`「${field}」は店舗ロールでは変更できません。`);
   }
   if (!COMMITTABLE_FIELDS.includes(field)) {
     throw new Error(`「${field}」はこの方法では変更できません。`);
@@ -1940,9 +2041,17 @@ function withInquiryOnlyCascade_(session, headers, rowData, changes) {
 // ★要件：支店が「CR（キャンセル依頼中）」にCWで回答したら日本側も自動でCWにする。
 // 「RQ（依頼中）」にUC（空きなし）で回答したら日本側も自動でUCにする。
 // 支店が正しく回答しているのに日本側のSTSだけ古いまま気づかれない、という事故を防ぐための自動連動。
+// ★機能追加（店舗拡張）：DC（日付変更依頼）・PC（プラン・式場変更依頼）は、支店側の回答
+// （OK／UC）がそのままSTS(JP側)にも反映される仕様（通常は支店側はSTS(支店側)しか
+// 変更できないが、この2コードの回答に限り例外）。setJpTo が branchValue と同じ＝
+// 「支店が入れた値をそのままJP側にも映す」ことを表す。
 const STATUS_AUTO_CASCADE = [
   { whenJpIs: 'CR', branchValue: 'CW', setJpTo: 'CW' },
-  { whenJpIs: 'RQ', branchValue: 'UC', setJpTo: 'UC' }
+  { whenJpIs: 'RQ', branchValue: 'UC', setJpTo: 'UC' },
+  { whenJpIs: 'DC', branchValue: 'OK', setJpTo: 'OK' },
+  { whenJpIs: 'DC', branchValue: 'UC', setJpTo: 'UC' },
+  { whenJpIs: 'PC', branchValue: 'OK', setJpTo: 'OK' },
+  { whenJpIs: 'PC', branchValue: 'UC', setJpTo: 'UC' }
 ];
 function applyStatusCascade_(sheet, headers, rowIndex, kanriNo, writes) {
   const branchWrite = writes.find(w => w.field === COL_STATUS_BRANCH);
@@ -1959,6 +2068,19 @@ function applyStatusCascade_(sheet, headers, rowIndex, kanriNo, writes) {
 
 function validateFieldPermission_(session, headers, rowData, field, value) {
   if (isJpStatusField_(field)) {
+    // ★機能追加（店舗拡張）：店舗は自分の案件のSTS(JP側)（オプションのSTSは除く）だけ、
+    // 決められた値（新規作成後の変更用途：最終確定・キャンセル依頼・ネームチェンジ・
+    // 日付変更依頼・プラン/式場変更依頼）に限って変更できる。
+    if (session.role === SHOP_ROLE) {
+      if (field !== COL_STATUS_JP) throw new Error('店舗はオプションのステータスを変更できません。');
+      if (!SHOP_STATUS_TARGETS.includes(value)) {
+        throw new Error(`店舗が設定できるSTS(JP側)は ${SHOP_STATUS_TARGETS.join('/')} のいずれかです。`);
+      }
+      if (value === 'FN' && String(rowData[headers.indexOf(COL_STATUS_JP)] || '') !== 'OK') {
+        throw new Error('STS(JP側)をFN（最終確定）にできるのはOKの状態からだけです。');
+      }
+      return;
+    }
     if (session.role !== JP_ROLE) throw new Error(`「${field}」は日本側のみ変更できます。`);
     if (value && !STATUS_CODES.includes(value)) throw new Error(`STSの値は ${STATUS_CODES.join('/')} のいずれかにしてください。`);
     return;
@@ -2034,6 +2156,142 @@ function apiSetDriveUrl(token, kanriNo, url) {
     lock.releaseLock();
   }
   return { ok: true };
+}
+
+// =====================================================
+// ⑨-2 ドライブ連携（お客様提供画像・指示書のアップロード／機能：拡張要望8章）
+// =====================================================
+// 店舗スタッフが、ヘアメイク画像・衣裳画像・撮影指示書・着付け指示書等をアップロードするための機能。
+// ★8-4（要望書に明記された未検証事項）：このWebアプリが「実行するユーザー：アクセスしたユーザー」で
+// デプロイされている場合、フォルダ作成・ファイル追加は「アップロード操作をした店舗スタッフ自身の
+// Googleアカウント」の権限で行われる。そのアカウントが共有ドライブへフォルダを作成できるかは
+// 実際の運用環境でしか確認できない（このリポジトリの開発環境では検証不可）ため、
+// Driveの操作は必ずtry/catchで囲み、失敗しても案件そのものの作成・表示は絶対に壊さない設計にしている。
+const SHOP_UPLOAD_DOC_TYPES = ['ヘアメイク画像', '衣裳画像', '撮影指示書', '着付け指示書'];
+
+// DriveのURL文字列からフォルダIDを取り出す。
+// 「.../folders/<ID>」「?id=<ID>」の代表的な2形式を優先的に拾い、
+// どちらにも当てはまらない場合は末尾のパスセグメントをIDとみなす（多少形式が違っても大体拾える簡易実装）。
+function driveFolderIdFromUrl_(url) {
+  const s = String(url || '').trim();
+  if (!s) return '';
+  let m = s.match(/\/folders\/([^/?#]+)/);
+  if (m) return m[1];
+  m = s.match(/[?&]id=([^&#]+)/);
+  if (m) return m[1];
+  const parts = s.split(/[/?#]/).filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : '';
+}
+
+// 案件の店舗アップロード用フォルダを取得（無ければ作成）する。
+// ★要件（8-1・8-2）：フォルダ名にチャレンジ番号・予約番号(管理番号)の両方を含める。
+// 既にDriveフォルダURL（最終的な撮影データ納品先）が登録済みならその直下に作る。
+// 未登録なら、このフォルダ自体を新規作成し、以後の最終データ納品用フォルダとしてもそのまま使い回す
+// （DriveフォルダURL欄にも同じURLを反映する＝「同じ親フォルダを使う」という要件を、
+// 　実質「同じフォルダをそのまま両方の用途に使う」形で満たす）。
+function ensureShopUploadFolder_(sheet, headers, rowIndex, rowData) {
+  const getV = (name) => rowData[headers.indexOf(name)];
+  const existingFolderUrl = String(getV(COL_SHOP_UPLOAD_FOLDER_URL) || '').trim();
+  if (existingFolderUrl) {
+    const id = driveFolderIdFromUrl_(existingFolderUrl);
+    if (id) return DriveApp.getFolderById(id);
+  }
+  const kanriNo = getV(COL_KANRI_NO);
+  const challengeNo = getV(COL_CHALLENGE_NO) || 'NoCH';
+  const folderName = `${challengeNo}_${kanriNo}`;
+  const existingDriveUrl = String(getV(COL_DRIVE_URL) || '').trim();
+  let parent = null;
+  if (existingDriveUrl) {
+    const pid = driveFolderIdFromUrl_(existingDriveUrl);
+    if (pid) { try { parent = DriveApp.getFolderById(pid); } catch (e) { parent = null; } }
+  }
+  const folder = parent ? parent.createFolder(folderName) : DriveApp.createFolder(folderName);
+  SHOP_UPLOAD_DOC_TYPES.forEach(t => folder.createFolder(t));
+  const url = folder.getUrl();
+  sheet.getRange(rowIndex, colIndexOrThrow_(headers, COL_SHOP_UPLOAD_FOLDER_URL)).setValue(url);
+  if (!existingDriveUrl) sheet.getRange(rowIndex, colIndexOrThrow_(headers, COL_DRIVE_URL)).setValue(url);
+  return folder;
+}
+
+// 店舗が、お客様提供の画像・指示書を1件アップロードする。
+// base64Data: ブラウザ側でFileReader.readAsDataURLしたものからヘッダを除いたBase64文字列を渡す想定。
+function apiShopUploadDocument(token, kanriNo, docType, filename, mimeType, base64Data) {
+  const session = requireSession_(token);
+  if (session.role !== SHOP_ROLE) throw new Error('この操作は店舗ロールのみ実行できます。');
+  if (!SHOP_UPLOAD_DOC_TYPES.includes(docType)) {
+    throw new Error(`書類種別は ${SHOP_UPLOAD_DOC_TYPES.join('/')} のいずれかにしてください。`);
+  }
+  const trimmedName = String(filename || '').trim();
+  if (!trimmedName) throw new Error('ファイル名を指定してください。');
+  if (!base64Data) throw new Error('アップロードするファイルを選択してください。');
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
+  try {
+    const { sheet, headers, rowIndex, rowData } = findReservationRow_(kanriNo);
+    if (rowIndex === -1) throw new Error('対象の予約が見つかりません。');
+    assertShopOwnRow_(session, headers, rowData);
+
+    const folder = ensureShopUploadFolder_(sheet, headers, rowIndex, rowData);
+    const subIter = folder.getFoldersByName(docType);
+    const targetFolder = subIter.hasNext() ? subIter.next() : folder.createFolder(docType);
+    const blob = Utilities.newBlob(Utilities.base64Decode(base64Data), mimeType || 'application/octet-stream', trimmedName);
+    const file = targetFolder.createFile(blob);
+
+    const freshRow = sheet.getRange(rowIndex, 1, 1, headers.length).getValues()[0];
+    const direction = resolveMessageDirection_(session, headers, freshRow);
+    appendHistory_(headers, freshRow, senderLabel_(session), `[お客様提供データのアップロード]\n${docType}: ${trimmedName}`, SHOP_ROLE, recipientRoleForDirection_(direction));
+    markUnreadForDirection_(sheet, headers, rowIndex, direction);
+
+    return { ok: true, fileUrl: file.getUrl(), folderUrl: folder.getUrl() };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// アップロード済みの書類一覧を取得する。
+// ★要件（8-3）：既定では手配課のみ閲覧可。支店マスタ「店舗アップロードの現地公開」がONの支店だけ
+// 現地(支店)にも見せる（店舗自身は常に自分の案件について閲覧できる）。
+function apiListShopUploadedDocuments(token, kanriNo) {
+  const session = requireSession_(token);
+  const { headers, rowIndex, rowData } = findReservationRow_(kanriNo);
+  if (rowIndex === -1) throw new Error('対象の予約が見つかりません。');
+  if (session.role === SHOP_ROLE) assertShopOwnRow_(session, headers, rowData);
+  else assertRowVisible_(session, headers, rowData);
+
+  if (session.role === BRANCH_ROLE) {
+    const targetMeta = branchMetaMap_()[String(rowData[headers.indexOf(COL_BRANCH_CODE)] || '').toUpperCase()] || {};
+    const originShop = String(rowData[headers.indexOf(COL_ORIGIN_SHOP)] || '').trim();
+    if (!originShop || !targetMeta.shopUploadVisibleToBranch) {
+      return { ok: true, visible: false, folders: [] };
+    }
+  }
+
+  const folderUrl = String(rowData[headers.indexOf(COL_SHOP_UPLOAD_FOLDER_URL)] || '').trim();
+  if (!folderUrl) return { ok: true, visible: true, folderUrl: '', folders: [] };
+  const id = driveFolderIdFromUrl_(folderUrl);
+  if (!id) return { ok: true, visible: true, folderUrl, folders: [] };
+
+  try {
+    const root = DriveApp.getFolderById(id);
+    const folders = SHOP_UPLOAD_DOC_TYPES.map(docType => {
+      const files = [];
+      const subIter = root.getFoldersByName(docType);
+      if (subIter.hasNext()) {
+        const sub = subIter.next();
+        const fIter = sub.getFiles();
+        while (fIter.hasNext()) {
+          const f = fIter.next();
+          files.push({ name: f.getName(), url: f.getUrl(), updatedAt: formatMaybeDate_(f.getLastUpdated()) });
+        }
+      }
+      return { docType, files };
+    });
+    return { ok: true, visible: true, folderUrl, folders };
+  } catch (e) {
+    // ★フォルダが削除された・権限を失った等の場合もエラーで落とさず、空リストで返す
+    return { ok: true, visible: true, folderUrl, folders: [], error: errorMessage_(e) };
+  }
 }
 
 // =====================================================
@@ -2137,12 +2395,17 @@ function apiAddMemo(token, kanriNo, memoType, body) {
   if (memoType !== MEMO_TYPE_SHARED && memoType !== MEMO_TYPE_LOCAL) {
     throw new Error('種別が正しくありません。');
   }
+  // ★機能追加（店舗拡張）：店舗が使えるのは共有メモだけ（メモ（現地用）は支店の内部運用メモのため）
+  if (session.role === SHOP_ROLE && memoType !== MEMO_TYPE_SHARED) {
+    throw new Error('店舗が追加できるのは共有メモだけです。');
+  }
   const text = String(body || '').trim();
   if (!text) throw new Error('内容を入力してください。');
 
   const { headers, rowIndex, rowData } = findReservationRow_(kanriNo);
   if (rowIndex === -1) throw new Error('対象の予約が見つかりません。');
-  assertRowVisible_(session, headers, rowData);
+  if (session.role === SHOP_ROLE) assertShopOwnRow_(session, headers, rowData);
+  else assertRowVisible_(session, headers, rowData);
 
   const sheet = getSpreadsheet_().getSheetByName(MEMO_LOG_SHEET_NAME);
   sheet.appendRow([kanriNo, memoType, text, senderLabel_(session), new Date()]);
@@ -2399,6 +2662,13 @@ function apiCreateReservation(token, branchCode, rawText) {
 // 店舗が起票したことが分かるよう起票元店舗（COL_ORIGIN_SHOP）を記録し、以後のメッセージは
 // 支店マスタの「店舗直接やり取り許可」がONの支店なら現地と直接、OFFなら日本の手配課を介して行う
 // （resolveMessageDirection_ が案件ごとに毎回この設定を見て向きを決める）。
+// ★機能追加（拡張要望2章）：店舗発の新規依頼フォームを拡張。
+// ・お客様名は「新郎名（ローマ字）」「新婦名（ローマ字）」の2項目に分離
+// ・セール名／撮影希望場所／準備場所／オプション(5件)を新規作成時から入力できる
+// ・希望日は1件→最大5件（第一〜第五希望）
+// ・パスポート番号は対象支店がパスポート必須の場合のみ受け付ける（表示条件を作成時にも踏襲）
+// ・新規作成時のSTS(JP側)は店舗が RQ（予約依頼）／CHK（空き確認のみ）から選べる（既定はRQ）
+const SHOP_CREATE_INITIAL_STATUS_CHOICES = ['RQ', 'CHK'];
 function apiShopCreateRequest(token, payload) {
   const session = requireSession_(token);
   if (session.role !== SHOP_ROLE) throw new Error('この操作は店舗ロールのみ実行できます。');
@@ -2412,10 +2682,21 @@ function apiShopCreateRequest(token, payload) {
   }
   const team = String(payload.team || '').trim();
   if (!JP_TEAMS.includes(team)) throw new Error(`該当の手配課は ${JP_TEAMS.join('/')} のいずれかにしてください。`);
-  const customerName = String(payload.customerName || '').trim();
-  if (!customerName) throw new Error('お客様名を入力してください。');
-  const hopeDate = String(payload.hopeDate || '').trim();
+  const groomName = String(payload.groomName || payload.customerName || '').trim();
+  if (!groomName) throw new Error('新郎名（ローマ字）を入力してください。');
+  const brideName = String(payload.brideName || '').trim();
   const plan = String(payload.plan || '').trim();
+  const saleName = String(payload.saleName || '').trim();
+  const location = String(payload.location || '').trim();
+  const prep = String(payload.prep || '').trim();
+  const hopes = [1, 2, 3, 4, 5].map(n => String(payload['hope' + n] || (n === 1 ? payload.hopeDate : '') || '').trim());
+  if (!hopes[0]) throw new Error('希望日（第一希望）を入力してください。');
+  const options = [1, 2, 3, 4, 5].map(n => String(payload['option' + n] || '').trim());
+  const passportNumber = String(payload.passportNumber || '').trim();
+  const initialStatus = String(payload.initialStatus || 'RQ').trim().toUpperCase() || 'RQ';
+  if (!SHOP_CREATE_INITIAL_STATUS_CHOICES.includes(initialStatus)) {
+    throw new Error(`新規作成時のSTS(JP側)は ${SHOP_CREATE_INITIAL_STATUS_CHOICES.join('/')} のいずれかにしてください。`);
+  }
 
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
@@ -2430,30 +2711,48 @@ function apiShopCreateRequest(token, payload) {
     setV(COL_BRANCH_CODE, branchCode);
     setV(COL_KANRI_NO, newNo);
     setV(COL_LAST_UPDATED, new Date());
-    setV(COL_STATUS_JP, 'RQ');
+    setV(COL_STATUS_JP, initialStatus);
     setV(COL_STATUS_BRANCH, 'NC');
-    setV(COL_GROOM_NAME, customerName);
-    setV(COL_HOPE1, hopeDate);
+    setV(COL_GROOM_NAME, groomName);
+    setV(COL_BRIDE_NAME, brideName);
+    setV(COL_HOPE1, hopes[0]);
+    setV(COL_HOPE2, hopes[1]);
+    setV(COL_HOPE3, hopes[2]);
+    setV(COL_HOPE4, hopes[3]);
+    setV(COL_HOPE5, hopes[4]);
     setV(COL_PLAN, plan);
+    setV(COL_SALE_NAME, saleName);
+    setV(COL_LOCATION, location);
+    setV(COL_PREP, prep);
+    options.forEach((name, i) => setV(opNameCol_(i + 1), name));
+    // ★パスポート番号は、対象支店の表示条件（パスポート必須）を作成時にもそのまま踏襲する
+    if (targetMeta.passportRequired) setV(COL_PASSPORT_NO, passportNumber);
     setV(COL_AREA, team);
     setV(COL_ORIGIN_SHOP, session.branchCode);
 
     sheet.getRange(newRowIndex, 1, 1, headers.length).setValues([newRowData]);
 
+    const initialStatusLabel = initialStatus === 'CHK' ? 'CHK（空き確認のみ）' : 'RQ（予約依頼）';
     const initMsg = [
-      `店舗（${session.branchName}）からの新規依頼です。`,
-      `お客様名: ${customerName}`,
-      hopeDate ? `希望日: ${hopeDate}` : '',
+      `店舗（${session.branchName}）からの新規依頼です。（${initialStatusLabel}）`,
+      `新郎名: ${groomName}`,
+      brideName ? `新婦名: ${brideName}` : '',
+      `希望日: ${[hopes[0], hopes[1], hopes[2], hopes[3], hopes[4]].filter(Boolean).join(' / ')}`,
       plan ? `プラン: ${plan}` : '',
+      saleName ? `セール名: ${saleName}` : '',
+      location ? `撮影希望場所: ${location}` : '',
+      prep ? `準備場所: ${prep}` : '',
       `該当の手配課: ${team}手配課`
     ].filter(Boolean).join('\n');
 
     // ★店舗自身の送信という扱いにする（appendHistory_のsenderRoleにSHOPを記録）。
-    // 宛先は「日本の該当手配課・現地支店の両方」（新規案件通知の定型、sendDirectionalMail_の既定fallback）。
     appendHistory_(headers, newRowData, senderLabel_(session), `[新規依頼（店舗より）]\n${initMsg}`, SHOP_ROLE, '');
     setUnreadFlag_(sheet, headers, newRowIndex, JP_ROLE, true);
     setUnreadFlag_(sheet, headers, newRowIndex, BRANCH_ROLE, true);
-    sendDirectionalMail_(headers, newRowData, 'SHOP_NEW_CASE', session, initMsg, '店舗からの新規依頼');
+    // ★機能追加（拡張要望5章）：支店マスタ「店舗依頼の手配課通知」がOFF（明示的にFALSE）の
+    // 直結支店については、手配課宛のメール通知だけを止める（手配課からの閲覧・監視は妨げない。
+    // 上のsetUnreadFlag_(JP_ROLE, true)は変えないため、手配課側の未読表示・一覧上の可視性は従来通り）。
+    sendDirectionalMail_(headers, newRowData, targetMeta.shopNotifyHq === false ? 'SHOP_NEW_CASE_BRANCH_ONLY' : 'SHOP_NEW_CASE', session, initMsg, '店舗からの新規依頼');
 
     sortReservationSheet_(sheet);
     return { ok: true, kanriNo: newNo };
@@ -2792,6 +3091,9 @@ function sendDirectionalMail_(headers, rowData, direction, session, message, kin
   else if (direction === 'SHOP_TO_JP') recipients = jpEmail;
   else if (direction === 'BRANCH_TO_SHOP') recipients = shopEmail;
   else if (direction === 'SHOP_TO_BRANCH') recipients = branchEmail;
+  // ★機能追加（拡張要望5章）：直結支店で「店舗依頼の手配課通知」がOFFの場合、
+  // 新規依頼通知は現地支店のみに送る（手配課の閲覧権限自体は変えない）
+  else if (direction === 'SHOP_NEW_CASE_BRANCH_ONLY') recipients = branchEmail;
   // 新規案件通知など：日本の該当手配課・現地支店の両方に知らせる
   else recipients = [jpEmail, branchEmail].filter(Boolean).join(',');
 
@@ -3485,4 +3787,49 @@ function onSurveyFormSubmitCore_(e, errors) {
 
   const sheet = getSpreadsheet_().getSheetByName(MEMO_LOG_SHEET_NAME);
   sheet.appendRow([kanri, MEMO_TYPE_SURVEY, lines.join('\n'), MEMO_AUTHOR_CUSTOMER, new Date()]);
+}
+
+// =====================================================
+// ⑲ 同意書・アンケートフォームの事前入力済みURL（機能：拡張要望10章）
+// =====================================================
+// ★背景：これまでお客様はフォームの「管理番号」欄を自分で手入力する必要があり、
+// お客様が管理番号を把握していないため機能していなかった。
+// Googleフォームの「事前入力済みのリンク」機能を使い、管理番号を埋め込んだURLを店舗が
+// お客様に送るだけで済むようにする（フォームを作り直す必要は無い）。
+//
+// 事前準備（スプレッドシート管理者が1回だけ行う。同意書・アンケートフォームそれぞれで実施）：
+//   1. 対象のGoogleフォームを開く → 右上の「⋮」（その他の設定） → 「事前入力したリンクを取得」
+//   2. 「管理番号」欄に何かダミー値（例：TEST123）を入力して「リンクを取得」
+//   3. 表示されたURLの中に `entry.123456789=TEST123` のようなパラメータが含まれるので、
+//      `entry.123456789` の部分（数字はフォームごとに異なる）を下記の ENTRY_ID 定数にコピーする
+//   4. URLのうち `entry.` より前の部分（`https://docs.google.com/forms/d/e/.../viewform` まで）を
+//      下記の FORM_URL 定数にコピーする
+//   5. 未設定（空欄）のままだと apiGetPrefilledFormUrls は空文字を返す＝画面側はURLを案内しない
+//      （設定前でも他の機能には一切影響しない）。
+const CONSENT_FORM_URL = ''; // 例: 'https://docs.google.com/forms/d/e/xxxxxxxx/viewform'
+const CONSENT_FORM_KANRI_ENTRY_ID = ''; // 例: 'entry.123456789'
+const SURVEY_FORM_URL = '';
+const SURVEY_FORM_KANRI_ENTRY_ID = '';
+
+function buildPrefilledFormUrl_(baseUrl, entryId, kanriNo) {
+  const base = String(baseUrl || '').trim();
+  const entry = String(entryId || '').trim();
+  if (!base || !entry) return '';
+  const sep = base.includes('?') ? '&' : '?';
+  return `${base}${sep}${entry}=${encodeURIComponent(kanriNo)}`;
+}
+
+// 案件の管理番号を埋め込んだ同意書・アンケートフォームのURLを返す（未設定の場合は空文字）。
+function apiGetPrefilledFormUrls(token, kanriNo) {
+  const session = requireSession_(token);
+  const { headers, rowIndex, rowData } = findReservationRow_(kanriNo);
+  if (rowIndex === -1) throw new Error('対象の予約が見つかりません。');
+  if (session.role === SHOP_ROLE) assertShopOwnRow_(session, headers, rowData);
+  else assertRowVisible_(session, headers, rowData);
+
+  return {
+    ok: true,
+    consentFormUrl: buildPrefilledFormUrl_(CONSENT_FORM_URL, CONSENT_FORM_KANRI_ENTRY_ID, kanriNo),
+    surveyFormUrl: buildPrefilledFormUrl_(SURVEY_FORM_URL, SURVEY_FORM_KANRI_ENTRY_ID, kanriNo)
+  };
 }

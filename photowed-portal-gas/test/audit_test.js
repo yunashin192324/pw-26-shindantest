@@ -40,6 +40,9 @@ function fixture() {
     '新郎名（ローマ字）': 'Taro', 'STS JP': 'RQ', '撮影日FIX': ctx.__daysFromToday(10) });
   add('予約一覧', { '支店コード': 'VIE', '管理番号': 'VIE-001', '管轄': '関西',
     '新郎名（ローマ字）': 'Jiro', 'STS JP': 'RQ', '撮影日FIX': ctx.__daysFromToday(20) });
+  // ★機能追加：店舗発の案件（拡張要望8章のドライブ連携監査用）。起票元店舗をSHOP1にしておく。
+  add('予約一覧', { '支店コード': 'VIE', '管理番号': 'VIE-950', '管轄': '関西',
+    '新郎名（ローマ字）': 'ShopCase', 'STS JP': 'RQ', '起票元店舗': 'SHOP1' });
   ss.getSheetByName('セールマスタ').appendRow(['ROW', '春セール', true]);
   ss.getSheetByName('スタッフマスタ').appendRow(['ROW', 'L.Conti', true]);
 
@@ -113,7 +116,11 @@ const API_SPECS = [
   // 支店ロールでは指定した支店コードは無視され、必ず自支店の案件になる（下で個別に検証する）
   { fn: 'apiCreateReservation',    scope: 'any', args: (t) => [t, 'VIE', '新郎名: A\n新婦名: B'], writes: true },
   { fn: 'apiShopCreateRequest',    scope: 'shop',
-    args: (t) => [t, { branchCode: 'VIE', team: '関東', customerName: '侵入テスト', hopeDate: '', plan: '' }], writes: true },
+    args: (t) => [t, { branchCode: 'VIE', team: '関東', groomName: '侵入テスト', hope1: '2026-09-01', plan: '' }], writes: true },
+  { fn: 'apiShopUploadDocument',   scope: 'shop',
+    args: (t) => [t, 'VIE-950', 'ヘアメイク画像', 'x.jpg', 'image/jpeg', Buffer.from('x').toString('base64')], target: 'VIE', writes: true },
+  { fn: 'apiListShopUploadedDocuments', scope: 'shop', args: (t) => [t, 'VIE-950'], target: 'VIE', reads: true },
+  { fn: 'apiGetPrefilledFormUrls', scope: 'any', args: (t) => [t, 'VIE-001'], target: 'VIE', reads: true },
   { fn: 'apiToggleHistoryCheck',   scope: 'any', args: (t, ctx) => [t, ctx.__someHistoryId || 'none', true], target: 'VIE', writes: true },
 
   // メモ履歴（共有メモ／メモ（現地用）の積み上げ記録）
@@ -174,7 +181,7 @@ section('A1. 認可マトリクス：保護の書き忘れを機械的に検出'
   const mustLock = ['apiSaveBranch','apiSetBranchActive','apiSaveFieldsQuiet','apiCommitChanges',
                     'apiSetDriveUrl','apiCreateReservation','apiShopCreateRequest','apiToggleHistoryCheck',
                     'apiSaveStaffItem','apiSaveSaleItem','apiSavePlanItem','apiSaveOptionItem','apiSaveLocationItem',
-                    'apiSaveArrangementSettings'];
+                    'apiSaveArrangementSettings','apiShopUploadDocument'];
   const noLock = mustLock.filter(f => {
     const b = bodyOf(f);
     return !/getScriptLock/.test(b) && !/saveMasterItem_/.test(b);
