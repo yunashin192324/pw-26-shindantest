@@ -967,7 +967,7 @@ function importUncontractedCsv(csvText) {
  * 「is not a function」という分かりにくいエラーになるため、
  * 画面側から版数を確認できるようにしている。
  */
-const SERVER_VERSION = '2026-08-18b';
+const SERVER_VERSION = '2026-08-18c';
 
 /**
  * サーバー側の版数を返す。画面側は、自分が期待する版数と一致するかを起動時に確認する。
@@ -2693,6 +2693,39 @@ function getAiReports(limit) {
         };
       });
     return { success: true, reports: reports, canSave: ctx.canManageMaster };
+  } catch (err) {
+    return { success: false, error: err.message + '\n' + err.stack };
+  }
+}
+
+/**
+ * 保存済みの分析レポートを消す（マスタ管理権限のみ）。
+ * 見出し行と「AI分析レポート」シート自体は残し、中身だけを空にする。
+ * @param {boolean} latestOnly trueなら最新の1件だけ、falseなら全件を消す
+ */
+function clearAiReports(latestOnly) {
+  try {
+    const ctx = getCurrentUserContext_();
+    if (!ctx.canManageMaster) {
+      throw new Error('分析レポートの削除はマスタ管理権限を持つユーザーのみ実行できます。');
+    }
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(AI_REPORT_SHEET_NAME);
+    if (!sheet) return { success: true, clearedCount: 0 };
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: true, clearedCount: 0 };
+
+    if (latestOnly) {
+      // 最新＝ヘッダーの直下（保存時に上へ挿入しているため）
+      sheet.deleteRow(2);
+      return { success: true, clearedCount: 1 };
+    }
+
+    const count = lastRow - 1;
+    sheet.getRange(2, 1, count, 4).clearContent();
+    return { success: true, clearedCount: count };
   } catch (err) {
     return { success: false, error: err.message + '\n' + err.stack };
   }

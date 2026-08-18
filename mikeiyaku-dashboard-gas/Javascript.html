@@ -11,7 +11,7 @@
 const MONTH_CODES = ['11', '12', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10'];
 const MONTH_LABELS = MONTH_CODES.map(function (c) { return (c.indexOf('0') === 0 ? c.substring(1) : c) + '月'; });
 const PAGE_SIZE = 50;
-const ALERT_THRESHOLD_DAYS = 7; // 前回アクション（最終アクション日）からこの日数以上経過してもSTS未入力（未対応）の場合にアラート対象とする
+const ALERT_THRESHOLD_DAYS = 7; // 相談日（対象年月日）からこの日数以上経過してもSTS未入力（未対応）の場合にアラート対象とする
 const MULTILINE_COLUMNS = ['次回ACT・進捗★手入力']; // インライン編集時にテキストエリアを使う列（メモのみ）
 
 // ---- グローバル状態 ----------------------------------------------------------
@@ -57,7 +57,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // 画面側が前提としているサーバー（Code.gs）の版数。Code.gs の SERVER_VERSION と対で更新する。
-const REQUIRED_SERVER_VERSION = '2026-08-18b';
+const REQUIRED_SERVER_VERSION = '2026-08-18c';
 
 /**
  * Code.gs が画面と同じ版数まで更新されているか確認する。
@@ -392,10 +392,12 @@ function daysSince(dateStr) {
   return Math.floor((today.getTime() - target.getTime()) / 86400000);
 }
 
-// STSが未対応（空欄）のまま、前回アクション（最終アクション日）から ALERT_THRESHOLD_DAYS 日以上経過している行を
-// 「要フォロー」とみなす。まだ一度もアクションしていない行は、最終アクション日が空欄のため対象年月日を基準にする。
+// STSが未対応（空欄）のまま、相談日（対象年月日）から ALERT_THRESHOLD_DAYS 日以上経過している行を
+// 「要フォロー」とみなす。
+// 基準は必ず相談日そのもの。メモを書いただけで最終アクション日が今日に更新され、
+// STSが未入力のままなのにアラートが消える、という取りこぼしを防ぐ。
 function alertBasisDate(row) {
-  return row['最終アクション日'] || row['対象年月日'];
+  return row['対象年月日'];
 }
 
 function isAlertRow(row) {
@@ -489,6 +491,10 @@ function initDashboardEvents() {
   document.getElementById('btn-open-ai-summary').addEventListener('click', openAiSummaryModal);
   document.getElementById('btn-copy-ai-summary').addEventListener('click', copyAiSummaryToClipboard);
   document.getElementById('btn-save-ai-report').addEventListener('click', onSaveAiReport);
+  document.getElementById('btn-clear-ai-report-latest')
+    .addEventListener('click', function () { onClearAiReports(true); });
+  document.getElementById('btn-clear-ai-report-all')
+    .addEventListener('click', function () { onClearAiReports(false); });
 }
 
 // ============================================================================
@@ -556,7 +562,7 @@ function buildAiSummaryText() {
   L.push('- リセール継続率: ' + pct(all.resaleAction, all.total) + ' %');
   L.push('- リセール中: ' + all.resaleProgress + ' 件 / 失注: ' + all.lost + ' 件');
   L.push('- 成約: ' + all.contract + ' 件 / PAX: ' + all.pax);
-  L.push('- 長期未対応（' + ALERT_THRESHOLD_DAYS + '日以上フォローなし）: ' + all.alert + ' 件');
+  L.push('- 長期未対応（相談日から' + ALERT_THRESHOLD_DAYS + '日以上STS未入力）: ' + all.alert + ' 件');
   L.push('');
 
   // ---- 店舗別 ----
@@ -743,6 +749,48 @@ function loadAiReports() {
     .getAiReports(5);
 }
 
+/**
+ * 保存済みレポートを消すボタンの表示を切り替える。
+ * 消せるのはマスタ管理権限のみ。レポートが1件も無いときは出さない。
+ */
+function updateAiClearButtons(reportCount) {
+  const show = !!currentUserContext.canManageMaster && reportCount > 0;
+  ['btn-clear-ai-report-latest', 'btn-clear-ai-report-all'].forEach(function (id) {
+    const btn = document.getElementById(id);
+    if (btn) btn.classList.toggle('hidden', !show);
+  });
+  // 履歴が無ければ「表示中を消す」と「すべて消す」が同じ意味になるため、片方だけ出す
+  const latestBtn = document.getElementById('btn-clear-ai-report-latest');
+  if (latestBtn && show && reportCount <= 1) latestBtn.classList.add('hidden');
+}
+
+/** 保存済みレポートを消す（latestOnly: 表示中の1件だけか、全件か） */
+function onClearAiReports(latestOnly) {
+  const message = latestOnly
+    ? '今表示している最新のレポートを消します。\n過去の履歴は残ります。よろしいですか？'
+    : '保存した分析レポートを、過去の履歴も含めてすべて消します。\n元に戻せません。よろしいですか？';
+  if (!window.confirm(message)) return;
+
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false);
+      if (res && res.success) {
+        showToast(res.clearedCount > 0
+          ? '分析レポートを消しました（' + res.clearedCount + '件）'
+          : '消すレポートはありませんでした。', 'success');
+        loadAiReports();
+      } else {
+        showToast('削除に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false);
+      showToast('通信エラー（clearAiReports）: ' + err.message, 'error');
+    })
+    .clearAiReports(!!latestOnly);
+}
+
 function renderAiReports(reports) {
   const bodyEl = document.getElementById('ai-report-body');
   const metaEl = document.getElementById('ai-report-meta');
@@ -758,8 +806,10 @@ function renderAiReports(reports) {
         + 'マスタ管理者が分析結果を保存すると、ここに表示されます。</p>';
     metaEl.textContent = '';
     histBox.classList.add('hidden');
+    updateAiClearButtons(0);
     return;
   }
+  updateAiClearButtons(reports.length);
 
   const latest = reports[0];
   bodyEl.textContent = latest.body;
@@ -1421,7 +1471,7 @@ function renderDataManagerGrid() {
     const rowClass = alert ? 'hover:bg-rose-100 bg-rose-50' : 'hover:bg-blue-50';
     const alertDays = alert ? daysSince(alertBasisDate(row)) : null;
     const alertCell = alert
-      ? '<td class="px-2 py-2 text-center text-rose-600" title="前回アクションから' + alertDays + '日経過・未対応です">🔔</td>'
+      ? '<td class="px-2 py-2 text-center text-rose-600" title="相談日から' + alertDays + '日経過・STS未入力です">🔔</td>'
       : '<td class="px-2 py-2 text-center"></td>';
 
     // 列順：スタッフが毎日触る編集項目（リセール〜メモ）を左端にまとめ、
