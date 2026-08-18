@@ -1,0 +1,1334 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI Photo Curator</title>
+
+<!--
+  ============================================================
+  ビルド不要の単一HTMLファイル版（Google Sites 埋め込み用）
+  ============================================================
+  React / ReactDOM / Babel(JSXのブラウザ内変換) / Tailwind CSS を
+  すべてCDNから読み込んでいます。npm install や webpack/vite などの
+  ビルド工程は一切不要で、このファイル1つをそのままホスティングして
+  Google Sites の「埋め込み」→「埋め込みコード」に iframe として
+  貼り付けるだけで動作します。
+
+  【デメリット・注意点】
+  ・Babel standalone がブラウザ上でJSXを変換するため、初回表示が
+    ビルド済みアプリよりわずかに遅くなります（アクセス数の多い
+    本番サイトで使うならVite等での事前ビルドを推奨）。
+  ・Tailwind CDN（Play CDN）も同様に実行時にCSSを生成する簡易版です。
+  ・後日パフォーマンスを求める場合は Vite でビルドし直す形に移行できます。
+-->
+
+<!-- Tailwind CSS（Play CDN・簡易版） -->
+<script src="https://cdn.tailwindcss.com"></script>
+
+<!--
+  React / ReactDOM / Babel standalone はバージョンを明示的に固定しています。
+  バージョン無指定でCDNの「最新版」を読み込むと、ライブラリ側の破壊的変更で
+  ある日突然ページが真っ白になる事故が起きます（実際、@babel/standalone は
+  無指定だと最新のBabel 8系が読み込まれ、JSXの変換結果に import 文が
+  混入して「Cannot use import statement outside a module」エラーで
+  アプリが起動しない状態になることを確認したため、動作確認済みの
+  バージョンに固定しています）。
+-->
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.8/babel.min.js"></script>
+
+<style>
+  html, body, #root { height: 100%; margin: 0; }
+  body { background: #0a0a0a; }
+</style>
+</head>
+<body>
+<div id="root">
+  <div style="color:#888; font-family: sans-serif; text-align:center; padding-top:40vh;">読み込み中...</div>
+</div>
+
+<!--
+  JSXソースコード本体。
+  type="text/babel" ではなく type="text/plain" にしてブラウザにもBabelの
+  自動スキャナにも「実行対象ではないテキスト」として扱わせ、下の
+  ブートストラップ用<script>から明示的な設定（runtime: "classic"）で
+  変換・実行しています。data-presets="react" だけに任せると、
+  読み込むBabelのバージョンによっては勝手に ES Modules 用の import 文を
+  出力してしまい、クラシックな<script>の中で実行できず真っ白画面に
+  なることがあるため、これを避けています。
+-->
+<script type="text/plain" id="app-source">
+const { useState, useCallback, useRef, useEffect } = React;
+
+// ==========================================
+// ⚠️ Gemini APIキー設定
+// ==========================================
+// ここに Google AI Studio で発行したご自身の Gemini APIキーを入力してください。
+// https://aistudio.google.com/apikey
+//
+// 重要な注意: このファイルはブラウザ上でそのまま実行される静的HTMLのため、
+// ここに書いたAPIキーはページを開いた人なら誰でも「ページのソースを表示」等で
+// 閲覧・抜き取り・悪用（あなたの請求で使用）できてしまいます。
+// 社内限定・自分専用など閲覧者を完全に信頼できる用途に限定するか、
+// 本番公開する場合は Google Apps Script の Web アプリ等でAPIキーを
+// サーバー側に隠すプロキシ構成に変更することを強く推奨します。
+const GEMINI_API_KEY = "ここにAPIキーを貼り付け";
+
+// ==========================================
+// 定数定義
+// ==========================================
+const RESIZE_W = 900;
+const RESIZE_H = 600;
+
+const CRITERIA = [
+  { key: "location", label: "撮影場所", weight: 2 },
+  { key: "composition", label: "配置・均衡", weight: 2 },
+  { key: "brightness", label: "明るさ・色", weight: 1.5 },
+  { key: "naturalness", label: "自然な姿", weight: 1.5 },
+  { key: "storytelling", label: "物語性", weight: 1 },
+];
+
+const SYSTEM_PROMPT = `あなたは、旅行会社でリゾートウェディングやフォトウェディングを体験されたお客様の事例写真をウェブサイトに掲載するため、写真を選定する専門家です。
+撮影地は世界中（ハワイ、グアム、ラスベガス、ヨーロッパなど）の様々なロケーションです。
+各基準を1〜10点で採点し、掲載に相応しいか評価してください。
+
+【厳格な分類ルール】
+1. 背景カテゴリ (sceneCategory): 似た背景の連続を防ぐため、次の中から**写真の大部分を占める要素に最も近いものを1つだけ**選んでください。
+   ["ビーチ・海", "大聖堂・教会・歴史的建造物", "自然・緑・森", "岩山・荒野・砂漠", "街並み・ストリート", "屋内・ホテル・カジノ", "夕景・夜景", "その他"]
+2. 構図・寄り引き (shotType): 構図のバリエーションを出すため、次の中から**最も当てはまるものを1つだけ**選んでください。
+   - "wide" (広大な景色の中に人物が小さく写っている、風景メインの引きの写真)
+   - "medium" (人物の全身〜膝上がしっかり写っている、標準的な距離の写真)
+   - "close-up" (人物のバストアップ、顔のアップ、または手元などのパーツ写真)
+3. モノクロ判定 (isMonochrome): 白黒またはセピア調の場合は true。ウェブサイトはカラー写真を基本とするため、モノクロ写真ばかりにならないようバランスを取ります。
+4. 写真の具体的内容 (contentDescription): 最終選考で似た写真の重複を防ぐため、写真の具体的な内容（背景の被写体、人物のポーズ、距離感など。例「エッフェル塔を背景に見つめ合う上半身」「指輪のケースのアップ」「階段で振り返る全身」等）を端的に20文字以内で記述してください。`;
+
+// ==========================================
+// IndexedDB ユーティリティ（自動保存機能）
+// ==========================================
+const DB_NAME = "AIPhotoCuratorDB";
+const STORE_NAME = "photos";
+const DB_VERSION = 1;
+
+const initDB = () => {
+  return new Promise((resolve, reject) => {
+    if (!window.indexedDB) {
+      reject(new Error("IndexedDB is not supported"));
+      return;
+    }
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: "id" });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+};
+
+const savePhotoToDB = async (photo) => {
+  if (!window.indexedDB) return;
+  try {
+    const db = await initDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(STORE_NAME, "readwrite");
+      const store = transaction.objectStore(STORE_NAME);
+      const photoToSave = { ...photo };
+      delete photoToSave.url; // URLは再起動時に無効になるため除外して保存
+      store.put(photoToSave);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+  } catch (err) {
+    console.error("DB保存エラー:", err);
+  }
+};
+
+const loadPhotosFromDB = async () => {
+  if (!window.indexedDB) return [];
+  try {
+    const db = await initDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(STORE_NAME, "readonly");
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.getAll();
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  } catch (err) {
+    console.error("DB読み込みエラー:", err);
+    return [];
+  }
+};
+
+const clearDB = async () => {
+  if (!window.indexedDB) return;
+  try {
+    const db = await initDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(STORE_NAME, "readwrite");
+      const store = transaction.objectStore(STORE_NAME);
+      store.clear();
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+  } catch (err) {
+    console.error("DBクリアエラー:", err);
+  }
+};
+
+// ==========================================
+// ユーティリティ関数
+// ==========================================
+
+// ファイル名を「撮影順」として自然順（数値考慮）で比較する。
+// 標準の localeCompare だけだと "IMG_2.jpg" が "IMG_10.jpg" より後になり、
+// ストーリー性の判定やファイル名順ソートが崩れるため numeric オプションを付与する。
+const compareFileNameNatural = (a, b) =>
+  a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+
+const loadJSZip = () => {
+  return new Promise((resolve, reject) => {
+    if (window.JSZip) {
+      resolve(window.JSZip);
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+    script.onload = () => resolve(window.JSZip);
+    script.onerror = () => reject(new Error("JSZipの読み込みに失敗しました"));
+    document.head.appendChild(script);
+  });
+};
+
+const resizeImageForDownload = (objectUrl, filename) =>
+  new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = RESIZE_W;
+        canvas.height = RESIZE_H;
+        const ctx = canvas.getContext("2d");
+
+        const srcRatio = img.width / img.height;
+        const dstRatio = RESIZE_W / RESIZE_H;
+        let sx = 0, sy = 0, sw = img.width, sh = img.height;
+
+        if (srcRatio > dstRatio) {
+          sw = img.height * dstRatio;
+          sx = (img.width - sw) / 2;
+        } else {
+          sh = img.width / dstRatio;
+          sy = (img.height - sh) / 2;
+        }
+
+        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, RESIZE_W, RESIZE_H);
+        canvas.toBlob((blob) => {
+          if (!blob) throw new Error("Blob生成に失敗しました");
+          resolve({ blob, filename: filename.replace(/\.[^.]+$/, "") + "_resized.jpg" });
+        }, "image/jpeg", 0.92);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    img.onerror = () => reject(new Error("画像の読み込みに失敗しました"));
+    img.src = objectUrl;
+  });
+
+const compressImageForAI = (file) =>
+  new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      try {
+        const isPortrait = img.height > img.width;
+        const orientation = isPortrait ? "portrait" : "landscape";
+
+        const canvas = document.createElement("canvas");
+        let w = img.width;
+        let h = img.height;
+        const maxSize = 800;
+
+        if (w > maxSize || h > maxSize) {
+          if (w > h) {
+            h = Math.round((h * maxSize) / w);
+            w = maxSize;
+          } else {
+            w = Math.round((w * maxSize) / h);
+            h = maxSize;
+          }
+        }
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, w, h);
+
+        const base64 = canvas.toDataURL("image/jpeg", 0.8).split(",")[1];
+        resolve({ base64, orientation });
+      } catch (err) {
+        reject(err);
+      }
+    };
+    img.onerror = () => reject(new Error("送信用画像の圧縮に失敗しました"));
+    img.src = url;
+  });
+
+const analyzePhotoWithAPI = async (base64) => {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`;
+
+  const payload = {
+    contents: [{
+      role: "user",
+      parts: [
+        { text: SYSTEM_PROMPT },
+        { inlineData: { mimeType: "image/jpeg", data: base64 } }
+      ]
+    }],
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: "OBJECT",
+        properties: {
+          location: { type: "INTEGER" },
+          composition: { type: "INTEGER" },
+          brightness: { type: "INTEGER" },
+          naturalness: { type: "INTEGER" },
+          storytelling: { type: "INTEGER" },
+          totalScore: { type: "NUMBER" },
+          recommend: { type: "BOOLEAN" },
+          reason: { type: "STRING" },
+          tags: { type: "ARRAY", items: { type: "STRING" } },
+          sceneCategory: { type: "STRING" },
+          shotType: { type: "STRING" },
+          isMonochrome: { type: "BOOLEAN" },
+          contentDescription: { type: "STRING" }
+        },
+        required: ["location", "composition", "brightness", "naturalness", "storytelling", "totalScore", "recommend", "reason", "tags", "sceneCategory", "shotType", "isMonochrome", "contentDescription"]
+      }
+    }
+  };
+
+  const delays = [1000, 2000, 4000, 8000, 16000];
+
+  for (let i = 0; i < 5; i++) {
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+         const errorText = await response.text();
+         const errObj = new Error(`APIリクエスト失敗: HTTP ${response.status} ${errorText}`);
+         errObj.status = response.status;
+         throw errObj;
+      }
+
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      if (!text) {
+         throw new Error("APIレスポンスの形式が異常です（テキストが見つかりません）");
+      }
+
+      return JSON.parse(text);
+    } catch (error) {
+      if (i === 4) {
+        if (error.status === 401 || error.status === 403) {
+          throw new Error("認証エラー (HTTP 401/403) が発生しました。\n\nAPIキーが未設定または無効な可能性があります。ファイル冒頭の GEMINI_API_KEY を確認してください。データはブラウザに安全に保存されていますので、右下の「ページを再読み込み」ボタンを押しても消えません。");
+        }
+        console.error("API呼び出しが上限回数失敗しました:", error);
+        throw error;
+      }
+      await new Promise(resolve => setTimeout(resolve, delays[i]));
+    }
+  }
+};
+
+const selectOptimalPhotosWithAI = async (candidates, targetSlots) => {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`;
+
+  const prompt = `あなたはウェディング写真のアルバム構成ディレクターです。
+以下のJSONデータは、一次評価を終えた写真の候補リストです。
+この中から、指定された「${targetSlots}枠」を埋める最適な写真のIDリストを選出してください。
+
+【最優先事項：「多様性」と「ストーリー展開」をスコアより優先する】
+単に高得点の写真を集めるのではなく、1冊のアルバムを通して見るような、
+最初から最後までの一連のストーリー（時間の流れ）を感じられる構成にすることを最優先してください。
+
+【逐次選考プロセス（必ず従うこと）】
+写真を1枚選ぶたびに、以下の「使用済みリスト」を更新し、次の選択に反映してください：
+- 使用済み category リスト（背景カテゴリ）
+- 使用済み shotType リスト（構図タイプ）
+
+次の1枚を選ぶ基準（優先順位順）：
+  1. まだ使用していない category → まだ使用していない shotType の組み合わせを最優先
+  2. まだ使用していない category だけ一致する写真を次点
+  3. まだ使用していない shotType だけ一致する写真を次点
+  4. どうしても被る場合のみ、同じ category や shotType を許可（その場合は description が全く異なるものを選ぶ）
+  5. 上記を満たす写真が複数ある場合のみ、スコアで判断する
+
+【絶対遵守ルール】
+1. 同じ category が2枚連続してはいけない
+2. 同じ shotType が3枚以上連続してはいけない
+3. ストーリー展開: "name"（ファイル名）の順序は撮影順を表しています。序盤・中盤・終盤から均等な間隔でピックアップしてください
+4. 枠数の計算: orientation が "landscape" は「1枠」、"portrait" は「0.5枠」として計算し、縦画像は必ず偶数枚選んでください
+5. isMonochrome が true の写真は全体の1〜2枚以内に抑えること
+6. 合計枠数が必ず ${targetSlots} 枠にぴったり一致すること
+
+【候補データ】
+${JSON.stringify(candidates)}
+`;
+
+  const payload = {
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: "OBJECT",
+        properties: {
+          selectedIds: { type: "ARRAY", items: { type: "STRING" } },
+          reasoning: { type: "STRING" }
+        },
+        required: ["selectedIds", "reasoning"]
+      }
+    }
+  };
+
+  const delays = [1000, 2000, 4000, 8000, 16000];
+
+  for (let i = 0; i < 5; i++) {
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        const errObj = new Error(`最終選考APIエラー: HTTP ${response.status} - ${errorText}`);
+        errObj.status = response.status;
+        throw errObj;
+      }
+
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      if (!text) {
+         throw new Error("APIレスポンスの形式が異常です（テキストが見つかりません）");
+      }
+
+      return JSON.parse(text);
+    } catch (error) {
+      if (i === 4) {
+        if (error.status === 401 || error.status === 403) {
+          throw new Error("認証エラー (HTTP 401/403) が発生しました。\n\nAPIキーが未設定または無効な可能性があります。ファイル冒頭の GEMINI_API_KEY を確認してください。データはブラウザに安全に保存されていますので、右下の「ページを再読み込み」ボタンを押しても消えません。");
+        }
+        console.error("最終選考APIの呼び出しが上限回数失敗しました:", error);
+        throw error;
+      }
+      await new Promise(resolve => setTimeout(resolve, delays[i]));
+    }
+  }
+};
+
+const formatRemainingTime = (ms) => {
+  if (ms === null || ms === undefined) return "計算中...";
+  const totalSeconds = Math.max(0, Math.round(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes > 0) {
+    return `残り約 ${minutes}分 ${seconds.toString().padStart(2, '0')}秒`;
+  }
+  return `残り約 ${seconds}秒`;
+};
+
+// ==========================================
+// サブコンポーネント
+// ==========================================
+
+function ScoreBadge({ score }) {
+  const safeScore = typeof score === "number" ? score : 0;
+  const colorClass = safeScore >= 8 ? "bg-green-500" : safeScore >= 6 ? "bg-amber-500" : "bg-red-500";
+  return (
+    <div className={`${colorClass} text-white font-mono font-bold text-xl rounded-md px-2 py-0.5 inline-block tracking-wider`}>
+      {safeScore.toFixed(1)}
+    </div>
+  );
+}
+
+function CriteriaBar({ label, score }) {
+  const safeScore = typeof score === "number" ? score : 0;
+  const colorClass = safeScore >= 8 ? "bg-green-500" : safeScore >= 6 ? "bg-amber-500" : "bg-red-500";
+  return (
+    <div className="mb-1">
+      <div className="flex justify-between text-[11px] text-neutral-400 mb-0.5">
+        <span>{label}</span><span>{safeScore}/10</span>
+      </div>
+      <div className="h-1 bg-neutral-800 rounded-full overflow-hidden">
+        <div
+          className={`h-full ${colorClass} rounded-full transition-all duration-700 ease-out`}
+          style={{ width: `${safeScore * 10}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// メインアプリケーション
+// ==========================================
+
+function App() {
+  const [photos, setPhotos] = useState([]);
+  const [processing, setProcessing] = useState(false);
+  const [filter, setFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("score");
+  const [pickCount, setPickCount] = useState(16);
+  const [isDragging, setIsDragging] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState(null);
+  const [isSelectingAI, setIsSelectingAI] = useState(false);
+  const [isZipping, setIsZipping] = useState(false);
+
+  const [showClearModal, setShowClearModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState(null);
+
+  const fileInputRef = useRef(null);
+  const folderInputRef = useRef(null);
+  const objectUrlsRef = useRef([]);
+  // 「全データ消去」が押されるたびに増分するトークン。
+  // 消去前から走っていた非同期処理（評価API・AI最終選考）が、消去後に
+  // 古い結果を setPhotos / savePhotoToDB で書き戻して「ゾンビデータ」を
+  // 復活させてしまうのを防ぐために使う。
+  const resetTokenRef = useRef(0);
+
+  // 初回マウント時にIndexedDBからデータを復元
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const savedPhotos = await loadPhotosFromDB();
+        if (savedPhotos && savedPhotos.length > 0) {
+          const restoredPhotos = savedPhotos.map(p => {
+            const url = URL.createObjectURL(p.file);
+            objectUrlsRef.current.push(url);
+
+            // 処理途中でリロードされたものはエラー扱いにする
+            let status = p.status;
+            let errorMsg = p.errorMsg;
+            if (status === "pending") {
+              status = "error";
+              errorMsg = "ブラウザの再読み込みにより処理が中断されました。";
+              savePhotoToDB({ ...p, status, errorMsg });
+            }
+
+            return { ...p, url, status, errorMsg };
+          });
+          setPhotos(restoredPhotos);
+        }
+      } catch (error) {
+        console.error("データの復元に失敗しました:", error);
+      }
+    };
+    loadData();
+
+    return () => {
+      objectUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
+    };
+  }, []);
+
+  const handleFullReset = async () => {
+    try {
+      // 実行中の評価処理・AI最終選考からの書き戻しを無効化する
+      resetTokenRef.current += 1;
+      await clearDB();
+      objectUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
+      objectUrlsRef.current = [];
+      setPhotos([]);
+      setProcessing(false);
+      setTimeRemaining(null);
+      setShowClearModal(false);
+    } catch (err) {
+      console.error("データの消去に失敗しました", err);
+      setErrorMessage("データの消去に失敗しました。");
+    }
+  };
+
+  const handleFiles = useCallback(async (files) => {
+    const imageFiles = Array.from(files).filter(f => f.type.startsWith("image/"));
+    if (!imageFiles.length) return;
+
+    // このバッチ実行中に「全データ消去」が行われたかを判定するためのトークン
+    const myResetToken = resetTokenRef.current;
+
+    const initialPhotos = imageFiles.map((f) => {
+      const url = URL.createObjectURL(f);
+      objectUrlsRef.current.push(url);
+
+      return {
+        id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2),
+        file: f,
+        name: f.name,
+        type: f.type,
+        url: url,
+        orientation: null,
+        status: "pending",
+        result: null,
+        selected: false,
+        errorMsg: "",
+      };
+    });
+
+    setPhotos(prev => [...prev, ...initialPhotos]);
+    // DBにバックグラウンドで保存
+    initialPhotos.forEach(p => savePhotoToDB(p));
+
+    setProcessing(true);
+    setTimeRemaining(null);
+    const startTime = Date.now();
+    let processedCount = 0;
+
+    const poolLimit = 3;
+    const executing = new Set();
+
+    for (const currentPhoto of initialPhotos) {
+      const p = (async () => {
+        try {
+          const { base64, orientation } = await compressImageForAI(currentPhoto.file);
+          const result = await analyzePhotoWithAPI(base64);
+
+          // 消去済みのバッチなら結果を書き戻さない
+          if (resetTokenRef.current !== myResetToken) return;
+
+          const updatedPhoto = { ...currentPhoto, status: "done", result, orientation };
+          setPhotos(prev => prev.map(p => p.id === currentPhoto.id ? updatedPhoto : p));
+          await savePhotoToDB(updatedPhoto);
+
+        } catch (e) {
+          if (resetTokenRef.current !== myResetToken) return;
+
+          const failedPhoto = { ...currentPhoto, status: "error", errorMsg: e.message };
+          setPhotos(prev => prev.map(p => p.id === currentPhoto.id ? failedPhoto : p));
+          await savePhotoToDB(failedPhoto);
+
+        } finally {
+          processedCount++;
+          if (resetTokenRef.current === myResetToken) {
+            const remainingCount = initialPhotos.length - processedCount;
+            if (remainingCount > 0) {
+              const elapsed = Date.now() - startTime;
+              const avgTime = elapsed / processedCount;
+              setTimeRemaining(avgTime * remainingCount);
+            } else {
+              setTimeRemaining(null);
+            }
+          }
+        }
+      })();
+
+      executing.add(p);
+      p.finally(() => executing.delete(p));
+
+      if (executing.size >= poolLimit) {
+        await Promise.race(executing);
+      }
+    }
+
+    await Promise.all(executing);
+    if (resetTokenRef.current === myResetToken) {
+      setProcessing(false);
+      setTimeRemaining(null);
+    }
+  }, []);
+
+  const onDragOver = useCallback((e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const onDragLeave = useCallback((e) => {
+    e.preventDefault();
+    setIsDragging(false);
+  }, []);
+
+  const onDrop = useCallback((e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFiles(e.dataTransfer.files);
+    }
+  }, [handleFiles]);
+
+  const toggleSelected = (id) => {
+    setPhotos(prev => {
+      const updated = prev.map(p => {
+        if (p.id === id) {
+          const newP = { ...p, selected: !p.selected };
+          savePhotoToDB(newP);
+          return newP;
+        }
+        return p;
+      });
+      return updated;
+    });
+  };
+
+  const downloadOne = async (photo) => {
+    try {
+      const { blob, filename } = await resizeImageForDownload(photo.url, photo.name);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("ダウンロード中にエラーが発生しました", error);
+      setErrorMessage("画像の個別保存に失敗しました。");
+    }
+  };
+
+  const downloadSelectedAsZip = async () => {
+    const selected = photos.filter(p => p.selected);
+    if (selected.length === 0) return;
+
+    setIsZipping(true);
+    try {
+      const JSZip = await loadJSZip();
+      const zip = new JSZip();
+
+      for (let i = 0; i < selected.length; i++) {
+        const photo = selected[i];
+        const { blob, filename } = await resizeImageForDownload(photo.url, photo.name);
+        const uniqueFilename = `${String(i + 1).padStart(2, '0')}_${filename}`;
+        zip.file(uniqueFilename, blob);
+      }
+
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement("a");
+      a.href = url;
+
+      const dateStr = new Date().toISOString().slice(0,10).replace(/-/g, "");
+      a.download = `wedding_photos_${dateStr}.zip`;
+
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("ZIP作成中にエラーが発生しました", error);
+      setErrorMessage("ZIPファイルの作成・保存に失敗しました。");
+    } finally {
+      setIsZipping(false);
+    }
+  };
+
+  const autoSelect = async () => {
+    const donePhotos = photos.filter(p => p.status === "done");
+    if (donePhotos.length === 0) return;
+
+    // 選考の途中で「全データ消去」が行われた場合に結果を書き戻さないためのトークン
+    const myResetToken = resetTokenRef.current;
+
+    setIsSelectingAI(true);
+    try {
+      // 🚀 高速化＆タイムアウト防止策＆候補の多様性確保
+      const maxCandidates = Math.max(pickCount * 4, 40);
+
+      // category × shotType の組み合わせでグループ化
+      const groupMap = {};
+      for (const photo of donePhotos) {
+        const cat = photo.result?.sceneCategory || "その他";
+        const shot = photo.result?.shotType || "medium";
+        const key = `${cat}__${shot}`;
+        if (!groupMap[key]) groupMap[key] = [];
+        groupMap[key].push(photo);
+      }
+
+      // 各グループ内をスコア降順に
+      Object.values(groupMap).forEach(g =>
+        g.sort((a, b) => (b.result?.totalScore || 0) - (a.result?.totalScore || 0))
+      );
+
+      // ラウンドロビン：各グループから1枚ずつ交互にピック
+      const groups = Object.values(groupMap);
+      const pickedIds = new Set();
+      const targetPhotos = [];
+      let round = 0;
+      while (targetPhotos.length < maxCandidates) {
+        let added = false;
+        for (const g of groups) {
+          if (g[round] && !pickedIds.has(g[round].id)) {
+            pickedIds.add(g[round].id);
+            targetPhotos.push(g[round]);
+            added = true;
+            if (targetPhotos.length >= maxCandidates) break;
+          }
+        }
+        round++;
+        if (!added) break;
+      }
+
+      // ストーリー性のためファイル名順（自然順）にソート
+      targetPhotos.sort((a, b) => compareFileNameNatural(a.name, b.name));
+
+      const candidates = targetPhotos.map(p => ({
+        id: p.id,
+        name: p.name,
+        score: p.result?.totalScore || 0,
+        description: p.result?.contentDescription || "",
+        category: p.result?.sceneCategory || "other",
+        shotType: p.result?.shotType || "medium",
+        isMonochrome: p.result?.isMonochrome || false,
+        orientation: p.orientation || "landscape"
+      }));
+
+      const selectionResult = await selectOptimalPhotosWithAI(candidates, pickCount);
+
+      // 選考中に全データ消去された場合はここで結果を破棄する
+      if (resetTokenRef.current !== myResetToken) return;
+
+      const selectedIds = new Set(selectionResult.selectedIds);
+
+      setPhotos(prev => {
+        const updated = prev.map(p => {
+          const isSelected = selectedIds.has(p.id);
+          if (p.selected !== isSelected) {
+            const newP = { ...p, selected: isSelected };
+            savePhotoToDB(newP); // 状態が変わったものだけDB更新
+            return newP;
+          }
+          return p;
+        });
+        return updated;
+      });
+
+      console.log("AIの選考理由:", selectionResult.reasoning);
+    } catch (error) {
+      if (resetTokenRef.current !== myResetToken) return;
+
+      console.error("AIによる最終選考に失敗しました:", error);
+
+      let errMsg = error.message || "AIによる最終選考に失敗しました。";
+      if (errMsg.includes("503") || errMsg.includes("504")) {
+         errMsg = "AIの処理時間が長すぎたためタイムアウトしました。時間をおいて再度お試しください。";
+      }
+
+      setErrorMessage(errMsg);
+    } finally {
+      if (resetTokenRef.current === myResetToken) {
+        setIsSelectingAI(false);
+      }
+    }
+  };
+
+  const sortedPhotos = [...photos].sort((a, b) => {
+    if (sortBy === "score") {
+      const scoreA = a.result?.totalScore || (a.status === "error" ? -1 : 0);
+      const scoreB = b.result?.totalScore || (b.status === "error" ? -1 : 0);
+      return scoreB - scoreA;
+    }
+    if (sortBy === "name") return compareFileNameNatural(a.name, b.name);
+    return 0;
+  });
+
+  const filteredPhotos = sortedPhotos.filter(p => {
+    if (filter === "recommended") return p.result?.recommend;
+    if (filter === "selected") return p.selected;
+    if (filter === "excluded") return p.status === "done" && !p.result?.recommend;
+    return true;
+  });
+
+  const doneCount = photos.filter(p => p.status === "done").length;
+  const errorCount = photos.filter(p => p.status === "error").length;
+  const selectedCount = photos.filter(p => p.selected).length;
+  const progressPercent = photos.length > 0 ? Math.round(((doneCount + errorCount) / photos.length) * 100) : 0;
+
+  return (
+    <div className="min-h-screen bg-[#0a0a0a] text-[#e8e0d8] font-sans flex flex-col relative">
+      {/* ヘッダー領域 */}
+      <header className="sticky top-0 z-50 border-b border-[#222] px-6 py-4 flex flex-col md:flex-row md:items-center justify-between bg-[#0f0f0f]/95 backdrop-blur-sm gap-4">
+        <div>
+          <div className="text-[10px] tracking-widest text-neutral-500 uppercase mb-1">AI Photo Curator</div>
+          <h1 className="text-xl font-medium tracking-wide">自動画像評価システム</h1>
+          <div className="text-[10px] text-neutral-500 mt-1">保存時の寸法：{RESIZE_W} × {RESIZE_H} px</div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          {photos.length > 0 && (
+            <div className="flex items-center gap-3 mr-2">
+              <span className="text-xs text-neutral-400">
+                評価完了: {doneCount}/{photos.length}枚
+              </span>
+              <span className="text-xs text-[#c9a96e] font-medium border-l border-neutral-700 pl-3">
+                選択中: {selectedCount}枚
+              </span>
+            </div>
+          )}
+
+          {photos.length > 0 && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={autoSelect}
+                disabled={isSelectingAI || processing || doneCount === 0}
+                title={doneCount === 0 ? "評価が完了した写真がありません" : undefined}
+                className={`text-black border-none rounded-md px-4 py-2 text-xs font-bold transition-colors flex items-center gap-2
+                  ${isSelectingAI || processing || doneCount === 0 ? "bg-[#c9a96e]/50 cursor-not-allowed" : "bg-[#c9a96e] hover:bg-[#b8985d] cursor-pointer"}
+                `}
+              >
+                {isSelectingAI ? (
+                  <>
+                    <svg className="animate-spin h-3 w-3 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    AIが最終調整中...
+                  </>
+                ) : (
+                  `上位${pickCount}枚をAI選考`
+                )}
+              </button>
+              <select
+                value={pickCount}
+                onChange={e => setPickCount(Number(e.target.value))}
+                className="bg-[#1a1a1a] text-[#e8e0d8] border border-[#333] rounded-md px-2 py-2 text-xs focus:outline-none focus:border-[#c9a96e] cursor-pointer"
+              >
+                {[4, 8, 12, 16, 20, 30].map(n => <option key={n} value={n}>{n}枚</option>)}
+              </select>
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="bg-[#222] hover:bg-[#333] text-[#e8e0d8] border border-[#444] rounded-md px-4 py-2 text-xs cursor-pointer transition-colors"
+            >
+              写真を追加
+            </button>
+            <button
+              onClick={() => folderInputRef.current?.click()}
+              className="bg-[#222] hover:bg-[#333] text-[#e8e0d8] border border-[#444] rounded-md px-4 py-2 text-xs cursor-pointer transition-colors hidden sm:block"
+              title="Googleドライブなどのフォルダを丸ごと追加"
+            >
+              フォルダ読込
+            </button>
+            {photos.length > 0 && (
+              <button
+                onClick={() => setShowClearModal(true)}
+                className="bg-transparent hover:bg-red-950/30 text-neutral-400 hover:text-red-400 border border-[#333] hover:border-red-900/50 rounded-md px-3 py-2 text-xs cursor-pointer transition-colors"
+                title="保存されているすべてのデータを完全に消去します"
+              >
+                全データ消去
+              </button>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* メインコンテンツ領域 */}
+      <main className="flex-1 flex flex-col relative">
+        {photos.length === 0 ? (
+          /* 初期状態：ドラッグ＆ドロップエリア */
+          <div className="flex-1 flex items-center justify-center p-6">
+            <div
+              onDragOver={onDragOver}
+              onDragLeave={onDragLeave}
+              onDrop={onDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className={`w-full max-w-2xl border-2 border-dashed rounded-2xl p-16 text-center cursor-pointer transition-all duration-300 flex flex-col items-center justify-center min-h-[400px]
+                ${isDragging
+                  ? "border-[#c9a96e] bg-[#c9a96e]/10 scale-[1.02]"
+                  : "border-[#333] hover:border-[#555] hover:bg-[#111]"
+                }`}
+            >
+              <div className="mb-4">
+                <svg className={`w-16 h-16 ${isDragging ? "text-[#c9a96e]" : "text-neutral-600"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <div className={`text-xl mb-3 font-medium ${isDragging ? "text-[#c9a96e]" : "text-[#e8e0d8]"}`}>
+                画像ファイルをここにドロップ
+              </div>
+              <div className="text-sm text-neutral-500 leading-relaxed">
+                またはクリックしてファイルを選択<br />
+                （複数選択可能・JPEG, PNG, WebP対応）
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* 写真一覧表示状態 */
+          <div className="flex flex-col flex-1 pb-24">
+
+            {/* プログレスバー（処理中の場合のみ） */}
+            {processing && (
+              <div className="px-6 py-3 bg-[#111] border-b border-[#1e1e1e]">
+                <div className="flex justify-between text-xs text-neutral-400 mb-2">
+                  <span className="flex items-center gap-2">
+                    <svg className="animate-spin h-3 w-3 text-[#c9a96e]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    AIが画像を評価しています...
+                    <span className="text-[#c9a96e]/80 ml-1">
+                      ({formatRemainingTime(timeRemaining)})
+                    </span>
+                  </span>
+                  <span>{progressPercent}%</span>
+                </div>
+                <div className="h-1.5 bg-[#222] rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-[#c9a96e] rounded-full transition-all duration-300 ease-out"
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* ツールバー（フィルター＆ソート） */}
+            <div className="px-6 py-4 border-b border-[#1a1a1a] flex flex-wrap gap-4 items-center justify-between bg-[#0a0a0a] sticky top-[73px] z-40">
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { key: "all", label: `すべて (${photos.length})` },
+                  { key: "recommended", label: `推奨 (${photos.filter(p => p.result?.recommend).length})` },
+                  { key: "selected", label: `選択中 (${selectedCount})` },
+                  { key: "excluded", label: `非推奨 (${photos.filter(p => p.status === "done" && !p.result?.recommend).length})` },
+                ].map(f => (
+                  <button
+                    key={f.key}
+                    onClick={() => setFilter(f.key)}
+                    className={`px-4 py-1.5 rounded-full text-xs font-medium transition-colors border ${
+                      filter === f.key
+                        ? "border-[#c9a96e] bg-[#c9a96e]/10 text-[#c9a96e]"
+                        : "border-[#333] bg-transparent text-neutral-400 hover:border-[#555] hover:text-[#e8e0d8]"
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-neutral-500 mr-1">並び替え:</span>
+                {[
+                  { key: "score", label: "点数順" },
+                  { key: "name", label: "ファイル名順" },
+                ].map(s => (
+                  <button
+                    key={s.key}
+                    onClick={() => setSortBy(s.key)}
+                    className={`px-3 py-1.5 rounded text-[11px] transition-colors border ${
+                      sortBy === s.key
+                        ? "border-[#444] bg-[#222] text-[#e8e0d8]"
+                        : "border-transparent bg-transparent text-neutral-500 hover:text-neutral-300 hover:bg-[#111]"
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* グリッドビュー */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 p-6">
+              {filteredPhotos.map(photo => {
+                const isDone = photo.status === "done";
+                const isError = photo.status === "error";
+                const isPending = photo.status === "pending";
+
+                return (
+                  <div
+                    key={photo.id}
+                    onClick={() => isDone && toggleSelected(photo.id)}
+                    className={`bg-[#111] rounded-xl overflow-hidden transition-all duration-200 group flex flex-col
+                      ${photo.selected
+                        ? "ring-2 ring-[#c9a96e] ring-offset-2 ring-offset-[#0a0a0a] transform scale-[1.02]"
+                        : isDone && photo.result?.recommend
+                        ? "border border-[#2a3a2a] hover:border-[#4a5a4a]"
+                        : "border border-[#1e1e1e] hover:border-[#333]"
+                      }
+                      ${isDone ? "cursor-pointer" : "cursor-default opacity-80"}
+                    `}
+                  >
+                    {/* サムネイル領域 */}
+                    <div className="relative aspect-[4/3] overflow-hidden bg-[#050505]">
+                      <img
+                        src={photo.url}
+                        alt={photo.name}
+                        className={`w-full h-full object-cover transition-transform duration-700 ${isDone && "group-hover:scale-105"}`}
+                      />
+
+                      {/* タグ表示 */}
+                      <div className="absolute top-2 left-2 flex flex-wrap gap-1.5 max-w-[80%]">
+                        {photo.result?.tags?.slice(0, 3).map(tag => (
+                          <span key={tag} className="bg-black/60 backdrop-blur-md text-neutral-300 text-[10px] px-2 py-0.5 rounded shadow-sm">
+                            #{tag}
+                          </span>
+                        ))}
+                        {photo.result?.tags?.length > 3 && (
+                          <span className="bg-black/60 backdrop-blur-md text-neutral-400 text-[10px] px-1.5 py-0.5 rounded shadow-sm">
+                            +{photo.result.tags.length - 3}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* 縦横バッジ＆カテゴリバッジ */}
+                      {isDone && (
+                        <div className="absolute bottom-2 right-2 flex gap-1 flex-wrap justify-end">
+                          <span className="bg-black/70 backdrop-blur-md text-[#c9a96e] text-[10px] px-1.5 py-0.5 rounded shadow-sm border border-[#c9a96e]/30">
+                            {photo.orientation === "landscape" ? "横画像" : "縦画像"}
+                          </span>
+                          {photo.result?.shotType && (
+                            <span className="bg-blue-900/80 text-blue-100 font-medium text-[10px] px-1.5 py-0.5 rounded shadow-sm border border-blue-700/50">
+                              {photo.result.shotType === "wide" ? "引き" : photo.result.shotType === "close-up" ? "アップ" : "全身/標準"}
+                            </span>
+                          )}
+                          {photo.result?.isMonochrome && (
+                            <span className="bg-neutral-800 text-neutral-300 font-medium text-[10px] px-1.5 py-0.5 rounded shadow-sm border border-neutral-600">
+                              モノクロ
+                            </span>
+                          )}
+                          {photo.result?.sceneCategory && (
+                            <span className="bg-[#c9a96e]/90 text-black font-medium text-[10px] px-1.5 py-0.5 rounded shadow-sm">
+                              {photo.result.sceneCategory}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* チェックマーク */}
+                      {photo.selected && (
+                        <div className="absolute top-2 right-2 bg-[#c9a96e] text-black rounded-full w-7 h-7 flex items-center justify-center text-sm font-bold shadow-lg transform scale-in">
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                        </div>
+                      )}
+
+                      {/* オーバーレイ（待機・エラー） */}
+                      {isPending && (
+                        <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex flex-col items-center justify-center text-xs text-neutral-300">
+                          <svg className="animate-spin h-6 w-6 text-[#c9a96e] mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                          評価待機中...
+                        </div>
+                      )}
+                      {isError && (
+                        <div className="absolute inset-0 bg-red-950/70 backdrop-blur-[2px] flex flex-col items-center justify-center p-4 text-center">
+                          <svg className="w-8 h-8 text-red-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                          <span className="text-xs text-red-200 font-medium">評価失敗</span>
+                          <span className="text-[10px] text-red-400 mt-1 line-clamp-2">{photo.errorMsg}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 詳細情報領域 */}
+                    <div className="p-4 flex flex-col flex-1 bg-gradient-to-b from-[#151515] to-[#0f0f0f]">
+                      <div className="flex justify-between items-start mb-3 gap-2">
+                        <div className="text-[11px] text-neutral-400 truncate flex-1 font-medium leading-tight" title={photo.name}>
+                          {photo.name}
+                        </div>
+                        {photo.result && <ScoreBadge score={photo.result.totalScore} />}
+                      </div>
+
+                      {photo.result && (
+                        <div className="flex-1 flex flex-col">
+                          <div className="text-[11px] text-neutral-300 leading-relaxed mb-4 flex-1 opacity-90 line-clamp-3" title={photo.result?.contentDescription || photo.result.reason}>
+                            {photo.result?.contentDescription || photo.result.reason}
+                          </div>
+
+                          <div className="space-y-1.5 mt-auto pt-3 border-t border-[#222]">
+                            {CRITERIA.map(c => (
+                              <CriteriaBar key={c.key} label={c.label} score={photo.result[c.key] || 0} />
+                            ))}
+                          </div>
+
+                          <div className="mt-4 flex justify-end">
+                            <button
+                              onClick={e => { e.stopPropagation(); downloadOne(photo); }}
+                              className="flex items-center gap-1.5 bg-[#222] hover:bg-[#333] border border-[#333] hover:border-[#555] text-neutral-300 rounded px-3 py-1.5 text-[10px] transition-colors"
+                            >
+                              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                              個別保存
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {filteredPhotos.length === 0 && (
+              <div className="flex-1 flex items-center justify-center text-neutral-500 text-sm">
+                表示できる画像がありません。
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+
+      {/* フローティング アクション バー（画像選択時のみ表示） */}
+      {selectedCount > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 bg-[#0f0f0f]/95 backdrop-blur-md border-t border-[#222] px-6 py-4 flex items-center gap-4 z-50 transform transition-transform duration-300 translate-y-0">
+          <div className="flex items-center gap-2 text-[#c9a96e]">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+            <span className="font-bold text-sm">{selectedCount}枚選択中</span>
+          </div>
+
+          <div className="flex-1 text-[11px] text-neutral-500 truncate px-4 hidden sm:block">
+            {photos.filter(p => p.selected).map(p => p.name).join(" / ")}
+          </div>
+
+          <button
+            onClick={downloadSelectedAsZip}
+            disabled={isZipping}
+            className={`ml-auto bg-gradient-to-r from-[#d4b479] to-[#c9a96e] hover:from-[#e5c58a] hover:to-[#d4b479] text-black border-none rounded-lg px-6 py-2.5 text-sm font-bold shadow-lg shadow-[#c9a96e]/20 flex items-center gap-2 transition-all transform active:scale-95 ${isZipping ? "opacity-75 cursor-wait" : "cursor-pointer"}`}
+          >
+            {isZipping ? (
+              <>
+                 <svg className="animate-spin h-4 w-4 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                 ZIP作成中...
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                選択した画像をZIPで保存
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* 隠し入力要素 */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept="image/jpeg, image/png, image/webp"
+        className="hidden"
+        onChange={e => handleFiles(e.target.files)}
+      />
+      <input
+        ref={folderInputRef}
+        type="file"
+        webkitdirectory="true"
+        directory="true"
+        multiple
+        accept="image/jpeg, image/png, image/webp"
+        className="hidden"
+        onChange={e => handleFiles(e.target.files)}
+      />
+
+      {/* 完全消去確認モーダル */}
+      {showClearModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-[#111] border border-[#333] rounded-xl p-6 max-w-md w-full shadow-2xl">
+            <h3 className="text-lg font-bold text-red-400 mb-2 flex items-center gap-2">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+              データを完全に消去しますか？
+            </h3>
+            <p className="text-sm text-neutral-400 mb-6 leading-relaxed">
+              現在ブラウザに保存されているすべての画像データとAIの評価結果を完全に削除します。この操作は取り消せません。
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowClearModal(false)}
+                className="px-4 py-2 rounded text-sm text-neutral-300 bg-[#222] hover:bg-[#333] transition-colors"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleFullReset}
+                className="px-4 py-2 rounded text-sm bg-red-900/60 hover:bg-red-700 text-red-100 transition-colors font-bold"
+              >
+                完全に消去する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* カスタムエラーモーダル */}
+      {errorMessage && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-[#111] border border-[#333] rounded-xl p-6 max-w-md w-full shadow-2xl">
+            <h3 className="text-lg font-bold text-red-400 mb-2 flex items-center gap-2">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              エラー
+            </h3>
+            <p className="text-sm text-neutral-300 mb-6 leading-relaxed whitespace-pre-wrap">
+              {errorMessage}
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setErrorMessage(null)}
+                className="px-4 py-2 rounded text-sm bg-[#333] hover:bg-[#444] text-white transition-colors font-bold"
+              >
+                閉じる
+              </button>
+              {errorMessage.includes("再読み込み") && (
+                <button
+                  onClick={() => window.location.reload()}
+                  className="px-4 py-2 rounded text-sm bg-red-900/60 hover:bg-red-700 text-red-100 transition-colors font-bold"
+                >
+                  ページを再読み込み
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App />);
+</script>
+
+<!--
+  ブートストラップ: 上の #app-source を明示的な設定でJSX変換し、
+  通常のscriptとして実行する。CDNの読み込み失敗（社内プロキシや
+  広告ブロッカー等によるブロックを含む）にも備え、失敗時は
+  無反応の白紙画面のままにせず、原因をその場に表示する。
+-->
+<script>
+(function () {
+  function showFatalError(message) {
+    var rootEl = document.getElementById("root");
+    if (!rootEl) return;
+    rootEl.innerHTML =
+      '<div style="max-width:640px;margin:15vh auto;padding:24px;' +
+      'font-family:sans-serif;color:#e8e0d8;background:#1a1a1a;' +
+      'border:1px solid #442222;border-radius:12px;line-height:1.7;">' +
+      '<div style="color:#ff8080;font-weight:bold;margin-bottom:8px;">読み込みに失敗しました</div>' +
+      '<div style="font-size:14px;white-space:pre-wrap;">' + message + '</div></div>';
+  }
+
+  try {
+    if (!window.React || !window.ReactDOM || !window.Babel) {
+      showFatalError(
+        "React / ReactDOM / Babel の読み込みに失敗しました。\n" +
+        "ネットワーク接続、または社内プロキシ・広告ブロッカーの設定をご確認のうえ、\n" +
+        "ページを再読み込みしてください。"
+      );
+      return;
+    }
+
+    var source = document.getElementById("app-source").textContent;
+    var transformed = Babel.transform(source, {
+      presets: [["react", { runtime: "classic" }]]
+    }).code;
+
+    var script = document.createElement("script");
+    script.text = transformed;
+    document.body.appendChild(script);
+  } catch (err) {
+    console.error("アプリの初期化に失敗しました:", err);
+    showFatalError("アプリの初期化中にエラーが発生しました。\n" + (err && err.message ? err.message : err));
+  }
+})();
+</script>
+</body>
+</html>

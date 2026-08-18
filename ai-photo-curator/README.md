@@ -32,6 +32,11 @@
 
 **修正**: `ScoreBadge` / `CriteriaBar` に数値以外のフォールバック（`0`）を追加し、防御的にしました。
 
+### 5. （`index.html` ビルド版で新規発見）バージョン無指定のCDNで真っ白画面になる
+Google Sites埋め込み用に単一HTML化する際、`@babel/standalone` をバージョン指定なしでCDNから読み込んだところ、CDNが配信する最新版（Babel 8系）がJSXを `React.createElement` ではなく `import { jsx as _jsx } from "react/jsx-runtime"` という ES Modules 形式に変換するようになっており、クラシックな `<script>` タグの中では実行できず「Cannot use import statement outside a module」で完全に真っ白な画面のまま止まることを実機検証で確認しました。
+
+**修正**: React / ReactDOM / Babel standalone を動作確認済みのバージョンに固定（`react@18.3.1`, `react-dom@18.3.1`, `@babel/standalone@7.29.8`）。さらにJSXソースを一度 `type="text/plain"` として無効化し、ブートストラップ用スクリプトから `Babel.transform(source, { presets: [["react", { runtime: "classic" }]] })` を明示的に呼び出す方式に変更し、将来CDNのバージョンが変わっても壊れにくい形にしました。あわせて、CDN読み込み自体に失敗した場合（社内プロキシ・広告ブロッカー等）も無反応の白紙のままにせず、画面にエラーメッセージを表示するようにしています。
+
 ---
 
 ## さらなる改善提案
@@ -53,3 +58,35 @@
 
 6. **アップロード時のファイルサイズ／枚数の上限チェックがない**
    大量・大容量の画像を一度にドロップすると、IndexedDBの容量やAPIコストの面で問題になり得ます。事前に警告するか、上限を設けることを検討してください。
+
+---
+
+## `index.html`（Google Sites 埋め込み用・単一ファイル版）
+
+`App.jsx` の内容をベースに、ビルド不要でそのままブラウザ実行できる単一HTMLファイル `index.html` を用意しました。React / ReactDOM / Babel standalone / Tailwind CSS をすべてCDNから読み込む構成です（npm installやwebpack/vite等のビルド工程は不要）。ローカルで実際にブラウザ実行して動作確認済みです。
+
+### 使い方（Google Sitesへの埋め込み手順）
+
+1. **APIキーを設定する**
+   `index.html` を開き、`GEMINI_API_KEY` という定数（ファイル冒頭のコメント付近）に、[Google AI Studio](https://aistudio.google.com/apikey) で発行したご自身のGemini APIキーを貼り付けてください。
+   ```js
+   const GEMINI_API_KEY = "ここにAPIキーを貼り付け";
+   ```
+   > ⚠️ **重要**: このファイルはブラウザ上でそのまま動く静的HTMLのため、ここに書いたAPIキーは、ページを開いた人なら誰でも「ページのソースを表示」等で閲覧・抜き取り・悪用（あなたの請求で使用）できてしまいます。社内限定・自分専用など閲覧者を完全に信頼できる用途に限定してください。不特定多数に公開するページに埋め込む場合は、Google Apps ScriptのWebアプリ等でAPIキーをサーバー側に隠すプロキシ構成への変更をおすすめします（必要であればサポートします）。
+
+2. **どこかにホスティングする**
+   Google Sites自体はHTMLファイルを直接アップロードできないため、`index.html` をどこかの公開URLに置く必要があります。候補:
+   - GitHub Pages（このリポジトリの `ai-photo-curator/` フォルダをそのまま公開する等）
+   - Firebase Hosting
+   - Google Apps Script の Web アプリとして公開（`doGet` で `index.html` のHTMLを返す）
+
+3. **Google Sitesに埋め込む**
+   Google Sitesの編集画面で「挿入」→「埋め込み」→「埋め込みコード」を選び、次のようなiframeタグを貼り付けます（URLは手順2で発行された公開URLに置き換えてください）。
+   ```html
+   <iframe src="https://your-hosting-url/index.html" style="width:100%; height:900px; border:0;"></iframe>
+   ```
+   高さはお好みで調整してください（写真一覧が縦に伸びるため900px以上を推奨）。
+
+### 既知の制約
+- **Tailwind CDN（Play CDN）を使用**しているため、実行時にCSSを生成する簡易版です。アクセスが多い本番サイトで長期運用する場合は、Vite等での事前ビルドに切り替えることを推奨します。
+- **IndexedDBによる自動保存はブラウザのタブ内ローカルストレージ**です。Google Sitesにiframeとして埋め込むと「サードパーティコンテキスト」になるため、ブラウザ（特にSafariやプライバシー設定を厳しくしたブラウザ）によってはストレージが分離・制限され、期待通りに保存が効かない場合があります。重要なデータは都度ZIPでダウンロードして保存する運用を推奨します。
