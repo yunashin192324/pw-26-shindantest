@@ -2033,5 +2033,26 @@ section('35. 検索：STSでの絞り込み・一覧表（表示形式が表）�
 }
 
 // ---------------------------------------------------------------
+section('36. DriveフォルダURL登録（不具合修正の回帰テスト）');
+{
+  // ★不具合修正：markUnreadForCounterpart_ 廃止時にこの呼び出し箇所だけ更新漏れしていて、
+  // 成功パス（正しいURL・正しい管理番号で最後まで到達する）を通す既存テストが無かったため
+  // 気づけなかった。実際に最後まで成功させて確認する。
+  const ctx = featureFixture();
+  addCase(ctx, '予約一覧', { '支店コード': 'VIE', '管理番号': 'VIE-901', '管轄': '関東', '新郎名（ローマ字）': 'A' });
+  const jp = ctx.apiLogin('KANTO', 'pw');
+  const t = jp.session.token;
+
+  let err = null;
+  try { ctx.apiSetDriveUrl(t, 'VIE-901', 'https://drive.google.com/drive/folders/abc'); } catch (e) { err = e; }
+  check('正しいURLで例外なく成功する', err === null, err ? (err.stack || err.message) : '');
+  const after = ctx.apiGetReservationDetail(t, 'VIE-901').detail;
+  check('DriveフォルダURLが保存される', after['DriveフォルダURL'] === 'https://drive.google.com/drive/folders/abc');
+  const vie = ctx.apiLogin('VIE', 'vp');
+  check('支店側も未読になる（通知が届く）',
+        ctx.apiGetDashboard(vie.session.token, { showAll: true }).reservations.find(r => r.kanriNo === 'VIE-901').needsAction === true);
+}
+
+// ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
 process.exit(fail === 0 ? 0 : 1);

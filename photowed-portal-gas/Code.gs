@@ -2023,8 +2023,12 @@ function apiSetDriveUrl(token, kanriNo, url) {
     sheet.getRange(rowIndex, colIndexOrThrow_(headers, COL_LAST_UPDATED)).setValue(new Date());
 
     const freshRow = sheet.getRange(rowIndex, 1, 1, headers.length).getValues()[0];
-    appendHistory_(headers, freshRow, senderLabel_(session), `[DriveフォルダURL更新]\n${trimmed}`, session.role);
-    markUnreadForCounterpart_(sheet, headers, rowIndex, session.role);
+    // ★不具合修正：markUnreadForCounterpart_ はSTS(JP側)未読フラグ実装の見直し（店舗ロール対応）で
+    // markUnreadForDirection_ に置き換えたが、この呼び出し箇所だけ更新漏れしていた
+    // （どのテストも実際にこの行まで到達する成功パスを通していなかったため気づけなかった）。
+    const direction = resolveMessageDirection_(session, headers, freshRow);
+    appendHistory_(headers, freshRow, senderLabel_(session), `[DriveフォルダURL更新]\n${trimmed}`, session.role, recipientRoleForDirection_(direction));
+    markUnreadForDirection_(sheet, headers, rowIndex, direction);
     sendDirectionalMail_(headers, freshRow, 'BOTH', session, trimmed, 'DriveフォルダURL');
   } finally {
     lock.releaseLock();
