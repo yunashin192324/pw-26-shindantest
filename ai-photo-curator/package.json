@@ -1,0 +1,17 @@
+{
+  "name": "ai-photo-curator",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Google Sites埋め込み用 AI Photo Curator（完全オフライン同梱ビルド）",
+  "scripts": {
+    "build": "node build.js"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.26.0",
+    "@babel/preset-react": "^7.25.9",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "jszip": "3.10.1",
+    "tailwindcss": "^3.4.19"
+  }
+}
