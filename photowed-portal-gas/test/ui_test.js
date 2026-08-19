@@ -718,6 +718,77 @@ function visiblePane(document) {
           document.getElementById('shop-upload-list').innerHTML.includes('hair.jpg'));
   }
 
+  // ---------------------------------------------------------------
+  section('U18. チャレンジ番号入力欄・送信後の案内・店舗一覧の絞り込み・希望日ごとのSTS');
+  {
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'SHOP1', 'CHANGE-ME-SHOP1');
+    document.getElementById('view-mode-card').click();
+    document.getElementById('nav-shop-new').click();
+    await settle();
+    document.getElementById('shop-new-branch').value = 'VIE';
+    document.getElementById('shop-new-team').value = '関東';
+    document.getElementById('shop-new-challengeno').value = 'CH-9001';
+    document.getElementById('shop-new-groom').value = 'Hope Tester';
+    document.getElementById('shop-new-hope1').value = '2026-08-01';
+    document.getElementById('shop-new-hope2').value = '2026-08-05';
+    document.getElementById('shop-new-submit').click();
+    await settle();
+    const successText = document.getElementById('shop-new-success').textContent;
+    check('チャレンジ番号つきで依頼を送信できる', !document.getElementById('shop-new-success').classList.contains('hidden'), successText);
+    check('送信後に「回答までお待ちください」の案内が出る（拡張要望）', successText.includes('お待ちください'), successText);
+    const kanri3 = successText.match(/依頼\s*(\S+)\s*を送信/)[1];
+
+    document.getElementById('nav-dashboard').click();
+    await settle();
+    check('店舗の一覧に絞り込み欄が表示される', !document.getElementById('shop-dashboard-filter').classList.contains('hidden'));
+    document.getElementById('shop-dashboard-search').value = 'CH-9001';
+    document.getElementById('shop-dashboard-search').dispatchEvent(new dom.window.Event('input'));
+    await settle();
+    check('チャレンジ番号で絞り込むと該当案件だけ表示される',
+          document.getElementById('reservation-list').innerHTML.includes(kanri3) &&
+          document.querySelectorAll('#reservation-list .res-card').length === 1);
+    document.getElementById('shop-dashboard-search').value = '';
+    document.getElementById('shop-dashboard-search').dispatchEvent(new dom.window.Event('input'));
+    document.getElementById('shop-dashboard-team').value = '関西';
+    document.getElementById('shop-dashboard-team').dispatchEvent(new dom.window.Event('change'));
+    await settle();
+    check('担当（手配課）で絞り込むと関東の案件は出ない',
+          !document.getElementById('reservation-list').innerHTML.includes(kanri3));
+    document.getElementById('shop-dashboard-team').value = '';
+    document.getElementById('shop-dashboard-team').dispatchEvent(new dom.window.Event('change'));
+    await settle();
+
+    // --- 希望日ごとのSTSが店舗の画面にも表示される ---
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanri3)).click();
+    await settle();
+    const shopDetailText = document.getElementById('detail-content').innerHTML;
+    check('店舗の画面にも希望日①のSTSが表示される（現地未確認のST）',
+          shopDetailText.includes('希望日① STS') && shopDetailText.includes('JP: RQ') && shopDetailText.includes('支店: ST'));
+
+    // --- 現地(支店)が希望日から確定する ---
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'VIE', 'CHANGE-ME-VIE');
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanri3)).click();
+    await settle();
+    const hopeBtn = document.querySelector('[data-hope-field="希望日② STS 支店"]');
+    check('現地の画面に希望日②の「希望日から確定する」ボタンが出る', !!hopeBtn);
+    hopeBtn.click();
+    await settle();
+    check('希望日から確定した後の画面に反映される（希望日②のSTS 支店がOK表示になる）',
+          !document.querySelector('[data-hope-field="希望日② STS 支店"]')); // 確定済みなのでボタンはもう出ない
+
+    const jp3 = ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    const afterHope = ctx.apiGetReservationDetail(jp3, kanri3).detail;
+    check('希望日②のSTS(支店側)がOKになる（画面操作がサーバーに反映される）', afterHope['希望日② STS 支店'] === 'OK');
+    check('撮影日FIXに希望日②の日付が反映される', afterHope['撮影日FIX'] === '2026-08-05', afterHope['撮影日FIX']);
+    check('案件全体のSTS(JP側)もOKへ進む', afterHope['STS JP'] === 'OK');
+  }
+
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error('テストが異常終了しました:', e); process.exit(1); });

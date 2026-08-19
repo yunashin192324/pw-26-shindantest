@@ -1208,6 +1208,7 @@ function buildShopReservationDetail_(session, kanriNo, headers, rowData) {
     [COL_HOPE5]: getV(COL_HOPE5),
     [COL_AREA]: getV(COL_AREA),
     branchName: meta.name || getV(COL_BRANCH_CODE),
+    // ★機能追加：希望日ごとの空き確認ステータス（現地未確認ST→RQ→OK/UC）は店舗にも見せる（読み取り専用）
     country: meta.country || '',
     city: meta.city || '',
     originShop: getV(COL_ORIGIN_SHOP) || '',
@@ -1218,6 +1219,12 @@ function buildShopReservationDetail_(session, kanriNo, headers, rowData) {
     shopBilling: ownMeta.shopBilling || ''
   };
   if (detail.passportRequired) detail[COL_PASSPORT_NO] = getV(COL_PASSPORT_NO);
+
+  // ★機能追加：希望日ごとの空き確認ステータス（現地未確認ST→RQ→OK/UC）は店舗にも見せる（読み取り専用）
+  for (let n = 1; n <= HOPE_COLS.length; n++) {
+    detail[hopeStsJpCol_(n)] = getV(hopeStsJpCol_(n));
+    detail[hopeStsBranchCol_(n)] = getV(hopeStsBranchCol_(n));
+  }
 
   // ★機能追加（拡張要望9章）：必要書類チェックリストは店舗側にも見せる（双方向でチェックできる）
   detail.checklist = CHECKLIST_ITEMS.map(item => ({ item, checked: isActiveFlag_(getV(checklistCol_(item))) }));

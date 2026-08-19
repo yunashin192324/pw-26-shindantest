@@ -60,6 +60,21 @@
           </div>
         </div>
         <div id="scope-selector" class="scope-box jp-only hidden"></div>
+        <!-- ★機能追加：店舗ロール向けの一覧の絞り込み（担当の手配課・チャレンジ番号／お名前／管理番号で検索） -->
+        <div id="shop-dashboard-filter" class="scope-box shop-only hidden" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
+          <div style="flex:2;min-width:180px;">
+            <label style="font-size:0.72rem;color:var(--color-muted);display:block;margin-bottom:4px;">検索（チャレンジ番号・お名前・管理番号）</label>
+            <input id="shop-dashboard-search" type="text" placeholder="例）CH-2201 / Yamada / VIE-003">
+          </div>
+          <div style="flex:1;min-width:130px;">
+            <label style="font-size:0.72rem;color:var(--color-muted);display:block;margin-bottom:4px;">担当（該当の手配課）</label>
+            <select id="shop-dashboard-team">
+              <option value="">すべて</option>
+              <option value="関東">関東手配課</option>
+              <option value="関西">関西手配課</option>
+            </select>
+          </div>
+        </div>
         <label class="checkbox-label" style="margin:4px 0 10px;">
           <input id="show-cancelled" type="checkbox"> キャンセル（CW）済みも表示する
         </label>
@@ -178,6 +193,8 @@
           <option value="RQ">RQ（予約依頼）</option>
           <option value="CHK">CHK（空き確認のみ）</option>
         </select>
+        <label>チャレンジ番号</label>
+        <input id="shop-new-challengeno" type="text" placeholder="任意入力">
         <label>新郎名（ローマ字）</label>
         <input id="shop-new-groom" type="text" placeholder="例）Ahmet Yilmaz">
         <label>新婦名（ローマ字）</label>
