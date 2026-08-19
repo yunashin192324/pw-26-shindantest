@@ -724,13 +724,26 @@
           <div class="history-body">${escapeHtml(h.body)}</div>
         </div>`).join('');
 
-    // ★機能追加：希望日ごとの空き確認ステータスは店舗にも見せる（編集はできない。読み取り専用）
+    // ★機能追加：希望日ごとの空き確認ステータスは店舗にも見せる（編集はできない。読み取り専用）。
+    // 「優先順位・日付・日本STS・現地STS」の表で表示する（JP/支店の予約内容タブと同じ形式）。
     const SHOP_HOPE_FIELDS = ['希望日①', '希望日②', '希望日③', '希望日④', '希望日⑤'];
-    const hopeStsShopHtml = SHOP_HOPE_FIELDS.map(f => {
+    const hopeTableRowsShop = SHOP_HOPE_FIELDS.map((f, i) => {
       const jpVal = d[`${f} STS JP`], branchVal = d[`${f} STS 支店`];
-      if (!d[f] && !jpVal && !branchVal) return '';
-      return `<div class="field-block"><label>${escapeHtml(f)} STS</label><div>JP: ${escapeHtml(jpVal || '未設定')} ／ 支店: ${escapeHtml(branchVal || '未設定')}</div></div>`;
+      return `
+        <tr>
+          <td>第${i + 1}希望</td>
+          <td><input type="date" data-pending="${escapeAttr(f)}" value="${escapeAttr(toIsoDate(d[f]))}" style="width:100%;"></td>
+          <td>${escapeHtml(jpVal || '')}</td>
+          <td>${escapeHtml(branchVal || '')}</td>
+        </tr>`;
     }).join('');
+    const hopeTableHtmlShop = `
+      <div class="table-wrap" style="margin-top:6px;">
+        <table class="res-table">
+          <thead><tr><th>優先順位</th><th>日付</th><th>日本STS</th><th>現地STS</th></tr></thead>
+          <tbody>${hopeTableRowsShop}</tbody>
+        </table>
+      </div>`;
 
     const optionsHtml = (d.options || []).map(o => o.name ? `
       <div class="field-block"><label>オプション${o.n}</label>
@@ -784,13 +797,8 @@
           ${!d.isItaly ? '' : `<div class="field-block"><label>準備場所</label>
             <select data-pending="準備場所"><option value="">未設定</option>${PREP_CHOICES.map(p =>
               `<option value="${escapeAttr(p)}" ${d['準備場所'] === p ? 'selected' : ''}>${escapeHtml(p)}</option>`).join('')}</select></div>`}
-          <div class="field-block"><label>希望日①</label><input type="date" data-pending="希望日①" value="${escapeAttr(toIsoDate(d['希望日①']))}"></div>
-          <div class="field-block"><label>希望日②</label><input type="date" data-pending="希望日②" value="${escapeAttr(toIsoDate(d['希望日②']))}"></div>
-          <div class="field-block"><label>希望日③</label><input type="date" data-pending="希望日③" value="${escapeAttr(toIsoDate(d['希望日③']))}"></div>
-          <div class="field-block"><label>希望日④</label><input type="date" data-pending="希望日④" value="${escapeAttr(toIsoDate(d['希望日④']))}"></div>
-          <div class="field-block"><label>希望日⑤</label><input type="date" data-pending="希望日⑤" value="${escapeAttr(toIsoDate(d['希望日⑤']))}"></div>
         </div>
-        <div class="detail-grid" style="margin-top:6px;">${hopeStsShopHtml}</div>
+        ${hopeTableHtmlShop}
       </div>
       <div class="section-card">
         <h3 style="margin-top:0;">オプション（最大5件）</h3>
@@ -1060,22 +1068,35 @@
     const staffNames = (staffList || []).filter(x => x.active).map(x => x.name);
     const staffDatalist = `<datalist id="staff-datalist">${staffNames.map(n => `<option value="${escapeAttr(n)}">`).join('')}</datalist>`;
 
-    // ★機能追加：希望日ごとの空き確認ステータス（第一〜第五希望それぞれにSTS JP／STS 支店）。
+    // ★機能追加：希望日ごとの空き確認ステータス（第一〜第五希望それぞれにSTS JP／STS 支店）を
+    // 「優先順位・日付・日本STS・現地STS」の表で表示する。
     // STS(JP側)は自動連動専用のシステム項目のため常に読み取り専用（editableByMe=false固定）。
-    // STS(支店側)は現地が編集する（初期値ST→ベンダー確認後RQ→取れたらOK／取れなければUC）。
+    // STS(支店側)は現地が編集する（初期値ST→ベンダー確認後RQ／取れたらOK／取れなければUC）。
     // OK/UCの回答はSTS(JP側)にも自動反映され、OKになると他の希望日は自動でUCになり、
     // その日付が撮影日FIXへ反映される（Code.gsのapplyHopeStatusCascade_参照）。
     const HOPE_FIELDS = ['希望日①', '希望日②', '希望日③', '希望日④', '希望日⑤'];
-    const hopeStsHtml = HOPE_FIELDS.map(f => {
+    const hopeTableRows = HOPE_FIELDS.map((f, i) => {
       const jpField = `${f} STS JP`, branchField = `${f} STS 支店`;
-      if (!d[f] && !d[jpField] && !d[branchField]) return ''; // 未入力の希望日はSTSも出さない
       const gate = branchGateFor(d[jpField]);
+      const jpCell = d[jpField] ? statusCell(jpField, d[jpField], false, null) : '';
+      const branchCell = (session.role === 'BRANCH' && gate.editable)
+        ? statusCell(branchField, d[branchField], true, gate.allowed, `${f} STS JP: ${d[jpField] || '未設定'}`)
+        : (d[branchField] ? statusCell(branchField, d[branchField], false, null) : '');
       return `
-        <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:6px;">
-          <div style="flex:1;"><div class="hint-text" style="margin-bottom:2px;">${escapeHtml(f)} STS JP</div>${statusCell(jpField, d[jpField], false, null)}</div>
-          <div style="flex:1;"><div class="hint-text" style="margin-bottom:2px;">${escapeHtml(f)} STS 支店</div>${statusCell(branchField, d[branchField], session.role === 'BRANCH' && gate.editable, gate.allowed, `${f} STS JP: ${d[jpField] || '未設定'}`)}</div>
-        </div>`;
+        <tr>
+          <td>第${i + 1}希望</td>
+          <td><input data-pending="${escapeAttr(f)}" value="${escapeAttr(d[f])}" style="width:100%;"></td>
+          <td>${jpCell}</td>
+          <td>${branchCell}</td>
+        </tr>`;
     }).join('');
+    const hopeFieldsHtml = `
+      <div class="table-wrap" style="margin-top:6px;">
+        <table class="res-table">
+          <thead><tr><th>優先順位</th><th>日付</th><th>日本STS</th><th>現地STS</th></tr></thead>
+          <tbody>${hopeTableRows}</tbody>
+        </table>
+      </div>`;
     // ★機能：希望日からのワンタップ回答（対象の希望日のSTS(支店側)をOKにする分かりやすいショートカット。
     // 実際の反映はapplyHopeStatusCascade_を通る＝上のSTSセレクトで選んだ場合と全く同じ結果になる）
     const hopeButtons = HOPE_FIELDS.map((f, i) => {
@@ -1091,9 +1112,6 @@
     const hopeBlock = hopeButtons
       ? `<div class="hope-box"><div class="hint-text" style="margin-bottom:6px;">希望日から確定する（その希望日のSTS 支店をOKにします。撮影日FIXへの反映・他の希望日の自動UC・日本側への通知は自動で行われます）</div>${hopeButtons}</div>`
       : '';
-    const hopeFieldsHtml = HOPE_FIELDS.map(f =>
-      `<div class="field-block"><label>${escapeHtml(f)}</label><input data-pending="${escapeAttr(f)}" value="${escapeAttr(d[f])}"></div>`).join('') +
-      `<div style="grid-column:1/-1;margin-top:6px;">${hopeStsHtml}</div>`;
 
     // ★要件：「空きだけ確認」にチェックを入れて確定すると、STS JPが自動でCHK（確認依頼中）になり、
     // 撮影日FIXではなく上の希望日①〜⑤の空き状況を現地へ確認する依頼になる（日本側のみ操作）
@@ -1319,7 +1337,7 @@
 
         <div class="section-card">
           ${inquiryBlock}
-          <div class="detail-grid" style="margin-top:10px;">${hopeFieldsHtml}</div>
+          ${hopeFieldsHtml}
           ${hopeBlock}
         </div>
 

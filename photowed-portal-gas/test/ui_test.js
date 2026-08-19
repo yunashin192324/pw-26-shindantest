@@ -764,9 +764,9 @@ function visiblePane(document) {
     [...document.querySelectorAll('#reservation-list .res-card')]
       .find(c => c.textContent.includes(kanri3)).click();
     await settle();
-    const shopDetailText = document.getElementById('detail-content').innerHTML;
-    check('店舗の画面にも希望日①のSTSが表示される（現地未確認のST）',
-          shopDetailText.includes('希望日① STS') && shopDetailText.includes('JP: RQ') && shopDetailText.includes('支店: ST'));
+    const hopeRow1 = [...document.querySelectorAll('#detail-content tr')].find(r => r.textContent.includes('第1希望'));
+    check('店舗の画面にも希望日①のSTSが表(優先順位/日付/日本STS/現地STS)で表示される（現地未確認のST）',
+          !!hopeRow1 && hopeRow1.textContent.includes('RQ') && hopeRow1.textContent.includes('ST'), hopeRow1 && hopeRow1.textContent);
 
     // --- 現地(支店)が希望日から確定する ---
     document.getElementById('nav-logout').click();
