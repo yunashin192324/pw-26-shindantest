@@ -61,7 +61,9 @@ const LOGIN_LOCKOUT_SEC = 900; // 15分
 // 支店側の編集ロック挙動＝NCは支店が自由に回答できる、という既存ルールは変えない）。
 // DC（日付変更依頼）・PC（プラン・式場変更依頼）は新設。どちらもチャージが発生し得る
 // 重要な変更のため、専用のステータスコードで管理する（詳細は STATUS_AUTO_CASCADE 付近を参照）。
-const STATUS_CODES = ['RQ', 'OK', 'CHK', 'CR', 'FN', 'CW', 'NC', 'UC', 'CF', 'DC', 'PC'];
+// ★機能追加：ST（現地側がまだ確認していない、の意）は主に希望日ごとのSTS(支店側)の初期値として使う
+// （現地スタッフが見てベンダーへ連絡したらRQへ変える。詳細はhopeStsBranchCol_付近を参照）。
+const STATUS_CODES = ['RQ', 'OK', 'CHK', 'CR', 'FN', 'CW', 'NC', 'UC', 'CF', 'DC', 'PC', 'ST'];
 const ALERT_COMPLETED_STATUS = 'FN';
 // ★要件：撮影日の45日前時点でSTSがFNになっていない場合に日本側へアラート
 const ALERT_DAYS_BEFORE = 45;
@@ -102,7 +104,10 @@ const BRANCH_EDIT_GATE = {
   'CHK': null,
   'CR': ['CW', 'CF'],
   'DC': ['OK', 'UC'],
-  'PC': ['OK', 'UC']
+  'PC': ['OK', 'UC'],
+  // ★機能追加：STS(JP側)がFN（最終確定）になった後、現地側もベンダーへ確定連絡が済んだら
+  // 自分のSTS(支店側)をFNにできる（それまでは編集不可のロックのまま）。
+  'FN': ['FN']
 };
 // 請求先（日本の地域区分）
 const BILLING_REGIONS = ['北海道', '東北', '関東', '中部', '関西', '中四国', '九州'];
@@ -211,6 +216,19 @@ function opNameCol_(n) { return `OP${n}`; }
 function opStsJpCol_(n) { return `OP${n} STS JP`; }
 function opStsBranchCol_(n) { return `OP${n} STS 支店`; }
 
+// ★機能追加：希望日ごとの空き確認ステータス（第一〜第五希望それぞれにSTS JP／STS 支店を持たせる。
+// OPn（オプション）と同じ構造）。
+//   ・STS(JP側)：新規作成時、日付が入っている希望日だけ自動でRQになる（誰も直接編集しない。
+//     生成時の初期化と、現地側のOK/UC回答に連動する自動反映だけで動く）
+//   ・STS(支店側)：現地側が編集する。初期値ST（まだ確認していない）→ ベンダーへ連絡したらRQ→
+//     取れたらOK／取れなければUC。OK／UCの回答はSTS(JP側)にもそのまま反映される
+//     （DC/PCの回答と同じ「支店側の回答がJP側にも映る」例外パターン。applyHopeStatusCascade_参照）
+// 希望日が複数OKになることは無い前提で、いずれかがOKになったら他の入力済みの希望日は自動でUCになり、
+// その日付が撮影日FIX（COL_CONFIRMED_DATE）へ反映される。
+const HOPE_COLS = [COL_HOPE1, COL_HOPE2, COL_HOPE3, COL_HOPE4, COL_HOPE5];
+function hopeStsJpCol_(n) { return `${HOPE_COLS[n - 1]} STS JP`; }
+function hopeStsBranchCol_(n) { return `${HOPE_COLS[n - 1]} STS 支店`; }
+
 // ★機能追加（拡張要望9章）：必要書類チェックリスト。店舗スタッフ（主）・現地(支店)のどちらからでも
 // チェックでき、どちらの変更も双方に反映される（＝どちらのロールにとっても普通のCOMMITTABLE_FIELDS）。
 // 通知アラートの要否は要望書自体が「未確定」としているため、今回はあえて何も送らない
@@ -238,6 +256,9 @@ const RESERVATION_HEADERS = (() => {
   ];
   for (let n = 1; n <= OPTION_COUNT; n++) {
     base.push(opNameCol_(n), opStsJpCol_(n), opStsBranchCol_(n));
+  }
+  for (let n = 1; n <= HOPE_COLS.length; n++) {
+    base.push(hopeStsJpCol_(n), hopeStsBranchCol_(n));
   }
   return base;
 })();
@@ -271,9 +292,13 @@ const INTERNAL_VALUE_SPECS = {
 // （a）保存のみ（通知しない）／（b）メッセージのみ送信／（c）変更内容＋メッセージを送信
 // のいずれかを選んで確定する。COMMITTABLE_FIELDS はその対象となる全フィールド
 // （システム列・DriveフォルダURL・JP内部進行管理欄は専用フローがあるため除く）。
+// ★希望日ごとのSTS(JP側)は、誰も直接編集しない（作成時の自動初期化と、現地側のOK/UC回答に
+// 連動する自動反映だけで動く。applyHopeStatusCascade_参照）。COMMITTABLE_FIELDSから除外しないと、
+// 通常の3択フロー経由で誰でも自由な文字列を書き込めてしまい、ゲート・自動連動の仕組みが素通りされる。
+const HOPE_JP_STATUS_FIELDS = Array.from({ length: HOPE_COLS.length }, (_, i) => hopeStsJpCol_(i + 1));
 const COMMITTABLE_FIELDS = RESERVATION_HEADERS.filter(h => ![
   COL_BRANCH_CODE, COL_KANRI_NO, COL_LAST_UPDATED, COL_DRIVE_URL, COL_SHOP_UPLOAD_FOLDER_URL, COL_ORIGIN_SHOP,
-  COL_UNREAD_JP, COL_UNREAD_BRANCH, COL_UNREAD_SHOP, ...JP_INTERNAL_FIELDS
+  COL_UNREAD_JP, COL_UNREAD_BRANCH, COL_UNREAD_SHOP, ...JP_INTERNAL_FIELDS, ...HOPE_JP_STATUS_FIELDS
 ].includes(h));
 
 // ★機能追加（店舗拡張）：店舗ロールが自分の起票した案件について、通常の3択フロー
@@ -1904,8 +1929,9 @@ function apiSaveFieldsQuiet(token, kanriNo, changes) {
     const who = senderLabel_(session);
     writes.forEach(w => logStatusChangeIfApplicable_(kanriNo, w, who));
     applyStatusCascade_(sheet, headers, rowIndex, kanriNo, writes);
+    const hopeDateChanged = applyHopeStatusCascade_(sheet, headers, rowIndex, kanriNo, writes, who);
 
-    if (Object.keys(changes).includes(COL_CONFIRMED_DATE)) sortReservationSheet_(sheet);
+    if (hopeDateChanged || Object.keys(changes).includes(COL_CONFIRMED_DATE)) sortReservationSheet_(sheet);
   } finally {
     lock.releaseLock();
   }
@@ -1954,6 +1980,7 @@ function apiCommitChanges(token, kanriNo, changes, message, recipient) {
       sheet.getRange(rowIndex, colIndexOrThrow_(headers, COL_LAST_UPDATED)).setValue(new Date());
       writes.forEach(w => logStatusChangeIfApplicable_(kanriNo, w, who));
       applyStatusCascade_(sheet, headers, rowIndex, kanriNo, writes);
+      if (applyHopeStatusCascade_(sheet, headers, rowIndex, kanriNo, writes, who)) dateChanged = true;
     }
     // ★不具合修正（重大）：以前はここで先に sortReservationSheet_() を呼んでいた。
     // 並べ替えを行うと行の位置が変わるため、直後に rowIndex で読み直していた freshRow が
@@ -2047,11 +2074,17 @@ function withInquiryOnlyCascade_(session, headers, rowData, changes) {
 // 「支店が入れた値をそのままJP側にも映す」ことを表す。
 const STATUS_AUTO_CASCADE = [
   { whenJpIs: 'CR', branchValue: 'CW', setJpTo: 'CW' },
+  // ★不具合修正：CWだけキャンセル成立を自動反映していたが、キャンセルチャージが発生するCFの
+  // 回答だけJP側に反映されず「支店側はCFなのにJP側はCRのまま」という食い違いが起きていた。
+  { whenJpIs: 'CR', branchValue: 'CF', setJpTo: 'CF' },
   { whenJpIs: 'RQ', branchValue: 'UC', setJpTo: 'UC' },
   { whenJpIs: 'DC', branchValue: 'OK', setJpTo: 'OK' },
   { whenJpIs: 'DC', branchValue: 'UC', setJpTo: 'UC' },
   { whenJpIs: 'PC', branchValue: 'OK', setJpTo: 'OK' },
-  { whenJpIs: 'PC', branchValue: 'UC', setJpTo: 'UC' }
+  { whenJpIs: 'PC', branchValue: 'UC', setJpTo: 'UC' },
+  // ★不具合修正：ネームチェンジ完了時、現地側がSTS(支店側)をOKに変えても、対になるはずの
+  // JP側は反映されず取り残されていた（現地が名前変更対応を終えたらJP・現地ともにOKへ、が要件）。
+  { whenJpIs: 'NC', branchValue: 'OK', setJpTo: 'OK' }
 ];
 function applyStatusCascade_(sheet, headers, rowIndex, kanriNo, writes) {
   const branchWrite = writes.find(w => w.field === COL_STATUS_BRANCH);
@@ -2064,6 +2097,79 @@ function applyStatusCascade_(sheet, headers, rowIndex, kanriNo, writes) {
   sheet.getRange(rowIndex, jpColIdx).setValue(rule.setJpTo);
   const logSheet = getSpreadsheet_().getSheetByName(STATUS_LOG_SHEET_NAME);
   if (logSheet) logSheet.appendRow([kanriNo, COL_STATUS_JP, currentJp, rule.setJpTo, '自動反映（ステータス連動）', new Date()]);
+}
+
+// ★機能追加：希望日ごとの空き確認ステータス（hopeStsBranchCol_/hopeStsJpCol_）専用の自動連動。
+//   1. 現地側がある希望日のSTS(支店側)をOK／UCに変えたら、対になる希望日のSTS(JP側)にも同じ値を
+//      反映する（DC/PCの回答と同じ「支店側の回答がJP側にも映る」例外パターン）
+//   2. OKになった場合は、撮影日FIX（COL_CONFIRMED_DATE）へその希望日の日付を反映し、
+//      他の入力済みの希望日（まだOK/UCでないもの）を自動でUC／UCにする
+//      （複数の希望日が同時にOKになることは無い前提のため）
+//   3. 案件全体のSTS(JP側)がまだ初期値のRQのままなら、案件全体のSTS(JP側)・STS(支店側)もOKにする
+//      （CHK＝空き確認のみの案件や、既にDC/PC/CR/NC等へ手動で進めている案件は巻き戻さない）
+// 戻り値：撮影日FIXを更新したかどうか（呼び出し元でsortReservationSheet_を呼ぶ判断に使う）
+function applyHopeStatusCascade_(sheet, headers, rowIndex, kanriNo, writes, who) {
+  const label = who || '自動反映（ステータス連動）';
+  const logSheet = getSpreadsheet_().getSheetByName(STATUS_LOG_SHEET_NAME);
+  const logChange = (field, oldVal, newVal) => { if (logSheet) logSheet.appendRow([kanriNo, field, oldVal, newVal, label, new Date()]); };
+  let dateChanged = false;
+
+  for (let n = 1; n <= HOPE_COLS.length; n++) {
+    const branchField = hopeStsBranchCol_(n);
+    const write = writes.find(w => w.field === branchField);
+    if (!write || !write.changed) continue;
+    const newVal = write.valueToStore;
+    if (newVal !== 'OK' && newVal !== 'UC') continue; // ST/RQへの変更はそれ単体で完結（連動なし）
+
+    const jpField = hopeStsJpCol_(n);
+    const jpColIdx = colIndexOrThrow_(headers, jpField);
+    const currentJp = sheet.getRange(rowIndex, jpColIdx).getValue();
+    if (currentJp !== newVal) {
+      sheet.getRange(rowIndex, jpColIdx).setValue(newVal);
+      logChange(jpField, currentJp, newVal);
+    }
+    if (newVal !== 'OK') continue;
+
+    // この希望日の日付を撮影日FIXへ反映する（希望日が日付として認識できない形式でも、ステータス連動自体は止めない）
+    const dateVal = sheet.getRange(rowIndex, colIndexOrThrow_(headers, HOPE_COLS[n - 1])).getValue();
+    if (dateVal) {
+      try {
+        const parsed = parseDateFromInput_(String(dateVal));
+        if (parsed) { sheet.getRange(rowIndex, colIndexOrThrow_(headers, COL_CONFIRMED_DATE)).setValue(parsed); dateChanged = true; }
+      } catch (e) { /* 無視して続行 */ }
+    }
+
+    // 他の希望日（入力済みのもの）は自動でUC／UCにする
+    for (let m = 1; m <= HOPE_COLS.length; m++) {
+      if (m === n) continue;
+      if (!sheet.getRange(rowIndex, colIndexOrThrow_(headers, HOPE_COLS[m - 1])).getValue()) continue;
+      const otherBranchIdx = colIndexOrThrow_(headers, hopeStsBranchCol_(m));
+      const otherJpIdx = colIndexOrThrow_(headers, hopeStsJpCol_(m));
+      const otherBranchVal = sheet.getRange(rowIndex, otherBranchIdx).getValue();
+      const otherJpVal = sheet.getRange(rowIndex, otherJpIdx).getValue();
+      if (otherBranchVal !== 'OK' && otherBranchVal !== 'UC') {
+        sheet.getRange(rowIndex, otherBranchIdx).setValue('UC');
+        logChange(hopeStsBranchCol_(m), otherBranchVal, 'UC');
+      }
+      if (otherJpVal !== 'OK' && otherJpVal !== 'UC') {
+        sheet.getRange(rowIndex, otherJpIdx).setValue('UC');
+        logChange(hopeStsJpCol_(m), otherJpVal, 'UC');
+      }
+    }
+
+    // 案件全体のSTS(JP側)がまだ初期値RQのままなら、希望日確定に伴い全体もOKへ進める
+    const overallJpIdx = colIndexOrThrow_(headers, COL_STATUS_JP);
+    const overallJp = sheet.getRange(rowIndex, overallJpIdx).getValue();
+    if (overallJp === 'RQ') {
+      sheet.getRange(rowIndex, overallJpIdx).setValue('OK');
+      logChange(COL_STATUS_JP, overallJp, 'OK');
+      const overallBranchIdx = colIndexOrThrow_(headers, COL_STATUS_BRANCH);
+      const overallBranch = sheet.getRange(rowIndex, overallBranchIdx).getValue();
+      sheet.getRange(rowIndex, overallBranchIdx).setValue('OK');
+      logChange(COL_STATUS_BRANCH, overallBranch, 'OK');
+    }
+  }
+  return dateChanged;
 }
 
 function validateFieldPermission_(session, headers, rowData, field, value) {
@@ -2111,16 +2217,20 @@ function validateFieldPermission_(session, headers, rowData, field, value) {
   }
 }
 
+// ★希望日ごとのSTS(JP側)（"希望日① STS JP"等）は意図的に含めない。誰も直接編集しないフィールドのため
+// （作成時の自動初期化と、現地側のOK/UC回答に連動する自動反映だけで値が変わる。上のHOPE_JP_STATUS_FIELDS参照）。
 function isJpStatusField_(field) {
   return field === COL_STATUS_JP || /^OP\d+ STS JP$/.test(field);
 }
 function isBranchStatusField_(field) {
-  return field === COL_STATUS_BRANCH || /^OP\d+ STS 支店$/.test(field);
+  return field === COL_STATUS_BRANCH || /^OP\d+ STS 支店$/.test(field) || /^希望日[①-⑤] STS 支店$/.test(field);
 }
 function pairedJpFieldFor_(field) {
   if (field === COL_STATUS_BRANCH) return COL_STATUS_JP;
   const m = field.match(/^(OP\d+) STS 支店$/);
-  return m ? `${m[1]} STS JP` : null;
+  if (m) return `${m[1]} STS JP`;
+  const hm = field.match(/^(希望日[①-⑤]) STS 支店$/);
+  return hm ? `${hm[1]} STS JP` : null;
 }
 
 // メッセージ単体の送信は apiCommitChanges(token, kanriNo, {}, message) を使う
@@ -2597,6 +2707,20 @@ function apiSendArrangementRequest(token, kanriNo, categoryKey, subject, body) {
 // =====================================================
 // ⑩ 新規案件作成（貼り付けテキストからの自動解析）
 // =====================================================
+// ★機能追加：新規案件作成時、日付が入っている希望日だけ自動でSTS(JP側)=RQ／STS(支店側)=ST
+// （現地未確認）で初期化する（第二希望までしか無い等、入っているところまでで良い）。
+// JP・支店どちらの新規作成経路（apiCreateReservation／apiShopCreateRequest）でも共通して使う。
+function seedHopeStatuses_(headers, newRowData) {
+  for (let n = 1; n <= HOPE_COLS.length; n++) {
+    const dateIdx = headers.indexOf(HOPE_COLS[n - 1]);
+    if (dateIdx === -1 || !newRowData[dateIdx]) continue;
+    const jpIdx = headers.indexOf(hopeStsJpCol_(n));
+    const branchIdx = headers.indexOf(hopeStsBranchCol_(n));
+    if (jpIdx !== -1) newRowData[jpIdx] = 'RQ';
+    if (branchIdx !== -1) newRowData[branchIdx] = 'ST';
+  }
+}
+
 function apiCreateReservation(token, branchCode, rawText) {
   const session = requireSession_(token);
   const targetBranch = session.role === JP_ROLE ? String(branchCode || '').trim().toUpperCase() : session.branchCode;
@@ -2624,7 +2748,9 @@ function apiCreateReservation(token, branchCode, rawText) {
     setV(COL_KANRI_NO, newNo);
     setV(COL_LAST_UPDATED, new Date());
     setV(COL_STATUS_JP, 'RQ');
-    setV(COL_STATUS_BRANCH, 'NC');
+    // ★不具合修正：STS(支店側)の初期値に「NC」を流用していたが、NCは今後ネームチェンジ専用の
+    // コードのため、名前を変える予定が無い新規案件で最初から「NC」と表示されるのは紛らわしい。
+    // 未着手を表す値は不要（空欄のまま。支店側はSTS(JP側)=RQの間は自由に編集できる）。
     setV(COL_CHALLENGE_NO, parsed.challengeNo);
     setV(COL_GROOM_NAME, parsed.groomName);
     setV(COL_BRIDE_NAME, parsed.brideName);
@@ -2632,6 +2758,7 @@ function apiCreateReservation(token, branchCode, rawText) {
     setV(COL_HOPE2, parsed.hopeDates && parsed.hopeDates[1]);
     setV(COL_HOPE3, parsed.hopeDates && parsed.hopeDates[2]);
     setV(COL_AREA, parsed.area);
+    seedHopeStatuses_(headers, newRowData);
 
     sheet.getRange(newRowIndex, 1, 1, headers.length).setValues([newRowData]);
 
@@ -2682,6 +2809,8 @@ function apiShopCreateRequest(token, payload) {
   }
   const team = String(payload.team || '').trim();
   if (!JP_TEAMS.includes(team)) throw new Error(`該当の手配課は ${JP_TEAMS.join('/')} のいずれかにしてください。`);
+  // ★機能追加：予約時にチャレンジ番号を入力できる欄が無かったため追加（任意入力）
+  const challengeNo = String(payload.challengeNo || '').trim();
   const groomName = String(payload.groomName || payload.customerName || '').trim();
   if (!groomName) throw new Error('新郎名（ローマ字）を入力してください。');
   const brideName = String(payload.brideName || '').trim();
@@ -2712,7 +2841,10 @@ function apiShopCreateRequest(token, payload) {
     setV(COL_KANRI_NO, newNo);
     setV(COL_LAST_UPDATED, new Date());
     setV(COL_STATUS_JP, initialStatus);
-    setV(COL_STATUS_BRANCH, 'NC');
+    // ★不具合修正：STS(支店側)の初期値に「NC」を流用していたが、NCは今後ネームチェンジ専用の
+    // コードのため、名前を変える予定が無い新規案件で最初から「NC」と表示されるのは紛らわしい。
+    // 未着手を表す値は不要（空欄のまま。支店側はSTS(JP側)=RQ/CHKの間は自由に編集できる）。
+    setV(COL_CHALLENGE_NO, challengeNo);
     setV(COL_GROOM_NAME, groomName);
     setV(COL_BRIDE_NAME, brideName);
     setV(COL_HOPE1, hopes[0]);
@@ -2729,12 +2861,14 @@ function apiShopCreateRequest(token, payload) {
     if (targetMeta.passportRequired) setV(COL_PASSPORT_NO, passportNumber);
     setV(COL_AREA, team);
     setV(COL_ORIGIN_SHOP, session.branchCode);
+    seedHopeStatuses_(headers, newRowData);
 
     sheet.getRange(newRowIndex, 1, 1, headers.length).setValues([newRowData]);
 
     const initialStatusLabel = initialStatus === 'CHK' ? 'CHK（空き確認のみ）' : 'RQ（予約依頼）';
     const initMsg = [
       `店舗（${session.branchName}）からの新規依頼です。（${initialStatusLabel}）`,
+      challengeNo ? `チャレンジ番号: ${challengeNo}` : '',
       `新郎名: ${groomName}`,
       brideName ? `新婦名: ${brideName}` : '',
       `希望日: ${[hopes[0], hopes[1], hopes[2], hopes[3], hopes[4]].filter(Boolean).join(' / ')}`,

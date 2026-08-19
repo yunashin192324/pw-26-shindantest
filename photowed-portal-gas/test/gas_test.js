@@ -1879,7 +1879,9 @@ function shopFixture() {
 
   const jpDetail = ctx.apiGetReservationDetail(jpToken, kanri).detail;
   check('STS JPはRQで作成される', jpDetail['STS JP'] === 'RQ');
-  check('STS 支店はNCで作成される', jpDetail['STS 支店'] === 'NC');
+  // ★不具合修正：以前はSTS(支店側)の初期値に「NC」を流用していたが、NCは今後ネームチェンジ専用の
+  // コードのため、名前を変える予定の無い新規案件で最初から「NC」と出るのは紛らわしい。今は空欄になる。
+  check('STS 支店は空欄で作成される（NCの誤用をやめた）', jpDetail['STS 支店'] === '');
   check('管轄は指定した手配課になる', jpDetail['管轄'] === '関東');
   check('お客様名が入る', jpDetail['新郎名（ローマ字）'] === 'Ahmet Yilmaz');
   check('希望日①が入る', jpDetail['希望日①'] === '2026-09-10');
@@ -1896,7 +1898,7 @@ function shopFixture() {
   // --- 店舗自身から見える案件詳細（項目は最小限） ---
   const shopDetail = ctx.apiGetReservationDetail(shopToken, kanri).detail;
   check('店舗自身は自分の起票した案件を見られる', shopDetail['管理番号'] === kanri);
-  check('店舗向けの詳細にはSTSが入る', shopDetail['STS JP'] === 'RQ' && shopDetail['STS 支店'] === 'NC');
+  check('店舗向けの詳細にはSTSが入る', shopDetail['STS JP'] === 'RQ' && shopDetail['STS 支店'] === '');
   check('店舗向けの詳細には請求先など内部項目は含まれない', !('請求先' in shopDetail) && !('ホテル' in shopDetail));
   check('店舗の一覧にも自分の起票した案件が出る（自分の依頼状況確認）',
         ctx.apiGetDashboard(shopToken, { showAll: true }).reservations.some(r => r.kanriNo === kanri));
@@ -2329,6 +2331,136 @@ section('42. 同意書・アンケートフォームの事前入力済みURL（�
   const builtWithQuery = ctx.buildPrefilledFormUrl_('https://example.com/form?usp=pp_url', 'entry.1', kanri);
   check('既に?が含まれるURLには&で連結する', builtWithQuery.includes('&entry.1='), builtWithQuery);
   check('baseUrlが空なら空文字を返す', ctx.buildPrefilledFormUrl_('', 'entry.1', kanri) === '');
+}
+
+// ---------------------------------------------------------------
+section('43. 希望日ごとの空き確認ステータス（第一〜第五希望それぞれにSTS JP/STS 支店）');
+{
+  const ctx = shopFixture();
+  const shop = ctx.apiLogin('SHOP1', 'sp');
+  const shopToken = shop.session.token;
+  const jp = ctx.apiLogin('KANTO', 'pw');
+  const jpToken = jp.session.token;
+  const vie = ctx.apiLogin('VIE', 'vp');
+  const vieToken = vie.session.token;
+
+  const created = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'VIE', team: '関東', groomName: 'A',
+    hope1: '2026-08-01', hope2: '2026-08-05', hope3: '2026-08-06'
+    // 希望日④・⑤は未入力のまま
+  });
+  const kanri = created.kanriNo;
+
+  let d = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+  check('入力済みの希望日はSTS(JP側)がRQで初期化される',
+        d['希望日① STS JP'] === 'RQ' && d['希望日② STS JP'] === 'RQ' && d['希望日③ STS JP'] === 'RQ');
+  check('入力済みの希望日はSTS(支店側)がST（現地未確認）で初期化される',
+        d['希望日① STS 支店'] === 'ST' && d['希望日② STS 支店'] === 'ST' && d['希望日③ STS 支店'] === 'ST');
+  check('未入力の希望日（第四・第五希望）はSTSも空欄のまま',
+        !d['希望日④ STS JP'] && !d['希望日④ STS 支店'] && !d['希望日⑤ STS JP'] && !d['希望日⑤ STS 支店']);
+  check('案件全体のSTS JPは従来どおりRQで作成される', d['STS JP'] === 'RQ');
+
+  // 現地が希望日②を確認してベンダーへ連絡（ST→RQ、まだ結果は出ていない）
+  ctx.apiSaveFieldsQuiet(vieToken, kanri, { '希望日② STS 支店': 'RQ' });
+  d = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+  check('ST→RQへの変更はそれ単体で完結する（他への連動なし）',
+        d['希望日② STS 支店'] === 'RQ' && d['希望日② STS JP'] === 'RQ' &&
+        d['希望日① STS 支店'] === 'ST' && d['希望日③ STS 支店'] === 'ST');
+
+  // 希望日②が取れた
+  ctx.apiSaveFieldsQuiet(vieToken, kanri, { '希望日② STS 支店': 'OK' });
+  d = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+  check('希望日②のSTS(支店側)がOKになる', d['希望日② STS 支店'] === 'OK');
+  check('希望日②のSTS(JP側)にも自動で反映される（DC/PCと同じ例外パターン）', d['希望日② STS JP'] === 'OK');
+  // 撮影日FIXはDATE_FIELDSのためISO形式（yyyy-MM-dd）で返る（他の日付欄と同じ）
+  check('撮影日FIXに希望日②の日付が反映される', d['撮影日FIX'] === '2026-08-05', d['撮影日FIX']);
+  check('他の入力済み希望日（第一・第三）は自動でUC/UCになる',
+        d['希望日① STS 支店'] === 'UC' && d['希望日① STS JP'] === 'UC' &&
+        d['希望日③ STS 支店'] === 'UC' && d['希望日③ STS JP'] === 'UC');
+  check('未入力だった希望日④・⑤は引き続き空欄のまま', !d['希望日④ STS 支店'] && !d['希望日⑤ STS 支店']);
+  check('案件全体のSTS(JP側)が初期値RQのままだったので、希望日確定に伴いOKへ進む', d['STS JP'] === 'OK');
+  check('案件全体のSTS(支店側)も同様にOKになる', d['STS 支店'] === 'OK');
+
+  // 変更履歴（誰が・いつ）が残っていること
+  const hist = ctx.apiGetFieldHistory(jpToken, kanri, '希望日② STS JP');
+  check('希望日のSTS(JP側)自動反映も変更履歴に残る', hist.length === 1 && hist[0].newValue === 'OK', JSON.stringify(hist));
+  const histOthers = ctx.apiGetFieldHistory(jpToken, kanri, '希望日① STS JP');
+  check('他の希望日への自動UC反映も履歴に残る', histOthers.length === 1 && histOthers[0].newValue === 'UC');
+
+  // 希望日ごとのSTS(JP側)は直接編集できない（自動連動専用のシステム項目）
+  let err = null;
+  try { ctx.apiSaveFieldsQuiet(jpToken, kanri, { '希望日① STS JP': 'OK' }); } catch (e) { err = e.message; }
+  check('希望日のSTS(JP側)は誰も直接編集できない', err !== null, String(err));
+
+  // 一度OK/ロックされた希望日は、支店側もこれ以上編集できない（BRANCH_EDIT_GATEにOKキーが無い）
+  err = null;
+  try { ctx.apiSaveFieldsQuiet(vieToken, kanri, { '希望日② STS 支店': 'UC' }); } catch (e) { err = e.message; }
+  check('OKで確定した希望日はこれ以上支店側も変更できない', err !== null, String(err));
+
+  // --- CHK（空き確認のみ）で作成した場合は、希望日が取れても案件全体を自動でOKへ進めない ---
+  const created2 = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'VIE', team: '関東', groomName: 'B', hope1: '2026-09-01', initialStatus: 'CHK'
+  });
+  ctx.apiSaveFieldsQuiet(vieToken, created2.kanriNo, { '希望日① STS 支店': 'OK' });
+  const d2 = ctx.apiGetReservationDetail(jpToken, created2.kanriNo).detail;
+  check('希望日①のSTS(支店側)はOKになる（CHKでも希望日単位の連動自体は動く）', d2['希望日① STS 支店'] === 'OK');
+  check('CHK（空き確認のみ）で作成した案件は、希望日が取れても全体を自動でOKにはしない', d2['STS JP'] === 'CHK');
+
+  // --- 既にDC/PC/CR/NC等へ手動で進めている案件は、希望日の自動連動で巻き戻さない ---
+  const created3 = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'C', hope1: '2026-09-05', hope2: '2026-09-06' });
+  ctx.apiSaveFieldsQuiet(jpToken, created3.kanriNo, { 'STS JP': 'DC' }); // 案件全体を手動でDCへ
+  ctx.apiSaveFieldsQuiet(vieToken, created3.kanriNo, { '希望日① STS 支店': 'OK' });
+  const d3 = ctx.apiGetReservationDetail(jpToken, created3.kanriNo).detail;
+  check('案件全体のSTSが既にRQ以外（DC）に進んでいる場合は、希望日確定で巻き戻さない', d3['STS JP'] === 'DC');
+}
+
+// ---------------------------------------------------------------
+section('44. ステータス連動の不具合修正（CR→CF・FNの支店側編集）とチャレンジ番号入力欄');
+{
+  const ctx = shopFixture();
+  const shop = ctx.apiLogin('SHOP1', 'sp');
+  const shopToken = shop.session.token;
+  const jp = ctx.apiLogin('KANTO', 'pw');
+  const jpToken = jp.session.token;
+  const vie = ctx.apiLogin('VIE', 'vp');
+  const vieToken = vie.session.token;
+
+  // --- チャレンジ番号を店舗発の新規依頼に入力できる ---
+  const created = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'VIE', team: '関東', groomName: 'A', hope1: '2026-09-10', challengeNo: 'CH-9001'
+  });
+  const kanri = created.kanriNo;
+  check('店舗が入力したチャレンジ番号が保存される', ctx.apiGetReservationDetail(jpToken, kanri).detail['CHG NO'] === 'CH-9001');
+
+  // --- CR→CF（キャンセルチャージあり）でもJP側に反映される（従来はCWだけ反映されていた不具合） ---
+  ctx.apiSaveFieldsQuiet(jpToken, kanri, { 'STS JP': 'OK' });
+  ctx.apiSaveFieldsQuiet(jpToken, kanri, { 'STS JP': 'CR' });
+  ctx.apiSaveFieldsQuiet(vieToken, kanri, { 'STS 支店': 'CF' });
+  const afterCf = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+  check('支店がCFで応答するとSTS(支店側)がCFになる', afterCf['STS 支店'] === 'CF');
+  check('不具合修正：CFの応答もSTS(JP側)へ反映される（従来はCWだけ反映されていた）', afterCf['STS JP'] === 'CF');
+
+  // --- FN確定後、現地側も自分のSTS(支店側)をFNにできる（従来はロックされて変更不可だった不具合） ---
+  const created2 = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'B', hope1: '2026-10-01' });
+  // STS(JP側)がRQの間に支店がOKで回答（このAPI設計ではRQ→OKの自動連動は無いため、JP側も別途OKにする）
+  ctx.apiSaveFieldsQuiet(vieToken, created2.kanriNo, { 'STS 支店': 'OK' });
+  ctx.apiSaveFieldsQuiet(jpToken, created2.kanriNo, { 'STS JP': 'OK' });
+  ctx.apiSaveFieldsQuiet(jpToken, created2.kanriNo, { 'STS JP': 'FN' });
+  let err = null;
+  try { ctx.apiSaveFieldsQuiet(vieToken, created2.kanriNo, { 'STS 支店': 'OK' }); } catch (e) { err = e.message; }
+  check('STS(JP側)がFNのとき、支店側はFN以外には変更できない', err !== null, String(err));
+  ctx.apiSaveFieldsQuiet(vieToken, created2.kanriNo, { 'STS 支店': 'FN' });
+  check('不具合修正：STS(JP側)がFNのとき、現地側も自分のSTS(支店側)をFNにできる',
+        ctx.apiGetReservationDetail(jpToken, created2.kanriNo).detail['STS 支店'] === 'FN');
+
+  // --- ネームチェンジ完了時、現地側のOK応答がJP側にも反映される（従来は反映されていなかった不具合） ---
+  const created3 = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'C', hope1: '2026-11-01' });
+  ctx.apiSaveFieldsQuiet(jpToken, created3.kanriNo, { 'STS JP': 'OK' });
+  ctx.apiSaveFieldsQuiet(jpToken, created3.kanriNo, { 'STS JP': 'NC' }); // 名前変更のリクエスト
+  ctx.apiSaveFieldsQuiet(vieToken, created3.kanriNo, { 'STS 支店': 'OK' }); // 現地が名前変更完了
+  const afterNc = ctx.apiGetReservationDetail(jpToken, created3.kanriNo).detail;
+  check('現地のOK応答でSTS(支店側)がOKになる', afterNc['STS 支店'] === 'OK');
+  check('不具合修正：ネームチェンジ完了時、現地のOK応答がSTS(JP側)にも反映される', afterNc['STS JP'] === 'OK');
 }
 
 // ---------------------------------------------------------------
