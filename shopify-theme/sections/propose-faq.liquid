@@ -1,0 +1,85 @@
+{%- comment -%} FAQ accordion + FAQPage structured data. {%- endcomment -%}
+{{ 'propose.css' | asset_url | stylesheet_tag }}
+
+<section class="pp-root pp-section" id="pp-faq">
+  <div class="pp-container">
+    <div class="pp-section-head">
+      <span class="pp-eyebrow">{{ section.settings.eyebrow }}</span>
+      <h2>{{ section.settings.heading }}</h2>
+      <div class="pp-divider"></div>
+    </div>
+    <div class="pp-faq-list" data-pp-faq>
+      {%- for block in section.blocks -%}
+        <div class="pp-faq-item" aria-expanded="false" {{ block.shopify_attributes }}>
+          <button class="pp-faq-q" aria-controls="pp-faq-a-{{ forloop.index }}"><span>{{ block.settings.question }}</span><span class="pp-mark">＋</span></button>
+          <div class="pp-faq-a" id="pp-faq-a-{{ forloop.index }}"><p class="pp-faq-a-inner">{{ block.settings.answer }}</p></div>
+        </div>
+      {%- endfor -%}
+    </div>
+  </div>
+</section>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {%- for block in section.blocks -%}
+      {
+        "@type": "Question",
+        "name": {{ block.settings.question | json }},
+        "acceptedAnswer": { "@type": "Answer", "text": {{ block.settings.answer | strip_html | json }} }
+      }{%- unless forloop.last -%},{%- endunless -%}
+    {%- endfor -%}
+  ]
+}
+</script>
+
+<script>
+  document.querySelectorAll('[data-pp-faq] .pp-faq-q').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var item = btn.closest('.pp-faq-item');
+      var open = item.getAttribute('aria-expanded') === 'true';
+      item.closest('[data-pp-faq]').querySelectorAll('.pp-faq-item').forEach(function (i) { i.setAttribute('aria-expanded', 'false'); });
+      item.setAttribute('aria-expanded', open ? 'false' : 'true');
+    });
+  });
+</script>
+
+{% schema %}
+{
+  "name": "プロポーズ FAQ",
+  "settings": [
+    { "type": "text", "id": "eyebrow", "label": "アイキャッチ英文", "default": "FAQ" },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "よくあるご質問" }
+  ],
+  "blocks": [
+    {
+      "type": "faq",
+      "name": "質問",
+      "settings": [
+        { "type": "text", "id": "question", "label": "質問" },
+        { "type": "textarea", "id": "answer", "label": "回答" }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "プロポーズ FAQ",
+      "blocks": [
+        { "type": "faq", "settings": { "question": "プロポーズ相手にはどう伝えればいいですか？", "answer": "「夕日を見に行こう」など、旅行中の自然な誘い方の例を各ロケーションページでご紹介しています。" } },
+        { "type": "faq", "settings": { "question": "写真撮影はどのタイミングで行われますか？", "answer": "カメラマンは離れた場所で自然に待機し、プロポーズの瞬間から撮影を開始します。" } },
+        { "type": "faq", "settings": { "question": "雨天の場合はどうなりますか？", "answer": "予備日・室内代替プランをご用意できる場合があります。詳細は予約確認画面でご案内します。" } },
+        { "type": "faq", "settings": { "question": "予約後にキャンセルはできますか？", "answer": "予約日の一定期間前まではキャンセル・返金が可能です。詳細な規定は注文確認メールに記載します。" } },
+        { "type": "faq", "settings": { "question": "日程の変更はできますか？", "answer": "空き状況によって日程変更が可能です。マイページまたはサポート窓口からご相談ください。" } },
+        { "type": "faq", "settings": { "question": "花束は用意してもらえますか？", "answer": "FLOWERプラン以上で花束が含まれます。BASICプランでもオプションとして追加できます。" } },
+        { "type": "faq", "settings": { "question": "送迎はありますか？", "answer": "PREMIUMプランに専用送迎が含まれます。BASIC・FLOWERプランでもオプションとして追加可能です。" } },
+        { "type": "faq", "settings": { "question": "写真はいつ届きますか？", "answer": "撮影後、順次オンラインで納品します。目安の日数は予約確認画面でご案内します。" } },
+        { "type": "faq", "settings": { "question": "何日前まで予約できますか？", "answer": "ロケーション・時期によって異なります。予約カレンダー上で直近の予約可能日を確認できます。" } },
+        { "type": "faq", "settings": { "question": "現地で日本語対応はできますか？", "answer": "現地日本語スタッフによるサポートが含まれます。" } },
+        { "type": "faq", "settings": { "question": "プロポーズをする場所は選べますか？", "answer": "各ロケーションには推奨撮影スポットがありますが、当日の状況に応じてスタッフがご提案します。" } }
+      ]
+    }
+  ]
+}
+{% endschema %}

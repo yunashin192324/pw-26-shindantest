@@ -1,0 +1,11 @@
+{
+  "sections": {
+    "main": {
+      "type": "propose-location-detail",
+      "settings": {
+        "booking_page_url": "/pages/propose-booking"
+      }
+    }
+  },
+  "order": ["main"]
+}

@@ -1,0 +1,74 @@
+{%- comment -%}
+  "どこで、伝えますか？" — the destination grid.
+  Data source: the `propose_location` metaobject (Settings > Custom data
+  > Metaobjects in the admin). Add an 11th destination by creating one
+  more metaobject entry — this section and propose-location-detail.liquid
+  need zero code changes. See shopify-theme/PROPOSE-README.md for the
+  field list and setup steps.
+{%- endcomment -%}
+{{ 'propose.css' | asset_url | stylesheet_tag }}
+
+<section class="pp-root pp-section" id="pp-destinations">
+  <div class="pp-container">
+    <div class="pp-section-head">
+      <span class="pp-eyebrow">{{ section.settings.eyebrow }}</span>
+      <h2>{{ section.settings.heading }}</h2>
+      <div class="pp-divider"></div>
+      {%- if section.settings.subheading != blank -%}<p>{{ section.settings.subheading }}</p>{%- endif -%}
+    </div>
+
+    <div class="pp-dest-scroller">
+      {%- assign locations = shop.metaobjects.propose_location.values -%}
+      {%- if locations.size > 0 -%}
+        {%- for location in locations -%}
+          {%- render 'propose-location-card', location: location -%}
+        {%- endfor -%}
+      {%- else -%}
+        {%- comment -%} No metaobjects created yet — render the section's own blocks so the page still looks complete in preview / before data entry. {%- endcomment -%}
+        {%- for block in section.blocks -%}
+          <a class="pp-dest-card" href="{{ block.settings.url | default: '#' }}" {{ block.shopify_attributes }}>
+            {%- if block.settings.image != blank -%}
+              <div class="pp-ph"><img src="{{ block.settings.image | image_url: width: 700 }}" loading="lazy" alt="{{ block.settings.name_en | escape }}"></div>
+            {%- else -%}
+              <div class="pp-ph" style="--c1:#333;--c2:#999;" role="img" aria-label="{{ block.settings.name_en | escape }}"></div>
+            {%- endif -%}
+            <div class="pp-dest-card-body">
+              {%- if block.settings.popular -%}<span class="pp-dest-tag">POPULAR</span>{%- endif -%}
+              <h3>{{ block.settings.name_en }}</h3>
+              <div class="pp-dest-ja">{{ block.settings.name_ja }}</div>
+              <p class="pp-dest-copy">{{ block.settings.tagline }}</p>
+              <div class="pp-dest-price">{{ block.settings.from_price }}<span> 〜</span></div>
+            </div>
+          </a>
+        {%- endfor -%}
+      {%- endif -%}
+    </div>
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "プロポーズ 目的地一覧",
+  "settings": [
+    { "type": "text", "id": "eyebrow", "label": "アイキャッチ英文", "default": "Destinations" },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "どこで、伝えますか？" },
+    { "type": "textarea", "id": "subheading", "label": "説明文", "default": "写真をタップすると、その場所のプランと料金がすぐに見られます。" }
+  ],
+  "blocks": [
+    {
+      "type": "location",
+      "name": "ロケーション（メタオブジェクト未設定時のフォールバック）",
+      "settings": [
+        { "type": "text", "id": "name_en", "label": "英語名", "default": "HAWAII" },
+        { "type": "text", "id": "name_ja", "label": "日本語名", "default": "ハワイ" },
+        { "type": "text", "id": "tagline", "label": "一言コピー" },
+        { "type": "text", "id": "from_price", "label": "料金〜（表示用テキスト）", "default": "¥128,000" },
+        { "type": "checkbox", "id": "popular", "label": "POPULAR表示", "default": false },
+        { "type": "image_picker", "id": "image", "label": "写真" },
+        { "type": "url", "id": "url", "label": "リンク先" }
+      ]
+    }
+  ],
+  "presets": [{ "name": "プロポーズ 目的地一覧" }]
+}
+{% endschema %}

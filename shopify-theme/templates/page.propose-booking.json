@@ -1,0 +1,9 @@
+{
+  "layout": "propose",
+  "sections": {
+    "main": {
+      "type": "propose-booking"
+    }
+  },
+  "order": ["main"]
+}

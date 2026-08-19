@@ -1,0 +1,36 @@
+{%- comment -%}
+  Static FAQ list shared by every location detail page (the home page
+  uses the editable propose-faq section instead). Same 11 questions as
+  spec §44 — edit this file once to change wording everywhere.
+{%- endcomment -%}
+{%- liquid
+  assign faq_q = 'プロポーズ相手にはどう伝えればいいですか？|写真撮影はどのタイミングで行われますか？|雨天の場合はどうなりますか？|予約後にキャンセルはできますか？|日程の変更はできますか？|花束は用意してもらえますか？|送迎はありますか？|写真はいつ届きますか？|何日前まで予約できますか？|現地で日本語対応はできますか？|プロポーズをする場所は選べますか？' | split: '|'
+  assign faq_a = '「夕日を見に行こう」など、旅行中の自然な誘い方の例をこのページの「誘い方のヒント」でご紹介しています。|カメラマンは離れた場所で自然に待機し、プロポーズの瞬間から撮影を開始します。|予備日・室内代替プランをご用意できる場合があります。詳細は予約確認画面でご案内します。|予約日の一定期間前まではキャンセル・返金が可能です。詳細な規定は注文確認メールに記載します。|空き状況によって日程変更が可能です。マイページまたはサポート窓口からご相談ください。|FLOWERプラン以上で花束が含まれます。BASICプランでもオプションとして追加できます。|PREMIUMプランに専用送迎が含まれます。BASIC・FLOWERプランでもオプションとして追加可能です。|撮影後、順次オンラインで納品します。目安の日数は予約確認画面でご案内します。|ロケーション・時期によって異なります。予約カレンダー上で直近の予約可能日を確認できます。|現地日本語スタッフによるサポートが含まれます。|各ロケーションには推奨撮影スポットがありますが、当日の状況に応じてスタッフがご提案します。' | split: '|'
+-%}
+<section class="pp-root pp-section" id="pp-faq">
+  <div class="pp-container">
+    <div class="pp-section-head">
+      <span class="pp-eyebrow">FAQ</span>
+      <h2>よくあるご質問</h2>
+      <div class="pp-divider"></div>
+    </div>
+    <div class="pp-faq-list" data-pp-faq>
+      {%- for q in faq_q -%}
+        <div class="pp-faq-item" aria-expanded="false">
+          <button class="pp-faq-q" aria-controls="pp-faq-a-loc-{{ forloop.index }}"><span>{{ q }}</span><span class="pp-mark">＋</span></button>
+          <div class="pp-faq-a" id="pp-faq-a-loc-{{ forloop.index }}"><p class="pp-faq-a-inner">{{ faq_a[forloop.index0] }}</p></div>
+        </div>
+      {%- endfor -%}
+    </div>
+  </div>
+</section>
+<script>
+  document.querySelectorAll('[data-pp-faq] .pp-faq-q').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var item = btn.closest('.pp-faq-item');
+      var open = item.getAttribute('aria-expanded') === 'true';
+      item.closest('[data-pp-faq]').querySelectorAll('.pp-faq-item').forEach(function (i) { i.setAttribute('aria-expanded', 'false'); });
+      item.setAttribute('aria-expanded', open ? 'false' : 'true');
+    });
+  });
+</script>

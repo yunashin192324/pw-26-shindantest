@@ -1,0 +1,123 @@
+{%- comment -%}
+  The reservation flow. Renders the same LOCATION → PLAN → DATE → TIME →
+  OPTIONS → CUSTOMER → PAYMENT stepper as the mockup, but here the data
+  comes from `propose_location` metaobjects + their linked plan_product
+  variants (real Shopify prices/currency/tax), and confirming adds the
+  plan variant + selected add-on option products to the real cart via
+  /cart/add.js, then hands off to Shopify's own secure checkout.
+  Intended layout: layout/propose.liquid (no sitewide header/footer —
+  see shopify-theme/PROPOSE-README.md for why).
+{%- endcomment -%}
+{{ 'propose.css' | asset_url | stylesheet_tag }}
+
+{%- liquid
+  assign locations = shop.metaobjects.propose_location.values
+-%}
+
+<div id="pp-booking-app" class="pp-root">
+  <header class="pp-booking-header">
+    <div class="pp-booking-topbar">
+      <a href="{{ routes.root_url }}" class="pp-booking-back">← TOP</a>
+      <span style="font-family:var(--pp-font-serif);font-size:1rem;">{{ shop.name }}</span>
+      <span style="width:44px;"></span>
+    </div>
+    <nav class="pp-stepper" id="pp-stepper" aria-label="予約の進行状況"></nav>
+  </header>
+
+  <main class="pp-booking-main" id="pp-booking-main"></main>
+
+  <div class="pp-booking-bottombar" id="pp-booking-bottombar">
+    <div class="pp-bb-inner">
+      <div class="pp-bb-total"><span class="pp-bb-label">TOTAL</span><span class="pp-bb-amount" id="pp-bb-amount">—</span></div>
+      <div class="pp-bb-actions">
+        <button class="pp-btn pp-btn-outline" id="pp-bb-back">戻る</button>
+        <button class="pp-btn pp-btn-primary" id="pp-bb-next">次へ</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{%- comment -%} Data handed to assets/propose-booking.js — see PROPOSE-README.md "Booking data model". {%- endcomment -%}
+<script>
+  window.ProposeBookingConfig = {
+    moneyFormat: {{ shop.money_format | json }},
+    cartAddUrl: {{ routes.cart_add_url | json }},
+    cartUpdateUrl: {{ routes.cart_update_url | json }},
+    cartUrl: {{ routes.cart_url | json }},
+    locations: [
+      {%- for location in locations -%}
+      {
+        id: {{ location.system.handle | json }},
+        name: {{ location.fields.title.value | json }},
+        nameJa: {{ location.fields.name_ja.value | json }},
+        meetingPoint: {{ location.fields.meeting_point.value | json }},
+        duration: {{ location.fields.duration.value | json }},
+        hue: [{{ location.fields.hue_start.value | default: '#333333' | json }}, {{ location.fields.hue_end.value | default: '#999999' | json }}],
+        bestTime: {{ location.fields.best_time.value | default: '17:30' | json }},
+        timeSlots: {% if location.fields.time_slots.value != blank %}{{ location.fields.time_slots.value | json }}{% else %}["15:00","16:00","17:00","17:30","18:00"]{% endif %},
+        blockedDates: [{%- for d in location.fields.blocked_dates.value -%}{{ d | date: '%Y-%m-%d' | json }}{%- unless forloop.last -%},{%- endunless -%}{%- endfor -%}],
+        fewLeftDates: [{%- for d in location.fields.few_left_dates.value -%}{{ d | date: '%Y-%m-%d' | json }}{%- unless forloop.last -%},{%- endunless -%}{%- endfor -%}],
+        plans: [
+          {%- assign plan_product = location.fields.plan_product.value -%}
+          {%- if plan_product -%}
+            {%- for variant in plan_product.variants -%}
+            {
+              id: {{ variant.title | handleize | json }},
+              variantId: {{ variant.id | json }},
+              name: {{ variant.title | upcase | json }},
+              price: {{ variant.price | json }},
+              includes: {% if variant.metafields.propose.includes.value != blank %}{{ variant.metafields.propose.includes.value | split: '|' | json }}{% else %}[]{% endif %}
+            }{%- unless forloop.last -%},{%- endunless -%}
+            {%- endfor -%}
+          {%- endif -%}
+        ]
+      }{%- unless forloop.last -%},{%- endunless -%}
+      {%- endfor -%}
+    ],
+    options: [
+      {%- for block in section.blocks -%}
+        {%- if block.type == 'option_product' and block.settings.product != blank -%}
+        {
+          id: {{ block.id | json }},
+          variantId: {{ block.settings.product.selected_or_first_available_variant.id | json }},
+          name: {{ block.settings.product.title | json }},
+          desc: {{ block.settings.description | json }},
+          price: {{ block.settings.product.price | json }},
+          includedInFlower: {{ block.settings.included_in_flower | json }},
+          includedInPremium: {{ block.settings.included_in_premium | json }}
+        }{%- unless forloop.last -%},{%- endunless -%}
+        {%- endif -%}
+      {%- endfor -%}
+    ]
+  };
+</script>
+<script src="{{ 'propose-booking.js' | asset_url }}" defer></script>
+
+{% schema %}
+{
+  "name": "プロポーズ 予約フロー",
+  "blocks": [
+    {
+      "type": "option_product",
+      "name": "オプション商品",
+      "settings": [
+        { "type": "product", "id": "product", "label": "対応する商品（1バリアント）", "info": "例: 「プロポーズ用花束」「専用送迎」など、単価のみのシンプルな商品。" },
+        { "type": "text", "id": "description", "label": "説明文" },
+        { "type": "checkbox", "id": "included_in_flower", "label": "FLOWERプランに含む", "default": false },
+        { "type": "checkbox", "id": "included_in_premium", "label": "PREMIUMプランに含む", "default": false }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "プロポーズ 予約フロー",
+      "blocks": [
+        { "type": "option_product", "settings": { "description": "プロポーズの瞬間に贈る花束をご用意します。", "included_in_flower": true, "included_in_premium": true } },
+        { "type": "option_product", "settings": { "description": "ホテル⇄撮影地の専用車での送迎。", "included_in_premium": true } },
+        { "type": "option_product", "settings": { "description": "撮影時間を30分延長し、カット数を追加します。" } },
+        { "type": "option_product", "settings": { "description": "日没時刻に合わせた時間帯を確保します。" } }
+      ]
+    }
+  ]
+}
+{% endschema %}

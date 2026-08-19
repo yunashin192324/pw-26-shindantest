@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>プロポーズを予約する｜世界のプロポーズプラン</title>
+<meta name="description" content="場所・プラン・日程・オプションを選んで、そのままオンライン予約。">
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/propose.css">
+</head>
+<body class="no-sticky-cta">
+
+<div id="booking-app">
+  <header class="booking-header">
+    <div class="booking-topbar">
+      <a href="index.html" class="booking-back">← TOP</a>
+      <span class="logo">PROPOSE<span style="color:var(--gold);">.</span></span>
+      <span style="width:44px;"></span>
+    </div>
+    <nav class="stepper" id="stepper" aria-label="予約の進行状況"></nav>
+  </header>
+
+  <main class="booking-main" id="booking-main"><!-- rendered by propose-booking.js --></main>
+
+  <div class="booking-bottombar" id="booking-bottombar">
+    <div class="bb-inner">
+      <div class="bb-total">
+        <span class="bb-label">TOTAL</span>
+        <span class="bb-amount" id="bb-amount">—</span>
+      </div>
+      <div class="bb-actions">
+        <button class="btn btn-outline bb-back" id="bb-back">戻る</button>
+        <button class="btn btn-primary" id="bb-next">次へ</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="assets/js/propose-data.js"></script>
+<script src="assets/js/propose-booking.js"></script>
+</body>
+</html>

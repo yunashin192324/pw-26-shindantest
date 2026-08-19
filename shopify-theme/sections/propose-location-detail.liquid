@@ -1,0 +1,148 @@
+{%- comment -%}
+  The ONE template that renders all 10 (and counting) location pages.
+  Assign a page a `propose_location` metaobject via
+  page.metafields.propose.location, and everything below — hero,
+  gallery, plans (read live from the linked plan_product's variants),
+  meeting point, FAQ — renders automatically. Adding an 11th
+  destination is a metaobject entry + one Page, not a new template.
+  See shopify-theme/PROPOSE-README.md for the field-by-field setup.
+{%- endcomment -%}
+{{ 'propose.css' | asset_url | stylesheet_tag }}
+<script src="{{ 'propose.js' | asset_url }}" defer></script>
+
+{%- liquid
+  assign location = page.metafields.propose.location.value
+-%}
+
+{%- if location == blank -%}
+  <section class="pp-root pp-section"><div class="pp-container"><p>このページには propose_location メタオブジェクトが設定されていません。ページ設定 &gt; メタフィールド &gt; propose.location で紐付けてください。</p></div></section>
+{%- else -%}
+  {%- liquid
+    assign plan_product = location.fields.plan_product.value
+    assign booking_url = section.settings.booking_page_url | default: '/pages/propose-booking'
+  -%}
+
+  <p class="pp-root" style="padding:14px var(--pp-gutter) 0;font-size:.78rem;color:var(--pp-ink-faint);">
+    <a href="{{ routes.root_url }}">TOP</a> ／ <a href="{{ routes.root_url }}#pp-destinations">DESTINATIONS</a> ／ {{ location.fields.title.value }}
+  </p>
+
+  <section class="pp-root pp-hero" style="padding:20px 0 0;">
+    <div style="position:relative;">
+      {%- if location.fields.hero_image.value -%}
+        <div class="pp-ph" style="aspect-ratio:4/5;"><img src="{{ location.fields.hero_image.value | image_url: width: 1800 }}" alt="{{ location.fields.title.value | escape }}" loading="eager"></div>
+      {%- else -%}
+        <div class="pp-ph" style="aspect-ratio:4/5;--c1:{{ location.fields.hue_start.value | default: '#333' }};--c2:{{ location.fields.hue_end.value | default: '#999' }};"></div>
+      {%- endif -%}
+      <div class="pp-hero-scrim"></div>
+      <div class="pp-hero-copy">
+        <span class="pp-eyebrow">{% if location.fields.popular.value %}POPULAR DESTINATION{% else %}DESTINATION{% endif %}</span>
+        <h1>{{ location.fields.title.value }}<br><span style="font-size:.6em;">{{ location.fields.name_ja.value }}</span></h1>
+      </div>
+    </div>
+  </section>
+  <style>@media (min-width:760px){.pp-root .pp-hero .pp-ph{aspect-ratio:21/9 !important;}}</style>
+
+  <section class="pp-root pp-section">
+    <div class="pp-container">
+      <div class="pp-section-head" style="margin-bottom:32px;">
+        <span class="pp-eyebrow">Why Here</span>
+        <h2>この場所でプロポーズする理由</h2>
+        <div class="pp-divider"></div>
+        <p>{{ location.fields.lede.value }}</p>
+      </div>
+      <div class="pp-loc-gallery">
+        {%- if location.fields.hero_image.value -%}
+          <div class="pp-ph"><img src="{{ location.fields.hero_image.value | image_url: width: 1600 }}" loading="lazy" alt="{{ location.fields.title.value | escape }}"></div>
+        {%- endif -%}
+        {%- for img in location.fields.gallery.value -%}
+          <div class="pp-ph"><img src="{{ img | image_url: width: 700 }}" loading="lazy" alt="{{ location.fields.title.value | escape }}"></div>
+        {%- endfor -%}
+      </div>
+    </div>
+  </section>
+
+  <section class="pp-root pp-section" style="background:var(--pp-paper-deep);">
+    <div class="pp-container">
+      <div class="pp-section-head">
+        <span class="pp-eyebrow">Plans</span>
+        <h2>プランを選ぶ</h2>
+        <div class="pp-divider"></div>
+        <p>基本プランはひとつ。必要な方だけ、花束や送迎を追加してください。</p>
+      </div>
+      <div class="pp-plan-grid">
+        {%- if plan_product -%}
+          {%- for variant in plan_product.variants -%}
+            <div class="pp-plan-card{% if forloop.index == 2 %} is-featured{% endif %}">
+              <span class="pp-plan-name">{{ variant.title | upcase }}</span>
+              <span class="pp-plan-price">{{ variant.price | money }}</span>
+              <ul>
+                {%- assign includes = variant.metafields.propose.includes.value -%}
+                {%- if includes != blank -%}
+                  {%- for line in includes | split: '|' -%}<li>{{ line | strip }}</li>{%- endfor -%}
+                {%- endif -%}
+              </ul>
+              <a class="pp-btn pp-btn-outline pp-btn-block" href="{{ booking_url }}?loc={{ location.system.handle }}&amp;plan={{ variant.title | handleize }}&amp;variant={{ variant.id }}">このプランで予約する</a>
+            </div>
+          {%- endfor -%}
+        {%- else -%}
+          <p>このロケーションにはプラン商品（plan_product）が設定されていません。</p>
+        {%- endif -%}
+      </div>
+    </div>
+  </section>
+
+  <section class="pp-root pp-section">
+    <div class="pp-container">
+      <div class="pp-section-head">
+        <span class="pp-eyebrow">Details</span>
+        <h2>撮影場所・所要時間</h2>
+        <div class="pp-divider"></div>
+      </div>
+      <table class="pp-info-table" style="max-width:640px;margin:0 auto;">
+        <tbody>
+          <tr><th>集合場所</th><td>{{ location.fields.meeting_point.value }}</td></tr>
+          <tr><th>所要時間</th><td>{{ location.fields.duration.value }}</td></tr>
+          {%- if plan_product -%}<tr><th>料金</th><td>{{ plan_product.price_min | money }}〜（プランにより異なります）</td></tr>{%- endif -%}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  {% render 'propose-flow-steps' %}
+
+  <section class="pp-root pp-section">
+    <div class="pp-container pp-text-center">
+      <span class="pp-eyebrow">Availability</span>
+      <h2>予約可能日を確認する</h2>
+      <div class="pp-divider"></div>
+      <p style="max-width:44ch;margin:0 auto 26px;">カレンダーで空き状況を見ながら、日付と時間を選べます。</p>
+      <a href="{{ booking_url }}?loc={{ location.system.handle }}" class="pp-btn pp-btn-primary">この場所の空き状況を見る</a>
+    </div>
+  </section>
+
+  {% render 'propose-faq-list' %}
+
+  <section class="pp-root pp-section" style="text-align:center;background:var(--pp-ink);color:var(--pp-white);">
+    <div class="pp-container">
+      <span class="pp-eyebrow" style="color:var(--pp-gold-soft);">Ready?</span>
+      <h2 style="color:var(--pp-white);">この場所で、予約する。</h2>
+      <p style="color:rgba(255,255,255,.7);margin:14px auto 28px;max-width:40ch;">場所は決まりました。あとはプランと日程を選ぶだけです。</p>
+      <a href="{{ booking_url }}?loc={{ location.system.handle }}" class="pp-btn pp-btn-gold">この場所で予約する</a>
+    </div>
+  </section>
+
+  <div class="pp-root pp-mobile-cta">
+    <a href="{{ booking_url }}?loc={{ location.system.handle }}" class="pp-btn pp-btn-primary">この場所で予約する</a>
+  </div>
+
+  {% render 'propose-schema', location: location, page: page %}
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "プロポーズ ロケーション詳細",
+  "settings": [
+    { "type": "url", "id": "booking_page_url", "label": "予約ページURL", "info": "既定値: /pages/propose-booking" }
+  ]
+}
+{% endschema %}

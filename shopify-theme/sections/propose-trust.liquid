@@ -1,0 +1,27 @@
+{%- comment -%}
+  Trust section. Keep this copy short and factual — do not fill it
+  with invented numbers ("1,000組の実績" etc.). If the merchant has
+  real, verifiable figures, put them in section settings; otherwise
+  leave the generic copy as-is.
+{%- endcomment -%}
+{{ 'propose.css' | asset_url | stylesheet_tag }}
+
+<section class="pp-root pp-section" style="background:var(--pp-paper-deep);">
+  <div class="pp-container" style="max-width:720px;text-align:center;">
+    <span class="pp-eyebrow">{{ section.settings.eyebrow }}</span>
+    <h2>{{ section.settings.heading }}</h2>
+    <p style="margin-top:16px;font-size:.95rem;">{{ section.settings.body }}</p>
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "プロポーズ 信頼性",
+  "settings": [
+    { "type": "text", "id": "eyebrow", "label": "アイキャッチ英文", "default": "Why Trust Us" },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "海外でも、安心して任せられる。" },
+    { "type": "textarea", "id": "body", "label": "本文", "default": "海外ウェディング・フォトウェディングを手がけてきた運営チームが、現地の撮影スタッフ・言語サポートまでまとめて手配します。予約から当日まで、日本語でやり取りできます。" }
+  ],
+  "presets": [{ "name": "プロポーズ 信頼性" }]
+}
+{% endschema %}

@@ -1,0 +1,31 @@
+{%- comment -%}
+  Renders one destination card from a `propose_location` metaobject.
+  Usage: {% render 'propose-location-card', location: location %}
+  Expects fields: title, name_ja, tagline, hero_image, hue_start, hue_end,
+  popular, plan_product (product reference — variants provide plan prices), page (page reference).
+{%- endcomment -%}
+{%- liquid
+  assign loc = location
+  assign url = '#'
+  if loc.fields.page.value
+    assign url = loc.fields.page.value.url
+  endif
+  assign from_price = 0
+  if loc.fields.plan_product.value
+    assign from_price = loc.fields.plan_product.value.price_min
+  endif
+-%}
+<a class="pp-dest-card" href="{{ url }}" data-pp-reveal>
+  {%- if loc.fields.hero_image.value -%}
+    <div class="pp-ph"><img src="{{ loc.fields.hero_image.value | image_url: width: 700 }}" loading="lazy" alt="{{ loc.fields.title.value | escape }}" width="700" height="{{ 700 | divided_by: loc.fields.hero_image.value.aspect_ratio | round }}"></div>
+  {%- else -%}
+    <div class="pp-ph" style="--c1:{{ loc.fields.hue_start.value | default: '#333333' }};--c2:{{ loc.fields.hue_end.value | default: '#999999' }};" role="img" aria-label="{{ loc.fields.title.value | escape }}"></div>
+  {%- endif -%}
+  <div class="pp-dest-card-body">
+    {%- if loc.fields.popular.value -%}<span class="pp-dest-tag">POPULAR</span>{%- endif -%}
+    <h3>{{ loc.fields.title.value }}</h3>
+    <div class="pp-dest-ja">{{ loc.fields.name_ja.value }}</div>
+    <p class="pp-dest-copy">{{ loc.fields.tagline.value }}</p>
+    <div class="pp-dest-price">{{ from_price | money }}<span> 〜</span></div>
+  </div>
+</a>

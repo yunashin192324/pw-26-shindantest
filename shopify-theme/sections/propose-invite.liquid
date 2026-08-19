@@ -1,0 +1,42 @@
+{%- comment -%} "相手には、どう誘えばいい？" — surprise-safe invitation tips. {%- endcomment -%}
+{{ 'propose.css' | asset_url | stylesheet_tag }}
+
+<section class="pp-root pp-section" style="background:var(--pp-paper-deep);">
+  <div class="pp-container">
+    <div class="pp-section-head">
+      <span class="pp-eyebrow">{{ section.settings.eyebrow }}</span>
+      <h2>{{ section.settings.heading }}</h2>
+      <div class="pp-divider"></div>
+      {%- if section.settings.subheading != blank -%}<p>{{ section.settings.subheading }}</p>{%- endif -%}
+    </div>
+    <div class="pp-tip-list">
+      {%- for block in section.blocks -%}
+        <div class="pp-tip-item" data-pp-reveal {{ block.shopify_attributes }}><span class="pp-tip-mark">＋</span><span>{{ block.settings.text }}</span></div>
+      {%- endfor -%}
+    </div>
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "プロポーズ 誘い方のヒント",
+  "settings": [
+    { "type": "text", "id": "eyebrow", "label": "アイキャッチ英文", "default": "Surprise" },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "相手には、どう誘えばいい？" },
+    { "type": "text", "id": "subheading", "label": "説明文", "default": "サプライズを崩さないための、自然な誘い方の例です。" }
+  ],
+  "blocks": [
+    { "type": "tip", "name": "ヒント", "settings": [{ "type": "text", "id": "text", "label": "テキスト", "default": "旅行中に自然に連れて行く" }] }
+  ],
+  "presets": [
+    {
+      "name": "プロポーズ 誘い方のヒント",
+      "blocks": [
+        { "type": "tip", "settings": { "text": "旅行中に「夕日を見に行こう」と自然に連れ出す" } },
+        { "type": "tip", "settings": { "text": "ホテルの送迎・オプショナルツアーとして案内する" } },
+        { "type": "tip", "settings": { "text": "記念日や誕生日のディナー前の散歩として誘う" } }
+      ]
+    }
+  ]
+}
+{% endschema %}

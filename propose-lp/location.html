@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>プロポーズプラン｜世界のプロポーズプラン</title>
+<meta name="description" content="世界のロケーションでプロポーズするための撮影付きプラン。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/propose.css">
+</head>
+<body>
+
+<header class="site-header">
+  <a href="index.html" class="logo">PROPOSE<span style="color:var(--gold);">.</span></a>
+  <nav class="nav-links">
+    <a href="index.html#destinations">DESTINATIONS</a>
+    <a href="index.html#plans">PLANS</a>
+    <a href="index.html#flow">HOW IT WORKS</a>
+    <a href="index.html#faq">FAQ</a>
+    <a href="booking.html" class="btn btn-gold header-cta" style="padding:10px 22px;min-height:auto;">予約する</a>
+  </nav>
+  <button class="nav-toggle" aria-label="メニュー" aria-expanded="false"><span></span><span></span><span></span></button>
+</header>
+
+<p class="breadcrumb" id="breadcrumb"></p>
+
+<section class="hero loc-hero" id="loc-hero" style="padding:20px 0 0;"><!-- rendered by propose-location.js --></section>
+
+<section>
+  <div class="container">
+    <div class="section-head" style="margin-bottom:32px;">
+      <span class="eyebrow">Why Here</span>
+      <h2>この場所でプロポーズする理由</h2>
+      <div class="divider"></div>
+      <p id="loc-lede"></p>
+    </div>
+
+    <div class="loc-gallery" id="loc-gallery"></div>
+  </div>
+</section>
+
+<section style="background:var(--paper-deep);">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">Plans</span>
+      <h2>プランを選ぶ</h2>
+      <div class="divider"></div>
+      <p>基本プランはひとつ。必要な方だけ、花束や送迎を追加してください。</p>
+    </div>
+    <div class="plan-grid" id="loc-plans"></div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">Details</span>
+      <h2>撮影場所・所要時間</h2>
+      <div class="divider"></div>
+    </div>
+    <table class="info-table" style="max-width:640px;margin:0 auto;" id="loc-info-table">
+      <tbody id="loc-info"></tbody>
+    </table>
+  </div>
+</section>
+
+<section style="background:var(--paper-deep);">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">How It Works</span>
+      <h2>当日はどうなる？</h2>
+      <div class="divider"></div>
+    </div>
+    <div class="flow-list" id="flow-list"></div>
+  </div>
+</section>
+
+<section>
+  <div class="container text-center">
+    <span class="eyebrow">Availability</span>
+    <h2>予約可能日を確認する</h2>
+    <div class="divider"></div>
+    <p style="max-width:44ch;margin:0 auto 26px;">カレンダーで空き状況を見ながら、日付と時間を選べます。</p>
+    <a href="booking.html" class="btn btn-primary hero-cta">この場所の空き状況を見る</a>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">FAQ</span>
+      <h2>よくあるご質問</h2>
+      <div class="divider"></div>
+    </div>
+    <div class="faq-list" id="faq-list"></div>
+  </div>
+</section>
+
+<section style="text-align:center;background:var(--ink);color:var(--white);">
+  <div class="container">
+    <span class="eyebrow" style="color:var(--gold-soft);">Ready?</span>
+    <h2 style="color:var(--white);">この場所で、予約する。</h2>
+    <p style="color:rgba(255,255,255,.7);margin:14px auto 28px;max-width:40ch;">場所は決まりました。あとはプランと日程を選ぶだけです。</p>
+    <a href="booking.html" class="btn btn-gold booking-cta-final">この場所で予約する</a>
+  </div>
+</section>
+
+<footer class="site-footer">
+  <div class="container footer-grid">
+    <div class="logo">PROPOSE<span style="color:var(--gold);">.</span></div>
+    <nav class="footer-links">
+      <a href="index.html#faq">ABOUT</a>
+      <a href="index.html#destinations">DESTINATIONS</a>
+      <a href="index.html#faq">FAQ</a>
+      <a href="#">TERMS</a>
+      <a href="#">PRIVACY</a>
+      <a href="#">CONTACT</a>
+    </nav>
+  </div>
+  <div class="container footer-meta">© 世界のプロポーズプラン. このページはデザインモックアップです。</div>
+</footer>
+
+<div class="mobile-cta">
+  <a href="booking.html" class="btn btn-primary">このプランで予約する</a>
+</div>
+
+<script src="assets/js/propose-data.js"></script>
+<script src="assets/js/propose-location.js"></script>
+<script src="assets/js/propose.js"></script>
+</body>
+</html>

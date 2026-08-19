@@ -1,0 +1,29 @@
+{
+  "sections": {
+    "main": {
+      "type": "propose-hero"
+    },
+    "destinations": {
+      "type": "propose-destination-grid"
+    },
+    "what-is": {
+      "type": "propose-what-is"
+    },
+    "moment": {
+      "type": "propose-moment"
+    },
+    "flow": {
+      "type": "propose-flow"
+    },
+    "invite": {
+      "type": "propose-invite"
+    },
+    "trust": {
+      "type": "propose-trust"
+    },
+    "faq": {
+      "type": "propose-faq"
+    }
+  },
+  "order": ["main", "destinations", "what-is", "moment", "flow", "invite", "trust", "faq"]
+}

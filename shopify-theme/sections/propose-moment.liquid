@@ -1,0 +1,30 @@
+{%- comment -%} Big, quiet photo moment — "この瞬間を、写真に残します。" {%- endcomment -%}
+{{ 'propose.css' | asset_url | stylesheet_tag }}
+
+<section class="pp-root" style="padding:0;">
+  <div style="position:relative;">
+    {%- if section.settings.image != blank -%}
+      <div class="pp-ph" style="aspect-ratio:4/5;"><img src="{{ section.settings.image | image_url: width: 1800 }}" loading="lazy" alt="{{ section.settings.heading | escape }}"></div>
+    {%- else -%}
+      <div class="pp-ph" style="aspect-ratio:4/5;--c1:#0f2233;--c2:#4a6f7d;"></div>
+    {%- endif -%}
+    <div style="position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:center;text-align:center;padding-bottom:clamp(24px,6vw,56px);">
+      <h2 style="color:var(--pp-white);">{{ section.settings.heading | newline_to_br }}</h2>
+    </div>
+  </div>
+</section>
+
+<style>
+  @media (min-width: 760px) { .pp-root .pp-ph[style*="aspect-ratio:4/5"] { aspect-ratio: 21/9 !important; } }
+</style>
+
+{% schema %}
+{
+  "name": "プロポーズ 瞬間写真",
+  "settings": [
+    { "type": "image_picker", "id": "image", "label": "写真" },
+    { "type": "textarea", "id": "heading", "label": "コピー", "default": "この瞬間を、\n写真に残します。" }
+  ],
+  "presets": [{ "name": "プロポーズ 瞬間写真" }]
+}
+{% endschema %}

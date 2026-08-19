@@ -1,0 +1,41 @@
+{%- comment -%}
+  JSON-LD for one location detail page: Product (with AggregateOffer
+  from the linked plan product's variants) + BreadcrumbList.
+  Usage: {% render 'propose-schema', location: location, page: page %}
+{%- endcomment -%}
+{%- liquid
+  assign plan_product = location.fields.plan_product.value
+-%}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Product",
+  "name": {{ location.fields.title.value | append: ' プロポーズプラン' | json }},
+  "description": {{ location.fields.lede.value | strip_html | json }},
+  {%- if location.fields.hero_image.value -%}
+  "image": [{{ location.fields.hero_image.value | image_url: width: 1600 | prepend: 'https:' | json }}],
+  {%- endif -%}
+  "offers": {
+    "@type": "AggregateOffer",
+    "priceCurrency": {{ cart.currency.iso_code | json }},
+    {%- if plan_product -%}
+    "lowPrice": {{ plan_product.price_min | money_without_currency | remove: ',' | json }},
+    "highPrice": {{ plan_product.price_max | money_without_currency | remove: ',' | json }},
+    "offerCount": {{ plan_product.variants.size | json }}
+    {%- else -%}
+    "lowPrice": "0", "highPrice": "0", "offerCount": "0"
+    {%- endif -%}
+  }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "TOP", "item": {{ shop.url | append: routes.root_url | json }} },
+    { "@type": "ListItem", "position": 2, "name": "DESTINATIONS", "item": {{ shop.url | append: routes.root_url | append: '#pp-destinations' | json }} },
+    { "@type": "ListItem", "position": 3, "name": {{ location.fields.title.value | json }}, "item": {{ shop.url | append: page.url | json }} }
+  ]
+}
+</script>

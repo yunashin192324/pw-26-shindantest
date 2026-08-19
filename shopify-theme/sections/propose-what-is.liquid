@@ -1,0 +1,92 @@
+{%- comment -%} "プロポーズは、何をするの？" — 3-step explainer + generic plan tiers. {%- endcomment -%}
+{{ 'propose.css' | asset_url | stylesheet_tag }}
+
+<section class="pp-root pp-section" style="background:var(--pp-paper-deep);">
+  <div class="pp-container">
+    <div class="pp-section-head">
+      <span class="pp-eyebrow">{{ section.settings.eyebrow }}</span>
+      <h2>{{ section.settings.heading }}</h2>
+      <div class="pp-divider"></div>
+    </div>
+
+    <div class="pp-steps-3">
+      {%- for block in section.blocks -%}
+        {%- if block.type == 'step' -%}
+          <div class="pp-step-3-item" data-pp-reveal {{ block.shopify_attributes }}>
+            {%- if block.settings.image != blank -%}
+              <div class="pp-ph"><img src="{{ block.settings.image | image_url: width: 600 }}" loading="lazy" alt="{{ block.settings.title | escape }}"></div>
+            {%- else -%}
+              <div class="pp-ph" style="--c1:{{ block.settings.hue_start }};--c2:{{ block.settings.hue_end }};"></div>
+            {%- endif -%}
+            <span class="pp-step-no">{{ block.settings.number }} — {{ block.settings.label }}</span>
+            <h3>{{ block.settings.title }}</h3>
+          </div>
+        {%- endif -%}
+      {%- endfor -%}
+    </div>
+
+    <div class="pp-plan-grid" style="margin-top:56px;">
+      {%- for block in section.blocks -%}
+        {%- if block.type == 'plan' -%}
+          <div class="pp-plan-card" data-pp-reveal {{ block.shopify_attributes }}>
+            <span class="pp-plan-name">{{ block.settings.name }}</span>
+            <span class="pp-plan-price">{{ block.settings.summary }}</span>
+            <ul>
+              {%- for line in block.settings.includes | newline_to_br | strip_newlines | split: '<br />' -%}
+                <li>{{ line | strip }}</li>
+              {%- endfor -%}
+            </ul>
+          </div>
+        {%- endif -%}
+      {%- endfor -%}
+    </div>
+    <p class="pp-text-center" style="font-size:.82rem;margin-top:20px;">{{ section.settings.plan_note }}</p>
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "プロポーズ とは",
+  "settings": [
+    { "type": "text", "id": "eyebrow", "label": "アイキャッチ英文", "default": "What We Offer" },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "プロポーズは、何をするの？" },
+    { "type": "text", "id": "plan_note", "label": "プラン注記", "default": "料金・内容はロケーションごとに異なります。各ロケーションのページで詳しくご確認いただけます。" }
+  ],
+  "blocks": [
+    {
+      "type": "step",
+      "name": "3ステップ",
+      "settings": [
+        { "type": "text", "id": "number", "label": "番号", "default": "01" },
+        { "type": "text", "id": "label", "label": "英字ラベル", "default": "PROPOSE" },
+        { "type": "text", "id": "title", "label": "見出し", "default": "ふたりで訪れた場所で、想いを伝える。" },
+        { "type": "image_picker", "id": "image", "label": "写真" },
+        { "type": "color", "id": "hue_start", "label": "プレースホルダー色1", "default": "#3a3a3a" },
+        { "type": "color", "id": "hue_end", "label": "プレースホルダー色2", "default": "#8a8a8a" }
+      ]
+    },
+    {
+      "type": "plan",
+      "name": "プラン概要カード",
+      "settings": [
+        { "type": "text", "id": "name", "label": "プラン名", "default": "BASIC" },
+        { "type": "text", "id": "summary", "label": "一言サマリー", "default": "プロポーズ撮影" },
+        { "type": "textarea", "id": "includes", "label": "内容（改行区切り）", "default": "プロカメラマンによる撮影\n写真データ一式\n現地日本語サポート" }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "プロポーズ とは",
+      "blocks": [
+        { "type": "step", "settings": { "number": "01", "label": "PROPOSE", "title": "ふたりで訪れた場所で、想いを伝える。" } },
+        { "type": "step", "settings": { "number": "02", "label": "CAPTURE", "title": "その瞬間を、プロのフォトグラファーが撮影。" } },
+        { "type": "step", "settings": { "number": "03", "label": "REMEMBER", "title": "写真とともに、一生残る旅にする。" } },
+        { "type": "plan", "settings": { "name": "BASIC", "summary": "プロポーズ撮影" } },
+        { "type": "plan", "settings": { "name": "FLOWER", "summary": "BASIC ＋ 花束" } },
+        { "type": "plan", "settings": { "name": "PREMIUM", "summary": "FLOWER ＋ 送迎" } }
+      ]
+    }
+  ]
+}
+{% endschema %}

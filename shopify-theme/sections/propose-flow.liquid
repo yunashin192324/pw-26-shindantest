@@ -1,0 +1,55 @@
+{%- comment -%} "当日はどうなる？" — 6-step day-of flow, reused on both the home page and location detail pages. {%- endcomment -%}
+{{ 'propose.css' | asset_url | stylesheet_tag }}
+
+<section class="pp-root pp-section" style="{% if section.settings.tint %}background:var(--pp-paper-deep);{% endif %}">
+  <div class="pp-container">
+    <div class="pp-section-head">
+      <span class="pp-eyebrow">{{ section.settings.eyebrow }}</span>
+      <h2>{{ section.settings.heading }}</h2>
+      <div class="pp-divider"></div>
+    </div>
+    <div class="pp-flow-list">
+      {%- for block in section.blocks -%}
+        <div class="pp-flow-item" data-pp-reveal {{ block.shopify_attributes }}>
+          <span class="pp-step-no">{{ block.settings.number }}</span>
+          <div><h3>{{ block.settings.title }}</h3><p>{{ block.settings.description }}</p></div>
+        </div>
+      {%- endfor -%}
+    </div>
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "プロポーズ 当日の流れ",
+  "settings": [
+    { "type": "text", "id": "eyebrow", "label": "アイキャッチ英文", "default": "How It Works" },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "当日はどうなる？" },
+    { "type": "checkbox", "id": "tint", "label": "背景をベージュにする", "default": false }
+  ],
+  "blocks": [
+    {
+      "type": "step",
+      "name": "ステップ",
+      "settings": [
+        { "type": "text", "id": "number", "label": "番号", "default": "01" },
+        { "type": "text", "id": "title", "label": "タイトル", "default": "指定場所へ移動" },
+        { "type": "textarea", "id": "description", "label": "説明", "default": "集合場所からふたりで撮影ポイントへ向かいます。" }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "プロポーズ 当日の流れ",
+      "blocks": [
+        { "type": "step", "settings": { "number": "01", "title": "指定場所へ移動", "description": "集合場所からふたりで撮影ポイントへ向かいます。" } },
+        { "type": "step", "settings": { "number": "02", "title": "フォトグラファーが自然に待機", "description": "気づかれない距離感で、カメラマンがスタンバイします。" } },
+        { "type": "step", "settings": { "number": "03", "title": "ふたりの時間を作る", "description": "景色を眺めながら、自然な会話の時間を過ごします。" } },
+        { "type": "step", "settings": { "number": "04", "title": "プロポーズ", "description": "想いを伝える、その瞬間。" } },
+        { "type": "step", "settings": { "number": "05", "title": "そのまま撮影", "description": "気づかれることなく、瞬間を撮影します。" } },
+        { "type": "step", "settings": { "number": "06", "title": "写真を受け取る", "description": "撮影後、オンラインで写真データをお届けします。" } }
+      ]
+    }
+  ]
+}
+{% endschema %}
