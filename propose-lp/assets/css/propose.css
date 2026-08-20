@@ -115,13 +115,23 @@ p { color: var(--ink-soft); }
 .mobile-cta .btn { width: 100%; }
 @media (min-width: 900px) { .mobile-cta { display: none; } body { padding-bottom: 0; } }
 
-/* ---------- Photo placeholders (mock imagery) ---------- */
+/* ---------- Photo placeholders (mock imagery) ----------
+   No real photography yet, so instead of a flat colour swatch this
+   paints a small sun-glow + horizon "scene" out of layered CSS
+   gradients — reads as an intentional travel-poster illustration
+   rather than a broken image, while still being obviously a
+   placeholder (see the location-name caption in the corner). */
 .ph {
-  position: relative; display: block; width: 100%; overflow: hidden; background: linear-gradient(135deg, var(--c1, #333), var(--c2, #999));
+  position: relative; display: block; width: 100%; overflow: hidden;
+  background:
+    radial-gradient(ellipse 55% 45% at 70% 26%, rgba(255,255,255,.55), rgba(255,255,255,0) 62%),
+    linear-gradient(180deg, transparent 0 57%, rgba(255,255,255,.4) 57% 57.6%, transparent 57.6% 100%),
+    linear-gradient(180deg, var(--c1, #333) 0%, var(--c1, #333) 42%, var(--c2, #999) 100%);
 }
 .ph::after {
-  content: attr(data-label); position: absolute; right: 8px; bottom: 6px; font-size: .6rem; letter-spacing: .08em;
-  color: rgba(255,255,255,.55); text-transform: uppercase; font-family: var(--font-sans); pointer-events: none;
+  content: attr(data-label); position: absolute; right: 10px; bottom: 8px; font-size: .62rem; letter-spacing: .1em;
+  color: rgba(255,255,255,.75); text-transform: uppercase; font-family: var(--font-sans); pointer-events: none;
+  text-shadow: 0 1px 3px rgba(0,0,0,.45);
 }
 .ph-hero { aspect-ratio: 4/5; }
 @media (min-width: 700px) { .ph-hero { aspect-ratio: 16/9; } }
