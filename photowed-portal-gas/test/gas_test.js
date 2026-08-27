@@ -1877,7 +1877,8 @@ function shopFixture() {
 
   // --- 起票 ---
   const created = ctx.apiShopCreateRequest(shopToken, {
-    branchCode: 'VIE', team: '関東', customerName: 'Ahmet Yilmaz', hopeDate: '2026-09-10', plan: 'プランA',
+    branchCode: 'VIE', team: '関東', groomLastName: 'Yilmaz', groomName: 'Ahmet',
+    brideLastName: 'Kaya', brideName: 'Elif', hopeDate: '2026-09-10', plan: 'プランA',
     challengeNo: 'DUMMYCHG000'
   });
   check('起票が成功する', created.ok === true && !!created.kanriNo, JSON.stringify(created));
@@ -1890,14 +1891,14 @@ function shopFixture() {
   // コードのため、名前を変える予定の無い新規案件で最初から「NC」と出るのは紛らわしい。今は空欄になる。
   check('STS 支店は空欄で作成される（NCの誤用をやめた）', jpDetail['STS 支店'] === '');
   check('管轄は指定した手配課になる', jpDetail['管轄'] === '関東');
-  check('お客様名が入る', jpDetail['新郎名（ローマ字）'] === 'Ahmet Yilmaz');
+  check('お客様名が入る（大文字で保存される）', jpDetail['新郎姓（ローマ字）'] === 'YILMAZ' && jpDetail['新郎名（ローマ字）'] === 'AHMET');
   check('希望日①が入る', jpDetail['希望日①'] === '2026-09-10');
   check('プランが入る', jpDetail['プラン名'] === 'プランA');
   check('起票元店舗が記録される', jpDetail.originShop === 'SHOP1');
   check('起票元店舗名も返る', jpDetail.originShopName === '新宿店');
 
-  check('日本の該当手配課へ通知メールが飛ぶ', ctx.__mail.some(m => m.to.includes('kanto@his-world.com') && m.body.includes('Ahmet Yilmaz')));
-  check('現地支店へも通知メールが飛ぶ', ctx.__mail.some(m => m.to.includes('vie@his-world.com') && m.body.includes('Ahmet Yilmaz')));
+  check('日本の該当手配課へ通知メールが飛ぶ', ctx.__mail.some(m => m.to.includes('kanto@his-world.com') && m.body.includes('YILMAZ AHMET')));
+  check('現地支店へも通知メールが飛ぶ', ctx.__mail.some(m => m.to.includes('vie@his-world.com') && m.body.includes('YILMAZ AHMET')));
 
   check('日本側は要対応（未読）になる', ctx.apiGetDashboard(jpToken, { showAll: true }).reservations.find(r => r.kanriNo === kanri).needsAction === true);
   check('支店側も要対応（未読）になる', ctx.apiGetDashboard(vieToken, { showAll: true }).reservations.find(r => r.kanriNo === kanri).needsAction === true);
@@ -1993,11 +1994,34 @@ function shopFixture() {
         jpDuringDirect.history.some(h => h.body.includes('直結モードでの質問です')) &&
         jpDuringDirect.history.some(h => h.body.includes('直結モードでの回答です')));
 
-  // JPからのメッセージは、直結モードでは（recipient指定に関わらず）支店へ届く
-  ctx.apiCommitChanges(jpToken, kanri, {}, '直結モード中のJPからの確認', 'SHOP');
+  // ★要件変更：直結モードでも、現地とやり取りした具体的な料金を店舗へ伝えたい等の理由で
+  // JPがrecipient='SHOP'を明示すれば店舗へ届くようにした（普段は店舗と支店が直接やり取りしていても
+  // 手配課が必要と判断すれば店舗に連絡できるようにしたい、との要望による）。
+  ctx.apiCommitChanges(jpToken, kanri, {}, '直結モード中でも手配課から店舗へ料金をご案内します', 'SHOP');
+  const relayedDuringDirect = ctx.apiGetReservationDetail(shopToken, kanri).detail;
+  check('直結モードでもrecipient="SHOP"を明示すればJPのメッセージが店舗へ届く',
+        relayedDuringDirect.history.some(h => h.body.includes('直結モード中でも手配課から店舗へ料金をご案内します')));
+  const notSeenByBranch1 = ctx.apiGetReservationDetail(vieToken, kanri).detail;
+  check('店舗への中継は支店には見えない（直結モードでも別チャネル）',
+        !notSeenByBranch1.history.some(h => h.body.includes('直結モード中でも手配課から店舗へ料金をご案内します')));
+
+  // JPがrecipientを指定しなければ、直結モードでも従来どおり支店へ届く
+  ctx.apiCommitChanges(jpToken, kanri, {}, '直結モード中のJPからの確認');
   const stillToBranch = ctx.apiGetReservationDetail(vieToken, kanri).detail;
-  check('直結モードではrecipient="SHOP"指定でもJPのメッセージは支店へ届く（店舗とは直接やり取りする設計のため）',
+  check('直結モードでもrecipient未指定のJPのメッセージは支店へ届く（従来どおり）',
         stillToBranch.history.some(h => h.body.includes('直結モード中のJPからの確認')));
+
+  // ★機能追加：直結モードでも、現地支店から手配課へ料金相談などの専用チャネルで連絡できる
+  // （recipient='JP'を明示。このメッセージは店舗には見えない）
+  ctx.apiCommitChanges(vieToken, kanri, {}, '直結モード中ですが料金について手配課に相談します', 'JP');
+  const branchToJpDuringDirect = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+  check('直結モードでも支店がrecipient="JP"を明示すればJPへ届く（料金相談用の専用チャネル）',
+        branchToJpDuringDirect.history.some(h => h.body.includes('直結モード中ですが料金について手配課に相談します')));
+  const notSeenByShop2 = ctx.apiGetReservationDetail(shopToken, kanri).detail;
+  check('支店から手配課への相談は店舗には見えない',
+        !notSeenByShop2.history.some(h => h.body.includes('直結モード中ですが料金について手配課に相談します')));
+  const dashboardJpAfterBranchAlert = ctx.apiGetDashboard(jpToken, { showAll: true }).reservations.find(r => r.kanriNo === kanri);
+  check('支店から手配課への相談はJP側を未読にする', dashboardJpAfterBranchAlert.needsAction === true);
 
   // --- 既読チェック（店舗ロール分） ---
   const shopHistId = ctx.apiGetReservationDetail(shopToken, kanri).detail.history.find(h => h.body.includes('直結モードでの回答です')).id;
@@ -2077,17 +2101,17 @@ section('37. 店舗発の新規依頼フォーム拡張（拡張要望2章）');
 
   // --- 希望日（第一希望）が必須 ---
   let err = null;
-  try { ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'A' }); } catch (e) { err = e.message; }
+  try { ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomLastName: 'AL', groomName: 'A', brideLastName: 'ABL', brideName: 'AB' }); } catch (e) { err = e.message; }
   check('希望日（第一希望）が無いと作成できない', err !== null, String(err));
 
   // --- 新規作成時のSTS(JP側)選択（RQ／CHK） ---
   err = null;
-  try { ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'A', hope1: '2026-09-10', initialStatus: 'OK' }); } catch (e) { err = e.message; }
+  try { ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomLastName: 'AL', groomName: 'A', brideLastName: 'ABL', brideName: 'AB', hope1: '2026-09-10', initialStatus: 'OK' }); } catch (e) { err = e.message; }
   check('初期STS(JP側)にRQ/CHK以外を指定すると作成できない', err !== null, String(err));
 
   // --- フル項目での作成（イスタンブール＝パスポート必須） ---
   const created = ctx.apiShopCreateRequest(shopToken, {
-    branchCode: 'IST', team: '関西', groomName: 'Kenji Sato', brideName: 'Yui Sato',
+    branchCode: 'IST', team: '関西', groomLastName: 'Sato', groomName: 'Kenji', brideLastName: 'Sato', brideName: 'Yui',
     plan: 'プランA', saleName: '春の特別セール', location: '旧市街の教会', prep: 'サロン',
     hope1: '2026-09-10', hope2: '2026-09-11', hope3: '2026-09-12', hope4: '2026-09-13', hope5: '2026-09-14',
     option1: '追加アルバム', option2: 'アクセサリーレンタル',
@@ -2096,8 +2120,8 @@ section('37. 店舗発の新規依頼フォーム拡張（拡張要望2章）');
   check('拡張項目つきで起票が成功する', created.ok === true && !!created.kanriNo, JSON.stringify(created));
   const kanri = created.kanriNo;
   const detail = ctx.apiGetReservationDetail(jpToken, kanri).detail;
-  check('新郎名が入る', detail['新郎名（ローマ字）'] === 'Kenji Sato');
-  check('新婦名が入る', detail['新婦名（ローマ字）'] === 'Yui Sato');
+  check('新郎名が大文字で入る', detail['新郎名（ローマ字）'] === 'KENJI');
+  check('新婦名が大文字で入る', detail['新婦名（ローマ字）'] === 'YUI');
   check('セール名が入る', detail['セール名'] === '春の特別セール');
   check('撮影希望場所が入る', detail['撮影希望場所'] === '旧市街の教会');
   check('準備場所が入る', detail['準備場所'] === 'サロン');
@@ -2109,7 +2133,7 @@ section('37. 店舗発の新規依頼フォーム拡張（拡張要望2章）');
 
   // --- パスポート非必須支店では指定しても無視される（表示条件を作成時にも踏襲） ---
   const created2 = ctx.apiShopCreateRequest(shopToken, {
-    branchCode: 'VIE', team: '関東', groomName: 'B', hope1: '2026-10-01', passportNumber: 'SHOULD-BE-IGNORED',
+    branchCode: 'VIE', team: '関東', groomLastName: 'BL', groomName: 'B', brideLastName: 'BBL', brideName: 'BB', hope1: '2026-10-01', passportNumber: 'SHOULD-BE-IGNORED',
     challengeNo: 'DUMMYCHG012'
   });
   const detail2 = ctx.apiGetReservationDetail(jpToken, created2.kanriNo).detail;
@@ -2128,7 +2152,7 @@ section('38. 案件作成後の店舗による変更：DC/PC/NC（拡張要望3�
   const vie = ctx.apiLogin('VIE', 'vp');
   const vieToken = vie.session.token;
 
-  const created = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'A', hope1: '2026-09-10', challengeNo: 'DUMMYCHG001' });
+  const created = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomLastName: 'AL', groomName: 'A', brideLastName: 'ABL', brideName: 'AB', hope1: '2026-09-10', challengeNo: 'DUMMYCHG001' });
   const kanri = created.kanriNo;
   // OKまで進める（前提条件：FNはOKからのみ）
   ctx.apiSaveFieldsQuiet(jpToken, kanri, { 'STS JP': 'OK' });
@@ -2183,7 +2207,7 @@ section('38. 案件作成後の店舗による変更：DC/PC/NC（拡張要望3�
         ctx.__mail.some(m => m.subj.includes('ネームチェンジ')), JSON.stringify(ctx.__mail.map(m => m.subj)));
 
   // --- FNの前提条件：OKの状態からのみ ---
-  const created2 = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'B', hope1: '2026-11-01', challengeNo: 'DUMMYCHG002' });
+  const created2 = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomLastName: 'BL', groomName: 'B', brideLastName: 'BBL', brideName: 'BB', hope1: '2026-11-01', challengeNo: 'DUMMYCHG002' });
   err = null;
   try { ctx.apiCommitChanges(shopToken, created2.kanriNo, { 'STS JP': 'FN' }, ''); } catch (e) { err = e.message; }
   check('STS(JP側)がRQのままではFN（最終確定）にできない', err !== null, String(err));
@@ -2210,13 +2234,13 @@ section('39. 手配課通知トグル・請求先マスタ（拡張要望5章・
   const vieToken = vie.session.token;
 
   // --- 既定（未設定）は従来どおり手配課・支店の両方に通知 ---
-  const created1 = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'A', hope1: '2026-09-10', challengeNo: 'DUMMYCHG003' });
+  const created1 = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomLastName: 'AL', groomName: 'A', brideLastName: 'ABL', brideName: 'AB', hope1: '2026-09-10', challengeNo: 'DUMMYCHG003' });
   check('通知トグル未設定なら手配課にも通知メールが飛ぶ（既定＝ON）', ctx.__mail.some(m => m.to.includes('kanto@his-world.com')));
 
   // --- 通知トグルをOFFにした支店は手配課宛メールだけ止まる（可視性は変わらない） ---
   setBranchField(ctx, 'VIE', '店舗依頼の手配課通知', false);
   ctx.__mail.length = 0;
-  const created2 = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'B', hope1: '2026-09-11', challengeNo: 'DUMMYCHG004' });
+  const created2 = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomLastName: 'BL', groomName: 'B', brideLastName: 'BBL', brideName: 'BB', hope1: '2026-09-11', challengeNo: 'DUMMYCHG004' });
   check('通知OFFの支店では手配課宛メールが飛ばない', !ctx.__mail.some(m => m.to.includes('kanto@his-world.com')));
   check('通知OFFでも現地支店へのメールは飛ぶ', ctx.__mail.some(m => m.to.includes('vie@his-world.com')));
   check('通知OFFでも手配課側の一覧には表示され、未読（要対応）になる（閲覧権限自体は変えない）',
@@ -2244,7 +2268,7 @@ section('40. 必要書類チェックリスト（拡張要望9章：双方向）
   const vie = ctx.apiLogin('VIE', 'vp');
   const vieToken = vie.session.token;
 
-  const created = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'A', hope1: '2026-09-10', challengeNo: 'DUMMYCHG005' });
+  const created = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomLastName: 'AL', groomName: 'A', brideLastName: 'ABL', brideName: 'AB', hope1: '2026-09-10', challengeNo: 'DUMMYCHG005' });
   const kanri = created.kanriNo;
 
   const initial = ctx.apiGetReservationDetail(jpToken, kanri).detail;
@@ -2282,7 +2306,7 @@ section('41. ドライブ連携：お客様提供画像・指示書のアップ�
   const vie = ctx.apiLogin('VIE', 'vp');
   const vieToken = vie.session.token;
 
-  const created = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'A', hope1: '2026-09-10', challengeNo: 'DUMMYCHG006' });
+  const created = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomLastName: 'AL', groomName: 'A', brideLastName: 'ABL', brideName: 'AB', hope1: '2026-09-10', challengeNo: 'DUMMYCHG006' });
   const kanri = created.kanriNo;
   const b64 = Buffer.from('dummy-image-bytes').toString('base64');
 
@@ -2344,7 +2368,7 @@ section('42. 同意書・アンケートフォームの事前入力済みURL（�
   const shop = ctx.apiLogin('SHOP1', 'sp');
   const shopToken = shop.session.token;
 
-  const created = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'A', hope1: '2026-09-10', challengeNo: 'DUMMYCHG007' });
+  const created = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomLastName: 'AL', groomName: 'A', brideLastName: 'ABL', brideName: 'AB', hope1: '2026-09-10', challengeNo: 'DUMMYCHG007' });
   const kanri = created.kanriNo;
 
   // ★要件：entry ID（管理番号を事前入力するための質問ID）が未設定でも、フォームのURL自体は
@@ -2395,7 +2419,7 @@ section('43. 希望日ごとの空き確認ステータス（第一〜第五希�
   const vieToken = vie.session.token;
 
   const created = ctx.apiShopCreateRequest(shopToken, {
-    branchCode: 'VIE', team: '関東', groomName: 'A',
+    branchCode: 'VIE', team: '関東', groomLastName: 'AL', groomName: 'A', brideLastName: 'ABL', brideName: 'AB',
     hope1: '2026-08-01', hope2: '2026-08-05', hope3: '2026-08-06',
     // 希望日④・⑤は未入力のまま
     challengeNo: 'DUMMYCHG013'
@@ -2450,7 +2474,7 @@ section('43. 希望日ごとの空き確認ステータス（第一〜第五希�
 
   // --- CHK（空き確認のみ）で作成した場合は、希望日が取れても案件全体を自動でOKへ進めない ---
   const created2 = ctx.apiShopCreateRequest(shopToken, {
-    branchCode: 'VIE', team: '関東', groomName: 'B', hope1: '2026-09-01', initialStatus: 'CHK',
+    branchCode: 'VIE', team: '関東', groomLastName: 'BL', groomName: 'B', brideLastName: 'BBL', brideName: 'BB', hope1: '2026-09-01', initialStatus: 'CHK',
     challengeNo: 'DUMMYCHG014'
   });
   ctx.apiSaveFieldsQuiet(vieToken, created2.kanriNo, { '希望日① STS 支店': 'OK' });
@@ -2459,7 +2483,7 @@ section('43. 希望日ごとの空き確認ステータス（第一〜第五希�
   check('CHK（空き確認のみ）で作成した案件は、希望日が取れても全体を自動でOKにはしない', d2['STS JP'] === 'CHK');
 
   // --- 既にDC/PC/CR/NC等へ手動で進めている案件は、希望日の自動連動で巻き戻さない ---
-  const created3 = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'C', hope1: '2026-09-05', hope2: '2026-09-06', challengeNo: 'DUMMYCHG008' });
+  const created3 = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomLastName: 'CL', groomName: 'C', brideLastName: 'CBL', brideName: 'CB', hope1: '2026-09-05', hope2: '2026-09-06', challengeNo: 'DUMMYCHG008' });
   ctx.apiSaveFieldsQuiet(jpToken, created3.kanriNo, { 'STS JP': 'DC' }); // 案件全体を手動でDCへ
   ctx.apiSaveFieldsQuiet(vieToken, created3.kanriNo, { '希望日① STS 支店': 'OK' });
   const d3 = ctx.apiGetReservationDetail(jpToken, created3.kanriNo).detail;
@@ -2469,7 +2493,7 @@ section('43. 希望日ごとの空き確認ステータス（第一〜第五希�
   //     サーバー側は単に「複数の希望日STS(支店側)を1回のwritesに含める」だけでよく、
   //     applyHopeStatusCascade_が各行ごとに正しくJP側へも連動させる ---
   const created4 = ctx.apiShopCreateRequest(shopToken, {
-    branchCode: 'VIE', team: '関東', groomName: 'D',
+    branchCode: 'VIE', team: '関東', groomLastName: 'DL', groomName: 'D', brideLastName: 'DBL', brideName: 'DB',
     hope1: '2026-10-01', hope2: '2026-10-02', hope3: '2026-10-03',
     challengeNo: 'DUMMYCHG015'
   });
@@ -2497,7 +2521,7 @@ section('44. ステータス連動の不具合修正（CR→CF・FNの支店側�
 
   // --- チャレンジ番号を店舗発の新規依頼に入力できる（英数字11桁固定） ---
   const created = ctx.apiShopCreateRequest(shopToken, {
-    branchCode: 'VIE', team: '関東', groomName: 'A', hope1: '2026-09-10', challengeNo: '0A2B3C4D5E6'
+    branchCode: 'VIE', team: '関東', groomLastName: 'AL', groomName: 'A', brideLastName: 'ABL', brideName: 'AB', hope1: '2026-09-10', challengeNo: '0A2B3C4D5E6'
   });
   const kanri = created.kanriNo;
   check('店舗が入力したチャレンジ番号が保存される', ctx.apiGetReservationDetail(jpToken, kanri).detail['CHG NO'] === '0A2B3C4D5E6');
@@ -2511,7 +2535,7 @@ section('44. ステータス連動の不具合修正（CR→CF・FNの支店側�
   check('不具合修正：CFの応答もSTS(JP側)へ反映される（従来はCWだけ反映されていた）', afterCf['STS JP'] === 'CF');
 
   // --- FN確定後、現地側も自分のSTS(支店側)をFNにできる（従来はロックされて変更不可だった不具合） ---
-  const created2 = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'B', hope1: '2026-10-01', challengeNo: 'DUMMYCHG009' });
+  const created2 = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomLastName: 'BL', groomName: 'B', brideLastName: 'BBL', brideName: 'BB', hope1: '2026-10-01', challengeNo: 'DUMMYCHG009' });
   // STS(JP側)がRQの間に支店がOKで回答（このAPI設計ではRQ→OKの自動連動は無いため、JP側も別途OKにする）
   ctx.apiSaveFieldsQuiet(vieToken, created2.kanriNo, { 'STS 支店': 'OK' });
   ctx.apiSaveFieldsQuiet(jpToken, created2.kanriNo, { 'STS JP': 'OK' });
@@ -2525,59 +2549,67 @@ section('44. ステータス連動の不具合修正（CR→CF・FNの支店側�
 
   // --- ネームチェンジ機能廃止：専用ステータスは無く、日本側が新婦名欄を直接編集して送信するだけで
   //     「ネームチェンジ」の通知として現地に伝わる（店舗発ではない通常の案件でも同じ） ---
-  const created3 = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'C', hope1: '2026-11-01', challengeNo: 'DUMMYCHG010' });
+  const created3 = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomLastName: 'CL', groomName: 'C', brideLastName: 'CBL', brideName: 'CB', hope1: '2026-11-01', challengeNo: 'DUMMYCHG010' });
   ctx.__mail.length = 0;
   ctx.apiCommitChanges(jpToken, created3.kanriNo, { '新婦名（ローマ字）': 'Renamed Bride' }, '');
   check('日本側が新婦名を変更して送信してもネームチェンジ通知になる',
         ctx.__mail.some(m => m.subj.includes('ネームチェンジ')));
   const afterNameChange = ctx.apiGetReservationDetail(jpToken, created3.kanriNo).detail;
-  check('新婦名の変更自体は普通に保存される', afterNameChange['新婦名（ローマ字）'] === 'Renamed Bride');
+  check('新婦名の変更自体は大文字化されて保存される', afterNameChange['新婦名（ローマ字）'] === 'RENAMED BRIDE');
 }
 
 // ---------------------------------------------------------------
-section('45. 新郎名・新婦名を姓・名に分けて入力できる');
+section('45. 新郎名・新婦名を姓・名に分けて入力できる（全4項目必須・常に大文字で保存）');
 {
   const ctx = shopFixture();
   const shopToken = ctx.apiLogin('SHOP1', 'sp').session.token;
   const jpToken = ctx.apiLogin('KANTO', 'pw').session.token;
 
-  // --- 店舗発の新規依頼：姓・名を別々に受け取り、別の列に保存される ---
+  // --- 店舗発の新規依頼：姓・名を別々に受け取り、別の列に保存される（常に大文字化） ---
   const created = ctx.apiShopCreateRequest(shopToken, {
     branchCode: 'VIE', team: '関東', hope1: '2026-09-10', challengeNo: 'NAMESPLIT01',
     groomLastName: 'Yilmaz', groomName: 'Ahmet', brideLastName: 'Kaya', brideName: 'Elif'
   });
   const kanri = created.kanriNo;
   const detail = ctx.apiGetReservationDetail(jpToken, kanri).detail;
-  check('新郎姓が専用の列に保存される', detail['新郎姓（ローマ字）'] === 'Yilmaz');
-  check('新郎名（=名のみ）が保存される', detail['新郎名（ローマ字）'] === 'Ahmet');
-  check('新婦姓が専用の列に保存される', detail['新婦姓（ローマ字）'] === 'Kaya');
-  check('新婦名（=名のみ）が保存される', detail['新婦名（ローマ字）'] === 'Elif');
+  check('新郎姓が専用の列に大文字で保存される', detail['新郎姓（ローマ字）'] === 'YILMAZ');
+  check('新郎名（=名のみ）が大文字で保存される', detail['新郎名（ローマ字）'] === 'AHMET');
+  check('新婦姓が専用の列に大文字で保存される', detail['新婦姓（ローマ字）'] === 'KAYA');
+  check('新婦名（=名のみ）が大文字で保存される', detail['新婦名（ローマ字）'] === 'ELIF');
 
   // --- 一覧・検索ではフルネーム（姓 名）として表示される ---
   const dash = ctx.apiGetDashboard(jpToken, { showAll: true });
   const row = dash.reservations.find(r => r.kanriNo === kanri);
-  check('案件一覧にはフルネーム（姓 名）で表示される', row.groomName === 'Yilmaz Ahmet' && row.brideName === 'Kaya Elif', JSON.stringify(row));
+  check('案件一覧にはフルネーム（姓 名）で表示される', row.groomName === 'YILMAZ AHMET' && row.brideName === 'KAYA ELIF', JSON.stringify(row));
 
-  // --- 姓だけで検索してもヒットする ---
-  const bySurname = ctx.apiSearchReservations(jpToken, { name: 'Yilmaz' });
-  check('姓（Yilmaz）だけで検索してもヒットする', bySurname.results.some(r => r.kanriNo === kanri));
-  const byGivenName = ctx.apiSearchReservations(jpToken, { name: 'Ahmet' });
-  check('名（Ahmet）だけで検索してもヒットする', byGivenName.results.some(r => r.kanriNo === kanri));
+  // --- 姓だけで検索してもヒットする（小文字で検索してもヒットする＝表記ゆれを吸収） ---
+  const bySurname = ctx.apiSearchReservations(jpToken, { name: 'yilmaz' });
+  check('姓（yilmaz）だけで検索してもヒットする', bySurname.results.some(r => r.kanriNo === kanri));
+  const byGivenName = ctx.apiSearchReservations(jpToken, { name: 'ahmet' });
+  check('名（ahmet）だけで検索してもヒットする', byGivenName.results.some(r => r.kanriNo === kanri));
 
-  // --- 姓だけ変更しても「ネームチェンジ」の通知になる ---
+  // --- 姓だけ変更しても「ネームチェンジ」の通知になる（変更後も大文字化される） ---
   ctx.__mail.length = 0;
   ctx.apiCommitChanges(jpToken, kanri, { '新郎姓（ローマ字）': 'Demir' }, '');
   check('姓だけの変更でも「ネームチェンジ」通知になる', ctx.__mail.some(m => m.subj.includes('ネームチェンジ')));
-  check('姓の変更自体は保存される', ctx.apiGetReservationDetail(jpToken, kanri).detail['新郎姓（ローマ字）'] === 'Demir');
+  check('姓の変更自体は大文字化されて保存される', ctx.apiGetReservationDetail(jpToken, kanri).detail['新郎姓（ローマ字）'] === 'DEMIR');
 
-  // --- 姓を入力しなくても（従来どおり）作成できる ---
-  const created2 = ctx.apiShopCreateRequest(shopToken, {
-    branchCode: 'VIE', team: '関東', hope1: '2026-09-11', challengeNo: 'NAMESPLIT02', groomName: 'NoSurname'
-  });
-  const detail2 = ctx.apiGetReservationDetail(jpToken, created2.kanriNo).detail;
-  check('姓は任意入力（未入力でも作成できる）', detail2['新郎名（ローマ字）'] === 'NoSurname' && !detail2['新郎姓（ローマ字）']);
-  const row2 = ctx.apiGetDashboard(jpToken, { showAll: true }).reservations.find(r => r.kanriNo === created2.kanriNo);
-  check('姓が未入力なら一覧には名だけが表示される', row2.groomName === 'NoSurname');
+  // --- ★要件変更：新規予約の姓・名は全4項目とも必須（以前は姓が任意だったが必須化された） ---
+  let err = null;
+  try {
+    ctx.apiShopCreateRequest(shopToken, {
+      branchCode: 'VIE', team: '関東', hope1: '2026-09-11', challengeNo: 'NAMESPLIT02', groomName: 'NoSurname'
+    });
+  } catch (e) { err = e.message; }
+  check('新郎姓が無いと作成できない（必須化）', err !== null, String(err));
+  err = null;
+  try {
+    ctx.apiShopCreateRequest(shopToken, {
+      branchCode: 'VIE', team: '関東', hope1: '2026-09-11', challengeNo: 'NAMESPLIT03',
+      groomLastName: 'Suzuki', groomName: 'Ichiro'
+    });
+  } catch (e) { err = e.message; }
+  check('新婦姓・新婦名が無いと作成できない（必須化）', err !== null, String(err));
 }
 
 // ---------------------------------------------------------------

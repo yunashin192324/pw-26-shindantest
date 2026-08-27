@@ -161,6 +161,7 @@
     $('nav-shop-new').addEventListener('click', openShopNewView);
     $('shop-new-branch').addEventListener('change', onShopNewBranchChange);
     $('shop-new-submit').addEventListener('click', submitShopNewRequest);
+    $('shop-new-success-top-btn').addEventListener('click', () => loadDashboard());
     $('nav-settings').addEventListener('click', openSettingsView);
     $('nav-logout').addEventListener('click', doLogout);
     $('detail-back').addEventListener('click', () => loadDashboard());
@@ -1421,25 +1422,34 @@
 
     // ★機能追加：店舗が起票した案件は、宛先が固定の2択（JP⇔支店）ではなくなる。
     // 支店マスタの「店舗直接やり取り許可」がOFFの間は、日本側（JP）が「支店へ」「店舗へ」を
-    // 選んで送る（＝現地の回答を店舗の画面へ中継する操作）。ONなら支店⇔店舗が直接やり取りするため
-    // 選択は不要（JPは従来どおり支店へ）。
+    // 選んで送る（＝現地の回答を店舗の画面へ中継する操作）。
+    // ★要件変更：ONの直結モード（支店⇔店舗が直接やり取り）でも、料金相談など日本の店舗には
+    // 見せたくないやり取りのために、現地支店↔手配課だけの専用チャネルを使えるようにした。
+    // ・JP側は直結モードかどうかに関わらず常に宛先（支店／店舗）を選べる
+    //   （直結モードでも、現地とやり取りした具体的な料金を店舗へ伝えたい時などに使う）
+    // ・BRANCH側は直結モードの時だけ宛先（店舗／手配課）を選べる（通常モードは今までどおりJPのみ）
     const shopBanner = !d.originShop ? '' : `
       <p class="hint-text" style="background:var(--color-bg-soft,#f4f4f8);padding:8px 10px;border-radius:6px;">
         この案件は店舗「${escapeHtml(d.originShopName || d.originShop)}」からの依頼です。
-        ${d.shopDirect ? '現地支店と店舗が直接やり取りします。' : '現地支店とのやり取りは日本の手配課が店舗へ中継します。'}
+        ${d.shopDirect ? '現地支店と店舗が直接やり取りします（必要に応じて手配課へも個別に相談できます）。' : '現地支店とのやり取りは日本の手配課が店舗へ中継します。'}
       </p>`;
-    const showRecipientSelect = session.role === 'JP' && d.originShop && !d.shopDirect;
-    const recipientSelectHtml = !showRecipientSelect ? '' : `
+    const showRecipientSelect = d.originShop && (session.role === 'JP' || (session.role === 'BRANCH' && d.shopDirect));
+    const recipientSelectHtml = !showRecipientSelect ? '' : (session.role === 'JP' ? `
       <label style="margin-top:10px;">宛先</label>
       <select id="msg-recipient">
         <option value="BRANCH">支店へ</option>
-        <option value="SHOP">店舗へ（現地からの回答を中継する）</option>
-      </select>`;
+        <option value="SHOP">店舗へ（現地の回答を中継する／確定した料金の案内など）</option>
+      </select>` : `
+      <label style="margin-top:10px;">宛先</label>
+      <select id="msg-recipient">
+        <option value="SHOP">店舗へ（通常のやり取り）</option>
+        <option value="JP">手配課へ（料金相談など。店舗には見えません）</option>
+      </select>`);
     const directionLabel = !d.originShop
       ? (session.role === 'JP' ? '日本 → 支店' : '支店 → 日本')
       : (session.role === 'SHOP' ? (d.shopDirect ? '店舗 → 支店' : '店舗 → 日本')
-        : session.role === 'BRANCH' ? (d.shopDirect ? '支店 → 店舗' : '支店 → 日本')
-        : (d.shopDirect ? '日本 → 支店' : '日本 → 支店／店舗（宛先で選択）'));
+        : session.role === 'BRANCH' ? (d.shopDirect ? '支店 → 店舗／手配課（宛先で選択）' : '支店 → 日本')
+        : '日本 → 支店／店舗（宛先で選択）');
     const messageTabHtml = `
       <div class="tab-pane ${detailActiveTab === 'message' ? '' : 'hidden'}" data-tab-pane="message">
         <div class="section-card">
@@ -2147,15 +2157,24 @@
     // ★要件：チャレンジ番号は任意ではなく必須。英数字11桁固定（0やアルファベットから始まる場合もある）
     if (!payload.challengeNo) { showFieldError('shop-new-error', 'チャレンジ番号を入力してください。'); return; }
     if (!/^[A-Za-z0-9]{11}$/.test(payload.challengeNo)) {
-      showFieldError('shop-new-error', 'チャレンジ番号は英数字11桁で入力してください（例：0A2B3C4D5E6）。'); return;
+      showFieldError('shop-new-error', 'チャレンジ番号は英数字11桁で入力してください（例：14126000123）。'); return;
     }
+    // ★要件変更：新郎新婦の姓・名は4項目とも必須（以前は新郎の名だけ必須だった）。
+    // 大文字で保存する仕様のため、送信前にクライアント側でも大文字化しておく（表示との食い違い防止）。
+    ['groomLastName', 'groomName', 'brideLastName', 'brideName'].forEach(k => { payload[k] = String(payload[k] || '').toUpperCase(); });
+    if (!payload.groomLastName) { showFieldError('shop-new-error', '新郎姓（ローマ字）を入力してください。'); return; }
     if (!payload.groomName) { showFieldError('shop-new-error', '新郎名（ローマ字）を入力してください。'); return; }
+    if (!payload.brideLastName) { showFieldError('shop-new-error', '新婦姓（ローマ字）を入力してください。'); return; }
+    if (!payload.brideName) { showFieldError('shop-new-error', '新婦名（ローマ字）を入力してください。'); return; }
     if (!payload.hope1) { showFieldError('shop-new-error', '希望日（第一希望）を入力してください。'); return; }
     try {
       const res = await gsRun('apiShopCreateRequest', session.token, payload);
       // ★機能追加：送信後に「回答までお待ちください」の案内を出す
-      // ★要件：送信後の案内が地味で気づきにくいとの指摘への対応。目立つバナー表示＋自動スクロールで確実に見えるようにする
-      $('shop-new-success').textContent = `依頼 ${res.kanriNo} を送信しました。日本の該当手配課と現地支店に通知が届きます。ご回答まで今しばらくお待ちください。`;
+      // ★要件：文言を「予約依頼（空き確認の時は空き確認依頼）をしました。回答までしばらくお待ちください。
+      // 予約番号 ○○」に変更。PC幅では画面中央に目立つモーダルで表示し（success-banner-prominent、
+      // Stylesheet.html参照）、あわせて「案件一覧（トップ）へ戻る」ボタンも併設する。
+      const kindLabel = payload.initialStatus === 'CHK' ? '空き確認依頼' : '予約依頼';
+      $('shop-new-success-text').innerHTML = `${escapeHtml(kindLabel)}をしました。<br>回答までしばらくお待ちください。<br>予約番号 ${escapeHtml(res.kanriNo)}`;
       $('shop-new-success').classList.remove('hidden');
       if (typeof $('shop-new-success').scrollIntoView === 'function') {
         $('shop-new-success').scrollIntoView({ behavior: 'smooth', block: 'center' });

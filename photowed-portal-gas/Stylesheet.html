@@ -74,6 +74,19 @@
     box-shadow: 0 2px 10px rgba(22, 163, 74, 0.15);
   }
   .success-banner::before { content: "✅"; font-size: 1.3rem; line-height: 1.4; flex: none; }
+  /* ★要件：店舗の新規依頼送信後の案内は、PC幅では特に目立つよう画面中央にモーダル状で表示する
+     （狭い画面＝スマホではフォーム内の通常のバナー表示のまま。中央固定にすると狭い画面では
+     かえって操作の邪魔になるため）。あわせて「案件一覧（トップ）へ戻る」ボタンを併設する。 */
+  @media (min-width: 960px) {
+    .success-banner-prominent:not(.hidden) {
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      z-index: 300; width: 480px; max-width: 90vw; box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+      border-width: 2px; font-size: 1.05rem;
+    }
+    .success-banner-prominent:not(.hidden)::after {
+      content: ""; position: fixed; inset: 0; background: rgba(15,15,30,0.45); z-index: -1;
+    }
+  }
   .hint-text { color: var(--color-muted); font-size: 0.82rem; }
   .checkbox-label { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--color-text); }
   .checkbox-label input { width: auto; }

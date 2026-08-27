@@ -194,15 +194,15 @@
           <option value="CHK">CHK（空き確認のみ）</option>
         </select>
         <label>チャレンジ番号（必須・英数字11桁）</label>
-        <input id="shop-new-challengeno" type="text" placeholder="例）0A2B3C4D5E6" maxlength="11">
-        <label>新郎姓（ローマ字）</label>
-        <input id="shop-new-groom-last" type="text" placeholder="任意入力（例）Yilmaz">
-        <label>新郎名（ローマ字）</label>
-        <input id="shop-new-groom" type="text" placeholder="例）Ahmet">
-        <label>新婦姓（ローマ字）</label>
-        <input id="shop-new-bride-last" type="text" placeholder="任意入力">
-        <label>新婦名（ローマ字）</label>
-        <input id="shop-new-bride" type="text" placeholder="任意入力">
+        <input id="shop-new-challengeno" type="text" placeholder="例）14126000123" maxlength="11">
+        <label>新郎姓（ローマ字・必須・大文字で入力）</label>
+        <input id="shop-new-groom-last" type="text" placeholder="例）YAMADA" style="text-transform:uppercase;">
+        <label>新郎名（ローマ字・必須・大文字で入力）</label>
+        <input id="shop-new-groom" type="text" placeholder="例）TARO" style="text-transform:uppercase;">
+        <label>新婦姓（ローマ字・必須・大文字で入力）</label>
+        <input id="shop-new-bride-last" type="text" placeholder="例）YAMADA" style="text-transform:uppercase;">
+        <label>新婦名（ローマ字・必須・大文字で入力）</label>
+        <input id="shop-new-bride" type="text" placeholder="例）HANAKO" style="text-transform:uppercase;">
         <label>プラン</label>
         <select id="shop-new-plan"><option value="">未設定</option></select>
         <label>セール名</label>
@@ -236,7 +236,14 @@
         <select id="shop-new-option5"><option value="">（未使用）</option></select>
         <button id="shop-new-submit" class="primary-btn" style="margin-top:14px;">この内容で送信</button>
         <p id="shop-new-error" class="error-text hidden"></p>
-        <p id="shop-new-success" class="success-banner hidden"></p>
+        <!-- ★要件：送信後の案内はPC幅では画面中央に目立つモーダル状で表示する（success-banner-prominent。
+             Stylesheet.htmlの@media(min-width:960px)参照）。トップ（案件一覧）へ戻るボタンも常に併設する。 -->
+        <div id="shop-new-success" class="success-banner success-banner-prominent hidden">
+          <div>
+            <p id="shop-new-success-text" style="margin:0;"></p>
+            <button type="button" id="shop-new-success-top-btn" class="primary-btn" style="margin-top:12px;">案件一覧（トップ）へ戻る</button>
+          </div>
+        </div>
       </section>
 
       <!-- 設定（現地スタッフ手配メール。自支店 or JPが編集可能） -->

@@ -545,7 +545,10 @@ function visiblePane(document) {
     await settle();
     document.getElementById('shop-new-team').value = '関東';
     document.getElementById('shop-new-challengeno').value = '0A2B3C4D5E6';
-    document.getElementById('shop-new-groom').value = 'Ahmet Yilmaz';
+    document.getElementById('shop-new-groom-last').value = 'Yilmaz';
+    document.getElementById('shop-new-groom').value = 'Ahmet';
+    document.getElementById('shop-new-bride-last').value = 'Yilmaz';
+    document.getElementById('shop-new-bride').value = 'Elif';
     document.getElementById('shop-new-hope1').value = '2026-09-10';
     const planOpts = [...document.getElementById('shop-new-plan').options].map(o => o.value);
     check('プランはVIE支店のマスタ一覧から選べる（自由入力ではない）', planOpts.includes('プランA'), planOpts.join(','));
@@ -557,7 +560,7 @@ function visiblePane(document) {
     await settle();
     check('依頼を送信できる', !document.getElementById('shop-new-success').classList.contains('hidden'),
           document.getElementById('shop-new-error').textContent);
-    const createdKanri = document.getElementById('shop-new-success').textContent.match(/依頼\s*(\S+)\s*を送信/)[1];
+    const createdKanri = document.getElementById('shop-new-success-text').textContent.match(/予約番号\s*(\S+)/)[1];
     check('選択したプラン・オプションが保存される',
           ctx.apiGetReservationDetail(ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token, createdKanri).detail['プラン名'] === 'プランA');
 
@@ -665,15 +668,19 @@ function visiblePane(document) {
     document.getElementById('shop-new-branch').value = 'VIE';
     document.getElementById('shop-new-team').value = '関東';
     document.getElementById('shop-new-challengeno').value = 'EXT0001AAAA';
-    document.getElementById('shop-new-groom').value = 'Extended Groom';
-    document.getElementById('shop-new-bride').value = 'Extended Bride';
+    document.getElementById('shop-new-groom-last').value = 'Extended';
+    document.getElementById('shop-new-groom').value = 'Groom';
+    document.getElementById('shop-new-bride-last').value = 'Extended';
+    document.getElementById('shop-new-bride').value = 'Bride';
     document.getElementById('shop-new-hope1').value = '2026-10-01';
     document.getElementById('shop-new-initial-status').value = 'CHK';
     document.getElementById('shop-new-submit').click();
     await settle();
     check('拡張フォームでも依頼を送信できる', !document.getElementById('shop-new-success').classList.contains('hidden'),
           document.getElementById('shop-new-error').textContent);
-    const kanri2 = document.getElementById('shop-new-success').textContent.match(/依頼\s*(\S+)\s*を送信/)[1];
+    check('初期STSがCHK（空き確認のみ）の場合は案内文言が「空き確認依頼」になる',
+          document.getElementById('shop-new-success-text').textContent.includes('空き確認依頼をしました'));
+    const kanri2 = document.getElementById('shop-new-success-text').textContent.match(/予約番号\s*(\S+)/)[1];
 
     const jpTokenForCheck = ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
     check('選んだ初期STS(JP側)（CHK）で作成される（拡張要望2章）',
@@ -784,7 +791,10 @@ function visiblePane(document) {
     await settle();
     document.getElementById('shop-new-branch').value = 'VIE';
     document.getElementById('shop-new-team').value = '関東';
-    document.getElementById('shop-new-groom').value = 'Hope Tester';
+    document.getElementById('shop-new-groom-last').value = 'Hope';
+    document.getElementById('shop-new-groom').value = 'Tester';
+    document.getElementById('shop-new-bride-last').value = 'Hope';
+    document.getElementById('shop-new-bride').value = 'Bride';
     document.getElementById('shop-new-hope1').value = '2026-08-01';
     document.getElementById('shop-new-hope2').value = '2026-08-05';
 
@@ -805,12 +815,16 @@ function visiblePane(document) {
     document.getElementById('shop-new-challengeno').value = 'CH9001AAAAA';
     document.getElementById('shop-new-submit').click();
     await settle();
-    const successText = document.getElementById('shop-new-success').textContent;
+    const successText = document.getElementById('shop-new-success-text').textContent;
     check('チャレンジ番号つきで依頼を送信できる', !document.getElementById('shop-new-success').classList.contains('hidden'), successText);
     check('送信後に「回答までお待ちください」の案内が出る（拡張要望）', successText.includes('お待ちください'), successText);
+    check('送信後の案内文言が「予約依頼をしました」に変わっている（要望どおり）', successText.includes('予約依頼をしました'), successText);
+    check('送信後の案内に予約番号が入る', successText.includes('予約番号'), successText);
     check('送信後の案内が目立つバナー表示になっている（success-bannerクラス）',
           document.getElementById('shop-new-success').classList.contains('success-banner'));
-    const kanri3 = successText.match(/依頼\s*(\S+)\s*を送信/)[1];
+    check('送信後の案内にトップ（案件一覧）へ戻るボタンが併設される',
+          !!document.getElementById('shop-new-success-top-btn'));
+    const kanri3 = successText.match(/予約番号\s*(\S+)/)[1];
 
     document.getElementById('nav-dashboard').click();
     await settle();
@@ -864,7 +878,7 @@ function visiblePane(document) {
   section('U19. 希望日ごとのSTSを現地・日本共に一括で設定できる（まとめて設定）');
   {
     const kanri4 = ctx.apiShopCreateRequest(ctx.apiLogin('SHOP1', 'CHANGE-ME-SHOP1').session.token, {
-      branchCode: 'VIE', team: '関東', groomName: 'Bulk Tester',
+      branchCode: 'VIE', team: '関東', groomLastName: 'Bulk', groomName: 'Tester', brideLastName: 'Bulk', brideName: 'Bride',
       hope1: '2026-10-01', hope2: '2026-10-02', hope3: '2026-10-03', challengeNo: 'BULK0001AAA'
     }).kanriNo;
 
@@ -981,13 +995,13 @@ function visiblePane(document) {
     await settle();
     check('姓・名を分けて送信できる', !document.getElementById('shop-new-success').classList.contains('hidden'),
           document.getElementById('shop-new-error').textContent);
-    const kanriSplit = document.getElementById('shop-new-success').textContent.match(/依頼\s*(\S+)\s*を送信/)[1];
+    const kanriSplit = document.getElementById('shop-new-success-text').textContent.match(/予約番号\s*(\S+)/)[1];
 
     document.getElementById('nav-dashboard').click();
     await settle();
     const cardText = [...document.querySelectorAll('#reservation-list .res-card')]
       .find(c => c.textContent.includes(kanriSplit)).textContent;
-    check('一覧のカードにはフルネーム（姓 名）で表示される', cardText.includes('Rossi Marco') && cardText.includes('Bianchi Giulia'), cardText);
+    check('一覧のカードにはフルネーム（姓 名・大文字）で表示される', cardText.includes('ROSSI MARCO') && cardText.includes('BIANCHI GIULIA'), cardText);
 
     // --- 日本側の詳細でも姓・名が別々の入力欄になっている ---
     document.getElementById('nav-logout').click();
@@ -996,9 +1010,9 @@ function visiblePane(document) {
     [...document.querySelectorAll('#reservation-list .res-card')]
       .find(c => c.textContent.includes(kanriSplit)).click();
     await settle();
-    check('日本側の詳細ヘッダーにもフルネーム（姓 名）で表示される',
-          document.querySelector('.names').textContent.includes('Rossi Marco') &&
-          document.querySelector('.names').textContent.includes('Bianchi Giulia'));
+    check('日本側の詳細ヘッダーにもフルネーム（姓 名・大文字）で表示される',
+          document.querySelector('.names').textContent.includes('ROSSI MARCO') &&
+          document.querySelector('.names').textContent.includes('BIANCHI GIULIA'));
     [...document.querySelectorAll('.tab-btn')].find(b => b.dataset.tab === 'reservation').click();
     await settle();
     const resPaneSplit = document.querySelector('[data-tab-pane="reservation"]');
@@ -1007,8 +1021,8 @@ function visiblePane(document) {
           !!resPaneSplit.querySelector('[data-pending="新郎名（ローマ字）"]') &&
           !!resPaneSplit.querySelector('[data-pending="新婦姓（ローマ字）"]') &&
           !!resPaneSplit.querySelector('[data-pending="新婦名（ローマ字）"]'));
-    check('新郎姓の入力欄にRossiが入っている',
-          resPaneSplit.querySelector('[data-pending="新郎姓（ローマ字）"]').value === 'Rossi');
+    check('新郎姓の入力欄に大文字化されたROSSIが入っている',
+          resPaneSplit.querySelector('[data-pending="新郎姓（ローマ字）"]').value === 'ROSSI');
 
     // --- 店舗側の詳細画面でも姓・名が別々の入力欄になっている ---
     document.getElementById('nav-logout').click();

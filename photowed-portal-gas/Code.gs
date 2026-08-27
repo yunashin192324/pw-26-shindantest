@@ -148,6 +148,13 @@ function fullName_(lastName, firstName) {
   const f = String(firstName || '').trim();
   return [l, f].filter(Boolean).join(' ');
 }
+// ★要件：新郎新婦の姓・名の4項目まとめて扱う場所（必須チェック・大文字化・ネームチェンジ検知）で使う一覧。
+const CUSTOMER_NAME_FIELDS = [COL_GROOM_LAST_NAME, COL_GROOM_NAME, COL_BRIDE_LAST_NAME, COL_BRIDE_NAME];
+// ★要件：パスポート等の正式表記に合わせ、姓・名は常に大文字（例：YAMADA / TARO）で保存する。
+// 小文字で入力されても自動で大文字化する（お客様・店舗側の入力ミスをここで吸収する）。
+function normalizeNameValue_(value) {
+  return String(value || '').trim().toUpperCase();
+}
 // ★機能追加：お客様がGoogleフォームで記入する『同意書』の記入有無を案件に反映する（機能④）。
 // 支店マスタの「同意書必須」が有効な支店（例：ローマ）では未回収を目立たせる。
 // ★要件：「お客様情報」タブに移動。表示は日本側、またはイタリアの支店のみ（他支店は非表示）。
@@ -1167,9 +1174,18 @@ function markUnreadForDirection_(sheet, headers, rowIndex, direction) {
 // - 起票元店舗が無い案件：従来どおり JP_TO_BRANCH／BRANCH_TO_JP のみ（挙動は一切変わらない）。
 // - 起票元店舗がある案件：
 //   ・店舗からの送信 → 支店マスタの「店舗直接やり取り許可」がONならSHOP_TO_BRANCH、OFFならSHOP_TO_JP
-//   ・支店からの送信 → 同フラグがONならBRANCH_TO_SHOP、OFFなら従来どおりBRANCH_TO_JP
-//   ・JPからの送信   → 同フラグがONならJP_TO_BRANCH（店舗とは支店が直接やり取りするため）、
-//                       OFFなら明示された宛先（recipient='SHOP'なら店舗へ中継、それ以外は従来どおり支店へ）
+//                       （店舗はrecipientを選べない。相手は常に1つに固定）
+//   ・支店からの送信 → 通常（OFF）は従来どおりBRANCH_TO_JP。ONの直結モードでは既定でBRANCH_TO_SHOP
+//                       だが、recipient='JP'を明示すれば料金相談などのためBRANCH_TO_JPを選べる
+//                       （このメッセージは店舗には見えない。現地支店・手配課のみの専用チャネル）。
+//   ・JPからの送信   → recipient='SHOP'を明示すればJP_TO_SHOP（直結モードでも、直結モードで
+//                       現地とやり取りした具体的な料金を店舗へ伝える、といった用途で使う）。
+//                       それ以外（recipient未指定）は、直結モードならJP_TO_BRANCH、
+//                       OFFなら従来どおりJP_TO_BRANCH。
+// ★要件変更：以前は直結モード（ON）だとJP・支店どちらもrecipientの指定を無視して固定の相手
+// （支店↔店舗）にしか送れなかったが、「普段は店舗と支店が直接やり取りする案件でも、
+// 現地支店側または手配課が必要と判断したら手配課／現地支店にもメッセージを送れるようにしたい」
+// との要望により、direct指定に関わらずrecipientの明示指定を優先するよう変更した。
 function resolveMessageDirection_(session, headers, rowData, recipient) {
   const originShop = String(rowData[headers.indexOf(COL_ORIGIN_SHOP)] || '').trim();
   if (!originShop) {
@@ -1179,10 +1195,13 @@ function resolveMessageDirection_(session, headers, rowData, recipient) {
   const direct = !!(branchMetaMap_()[branchCode] || {}).shopDirect;
 
   if (session.role === SHOP_ROLE) return direct ? 'SHOP_TO_BRANCH' : 'SHOP_TO_JP';
-  if (session.role === BRANCH_ROLE) return direct ? 'BRANCH_TO_SHOP' : 'BRANCH_TO_JP';
+  if (session.role === BRANCH_ROLE) {
+    if (direct && recipient === 'JP') return 'BRANCH_TO_JP'; // 直結モードでも手配課へ相談できる専用チャネル
+    return direct ? 'BRANCH_TO_SHOP' : 'BRANCH_TO_JP';
+  }
   // JPロール
-  if (direct) return 'JP_TO_BRANCH';
-  return recipient === 'SHOP' ? 'JP_TO_SHOP' : 'JP_TO_BRANCH';
+  if (recipient === 'SHOP') return 'JP_TO_SHOP'; // 直結モードでも、確定した料金等を店舗へ伝えたい時に使う
+  return 'JP_TO_BRANCH';
 }
 
 // 旧データ（宛先ロール列が無かった頃）は必ずJP⇔支店の2者間だったので、送信者ロールから
@@ -2029,7 +2048,7 @@ function apiCommitChanges(token, kanriNo, changes, message, recipient) {
     // ★機能追加：ネームチェンジは専用のステータスを持たない代わりに、新郎名・新婦名欄の変更が
     // 含まれる送信を検知して、通知そのものを「ネームチェンジのお知らせ」として分かりやすくする
     // （お客様が旧姓から新姓に変える等、名前を打ち替えて送信するだけで現地に伝わるようにする）。
-    const nameChanged = writes.some(w => w.changed && [COL_GROOM_LAST_NAME, COL_GROOM_NAME, COL_BRIDE_LAST_NAME, COL_BRIDE_NAME].includes(w.field));
+    const nameChanged = writes.some(w => w.changed && CUSTOMER_NAME_FIELDS.includes(w.field));
     const bodyParts = [];
     if (nameChanged) bodyParts.push('［ネームチェンジのお知らせ］\nお客様のお名前が変更されました。');
     if (summaryLines.length > 0) bodyParts.push(`[変更内容]\n${summaryLines.join('\n')}`);
@@ -2079,7 +2098,9 @@ function prepareFieldWrite_(session, headers, rowData, field, value) {
   const isDateField = DATE_FIELDS.includes(field);
   const rawOld = rowData[colIdx];
   const oldDisplay = isDateField ? (formatMaybeDate_(rawOld) || '未定') : (rawOld || '(未設定)');
-  const valueToStore = isDateField ? parseDateFromInput_(value) : (value || '');
+  // ★要件：新郎新婦の姓・名は常に大文字で保存する（誰が変更しても揃う）
+  const valueToStore = isDateField ? parseDateFromInput_(value)
+    : (CUSTOMER_NAME_FIELDS.includes(field) ? normalizeNameValue_(value) : (value || ''));
   const newDisplay = isDateField ? (formatMaybeDate_(valueToStore) || '未定') : (valueToStore || '(未設定)');
   const changed = isDateField ? (oldDisplay !== newDisplay) : (String(rawOld || '') !== String(valueToStore));
 
@@ -2262,7 +2283,7 @@ function validateFieldPermission_(session, headers, rowData, field, value) {
   // ★要件：チャレンジ番号（CHG NO）は英数字11桁固定。通常の3択フローで変更する場合も同じ形式を強制する
   // （新規作成時の必須チェックはapiShopCreateRequest側で行う。ここでは「値を入れるならこの形式のみ」）
   if (field === COL_CHALLENGE_NO && value && !CHALLENGE_NO_PATTERN.test(value)) {
-    throw new Error('チャレンジ番号は英数字11桁で入力してください（例：0A2B3C4D5E6）。');
+    throw new Error('チャレンジ番号は英数字11桁で入力してください（例：14126000123）。');
   }
 }
 
@@ -2862,15 +2883,20 @@ function apiShopCreateRequest(token, payload) {
   const challengeNo = String(payload.challengeNo || '').trim();
   if (!challengeNo) throw new Error('チャレンジ番号を入力してください。');
   if (!CHALLENGE_NO_PATTERN.test(challengeNo)) {
-    throw new Error('チャレンジ番号は英数字11桁で入力してください（例：0A2B3C4D5E6）。');
+    throw new Error('チャレンジ番号は英数字11桁で入力してください（例：14126000123）。');
   }
-  // ★要件：新郎名・新婦名は姓・名を分けて入力する。必須／任意の扱いは従来どおり
-  // （新郎の名は必須、それ以外＝新郎の姓・新婦の姓名はすべて任意）。
-  const groomLastName = String(payload.groomLastName || '').trim();
-  const groomName = String(payload.groomName || payload.customerName || '').trim();
+  // ★要件変更：新規予約作成時は新郎新婦の姓・名すべて必須（以前は新郎の名だけ必須だったが、
+  // 「名前も任意入力じゃなくてmust」との要望により全4項目を必須化）。姓・名は常に大文字で保存する
+  // （例：YAMADA TARO / YAMADA HANAKO）。既存案件の更新（3択フロー）では従来どおり
+  // 必須化はしない（prepareFieldWrite_のnormalizeNameValue_で大文字化だけは常に行う）。
+  const groomLastName = normalizeNameValue_(payload.groomLastName);
+  const groomName = normalizeNameValue_(payload.groomName || payload.customerName);
+  if (!groomLastName) throw new Error('新郎姓（ローマ字）を入力してください。');
   if (!groomName) throw new Error('新郎名（ローマ字）を入力してください。');
-  const brideLastName = String(payload.brideLastName || '').trim();
-  const brideName = String(payload.brideName || '').trim();
+  const brideLastName = normalizeNameValue_(payload.brideLastName);
+  const brideName = normalizeNameValue_(payload.brideName);
+  if (!brideLastName) throw new Error('新婦姓（ローマ字）を入力してください。');
+  if (!brideName) throw new Error('新婦名（ローマ字）を入力してください。');
   const plan = String(payload.plan || '').trim();
   const saleName = String(payload.saleName || '').trim();
   const location = String(payload.location || '').trim();
@@ -2929,7 +2955,7 @@ function apiShopCreateRequest(token, payload) {
       `店舗（${session.branchName}）からの新規依頼です。（${initialStatusLabel}）`,
       challengeNo ? `チャレンジ番号: ${challengeNo}` : '',
       `新郎名: ${fullName_(groomLastName, groomName)}`,
-      (brideLastName || brideName) ? `新婦名: ${fullName_(brideLastName, brideName)}` : '',
+      `新婦名: ${fullName_(brideLastName, brideName)}`,
       `希望日: ${[hopes[0], hopes[1], hopes[2], hopes[3], hopes[4]].filter(Boolean).join(' / ')}`,
       plan ? `プラン: ${plan}` : '',
       saleName ? `セール名: ${saleName}` : '',
@@ -2946,6 +2972,17 @@ function apiShopCreateRequest(token, payload) {
     // 直結支店については、手配課宛のメール通知だけを止める（手配課からの閲覧・監視は妨げない。
     // 上のsetUnreadFlag_(JP_ROLE, true)は変えないため、手配課側の未読表示・一覧上の可視性は従来通り）。
     sendDirectionalMail_(headers, newRowData, targetMeta.shopNotifyHq === false ? 'SHOP_NEW_CASE_BRANCH_ONLY' : 'SHOP_NEW_CASE', session, initMsg, '店舗からの新規依頼');
+
+    // ★要件：請求先は先にマスタ登録しておく運用（支店マスタの「請求先」列）。万が一この店舗の
+    // 請求先が未登録（空欄）のまま新規依頼が来た場合は、店舗直接やり取り許可がONの支店であっても
+    // 必ず手配課へアラートが届くようにする。店舗には見せず、現地支店・手配課のみ閲覧できる
+    // 専用チャネル（BRANCH→JP）で送る（appendHistory_のrecipientRoleにJP_ROLEを明示）。
+    const ownShopMeta = branchMetaMap_()[session.branchCode] || {};
+    if (!ownShopMeta.shopBilling) {
+      appendHistory_(headers, newRowData, 'システム（自動通知）',
+        `［請求先未登録アラート］\n店舗「${session.branchName}」の請求先が支店マスタに未登録です。手配課にてご確認・ご登録をお願いします。`,
+        BRANCH_ROLE, JP_ROLE);
+    }
 
     sortReservationSheet_(sheet);
     return { ok: true, kanriNo: newNo };
