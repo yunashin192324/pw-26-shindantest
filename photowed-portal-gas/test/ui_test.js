@@ -902,6 +902,23 @@ function visiblePane(document) {
     check('店舗側でも印刷用の手配内容ブロックが生成される', printBlockShop.innerHTML.includes('手配内容'));
   }
 
+  section('U21. 店舗画面のクイックナビ（タブを押すと該当セクションへスクロール）');
+  {
+    // U20の続きで店舗の詳細画面を開いたままの状態
+    const nav = document.getElementById('shop-quick-nav');
+    check('店舗の詳細画面上部にクイックナビが表示される', !!nav);
+    const navBtns = [...nav.querySelectorAll('[data-scroll-to]')];
+    check('クイックナビに依頼状況・お客様情報・予約内容・オプション・書類・メッセージ・履歴の7つがある',
+          navBtns.length === 7, navBtns.map(b => b.dataset.scrollTo).join(','));
+    const missingTargets = navBtns.map(b => b.dataset.scrollTo).filter(id => !document.getElementById(id));
+    check('クイックナビの全ボタンに対応するセクションが実在する', missingTargets.length === 0, missingTargets.join(','));
+    // ★不具合防止：jsdomにはscrollIntoViewが無いが、押しても例外にならず安全に無視されること
+    let navErr = null;
+    try { navBtns.forEach(b => b.click()); } catch (e) { navErr = e; }
+    check('クイックナビのボタンを押しても例外にならない（scrollIntoViewが無い環境でも安全）',
+          navErr === null, String(navErr));
+  }
+
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error('テストが異常終了しました:', e); process.exit(1); });

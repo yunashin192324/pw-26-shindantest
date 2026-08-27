@@ -770,13 +770,29 @@
         ${escapeHtml(c2.item)}
       </label>`).join('');
 
+    // ★要件：メッセージ欄まで画面が長く、スクロールが大変とのご指摘への対応。
+    // JP/支店側のようなタブ切替（他を隠す）ではなく、上部に置いたボタンを押すと該当セクションまで
+    // スムーズにスクロールする「クイックナビ」にする（店舗の画面はそもそも編集項目が少なく、
+    // 1画面で全体を見渡せる構成の良さは保ちたいため）。
+    const shopQuickNavHtml = `
+      <div class="tab-bar" id="shop-quick-nav">
+        <button type="button" class="tab-btn" data-scroll-to="shop-sec-status">依頼状況</button>
+        <button type="button" class="tab-btn" data-scroll-to="shop-sec-customer">お客様情報</button>
+        <button type="button" class="tab-btn" data-scroll-to="shop-sec-reservation">予約内容</button>
+        <button type="button" class="tab-btn" data-scroll-to="shop-sec-options">オプション</button>
+        <button type="button" class="tab-btn" data-scroll-to="shop-sec-docs">書類</button>
+        <button type="button" class="tab-btn" data-scroll-to="shop-sec-message">メッセージ</button>
+        <button type="button" class="tab-btn" data-scroll-to="shop-sec-history">履歴</button>
+      </div>`;
+
     c.innerHTML = `
       <div class="detail-header">
         <div class="kanri">管理番号: ${escapeHtml(d['管理番号'])}</div>
         <div class="chg-no">CHG NO: ${escapeHtml(d['CHG NO'] || 'なし')}</div>
         <button type="button" class="print-btn" id="print-arrangement-btn">🖨 手配内容をPDFで保存</button>
       </div>
-      <div class="section-card">
+      ${shopQuickNavHtml}
+      <div class="section-card" id="shop-sec-status">
         <h3>依頼状況</h3>
         <div class="detail-grid">
           <div class="field-block"><label>依頼先支店</label><div>${escapeHtml(d.branchName || '')}（${escapeHtml(d.country || '')}/${escapeHtml(d.city || '')}）</div></div>
@@ -787,7 +803,7 @@
           ${!d.shopBilling ? '' : `<div class="field-block"><label>請求先</label><div>${escapeHtml(d.shopBilling)}</div></div>`}
         </div>
       </div>
-      <div class="section-card">
+      <div class="section-card" id="shop-sec-customer">
         <h3>お客様情報</h3>
         <div class="detail-grid">
           <div class="field-block"><label>新郎名（ローマ字）</label><input data-pending="新郎名（ローマ字）" value="${escapeAttr(d['新郎名（ローマ字）'])}"></div>
@@ -795,7 +811,7 @@
           ${!('パスポート番号' in d) ? '' : `<div class="field-block"><label>パスポート番号</label><input data-pending="パスポート番号" value="${escapeAttr(d['パスポート番号'])}"></div>`}
         </div>
       </div>
-      <div class="section-card">
+      <div class="section-card" id="shop-sec-reservation">
         <h3>予約内容</h3>
         <div class="detail-grid">
           <div class="field-block">
@@ -815,11 +831,11 @@
         <p id="shop-status-warning" class="error-text hidden">⚠️ チャージ規定は各自ご確認ください。内容を確認のうえ送信してください。</p>
         ${hopeTableHtmlShop}
       </div>
-      <div class="section-card">
+      <div class="section-card" id="shop-sec-options">
         <h3 style="margin-top:0;">オプション（最大5件）</h3>
         ${optionsHtml}
       </div>
-      <div class="section-card">
+      <div class="section-card" id="shop-sec-docs">
         <h3>必要書類チェックリスト・同意書</h3>
         <p class="hint-text">現地(支店)とチェック状況を共有します（双方向）。</p>
         ${checklistHtml}
@@ -846,13 +862,13 @@
           <button type="button" class="send-btn" id="btn-save-quiet" style="width:100%;background:var(--color-muted);">保存のみ（通知しない）</button>
         </div>
       </div>
-      <div class="section-card">
+      <div class="section-card" id="shop-sec-message">
         <h3>メッセージ・変更の送信</h3>
         <p class="hint-text">送信者として記録されます：<strong>${escapeHtml(currentUserName || session.branchName)}</strong></p>
         <div class="msg-row"><textarea id="msg-input" placeholder="メッセージ（任意）"></textarea></div>
         <button class="send-btn" id="btn-msg-only" style="width:100%;margin-top:10px;">メッセージのみ送信</button>
       </div>
-      <div class="section-card">
+      <div class="section-card" id="shop-sec-history">
         <h3>やり取り履歴（新しい順）</h3>
         ${historyHtml}
       </div>`;
@@ -861,6 +877,17 @@
     $('btn-msg-only').addEventListener('click', sendMessageOnly);
     $('btn-commit').addEventListener('click', commitChangesWithMessage);
     $('btn-save-quiet').addEventListener('click', saveQuiet);
+
+    // ★要件：メッセージ欄まで画面が長いので、上部のタブを押すと該当セクションまで
+    // スムーズスクロールできるようにする（他のセクションを隠すタブ切替ではなく、あくまで移動用）
+    c.querySelectorAll('#shop-quick-nav [data-scroll-to]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = $(btn.dataset.scrollTo);
+        if (target && typeof target.scrollIntoView === 'function') {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    });
 
     // ★要件：手配内容をPDFにできるように
     renderPrintArrangement(d);
