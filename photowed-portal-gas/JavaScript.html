@@ -741,7 +741,7 @@
       return `
         <tr>
           <td>第${i + 1}希望</td>
-          <td><input type="date" data-pending="${escapeAttr(f)}" value="${escapeAttr(toIsoDate(d[f]))}" style="width:100%;"></td>
+          <td><input type="date" data-pending="${escapeAttr(f)}" value="${escapeAttr(toIsoDate(d[f]))}" min="${todayIsoDate_()}" style="width:100%;"></td>
           <td>${escapeHtml(jpVal || '')}</td>
           <td>${escapeHtml(branchVal || '')}</td>
         </tr>`;
@@ -1178,6 +1178,16 @@
     return names;
   }
 
+  // ★要件：希望日のカレンダーで過去日まで選べてしまうと誤操作の元になるため、
+  // 希望日の入力欄（<input type="date">）には今日以降しか選べないよう min 属性を付ける。
+  // 既に過去の日付が入力済みの案件（過去に登録された希望日など）まで壊さないよう、
+  // あくまで「これから選ぶ時のカレンダーの下限」であって、既存の値を消したり弾いたりはしない。
+  function todayIsoDate_() {
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+
   // 「2026/12/3」「2026-12-03」等を <input type="date"> 用の yyyy-MM-dd に変換（不正ならnull）
   function toIsoDate(v) {
     const m = String(v || '').trim().match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
@@ -1512,22 +1522,24 @@
             <div class="field-block"><label>新郎名（ローマ字）</label><input data-pending="新郎名（ローマ字）" value="${escapeAttr(d['新郎名（ローマ字）'])}"></div>
             <div class="field-block"><label>新婦姓（ローマ字）</label><input data-pending="新婦姓（ローマ字）" value="${escapeAttr(d['新婦姓（ローマ字）'])}"></div>
             <div class="field-block"><label>新婦名（ローマ字）</label><input data-pending="新婦名（ローマ字）" value="${escapeAttr(d['新婦名（ローマ字）'])}"></div>
-            <div class="field-block"><label>CHG NO</label><input data-pending="CHG NO" value="${escapeAttr(d['CHG NO'])}"></div>
           </div>
+        </div>
+
+        <div class="section-card">
+          <!-- ★要件：CHG NOのすぐ隣に撮影日FIX・挙式日FIXを並べる（希望日のいずれかで
+               現地・日本双方がOKになると、applyHopeStatusCascade_により撮影日FIXへ自動で日付が入る） -->
+          <div class="detail-grid">
+            <div class="field-block"><label>CHG NO</label><input data-pending="CHG NO" value="${escapeAttr(d['CHG NO'])}"></div>
+            <div class="field-block"><label>撮影日FIX</label><input type="date" data-pending="撮影日FIX" value="${escapeAttr(d['撮影日FIX'])}"></div>
+            <div class="field-block"><label>挙式日FIX</label><input type="date" data-pending="挙式日FIX" value="${escapeAttr(d['挙式日FIX'])}"></div>
+          </div>
+          ${statusRowHtml}
         </div>
 
         <div class="section-card">
           ${inquiryBlock}
           ${hopeFieldsHtml}
           ${hopeBlock}
-        </div>
-
-        <div class="section-card">
-          <div class="detail-grid">
-            <div class="field-block"><label>撮影日FIX</label><input type="date" data-pending="撮影日FIX" value="${escapeAttr(d['撮影日FIX'])}"></div>
-            <div class="field-block"><label>挙式日FIX</label><input type="date" data-pending="挙式日FIX" value="${escapeAttr(d['挙式日FIX'])}"></div>
-          </div>
-          ${statusRowHtml}
         </div>
 
         <div class="section-card">
@@ -1634,6 +1646,7 @@
         <div class="kanri">管理番号: ${escapeHtml(d['管理番号'])} ｜ CHG NO: <span class="chg-no">${escapeHtml(d['CHG NO'] || 'なし')}</span></div>
         <div class="kanri">${escapeHtml(d.branchName)}（${escapeHtml(d['支店コード'])}）${d.country ? ' ・ ' + escapeHtml(d.country) : ''}${d.city ? ' ／ ' + escapeHtml(d.city) : ''}</div>
         <div class="kanri">担当: ${d['管轄'] ? escapeHtml(d['管轄']) + '手配課' : '未設定'}</div>
+        ${!d.originShop ? '' : `<div class="kanri">日本の店舗: <strong>${escapeHtml(d.originShopName || d.originShop)}</strong></div>`}
         <div class="names">新郎: ${escapeHtml(fullNameClient_(d['新郎姓（ローマ字）'], d['新郎名（ローマ字）']))}<br>新婦: ${escapeHtml(fullNameClient_(d['新婦姓（ローマ字）'], d['新婦名（ローマ字）']))}</div>
         <button type="button" class="print-btn" id="print-arrangement-btn">🖨 手配内容をPDFで保存</button>
       </div>
@@ -2088,6 +2101,8 @@
     $('shop-new-success').classList.add('hidden');
     SHOP_NEW_TEXT_FIELDS.forEach(k => { $('shop-new-' + k).value = ''; });
     SHOP_NEW_DATE_FIELDS.forEach(k => { $('shop-new-' + k).value = ''; });
+    // ★要件：希望日のカレンダーで今日より前の日付が選べてしまわないよう下限を付ける
+    SHOP_NEW_DATE_FIELDS.forEach(k => { $('shop-new-' + k).min = todayIsoDate_(); });
     $('shop-new-initial-status').value = 'RQ';
     if (!branchesCache.length) {
       const data = await gsRun('apiGetDashboard', session.token, { showAll: true });

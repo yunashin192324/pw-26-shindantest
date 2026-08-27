@@ -538,6 +538,10 @@ function visiblePane(document) {
     await settle();
     const branchOpts = [...document.getElementById('shop-new-branch').options].map(o => o.value);
     check('依頼先の支店（都市）が選べる', branchOpts.includes('VIE'), branchOpts.join(','));
+    // ★要件：希望日のカレンダーで過去日が選べないよう min 属性が今日の日付になっている
+    const todayIsoNew = new Date().toISOString().slice(0, 10);
+    check('新規依頼フォームの希望日欄もカレンダーで過去日を選べない（min=今日）',
+          document.getElementById('shop-new-hope1').min === todayIsoNew, document.getElementById('shop-new-hope1').min);
     document.getElementById('shop-new-branch').value = 'VIE';
     // ★要件：プラン・セール名・オプションは支店ごとのマスタから選ぶ選択式にしたため、
     // 支店を切り替えたら候補が入れ替わる（change時に発火するonShopNewBranchChangeを待つ）
@@ -587,6 +591,10 @@ function visiblePane(document) {
     await settle();
     check('日本側の詳細に「店舗からの依頼」の案内が出る',
           document.getElementById('detail-content').innerHTML.includes('新宿店'));
+    // ★要件：現地支店側の画面でも日本の店舗名が自動でヘッダーに表示される（タブを開かなくても見える）
+    check('詳細ヘッダーに「日本の店舗」として自動で表示される',
+          document.querySelector('.detail-header').textContent.includes('日本の店舗') &&
+          document.querySelector('.detail-header').textContent.includes('新宿店'));
     check('日本側には宛先（支店へ／店舗へ）の選択欄が出る（店舗直接やり取り許可がOFFのため）',
           !!document.getElementById('msg-recipient'));
     document.getElementById('msg-recipient').value = 'SHOP';
@@ -853,6 +861,10 @@ function visiblePane(document) {
     const hopeRow1 = [...document.querySelectorAll('#detail-content tr')].find(r => r.textContent.includes('第1希望'));
     check('店舗の画面にも希望日①のSTSが表(優先順位/日付/日本STS/現地STS)で表示される（現地未確認のST）',
           !!hopeRow1 && hopeRow1.textContent.includes('RQ') && hopeRow1.textContent.includes('ST'), hopeRow1 && hopeRow1.textContent);
+    // ★要件：希望日のカレンダーで過去日が選べないよう min 属性が今日の日付になっている
+    const todayIso = new Date().toISOString().slice(0, 10);
+    check('店舗の希望日入力欄はカレンダーで過去日を選べない（min=今日）',
+          hopeRow1.querySelector('input[type="date"]').min === todayIso, hopeRow1.querySelector('input[type="date"]').min);
 
     // --- 現地(支店)が希望日から確定する ---
     document.getElementById('nav-logout').click();
