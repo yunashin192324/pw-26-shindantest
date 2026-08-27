@@ -93,7 +93,7 @@
           <p class="text-xs opacity-80">成約件数 / PAX数</p>
           <p class="text-2xl font-bold"><span id="kpi-contract">0</span> <span class="text-base font-normal">件 /</span> <span id="kpi-pax">0</span> <span class="text-base font-normal">人</span></p>
         </div>
-        <div class="kpi-card bg-gradient-to-br from-rose-500 to-rose-600 text-white rounded-xl p-3 shadow" title="相談日（対象年月日）から1週間以上たってもSTSが「－」（未対応）のままの件数">
+        <div class="kpi-card bg-gradient-to-br from-rose-500 to-rose-600 text-white rounded-xl p-3 shadow" title="相談日（対象年月日）から1週間以上たってもACT日が未入力のままの件数">
           <p class="text-xs opacity-80">🔔 長期未対応アラート</p>
           <p id="kpi-alert-count" class="text-2xl font-bold">0</p>
         </div>
@@ -349,7 +349,9 @@
         </div>
         <div class="overflow-auto max-h-[65vh]">
           <table class="min-w-full text-sm whitespace-nowrap">
-            <thead class="bg-slate-100 text-slate-600 sticky top-0 z-10">
+            <!-- 見出し行は本文の固定列より前面に置く（z-30）。同じ重なり順だと、
+                 下へスクロールしたときに本文の固定セルが見出しに重なってしまう。 -->
+            <thead class="bg-slate-100 text-slate-600 sticky top-0 z-30">
               <tr>
                 <th class="dm-sticky dm-sticky-1 dm-sortable px-3 py-2 text-left bg-amber-50" data-sort="リセール" title="編集可（クリックで並べ替え）">リセール</th>
                 <th class="dm-sticky dm-sticky-2 dm-sortable px-3 py-2 text-left bg-amber-50" data-sort="STS" title="編集可（クリックで並べ替え）">STS</th>
