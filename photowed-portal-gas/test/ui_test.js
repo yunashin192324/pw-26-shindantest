@@ -839,6 +839,37 @@ function visiblePane(document) {
     check('一括設定：選ばなかった希望日③は影響を受けない', afterBulk['希望日③ STS 支店'] === 'ST');
   }
 
+  section('U20. 手配内容をPDFで保存できる（印刷用ブロックの生成）');
+  {
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'ROW', 'CHANGE-ME-ROW');
+    document.querySelector('#reservation-list .res-card').click();
+    await settle();
+
+    const printBtn = document.getElementById('print-arrangement-btn');
+    check('日本・支店側の詳細画面に「手配内容をPDFで保存」ボタンが表示される', !!printBtn);
+    const printBlockJp = document.getElementById('print-arrangement');
+    check('印刷用の手配内容ブロックが管理番号を含めて生成される（画面には出さない）',
+          printBlockJp.innerHTML.includes('R-001') && printBlockJp.classList.contains('print-only'));
+    // ブラウザ以外（jsdom）ではwindow.printが無いため、押しても例外にならないことだけ確認する
+    let printErr = null;
+    try { printBtn.click(); } catch (e) { printErr = e; }
+    check('ボタンを押しても例外にならない（window.printが無い環境でも安全）', printErr === null, String(printErr));
+
+    // --- 店舗ロールの詳細画面にも同じボタン・仕組みがある ---
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'SHOP1', 'CHANGE-ME-SHOP1');
+    document.getElementById('view-mode-card').click();
+    document.querySelector('#reservation-list .res-card').click();
+    await settle();
+    const shopPrintBtn = document.getElementById('print-arrangement-btn');
+    check('店舗側の詳細画面にも「手配内容をPDFで保存」ボタンが表示される', !!shopPrintBtn);
+    const printBlockShop = document.getElementById('print-arrangement');
+    check('店舗側でも印刷用の手配内容ブロックが生成される', printBlockShop.innerHTML.includes('手配内容'));
+  }
+
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error('テストが異常終了しました:', e); process.exit(1); });

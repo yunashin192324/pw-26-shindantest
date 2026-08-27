@@ -762,7 +762,7 @@
         ${escapeHtml(c2.item)}
       </label>`).join('');
 
-    // ★機能追加（拡張要望3章）：店舗が設定できるSTS(JP側)（FN/CR/NC/DC/PC）。
+    // ★機能追加（拡張要望3章）：店舗が設定できるSTS(JP側)（FN/CR/DC/PC）。
     // DC・PCを選んだ時だけ「チャージ規定は各自ご確認ください」の警告を表示する（3-2）。
     const statusOptions = ['<option value="">-（変更しない）</option>']
       .concat(SHOP_STATUS_TARGETS.map(v => `<option value="${v}">${escapeHtml(SHOP_STATUS_LABELS[v])}</option>`)).join('');
@@ -771,6 +771,7 @@
       <div class="detail-header">
         <div class="kanri">管理番号: ${escapeHtml(d['管理番号'])}</div>
         <div class="chg-no">CHG NO: ${escapeHtml(d['CHG NO'] || 'なし')}</div>
+        <button type="button" class="print-btn" id="print-arrangement-btn">🖨 手配内容をPDFで保存</button>
       </div>
       <div class="section-card">
         <h3>依頼状況</h3>
@@ -857,6 +858,12 @@
     $('btn-msg-only').addEventListener('click', sendMessageOnly);
     $('btn-commit').addEventListener('click', commitChangesWithMessage);
     $('btn-save-quiet').addEventListener('click', saveQuiet);
+
+    // ★要件：手配内容をPDFにできるように
+    renderPrintArrangement(d);
+    $('print-arrangement-btn').addEventListener('click', () => {
+      if (typeof window.print === 'function') window.print();
+    });
 
     const statusSel = $('shop-status-select');
     statusSel.value = pendingChanges['STS JP'] || '';
@@ -950,6 +957,51 @@
     return `<span class="chip ${chipClass}" data-history-field="${escapeAttr(fieldName)}" data-history-target="${hid}"
         style="cursor:pointer;font-weight:700;">${escapeHtml(current || '未設定')}</span>
       <div class="history-panel hidden" id="${hid}" style="width:100%;margin-top:4px;"></div>`;
+  }
+
+  // ★要件：手配内容をPDFにできるようにしてほしい、との要望への対応。
+  // GAS上のWebアプリなのでサーバー側でPDFを生成するのではなく、画面上に「印刷用の手配内容」を
+  // 常時（非表示で）用意しておき、ブラウザの印刷機能（送信先を「PDFに保存」）でPDF化してもらう方式。
+  // JP/支店/店舗いずれの詳細画面でも同じ関数を使い回せるよう、共通のフィールド名（希望日・オプション
+  // 一覧の形は buildShopReservationDetail_ と renderDetail 用の集計処理で揃えてある）だけを参照する。
+  function buildArrangementPrintHtml(d) {
+    const hopeRows = ['①', '②', '③', '④', '⑤'].map((mark, i) => {
+      const n = i + 1;
+      const dateVal = d[`希望日${mark}`];
+      if (!dateVal) return '';
+      return `<tr><td>第${n}希望</td><td>${escapeHtml(dateVal)}</td>
+        <td>${escapeHtml(d[`希望日${mark} STS JP`] || '-')}</td><td>${escapeHtml(d[`希望日${mark} STS 支店`] || '-')}</td></tr>`;
+    }).filter(Boolean).join('');
+    const optionRows = (d.options || []).filter(o => o.name).map(o => `
+      <tr><td>オプション${o.n}</td><td>${escapeHtml(o.name)}</td>
+        <td>${escapeHtml(o.stsJp || '-')}</td><td>${escapeHtml(o.stsBranch || '-')}</td></tr>`).join('');
+    const stamp = new Date().toLocaleString('ja-JP');
+    return `
+      <h1 style="margin:0 0 4px;">手配内容</h1>
+      <p style="margin:0 0 16px;color:#555;">出力日時: ${escapeHtml(stamp)}</p>
+      <table class="print-kv">
+        <tr><th>管理番号</th><td>${escapeHtml(d['管理番号'] || '')}</td><th>CHG NO</th><td>${escapeHtml(d['CHG NO'] || 'なし')}</td></tr>
+        <tr><th>支店</th><td>${escapeHtml(d.branchName || '')}（${escapeHtml(d['支店コード'] || '')}）</td><th>担当</th><td>${escapeHtml(d['管轄'] || '未設定')}${d['管轄'] ? '手配課' : ''}</td></tr>
+        <tr><th>新郎名</th><td>${escapeHtml(d['新郎名（ローマ字）'] || '')}</td><th>新婦名</th><td>${escapeHtml(d['新婦名（ローマ字）'] || '')}</td></tr>
+        <tr><th>プラン</th><td>${escapeHtml(d['プラン名'] || '未設定')}</td><th>セール名</th><td>${escapeHtml(d['セール名'] || '')}</td></tr>
+        <tr><th>撮影希望場所</th><td>${escapeHtml(d['撮影希望場所'] || '')}</td><th>撮影日FIX</th><td>${escapeHtml(d['撮影日FIX'] || '未定')}</td></tr>
+        <tr><th>STS JP</th><td>${escapeHtml(d['STS JP'] || '')}</td><th>STS 支店</th><td>${escapeHtml(d['STS 支店'] || '')}</td></tr>
+      </table>
+      ${!hopeRows ? '' : `<h2>希望日ごとのステータス</h2>
+        <table class="print-table"><thead><tr><th>優先順位</th><th>日付</th><th>日本STS</th><th>現地STS</th></tr></thead>
+        <tbody>${hopeRows}</tbody></table>`}
+      ${!optionRows ? '' : `<h2>オプション・プラン明細</h2>
+        <table class="print-table"><thead><tr><th>No.</th><th>名称</th><th>STS JP</th><th>STS 支店</th></tr></thead>
+        <tbody>${optionRows}</tbody></table>`}
+      <h2>備考</h2>
+      <p>${escapeHtml(d['備考'] || 'なし')}</p>`;
+  }
+
+  // 詳細画面の見出しに「PDFとして保存」ボタンと、印刷専用の非表示ブロックを差し込む。
+  // ボタンは画面上でwindow.print()を呼ぶだけ（印刷用CSSが他の要素を隠し、この内容だけを印刷対象にする）
+  function renderPrintArrangement(d) {
+    const el = $('print-arrangement');
+    if (el) el.innerHTML = buildArrangementPrintHtml(d);
   }
 
   // ★機能：共有メモ／メモ（現地用）を「積み上げ式」で表示する。日付・記入者は自動、内容だけ手入力。
@@ -1484,6 +1536,7 @@
         <div class="kanri">${escapeHtml(d.branchName)}（${escapeHtml(d['支店コード'])}）${d.country ? ' ・ ' + escapeHtml(d.country) : ''}${d.city ? ' ／ ' + escapeHtml(d.city) : ''}</div>
         <div class="kanri">担当: ${d['管轄'] ? escapeHtml(d['管轄']) + '手配課' : '未設定'}</div>
         <div class="names">新郎: ${escapeHtml(d['新郎名（ローマ字）'] || '')}<br>新婦: ${escapeHtml(d['新婦名（ローマ字）'] || '')}</div>
+        <button type="button" class="print-btn" id="print-arrangement-btn">🖨 手配内容をPDFで保存</button>
       </div>
       ${tabBarHtml}
       ${messageTabHtml}
@@ -1552,6 +1605,11 @@
     $('btn-msg-only').addEventListener('click', sendMessageOnly);
     $('btn-commit').addEventListener('click', commitChangesWithMessage);
     $('btn-save-quiet').addEventListener('click', saveQuiet);
+    // ★要件：手配内容をPDFにできるように
+    renderPrintArrangement(d);
+    $('print-arrangement-btn').addEventListener('click', () => {
+      if (typeof window.print === 'function') window.print();
+    });
     // ★機能：予約内容・現地記入欄タブ下部の複製ボタン（メッセージタブへ戻らず確定できるように）
     c.querySelectorAll('.quick-commit-btn').forEach(btn => btn.addEventListener('click', commitChangesWithMessage));
     c.querySelectorAll('.quick-save-btn').forEach(btn => btn.addEventListener('click', saveQuiet));

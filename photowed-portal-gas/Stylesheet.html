@@ -287,4 +287,20 @@
     /* メッセージ本文・入力欄は横幅いっぱいに伸ばすと逆に読みにくくなるため、読みやすい幅で頭打ちにする */
     #view-detail .tab-pane[data-tab-pane="message"] .section-card { max-width: 760px; }
   }
+
+  /* ★要件：手配内容をPDFにできるように。画面には出さず（.print-only）、印刷時（=ブラウザの
+     「PDFに保存」）にだけ #print-arrangement を表示し、それ以外は隠す。 */
+  .print-only { display: none; }
+  .print-btn { background: #fff; color: var(--color-primary); border: 1px solid #fff;
+    border-radius: 6px; padding: 6px 12px; font-size: 0.82rem; font-weight: 600; cursor: pointer; margin-top: 8px; }
+  @media print {
+    body * { visibility: hidden; }
+    #print-arrangement, #print-arrangement * { visibility: visible; }
+    #print-arrangement { display: block; position: absolute; left: 0; top: 0; width: 100%; padding: 24px; color: #000; }
+    #print-arrangement h1 { font-size: 1.3rem; }
+    #print-arrangement h2 { font-size: 1.05rem; margin: 18px 0 6px; border-bottom: 1px solid #999; padding-bottom: 4px; }
+    #print-arrangement table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+    #print-arrangement th, #print-arrangement td { border: 1px solid #999; padding: 5px 8px; font-size: 0.85rem; text-align: left; }
+    #print-arrangement .print-kv th { width: 110px; background: #f0f0f0; }
+  }
 </style>
