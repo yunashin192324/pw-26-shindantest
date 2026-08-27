@@ -791,6 +791,52 @@ function visiblePane(document) {
     check('案件全体のSTS(JP側)もOKへ進む', afterHope['STS JP'] === 'OK');
   }
 
+  section('U19. 希望日ごとのSTSを現地・日本共に一括で設定できる（まとめて設定）');
+  {
+    const kanri4 = ctx.apiShopCreateRequest(ctx.apiLogin('SHOP1', 'CHANGE-ME-SHOP1').session.token, {
+      branchCode: 'VIE', team: '関東', groomName: 'Bulk Tester',
+      hope1: '2026-10-01', hope2: '2026-10-02', hope3: '2026-10-03'
+    }).kanriNo;
+
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'VIE', 'CHANGE-ME-VIE');
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanri4)).click();
+    await settle();
+    [...document.querySelectorAll('.tab-btn')].find(b => b.dataset.tab === 'reservation').click();
+    await settle();
+    const resPaneBulk = document.querySelector('[data-tab-pane="reservation"]');
+    check('現地（支店）の画面に一括設定バーが表示される', !!document.getElementById('hope-bulk-apply'));
+
+    const checksAll = [...resPaneBulk.querySelectorAll('.hope-bulk-check')];
+    check('希望日は第五希望まで5行分チェックボックスが表示される（未入力分は無効）', checksAll.length === 5, checksAll.length);
+    const checks = checksAll.filter(cb => !cb.disabled);
+    check('入力済みの第一〜第三希望の3つだけが操作可能', checks.length === 3, checks.length);
+    // 第一・第二希望をチェックしてUC（現地不可）にまとめて設定する
+    checks[0].checked = true;
+    checks[1].checked = true;
+    document.getElementById('hope-bulk-value').value = 'UC';
+    document.getElementById('hope-bulk-apply').click();
+    await settle();
+
+    const sel1 = document.querySelector('[data-pending="希望日① STS 支店"]');
+    const sel2 = document.querySelector('[data-pending="希望日② STS 支店"]');
+    const sel3 = document.querySelector('[data-pending="希望日③ STS 支店"]');
+    check('一括設定：チェックした2件のプルダウンがUCに変わる（画面上）', sel1.value === 'UC' && sel2.value === 'UC');
+    check('一括設定：チェックしなかった希望日③は変わらない（画面上）', sel3.value !== 'UC');
+
+    document.querySelector('[data-tab-pane="reservation"] .quick-commit-btn').click();
+    await settle();
+
+    const jp4 = ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    const afterBulk = ctx.apiGetReservationDetail(jp4, kanri4).detail;
+    check('一括設定：サーバー側にも2件まとめて反映される（現地側）',
+          afterBulk['希望日① STS 支店'] === 'UC' && afterBulk['希望日② STS 支店'] === 'UC');
+    check('一括設定：日本側のSTSにも1回の送信で両方連動する', afterBulk['希望日① STS JP'] === 'UC' && afterBulk['希望日② STS JP'] === 'UC');
+    check('一括設定：選ばなかった希望日③は影響を受けない', afterBulk['希望日③ STS 支店'] === 'ST');
+  }
+
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error('テストが異常終了しました:', e); process.exit(1); });

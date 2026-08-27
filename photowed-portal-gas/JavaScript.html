@@ -1088,28 +1088,43 @@
     // OK/UCの回答はSTS(JP側)にも自動反映され、OKになると他の希望日は自動でUCになり、
     // その日付が撮影日FIXへ反映される（Code.gsのapplyHopeStatusCascade_参照）。
     const HOPE_FIELDS = ['希望日①', '希望日②', '希望日③', '希望日④', '希望日⑤'];
+    // ★要件：現地・日本共に一括でステータスをセットできるように。チェックした希望日のSTS(支店側)を
+    // まとめて選んだ値にする（OK/UCならJP側にも自動反映される＝applyHopeStatusCascade_が担当）。
+    const canBulkSetHope = session.role === 'BRANCH';
     const hopeTableRows = HOPE_FIELDS.map((f, i) => {
       const jpField = `${f} STS JP`, branchField = `${f} STS 支店`;
       const gate = branchGateFor(d[jpField]);
+      const branchEditable = session.role === 'BRANCH' && gate.editable;
       const jpCell = d[jpField] ? statusCell(jpField, d[jpField], false, null) : '';
-      const branchCell = (session.role === 'BRANCH' && gate.editable)
+      const branchCell = branchEditable
         ? statusCell(branchField, d[branchField], true, gate.allowed, `${f} STS JP: ${d[jpField] || '未設定'}`)
         : (d[branchField] ? statusCell(branchField, d[branchField], false, null) : '');
+      const checkCell = !canBulkSetHope ? '' :
+        `<td><input type="checkbox" class="hope-bulk-check" data-hope-bulk-field="${escapeAttr(branchField)}" ${branchEditable ? '' : 'disabled'}></td>`;
       return `
         <tr>
+          ${checkCell}
           <td>第${i + 1}希望</td>
           <td><input data-pending="${escapeAttr(f)}" value="${escapeAttr(d[f])}" style="width:100%;"></td>
           <td>${jpCell}</td>
           <td>${branchCell}</td>
         </tr>`;
     }).join('');
+    const hopeBulkBarHtml = !canBulkSetHope ? '' : `
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;">
+        <span class="hint-text">選択した希望日の現地STSをまとめて設定：</span>
+        <select id="hope-bulk-value" class="sort-select">${STATUS_CODES.map(c => `<option value="${c}">${c}</option>`).join('')}</select>
+        <button type="button" class="send-btn-sm" id="hope-bulk-apply">まとめて設定</button>
+      </div>
+      <p class="hint-text" style="margin-top:4px;">OK／UCを選ぶと、日本側のSTSにも自動で反映されます。下の3択（保存のみ／メッセージ／変更＋メッセージ）で確定してください。</p>`;
     const hopeFieldsHtml = `
       <div class="table-wrap" style="margin-top:6px;">
         <table class="res-table">
-          <thead><tr><th>優先順位</th><th>日付</th><th>日本STS</th><th>現地STS</th></tr></thead>
+          <thead><tr>${canBulkSetHope ? '<th></th>' : ''}<th>優先順位</th><th>日付</th><th>日本STS</th><th>現地STS</th></tr></thead>
           <tbody>${hopeTableRows}</tbody>
         </table>
-      </div>`;
+      </div>
+      ${hopeBulkBarHtml}`;
     // ★機能：希望日からのワンタップ回答（対象の希望日のSTS(支店側)をOKにする分かりやすいショートカット。
     // 実際の反映はapplyHopeStatusCascade_を通る＝上のSTSセレクトで選んだ場合と全く同じ結果になる）
     const hopeButtons = HOPE_FIELDS.map((f, i) => {
@@ -1510,6 +1525,23 @@
     c.querySelectorAll('[data-hope-iso]').forEach(btn => {
       btn.addEventListener('click', () => answerWithHopeDate(btn.dataset.hopeField, btn.dataset.hopeIso, btn.dataset.hopeLabel));
     });
+    // ★要件：現地・日本共に一括でステータスをセットできるように。チェックした希望日の現地STSを
+    // まとめて選んだ値にする（OK/UCならJP側にも自動で反映される＝applyHopeStatusCascade_が担当）
+    const hopeBulkApplyBtn = $('hope-bulk-apply');
+    if (hopeBulkApplyBtn) {
+      hopeBulkApplyBtn.addEventListener('click', () => {
+        const value = $('hope-bulk-value').value;
+        const checked = Array.from(c.querySelectorAll('.hope-bulk-check:checked'));
+        if (!checked.length) { alert('希望日を1つ以上選択してください。'); return; }
+        checked.forEach(cb => {
+          const field = cb.dataset.hopeBulkField;
+          pendingChanges[field] = value;
+          const sel = c.querySelector(`[data-pending="${CSS.escape(field)}"]`);
+          if (sel) sel.value = value;
+        });
+        updatePendingIndicator();
+      });
+    }
 
     // ★機能：スタッフのダブルブッキング検知（入力を変えたタイミングで確認）
     c.querySelectorAll('[data-staff]').forEach(el => {

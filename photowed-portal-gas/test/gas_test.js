@@ -2432,6 +2432,23 @@ section('43. 希望日ごとの空き確認ステータス（第一〜第五希�
   ctx.apiSaveFieldsQuiet(vieToken, created3.kanriNo, { '希望日① STS 支店': 'OK' });
   const d3 = ctx.apiGetReservationDetail(jpToken, created3.kanriNo).detail;
   check('案件全体のSTSが既にRQ以外（DC）に進んでいる場合は、希望日確定で巻き戻さない', d3['STS JP'] === 'DC');
+
+  // --- 現地・日本共に一括でステータスをセットできるように（画面のチェックボックス＋まとめて設定）。
+  //     サーバー側は単に「複数の希望日STS(支店側)を1回のwritesに含める」だけでよく、
+  //     applyHopeStatusCascade_が各行ごとに正しくJP側へも連動させる ---
+  const created4 = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'VIE', team: '関東', groomName: 'D',
+    hope1: '2026-10-01', hope2: '2026-10-02', hope3: '2026-10-03'
+  });
+  ctx.apiSaveFieldsQuiet(vieToken, created4.kanriNo, {
+    '希望日① STS 支店': 'UC', '希望日② STS 支店': 'UC'
+  });
+  const d4 = ctx.apiGetReservationDetail(jpToken, created4.kanriNo).detail;
+  check('一括設定：チェックした複数の希望日STS(支店側)が1回の送信でまとめて反映される',
+        d4['希望日① STS 支店'] === 'UC' && d4['希望日② STS 支店'] === 'UC');
+  check('一括設定：それぞれのSTS(JP側)にも自動で反映される（1回の送信で両方連動）',
+        d4['希望日① STS JP'] === 'UC' && d4['希望日② STS JP'] === 'UC');
+  check('一括設定：選ばなかった希望日③はSTのまま影響を受けない', d4['希望日③ STS 支店'] === 'ST');
 }
 
 // ---------------------------------------------------------------
