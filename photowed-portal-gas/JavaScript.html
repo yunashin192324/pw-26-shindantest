@@ -746,26 +746,29 @@
         </table>
       </div>`;
 
-    // ★要件：オプション名のすぐ隣にSTS（JP・支店）を表示する（店舗は編集できず参照のみ。クリックで履歴）
-    const optionsHtml = (d.options || []).map(o => `
-      <div class="field-block"><label>オプション${o.n}</label>
-        <input data-pending="OP${o.n}" value="${escapeAttr(o.name)}" placeholder="未設定">
-        ${!o.name ? '' : `<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">
-          ${inlineStatusBadge('OP' + o.n + ' STS JP', o.stsJp, 'hq')}
-          ${inlineStatusBadge('OP' + o.n + ' STS 支店', o.stsBranch, 'branch')}
-        </div>`}
-      </div>`).join('');
+    // ★要件：オプション名のすぐ隣にSTS（JP・支店）を、希望日テーブルと同じ表形式で表示する。
+    // STS JPは店舗自身がその場でRQ→CR等へ直接変更できる（専用の「ステータス変更」欄は廃止）。
+    // STS 支店は従来どおり読み取り専用（クリックで履歴）。
+    const optionRowsShop = (d.options || []).map(o => `
+      <tr>
+        <td>オプション${o.n}</td>
+        <td><input data-pending="OP${o.n}" value="${escapeAttr(o.name)}" placeholder="未設定" style="width:100%;"></td>
+        <td>${!o.name ? '' : shopStatusCell('OP' + o.n + ' STS JP', o.stsJp)}</td>
+        <td>${!o.name ? '' : inlineStatusBadge('OP' + o.n + ' STS 支店', o.stsBranch, 'branch')}</td>
+      </tr>`).join('');
+    const optionsHtml = `
+      <div class="table-wrap" style="margin-top:6px;">
+        <table class="res-table">
+          <thead><tr><th>オプション</th><th>名称</th><th>STS JP</th><th>STS 支店</th></tr></thead>
+          <tbody>${optionRowsShop}</tbody>
+        </table>
+      </div>`;
 
     const checklistHtml = (d.checklist || []).map(c2 => `
       <label class="checkbox-label">
         <input type="checkbox" data-pending="${escapeAttr('必要書類チェック:' + c2.item)}" data-bool-checkbox="1" ${c2.checked ? 'checked' : ''}>
         ${escapeHtml(c2.item)}
       </label>`).join('');
-
-    // ★機能追加（拡張要望3章）：店舗が設定できるSTS(JP側)（FN/CR/DC/PC）。
-    // DC・PCを選んだ時だけ「チャージ規定は各自ご確認ください」の警告を表示する（3-2）。
-    const statusOptions = ['<option value="">-（変更しない）</option>']
-      .concat(SHOP_STATUS_TARGETS.map(v => `<option value="${v}">${escapeHtml(SHOP_STATUS_LABELS[v])}</option>`)).join('');
 
     c.innerHTML = `
       <div class="detail-header">
@@ -795,18 +798,26 @@
       <div class="section-card">
         <h3>予約内容</h3>
         <div class="detail-grid">
-          <div class="field-block"><label>プラン</label><input data-pending="プラン名" value="${escapeAttr(d['プラン名'])}"></div>
+          <div class="field-block">
+            <label>プラン</label><input data-pending="プラン名" value="${escapeAttr(d['プラン名'])}">
+            <div style="margin-top:6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+              ${shopStatusCell('STS JP', d['STS JP'])}
+              ${inlineStatusBadge('STS 支店', d['STS 支店'], 'branch')}
+            </div>
+          </div>
           <div class="field-block"><label>セール名</label><input data-pending="セール名" value="${escapeAttr(d['セール名'])}"></div>
           <div class="field-block"><label>撮影希望場所</label><input data-pending="撮影希望場所" value="${escapeAttr(d['撮影希望場所'])}"></div>
           ${!d.isItaly ? '' : `<div class="field-block"><label>準備場所</label>
             <select data-pending="準備場所"><option value="">未設定</option>${PREP_CHOICES.map(p =>
               `<option value="${escapeAttr(p)}" ${d['準備場所'] === p ? 'selected' : ''}>${escapeHtml(p)}</option>`).join('')}</select></div>`}
         </div>
+        <p class="hint-text" style="margin-top:8px;">STS JPはプラン・各オプションの隣から直接変更できます（最終確定・キャンセル依頼・日付変更依頼・プラン/式場変更依頼）。選択すると、下の「変更＋メッセージを決定して送信」または「保存のみ」で確定します。</p>
+        <p id="shop-status-warning" class="error-text hidden">⚠️ チャージ規定は各自ご確認ください。内容を確認のうえ送信してください。</p>
         ${hopeTableHtmlShop}
       </div>
       <div class="section-card">
         <h3 style="margin-top:0;">オプション（最大5件）</h3>
-        <div class="detail-grid">${optionsHtml}</div>
+        ${optionsHtml}
       </div>
       <div class="section-card">
         <h3>必要書類チェックリスト・同意書</h3>
@@ -816,13 +827,6 @@
           <div class="hint-text" style="margin-bottom:4px;">同意書・アンケートのご案内URL（お客様にお送りください。管理番号が自動で入力された状態で開きます）</div>
           <div id="shop-form-urls"><p class="hint-text">読み込み中...</p></div>
         </div>
-      </div>
-      <div class="section-card">
-        <h3>ステータス変更（最終確定・キャンセル依頼・日付変更依頼・プラン/式場変更依頼）</h3>
-        <label>STS JP を変更</label>
-        <select id="shop-status-select">${statusOptions}</select>
-        <p id="shop-status-warning" class="error-text hidden">⚠️ チャージ規定は各自ご確認ください。内容を確認のうえ送信してください。</p>
-        <p class="hint-text">選択すると、下の「変更＋メッセージを決定して送信」または「保存のみ」で確定します。</p>
       </div>
       <div class="section-card">
         <h3>お客様提供画像・指示書のアップロード</h3>
@@ -864,14 +868,27 @@
       if (typeof window.print === 'function') window.print();
     });
 
-    const statusSel = $('shop-status-select');
-    statusSel.value = pendingChanges['STS JP'] || '';
-    statusSel.addEventListener('change', () => {
-      const v = statusSel.value;
-      $('shop-status-warning').classList.toggle('hidden', v !== 'DC' && v !== 'PC');
-      if (v) pendingChanges['STS JP'] = v; else delete pendingChanges['STS JP'];
-      updatePendingIndicator();
+    // ★要件：専用の「ステータス変更」欄は廃止し、プラン・各オプションの隣のSTS JPバッジ
+    // （shopStatusCellで生成した<select>）から直接変更できるようにする。DC/PCがどれか1つでも
+    // 選ばれていれば、共通の警告（チャージ規定の確認）を表示する。
+    const updateShopChargeWarning = () => {
+      const warn = $('shop-status-warning');
+      if (!warn) return;
+      const hasChargeRisk = Object.keys(pendingChanges).some(f =>
+        (f === 'STS JP' || /^OP\d+ STS JP$/.test(f)) && (pendingChanges[f] === 'DC' || pendingChanges[f] === 'PC'));
+      warn.classList.toggle('hidden', !hasChargeRisk);
+    };
+    c.querySelectorAll('[data-shop-status-field]').forEach(sel => {
+      const field = sel.dataset.shopStatusField;
+      if (Object.prototype.hasOwnProperty.call(pendingChanges, field)) sel.value = pendingChanges[field];
+      sel.addEventListener('change', () => {
+        const v = sel.value;
+        if (v) pendingChanges[field] = v; else delete pendingChanges[field];
+        updateShopChargeWarning();
+        updatePendingIndicator();
+      });
     });
+    updateShopChargeWarning();
 
     $('shop-upload-submit').addEventListener('click', submitShopUpload);
     loadShopUploadedDocsInto('shop-upload-list');
@@ -956,6 +973,21 @@
     return `<span class="chip ${chipClass}" data-history-field="${escapeAttr(fieldName)}" data-history-target="${hid}"
         style="cursor:pointer;font-weight:700;">${escapeHtml(current || '未設定')}</span>
       <div class="history-panel hidden" id="${hid}" style="width:100%;margin-top:4px;"></div>`;
+  }
+
+  // ★要件：専用の「ステータス変更」欄は廃止し、プラン・各オプションの隣に出るSTS(JP側)バッジ
+  // から店舗自身がその場でRQ→CR等へ直接変更できるようにする（Code.gsのSHOP_STATUS_TARGETS参照）。
+  // 現在値がFN/CR/DC/PCのいずれでもない（RQ等）場合も、選択肢の先頭に現在値を追加してそのまま表示する
+  // （現在値を選び直しても実質「変更なし」なので、送信時は「-（変更しない）」と同じ扱いになる）。
+  function shopStatusCell(fieldName, current) {
+    const codes = (!current || SHOP_STATUS_TARGETS.includes(current)) ? SHOP_STATUS_TARGETS : [current, ...SHOP_STATUS_TARGETS];
+    const opts = ['<option value="">-（変更しない）</option>'].concat(
+      codes.map(c => `<option value="${c}" ${c === current ? 'selected' : ''}>${escapeHtml(SHOP_STATUS_LABELS[c] || c)}</option>`)
+    ).join('');
+    const hid = 'fh-shopsts-' + fieldName.replace(/[^A-Za-z0-9]/g, '_');
+    return `<select data-shop-status-field="${escapeAttr(fieldName)}">${opts}</select>
+      <button type="button" class="history-link" data-history-field="${escapeAttr(fieldName)}" data-history-target="${hid}">履歴</button>
+      <div class="history-panel hidden" id="${hid}"></div>`;
   }
 
   // ★要件：手配内容をPDFにできるようにしてほしい、との要望への対応。

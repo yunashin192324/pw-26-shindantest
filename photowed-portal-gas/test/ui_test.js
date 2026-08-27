@@ -669,8 +669,11 @@ function visiblePane(document) {
       .find(c => c.textContent.includes(kanri2)).click();
     await settle();
 
+    // ★要件：専用の「ステータス変更」欄は廃止し、プランの隣のSTS JPバッジから直接変更する。
     // DC/PCを選ぶとチャージ規定の警告が出る（拡張要望3-2章）
-    const statusSel = document.getElementById('shop-status-select');
+    const statusSel = document.querySelector('[data-shop-status-field="STS JP"]');
+    check('プランの隣にSTS JPを直接変更できるプルダウンが表示される（専用のステータス変更欄は無い）',
+          !!statusSel && !document.getElementById('shop-status-select'));
     statusSel.value = 'DC'; statusSel.dispatchEvent(new dom.window.Event('change'));
     check('DCを選ぶとチャージ規定の警告が表示される',
           !document.getElementById('shop-status-warning').classList.contains('hidden'));
@@ -687,6 +690,27 @@ function visiblePane(document) {
     await settle();
     check('店舗がチェックリストにチェックを入れて保存できる',
           ctx.apiGetReservationDetail(jpTokenForCheck, kanri2).detail.checklist.find(c => c.item === 'ヘアメイク画像').checked === true);
+
+    // ★要件：専用の「ステータス変更」欄は廃止し、各オプションの隣のSTS JPバッジからも
+    // 店舗自身が直接RQ→CR等へ変更できる（希望日テーブルと同じ表形式で表示される）
+    document.querySelector('[data-pending="OP1"]').value = '前撮りアルバム';
+    document.querySelector('[data-pending="OP1"]').dispatchEvent(new dom.window.Event('change'));
+    document.getElementById('btn-save-quiet').click();
+    await settle();
+    document.getElementById('nav-dashboard').click();
+    await settle();
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanri2)).click();
+    await settle();
+    const opStatusSel = document.querySelector('[data-shop-status-field="OP1 STS JP"]');
+    check('オプション①の隣にもSTS JPを直接変更できるプルダウンが表示される（表形式）',
+          !!opStatusSel && !!opStatusSel.closest('table.res-table'));
+    opStatusSel.value = 'CR';
+    opStatusSel.dispatchEvent(new dom.window.Event('change'));
+    document.getElementById('btn-save-quiet').click();
+    await settle();
+    check('オプション①のSTS(JP側)がCRに変わる（サーバー側）',
+          ctx.apiGetReservationDetail(jpTokenForCheck, kanri2).detail['OP1 STS JP'] === 'CR');
 
     // ドライブアップロード一覧・フォームURL欄が表示される（ファイル選択のシミュレーションはjsdomでは行わず、
     // サーバー側APIを直接呼んでから一覧の再読み込みだけを検証する）
