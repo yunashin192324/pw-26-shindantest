@@ -693,8 +693,15 @@
       // メッセージのやり取りに必要な最小限だけを専用の描画関数で表示する
       if (session.role === 'SHOP') {
         const shopDetailRes = await gsRun('apiGetReservationDetail', session.token, kanriNo);
+        // ★要件：プラン・セール名・オプションは自由入力ではなく、依頼先支店のマスタ一覧から選べるように
+        const shopBranchCode = shopDetailRes.detail['支店コード'];
+        const [shopPlanList, shopOptionList, shopSaleList] = await Promise.all([
+          gsRun('apiListPlans', session.token, shopBranchCode),
+          gsRun('apiListOptionItems', session.token, shopBranchCode),
+          gsRun('apiListSales', session.token, shopBranchCode)
+        ]);
         currentDetail = shopDetailRes.detail;
-        renderShopDetail(shopDetailRes.detail);
+        renderShopDetail(shopDetailRes.detail, shopPlanList, shopOptionList, shopSaleList);
         return;
       }
       const detailRes = await gsRun('apiGetReservationDetail', session.token, kanriNo);
@@ -715,7 +722,7 @@
   // ★機能追加：店舗ロール向けの案件詳細（依頼状況の確認・許可された項目の編集・メッセージのやり取り）
   // 拡張要望2章・3章に対応し、当初の「読み取り専用＋メッセージのみ」から、
   // 通常の3択（保存のみ／メッセージのみ／変更＋メッセージ）で編集できる画面へ拡張した。
-  function renderShopDetail(d) {
+  function renderShopDetail(d, planList, optionList, saleList) {
     const c = $('detail-content');
     const historyHtml = (d.history || []).length === 0
       ? '<p class="hint-text">まだやり取りがありません。</p>'
@@ -749,13 +756,20 @@
     // ★要件：オプション名のすぐ隣にSTS（JP・支店）を、希望日テーブルと同じ表形式で表示する。
     // STS JPは店舗自身がその場でRQ→CR等へ直接変更できる（専用の「ステータス変更」欄は廃止）。
     // STS 支店は従来どおり読み取り専用（クリックで履歴）。
-    const optionRowsShop = (d.options || []).map(o => `
+    // ★要件：オプション名は自由入力ではなく、依頼先支店のオプションマスタから選ぶ選択式にする
+    // （JP/支店側の予約内容タブと同じnameListWithCurrentの仕組みを再利用）。
+    const optionRowsShop = (d.options || []).map(o => {
+      const optNames = nameListWithCurrent(optionList, o.name);
+      const nameSelect = `<select data-pending="OP${o.n}" style="width:100%;"><option value="">（未使用）</option>${optNames.map(n =>
+        `<option value="${escapeAttr(n)}" ${n === o.name ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}</select>`;
+      return `
       <tr>
         <td>オプション${o.n}</td>
-        <td><input data-pending="OP${o.n}" value="${escapeAttr(o.name)}" placeholder="未設定" style="width:100%;"></td>
+        <td>${nameSelect}</td>
         <td>${!o.name ? '' : shopStatusCell('OP' + o.n + ' STS JP', o.stsJp)}</td>
         <td>${!o.name ? '' : inlineStatusBadge('OP' + o.n + ' STS 支店', o.stsBranch, 'branch')}</td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
     const optionsHtml = `
       <div class="table-wrap" style="margin-top:6px;">
         <table class="res-table">
@@ -815,13 +829,18 @@
         <h3>予約内容</h3>
         <div class="detail-grid">
           <div class="field-block">
-            <label>プラン</label><input data-pending="プラン名" value="${escapeAttr(d['プラン名'])}">
+            <label>プラン（マスタから選択）</label>
+            <select data-pending="プラン名"><option value="">未設定</option>${nameListWithCurrent(planList, d['プラン名']).map(n =>
+              `<option value="${escapeAttr(n)}" ${n === d['プラン名'] ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}</select>
             <div style="margin-top:6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
               ${shopStatusCell('STS JP', d['STS JP'])}
               ${inlineStatusBadge('STS 支店', d['STS 支店'], 'branch')}
             </div>
           </div>
-          <div class="field-block"><label>セール名</label><input data-pending="セール名" value="${escapeAttr(d['セール名'])}"></div>
+          <div class="field-block"><label>セール名（マスタから選択）</label>
+            <select data-pending="セール名"><option value="">未設定</option>${nameListWithCurrent(saleList, d['セール名']).map(n =>
+              `<option value="${escapeAttr(n)}" ${n === d['セール名'] ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}</select>
+          </div>
           <div class="field-block"><label>撮影希望場所</label><input data-pending="撮影希望場所" value="${escapeAttr(d['撮影希望場所'])}"></div>
           ${!d.isItaly ? '' : `<div class="field-block"><label>準備場所</label>
             <select data-pending="準備場所"><option value="">未設定</option>${PREP_CHOICES.map(p =>
@@ -2060,8 +2079,10 @@
     onShopNewBranchChange();
   }
 
-  // 支店（都市）を選ぶと、その支店のプラン・セール・撮影希望場所の候補をdatalistへ反映し、
-  // 準備場所（イタリアのみ）・パスポート番号（必須の支店のみ）の表示を切り替える
+  // 支店（都市）を選ぶと、その支店のプラン・セール・オプションの候補を選択式（select）へ反映し、
+  // 準備場所（イタリアのみ）・パスポート番号（必須の支店のみ）の表示を切り替える。
+  // ★要件：プラン・セール名・オプションは自由入力ではなく、必ずマスタ一覧から選べるようにする
+  // （撮影希望場所は各地でばらつきが大きいため、従来どおり任意入力＋候補のdatalistのまま）。
   async function onShopNewBranchChange() {
     const branchCode = $('shop-new-branch').value;
     if (!branchCode) return;
@@ -2069,15 +2090,23 @@
     $('shop-new-prep-block').classList.toggle('hidden', meta.country !== 'イタリア');
     $('shop-new-passport-block').classList.toggle('hidden', !meta.passportRequired);
     try {
-      const [plans, sales, locations] = await Promise.all([
+      const [plans, sales, locations, options] = await Promise.all([
         gsRun('apiListPlans', session.token, branchCode),
         gsRun('apiListSales', session.token, branchCode),
-        gsRun('apiListLocations', session.token, branchCode)
+        gsRun('apiListLocations', session.token, branchCode),
+        gsRun('apiListOptionItems', session.token, branchCode)
       ]);
-      $('shop-new-plan-datalist').innerHTML = plans.map(p => `<option value="${escapeAttr(p.name)}">`).join('');
-      $('shop-new-sale-datalist').innerHTML = sales.map(p => `<option value="${escapeAttr(p.name)}">`).join('');
-      $('shop-new-location-datalist').innerHTML = locations.map(p => `<option value="${escapeAttr(p.name)}">`).join('');
-    } catch (e) { /* 候補が取れなくても入力自体は続けられる */ }
+      const activeNames = (list) => (list || []).filter(x => x.active).map(x => x.name);
+      const planNames = activeNames(plans), saleNames = activeNames(sales), optionNames = activeNames(options);
+      $('shop-new-plan').innerHTML = '<option value="">未設定</option>' +
+        planNames.map(n => `<option value="${escapeAttr(n)}">${escapeHtml(n)}</option>`).join('');
+      $('shop-new-sale').innerHTML = '<option value="">未設定</option>' +
+        saleNames.map(n => `<option value="${escapeAttr(n)}">${escapeHtml(n)}</option>`).join('');
+      $('shop-new-location-datalist').innerHTML = activeNames(locations).map(n => `<option value="${escapeAttr(n)}">`).join('');
+      const optionOptsHtml = '<option value="">（未使用）</option>' +
+        optionNames.map(n => `<option value="${escapeAttr(n)}">${escapeHtml(n)}</option>`).join('');
+      for (let i = 1; i <= 5; i++) $('shop-new-option' + i).innerHTML = optionOptsHtml;
+    } catch (e) { /* 候補が取れなくても入力自体は続けられる（プラン等は未設定のまま） */ }
   }
 
   async function submitShopNewRequest() {

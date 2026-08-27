@@ -43,6 +43,9 @@ function makeServer() {
 
   // セールマスタに候補を1件登録
   ss.getSheetByName('セールマスタ').appendRow(['ROW', '春の特典フェア', true]);
+  // ★要件：店舗の新規依頼画面でプラン・オプションを選択式にしたため、テスト用にVIE支店の候補を登録
+  ss.getSheetByName('プランマスタ').appendRow(['VIE', 'プランA', true]);
+  ss.getSheetByName('オプションマスタ').appendRow(['VIE', '追加アルバム', true]);
 
   // ★機能追加：店舗ロールのログインを1件用意する
   const shopRowIdx = bm.getLastRow() + 1;
@@ -536,16 +539,27 @@ function visiblePane(document) {
     const branchOpts = [...document.getElementById('shop-new-branch').options].map(o => o.value);
     check('依頼先の支店（都市）が選べる', branchOpts.includes('VIE'), branchOpts.join(','));
     document.getElementById('shop-new-branch').value = 'VIE';
+    // ★要件：プラン・セール名・オプションは支店ごとのマスタから選ぶ選択式にしたため、
+    // 支店を切り替えたら候補が入れ替わる（change時に発火するonShopNewBranchChangeを待つ）
+    document.getElementById('shop-new-branch').dispatchEvent(new dom.window.Event('change'));
+    await settle();
     document.getElementById('shop-new-team').value = '関東';
     document.getElementById('shop-new-challengeno').value = '0A2B3C4D5E6';
     document.getElementById('shop-new-groom').value = 'Ahmet Yilmaz';
     document.getElementById('shop-new-hope1').value = '2026-09-10';
+    const planOpts = [...document.getElementById('shop-new-plan').options].map(o => o.value);
+    check('プランはVIE支店のマスタ一覧から選べる（自由入力ではない）', planOpts.includes('プランA'), planOpts.join(','));
     document.getElementById('shop-new-plan').value = 'プランA';
+    const optionOpts = [...document.getElementById('shop-new-option1').options].map(o => o.value);
+    check('オプションもマスタ一覧から選べる（自由入力ではない）', optionOpts.includes('追加アルバム'), optionOpts.join(','));
+    document.getElementById('shop-new-option1').value = '追加アルバム';
     document.getElementById('shop-new-submit').click();
     await settle();
     check('依頼を送信できる', !document.getElementById('shop-new-success').classList.contains('hidden'),
           document.getElementById('shop-new-error').textContent);
     const createdKanri = document.getElementById('shop-new-success').textContent.match(/依頼\s*(\S+)\s*を送信/)[1];
+    check('選択したプラン・オプションが保存される',
+          ctx.apiGetReservationDetail(ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token, createdKanri).detail['プラン名'] === 'プランA');
 
     document.getElementById('nav-dashboard').click();
     await settle();
@@ -683,6 +697,11 @@ function visiblePane(document) {
     check('FNを選ぶと警告は消える', document.getElementById('shop-status-warning').classList.contains('hidden'));
     statusSel.value = ''; statusSel.dispatchEvent(new dom.window.Event('change'));
 
+    // ★要件：案件詳細のプラン・セール名も自由入力ではなく依頼先支店のマスタ一覧から選べる
+    const planSelEl = document.querySelector('[data-pending="プラン名"]');
+    check('案件詳細のプラン欄もマスタ一覧のselectになっている（自由入力ではない）',
+          planSelEl.tagName === 'SELECT' && [...planSelEl.options].map(o => o.value).includes('プランA'));
+
     // 必要書類チェックリストのチェック（拡張要望9章）
     const checklistBox = [...document.querySelectorAll('.checkbox-label input[type=checkbox]')]
       .find(el => el.closest('.checkbox-label').textContent.includes('ヘアメイク画像'));
@@ -695,7 +714,7 @@ function visiblePane(document) {
 
     // ★要件：専用の「ステータス変更」欄は廃止し、各オプションの隣のSTS JPバッジからも
     // 店舗自身が直接RQ→CR等へ変更できる（希望日テーブルと同じ表形式で表示される）
-    document.querySelector('[data-pending="OP1"]').value = '前撮りアルバム';
+    document.querySelector('[data-pending="OP1"]').value = '追加アルバム';
     document.querySelector('[data-pending="OP1"]').dispatchEvent(new dom.window.Event('change'));
     document.getElementById('btn-save-quiet').click();
     await settle();

@@ -200,11 +200,9 @@
         <label>新婦名（ローマ字）</label>
         <input id="shop-new-bride" type="text" placeholder="任意入力">
         <label>プラン</label>
-        <input id="shop-new-plan" type="text" list="shop-new-plan-datalist" placeholder="任意入力">
-        <datalist id="shop-new-plan-datalist"></datalist>
+        <select id="shop-new-plan"><option value="">未設定</option></select>
         <label>セール名</label>
-        <input id="shop-new-sale" type="text" list="shop-new-sale-datalist" placeholder="任意入力">
-        <datalist id="shop-new-sale-datalist"></datalist>
+        <select id="shop-new-sale"><option value="">未設定</option></select>
         <label>撮影希望場所</label>
         <input id="shop-new-location" type="text" list="shop-new-location-datalist" placeholder="任意入力">
         <datalist id="shop-new-location-datalist"></datalist>
@@ -227,11 +225,11 @@
           <input id="shop-new-passport" type="text" placeholder="任意入力">
         </div>
         <h3 style="margin-top:14px;">オプション（任意・最大5件）</h3>
-        <input id="shop-new-option1" type="text" placeholder="オプション①">
-        <input id="shop-new-option2" type="text" placeholder="オプション②">
-        <input id="shop-new-option3" type="text" placeholder="オプション③">
-        <input id="shop-new-option4" type="text" placeholder="オプション④">
-        <input id="shop-new-option5" type="text" placeholder="オプション⑤">
+        <select id="shop-new-option1"><option value="">（未使用）</option></select>
+        <select id="shop-new-option2"><option value="">（未使用）</option></select>
+        <select id="shop-new-option3"><option value="">（未使用）</option></select>
+        <select id="shop-new-option4"><option value="">（未使用）</option></select>
+        <select id="shop-new-option5"><option value="">（未使用）</option></select>
         <button id="shop-new-submit" class="primary-btn" style="margin-top:14px;">この内容で送信</button>
         <p id="shop-new-error" class="error-text hidden"></p>
         <p id="shop-new-success" class="success-banner hidden"></p>

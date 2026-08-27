@@ -1201,6 +1201,7 @@ function buildShopReservationDetail_(session, kanriNo, headers, rowData) {
   const meta = branchMetaMap_()[getV(COL_BRANCH_CODE)] || {};
   const ownMeta = branchMetaMap_()[session.branchCode] || {};
   const detail = {
+    [COL_BRANCH_CODE]: getV(COL_BRANCH_CODE),
     [COL_KANRI_NO]: getV(COL_KANRI_NO),
     [COL_CHALLENGE_NO]: getV(COL_CHALLENGE_NO),
     [COL_STATUS_JP]: getV(COL_STATUS_JP),
