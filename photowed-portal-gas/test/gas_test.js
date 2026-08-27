@@ -2535,5 +2535,51 @@ section('44. ステータス連動の不具合修正（CR→CF・FNの支店側�
 }
 
 // ---------------------------------------------------------------
+section('45. 新郎名・新婦名を姓・名に分けて入力できる');
+{
+  const ctx = shopFixture();
+  const shopToken = ctx.apiLogin('SHOP1', 'sp').session.token;
+  const jpToken = ctx.apiLogin('KANTO', 'pw').session.token;
+
+  // --- 店舗発の新規依頼：姓・名を別々に受け取り、別の列に保存される ---
+  const created = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'VIE', team: '関東', hope1: '2026-09-10', challengeNo: 'NAMESPLIT01',
+    groomLastName: 'Yilmaz', groomName: 'Ahmet', brideLastName: 'Kaya', brideName: 'Elif'
+  });
+  const kanri = created.kanriNo;
+  const detail = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+  check('新郎姓が専用の列に保存される', detail['新郎姓（ローマ字）'] === 'Yilmaz');
+  check('新郎名（=名のみ）が保存される', detail['新郎名（ローマ字）'] === 'Ahmet');
+  check('新婦姓が専用の列に保存される', detail['新婦姓（ローマ字）'] === 'Kaya');
+  check('新婦名（=名のみ）が保存される', detail['新婦名（ローマ字）'] === 'Elif');
+
+  // --- 一覧・検索ではフルネーム（姓 名）として表示される ---
+  const dash = ctx.apiGetDashboard(jpToken, { showAll: true });
+  const row = dash.reservations.find(r => r.kanriNo === kanri);
+  check('案件一覧にはフルネーム（姓 名）で表示される', row.groomName === 'Yilmaz Ahmet' && row.brideName === 'Kaya Elif', JSON.stringify(row));
+
+  // --- 姓だけで検索してもヒットする ---
+  const bySurname = ctx.apiSearchReservations(jpToken, { name: 'Yilmaz' });
+  check('姓（Yilmaz）だけで検索してもヒットする', bySurname.results.some(r => r.kanriNo === kanri));
+  const byGivenName = ctx.apiSearchReservations(jpToken, { name: 'Ahmet' });
+  check('名（Ahmet）だけで検索してもヒットする', byGivenName.results.some(r => r.kanriNo === kanri));
+
+  // --- 姓だけ変更しても「ネームチェンジ」の通知になる ---
+  ctx.__mail.length = 0;
+  ctx.apiCommitChanges(jpToken, kanri, { '新郎姓（ローマ字）': 'Demir' }, '');
+  check('姓だけの変更でも「ネームチェンジ」通知になる', ctx.__mail.some(m => m.subj.includes('ネームチェンジ')));
+  check('姓の変更自体は保存される', ctx.apiGetReservationDetail(jpToken, kanri).detail['新郎姓（ローマ字）'] === 'Demir');
+
+  // --- 姓を入力しなくても（従来どおり）作成できる ---
+  const created2 = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'VIE', team: '関東', hope1: '2026-09-11', challengeNo: 'NAMESPLIT02', groomName: 'NoSurname'
+  });
+  const detail2 = ctx.apiGetReservationDetail(jpToken, created2.kanriNo).detail;
+  check('姓は任意入力（未入力でも作成できる）', detail2['新郎名（ローマ字）'] === 'NoSurname' && !detail2['新郎姓（ローマ字）']);
+  const row2 = ctx.apiGetDashboard(jpToken, { showAll: true }).reservations.find(r => r.kanriNo === created2.kanriNo);
+  check('姓が未入力なら一覧には名だけが表示される', row2.groomName === 'NoSurname');
+}
+
+// ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
 process.exit(fail === 0 ? 0 : 1);

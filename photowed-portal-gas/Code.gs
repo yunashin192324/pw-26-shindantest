@@ -134,8 +134,20 @@ const COL_HOPE5 = '希望日⑤';
 // ★機能追加：「空き確認のみ」にチェックを入れて確定すると、STS JPが自動でCHK（確認依頼中）になり、
 // 撮影日FIXの確定ではなく「上の希望日①〜⑤の中で空きがあるか」を現地へ確認する依頼になる。
 const COL_INQUIRY_ONLY = '空き確認のみ';
+// ★要件：新郎名・新婦名は姓・名を分けて入力できるようにする。既存のCOL_GROOM_NAME／COL_BRIDE_NAME
+// （列名はそのまま）は「名（given name）」専用の欄とし、新しく姓（surname）専用の欄を追加する。
+// 表示・検索・メール本文などで使う「フルネーム」は、どこでも fullName_(姓, 名) で組み立てる
+// （フルネームだけを持つ列は新設しない＝姓・名がずれて食い違う事故を防ぐため）。
+const COL_GROOM_LAST_NAME = '新郎姓（ローマ字）';
 const COL_GROOM_NAME = '新郎名（ローマ字）';
+const COL_BRIDE_LAST_NAME = '新婦姓（ローマ字）';
 const COL_BRIDE_NAME = '新婦名（ローマ字）';
+// 姓・名から表示用のフルネームを組み立てる（姓 名 の順。片方だけ入っていてもそのまま返す）
+function fullName_(lastName, firstName) {
+  const l = String(lastName || '').trim();
+  const f = String(firstName || '').trim();
+  return [l, f].filter(Boolean).join(' ');
+}
 // ★機能追加：お客様がGoogleフォームで記入する『同意書』の記入有無を案件に反映する（機能④）。
 // 支店マスタの「同意書必須」が有効な支店（例：ローマ）では未回収を目立たせる。
 // ★要件：「お客様情報」タブに移動。表示は日本側、またはイタリアの支店のみ（他支店は非表示）。
@@ -245,7 +257,8 @@ const RESERVATION_HEADERS = (() => {
     COL_BRANCH_CODE, COL_KANRI_NO, COL_CHALLENGE_NO, COL_STATUS_JP, COL_STATUS_BRANCH,
     COL_CONFIRMED_DATE, COL_CEREMONY_DATE, COL_INQUIRY_ONLY,
     COL_HOPE1, COL_HOPE2, COL_HOPE3, COL_HOPE4, COL_HOPE5,
-    COL_GROOM_NAME, COL_BRIDE_NAME, COL_CONSENT, COL_PLAN, COL_SALE_NAME, COL_LOCATION, COL_PREP,
+    COL_GROOM_LAST_NAME, COL_GROOM_NAME, COL_BRIDE_LAST_NAME, COL_BRIDE_NAME,
+    COL_CONSENT, COL_PLAN, COL_SALE_NAME, COL_LOCATION, COL_PREP,
     COL_PASSPORT_NO, COL_LOCAL_EMAIL, COL_LOCAL_PHONE, COL_HOTEL, COL_HOTEL_ADDRESS, COL_FLIGHT_INFO,
     COL_AREA, COL_BILLING_REGION, COL_JP_SHOP, COL_INVOICE_NO, COL_SHOP,
     COL_DAY_STAFF, COL_HAIR_MAKEUP, COL_HAIR_START_TIME, COL_PHOTOGRAPHER, COL_PHOTO_START_TIME,
@@ -313,7 +326,8 @@ const COMMITTABLE_FIELDS = RESERVATION_HEADERS.filter(h => ![
 // ★要件：店舗がSTS(JP側)を変更できる範囲は、この配列＋isJpStatusField_が真になる列
 // （案件全体のSTS JPと各オプションのSTS JP）。詳しくはprepareFieldWrite_・validateFieldPermission_参照。
 const SHOP_EDITABLE_FIELDS = [
-  COL_GROOM_NAME, COL_BRIDE_NAME, COL_PLAN, COL_SALE_NAME, COL_LOCATION, COL_PREP,
+  COL_GROOM_LAST_NAME, COL_GROOM_NAME, COL_BRIDE_LAST_NAME, COL_BRIDE_NAME,
+  COL_PLAN, COL_SALE_NAME, COL_LOCATION, COL_PREP,
   COL_HOPE1, COL_HOPE2, COL_HOPE3, COL_HOPE4, COL_HOPE5, COL_PASSPORT_NO,
   ...Array.from({ length: OPTION_COUNT }, (_, i) => opNameCol_(i + 1)),
   ...CHECKLIST_ITEMS.map(checklistCol_)
@@ -1086,8 +1100,8 @@ function apiGetDashboard(token, scope) {
     statusBranch: r[COL_STATUS_BRANCH],
     confirmedDate: formatMaybeDate_(r[COL_CONFIRMED_DATE]),
     ceremonyDate: formatMaybeDate_(r[COL_CEREMONY_DATE]),
-    groomName: r[COL_GROOM_NAME],
-    brideName: r[COL_BRIDE_NAME],
+    groomName: fullName_(r[COL_GROOM_LAST_NAME], r[COL_GROOM_NAME]),
+    brideName: fullName_(r[COL_BRIDE_LAST_NAME], r[COL_BRIDE_NAME]),
     plan: r[COL_PLAN],
     area: r[COL_AREA],
     lastUpdated: formatMaybeDate_(r[COL_LAST_UPDATED]),
@@ -1208,7 +1222,9 @@ function buildShopReservationDetail_(session, kanriNo, headers, rowData) {
     [COL_STATUS_BRANCH]: getV(COL_STATUS_BRANCH),
     [COL_CONFIRMED_DATE]: formatDateForInput_(getV(COL_CONFIRMED_DATE)),
     [COL_CEREMONY_DATE]: formatDateForInput_(getV(COL_CEREMONY_DATE)),
+    [COL_GROOM_LAST_NAME]: getV(COL_GROOM_LAST_NAME),
     [COL_GROOM_NAME]: getV(COL_GROOM_NAME),
+    [COL_BRIDE_LAST_NAME]: getV(COL_BRIDE_LAST_NAME),
     [COL_BRIDE_NAME]: getV(COL_BRIDE_NAME),
     [COL_PLAN]: getV(COL_PLAN),
     [COL_SALE_NAME]: getV(COL_SALE_NAME),
@@ -1502,8 +1518,8 @@ function apiGetPendingDeliveries(token, scope) {
         branchCode: r[COL_BRANCH_CODE],
         branchName: meta.name || r[COL_BRANCH_CODE],
         country: meta.country || '',
-        groomName: r[COL_GROOM_NAME],
-        brideName: r[COL_BRIDE_NAME],
+        groomName: fullName_(r[COL_GROOM_LAST_NAME], r[COL_GROOM_NAME]),
+        brideName: fullName_(r[COL_BRIDE_LAST_NAME], r[COL_BRIDE_NAME]),
         area: r[COL_AREA],
         confirmedDate: formatMaybeDate_(r[COL_CONFIRMED_DATE]),
         daysPast: info.daysPast,
@@ -1543,8 +1559,8 @@ function apiGetDaySchedule(token, dateStr, scope) {
         kanriNo: r[COL_KANRI_NO],
         branchCode: r[COL_BRANCH_CODE],
         branchName: meta.name || r[COL_BRANCH_CODE],
-        groomName: r[COL_GROOM_NAME],
-        brideName: r[COL_BRIDE_NAME],
+        groomName: fullName_(r[COL_GROOM_LAST_NAME], r[COL_GROOM_NAME]),
+        brideName: fullName_(r[COL_BRIDE_LAST_NAME], r[COL_BRIDE_NAME]),
         plan: r[COL_PLAN],
         saleName: r[COL_SALE_NAME] || '',
         // ★要件：同意書は撮影当日までに回収されている必要があるため、当日表でも状態が分かるようにする。
@@ -1609,8 +1625,8 @@ function apiCheckStaffConflict(token, kanriNo, dateStr, staffNames) {
           field: wanted[key].field,
           conflictField: col,
           kanriNo: r[COL_KANRI_NO],
-          groomName: r[COL_GROOM_NAME],
-          brideName: r[COL_BRIDE_NAME]
+          groomName: fullName_(r[COL_GROOM_LAST_NAME], r[COL_GROOM_NAME]),
+          brideName: fullName_(r[COL_BRIDE_LAST_NAME], r[COL_BRIDE_NAME])
         });
       });
     });
@@ -1714,8 +1730,8 @@ function apiGetBillingGaps(token, month) {
         kanriNo: r[COL_KANRI_NO],
         branchCode: r[COL_BRANCH_CODE],
         branchName: meta.name || r[COL_BRANCH_CODE],
-        groomName: r[COL_GROOM_NAME],
-        brideName: r[COL_BRIDE_NAME],
+        groomName: fullName_(r[COL_GROOM_LAST_NAME], r[COL_GROOM_NAME]),
+        brideName: fullName_(r[COL_BRIDE_LAST_NAME], r[COL_BRIDE_NAME]),
         area: r[COL_AREA],
         confirmedDate: formatMaybeDate_(r[COL_CONFIRMED_DATE]),
         missing
@@ -2013,7 +2029,7 @@ function apiCommitChanges(token, kanriNo, changes, message, recipient) {
     // ★機能追加：ネームチェンジは専用のステータスを持たない代わりに、新郎名・新婦名欄の変更が
     // 含まれる送信を検知して、通知そのものを「ネームチェンジのお知らせ」として分かりやすくする
     // （お客様が旧姓から新姓に変える等、名前を打ち替えて送信するだけで現地に伝わるようにする）。
-    const nameChanged = writes.some(w => w.changed && (w.field === COL_GROOM_NAME || w.field === COL_BRIDE_NAME));
+    const nameChanged = writes.some(w => w.changed && [COL_GROOM_LAST_NAME, COL_GROOM_NAME, COL_BRIDE_LAST_NAME, COL_BRIDE_NAME].includes(w.field));
     const bodyParts = [];
     if (nameChanged) bodyParts.push('［ネームチェンジのお知らせ］\nお客様のお名前が変更されました。');
     if (summaryLines.length > 0) bodyParts.push(`[変更内容]\n${summaryLines.join('\n')}`);
@@ -2668,8 +2684,8 @@ function apiBuildArrangementDraft(token, kanriNo, categoryKey) {
 
   const kanri = getV(COL_KANRI_NO);
   const chgNo = getV(COL_CHALLENGE_NO) || 'なし';
-  const groom = getV(COL_GROOM_NAME);
-  const bride = getV(COL_BRIDE_NAME);
+  const groom = fullName_(getV(COL_GROOM_LAST_NAME), getV(COL_GROOM_NAME));
+  const bride = fullName_(getV(COL_BRIDE_LAST_NAME), getV(COL_BRIDE_NAME));
   const hopeDates = [getV(COL_HOPE1), getV(COL_HOPE2), getV(COL_HOPE3), getV(COL_HOPE4), getV(COL_HOPE5)].filter(Boolean);
   const dateDisplay = formatMaybeDate_(getV(COL_CONFIRMED_DATE)) ||
     (hopeDates.length ? `未定（希望日: ${hopeDates.join(' / ')}）` : '未定');
@@ -2848,8 +2864,12 @@ function apiShopCreateRequest(token, payload) {
   if (!CHALLENGE_NO_PATTERN.test(challengeNo)) {
     throw new Error('チャレンジ番号は英数字11桁で入力してください（例：0A2B3C4D5E6）。');
   }
+  // ★要件：新郎名・新婦名は姓・名を分けて入力する。必須／任意の扱いは従来どおり
+  // （新郎の名は必須、それ以外＝新郎の姓・新婦の姓名はすべて任意）。
+  const groomLastName = String(payload.groomLastName || '').trim();
   const groomName = String(payload.groomName || payload.customerName || '').trim();
   if (!groomName) throw new Error('新郎名（ローマ字）を入力してください。');
+  const brideLastName = String(payload.brideLastName || '').trim();
   const brideName = String(payload.brideName || '').trim();
   const plan = String(payload.plan || '').trim();
   const saleName = String(payload.saleName || '').trim();
@@ -2882,7 +2902,9 @@ function apiShopCreateRequest(token, payload) {
     // コードのため、名前を変える予定が無い新規案件で最初から「NC」と表示されるのは紛らわしい。
     // 未着手を表す値は不要（空欄のまま。支店側はSTS(JP側)=RQ/CHKの間は自由に編集できる）。
     setV(COL_CHALLENGE_NO, challengeNo);
+    setV(COL_GROOM_LAST_NAME, groomLastName);
     setV(COL_GROOM_NAME, groomName);
+    setV(COL_BRIDE_LAST_NAME, brideLastName);
     setV(COL_BRIDE_NAME, brideName);
     setV(COL_HOPE1, hopes[0]);
     setV(COL_HOPE2, hopes[1]);
@@ -2906,8 +2928,8 @@ function apiShopCreateRequest(token, payload) {
     const initMsg = [
       `店舗（${session.branchName}）からの新規依頼です。（${initialStatusLabel}）`,
       challengeNo ? `チャレンジ番号: ${challengeNo}` : '',
-      `新郎名: ${groomName}`,
-      brideName ? `新婦名: ${brideName}` : '',
+      `新郎名: ${fullName_(groomLastName, groomName)}`,
+      (brideLastName || brideName) ? `新婦名: ${fullName_(brideLastName, brideName)}` : '',
       `希望日: ${[hopes[0], hopes[1], hopes[2], hopes[3], hopes[4]].filter(Boolean).join(' / ')}`,
       plan ? `プラン: ${plan}` : '',
       saleName ? `セール名: ${saleName}` : '',
@@ -3143,7 +3165,7 @@ function matchesSearch_(r, c, branchMeta) {
   if (c.kanriNo && !norm(r[COL_KANRI_NO]).includes(norm(c.kanriNo))) return false;
   if (c.challengeNo && !norm(r[COL_CHALLENGE_NO]).includes(norm(c.challengeNo))) return false;
   if (c.name) {
-    const hay = norm(r[COL_GROOM_NAME]) + ' ' + norm(r[COL_BRIDE_NAME]);
+    const hay = norm(fullName_(r[COL_GROOM_LAST_NAME], r[COL_GROOM_NAME])) + ' ' + norm(fullName_(r[COL_BRIDE_LAST_NAME], r[COL_BRIDE_NAME]));
     if (!hay.includes(norm(c.name))) return false;
   }
   const meta = branchMeta[r[COL_BRANCH_CODE]] || {};
@@ -3193,8 +3215,8 @@ function toSearchResult_(r, branchMeta, source) {
     city: meta.city || '',
     kanriNo: r[COL_KANRI_NO],
     challengeNo: r[COL_CHALLENGE_NO],
-    groomName: r[COL_GROOM_NAME],
-    brideName: r[COL_BRIDE_NAME],
+    groomName: fullName_(r[COL_GROOM_LAST_NAME], r[COL_GROOM_NAME]),
+    brideName: fullName_(r[COL_BRIDE_LAST_NAME], r[COL_BRIDE_NAME]),
     statusJp: r[COL_STATUS_JP],
     statusBranch: r[COL_STATUS_BRANCH],
     area: r[COL_AREA],
@@ -3230,8 +3252,8 @@ function appendHistory_(headers, rowData, sender, body, senderRole, recipientRol
   set(H_COL_KANRI, getV(COL_KANRI_NO));
   set(H_COL_CHALLENGE_NO, getV(COL_CHALLENGE_NO));
   set(H_COL_CONFIRMED_DATE, dateStr);
-  set(H_COL_GROOM_NAME, getV(COL_GROOM_NAME));
-  set(H_COL_BRIDE_NAME, getV(COL_BRIDE_NAME));
+  set(H_COL_GROOM_NAME, fullName_(getV(COL_GROOM_LAST_NAME), getV(COL_GROOM_NAME)));
+  set(H_COL_BRIDE_NAME, fullName_(getV(COL_BRIDE_LAST_NAME), getV(COL_BRIDE_NAME)));
   set(H_COL_DATETIME, new Date());
   set(H_COL_SENDER, sender);
   // ★要件：どちら側（JP／BRANCH／SHOP）からのメッセージかを記録し、ダッシュボードの「要対応」判定に使う
@@ -3250,8 +3272,8 @@ function sendDirectionalMail_(headers, rowData, direction, session, message, kin
   const area = getV(COL_AREA);
   const kanri = getV(COL_KANRI_NO);
   const chgNo = getV(COL_CHALLENGE_NO) || 'No CH';
-  const groom = getV(COL_GROOM_NAME);
-  const bride = getV(COL_BRIDE_NAME);
+  const groom = fullName_(getV(COL_GROOM_LAST_NAME), getV(COL_GROOM_NAME));
+  const bride = fullName_(getV(COL_BRIDE_LAST_NAME), getV(COL_BRIDE_NAME));
 
   const jpEmail = getJpTeamEmail_(area);
   const branchEmail = getBranchEmail_(branchCode);
@@ -3576,7 +3598,7 @@ function checkUnansweredAlertsCore_(errors) {
 
         const item = {
           kanriNo: kanri,
-          names: `${row[headers.indexOf(COL_GROOM_NAME)] || ''} / ${row[headers.indexOf(COL_BRIDE_NAME)] || ''}`,
+          names: `${fullName_(row[headers.indexOf(COL_GROOM_LAST_NAME)], row[headers.indexOf(COL_GROOM_NAME)])} / ${fullName_(row[headers.indexOf(COL_BRIDE_LAST_NAME)], row[headers.indexOf(COL_BRIDE_NAME)])}`,
           branchName: meta.name || branchCode,
           waitingDays,
           shootDate: formatMaybeDate_(row[headers.indexOf(COL_CONFIRMED_DATE)]) || '撮影日未定'

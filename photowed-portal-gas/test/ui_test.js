@@ -955,6 +955,76 @@ function visiblePane(document) {
           navErr === null, String(navErr));
   }
 
+  section('U22. 新郎名・新婦名を姓・名に分けて入力できる');
+  {
+    // --- 店舗の新規依頼フォーム：姓・名それぞれの入力欄がある ---
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'SHOP1', 'CHANGE-ME-SHOP1');
+    document.getElementById('view-mode-card').click();
+    document.getElementById('nav-shop-new').click();
+    await settle();
+    check('店舗の新規依頼フォームに新郎姓・新郎名・新婦姓・新婦名の4欄がある',
+          !!document.getElementById('shop-new-groom-last') && !!document.getElementById('shop-new-groom') &&
+          !!document.getElementById('shop-new-bride-last') && !!document.getElementById('shop-new-bride'));
+    document.getElementById('shop-new-branch').value = 'VIE';
+    document.getElementById('shop-new-branch').dispatchEvent(new dom.window.Event('change'));
+    await settle();
+    document.getElementById('shop-new-team').value = '関東';
+    document.getElementById('shop-new-challengeno').value = 'NAMESPLIT03';
+    document.getElementById('shop-new-groom-last').value = 'Rossi';
+    document.getElementById('shop-new-groom').value = 'Marco';
+    document.getElementById('shop-new-bride-last').value = 'Bianchi';
+    document.getElementById('shop-new-bride').value = 'Giulia';
+    document.getElementById('shop-new-hope1').value = '2026-09-10';
+    document.getElementById('shop-new-submit').click();
+    await settle();
+    check('姓・名を分けて送信できる', !document.getElementById('shop-new-success').classList.contains('hidden'),
+          document.getElementById('shop-new-error').textContent);
+    const kanriSplit = document.getElementById('shop-new-success').textContent.match(/依頼\s*(\S+)\s*を送信/)[1];
+
+    document.getElementById('nav-dashboard').click();
+    await settle();
+    const cardText = [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanriSplit)).textContent;
+    check('一覧のカードにはフルネーム（姓 名）で表示される', cardText.includes('Rossi Marco') && cardText.includes('Bianchi Giulia'), cardText);
+
+    // --- 日本側の詳細でも姓・名が別々の入力欄になっている ---
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'KANTO', 'CHANGE-ME-KANTO');
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanriSplit)).click();
+    await settle();
+    check('日本側の詳細ヘッダーにもフルネーム（姓 名）で表示される',
+          document.querySelector('.names').textContent.includes('Rossi Marco') &&
+          document.querySelector('.names').textContent.includes('Bianchi Giulia'));
+    [...document.querySelectorAll('.tab-btn')].find(b => b.dataset.tab === 'reservation').click();
+    await settle();
+    const resPaneSplit = document.querySelector('[data-tab-pane="reservation"]');
+    check('予約内容タブに新郎姓・新郎名・新婦姓・新婦名の4つの入力欄が別々にある',
+          !!resPaneSplit.querySelector('[data-pending="新郎姓（ローマ字）"]') &&
+          !!resPaneSplit.querySelector('[data-pending="新郎名（ローマ字）"]') &&
+          !!resPaneSplit.querySelector('[data-pending="新婦姓（ローマ字）"]') &&
+          !!resPaneSplit.querySelector('[data-pending="新婦名（ローマ字）"]'));
+    check('新郎姓の入力欄にRossiが入っている',
+          resPaneSplit.querySelector('[data-pending="新郎姓（ローマ字）"]').value === 'Rossi');
+
+    // --- 店舗側の詳細画面でも姓・名が別々の入力欄になっている ---
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'SHOP1', 'CHANGE-ME-SHOP1');
+    document.getElementById('view-mode-card').click();
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanriSplit)).click();
+    await settle();
+    check('店舗側の詳細にも新郎姓・新郎名・新婦姓・新婦名の4つの入力欄が別々にある',
+          !!document.querySelector('[data-pending="新郎姓（ローマ字）"]') &&
+          !!document.querySelector('[data-pending="新郎名（ローマ字）"]') &&
+          !!document.querySelector('[data-pending="新婦姓（ローマ字）"]') &&
+          !!document.querySelector('[data-pending="新婦名（ローマ字）"]'));
+  }
+
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error('テストが異常終了しました:', e); process.exit(1); });

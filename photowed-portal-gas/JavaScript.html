@@ -820,7 +820,9 @@
       <div class="section-card" id="shop-sec-customer">
         <h3>お客様情報</h3>
         <div class="detail-grid">
+          <div class="field-block"><label>新郎姓（ローマ字）</label><input data-pending="新郎姓（ローマ字）" value="${escapeAttr(d['新郎姓（ローマ字）'])}"></div>
           <div class="field-block"><label>新郎名（ローマ字）</label><input data-pending="新郎名（ローマ字）" value="${escapeAttr(d['新郎名（ローマ字）'])}"></div>
+          <div class="field-block"><label>新婦姓（ローマ字）</label><input data-pending="新婦姓（ローマ字）" value="${escapeAttr(d['新婦姓（ローマ字）'])}"></div>
           <div class="field-block"><label>新婦名（ローマ字）</label><input data-pending="新婦名（ローマ字）" value="${escapeAttr(d['新婦名（ローマ字）'])}"></div>
           ${!('パスポート番号' in d) ? '' : `<div class="field-block"><label>パスポート番号</label><input data-pending="パスポート番号" value="${escapeAttr(d['パスポート番号'])}"></div>`}
         </div>
@@ -1059,7 +1061,7 @@
       <table class="print-kv">
         <tr><th>管理番号</th><td>${escapeHtml(d['管理番号'] || '')}</td><th>CHG NO</th><td>${escapeHtml(d['CHG NO'] || 'なし')}</td></tr>
         <tr><th>支店</th><td>${escapeHtml(d.branchName || '')}（${escapeHtml(d['支店コード'] || '')}）</td><th>担当</th><td>${escapeHtml(d['管轄'] || '未設定')}${d['管轄'] ? '手配課' : ''}</td></tr>
-        <tr><th>新郎名</th><td>${escapeHtml(d['新郎名（ローマ字）'] || '')}</td><th>新婦名</th><td>${escapeHtml(d['新婦名（ローマ字）'] || '')}</td></tr>
+        <tr><th>新郎名</th><td>${escapeHtml(fullNameClient_(d['新郎姓（ローマ字）'], d['新郎名（ローマ字）']))}</td><th>新婦名</th><td>${escapeHtml(fullNameClient_(d['新婦姓（ローマ字）'], d['新婦名（ローマ字）']))}</td></tr>
         <tr><th>プラン</th><td>${escapeHtml(d['プラン名'] || '未設定')}</td><th>セール名</th><td>${escapeHtml(d['セール名'] || '')}</td></tr>
         <tr><th>撮影希望場所</th><td>${escapeHtml(d['撮影希望場所'] || '')}</td><th>撮影日FIX</th><td>${escapeHtml(d['撮影日FIX'] || '未定')}</td></tr>
         <tr><th>STS JP</th><td>${escapeHtml(d['STS JP'] || '')}</td><th>STS 支店</th><td>${escapeHtml(d['STS 支店'] || '')}</td></tr>
@@ -1159,6 +1161,14 @@
         </div>
         ${surveyLogSectionHtml(d)}
       </div>`;
+  }
+
+  // ★要件：新郎名・新婦名は姓・名を分けて入力する。表示用のフルネームはどこでもこの関数で組み立てる
+  // （Code.gsのfullName_と同じロジック。姓・名がずれて食い違わないよう、フルネームだけの列は持たない）
+  function fullNameClient_(lastName, firstName) {
+    const l = String(lastName || '').trim();
+    const f = String(firstName || '').trim();
+    return [l, f].filter(Boolean).join(' ');
   }
 
   function nameListWithCurrent(masterList, current) {
@@ -1488,7 +1498,9 @@
       <div class="tab-pane ${detailActiveTab === 'reservation' ? '' : 'hidden'}" data-tab-pane="reservation">
         <div class="section-card">
           <div class="detail-grid">
+            <div class="field-block"><label>新郎姓（ローマ字）</label><input data-pending="新郎姓（ローマ字）" value="${escapeAttr(d['新郎姓（ローマ字）'])}"></div>
             <div class="field-block"><label>新郎名（ローマ字）</label><input data-pending="新郎名（ローマ字）" value="${escapeAttr(d['新郎名（ローマ字）'])}"></div>
+            <div class="field-block"><label>新婦姓（ローマ字）</label><input data-pending="新婦姓（ローマ字）" value="${escapeAttr(d['新婦姓（ローマ字）'])}"></div>
             <div class="field-block"><label>新婦名（ローマ字）</label><input data-pending="新婦名（ローマ字）" value="${escapeAttr(d['新婦名（ローマ字）'])}"></div>
             <div class="field-block"><label>CHG NO</label><input data-pending="CHG NO" value="${escapeAttr(d['CHG NO'])}"></div>
           </div>
@@ -1612,7 +1624,7 @@
         <div class="kanri">管理番号: ${escapeHtml(d['管理番号'])} ｜ CHG NO: <span class="chg-no">${escapeHtml(d['CHG NO'] || 'なし')}</span></div>
         <div class="kanri">${escapeHtml(d.branchName)}（${escapeHtml(d['支店コード'])}）${d.country ? ' ・ ' + escapeHtml(d.country) : ''}${d.city ? ' ／ ' + escapeHtml(d.city) : ''}</div>
         <div class="kanri">担当: ${d['管轄'] ? escapeHtml(d['管轄']) + '手配課' : '未設定'}</div>
-        <div class="names">新郎: ${escapeHtml(d['新郎名（ローマ字）'] || '')}<br>新婦: ${escapeHtml(d['新婦名（ローマ字）'] || '')}</div>
+        <div class="names">新郎: ${escapeHtml(fullNameClient_(d['新郎姓（ローマ字）'], d['新郎名（ローマ字）']))}<br>新婦: ${escapeHtml(fullNameClient_(d['新婦姓（ローマ字）'], d['新婦名（ローマ字）']))}</div>
         <button type="button" class="print-btn" id="print-arrangement-btn">🖨 手配内容をPDFで保存</button>
       </div>
       ${tabBarHtml}
@@ -2057,7 +2069,7 @@
   }
 
   // ---------- 新規依頼（店舗ロール専用。拡張要望2章） ----------
-  const SHOP_NEW_TEXT_FIELDS = ['challengeno', 'groom', 'bride', 'plan', 'sale', 'location', 'passport',
+  const SHOP_NEW_TEXT_FIELDS = ['challengeno', 'groom-last', 'groom', 'bride-last', 'bride', 'plan', 'sale', 'location', 'passport',
     'option1', 'option2', 'option3', 'option4', 'option5'];
   const SHOP_NEW_DATE_FIELDS = ['hope1', 'hope2', 'hope3', 'hope4', 'hope5'];
   async function openShopNewView() {
@@ -2117,7 +2129,9 @@
       team: $('shop-new-team').value,
       initialStatus: $('shop-new-initial-status').value,
       challengeNo: $('shop-new-challengeno').value.trim(),
+      groomLastName: $('shop-new-groom-last').value.trim(),
       groomName: $('shop-new-groom').value.trim(),
+      brideLastName: $('shop-new-bride-last').value.trim(),
       brideName: $('shop-new-bride').value.trim(),
       plan: $('shop-new-plan').value.trim(),
       saleName: $('shop-new-sale').value.trim(),
