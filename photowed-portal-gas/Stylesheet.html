@@ -294,9 +294,10 @@
   .print-btn { background: #fff; color: var(--color-primary); border: 1px solid #fff;
     border-radius: 6px; padding: 6px 12px; font-size: 0.82rem; font-weight: 600; cursor: pointer; margin-top: 8px; }
   @media print {
+    body { background: #fff; }
     body * { visibility: hidden; }
     #print-arrangement, #print-arrangement * { visibility: visible; }
-    #print-arrangement { display: block; position: absolute; left: 0; top: 0; width: 100%; padding: 24px; color: #000; }
+    #print-arrangement { display: block; position: absolute; left: 0; top: 0; width: 100%; padding: 24px; color: #000; background: #fff; }
     #print-arrangement h1 { font-size: 1.3rem; }
     #print-arrangement h2 { font-size: 1.05rem; margin: 18px 0 6px; border-bottom: 1px solid #999; padding-bottom: 4px; }
     #print-arrangement table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
