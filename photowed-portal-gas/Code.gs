@@ -56,14 +56,15 @@ const LOGIN_MAX_ATTEMPTS = 10;
 const LOGIN_LOCKOUT_SEC = 900; // 15分
 
 // --- ステータスコード（"確定"等の和訳ラベルは使わず、コードそのものを運用する） ---
-// ★機能追加（店舗拡張）：NC は従来「依頼なし・状態リセット」の意味だったが、
-// 今後は「ネームチェンジ」専用のコードとして再定義する（値そのものは変えない。
-// 支店側の編集ロック挙動＝NCは支店が自由に回答できる、という既存ルールは変えない）。
+// ★機能廃止：NC（ネームチェンジ専用コードとして一時再定義していたもの）は結局不要と判断し廃止した。
+// 名前の変更は、新郎名・新婦名欄を直接書き換えて通常の3択フロー（変更＋メッセージ送信）で送るだけで
+// 現地に伝わるようにしている（apiCommitChanges内でお客様名の変更を検知し、通知を
+// 「ネームチェンジのお知らせ」として分かりやすく送る。専用のステータスは持たない）。
 // DC（日付変更依頼）・PC（プラン・式場変更依頼）は新設。どちらもチャージが発生し得る
 // 重要な変更のため、専用のステータスコードで管理する（詳細は STATUS_AUTO_CASCADE 付近を参照）。
 // ★機能追加：ST（現地側がまだ確認していない、の意）は主に希望日ごとのSTS(支店側)の初期値として使う
 // （現地スタッフが見てベンダーへ連絡したらRQへ変える。詳細はhopeStsBranchCol_付近を参照）。
-const STATUS_CODES = ['RQ', 'OK', 'CHK', 'CR', 'FN', 'CW', 'NC', 'UC', 'CF', 'DC', 'PC', 'ST'];
+const STATUS_CODES = ['RQ', 'OK', 'CHK', 'CR', 'FN', 'CW', 'UC', 'CF', 'DC', 'PC', 'ST'];
 const ALERT_COMPLETED_STATUS = 'FN';
 // ★要件：撮影日の45日前時点でSTSがFNになっていない場合に日本側へアラート
 const ALERT_DAYS_BEFORE = 45;
@@ -91,7 +92,7 @@ const EXPORT_MAX_ROWS = 5000;
 // --- 支店側がSTS(支店側)を編集してよい条件（キー＝対になるSTS(JP側)の現在値） ---
 // null = 値の制限なし（STATUS_CODESから自由に選べる）／配列 = その中からのみ選べる／
 // キーが存在しない値（OK,FN,CW,UC,CFなど）のときは支店側は編集不可（ロック）
-//  - NC/RQ/CHK：日本側からの依頼待ち・確認依頼中の状態。支店側は自由に回答できる
+//  - RQ/CHK：日本側からの依頼待ち・確認依頼中の状態。支店側は自由に回答できる
 //    （空きがなければ UC＝空きなし、を含めどのコードでも返せる）
 //  - CR：日本側が既存予約のキャンセルを依頼した状態。支店側は CW（チャージなしで取消）か
 //    CF（キャンセルチャージが発生）のいずれかで回答する
@@ -99,7 +100,6 @@ const EXPORT_MAX_ROWS = 5000;
 //    （このOK／UCの回答だけは、通常の「支店側はSTS(支店側)のみ編集できる」の例外として
 //    STS(JP側)にも同じ値がそのまま反映される。STATUS_AUTO_CASCADE 参照）
 const BRANCH_EDIT_GATE = {
-  'NC': null,
   'RQ': null,
   'CHK': null,
   'CR': ['CW', 'CF'],
@@ -317,7 +317,9 @@ const SHOP_EDITABLE_FIELDS = [
 // 選択は apiShopCreateRequest 側で扱うため、ここには含めない（作成後の変更だけを対象にする）。
 // FN（最終確定）だけは「OKの状態から」という前提条件があるため、validateFieldPermission_側で
 // 別途チェックする。
-const SHOP_STATUS_TARGETS = ['FN', 'CR', 'NC', 'DC', 'PC'];
+// ★機能廃止：ネームチェンジ専用のNCは廃止（新郎名・新婦名欄を直接編集して送信すれば
+// 現地に伝わるため、専用ステータスは不要と判断した）。
+const SHOP_STATUS_TARGETS = ['FN', 'CR', 'DC', 'PC'];
 
 // 日付として保存すべきフィールド（<input type="date">で受け渡しし、実Dateとして保存する）
 // checkAlerts/archivePastReservations/sortReservationSheet_ は撮影日FIXがDate型であることを前提にしている
@@ -1997,12 +1999,18 @@ function apiCommitChanges(token, kanriNo, changes, message, recipient) {
     // という事故が起きていた（撮影日FIXを変更したときに発生）。
     // 行の位置に依存する読み取りを全て終えてから、最後に並べ替える。
     const freshRow = sheet.getRange(rowIndex, 1, 1, headers.length).getValues()[0];
+    // ★機能追加：ネームチェンジは専用のステータスを持たない代わりに、新郎名・新婦名欄の変更が
+    // 含まれる送信を検知して、通知そのものを「ネームチェンジのお知らせ」として分かりやすくする
+    // （お客様が旧姓から新姓に変える等、名前を打ち替えて送信するだけで現地に伝わるようにする）。
+    const nameChanged = writes.some(w => w.changed && (w.field === COL_GROOM_NAME || w.field === COL_BRIDE_NAME));
     const bodyParts = [];
+    if (nameChanged) bodyParts.push('［ネームチェンジのお知らせ］\nお客様のお名前が変更されました。');
     if (summaryLines.length > 0) bodyParts.push(`[変更内容]\n${summaryLines.join('\n')}`);
     if (message) bodyParts.push(`[メッセージ]\n${message}`);
     const body = bodyParts.join('\n\n');
     const direction = resolveMessageDirection_(session, headers, freshRow, recipient);
-    const kind = summaryLines.length > 0 && message ? '変更＋メッセージ' : (summaryLines.length > 0 ? '変更内容' : 'メッセージ');
+    const kind = nameChanged ? 'ネームチェンジ'
+      : (summaryLines.length > 0 && message ? '変更＋メッセージ' : (summaryLines.length > 0 ? '変更内容' : 'メッセージ'));
 
     appendHistory_(headers, freshRow, who, body, session.role, recipientRoleForDirection_(direction));
     markUnreadForDirection_(sheet, headers, rowIndex, direction);
@@ -2088,10 +2096,7 @@ const STATUS_AUTO_CASCADE = [
   { whenJpIs: 'DC', branchValue: 'OK', setJpTo: 'OK' },
   { whenJpIs: 'DC', branchValue: 'UC', setJpTo: 'UC' },
   { whenJpIs: 'PC', branchValue: 'OK', setJpTo: 'OK' },
-  { whenJpIs: 'PC', branchValue: 'UC', setJpTo: 'UC' },
-  // ★不具合修正：ネームチェンジ完了時、現地側がSTS(支店側)をOKに変えても、対になるはずの
-  // JP側は反映されず取り残されていた（現地が名前変更対応を終えたらJP・現地ともにOKへ、が要件）。
-  { whenJpIs: 'NC', branchValue: 'OK', setJpTo: 'OK' }
+  { whenJpIs: 'PC', branchValue: 'UC', setJpTo: 'UC' }
 ];
 function applyStatusCascade_(sheet, headers, rowIndex, kanriNo, writes) {
   const branchWrite = writes.find(w => w.field === COL_STATUS_BRANCH);
@@ -2182,8 +2187,9 @@ function applyHopeStatusCascade_(sheet, headers, rowIndex, kanriNo, writes, who)
 function validateFieldPermission_(session, headers, rowData, field, value) {
   if (isJpStatusField_(field)) {
     // ★機能追加（店舗拡張）：店舗は自分の案件のSTS(JP側)（オプションのSTSは除く）だけ、
-    // 決められた値（新規作成後の変更用途：最終確定・キャンセル依頼・ネームチェンジ・
-    // 日付変更依頼・プラン/式場変更依頼）に限って変更できる。
+    // 決められた値（新規作成後の変更用途：最終確定・キャンセル依頼・
+    // 日付変更依頼・プラン/式場変更依頼）に限って変更できる。名前変更（ネームチェンジ）は
+    // 専用のステータスを持たず、新郎名・新婦名欄を直接編集して送信するだけでよい。
     if (session.role === SHOP_ROLE) {
       if (field !== COL_STATUS_JP) throw new Error('店舗はオプションのステータスを変更できません。');
       if (!SHOP_STATUS_TARGETS.includes(value)) {
@@ -3061,7 +3067,10 @@ function apiGetFieldHistory(token, kanriNo, field) {
   const session = requireSession_(token);
   const { headers, rowIndex, rowData } = findReservationRow_(kanriNo);
   if (rowIndex === -1) throw new Error('対象の予約が見つかりません。');
-  assertRowVisible_(session, headers, rowData);
+  // ★機能追加：オプション・プランの名前のすぐ隣にSTSバッジを置き、店舗の画面からもクリックで
+  // 履歴を見られるようにしたため、店舗ロールでも自分の起票した案件だけは閲覧できるようにする。
+  if (session.role === SHOP_ROLE) assertShopOwnRow_(session, headers, rowData);
+  else assertRowVisible_(session, headers, rowData);
 
   const sheet = getSpreadsheet_().getSheetByName(STATUS_LOG_SHEET_NAME);
   const rows = getRowsAsObjects_(sheet).filter(r =>
@@ -3947,8 +3956,18 @@ function onSurveyFormSubmitCore_(e, errors) {
 //      下記の FORM_URL 定数にコピーする
 //   5. 未設定（空欄）のままだと apiGetPrefilledFormUrls は空文字を返す＝画面側はURLを案内しない
 //      （設定前でも他の機能には一切影響しない）。
-const CONSENT_FORM_URL = ''; // 例: 'https://docs.google.com/forms/d/e/xxxxxxxx/viewform'
-const CONSENT_FORM_KANRI_ENTRY_ID = ''; // 例: 'entry.123456789'
+//
+// ★フォームのURL自体はご提供いただいたものを設定済み（イタリアの支店だけ別のフォームを使う）。
+// ⚠️ ENTRY_ID（「管理番号」の質問が何番目のentryかを表す値）は、このサンドボックス環境からは
+// forms.gle・docs.google.com への外部アクセスが組織のネットワークポリシーで遮断されており
+// 自動取得できなかったため、空欄のままにしている。上記の手順1〜3で実際の値を調べて
+// 埋めてください（埋めるまでは apiGetPrefilledFormUrls は空文字を返し、画面側はURLを案内しない
+// だけで、他の機能には一切影響しない）。
+const CONSENT_FORM_URL = 'https://forms.gle/D45veRz2svQVSnc16'; // 同意書フォーム（通常）
+const CONSENT_FORM_KANRI_ENTRY_ID = ''; // 例: 'entry.123456789'（要設定）
+// ★要件：イタリアの支店（ローマ支店等）だけ別の同意書フォームを使う
+const ITALY_CONSENT_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSfWEeaiQmvt3ffV1giA3Cc2b5rPmcSxazZP2fZdveDQhGPT0A/viewform';
+const ITALY_CONSENT_FORM_KANRI_ENTRY_ID = ''; // 例: 'entry.123456789'（要設定。通常フォームとは別の値になる）
 const SURVEY_FORM_URL = '';
 const SURVEY_FORM_KANRI_ENTRY_ID = '';
 
@@ -3961,6 +3980,7 @@ function buildPrefilledFormUrl_(baseUrl, entryId, kanriNo) {
 }
 
 // 案件の管理番号を埋め込んだ同意書・アンケートフォームのURLを返す（未設定の場合は空文字）。
+// ★要件：イタリアの支店の案件だけ、同意書はイタリア専用フォームのURLを使う。
 function apiGetPrefilledFormUrls(token, kanriNo) {
   const session = requireSession_(token);
   const { headers, rowIndex, rowData } = findReservationRow_(kanriNo);
@@ -3968,9 +3988,15 @@ function apiGetPrefilledFormUrls(token, kanriNo) {
   if (session.role === SHOP_ROLE) assertShopOwnRow_(session, headers, rowData);
   else assertRowVisible_(session, headers, rowData);
 
+  const branchCode = String(rowData[headers.indexOf(COL_BRANCH_CODE)] || '').toUpperCase();
+  const meta = branchMetaMap_()[branchCode] || {};
+  const isItaly = meta.country === ITALY_COUNTRY_NAME;
+  const consentUrl = isItaly ? ITALY_CONSENT_FORM_URL : CONSENT_FORM_URL;
+  const consentEntryId = isItaly ? ITALY_CONSENT_FORM_KANRI_ENTRY_ID : CONSENT_FORM_KANRI_ENTRY_ID;
+
   return {
     ok: true,
-    consentFormUrl: buildPrefilledFormUrl_(CONSENT_FORM_URL, CONSENT_FORM_KANRI_ENTRY_ID, kanriNo),
+    consentFormUrl: buildPrefilledFormUrl_(consentUrl, consentEntryId, kanriNo),
     surveyFormUrl: buildPrefilledFormUrl_(SURVEY_FORM_URL, SURVEY_FORM_KANRI_ENTRY_ID, kanriNo)
   };
 }

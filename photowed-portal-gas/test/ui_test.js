@@ -493,7 +493,9 @@ function visiblePane(document) {
     check('お客様情報タブにホテル住所の入力欄がある', !!custPane.querySelector('[data-pending="ホテル住所"]'));
     check('お客様情報タブにフライト情報の入力欄がある', !!custPane.querySelector('[data-pending="フライト情報"]'));
     check('パスポート番号欄が未設定の支店ではパスポート番号欄が出ない', !custPane.querySelector('[data-pending="パスポート番号"]'));
-    check('イタリアではないウィーン支店では同意書欄が出ない（JPでもないため）', !custPane.querySelector('[data-consent-checkbox]'));
+    // ★UI変更：同意書欄は必要書類チェックリストの近く（予約内容タブ）に移設した
+    const resPaneForConsent = document.querySelector('[data-tab-pane="reservation"]');
+    check('イタリアではないウィーン支店では同意書欄が出ない（JPでもないため）', !resPaneForConsent.querySelector('[data-consent-checkbox]'));
 
     [...document.querySelectorAll('.tab-btn')].find(b => b.dataset.tab === 'local').click();
     await settle();

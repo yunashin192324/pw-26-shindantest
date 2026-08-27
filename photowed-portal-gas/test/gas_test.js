@@ -1826,12 +1826,12 @@ section('33. STSの自動連動（日本CR＋支店CW→日本もCW／日本RQ�
   const after2 = ctx.apiGetReservationDetail(t, 'VIE-712').detail;
   check('現地がUCに回答すると日本側も自動でUCになる', after2['STS JP'] === 'UC', String(after2['STS JP']));
 
-  // ルールに当てはまらない組み合わせでは連動しない（例：日本側がNCのまま支店だけCWにする）
+  // ルールに当てはまらない組み合わせでは連動しない（例：日本側がCHKのまま支店だけCWにする）
   addCase(ctx, '予約一覧', { '支店コード': 'VIE', '管理番号': 'VIE-713', '管轄': '関東', '新郎名（ローマ字）': 'C' });
-  ctx.apiSaveFieldsQuiet(t, 'VIE-713', { 'STS JP': 'NC' });
+  ctx.apiSaveFieldsQuiet(t, 'VIE-713', { 'STS JP': 'CHK' });
   ctx.apiSaveFieldsQuiet(vt, 'VIE-713', { 'STS 支店': 'CW' });
-  check('対象外の組み合わせでは日本側のSTSは変わらない（NCのまま）',
-        ctx.apiGetReservationDetail(t, 'VIE-713').detail['STS JP'] === 'NC');
+  check('対象外の組み合わせでは日本側のSTSは変わらない（CHKのまま）',
+        ctx.apiGetReservationDetail(t, 'VIE-713').detail['STS JP'] === 'CHK');
 
   // 通知メールは飛ばない（自動連動は監査ログのみで、メッセージ通知には乗らない）
   check('自動連動そのものはメールを増やさない（直前の3件の保存はいずれも apiSaveFieldsQuiet）',
@@ -2146,14 +2146,16 @@ section('38. 案件作成後の店舗による変更：DC/PC/NC（拡張要望3�
   try { ctx.apiSaveFieldsQuiet(shopToken, kanri, { 'OP1 STS JP': 'DC' }); } catch (e) { err = e.message; }
   check('オプションのSTSはDC/PCの対象外（店舗はオプションのSTSを変更できない）', err !== null, String(err));
 
-  // --- ネームチェンジ（NC）：旧仕様（依頼なし・リセット）から意味を変更 ---
+  // --- ネームチェンジ機能は廃止：専用のステータスコードは持たない。新郎名・新婦名欄を
+  //     直接編集して送信するだけで「ネームチェンジのお知らせ」として現地に伝わる ---
   ctx.apiSaveFieldsQuiet(jpToken, kanri, { 'STS JP': 'OK' });
-  ctx.apiCommitChanges(shopToken, kanri, { 'STS JP': 'NC' }, 'ネームチェンジをお願いします。');
-  check('店舗がOKの状態からNC（ネームチェンジ）を設定できる', ctx.apiGetReservationDetail(jpToken, kanri).detail['STS JP'] === 'NC');
-  // 支店側は「STS JPがNCのとき」STS 支店を自由に編集できる（既存のBRANCH_EDIT_GATE仕様のまま）
-  ctx.apiSaveFieldsQuiet(vieToken, kanri, { 'STS 支店': 'OK' });
-  check('支店がNCの状態でSTS(支店側)を自由に更新できる（対応完了の意味で使う）',
-        ctx.apiGetReservationDetail(jpToken, kanri).detail['STS 支店'] === 'OK');
+  err = null;
+  try { ctx.apiCommitChanges(shopToken, kanri, { 'STS JP': 'NC' }, ''); } catch (e) { err = e.message; }
+  check('NC（廃止済み）はもう設定できない', err !== null, String(err));
+  ctx.__mail.length = 0;
+  ctx.apiCommitChanges(shopToken, kanri, { '新郎名（ローマ字）': 'Renamed Groom' }, 'お客様のお名前が変わりました。');
+  check('新郎名を変更して送信すると「ネームチェンジ」の通知になる（専用ステータス不要）',
+        ctx.__mail.some(m => m.subj.includes('ネームチェンジ')), JSON.stringify(ctx.__mail.map(m => m.subj)));
 
   // --- FNの前提条件：OKの状態からのみ ---
   const created2 = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'B', hope1: '2026-11-01' });
@@ -2331,6 +2333,24 @@ section('42. 同意書・アンケートフォームの事前入力済みURL（�
   const builtWithQuery = ctx.buildPrefilledFormUrl_('https://example.com/form?usp=pp_url', 'entry.1', kanri);
   check('既に?が含まれるURLには&で連結する', builtWithQuery.includes('&entry.1='), builtWithQuery);
   check('baseUrlが空なら空文字を返す', ctx.buildPrefilledFormUrl_('', 'entry.1', kanri) === '');
+
+  // ★ご提供いただいた実際の同意書フォームURLが設定されていること（entry IDは
+  // ネットワーク制限のためこの環境では自動取得できず、別途設定が必要）
+  check('同意書フォームURL（通常）が設定されている', ctx.CONSENT_FORM_URL === 'https://forms.gle/D45veRz2svQVSnc16');
+  check('同意書フォームURL（イタリア専用）が設定されている',
+        ctx.ITALY_CONSENT_FORM_URL === 'https://docs.google.com/forms/d/e/1FAIpQLSfWEeaiQmvt3ffV1giA3Cc2b5rPmcSxazZP2fZdveDQhGPT0A/viewform');
+
+  // ★要件：イタリアの支店の案件だけ、同意書はイタリア専用フォームを使う（entry ID設定済みと仮定して検証）
+  const italyUrl = ctx.buildPrefilledFormUrl_(ctx.ITALY_CONSENT_FORM_URL, 'entry.999', kanri);
+  const normalUrl = ctx.buildPrefilledFormUrl_(ctx.CONSENT_FORM_URL, 'entry.999', kanri);
+  check('通常フォームとイタリア専用フォームで異なるURLが生成される', italyUrl !== normalUrl);
+
+  // イタリアの支店（国名で判定）でも例外なく動く（entry ID未設定のため空文字が返るのは同じ）
+  addBranchRow(ctx, { '支店コード': 'ROW', '支店名': 'ローマ支店', '国': 'イタリア', '都市': 'ローマ', 'ロール': 'BRANCH', 'ログインパスコード': 'rp', '有効': true });
+  addCase(ctx, '予約一覧', { '支店コード': 'ROW', '管理番号': 'ROW-901', '管轄': '関東', '新郎名（ローマ字）': 'X' });
+  const jpToken42 = ctx.apiLogin('KANTO', 'pw').session.token;
+  const urlsItaly = ctx.apiGetPrefilledFormUrls(jpToken42, 'ROW-901');
+  check('イタリアの支店の案件でも例外なくURLを返す', urlsItaly.ok === true && urlsItaly.consentFormUrl === '');
 }
 
 // ---------------------------------------------------------------
@@ -2453,14 +2473,15 @@ section('44. ステータス連動の不具合修正（CR→CF・FNの支店側�
   check('不具合修正：STS(JP側)がFNのとき、現地側も自分のSTS(支店側)をFNにできる',
         ctx.apiGetReservationDetail(jpToken, created2.kanriNo).detail['STS 支店'] === 'FN');
 
-  // --- ネームチェンジ完了時、現地側のOK応答がJP側にも反映される（従来は反映されていなかった不具合） ---
+  // --- ネームチェンジ機能廃止：専用ステータスは無く、日本側が新婦名欄を直接編集して送信するだけで
+  //     「ネームチェンジ」の通知として現地に伝わる（店舗発ではない通常の案件でも同じ） ---
   const created3 = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'C', hope1: '2026-11-01' });
-  ctx.apiSaveFieldsQuiet(jpToken, created3.kanriNo, { 'STS JP': 'OK' });
-  ctx.apiSaveFieldsQuiet(jpToken, created3.kanriNo, { 'STS JP': 'NC' }); // 名前変更のリクエスト
-  ctx.apiSaveFieldsQuiet(vieToken, created3.kanriNo, { 'STS 支店': 'OK' }); // 現地が名前変更完了
-  const afterNc = ctx.apiGetReservationDetail(jpToken, created3.kanriNo).detail;
-  check('現地のOK応答でSTS(支店側)がOKになる', afterNc['STS 支店'] === 'OK');
-  check('不具合修正：ネームチェンジ完了時、現地のOK応答がSTS(JP側)にも反映される', afterNc['STS JP'] === 'OK');
+  ctx.__mail.length = 0;
+  ctx.apiCommitChanges(jpToken, created3.kanriNo, { '新婦名（ローマ字）': 'Renamed Bride' }, '');
+  check('日本側が新婦名を変更して送信してもネームチェンジ通知になる',
+        ctx.__mail.some(m => m.subj.includes('ネームチェンジ')));
+  const afterNameChange = ctx.apiGetReservationDetail(jpToken, created3.kanriNo).detail;
+  check('新婦名の変更自体は普通に保存される', afterNameChange['新婦名（ローマ字）'] === 'Renamed Bride');
 }
 
 // ---------------------------------------------------------------

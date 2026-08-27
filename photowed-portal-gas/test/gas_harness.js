@@ -252,7 +252,8 @@ function makeContext() {
                  'SHOP_ROLE','BM_COL_SHOP_DIRECT','H_COL_RECIPIENT_ROLE','H_COL_ORIGIN_SHOP',
                  'SHOP_EDITABLE_FIELDS','SHOP_STATUS_TARGETS','BM_COL_SHOP_NOTIFY_HQ','BM_COL_SHOP_BILLING',
                  'BM_COL_SHOP_UPLOAD_VISIBLE_TO_BRANCH','CHECKLIST_ITEMS','SHOP_UPLOAD_DOC_TYPES',
-                 'COL_SHOP_UPLOAD_FOLDER_URL','BRANCH_EDIT_GATE','buildPrefilledFormUrl_','driveFolderIdFromUrl_'];
+                 'COL_SHOP_UPLOAD_FOLDER_URL','BRANCH_EDIT_GATE','buildPrefilledFormUrl_','driveFolderIdFromUrl_',
+                 'CONSENT_FORM_URL','ITALY_CONSENT_FORM_URL'];
   const vals = [RESERVATION_HEADERS,HISTORY_HEADERS,BRANCH_MASTER_HEADERS,STATUS_LOG_HEADERS,
                 MASTER_ITEM_HEADERS,STATUS_CODES,BILLING_REGIONS,JP_TEAMS,
                 ALERT_DAYS_BEFORE,DELIVERY_ALERT_DEFAULT_DAYS,COMMITTABLE_FIELDS,
@@ -262,7 +263,8 @@ function makeContext() {
                 SHOP_ROLE,BM_COL_SHOP_DIRECT,H_COL_RECIPIENT_ROLE,H_COL_ORIGIN_SHOP,
                 SHOP_EDITABLE_FIELDS,SHOP_STATUS_TARGETS,BM_COL_SHOP_NOTIFY_HQ,BM_COL_SHOP_BILLING,
                 BM_COL_SHOP_UPLOAD_VISIBLE_TO_BRANCH,CHECKLIST_ITEMS,SHOP_UPLOAD_DOC_TYPES,
-                COL_SHOP_UPLOAD_FOLDER_URL,BRANCH_EDIT_GATE,buildPrefilledFormUrl_,driveFolderIdFromUrl_];
+                COL_SHOP_UPLOAD_FOLDER_URL,BRANCH_EDIT_GATE,buildPrefilledFormUrl_,driveFolderIdFromUrl_,
+                CONSENT_FORM_URL,ITALY_CONSENT_FORM_URL];
   names.forEach((n, i) => { this[n] = vals[i]; });
 }).call(this);`;
   vm.runInContext(src, ctx);
