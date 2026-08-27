@@ -119,6 +119,9 @@ const ITALY_COUNTRY_NAME = 'イタリア';
 const COL_BRANCH_CODE = '支店コード';
 const COL_KANRI_NO = '管理番号';
 const COL_CHALLENGE_NO = 'CHG NO';
+// ★要件：チャレンジ番号（CHG NO）は英数字11桁固定（0から始まる場合・アルファベットから
+// 始まる場合もある）。店舗の新規依頼では必須、既存案件の変更時も値を入れるならこの形式のみ許可する。
+const CHALLENGE_NO_PATTERN = /^[A-Za-z0-9]{11}$/;
 const COL_STATUS_JP = 'STS JP';
 const COL_STATUS_BRANCH = 'STS 支店';
 const COL_CONFIRMED_DATE = '撮影日FIX';
@@ -324,7 +327,9 @@ const SHOP_EDITABLE_FIELDS = [
 // ★要件：専用の「ステータス変更」欄は廃止し、案件全体・各オプションいずれもプラン名／
 // オプション名のすぐ隣に出るSTS(JP側)バッジから、店舗自身がその場で直接この中の値へ変更できるようにする
 // （現在の値がFN以外の状態からいつでもRQ→CR等に変えられる。FNだけは対象の項目がOKの時だけ選べる）。
-const SHOP_STATUS_TARGETS = ['FN', 'CR', 'DC', 'PC'];
+// ★要件：RQ（予約依頼）へ戻す操作も、案件全体・各オプションいずれのSTS(JP側)バッジからも
+// 選べるようにする（一度CR等にした後に取り消して依頼中の状態へ戻す、といった用途）。
+const SHOP_STATUS_TARGETS = ['RQ', 'FN', 'CR', 'DC', 'PC'];
 
 // 日付として保存すべきフィールド（<input type="date">で受け渡しし、実Dateとして保存する）
 // checkAlerts/archivePastReservations/sortReservationSheet_ は撮影日FIXがDate型であることを前提にしている
@@ -2237,6 +2242,11 @@ function validateFieldPermission_(session, headers, rowData, field, value) {
   if (field === COL_BILLING_REGION && value && !BILLING_REGIONS.includes(value)) {
     throw new Error(`請求先は ${BILLING_REGIONS.join('/')} のいずれかにしてください。`);
   }
+  // ★要件：チャレンジ番号（CHG NO）は英数字11桁固定。通常の3択フローで変更する場合も同じ形式を強制する
+  // （新規作成時の必須チェックはapiShopCreateRequest側で行う。ここでは「値を入れるならこの形式のみ」）
+  if (field === COL_CHALLENGE_NO && value && !CHALLENGE_NO_PATTERN.test(value)) {
+    throw new Error('チャレンジ番号は英数字11桁で入力してください（例：0A2B3C4D5E6）。');
+  }
 }
 
 // ★希望日ごとのSTS(JP側)（"希望日① STS JP"等）は意図的に含めない。誰も直接編集しないフィールドのため
@@ -2831,8 +2841,12 @@ function apiShopCreateRequest(token, payload) {
   }
   const team = String(payload.team || '').trim();
   if (!JP_TEAMS.includes(team)) throw new Error(`該当の手配課は ${JP_TEAMS.join('/')} のいずれかにしてください。`);
-  // ★機能追加：予約時にチャレンジ番号を入力できる欄が無かったため追加（任意入力）
+  // ★要件：チャレンジ番号は任意ではなく必須。英数字11桁固定（0やアルファベットから始まる場合もある）。
   const challengeNo = String(payload.challengeNo || '').trim();
+  if (!challengeNo) throw new Error('チャレンジ番号を入力してください。');
+  if (!CHALLENGE_NO_PATTERN.test(challengeNo)) {
+    throw new Error('チャレンジ番号は英数字11桁で入力してください（例：0A2B3C4D5E6）。');
+  }
   const groomName = String(payload.groomName || payload.customerName || '').trim();
   if (!groomName) throw new Error('新郎名（ローマ字）を入力してください。');
   const brideName = String(payload.brideName || '').trim();

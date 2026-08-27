@@ -116,7 +116,7 @@ const API_SPECS = [
   // 支店ロールでは指定した支店コードは無視され、必ず自支店の案件になる（下で個別に検証する）
   { fn: 'apiCreateReservation',    scope: 'any', args: (t) => [t, 'VIE', '新郎名: A\n新婦名: B'], writes: true },
   { fn: 'apiShopCreateRequest',    scope: 'shop',
-    args: (t) => [t, { branchCode: 'VIE', team: '関東', groomName: '侵入テスト', hope1: '2026-09-01', plan: '' }], writes: true },
+    args: (t) => [t, { branchCode: 'VIE', team: '関東', groomName: '侵入テスト', hope1: '2026-09-01', plan: '', challengeNo: 'AUDITCHG001' }], writes: true },
   { fn: 'apiShopUploadDocument',   scope: 'shop',
     args: (t) => [t, 'VIE-950', 'ヘアメイク画像', 'x.jpg', 'image/jpeg', Buffer.from('x').toString('base64')], target: 'VIE', writes: true },
   { fn: 'apiListShopUploadedDocuments', scope: 'shop', args: (t) => [t, 'VIE-950'], target: 'VIE', reads: true },

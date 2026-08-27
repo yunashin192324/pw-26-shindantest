@@ -19,8 +19,8 @@
   // 希望日ごとのSTS(支店側)は、現地が自由に選べる（Code.gsのapplyHopeStatusCascade_が連動を担当するため、
   // ここでは値の範囲を絞らずSTATUS_CODESすべてから選べるようにする）
   // ★機能追加（拡張要望3章）：店舗が案件作成後に設定できるSTS(JP側)（Code.gsのSHOP_STATUS_TARGETSと一致）
-  const SHOP_STATUS_TARGETS = ['FN', 'CR', 'DC', 'PC'];
-  const SHOP_STATUS_LABELS = { FN: 'FN（最終確定）', CR: 'CR（キャンセル依頼）',
+  const SHOP_STATUS_TARGETS = ['RQ', 'FN', 'CR', 'DC', 'PC'];
+  const SHOP_STATUS_LABELS = { RQ: 'RQ（予約依頼）', FN: 'FN（最終確定）', CR: 'CR（キャンセル依頼）',
     DC: 'DC（日付変更依頼）', PC: 'PC（プラン・式場変更依頼）' };
   // 必要書類チェックリスト（Code.gsのCHECKLIST_ITEMSと一致させる）
   const CHECKLIST_ITEMS = ['ヘアメイク画像', '衣裳画像', '撮影指示書', '着付け指示書'];
@@ -2101,6 +2101,11 @@
       option3: $('shop-new-option3').value.trim(), option4: $('shop-new-option4').value.trim(),
       option5: $('shop-new-option5').value.trim()
     };
+    // ★要件：チャレンジ番号は任意ではなく必須。英数字11桁固定（0やアルファベットから始まる場合もある）
+    if (!payload.challengeNo) { showFieldError('shop-new-error', 'チャレンジ番号を入力してください。'); return; }
+    if (!/^[A-Za-z0-9]{11}$/.test(payload.challengeNo)) {
+      showFieldError('shop-new-error', 'チャレンジ番号は英数字11桁で入力してください（例：0A2B3C4D5E6）。'); return;
+    }
     if (!payload.groomName) { showFieldError('shop-new-error', '新郎名（ローマ字）を入力してください。'); return; }
     if (!payload.hope1) { showFieldError('shop-new-error', '希望日（第一希望）を入力してください。'); return; }
     try {

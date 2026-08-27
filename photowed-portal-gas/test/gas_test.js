@@ -1858,8 +1858,14 @@ function shopFixture() {
 
   // --- 入力チェック ---
   let err;
-  err = null; try { ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', customerName: '' }); } catch (e) { err = e.message; }
+  err = null; try { ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', customerName: '', challengeNo: 'DUMMYCHG016' }); } catch (e) { err = e.message; }
   check('お客様名が無いと作成できない', err !== null, String(err));
+  err = null; try { ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', customerName: 'A' }); } catch (e) { err = e.message; }
+  check('チャレンジ番号が無いと作成できない（任意ではなく必須）', err !== null, String(err));
+  err = null; try { ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', customerName: 'A', challengeNo: 'CH-9001' }); } catch (e) { err = e.message; }
+  check('チャレンジ番号の形式が不正（ハイフンあり・10桁）だと作成できない', err !== null, String(err));
+  err = null; try { ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', customerName: 'A', challengeNo: '123456789012' }); } catch (e) { err = e.message; }
+  check('チャレンジ番号が12桁だと作成できない', err !== null, String(err));
   err = null; try { ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '北海道', customerName: 'A' }); } catch (e) { err = e.message; }
   check('該当の手配課が不正だと作成できない', err !== null, String(err));
   err = null; try { ctx.apiShopCreateRequest(shopToken, { branchCode: 'NOPE', team: '関東', customerName: 'A' }); } catch (e) { err = e.message; }
@@ -1871,7 +1877,8 @@ function shopFixture() {
 
   // --- 起票 ---
   const created = ctx.apiShopCreateRequest(shopToken, {
-    branchCode: 'VIE', team: '関東', customerName: 'Ahmet Yilmaz', hopeDate: '2026-09-10', plan: 'プランA'
+    branchCode: 'VIE', team: '関東', customerName: 'Ahmet Yilmaz', hopeDate: '2026-09-10', plan: 'プランA',
+    challengeNo: 'DUMMYCHG000'
   });
   check('起票が成功する', created.ok === true && !!created.kanriNo, JSON.stringify(created));
   check('採番は対象支店（VIE）のプレフィックスになる', String(created.kanriNo).startsWith('VIE-'), created.kanriNo);
@@ -2084,7 +2091,7 @@ section('37. 店舗発の新規依頼フォーム拡張（拡張要望2章）');
     plan: 'プランA', saleName: '春の特別セール', location: '旧市街の教会', prep: 'サロン',
     hope1: '2026-09-10', hope2: '2026-09-11', hope3: '2026-09-12', hope4: '2026-09-13', hope5: '2026-09-14',
     option1: '追加アルバム', option2: 'アクセサリーレンタル',
-    passportNumber: 'TR1234567', initialStatus: 'CHK'
+    passportNumber: 'TR1234567', initialStatus: 'CHK', challengeNo: 'DUMMYCHG011'
   });
   check('拡張項目つきで起票が成功する', created.ok === true && !!created.kanriNo, JSON.stringify(created));
   const kanri = created.kanriNo;
@@ -2102,7 +2109,8 @@ section('37. 店舗発の新規依頼フォーム拡張（拡張要望2章）');
 
   // --- パスポート非必須支店では指定しても無視される（表示条件を作成時にも踏襲） ---
   const created2 = ctx.apiShopCreateRequest(shopToken, {
-    branchCode: 'VIE', team: '関東', groomName: 'B', hope1: '2026-10-01', passportNumber: 'SHOULD-BE-IGNORED'
+    branchCode: 'VIE', team: '関東', groomName: 'B', hope1: '2026-10-01', passportNumber: 'SHOULD-BE-IGNORED',
+    challengeNo: 'DUMMYCHG012'
   });
   const detail2 = ctx.apiGetReservationDetail(jpToken, created2.kanriNo).detail;
   check('パスポート非必須支店ではパスポート番号は保存されない', !detail2['パスポート番号']);
@@ -2120,7 +2128,7 @@ section('38. 案件作成後の店舗による変更：DC/PC/NC（拡張要望3�
   const vie = ctx.apiLogin('VIE', 'vp');
   const vieToken = vie.session.token;
 
-  const created = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'A', hope1: '2026-09-10' });
+  const created = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'A', hope1: '2026-09-10', challengeNo: 'DUMMYCHG001' });
   const kanri = created.kanriNo;
   // OKまで進める（前提条件：FNはOKからのみ）
   ctx.apiSaveFieldsQuiet(jpToken, kanri, { 'STS JP': 'OK' });
@@ -2158,6 +2166,11 @@ section('38. 案件作成後の店舗による変更：DC/PC/NC（拡張要望3�
   check('オプション①がOKの状態からなら店舗はFNへ変更できる',
         ctx.apiGetReservationDetail(jpToken, kanri).detail['OP1 STS JP'] === 'FN');
 
+  // ★要件：RQ（予約依頼）へ戻す操作も店舗自身で選べるようにする
+  ctx.apiSaveFieldsQuiet(shopToken, kanri, { 'OP1 STS JP': 'RQ' });
+  check('店舗はSTS(JP側)をRQ（予約依頼）へ戻すこともできる',
+        ctx.apiGetReservationDetail(jpToken, kanri).detail['OP1 STS JP'] === 'RQ');
+
   // --- ネームチェンジ機能は廃止：専用のステータスコードは持たない。新郎名・新婦名欄を
   //     直接編集して送信するだけで「ネームチェンジのお知らせ」として現地に伝わる ---
   ctx.apiSaveFieldsQuiet(jpToken, kanri, { 'STS JP': 'OK' });
@@ -2170,7 +2183,7 @@ section('38. 案件作成後の店舗による変更：DC/PC/NC（拡張要望3�
         ctx.__mail.some(m => m.subj.includes('ネームチェンジ')), JSON.stringify(ctx.__mail.map(m => m.subj)));
 
   // --- FNの前提条件：OKの状態からのみ ---
-  const created2 = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'B', hope1: '2026-11-01' });
+  const created2 = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'B', hope1: '2026-11-01', challengeNo: 'DUMMYCHG002' });
   err = null;
   try { ctx.apiCommitChanges(shopToken, created2.kanriNo, { 'STS JP': 'FN' }, ''); } catch (e) { err = e.message; }
   check('STS(JP側)がRQのままではFN（最終確定）にできない', err !== null, String(err));
@@ -2197,13 +2210,13 @@ section('39. 手配課通知トグル・請求先マスタ（拡張要望5章・
   const vieToken = vie.session.token;
 
   // --- 既定（未設定）は従来どおり手配課・支店の両方に通知 ---
-  const created1 = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'A', hope1: '2026-09-10' });
+  const created1 = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'A', hope1: '2026-09-10', challengeNo: 'DUMMYCHG003' });
   check('通知トグル未設定なら手配課にも通知メールが飛ぶ（既定＝ON）', ctx.__mail.some(m => m.to.includes('kanto@his-world.com')));
 
   // --- 通知トグルをOFFにした支店は手配課宛メールだけ止まる（可視性は変わらない） ---
   setBranchField(ctx, 'VIE', '店舗依頼の手配課通知', false);
   ctx.__mail.length = 0;
-  const created2 = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'B', hope1: '2026-09-11' });
+  const created2 = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'B', hope1: '2026-09-11', challengeNo: 'DUMMYCHG004' });
   check('通知OFFの支店では手配課宛メールが飛ばない', !ctx.__mail.some(m => m.to.includes('kanto@his-world.com')));
   check('通知OFFでも現地支店へのメールは飛ぶ', ctx.__mail.some(m => m.to.includes('vie@his-world.com')));
   check('通知OFFでも手配課側の一覧には表示され、未読（要対応）になる（閲覧権限自体は変えない）',
@@ -2231,7 +2244,7 @@ section('40. 必要書類チェックリスト（拡張要望9章：双方向）
   const vie = ctx.apiLogin('VIE', 'vp');
   const vieToken = vie.session.token;
 
-  const created = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'A', hope1: '2026-09-10' });
+  const created = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'A', hope1: '2026-09-10', challengeNo: 'DUMMYCHG005' });
   const kanri = created.kanriNo;
 
   const initial = ctx.apiGetReservationDetail(jpToken, kanri).detail;
@@ -2269,7 +2282,7 @@ section('41. ドライブ連携：お客様提供画像・指示書のアップ�
   const vie = ctx.apiLogin('VIE', 'vp');
   const vieToken = vie.session.token;
 
-  const created = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'A', hope1: '2026-09-10' });
+  const created = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'A', hope1: '2026-09-10', challengeNo: 'DUMMYCHG006' });
   const kanri = created.kanriNo;
   const b64 = Buffer.from('dummy-image-bytes').toString('base64');
 
@@ -2286,7 +2299,7 @@ section('41. ドライブ連携：お客様提供画像・指示書のアップ�
   const folderId = detailAfterUpload.shopUploadFolderUrl.split('/').pop();
   const folderName = ctx.__driveFolders[folderId] && ctx.__driveFolders[folderId].name;
   check('フォルダ名にチャレンジ番号と管理番号の両方が含まれる（8-1）',
-        folderName === `NoCH_${kanri}`, folderName);
+        folderName === `DUMMYCHG006_${kanri}`, folderName);
   check('やり取り履歴にアップロードが記録される',
         detailAfterUpload.history.some(h => h.body.includes('ヘアメイク画像') && h.body.includes('hair1.jpg')));
 
@@ -2331,7 +2344,7 @@ section('42. 同意書・アンケートフォームの事前入力済みURL（�
   const shop = ctx.apiLogin('SHOP1', 'sp');
   const shopToken = shop.session.token;
 
-  const created = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'A', hope1: '2026-09-10' });
+  const created = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'A', hope1: '2026-09-10', challengeNo: 'DUMMYCHG007' });
   const kanri = created.kanriNo;
 
   // ★要件：entry ID（管理番号を事前入力するための質問ID）が未設定でも、フォームのURL自体は
@@ -2383,8 +2396,9 @@ section('43. 希望日ごとの空き確認ステータス（第一〜第五希�
 
   const created = ctx.apiShopCreateRequest(shopToken, {
     branchCode: 'VIE', team: '関東', groomName: 'A',
-    hope1: '2026-08-01', hope2: '2026-08-05', hope3: '2026-08-06'
+    hope1: '2026-08-01', hope2: '2026-08-05', hope3: '2026-08-06',
     // 希望日④・⑤は未入力のまま
+    challengeNo: 'DUMMYCHG013'
   });
   const kanri = created.kanriNo;
 
@@ -2436,7 +2450,8 @@ section('43. 希望日ごとの空き確認ステータス（第一〜第五希�
 
   // --- CHK（空き確認のみ）で作成した場合は、希望日が取れても案件全体を自動でOKへ進めない ---
   const created2 = ctx.apiShopCreateRequest(shopToken, {
-    branchCode: 'VIE', team: '関東', groomName: 'B', hope1: '2026-09-01', initialStatus: 'CHK'
+    branchCode: 'VIE', team: '関東', groomName: 'B', hope1: '2026-09-01', initialStatus: 'CHK',
+    challengeNo: 'DUMMYCHG014'
   });
   ctx.apiSaveFieldsQuiet(vieToken, created2.kanriNo, { '希望日① STS 支店': 'OK' });
   const d2 = ctx.apiGetReservationDetail(jpToken, created2.kanriNo).detail;
@@ -2444,7 +2459,7 @@ section('43. 希望日ごとの空き確認ステータス（第一〜第五希�
   check('CHK（空き確認のみ）で作成した案件は、希望日が取れても全体を自動でOKにはしない', d2['STS JP'] === 'CHK');
 
   // --- 既にDC/PC/CR/NC等へ手動で進めている案件は、希望日の自動連動で巻き戻さない ---
-  const created3 = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'C', hope1: '2026-09-05', hope2: '2026-09-06' });
+  const created3 = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'C', hope1: '2026-09-05', hope2: '2026-09-06', challengeNo: 'DUMMYCHG008' });
   ctx.apiSaveFieldsQuiet(jpToken, created3.kanriNo, { 'STS JP': 'DC' }); // 案件全体を手動でDCへ
   ctx.apiSaveFieldsQuiet(vieToken, created3.kanriNo, { '希望日① STS 支店': 'OK' });
   const d3 = ctx.apiGetReservationDetail(jpToken, created3.kanriNo).detail;
@@ -2455,7 +2470,8 @@ section('43. 希望日ごとの空き確認ステータス（第一〜第五希�
   //     applyHopeStatusCascade_が各行ごとに正しくJP側へも連動させる ---
   const created4 = ctx.apiShopCreateRequest(shopToken, {
     branchCode: 'VIE', team: '関東', groomName: 'D',
-    hope1: '2026-10-01', hope2: '2026-10-02', hope3: '2026-10-03'
+    hope1: '2026-10-01', hope2: '2026-10-02', hope3: '2026-10-03',
+    challengeNo: 'DUMMYCHG015'
   });
   ctx.apiSaveFieldsQuiet(vieToken, created4.kanriNo, {
     '希望日① STS 支店': 'UC', '希望日② STS 支店': 'UC'
@@ -2479,12 +2495,12 @@ section('44. ステータス連動の不具合修正（CR→CF・FNの支店側�
   const vie = ctx.apiLogin('VIE', 'vp');
   const vieToken = vie.session.token;
 
-  // --- チャレンジ番号を店舗発の新規依頼に入力できる ---
+  // --- チャレンジ番号を店舗発の新規依頼に入力できる（英数字11桁固定） ---
   const created = ctx.apiShopCreateRequest(shopToken, {
-    branchCode: 'VIE', team: '関東', groomName: 'A', hope1: '2026-09-10', challengeNo: 'CH-9001'
+    branchCode: 'VIE', team: '関東', groomName: 'A', hope1: '2026-09-10', challengeNo: '0A2B3C4D5E6'
   });
   const kanri = created.kanriNo;
-  check('店舗が入力したチャレンジ番号が保存される', ctx.apiGetReservationDetail(jpToken, kanri).detail['CHG NO'] === 'CH-9001');
+  check('店舗が入力したチャレンジ番号が保存される', ctx.apiGetReservationDetail(jpToken, kanri).detail['CHG NO'] === '0A2B3C4D5E6');
 
   // --- CR→CF（キャンセルチャージあり）でもJP側に反映される（従来はCWだけ反映されていた不具合） ---
   ctx.apiSaveFieldsQuiet(jpToken, kanri, { 'STS JP': 'OK' });
@@ -2495,7 +2511,7 @@ section('44. ステータス連動の不具合修正（CR→CF・FNの支店側�
   check('不具合修正：CFの応答もSTS(JP側)へ反映される（従来はCWだけ反映されていた）', afterCf['STS JP'] === 'CF');
 
   // --- FN確定後、現地側も自分のSTS(支店側)をFNにできる（従来はロックされて変更不可だった不具合） ---
-  const created2 = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'B', hope1: '2026-10-01' });
+  const created2 = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'B', hope1: '2026-10-01', challengeNo: 'DUMMYCHG009' });
   // STS(JP側)がRQの間に支店がOKで回答（このAPI設計ではRQ→OKの自動連動は無いため、JP側も別途OKにする）
   ctx.apiSaveFieldsQuiet(vieToken, created2.kanriNo, { 'STS 支店': 'OK' });
   ctx.apiSaveFieldsQuiet(jpToken, created2.kanriNo, { 'STS JP': 'OK' });
@@ -2509,7 +2525,7 @@ section('44. ステータス連動の不具合修正（CR→CF・FNの支店側�
 
   // --- ネームチェンジ機能廃止：専用ステータスは無く、日本側が新婦名欄を直接編集して送信するだけで
   //     「ネームチェンジ」の通知として現地に伝わる（店舗発ではない通常の案件でも同じ） ---
-  const created3 = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'C', hope1: '2026-11-01' });
+  const created3 = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'C', hope1: '2026-11-01', challengeNo: 'DUMMYCHG010' });
   ctx.__mail.length = 0;
   ctx.apiCommitChanges(jpToken, created3.kanriNo, { '新婦名（ローマ字）': 'Renamed Bride' }, '');
   check('日本側が新婦名を変更して送信してもネームチェンジ通知になる',

@@ -537,6 +537,7 @@ function visiblePane(document) {
     check('依頼先の支店（都市）が選べる', branchOpts.includes('VIE'), branchOpts.join(','));
     document.getElementById('shop-new-branch').value = 'VIE';
     document.getElementById('shop-new-team').value = '関東';
+    document.getElementById('shop-new-challengeno').value = '0A2B3C4D5E6';
     document.getElementById('shop-new-groom').value = 'Ahmet Yilmaz';
     document.getElementById('shop-new-hope1').value = '2026-09-10';
     document.getElementById('shop-new-plan').value = 'プランA';
@@ -649,6 +650,7 @@ function visiblePane(document) {
     await settle();
     document.getElementById('shop-new-branch').value = 'VIE';
     document.getElementById('shop-new-team').value = '関東';
+    document.getElementById('shop-new-challengeno').value = 'EXT0001AAAA';
     document.getElementById('shop-new-groom').value = 'Extended Groom';
     document.getElementById('shop-new-bride').value = 'Extended Bride';
     document.getElementById('shop-new-hope1').value = '2026-10-01';
@@ -763,10 +765,25 @@ function visiblePane(document) {
     await settle();
     document.getElementById('shop-new-branch').value = 'VIE';
     document.getElementById('shop-new-team').value = '関東';
-    document.getElementById('shop-new-challengeno').value = 'CH-9001';
     document.getElementById('shop-new-groom').value = 'Hope Tester';
     document.getElementById('shop-new-hope1').value = '2026-08-01';
     document.getElementById('shop-new-hope2').value = '2026-08-05';
+
+    // ★要件：チャレンジ番号は任意ではなく必須。英数字11桁固定
+    document.getElementById('shop-new-submit').click();
+    await settle();
+    check('チャレンジ番号が未入力だと送信できない',
+          document.getElementById('shop-new-success').classList.contains('hidden') &&
+          !document.getElementById('shop-new-error').classList.contains('hidden'));
+    document.getElementById('shop-new-challengeno').value = 'CH-9001';
+    document.getElementById('shop-new-submit').click();
+    await settle();
+    check('チャレンジ番号の形式が不正（ハイフンあり・10桁）だと送信できない',
+          document.getElementById('shop-new-success').classList.contains('hidden') &&
+          !document.getElementById('shop-new-error').classList.contains('hidden'),
+          document.getElementById('shop-new-error').textContent);
+
+    document.getElementById('shop-new-challengeno').value = 'CH9001AAAAA';
     document.getElementById('shop-new-submit').click();
     await settle();
     const successText = document.getElementById('shop-new-success').textContent;
@@ -779,7 +796,7 @@ function visiblePane(document) {
     document.getElementById('nav-dashboard').click();
     await settle();
     check('店舗の一覧に絞り込み欄が表示される', !document.getElementById('shop-dashboard-filter').classList.contains('hidden'));
-    document.getElementById('shop-dashboard-search').value = 'CH-9001';
+    document.getElementById('shop-dashboard-search').value = 'CH9001AAAAA';
     document.getElementById('shop-dashboard-search').dispatchEvent(new dom.window.Event('input'));
     await settle();
     check('チャレンジ番号で絞り込むと該当案件だけ表示される',
@@ -829,7 +846,7 @@ function visiblePane(document) {
   {
     const kanri4 = ctx.apiShopCreateRequest(ctx.apiLogin('SHOP1', 'CHANGE-ME-SHOP1').session.token, {
       branchCode: 'VIE', team: '関東', groomName: 'Bulk Tester',
-      hope1: '2026-10-01', hope2: '2026-10-02', hope3: '2026-10-03'
+      hope1: '2026-10-01', hope2: '2026-10-02', hope3: '2026-10-03', challengeNo: 'BULK0001AAA'
     }).kanriNo;
 
     document.getElementById('nav-logout').click();
