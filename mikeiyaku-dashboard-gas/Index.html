@@ -25,6 +25,22 @@
     .toast { animation: slideIn .25s ease-out; }
     @keyframes slideIn { from { opacity:0; transform:translateX(30px);} to {opacity:1; transform:translateX(0);} }
     .editable-cell:hover { background:#eff6ff; cursor:text; }
+
+    /* リセールリストの左端（リセール〜ACT日）を横スクロールしても隠れないよう固定する。
+       メモや詳細を見るために右へスクロールしても、入力欄が見えたままになる。 */
+    .dm-sticky { position:sticky; background:#fffbeb; }
+    thead .dm-sticky { z-index:30; background:#fef3c7; }
+    tbody .dm-sticky { z-index:10; }
+    .dm-sticky-1 { left:0;     min-width:92px;  max-width:92px; }
+    .dm-sticky-2 { left:92px;  min-width:104px; max-width:104px; }
+    .dm-sticky-3 { left:196px; min-width:78px;  max-width:78px; }
+    .dm-sticky-4 { left:274px; min-width:118px; max-width:118px; }
+    /* 固定列の右端に境目を出して、どこまでが固定かを分かりやすくする */
+    .dm-sticky-4 { box-shadow: 2px 0 4px -2px rgba(0,0,0,.25); }
+    /* アラート行でも固定列の背景が透けないようにする */
+    tr.dm-alert-row .dm-sticky { background:#fff1f2; }
+    /* まだ保存していないリセールの変更を目立たせる */
+    .dm-resale-pending { outline:2px solid #f59e0b; outline-offset:-2px; border-radius:6px; }
     .spinner { border-top-color:#1d4ed8; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
   </style>
@@ -318,23 +334,36 @@
       </div>
 
       <div class="bg-white rounded-xl shadow p-4">
+        <!-- リセールの変更は「まとめて保存」する。1件ずつ通信すると次の入力まで待たされるため。 -->
+        <div id="resale-pending-bar" class="hidden mb-3 flex flex-wrap items-center gap-3 bg-amber-50 border border-amber-300 rounded-lg px-3 py-2">
+          <span class="text-sm font-semibold text-amber-800">
+            <i class="fa-solid fa-pen"></i> リセールの未保存の変更：<span id="resale-pending-count">0</span>件
+          </span>
+          <button id="btn-save-resale" class="bg-amber-600 hover:bg-amber-700 text-white rounded-lg px-4 py-1.5 text-sm font-semibold shadow">
+            <i class="fa-solid fa-floppy-disk"></i> まとめて保存する
+          </button>
+          <button id="btn-cancel-resale" class="border border-slate-300 text-slate-600 hover:bg-slate-100 rounded-lg px-3 py-1.5 text-sm font-semibold">
+            取り消す
+          </button>
+          <span class="text-xs text-amber-700">STS・ACT日・ACT内容・メモ・詳細はこれまでどおり、その場で保存されます。</span>
+        </div>
         <div class="overflow-auto max-h-[65vh]">
           <table class="min-w-full text-sm whitespace-nowrap">
             <thead class="bg-slate-100 text-slate-600 sticky top-0 z-10">
               <tr>
-                <th class="dm-sortable px-3 py-2 text-left bg-amber-50" data-sort="リセール" title="編集可（クリックで並べ替え）">リセール</th>
-                <th class="dm-sortable px-3 py-2 text-left bg-amber-50" data-sort="STS" title="編集可（クリックで並べ替え）">STS</th>
-                <th class="dm-sortable px-3 py-2 text-right bg-amber-50" data-sort="成約PAX" title="編集可（クリックで並べ替え）">成約PAX</th>
-                <th class="dm-sortable px-3 py-2 text-left bg-amber-50" data-sort="ACT日" title="編集可（クリックで並べ替え）">ACT日</th>
+                <th class="dm-sticky dm-sticky-1 dm-sortable px-3 py-2 text-left bg-amber-50" data-sort="リセール" title="編集可（クリックで並べ替え）">リセール</th>
+                <th class="dm-sticky dm-sticky-2 dm-sortable px-3 py-2 text-left bg-amber-50" data-sort="STS" title="編集可（クリックで並べ替え）">STS</th>
+                <th class="dm-sticky dm-sticky-3 dm-sortable px-3 py-2 text-right bg-amber-50" data-sort="成約PAX" title="編集可（クリックで並べ替え）">成約PAX</th>
+                <th class="dm-sticky dm-sticky-4 dm-sortable px-3 py-2 text-left bg-amber-50" data-sort="ACT日" title="編集可（クリックで並べ替え）">ACT日</th>
                 <th class="px-3 py-2 text-left bg-amber-50" title="編集可">ACT内容</th>
-                <th class="px-3 py-2 text-left w-48 bg-amber-50" title="編集可">メモ</th>
+                <th class="px-3 py-2 text-left bg-amber-50" title="編集可（カーソルを合わせると全文表示）">メモ</th>
                 <th class="px-2 py-2 text-center" title="長期未対応アラート">🔔</th>
                 <th class="dm-sortable px-3 py-2 text-left" data-sort="店舗" title="クリックで五十音順に並べ替え">店舗</th>
                 <th class="dm-sortable px-3 py-2 text-left" data-sort="社員名" title="クリックで五十音順に並べ替え">社員名</th>
                 <th class="dm-sortable px-3 py-2 text-left" data-sort="対象年月日" title="クリックで日付順に並べ替え">対象年月日</th>
-                <th class="px-3 py-2 text-left w-64">詳細</th>
-                <th class="dm-sortable px-3 py-2 text-left" data-sort="未成約理由(大)" title="クリックで並べ替え">未成約理由(大)</th>
                 <th class="dm-sortable px-3 py-2 text-left" data-sort="都市コード" title="クリックで並べ替え">都市コード</th>
+                <th class="px-3 py-2 text-left" title="編集可（カーソルを合わせると全文表示）">詳細</th>
+                <th class="dm-sortable px-3 py-2 text-left" data-sort="未成約理由(大)" title="クリックで並べ替え">未成約理由(大)</th>
                 <th class="dm-sortable px-3 py-2 text-left" data-sort="種別" title="クリックで並べ替え">種別</th>
                 <th class="dm-sortable px-3 py-2 text-left" data-sort="旅行目的(小)" title="クリックで並べ替え">旅行目的(小)</th>
                 <th class="dm-sortable px-3 py-2 text-left" data-sort="接客方法" title="クリックで並べ替え">接客方法</th>

@@ -12,7 +12,7 @@ const MONTH_CODES = ['11', '12', '01', '02', '03', '04', '05', '06', '07', '08',
 const MONTH_LABELS = MONTH_CODES.map(function (c) { return (c.indexOf('0') === 0 ? c.substring(1) : c) + '月'; });
 const PAGE_SIZE = 50;
 const ALERT_THRESHOLD_DAYS = 7; // 相談日（対象年月日）からこの日数以上経過してもSTS未入力（未対応）の場合にアラート対象とする
-const MULTILINE_COLUMNS = ['次回ACT・進捗★手入力']; // インライン編集時にテキストエリアを使う列（メモのみ）
+const MULTILINE_COLUMNS = ['次回ACT・進捗★手入力', '詳細']; // インライン編集時にテキストエリアを使う列（メモ・詳細）
 
 // ---- グローバル状態 ----------------------------------------------------------
 let allDataCache = [];              // getDashboardData() の統合生データ（超高速フィルタの元データ・直近2年分）
@@ -29,6 +29,9 @@ let dmFilteredCache = [];
 let rankingSortState = { key: 'total', dir: 'desc' };
 // リセールリストの並べ替え（既定は対象年月日の新しい順）
 let dmSortState = { key: '対象年月日', dir: 'desc' };
+// まだ保存していない「リセール」の変更。{ "店舗名::行番号": { sheetName, rowIndex, value } }
+// 1件ずつ通信すると次の入力まで待たされるため、ためてから一括で送る。
+let pendingResaleChanges = {};
 let loadCompletedCount = 0;
 const LOAD_TARGET = 4;
 let currentUserContext = {
@@ -57,7 +60,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // 画面側が前提としているサーバー（Code.gs）の版数。Code.gs の SERVER_VERSION と対で更新する。
-const REQUIRED_SERVER_VERSION = '2026-08-18c';
+const REQUIRED_SERVER_VERSION = '2026-08-19';
 
 /**
  * Code.gs が画面と同じ版数まで更新されているか確認する。
@@ -392,16 +395,19 @@ function daysSince(dateStr) {
   return Math.floor((today.getTime() - target.getTime()) / 86400000);
 }
 
-// STSが未対応（空欄）のまま、相談日（対象年月日）から ALERT_THRESHOLD_DAYS 日以上経過している行を
+// 相談日（対象年月日）から ALERT_THRESHOLD_DAYS 日たっても「ACT日」が未入力の行を
 // 「要フォロー」とみなす。
-// 基準は必ず相談日そのもの。メモを書いただけで最終アクション日が今日に更新され、
-// STSが未入力のままなのにアラートが消える、という取りこぼしを防ぐ。
+// 基準は相談日そのもの。判定に使うのは ACT日 の有無だけで、STSは見ない。
+// （商品の販売待ちなど、まだ結果が出ない案件もあるため。何か動いた＝ACT日が入った
+//   時点でアラートは消える。）
 function alertBasisDate(row) {
   return row['対象年月日'];
 }
 
 function isAlertRow(row) {
-  if (row['STS']) return false; // 失注／成約／リセール中いずれかが入っていれば対象外
+  if (String(row['ACT日'] === null || row['ACT日'] === undefined ? '' : row['ACT日']).trim()) {
+    return false; // ACT日が入っていれば対応済みとみなす
+  }
   const days = daysSince(alertBasisDate(row));
   return days !== null && days >= ALERT_THRESHOLD_DAYS;
 }
@@ -420,11 +426,8 @@ function populateAllMasterSelects() {
   fillSelectWithBlank('dm-filter-contact', metaMasters.contactMaster || []);
   fillSelectWithBlank('dm-filter-purpose', metaMasters.purposeMaster || []);
 
-  const employeeNames = (metaMasters.employeeList || [])
-    .map(function (e) { return e.employeeName; })
-    .filter(function (name, idx, arr) { return name && arr.indexOf(name) === idx; })
-    .sort(function (a, b) { return String(a).localeCompare(String(b), 'ja'); });
-  fillSelectWithBlank('dm-filter-employee', employeeNames);
+  // 社員の選択肢は、選ばれている店舗に合わせて絞り込む
+  populateDmEmployeeSelect();
 
   const modalShopSelect = document.querySelector('#register-form select[name="sheetName"]');
   modalShopSelect.innerHTML = '<option value="">選択してください</option>' +
@@ -1316,6 +1319,8 @@ function initDataManagerEvents() {
   ['dm-filter-shop', 'dm-filter-month', 'dm-filter-sts', 'dm-filter-contact', 'dm-filter-purpose',
     'dm-filter-employee', 'dm-filter-date-from', 'dm-filter-date-to', 'dm-filter-alert-only'].forEach(function (id) {
     document.getElementById(id).addEventListener('change', function () {
+      // 店舗を選んだら、社員の選択肢もその店舗の人だけに絞る
+      if (id === 'dm-filter-shop') populateDmEmployeeSelect();
       dmCurrentPage = 1;
       renderDataManagerTab();
     });
@@ -1327,6 +1332,48 @@ function initDataManagerEvents() {
     const maxPage = Math.max(1, Math.ceil(dmFilteredCache.length / PAGE_SIZE));
     if (dmCurrentPage < maxPage) { dmCurrentPage++; renderDataManagerGrid(); }
   });
+
+  document.getElementById('btn-save-resale').addEventListener('click', onSaveResaleChanges);
+  document.getElementById('btn-cancel-resale').addEventListener('click', onCancelResaleChanges);
+
+  // 未保存のまま画面を閉じようとしたときに警告する
+  window.addEventListener('beforeunload', function (ev) {
+    if (pendingResaleCount() === 0) return;
+    ev.preventDefault();
+    ev.returnValue = '';
+  });
+}
+
+/**
+ * リセールリストの「社員」絞り込みの選択肢を作り直す。
+ * 店舗が選ばれている場合は、その店舗に実績のある社員だけを並べる。
+ * （全店舗ぶんの名前が並ぶと、目的の人を探すのに時間がかかるため）
+ */
+function populateDmEmployeeSelect() {
+  const select = document.getElementById('dm-filter-employee');
+  if (!select) return;
+  const shop = document.getElementById('dm-filter-shop').value;
+  const keep = select.value;
+
+  // 店舗未選択のときは、マスタの全社員（従来どおり）
+  let names;
+  if (!shop) {
+    names = (metaMasters.employeeList || []).map(function (e) { return e.employeeName; });
+  } else {
+    names = allDataCache
+      .filter(function (r) { return r.__sheetName === shop; })
+      .map(function (r) { return r['社員名']; });
+  }
+  names = names
+    .filter(function (n, i, arr) { return n && arr.indexOf(n) === i; })
+    .sort(function (a, b) {
+      return dmCollator ? dmCollator.compare(String(a), String(b))
+                        : String(a).localeCompare(String(b), 'ja');
+    });
+
+  fillSelectWithBlank('dm-filter-employee', names);
+  // 絞り込み後も同じ社員が選べるなら選択を保つ
+  select.value = (keep && names.indexOf(keep) !== -1) ? keep : '';
 }
 
 function renderDataManagerTab() {
@@ -1463,41 +1510,47 @@ function renderDataManagerGrid() {
     const stsOptions = ['失注', '成約', 'リセール中'].map(function (s) {
       return '<option value="' + s + '"' + (row['STS'] === s ? ' selected' : '') + '>' + s + '</option>';
     }).join('');
-    const resaleOptions = ['〇', '✖'].map(function (s) {
-      return '<option value="' + s + '"' + (row['リセール'] === s ? ' selected' : '') + '>' + s + '</option>';
-    }).join('');
-
     const alert = isAlertRow(row);
-    const rowClass = alert ? 'hover:bg-rose-100 bg-rose-50' : 'hover:bg-blue-50';
+    const rowClass = (alert ? 'dm-alert-row hover:bg-rose-100 bg-rose-50' : 'hover:bg-blue-50');
     const alertDays = alert ? daysSince(alertBasisDate(row)) : null;
     const alertCell = alert
-      ? '<td class="px-2 py-2 text-center text-rose-600" title="相談日から' + alertDays + '日経過・STS未入力です">🔔</td>'
+      ? '<td class="px-2 py-2 text-center text-rose-600" title="相談日から' + alertDays + '日経過・ACT日が未入力です">🔔</td>'
       : '<td class="px-2 py-2 text-center"></td>';
 
+    // 未保存のリセール変更があれば、保存前の状態ではなくその値を選択状態にする
+    const pendingResale = pendingResaleChanges[rid];
+    const resaleValue = (pendingResale !== undefined) ? pendingResale : (row['リセール'] || '');
+    const resaleOpts = ['〇', '✖'].map(function (s) {
+      return '<option value="' + s + '"' + (resaleValue === s ? ' selected' : '') + '>' + s + '</option>';
+    }).join('');
+    const resaleClass = 'resale-select border border-slate-300 rounded px-1 py-1 text-xs'
+      + (pendingResale !== undefined ? ' dm-resale-pending' : '');
+
     // 列順：スタッフが毎日触る編集項目（リセール〜メモ）を左端にまとめ、
-    // 参照用のCSV由来項目をその右に並べる
+    // 参照用のCSV由来項目をその右に並べる。
+    // リセール〜ACT日の4列は横スクロールしても隠れないよう固定する（dm-sticky）。
     return '<tr class="' + rowClass + '" data-rid="' + rid + '">' +
-      '<td class="px-2 py-1">' +
-        '<select class="resale-select border border-slate-300 rounded px-1 py-1 text-xs" data-sheet="' + escapeHtml(row.__sheetName) + '" data-row="' + row.__rowIndex + '">' +
-          '<option value="">－</option>' + resaleOptions +
+      '<td class="dm-sticky dm-sticky-1 px-2 py-1">' +
+        '<select class="' + resaleClass + '" data-sheet="' + escapeHtml(row.__sheetName) + '" data-row="' + row.__rowIndex + '" data-rid="' + escapeHtml(rid) + '">' +
+          '<option value="">－</option>' + resaleOpts +
         '</select>' +
       '</td>' +
-      '<td class="px-2 py-1">' +
+      '<td class="dm-sticky dm-sticky-2 px-2 py-1">' +
         '<select class="sts-select border border-slate-300 rounded px-1 py-1 text-xs" data-sheet="' + escapeHtml(row.__sheetName) + '" data-row="' + row.__rowIndex + '">' +
           '<option value="">－</option>' + stsOptions +
         '</select>' +
       '</td>' +
-      editableCellTd(row, '成約PAX', 'number') +
-      editableCellTd(row, 'ACT日', 'date') +
+      editableCellTd(row, '成約PAX', 'number', 'dm-sticky dm-sticky-3') +
+      editableCellTd(row, 'ACT日', 'date', 'dm-sticky dm-sticky-4') +
       editableCellTd(row, 'ACT内容', 'text') +
-      editableCellTd(row, '次回ACT・進捗★手入力', 'text') +
+      longTextCellTd(row, '次回ACT・進捗★手入力') +
       alertCell +
       '<td class="px-3 py-2">' + escapeHtml(row.__sheetName) + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(row['社員名']) + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(row['対象年月日']) + '</td>' +
-      readonlyDetailTd(row, '詳細') +
-      '<td class="px-3 py-2">' + escapeHtml(row['未成約理由(大)']) + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(row['都市コード']) + '</td>' +
+      longTextCellTd(row, '詳細') +
+      '<td class="px-3 py-2">' + escapeHtml(row['未成約理由(大)']) + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(row['種別']) + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(row['旅行目的(小)']) + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(row['接客方法']) + '</td>' +
@@ -1507,24 +1560,135 @@ function renderDataManagerGrid() {
   bindGridEditEvents();
 }
 
-function editableCellTd(row, columnName, type) {
+function editableCellTd(row, columnName, type, extraClass) {
   const val = row[columnName] !== undefined && row[columnName] !== null ? row[columnName] : '';
-  return '<td class="editable-cell px-3 py-2" data-column="' + escapeHtml(columnName) + '" data-type="' + type + '" data-sheet="' + escapeHtml(row.__sheetName) + '" data-row="' + row.__rowIndex + '">' +
+  return '<td class="editable-cell px-3 py-2 ' + (extraClass || '') + '" data-column="' + escapeHtml(columnName) + '" data-type="' + type + '" data-sheet="' + escapeHtml(row.__sheetName) + '" data-row="' + row.__rowIndex + '">' +
     '<span class="cell-display">' + escapeHtml(val) + '</span></td>';
 }
 
-// 「詳細」列：CSV由来の読み取り専用列。ホバーで全文ポップアップ表示はできるが編集はできない。
-function readonlyDetailTd(row, columnName) {
-  const val = row[columnName] !== undefined && row[columnName] !== null ? row[columnName] : '';
-  return '<td class="detail-cell px-3 py-2 truncate w-64" data-detail="1">' +
-    '<span class="cell-display">' + escapeHtml(val) + '</span></td>';
+// 表示だけを切り詰める文字数。長文が入ると右側の列がどんどん右へ押し出されるため、
+// 一覧では先頭だけを見せ、全文はカーソルを合わせたときにポップアップで表示する。
+const LONG_TEXT_PREVIEW_LENGTH = 20;
+
+/**
+ * 「メモ」「詳細」のような長文列のセル。
+ * ・表示は先頭20文字まで（続きがあれば「…」）
+ * ・カーソルを合わせると全文をポップアップ表示
+ * ・ダブルクリックで編集（どちらも編集可）
+ */
+function longTextCellTd(row, columnName) {
+  const raw = row[columnName] !== undefined && row[columnName] !== null ? String(row[columnName]) : '';
+  const oneLine = raw.replace(/\s+/g, ' ');
+  const preview = oneLine.length > LONG_TEXT_PREVIEW_LENGTH
+    ? oneLine.substring(0, LONG_TEXT_PREVIEW_LENGTH) + '…'
+    : oneLine;
+  return '<td class="editable-cell detail-cell px-3 py-2" data-detail="1"' +
+    ' data-column="' + escapeHtml(columnName) + '" data-type="text"' +
+    ' data-sheet="' + escapeHtml(row.__sheetName) + '" data-row="' + row.__rowIndex + '">' +
+    // 全文は data-full に持たせ、ポップアップと編集開始時にこちらを使う
+    '<span class="cell-display" data-full="' + escapeHtml(raw) + '">' + escapeHtml(preview) + '</span></td>';
+}
+
+// ============================================================================
+// リセールのまとめて保存
+// ----------------------------------------------------------------------------
+// リセール列だけは、選ぶたびに通信すると1行ごとに数秒待たされて次の入力ができない。
+// 変更を画面側にためておき、「まとめて保存する」で一括送信する。
+// ============================================================================
+
+/** リセールの変更を保存待ちに積む（元の値に戻した場合は保存待ちから外す） */
+function stageResaleChange(rid, sheetName, rowIndex, value) {
+  const row = dmFilteredCache.find(function (r) {
+    return r.__sheetName === sheetName && String(r.__rowIndex) === String(rowIndex);
+  });
+  const original = row ? (row['リセール'] || '') : '';
+
+  if (String(value || '') === String(original)) {
+    delete pendingResaleChanges[rid];   // 元の値に戻したので変更なし
+  } else {
+    pendingResaleChanges[rid] = { sheetName: sheetName, rowIndex: rowIndex, value: value };
+  }
+  renderResalePendingBar();
+}
+
+function pendingResaleCount() { return Object.keys(pendingResaleChanges).length; }
+
+/** 未保存の件数バーの表示を更新する */
+function renderResalePendingBar() {
+  const bar = document.getElementById('resale-pending-bar');
+  const countEl = document.getElementById('resale-pending-count');
+  if (!bar || !countEl) return;
+  const n = pendingResaleCount();
+  countEl.textContent = n;
+  bar.classList.toggle('hidden', n === 0);
+}
+
+/** 未保存の変更をすべて破棄して表示を元に戻す */
+function discardResaleChanges() {
+  pendingResaleChanges = {};
+  renderResalePendingBar();
+  renderDataManagerGrid();
+}
+
+function onCancelResaleChanges() {
+  if (pendingResaleCount() === 0) return;
+  if (!window.confirm('保存していないリセールの変更を取り消します。よろしいですか？')) return;
+  discardResaleChanges();
+  showToast('変更を取り消しました。', 'info');
+}
+
+/** ためていたリセールの変更を一括で保存する */
+function onSaveResaleChanges() {
+  const keys = Object.keys(pendingResaleChanges);
+  if (keys.length === 0) return;
+
+  const changes = keys.map(function (k) { return pendingResaleChanges[k]; });
+  const btn = document.getElementById('btn-save-resale');
+  btn.disabled = true;
+  showLoading(true);
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false);
+      btn.disabled = false;
+      if (!res || !res.success) {
+        showToast('保存に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+        return;
+      }
+      (res.updatedRows || []).forEach(applyUpdatedRowToCache);
+
+      // 保存できた行だけ保存待ちから外す（失敗した行は残して、もう一度保存できるようにする）
+      const failedRids = {};
+      (res.failures || []).forEach(function (f) { failedRids[f.sheetName + '::' + f.rowIndex] = true; });
+      keys.forEach(function (k) { if (!failedRids[k]) delete pendingResaleChanges[k]; });
+
+      renderResalePendingBar();
+      renderKpi(getDashboardFilteredData());
+      renderRankingTable(getDashboardFilteredData());
+      renderDataManagerGrid();
+
+      if (res.failures && res.failures.length > 0) {
+        showToast(res.updatedCount + '件を保存しましたが、' + res.failures.length +
+          '件は保存できませんでした：' + res.failures[0].error, 'error');
+      } else {
+        showToast('リセールを' + res.updatedCount + '件保存しました。', 'success');
+      }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false);
+      btn.disabled = false;
+      showToast('通信エラー（updateResaleValues）: ' + err.message, 'error');
+    })
+    .updateResaleValues(changes);
 }
 
 function bindGridEditEvents() {
-  // リセール：常時表示のセレクトボックスで即時更新
+  // リセール：その場では保存せず、変更をためて「まとめて保存する」で一括送信する。
+  // 1件ずつ通信すると1行あたり数秒待たされ、続けて入力できないため。
   document.querySelectorAll('.resale-select').forEach(function (sel) {
     sel.addEventListener('change', function () {
-      callUpdateCellValue(sel.dataset.sheet, sel.dataset.row, 'リセール', sel.value);
+      stageResaleChange(sel.dataset.rid, sel.dataset.sheet, sel.dataset.row, sel.value);
+      sel.classList.toggle('dm-resale-pending', pendingResaleChanges[sel.dataset.rid] !== undefined);
     });
   });
 
@@ -1548,11 +1712,12 @@ function bindGridEditEvents() {
     });
   });
 
-  // 「詳細」列：カーソルを合わせると全文をポップアップ表示（長文対策、読み取り専用列）
+  // 「メモ」「詳細」列：カーソルを合わせると全文をポップアップ表示（一覧では20文字まで）
   document.querySelectorAll('[data-detail="1"]').forEach(function (td) {
     td.addEventListener('mouseenter', function () {
       if (td.querySelector('textarea, input')) return; // 編集中は出さない
-      const text = td.querySelector('.cell-display').textContent;
+      const span = td.querySelector('.cell-display');
+      const text = span.dataset.full || span.textContent;
       if (!text) return;
       showDetailTooltip(td, text);
     });
@@ -1565,7 +1730,8 @@ function bindGridEditEvents() {
       if (td.querySelector('input, textarea')) return;
       hideDetailTooltip();
       const span = td.querySelector('.cell-display');
-      const currentVal = span.textContent;
+      // 長文列は表示を切り詰めているため、編集には全文（data-full）を使う
+      const currentVal = span.dataset.full !== undefined ? span.dataset.full : span.textContent;
       const type = td.dataset.type;
       const columnName = td.dataset.column;
       const isMultiline = MULTILINE_COLUMNS.indexOf(columnName) !== -1;

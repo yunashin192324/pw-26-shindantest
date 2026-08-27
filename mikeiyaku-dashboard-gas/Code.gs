@@ -967,7 +967,7 @@ function importUncontractedCsv(csvText) {
  * 「is not a function」という分かりにくいエラーになるため、
  * 画面側から版数を確認できるようにしている。
  */
-const SERVER_VERSION = '2026-08-18c';
+const SERVER_VERSION = '2026-08-19';
 
 /**
  * サーバー側の版数を返す。画面側は、自分が期待する版数と一致するかを起動時に確認する。
@@ -1404,7 +1404,10 @@ function updateStatus(sheetName, rowIndex, newStatus, contractPax) {
 // ---- リセールリストでスタッフが編集できる列（それ以外はCSV由来の読み取り専用） ---
 // 一般スタッフ（店舗スタッフ）も自店舗の行であればこれらを編集できる。
 // 「STS」だけは成約PAXのクリアやリセール補完を伴うため専用API（updateStatus）で更新する。
-const EDITABLE_COLUMNS = ['リセール', '成約PAX', 'ACT日', 'ACT内容', '次回ACT・進捗★手入力'];
+// 「詳細」はCSV由来だが、相談時に書ききれなかった補足を後から足せるよう編集可としている。
+// CSVの再取込では既存行を上書きしないため（重複キーが一致する行は取り込まずに読み飛ばす）、
+// 手で書き足した内容が取込によって消えることはない。
+const EDITABLE_COLUMNS = ['リセール', '成約PAX', 'ACT日', 'ACT内容', '次回ACT・進捗★手入力', '詳細'];
 
 // 文字列として保存する列。スプレッドシートは「0120」「08」のように数値に見える
 // 入力を数値へ変換してしまい、先頭の0が消える（「0」だけの入力も0として扱われる）。
@@ -1415,6 +1418,7 @@ const TEXT_CELL_COLUMNS = {
   'ACT日': true,
   'ACT内容': true,
   '次回ACT・進捗★手入力': true,
+  '詳細': true,
   '最終アクション日': true
 };
 
@@ -1518,6 +1522,73 @@ function updateCellValue(sheetName, rowIndex, columnName, value) {
     updatedObj.__rowIndex = rIdx;
 
     return { success: true, data: updatedObj };
+  } catch (err) {
+    return { success: false, error: err.message + '\n' + err.stack };
+  }
+}
+
+/**
+ * 「リセール」列の変更をまとめて保存する。
+ * 1件ずつ通信すると1行あたり数秒の待ちが発生し、続けて入力できないため、
+ * 画面側で変更をためておき、この関数で一度に書き込む。
+ * @param {Array} changes [{sheetName, rowIndex, value}, ...]
+ * @return {Object} 成功件数・失敗した行の内訳・更新後の行データ
+ */
+function updateResaleValues(changes) {
+  try {
+    if (!Array.isArray(changes) || changes.length === 0) {
+      return { success: true, updatedCount: 0, updatedRows: [], failures: [] };
+    }
+    if (changes.length > 500) {
+      throw new Error('一度に更新できるのは500件までです（指定: ' + changes.length + '件）。');
+    }
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const colIdx = HEADERS_MAIN.indexOf('リセール') + 1;
+    const todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    const updatedRows = [];
+    const failures = [];
+
+    changes.forEach(function (change) {
+      const sheetName = change && change.sheetName;
+      const rowIndex = change && change.rowIndex;
+      try {
+        assertShopInScope_(sheetName);
+
+        const rIdx = parseInt(rowIndex, 10);
+        if (isNaN(rIdx) || rIdx < 2) throw new Error('不正な行番号です: ' + rowIndex);
+
+        const value = String(change.value === undefined || change.value === null ? '' : change.value);
+        if (RESALE_VALUES.indexOf(value) === -1) {
+          throw new Error('リセール列には「〇」「✖」または空欄のみ設定できます: ' + change.value);
+        }
+
+        const sheet = ss.getSheetByName(sheetName);
+        if (!sheet) throw new Error('シートが見つかりません: ' + sheetName);
+
+        setTextCell_(sheet, rIdx, colIdx, value);
+        setTextCell_(sheet, rIdx, 21, todayStr); // 最終アクション日
+
+        const values = sheet.getRange(rIdx, 1, 1, HEADERS_MAIN.length).getValues()[0];
+        const obj = {};
+        for (let c = 0; c < HEADERS_MAIN.length; c++) {
+          obj[HEADERS_MAIN[c]] = serializeCellValue_(values[c]);
+        }
+        obj.__sheetName = sheetName;
+        obj.__rowIndex = rIdx;
+        updatedRows.push(obj);
+      } catch (rowErr) {
+        // 1行の失敗で全体を止めない。どの行が失敗したかを画面へ返す。
+        failures.push({ sheetName: sheetName, rowIndex: rowIndex, error: rowErr.message });
+      }
+    });
+
+    return {
+      success: true,
+      updatedCount: updatedRows.length,
+      updatedRows: updatedRows,
+      failures: failures
+    };
   } catch (err) {
     return { success: false, error: err.message + '\n' + err.stack };
   }
