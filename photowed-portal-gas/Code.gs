@@ -307,6 +307,8 @@ const COMMITTABLE_FIELDS = RESERVATION_HEADERS.filter(h => ![
 // STS(JP側)／STS(支店側)は含めない＝オプションの状態管理は現行のまま手配課・支店のもの）。
 // ★機能追加（拡張要望9章）：必要書類チェックリストは店舗・現地(支店)どちらからでもチェックできる
 // （双方向）ため、店舗の編集可能項目にも含める。
+// ★要件：店舗がSTS(JP側)を変更できる範囲は、この配列＋isJpStatusField_が真になる列
+// （案件全体のSTS JPと各オプションのSTS JP）。詳しくはprepareFieldWrite_・validateFieldPermission_参照。
 const SHOP_EDITABLE_FIELDS = [
   COL_GROOM_NAME, COL_BRIDE_NAME, COL_PLAN, COL_SALE_NAME, COL_LOCATION, COL_PREP,
   COL_HOPE1, COL_HOPE2, COL_HOPE3, COL_HOPE4, COL_HOPE5, COL_PASSPORT_NO,
@@ -319,6 +321,9 @@ const SHOP_EDITABLE_FIELDS = [
 // 別途チェックする。
 // ★機能廃止：ネームチェンジ専用のNCは廃止（新郎名・新婦名欄を直接編集して送信すれば
 // 現地に伝わるため、専用ステータスは不要と判断した）。
+// ★要件：専用の「ステータス変更」欄は廃止し、案件全体・各オプションいずれもプラン名／
+// オプション名のすぐ隣に出るSTS(JP側)バッジから、店舗自身がその場で直接この中の値へ変更できるようにする
+// （現在の値がFN以外の状態からいつでもRQ→CR等に変えられる。FNだけは対象の項目がOKの時だけ選べる）。
 const SHOP_STATUS_TARGETS = ['FN', 'CR', 'DC', 'PC'];
 
 // 日付として保存すべきフィールド（<input type="date">で受け渡しし、実Dateとして保存する）
@@ -2038,9 +2043,9 @@ function colIndexOrThrow_(headers, name) {
 // 1フィールド分の検証・保存準備（役割チェック・STSゲート・列挙値チェック・日付変換）を共通化したもの
 function prepareFieldWrite_(session, headers, rowData, field, value) {
   // ★機能追加（店舗拡張）：店舗ロールは自分が起票した案件について、SHOP_EDITABLE_FIELDS と
-  // STS(JP側)（許可される値は validateFieldPermission_ 側でチェック）だけ変更できる。
-  // それ以外（請求先・オプションのステータス・現地記入欄など）は従来どおり変更できない。
-  if (session.role === SHOP_ROLE && field !== COL_STATUS_JP && !SHOP_EDITABLE_FIELDS.includes(field)) {
+  // STS(JP側)（案件全体・各オプションいずれも。許可される値は validateFieldPermission_ 側でチェック）
+  // だけ変更できる。それ以外（請求先・支店側のSTS・現地記入欄など）は従来どおり変更できない。
+  if (session.role === SHOP_ROLE && !isJpStatusField_(field) && !SHOP_EDITABLE_FIELDS.includes(field)) {
     throw new Error(`「${field}」は店舗ロールでは変更できません。`);
   }
   if (!COMMITTABLE_FIELDS.includes(field)) {
@@ -2186,16 +2191,20 @@ function applyHopeStatusCascade_(sheet, headers, rowIndex, kanriNo, writes, who)
 
 function validateFieldPermission_(session, headers, rowData, field, value) {
   if (isJpStatusField_(field)) {
-    // ★機能追加（店舗拡張）：店舗は自分の案件のSTS(JP側)（オプションのSTSは除く）だけ、
+    // ★機能追加（店舗拡張）：店舗は自分の案件のSTS(JP側)（案件全体・各オプションいずれも）を、
     // 決められた値（新規作成後の変更用途：最終確定・キャンセル依頼・
     // 日付変更依頼・プラン/式場変更依頼）に限って変更できる。名前変更（ネームチェンジ）は
     // 専用のステータスを持たず、新郎名・新婦名欄を直接編集して送信するだけでよい。
+    // ★要件：専用の「ステータス変更」欄を廃止し、プラン・各オプションの隣に出るSTS(JP側)バッジ
+    // から直接変更できるようにしたため、対象を案件全体に限定せず isJpStatusField_ が真になる
+    // フィールド（＝案件全体のSTS JPと各オプションのSTS JP）すべてに広げる。
+    // FNの前提条件（OKからのみ）は、対象のフィールドそれぞれの現在値で判定する
+    // （案件全体をFNにするにはSTS JPがOK、オプション③をFNにするにはオプション③のSTS JPがOK、という具合）。
     if (session.role === SHOP_ROLE) {
-      if (field !== COL_STATUS_JP) throw new Error('店舗はオプションのステータスを変更できません。');
       if (!SHOP_STATUS_TARGETS.includes(value)) {
         throw new Error(`店舗が設定できるSTS(JP側)は ${SHOP_STATUS_TARGETS.join('/')} のいずれかです。`);
       }
-      if (value === 'FN' && String(rowData[headers.indexOf(COL_STATUS_JP)] || '') !== 'OK') {
+      if (value === 'FN' && String(rowData[headers.indexOf(field)] || '') !== 'OK') {
         throw new Error('STS(JP側)をFN（最終確定）にできるのはOKの状態からだけです。');
       }
       return;
@@ -3973,8 +3982,12 @@ const SURVEY_FORM_KANRI_ENTRY_ID = '';
 
 function buildPrefilledFormUrl_(baseUrl, entryId, kanriNo) {
   const base = String(baseUrl || '').trim();
+  if (!base) return '';
+  // ★要件：entry ID（管理番号を事前入力するためのフォーム側の質問ID）が未設定でも、
+  // フォームのURL自体は既に分かっているので、その素のURL（管理番号は自動入力されない）を
+  // 案内できるようにする。以前はentry ID未設定の間は空文字を返し、画面に何も表示されなかった。
   const entry = String(entryId || '').trim();
-  if (!base || !entry) return '';
+  if (!entry) return base;
   const sep = base.includes('?') ? '&' : '?';
   return `${base}${sep}${entry}=${encodeURIComponent(kanriNo)}`;
 }

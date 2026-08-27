@@ -699,8 +699,11 @@ function visiblePane(document) {
     await settle();
     check('アップロード済みの書類一覧が店舗の画面に表示される',
           document.getElementById('shop-upload-list').innerHTML.includes('hair.jpg'));
-    check('同意書・アンケートURL欄が表示される（未設定案内）',
-          document.getElementById('shop-form-urls').textContent.includes('未設定'));
+    // ★要件：entry ID未設定でも同意書フォームの素のURLは案内される（アンケートはURL自体が未設定なので出ない）
+    check('同意書・アンケートURL欄に同意書フォームのリンクが表示される',
+          document.getElementById('shop-form-urls').textContent.includes('同意書フォームを開く'));
+    check('アンケートフォームは未設定なのでリンクが出ない',
+          !document.getElementById('shop-form-urls').textContent.includes('アンケートフォームを開く'));
     // ★UI変更：店舗側でも同意書のご案内URLは必要書類チェックリストの近く（同じカード内）に置く
     const checklistCardShop = document.getElementById('shop-form-urls').closest('.section-card');
     check('店舗側でも同意書・アンケートURL欄が必要書類チェックリストと同じカードに表示される',

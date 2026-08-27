@@ -2141,10 +2141,22 @@ section('38. 案件作成後の店舗による変更：DC/PC/NC（拡張要望3�
   check('支店のUC応答でSTS(支店側)がUCになる', afterPcUc['STS 支店'] === 'UC');
   check('支店のUC応答でSTS(JP側)もUCになる（対応不可＝店舗が直接リブッキング）', afterPcUc['STS JP'] === 'UC');
 
-  // --- オプションは全案件共通仕様の対象外（DC/PCの影響を受けない・従来どおり） ---
+  // --- ★要件：専用の「ステータス変更」欄を廃止し、各オプション・プランの隣のSTS(JP側)バッジ
+  //     から店舗自身が直接RQ→CR等へ変更できるようにする。案件全体のSTS JPだけでなく、
+  //     各オプションのSTS JPも同じ対象値（FN/CR/DC/PC）へ店舗が直接変更できる ---
+  ctx.apiSaveFieldsQuiet(shopToken, kanri, { 'OP1 STS JP': 'CR' });
+  check('店舗はオプション①のSTS(JP側)も直接CRへ変更できる',
+        ctx.apiGetReservationDetail(jpToken, kanri).detail['OP1 STS JP'] === 'CR');
   let err = null;
-  try { ctx.apiSaveFieldsQuiet(shopToken, kanri, { 'OP1 STS JP': 'DC' }); } catch (e) { err = e.message; }
-  check('オプションのSTSはDC/PCの対象外（店舗はオプションのSTSを変更できない）', err !== null, String(err));
+  try { ctx.apiSaveFieldsQuiet(shopToken, kanri, { 'OP1 STS JP': 'OK' }); } catch (e) { err = e.message; }
+  check('店舗が設定できるのはFN/CR/DC/PCのみ（OK等は不可）', err !== null, String(err));
+  err = null;
+  try { ctx.apiSaveFieldsQuiet(shopToken, kanri, { 'OP1 STS JP': 'FN' }); } catch (e) { err = e.message; }
+  check('オプション①をFNにできるのはそのオプション自身がOKの時だけ（今はCRなので不可）', err !== null, String(err));
+  ctx.apiSaveFieldsQuiet(jpToken, kanri, { 'OP1 STS JP': 'OK' }); // JP側は従来どおり自由に値を設定できる
+  ctx.apiSaveFieldsQuiet(shopToken, kanri, { 'OP1 STS JP': 'FN' });
+  check('オプション①がOKの状態からなら店舗はFNへ変更できる',
+        ctx.apiGetReservationDetail(jpToken, kanri).detail['OP1 STS JP'] === 'FN');
 
   // --- ネームチェンジ機能は廃止：専用のステータスコードは持たない。新郎名・新婦名欄を
   //     直接編集して送信するだけで「ネームチェンジのお知らせ」として現地に伝わる ---
@@ -2322,10 +2334,12 @@ section('42. 同意書・アンケートフォームの事前入力済みURL（�
   const created = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomName: 'A', hope1: '2026-09-10' });
   const kanri = created.kanriNo;
 
-  // URL生成ロジック単体（entry IDが未設定＝実運用フォーム未設定の状態）
+  // ★要件：entry ID（管理番号を事前入力するための質問ID）が未設定でも、フォームのURL自体は
+  // 案内できるようにする（管理番号は自動入力されないが、案内が一切出ないよりよい）。
   const urls = ctx.apiGetPrefilledFormUrls(shopToken, kanri);
-  check('フォームのentry ID未設定時は空文字を返す（画面側は案内しない）',
-        urls.consentFormUrl === '' && urls.surveyFormUrl === '');
+  check('同意書フォームはentry ID未設定でも素のURLを返す（管理番号は自動入力されない）',
+        urls.consentFormUrl === ctx.CONSENT_FORM_URL, urls.consentFormUrl);
+  check('アンケートフォームはURL自体が未設定なので空文字のまま', urls.surveyFormUrl === '');
 
   // URL生成ロジック単体テスト（実際にentry IDが設定されている想定）
   const built = ctx.buildPrefilledFormUrl_('https://docs.google.com/forms/d/e/abc/viewform', 'entry.123456789', kanri);
@@ -2333,6 +2347,8 @@ section('42. 同意書・アンケートフォームの事前入力済みURL（�
   const builtWithQuery = ctx.buildPrefilledFormUrl_('https://example.com/form?usp=pp_url', 'entry.1', kanri);
   check('既に?が含まれるURLには&で連結する', builtWithQuery.includes('&entry.1='), builtWithQuery);
   check('baseUrlが空なら空文字を返す', ctx.buildPrefilledFormUrl_('', 'entry.1', kanri) === '');
+  check('entry IDが空でもbaseUrlがあればそのまま返す（事前入力なしの素のURL）',
+        ctx.buildPrefilledFormUrl_('https://example.com/form', '', kanri) === 'https://example.com/form');
 
   // ★ご提供いただいた実際の同意書フォームURLが設定されていること（entry IDは
   // ネットワーク制限のためこの環境では自動取得できず、別途設定が必要）
@@ -2345,12 +2361,13 @@ section('42. 同意書・アンケートフォームの事前入力済みURL（�
   const normalUrl = ctx.buildPrefilledFormUrl_(ctx.CONSENT_FORM_URL, 'entry.999', kanri);
   check('通常フォームとイタリア専用フォームで異なるURLが生成される', italyUrl !== normalUrl);
 
-  // イタリアの支店（国名で判定）でも例外なく動く（entry ID未設定のため空文字が返るのは同じ）
+  // イタリアの支店（国名で判定）では、entry ID未設定でもイタリア専用フォームの素のURLが返る
   addBranchRow(ctx, { '支店コード': 'ROW', '支店名': 'ローマ支店', '国': 'イタリア', '都市': 'ローマ', 'ロール': 'BRANCH', 'ログインパスコード': 'rp', '有効': true });
   addCase(ctx, '予約一覧', { '支店コード': 'ROW', '管理番号': 'ROW-901', '管轄': '関東', '新郎名（ローマ字）': 'X' });
   const jpToken42 = ctx.apiLogin('KANTO', 'pw').session.token;
   const urlsItaly = ctx.apiGetPrefilledFormUrls(jpToken42, 'ROW-901');
-  check('イタリアの支店の案件でも例外なくURLを返す', urlsItaly.ok === true && urlsItaly.consentFormUrl === '');
+  check('イタリアの支店の案件ではイタリア専用フォームの素のURLを返す',
+        urlsItaly.ok === true && urlsItaly.consentFormUrl === ctx.ITALY_CONSENT_FORM_URL, urlsItaly.consentFormUrl);
 }
 
 // ---------------------------------------------------------------
