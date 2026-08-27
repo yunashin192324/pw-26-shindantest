@@ -2613,5 +2613,69 @@ section('45. 新郎名・新婦名を姓・名に分けて入力できる（全4
 }
 
 // ---------------------------------------------------------------
+section('46. プランごとの撮影場所方式・セールのプラン/支店紐付け');
+{
+  const ctx = featureFixture();
+  // ★featureFixtureはプランマスタを作らない（従来ほとんどのテストがプランを自由文字列として
+  // 扱っていたため）。この章の対象なので、実際の運用でsetupPortalが列を追加する動きと同じく、
+  // ここでプランマスタの作成／セールマスタへの列追加をそれぞれ行う。
+  ctx.ensureSheetWithHeaders_(ctx.__ss, 'プランマスタ', ctx.PLAN_MASTER_HEADERS);
+  ctx.ensureSheetWithHeaders_(ctx.__ss, 'セールマスタ', ctx.SALE_MASTER_HEADERS);
+  const jpToken = ctx.apiLogin('KANTO', 'pw').session.token;
+  const vieToken = ctx.apiLogin('VIE', 'vp').session.token;
+  const istToken = ctx.apiLogin('IST', 'ip').session.token;
+
+  // --- プランごとの撮影場所方式（既定は自由入力） ---
+  ctx.apiSavePlanItem(jpToken, 'VIE', 'ローマ3時間フォト', null, true, 'checkbox', 'コロッセオ、トレビの泉、スペイン広場');
+  ctx.apiSavePlanItem(jpToken, 'VIE', 'フィレンツェフォト', null, true, 'select', 'ドゥオモ\nヴェッキオ橋');
+  ctx.apiSavePlanItem(jpToken, 'VIE', 'シンプルプラン', null, true); // 方式省略＝自由入力のまま
+  const plans = ctx.apiListPlans(vieToken, 'VIE');
+  const p1 = plans.find(p => p.name === 'ローマ3時間フォト');
+  const p2 = plans.find(p => p.name === 'フィレンツェフォト');
+  const p3 = plans.find(p => p.name === 'シンプルプラン');
+  check('チェックボックス方式・候補が保存される', p1.locationMode === 'checkbox' && JSON.stringify(p1.locationCandidates) === JSON.stringify(['コロッセオ', 'トレビの泉', 'スペイン広場']), JSON.stringify(p1));
+  check('プルダウン方式・候補（改行区切り）が保存される', p2.locationMode === 'select' && JSON.stringify(p2.locationCandidates) === JSON.stringify(['ドゥオモ', 'ヴェッキオ橋']), JSON.stringify(p2));
+  check('方式を指定しなければ自由入力（free）のまま', p3.locationMode === 'free' && p3.locationCandidates.length === 0, JSON.stringify(p3));
+
+  // 更新（同じ名称で再保存すると上書きされる。行が増えない）
+  ctx.apiSavePlanItem(jpToken, 'VIE', 'ローマ3時間フォト', null, true, 'select', 'コロッセオ');
+  const plansAfterUpdate = ctx.apiListPlans(vieToken, 'VIE');
+  check('同名で再保存すると内容が更新される（行が増えない）',
+        plansAfterUpdate.filter(p => p.name === 'ローマ3時間フォト').length === 1 &&
+        plansAfterUpdate.find(p => p.name === 'ローマ3時間フォト').locationMode === 'select');
+
+  // --- セールのプラン/支店紐付け ---
+  ctx.apiSaveSaleItem(jpToken, 'VIE', '春の全プラン共通セール', null, true); // 対象プラン省略＝全プラン共通
+  ctx.apiSaveSaleItem(jpToken, 'VIE', 'ローマ限定セール', null, true, 'ローマ3時間フォト');
+  ctx.apiSaveSaleItem(jpToken, 'ALL', '全社共通セール', null, true);
+
+  const salesForRoma = ctx.apiListSales(vieToken, 'VIE', 'ローマ3時間フォト');
+  check('対象プラン一致＋全プラン共通＋全社共通の3件が出る（ローマ3時間フォト選択時）',
+        salesForRoma.some(s => s.name === '春の全プラン共通セール') &&
+        salesForRoma.some(s => s.name === 'ローマ限定セール') &&
+        salesForRoma.some(s => s.name === '全社共通セール'), JSON.stringify(salesForRoma));
+
+  const salesForOther = ctx.apiListSales(vieToken, 'VIE', 'フィレンツェフォト');
+  check('対象プラン不一致のセールは出ない（フィレンツェフォト選択時はローマ限定セールが出ない）',
+        !salesForOther.some(s => s.name === 'ローマ限定セール') &&
+        salesForOther.some(s => s.name === '春の全プラン共通セール') &&
+        salesForOther.some(s => s.name === '全社共通セール'), JSON.stringify(salesForOther));
+
+  const salesNoPlan = ctx.apiListSales(vieToken, 'VIE');
+  check('プラン未指定で呼ぶと従来どおり支店内の全件が返る（新規依頼フォームの支店切替直後用）',
+        salesNoPlan.length === 3);
+
+  const salesForIst = ctx.apiListSales(istToken, 'IST', 'ローマ3時間フォト');
+  check('他支店ではALL共通セールだけが見える（支店限定のセールは見えない）',
+        !salesForIst.some(s => s.name === 'ローマ限定セール') &&
+        !salesForIst.some(s => s.name === '春の全プラン共通セール') &&
+        salesForIst.some(s => s.name === '全社共通セール'), JSON.stringify(salesForIst));
+
+  let err = null;
+  try { ctx.apiSaveSaleItem(vieToken, 'ALL', '支店から全社共通は登録できないはず', null, true); } catch (e) { err = e.message; }
+  check('全支店共通（ALL）のセール登録は支店ロールではできない（JPのみ）', err !== null, String(err));
+}
+
+// ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
 process.exit(fail === 0 ? 0 : 1);

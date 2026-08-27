@@ -429,6 +429,33 @@ const MM_COL_NAME = '名称';
 const MM_COL_ACTIVE = '有効';
 const MASTER_ITEM_HEADERS = [MM_COL_BRANCH, MM_COL_NAME, MM_COL_ACTIVE];
 
+// ★要件：プランごとに撮影希望場所の入力方式（チェックボックスで複数選択／決まった候補から
+// 1つ選ぶプルダウン／自由入力）を変えられるようにする（例：ローマ支店の「フィレンツェ3時間フォト」
+// では候補A・Bのチェックボックス、「ローマ3時間フォト」では別の候補、というように、プランごとに
+// 表示する候補・入力方式が変わる）。プランマスタに列を2つ追加し、コード変更なしでJP・支店側の
+// 担当者がスプレッドシート上で自由に設定・変更できるようにする（他のマスタと同じ運用方針）。
+const MM_COL_PLAN_LOCATION_MODE = '撮影場所方式';       // 'checkbox' / 'select' / 空欄（＝自由入力。既定）
+const MM_COL_PLAN_LOCATION_CANDIDATES = '撮影場所候補';  // 改行または読点（、）区切りの候補一覧
+const PLAN_LOCATION_MODE_CHECKBOX = 'checkbox';
+const PLAN_LOCATION_MODE_SELECT = 'select';
+const PLAN_LOCATION_MODE_FREE = 'free';
+const PLAN_MASTER_HEADERS = [MM_COL_BRANCH, MM_COL_NAME, MM_COL_ACTIVE, MM_COL_PLAN_LOCATION_MODE, MM_COL_PLAN_LOCATION_CANDIDATES];
+function normalizePlanLocationMode_(v) {
+  const s = String(v || '').trim().toLowerCase();
+  return (s === PLAN_LOCATION_MODE_CHECKBOX || s === PLAN_LOCATION_MODE_SELECT) ? s : PLAN_LOCATION_MODE_FREE;
+}
+function splitLocationCandidates_(v) {
+  return String(v || '').split(/[\n,、]/).map(s => s.trim()).filter(Boolean);
+}
+
+// ★要件：セール名は登録時に「一括（全支店・全プラン共通）」「特定の支店の全プラン共通」
+// 「特定の支店の特定プランのみ」のいずれかに反映範囲を指定できるようにする。
+// 支店コードに定型文マスタと同じ ALL を入れると全支店共通になる。対象プランを空欄にすると、
+// その支店（またはALL）の全プランで使えるセールとして扱う。
+const SALE_COL_TARGET_PLAN = '対象プラン';
+const SALE_MASTER_HEADERS = [MM_COL_BRANCH, MM_COL_NAME, MM_COL_ACTIVE, SALE_COL_TARGET_PLAN];
+const SALE_SHARED_CODE = 'ALL';
+
 // --- 定型文マスタの列定義 ---
 // 支店コードに ALL を入れると全支店・日本側の共通テンプレートとして使える
 const PH_COL_BRANCH = '支店コード';
@@ -528,12 +555,12 @@ function setupPortal() {
   const ss = getSpreadsheet_();
 
   ensureSheetWithHeaders_(ss, BRANCH_MASTER_SHEET_NAME, BRANCH_MASTER_HEADERS);
-  ensureSheetWithHeaders_(ss, PLAN_MASTER_SHEET_NAME, MASTER_ITEM_HEADERS);
+  ensureSheetWithHeaders_(ss, PLAN_MASTER_SHEET_NAME, PLAN_MASTER_HEADERS);
   ensureSheetWithHeaders_(ss, OPTION_MASTER_SHEET_NAME, MASTER_ITEM_HEADERS);
   ensureSheetWithHeaders_(ss, LOCATION_MASTER_SHEET_NAME, MASTER_ITEM_HEADERS);
   ensureSheetWithHeaders_(ss, STAFF_MASTER_SHEET_NAME, MASTER_ITEM_HEADERS);
   ensureSheetWithHeaders_(ss, PHRASE_MASTER_SHEET_NAME, PHRASE_MASTER_HEADERS);
-  ensureSheetWithHeaders_(ss, SALE_MASTER_SHEET_NAME, MASTER_ITEM_HEADERS);
+  ensureSheetWithHeaders_(ss, SALE_MASTER_SHEET_NAME, SALE_MASTER_HEADERS);
   ensureSheetWithHeaders_(ss, RESERVATION_SHEET_NAME, RESERVATION_HEADERS);
   ensureSheetWithHeaders_(ss, HISTORY_SHEET_NAME, HISTORY_HEADERS);
   ensureSheetWithHeaders_(ss, ARCHIVE_SHEET_NAME, RESERVATION_HEADERS);
@@ -960,10 +987,21 @@ function apiSetBranchActive(token, code, active) {
 // =====================================================
 // ④ プラン／オプションマスタ管理（支店ごと。自支店 or JPが操作可能）
 // =====================================================
+// ★要件：プランごとに撮影希望場所の入力方式・候補が変わるため、name/activeだけでなく
+// locationMode（'checkbox'/'select'/'free'）とlocationCandidates（候補の配列）も返す。
+// 既存の呼び出し側はname/activeしか見ないため、この拡張だけでは何も壊れない。
 function apiListPlans(token, branchCode) {
   const session = requireSession_(token);
   const target = session.role === BRANCH_ROLE ? session.branchCode : String(branchCode || '').toUpperCase();
-  return listMasterItems_(PLAN_MASTER_SHEET_NAME, target);
+  const sheet = getSpreadsheet_().getSheetByName(PLAN_MASTER_SHEET_NAME);
+  return getRowsAsObjects_(sheet)
+    .filter(r => String(r[MM_COL_BRANCH]).trim().toUpperCase() === String(target).trim().toUpperCase())
+    .map(r => ({
+      name: r[MM_COL_NAME],
+      active: isActiveFlag_(r[MM_COL_ACTIVE]),
+      locationMode: normalizePlanLocationMode_(r[MM_COL_PLAN_LOCATION_MODE]),
+      locationCandidates: splitLocationCandidates_(r[MM_COL_PLAN_LOCATION_CANDIDATES])
+    }));
 }
 function apiListOptionItems(token, branchCode) {
   const session = requireSession_(token);
@@ -992,15 +1030,33 @@ function apiSaveStaffItem(token, branchCode, name, originalName, active) {
 
 // ★機能追加：セール名（機能⑤）。プランマスタと同じく支店ごとの事前登録＋自由入力の両対応。
 // セールは頻度が高く名称も毎回変わるため、必須の選択式にはしない（撮影希望場所と同じ運用）
-function apiListSales(token, branchCode) {
+// ★要件：セールは登録時に反映範囲を選べるようにする。
+//   ・支店コードにALLを入れる＝全支店共通（定型文マスタのALLと同じ考え方）
+//   ・対象プランが空欄＝その支店（またはALL）の全プランで使える
+//   ・対象プランを指定＝そのプランを選んだ時だけ候補に出る
+// planNameを渡すと、対象プランが空欄の行＋そのプラン名と一致する行だけに絞り込む
+// （渡さない場合は従来どおり支店単位の全件を返す＝新規依頼フォームで支店だけ選んだ直後などに使う）。
+function apiListSales(token, branchCode, planName) {
   const session = requireSession_(token);
-  const target = session.role === BRANCH_ROLE ? session.branchCode : String(branchCode || '').toUpperCase();
-  return listMasterItems_(SALE_MASTER_SHEET_NAME, target);
+  const target = String(session.role === BRANCH_ROLE ? session.branchCode : (branchCode || '')).trim().toUpperCase();
+  const plan = String(planName || '').trim();
+  const sheet = getSpreadsheet_().getSheetByName(SALE_MASTER_SHEET_NAME);
+  return getRowsAsObjects_(sheet)
+    .filter(r => {
+      const code = String(r[MM_COL_BRANCH]).trim().toUpperCase();
+      if (code !== SALE_SHARED_CODE && code !== target) return false;
+      const targetPlan = String(r[SALE_COL_TARGET_PLAN] || '').trim();
+      if (!plan || !targetPlan) return true; // 対象プラン未指定の絞り込み、またはこの行が全プラン共通
+      return targetPlan === plan;
+    })
+    .map(r => ({ name: r[MM_COL_NAME], active: isActiveFlag_(r[MM_COL_ACTIVE]), targetPlan: r[SALE_COL_TARGET_PLAN] || '' }));
 }
-function apiSaveSaleItem(token, branchCode, name, originalName, active) {
+// targetPlanは省略可（省略・空欄＝全プラン共通）。branchCodeにALLを渡すと全支店共通のセールになる。
+function apiSaveSaleItem(token, branchCode, name, originalName, active, targetPlan) {
   const session = requireSession_(token);
-  assertBranchAccess_(session, branchCode);
-  return saveMasterItem_(SALE_MASTER_SHEET_NAME, branchCode, name, originalName, active);
+  if (String(branchCode || '').trim().toUpperCase() !== SALE_SHARED_CODE) assertBranchAccess_(session, branchCode);
+  else if (session.role !== JP_ROLE) throw new Error('全支店共通（ALL）のセール登録はJPロールのみ実行できます。');
+  return saveMasterItem_(SALE_MASTER_SHEET_NAME, branchCode, name, originalName, active, [String(targetPlan || '')]);
 }
 
 // ★機能追加：メッセージの定型文。支店コードに ALL を入れた行は全員が使える共通テンプレート。
@@ -1026,10 +1082,13 @@ function apiSaveLocationItem(token, branchCode, name, originalName, active) {
   assertBranchAccess_(session, branchCode);
   return saveMasterItem_(LOCATION_MASTER_SHEET_NAME, branchCode, name, originalName, active);
 }
-function apiSavePlanItem(token, branchCode, name, originalName, active) {
+// locationMode/locationCandidatesTextは省略可（省略時は自由入力＝従来どおりのプランのまま）。
+// locationCandidatesTextは改行または読点（、）区切りの文字列で渡す。
+function apiSavePlanItem(token, branchCode, name, originalName, active, locationMode, locationCandidatesText) {
   const session = requireSession_(token);
   assertBranchAccess_(session, branchCode);
-  return saveMasterItem_(PLAN_MASTER_SHEET_NAME, branchCode, name, originalName, active);
+  return saveMasterItem_(PLAN_MASTER_SHEET_NAME, branchCode, name, originalName, active,
+    [normalizePlanLocationMode_(locationMode) === PLAN_LOCATION_MODE_FREE ? '' : normalizePlanLocationMode_(locationMode), String(locationCandidatesText || '')]);
 }
 function apiSaveOptionItem(token, branchCode, name, originalName, active) {
   const session = requireSession_(token);
@@ -1044,7 +1103,10 @@ function listMasterItems_(sheetName, branchCode) {
     .map(r => ({ name: r[MM_COL_NAME], active: isActiveFlag_(r[MM_COL_ACTIVE]) }));
 }
 
-function saveMasterItem_(sheetName, branchCode, name, originalName, active) {
+// extraCols: プランマスタ（撮影場所方式・撮影場所候補）やセールマスタ（対象プラン）など、
+// 基本の3列（支店コード・名称・有効）より後ろに続く追加列の値を渡す（省略時は基本3列のみ書く。
+// オプション／撮影場所／スタッフマスタは今まで通り3列のまま）。
+function saveMasterItem_(sheetName, branchCode, name, originalName, active, extraCols) {
   if (!name || !String(name).trim()) throw new Error('名称を入力してください。');
   const code = String(branchCode).trim().toUpperCase();
   const lock = LockService.getScriptLock();
@@ -1054,7 +1116,8 @@ function saveMasterItem_(sheetName, branchCode, name, originalName, active) {
     const lastRow = sheet.getLastRow();
     let targetRow = -1;
     if (lastRow > 1) {
-      const values = sheet.getRange(2, 1, lastRow - 1, MASTER_ITEM_HEADERS.length).getValues();
+      // 支店コード・名称の2列だけ見て既存行を探す（追加列があっても位置は変わらないため2列で十分）
+      const values = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
       const matchName = (originalName || name);
       for (let i = 0; i < values.length; i++) {
         if (String(values[i][0]).trim().toUpperCase() === code &&
@@ -1064,7 +1127,7 @@ function saveMasterItem_(sheetName, branchCode, name, originalName, active) {
         }
       }
     }
-    const rowData = [code, name, active !== false];
+    const rowData = [code, name, active !== false].concat(extraCols || []);
     if (targetRow === -1) {
       sheet.getRange(sheet.getLastRow() + 1, 1, 1, rowData.length).setValues([rowData]);
     } else {

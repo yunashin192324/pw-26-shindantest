@@ -46,6 +46,12 @@ function makeServer() {
   // ★要件：店舗の新規依頼画面でプラン・オプションを選択式にしたため、テスト用にVIE支店の候補を登録
   ss.getSheetByName('プランマスタ').appendRow(['VIE', 'プランA', true]);
   ss.getSheetByName('オプションマスタ').appendRow(['VIE', '追加アルバム', true]);
+  // ★要件：プランごとに撮影希望場所の入力方式・候補を変えられるようにする（チェックボックス／
+  // プルダウン／自由入力）。テスト用にVIE支店に方式違いのプランを2つ登録する。
+  ss.getSheetByName('プランマスタ').appendRow(['VIE', 'ローマ3時間フォト', true, 'checkbox', 'コロッセオ、トレビの泉']);
+  ss.getSheetByName('プランマスタ').appendRow(['VIE', 'フィレンツェフォト', true, 'select', 'ドゥオモ\nヴェッキオ橋']);
+  // ★要件：セールはプランに紐付けて登録できる（対象プランを指定すればそのプラン専用のセールになる）
+  ss.getSheetByName('セールマスタ').appendRow(['VIE', 'ローマ限定セール', true, 'ローマ3時間フォト']);
 
   // ★機能追加：店舗ロールのログインを1件用意する
   const shopRowIdx = bm.getLastRow() + 1;
@@ -1049,6 +1055,91 @@ function visiblePane(document) {
           !!document.querySelector('[data-pending="新郎名（ローマ字）"]') &&
           !!document.querySelector('[data-pending="新婦姓（ローマ字）"]') &&
           !!document.querySelector('[data-pending="新婦名（ローマ字）"]'));
+  }
+
+  section('U23. プランごとの撮影希望場所の入力方式（チェックボックス／プルダウン）・セールのプラン紐付け');
+  {
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'SHOP1', 'CHANGE-ME-SHOP1');
+    document.getElementById('nav-shop-new').click();
+    await settle();
+    document.getElementById('shop-new-branch').value = 'VIE';
+    document.getElementById('shop-new-branch').dispatchEvent(new dom.window.Event('change'));
+    await settle();
+
+    // --- 既定（プラン未選択）は従来どおり自由入力 ---
+    check('プラン未選択のときは撮影希望場所が自由入力のまま',
+          document.getElementById('shop-new-location').tagName === 'INPUT');
+
+    // --- チェックボックス方式のプランを選ぶと複数選択のチェックボックスに切り替わる ---
+    document.getElementById('shop-new-plan').value = 'ローマ3時間フォト';
+    document.getElementById('shop-new-plan').dispatchEvent(new dom.window.Event('change'));
+    await settle();
+    const checks = [...document.querySelectorAll('.shop-new-location-cb')];
+    check('チェックボックス方式のプランを選ぶと候補が複数のチェックボックスで表示される',
+          checks.length === 2 && checks.some(c => c.value === 'コロッセオ') && checks.some(c => c.value === 'トレビの泉'));
+    checks.find(c => c.value === 'コロッセオ').checked = true;
+    checks.find(c => c.value === 'コロッセオ').dispatchEvent(new dom.window.Event('change'));
+    checks.find(c => c.value === 'トレビの泉').checked = true;
+    checks.find(c => c.value === 'トレビの泉').dispatchEvent(new dom.window.Event('change'));
+    check('チェックボックスで選んだ値が撮影希望場所に反映される（読点区切り）',
+          document.getElementById('shop-new-location').value === 'コロッセオ、トレビの泉');
+    const saleOptsRoma = [...document.getElementById('shop-new-sale').options].map(o => o.value).filter(Boolean);
+    check('このプラン専用のセールが候補に出る（対象プラン一致）', saleOptsRoma.includes('ローマ限定セール'));
+
+    // --- プルダウン方式のプランに切り替えると単一選択のプルダウンになり、専用セールは消える ---
+    document.getElementById('shop-new-plan').value = 'フィレンツェフォト';
+    document.getElementById('shop-new-plan').dispatchEvent(new dom.window.Event('change'));
+    await settle();
+    check('プルダウン方式のプランを選ぶと単一選択のselectに切り替わる',
+          document.getElementById('shop-new-location').tagName === 'SELECT');
+    const selectOpts = [...document.getElementById('shop-new-location').options].map(o => o.value).filter(Boolean);
+    check('プルダウンの候補にこのプラン専用のものが入る', selectOpts.includes('ドゥオモ') && selectOpts.includes('ヴェッキオ橋'));
+    const saleOptsFirenze = [...document.getElementById('shop-new-sale').options].map(o => o.value).filter(Boolean);
+    check('プランを切り替えると対象プラン不一致のセールは候補から消える（ローマ限定セール）',
+          !saleOptsFirenze.includes('ローマ限定セール'));
+
+    // --- 実際に送信して、選んだ撮影希望場所・セール名が保存されることを確認 ---
+    document.getElementById('shop-new-location').value = 'ドゥオモ';
+    document.getElementById('shop-new-sale').value = '';
+    document.getElementById('shop-new-team').value = '関東';
+    document.getElementById('shop-new-challengeno').value = 'PLANLOC0001';
+    document.getElementById('shop-new-groom-last').value = 'Verdi';
+    document.getElementById('shop-new-groom').value = 'Luca';
+    document.getElementById('shop-new-bride-last').value = 'Verdi';
+    document.getElementById('shop-new-bride').value = 'Sara';
+    document.getElementById('shop-new-hope1').value = '2026-09-10';
+    document.getElementById('shop-new-submit').click();
+    await settle();
+    check('プランごとの入力方式のまま送信できる', !document.getElementById('shop-new-success').classList.contains('hidden'),
+          document.getElementById('shop-new-error').textContent);
+    const kanriPlanLoc = document.getElementById('shop-new-success-text').textContent.match(/予約番号\s*(\S+)/)[1];
+    const savedDetail = ctx.apiGetReservationDetail(ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token, kanriPlanLoc).detail;
+    check('選んだプルダウンの撮影希望場所が保存される', savedDetail['撮影希望場所'] === 'ドゥオモ');
+
+    // --- 既存案件の店舗詳細画面でも、プランを選び直すと撮影希望場所・セール名が切り替わる ---
+    document.getElementById('nav-dashboard').click();
+    await settle();
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanriPlanLoc)).click();
+    await settle();
+    check('既存案件の詳細にもプラン選択欄がある', !!document.getElementById('shop-detail-plan-select'));
+    document.getElementById('shop-detail-plan-select').value = 'ローマ3時間フォト';
+    document.getElementById('shop-detail-plan-select').dispatchEvent(new dom.window.Event('change'));
+    await settle();
+    const detailChecks = [...document.querySelectorAll('.shop-detail-location-cb')];
+    check('既存案件の詳細でもプラン変更でチェックボックス方式に切り替わる',
+          detailChecks.length === 2 && detailChecks.some(c => c.value === 'コロッセオ'));
+    detailChecks.find(c => c.value === 'コロッセオ').checked = true;
+    detailChecks.find(c => c.value === 'コロッセオ').dispatchEvent(new dom.window.Event('change'));
+    const detailSaleOpts = [...document.getElementById('shop-detail-sale-wrap').querySelectorAll('option')].map(o => o.value).filter(Boolean);
+    check('既存案件の詳細でもプラン専用セールに絞り込まれる', detailSaleOpts.includes('ローマ限定セール'));
+    document.getElementById('btn-save-quiet').click();
+    await settle();
+    const afterPlanSwitch = ctx.apiGetReservationDetail(ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token, kanriPlanLoc).detail;
+    check('プラン変更後にチェックボックスで選んだ撮影希望場所が保存される', afterPlanSwitch['撮影希望場所'] === 'コロッセオ');
+    check('プラン自体の変更も保存される', afterPlanSwitch['プラン名'] === 'ローマ3時間フォト');
   }
 
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);

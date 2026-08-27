@@ -208,8 +208,13 @@
         <label>セール名</label>
         <select id="shop-new-sale"><option value="">未設定</option></select>
         <label>撮影希望場所</label>
-        <input id="shop-new-location" type="text" list="shop-new-location-datalist" placeholder="任意入力">
-        <datalist id="shop-new-location-datalist"></datalist>
+        <!-- ★要件：撮影希望場所はプランごとにチェックボックス（複数選択）／プルダウン（単一選択）／
+             自由入力のいずれかになる（プランマスタの「撮影場所方式」で設定。既定は自由入力）。
+             プラン選択時に onShopNewPlanChange がこの中身を差し替える。 -->
+        <div id="shop-new-location-wrap">
+          <input id="shop-new-location" type="text" list="shop-new-location-datalist" placeholder="任意入力">
+          <datalist id="shop-new-location-datalist"></datalist>
+        </div>
         <div id="shop-new-prep-block" class="hidden">
           <label>準備場所</label>
           <select id="shop-new-prep"><option value="">-</option></select>
