@@ -701,6 +701,11 @@ function visiblePane(document) {
           document.getElementById('shop-upload-list').innerHTML.includes('hair.jpg'));
     check('同意書・アンケートURL欄が表示される（未設定案内）',
           document.getElementById('shop-form-urls').textContent.includes('未設定'));
+    // ★UI変更：店舗側でも同意書のご案内URLは必要書類チェックリストの近く（同じカード内）に置く
+    const checklistCardShop = document.getElementById('shop-form-urls').closest('.section-card');
+    check('店舗側でも同意書・アンケートURL欄が必要書類チェックリストと同じカードに表示される',
+          !!checklistCardShop && checklistCardShop.querySelector('h3').textContent.includes('必要書類チェックリスト'),
+          checklistCardShop && checklistCardShop.querySelector('h3').textContent);
 
     // JP側：請求先の表示・ドライブタブでのアップロード一覧の閲覧（拡張要望6章・8章）
     document.getElementById('nav-logout').click();

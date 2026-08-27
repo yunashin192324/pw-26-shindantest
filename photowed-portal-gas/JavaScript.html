@@ -809,12 +809,16 @@
         <div class="detail-grid">${optionsHtml}</div>
       </div>
       <div class="section-card">
-        <h3>必要書類チェックリスト</h3>
+        <h3>必要書類チェックリスト・同意書</h3>
         <p class="hint-text">現地(支店)とチェック状況を共有します（双方向）。</p>
         ${checklistHtml}
+        <div style="margin-top:10px;">
+          <div class="hint-text" style="margin-bottom:4px;">同意書・アンケートのご案内URL（お客様にお送りください。管理番号が自動で入力された状態で開きます）</div>
+          <div id="shop-form-urls"><p class="hint-text">読み込み中...</p></div>
+        </div>
       </div>
       <div class="section-card">
-        <h3>ステータス変更（最終確定・キャンセル依頼・ネームチェンジ・日付変更依頼・プラン/式場変更依頼）</h3>
+        <h3>ステータス変更（最終確定・キャンセル依頼・日付変更依頼・プラン/式場変更依頼）</h3>
         <label>STS JP を変更</label>
         <select id="shop-status-select">${statusOptions}</select>
         <p id="shop-status-warning" class="error-text hidden">⚠️ チャージ規定は各自ご確認ください。内容を確認のうえ送信してください。</p>
@@ -831,11 +835,6 @@
         <button class="send-btn" id="shop-upload-submit" style="margin-top:8px;">アップロード</button>
         <p id="shop-upload-error" class="error-text hidden"></p>
         <div id="shop-upload-list" style="margin-top:10px;"><p class="hint-text">読み込み中...</p></div>
-      </div>
-      <div class="section-card">
-        <h3>同意書・アンケートのご案内URL</h3>
-        <p class="hint-text">お客様にお送りください（管理番号が自動で入力された状態で開きます）。</p>
-        <div id="shop-form-urls"><p class="hint-text">読み込み中...</p></div>
       </div>
       <div class="section-card">
         <div style="display:flex;flex-direction:column;gap:8px;">
