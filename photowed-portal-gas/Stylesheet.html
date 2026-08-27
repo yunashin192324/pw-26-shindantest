@@ -132,7 +132,11 @@
   .field-block input, .field-block select { border: 1px solid var(--color-border); border-radius: 6px; padding: 6px 8px;
     font-size: 0.9rem; width: 100%; background: #fff; }
   .section-card { background: var(--color-card); border-radius: 8px; padding: 14px; margin-bottom: 14px;
-    border: 1px solid var(--color-border); }
+    border: 1px solid var(--color-border);
+    /* ★要件：店舗画面のクイックナビ（.tab-bar流用）でスクロールジャンプした際、
+       sticky固定の.app-header（上端）＋クイックナビ自体のtab-bar（top:54px）の
+       2段ぶんに見出しが隠れないよう、スクロール停止位置に余白を確保する */
+    scroll-margin-top: 110px; }
   /* ★ARW寄り：セクション見出しを濃紺の下線で強調する */
   .section-card > h3:first-child, .view h3 { color: var(--color-primary); border-bottom: 2px solid var(--color-primary-tint);
     padding-bottom: 6px; }
