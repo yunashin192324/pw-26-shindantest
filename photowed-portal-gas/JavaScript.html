@@ -1907,6 +1907,9 @@
       const res = await gsRun('apiCreateReservation', session.token, branchCode, raw);
       $('new-success').textContent = `案件 ${res.kanriNo} を作成しました。`;
       $('new-success').classList.remove('hidden');
+      if (typeof $('new-success').scrollIntoView === 'function') {
+        $('new-success').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
       $('new-rawtext').value = '';
     } catch (e) {
       showFieldError('new-error', e.message);
@@ -1987,8 +1990,12 @@
     try {
       const res = await gsRun('apiShopCreateRequest', session.token, payload);
       // ★機能追加：送信後に「回答までお待ちください」の案内を出す
+      // ★要件：送信後の案内が地味で気づきにくいとの指摘への対応。目立つバナー表示＋自動スクロールで確実に見えるようにする
       $('shop-new-success').textContent = `依頼 ${res.kanriNo} を送信しました。日本の該当手配課と現地支店に通知が届きます。ご回答まで今しばらくお待ちください。`;
       $('shop-new-success').classList.remove('hidden');
+      if (typeof $('shop-new-success').scrollIntoView === 'function') {
+        $('shop-new-success').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
       SHOP_NEW_TEXT_FIELDS.forEach(k => { $('shop-new-' + k).value = ''; });
       SHOP_NEW_DATE_FIELDS.forEach(k => { $('shop-new-' + k).value = ''; });
       $('shop-new-initial-status').value = 'RQ';

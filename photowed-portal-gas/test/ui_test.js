@@ -740,6 +740,8 @@ function visiblePane(document) {
     const successText = document.getElementById('shop-new-success').textContent;
     check('チャレンジ番号つきで依頼を送信できる', !document.getElementById('shop-new-success').classList.contains('hidden'), successText);
     check('送信後に「回答までお待ちください」の案内が出る（拡張要望）', successText.includes('お待ちください'), successText);
+    check('送信後の案内が目立つバナー表示になっている（success-bannerクラス）',
+          document.getElementById('shop-new-success').classList.contains('success-banner'));
     const kanri3 = successText.match(/依頼\s*(\S+)\s*を送信/)[1];
 
     document.getElementById('nav-dashboard').click();
