@@ -1,17 +1,12 @@
 #!/usr/bin/env node
 /**
- * ai-photo-curator のビルドスクリプト
+ * ai-photo-curator のビルドスクリプト（Google Sites 埋め込みコード専用・軽量版）
  * ============================================================
- * src/app-source.jsx（人が編集するJSXソース）から、外部CDNに一切
- * 依存しない単一の index.html を生成します。
- *
- *   1. Babel（@babel/preset-react, runtime: classic）でJSXを
- *      プレーンなJavaScriptへ事前コンパイル（ブラウザ上でのBabel変換を不要にする）
- *   2. Tailwind CSS CLIで、実際にsrc/app-source.jsx内で使われている
- *      クラスだけを静的CSSとして生成
- *   3. React / ReactDOM / JSZip のUMDビルド（node_modules内）を
- *      そのままテキストとして読み込み
- *   4. すべてを1つのHTMLファイルに埋め込んで index.html として書き出す
+ * src/app.js（人が編集する素のJavaScriptソース）から、Google Sitesの
+ * 「埋め込みコード」ボックスにそのまま貼り付けられる単一の index.html を
+ * 生成します。React/Babel/JSZipなどの外部ライブラリは一切使わないため、
+ * ビルドで行うのは実質「使われているTailwindクラスだけを静的CSSとして
+ * 生成し、app.jsと一緒に1ファイルにまとめる」だけです。
  *
  * 使い方:
  *   cd ai-photo-curator
@@ -19,17 +14,15 @@
  *   npm run build
  *
  * 出力: ai-photo-curator/index.html
- *       （これをそのままGoogle Sites埋め込み用にホスティングします）
  */
 
 const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");
 const os = require("os");
-const babel = require("@babel/core");
 
 const ROOT = __dirname;
-const SRC_JSX = path.join(ROOT, "src", "app-source.jsx");
+const SRC_JS = path.join(ROOT, "src", "app.js");
 const OUT_HTML = path.join(ROOT, "index.html");
 
 function buildTailwindCSS() {
@@ -48,32 +41,12 @@ function buildTailwindCSS() {
   return fs.readFileSync(outputCssPath, "utf8");
 }
 
-function buildAppScript() {
-  const source = fs.readFileSync(SRC_JSX, "utf8");
-  const out = babel.transform(source, {
-    presets: [["@babel/preset-react", { runtime: "classic" }]],
-    filename: "app-source.jsx",
-    babelrc: false,
-    configFile: false
-  });
-  return out.code;
-}
-
-function readUmdLib(pkgRelativePath) {
-  return fs.readFileSync(path.join(ROOT, "node_modules", pkgRelativePath), "utf8");
-}
-
 function main() {
   console.log("Tailwind CSSをビルド中...");
   const tailwindCss = buildTailwindCSS();
 
-  console.log("JSXをコンパイル中...");
-  const appJs = buildAppScript();
-
-  console.log("React / ReactDOM / JSZipを読み込み中...");
-  const reactJs = readUmdLib("react/umd/react.production.min.js");
-  const reactDomJs = readUmdLib("react-dom/umd/react-dom.production.min.js");
-  const jszipJs = readUmdLib("jszip/dist/jszip.min.js");
+  console.log("app.jsを読み込み中...");
+  const appJs = fs.readFileSync(SRC_JS, "utf8");
 
   const html = `<!doctype html>
 <html lang="ja">
@@ -84,16 +57,13 @@ function main() {
 
 <!--
   ============================================================
-  完全オフライン同梱版（Google Sites 埋め込み・社内セキュリティ対応）
+  Google Sites「埋め込みコード」専用・単一ファイル版
   ============================================================
-  会社のセキュリティポリシーで「Google関連サービス以外は使用不可」という
-  制約があるため、このファイルはページの表示に外部CDN（unpkg.com /
-  cdn.tailwindcss.com / cdnjs.cloudflare.com 等）を一切使いません。
-
-  React・ReactDOM・JSZip・（実際に使われている分だけの）Tailwind CSSは
-  すべてこのファイルの中にビルド時に埋め込み済みです。JSXも事前に
-  プレーンなJavaScriptへ変換済みのため、ブラウザ上でのBabel変換も
-  不要です。
+  React / JSZip / Tailwind CDN など、外部ライブラリ・外部CDNを一切
+  使わない素のHTML/CSS/JavaScriptです。このファイルの中身をまるごと
+  Google Sitesの「挿入」→「埋め込み」→「埋め込みコード」ボックスに
+  貼り付けるだけで動作します（別途どこかにホスティングする必要は
+  ありません）。
 
   ページを開いた際にブラウザが通信するのは、ボタン操作でAIを呼び出す
   ときの Google Apps Script（あなたの会社のGoogleアカウントで動く
@@ -101,9 +71,11 @@ function main() {
   (generativelanguage.googleapis.com) を呼ぶ通信も含め、発生する外部
   通信はすべてGoogleドメインのみで完結します。
 
-  このファイルは src/app-source.jsx から build.js で自動生成されています。
-  直接編集せず、src/app-source.jsx を編集して "npm run build" を
-  再実行してください。
+  このファイルは src/app.js から build.js で自動生成されています。
+  直接編集せず、src/app.js を編集して "npm run build" を
+  再実行してください（新しいTailwindクラスを使った場合のみビルドが
+  必要です。既存クラスの組み合わせを変えるだけなら直接 index.html の
+  <script> 部分を編集しても問題ありません）。
 -->
 
 <style>
@@ -117,45 +89,12 @@ ${tailwindCss}
   <div style="color:#888; font-family: sans-serif; text-align:center; padding-top:40vh;">読み込み中...</div>
 </div>
 
-<!-- React（UMD本番ビルドを同梱、外部CDN不使用） -->
-<script>
-${reactJs}
-</script>
+<!-- 隠しファイル入力（写真追加・フォルダ読込ボタンから呼び出される） -->
+<input id="fileInput" type="file" multiple accept="image/jpeg, image/png, image/webp" class="hidden">
+<input id="folderInput" type="file" webkitdirectory directory multiple accept="image/jpeg, image/png, image/webp" class="hidden">
 
-<!-- ReactDOM（UMD本番ビルドを同梱、外部CDN不使用） -->
 <script>
-${reactDomJs}
-</script>
-
-<!-- JSZip（選択画像のZIP一括ダウンロード用。同梱済みで外部CDN不使用） -->
-<script>
-${jszipJs}
-</script>
-
-<!-- アプリ本体（事前にJSXをプレーンJSへコンパイル済み。ブラウザ上でのBabel変換は不要） -->
-<script>
-(function () {
-  function showFatalError(message) {
-    var rootEl = document.getElementById("root");
-    if (!rootEl) return;
-    rootEl.innerHTML =
-      '<div style="max-width:640px;margin:15vh auto;padding:24px;' +
-      'font-family:sans-serif;color:#e8e0d8;background:#1a1a1a;' +
-      'border:1px solid #442222;border-radius:12px;line-height:1.7;">' +
-      '<div style="color:#ff8080;font-weight:bold;margin-bottom:8px;">読み込みに失敗しました</div>' +
-      '<div style="font-size:14px;white-space:pre-wrap;">' + message + '</div></div>';
-  }
-  if (!window.React || !window.ReactDOM) {
-    showFatalError("React / ReactDOM の初期化に失敗しました。ページを再読み込みしてください。");
-    return;
-  }
-  try {
 ${appJs}
-  } catch (err) {
-    console.error("アプリの初期化に失敗しました:", err);
-    showFatalError("アプリの初期化中にエラーが発生しました。\\n" + (err && err.message ? err.message : err));
-  }
-})();
 </script>
 </body>
 </html>

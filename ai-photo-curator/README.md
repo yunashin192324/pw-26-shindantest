@@ -60,14 +60,16 @@ Google Sites埋め込み用に単一HTML化する際、当初は`@babel/standalo
 
 ---
 
-## `index.html`（Google Sites 埋め込み用・完全オフライン同梱ビルド）
+## `index.html`（Google Sites「埋め込みコード」専用・単一ファイル版）
 
-**会社のセキュリティポリシーで「Google関連サービス以外は使用不可」という制約があるため、`index.html` はページの表示に外部CDNを一切使いません。** React・ReactDOM・JSZip・Tailwind CSS（実際に使われているクラスのみ）はすべてビルド時にこのファイルの中へ埋め込み済みで、JSXも事前にプレーンなJavaScriptへコンパイル済みです。ブラウザがページを開いた時点で発生する外部通信はゼロです。
+**Google Sitesの「挿入」→「埋め込み」→「埋め込みコード」ボックスにこのファイルの中身をまるごと貼り付けるだけで動くように作っています。** 別のサービスにホスティングする必要は一切ありません。
 
-**唯一発生する外部通信は、ボタン操作でAIを呼び出すときの Google Apps Script（`.../macros/s/.../exec`, script.google.comドメイン）へのfetchだけ**で、そこからGemini API（`generativelanguage.googleapis.com`）を呼ぶのもApps Script側（サーバー間通信）です。ブラウザが直接Gemini APIやunpkg.com・cdnjs.cloudflare.com等の非Googleドメインと通信することは一切ありません。
+会社のセキュリティポリシーで「Google関連サービス以外は使用不可」という制約があるため、React・JSZipなどの外部ライブラリ・外部CDNを一切使わず、**素のHTML/CSS/JavaScriptだけ**で実装し直しました（旧版はReact/ReactDOM/JSZipを埋め込んでいたため約320KBありましたが、素のJavaScript化により**約77KB**まで軽量化しています。埋め込みコード欄に貼り付けるコードは軽いに越したことはないためです）。
+
+**発生する外部通信は、ボタン操作でAIを呼び出すときの Google Apps Script（`.../macros/s/.../exec`, script.google.comドメイン）へのfetchだけ**で、そこからGemini API（`generativelanguage.googleapis.com`）を呼ぶのもApps Script側（サーバー間通信）です。ブラウザが直接Gemini APIや非Googleドメインと通信することは一切ありません。
 
 ```
-[ブラウザ (index.html・外部CDN不使用)]
+[Google Sitesに埋め込まれた index.html の中身・外部ライブラリ不使用]
         │ fetch (Googleドメインのみ)
         ▼
 [Apps Script プロキシ (script.google.com・会社アカウントで実行)]
@@ -81,17 +83,18 @@ Google Sites埋め込み用に単一HTML化する際、当初は`@babel/standalo
 ### リポジトリ構成
 | ファイル | 役割 |
 |---|---|
-| `src/app-source.jsx` | **編集する時はここ**。アプリ本体のJSXソース（人が読み書きする唯一の場所） |
-| `build.js` / `package.json` / `tailwind.config.js` | `src/app-source.jsx` から `index.html` を生成するビルド一式 |
-| `index.html` | **`npm run build` の自動生成物**。Google Sitesに埋め込む実体はこれ。直接編集しない |
+| `src/app.js` | **編集する時はここ**。アプリ本体の素のJavaScriptソース（人が読み書きする唯一の場所） |
+| `build.js` / `package.json` / `tailwind.config.js` | `src/app.js` から `index.html` を生成するビルド一式（使用クラスだけの静的CSS生成のみ） |
+| `index.html` | **`npm run build` の自動生成物。Google Sitesの「埋め込みコード」にはこのファイルの中身をまるごとコピペする** |
 | `apps-script/Code.gs` | Gemini APIキーを隠すApps Scriptプロキシ |
-| `App.jsx` | 当初の不具合修正版（bundler前提のReactコンポーネント単体）。参考用・現在は未使用 |
+| `App.jsx` / `src/app-source.jsx` | React版（旧構成）。別サービスにホスティングしてiframeで埋め込む方式を取る場合の参考用。**今回の「埋め込みコード」方式では使用しません** |
 
-コードの挙動を変更したい場合は `src/app-source.jsx` を編集し、`ai-photo-curator/` ディレクトリで次を実行して `index.html` を再生成してください（要 Node.js / npm）。
+コードの挙動を変更したい場合は `src/app.js` を編集し、`ai-photo-curator/` ディレクトリで次を実行して `index.html` を再生成してください（要 Node.js / npm）。
 ```bash
 npm install   # 初回のみ
 npm run build
 ```
+> 使っているTailwindのクラスを増減させない範囲の変更（文言・ロジックの変更など）であれば、`npm run build` を省略して `index.html` の `<script>` の中身を直接書き換えても動きます。新しいユーティリティクラス（例：今まで使っていない色や余白）を追加した場合のみ再ビルドが必要です。
 
 ### 手順①: Apps Scriptプロキシをデプロイする
 
@@ -108,40 +111,33 @@ npm run build
 
 ### 手順②: プロキシURLを設定して `index.html` を再ビルドする
 
-`src/app-source.jsx` 冒頭付近にある以下の定数を書き換えます（**`index.html` を直接編集しないでください**。ビルドで上書きされます）。
+`src/app.js` 冒頭付近にある以下の定数を書き換えます（**`index.html` の `<script>` 部分をコピペで直接書き換えても構いません**。どちらでも最終的には同じ場所を更新することになります）。
 
 ```js
 const PROXY_URL = "ここにApps ScriptのWebアプリURLを貼り付け"; // 手順①で発行されたURL
 const PROXY_SHARED_SECRET = ""; // 手順①でSHARED_SECRETを設定した場合は同じ文字列を入れる
 ```
 
-書き換えたら、`ai-photo-curator/` ディレクトリで再ビルドして `index.html` に反映させます。
+`src/app.js` を書き換えた場合は、`ai-photo-curator/` ディレクトリで再ビルドして `index.html` に反映させます。
 ```bash
 npm install   # 初回のみ
 npm run build
 ```
-> Node.js/npmが手元にない環境の場合は、私（Claude）にPROXY_URLを伝えていただければ、代わりにビルドして`index.html`を更新できます。
+> Node.js/npmが手元にない環境の場合は、私（Claude）にPROXY_URLを伝えていただければ、代わりにビルドして更新版の`index.html`をお渡しします。
 
-### 手順③: `index.html` をホスティングする
+### 手順③: Google Sitesの「埋め込みコード」に貼り付ける
 
-Google Sites自体はHTMLファイルを直接アップロードできないため、`index.html` をどこかの公開URLに置く必要があります。候補:
-- GitHub Pages（このリポジトリの `ai-photo-curator/` フォルダをそのまま公開する等）
-- Firebase Hosting
-- 別のApps ScriptをWebアプリとして公開し、`doGet` で `index.html` のHTML文字列を返す
-
-### 手順④: Google Sitesに埋め込む
-
-Google Sitesの編集画面で「挿入」→「埋め込み」→「埋め込みコード」を選び、次のようなiframeタグを貼り付けます（URLは手順③で発行された公開URLに置き換えてください）。
-```html
-<iframe src="https://your-hosting-url/index.html" style="width:100%; height:900px; border:0;"></iframe>
-```
-高さはお好みで調整してください（写真一覧が縦に伸びるため900px以上を推奨）。
+1. Google Sitesの編集画面を開き、貼り付けたい場所で「挿入」→「埋め込み」→「埋め込みコード」を選択。
+2. `index.html` の中身を**ファイルの先頭（`<!doctype html>`）から末尾（`</html>`）まで丸ごとコピー**して、埋め込みコードの入力欄に貼り付ける。
+3. 挿入されたら、埋め込み枠の高さをドラッグで調整（写真一覧が縦に伸びるため、最初は大きめ・高さ800px以上を推奨）。
+4. 公開して実際にページを開き、写真をアップロードして動作確認する。
 
 ### 既知の制約
 - **APIキーの請求責任は依然として会社のGoogle Cloudプロジェクトにあります。** プロキシ化によって「キーが漏れて誰でも使い放題」というリスクはなくなりますが、社内の利用量自体（Gemini API呼び出し回数）に応じた課金は発生します。アクセス制御を「組織内のユーザー」にしておけば、少なくとも社外からの不正利用は防げます。
 - **Apps ScriptのWebアプリはCORSのプリフライト(OPTIONS)に正しく応答できない**という既知の制約があるため、`index.html` 側は意図的に `Content-Type: text/plain` でPOSTしてプリフライトを回避しています（本文は引き続きJSON文字列です）。この構成自体を変更する必要はありませんが、もし将来手を入れる場合はご注意ください。
 - **Apps ScriptのWebアプリは無料利用枠に1日あたりの実行回数上限があります**（Google Workspaceの契約種別により変動）。大量の写真を毎日処理するような使い方だと上限に達する可能性があるため、様子を見ながら運用してください。
-- **`index.html` はビルド生成物（約310KB）です。** `src/app-source.jsx` を直接編集しても `npm run build` を実行するまで反映されません。逆に `index.html` を直接編集しても、次にビルドし直すと上書きされて消えます。
-- **IndexedDBによる自動保存はブラウザのタブ内ローカルストレージ**です。Google Sitesにiframeとして埋め込むと「サードパーティコンテキスト」になるため、ブラウザ（特にSafariやプライバシー設定を厳しくしたブラウザ）によってはストレージが分離・制限され、期待通りに保存が効かない場合があります。重要なデータは都度ZIPでダウンロードして保存する運用を推奨します。
+- **Google Sitesの「埋め込みコード」欄の最大文字数は、この環境からは実際に確認できていません。** 約77KB（約7万文字）まで軽量化していますが、それでも貼り付け時に切り詰められる・不安定になる場合は、貼り付け後すぐに保存して再度開き、コードが全文残っているか確認してください。万一収まらない場合は、コードをさらに分割・圧縮するか、以前の「index.htmlを外部ホスティングしてiframeで埋め込む」方式（`App.jsx`/`src/app-source.jsx`のReact版）に切り替えることもできます。
+- **`index.html` はビルド生成物です。** `src/app.js` を編集しても `npm run build` を実行するまで反映されません。
+- **IndexedDBによる自動保存はブラウザのタブ内ローカルストレージ**です。Google Sitesの埋め込みコードは内部的にiframe（サードパーティコンテキスト）として動作するため、ブラウザ（特にSafariやプライバシー設定を厳しくしたブラウザ）によってはストレージが分離・制限され、期待通りに保存が効かない場合があります。重要なデータは都度ZIPでダウンロードして保存する運用を推奨します。
 - **この `apps-script/Code.gs` は実際にApps Scriptへデプロイしての動作確認はできていません**（このセッションの環境からはApps Scriptプロジェクトを作成・デプロイできないため）。doPost + ContentService + text/plain送信によるCORS回避は広く使われている実績のあるパターンですが、実際にデプロイした際にCORSエラー等が出た場合は、アクセス権限の設定やデプロイURLが最新版になっているか（手順①-6）をまずご確認ください。
-- 一方、**`index.html` 自体（外部CDN不使用・完全オフライン同梱）は、このリポジトリ内で `npm run build` → 実ブラウザ（Playwright）でのレンダリング・ファイルアップロード・エラー表示まで実機検証済み**です。ページ読み込み時に発生する外部通信がゼロであること（DevTools/Playwrightのネットワークログで確認）、TailwindのスタイルやReact/JSZipが正しく動作することを確認しています。
+- 一方、**`index.html` 自体（外部ライブラリ不使用の素のJavaScript版）は、このリポジトリ内で `npm run build` → 実ブラウザ（Playwright、外部プロキシなし）でのレンダリング・ファイルアップロード・エラー表示・複数選択・ZIP作成まで実機検証済み**です。ページ読み込み時に発生する外部通信がゼロであること、Tailwindのスタイルが正しく適用されること、自前実装のZIP生成が正しい構造（Pythonの`zipfile`で展開・CRC検証OK）であることを確認しています。
