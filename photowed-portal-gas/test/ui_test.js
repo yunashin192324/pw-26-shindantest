@@ -733,6 +733,11 @@ function visiblePane(document) {
     check('店舗がチェックリストにチェックを入れて保存できる',
           ctx.apiGetReservationDetail(jpTokenForCheck, kanri2).detail.checklist.find(c => c.item === 'ヘアメイク画像').checked === true);
 
+    // ★要件：オプションのSTSは新規申し込み時に限らず、いつでも変更できるようにする。
+    // 名称が未設定（未使用）のオプション枠でもSTS JPのプルダウン自体は常に表示される。
+    check('名称未設定のオプション枠でもSTS JPのプルダウンが最初から表示される',
+          !!document.querySelector('[data-shop-status-field="OP2 STS JP"]'));
+
     // ★要件：専用の「ステータス変更」欄は廃止し、各オプションの隣のSTS JPバッジからも
     // 店舗自身が直接RQ→CR等へ変更できる（希望日テーブルと同じ表形式で表示される）
     document.querySelector('[data-pending="OP1"]').value = '追加アルバム';
@@ -753,6 +758,21 @@ function visiblePane(document) {
     await settle();
     check('オプション①のSTS(JP側)がCRに変わる（サーバー側）',
           ctx.apiGetReservationDetail(jpTokenForCheck, kanri2).detail['OP1 STS JP'] === 'CR');
+
+    // ★要件：一度OK（現地確定）になったオプションは、店舗の選択肢がCR・FNのみに絞られる
+    // （RQ・DC・PCは選べない）
+    ctx.apiSaveFieldsQuiet(jpTokenForCheck, kanri2, { 'OP1 STS JP': 'OK' });
+    document.getElementById('nav-dashboard').click();
+    await settle();
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanri2)).click();
+    await settle();
+    const opStatusSelAfterOk = document.querySelector('[data-shop-status-field="OP1 STS JP"]');
+    const opStatusValues = [...opStatusSelAfterOk.options].map(o => o.value).filter(Boolean);
+    check('OKになったオプションはRQ・DC・PCが選択肢に出ない',
+          !opStatusValues.includes('RQ') && !opStatusValues.includes('DC') && !opStatusValues.includes('PC'), opStatusValues.join(','));
+    check('OKになったオプションはCR・FNだけが選べる',
+          opStatusValues.includes('CR') && opStatusValues.includes('FN'));
 
     // ドライブアップロード一覧・フォームURL欄が表示される（ファイル選択のシミュレーションはjsdomでは行わず、
     // サーバー側APIを直接呼んでから一覧の再読み込みだけを検証する）

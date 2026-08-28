@@ -800,12 +800,15 @@
       const optNames = nameListWithCurrent(optionList, o.name);
       const nameSelect = `<select data-pending="OP${o.n}" style="width:100%;"><option value="">（未使用）</option>${optNames.map(n =>
         `<option value="${escapeAttr(n)}" ${n === o.name ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}</select>`;
+      // ★要件：オプションのSTSは新規申し込み時に限らず、いつでも店舗が変更できるようにする。
+      // 名称が未設定（＝未使用のオプション枠）でもSTS JPの操作自体は常に表示する
+      // （従来は名称が入っていないと欄自体が出なかった）。
       return `
       <tr>
         <td>オプション${o.n}</td>
         <td>${nameSelect}</td>
-        <td>${!o.name ? '' : shopStatusCell('OP' + o.n + ' STS JP', o.stsJp)}</td>
-        <td>${!o.name ? '' : inlineStatusBadge('OP' + o.n + ' STS 支店', o.stsBranch, 'branch')}</td>
+        <td>${shopStatusCell('OP' + o.n + ' STS JP', o.stsJp)}</td>
+        <td>${inlineStatusBadge('OP' + o.n + ' STS 支店', o.stsBranch, 'branch')}</td>
       </tr>`;
     }).join('');
     const optionsHtml = `
@@ -1085,8 +1088,14 @@
   // から店舗自身がその場でRQ→CR等へ直接変更できるようにする（Code.gsのSHOP_STATUS_TARGETS参照）。
   // 現在値がFN/CR/DC/PCのいずれでもない（RQ等）場合も、選択肢の先頭に現在値を追加してそのまま表示する
   // （現在値を選び直しても実質「変更なし」なので、送信時は「-（変更しない）」と同じ扱いになる）。
+  // ★要件：一度OK（現地確定）になった「各オプション」は、店舗側からRQ・DC・PCへは戻せない。
+  // OKの状態から店舗が選べるのはCR（キャンセル依頼）・FN（最終確定）のみにする
+  // （案件全体のSTS(JP側)は、OKになった後もDC/PCを店舗から出せる仕様のため対象外）。
+  const SHOP_STATUS_TARGETS_FROM_OK = ['CR', 'FN'];
   function shopStatusCell(fieldName, current) {
-    const codes = (!current || SHOP_STATUS_TARGETS.includes(current)) ? SHOP_STATUS_TARGETS : [current, ...SHOP_STATUS_TARGETS];
+    const isOptionField = /^OP\d+ STS JP$/.test(fieldName);
+    const targets = (isOptionField && current === 'OK') ? SHOP_STATUS_TARGETS_FROM_OK : SHOP_STATUS_TARGETS;
+    const codes = (!current || targets.includes(current)) ? targets : [current, ...targets];
     const opts = ['<option value="">-（変更しない）</option>'].concat(
       codes.map(c => `<option value="${c}" ${c === current ? 'selected' : ''}>${escapeHtml(SHOP_STATUS_LABELS[c] || c)}</option>`)
     ).join('');

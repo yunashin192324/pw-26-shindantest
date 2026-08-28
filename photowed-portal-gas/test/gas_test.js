@@ -2195,6 +2195,32 @@ section('38. 案件作成後の店舗による変更：DC/PC/NC（拡張要望3�
   check('店舗はSTS(JP側)をRQ（予約依頼）へ戻すこともできる',
         ctx.apiGetReservationDetail(jpToken, kanri).detail['OP1 STS JP'] === 'RQ');
 
+  // ★要件：一度OK（現地確定）になったオプションは、店舗側からRQ・DC・PCへは戻せない
+  // （選べるのはCR・FNのみ）。RQ以外の状態からRQ等へ戻す操作自体は引き続きできる（上のテスト）。
+  ctx.apiSaveFieldsQuiet(jpToken, kanri, { 'OP1 STS JP': 'OK' });
+  err = null;
+  try { ctx.apiSaveFieldsQuiet(shopToken, kanri, { 'OP1 STS JP': 'RQ' }); } catch (e) { err = e.message; }
+  check('OKのオプションを店舗はRQへ戻せない', err !== null, String(err));
+  err = null;
+  try { ctx.apiSaveFieldsQuiet(shopToken, kanri, { 'OP1 STS JP': 'DC' }); } catch (e) { err = e.message; }
+  check('OKのオプションを店舗はDC（日付変更依頼）にもできない', err !== null, String(err));
+  err = null;
+  try { ctx.apiSaveFieldsQuiet(shopToken, kanri, { 'OP1 STS JP': 'PC' }); } catch (e) { err = e.message; }
+  check('OKのオプションを店舗はPC（プラン変更依頼）にもできない', err !== null, String(err));
+  ctx.apiSaveFieldsQuiet(shopToken, kanri, { 'OP1 STS JP': 'CR' });
+  check('OKのオプションから店舗はCR（キャンセル依頼）にはできる',
+        ctx.apiGetReservationDetail(jpToken, kanri).detail['OP1 STS JP'] === 'CR');
+  ctx.apiSaveFieldsQuiet(jpToken, kanri, { 'OP1 STS JP': 'OK' }); // 再度OKに戻してFNのテスト
+  ctx.apiSaveFieldsQuiet(shopToken, kanri, { 'OP1 STS JP': 'FN' });
+  check('OKのオプションから店舗はFN（最終確定）にはできる',
+        ctx.apiGetReservationDetail(jpToken, kanri).detail['OP1 STS JP'] === 'FN');
+  // ★要件：この制限はオプションだけが対象。案件全体のSTS(JP側)は、OKになった後も
+  // DC/PC（拡張要望3-2）を店舗から出せる仕様のまま変わらない。
+  ctx.apiSaveFieldsQuiet(jpToken, kanri, { 'STS JP': 'OK' });
+  ctx.apiSaveFieldsQuiet(shopToken, kanri, { 'STS JP': 'DC' });
+  check('案件全体のSTS(JP側)はOKの後もDC（日付変更依頼）にできる（オプションとは別扱い）',
+        ctx.apiGetReservationDetail(jpToken, kanri).detail['STS JP'] === 'DC');
+
   // --- ネームチェンジ機能は廃止：専用のステータスコードは持たない。新郎名・新婦名欄を
   //     直接編集して送信するだけで「ネームチェンジのお知らせ」として現地に伝わる ---
   ctx.apiSaveFieldsQuiet(jpToken, kanri, { 'STS JP': 'OK' });
