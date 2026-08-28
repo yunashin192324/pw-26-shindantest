@@ -560,6 +560,15 @@ function visiblePane(document) {
     document.getElementById('shop-new-bride-last').value = 'Yilmaz';
     document.getElementById('shop-new-bride').value = 'Elif';
     document.getElementById('shop-new-hope1').value = '2026-09-10';
+    // ★要件：新郎新婦それぞれの年齢欄・パスポート番号欄（いずれも※ISWのみ必要の注記付き）が
+    // 支店の必須設定に関わらず常に表示される
+    check('新郎年齢欄が常に表示される（※ISWのみ必要）', !!document.getElementById('shop-new-groom-age'));
+    check('新婦年齢欄が常に表示される（※ISWのみ必要）', !!document.getElementById('shop-new-bride-age'));
+    check('パスポート番号欄が支店の必須設定に関わらず常に表示される（VIE支店はパスポート必須ではない）',
+          !document.getElementById('shop-new-passport-block').classList.contains('hidden'));
+    document.getElementById('shop-new-groom-age').value = '29';
+    document.getElementById('shop-new-bride-age').value = '27';
+    document.getElementById('shop-new-passport').value = 'TEST-PASSPORT-001';
     const planOpts = [...document.getElementById('shop-new-plan').options].map(o => o.value);
     check('プランはVIE支店のマスタ一覧から選べる（自由入力ではない）', planOpts.includes('プランA'), planOpts.join(','));
     document.getElementById('shop-new-plan').value = 'プランA';
@@ -571,6 +580,9 @@ function visiblePane(document) {
     check('依頼を送信できる', !document.getElementById('shop-new-success').classList.contains('hidden'),
           document.getElementById('shop-new-error').textContent);
     const createdKanri = document.getElementById('shop-new-success-text').textContent.match(/予約番号\s*(\S+)/)[1];
+    check('年齢・パスポート番号（必須支店でなくても）が保存される',
+          ctx.apiGetReservationDetail(ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token, createdKanri).detail['新郎年齢'] === '29' &&
+          ctx.apiGetReservationDetail(ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token, createdKanri).detail['パスポート番号'] === 'TEST-PASSPORT-001');
     check('選択したプラン・オプションが保存される',
           ctx.apiGetReservationDetail(ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token, createdKanri).detail['プラン名'] === 'プランA');
 

@@ -203,6 +203,10 @@
         <input id="shop-new-bride-last" type="text" placeholder="例）YAMADA" style="text-transform:uppercase;">
         <label>新婦名（ローマ字・必須・大文字で入力）</label>
         <input id="shop-new-bride" type="text" placeholder="例）HANAKO" style="text-transform:uppercase;">
+        <label>新郎年齢（※ISWのみ必要）</label>
+        <input id="shop-new-groom-age" type="number" min="0" placeholder="任意入力">
+        <label>新婦年齢（※ISWのみ必要）</label>
+        <input id="shop-new-bride-age" type="number" min="0" placeholder="任意入力">
         <label>プラン</label>
         <select id="shop-new-plan"><option value="">未設定</option></select>
         <label>セール名</label>
@@ -229,8 +233,10 @@
         <input id="shop-new-hope4" type="date">
         <label>希望日（第五希望）</label>
         <input id="shop-new-hope5" type="date">
-        <div id="shop-new-passport-block" class="hidden">
-          <label>パスポート番号</label>
+        <!-- ★要件変更：パスポート番号欄は支店ごとの必須設定に関わらず常に表示する
+             （※ISWのみ必要、という注記を添えて店舗自身に判断してもらう運用にした） -->
+        <div id="shop-new-passport-block">
+          <label>パスポート番号（※ISWのみ必要）</label>
           <input id="shop-new-passport" type="text" placeholder="任意入力">
         </div>
         <h3 style="margin-top:14px;">オプション（任意・最大5件）</h3>

@@ -155,6 +155,9 @@ const CUSTOMER_NAME_FIELDS = [COL_GROOM_LAST_NAME, COL_GROOM_NAME, COL_BRIDE_LAS
 function normalizeNameValue_(value) {
   return String(value || '').trim().toUpperCase();
 }
+// ★要件：新郎新婦それぞれの年齢欄（日本の店舗画面向け。※ISWのみ必要という注記付きで表示する）
+const COL_GROOM_AGE = '新郎年齢';
+const COL_BRIDE_AGE = '新婦年齢';
 // ★機能追加：お客様がGoogleフォームで記入する『同意書』の記入有無を案件に反映する（機能④）。
 // 支店マスタの「同意書必須」が有効な支店（例：ローマ）では未回収を目立たせる。
 // ★要件：「お客様情報」タブに移動。表示は日本側、またはイタリアの支店のみ（他支店は非表示）。
@@ -265,6 +268,7 @@ const RESERVATION_HEADERS = (() => {
     COL_CONFIRMED_DATE, COL_CEREMONY_DATE, COL_INQUIRY_ONLY,
     COL_HOPE1, COL_HOPE2, COL_HOPE3, COL_HOPE4, COL_HOPE5,
     COL_GROOM_LAST_NAME, COL_GROOM_NAME, COL_BRIDE_LAST_NAME, COL_BRIDE_NAME,
+    COL_GROOM_AGE, COL_BRIDE_AGE,
     COL_CONSENT, COL_PLAN, COL_SALE_NAME, COL_LOCATION, COL_PREP,
     COL_PASSPORT_NO, COL_LOCAL_EMAIL, COL_LOCAL_PHONE, COL_HOTEL, COL_HOTEL_ADDRESS, COL_FLIGHT_INFO,
     COL_AREA, COL_BILLING_REGION, COL_JP_SHOP, COL_INVOICE_NO, COL_SHOP,
@@ -334,6 +338,7 @@ const COMMITTABLE_FIELDS = RESERVATION_HEADERS.filter(h => ![
 // （案件全体のSTS JPと各オプションのSTS JP）。詳しくはprepareFieldWrite_・validateFieldPermission_参照。
 const SHOP_EDITABLE_FIELDS = [
   COL_GROOM_LAST_NAME, COL_GROOM_NAME, COL_BRIDE_LAST_NAME, COL_BRIDE_NAME,
+  COL_GROOM_AGE, COL_BRIDE_AGE,
   COL_PLAN, COL_SALE_NAME, COL_LOCATION, COL_PREP,
   COL_HOPE1, COL_HOPE2, COL_HOPE3, COL_HOPE4, COL_HOPE5, COL_PASSPORT_NO,
   ...Array.from({ length: OPTION_COUNT }, (_, i) => opNameCol_(i + 1)),
@@ -1312,6 +1317,8 @@ function buildShopReservationDetail_(session, kanriNo, headers, rowData) {
     [COL_GROOM_NAME]: getV(COL_GROOM_NAME),
     [COL_BRIDE_LAST_NAME]: getV(COL_BRIDE_LAST_NAME),
     [COL_BRIDE_NAME]: getV(COL_BRIDE_NAME),
+    [COL_GROOM_AGE]: getV(COL_GROOM_AGE),
+    [COL_BRIDE_AGE]: getV(COL_BRIDE_AGE),
     [COL_PLAN]: getV(COL_PLAN),
     [COL_SALE_NAME]: getV(COL_SALE_NAME),
     [COL_LOCATION]: getV(COL_LOCATION),
@@ -1333,7 +1340,9 @@ function buildShopReservationDetail_(session, kanriNo, headers, rowData) {
     // ★要件：店舗発の案件の請求先表示は、店舗自身の支店マスタ行の「請求先」（営業本部）を使う
     shopBilling: ownMeta.shopBilling || ''
   };
-  if (detail.passportRequired) detail[COL_PASSPORT_NO] = getV(COL_PASSPORT_NO);
+  // ★要件：パスポート番号欄は「日本の店舗画面」では支店の必須設定に関わらず常に表示する
+  // （※ISWのみ必要、という注記を添えて店舗自身に判断してもらう運用に変更したため）。
+  detail[COL_PASSPORT_NO] = getV(COL_PASSPORT_NO);
 
   // ★機能追加：希望日ごとの空き確認ステータス（現地未確認ST→RQ→OK/UC）は店舗にも見せる（読み取り専用）
   for (let n = 1; n <= HOPE_COLS.length; n++) {
@@ -2975,6 +2984,9 @@ function apiShopCreateRequest(token, payload) {
   const brideName = normalizeNameValue_(payload.brideName);
   if (!brideLastName) throw new Error('新婦姓（ローマ字）を入力してください。');
   if (!brideName) throw new Error('新婦名（ローマ字）を入力してください。');
+  // ★要件：日本の店舗画面に新郎新婦それぞれの年齢欄を追加（※ISWのみ必要。任意入力）
+  const groomAge = String(payload.groomAge || '').trim();
+  const brideAge = String(payload.brideAge || '').trim();
   const plan = String(payload.plan || '').trim();
   const saleName = String(payload.saleName || '').trim();
   const location = String(payload.location || '').trim();
@@ -2982,6 +2994,7 @@ function apiShopCreateRequest(token, payload) {
   const hopes = [1, 2, 3, 4, 5].map(n => String(payload['hope' + n] || (n === 1 ? payload.hopeDate : '') || '').trim());
   if (!hopes[0]) throw new Error('希望日（第一希望）を入力してください。');
   const options = [1, 2, 3, 4, 5].map(n => String(payload['option' + n] || '').trim());
+  // ★要件：パスポート番号欄は支店の必須設定に関わらず常に入力できる（※ISWのみ必要。任意入力）
   const passportNumber = String(payload.passportNumber || '').trim();
   const initialStatus = String(payload.initialStatus || 'RQ').trim().toUpperCase() || 'RQ';
   if (!SHOP_CREATE_INITIAL_STATUS_CHOICES.includes(initialStatus)) {
@@ -3010,6 +3023,8 @@ function apiShopCreateRequest(token, payload) {
     setV(COL_GROOM_NAME, groomName);
     setV(COL_BRIDE_LAST_NAME, brideLastName);
     setV(COL_BRIDE_NAME, brideName);
+    setV(COL_GROOM_AGE, groomAge);
+    setV(COL_BRIDE_AGE, brideAge);
     setV(COL_HOPE1, hopes[0]);
     setV(COL_HOPE2, hopes[1]);
     setV(COL_HOPE3, hopes[2]);
@@ -3020,8 +3035,9 @@ function apiShopCreateRequest(token, payload) {
     setV(COL_LOCATION, location);
     setV(COL_PREP, prep);
     options.forEach((name, i) => setV(opNameCol_(i + 1), name));
-    // ★パスポート番号は、対象支店の表示条件（パスポート必須）を作成時にもそのまま踏襲する
-    if (targetMeta.passportRequired) setV(COL_PASSPORT_NO, passportNumber);
+    // ★要件変更：パスポート番号は支店の必須設定に関わらず、入力があれば常に保存する
+    // （日本の店舗画面では常に入力欄を表示し、「※ISWのみ必要」という注記で運用する方針に変更したため）
+    setV(COL_PASSPORT_NO, passportNumber);
     setV(COL_AREA, team);
     setV(COL_ORIGIN_SHOP, session.branchCode);
     seedHopeStatuses_(headers, newRowData);

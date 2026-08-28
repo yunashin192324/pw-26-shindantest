@@ -865,7 +865,9 @@
           <div class="field-block"><label>新郎名（ローマ字）</label><input data-pending="新郎名（ローマ字）" value="${escapeAttr(d['新郎名（ローマ字）'])}"></div>
           <div class="field-block"><label>新婦姓（ローマ字）</label><input data-pending="新婦姓（ローマ字）" value="${escapeAttr(d['新婦姓（ローマ字）'])}"></div>
           <div class="field-block"><label>新婦名（ローマ字）</label><input data-pending="新婦名（ローマ字）" value="${escapeAttr(d['新婦名（ローマ字）'])}"></div>
-          ${!('パスポート番号' in d) ? '' : `<div class="field-block"><label>パスポート番号</label><input data-pending="パスポート番号" value="${escapeAttr(d['パスポート番号'])}"></div>`}
+          <div class="field-block"><label>新郎年齢（※ISWのみ必要）</label><input type="number" min="0" data-pending="新郎年齢" value="${escapeAttr(d['新郎年齢'])}"></div>
+          <div class="field-block"><label>新婦年齢（※ISWのみ必要）</label><input type="number" min="0" data-pending="新婦年齢" value="${escapeAttr(d['新婦年齢'])}"></div>
+          <div class="field-block"><label>パスポート番号（※ISWのみ必要）</label><input data-pending="パスポート番号" value="${escapeAttr(d['パスポート番号'])}"></div>
         </div>
       </div>
       <div class="section-card" id="shop-sec-reservation">
@@ -1600,7 +1602,9 @@
       <div class="tab-pane ${detailActiveTab === 'customer' ? '' : 'hidden'}" data-tab-pane="customer">
         <div class="section-card">
           <div class="detail-grid">
-            ${!d.passportRequired ? '' : `<div class="field-block"><label>パスポート番号</label><input data-pending="パスポート番号" value="${escapeAttr(d['パスポート番号'])}"></div>`}
+            <div class="field-block"><label>新郎年齢（※ISWのみ必要）</label><input type="number" min="0" data-pending="新郎年齢" value="${escapeAttr(d['新郎年齢'])}"></div>
+            <div class="field-block"><label>新婦年齢（※ISWのみ必要）</label><input type="number" min="0" data-pending="新婦年齢" value="${escapeAttr(d['新婦年齢'])}"></div>
+            ${!d.passportRequired ? '' : `<div class="field-block"><label>パスポート番号（※ISWのみ必要）</label><input data-pending="パスポート番号" value="${escapeAttr(d['パスポート番号'])}"></div>`}
             <div class="field-block"><label>現地で連絡可能なメールアドレス</label><input type="email" data-pending="現地連絡先メール" value="${escapeAttr(d['現地連絡先メール'])}"></div>
             <div class="field-block"><label>現地で連絡可能な電話番号</label><input data-pending="現地連絡先電話" value="${escapeAttr(d['現地連絡先電話'])}"></div>
             <div class="field-block"><label>滞在ホテル名</label><input data-pending="ホテル" value="${escapeAttr(d['ホテル'])}"></div>
@@ -2194,7 +2198,8 @@
   }
 
   // ---------- 新規依頼（店舗ロール専用。拡張要望2章） ----------
-  const SHOP_NEW_TEXT_FIELDS = ['challengeno', 'groom-last', 'groom', 'bride-last', 'bride', 'plan', 'sale', 'location', 'passport',
+  const SHOP_NEW_TEXT_FIELDS = ['challengeno', 'groom-last', 'groom', 'bride-last', 'bride', 'groom-age', 'bride-age',
+    'plan', 'sale', 'location', 'passport',
     'option1', 'option2', 'option3', 'option4', 'option5'];
   const SHOP_NEW_DATE_FIELDS = ['hope1', 'hope2', 'hope3', 'hope4', 'hope5'];
   async function openShopNewView() {
@@ -2227,7 +2232,7 @@
     if (!branchCode) return;
     const meta = branchesCache.find(b => b.code === branchCode) || {};
     $('shop-new-prep-block').classList.toggle('hidden', meta.country !== 'イタリア');
-    $('shop-new-passport-block').classList.toggle('hidden', !meta.passportRequired);
+    // ★要件変更：パスポート番号欄は支店の必須設定に関わらず常に表示する（※ISWのみ必要、と注記）
     try {
       const [plans, sales, locations, options] = await Promise.all([
         gsRun('apiListPlans', session.token, branchCode),
@@ -2305,11 +2310,14 @@
       groomName: $('shop-new-groom').value.trim(),
       brideLastName: $('shop-new-bride-last').value.trim(),
       brideName: $('shop-new-bride').value.trim(),
+      groomAge: $('shop-new-groom-age').value.trim(),
+      brideAge: $('shop-new-bride-age').value.trim(),
       plan: $('shop-new-plan').value.trim(),
       saleName: $('shop-new-sale').value.trim(),
       location: $('shop-new-location').value.trim(),
       prep: $('shop-new-prep-block').classList.contains('hidden') ? '' : $('shop-new-prep').value,
-      passportNumber: $('shop-new-passport-block').classList.contains('hidden') ? '' : $('shop-new-passport').value.trim(),
+      // ★要件変更：パスポート番号欄は常に表示するため、hiddenかどうかで送信有無を判断しない
+      passportNumber: $('shop-new-passport').value.trim(),
       hope1: $('shop-new-hope1').value, hope2: $('shop-new-hope2').value, hope3: $('shop-new-hope3').value,
       hope4: $('shop-new-hope4').value, hope5: $('shop-new-hope5').value,
       option1: $('shop-new-option1').value.trim(), option2: $('shop-new-option2').value.trim(),

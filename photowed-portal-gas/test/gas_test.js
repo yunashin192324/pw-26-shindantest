@@ -2131,13 +2131,16 @@ section('37. 店舗発の新規依頼フォーム拡張（拡張要望2章）');
   check('パスポート必須支店ではパスポート番号が保存される', detail['パスポート番号'] === 'TR1234567');
   check('選択した初期STS(JP側)（CHK）で作成される', detail['STS JP'] === 'CHK');
 
-  // --- パスポート非必須支店では指定しても無視される（表示条件を作成時にも踏襲） ---
+  // --- ★要件変更：パスポート番号欄は支店の必須設定に関わらず常に入力・保存できる
+  //     （日本の店舗画面では「※ISWのみ必要」の注記付きで常時表示する運用にしたため） ---
   const created2 = ctx.apiShopCreateRequest(shopToken, {
-    branchCode: 'VIE', team: '関東', groomLastName: 'BL', groomName: 'B', brideLastName: 'BBL', brideName: 'BB', hope1: '2026-10-01', passportNumber: 'SHOULD-BE-IGNORED',
+    branchCode: 'VIE', team: '関東', groomLastName: 'BL', groomName: 'B', brideLastName: 'BBL', brideName: 'BB', hope1: '2026-10-01', passportNumber: 'NOT-IGNORED',
+    groomAge: '28', brideAge: '26',
     challengeNo: 'DUMMYCHG012'
   });
   const detail2 = ctx.apiGetReservationDetail(jpToken, created2.kanriNo).detail;
-  check('パスポート非必須支店ではパスポート番号は保存されない', !detail2['パスポート番号']);
+  check('パスポート非必須支店でもパスポート番号は保存される（常に入力可能）', detail2['パスポート番号'] === 'NOT-IGNORED');
+  check('新郎年齢・新婦年齢が保存される', detail2['新郎年齢'] === '28' && detail2['新婦年齢'] === '26');
   check('initialStatus省略時は既定のRQで作成される', detail2['STS JP'] === 'RQ');
 }
 
