@@ -240,6 +240,10 @@
   .tab-btn { flex: 1; background: var(--color-card); border: 1px solid var(--color-border); color: var(--color-text);
     padding: 10px 6px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
   .tab-btn.active { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
+  /* ★要件：現地支店・手配課の画面も店舗画面と同じクイックナビ形式にしたため、.tab-paneが
+     スクロールジャンプ先になる。.section-cardと同じ理由でsticky2段分の見出しに隠れないよう
+     余白を確保する（.section-card自身にも同じ値が付くが、入れ子でも問題ない）。 */
+  .tab-pane { scroll-margin-top: 110px; }
 
   /* 統計ダッシュボード（JPのみ） */
   .stats-total { font-size: 1.3rem; font-weight: 700; }

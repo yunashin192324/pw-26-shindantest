@@ -26,12 +26,15 @@
   const CHECKLIST_ITEMS = ['ヘアメイク画像', '衣裳画像', '撮影指示書', '着付け指示書'];
   // ドライブアップロードの書類種別（Code.gsのSHOP_UPLOAD_DOC_TYPESと一致させる）
   const SHOP_UPLOAD_DOC_TYPES = ['ヘアメイク画像', '衣裳画像', '撮影指示書', '着付け指示書'];
-  const DETAIL_TABS = [
+  // ★要件：日本の支店（店舗）画面と同じフォーマット（隠す/表示のタブ切替ではなく、上部の
+  // クイックナビを押すと該当セクションへスムーズスクロールする形式）にする。ただし
+  // 現地支店・手配課ならではの項目（現地記入欄／日本記入欄）はそのままタブとして残す
+  // （「記入欄」セクション内の小さな切替タブとして実装。詳しくはrenderDetail参照）。
+  const DETAIL_QUICK_NAV = [
     { key: 'message', label: 'メッセージ' },
     { key: 'customer', label: 'お客様情報' },
     { key: 'reservation', label: '予約内容' },
-    { key: 'jpEntry', label: '日本記入欄', jpOnly: true },
-    { key: 'local', label: '現地記入欄' },
+    { key: 'entry', label: '記入欄' },
     { key: 'arrangement', label: '手配' },
     { key: 'drive', label: 'ドライブ' },
     { key: 'timeline', label: '履歴' }
@@ -56,7 +59,9 @@
   let session = null;
   let currentKanri = null;
   let currentUserName = ''; // ★要件：Googleアカウント（氏名@his-world.com）から取れる実名
-  let detailActiveTab = 'message';
+  // ★要件変更：案件詳細が隠す/表示のタブ切替から常時スクロール表示に変わったため、
+  // このフラグの役目は「記入欄」セクション内の小さな切替（日本記入欄／現地記入欄）だけになった。
+  let detailActiveTab = 'local';
   let dashboardScope = { showAll: true, teams: [], branches: [] };
   let dashboardSortKey = 'default';  // 案件一覧の並び替え
   let dashboardViewMode = 'card';    // 案件一覧の表示形式：'card'（カード）／'table'（表）
@@ -714,15 +719,15 @@
   }
 
   // ---------- 詳細 ----------
-  // keepTab=true のときは今開いているタブを維持する。
-  // ★不具合修正：「予約内容」「現地記入欄」タブの下部ボタンで保存すると、再描画のたびに
-  // 「メッセージ」タブへ戻されてしまい、"メッセージタブに戻るのが面倒"という
-  // 追加要望そのものが解決しない状態だった。保存後の再描画では元のタブに留まる。
+  // keepTab=true のときは「記入欄」の切替（日本記入欄／現地記入欄）を維持する。
+  // ★要件変更：案件詳細は常時スクロール表示（隠す/表示のタブ切替ではない）になったため、
+  // 「メッセージへ戻されてしまう」問題自体が起きなくなった（メッセージは常に一番上にあり、
+  // 一覧から開いたときは自然に最初に目に入る）。detailActiveTabは「記入欄」内の
+  // 小さな切替（日本記入欄／現地記入欄）専用のフラグとして引き続き使う。
   async function openDetail(kanriNo, keepTab) {
     if (kanriNo !== currentKanri) pendingChanges = {};
     currentKanri = kanriNo;
-    // ★要件：一覧から開いたときはまずメッセージ（未読の有無）が目に入るようにする
-    if (!keepTab) detailActiveTab = 'message';
+    if (!keepTab) detailActiveTab = 'local';
     showView('detail');
     $('detail-content').innerHTML = '<p class="hint-text">読み込み中...</p>';
     try {
@@ -1197,7 +1202,7 @@
   function arrangementTabHtml(d) {
     if (!d.arrangementEnabled) {
       return `
-        <div class="tab-pane ${detailActiveTab === 'arrangement' ? '' : 'hidden'}" data-tab-pane="arrangement">
+        <div class="tab-pane" data-tab-pane="arrangement" id="sec-arrangement">
           <div class="section-card">
             <h3>スタッフ手配</h3>
             <p class="hint-text">この支店では現地スタッフ手配メール機能が無効になっています。使う場合は「設定」画面から有効にしてください。</p>
@@ -1218,7 +1223,7 @@
           </div>`).join('')
       : '<p class="hint-text">まだ手配依頼を送っていません。</p>';
     return `
-      <div class="tab-pane ${detailActiveTab === 'arrangement' ? '' : 'hidden'}" data-tab-pane="arrangement">
+      <div class="tab-pane" data-tab-pane="arrangement" id="sec-arrangement">
         <div class="section-card">
           <h3>スタッフ手配</h3>
           <p class="hint-text" style="margin-bottom:10px;">ボタンを押すと宛先・内容を確認できる下書きが開きます。内容を確認・編集してから送信してください（宛先は「設定」画面の登録内容から自動で決まります）。</p>
@@ -1492,7 +1497,7 @@
     // 通常の3択（保存のみ／メッセージ／変更＋メッセージ）とは別に、変更した瞬間に単独で保存する
     // （支店に見える履歴・通知メールへ絶対に混ざらないようにするため）。
     const jpEntryTabHtml = session.role !== 'JP' ? '' : `
-      <div class="tab-pane ${detailActiveTab === 'jpEntry' ? '' : 'hidden'}" data-tab-pane="jpEntry">
+      <div class="tab-pane ${detailActiveTab === 'jpEntry' ? '' : 'hidden'}" data-tab-pane="jpEntry" id="sec-jpEntry">
         <div class="section-card">
           <h3>管轄</h3>
           <select data-pending="管轄"><option value="">未定</option>${JP_TEAMS.map(t => `<option value="${t}" ${d['管轄'] === t ? 'selected' : ''}>${t}</option>`).join('')}</select>
@@ -1528,10 +1533,14 @@
         ${quickActionsHtml}
       </div>`;
 
+    // ★要件：日本の支店（店舗）画面と同じフォーマットにする。押すと隠れていたタブが表示される
+    // 従来の仕組みではなく、押すと該当セクションへスムーズスクロールするクイックナビにする
+    // （店舗画面のshopQuickNavHtmlと同じ考え方）。data-tab属性は既存のテスト・記入欄の
+    // 切替ボタンと衝突しない範囲で、後方互換のためそのまま残す（実際の表示切替はしない）。
     const tabBarHtml = `
-      <div class="tab-bar">
-        ${DETAIL_TABS.filter(t => !t.jpOnly || session.role === 'JP').map(t =>
-          `<button type="button" class="tab-btn ${detailActiveTab === t.key ? 'active' : ''}" data-tab="${t.key}">${t.label}</button>`).join('')}
+      <div class="tab-bar" id="detail-quick-nav">
+        ${DETAIL_QUICK_NAV.map(t =>
+          `<button type="button" class="tab-btn" data-tab="${t.key}" data-scroll-to="sec-${t.key}">${t.label}</button>`).join('')}
       </div>`;
 
     // ★機能追加：店舗が起票した案件は、宛先が固定の2択（JP⇔支店）ではなくなる。
@@ -1565,12 +1574,12 @@
         : session.role === 'BRANCH' ? (d.shopDirect ? '支店 → 店舗／手配課（宛先で選択）' : '支店 → 日本')
         : '日本 → 支店／店舗（宛先で選択）');
     const messageTabHtml = `
-      <div class="tab-pane ${detailActiveTab === 'message' ? '' : 'hidden'}" data-tab-pane="message">
+      <div class="tab-pane" data-tab-pane="message" id="sec-message">
         <div class="section-card">
           <h3>メッセージ・変更の送信</h3>
           ${shopBanner}
           <p class="hint-text">送信者として記録されます：<strong>${escapeHtml(currentUserName || session.branchName)}</strong>${currentUserName ? `（${escapeHtml(session.branchName)}）` : ''}</p>
-          <p id="pending-indicator" class="hint-text ${pendingCount ? '' : 'hidden'}">未保存の変更: ${pendingCount}件（「お客様情報」「予約内容」「現地記入欄」タブでの入力を含みます）</p>
+          <p id="pending-indicator" class="hint-text ${pendingCount ? '' : 'hidden'}">未保存の変更: ${pendingCount}件（「お客様情報」「予約内容」「現地記入欄」セクションでの入力を含みます）</p>
           ${(phraseList && phraseList.length) ? `
           <label style="margin-top:10px;">定型文から挿入</label>
           <select id="phrase-select">
@@ -1599,7 +1608,7 @@
     // ★要件：お客様情報タブ。予約内容タブから移した項目（滞在先・請求関連・同意書）＋新設項目。
     // パスポート番号は支店マスタでパスポート番号欄がON（例：イスタンブール支店）の支店のみ表示する。
     const customerTabHtml = `
-      <div class="tab-pane ${detailActiveTab === 'customer' ? '' : 'hidden'}" data-tab-pane="customer">
+      <div class="tab-pane" data-tab-pane="customer" id="sec-customer">
         <div class="section-card">
           <div class="detail-grid">
             <div class="field-block"><label>新郎年齢（※ISWのみ必要）</label><input type="number" min="0" data-pending="新郎年齢" value="${escapeAttr(d['新郎年齢'])}"></div>
@@ -1621,7 +1630,7 @@
       </div>`;
 
     const reservationTabHtml = `
-      <div class="tab-pane ${detailActiveTab === 'reservation' ? '' : 'hidden'}" data-tab-pane="reservation">
+      <div class="tab-pane" data-tab-pane="reservation" id="sec-reservation">
         <div class="section-card">
           <div class="detail-grid">
             <div class="field-block"><label>新郎姓（ローマ字）</label><input data-pending="新郎姓（ローマ字）" value="${escapeAttr(d['新郎姓（ローマ字）'])}"></div>
@@ -1692,8 +1701,10 @@
         ${quickActionsHtml}
       </div>`;
 
+    // ★要件：現地記入欄は現地支店ならではの項目のため、「記入欄」セクション内の切替タブとして残す
+    // （BRANCHには日本記入欄との切替自体が無いので常に表示。JPは日本記入欄との2択で切り替える）。
     const localTabHtml = `
-      <div class="tab-pane ${detailActiveTab === 'local' ? '' : 'hidden'}" data-tab-pane="local">
+      <div class="tab-pane ${session.role === 'JP' && detailActiveTab !== 'local' ? 'hidden' : ''}" data-tab-pane="local" id="sec-local">
         <div class="section-card">
           <h3>現地運用情報</h3>
           <div class="detail-grid">
@@ -1716,9 +1727,27 @@
         ${quickActionsHtml}
       </div>`;
 
+    // ★要件：現地支店・手配課の画面フォーマットを日本の支店（店舗）画面と統一するクイックナビ化に伴い、
+    // 「記入欄」はクイックナビの1セクションにまとめる。ただし日本記入欄／現地記入欄はそれぞれ
+    // 手配課・現地支店ならではの項目なので、これまでどおり切替タブ（隠す／表示）として内側に残す。
+    // JPは日本記入欄／現地記入欄の2択で切替、BRANCHはそもそも日本記入欄が無いので現地記入欄のみ表示
+    // （切替ボタン自体を出さない）。内側の切替タブは.tab-barを流用するが、外側のクイックナビと
+    // 二重にstickyにならないようposition:staticで打ち消す。
+    const entrySwitcherHtml = session.role !== 'JP' ? '' : `
+      <div class="tab-bar" id="entry-switcher" style="position:static;">
+        <button type="button" class="tab-btn entry-switch-btn ${detailActiveTab === 'jpEntry' ? 'active' : ''}" data-entry-tab="jpEntry">日本記入欄</button>
+        <button type="button" class="tab-btn entry-switch-btn ${detailActiveTab === 'local' ? 'active' : ''}" data-entry-tab="local">現地記入欄</button>
+      </div>`;
+    const entryGroupHtml = `
+      <div id="sec-entry">
+        ${entrySwitcherHtml}
+        ${jpEntryTabHtml}
+        ${localTabHtml}
+      </div>`;
+
     // ★要件：Driveフォルダ URLは現地記入欄から独立した4つ目のタブに（日本側からアップロードすることもあるため）
     const driveTabHtml = `
-      <div class="tab-pane ${detailActiveTab === 'drive' ? '' : 'hidden'}" data-tab-pane="drive">
+      <div class="tab-pane" data-tab-pane="drive" id="sec-drive">
         <div class="section-card">
           <h3>Driveフォルダ URL</h3>
           <div class="msg-row">
@@ -1737,7 +1766,7 @@
 
     // ★機能：ステータス変更履歴とやり取り履歴を時系列にマージした「案件タイムライン」
     const timelineTabHtml = `
-      <div class="tab-pane ${detailActiveTab === 'timeline' ? '' : 'hidden'}" data-tab-pane="timeline">
+      <div class="tab-pane" data-tab-pane="timeline" id="sec-timeline">
         <div class="section-card">
           <h3>案件の履歴（新しい順）</h3>
           <p class="hint-text">メッセージとステータス変更を1本の流れで表示します。引き継ぎや経緯の確認にお使いください。</p>
@@ -1760,21 +1789,33 @@
       ${messageTabHtml}
       ${customerTabHtml}
       ${reservationTabHtml}
-      ${jpEntryTabHtml}
-      ${localTabHtml}
+      ${entryGroupHtml}
       ${arrangementTabHtml(d)}
       ${driveTabHtml}
       ${timelineTabHtml}
     `;
 
-    c.querySelectorAll('.tab-btn').forEach(btn => {
+    // ★要件：日本の支店（店舗）画面と同じフォーマットにする。クイックナビは押すと該当セクションへ
+    // スムーズスクロールするだけで、他のセクションを隠したりはしない（店舗画面と同じ考え方）。
+    c.querySelectorAll('#detail-quick-nav [data-scroll-to]').forEach(btn => {
       btn.addEventListener('click', () => {
-        detailActiveTab = btn.dataset.tab;
-        c.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === detailActiveTab));
-        c.querySelectorAll('.tab-pane').forEach(p => p.classList.toggle('hidden', p.dataset.tabPane !== detailActiveTab));
-        if (detailActiveTab === 'timeline') loadTimeline();
-        if (detailActiveTab === 'drive') loadShopUploadedDocsInto('shop-upload-list');
-        if (detailActiveTab === 'reservation') loadFormUrlsInto('form-urls-jp');
+        const target = $(btn.dataset.scrollTo);
+        if (target && typeof target.scrollIntoView === 'function') {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    });
+
+    // ★要件：「記入欄」内の日本記入欄／現地記入欄だけは、手配課・現地支店ならではの項目のため
+    // これまでどおり切替タブ（隠す／表示）として残す（JPのみ。BRANCHは現地記入欄しか無いので対象外）。
+    c.querySelectorAll('.entry-switch-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        detailActiveTab = btn.dataset.entryTab;
+        c.querySelectorAll('.entry-switch-btn').forEach(b => b.classList.toggle('active', b.dataset.entryTab === detailActiveTab));
+        const jpPane = c.querySelector('[data-tab-pane="jpEntry"]');
+        const localPane = c.querySelector('[data-tab-pane="local"]');
+        if (jpPane) jpPane.classList.toggle('hidden', detailActiveTab !== 'jpEntry');
+        if (localPane) localPane.classList.toggle('hidden', detailActiveTab !== 'local');
       });
     });
 
@@ -1855,11 +1896,11 @@
     c.querySelectorAll('[data-arrangement-category]').forEach(btn => {
       btn.addEventListener('click', () => openArrangementDraft(btn.dataset.arrangementCategory));
     });
-    // 履歴タブを開いたまま再描画された場合、タブのクリックが起きないので
-    // ここで読み込まないと「読み込み中...」のまま止まってしまう
-    if (detailActiveTab === 'timeline') loadTimeline();
-    if (detailActiveTab === 'drive' && $('shop-upload-list')) loadShopUploadedDocsInto('shop-upload-list');
-    if (detailActiveTab === 'reservation' && $('form-urls-jp')) loadFormUrlsInto('form-urls-jp');
+    // ★要件：クイックナビ化により全セクションが常に表示されているため、タブのクリックを待たず
+    // ここで読み込む（そうしないと「読み込み中...」のまま止まってしまう）
+    loadTimeline();
+    if ($('shop-upload-list')) loadShopUploadedDocsInto('shop-upload-list');
+    if ($('form-urls-jp')) loadFormUrlsInto('form-urls-jp');
   }
 
   // ★機能追加（拡張要望8章）：店舗アップロード済みの書類一覧を取得して描画する（JP・支店の閲覧用）
@@ -2023,7 +2064,7 @@
     const el = $('pending-indicator');
     if (!el) return;
     const n = Object.keys(pendingChanges).length;
-    el.textContent = `未保存の変更: ${n}件（「予約内容」「現地記入欄」タブでの入力を含みます）`;
+    el.textContent = `未保存の変更: ${n}件（「予約内容」「現地記入欄」セクションでの入力を含みます）`;
     el.classList.toggle('hidden', n === 0);
   }
 

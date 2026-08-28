@@ -129,13 +129,19 @@ async function login(dom, code, passcode) {
   await settle();
 }
 
+// ★要件変更：JP/支店の案件詳細は「隠す/表示」のタブ切替から、店舗画面と同じ常時スクロール表示
+// （クイックナビは押すとスクロールするだけで、他のセクションを隠さない）に変わったため、
+// 「今どのタブがアクティブか」という概念自体が「記入欄」内の日本記入欄／現地記入欄の
+// 切替（.entry-switch-btn）にしか残っていない。
 function activeTab(document) {
-  const btn = document.querySelector('.tab-btn.active');
-  return btn ? btn.dataset.tab : null;
+  const btn = document.querySelector('.entry-switch-btn.active');
+  return btn ? btn.dataset.entryTab : null;
 }
-function visiblePane(document) {
-  const pane = [...document.querySelectorAll('.tab-pane')].find(p => !p.classList.contains('hidden'));
-  return pane ? pane.dataset.tabPane : null;
+// 指定タブが「隠されているか」を返す（クイックナビ側のセクションは常にfalse、
+// 記入欄内の日本記入欄／現地記入欄だけは実際に切り替わる）
+function paneHidden(document, key) {
+  const pane = document.querySelector(`[data-tab-pane="${key}"]`);
+  return pane ? pane.classList.contains('hidden') : null;
 }
 
 (async () => {
@@ -157,7 +163,8 @@ function visiblePane(document) {
   document.querySelector('#reservation-list .res-card').click();
   await settle();
   check('案件詳細が開く', document.getElementById('detail-content').innerHTML.includes('R-001'));
-  check('開いた直後はメッセージタブ', activeTab(document) === 'message', String(activeTab(document)));
+  // ★要件変更：常時スクロール表示になったため、開いた直後から一番上の「メッセージ」が見えている
+  check('開いた直後からメッセージ欄が表示されている', paneHidden(document, 'message') === false);
 
   // ---------------------------------------------------------------
   section('U2. ①ドライブタブの見出しから「（納品）」が取れている');
@@ -165,7 +172,7 @@ function visiblePane(document) {
   driveTabBtn.click();
   await settle();
   const drivePane = document.querySelector('[data-tab-pane="drive"]');
-  check('ドライブタブが表示される', visiblePane(document) === 'drive', String(visiblePane(document)));
+  check('ドライブタブが表示される', paneHidden(document, 'drive') === false);
   check('見出しが「Driveフォルダ URL」', drivePane.querySelector('h3').textContent.trim() === 'Driveフォルダ URL',
         drivePane.querySelector('h3').textContent);
   check('「（納品）」の文字が残っていない', !drivePane.innerHTML.includes('（納品）'));
@@ -190,14 +197,13 @@ function visiblePane(document) {
 
   check('保存のみでサーバーに反映される',
         ctx.apiGetReservationDetail(ctx.apiLogin('ROW','CHANGE-ME-ROW').session.token, 'R-001').detail['備考'] === '会場までの送迎希望');
-  // ★これが今回の要望の肝：保存後にメッセージタブへ飛ばされないこと
-  check('保存後も「予約内容」タブに留まる（メッセージタブに戻らない）',
-        activeTab(document) === 'reservation', `実際: ${activeTab(document)}`);
-  check('表示中のパネルも予約内容のまま', visiblePane(document) === 'reservation', String(visiblePane(document)));
+  // ★これが今回の要望の肝：保存後にメッセージタブへ飛ばされないこと（常時スクロール表示になった今も、
+  // 予約内容セクションが隠されたりメッセージ欄へ強制的にスクロール移動させられたりしないこと）
+  check('保存後も「予約内容」セクションが表示されたまま（メッセージタブへ戻されない）',
+        paneHidden(document, 'reservation') === false);
 
-  // 現地記入欄タブからも同様に確定できる
-  [...document.querySelectorAll('.tab-btn')].find(b => b.dataset.tab === 'local').click();
-  await settle();
+  // 現地記入欄タブからも同様に確定できる（支店ロールでは日本記入欄との切替自体が無いため、
+  // 「現地記入欄」セクションはクリック無しで最初から表示されている）
   const pane2 = document.querySelector('[data-tab-pane="local"]');
   const pickup = pane2.querySelector('[data-pending="配車時間"]');
   pickup.value = '08:30';
@@ -207,7 +213,7 @@ function visiblePane(document) {
   const tok = ctx.apiLogin('ROW','CHANGE-ME-ROW').session.token;
   check('現地記入欄の「変更＋メッセージ」で保存される',
         ctx.apiGetReservationDetail(tok, 'R-001').detail['配車時間'] === '08:30');
-  check('保存後も「現地記入欄」タブに留まる', activeTab(document) === 'local', `実際: ${activeTab(document)}`);
+  check('保存後も「現地記入欄」セクションが表示されたまま', paneHidden(document, 'local') === false);
 
   // ---------------------------------------------------------------
   section('U4. ③タイトルがWEDLINKになっている');
@@ -330,9 +336,9 @@ function visiblePane(document) {
   await login(dom, 'KANTO', 'CHANGE-ME-KANTO');
   document.querySelector('#reservation-list .res-card').click();
   await settle();
-  check('日本側には「日本記入欄」タブが出る',
-        !![...document.querySelectorAll('.tab-btn')].find(b => b.dataset.tab === 'jpEntry'));
-  [...document.querySelectorAll('.tab-btn')].find(b => b.dataset.tab === 'jpEntry').click();
+  check('日本側には「記入欄」内に日本記入欄への切替タブが出る',
+        !!document.querySelector('.entry-switch-btn[data-entry-tab="jpEntry"]'));
+  document.querySelector('.entry-switch-btn[data-entry-tab="jpEntry"]').click();
   await settle();
   const pbCheckbox = document.querySelector('[data-internal-flag="フォトブリッジ登録"]');
   check('日本側にはフォトブリッジ登録のチェックボックスが出る', !!pbCheckbox);
@@ -351,7 +357,8 @@ function visiblePane(document) {
   const pbAfter = document.querySelector('[data-internal-flag="フォトブリッジ登録"]');
   check('チェック状態が再描画後も維持される', pbAfter.checked === true);
   check('保存後も日本記入欄タブに留まる（他の操作と同じ挙動）',
-        activeTab(document) === 'jpEntry', `実際: ${activeTab(document)}`);
+        activeTab(document) === 'jpEntry' && paneHidden(document, 'jpEntry') === false,
+        `実際: ${activeTab(document)}`);
   check('入力者名が画面に表示される（自動反映）',
         document.querySelector('[data-tab-pane="jpEntry"]').textContent.includes('登録者:'));
   check('チェック日時も画面に表示される（自動反映）',
@@ -364,8 +371,8 @@ function visiblePane(document) {
   await login(dom, 'ROW', 'CHANGE-ME-ROW');
   document.querySelector('#reservation-list .res-card').click();
   await settle();
-  check('支店側には「日本記入欄」タブ自体が出ない',
-        ![...document.querySelectorAll('.tab-btn')].find(b => b.dataset.tab === 'jpEntry'));
+  check('支店側には「日本記入欄」タブ自体が出ない（切替タブごと表示されない）',
+        !document.querySelector('.entry-switch-btn[data-entry-tab="jpEntry"]') && !document.querySelector('[data-tab-pane="jpEntry"]'));
   check('支店側の画面には社内進行管理欄のチェックボックスが一切出ない',
         !document.querySelector('[data-internal-flag]'));
   // ★注意：document.body.innerHTML には<script>タグの中身（JSソースコード自体）も含まれるため、
@@ -394,11 +401,10 @@ function visiblePane(document) {
     await settle();
     const pane = document.querySelector('[data-tab-pane="reservation"]');
     check('追加した内容がすぐ画面に反映される', pane.textContent.includes('請求書を発送しました'));
-    check('保存後も予約内容タブに留まる', activeTab(document) === 'reservation', `実際: ${activeTab(document)}`);
+    check('保存後も予約内容セクションが表示されたまま', paneHidden(document, 'reservation') === false);
 
-    // 現地記入欄タブでも同様に追記できる（種別が別れて保存される）
-    [...document.querySelectorAll('.tab-btn')].find(b => b.dataset.tab === 'local').click();
-    await settle();
+    // 現地記入欄タブでも同様に追記できる（種別が別れて保存される。支店ロールでは切替タブ自体が無く
+    // 最初から現地記入欄が表示されているため、クリックは不要）
     const localInput = document.querySelector('[data-memo-input="メモ（現地用）"]');
     localInput.value = '雨天時は屋内スタジオへ変更';
     document.querySelector('[data-memo-add="メモ（現地用）"]').click();
@@ -506,8 +512,7 @@ function visiblePane(document) {
     const resPaneForConsent = document.querySelector('[data-tab-pane="reservation"]');
     check('イタリアではないウィーン支店では同意書欄が出ない（JPでもないため）', !resPaneForConsent.querySelector('[data-consent-checkbox]'));
 
-    [...document.querySelectorAll('.tab-btn')].find(b => b.dataset.tab === 'local').click();
-    await settle();
+    // 支店ロールでは日本記入欄との切替タブ自体が無く、現地記入欄が最初から表示されている
     const localPane = document.querySelector('[data-tab-pane="local"]');
     check('現地記入欄にヘアメイク開始時間欄がある', !!localPane.querySelector('[data-pending="ヘアメイク開始時間"]'));
     check('現地記入欄に撮影開始時間欄がある', !!localPane.querySelector('[data-pending="撮影開始時間"]'));
@@ -1259,6 +1264,61 @@ function visiblePane(document) {
     check('一覧表（表）でも「予約確定」と出る', rowOk.textContent.includes('予約確定'), rowOk.textContent);
     document.getElementById('view-mode-card').click();
     await settle();
+  }
+
+  section('U25. 現地支店・手配課の案件詳細も日本の店舗画面と同じクイックナビ形式（常時スクロール表示）になっている');
+  {
+    // --- 日本（JP）側：クイックナビ7項目＋「記入欄」内の日本記入欄／現地記入欄の切替タブ ---
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'KANTO', 'CHANGE-ME-KANTO');
+    document.querySelector('#reservation-list .res-card').click();
+    await settle();
+
+    const nav = document.getElementById('detail-quick-nav');
+    check('日本側の詳細画面にもクイックナビが表示される（店舗画面と同じ仕組み）', !!nav);
+    const navBtns = [...nav.querySelectorAll('[data-scroll-to]')];
+    check('クイックナビにメッセージ・お客様情報・予約内容・記入欄・手配・ドライブ・履歴の7つがある',
+          navBtns.length === 7, navBtns.map(b => b.dataset.scrollTo).join(','));
+    const missingTargets = navBtns.map(b => b.dataset.scrollTo).filter(id => !document.getElementById(id));
+    check('クイックナビの全ボタンに対応するセクションが実在する', missingTargets.length === 0, missingTargets.join(','));
+    // ★不具合防止：jsdomにはscrollIntoViewが無いが、押しても例外にならず安全に無視されること
+    let navErr = null;
+    try { navBtns.forEach(b => b.click()); } catch (e) { navErr = e; }
+    check('クイックナビのボタンを押しても例外にならない（scrollIntoViewが無い環境でも安全）',
+          navErr === null, String(navErr));
+
+    // ★要件の肝：現地支店や手配課ならではの項目（記入欄内の日本記入欄／現地記入欄）だけは
+    // これまでどおりタブ（隠す／表示の切替）として残っている一方、その他のセクションは
+    // クイックナビをクリックしなくても最初から全部見える（隠されていない）
+    ['message', 'customer', 'reservation', 'arrangement', 'drive', 'timeline'].forEach(key => {
+      check(`「${key}」セクションはクイックナビを押さなくても最初から表示されている`,
+            paneHidden(document, key) === false, String(paneHidden(document, key)));
+    });
+    const switcherBtns = [...document.querySelectorAll('.entry-switch-btn')];
+    check('日本側には「記入欄」内に日本記入欄／現地記入欄の2択の切替タブがある', switcherBtns.length === 2,
+          switcherBtns.map(b => b.dataset.entryTab).join(','));
+
+    // --- 現地支店（BRANCH）側：クイックナビは同じ7項目、ただし切替タブは無く現地記入欄のみ ---
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'ROW', 'CHANGE-ME-ROW');
+    document.querySelector('#reservation-list .res-card').click();
+    await settle();
+
+    const navBranch = document.getElementById('detail-quick-nav');
+    check('現地支店の詳細画面にも同じクイックナビが表示される', !!navBranch);
+    const navBranchBtns = [...navBranch.querySelectorAll('[data-scroll-to]')];
+    check('現地支店のクイックナビも7項目（日本記入欄が無いだけで項目数は変わらない）',
+          navBranchBtns.length === 7, navBranchBtns.map(b => b.dataset.scrollTo).join(','));
+    ['message', 'customer', 'reservation', 'arrangement', 'drive', 'timeline', 'local'].forEach(key => {
+      check(`現地支店でも「${key}」セクションが最初から表示されている`,
+            paneHidden(document, key) === false, String(paneHidden(document, key)));
+    });
+    check('現地支店には日本記入欄との切替タブ自体が出ない（現地ならではの項目のみ）',
+          document.querySelectorAll('.entry-switch-btn').length === 0);
+    check('現地支店の画面には日本記入欄セクション自体が存在しない',
+          !document.querySelector('[data-tab-pane="jpEntry"]'));
   }
 
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
