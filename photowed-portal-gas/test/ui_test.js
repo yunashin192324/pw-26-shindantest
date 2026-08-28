@@ -1142,6 +1142,73 @@ function visiblePane(document) {
     check('プラン自体の変更も保存される', afterPlanSwitch['プラン名'] === 'ローマ3時間フォト');
   }
 
+  section('U24. 撮影日FIX未入力時の一覧表示：STSに応じた文言（撮影日未定の誤表示を修正）');
+  {
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'KANTO', 'CHANGE-ME-KANTO');
+    const jpToken = ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    const rowToken = ctx.apiLogin('ROW', 'CHANGE-ME-ROW').session.token;
+
+    // --- STS JP・STS 支店がどちらもOKなのに撮影日FIX未入力（不整合データ）でも「予約確定」と出る ---
+    // （STS 支店はBRANCH_EDIT_GATEにより「現在のSTS JP」次第で書き込める値が変わるため、
+    //   まずSTS 支店をRQ状態のうちにOKへ、そのあとでSTS JPを別途OKにする順で組み立てる）
+    const kOk = ctx.apiCreateReservation(jpToken, 'ROW', '01 Status Ok\n02 Status Bride').kanriNo;
+    ctx.apiSaveFieldsQuiet(rowToken, kOk, { 'STS 支店': 'OK' });
+    ctx.apiSaveFieldsQuiet(jpToken, kOk, { 'STS JP': 'OK' });
+    document.getElementById('nav-dashboard').click();
+    await settle();
+    const cardOk = [...document.querySelectorAll('#reservation-list .res-card')].find(c => c.textContent.includes(kOk));
+    check('STS JP・STS 支店が両方OKで撮影日FIX未入力なら「撮影日未定」ではなく「予約確定」と出る',
+          cardOk.textContent.includes('予約確定') && !cardOk.textContent.includes('撮影日未定'), cardOk.textContent);
+
+    // --- どちらかがRQのままなら「リクエスト中」（OKが片方にあっても、まだ確定扱いにしない） ---
+    const kRq = ctx.apiCreateReservation(jpToken, 'ROW', '01 Status Rq\n02 Status Bride2').kanriNo;
+    ctx.apiSaveFieldsQuiet(rowToken, kRq, { 'STS 支店': 'OK' }); // STS JPはRQのまま
+    document.getElementById('nav-dashboard').click();
+    await settle();
+    const cardRq = [...document.querySelectorAll('#reservation-list .res-card')].find(c => c.textContent.includes(kRq));
+    check('STS(JP側)がRQ・STS(支店側)がOKなら「リクエスト中」と出る（片方でも未確定なら予約確定にしない）',
+          cardRq.textContent.includes('リクエスト中'), cardRq.textContent);
+
+    // --- FN／CR／CWもそれぞれの文言になる ---
+    const kFn = ctx.apiCreateReservation(jpToken, 'ROW', '01 Status Fn\n02 Status Bride3').kanriNo;
+    ctx.apiSaveFieldsQuiet(jpToken, kFn, { 'STS JP': 'FN' });
+    ctx.apiSaveFieldsQuiet(rowToken, kFn, { 'STS 支店': 'FN' }); // STS JPがFNの間だけ支店もFNにできる
+    const kCr = ctx.apiCreateReservation(jpToken, 'ROW', '01 Status Cr\n02 Status Bride4').kanriNo;
+    ctx.apiSaveFieldsQuiet(jpToken, kCr, { 'STS JP': 'CR' });
+    const kCw = ctx.apiCreateReservation(jpToken, 'ROW', '01 Status Cw\n02 Status Bride5').kanriNo;
+    ctx.apiSaveFieldsQuiet(jpToken, kCw, { 'STS JP': 'CR' });
+    ctx.apiSaveFieldsQuiet(rowToken, kCw, { 'STS 支店': 'CW' }); // 支店がCWで応答→自動連動でSTS JPもCWになる
+    document.getElementById('nav-dashboard').click();
+    await settle();
+    document.getElementById('show-cancelled').checked = true; // CW（キャンセル済み）はデフォルトで一覧に出ないため表示させる
+    document.getElementById('show-cancelled').dispatchEvent(new dom.window.Event('change'));
+    await settle();
+    const textOf = (k) => [...document.querySelectorAll('#reservation-list .res-card')].find(c => c.textContent.includes(k)).textContent;
+    check('STS JP・STS 支店が両方FNなら「最終確定」と出る', textOf(kFn).includes('最終確定'));
+    check('STS(JP側)がCRなら「キャンセル中」と出る', textOf(kCr).includes('キャンセル中'));
+    check('STS JP・STS 支店が両方CWなら「キャンセル済」と出る', textOf(kCw).includes('キャンセル済'));
+
+    // --- 撮影日FIXが実際に入っていれば、従来どおり日付をそのまま表示する（今回の変更で退行しない） ---
+    const kDated = ctx.apiCreateReservation(jpToken, 'ROW', '01 Status Dated\n02 Status Bride6').kanriNo;
+    ctx.apiSaveFieldsQuiet(rowToken, kDated, { 'STS 支店': 'OK' });
+    ctx.apiSaveFieldsQuiet(jpToken, kDated, { 'STS JP': 'OK', '撮影日FIX': '2026-12-01' });
+    document.getElementById('nav-dashboard').click();
+    await settle();
+    const cardDated = [...document.querySelectorAll('#reservation-list .res-card')].find(c => c.textContent.includes(kDated));
+    check('撮影日FIXが入っている案件は従来どおり日付が表示される（文言に置き換わらない）',
+          cardDated.textContent.includes('2026/12/01') || cardDated.textContent.includes('2026-12-01'), cardDated.textContent);
+
+    // --- 一覧表（表示形式が表）でも同じ文言になる ---
+    document.getElementById('view-mode-table').click();
+    await settle();
+    const rowOk = [...document.querySelectorAll('#reservation-table-body tr')].find(r => r.textContent.includes(kOk));
+    check('一覧表（表）でも「予約確定」と出る', rowOk.textContent.includes('予約確定'), rowOk.textContent);
+    document.getElementById('view-mode-card').click();
+    await settle();
+  }
+
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error('テストが異常終了しました:', e); process.exit(1); });
