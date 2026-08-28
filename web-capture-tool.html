@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webページ丸ごと保存ツール</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* Googleサイトのiframe内でスクロールバーが出ないように調整 */
+        html, body {
+            margin: 0;
+            padding: 0;
+            background-color: transparent !important; /* サイトの背景に馴染ませる */
+            overflow: hidden; /* iframeの余計なスクロールを防ぐ */
+        }
+        /* スクロールが必要な場合のみカード内をスクロール */
+        .card-container {
+            max-height: 100vh;
+            overflow-y: auto;
+        }
+        /* 状態遷移ユーティリティ */
+        .hidden-state {
+            display: none !important;
+        }
+    </style>
+</head>
+<body class="font-sans text-gray-800 p-2 sm:p-4">
+
+    <div class="card-container w-full max-w-2xl mx-auto bg-white p-6 sm:p-8 rounded-2xl shadow-lg border border-gray-100">
+        <h1 class="text-2xl sm:text-3xl font-extrabold mb-2 text-gray-900 tracking-tight">📸 Webページ丸ごと保存</h1>
+        <p class="mb-6 text-sm text-gray-500">
+            保存したいWebページのURLを入力してください。ページ全体を高画質な画像（PNG）とPDFとして同時に生成し、ダウンロードできます。
+        </p>
+
+        <div class="space-y-4">
+            <form id="capture-form" class="relative group m-0">
+                <!-- URL入力領域 -->
+                <div class="relative w-full">
+                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <i data-lucide="link" class="h-5 w-5 text-gray-400"></i>
+                    </div>
+                    <input
+                        type="text"
+                        id="url-input"
+                        class="block w-full pl-11 pr-4 py-4 bg-gray-50 border border-gray-300 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                        placeholder="https://example.com"
+                        autocomplete="off"
+                    />
+                </div>
+
+                <!-- 処理ボタン -->
+                <button
+                    type="submit"
+                    id="submit-btn"
+                    class="w-full relative bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-bold py-4 px-4 rounded-xl shadow-md transition-all duration-200 flex justify-center items-center gap-2 mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    <!-- デフォルト状態 -->
+                    <span id="btn-content-default" class="flex items-center gap-2">
+                        <i data-lucide="camera" class="w-5 h-5"></i>
+                        <span>🚀 画像とPDFを生成する！</span>
+                    </span>
+                    <!-- ローディング状態 -->
+                    <span id="btn-content-loading" class="hidden-state flex items-center gap-2">
+                        <i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i>
+                        <span>生成処理中...（数秒かかります）</span>
+                    </span>
+                </button>
+            </form>
+
+            <!-- メッセージエリア（エラー等） -->
+            <div id="message-area" class="mt-4 text-sm font-bold hidden-state p-4 rounded-xl transition-all duration-300 opacity-0 transform translate-y-2">
+                <div class="flex items-center gap-2">
+                    <i id="message-icon" data-lucide="alert-circle" class="w-5 h-5 shrink-0"></i>
+                    <span id="message-text" class="break-all"></span>
+                </div>
+            </div>
+
+            <!-- 結果表示領域 -->
+            <div id="result-area" class="hidden-state mt-6 transition-all duration-700 ease-in-out opacity-0 max-h-0 overflow-hidden">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 p-4 bg-blue-50 rounded-xl border border-blue-100">
+                    <div class="flex items-center gap-2 overflow-hidden">
+                        <div class="h-2 w-2 rounded-full bg-green-500 animate-pulse shrink-0"></div>
+                        <span id="target-url-display" class="text-sm font-medium text-blue-800 truncate"></span>
+                    </div>
+
+                    <!-- アクションボタン群 -->
+                    <div id="action-buttons" class="hidden-state flex flex-wrap gap-2 shrink-0">
+                        <a
+                            id="link-external"
+                            href="#"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="p-2 text-gray-500 hover:text-blue-600 bg-white hover:bg-blue-50 rounded-lg transition-colors border border-gray-200"
+                            title="元のサイトを開く"
+                        >
+                            <i data-lucide="external-link" class="w-4 h-4"></i>
+                        </a>
+                        <button id="btn-png" class="hidden-state flex items-center gap-2 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-sm font-bold rounded-lg transition-colors border border-emerald-200">
+                            <i data-lucide="image" class="w-4 h-4"></i>
+                            <span>画像(PNG)</span>
+                        </button>
+                        <button id="btn-pdf" class="hidden-state flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg transition-colors shadow-sm">
+                            <i data-lucide="file-text" class="w-4 h-4"></i>
+                            <span>PDF</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- プレビューコンテナ -->
+                <div class="relative w-full rounded-xl overflow-hidden bg-gray-50 border border-gray-200 min-h-[300px] flex items-center justify-center group shadow-inner">
+
+                    <!-- ローディングインジケーター -->
+                    <div id="state-loading" class="hidden-state flex flex-col items-center text-blue-600 p-8 text-center">
+                        <i data-lucide="refresh-cw" class="w-10 h-10 animate-spin mb-4"></i>
+                        <span class="text-sm font-bold">ページデータを解析・生成しています...</span>
+                        <span class="text-xs text-blue-500 mt-2">サイトの規模により少し時間がかかる場合があります</span>
+                    </div>
+
+                    <!-- 画像プレビュー -->
+                    <div id="state-image" class="hidden-state relative w-full h-full max-h-[500px] overflow-hidden">
+                        <img
+                            id="preview-image"
+                            src=""
+                            alt="プレビュー"
+                            class="w-full h-auto object-cover object-top"
+                            loading="lazy"
+                        />
+                        <!-- 下部のグラデーション（続きがあることを示す） -->
+                        <div class="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-gray-100 to-transparent pointer-events-none"></div>
+                    </div>
+
+                    <!-- PDFのみフォールバック -->
+                    <div id="state-pdf-only" class="hidden-state flex flex-col items-center justify-center text-gray-500 p-8 text-center">
+                        <i data-lucide="file-text" class="w-16 h-16 mb-4 text-gray-300"></i>
+                        <p class="text-sm font-bold">PDFの生成が完了しました！<br>上のボタンからダウンロードしてください。</p>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class HyperCaptureEngine {
+            constructor() {
+                this.abortController = null;
+                this.currentUrl = '';
+                this.downloadUrls = { png: null, pdf: null };
+
+                // DOM要素
+                this.elements = {
+                    form: document.getElementById('capture-form'),
+                    input: document.getElementById('url-input'),
+                    submitBtn: document.getElementById('submit-btn'),
+                    btnDefault: document.getElementById('btn-content-default'),
+                    btnLoading: document.getElementById('btn-content-loading'),
+                    messageArea: document.getElementById('message-area'),
+                    messageText: document.getElementById('message-text'),
+                    messageIcon: document.getElementById('message-icon'),
+                    resultArea: document.getElementById('result-area'),
+                    targetUrlDisplay: document.getElementById('target-url-display'),
+                    actionButtons: document.getElementById('action-buttons'),
+                    linkExternal: document.getElementById('link-external'),
+                    btnPng: document.getElementById('btn-png'),
+                    btnPdf: document.getElementById('btn-pdf'),
+                    stateLoading: document.getElementById('state-loading'),
+                    stateImage: document.getElementById('state-image'),
+                    statePdfOnly: document.getElementById('state-pdf-only'),
+                    previewImage: document.getElementById('preview-image'),
+                };
+
+                this.bindEvents();
+                lucide.createIcons();
+            }
+
+            bindEvents() {
+                this.elements.form.addEventListener('submit', (e) => this.handleSubmit(e));
+                this.elements.input.addEventListener('input', () => this.hideMessage());
+                this.elements.btnPng.addEventListener('click', () => this.forceDownload(this.downloadUrls.png, 'png'));
+                this.elements.btnPdf.addEventListener('click', () => this.forceDownload(this.downloadUrls.pdf, 'pdf'));
+            }
+
+            isValidUrl(urlString) {
+                if (!urlString || urlString.trim() === '') return false;
+                try {
+                    const url = new URL(urlString);
+                    return url.protocol === 'http:' || url.protocol === 'https:';
+                } catch (error) {
+                    return false;
+                }
+            }
+
+            showMessage(text, type = 'error') {
+                this.elements.messageText.textContent = text;
+                this.elements.messageArea.classList.remove('hidden-state', 'opacity-0', 'translate-y-2');
+                this.elements.messageArea.classList.add('opacity-100', 'translate-y-0');
+
+                if (type === 'error') {
+                    this.elements.messageArea.className = 'mt-4 text-sm font-bold p-4 rounded-xl transition-all duration-300 opacity-100 translate-y-0 bg-red-50 text-red-600 border border-red-200';
+                    this.elements.input.classList.add('border-red-500', 'focus:ring-red-500');
+                    this.elements.input.classList.remove('focus:ring-blue-500', 'focus:border-blue-500');
+                } else {
+                    this.elements.messageArea.className = 'mt-4 text-sm font-bold p-4 rounded-xl transition-all duration-300 opacity-100 translate-y-0 bg-green-50 text-green-700 border border-green-200';
+                    this.elements.input.classList.remove('border-red-500', 'focus:ring-red-500');
+                }
+            }
+
+            hideMessage() {
+                this.elements.messageArea.classList.add('opacity-0', 'translate-y-2');
+                this.elements.input.classList.remove('border-red-500', 'focus:ring-red-500');
+                this.elements.input.classList.add('focus:ring-blue-500', 'focus:border-blue-500');
+                setTimeout(() => {
+                    this.elements.messageArea.classList.add('hidden-state');
+                }, 300);
+            }
+
+            setLoadingState(isLoading) {
+                this.elements.submitBtn.disabled = isLoading;
+                this.elements.input.disabled = isLoading;
+
+                if (isLoading) {
+                    this.elements.btnDefault.classList.add('hidden-state');
+                    this.elements.btnLoading.classList.remove('hidden-state');
+                    this.elements.submitBtn.classList.add('bg-blue-400');
+                    this.elements.submitBtn.classList.remove('hover:bg-blue-700', 'bg-blue-600');
+
+                    this.hideMessage();
+                    this.elements.actionButtons.classList.add('hidden-state');
+                    this.elements.stateImage.classList.add('hidden-state');
+                    this.elements.statePdfOnly.classList.add('hidden-state');
+
+                    this.elements.resultArea.classList.remove('hidden-state', 'opacity-0', 'max-h-0');
+                    this.elements.resultArea.classList.add('opacity-100', 'max-h-[2000px]');
+                    this.elements.stateLoading.classList.remove('hidden-state');
+                } else {
+                    this.elements.btnLoading.classList.add('hidden-state');
+                    this.elements.btnDefault.classList.remove('hidden-state');
+                    this.elements.submitBtn.classList.remove('bg-blue-400');
+                    this.elements.submitBtn.classList.add('hover:bg-blue-700', 'bg-blue-600');
+                    this.elements.stateLoading.classList.add('hidden-state');
+                }
+            }
+
+            renderResult(imageUrl, pdfUrl, info = {}) {
+                this.downloadUrls = { png: imageUrl, pdf: pdfUrl };
+                this.elements.actionButtons.classList.remove('hidden-state');
+
+                if (imageUrl) {
+                    this.elements.btnPng.classList.remove('hidden-state');
+                    this.elements.previewImage.src = imageUrl;
+                    this.elements.previewImage.onload = () => {
+                        this.elements.stateImage.classList.remove('hidden-state');
+                    };
+                } else {
+                    this.elements.btnPng.classList.add('hidden-state');
+                }
+
+                if (pdfUrl) {
+                    this.elements.btnPdf.classList.remove('hidden-state');
+                    if (!imageUrl) {
+                        this.elements.statePdfOnly.classList.remove('hidden-state');
+                    }
+                } else {
+                    this.elements.btnPdf.classList.add('hidden-state');
+                }
+
+                // 画像・PDFのどちらかが欠けた場合は「完了しました」と誤魔化さず、
+                // 何が失敗したのかをユーザーに明示する（片方が無言で消えるだけだと不具合に気づけないため）
+                if (imageUrl && pdfUrl) {
+                    this.showMessage('🎉 取得が完了しました！ダウンロードボタンから保存してください。', 'success');
+                } else if (pdfUrl && !imageUrl) {
+                    this.showMessage('🎉 PDFの取得が完了しました！（画像プレビューの生成には失敗しました）', 'success');
+                } else if (imageUrl && !pdfUrl) {
+                    const reason = info.pdfError ? `（理由: ${info.pdfError}）` : '';
+                    this.showMessage(`⚠️ 画像は取得できましたが、PDFの生成には失敗しました。${reason} お手数ですが、もう一度お試しください。`);
+                }
+            }
+
+            async handleSubmit(e) {
+                e.preventDefault();
+
+                let urlString = this.elements.input.value.trim();
+                if (!urlString) {
+                    this.showMessage('⚠️ URLを入力してください');
+                    return;
+                }
+
+                if (!urlString.startsWith('http')) {
+                    urlString = `https://${urlString}`;
+                }
+
+                if (!this.isValidUrl(urlString)) {
+                    this.showMessage('⚠️ 正しいURL形式で入力してください');
+                    return;
+                }
+
+                this.currentUrl = urlString;
+                this.elements.targetUrlDisplay.textContent = urlString;
+                this.elements.linkExternal.href = urlString;
+
+                await this.fetchScreenshot(urlString);
+            }
+
+            /**
+             * screenshot用・pdf用で共通のクエリパラメータを組み立てる。
+             * kind には 'screenshot' か 'pdf' を渡す。
+             */
+            buildApiUrl(url, kind) {
+                const apiUrl = new URL('https://api.microlink.io');
+                apiUrl.searchParams.append('url', url);
+                apiUrl.searchParams.append('meta', 'false');
+
+                // 【不具合の主因】以前は waitUntil に 'networkidle0'（＝通信が完全にゼロになるまで待つ）を
+                // 指定していたが、広告タグ・アクセス解析・チャットウィジェットなどが常時通信し続ける
+                // サイトでは条件が永遠に満たされず、そのままタイムアウトして画像・PDFとも生成に
+                // 失敗していた（サイトによって起きたり起きなかったりする＝「たまに失敗する」の正体）。
+                // 通信が2本以下になれば良しとする 'networkidle2' に変更し、待ちすぎを防ぐ。
+                apiUrl.searchParams.append('waitUntil', 'networkidle2');
+                apiUrl.searchParams.append('waitForTimeout', '3000');
+
+                // 無料プランで許容される上限（30秒）まで明示的に確保し、
+                // 重いページでもサーバー側の内部タイムアウトに引っかかりにくくする
+                apiUrl.searchParams.append('timeout', '30s');
+
+                if (kind === 'screenshot') {
+                    apiUrl.searchParams.append('screenshot', 'true');
+                    apiUrl.searchParams.append('fullPage', 'true');
+                } else if (kind === 'pdf') {
+                    apiUrl.searchParams.append('pdf', 'true');
+                    apiUrl.searchParams.append('pdf.format', 'A4');
+                    apiUrl.searchParams.append('pdf.margin', '0.4cm');
+                }
+
+                // エンジニアの意地：確実なレンダリングのための設定
+                const forcedVisibilityCss = `
+                    * {
+                        opacity: 1 !important; visibility: visible !important;
+                        transform: none !important; animation: none !important; transition: none !important;
+                    }
+                    .fixed, .sticky, [style*="position: fixed"], [style*="position: sticky"] { position: absolute !important; }
+                    iframe[src*="chat"], #chat-widget, .cookie-banner { display: none !important; }
+                `;
+                apiUrl.searchParams.append('style', forcedVisibilityCss);
+
+                return apiUrl;
+            }
+
+            /**
+             * Microlink APIを叩き、一時的なエラー（レート制限・タイムアウト・5xx）の場合は
+             * 短い間隔を空けて自動的に1回だけ再試行する。
+             * 「たまに失敗する」不具合の多くは一過性のエラーのため、再試行だけで解消するケースが多い。
+             */
+            async fetchWithRetry(apiUrl, signal, retries = 1) {
+                let lastError = new Error('不明なエラーが発生しました');
+
+                for (let attempt = 0; attempt <= retries; attempt++) {
+                    try {
+                        const response = await fetch(apiUrl.toString(), {
+                            signal,
+                            headers: { 'Accept': 'application/json' }
+                        });
+
+                        // Microlinkはエラー時もJSONボディに詳細な理由(message)を返してくるため、
+                        // ステータスコードだけでなく中身を読んで理由を拾う
+                        const data = await response.json().catch(() => null);
+
+                        if (!response.ok || data?.status !== 'success') {
+                            const reason = data?.message || `ページの取得に失敗しました (ステータス: ${response.status})`;
+                            const isTransient = response.status === 429 || response.status >= 500;
+
+                            if (isTransient && attempt < retries) {
+                                lastError = new Error(reason);
+                                await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)));
+                                continue;
+                            }
+                            throw new Error(reason);
+                        }
+
+                        return data;
+                    } catch (error) {
+                        if (error.name === 'AbortError') throw error;
+                        lastError = error;
+                        if (attempt < retries) {
+                            await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)));
+                            continue;
+                        }
+                        throw lastError;
+                    }
+                }
+
+                throw lastError;
+            }
+
+            async fetchScreenshot(url) {
+                if (this.abortController) {
+                    this.abortController.abort();
+                }
+
+                this.abortController = new AbortController();
+                const signal = this.abortController.signal;
+
+                this.setLoadingState(true);
+
+                try {
+                    // 画像とPDFを1本のリクエストにまとめていたのをやめ、それぞれ独立したリクエストにする。
+                    // 1本のリクエストにまとめていると、PDF生成だけが重くて失敗した場合に画像まで
+                    // 巻き添えで失敗してしまっていた。Promise.allSettledで分離することで、
+                    // 片方が失敗してももう片方の結果は活かせるようにする。
+                    const [screenshotResult, pdfResult] = await Promise.allSettled([
+                        this.fetchWithRetry(this.buildApiUrl(url, 'screenshot'), signal),
+                        this.fetchWithRetry(this.buildApiUrl(url, 'pdf'), signal),
+                    ]);
+
+                    if (signal.aborted) return;
+
+                    const imageUrl = screenshotResult.status === 'fulfilled'
+                        ? screenshotResult.value?.data?.screenshot?.url
+                        : null;
+                    const pdfUrl = pdfResult.status === 'fulfilled'
+                        ? pdfResult.value?.data?.pdf?.url
+                        : null;
+
+                    if (!imageUrl && !pdfUrl) {
+                        const reason = pdfResult.reason?.message || screenshotResult.reason?.message
+                            || '対象のページを正しく読み込めませんでした。アクセス制限がある可能性があります。';
+                        throw new Error(reason);
+                    }
+
+                    this.renderResult(imageUrl, pdfUrl, {
+                        pdfError: pdfResult.status === 'rejected' ? pdfResult.reason?.message : null,
+                    });
+
+                } catch (error) {
+                    if (error.name === 'AbortError') return;
+                    this.showMessage(`❌ エラー: ${error.message}`);
+                    this.elements.resultArea.classList.add('opacity-0', 'max-h-0');
+                    this.elements.resultArea.classList.remove('opacity-100', 'max-h-[2000px]');
+                } finally {
+                    this.setLoadingState(false);
+                    this.abortController = null;
+                }
+            }
+
+            async forceDownload(fileUrl, extension) {
+                if (!fileUrl) return;
+
+                try {
+                    const response = await fetch(fileUrl);
+                    if (!response.ok) throw new Error('Fetch failed');
+
+                    const blob = await response.blob();
+                    const blobUrl = window.URL.createObjectURL(blob);
+
+                    const a = document.createElement('a');
+                    a.href = blobUrl;
+
+                    const hostname = new URL(this.currentUrl).hostname.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                    a.download = `web_capture_${hostname}_${timestamp}.${extension}`;
+
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+
+                    setTimeout(() => window.URL.revokeObjectURL(blobUrl), 100);
+                } catch (err) {
+                    window.open(fileUrl, '_blank', 'noopener,noreferrer');
+                }
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            new HyperCaptureEngine();
+        });
+    </script>
+</body>
+</html>
