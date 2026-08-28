@@ -1190,15 +1190,35 @@ function visiblePane(document) {
     check('STS(JP側)がCRなら「キャンセル中」と出る', textOf(kCr).includes('キャンセル中'));
     check('STS JP・STS 支店が両方CWなら「キャンセル済」と出る', textOf(kCw).includes('キャンセル済'));
 
-    // --- 撮影日FIXが実際に入っていれば、従来どおり日付をそのまま表示する（今回の変更で退行しない） ---
+    // --- ★要件変更：撮影日FIXが入っている案件でも、文言（予約確定など）と日付の両方を併記する ---
     const kDated = ctx.apiCreateReservation(jpToken, 'ROW', '01 Status Dated\n02 Status Bride6').kanriNo;
     ctx.apiSaveFieldsQuiet(rowToken, kDated, { 'STS 支店': 'OK' });
     ctx.apiSaveFieldsQuiet(jpToken, kDated, { 'STS JP': 'OK', '撮影日FIX': '2026-12-01' });
     document.getElementById('nav-dashboard').click();
     await settle();
     const cardDated = [...document.querySelectorAll('#reservation-list .res-card')].find(c => c.textContent.includes(kDated));
-    check('撮影日FIXが入っている案件は従来どおり日付が表示される（文言に置き換わらない）',
+    check('撮影日FIXが入っていれば日付は従来どおり表示される',
           cardDated.textContent.includes('2026/12/01') || cardDated.textContent.includes('2026-12-01'), cardDated.textContent);
+    check('撮影日FIXが入っていても文言（予約確定）が併記される（今回の要望）',
+          cardDated.textContent.includes('予約確定'), cardDated.textContent);
+    check('日付と文言がそれぞれ別のクラスの要素として構造化されている',
+          !!cardDated.querySelector('.case-status-label') && !!cardDated.querySelector('.case-status-date'));
+
+    // --- UC／CHK／DC／PCもそれぞれの文言になる ---
+    const kUc = ctx.apiCreateReservation(jpToken, 'ROW', '01 Status Uc\n02 Status Bride7').kanriNo;
+    ctx.apiSaveFieldsQuiet(rowToken, kUc, { 'STS 支店': 'UC' }); // JPはRQのまま→支店の回答はJP側にも自動連動しUCになる
+    const kChk = ctx.apiCreateReservation(jpToken, 'ROW', '01 Status Chk\n02 Status Bride8').kanriNo;
+    ctx.apiSaveFieldsQuiet(jpToken, kChk, { 'STS JP': 'CHK' });
+    const kDc = ctx.apiCreateReservation(jpToken, 'ROW', '01 Status Dc\n02 Status Bride9').kanriNo;
+    ctx.apiSaveFieldsQuiet(jpToken, kDc, { 'STS JP': 'DC' });
+    const kPc = ctx.apiCreateReservation(jpToken, 'ROW', '01 Status Pc\n02 Status Bride10').kanriNo;
+    ctx.apiSaveFieldsQuiet(jpToken, kPc, { 'STS JP': 'PC' });
+    document.getElementById('nav-dashboard').click();
+    await settle();
+    check('STS(支店側)がUCなら「空きなし」と出る', textOf(kUc).includes('空きなし'), textOf(kUc));
+    check('STS(JP側)がCHKなら「空き確認中」と出る', textOf(kChk).includes('空き確認中'));
+    check('STS(JP側)がDCなら「日付変更中」と出る', textOf(kDc).includes('日付変更中'));
+    check('STS(JP側)がPCなら「プラン変更中」と出る', textOf(kPc).includes('プラン変更中'));
 
     // --- 一覧表（表示形式が表）でも同じ文言になる ---
     document.getElementById('view-mode-table').click();

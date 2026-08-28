@@ -108,9 +108,14 @@
   .res-card { background: var(--color-card); border-radius: 12px; padding: 12px 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
     cursor: pointer; border-left: 4px solid var(--color-primary); }
   .res-card:active { background: var(--color-primary-tint); }
-  .res-card-top { display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; color: var(--color-muted); }
+  .res-card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; font-size: 0.85rem; color: var(--color-muted); }
   /* ★要件：一覧の日付はお名前より大きく、パッと見て日付がわかるようにする */
-  .res-card-top span:last-child { font-size: 1.12rem; font-weight: 700; color: var(--color-text); }
+  .res-card-date-cell { text-align: right; white-space: nowrap; }
+  /* ★要件：撮影日FIXが未入力／既入力どちらでも、STSに応じた文言（予約確定・リクエスト中等）と
+     撮影日FIXの両方が分かるように併記する（case-status-label＝文言、case-status-date＝日付）。
+     文言は日付より小さく色付きで、日付は従来どおり大きく太字で目立たせる。 */
+  .case-status-label { display: block; font-size: 0.78rem; font-weight: 700; color: var(--color-primary); }
+  .case-status-date { display: block; font-size: 1.12rem; font-weight: 700; color: var(--color-text); }
   .res-card-names { font-size: 1rem; font-weight: 600; margin: 4px 0; }
   .res-card-bottom { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
   .chip { font-size: 0.72rem; padding: 3px 8px; border-radius: 999px; background: #eef2f7; color: var(--color-text); }

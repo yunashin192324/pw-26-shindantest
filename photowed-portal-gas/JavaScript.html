@@ -366,9 +366,10 @@
 
   // ★不具合修正：撮影日FIXが未入力の案件は一律「撮影日未定」と表示していたが、
   // STS(JP側)・STS(支店側)がどちらもOKなのに「未定」と出るのはおかしい、との指摘への対応。
-  // 撮影日FIXが入っていればそのまま日付を表示し（変更なし）、未入力の場合だけ、
-  // STS(JP側)・STS(支店側)のどちらかが該当するコードを持っていれば状況の分かる文言に置き換える。
-  // 該当が無い（CHK/UC/CF/DC/PC等）場合は従来どおり「撮影日未定」のまま。
+  // ★要件変更：さらに「文言と日付、両方書いてほしい」との要望により、撮影日FIXが入っている
+  // 案件でも文言（予約確定など）を併記するようにした（従来は日付が入っていれば文言は出さず
+  // 日付だけを表示していた）。該当するSTSが無い場合（CF等）は文言を出さず、日付だけ・
+  // どちらも無ければ「撮影日未定」のみを表示する。
   function caseStatusLabel_(statusJp, statusBranch) {
     const has = (code) => statusJp === code || statusBranch === code;
     if (has('RQ')) return 'リクエスト中';
@@ -376,7 +377,22 @@
     if (has('FN')) return '最終確定';
     if (has('CR')) return 'キャンセル中';
     if (has('CW')) return 'キャンセル済';
-    return '撮影日未定';
+    if (has('UC')) return '空きなし';
+    if (has('CHK')) return '空き確認中';
+    if (has('DC')) return '日付変更中';
+    if (has('PC')) return 'プラン変更中';
+    return '';
+  }
+  // 案件一覧の日付欄：文言（あれば）と撮影日FIX（あれば）を両方表示する。
+  // どちらも無ければ「撮影日未定」のみ表示する（従来どおり）。
+  function caseDateCellHtml_(r) {
+    const label = caseStatusLabel_(r.statusJp, r.statusBranch);
+    const date = r.confirmedDate || '';
+    if (!label && !date) return escapeHtml('撮影日未定');
+    return [
+      label ? `<span class="case-status-label">${escapeHtml(label)}</span>` : '',
+      date ? `<span class="case-status-date">${escapeHtml(date)}</span>` : ''
+    ].filter(Boolean).join('<br>');
   }
 
   // ★要件：一覧表では、日付・都市・チャレンジ番号・お名前・STS JP・STS 支店・予約番号（管理番号）・
@@ -390,7 +406,7 @@
       tr.className = r.needsAction ? 'needs-action-row' : '';
       // ★不具合修正：カード表示と同様、自由入力項目はエスケープしてから差し込む（保存型XSS対策）
       tr.innerHTML = `
-        <td class="res-table-date">${escapeHtml(r.confirmedDate || caseStatusLabel_(r.statusJp, r.statusBranch))}</td>
+        <td class="res-table-date">${caseDateCellHtml_(r)}</td>
         <td>${escapeHtml(r.city || '-')}</td>
         <td>${escapeHtml(r.challengeNo || 'なし')}</td>
         <td>${escapeHtml(r.groomName || '')}${r.brideName ? '／' + escapeHtml(r.brideName) : ''}${r.needsAction ? ' ●' : ''}${cancelled ? '（キャンセル）' : ''}</td>
@@ -412,7 +428,7 @@
     // エスケープせずinnerHTMLへ差し込むと保存型XSS（悪意あるHTMLをそのまま実行）につながる。
     // ダッシュボードはログイン直後に必ず表示される画面なので、ここでのエスケープ漏れは特に危険。
     card.innerHTML = `
-      <div class="res-card-top"><span>${escapeHtml(r.kanriNo)} ・ CHG: ${escapeHtml(r.challengeNo || 'なし')}</span><span>${escapeHtml(r.confirmedDate || caseStatusLabel_(r.statusJp, r.statusBranch))}</span></div>
+      <div class="res-card-top"><span>${escapeHtml(r.kanriNo)} ・ CHG: ${escapeHtml(r.challengeNo || 'なし')}</span><span class="res-card-date-cell">${caseDateCellHtml_(r)}</span></div>
       <div class="res-card-names">${escapeHtml(r.groomName || '')} ${r.brideName ? '／ ' + escapeHtml(r.brideName) : ''}</div>
       <div class="res-card-bottom">
         ${r.needsAction ? '<span class="chip needs-action-chip">● 要対応</span>' : ''}
@@ -463,7 +479,7 @@
         card.className = 'res-card';
         // ★不具合修正：検索結果も自由入力の値をエスケープせず描画していたため保存型XSSの経路になっていた
         card.innerHTML = `
-          <div class="res-card-top"><span>${escapeHtml(r.kanriNo)} ・ CHG: ${escapeHtml(r.challengeNo || 'なし')}</span><span>${escapeHtml(r.confirmedDate || caseStatusLabel_(r.statusJp, r.statusBranch))}</span></div>
+          <div class="res-card-top"><span>${escapeHtml(r.kanriNo)} ・ CHG: ${escapeHtml(r.challengeNo || 'なし')}</span><span class="res-card-date-cell">${caseDateCellHtml_(r)}</span></div>
           <div class="res-card-names">${escapeHtml(r.groomName || '')} ${r.brideName ? '／ ' + escapeHtml(r.brideName) : ''}</div>
           <div class="res-card-bottom">
             <span class="chip branch">${escapeHtml(r.branchName)}${r.city ? '・' + escapeHtml(r.city) : ''}</span>
