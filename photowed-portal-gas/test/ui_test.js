@@ -1321,6 +1321,75 @@ function paneHidden(document, key) {
           !document.querySelector('[data-tab-pane="jpEntry"]'));
   }
 
+  section('U26. 現地支店・手配課のプラン・オプションを表形式に統一（プラン／オプションの隣でSTSを直接編集）');
+  {
+    const kanri5 = ctx.apiCreateReservation(
+      ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token, 'ROW', '01 PlanTable\n02 PlanTable2'
+    ).kanriNo;
+
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'KANTO', 'CHANGE-ME-KANTO');
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanri5)).click();
+    await settle();
+
+    // ★要件の肝：以前は「プラン名の下」に読み取り専用のSTSバッジ、CHG NOの下に編集用の
+    // STS JP/STS 支店の欄が別々にあったが、添付いただいた既存システムのUIに寄せて、
+    // プラン・オプションと同じ表の中にSTS列として並べ、その場で直接編集できるようにした
+    const planCard = document.querySelector('.plan-option-card');
+    check('プラン・オプションが1つの表（明細票）にまとまっている', !!planCard);
+    const planTable = planCard.querySelector('table.plan-table');
+    check('表のヘッダーに種別・名称・STS（JP側）・STS（支店側）の4列がある',
+          !!planTable && [...planTable.querySelectorAll('thead th')].map(th => th.textContent.trim()).join(',') ===
+          '種別,名称,STS（JP側）,STS（支店側）');
+    const rows = [...planTable.querySelectorAll('tbody tr')];
+    check('先頭行がプラン、続く5行がオプション①〜⑤になっている', rows.length === 6 && rows[0].cells[0].textContent === 'プラン');
+    check('もう「STS JP」「STS 支店」の独立したカード（status-row）は表示されない（表に一本化）',
+          !document.querySelector('.status-row'));
+    check('同じフィールドを二重に編集できる状態になっていない（STS JPのdata-pendingは1つだけ）',
+          document.querySelectorAll('[data-pending="STS JP"]').length === 1);
+
+    // プランの行のSTS(JP側)は、プラン名のすぐ隣（同じ行のセル）で直接編集できる
+    const planRow = rows[0];
+    const planStsJpSelect = planRow.cells[2].querySelector('select');
+    check('プランの行のSTS（JP側）が、プラン名の隣で直接プルダウン編集できる（FNなども選べる）',
+          !!planStsJpSelect && [...planStsJpSelect.options].some(o => o.value === 'FN'));
+    planStsJpSelect.value = 'OK';
+    planStsJpSelect.dispatchEvent(new dom.window.Event('change'));
+    document.getElementById('btn-save-quiet').click();
+    await settle();
+    check('その場で選んだSTS（JP側）がサーバーに保存される',
+          ctx.apiGetReservationDetail(ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token, kanri5).detail['STS JP'] === 'OK');
+
+    // オプションもオプション名の隣（同じ行のセル）にSTS(JP側)があり、直接編集できる
+    const optRow1 = rows[1];
+    check('オプション①の行にも名称の隣にSTS（JP側）のプルダウンがある', optRow1.cells[0].textContent === 'オプション1' &&
+          !!optRow1.cells[2].querySelector('select'));
+    // ★要件：名称未設定（未使用）のオプション枠でも、日本側・支店側はSTS(JP側)の操作自体は
+    // 従来から常に可能（名称の有無で制限しているのは店舗ロールだけ）
+    const optStsJpSelect = optRow1.cells[2].querySelector('select');
+    optStsJpSelect.value = 'FN';
+    optStsJpSelect.dispatchEvent(new dom.window.Event('change'));
+    document.getElementById('btn-save-quiet').click();
+    await settle();
+    const afterOptSave = ctx.apiGetReservationDetail(ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token, kanri5).detail;
+    check('オプション①のSTS（JP側）もその場でFNへ保存できる', afterOptSave['OP1 STS JP'] === 'FN', afterOptSave['OP1 STS JP']);
+
+    // --- 現地支店（BRANCH）側でも同じ表形式で、STS(支店側)がオプション名の隣で編集できる ---
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'ROW', 'CHANGE-ME-ROW');
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanri5)).click();
+    await settle();
+    const branchPlanRow = document.querySelector('.plan-table tbody tr');
+    // ★注：STS(JP側)がOKの間は、支店側のSTSはBRANCH_EDIT_GATEの仕様により編集不可
+    // （ロック表示になる。これは今回の表形式化とは無関係の既存の業務ルール）
+    check('現地支店側でも同じ表で、プラン名の隣にSTS（支店側）の欄が表示される',
+          branchPlanRow.cells[3].textContent.includes('OK'));
+  }
+
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error('テストが異常終了しました:', e); process.exit(1); });

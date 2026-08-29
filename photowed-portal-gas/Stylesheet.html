@@ -137,6 +137,25 @@
   .res-table tbody tr.needs-action-row:hover { background: #fef3c7; }
   .res-table td.res-table-date { font-weight: 700; }
 
+  /* ★要件：現地支店・手配課の「プラン・オプション明細」を、実際に使っている外部システムの
+     画面（薄い水色のヘッダーバー＋表形式でSTSが列として並ぶ）に近づける。プラン・各オプションの
+     名称のすぐ隣にSTS(JP側)・STS(支店側)を編集できる列として置く（従来は名称の下や別の場所に
+     分かれていた）。カードの見出しバーだけ薄い水色（--color-primary-tint）にして、
+     表そのもの（.res-tableと同じ濃紺ヘッダー）とは別に「明細票」らしい区切りを付ける。 */
+  .plan-option-card { padding: 0; overflow: hidden; }
+  .plan-option-head { display: flex; align-items: center; gap: 8px; background: var(--color-primary-tint);
+    color: var(--color-primary); padding: 12px 14px; border-bottom: 1px solid var(--color-border); }
+  .plan-option-head .icon { font-size: 1.1rem; }
+  .plan-option-head h3 { color: var(--color-primary); border-bottom: none; padding-bottom: 0; }
+  .plan-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+  .plan-table th, .plan-table td { padding: 10px 12px; text-align: left; vertical-align: middle;
+    border-bottom: 1px solid var(--color-border); border-right: 1px solid var(--color-border); }
+  .plan-table th:last-child, .plan-table td:last-child { border-right: none; }
+  .plan-table thead th { background: var(--color-primary-tint); color: var(--color-primary);
+    font-size: 0.72rem; font-weight: 700; letter-spacing: 0.02em; }
+  .plan-table tbody tr:nth-child(even) { background: #f7f8fc; }
+  .plan-table tbody tr:last-child td { border-bottom: none; }
+
   /* Detail ★ARW寄り：案件詳細の先頭は、arluis.meの「REF・新郎・新婦」情報バーを参考に
      濃紺の帯＋白文字で表示する（要対応・案件の要点をまず視認できるようにするため） */
   .detail-header { background: var(--color-primary); color: #fff; border-radius: 8px; padding: 14px; margin-bottom: 14px; }
@@ -171,17 +190,6 @@
   .history-checks { display: flex; gap: 14px; margin-top: 6px; font-size: 0.78rem; color: var(--color-muted); }
   .history-checks label { display: flex; align-items: center; gap: 4px; }
 
-  .option-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; font-size: 0.9rem;
-    border-bottom: 1px dashed var(--color-border); }
-  .option-row:last-child { border-bottom: none; }
-
-  /* ステータス（STS JP／STS 支店） */
-  .status-row { display: flex; gap: 10px; margin-bottom: 4px; }
-  .status-card { flex: 1; background: #f9fafb; border: 1px solid var(--color-border); border-radius: 6px; padding: 10px 12px; }
-  .status-card .who { font-size: 0.72rem; color: var(--color-muted); text-transform: uppercase; letter-spacing: 0.02em;
-    margin-bottom: 4px; }
-  .status-card select { border: 1px solid var(--color-border); border-radius: 6px; padding: 8px; font-size: 1rem;
-    font-weight: 700; width: 100%; background: #fff; }
   .val { font-size: 0.9rem; }
   .val.locked-val { font-weight: 700; color: var(--color-muted); display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
   .history-link { display: block; background: none; border: none; color: var(--color-primary-dark); font-size: 0.72rem;

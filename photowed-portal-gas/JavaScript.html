@@ -1308,7 +1308,7 @@
     const c = $('detail-content');
 
     const planNames = nameListWithCurrent(planList, d['プラン名']);
-    const planSelect = `<select data-pending="プラン名"><option value="">未設定</option>${planNames.map(n =>
+    const planSelect = `<select data-pending="プラン名" style="width:100%;"><option value="">未設定</option>${planNames.map(n =>
       `<option value="${escapeAttr(n)}" ${n === d['プラン名'] ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}</select>`;
 
     // ★機能：セールは頻度が高く名称も毎回変わるため、プラン名とは別の欄にする（機能⑤）。
@@ -1410,12 +1410,11 @@
       </label>
       <p class="hint-text">チェックして「変更（＋メッセージ）を決定して送信」すると、STS JPが自動でCHKになり現地へ確認依頼が届きます。現地はUC（空きなし）で回答するか、メッセージで空き状況を返信します。</p>`;
 
+    // ★要件変更：以前はここ（CHG NOの下）にSTS JP・STS 支店の編集欄を独立して置いていたが、
+    // 「プラン・オプションの隣でSTSを編集したい」というご要望を受け、プランの行に一本化した
+    // （下のplanOptionTableHtml参照。同じフィールドを2箇所で編集できる状態を避けるため、
+    // ここでの表示・編集は廃止した）。
     const mainGate = branchGateFor(d['STS JP']);
-    const statusRowHtml = `
-      <div class="status-row">
-        <div class="status-card"><div class="who">STS JP</div>${statusCell('STS JP', d['STS JP'], session.role === 'JP', null)}</div>
-        <div class="status-card"><div class="who">STS 支店</div>${statusCell('STS 支店', d['STS 支店'], session.role === 'BRANCH' && mainGate.editable, mainGate.allowed, `STS JP: ${d['STS JP'] || '未設定'}`)}</div>
-      </div>`;
 
     // ★要件：準備場所はイタリアの支店のみ表示し、ホテル／サロンの選択式にする（他支店は非表示）
     const prepFieldHtml = !d.isItaly ? '' : `
@@ -1441,22 +1440,23 @@
         </div>
       </div>`;
 
-    // ★要件：オプション名のすぐ隣にステータス（STS JP・STS 支店）を置く（従来は名前の下に
-    // 別ブロックとして表示していた）。クリックすると誰が・いつ変更したかの履歴が見られる仕様は
-    // 既存のstatusCell（「履歴」リンク）をそのまま使うので変わらない。
-    const optionsHtml = d.options.map(o => {
+    // ★要件変更：現地支店・手配課の画面は「プラン・オプションの隣にSTSが来ない」「STSが表形式で
+    // 一覧できない」というご指摘を受け、店舗画面（optionRowsShop）・希望日テーブルと同じ
+    // <table class="res-table">の行として、プラン・各オプションの名称のすぐ隣にSTS(JP側)・
+    // STS(支店側)を列として並べる（クリックすると誰が・いつ変更したかの履歴が見られる仕様は
+    // 既存のstatusCell（「履歴」リンク）をそのまま使うので変わらない）。
+    const optionRows = d.options.map(o => {
       const gate = branchGateFor(o.stsJp);
       const optNames = nameListWithCurrent(optionList, o.name);
-      const nameSelect = `<select data-pending="OP${o.n}"><option value="">（未使用）</option>${optNames.map(n =>
+      const nameSelect = `<select data-pending="OP${o.n}" style="width:100%;"><option value="">（未使用）</option>${optNames.map(n =>
         `<option value="${escapeAttr(n)}" ${n === o.name ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}</select>`;
       return `
-        <div class="option-row" style="align-items:center;gap:10px;">
-          <div style="flex:1;min-width:0;">${nameSelect}</div>
-          <div style="display:flex;gap:6px;flex:none;">
-            <div style="width:112px;">${statusCell('OP' + o.n + ' STS JP', o.stsJp, session.role === 'JP', null)}</div>
-            <div style="width:112px;">${statusCell('OP' + o.n + ' STS 支店', o.stsBranch, session.role === 'BRANCH' && gate.editable, gate.allowed, `STS JP: ${o.stsJp || '未設定'}`)}</div>
-          </div>
-        </div>`;
+        <tr>
+          <td>オプション${o.n}</td>
+          <td>${nameSelect}</td>
+          <td>${statusCell('OP' + o.n + ' STS JP', o.stsJp, session.role === 'JP', null)}</td>
+          <td>${statusCell('OP' + o.n + ' STS 支店', o.stsBranch, session.role === 'BRANCH' && gate.editable, gate.allowed, `STS JP: ${o.stsJp || '未設定'}`)}</td>
+        </tr>`;
     }).join('');
 
     // ★要件：メッセージ・変更のチェック（既読）は「誰が・いつ」確認したかも表示し、未読かどうか一目でわかるようにする
@@ -1648,7 +1648,6 @@
             <div class="field-block"><label>撮影日FIX</label><input type="date" data-pending="撮影日FIX" value="${escapeAttr(d['撮影日FIX'])}"></div>
             <div class="field-block"><label>挙式日FIX</label><input type="date" data-pending="挙式日FIX" value="${escapeAttr(d['挙式日FIX'])}"></div>
           </div>
-          ${statusRowHtml}
         </div>
 
         <div class="section-card">
@@ -1659,12 +1658,6 @@
 
         <div class="section-card">
           <div class="detail-grid">
-            <div class="field-block"><label>プラン名（マスタから選択）</label>${planSelect}
-              <div style="margin-top:6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-                ${inlineStatusBadge('STS JP', d['STS JP'], 'hq')}
-                ${inlineStatusBadge('STS 支店', d['STS 支店'], 'branch')}
-              </div>
-            </div>
             <div class="field-block"><label>セール名（候補から選択・自由入力も可）</label>
               <input data-pending="セール名" value="${escapeAttr(d['セール名'])}" list="sale-datalist" placeholder="任意入力">
               ${saleDatalist}
@@ -1678,9 +1671,22 @@
           </div>
         </div>
 
-        <div class="section-card">
-          <h3 style="margin-top:0;">オプション（最大5件）</h3>
-          ${optionsHtml}
+        <div class="section-card plan-option-card">
+          <div class="plan-option-head"><span class="icon">📋</span><h3 style="margin:0;">プラン・オプション明細（プラン＋オプション最大5件）</h3></div>
+          <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none;">
+            <table class="plan-table">
+              <thead><tr><th>種別</th><th>名称</th><th>STS（JP側）</th><th>STS（支店側）</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td>プラン</td>
+                  <td>${planSelect}</td>
+                  <td>${statusCell('STS JP', d['STS JP'], session.role === 'JP', null)}</td>
+                  <td>${statusCell('STS 支店', d['STS 支店'], session.role === 'BRANCH' && mainGate.editable, mainGate.allowed, `STS JP: ${d['STS JP'] || '未設定'}`)}</td>
+                </tr>
+                ${optionRows}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         ${shopBillingBlock}
