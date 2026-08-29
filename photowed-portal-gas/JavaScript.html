@@ -788,13 +788,19 @@
           <td>${escapeHtml(branchVal || '')}</td>
         </tr>`;
     }).join('');
+    // ★要件：希望日の一覧は「最初の予約時（回答待ち）」「日付変更依頼（DC）の対応中」以外は
+    // ほとんど参照しないため、ふだんは折りたたんでおき、必要なときだけ自動で開いた状態にする。
+    const hopeShouldExpandShop = !d['撮影日FIX'] || d['STS JP'] === 'DC';
     const hopeTableHtmlShop = `
-      <div class="table-wrap" style="margin-top:6px;">
-        <table class="res-table">
-          <thead><tr><th>優先順位</th><th>日付</th><th>日本STS</th><th>現地STS</th></tr></thead>
-          <tbody>${hopeTableRowsShop}</tbody>
-        </table>
-      </div>`;
+      <details class="hope-collapse" ${hopeShouldExpandShop ? 'open' : ''}>
+        <summary>希望日一覧（優先順位・日付・STS）${hopeShouldExpandShop ? '' : '－ふだんは折りたたみ表示です。開くと確認できます'}</summary>
+        <div class="table-wrap" style="margin-top:6px;">
+          <table class="res-table">
+            <thead><tr><th>優先順位</th><th>日付</th><th>日本STS</th><th>現地STS</th></tr></thead>
+            <tbody>${hopeTableRowsShop}</tbody>
+          </table>
+        </div>
+      </details>`;
 
     // ★要件：オプション名のすぐ隣にSTS（JP・支店）を、希望日テーブルと同じ表形式で表示する。
     // STS JPは店舗自身がその場でRQ→CR等へ直接変更できる（専用の「ステータス変更」欄は廃止）。
@@ -1096,12 +1102,17 @@
   // 現在値がFN/CR/DC/PCのいずれでもない（RQ等）場合も、選択肢の先頭に現在値を追加してそのまま表示する
   // （現在値を選び直しても実質「変更なし」なので、送信時は「-（変更しない）」と同じ扱いになる）。
   // ★要件：一度OK（現地確定）になった「各オプション」は、店舗側からRQ・DC・PCへは戻せない。
-  // OKの状態から店舗が選べるのはCR（キャンセル依頼）・FN（最終確定）のみにする
-  // （案件全体のSTS(JP側)は、OKになった後もDC/PCを店舗から出せる仕様のため対象外）。
+  // OKの状態から店舗が選べるのはCR（キャンセル依頼）・FN（最終確定）のみにする。
   const SHOP_STATUS_TARGETS_FROM_OK = ['CR', 'FN'];
+  // ★要件：案件全体のSTS(JP側)も、一度OK（現地確定）になった後はRQ（予約依頼）へは戻せない
+  // （＝RQ自体を選択肢から出さない）。ただしDC（日付変更依頼）・PC（プラン・式場変更依頼）は
+  // OKになった後でも店舗から出せる仕様（拡張要望3-2）のため、こちらは引き続き選択肢に残す
+  // （オプションと違い、案件全体はDC/PCの対象になるため許容範囲が異なる）。
+  const SHOP_STATUS_TARGETS_FROM_OK_CASE = ['CR', 'FN', 'DC', 'PC'];
   function shopStatusCell(fieldName, current) {
     const isOptionField = /^OP\d+ STS JP$/.test(fieldName);
-    const targets = (isOptionField && current === 'OK') ? SHOP_STATUS_TARGETS_FROM_OK : SHOP_STATUS_TARGETS;
+    const targets = current !== 'OK' ? SHOP_STATUS_TARGETS
+      : (isOptionField ? SHOP_STATUS_TARGETS_FROM_OK : SHOP_STATUS_TARGETS_FROM_OK_CASE);
     const codes = (!current || targets.includes(current)) ? targets : [current, ...targets];
     const opts = ['<option value="">-（変更しない）</option>'].concat(
       codes.map(c => `<option value="${c}" ${c === current ? 'selected' : ''}>${escapeHtml(SHOP_STATUS_LABELS[c] || c)}</option>`)
@@ -1347,6 +1358,10 @@
     // OK/UCの回答はSTS(JP側)にも自動反映され、OKになると他の希望日は自動でUCになり、
     // その日付が撮影日FIXへ反映される（Code.gsのapplyHopeStatusCascade_参照）。
     const HOPE_FIELDS = ['希望日①', '希望日②', '希望日③', '希望日④', '希望日⑤'];
+    // ★要件：希望日の一覧は「最初の予約時（回答待ち）」「日付変更依頼（DC）の対応中」以外は
+    // ほとんど参照しないため、ふだんは折りたたんでおき、必要なときだけ自動で開いた状態にする
+    // （撮影日FIXが未確定＝まだ回答待ちの間、またはSTS JPがDC＝日付変更依頼の対応中の間は開く）。
+    const hopeShouldExpand = !d['撮影日FIX'] || d['STS JP'] === 'DC';
     // ★要件：現地・日本共に一括でステータスをセットできるように。チェックした希望日のSTS(支店側)を
     // まとめて選んだ値にする（OK/UCならJP側にも自動反映される＝applyHopeStatusCascade_が担当）。
     const canBulkSetHope = session.role === 'BRANCH';
@@ -1652,8 +1667,11 @@
 
         <div class="section-card">
           ${inquiryBlock}
-          ${hopeFieldsHtml}
-          ${hopeBlock}
+          <details class="hope-collapse" ${hopeShouldExpand ? 'open' : ''}>
+            <summary>希望日一覧（優先順位・日付・STS）${hopeShouldExpand ? '' : '－ふだんは折りたたみ表示です。開くと確認・変更できます'}</summary>
+            ${hopeFieldsHtml}
+            ${hopeBlock}
+          </details>
         </div>
 
         <div class="section-card">

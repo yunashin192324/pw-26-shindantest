@@ -791,6 +791,21 @@ function paneHidden(document, key) {
     check('OKになったオプションはCR・FNだけが選べる',
           opStatusValues.includes('CR') && opStatusValues.includes('FN'));
 
+    // ★要件：案件全体（プラン）のSTS(JP側)も、一度OKになった後はRQ（依頼前の状態）が
+    // 選択肢に出なくなる。ただしDC・PCはオプションと違い、OKの後も引き続き選べる
+    // （拡張要望3-2で店舗から日付変更・プラン変更を出せる仕様のため）。
+    ctx.apiSaveFieldsQuiet(ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token, kanri2, { 'STS JP': 'OK' });
+    document.getElementById('nav-dashboard').click();
+    await settle();
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanri2)).click();
+    await settle();
+    const planStatusSel = document.querySelector('[data-shop-status-field="STS JP"]');
+    const planStatusValues = [...planStatusSel.options].map(o => o.value).filter(Boolean);
+    check('OKになった案件全体はRQが選択肢に出ない', !planStatusValues.includes('RQ'), planStatusValues.join(','));
+    check('OKになった案件全体でもDC・PC・CR・FNは引き続き選べる（オプションとは別扱い）',
+          ['DC', 'PC', 'CR', 'FN'].every(v => planStatusValues.includes(v)), planStatusValues.join(','));
+
     // ドライブアップロード一覧・フォームURL欄が表示される（ファイル選択のシミュレーションはjsdomでは行わず、
     // サーバー側APIを直接呼んでから一覧の再読み込みだけを検証する）
     ctx.apiShopUploadDocument(ctx.apiLogin('SHOP1', 'CHANGE-ME-SHOP1').session.token, kanri2,
@@ -1388,6 +1403,55 @@ function paneHidden(document, key) {
     // （ロック表示になる。これは今回の表形式化とは無関係の既存の業務ルール）
     check('現地支店側でも同じ表で、プラン名の隣にSTS（支店側）の欄が表示される',
           branchPlanRow.cells[3].textContent.includes('OK'));
+
+    // ★要件：希望日一覧は「最初の予約時」「日付変更依頼(DC)の対応中」以外はほとんど使わないため、
+    // ふだんは折りたたんでおく。kanri5は撮影日FIXが未確定のまま（＝まだ回答待ち）なので開いている
+    const hopeDetailsBranch = document.querySelector('.hope-collapse');
+    check('撮影日FIXが未確定の間は、希望日一覧が最初から開いている（現地支店）', hopeDetailsBranch.open);
+  }
+
+  section('U27. 希望日一覧のふだんの折りたたみ表示（回答待ち・日付変更依頼の間だけ自動で開く）');
+  {
+    const jpTok2 = ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+
+    // --- 確定済み（撮影日FIXあり・STS JPはOK＝DCではない）は、ふだんは折りたたまれている ---
+    const kanriDone = ctx.apiCreateReservation(jpTok2, 'ROW', '01 HopeDone\n02 HopeDone2').kanriNo;
+    ctx.apiSaveFieldsQuiet(jpTok2, kanriDone, { 'STS JP': 'OK', '撮影日FIX': '2026-11-20' });
+
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'KANTO', 'CHANGE-ME-KANTO');
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanriDone)).click();
+    await settle();
+    const hopeDetailsDone = document.querySelector('.hope-collapse');
+    check('撮影日FIXが確定済み（DCでもない）なら、希望日一覧はふだん折りたたまれている',
+          !hopeDetailsDone.open);
+
+    // --- 日付変更依頼（STS JPがDC）の間は、撮影日FIXが入っていても自動で開く ---
+    ctx.apiSaveFieldsQuiet(jpTok2, kanriDone, { 'STS JP': 'DC' });
+    document.getElementById('nav-dashboard').click();
+    await settle();
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanriDone)).click();
+    await settle();
+    const hopeDetailsDc = document.querySelector('.hope-collapse');
+    check('STS(JP側)がDC（日付変更依頼）の間は、撮影日FIXが入っていても希望日一覧が自動で開く',
+          hopeDetailsDc.open);
+
+    // --- 店舗の画面でも同じ折りたたみ挙動になる ---
+    const kanriShop = ctx.apiShopCreateRequest(ctx.apiLogin('SHOP1', 'CHANGE-ME-SHOP1').session.token, {
+      branchCode: 'VIE', team: '関東', groomLastName: 'Hope', groomName: 'Collapse', brideLastName: 'Hope', brideName: 'CollapseB',
+      hope1: '2026-10-15', challengeNo: 'HOPECOLPS01'
+    }).kanriNo;
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'SHOP1', 'CHANGE-ME-SHOP1');
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanriShop)).click();
+    await settle();
+    const hopeDetailsShop = document.querySelector('.hope-collapse');
+    check('店舗の画面でも、撮影日FIX未確定の間は希望日一覧が最初から開いている', hopeDetailsShop.open);
   }
 
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);

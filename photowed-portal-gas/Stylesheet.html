@@ -156,6 +156,16 @@
   .plan-table tbody tr:nth-child(even) { background: #f7f8fc; }
   .plan-table tbody tr:last-child td { border-bottom: none; }
 
+  /* ★要件：希望日一覧は「最初の予約時」「日付変更依頼(DC)の対応中」以外はほとんど使わないため、
+     ふだんは折りたたんでおき（<details>）、必要なときだけ自動で開いた状態にする。 */
+  .hope-collapse { margin-top: 6px; }
+  .hope-collapse summary { cursor: pointer; font-weight: 700; color: var(--color-primary);
+    padding: 6px 0; list-style: none; }
+  .hope-collapse summary::-webkit-details-marker { display: none; }
+  .hope-collapse summary::before { content: '▶'; display: inline-block; margin-right: 6px;
+    font-size: 0.7rem; transition: transform 0.15s; }
+  .hope-collapse[open] summary::before { transform: rotate(90deg); }
+
   /* Detail ★ARW寄り：案件詳細の先頭は、arluis.meの「REF・新郎・新婦」情報バーを参考に
      濃紺の帯＋白文字で表示する（要対応・案件の要点をまず視認できるようにするため） */
   .detail-header { background: var(--color-primary); color: #fff; border-radius: 8px; padding: 14px; margin-bottom: 14px; }

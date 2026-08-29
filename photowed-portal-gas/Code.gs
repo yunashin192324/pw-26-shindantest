@@ -360,6 +360,10 @@ const SHOP_STATUS_TARGETS = ['RQ', 'FN', 'CR', 'DC', 'PC'];
 // OKの状態から店舗が選べるのはCR（キャンセル依頼）・FN（最終確定）のみにする（対象はオプションの
 // STS(JP側)のみ。案件全体のSTS(JP側)は、OKになった後もDC/PCを店舗から出せる仕様のため対象外）。
 const SHOP_STATUS_TARGETS_FROM_OK = ['CR', 'FN'];
+// ★要件：案件全体のSTS(JP側)も、一度OK（現地確定）になった後はRQ（予約依頼＝依頼前の状態）へは
+// 戻せないようにする（RQ自体を選択肢から出さない）。DC（日付変更依頼）・PC（プラン・式場変更依頼）は
+// 拡張要望3-2のとおりOKになった後も店舗から出せる仕様のため、引き続き選択肢に残す。
+const SHOP_STATUS_TARGETS_FROM_OK_CASE = ['CR', 'FN', 'DC', 'PC'];
 
 // 日付として保存すべきフィールド（<input type="date">で受け渡しし、実Dateとして保存する）
 // checkAlerts/archivePastReservations/sortReservationSheet_ は撮影日FIXがDate型であることを前提にしている
@@ -2321,18 +2325,17 @@ function validateFieldPermission_(session, headers, rowData, field, value) {
     // （案件全体をFNにするにはSTS JPがOK、オプション③をFNにするにはオプション③のSTS JPがOK、という具合）。
     if (session.role === SHOP_ROLE) {
       const currentValue = String(rowData[headers.indexOf(field)] || '');
-      // ★要件：一度OK（現地確定）になった「各オプション」は、店舗側からRQ・DC・PCへは
-      // 戻せないようにする。OKの状態から店舗が選べるのはCR（キャンセル依頼）・FN（最終確定）のみ
-      // （RQへ戻す＝依頼前に戻す・DC/PCへ変える＝まだ何も確定していない扱いにする、といった
-      // 操作は、現地が既に確定させた後では認めない）。
-      // ★対象はオプション（OPn STS JP）のみ：案件全体のSTS(JP側)は、OKになった後もDC（日付変更依頼）・
-      // PC（プラン・式場変更依頼）を店舗から出せる仕様（拡張要望3-2）のため、ここでは絞り込まない。
+      // ★要件：一度OK（現地確定）になった案件・オプションは、店舗側からRQ（依頼前の状態）へは
+      // 戻せないようにする。オプションはさらにDC/PCへも戻せない（CR・FNのみ）。案件全体は
+      // 拡張要望3-2のとおりOKになった後もDC（日付変更依頼）・PC（プラン・式場変更依頼）を
+      // 店舗から出せる仕様のため、こちらはCR/FN/DC/PCを許可する。
       const isOptionField = /^OP\d+ STS JP$/.test(field);
-      const allowedTargets = (isOptionField && currentValue === 'OK') ? SHOP_STATUS_TARGETS_FROM_OK : SHOP_STATUS_TARGETS;
+      const allowedTargets = currentValue !== 'OK' ? SHOP_STATUS_TARGETS
+        : (isOptionField ? SHOP_STATUS_TARGETS_FROM_OK : SHOP_STATUS_TARGETS_FROM_OK_CASE);
       if (!allowedTargets.includes(value)) {
-        throw new Error((isOptionField && currentValue === 'OK')
-          ? `OK（現地確定済み）の状態から店舗が設定できるSTS(JP側)は ${SHOP_STATUS_TARGETS_FROM_OK.join('/')} のいずれかです。`
-          : `店舗が設定できるSTS(JP側)は ${SHOP_STATUS_TARGETS.join('/')} のいずれかです。`);
+        throw new Error(currentValue !== 'OK'
+          ? `店舗が設定できるSTS(JP側)は ${SHOP_STATUS_TARGETS.join('/')} のいずれかです。`
+          : `OK（現地確定済み）の状態から店舗が設定できるSTS(JP側)は ${allowedTargets.join('/')} のいずれかです。`);
       }
       if (value === 'FN' && currentValue !== 'OK') {
         throw new Error('STS(JP側)をFN（最終確定）にできるのはOKの状態からだけです。');
