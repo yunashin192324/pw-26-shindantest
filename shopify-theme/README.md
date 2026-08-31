@@ -11,6 +11,51 @@ white/black/gold tokens, Cormorant Garamond + Noto Sans JP, `.container`,
 same stylesheet/script, copied verbatim; `assets/journal.css` /
 `assets/journal.js` only *add* JOURNAL-specific rules on top.
 
+## Installing into an existing live theme (no theme.liquid edit needed)
+
+Copy these folders/files into your live theme's "Edit code" as new files —
+none of them exist in your theme yet, so there's nothing to merge:
+
+- `sections/journal-*.liquid`, `sections/article-*.liquid` → add as new Sections
+- `snippets/journal-*.liquid` → add as new Snippets
+- `templates/blog.journal.json`, `templates/article.journal.json` → add as new Templates
+- `assets/journal.css`, `assets/journal.js`, `assets/theme.css`, `assets/theme.js` → add as new Assets
+
+`snippets/journal-assets.liquid` loads all four of those assets (plus the
+Google Fonts) itself from inside the JOURNAL sections, so you don't need to
+touch `theme.liquid` at all — this makes JOURNAL render correctly even on a
+theme that doesn't already carry this design system (e.g. a fresh Dawn test
+store). `layout/theme.liquid` and `config/settings_schema.json` still don't
+need to be copied over your existing files either way.
+
+**Only if** you're installing this into a theme that's already a copy of the
+TOP page design (same `--black`/`--gold` tokens, same header/footer/`.reveal`
+behaviour already loaded sitewide) should you open `snippets/journal-assets.liquid`
+and comment out the `theme.css`/`theme.js` lines — loading a second copy of
+those on a theme that already has them would double up JS event listeners
+(e.g. the mobile menu opening and immediately re-closing). `journal.css`/
+`journal.js` stay either way; they're genuinely new.
+
+### Template names — use the `.journal.` suffix
+
+Your live theme almost certainly already ships a default `templates/blog.json`
+and `templates/article.json` for its existing blog. Don't overwrite those —
+add these as **alternate templates** instead, named `blog.journal.json` and
+`article.journal.json` (Shopify's dot-suffix convention; the content is
+identical either way, only the filename differs). When creating the file in
+"Edit code", just type that exact filename — Shopify infers the resource
+type (blog / article) from the part before the first dot.
+
+Once added, Shopify shows them as a template named **"journal"** that you
+select explicitly in two places:
+1. **The JOURNAL blog itself** — Online Store → Blog posts → Manage blogs →
+   open the JOURNAL blog → "Theme template" → choose `journal`.
+2. **Every article you create in it** — on the article's edit page, find
+   "Theme template" and choose `journal`. This is per-article, not inherited
+   from the blog, so it's worth checking each time until it becomes habit —
+   an article left on the default template will render with your theme's
+   normal blog post look instead of JOURNAL.
+
 ## Editor workflow (title / eyecatch / body only)
 
 Creating an article only requires the three standard Shopify fields:
@@ -88,11 +133,14 @@ editors never maintain it separately.
 ## SEO / AIO / GEO
 
 `snippets/journal-schema.liquid` outputs `Article` + `BreadcrumbList`
-JSON-LD on every article. `layout/theme.liquid` sets canonical, OGP and
-Twitter Card tags for every page, using the article's own image on
-article pages. The POINT box / GEO block / comparison table markup above
-exists specifically so AI answer engines and generative search (AIO/GEO)
-have short, structured, quotable facts to lift from each article.
+JSON-LD on every article, rendered from `article-hero.liquid` — this works
+regardless of which `layout/theme.liquid` you're using. `layout/theme.liquid`
+in this package additionally sets canonical/OGP/Twitter Card tags, but if
+you're installing into an existing theme, your theme's own layout almost
+certainly already does this sitewide, so there's nothing extra to add.
+The POINT box / GEO block / comparison table markup above exists
+specifically so AI answer engines and generative search (AIO/GEO) have
+short, structured, quotable facts to lift from each article.
 
 ## About the `/journal/` URL
 

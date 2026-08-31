@@ -3,6 +3,7 @@
   Same .hero component as the TOP page hero; content stays
   bottom-left like the existing page-hero convention.
 {%- endcomment -%}
+{%- render 'journal-assets' -%}
 {%- render 'journal-schema', article: article, blog: blog -%}
 
 {%- capture primary_tag -%}{% render 'journal-primary-tag', article: article %}{%- endcapture -%}

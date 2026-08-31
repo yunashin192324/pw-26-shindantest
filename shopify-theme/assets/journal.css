@@ -181,3 +181,63 @@
 @media (prefers-reduced-motion: reduce) {
   .article-toc a { transition: none; }
 }
+
+/* ---------- Content must never depend on JS to become visible ----------
+   theme.css's .reveal starts every element at opacity:0 and only shows it
+   once theme.js's IntersectionObserver adds .is-visible. On stores where
+   that script doesn't run reliably (conflicts with other theme/app JS,
+   ad blockers, JS-less crawlers — including AI/GEO crawlers, which is the
+   opposite of what this feature is for), .reveal content stays invisible
+   forever. JOURNAL content is always shown; this rule wins the cascade
+   because it loads after theme.css. The fade-in still plays normally
+   wherever theme.js does run (it only ever adds opacity:1, same as this). */
+.reveal { opacity: 1; transform: none; }
+
+/* ---------- Force-readable hero text (defensive, doesn't rely on theme.css) ----------
+   theme.css already darkens hero photos via .hero-media::after and sets white
+   text, but on stores where that file is out of sync (cache/duplicate-theme
+   issues), hero text can end up unreadable against a bright photo. journal.css
+   loads after theme.css and only on JOURNAL pages, so it's safe to repeat and
+   strengthen these rules here with !important as a guarantee. */
+.hero .hero-media {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 0 !important;
+}
+.hero .hero-media img {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
+.hero .hero-media::after {
+  content: '' !important;
+  position: absolute !important;
+  inset: 0 !important;
+  background: linear-gradient(to top, rgba(8,7,5,0.88) 0%, rgba(8,7,5,0.4) 55%, rgba(8,7,5,0.6) 100%) !important;
+}
+.hero .hero-content h1,
+.hero .hero-content .lede,
+.hero .hero-content .journal-meta,
+.hero .hero-content .journal-meta span:not(.journal-category) {
+  color: #ffffff !important;
+  text-shadow: 0 2px 18px rgba(0,0,0,0.65), 0 1px 6px rgba(0,0,0,0.5) !important;
+}
+.hero .hero-content h1 {
+  /* Best-effort: balance line lengths so long JP titles don't wrap into an
+     ugly 1-character orphan line. No effect in browsers that don't support
+     it yet (falls back to normal wrapping) — safe either way. */
+  text-wrap: balance;
+}
+@media (max-width: 600px) {
+  .hero .hero-content h1 { font-size: clamp(1.6rem, 7vw, 2.4rem) !important; }
+}
+.hero .hero-content .eyebrow {
+  color: #d9bd8a !important;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.6) !important;
+}
+.hero .hero-content .journal-category {
+  color: #d9bd8a !important;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.6) !important;
+}
