@@ -784,7 +784,7 @@ function paneHidden(document, key) {
     await settle();
     const opStatusSel = document.querySelector('[data-shop-status-field="OP1 STS JP"]');
     check('オプション①の隣にもSTS JPを直接変更できるプルダウンが表示される（表形式）',
-          !!opStatusSel && !!opStatusSel.closest('table.res-table'));
+          !!opStatusSel && !!opStatusSel.closest('table.plan-table'));
     opStatusSel.value = 'CR';
     opStatusSel.dispatchEvent(new dom.window.Event('change'));
     // ★要件：CRを選ぶとキャンセル理由の入力欄が現れ、送信にはその入力が必須になる
@@ -1077,8 +1077,10 @@ function paneHidden(document, key) {
     const nav = document.getElementById('shop-quick-nav');
     check('店舗の詳細画面上部にクイックナビが表示される', !!nav);
     const navBtns = [...nav.querySelectorAll('[data-scroll-to]')];
-    check('クイックナビに依頼状況・お客様情報・予約内容・オプション・書類・メッセージ・履歴の7つがある',
-          navBtns.length === 7, navBtns.map(b => b.dataset.scrollTo).join(','));
+    // ★要件：オプションはプラン・オプション明細表として「予約内容」に統合したため、
+    // 独立タブとしては無くなり6項目になる
+    check('クイックナビに依頼状況・お客様情報・予約内容・書類・メッセージ・履歴の6つがある',
+          navBtns.length === 6, navBtns.map(b => b.dataset.scrollTo).join(','));
     const missingTargets = navBtns.map(b => b.dataset.scrollTo).filter(id => !document.getElementById(id));
     check('クイックナビの全ボタンに対応するセクションが実在する', missingTargets.length === 0, missingTargets.join(','));
     // ★不具合防止：jsdomにはscrollIntoViewが無いが、押しても例外にならず安全に無視されること
@@ -1663,7 +1665,7 @@ function paneHidden(document, key) {
     [...document.querySelectorAll('#reservation-list .res-card')]
       .find(c => c.textContent.includes(kanriTenOpt)).click();
     await settle();
-    const shopOpAccordion = document.querySelector('#shop-sec-options details.hope-collapse');
+    const shopOpAccordion = document.querySelector('#shop-sec-reservation .plan-option-card details.hope-collapse');
     check('店舗の詳細画面でもオプション6〜10がアコーディオンに入っている', !!shopOpAccordion);
     check('入力済みなのでアコーディオンが自動で開いている', shopOpAccordion.open);
     check('店舗の詳細でもオプション名はフリー入力（input）',
@@ -1681,6 +1683,58 @@ function paneHidden(document, key) {
     check('入力済みなのでアコーディオンが自動で開いている（JP側）', jpOpAccordion.open);
     check('日本側でもオプション名はフリー入力（input）',
           document.querySelector('[data-pending="OP1"]').tagName === 'INPUT');
+  }
+
+  section('U31. 店舗の「オプション」タブを廃止し、プラン・オプション明細の1枚の表に統合（プラン行を強調表示）');
+  {
+    // ★このセクション専用の店舗発案件を作る（前のセクションの変数に依存させない）
+    const shopTokU31 = ctx.apiLogin('SHOP1', 'CHANGE-ME-SHOP1').session.token;
+    const kanriU31 = ctx.apiShopCreateRequest(shopTokU31, {
+      branchCode: 'VIE', team: '関東', groomLastName: 'Union', groomName: 'Plan',
+      brideLastName: 'Union', brideName: 'Option', hopeDate: '2026-09-10',
+      challengeNo: 'PLANOPT0001'
+    }).kanriNo;
+
+    // --- 日本側（JP）は元々1枚の表なので、プラン行に.plan-rowが付いているかだけ確認 ---
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'KANTO', 'CHANGE-ME-KANTO');
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanriU31)).click();
+    await settle();
+    const jpPlanRow = document.querySelector('.plan-option-card table.plan-table tr.plan-row');
+    check('日本側の明細表で、プラン行に強調用のクラス（plan-row）が付いている', !!jpPlanRow);
+    check('プラン行のいちばん左のセルが「プラン」', jpPlanRow && jpPlanRow.querySelector('td').textContent.trim() === 'プラン');
+
+    // --- 店舗側：オプション独立タブが無くなり、プラン・オプションが1枚の表に統合されている ---
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'SHOP1', 'CHANGE-ME-SHOP1');
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanriU31)).click();
+    await settle();
+
+    check('店舗のクイックナビに「オプション」ボタンはもう無い', !document.querySelector('[data-scroll-to="shop-sec-options"]'));
+    check('店舗の画面に独立した「オプション」セクション（shop-sec-options）はもう無い', !document.getElementById('shop-sec-options'));
+
+    const shopTable = document.querySelector('#shop-sec-reservation table.plan-table');
+    check('店舗の「予約内容」内にプラン・オプション明細の表（plan-table）がある', !!shopTable);
+    check('店舗のプラン選択（shop-detail-plan-select）が、この明細表の中にある',
+          !!document.getElementById('shop-detail-plan-select').closest('table.plan-table'));
+    check('店舗の明細表にもオプション①の入力欄（data-pending="OP1"）が同じ表の中にある',
+          document.querySelector('[data-pending="OP1"]').closest('table.plan-table') === shopTable);
+
+    const shopPlanRow = shopTable.querySelector('tr.plan-row');
+    check('店舗の明細表でも、プラン行に強調用のクラス（plan-row）が付いている', !!shopPlanRow);
+    check('店舗のプラン行のいちばん左のセルが「プラン」', shopPlanRow && shopPlanRow.querySelector('td').textContent.trim() === 'プラン');
+    check('店舗のプラン行の中にプラン選択欄がある（プラン行＝代表行として明細の先頭にある）',
+          shopPlanRow.contains(document.getElementById('shop-detail-plan-select')));
+
+    // ★要件：PUSHボタン・キャンセル理由欄は、統合後も引き続きプラン・オプションの明細表のすぐ近くにある
+    check('PUSHボタンは引き続きプラン・オプション明細表と同じカードの中にある',
+          !!shopTable.closest('.plan-option-card').querySelector('#shop-push-btn'));
+    check('キャンセル理由欄も引き続き同じカードの中にある',
+          !!shopTable.closest('.plan-option-card').querySelector('#shop-cancel-reason-block'));
   }
 
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);

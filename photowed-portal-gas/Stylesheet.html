@@ -155,6 +155,10 @@
     font-size: 0.72rem; font-weight: 700; letter-spacing: 0.02em; }
   .plan-table tbody tr:nth-child(even) { background: #f7f8fc; }
   .plan-table tbody tr:last-child td { border-bottom: none; }
+  /* ★要件：プラン・オプション明細の表で「プラン」行だけひと目でわかるよう強調する
+     （店舗・現地支店・手配課いずれの画面でも共通のplan-tableを使うため、ここ1箇所で揃う）。 */
+  .plan-table tbody tr.plan-row { background: var(--color-primary-tint); }
+  .plan-table tbody tr.plan-row td:first-child { font-weight: 700; color: var(--color-primary); }
 
   /* ★要件：希望日一覧は「最初の予約時」「日付変更依頼(DC)の対応中」以外はほとんど使わないため、
      ふだんは折りたたんでおき（<details>）、必要なときだけ自動で開いた状態にする。 */

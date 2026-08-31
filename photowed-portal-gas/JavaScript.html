@@ -861,24 +861,6 @@
     const optionsShopExtra = optionsAllShop.slice(5);
     const optionRowsShopExtra = optionsShopExtra.map(buildOptionRowShop).join('');
     const optionsShopExtraOpen = optionsShopExtra.some(o => o.name);
-    const optionsHtml = `
-      <div class="table-wrap" style="margin-top:6px;">
-        <table class="res-table">
-          <thead><tr><th>オプション</th><th>名称</th><th>STS JP</th><th>STS 支店</th></tr></thead>
-          <tbody>${optionRowsShopMain}</tbody>
-        </table>
-      </div>
-      ${!optionRowsShopExtra ? '' : `
-      <details class="hope-collapse" ${optionsShopExtraOpen ? 'open' : ''} style="margin-top:6px;">
-        <summary>オプション6〜10${optionsShopExtraOpen ? '' : '（ふだんは折りたたみ）'}</summary>
-        <div class="table-wrap" style="margin-top:6px;">
-          <table class="res-table">
-            <thead><tr><th>オプション</th><th>名称</th><th>STS JP</th><th>STS 支店</th></tr></thead>
-            <tbody>${optionRowsShopExtra}</tbody>
-          </table>
-        </div>
-      </details>`}
-      ${shopOptionDatalistHtml}`;
 
     const checklistHtml = (d.checklist || []).map(c2 => `
       <label class="checkbox-label">
@@ -895,7 +877,6 @@
         <button type="button" class="tab-btn" data-scroll-to="shop-sec-status">依頼状況</button>
         <button type="button" class="tab-btn" data-scroll-to="shop-sec-customer">お客様情報</button>
         <button type="button" class="tab-btn" data-scroll-to="shop-sec-reservation">予約内容</button>
-        <button type="button" class="tab-btn" data-scroll-to="shop-sec-options">オプション</button>
         <button type="button" class="tab-btn" data-scroll-to="shop-sec-docs">書類</button>
         <button type="button" class="tab-btn" data-scroll-to="shop-sec-message">メッセージ</button>
         <button type="button" class="tab-btn" data-scroll-to="shop-sec-history">履歴</button>
@@ -936,39 +917,63 @@
           <div class="field-block" style="grid-column:1/-1;"><label>フライト情報</label><input data-pending="フライト情報" value="${escapeAttr(d['フライト情報'])}" placeholder="例）JL123 8/20 10:00羽田発 → 14:00現地着"></div>
         </div>
       </div>
-      <div class="section-card" id="shop-sec-reservation">
-        <h3>予約内容</h3>
-        <div class="detail-grid">
-          <div class="field-block">
-            <label>プラン（マスタから選択）</label>
-            <select data-pending="プラン名" id="shop-detail-plan-select"><option value="">未設定</option>${nameListWithCurrent(planList, d['プラン名']).map(n =>
-              `<option value="${escapeAttr(n)}" ${n === d['プラン名'] ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}</select>
-            <div style="margin-top:6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-              ${shopStatusCell('STS JP', d['STS JP'])}
-              ${inlineStatusBadge('STS 支店', d['STS 支店'], 'branch')}
+      <div id="shop-sec-reservation" style="scroll-margin-top:110px;">
+        <div class="section-card">
+          <h3>予約内容</h3>
+          <div class="detail-grid">
+            <div class="field-block" id="shop-detail-sale-wrap">${shopDetailSaleFieldHtml_(saleList, d['プラン名'], d['セール名'])}</div>
+            <div class="field-block" id="shop-detail-location-wrap">${shopDetailLocationFieldHtml_(planForName_(planList, d['プラン名']), d['撮影希望場所'])}</div>
+            ${!d.isItaly ? '' : `<div class="field-block"><label>準備場所</label>
+              <select data-pending="準備場所"><option value="">未設定</option>${PREP_CHOICES.map(p =>
+                `<option value="${escapeAttr(p)}" ${d['準備場所'] === p ? 'selected' : ''}>${escapeHtml(p)}</option>`).join('')}</select></div>`}
+          </div>
+          ${hopeTableHtmlShop}
+        </div>
+
+        <!-- ★要件：JP/支店の「プラン・オプション明細」と同じ、プラン＋オプションを1枚の表にまとめた
+             形式に統一する（従来は店舗だけ「オプション」が別タブに分かれていた）。プラン行だけは
+             一番上の代表行として一目でわかるよう.plan-rowで強調する（背景色・太字）。 -->
+        <div class="section-card plan-option-card">
+          <div class="plan-option-head"><span class="icon">📋</span><h3 style="margin:0;">プラン・オプション明細（プラン＋オプション最大10件）</h3></div>
+          <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none;">
+            <table class="plan-table">
+              <thead><tr><th>種別</th><th>名称</th><th>STS JP</th><th>STS 支店</th></tr></thead>
+              <tbody>
+                <tr class="plan-row">
+                  <td>プラン</td>
+                  <td><select data-pending="プラン名" id="shop-detail-plan-select" style="width:100%;"><option value="">未設定</option>${nameListWithCurrent(planList, d['プラン名']).map(n =>
+                    `<option value="${escapeAttr(n)}" ${n === d['プラン名'] ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}</select></td>
+                  <td>${shopStatusCell('STS JP', d['STS JP'])}</td>
+                  <td>${inlineStatusBadge('STS 支店', d['STS 支店'], 'branch')}</td>
+                </tr>
+                ${optionRowsShopMain}
+              </tbody>
+            </table>
+          </div>
+          ${!optionRowsShopExtra ? '' : `
+          <details class="hope-collapse" ${optionsShopExtraOpen ? 'open' : ''} style="margin:6px 14px 10px;">
+            <summary>オプション6〜10${optionsShopExtraOpen ? '' : '（ふだんは折りたたみ）'}</summary>
+            <div class="table-wrap" style="margin-top:6px;">
+              <table class="plan-table">
+                <thead><tr><th>種別</th><th>名称</th><th>STS JP</th><th>STS 支店</th></tr></thead>
+                <tbody>${optionRowsShopExtra}</tbody>
+              </table>
+            </div>
+          </details>`}
+          ${shopOptionDatalistHtml}
+          <div style="padding:0 14px 14px;">
+            <p class="hint-text" style="margin-top:8px;">STS JPはプラン・各オプションの隣から直接変更できます（最終確定・キャンセル依頼・日付変更依頼・プラン/式場変更依頼）。選択すると、下の「変更＋メッセージを決定して送信」または「保存のみ」で確定します。</p>
+            <p id="shop-status-warning" class="error-text hidden">⚠️ チャージ規定は各自ご確認ください。内容を確認のうえ送信してください。</p>
+            <div id="shop-cancel-reason-block" class="hidden" style="margin-top:8px;">
+              <label>キャンセル理由（必須）</label>
+              <textarea data-pending="キャンセル理由" placeholder="キャンセルの理由を入力してください">${escapeHtml(d['キャンセル理由'])}</textarea>
+            </div>
+            <div style="margin-top:10px;">
+              <button type="button" class="send-btn-sm" id="shop-push-btn">📣 現地支店へ急ぎの回答を依頼（PUSH）</button>
+              <p class="hint-text" style="margin-top:4px;">土日は現地支店は動いておりません。PUする際は土日祝のぞく５日以上みてください。</p>
             </div>
           </div>
-          <div class="field-block" id="shop-detail-sale-wrap">${shopDetailSaleFieldHtml_(saleList, d['プラン名'], d['セール名'])}</div>
-          <div class="field-block" id="shop-detail-location-wrap">${shopDetailLocationFieldHtml_(planForName_(planList, d['プラン名']), d['撮影希望場所'])}</div>
-          ${!d.isItaly ? '' : `<div class="field-block"><label>準備場所</label>
-            <select data-pending="準備場所"><option value="">未設定</option>${PREP_CHOICES.map(p =>
-              `<option value="${escapeAttr(p)}" ${d['準備場所'] === p ? 'selected' : ''}>${escapeHtml(p)}</option>`).join('')}</select></div>`}
         </div>
-        <p class="hint-text" style="margin-top:8px;">STS JPはプラン・各オプションの隣から直接変更できます（最終確定・キャンセル依頼・日付変更依頼・プラン/式場変更依頼）。選択すると、下の「変更＋メッセージを決定して送信」または「保存のみ」で確定します。</p>
-        <p id="shop-status-warning" class="error-text hidden">⚠️ チャージ規定は各自ご確認ください。内容を確認のうえ送信してください。</p>
-        <div id="shop-cancel-reason-block" class="hidden" style="margin-top:8px;">
-          <label>キャンセル理由（必須）</label>
-          <textarea data-pending="キャンセル理由" placeholder="キャンセルの理由を入力してください">${escapeHtml(d['キャンセル理由'])}</textarea>
-        </div>
-        <div style="margin-top:10px;">
-          <button type="button" class="send-btn-sm" id="shop-push-btn">📣 現地支店へ急ぎの回答を依頼（PUSH）</button>
-          <p class="hint-text" style="margin-top:4px;">土日は現地支店は動いておりません。PUする際は土日祝のぞく５日以上みてください。</p>
-        </div>
-        ${hopeTableHtmlShop}
-      </div>
-      <div class="section-card" id="shop-sec-options">
-        <h3 style="margin-top:0;">オプション（最大10件）</h3>
-        ${optionsHtml}
       </div>
       <div class="section-card" id="shop-sec-docs">
         <h3>必要書類チェックリスト・同意書</h3>
@@ -1788,7 +1793,7 @@
             <table class="plan-table">
               <thead><tr><th>種別</th><th>名称</th><th>STS（JP側）</th><th>STS（支店側）</th></tr></thead>
               <tbody>
-                <tr>
+                <tr class="plan-row">
                   <td>プラン</td>
                   <td>${planSelect}</td>
                   <td>${statusCell('STS JP', d['STS JP'], session.role === 'JP', null)}</td>
