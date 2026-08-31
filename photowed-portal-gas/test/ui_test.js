@@ -577,8 +577,9 @@ function paneHidden(document, key) {
     const planOpts = [...document.getElementById('shop-new-plan').options].map(o => o.value);
     check('プランはVIE支店のマスタ一覧から選べる（自由入力ではない）', planOpts.includes('プランA'), planOpts.join(','));
     document.getElementById('shop-new-plan').value = 'プランA';
-    const optionOpts = [...document.getElementById('shop-new-option1').options].map(o => o.value);
-    check('オプションもマスタ一覧から選べる（自由入力ではない）', optionOpts.includes('追加アルバム'), optionOpts.join(','));
+    // ★要件変更：オプション名はマスタ候補（datalist）を出しつつ自由に書ける入力欄になった
+    const optionOpts = [...document.getElementById('shop-new-option-datalist').options].map(o => o.value);
+    check('オプションはマスタの候補（datalist）が出る（自由入力も可）', optionOpts.includes('追加アルバム'), optionOpts.join(','));
     document.getElementById('shop-new-option1').value = '追加アルバム';
     document.getElementById('shop-new-submit').click();
     await settle();
@@ -1617,6 +1618,69 @@ function paneHidden(document, key) {
     check('日本側には撮影データ納品のURL登録欄が出ない（閲覧のみ）', !document.getElementById('delivery-data-url-input'));
     check('日本側にも登録済みのURLへのリンクは表示される',
           document.getElementById('detail-content').innerHTML.includes('https://drive.google.com/jp-view'));
+  }
+
+  section('U30. オプション枠を5件から10件に拡張（自由入力・6件目以降はアコーディオン）');
+  {
+    // --- 新規依頼フォーム：10件の入力欄、6〜10件目はアコーディオンに収納 ---
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'SHOP1', 'CHANGE-ME-SHOP1');
+    document.getElementById('nav-shop-new').click();
+    await settle();
+    for (let n = 1; n <= 10; n++) {
+      check(`新規依頼フォームにオプション${n}の入力欄がある`, !!document.getElementById('shop-new-option' + n));
+    }
+    check('オプション名の入力欄はフリー入力（select ではなく input）',
+          document.getElementById('shop-new-option1').tagName === 'INPUT');
+    const newOptionAccordion = document.getElementById('shop-new-option6').closest('details');
+    check('新規依頼フォームのオプション6〜10はアコーディオン（details）に収納されている', !!newOptionAccordion);
+    check('未入力の間はアコーディオンが閉じている', !newOptionAccordion.open);
+
+    document.getElementById('shop-new-branch').value = 'VIE';
+    document.getElementById('shop-new-branch').dispatchEvent(new dom.window.Event('change'));
+    await settle();
+    document.getElementById('shop-new-team').value = '関東';
+    document.getElementById('shop-new-challengeno').value = 'TENOPTUI001';
+    document.getElementById('shop-new-groom-last').value = 'Ten';
+    document.getElementById('shop-new-groom').value = 'Options';
+    document.getElementById('shop-new-bride-last').value = 'Ten';
+    document.getElementById('shop-new-bride').value = 'OptionsB';
+    document.getElementById('shop-new-hope1').value = '2026-09-10';
+    for (let n = 1; n <= 10; n++) document.getElementById('shop-new-option' + n).value = `オプション${n}番`;
+    document.getElementById('shop-new-submit').click();
+    await settle();
+    check('10件のオプションを指定して送信できる', !document.getElementById('shop-new-success').classList.contains('hidden'),
+          document.getElementById('shop-new-error').textContent);
+    const kanriTenOpt = document.getElementById('shop-new-success-text').textContent.match(/予約番号\s*(\S+)/)[1];
+    const jpTok5 = ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    const tenOptDetail = ctx.apiGetReservationDetail(jpTok5, kanriTenOpt).detail;
+    check('10件目（OP10）のオプションも保存される', tenOptDetail['OP10'] === 'オプション10番');
+
+    // --- 店舗の詳細画面：オプション表も6〜10件目はアコーディオン ---
+    document.getElementById('nav-dashboard').click();
+    await settle();
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanriTenOpt)).click();
+    await settle();
+    const shopOpAccordion = document.querySelector('#shop-sec-options details.hope-collapse');
+    check('店舗の詳細画面でもオプション6〜10がアコーディオンに入っている', !!shopOpAccordion);
+    check('入力済みなのでアコーディオンが自動で開いている', shopOpAccordion.open);
+    check('店舗の詳細でもオプション名はフリー入力（input）',
+          document.querySelector('[data-pending="OP1"]').tagName === 'INPUT');
+
+    // --- JP/BRANCHの詳細画面でも同様（プラン・オプション明細） ---
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'KANTO', 'CHANGE-ME-KANTO');
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanriTenOpt)).click();
+    await settle();
+    const jpOpAccordion = document.querySelector('.plan-option-card details.hope-collapse');
+    check('日本側（JP）の詳細画面でもオプション6〜10がアコーディオンに入っている', !!jpOpAccordion);
+    check('入力済みなのでアコーディオンが自動で開いている（JP側）', jpOpAccordion.open);
+    check('日本側でもオプション名はフリー入力（input）',
+          document.querySelector('[data-pending="OP1"]').tagName === 'INPUT');
   }
 
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);

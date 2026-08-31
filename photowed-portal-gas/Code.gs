@@ -245,7 +245,8 @@ const COL_SHOP_UPLOAD_FOLDER_URL = '店舗アップロード用フォルダURL';
 const COL_DELIVERY_DATA_URL = '撮影データ納品URL';
 const COL_DELIVERY_DATA_FOLDER_URL = '撮影データ納品フォルダURL';
 
-const OPTION_COUNT = 5;
+// ★要件：オプション枠を5件から10件に拡張（6件目以降は画面側でアコーディオン表示にする）
+const OPTION_COUNT = 10;
 function opNameCol_(n) { return `OP${n}`; }
 function opStsJpCol_(n) { return `OP${n} STS JP`; }
 function opStsBranchCol_(n) { return `OP${n} STS 支店`; }
@@ -3235,7 +3236,7 @@ function apiShopCreateRequest(token, payload) {
   const prep = String(payload.prep || '').trim();
   const hopes = [1, 2, 3, 4, 5].map(n => String(payload['hope' + n] || (n === 1 ? payload.hopeDate : '') || '').trim());
   if (!hopes[0]) throw new Error('希望日（第一希望）を入力してください。');
-  const options = [1, 2, 3, 4, 5].map(n => String(payload['option' + n] || '').trim());
+  const options = Array.from({ length: OPTION_COUNT }, (_, i) => String(payload['option' + (i + 1)] || '').trim());
   // ★要件：パスポート番号欄は支店の必須設定に関わらず常に入力できる（※ISWのみ必要。任意入力）
   const passportNumber = String(payload.passportNumber || '').trim();
   const initialStatus = String(payload.initialStatus || 'RQ').trim().toUpperCase() || 'RQ';

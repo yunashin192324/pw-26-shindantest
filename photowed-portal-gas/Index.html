@@ -254,12 +254,21 @@
           <label>パスポート番号（※ISWのみ必要）</label>
           <input id="shop-new-passport" type="text" placeholder="任意入力">
         </div>
-        <h3 style="margin-top:14px;">オプション（任意・最大5件）</h3>
-        <select id="shop-new-option1"><option value="">（未使用）</option></select>
-        <select id="shop-new-option2"><option value="">（未使用）</option></select>
-        <select id="shop-new-option3"><option value="">（未使用）</option></select>
-        <select id="shop-new-option4"><option value="">（未使用）</option></select>
-        <select id="shop-new-option5"><option value="">（未使用）</option></select>
+        <h3 style="margin-top:14px;">オプション（任意・最大10件・マスタ候補から選ぶか自由に入力できます）</h3>
+        <input id="shop-new-option1" list="shop-new-option-datalist" placeholder="（未使用）">
+        <input id="shop-new-option2" list="shop-new-option-datalist" placeholder="（未使用）">
+        <input id="shop-new-option3" list="shop-new-option-datalist" placeholder="（未使用）">
+        <input id="shop-new-option4" list="shop-new-option-datalist" placeholder="（未使用）">
+        <input id="shop-new-option5" list="shop-new-option-datalist" placeholder="（未使用）">
+        <details class="hope-collapse">
+          <summary>オプション6〜10（ふだんは折りたたみ）</summary>
+          <input id="shop-new-option6" list="shop-new-option-datalist" placeholder="（未使用）">
+          <input id="shop-new-option7" list="shop-new-option-datalist" placeholder="（未使用）">
+          <input id="shop-new-option8" list="shop-new-option-datalist" placeholder="（未使用）">
+          <input id="shop-new-option9" list="shop-new-option-datalist" placeholder="（未使用）">
+          <input id="shop-new-option10" list="shop-new-option-datalist" placeholder="（未使用）">
+        </details>
+        <datalist id="shop-new-option-datalist"></datalist>
         <button id="shop-new-submit" class="primary-btn" style="margin-top:14px;">この内容で送信</button>
         <p id="shop-new-error" class="error-text hidden"></p>
         <!-- ★要件：送信後の案内はPC幅では画面中央に目立つモーダル状で表示する（success-banner-prominent。

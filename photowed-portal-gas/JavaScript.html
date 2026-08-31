@@ -839,30 +839,46 @@
     // ★要件：オプション名のすぐ隣にSTS（JP・支店）を、希望日テーブルと同じ表形式で表示する。
     // STS JPは店舗自身がその場でRQ→CR等へ直接変更できる（専用の「ステータス変更」欄は廃止）。
     // STS 支店は従来どおり読み取り専用（クリックで履歴）。
-    // ★要件：オプション名は自由入力ではなく、依頼先支店のオプションマスタから選ぶ選択式にする
-    // （JP/支店側の予約内容タブと同じnameListWithCurrentの仕組みを再利用）。
-    const optionRowsShop = (d.options || []).map(o => {
-      const optNames = nameListWithCurrent(optionList, o.name);
-      const nameSelect = `<select data-pending="OP${o.n}" style="width:100%;"><option value="">（未使用）</option>${optNames.map(n =>
-        `<option value="${escapeAttr(n)}" ${n === o.name ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}</select>`;
-      // ★要件：オプションのSTSは新規申し込み時に限らず、いつでも店舗が変更できるようにする。
-      // 名称が未設定（＝未使用のオプション枠）でもSTS JPの操作自体は常に表示する
-      // （従来は名称が入っていないと欄自体が出なかった）。
-      return `
+    // ★要件変更：オプション名はマスタからの選択式ではなく、候補（datalist）を出しつつ自由に
+    // 書ける入力欄にする（マスタに無い名称も入力できる）。
+    const shopOptionDatalistId = 'shop-detail-option-datalist';
+    const shopOptionDatalistHtml = `<datalist id="${shopOptionDatalistId}">${(optionList || []).filter(x => x.active)
+      .map(x => `<option value="${escapeAttr(x.name)}">`).join('')}</datalist>`;
+    const buildOptionRowShop = (o) => `
       <tr>
         <td>オプション${o.n}</td>
-        <td>${nameSelect}</td>
+        <td><input list="${shopOptionDatalistId}" data-pending="OP${o.n}" style="width:100%;" value="${escapeAttr(o.name)}" placeholder="（未使用）"></td>
         <td>${shopStatusCell('OP' + o.n + ' STS JP', o.stsJp)}</td>
         <td>${inlineStatusBadge('OP' + o.n + ' STS 支店', o.stsBranch, 'branch')}</td>
       </tr>`;
-    }).join('');
+    // ★要件：オプションのSTSは新規申し込み時に限らず、いつでも店舗が変更できるようにする。
+    // 名称が未設定（＝未使用のオプション枠）でもSTS JPの操作自体は常に表示する
+    // （従来は名称が入っていないと欄自体が出なかった）。
+    // ★要件：オプションを10件に拡張。6件目以降は普段使わないことが多いのでアコーディオンに収納する
+    // （既に入力済みのものがあれば自動で開く）。
+    const optionsAllShop = d.options || [];
+    const optionRowsShopMain = optionsAllShop.slice(0, 5).map(buildOptionRowShop).join('');
+    const optionsShopExtra = optionsAllShop.slice(5);
+    const optionRowsShopExtra = optionsShopExtra.map(buildOptionRowShop).join('');
+    const optionsShopExtraOpen = optionsShopExtra.some(o => o.name);
     const optionsHtml = `
       <div class="table-wrap" style="margin-top:6px;">
         <table class="res-table">
           <thead><tr><th>オプション</th><th>名称</th><th>STS JP</th><th>STS 支店</th></tr></thead>
-          <tbody>${optionRowsShop}</tbody>
+          <tbody>${optionRowsShopMain}</tbody>
         </table>
-      </div>`;
+      </div>
+      ${!optionRowsShopExtra ? '' : `
+      <details class="hope-collapse" ${optionsShopExtraOpen ? 'open' : ''} style="margin-top:6px;">
+        <summary>オプション6〜10${optionsShopExtraOpen ? '' : '（ふだんは折りたたみ）'}</summary>
+        <div class="table-wrap" style="margin-top:6px;">
+          <table class="res-table">
+            <thead><tr><th>オプション</th><th>名称</th><th>STS JP</th><th>STS 支店</th></tr></thead>
+            <tbody>${optionRowsShopExtra}</tbody>
+          </table>
+        </div>
+      </details>`}
+      ${shopOptionDatalistHtml}`;
 
     const checklistHtml = (d.checklist || []).map(c2 => `
       <label class="checkbox-label">
@@ -951,7 +967,7 @@
         ${hopeTableHtmlShop}
       </div>
       <div class="section-card" id="shop-sec-options">
-        <h3 style="margin-top:0;">オプション（最大5件）</h3>
+        <h3 style="margin-top:0;">オプション（最大10件）</h3>
         ${optionsHtml}
       </div>
       <div class="section-card" id="shop-sec-docs">
@@ -1530,19 +1546,26 @@
     // <table class="res-table">の行として、プラン・各オプションの名称のすぐ隣にSTS(JP側)・
     // STS(支店側)を列として並べる（クリックすると誰が・いつ変更したかの履歴が見られる仕様は
     // 既存のstatusCell（「履歴」リンク）をそのまま使うので変わらない）。
-    const optionRows = d.options.map(o => {
+    // ★要件変更：オプション名はマスタからの選択式ではなく、候補（datalist）を出しつつ自由に
+    // 書ける入力欄にする（マスタに無い名称も入力できる）。オプションも10件に拡張し、
+    // 6件目以降はアコーディオンに収納する（既に入力済みのものがあれば自動で開く）。
+    const optionDatalistId = 'detail-option-datalist';
+    const optionDatalistHtml = `<datalist id="${optionDatalistId}">${(optionList || []).filter(x => x.active)
+      .map(x => `<option value="${escapeAttr(x.name)}">`).join('')}</datalist>`;
+    const buildOptionRow_ = (o) => {
       const gate = branchGateFor(o.stsJp);
-      const optNames = nameListWithCurrent(optionList, o.name);
-      const nameSelect = `<select data-pending="OP${o.n}" style="width:100%;"><option value="">（未使用）</option>${optNames.map(n =>
-        `<option value="${escapeAttr(n)}" ${n === o.name ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}</select>`;
       return `
         <tr>
           <td>オプション${o.n}</td>
-          <td>${nameSelect}</td>
+          <td><input list="${optionDatalistId}" data-pending="OP${o.n}" style="width:100%;" value="${escapeAttr(o.name)}" placeholder="（未使用）"></td>
           <td>${statusCell('OP' + o.n + ' STS JP', o.stsJp, session.role === 'JP', null)}</td>
           <td>${statusCell('OP' + o.n + ' STS 支店', o.stsBranch, session.role === 'BRANCH' && gate.editable, gate.allowed, `STS JP: ${o.stsJp || '未設定'}`)}</td>
         </tr>`;
-    }).join('');
+    };
+    const optionRowsMain = d.options.slice(0, 5).map(buildOptionRow_).join('');
+    const optionsExtra = d.options.slice(5);
+    const optionRowsExtra = optionsExtra.map(buildOptionRow_).join('');
+    const optionsExtraOpen = optionsExtra.some(o => o.name);
 
     // ★要件：メッセージ・変更のチェック（既読）は「誰が・いつ」確認したかも表示し、未読かどうか一目でわかるようにする
     const historyHtml = d.history.map(h => {
@@ -1760,7 +1783,7 @@
         </div>
 
         <div class="section-card plan-option-card">
-          <div class="plan-option-head"><span class="icon">📋</span><h3 style="margin:0;">プラン・オプション明細（プラン＋オプション最大5件）</h3></div>
+          <div class="plan-option-head"><span class="icon">📋</span><h3 style="margin:0;">プラン・オプション明細（プラン＋オプション最大10件）</h3></div>
           <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none;">
             <table class="plan-table">
               <thead><tr><th>種別</th><th>名称</th><th>STS（JP側）</th><th>STS（支店側）</th></tr></thead>
@@ -1771,10 +1794,21 @@
                   <td>${statusCell('STS JP', d['STS JP'], session.role === 'JP', null)}</td>
                   <td>${statusCell('STS 支店', d['STS 支店'], session.role === 'BRANCH' && mainGate.editable, mainGate.allowed, `STS JP: ${d['STS JP'] || '未設定'}`)}</td>
                 </tr>
-                ${optionRows}
+                ${optionRowsMain}
               </tbody>
             </table>
           </div>
+          ${!optionRowsExtra ? '' : `
+          <details class="hope-collapse" ${optionsExtraOpen ? 'open' : ''} style="margin:6px 14px 10px;">
+            <summary>オプション6〜10${optionsExtraOpen ? '' : '（ふだんは折りたたみ）'}</summary>
+            <div class="table-wrap" style="margin-top:6px;">
+              <table class="plan-table">
+                <thead><tr><th>種別</th><th>名称</th><th>STS（JP側）</th><th>STS（支店側）</th></tr></thead>
+                <tbody>${optionRowsExtra}</tbody>
+              </table>
+            </div>
+          </details>`}
+          ${optionDatalistHtml}
         </div>
 
         ${shopBillingBlock}
@@ -2438,7 +2472,9 @@
   // ---------- 新規依頼（店舗ロール専用。拡張要望2章） ----------
   const SHOP_NEW_TEXT_FIELDS = ['challengeno', 'groom-last', 'groom', 'bride-last', 'bride', 'groom-age', 'bride-age',
     'plan', 'sale', 'location', 'passport',
-    'option1', 'option2', 'option3', 'option4', 'option5'];
+    // ★要件：オプションは最大10件（フリー入力）
+    'option1', 'option2', 'option3', 'option4', 'option5',
+    'option6', 'option7', 'option8', 'option9', 'option10'];
   const SHOP_NEW_DATE_FIELDS = ['hope1', 'hope2', 'hope3', 'hope4', 'hope5'];
   async function openShopNewView() {
     showView('shop-new');
@@ -2485,9 +2521,9 @@
       $('shop-new-plan').innerHTML = '<option value="">未設定</option>' +
         planNames.map(n => `<option value="${escapeAttr(n)}">${escapeHtml(n)}</option>`).join('');
       $('shop-new-location-datalist').innerHTML = activeNames(locations).map(n => `<option value="${escapeAttr(n)}">`).join('');
-      const optionOptsHtml = '<option value="">（未使用）</option>' +
-        optionNames.map(n => `<option value="${escapeAttr(n)}">${escapeHtml(n)}</option>`).join('');
-      for (let i = 1; i <= 5; i++) $('shop-new-option' + i).innerHTML = optionOptsHtml;
+      // ★要件：オプション名はマスタからの選択式ではなく、候補（datalist）を出しつつ自由に書ける
+      // 入力欄にする（フリー入力）。マスタに無い名称も入力できる
+      $('shop-new-option-datalist').innerHTML = optionNames.map(n => `<option value="${escapeAttr(n)}">`).join('');
       // ★要件：プラン未選択（＝支店切り替え直後）の状態にリセットする。撮影希望場所は自由入力に、
       // セール名はその支店の全プラン共通のもの（対象プラン未指定）だけに戻る。
       onShopNewPlanChange();
@@ -2557,11 +2593,10 @@
       // ★要件変更：パスポート番号欄は常に表示するため、hiddenかどうかで送信有無を判断しない
       passportNumber: $('shop-new-passport').value.trim(),
       hope1: $('shop-new-hope1').value, hope2: $('shop-new-hope2').value, hope3: $('shop-new-hope3').value,
-      hope4: $('shop-new-hope4').value, hope5: $('shop-new-hope5').value,
-      option1: $('shop-new-option1').value.trim(), option2: $('shop-new-option2').value.trim(),
-      option3: $('shop-new-option3').value.trim(), option4: $('shop-new-option4').value.trim(),
-      option5: $('shop-new-option5').value.trim()
+      hope4: $('shop-new-hope4').value, hope5: $('shop-new-hope5').value
     };
+    // ★要件：オプションは最大10件（フリー入力）
+    for (let i = 1; i <= 10; i++) payload['option' + i] = $('shop-new-option' + i).value.trim();
     // ★要件：チャレンジ番号は任意ではなく必須。英数字11桁固定（0やアルファベットから始まる場合もある）
     if (!payload.challengeNo) { showFieldError('shop-new-error', 'チャレンジ番号を入力してください。'); return; }
     if (!/^[A-Za-z0-9]{11}$/.test(payload.challengeNo)) {

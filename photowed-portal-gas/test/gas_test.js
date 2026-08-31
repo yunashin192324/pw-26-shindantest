@@ -2796,5 +2796,39 @@ section('47. 撮影データ納品（現地支店がURL登録・ファイルア�
 }
 
 // ---------------------------------------------------------------
+section('48. オプション枠を5件から10件に拡張（自由入力・OP6〜OP10も通常どおり操作できる）');
+{
+  const ctx = featureFixture();
+  addBranchRow(ctx, { '支店コード': 'SHOP1', '支店名': '新宿店', 'ロール': 'SHOP', 'ログインパスコード': 'sp', '通知先メール': 'shop1@example.com', '有効': true });
+  const jp = ctx.apiLogin('KANTO', 'pw');
+  const jpTok = jp.session.token;
+  const shopTok = ctx.apiLogin('SHOP1', 'sp').session.token;
+
+  // --- 新規依頼フォームで10件目（option10）まで指定できる ---
+  const payload = { branchCode: 'VIE', team: '関東', groomLastName: 'Ten', groomName: 'Options', brideLastName: 'Ten', brideName: 'OptionsB',
+    hope1: '2026-09-01', challengeNo: 'TENOPTION01' };
+  for (let n = 1; n <= 10; n++) payload['option' + n] = `オプション${n}番`;
+  const created = ctx.apiShopCreateRequest(shopTok, payload);
+  const detail = ctx.apiGetReservationDetail(jpTok, created.kanriNo).detail;
+  check('1件目のオプションが保存される', detail['OP1'] === 'オプション1番');
+  check('10件目（OP10）のオプションも保存される（従来は5件までだった）', detail['OP10'] === 'オプション10番');
+
+  // --- 既存案件でもOP6〜OP10のSTS(JP側)を通常どおり操作できる ---
+  check('OP6のSTS(JP側)は未設定から始まる', !detail['OP6 STS JP']);
+  ctx.apiSaveFieldsQuiet(jpTok, created.kanriNo, { 'OP6 STS JP': 'OK' });
+  const afterOp6 = ctx.apiGetReservationDetail(jpTok, created.kanriNo).detail;
+  check('日本側はOP6のSTS(JP側)を通常どおり設定できる', afterOp6['OP6 STS JP'] === 'OK');
+
+  let err = null;
+  try { ctx.apiSaveFieldsQuiet(shopTok, created.kanriNo, { 'OP10 STS JP': 'CR', 'キャンセル理由': 'テスト理由' }); } catch (e) { err = e.message; }
+  check('店舗もOP10のSTS(JP側)を通常どおり変更できる（CRの制限も同じロジックが働く）', err === null, String(err));
+  const afterOp10 = ctx.apiGetReservationDetail(jpTok, created.kanriNo).detail;
+  check('OP10のSTS(JP側)がCRになる', afterOp10['OP10 STS JP'] === 'CR');
+
+  // --- オプション名は自由入力（マスタに無い名前も保存できる） ---
+  check('オプション名はマスタに無い名称も保存できる（フリー入力）', afterOp10['OP1'] === 'オプション1番');
+}
+
+// ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
 process.exit(fail === 0 ? 0 : 1);
