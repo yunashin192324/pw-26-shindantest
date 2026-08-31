@@ -1,0 +1,58 @@
+{%- comment -%}
+  contact-cards — About page's "ご相談・お問い合わせ" panel: phone /
+  email / diagnosis-style cards, reusing the plain padded .card.
+{%- endcomment -%}
+{%- if section.settings.show_section and section.blocks.size > 0 -%}
+  <section id="contact" class="{% if section.settings.background == 'ivory' %}bg-ivory{% endif %}">
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="eyebrow">Contact</p>
+        <h2>{{ section.settings.heading }}</h2>
+        <div class="divider-gold"></div>
+        {%- if section.settings.body != blank -%}<p>{{ section.settings.body }}</p>{%- endif -%}
+      </div>
+      <div class="grid grid-3 reveal">
+        {%- for block in section.blocks -%}
+          <div class="card" style="padding:32px;" {{ block.shopify_attributes }}>
+            <h3 style="font-size:1.05rem;">{{ block.settings.title }}</h3>
+            {%- if block.settings.body != blank -%}
+              <div class="card-desc mt-40" style="margin-top:14px;">{{ block.settings.body }}</div>
+            {%- endif -%}
+            {%- if block.settings.button_url != blank -%}
+              <a href="{{ block.settings.button_url }}" class="btn btn-gold btn-sm mt-40" style="margin-top:14px;">{{ block.settings.button_label }}</a>
+            {%- endif -%}
+          </div>
+        {%- endfor -%}
+      </div>
+    </div>
+  </section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "お問い合わせ",
+  "settings": [
+    { "type": "checkbox", "id": "show_section", "label": "表示する", "default": true },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "ご相談・お問い合わせ" },
+    { "type": "richtext", "id": "body", "label": "本文" },
+    { "type": "select", "id": "background", "label": "背景", "options": [
+        { "value": "white", "label": "白" },
+        { "value": "ivory", "label": "アイボリー" }
+      ], "default": "ivory" }
+  ],
+  "blocks": [
+    {
+      "type": "contact_card",
+      "name": "カード",
+      "settings": [
+        { "type": "text", "id": "title", "label": "見出し", "default": "お電話でのご相談" },
+        { "type": "richtext", "id": "body", "label": "本文" },
+        { "type": "text", "id": "button_label", "label": "ボタン文言" },
+        { "type": "url", "id": "button_url", "label": "ボタンリンク先" }
+      ]
+    }
+  ],
+  "max_blocks": 4,
+  "presets": [{ "name": "お問い合わせ" }]
+}
+{% endschema %}

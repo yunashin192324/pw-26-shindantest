@@ -1,0 +1,46 @@
+{%- comment -%}
+  collection-gallery — masonry-style photo gallery for the destination,
+  reusing the existing .gallery component (same one used pre-Shopify).
+{%- endcomment -%}
+{%- if section.settings.show_section and section.blocks.size > 0 -%}
+  <section class="{% if section.settings.background == 'ivory' %}bg-ivory{% endif %}">
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="eyebrow">Gallery</p>
+        <h2>{{ section.settings.heading }}</h2>
+        <div class="divider-gold"></div>
+      </div>
+      <div class="gallery reveal">
+        {%- for block in section.blocks -%}
+          {%- if block.settings.image -%}
+            <a href="{{ block.settings.image | image_url: width: 1400 }}" {{ block.shopify_attributes }}>
+              <img src="{{ block.settings.image | image_url: width: 700 }}" alt="{{ block.settings.image.alt | default: collection.title | escape }}" loading="lazy" width="700" height="700">
+            </a>
+          {%- endif -%}
+        {%- endfor -%}
+      </div>
+    </div>
+  </section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "撮影ギャラリー",
+  "settings": [
+    { "type": "checkbox", "id": "show_section", "label": "表示する", "default": true },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "撮影ギャラリー" },
+    { "type": "select", "id": "background", "label": "背景", "options": [
+        { "value": "white", "label": "白" },
+        { "value": "ivory", "label": "アイボリー" }
+      ], "default": "ivory" }
+  ],
+  "blocks": [
+    {
+      "type": "photo",
+      "name": "写真",
+      "settings": [{ "type": "image_picker", "id": "image", "label": "画像" }]
+    }
+  ],
+  "max_blocks": 8
+}
+{% endschema %}

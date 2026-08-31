@@ -1,0 +1,38 @@
+{%- comment -%}
+  image-duo — two photos side by side, reusing .split-media aspect
+  ratio. Used on the Dress page between "why it matters" and "flow".
+{%- endcomment -%}
+{%- if section.settings.show_section -%}
+  <section class="{% if section.settings.background == 'ivory' %}bg-ivory{% endif %}">
+    <div class="container">
+      <div class="grid grid-2 reveal">
+        {%- if section.settings.image_1 -%}
+          <div class="split-media" style="aspect-ratio:4/5;">
+            <img src="{{ section.settings.image_1 | image_url: width: 800 }}" alt="{{ section.settings.image_1.alt | escape }}" loading="lazy" width="800" height="1000">
+          </div>
+        {%- endif -%}
+        {%- if section.settings.image_2 -%}
+          <div class="split-media" style="aspect-ratio:4/5;">
+            <img src="{{ section.settings.image_2 | image_url: width: 800 }}" alt="{{ section.settings.image_2.alt | escape }}" loading="lazy" width="800" height="1000">
+          </div>
+        {%- endif -%}
+      </div>
+    </div>
+  </section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "画像2枚並び",
+  "settings": [
+    { "type": "checkbox", "id": "show_section", "label": "表示する", "default": true },
+    { "type": "select", "id": "background", "label": "背景", "options": [
+        { "value": "white", "label": "白" },
+        { "value": "ivory", "label": "アイボリー" }
+      ], "default": "white" },
+    { "type": "image_picker", "id": "image_1", "label": "画像1" },
+    { "type": "image_picker", "id": "image_2", "label": "画像2" }
+  ],
+  "presets": [{ "name": "画像2枚並び" }]
+}
+{% endschema %}

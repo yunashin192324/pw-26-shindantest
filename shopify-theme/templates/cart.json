@@ -1,0 +1,14 @@
+{
+  "sections": {
+    "main-cart": {
+      "type": "main-cart",
+      "settings": {
+        "heading": "カート",
+        "empty_text": "カートに商品がありません。",
+        "empty_button_label": "撮影地を見る",
+        "checkout_label": "レジに進む"
+      }
+    }
+  },
+  "order": ["main-cart"]
+}

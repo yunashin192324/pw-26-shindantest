@@ -1,0 +1,11 @@
+{%- comment -%}
+  page-breadcrumb — .breadcrumb component for a generic Shopify Page
+  (About / Dress / FAQ). Keep in sync with page-schema.liquid.
+
+  Params:
+    page — required
+{%- endcomment -%}
+<p class="breadcrumb">
+  <span><a href="{{ routes.root_url }}">TOP</a></span>
+  <span>{{ page.title }}</span>
+</p>

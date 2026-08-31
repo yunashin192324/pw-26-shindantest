@@ -1,0 +1,53 @@
+{%- comment -%}
+  product-schedule — ⑥ スケジュール. Timeline of the day, reusing the
+  existing .info-table component (time / description rows).
+{%- endcomment -%}
+{%- if section.settings.show_section and section.blocks.size > 0 -%}
+  <section class="{% if section.settings.background == 'ivory' %}bg-ivory{% endif %}">
+    <div class="container" style="max-width:820px;">
+      <div class="section-head reveal">
+        <p class="eyebrow">Schedule</p>
+        <h2>{{ section.settings.heading }}</h2>
+        <div class="divider-gold"></div>
+      </div>
+      <table class="info-table reveal">
+        {%- for block in section.blocks -%}
+          <tr {{ block.shopify_attributes }}><th>{{ block.settings.time }}</th><td>{{ block.settings.description }}</td></tr>
+        {%- endfor -%}
+      </table>
+    </div>
+  </section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "スケジュール",
+  "settings": [
+    { "type": "checkbox", "id": "show_section", "label": "表示する", "default": true },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "撮影当日のスケジュール例" },
+    { "type": "select", "id": "background", "label": "背景", "options": [
+        { "value": "white", "label": "白" },
+        { "value": "ivory", "label": "アイボリー" }
+      ], "default": "ivory" }
+  ],
+  "blocks": [
+    {
+      "type": "step",
+      "name": "時間",
+      "settings": [
+        { "type": "text", "id": "time", "label": "時刻", "default": "9:00" },
+        { "type": "text", "id": "description", "label": "内容", "default": "ヘアメイク" }
+      ]
+    }
+  ],
+  "max_blocks": 12,
+  "default": {
+    "blocks": [
+      { "type": "step", "settings": { "time": "7:00", "description": "リゾートにて本格ヘアメイク" } },
+      { "type": "step", "settings": { "time": "9:00", "description": "ロケーションへ移動" } },
+      { "type": "step", "settings": { "time": "10:00", "description": "メインロケーションにて撮影" } },
+      { "type": "step", "settings": { "time": "13:00", "description": "撮影終了・解散" } }
+    ]
+  }
+}
+{% endschema %}

@@ -1,0 +1,110 @@
+{%- comment -%}
+  faq-accordion — generic FAQ, reusing .accordion. Supports two block
+  types so it can render either a flat list (TOP page teaser) or a
+  list grouped under category headers (the full FAQ page): add a
+  "category" block before a run of "qa" blocks to start a new group.
+  FAQPage JSON-LD is built from every "qa" block regardless of
+  grouping. Optional "more_link" turns this into a teaser with a
+  "FAQをもっと見る"-style button underneath.
+{%- endcomment -%}
+{%- assign qa_blocks = section.blocks | where: 'type', 'qa' -%}
+{%- if section.settings.show_section and qa_blocks.size > 0 -%}
+  <section class="{% if section.settings.background == 'ivory' %}bg-ivory{% endif %}">
+    <div class="container" style="max-width:{{ section.settings.width }}px;">
+      <div class="section-head reveal">
+        <p class="eyebrow">FAQ</p>
+        <h2>{{ section.settings.heading }}</h2>
+        <div class="divider-gold"></div>
+      </div>
+
+      {%- assign accordion_open = false -%}
+      {%- for block in section.blocks -%}
+        {%- if block.type == 'category' -%}
+          {%- if accordion_open -%}</div>{%- endif -%}
+          <div class="reveal mb-40" {{ block.shopify_attributes }}>
+            <p class="eyebrow">{{ block.settings.label }}</p>
+            <h2 style="font-size:1.4rem;">{{ block.settings.sub_heading }}</h2>
+            <div class="divider-gold" style="margin-left:0;"></div>
+          </div>
+          <div class="accordion reveal mb-40">
+          {%- assign accordion_open = true -%}
+        {%- elsif block.type == 'qa' -%}
+          {%- unless accordion_open -%}
+            <div class="accordion reveal mb-40">
+            {%- assign accordion_open = true -%}
+          {%- endunless -%}
+          <div class="accordion-item" {{ block.shopify_attributes }}>
+            <button class="accordion-trigger"><span>{{ block.settings.question }}</span><span class="plus"></span></button>
+            <div class="accordion-panel"><div class="accordion-panel-inner">{{ block.settings.answer }}</div></div>
+          </div>
+        {%- endif -%}
+      {%- endfor -%}
+      {%- if accordion_open -%}</div>{%- endif -%}
+
+      {%- if section.settings.more_link_url != blank -%}
+        <div class="text-center mt-40">
+          <a href="{{ section.settings.more_link_url }}" class="btn btn-outline-dark">{{ section.settings.more_link_label }}</a>
+        </div>
+      {%- endif -%}
+    </div>
+  </section>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {%- for block in qa_blocks -%}
+        {
+          "@type": "Question",
+          "name": {{ block.settings.question | strip_html | json }},
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": {{ block.settings.answer | strip_html | json }}
+          }
+        }{%- unless forloop.last -%},{%- endunless -%}
+      {%- endfor -%}
+    ]
+  }
+  </script>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "FAQ",
+  "settings": [
+    { "type": "checkbox", "id": "show_section", "label": "表示する", "default": true },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "よくあるご質問" },
+    { "type": "select", "id": "background", "label": "背景", "options": [
+        { "value": "white", "label": "白" },
+        { "value": "ivory", "label": "アイボリー" }
+      ], "default": "white" },
+    { "type": "select", "id": "width", "label": "本文幅", "options": [
+        { "value": "820", "label": "標準" },
+        { "value": "860", "label": "広め" }
+      ], "default": "820" },
+    { "type": "text", "id": "more_link_label", "label": "「もっと見る」ボタン文言", "default": "FAQをもっと見る" },
+    { "type": "url", "id": "more_link_url", "label": "「もっと見る」ボタンリンク先", "info": "設定するとボタンが表示されます（TOPページの抜粋表示などに）。" }
+  ],
+  "blocks": [
+    {
+      "type": "category",
+      "name": "カテゴリ見出し（グループ分けする場合のみ）",
+      "settings": [
+        { "type": "text", "id": "label", "label": "英字ラベル", "default": "Category" },
+        { "type": "text", "id": "sub_heading", "label": "日本語見出し", "default": "カテゴリ名" }
+      ]
+    },
+    {
+      "type": "qa",
+      "name": "質問",
+      "settings": [
+        { "type": "text", "id": "question", "label": "質問", "default": "質問文をここに入力" },
+        { "type": "richtext", "id": "answer", "label": "回答" }
+      ]
+    }
+  ],
+  "max_blocks": 40,
+  "presets": [{ "name": "FAQ" }]
+}
+{% endschema %}

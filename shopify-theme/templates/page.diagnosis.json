@@ -1,0 +1,50 @@
+{
+  "sections": {
+    "diagnosis-hero": {
+      "type": "page-hero",
+      "settings": {
+        "eyebrow": "30-Second Diagnosis",
+        "heading": "あなたに合う撮影地を、\n30秒で診断。",
+        "lede": "3つの質問に答えるだけで、おすすめの撮影地とプランをご提案します。"
+      }
+    },
+    "diagnosis-quiz": {
+      "type": "diagnosis-quiz",
+      "settings": {},
+      "blocks": {
+        "q1": { "type": "question", "settings": { "key": "vibe", "question": "気になる雰囲気はどちらですか？" } },
+        "q1-o1": { "type": "option", "settings": { "value": "hawaii", "label": "定番ビーチ×常夏の開放感", "sub": "ワイキキビーチ、ダイヤモンドヘッド（ハワイ）" } },
+        "q1-o2": { "type": "option", "settings": { "value": "danang", "label": "コスパの良い非日常リゾート", "sub": "黄金の橋、五つ星リゾート（ダナン）" } },
+        "q1-o3": { "type": "option", "settings": { "value": "london", "label": "歴史的建築×クラシックな気品", "sub": "タワーブリッジ、古城・庭園（ロンドン）" } },
+
+        "q2": { "type": "question", "settings": { "key": "budget", "question": "ご予算の目安はどのくらいですか？" } },
+        "q2-o1": { "type": "option", "settings": { "value": "low", "label": "30万円以下", "sub": "まずは無理のない範囲で" } },
+        "q2-o2": { "type": "option", "settings": { "value": "mid", "label": "30〜45万円", "sub": "内容とのバランスを重視" } },
+        "q2-o3": { "type": "option", "settings": { "value": "high", "label": "45万円以上", "sub": "こだわりを優先したい" } },
+
+        "q3": { "type": "question", "settings": { "key": "priority", "question": "一番重視したいことは何ですか？" } },
+        "q3-o1": { "type": "option", "settings": { "value": "standard", "label": "王道・安心感のある内容", "sub": "定番のロケーションでしっかりと" } },
+        "q3-o2": { "type": "option", "settings": { "value": "value", "label": "コストパフォーマンス", "sub": "費用を抑えつつ満足できる内容" } },
+        "q3-o3": { "type": "option", "settings": { "value": "special", "label": "特別感・非日常体験", "sub": "複数ロケーションや特別な演出" } }
+      },
+      "block_order": [
+        "q1", "q1-o1", "q1-o2", "q1-o3",
+        "q2", "q2-o1", "q2-o2", "q2-o3",
+        "q3", "q3-o1", "q3-o2", "q3-o3"
+      ]
+    },
+    "diagnosis-cta": {
+      "type": "cta-band",
+      "settings": {
+        "eyebrow": "Not sure yet?",
+        "heading": "迷ったら、まずはご相談ください。"
+      },
+      "blocks": {
+        "cta-1": { "type": "button", "settings": { "label": "相談する", "url": "/pages/about#contact", "style": "outline" } },
+        "cta-2": { "type": "button", "settings": { "label": "全プランを見る", "url": "/#destinations", "style": "gold" } }
+      },
+      "block_order": ["cta-1", "cta-2"]
+    }
+  },
+  "order": ["diagnosis-hero", "diagnosis-quiz", "diagnosis-cta"]
+}

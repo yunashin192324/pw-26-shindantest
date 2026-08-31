@@ -1,0 +1,77 @@
+{%- comment -%}
+  destination-plans — この都市のプラン一覧。area-lp.liquidの「プラン」
+  ブロックと同じ考え方：ブロックに商品を1つ指定するだけで、商品名・
+  価格・画像・URL・即予約バッジが自動反映される。ブロックの並び替え・
+  削除はTheme Editor標準の機能でそのまま行える(コード編集不要)。
+{%- endcomment -%}
+{%- assign plan_blocks = section.blocks | where: 'type', 'plan' -%}
+
+{%- if plan_blocks.size > 0 -%}
+<section id="dst-plans"{% if section.settings.bg_ivory %} class="dst-bg-ivory"{% endif %}>
+  <div class="dst-container">
+    <div class="dst-section-head dst-reveal">
+      <p class="dst-eyebrow" style="color:{{ section.settings.eyebrow_color }};">{{ section.settings.eyebrow }}</p>
+      <h2 style="color:{{ section.settings.heading_color }};">{{ section.settings.heading }}</h2>
+      <hr class="dst-divider">
+    </div>
+    <div class="dst-plans-grid">
+      {%- for block in plan_blocks -%}
+        {%- assign linked_product = block.settings.product -%}
+        {%- assign plan_variant = linked_product.selected_or_first_available_variant -%}
+        {%- assign is_instant = false -%}
+        {%- if linked_product.tags contains '即予約' -%}{%- assign is_instant = true -%}{%- endif -%}
+        <a href="{{ linked_product.url }}" class="dst-plan-card dst-reveal" {{ block.shopify_attributes }}>
+          <div class="dst-plan-media">
+            {%- if linked_product.featured_image != blank -%}
+              {%- capture plan_img_style -%}object-position: {{ section.settings.img_position }};{%- endcapture -%}
+              {{ linked_product.featured_image | image_url: width: 900 | image_tag: class: 'dst-plan-img', loading: 'lazy', alt: linked_product.title, style: plan_img_style }}
+            {%- endif -%}
+            {%- if is_instant -%}<span class="dst-plan-badge">即予約</span>{%- endif -%}
+          </div>
+          <div class="dst-plan-body">
+            <h3 class="dst-plan-title">{% render 'safe-linebreak', text: linked_product.title %}</h3>
+            {%- if linked_product.description != blank -%}
+              <p class="dst-plan-desc">{{ linked_product.description | strip_html | truncate: 60 }}</p>
+            {%- endif -%}
+            {%- if plan_variant -%}
+              <p class="dst-plan-price">{{ plan_variant.price | money_without_currency }}<span style="font-size:0.6em;">円〜</span></p>
+            {%- endif -%}
+            <span class="dst-card-link">詳しく見る ＞</span>
+          </div>
+        </a>
+      {%- endfor -%}
+    </div>
+  </div>
+</section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "都市 プラン一覧",
+  "settings": [
+    { "type": "checkbox", "id": "bg_ivory", "label": "背景をアイボリーにする", "default": true },
+    { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "Plans" },
+    { "type": "color", "id": "eyebrow_color", "label": "英字見出し色", "default": "#c9a96e" },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "おすすめプラン" },
+    { "type": "color", "id": "heading_color", "label": "見出し色", "default": "#1a1a1a" },
+    { "type": "select", "id": "img_position", "label": "画像トリミング位置", "default": "center",
+      "options": [
+        { "value": "top", "label": "上" },
+        { "value": "center", "label": "中央" },
+        { "value": "bottom", "label": "下" }
+      ]
+    }
+  ],
+  "blocks": [
+    {
+      "type": "plan",
+      "name": "プラン",
+      "settings": [
+        { "type": "product", "id": "product", "label": "商品", "info": "この都市のプラン商品を選択してください。名称・価格・画像・URL・即予約バッジは商品から自動取得されます。" }
+      ]
+    }
+  ],
+  "max_blocks": 20,
+  "presets": [{ "name": "都市 プラン一覧" }]
+}
+{% endschema %}

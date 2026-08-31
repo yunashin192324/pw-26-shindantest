@@ -1,0 +1,63 @@
+{
+  "sections": {
+    "dress-diagnosis-hero": {
+      "type": "page-hero",
+      "settings": {
+        "eyebrow": "Dress Diagnosis",
+        "heading": "フォトウェディング\nドレス診断",
+        "lede": "いくつかの質問に答えるだけで、豊富なコレクションの中からあなたの撮影イメージに最も映える運命のドレスをご提案します。"
+      }
+    },
+    "dress-diagnosis-quiz": {
+      "type": "dress-diagnostic",
+      "settings": {
+        "start_heading": "フォトウェディング ドレス診断",
+        "start_body": "いくつかの質問に答えるだけで、豊富なコレクションの中からあなたの撮影イメージに最も映える運命のドレスをご提案します。",
+        "start_button_label": "診断をスタート",
+        "result_lede": "あなたの撮影にぴったりのドレスは…",
+        "consult_label": "試着について相談する",
+        "consult_url": "/pages/about#contact",
+        "result_footnote": "診断結果は目安です。実際の着心地やサイズ感は、ぜひ試着でご確認ください。"
+      },
+      "blocks": {
+        "q1": { "type": "question", "settings": { "question": "Q1. 撮影のロケーション（場所）は、どんなイメージが良いですか？" } },
+        "q1-o1": { "type": "option", "settings": { "label": "チャペルや歴史的建造物など、クラシカルで厳かな場所", "trait": "style", "value": "classic" } },
+        "q1-o2": { "type": "option", "settings": { "label": "海辺や森、自然豊かな公園など、ナチュラルな屋外", "trait": "style", "value": "natural" } },
+        "q1-o3": { "type": "option", "settings": { "label": "おしゃれなスタジオや洋館、都会の街並みなど、モダンな空間", "trait": "style", "value": "modern" } },
+
+        "q2": { "type": "question", "settings": { "question": "Q2. 写真全体を通して、どんなシルエットで残したいですか？" } },
+        "q2-o1": { "type": "option", "settings": { "label": "お姫様のように華やかで可愛らしい雰囲気（ふんわりAライン、プリンセスライン）", "trait": "silhouette", "value": "volume" } },
+        "q2-o2": { "type": "option", "settings": { "label": "スタイル良く、大人っぽく洗練された雰囲気（スッキリとしたスレンダー、マーメイド）", "trait": "silhouette", "value": "slender" } },
+
+        "q3": { "type": "question", "settings": { "question": "Q3. お顔周りのアップ写真に影響する、胸元や袖の希望は？" } },
+        "q3-o1": { "type": "option", "settings": { "label": "デコルテを出して、お顔周りをすっきり明るく見せたい", "trait": "neck", "value": "clear" } },
+        "q3-o2": { "type": "option", "settings": { "label": "素肌に重なるレースで、上品で繊細な雰囲気を演出したい", "trait": "neck", "value": "sheer" } },
+        "q3-o3": { "type": "option", "settings": { "label": "袖ありのデザインで、トレンド感やクラシカルさを出したい", "trait": "neck", "value": "sleeves" } },
+
+        "q4": { "type": "question", "settings": { "question": "Q4. 写真の仕上がりや、ドレスの質感に対する希望は？" } },
+        "q4-o1": { "type": "option", "settings": { "label": "細かい刺繍やレースのディテールが綺麗に写る、華やかなスタイル", "trait": "fabric", "value": "lace" } },
+        "q4-o2": { "type": "option", "settings": { "label": "風になびくような軽やかさや、光に透ける透明感がほしい（チュール・オーガンジー等）", "trait": "fabric", "value": "tulle" } },
+        "q4-o3": { "type": "option", "settings": { "label": "光沢感があり、陰影が美しく際立つ、重厚で高級感のあるスタイル（サテン・ミカドシルク等）", "trait": "fabric", "value": "satin" } }
+      },
+      "block_order": [
+        "q1", "q1-o1", "q1-o2", "q1-o3",
+        "q2", "q2-o1", "q2-o2",
+        "q3", "q3-o1", "q3-o2", "q3-o3",
+        "q4", "q4-o1", "q4-o2", "q4-o3"
+      ]
+    },
+    "dress-diagnosis-cta": {
+      "type": "cta-band",
+      "settings": {
+        "eyebrow": "Not sure yet?",
+        "heading": "実際に試着して確かめたい方は、お気軽にご相談ください。"
+      },
+      "blocks": {
+        "cta-1": { "type": "button", "settings": { "label": "試着について相談する", "url": "/pages/about#contact", "style": "outline" } },
+        "cta-2": { "type": "button", "settings": { "label": "ドレス一覧を見る", "url": "/pages/dress-gallery", "style": "gold" } }
+      },
+      "block_order": ["cta-1", "cta-2"]
+    }
+  },
+  "order": ["dress-diagnosis-hero", "dress-diagnosis-quiz", "dress-diagnosis-cta"]
+}

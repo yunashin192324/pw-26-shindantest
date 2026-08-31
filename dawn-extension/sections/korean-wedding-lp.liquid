@@ -1,0 +1,864 @@
+{% comment %}
+  HIS World Wedding LP セクション - フルカスタマイズ完全版（テーマ連動型）
+{% endcomment %}
+
+<script src="https://cdn.tailwindcss.com/3.4.17" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js" defer></script>
+
+<script>
+  /* Tailwind CSSのフォント設定をShopifyテーマの共通変数に連動させる */
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          'serif-display': ['var(--font-heading-family)', 'serif'],
+          sans: ['var(--font-body-family)', 'sans-serif']
+        }
+      }
+    }
+  }
+</script>
+
+<style>
+  :root {
+    --gold: #C9A96E;
+    --dark: #1a1a1a;
+    --dark-brown: #2d2419;
+    --offwhite: #f8f6f2;
+    --ivory: #faf9f6;
+  }
+
+  /* テーマの枠制限を突破して全画面幅にする強制リセット */
+  .lp-container {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    margin-left: calc(50% - 50vw) !important;
+    overflow-x: hidden;
+    /* Shopifyテーマの本文フォントと基準サイズスケールを適用 */
+    font-family: var(--font-body-family), sans-serif;
+    font-size: calc(var(--font-body-scale) * 100%);
+    color: #333;
+  }
+
+  .lp-container .font-serif-display {
+    /* Shopifyテーマの見出しフォントを適用 */
+    font-family: var(--font-heading-family), serif;
+  }
+
+  .lp-container .text-gold { color: var(--gold); }
+  .lp-container .bg-gold { background-color: var(--gold); }
+  .lp-container .bg-ivory { background-color: var(--ivory); }
+  .lp-container .border-gold { border-color: var(--gold); }
+  .lp-container .tracking-widest-custom { letter-spacing: 0.15em; }
+  .lp-container .fade-in {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.8s ease, transform 0.8s ease;
+  }
+  .lp-container .fade-in.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .lp-container .gold-line {
+    border-color: var(--gold);
+    opacity: 0.4;
+    margin-top: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  /* ボタン共通スタイル */
+  .lp-container .btn {
+    padding: 12px 32px;
+    letter-spacing: 0.1em;
+    font-size: 14px;
+    transition: all 0.3s;
+    text-align: center;
+    display: inline-block;
+    cursor: pointer;
+    min-width: 180px;
+  }
+  .lp-container .btn-gold {
+    background: var(--gold);
+    color: #fff;
+    border: 1px solid var(--gold);
+  }
+  .lp-container .btn-gold:hover {
+    background: #b5955a;
+    border-color: #b5955a;
+  }
+  .lp-container .btn-outline-light {
+    border: 1px solid #fff;
+    color: #fff;
+  }
+  .lp-container .btn-outline-light:hover {
+    background: #fff;
+    color: var(--dark);
+  }
+  .lp-container .btn-outline-dark {
+    border: 1px solid var(--dark);
+    color: var(--dark);
+  }
+  .lp-container .btn-outline-dark:hover {
+    background: var(--dark);
+    color: #fff;
+  }
+
+  /* アコーディオン */
+  .qa-answer {
+    transition: max-height 0.3s ease-out;
+  }
+
+  /* ==========================================================================
+     【追加箇所】写真の爽快感を邪魔しない、文字をクッキリ読ませる強力な多層文字シャドウ
+     ========================================================================== */
+  .hero-perfect-shadow h1,
+  .hero-perfect-shadow p {
+    text-shadow: 0 4px 16px rgba(0, 0, 0, 0.60), 0 1px 4px rgba(0, 0, 0, 0.45);
+  }
+
+  /* ==========================================================================
+     【修正】見出しフォント(--font-heading-family)は半角数字の字形が
+     極端に小さく・沈んで見える(オールドスタイル数字)ため、position/
+     line-heightでの位置調整では直らなかった。数字だけ本文用フォント
+     (--font-body-family)に切り替えて描画することで解決する。
+     ========================================================================== */
+  .lp-container .num-fix {
+    font-family: var(--font-body-family), sans-serif;
+    font-variant-numeric: lining-nums;
+  }
+</style>
+
+<div class="lp-container w-full">
+
+  <header class="relative w-full h-screen">
+    <div class="absolute inset-0">
+      {% if section.settings.hero_image %}
+        {% assign hero_img_class = 'w-full h-full object-cover ' | append: section.settings.hero_image_position %}
+        {{ section.settings.hero_image | image_url: width: 2000 | image_tag: class: hero_img_class, loading: 'eager', alt: section.settings.hero_title }}
+      {% else %}
+        <div class="w-full h-full bg-gray-600"></div>
+      {% endif %}
+      <div class="absolute inset-0 bg-black" style="opacity: {{ section.settings.hero_overlay_opacity | divided_by: 100.0 }};"></div>
+    </div>
+
+    <div class="relative z-10 absolute inset-0 flex flex-col items-center justify-center text-center px-6 pt-20 h-full bg-gradient-to-b from-black/15 via-black/5 to-black/20">
+      <div class="hero-perfect-shadow">
+        <p class="font-serif-display tracking-widest-custom mb-4 font-bold" style="color: {{ section.settings.hero_eyebrow_color }};">{{ section.settings.hero_eyebrow }}</p>
+        <h1 class="font-serif-display text-4xl md:text-6xl tracking-widest-custom mb-6 leading-tight font-medium" style="color: {{ section.settings.hero_title_color }};">{{ section.settings.hero_title | newline_to_br }}</h1>
+        <p class="text-sm md:text-base leading-loose max-w-2xl mx-auto mb-10 opacity-95" style="color: {{ section.settings.hero_desc_color }};">{{ section.settings.hero_desc | newline_to_br }}</p>
+        <div class="flex flex-col sm:flex-row gap-4 justify-center">
+          {% if section.settings.show_diagnosis %}
+            <a href="{{ section.settings.diagnosis_link | default: '#' }}" class="btn btn-gold">{{ section.settings.hero_btn_2_text }}</a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section id="plans" class="py-24 px-6">
+      <div class="max-w-6xl mx-auto">
+
+        <div class="text-center mb-16 fade-in">
+          <p class="font-serif-display tracking-widest-custom mb-2 font-bold" style="color: {{ section.settings.plan_eyebrow_color }};">Popular Plans</p>
+          <h2 class="text-2xl md:text-3xl tracking-widest-custom mb-4 font-medium" style="color: {{ section.settings.plan_heading_color }};">{{ section.settings.plan_title }}</h2>
+          <hr class="gold-line max-w-[60px] mx-auto" style="border-color: {{ section.settings.plan_eyebrow_color }};">
+          <p class="text-sm" style="color: {{ section.settings.plan_desc_color }};">{{ section.settings.plan_desc }}</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {% assign plan_blocks = section.blocks | where: "type", "plan" %}
+          {% for block in plan_blocks %}
+            {%- comment -%}
+              商品を選択している場合は、名称・価格・画像・URL・即予約バッジを
+              商品から自動取得する（プランページ側のarea-lp.liquid/
+              destination-plans.liquidと同じ考え方）。選択していなければ
+              従来通りの手入力フィールドを使う。
+            {%- endcomment -%}
+            {%- assign linked_product = block.settings.product -%}
+            {%- assign plan_variant = linked_product.selected_or_first_available_variant -%}
+            {%- assign plan_is_instant = false -%}
+            {%- if linked_product.tags contains '即予約' -%}{%- assign plan_is_instant = true -%}{%- endif -%}
+            {%- if linked_product -%}
+              {%- assign plan_name_source = linked_product.title -%}
+              {%- assign plan_region_source = linked_product.metafields.custom.plan_area_name.value -%}
+              {%- assign plan_desc_source = linked_product.description | strip_html -%}
+              {%- assign plan_url_source = linked_product.url -%}
+              {%- assign plan_price_source = plan_variant.price | money_without_currency | prepend: '¥' -%}
+            {%- else -%}
+              {%- assign plan_name_source = block.settings.plan_name -%}
+              {%- assign plan_region_source = block.settings.plan_region -%}
+              {%- assign plan_desc_source = block.settings.plan_detail -%}
+              {%- assign plan_url_source = block.settings.plan_url | default: '#' -%}
+              {%- assign plan_price_source = block.settings.plan_price -%}
+            {%- endif -%}
+            {% assign plan_name_display = plan_name_source
+              | replace: '0', '<span class="num-fix">0</span>'
+              | replace: '1', '<span class="num-fix">1</span>'
+              | replace: '2', '<span class="num-fix">2</span>'
+              | replace: '3', '<span class="num-fix">3</span>'
+              | replace: '4', '<span class="num-fix">4</span>'
+              | replace: '5', '<span class="num-fix">5</span>'
+              | replace: '6', '<span class="num-fix">6</span>'
+              | replace: '7', '<span class="num-fix">7</span>'
+              | replace: '8', '<span class="num-fix">8</span>'
+              | replace: '9', '<span class="num-fix">9</span>'
+            %}
+            <a href="{{ plan_url_source }}" class="group block border border-gray-200 bg-white hover:shadow-xl transition-shadow duration-300 fade-in" {{ block.shopify_attributes }}>
+              <div class="relative aspect-[4/3] overflow-hidden">
+                {% if block.settings.is_popular %}
+                  <span class="absolute top-4 left-4 z-10 text-white text-xs font-bold px-3 py-1 tracking-wider" style="background-color: {{ block.settings.plan_badge_color | default: 'var(--gold)' }};">{{ block.settings.badge }}</span>
+                {% endif %}
+                {% if linked_product.featured_image %}
+                  {% assign plan_img_class = 'w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ' | append: block.settings.image_position %}
+                  {{ linked_product.featured_image | image_url: width: 800 | image_tag: class: plan_img_class, loading: 'lazy', alt: plan_name_source }}
+                {% elsif block.settings.plan_img %}
+                  {% assign plan_img_class = 'w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ' | append: block.settings.image_position %}
+                  {{ block.settings.plan_img | image_url: width: 800 | image_tag: class: plan_img_class, loading: 'lazy', alt: plan_name_source }}
+                {% else %}
+                  <div class="w-full h-full bg-gray-200"></div>
+                {% endif %}
+              </div>
+              <div class="p-6">
+                <p class="font-serif-display text-sm tracking-widest-custom mb-1 font-bold" style="color: {{ block.settings.plan_title_color }};">{{ plan_region_source }}</p>
+                <h3 class="text-lg font-bold mb-3" style="color: {{ block.settings.plan_title_color }};">{{ plan_name_display }}</h3>
+                <p class="text-sm mb-4 h-10 line-clamp-2" style="color: {{ block.settings.plan_desc_color }};">{{ plan_desc_source }}</p>
+
+                <div class="mb-6">
+                  {% if linked_product %}
+                    {% if plan_is_instant %}
+                      <span class="inline-block border border-green-600 text-green-600 text-[10px] px-2 py-1 font-bold bg-green-50">即予約できます</span>
+                    {% else %}
+                      <span class="inline-block border border-gray-500 text-gray-600 text-[10px] px-2 py-1 font-bold bg-amber-50">現地確認後ご回答</span>
+                    {% endif %}
+                  {% else %}
+                    {% if block.settings.availability == 'instant' %}
+                      <span class="inline-block border border-green-600 text-green-600 text-[10px] px-2 py-1 font-bold bg-green-50">即予約できます</span>
+                    {% else %}
+                      <span class="inline-block border border-gray-500 text-gray-600 text-[10px] px-2 py-1 font-bold bg-amber-50">現地確認後ご回答</span>
+                    {% endif %}
+                  {% endif %}
+                </div>
+
+                <div class="flex justify-between items-end border-t border-gray-100 pt-4">
+                  <div>
+                    <span class="text-xl font-bold" style="color: {{ block.settings.plan_price_color }};">{{ plan_price_source }}</span>
+                    <span class="text-xs text-gray-500 ml-1">
+                      {% if block.settings.show_tax_label %}税込 / {% else %}/ {% endif %}2名
+                    </span>
+                  </div>
+                  <span class="text-xs font-bold group-hover:underline" style="color: {{ block.settings.plan_price_color }};">詳細を見る ＞</span>
+                </div>
+              </div>
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+
+    <section id="destinations" class="py-24 px-6 bg-ivory">
+      <div class="max-w-6xl mx-auto">
+        <div class="text-center mb-16 fade-in">
+          <p class="font-serif-display tracking-widest-custom mb-2 font-bold" style="color: {{ section.settings.dest_eyebrow_color }};">Destinations</p>
+          <h2 class="text-2xl md:text-3xl tracking-widest-custom mb-4 font-medium" style="color: {{ section.settings.dest_heading_color }};">{{ section.settings.dest_title }}</h2>
+          <hr class="gold-line max-w-[60px] mx-auto" style="border-color: {{ section.settings.dest_eyebrow_color }};">
+          <p class="text-sm" style="color: {{ section.settings.dest_desc_color }};">{{ section.settings.dest_desc }}</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {% assign dest_blocks = section.blocks | where: "type", "destination" %}
+          {% for block in dest_blocks %}
+            <a href="{{ block.settings.dest_url | default: '#' }}" class="group relative aspect-[4/5] overflow-hidden fade-in block" {{ block.shopify_attributes }}>
+              {% if block.settings.dest_img %}
+                {% assign dest_img_class = 'absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ' | append: block.settings.image_position %}
+                {{ block.settings.dest_img | image_url: width: 800 | image_tag: class: dest_img_class, loading: 'lazy', alt: block.settings.dest_name }}
+              {% else %}
+                <div class="absolute inset-0 w-full h-full bg-gray-300"></div>
+              {% endif %}
+
+              <div class="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/90 via-black/40 to-transparent pointer-events-none"></div>
+              <div class="absolute bottom-0 left-0 w-full p-8 z-10" style="text-shadow: 0px 4px 10px rgba(0,0,0,0.8);">
+                <p class="font-serif-display tracking-widest-custom text-sm mb-1 font-bold" style="color: {{ block.settings.dest_country_color | default: 'var(--gold)' }};">{{ block.settings.dest_country }}</p>
+                <h3 class="text-3xl tracking-widest-custom mb-2 font-bold" style="color: {{ block.settings.dest_name_color | default: '#ffffff' }};">{{ block.settings.dest_name }}</h3>
+                {% assign dest_meta_display = block.settings.dest_meta
+                  | replace: '0', '<span class="num-fix">0</span>'
+                  | replace: '1', '<span class="num-fix">1</span>'
+                  | replace: '2', '<span class="num-fix">2</span>'
+                  | replace: '3', '<span class="num-fix">3</span>'
+                  | replace: '4', '<span class="num-fix">4</span>'
+                  | replace: '5', '<span class="num-fix">5</span>'
+                  | replace: '6', '<span class="num-fix">6</span>'
+                  | replace: '7', '<span class="num-fix">7</span>'
+                  | replace: '8', '<span class="num-fix">8</span>'
+                  | replace: '9', '<span class="num-fix">9</span>'
+                %}
+                <p class="text-xs font-medium" style="color: {{ block.settings.dest_meta_color | default: '#e5e7eb' }};">{{ dest_meta_display }}</p>
+              </div>
+            </a>
+          {% endfor %}
+        </div>
+
+        {% if section.settings.show_dest_more %}
+          <div class="text-center mt-12 fade-in">
+            <a href="{{ section.settings.dest_more_link | default: '#' }}" class="btn btn-outline-dark">{{ section.settings.dest_more_text }}</a>
+          </div>
+        {% endif %}
+
+      </div>
+    </section>
+
+    <section class="py-24 px-6">
+      <div class="max-w-5xl mx-auto">
+        {%- comment -%}
+          見出し・本文中の半角数字（例:「3つの安心」「39店舗」）だけ
+          ベースラインが沈んで見える不具合を、「人気プラン」のプラン名で
+          既に使っていたnum-fixの仕組みをここにも適用して補正。
+        {%- endcomment -%}
+        {% assign trust_heading_display = section.settings.trust_heading
+          | replace: '0', '<span class="num-fix">0</span>'
+          | replace: '1', '<span class="num-fix">1</span>'
+          | replace: '2', '<span class="num-fix">2</span>'
+          | replace: '3', '<span class="num-fix">3</span>'
+          | replace: '4', '<span class="num-fix">4</span>'
+          | replace: '5', '<span class="num-fix">5</span>'
+          | replace: '6', '<span class="num-fix">6</span>'
+          | replace: '7', '<span class="num-fix">7</span>'
+          | replace: '8', '<span class="num-fix">8</span>'
+          | replace: '9', '<span class="num-fix">9</span>'
+        %}
+        <div class="text-center mb-16 fade-in">
+          <p class="font-serif-display tracking-widest-custom mb-2 font-bold" style="color: {{ section.settings.trust_eyebrow_color }};">Peace of Mind</p>
+          <h2 class="text-2xl md:text-3xl tracking-widest-custom mb-4 font-medium" style="color: {{ section.settings.trust_heading_color }};">{{ trust_heading_display }}</h2>
+          <hr class="gold-line max-w-[60px] mx-auto" style="border-color: {{ section.settings.trust_eyebrow_color }};">
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-12 text-center">
+          {% for i in (1..6) %}
+            {% assign show_key = 'trust_' | append: i | append: '_show' %}
+            {% assign icon_key = 'trust_' | append: i | append: '_icon' %}
+            {% assign title_key = 'trust_' | append: i | append: '_title' %}
+            {% assign desc_key = 'trust_' | append: i | append: '_desc' %}
+
+            {% if section.settings[show_key] %}
+              {% assign trust_title_display = section.settings[title_key]
+                | replace: '0', '<span class="num-fix">0</span>'
+                | replace: '1', '<span class="num-fix">1</span>'
+                | replace: '2', '<span class="num-fix">2</span>'
+                | replace: '3', '<span class="num-fix">3</span>'
+                | replace: '4', '<span class="num-fix">4</span>'
+                | replace: '5', '<span class="num-fix">5</span>'
+                | replace: '6', '<span class="num-fix">6</span>'
+                | replace: '7', '<span class="num-fix">7</span>'
+                | replace: '8', '<span class="num-fix">8</span>'
+                | replace: '9', '<span class="num-fix">9</span>'
+              %}
+              {% assign trust_desc_display = section.settings[desc_key] | newline_to_br
+                | replace: '0', '<span class="num-fix">0</span>'
+                | replace: '1', '<span class="num-fix">1</span>'
+                | replace: '2', '<span class="num-fix">2</span>'
+                | replace: '3', '<span class="num-fix">3</span>'
+                | replace: '4', '<span class="num-fix">4</span>'
+                | replace: '5', '<span class="num-fix">5</span>'
+                | replace: '6', '<span class="num-fix">6</span>'
+                | replace: '7', '<span class="num-fix">7</span>'
+                | replace: '8', '<span class="num-fix">8</span>'
+                | replace: '9', '<span class="num-fix">9</span>'
+              %}
+              <div class="fade-in" style="transition-delay: {{ forloop.index0 | times: 100 }}ms;">
+                <div class="w-16 h-16 mx-auto bg-ivory rounded-full flex items-center justify-center mb-6" style="color: {{ section.settings.trust_icon_color }};">
+                  <i data-lucide="{{ section.settings[icon_key] }}" class="w-8 h-8"></i>
+                </div>
+                <h3 class="text-lg font-bold tracking-widest-custom mb-4" style="color: {{ section.settings.trust_title_color }};">{{ trust_title_display }}</h3>
+                <p class="text-sm leading-relaxed" style="color: {{ section.settings.trust_desc_color }};">{{ trust_desc_display }}</p>
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+    <section id="dress" class="py-24 px-6 bg-ivory">
+      <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+        <div class="aspect-[3/4] overflow-hidden fade-in">
+          {% if section.settings.dress_image %}
+            {% assign dress_img_class = 'w-full h-full object-cover ' | append: section.settings.dress_image_position %}
+            {{ section.settings.dress_image | image_url: width: 1000 | image_tag: class: dress_img_class, loading: 'lazy', alt: section.settings.dress_title }}
+          {% else %}
+            <div class="w-full h-full bg-gray-300"></div>
+          {% endif %}
+        </div>
+        <div class="fade-in">
+          <p class="font-serif-display tracking-widest-custom mb-2 font-bold" style="color: {{ section.settings.dress_eyebrow_color }};">Dress</p>
+          <h2 class="text-2xl md:text-2xl tracking-widest-custom mb-6 leading-tight font-medium" style="color: {{ section.settings.dress_heading_color }};">{{ section.settings.dress_title | newline_to_br }}</h2>
+          <hr class="gold-line max-w-[60px] ml-0" style="border-color: {{ section.settings.dress_eyebrow_color }};">
+          <p class="text-sm border-gold leading-loose mb-8" style="color: {{ section.settings.dress_desc_color }};">{{ section.settings.dress_desc | newline_to_br }}</p>
+          <a href="{{ section.settings.dress_link | default: '#' }}" class="btn btn-outline-dark">{{ section.settings.dress_btn }}</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="flow" class="py-24 px-6 bg-[#1a1a1a] text-white">
+      <div class="max-w-6xl mx-auto text-center mb-16 fade-in">
+        <p class="font-serif-display tracking-widest-custom mb-2 font-bold" style="color: {{ section.settings.flow_eyebrow_color }};">Flow</p>
+        <h2 class="text-2xl md:text-3xl tracking-widest-custom font-medium" style="color: {{ section.settings.flow_heading_color }};">{{ section.settings.flow_heading }}</h2>
+        <hr class="border-t opacity-40 max-w-[60px] mx-auto mt-6" style="border-color: {{ section.settings.flow_eyebrow_color }};">
+      </div>
+
+      <div class="max-w-6xl mx-auto">
+        <div class="flex flex-col md:flex-row items-start justify-between gap-6 md:gap-2">
+          {% assign flow_blocks = section.blocks | where: "type", "flow" %}
+          {% for block in flow_blocks %}
+            <div class="text-center w-full md:flex-1 fade-in" style="transition-delay: {{ forloop.index0 | times: 100 }}ms;" {{ block.shopify_attributes }}>
+              <div class="font-serif-display text-3xl mb-3" style="color: {{ section.settings.flow_eyebrow_color }};">0{{ forloop.index }}</div>
+              <h4 class="text-base font-bold tracking-widest-custom mb-3" style="color: {{ block.settings.step_title_color }};">{{ block.settings.step_title }}</h4>
+              <p class="text-xs leading-relaxed text-center px-2" style="color: {{ block.settings.step_desc_color }};">{{ block.settings.step_desc }}</p>
+            </div>
+
+            {% unless forloop.last %}
+              <div class="hidden md:flex fade-in items-center mt-4" style="transition-delay: {{ forloop.index0 | times: 100 }}ms; color: {{ section.settings.flow_eyebrow_color }};">
+                <i data-lucide="arrow-right" class="w-5 h-5"></i>
+              </div>
+              <div class="flex md:hidden justify-center w-full fade-in" style="transition-delay: {{ forloop.index0 | times: 100 }}ms; color: {{ section.settings.flow_eyebrow_color }};">
+                <i data-lucide="arrow-down" class="w-5 h-5"></i>
+              </div>
+            {% endunless %}
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+
+    <section id="faq" class="py-24 px-6">
+      <div class="max-w-3xl mx-auto">
+        <div class="text-center mb-16 fade-in">
+          <p class="font-serif-display tracking-widest-custom mb-2 font-bold" style="color: {{ section.settings.faq_eyebrow_color }};">FAQ</p>
+          <h2 class="text-2xl md:text-3xl tracking-widest-custom mb-4 font-medium" style="color: {{ section.settings.faq_heading_color }};">よくあるご質問</h2>
+          <hr class="gold-line max-w-[60px] mx-auto" style="border-color: {{ section.settings.faq_eyebrow_color }};">
+        </div>
+
+        <div class="space-y-4 fade-in">
+          {% assign faq_blocks = section.blocks | where: "type", "faq" %}
+          {% for block in faq_blocks %}
+            <div class="border-b border-gray-200 pb-4 qa-item" {{ block.shopify_attributes }}>
+              <button class="qa-toggle w-full text-left flex justify-between items-center py-4 focus:outline-none">
+                <span class="text-sm font-bold tracking-wider pr-4" style="color: {{ block.settings.faq_q_color }};">Q. {{ block.settings.question }}</span>
+                <i data-lucide="plus" class="w-5 h-5 flex-shrink-0 transition-transform duration-300" style="color: {{ section.settings.faq_eyebrow_color }};"></i>
+              </button>
+              <div class="qa-answer max-h-0 overflow-hidden">
+                <p class="text-sm leading-loose pt-2 pb-4" style="color: {{ block.settings.faq_a_color }};">A. {{ block.settings.answer | newline_to_br }}</p>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+
+        <div class="text-center mt-12 fade-in">
+          <a href="{{ section.settings.faq_link | default: '#' }}" class="btn btn-outline-dark">FAQをもっと見る</a>
+        </div>
+      </div>
+    </section>
+
+    {% if section.settings.show_bottom_cta %}
+      <section class="py-24 px-6 bg-[#1a1a1a] text-center text-white">
+        <div class="max-w-4xl mx-auto fade-in">
+          <p class="text-gold font-serif-display tracking-widest-custom mb-4">Get Started</p>
+          <h2 class="text-2xl md:text-4xl tracking-widest-custom mb-10 leading-relaxed">世界で、一生残る一枚を。<br>まずは、あなたに合う撮影地から。</h2>
+
+          <div class="flex flex-col md:flex-row gap-4 justify-center">
+            <a href="{{ section.settings.cta_link_1 | default: '#' }}" class="btn btn-outline-light">{{ section.settings.cta_text_1 }}</a>
+            {% if section.settings.show_diagnosis %}
+              <a href="{{ section.settings.diagnosis_link | default: '#' }}" class="btn btn-gold">30秒診断する</a>
+            {% endif %}
+            <a href="#destinations" class="btn btn-outline-light">撮影地一覧を見る</a>
+          </div>
+        </div>
+      </section>
+    {% endif %}
+  </main>
+
+  <footer class="py-16 px-6 bg-[#2d2419] text-white">
+    <div class="max-w-6xl mx-auto">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12 border-b border-gray-600 pb-12">
+        <div class="md:col-span-1">
+          <p class="font-serif-display text-2xl tracking-widest-custom mb-4">{{ section.settings.nav_logo }}</p>
+          <p class="text-xs text-gray-400 leading-relaxed">{{ section.settings.footer_tagline }}</p>
+        </div>
+        <div>
+          <h4 class="text-gold text-sm tracking-widest-custom mb-6">撮影地</h4>
+          <ul class="space-y-4">
+            <li><a href="{{ section.settings.footer_hawaii_link | default: '#' }}" class="text-xs text-gray-300 hover:text-white transition">{{ section.settings.footer_hawaii_text }}</a></li>
+            <li><a href="{{ section.settings.footer_danang_link | default: '#' }}" class="text-xs text-gray-300 hover:text-white transition">{{ section.settings.footer_danang_text }}</a></li>
+            <li><a href="{{ section.settings.footer_london_link | default: '#' }}" class="text-xs text-gray-300 hover:text-white transition">{{ section.settings.footer_london_text }}</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="text-gold text-sm tracking-widest-custom mb-6">サイト</h4>
+          <ul class="space-y-4">
+            <li><a href="#dress" class="text-xs text-gray-300 hover:text-white transition">ドレス</a></li>
+            <li><a href="{{ section.settings.diagnosis_link | default: '#' }}" class="text-xs text-gray-300 hover:text-white transition">診断</a></li>
+            <li><a href="{{ section.settings.faq_link | default: '#' }}" class="text-xs text-gray-300 hover:text-white transition">FAQ</a></li>
+            <li><a href="{{ section.settings.footer_company_link | default: '#' }}" class="text-xs text-gray-300 hover:text-white transition">{{ section.settings.footer_company_text }}</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="text-gold text-sm tracking-widest-custom mb-6">お問い合わせ</h4>
+          <ul class="space-y-4">
+            <li>
+              <a href="{{ section.settings.footer_contact_link | default: '#' }}"
+                 class="text-xs text-gray-300 hover:text-white transition"
+                 {% if section.settings.footer_contact_link contains 'http' %}target="_blank" rel="noopener noreferrer"{% endif %}>
+                {{ section.settings.footer_contact_text }}
+              </a>
+            </li>
+          </ul>
+        </div>
+      </div>
+      <div class="flex flex-col md:flex-row justify-between items-center text-[10px] text-gray-500">
+        <p>{{ section.settings.copyright_text }}</p>
+        <p class="mt-2 md:mt-0">{{ section.settings.operated_by_text }}</p>
+      </div>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    lucide.createIcons();
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          e.target.classList.add('visible');
+        }
+      });
+    }, { threshold: 0.1, rootMargin: "0px 0px -50px 0px" });
+    document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+
+    document.querySelectorAll('.qa-toggle').forEach(btn => {
+      btn.addEventListener('click', function() {
+        const answer = this.nextElementSibling;
+        const icon = this.querySelector('[data-lucide]');
+
+        if (answer.style.maxHeight) {
+          answer.style.maxHeight = null;
+          icon.style.transform = 'rotate(0deg)';
+        } else {
+          answer.style.maxHeight = answer.scrollHeight + "px";
+          icon.style.transform = 'rotate(45deg)';
+        }
+      });
+    });
+
+    // スムーズスクロールズレの完全補正
+    const handleSmoothScroll = (targetSelector) => {
+      const targetElement = document.querySelector(targetSelector);
+      if (targetElement) {
+        const headerOffset = 80;
+        // 固定ヘッダーの高さ
+        const elementPosition = targetElement.getBoundingClientRect().top;
+        const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+
+        window.scrollTo({
+          top: offsetPosition,
+          behavior: 'smooth'
+        });
+      }
+    };
+
+    // ナビゲーションメニューとページ内リンクのルーティング監視
+    document.addEventListener('click', (e) => {
+      const anchor = e.target.closest('a');
+      if (!anchor) return;
+
+      const href = anchor.getAttribute('href');
+      if (!href) return;
+
+      // 「/」から始まるURLに対応（別ページ遷移対策）
+      const cleanHref = href.replace(/^.*?#/, '#');
+
+      if (cleanHref === '#destinations' || cleanHref === '#plan' || cleanHref === '#plans') {
+        e.preventDefault();
+        handleSmoothScroll('#destinations');
+      } else if (cleanHref.startsWith('#') && cleanHref.length > 1) {
+        e.preventDefault();
+        handleSmoothScroll(cleanHref);
+      }
+    });
+
+    // 別ページからリンク付き（例: /#destinations）でトップに戻ってきた時の読み込み時処理
+    if (window.location.hash) {
+      setTimeout(() => {
+        let hash = window.location.hash;
+        if (hash === '#plan' || hash === '#plans') hash = '#destinations';
+        handleSmoothScroll(hash);
+      }, 300);
+    }
+  });
+</script>
+
+{% schema %}
+{
+  "name": "HIS World Wedding LP",
+  "settings": [
+    { "type": "header", "content": "ナビゲーション設定" },
+    { "type": "text", "id": "nav_logo", "label": "ロゴテキスト", "default": "HIS World Wedding" },
+    { "type": "url", "id": "diagnosis_link", "label": "30秒診断 リンク先" },
+    { "type": "checkbox", "id": "show_diagnosis", "label": "30秒診断ボタンを表示する", "default": true },
+
+    { "type": "header", "content": "Heroセクション" },
+    { "type": "image_picker", "id": "hero_image", "label": "ヒーロー画像" },
+    {
+      "type": "select",
+      "id": "hero_image_position",
+      "label": "画像のトリミング位置",
+      "options": [
+        { "value": "object-center", "label": "中央" },
+        { "value": "object-top", "label": "上部" },
+        { "value": "object-bottom", "label": "下部" },
+        { "value": "object-left", "label": "左寄せ" },
+        { "value": "object-right", "label": "右寄せ" }
+      ],
+      "default": "object-center"
+    },
+    {
+      "type": "range",
+      "id": "hero_overlay_opacity",
+      "min": 0,
+      "max": 100,
+      "step": 5,
+      "unit": "%",
+      "label": "背景画像の暗さ（フィルター）",
+      "default": 30
+    },
+    { "type": "text", "id": "hero_eyebrow", "label": "眉見出し", "default": "HIS World Wedding" },
+    { "type": "color", "id": "hero_eyebrow_color", "label": "眉見出しの文字色", "default": "#C9A96E" },
+    { "type": "textarea", "id": "hero_title", "label": "タイトル", "default": "世界で、\\n一生残る一枚を。" },
+    { "type": "color", "id": "hero_title_color", "label": "タイトルの文字色", "default": "#ffffff" },
+    { "type": "textarea", "id": "hero_desc", "label": "サブテキスト", "default": "HISだから安心できる海外フォトウェディング。日本全国で試着できるフォーシスアンドカンパニーの衣裳と、現地までの手厚いサポートで、あなたの物語を世界のロケーションで残します。" },
+    { "type": "color", "id": "hero_desc_color", "label": "サブテキストの文字色", "default": "#ffffff" },
+    { "type": "text", "id": "hero_btn_2_text", "label": "ボタン2 テキスト", "default": "30秒診断する" },
+
+    { "type": "header", "content": "人気プラン" },
+    { "type": "text", "id": "plan_title", "label": "見出し", "default": "人気のフォトウェディングプラン" },
+    { "type": "color", "id": "plan_heading_color", "label": "見出しの文字色", "default": "#1a1a1a" },
+    { "type": "color", "id": "plan_eyebrow_color", "label": "眉見出し・線の色", "default": "#C9A96E" },
+    { "type": "textarea", "id": "plan_desc", "label": "説明文", "default": "ハワイ・ダナン・ロンドン——選ばれているプランから、あなたの一枚を探す。" },
+    { "type": "color", "id": "plan_desc_color", "label": "説明文の文字色", "default": "#4b5563" },
+
+    { "type": "header", "content": "撮影地一覧" },
+    { "type": "text", "id": "dest_title", "label": "見出し", "default": "撮影地から選ぶ" },
+    { "type": "color", "id": "dest_heading_color", "label": "見出しの文字色", "default": "#1a1a1a" },
+    { "type": "color", "id": "dest_eyebrow_color", "label": "眉見出し・線の色", "default": "#C9A96E" },
+    { "type": "textarea", "id": "dest_desc", "label": "説明文", "default": "現在3方面。今後30〜50方面まで順次拡大予定です。" },
+    { "type": "color", "id": "dest_desc_color", "label": "説明文の文字色", "default": "#4b5563" },
+    { "type": "checkbox", "id": "show_dest_more", "label": "「その他撮影地」ボタンを表示する", "default": true },
+    { "type": "text", "id": "dest_more_text", "label": "ボタンのテキスト", "default": "その他撮影地を見る" },
+    { "type": "url", "id": "dest_more_link", "label": "ボタンのリンク先" },
+
+    { "type": "header", "content": "安心ポイント (最大6つ)" },
+    { "type": "text", "id": "trust_heading", "label": "セクション見出し", "default": "選ばれる、3つの安心" },
+    { "type": "color", "id": "trust_heading_color", "label": "見出しの文字色", "default": "#1a1a1a" },
+    { "type": "color", "id": "trust_eyebrow_color", "label": "眉見出し・線の色", "default": "#C9A96E" },
+    { "type": "color", "id": "trust_icon_color", "label": "アイコンの色", "default": "#C9A96E" },
+    { "type": "color", "id": "trust_title_color", "label": "タイトルの文字色", "default": "#1a1a1a" },
+    { "type": "color", "id": "trust_desc_color", "label": "説明文の文字色", "default": "#4b5563" },
+
+    { "type": "header", "content": "ポイント 1" },
+    { "type": "checkbox", "id": "trust_1_show", "label": "表示する", "default": true },
+    { "type": "text", "id": "trust_1_icon", "label": "アイコン名 (Lucide)", "default": "smartphone", "info": "https://lucide.dev/icons/ から検索" },
+    { "type": "text", "id": "trust_1_title", "label": "タイトル", "default": "オンライン予約" },
+    { "type": "textarea", "id": "trust_1_desc", "label": "説明文", "default": "空き状況の確認からご予約まで、オンラインで完結。" },
+
+    { "type": "header", "content": "ポイント 2" },
+    { "type": "checkbox", "id": "trust_2_show", "label": "表示する", "default": true },
+    { "type": "text", "id": "trust_2_icon", "label": "アイコン名 (Lucide)", "default": "map-pin" },
+    { "type": "text", "id": "trust_2_title", "label": "タイトル", "default": "日本全国で試着" },
+    { "type": "textarea", "id": "trust_2_desc", "label": "説明文", "default": "渡航前に、お近くの「フォーシスアンドカンパニー」のサロンでドレス・タキシードの試着が可能。" },
+
+    { "type": "header", "content": "ポイント 3" },
+    { "type": "checkbox", "id": "trust_3_show", "label": "表示する", "default": true },
+    { "type": "text", "id": "trust_3_icon", "label": "アイコン名 (Lucide)", "default": "message-circle" },
+    { "type": "text", "id": "trust_3_title", "label": "タイトル", "default": "日本語サポート" },
+    { "type": "textarea", "id": "trust_3_desc", "label": "説明文", "default": "現地でも日本語対応スタッフ・通訳が同行、または手配で安心。" },
+
+    { "type": "header", "content": "ポイント 4" },
+    { "type": "checkbox", "id": "trust_4_show", "label": "表示する", "default": false },
+    { "type": "text", "id": "trust_4_icon", "label": "アイコン名 (Lucide)", "default": "heart" },
+    { "type": "text", "id": "trust_4_title", "label": "タイトル", "default": "ポイント4" },
+    { "type": "textarea", "id": "trust_4_desc", "label": "説明文", "default": "ポイント4の説明文が入ります。" },
+
+    { "type": "header", "content": "ポイント 5" },
+    { "type": "checkbox", "id": "trust_5_show", "label": "表示する", "default": false },
+    { "type": "text", "id": "trust_5_icon", "label": "アイコン名 (Lucide)", "default": "star" },
+    { "type": "text", "id": "trust_5_title", "label": "タイトル", "default": "ポイント5" },
+    { "type": "textarea", "id": "trust_5_desc", "label": "説明文", "default": "ポイント5の説明文が入ります。" },
+
+    { "type": "header", "content": "ポイント 6" },
+    { "type": "checkbox", "id": "trust_6_show", "label": "表示する", "default": false },
+    { "type": "text", "id": "trust_6_icon", "label": "アイコン名 (Lucide)", "default": "check-circle" },
+    { "type": "text", "id": "trust_6_title", "label": "タイトル", "default": "ポイント6" },
+    { "type": "textarea", "id": "trust_6_desc", "label": "説明文", "default": "ポイント6の説明文が入ります。" },
+
+    { "type": "header", "content": "ドレスセクション" },
+    { "type": "image_picker", "id": "dress_image", "label": "ドレス画像" },
+    {
+      "type": "select",
+      "id": "dress_image_position",
+      "label": "画像のトリミング位置",
+      "options": [
+        { "value": "object-center", "label": "中央" },
+        { "value": "object-top", "label": "上部" },
+        { "value": "object-bottom", "label": "下部" },
+        { "value": "object-left", "label": "左寄せ" },
+        { "value": "object-right", "label": "右寄せ" }
+      ],
+      "default": "object-center"
+    },
+    { "type": "textarea", "id": "dress_title", "label": "見出し", "default": "フォーシスアンドカンパニーの衣裳を、\\nそのまま海外へ。" },
+    { "type": "color", "id": "dress_heading_color", "label": "見出しの文字色", "default": "#1a1a1a" },
+    { "type": "color", "id": "dress_eyebrow_color", "label": "眉見出し・線の色", "default": "#C9A96E" },
+    { "type": "textarea", "id": "dress_desc", "label": "説明文", "default": "全国の提携サロンで試着し、選んだ一着をそのまま撮影地まで。海外挙式・フォトウェディングに精通したフォーシスアンドカンパニーの上質なドレス・タキシードだから、写真映えも着心地も妥協しません。" },
+    { "type": "color", "id": "dress_desc_color", "label": "説明文の文字色", "default": "#4b5563" },
+    { "type": "text", "id": "dress_btn", "label": "ボタンテキスト", "default": "ドレスを詳しく見る" },
+    { "type": "url", "id": "dress_link", "label": "ボタンリンク" },
+
+    { "type": "header", "content": "ご利用の流れセクション" },
+    { "type": "text", "id": "flow_heading", "label": "ご利用の流れ 見出し", "default": "ご利用の流れ" },
+    { "type": "color", "id": "flow_heading_color", "label": "見出しの文字色", "default": "#ffffff" },
+    { "type": "color", "id": "flow_eyebrow_color", "label": "眉見出し・数字・線の色", "default": "#C9A96E" },
+
+    { "type": "header", "content": "FAQセクション" },
+    { "type": "color", "id": "faq_heading_color", "label": "見出しの文字色", "default": "#1a1a1a" },
+    { "type": "color", "id": "faq_eyebrow_color", "label": "眉見出し・プラスアイコン・線の色", "default": "#C9A96E" },
+    { "type": "url", "id": "faq_link", "label": "FAQページ リンク先" },
+
+    { "type": "header", "content": "ボトムCTA" },
+    { "type": "checkbox", "id": "show_bottom_cta", "label": "ボトムCTAセクションを表示する", "default": true },
+    { "type": "text", "id": "cta_text_1", "label": "相談ボタン テキスト", "default": "相談する" },
+    { "type": "url", "id": "cta_link_1", "label": "相談ボタン リンク" },
+
+    { "type": "header", "content": "フッター" },
+    { "type": "textarea", "id": "footer_tagline", "label": "フッターキャッチコピー", "default": "HISブランドの海外フォトウェディング。世界で、一生残る一枚を。" },
+    { "type": "header", "content": "フッターリンク（撮影地）" },
+    { "type": "text", "id": "footer_hawaii_text", "label": "リンク1 テキスト", "default": "ハワイ" },
+    { "type": "url", "id": "footer_hawaii_link", "label": "リンク1 URL" },
+    { "type": "text", "id": "footer_danang_text", "label": "リンク2 テキスト", "default": "ダナン" },
+    { "type": "url", "id": "footer_danang_link", "label": "リンク2 URL" },
+    { "type": "text", "id": "footer_london_text", "label": "リンク3 テキスト", "default": "ロンドン" },
+    { "type": "url", "id": "footer_london_link", "label": "リンク3 URL" },
+    { "type": "header", "content": "フッターリンク（サイト）" },
+    { "type": "text", "id": "footer_company_text", "label": "会社情報 テキスト", "default": "会社情報" },
+    { "type": "url", "id": "footer_company_link", "label": "会社情報 URL" },
+    { "type": "header", "content": "フッターリンク（お問い合わせ）" },
+    { "type": "text", "id": "footer_contact_text", "label": "お問い合わせ テキスト", "default": "ご相談・お問い合わせ" },
+    { "type": "url", "id": "footer_contact_link", "label": "お問い合わせ URL" },
+    { "type": "header", "content": "フッター最下部" },
+    { "type": "text", "id": "copyright_text", "label": "コピーライトテキスト", "default": "HIS World Wedding." },
+    { "type": "text", "id": "operated_by_text", "label": "運営テキスト", "default": "Operated by HIS Co., Ltd. / Dress by Four Seasons & Company" }
+  ],
+  "blocks": [
+    {
+      "type": "plan",
+      "name": "人気プラン",
+      "limit": 3,
+      "settings": [
+        { "type": "product", "id": "product", "label": "商品（設定すると以下の手入力項目より優先されます）", "info": "設定すると、プラン名・価格・画像・URL・即予約バッジがすべて商品から自動取得されます。地域表記は商品のplan_area_nameメタフィールドがあればそれを使います。" },
+        { "type": "checkbox", "id": "is_popular", "label": "「人気No.1」バッジを表示", "default": false },
+        { "type": "image_picker", "id": "plan_img", "label": "プラン画像（商品未選択時のみ）" },
+        {
+          "type": "select",
+          "id": "image_position",
+          "label": "画像のトリミング位置",
+          "options": [
+            { "value": "object-center", "label": "中央" },
+            { "value": "object-top", "label": "上部" },
+            { "value": "object-bottom", "label": "下部" },
+            { "value": "object-left", "label": "左寄せ" },
+            { "value": "object-right", "label": "右寄せ" }
+          ],
+          "default": "object-center"
+        },
+        { "type": "text", "id": "plan_region", "label": "地域 (例: Hawaii)", "default": "Hawaii" },
+        { "type": "text", "id": "plan_name", "label": "プラン名", "default": "ハワイ ベーシックプラン" },
+        { "type": "color", "id": "plan_title_color", "label": "プラン名・地域名の文字色", "default": "#1a1a1a" },
+        { "type": "textarea", "id": "plan_detail", "label": "プラン説明", "default": "定番ビーチ×ワイキキの街並みで撮る、王道の一枚。" },
+        { "type": "color", "id": "plan_desc_color", "label": "説明文の文字色", "default": "#4b5563" },
+        { "type": "select", "id": "availability", "label": "予約ステータス", "options": [
+            { "value": "instant", "label": "即予約できます" },
+            { "value": "confirm", "label": "現地確認後ご回答" }
+          ],
+          "default": "instant"
+        },
+        { "type": "text", "id": "plan_price", "label": "価格", "default": "¥298,000" },
+        { "type": "color", "id": "plan_price_color", "label": "価格・リンクの文字色", "default": "#C9A96E" },
+        { "type": "checkbox", "id": "show_tax_label", "label": "「税込」を表示する", "default": true },
+        { "type": "text", "id": "badge", "label": "バッジ (人気No.1など)", "default": "人気No.1" },
+        { "type": "color", "id": "plan_badge_color", "label": "バッジ背景色", "default": "#C9A96E" },
+        { "type": "url", "id": "plan_url", "label": "プラン詳細リンク" }
+      ]
+    },
+    {
+      "type": "destination",
+      "name": "撮影地",
+      "limit": 6,
+      "settings": [
+        { "type": "image_picker", "id": "dest_img", "label": "撮影地 画像" },
+        {
+          "type": "select",
+          "id": "image_position",
+          "label": "画像のトリミング位置",
+          "options": [
+            { "value": "object-center", "label": "中央" },
+            { "value": "object-top", "label": "上部" },
+            { "value": "object-bottom", "label": "下部" },
+            { "value": "object-left", "label": "左寄せ" },
+            { "value": "object-right", "label": "右寄せ" }
+          ],
+          "default": "object-center"
+        },
+        { "type": "text", "id": "dest_country", "label": "国名 (例: U.S.A.)" },
+        { "type": "color", "id": "dest_country_color", "label": "国名の文字色", "default": "#C9A96E" },
+        { "type": "text", "id": "dest_name", "label": "地域名 (例: ハワイ)" },
+        { "type": "color", "id": "dest_name_color", "label": "地域名の文字色", "default": "#ffffff" },
+        { "type": "text", "id": "dest_meta", "label": "メタ情報 (例: プラン2種 / ベストシーズン通年)" },
+        { "type": "color", "id": "dest_meta_color", "label": "メタ情報の文字色", "default": "#e5e7eb" },
+        { "type": "url", "id": "dest_url", "label": "リンク先" }
+      ]
+    },
+    {
+      "type": "flow",
+      "name": "ご利用の流れ",
+      "settings": [
+        { "type": "text", "id": "step_title", "label": "ステップ名", "default": "ステップ" },
+        { "type": "color", "id": "step_title_color", "label": "ステップ名の文字色", "default": "#ffffff" },
+        { "type": "textarea", "id": "step_desc", "label": "説明文" },
+        { "type": "color", "id": "step_desc_color", "label": "説明文の文字色", "default": "#d1d5db" }
+      ]
+    },
+    {
+      "type": "faq",
+      "name": "FAQ項目",
+      "settings": [
+        { "type": "text", "id": "question", "label": "質問 (Q)" },
+        { "type": "color", "id": "faq_q_color", "label": "質問(Q)の文字色", "default": "#1a1a1a" },
+        { "type": "textarea", "id": "answer", "label": "回答 (A)" },
+        { "type": "color", "id": "faq_a_color", "label": "回答(A)の文字色", "default": "#4b5563" }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "HIS World Wedding LP",
+      "blocks": [
+        { "type": "plan" }, { "type": "plan" }, { "type": "plan" },
+        { "type": "destination" }, { "type": "destination" }, { "type": "destination" },
+        { "type": "flow", "settings": { "step_title": "予約", "step_title_color": "#ffffff", "step_desc": "オンラインでプランを選び、空き状況を確認して仮予約。" } },
+        { "type": "flow", "settings": { "step_title": "試着", "step_title_color": "#ffffff", "step_desc": "全国の提携サロンでドレス・タキシードを試着。" } },
+        { "type": "flow", "settings": { "step_title": "衣裳決定", "step_title_color": "#ffffff", "step_desc": "お気に入りの一着を決定し、撮影内容を最終確認。" } },
+        { "type": "flow", "settings": { "step_title": "渡航", "step_title_color": "#ffffff", "step_desc": "現地スタッフのサポートのもと、撮影地へ。" } },
+        { "type": "flow", "settings": { "step_title": "撮影", "step_title_color": "#ffffff", "step_desc": "プロカメラマンが、二人だけの物語を一枚に。" } },
+        { "type": "flow", "settings": { "step_title": "データ納品", "step_title_color": "#ffffff", "step_desc": "撮影データを高画質でお届け。一生の宝物に。" } },
+        { "type": "faq" }, { "type": "faq" }, { "type": "faq" }
+      ]
+    }
+  ]
+}
+{% endschema %}

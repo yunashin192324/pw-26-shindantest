@@ -1,0 +1,246 @@
+{%- comment -%}
+  destination-quiz — 撮影地 30秒診断。
+  ----------------------------------------------------------------
+  質問の回答をテーマタグ(themes: beach/streets/palace/heritage/view/
+  lake/desert/balloon/church/museum/library/resort/sunset/overwater)
+  にスコアリングし、そのタグを多く持つDestinationを結果として表示する。
+
+  結果候補は都市名を1件もハードコードしていない。ページ読み込み時に
+  Liquidが shop.metaobjects.destination.values を全件JSONに書き出し、
+  診断終了後はJS側でそのJSONをスコアでソートするだけ。そのため、
+  新しい都市をMetaobjectに追加してthemesタグを設定するだけで、
+  診断結果は自動的に反映される（このファイルを触る必要はない）。
+
+  質問文・選択肢の文言はこのファイル内のQUESTIONS配列を直接編集する。
+  マーチャント向けにブロック化していないのは、選択肢とテーマタグの
+  対応関係を壊さないようにするため（変更したい場合は私に聞いてください）。
+{%- endcomment -%}
+
+<script>
+  if (!document.getElementById('tw-config')) {
+    var twConfig = document.createElement('script');
+    twConfig.id = 'tw-config';
+    twConfig.innerHTML = "tailwind.config = { theme: { extend: { colors: { ivory: '#FAF8F5', gold: '#B8860B', 'gold-light': '#D4A843', dark: '#1a1a1a' }, fontFamily: { serif: ['var(--font-heading-family, serif)', 'serif'], sans: ['var(--font-body-family, sans-serif)', 'sans-serif'] } } } };";
+    document.head.appendChild(twConfig);
+  }
+  if (!document.getElementById('tw-cdn')) {
+    var twScript = document.createElement('script');
+    twScript.id = 'tw-cdn';
+    twScript.src = 'https://cdn.tailwindcss.com/3.4.17';
+    document.head.appendChild(twScript);
+  }
+</script>
+
+{%- comment -%}
+  全Destinationをテーマタグ付きでJSON化。themesは選択リスト
+  (単一行テキストのリスト)型なので、d.themes.valueをそのまま配列
+  として使う。
+{%- endcomment -%}
+{%- assign all_destinations = shop.metaobjects.destination.values -%}
+<script type="application/json" id="quiz-destinations-{{ section.id }}">
+[
+  {%- for d in all_destinations -%}
+    {%- assign theme_list = d.themes.value -%}
+    {
+      "name": {{ d.name_ja.value | json }},
+      "url": "/pages/{{ d.slug.value }}",
+      "image": {{ d.hero_image.value | image_url: width: 700 | json }},
+      "themes": [{% for t in theme_list %}{{ t | strip | downcase | json }}{% unless forloop.last %},{% endunless %}{% endfor %}]
+    }{%- unless forloop.last -%},{%- endunless -%}
+  {%- endfor -%}
+]
+</script>
+
+<div id="destination-quiz-{{ section.id }}" class="w-full bg-white">
+  <section class="py-16 md:py-24">
+    <div class="max-w-2xl mx-auto px-6">
+
+      {% comment %} --- イントロ --- {% endcomment %}
+      <div class="quiz-step" data-step="intro">
+        <div class="text-center">
+          <p class="font-serif tracking-widest uppercase mb-2 text-sm" style="color:#B8860B;">{{ section.settings.eyebrow | default: '30 SECONDS' }}</p>
+          <h2 class="font-medium mb-4" style="font-size: calc(var(--font-heading-scale, 1) * 28px);">{{ section.settings.heading | default: 'あなたにぴったりの撮影地診断' }}</h2>
+          <p class="text-sm text-gray-600 leading-relaxed mb-8">{{ section.settings.intro_text | default: '簡単な質問に答えるだけで、おふたりに合う撮影地をご提案します。' }}</p>
+          <button type="button" class="quiz-start px-10 py-4 rounded-full font-medium text-sm text-white transition hover:opacity-80" style="background-color:#B8860B;">{{ section.settings.start_label | default: '診断をはじめる' }}</button>
+        </div>
+      </div>
+
+      {% comment %} --- 質問（テンプレート、JSで複製して差し込む） --- {% endcomment %}
+      <div class="quiz-step hidden" data-step="question-template">
+        <div class="text-center mb-2">
+          <p class="text-xs text-gray-400 quiz-progress"></p>
+        </div>
+        <h3 class="text-center font-medium mb-8 quiz-question-text" style="font-size: calc(var(--font-heading-scale, 1) * 20px);"></h3>
+        <div class="space-y-3 quiz-choices"></div>
+      </div>
+
+      {% comment %} --- 結果 --- {% endcomment %}
+      <div class="quiz-step hidden" data-step="result">
+        <div class="text-center mb-10">
+          <p class="font-serif tracking-widest uppercase mb-2 text-sm" style="color:#B8860B;">RESULT</p>
+          <h2 class="font-medium" style="font-size: calc(var(--font-heading-scale, 1) * 26px);">{{ section.settings.result_heading | default: 'おふたりにおすすめの撮影地' }}</h2>
+        </div>
+        <div class="grid gap-6 quiz-results"></div>
+        <div class="text-center mt-10">
+          <button type="button" class="quiz-restart text-sm underline text-gray-500">{{ section.settings.restart_label | default: 'もう一度診断する' }}</button>
+        </div>
+      </div>
+
+    </div>
+  </section>
+</div>
+
+<script>
+  (function () {
+    var root = document.getElementById('destination-quiz-{{ section.id }}');
+    if (!root) return;
+    var destinationsData = JSON.parse(document.getElementById('quiz-destinations-{{ section.id }}').textContent || '[]');
+
+    // 質問と選択肢。valueはテーマタグ(themes)のキーと一致させる。
+    var QUESTIONS = [
+      {
+        text: 'どんな景色に惹かれますか？',
+        choices: [
+          { label: '透き通るビーチ', themes: ['beach', 'overwater'] },
+          { label: '歴史ある街並み', themes: ['streets', 'heritage'] },
+          { label: '雄大な自然・絶景', themes: ['view', 'lake', 'desert'] },
+          { label: '荘厳な宮殿や教会', themes: ['palace', 'church'] }
+        ]
+      },
+      {
+        text: 'ふたりらしい撮影スタイルは？',
+        choices: [
+          { label: '開放的なリゾート感', themes: ['resort', 'overwater', 'beach'] },
+          { label: 'クラシックで上品な雰囲気', themes: ['palace', 'museum', 'church'] },
+          { label: '幻想的でロマンチック', themes: ['sunset', 'lake', 'view'] },
+          { label: 'アクティブで非日常的', themes: ['desert', 'balloon'] }
+        ]
+      },
+      {
+        text: 'どんな時間帯の写真を残したいですか？',
+        choices: [
+          { label: '眩しい真昼のビーチ', themes: ['beach', 'overwater', 'resort'] },
+          { label: '幻想的な夕暮れ', themes: ['sunset', 'view'] },
+          { label: '歴史的建造物の中で', themes: ['palace', 'church', 'museum', 'library'] }
+        ]
+      },
+      {
+        text: '滞在中に楽しみたいことは？',
+        choices: [
+          { label: 'ゆったりリゾートステイ', themes: ['resort', 'overwater'] },
+          { label: '街歩き・観光', themes: ['streets', 'museum', 'library'] },
+          { label: '大自然のアクティビティ', themes: ['desert', 'balloon', 'lake'] },
+          { label: '世界遺産めぐり', themes: ['heritage', 'palace'] }
+        ]
+      }
+    ];
+
+    var scores = {};
+    var currentQuestion = 0;
+
+    var introEl = root.querySelector('[data-step="intro"]');
+    var questionTemplateEl = root.querySelector('[data-step="question-template"]');
+    var resultEl = root.querySelector('[data-step="result"]');
+    var progressEl = questionTemplateEl.querySelector('.quiz-progress');
+    var questionTextEl = questionTemplateEl.querySelector('.quiz-question-text');
+    var choicesEl = questionTemplateEl.querySelector('.quiz-choices');
+    var resultsEl = resultEl.querySelector('.quiz-results');
+
+    function resetScores() {
+      scores = {};
+      currentQuestion = 0;
+    }
+
+    function showQuestion(index) {
+      var q = QUESTIONS[index];
+      progressEl.textContent = 'Q' + (index + 1) + ' / ' + QUESTIONS.length;
+      questionTextEl.textContent = q.text;
+      choicesEl.innerHTML = '';
+      q.choices.forEach(function (choice) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'w-full text-left px-6 py-4 rounded-lg border border-gray-200 text-sm hover:border-gold transition';
+        btn.style.borderColor = '#e5e7eb';
+        btn.textContent = choice.label;
+        btn.addEventListener('click', function () {
+          choice.themes.forEach(function (t) {
+            scores[t] = (scores[t] || 0) + 1;
+          });
+          currentQuestion++;
+          if (currentQuestion < QUESTIONS.length) {
+            showQuestion(currentQuestion);
+          } else {
+            showResult();
+          }
+        });
+        choicesEl.appendChild(btn);
+      });
+    }
+
+    function topThemes() {
+      return Object.keys(scores).sort(function (a, b) { return scores[b] - scores[a]; });
+    }
+
+    function matchDestinations() {
+      var ranked = destinationsData.map(function (d) {
+        var overlap = (d.themes || []).filter(function (t) { return scores[t]; })
+          .reduce(function (sum, t) { return sum + scores[t]; }, 0);
+        return { destination: d, score: overlap };
+      });
+      ranked = ranked.filter(function (r) { return r.score > 0; });
+      ranked.sort(function (a, b) { return b.score - a.score; });
+      if (ranked.length === 0) {
+        // マッチが無い場合は全都市からランダムに3件を提案
+        ranked = destinationsData.slice(0, 3).map(function (d) { return { destination: d, score: 0 }; });
+      }
+      return ranked.slice(0, 3).map(function (r) { return r.destination; });
+    }
+
+    function showResult() {
+      var results = matchDestinations();
+      resultsEl.innerHTML = '';
+      if (results.length === 0) {
+        resultsEl.innerHTML = '<p class="text-center text-sm text-gray-500">診断結果を表示する撮影地がまだ登録されていません。</p>';
+      } else {
+        results.forEach(function (d) {
+          var a = document.createElement('a');
+          a.href = d.url;
+          a.className = 'block rounded-lg overflow-hidden border border-gray-200 hover:opacity-90 transition';
+          var imgHtml = d.image ? '<div class="w-full relative" style="padding-top:60%;"><img src="' + d.image + '" alt="' + d.name + '" class="absolute inset-0 w-full h-full object-cover" loading="lazy"></div>' : '';
+          a.innerHTML = imgHtml + '<div class="p-4"><h4 class="font-medium text-base">' + d.name + '</h4><span class="text-xs" style="color:#B8860B;">詳しく見る ＞</span></div>';
+          resultsEl.appendChild(a);
+        });
+      }
+      introEl.classList.add('hidden');
+      questionTemplateEl.classList.add('hidden');
+      resultEl.classList.remove('hidden');
+    }
+
+    root.querySelector('.quiz-start').addEventListener('click', function () {
+      resetScores();
+      introEl.classList.add('hidden');
+      questionTemplateEl.classList.remove('hidden');
+      showQuestion(0);
+    });
+    root.querySelector('.quiz-restart').addEventListener('click', function () {
+      resetScores();
+      resultEl.classList.add('hidden');
+      introEl.classList.remove('hidden');
+    });
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "撮影地 30秒診断",
+  "settings": [
+    { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "30 SECONDS" },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "あなたにぴったりの撮影地診断" },
+    { "type": "textarea", "id": "intro_text", "label": "説明文", "default": "簡単な質問に答えるだけで、おふたりに合う撮影地をご提案します。" },
+    { "type": "text", "id": "start_label", "label": "開始ボタン文言", "default": "診断をはじめる" },
+    { "type": "text", "id": "result_heading", "label": "結果見出し", "default": "おふたりにおすすめの撮影地" },
+    { "type": "text", "id": "restart_label", "label": "やり直しボタン文言", "default": "もう一度診断する" }
+  ],
+  "presets": [{ "name": "撮影地 30秒診断" }]
+}
+{% endschema %}

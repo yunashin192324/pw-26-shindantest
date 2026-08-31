@@ -1,0 +1,67 @@
+{%- comment -%}
+  collection-faq — destination-level FAQ (flight time, weather, what's
+  included at this collection vs product level) + FAQPage JSON-LD.
+{%- endcomment -%}
+{%- if section.settings.show_section and section.blocks.size > 0 -%}
+  <section class="{% if section.settings.background == 'ivory' %}bg-ivory{% endif %}">
+    <div class="container" style="max-width:820px;">
+      <div class="section-head reveal">
+        <p class="eyebrow">FAQ</p>
+        <h2>{{ section.settings.heading }}</h2>
+        <div class="divider-gold"></div>
+      </div>
+      <div class="accordion reveal">
+        {%- for block in section.blocks -%}
+          <div class="accordion-item" {{ block.shopify_attributes }}>
+            <button class="accordion-trigger"><span>{{ block.settings.question }}</span><span class="plus"></span></button>
+            <div class="accordion-panel"><div class="accordion-panel-inner">{{ block.settings.answer }}</div></div>
+          </div>
+        {%- endfor -%}
+      </div>
+    </div>
+  </section>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {%- for block in section.blocks -%}
+        {
+          "@type": "Question",
+          "name": {{ block.settings.question | strip_html | json }},
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": {{ block.settings.answer | strip_html | json }}
+          }
+        }{%- unless forloop.last -%},{%- endunless -%}
+      {%- endfor -%}
+    ]
+  }
+  </script>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "FAQ",
+  "settings": [
+    { "type": "checkbox", "id": "show_section", "label": "表示する", "default": true },
+    { "type": "text", "id": "heading", "label": "見出し", "default": "よくあるご質問" },
+    { "type": "select", "id": "background", "label": "背景", "options": [
+        { "value": "white", "label": "白" },
+        { "value": "ivory", "label": "アイボリー" }
+      ], "default": "white" }
+  ],
+  "blocks": [
+    {
+      "type": "qa",
+      "name": "質問",
+      "settings": [
+        { "type": "text", "id": "question", "label": "質問", "default": "質問文をここに入力" },
+        { "type": "richtext", "id": "answer", "label": "回答" }
+      ]
+    }
+  ],
+  "max_blocks": 20
+}
+{% endschema %}

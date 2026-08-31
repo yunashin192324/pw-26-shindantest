@@ -1,0 +1,135 @@
+{
+  "sections": {
+    "product-hero": {
+      "type": "product-hero",
+      "settings": {
+        "eyebrow": "Overseas Photo Wedding",
+        "price_note": "税込 / 2名様",
+        "show_badge": true,
+        "booking_label": "空き状況を見る",
+        "secondary_label": "",
+        "secondary_url": ""
+      }
+    },
+    "product-booking": {
+      "type": "product-booking",
+      "settings": {
+        "heading": "空き状況・ご予約",
+        "highlights": "ご希望日の第1〜第2候補まで承ります\n人数・オプションもあわせてご相談いただけます",
+        "price_note": "税込 / 2名様",
+        "instant_button_label": "カートに追加して予約する",
+        "request_button_label": "希望日時をリクエストする",
+        "request_explainer": "ご希望の日時を送信いただくと、手配課が空き状況を確認し、予約を確定いたします。確認のためのご連絡・接客は発生しません。",
+        "note": "ご希望日の第2候補まで承ります。繁忙期は早めのお問い合わせがおすすめです。"
+      }
+    },
+    "product-gallery": {
+      "type": "product-gallery",
+      "settings": {
+        "heading": "撮影イメージ",
+        "background": "white",
+        "max_images": 10
+      }
+    },
+    "product-about": {
+      "type": "product-about",
+      "settings": {
+        "eyebrow": "Plan Overview",
+        "heading": "このプランについて"
+      }
+    },
+    "product-features": {
+      "type": "product-features",
+      "settings": {
+        "heading": "プラン内容",
+        "background": "ivory"
+      }
+    },
+    "product-options": {
+      "type": "product-options",
+      "settings": {
+        "heading": "オプション"
+      }
+    },
+    "product-schedule": {
+      "type": "product-schedule",
+      "settings": {
+        "heading": "撮影当日のスケジュール例",
+        "background": "ivory"
+      }
+    },
+    "product-locations": {
+      "type": "product-locations",
+      "settings": {
+        "heading": "ロケーション紹介"
+      }
+    },
+    "product-attire": {
+      "type": "product-attire",
+      "settings": {
+        "background": "ivory",
+        "image_position": "left",
+        "eyebrow": "Dress",
+        "heading": "衣装について",
+        "fitting_note": "全国の提携サロンで事前に試着可能です\nドレス・タキシード各2着まで無料チェンジ",
+        "button_label": "ドレスを詳しく見る",
+        "button_url": "/pages/dress"
+      }
+    },
+    "product-customer-photos": {
+      "type": "product-customer-photos",
+      "settings": {
+        "heading": "お客様のフォトをご紹介",
+        "background": "white"
+      }
+    },
+    "product-reviews": {
+      "type": "product-reviews",
+      "settings": {
+        "heading": "お客様の声",
+        "background": "white"
+      }
+    },
+    "product-faq": {
+      "type": "product-faq",
+      "settings": {
+        "heading": "よくあるご質問",
+        "background": "ivory"
+      }
+    },
+    "product-related": {
+      "type": "product-related",
+      "settings": {
+        "heading": "この撮影地をご覧になった方はこちらも検討しています",
+        "background": "ivory",
+        "max_products": 6
+      }
+    },
+    "product-cta": {
+      "type": "product-cta",
+      "settings": {
+        "eyebrow": "Reservation",
+        "heading": "このプランを予約する",
+        "booking_label": "空き状況を見る",
+        "contact_label": "相談する",
+        "contact_url": "/pages/about#contact"
+      }
+    }
+  },
+  "order": [
+    "product-hero",
+    "product-booking",
+    "product-gallery",
+    "product-about",
+    "product-features",
+    "product-options",
+    "product-schedule",
+    "product-locations",
+    "product-attire",
+    "product-customer-photos",
+    "product-reviews",
+    "product-faq",
+    "product-related",
+    "product-cta"
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "sections": {
+    "dress-hero": {
+      "type": "page-hero",
+      "settings": {
+        "eyebrow": "Dress — Four Seasons & Company",
+        "heading": "試着した、その一着を。\nそのまま世界へ。",
+        "lede": "フォーシスアンドカンパニーの上質な衣裳を、全国の提携サロンで試着してから撮影地へ。"
+      }
+    },
+    "dress-intro": {
+      "type": "split-content",
+      "settings": {
+        "background": "white",
+        "image_position": "left",
+        "eyebrow": "About Four Seasons & Company",
+        "heading": "海外フォトウェディングに精通した衣裳ブランド",
+        "body": "<p>フォーシスアンドカンパニーは、ウェディングドレス・タキシードを専門に扱うブランドです。海外での撮影・移動・気候を熟知したうえで選定された衣裳ラインナップだから、写真映えはもちろん、長時間の撮影でも快適な着心地を実現します。</p>"
+      }
+    },
+    "dress-why": {
+      "type": "icon-grid",
+      "settings": {
+        "eyebrow": "Why It Matters",
+        "heading": "「試着してから持参する」という安心",
+        "columns": "3",
+        "background": "ivory"
+      },
+      "blocks": {
+        "why-1": { "type": "point", "settings": { "icon": "dress", "title": "日本全国で試着可能", "text": "全国の提携サロンで、実際に袖を通してからお選びいただけます。現地で初めて着る不安がありません。" } },
+        "why-2": { "type": "point", "settings": { "icon": "pin", "title": "そのまま撮影地へ持参", "text": "試着で選んだ一着を、専用のケースでそのまま海外の撮影地までお持ちいただきます。" } },
+        "why-3": { "type": "point", "settings": { "icon": "sparkle", "title": "品質保証", "text": "撮影当日までクリーニング・保管を徹底。万全のコンディションでお渡しします。" } }
+      },
+      "block_order": ["why-1", "why-2", "why-3"]
+    },
+    "dress-lineup": {
+      "type": "image-duo",
+      "settings": { "background": "white" }
+    },
+    "dress-flow": {
+      "type": "flow-steps",
+      "settings": {
+        "eyebrow": "Flow",
+        "heading": "試着からご利用までの流れ",
+        "background": "ivory"
+      },
+      "blocks": {
+        "flow-1": { "type": "step", "settings": { "title": "サロン予約", "text": "お近くの提携サロンをオンラインで予約。" } },
+        "flow-2": { "type": "step", "settings": { "title": "試着", "text": "複数の衣裳を実際に試着して比較検討。" } },
+        "flow-3": { "type": "step", "settings": { "title": "選定・採寸", "text": "お気に入りの一着を選び、最終採寸。" } },
+        "flow-4": { "type": "step", "settings": { "title": "お渡し", "text": "渡航前に衣裳一式をお渡し、そのまま海外へ。" } }
+      },
+      "block_order": ["flow-1", "flow-2", "flow-3", "flow-4"]
+    },
+    "dress-cta": {
+      "type": "cta-band",
+      "settings": {
+        "eyebrow": "Dress",
+        "heading": "ドレス・小物・タキシードを見る、\nまたはあなたに似合う系統を診断する。"
+      },
+      "blocks": {
+        "cta-1": { "type": "button", "settings": { "label": "ドレス・小物・タキシードを見る", "url": "/pages/dress-gallery", "style": "gold" } },
+        "cta-2": { "type": "button", "settings": { "label": "ドレス診断をする", "url": "/pages/dress-diagnosis", "style": "outline" } },
+        "cta-3": { "type": "button", "settings": { "label": "試着について相談する", "url": "/pages/about#contact", "style": "outline" } }
+      },
+      "block_order": ["cta-1", "cta-2", "cta-3"]
+    }
+  },
+  "order": ["dress-hero", "dress-intro", "dress-why", "dress-lineup", "dress-flow", "dress-cta"]
+}

@@ -1,0 +1,73 @@
+{%- comment -%}
+  icon-grid — generic icon + heading + text grid, reusing
+  .trust-item / .trust-icon. Used for the TOP page's "選ばれる、5つの
+  安心", About's "私たちが大切にしていること" and Dress's "試着してから
+  持参するという安心" — one section type, different blocks per use.
+{%- endcomment -%}
+{%- if section.settings.show_section and section.blocks.size > 0 -%}
+  <section class="{% if section.settings.background == 'ivory' %}bg-ivory{% endif %}">
+    <div class="container">
+      {%- if section.settings.heading != blank -%}
+        <div class="section-head reveal">
+          {%- if section.settings.eyebrow != blank -%}<p class="eyebrow">{{ section.settings.eyebrow }}</p>{%- endif -%}
+          <h2>{{ section.settings.heading }}</h2>
+          <div class="divider-gold"></div>
+          {%- if section.settings.body != blank -%}<p>{{ section.settings.body }}</p>{%- endif -%}
+        </div>
+      {%- endif -%}
+      <div class="grid grid-{{ section.settings.columns }}">
+        {%- for block in section.blocks -%}
+          <div class="trust-item reveal{% if forloop.index0 > 0 %} reveal-{{ forloop.index0 | modulo: 4 }}{% endif %}" {{ block.shopify_attributes }}>
+            <div class="trust-icon">{% render 'product-icon', icon: block.settings.icon %}</div>
+            <h3>{{ block.settings.title }}</h3>
+            {%- if block.settings.text != blank -%}<p>{{ block.settings.text }}</p>{%- endif -%}
+          </div>
+        {%- endfor -%}
+      </div>
+    </div>
+  </section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "アイコングリッド",
+  "settings": [
+    { "type": "checkbox", "id": "show_section", "label": "表示する", "default": true },
+    { "type": "text", "id": "eyebrow", "label": "英字見出し" },
+    { "type": "text", "id": "heading", "label": "見出し" },
+    { "type": "richtext", "id": "body", "label": "本文" },
+    { "type": "select", "id": "columns", "label": "列数", "options": [
+        { "value": "3", "label": "3列" },
+        { "value": "4", "label": "4列" }
+      ], "default": "4" },
+    { "type": "select", "id": "background", "label": "背景", "options": [
+        { "value": "white", "label": "白" },
+        { "value": "ivory", "label": "アイボリー" }
+      ], "default": "white" }
+  ],
+  "blocks": [
+    {
+      "type": "point",
+      "name": "項目",
+      "settings": [
+        { "type": "select", "id": "icon", "label": "アイコン", "options": [
+            { "value": "shield", "label": "安心" },
+            { "value": "dress", "label": "衣裳" },
+            { "value": "suit", "label": "衣裳（男性）" },
+            { "value": "sparkle", "label": "品質" },
+            { "value": "pin", "label": "拠点" },
+            { "value": "sun", "label": "気候" },
+            { "value": "camera", "label": "撮影" },
+            { "value": "car", "label": "送迎" },
+            { "value": "download", "label": "データ" },
+            { "value": "clock", "label": "時間" }
+          ], "default": "shield" },
+        { "type": "text", "id": "title", "label": "見出し", "default": "項目タイトル" },
+        { "type": "text", "id": "text", "label": "説明" }
+      ]
+    }
+  ],
+  "max_blocks": 6,
+  "presets": [{ "name": "アイコングリッド" }]
+}
+{% endschema %}

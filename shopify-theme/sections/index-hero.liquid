@@ -1,0 +1,47 @@
+{%- comment -%}
+  index-hero — TOP page full-bleed hero. Same .hero component as the
+  product hero, dual CTA + scroll cue, no price/booking elements.
+{%- endcomment -%}
+{%- render 'index-schema' -%}
+
+<section class="hero">
+  <div class="hero-media">
+    {%- if section.settings.background_image -%}
+      <img
+        src="{{ section.settings.background_image | image_url: width: 2400 }}"
+        srcset="{{ section.settings.background_image | image_url: width: 1200 }} 1200w, {{ section.settings.background_image | image_url: width: 1800 }} 1800w, {{ section.settings.background_image | image_url: width: 2400 }} 2400w"
+        sizes="100vw"
+        alt="{{ section.settings.background_image.alt | default: section.settings.heading | escape }}"
+        loading="eager"
+        fetchpriority="high"
+        width="2400" height="1350"
+      >
+    {%- endif -%}
+  </div>
+  <div class="hero-content">
+    {%- if section.settings.eyebrow != blank -%}<p class="eyebrow">{{ section.settings.eyebrow }}</p>{%- endif -%}
+    <h1>{{ section.settings.heading | newline_to_br }}</h1>
+    {%- if section.settings.lede != blank -%}<p class="lede">{{ section.settings.lede }}</p>{%- endif -%}
+    <div class="cta-row">
+      {%- if section.settings.primary_url != blank -%}<a href="{{ section.settings.primary_url }}" class="btn btn-gold">{{ section.settings.primary_label }}</a>{%- endif -%}
+      {%- if section.settings.secondary_url != blank -%}<a href="{{ section.settings.secondary_url }}" class="btn btn-outline-light">{{ section.settings.secondary_label }}</a>{%- endif -%}
+    </div>
+  </div>
+  <div class="scroll-cue"><span>SCROLL</span><span class="line"></span></div>
+</section>
+
+{% schema %}
+{
+  "name": "TOPヒーロー",
+  "settings": [
+    { "type": "image_picker", "id": "background_image", "label": "背景画像" },
+    { "type": "text", "id": "eyebrow", "label": "英字見出し", "default": "HIS World Wedding" },
+    { "type": "textarea", "id": "heading", "label": "見出し", "default": "世界で、\n一生残る一枚を。" },
+    { "type": "textarea", "id": "lede", "label": "リード文" },
+    { "type": "text", "id": "primary_label", "label": "メインボタン文言", "default": "撮影地を見る" },
+    { "type": "url", "id": "primary_url", "label": "メインボタンリンク先" },
+    { "type": "text", "id": "secondary_label", "label": "サブボタン文言" },
+    { "type": "url", "id": "secondary_url", "label": "サブボタンリンク先" }
+  ]
+}
+{% endschema %}

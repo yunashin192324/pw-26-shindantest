@@ -1,0 +1,50 @@
+{%- comment -%}
+  product-schema — Product + BreadcrumbList JSON-LD for a product page.
+  FAQPage JSON-LD is emitted separately by product-faq.liquid, next to
+  the FAQ content it describes, so the two never drift out of sync.
+
+  Params:
+    product    — required
+    collection — optional, current collection context (drives the
+                 breadcrumb's middle crumb); falls back to
+                 product.collections.first when not passed.
+{%- endcomment -%}
+{%- assign crumb_collection = collection | default: product.collections.first -%}
+{%- assign variant = product.selected_or_first_available_variant -%}
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Product",
+  "name": {{ product.title | json }},
+  "description": {{ product.description | strip_html | truncate: 300 | json }},
+  {%- if product.featured_image %}
+  "image": [{{ product.featured_image | image_url: width: 1600 | prepend: "https:" | json }}],
+  {%- endif %}
+  "brand": {
+    "@type": "Brand",
+    "name": {{ shop.name | json }}
+  },
+  "offers": {
+    "@type": "Offer",
+    "priceCurrency": {{ cart.currency.iso_code | json }},
+    "price": {{ variant.price | money_without_currency | json }},
+    "availability": "https://schema.org/{% if variant.available %}InStock{% else %}OutOfStock{% endif %}",
+    "url": {{ canonical_url | json }}
+  }
+}
+</script>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "TOP", "item": {{ shop.url | append: routes.root_url | json }} }
+    {%- if crumb_collection -%}
+    ,{ "@type": "ListItem", "position": 2, "name": {{ crumb_collection.title | json }}, "item": {{ shop.url | append: crumb_collection.url | json }} }
+    {%- endif -%}
+    ,{ "@type": "ListItem", "position": {% if crumb_collection %}3{% else %}2{% endif %}, "name": {{ product.title | json }}, "item": {{ canonical_url | json }} }
+  ]
+}
+</script>

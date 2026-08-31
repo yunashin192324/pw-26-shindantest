@@ -1,0 +1,88 @@
+{
+  "sections": {
+    "main": {
+      "type": "main-product",
+      "disabled": true,
+      "settings": {}
+    },
+    "product_plan_main": {
+      "type": "product-plan",
+      "blocks": {
+        "tag_1": { "type": "tag", "settings": { "title": "ダブルカメラマン" } },
+        "tag_2": { "type": "tag", "settings": { "title": "撮影時間 約3時間" } },
+        "option_1": { "type": "option", "settings": { "title": "送迎付きプラン", "price": "+¥12,000" } },
+        "gallery_1": { "type": "gallery_image", "settings": { "image": "shopify://shop_images/DAD_beach_14.jpg", "img_position": "object-center" } },
+        "gallery_2": { "type": "gallery_image", "settings": { "image": "shopify://shop_images/DAD_city_03.jpg", "img_position": "object-center" } },
+        "gallery_3": { "type": "gallery_image", "settings": { "image": "shopify://shop_images/city014_resized.webp", "img_position": "object-center" } },
+        "gallery_4": { "type": "gallery_image", "settings": { "image": "shopify://shop_images/Hoian024.jpg", "img_position": "object-center" } },
+        "gallery_5": { "type": "gallery_image", "settings": { "image": "shopify://shop_images/Hoian006.jpg", "img_position": "object-right" } },
+        "schedule_1": { "type": "schedule", "settings": { "time": "8:00", "desc": "サロンにてお仕度開始" } },
+        "schedule_2": { "type": "schedule", "settings": { "time": "9:30", "desc": "移動・撮影開始（約60分）" } },
+        "schedule_3": { "type": "schedule", "settings": { "time": "11:00", "desc": "ホテルへ戻り解散" } },
+        "faq_1": { "type": "faq", "settings": { "question": "ビザは必要ですか？", "answer": "15日以内の観光滞在であればベトナム入国時のビザは原則不要です。" } },
+        "note_1": {
+          "type": "note",
+          "settings": {
+            "title": "",
+            "text": "※ダナン市内、ビーチエリアのホテルが対象となります。「インターコンチネンタル・ダナン・サン・ペニンシュラ・リゾート」含む北エリア、「フォーシーズンズ リゾート ザ ナムハイ ベトナム」以南、ホイアンエリアに宿泊の場合は対象外です。\n※撮影当日が雨天の場合も撮影いたします。悪天候の場合、催行判断は催行会社が判断いたします。お客様判断の場合はキャンセル料が発生いたします。\n※ビーチは基本ミーケビーチとなります。"
+          }
+        }
+      },
+      "block_order": ["tag_1", "tag_2", "option_1", "gallery_1", "gallery_2", "gallery_3", "gallery_4", "gallery_5", "schedule_1", "schedule_2", "schedule_3", "faq_1", "note_1"],
+      "settings": {
+        "hero_img": "shopify://shop_images/1-3457.jpg",
+        "hero_img_position": "object-bottom",
+        "hero_eyebrow": "DA NANG — PHOTO WEDDING",
+        "hero_title": "",
+        "hero_lede": "ミーケービーチとリゾート内で撮る、開放感あふれる一枚。",
+
+        "overview_eyebrow": "PLAN OVERVIEW",
+        "overview_title": "世界的に評価されるビーチで撮る一枚",
+        "overview_desc": "米国の旅行誌でも「世界の美しいビーチ」に選ばれたミーケービーチと、五つ星リゾートの庭園やプールサイドを舞台に撮影。日本人カメラマンとベトナム人カメラマンのダブルカメラマンにて撮影。1人ではできない厚みのある写真を残せます。",
+
+        "price_note": "税込 / 2名様",
+        "price_cancel_note": "【変更取消規定】予約後～31日前…10,000円、30日前以降…全額",
+        "reserve_button_label_instant": "空き状況を確認して予約する",
+        "reserve_button_label_request": "希望日時をリクエストする",
+        "request_explainer": "ご希望の日時を送信いただくと、手配課が空き状況を確認し、予約を確定いたします。確認のためのご連絡・接客は発生しません。",
+
+        "included_title": "含まれるもの",
+        "included_list": "写真撮影（ダブルカメラマン）\n編集済み撮影データ（約60枚）\n編集なし撮影データ（約500～700枚）\n往復送迎車（ダナン市内、ビーチエリアのホテル限定）\n新婦ヘアセット＆メイク\nメイクスタッフ同行\nベトナム人通訳スタッフ同行\n造花ブーケ\nレンタル衣裳（ドレス88,000円分、タキシード：22,000円分 ※1）",
+        "excluded_title": "含まれないもの",
+        "excluded_list": "航空券\n宿泊費",
+
+        "show_options": true,
+        "options_eyebrow": "OPTIONS",
+        "options_title": "オプション",
+
+        "show_dress": true,
+        "dress_img": "shopify://shop_images/Merlot_2024_web.jpg",
+        "dress_img_position": "object-center",
+        "dress_eyebrow": "DRESS & TUXEDO",
+        "dress_title": "こだわりの衣裳",
+        "dress_desc": "リゾートの雰囲気に合う軽やかなドレスから王道スタイルまで、豊富にご用意しております。",
+        "dress_btn_text": "衣裳一覧を見る",
+        "dress_btn_url": "/pages/dress",
+
+        "gallery_eyebrow": "GALLERY",
+        "gallery_title": "撮影イメージ",
+
+        "schedule_eyebrow": "SCHEDULE",
+        "schedule_title": "撮影当日のスケジュール例",
+
+        "faq_eyebrow": "FAQ",
+        "faq_title": "よくあるご質問",
+
+        "show_notes": true,
+        "notes_title": "注意事項・ご案内",
+
+        "reserve_eyebrow": "RESERVATION",
+        "reserve_title": "ビーチプランを予約する",
+        "reserve_desc": "空き状況のご確認・ご予約、まずはお気軽にご相談ください。",
+        "reserve_cta_secondary": "",
+        "reserve_url_secondary": ""
+      }
+    }
+  },
+  "order": ["main", "product_plan_main"]
+}
