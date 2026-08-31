@@ -120,6 +120,16 @@ const API_SPECS = [
   { fn: 'apiShopUploadDocument',   scope: 'shop',
     args: (t) => [t, 'VIE-950', 'ヘアメイク画像', 'x.jpg', 'image/jpeg', Buffer.from('x').toString('base64')], target: 'VIE', writes: true },
   { fn: 'apiListShopUploadedDocuments', scope: 'shop', args: (t) => [t, 'VIE-950'], target: 'VIE', reads: true },
+  { fn: 'apiShopDeleteUploadedDocument', scope: 'shop',
+    args: (t) => [t, 'VIE-950', 'https://drive.mock/file/dummy'], target: 'VIE', writes: true },
+  // ★要件：現地支店の「撮影データ納品」（URL登録・ファイルアップロード・一覧・削除）
+  { fn: 'apiSetDeliveryDataUrl', scope: 'branch',
+    args: (t) => [t, 'VIE-001', 'https://drive.google.com/delivery'], target: 'VIE', writes: true },
+  { fn: 'apiBranchUploadDeliveryData', scope: 'branch',
+    args: (t) => [t, 'VIE-001', 'final.jpg', 'image/jpeg', Buffer.from('x').toString('base64')], target: 'VIE', writes: true },
+  { fn: 'apiListDeliveryData', scope: 'any', args: (t) => [t, 'VIE-001'], target: 'VIE', reads: true },
+  { fn: 'apiBranchDeleteDeliveryData', scope: 'branch',
+    args: (t) => [t, 'VIE-001', 'https://drive.mock/file/dummy'], target: 'VIE', writes: true },
   { fn: 'apiGetPrefilledFormUrls', scope: 'any', args: (t) => [t, 'VIE-001'], target: 'VIE', reads: true },
   { fn: 'apiToggleHistoryCheck',   scope: 'any', args: (t, ctx) => [t, ctx.__someHistoryId || 'none', true], target: 'VIE', writes: true },
 
@@ -172,7 +182,8 @@ section('A1. 認可マトリクス：保護の書き忘れを機械的に検出'
   // 案件を特定して読み書きするAPIは、行の可視性チェックが必要
   const caseApis = ['apiGetReservationDetail','apiGetCaseTimeline','apiGetFieldHistory',
                     'apiCheckStaffConflict','apiSaveFieldsQuiet','apiCommitChanges','apiSetDriveUrl',
-                    'apiAddMemo','apiBuildArrangementDraft','apiSendArrangementRequest'];
+                    'apiAddMemo','apiBuildArrangementDraft','apiSendArrangementRequest',
+                    'apiSetDeliveryDataUrl','apiBranchUploadDeliveryData','apiBranchDeleteDeliveryData'];
   const noVisible = caseApis.filter(f => !/assertRowVisible_/.test(bodyOf(f)));
   check('案件を指定するAPIは全て assertRowVisible_ を通している',
         noVisible.length === 0, '可視性チェックなし: ' + noVisible.join(', '));
@@ -181,7 +192,8 @@ section('A1. 認可マトリクス：保護の書き忘れを機械的に検出'
   const mustLock = ['apiSaveBranch','apiSetBranchActive','apiSaveFieldsQuiet','apiCommitChanges',
                     'apiSetDriveUrl','apiCreateReservation','apiShopCreateRequest','apiToggleHistoryCheck',
                     'apiSaveStaffItem','apiSaveSaleItem','apiSavePlanItem','apiSaveOptionItem','apiSaveLocationItem',
-                    'apiSaveArrangementSettings','apiShopUploadDocument'];
+                    'apiSaveArrangementSettings','apiShopUploadDocument','apiShopDeleteUploadedDocument',
+                    'apiSetDeliveryDataUrl','apiBranchUploadDeliveryData','apiBranchDeleteDeliveryData'];
   const noLock = mustLock.filter(f => {
     const b = bodyOf(f);
     return !/getScriptLock/.test(b) && !/saveMasterItem_/.test(b);
@@ -310,11 +322,12 @@ section('A5. ロック競合：同時書き込みでも壊れず、分かりや�
   const t = jp.session.token;
   const writers = API_SPECS.filter(s => s.writes && s.scope !== 'public');
   // ★機能追加：店舗ロール専用のAPIはJPトークンでは（ロールチェックの時点で）ロックまで到達しないため、
-  // このロック競合テストだけは店舗としてログインしたトークンを使う
+  // このロック競合テストだけは店舗としてログインしたトークンを使う（現地支店専用APIも同様）
   const shopToken = ctx.apiLogin('SHOP1', 'CHANGE-ME-SHOP1').session.token;
+  const branchToken = ctx.apiLogin('VIE', 'CHANGE-ME-VIE').session.token;
 
   writers.forEach(spec => {
-    const actorToken = spec.scope === 'shop' ? shopToken : t;
+    const actorToken = spec.scope === 'shop' ? shopToken : (spec.scope === 'branch' ? branchToken : t);
     ctx.__failNextLocks(1); // 他の処理がロックを握っている状況を作る
     let msg = null, threw = false;
     try { ctx[spec.fn](...spec.args(actorToken, ctx)); }

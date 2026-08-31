@@ -135,12 +135,13 @@ function makeContext() {
       },
       createFile: (blob) => {
         const fid = `file-${++driveSeq}`;
-        driveFiles[fid] = { id: fid, name: blob.getName ? blob.getName() : 'file', blob, updatedAt: mkDate(2026, 0, 1) };
+        driveFiles[fid] = { id: fid, name: blob.getName ? blob.getName() : 'file', blob, updatedAt: mkDate(2026, 0, 1), trashed: false };
         driveFolders[id].fileIds.push(fid);
         return makeFileObj(fid);
       },
       getFiles: () => {
-        const fileIds = driveFolders[id].fileIds.slice();
+        // ★要件：削除（ゴミ箱行き）にしたファイルは一覧に出さない（実DriveのgetFiles相当の挙動）
+        const fileIds = driveFolders[id].fileIds.filter(fid => driveFiles[fid] && !driveFiles[fid].trashed);
         let i = 0;
         return { hasNext: () => i < fileIds.length, next: () => makeFileObj(fileIds[i++]) };
       }
@@ -151,7 +152,10 @@ function makeContext() {
       getId: () => id,
       getName: () => driveFiles[id].name,
       getUrl: () => `https://drive.mock/file/${id}`,
-      getLastUpdated: () => driveFiles[id].updatedAt
+      getLastUpdated: () => driveFiles[id].updatedAt,
+      // ★要件：一度アップロードしたものを削除（取消）できるようにする（実Driveのゴミ箱相当）
+      setTrashed: (v) => { driveFiles[id].trashed = !!v; return makeFileObj(id); },
+      isTrashed: () => !!driveFiles[id].trashed
     };
   }
   const ctx = {
@@ -190,6 +194,10 @@ function makeContext() {
       getFolderById: (id) => {
         if (!driveFolders[id]) throw new Error('フォルダが見つかりません: ' + id);
         return makeFolderObj(id);
+      },
+      getFileById: (id) => {
+        if (!driveFiles[id]) throw new Error('ファイルが見つかりません: ' + id);
+        return makeFileObj(id);
       }
     },
     // ★CacheService は有効期限(TTL)を持つ。実GASでは期限切れの値は取得できず null になるため、

@@ -1833,9 +1833,14 @@ section('33. STSの自動連動（日本CR＋支店CW→日本もCW／日本RQ�
   check('対象外の組み合わせでは日本側のSTSは変わらない（CHKのまま）',
         ctx.apiGetReservationDetail(t, 'VIE-713').detail['STS JP'] === 'CHK');
 
-  // 通知メールは飛ばない（自動連動は監査ログのみで、メッセージ通知には乗らない）
-  check('自動連動そのものはメールを増やさない（直前の3件の保存はいずれも apiSaveFieldsQuiet）',
-        !ctx.__mail.some(m => /VIE-711|VIE-712/.test(m.subj + m.body)));
+  // 通知メール：STSの自動連動そのものはメッセージ通知には乗らない（監査ログのみ）。
+  // ただしVIE-711は支店がCW（キャンセル成立）で回答しているため、別の要件（現地支店がCWにしたら
+  // 自動で注意書きを送る＝appendCwAutoNoticeIfApplicable_）によりメールが1通だけ飛ぶ
+  // （自動連動そのものが飛ばしているのではないことを、UCの回答＝VIE-712の側で確認する）。
+  check('自動連動そのものはメールを増やさない（UCの回答＝VIE-712分にはメールが無い）',
+        !ctx.__mail.some(m => /VIE-712/.test(m.subj + m.body)));
+  check('支店がCWにした分だけ、自動注意書きのメールが1通飛ぶ（VIE-711）',
+        ctx.__mail.some(m => /VIE-711/.test(m.subj + m.body) && m.body.includes('チャージの確認はしていない')));
 }
 
 // ---------------------------------------------------------------
@@ -1907,7 +1912,10 @@ function shopFixture() {
   const shopDetail = ctx.apiGetReservationDetail(shopToken, kanri).detail;
   check('店舗自身は自分の起票した案件を見られる', shopDetail['管理番号'] === kanri);
   check('店舗向けの詳細にはSTSが入る', shopDetail['STS JP'] === 'RQ' && shopDetail['STS 支店'] === '');
-  check('店舗向けの詳細には請求先など内部項目は含まれない', !('請求先' in shopDetail) && !('ホテル' in shopDetail));
+  check('店舗向けの詳細には請求先など内部項目は含まれない', !('請求先' in shopDetail));
+  // ★要件：お客様情報タブに、現地連絡先・滞在ホテル・フライト情報も店舗から入力できるようにする
+  check('店舗向けの詳細には現地連絡先・滞在ホテル・フライト情報の項目が入る',
+        'ホテル' in shopDetail && '現地連絡先メール' in shopDetail && 'フライト情報' in shopDetail);
   check('店舗の一覧にも自分の起票した案件が出る（自分の依頼状況確認）',
         ctx.apiGetDashboard(shopToken, { showAll: true }).reservations.some(r => r.kanriNo === kanri));
 
@@ -2041,9 +2049,9 @@ function shopFixture() {
 section('35. 検索：STSでの絞り込み・一覧表（表示形式が表）に返るSTS');
 {
   const ctx = featureFixture();
-  addCase(ctx, '予約一覧', { '支店コード': 'VIE', '管理番号': 'VIE-801', '管轄': '関東', '新郎名（ローマ字）': 'A', 'STS JP': 'RQ', 'STS 支店': 'NC' });
-  addCase(ctx, '予約一覧', { '支店コード': 'VIE', '管理番号': 'VIE-802', '管轄': '関東', '新郎名（ローマ字）': 'B', 'STS JP': 'OK', 'STS 支店': 'OK' });
-  addCase(ctx, '予約一覧', { '支店コード': 'IST', '管理番号': 'IST-801', '管轄': '関西', '新郎名（ローマ字）': 'C', 'STS JP': 'OK', 'STS 支店': 'NC' });
+  addCase(ctx, '予約一覧', { '支店コード': 'VIE', '管理番号': 'VIE-801', '管轄': '関東', '新郎名（ローマ字）': 'A', 'STS JP': 'RQ', 'STS 支店': 'NC', 'プラン名': 'スタンダードプラン' });
+  addCase(ctx, '予約一覧', { '支店コード': 'VIE', '管理番号': 'VIE-802', '管轄': '関東', '新郎名（ローマ字）': 'B', 'STS JP': 'OK', 'STS 支店': 'OK', 'プラン名': 'プレミアムプラン' });
+  addCase(ctx, '予約一覧', { '支店コード': 'IST', '管理番号': 'IST-801', '管轄': '関西', '新郎名（ローマ字）': 'C', 'STS JP': 'OK', 'STS 支店': 'NC', 'プラン名': 'プレミアムプラン（ブーケ付き）' });
   const jp = ctx.apiLogin('KANTO', 'pw');
   const t = jp.session.token;
 
@@ -2061,6 +2069,14 @@ section('35. 検索：STSでの絞り込み・一覧表（表示形式が表）�
 
   const all = ctx.apiSearchReservations(t, { scope: { showAll: true } }).results;
   check('STS未指定なら絞り込まれない', all.length === 3, String(all.length));
+
+  // ★要件：一覧を日付範囲・ステータスに加えてプラン名でも絞り込める（部分一致）
+  const byPlan = ctx.apiSearchReservations(t, { scope: { showAll: true }, plan: 'プレミアム' }).results;
+  check('プラン名で絞り込める（部分一致）', byPlan.map(r => r.kanriNo).sort().join(',') === 'IST-801,VIE-802',
+        JSON.stringify(byPlan.map(r => r.kanriNo)));
+  const byPlanAndSts = ctx.apiSearchReservations(t, { scope: { showAll: true }, plan: 'プレミアム', statusBranch: 'OK' }).results;
+  check('プラン名とSTSを組み合わせるとAND条件になる（1月1日～4月1日OKのみ抽出、のような複合条件を想定）',
+        byPlanAndSts.map(r => r.kanriNo).join(',') === 'VIE-802', JSON.stringify(byPlanAndSts.map(r => r.kanriNo)));
 
   // 一覧（表示形式が表）でもSTSの値が取れるようになっているか（apiGetDashboardの返却値）
   const dash = ctx.apiGetDashboard(t, { showAll: true }).reservations.find(r => r.kanriNo === 'VIE-801');
@@ -2179,9 +2195,11 @@ section('38. 案件作成後の店舗による変更：DC/PC/NC（拡張要望3�
   // --- ★要件：専用の「ステータス変更」欄を廃止し、各オプション・プランの隣のSTS(JP側)バッジ
   //     から店舗自身が直接RQ→CR等へ変更できるようにする。案件全体のSTS JPだけでなく、
   //     各オプションのSTS JPも同じ対象値（FN/CR/DC/PC）へ店舗が直接変更できる ---
-  ctx.apiSaveFieldsQuiet(shopToken, kanri, { 'OP1 STS JP': 'CR' });
+  ctx.apiSaveFieldsQuiet(shopToken, kanri, { 'OP1 STS JP': 'CR', 'キャンセル理由': 'お客様都合によるキャンセル' });
   check('店舗はオプション①のSTS(JP側)も直接CRへ変更できる',
         ctx.apiGetReservationDetail(jpToken, kanri).detail['OP1 STS JP'] === 'CR');
+  check('CRにする際に入力したキャンセル理由が保存される',
+        ctx.apiGetReservationDetail(jpToken, kanri).detail['キャンセル理由'] === 'お客様都合によるキャンセル');
   let err = null;
   try { ctx.apiSaveFieldsQuiet(shopToken, kanri, { 'OP1 STS JP': 'OK' }); } catch (e) { err = e.message; }
   check('店舗が設定できるのはFN/CR/DC/PCのみ（OK等は不可）', err !== null, String(err));
@@ -2711,6 +2729,70 @@ section('46. プランごとの撮影場所方式・セールのプラン/支店
   let err = null;
   try { ctx.apiSaveSaleItem(vieToken, 'ALL', '支店から全社共通は登録できないはず', null, true); } catch (e) { err = e.message; }
   check('全支店共通（ALL）のセール登録は支店ロールではできない（JPのみ）', err !== null, String(err));
+}
+
+// ---------------------------------------------------------------
+section('47. 撮影データ納品（現地支店がURL登録・ファイルアップロード・削除できる）');
+{
+  const ctx = featureFixture();
+  addCase(ctx, '予約一覧', { '支店コード': 'VIE', '管理番号': 'VIE-960', '管轄': '関東', '新郎名（ローマ字）': 'Delivery' });
+  const jp = ctx.apiLogin('KANTO', 'pw');
+  const jpTok = jp.session.token;
+  const vie = ctx.apiLogin('VIE', 'vp');
+  const vieTok = vie.session.token;
+
+  // --- URLでの登録 ---
+  let err = null;
+  try { ctx.apiSetDeliveryDataUrl(jpTok, 'VIE-960', 'https://drive.google.com/x'); } catch (e) { err = e.message; }
+  check('日本側（JP）は撮影データ納品URLを登録できない（現地支店ロール専用）', err !== null, String(err));
+
+  ctx.apiSetDeliveryDataUrl(vieTok, 'VIE-960', 'https://drive.google.com/final-data');
+  const afterUrl = ctx.apiGetReservationDetail(jpTok, 'VIE-960').detail;
+  check('現地支店が撮影データ納品URLを登録できる', afterUrl['撮影データ納品URL'] === 'https://drive.google.com/final-data');
+  check('登録すると既定の手配課へ自動で通知される（メール）',
+        ctx.__mail.some(m => m.to.includes('kanto@his-world.com') && m.body.includes('final-data')));
+  check('登録すると履歴にも残る',
+        afterUrl.history.some(h => h.body.includes('撮影データ納品URLを登録') && h.body.includes('final-data')));
+
+  err = null;
+  try { ctx.apiSetDeliveryDataUrl(vieTok, 'VIE-960', 'ftp://not-http'); } catch (e) { err = e.message; }
+  check('httpで始まらないURLは登録できない', err !== null, String(err));
+
+  // --- 取消（空文字で登録するとクリアされる） ---
+  ctx.apiSetDeliveryDataUrl(vieTok, 'VIE-960', '');
+  const afterClear = ctx.apiGetReservationDetail(jpTok, 'VIE-960').detail;
+  check('URLを取消すると空になる', afterClear['撮影データ納品URL'] === '');
+  check('取消も履歴に残る（自動通知）',
+        afterClear.history.some(h => h.body.includes('撮影データ納品URLを取消しました')));
+
+  // --- ファイルアップロード ---
+  const up = ctx.apiBranchUploadDeliveryData(vieTok, 'VIE-960', 'final.zip', 'application/zip', Buffer.from('data').toString('base64'));
+  check('現地支店がファイルをアップロードできる', !!up.fileUrl);
+  err = null;
+  try { ctx.apiBranchUploadDeliveryData(jpTok, 'VIE-960', 'x.zip', 'application/zip', Buffer.from('x').toString('base64')); } catch (e) { err = e.message; }
+  check('日本側（JP）はファイルアップロードできない（現地支店ロール専用）', err !== null, String(err));
+
+  const listed = ctx.apiListDeliveryData(jpTok, 'VIE-960');
+  check('アップロードしたファイルが一覧で見える（日本側からも）',
+        listed.files.some(f => f.name === 'final.zip'), JSON.stringify(listed.files));
+  const listedByShop = ctx.apiListDeliveryData(vieTok, 'VIE-960');
+  check('現地支店側からも一覧が見える', listedByShop.files.some(f => f.name === 'final.zip'));
+
+  // --- 削除（取消） ---
+  err = null;
+  try { ctx.apiBranchDeleteDeliveryData(jpTok, 'VIE-960', listed.files[0].url); } catch (e) { err = e.message; }
+  check('日本側（JP）はファイルを削除できない（現地支店ロール専用）', err !== null, String(err));
+
+  ctx.apiBranchDeleteDeliveryData(vieTok, 'VIE-960', listed.files[0].url);
+  const afterDelete = ctx.apiListDeliveryData(jpTok, 'VIE-960');
+  check('現地支店はアップロード済みのファイルを削除（取消）できる',
+        !afterDelete.files.some(f => f.name === 'final.zip'), JSON.stringify(afterDelete.files));
+
+  // --- 他支店からは操作できない ---
+  const other = ctx.apiLogin('IST', 'ip');
+  err = null;
+  try { ctx.apiSetDeliveryDataUrl(other.session.token, 'VIE-960', 'https://drive.google.com/侵入'); } catch (e) { err = e.message; }
+  check('他の現地支店はよその案件の撮影データ納品URLを登録できない', err !== null, String(err));
 }
 
 // ---------------------------------------------------------------

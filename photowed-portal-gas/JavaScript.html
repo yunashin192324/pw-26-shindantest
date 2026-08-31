@@ -22,8 +22,11 @@
   const SHOP_STATUS_TARGETS = ['RQ', 'FN', 'CR', 'DC', 'PC'];
   const SHOP_STATUS_LABELS = { RQ: 'RQ（予約依頼）', FN: 'FN（最終確定）', CR: 'CR（キャンセル依頼）',
     DC: 'DC（日付変更依頼）', PC: 'PC（プラン・式場変更依頼）' };
+  // ★要件：店舗がプラン・オプションのSTSのすぐ近くから、現地支店へ急ぎの回答を求められるように
+  // する「PUSH」ボタンの固定文面（急ぎで回答が欲しいことを伝えるためのボタン）
+  const SHOP_PUSH_MESSAGE_TEXT = '【至急】ご回答をお願いいたします。恐れ入りますが、お早めのご確認・ご返信をお願いします。';
   // 必要書類チェックリスト（Code.gsのCHECKLIST_ITEMSと一致させる）
-  const CHECKLIST_ITEMS = ['ヘアメイク画像', '衣裳画像', '撮影指示書', '着付け指示書'];
+  const CHECKLIST_ITEMS = ['ヘアメイク画像', '衣裳画像', '撮影指示書', '着付け指示書', '婚姻受理証明書コピー（必要な場合）'];
   // ドライブアップロードの書類種別（Code.gsのSHOP_UPLOAD_DOC_TYPESと一致させる）
   const SHOP_UPLOAD_DOC_TYPES = ['ヘアメイク画像', '衣裳画像', '撮影指示書', '着付け指示書'];
   // ★要件：日本の支店（店舗）画面と同じフォーマット（隠す/表示のタブ切替ではなく、上部の
@@ -133,6 +136,7 @@
     populateLoginOptions();
     populateStatusSelect('s-sts-jp');
     populateStatusSelect('s-sts-branch');
+    populateStatusSelect('shop-dashboard-sts');
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       session = JSON.parse(saved);
@@ -182,9 +186,15 @@
     $('day-submit').addEventListener('click', loadDaySchedule);
     $('billing-submit').addEventListener('click', loadBillingGaps);
     $('show-cancelled').addEventListener('change', () => { if (lastDashboardData) renderDashboard(lastDashboardData); });
-    // ★機能追加：店舗ロール向けの一覧絞り込み（担当の手配課・チャレンジ番号／お名前／管理番号で検索）
-    $('shop-dashboard-search').addEventListener('input', () => { if (lastDashboardData) renderDashboard(lastDashboardData); });
-    $('shop-dashboard-team').addEventListener('change', () => { if (lastDashboardData) renderDashboard(lastDashboardData); });
+    // ★要件：出発済み（撮影日が過去）の案件は既定で一覧から隠す。チェックすると表示する
+    $('show-past').addEventListener('change', () => { if (lastDashboardData) renderDashboard(lastDashboardData); });
+    // ★機能追加：店舗ロール向けの一覧絞り込み（チャレンジ番号／お名前／管理番号・撮影日の範囲・
+    // STS(JP側)・プラン名で検索。担当（手配課）の絞り込みは廃止した）
+    ['shop-dashboard-search', 'shop-dashboard-date-from', 'shop-dashboard-date-to', 'shop-dashboard-sts', 'shop-dashboard-plan']
+      .forEach(id => {
+        $(id).addEventListener('input', () => { if (lastDashboardData) renderDashboard(lastDashboardData); });
+        $(id).addEventListener('change', () => { if (lastDashboardData) renderDashboard(lastDashboardData); });
+      });
     $('dashboard-sort').addEventListener('change', () => {
       dashboardSortKey = $('dashboard-sort').value;
       if (lastDashboardData) renderDashboard(lastDashboardData);
@@ -318,15 +328,38 @@
       ? data.reservations
       : data.reservations.filter(r => r.statusJp !== 'CW' && r.statusBranch !== 'CW');
 
-    // ★機能追加：店舗ロールの一覧絞り込み（担当の手配課・チャレンジ番号／お名前／管理番号で検索）
+    // ★要件：出発済み（撮影日FIXが現在の日付より過去）の案件は、現地支店・日本の支店・手配課
+    // いずれの一覧でも既定では表示しない。「過去を表示」にチェックすると表示する
+    // （役割共通のロジックなのでrenderDashboard1箇所だけに実装する）
+    if (!$('show-past').checked) {
+      const todayIso = todayIsoDate_();
+      list = list.filter(r => {
+        const iso = toIsoDate(r.confirmedDate);
+        return !iso || iso >= todayIso; // 撮影日未定・変換できない値は「過去」扱いにせず表示する
+      });
+    }
+
+    // ★機能追加：店舗ロールの一覧絞り込み（チャレンジ番号／お名前／管理番号・撮影日の範囲・
+    // STS(JP側)・プラン名で検索。担当（手配課）の絞り込みは廃止した）
     if (data.role === 'SHOP') {
-      const team = $('shop-dashboard-team').value;
-      if (team) list = list.filter(r => r.area === team);
       const q = $('shop-dashboard-search').value.trim().toLowerCase();
       if (q) {
         list = list.filter(r => [r.challengeNo, r.groomName, r.brideName, r.kanriNo]
           .some(v => String(v || '').toLowerCase().includes(q)));
       }
+      const dFrom = $('shop-dashboard-date-from').value;
+      const dTo = $('shop-dashboard-date-to').value;
+      if (dFrom || dTo) {
+        list = list.filter(r => {
+          const iso = toIsoDate(r.confirmedDate);
+          if (!iso) return false;
+          return (!dFrom || iso >= dFrom) && (!dTo || iso <= dTo);
+        });
+      }
+      const sts = $('shop-dashboard-sts').value;
+      if (sts) list = list.filter(r => r.statusJp === sts || r.statusBranch === sts);
+      const plan = $('shop-dashboard-plan').value.trim().toLowerCase();
+      if (plan) list = list.filter(r => String(r.plan || '').toLowerCase().includes(plan));
     }
 
     list = sortReservations(list, dashboardSortKey);
@@ -462,6 +495,7 @@
       name: $('s-name').value.trim(),
       country: $('s-country').value.trim(),
       city: $('s-city').value.trim(),
+      plan: $('s-plan').value.trim(),
       statusJp: $('s-sts-jp').value,
       statusBranch: $('s-sts-branch').value,
       dateField: $('s-datefield').value,
@@ -879,6 +913,11 @@
           <div class="field-block"><label>新郎年齢（※ISWのみ必要）</label><input type="number" min="0" data-pending="新郎年齢" value="${escapeAttr(d['新郎年齢'])}"></div>
           <div class="field-block"><label>新婦年齢（※ISWのみ必要）</label><input type="number" min="0" data-pending="新婦年齢" value="${escapeAttr(d['新婦年齢'])}"></div>
           <div class="field-block"><label>パスポート番号（※ISWのみ必要）</label><input data-pending="パスポート番号" value="${escapeAttr(d['パスポート番号'])}"></div>
+          <div class="field-block"><label>現地で連絡可能なメールアドレス</label><input type="email" data-pending="現地連絡先メール" value="${escapeAttr(d['現地連絡先メール'])}"></div>
+          <div class="field-block"><label>現地で連絡可能な電話番号</label><input data-pending="現地連絡先電話" value="${escapeAttr(d['現地連絡先電話'])}"></div>
+          <div class="field-block"><label>滞在ホテル名</label><input data-pending="ホテル" value="${escapeAttr(d['ホテル'])}"></div>
+          <div class="field-block"><label>ホテル住所</label><input data-pending="ホテル住所" value="${escapeAttr(d['ホテル住所'])}"></div>
+          <div class="field-block" style="grid-column:1/-1;"><label>フライト情報</label><input data-pending="フライト情報" value="${escapeAttr(d['フライト情報'])}" placeholder="例）JL123 8/20 10:00羽田発 → 14:00現地着"></div>
         </div>
       </div>
       <div class="section-card" id="shop-sec-reservation">
@@ -901,6 +940,14 @@
         </div>
         <p class="hint-text" style="margin-top:8px;">STS JPはプラン・各オプションの隣から直接変更できます（最終確定・キャンセル依頼・日付変更依頼・プラン/式場変更依頼）。選択すると、下の「変更＋メッセージを決定して送信」または「保存のみ」で確定します。</p>
         <p id="shop-status-warning" class="error-text hidden">⚠️ チャージ規定は各自ご確認ください。内容を確認のうえ送信してください。</p>
+        <div id="shop-cancel-reason-block" class="hidden" style="margin-top:8px;">
+          <label>キャンセル理由（必須）</label>
+          <textarea data-pending="キャンセル理由" placeholder="キャンセルの理由を入力してください">${escapeHtml(d['キャンセル理由'])}</textarea>
+        </div>
+        <div style="margin-top:10px;">
+          <button type="button" class="send-btn-sm" id="shop-push-btn">📣 現地支店へ急ぎの回答を依頼（PUSH）</button>
+          <p class="hint-text" style="margin-top:4px;">土日は現地支店は動いておりません。PUする際は土日祝のぞく５日以上みてください。</p>
+        </div>
         ${hopeTableHtmlShop}
       </div>
       <div class="section-card" id="shop-sec-options">
@@ -1000,6 +1047,16 @@
         (f === 'STS JP' || /^OP\d+ STS JP$/.test(f)) && (pendingChanges[f] === 'DC' || pendingChanges[f] === 'PC'));
       warn.classList.toggle('hidden', !hasChargeRisk);
     };
+    // ★要件：STS(JP側)（案件全体・各オプションいずれも）にCR（キャンセル依頼）を選んだら、
+    // キャンセル理由の入力欄を表示する（送信にはこの理由の入力が必須。Code.gs側のassertCancelReasonProvided_
+    // でも二重にチェックする）。
+    const updateShopCancelReasonUI = () => {
+      const block = $('shop-cancel-reason-block');
+      if (!block) return;
+      const hasCr = Object.keys(pendingChanges).some(f =>
+        (f === 'STS JP' || /^OP\d+ STS JP$/.test(f)) && pendingChanges[f] === 'CR');
+      block.classList.toggle('hidden', !hasCr);
+    };
     c.querySelectorAll('[data-shop-status-field]').forEach(sel => {
       const field = sel.dataset.shopStatusField;
       if (Object.prototype.hasOwnProperty.call(pendingChanges, field)) sel.value = pendingChanges[field];
@@ -1007,10 +1064,23 @@
         const v = sel.value;
         if (v) pendingChanges[field] = v; else delete pendingChanges[field];
         updateShopChargeWarning();
+        updateShopCancelReasonUI();
         updatePendingIndicator();
       });
     });
     updateShopChargeWarning();
+    updateShopCancelReasonUI();
+
+    // ★要件：プラン・オプションのSTSのすぐ近くに、現地支店へ急ぎの回答を依頼するボタンを置く
+    // （急ぎで回答が欲しいことを伝えるためのボタン。固定文面のメッセージを、通常のメッセージ機能
+    // と同じ経路でその場で送信する）
+    $('shop-push-btn').addEventListener('click', async () => {
+      try {
+        await gsRun('apiCommitChanges', session.token, currentKanri, {}, SHOP_PUSH_MESSAGE_TEXT, currentMsgRecipient());
+        showToast('現地支店へ急ぎの回答を依頼しました');
+        openDetail(currentKanri, true);
+      } catch (e) { handleAuthError(e); }
+    });
 
     $('shop-upload-submit').addEventListener('click', submitShopUpload);
     loadShopUploadedDocsInto('shop-upload-list');
@@ -1786,6 +1856,23 @@
           <p class="hint-text">店舗（${escapeHtml(d.originShopName || d.originShop)}）がアップロードした書類です。既定では手配課のみ閲覧できます（支店マスタの設定で現地にも公開できます）。</p>
           <div id="shop-upload-list"><p class="hint-text">読み込み中...</p></div>
         </div>`}
+        <div class="section-card">
+          <h3>撮影データ納品</h3>
+          ${session.role !== 'BRANCH' ? `
+          <p class="hint-text">${d['撮影データ納品URL']
+            ? `<a href="${escapeAttr(d['撮影データ納品URL'])}" target="_blank" rel="noopener">${escapeHtml(d['撮影データ納品URL'])}</a>`
+            : '現地支店からの登録はまだありません。'}</p>` : `
+          <div class="msg-row">
+            <input id="delivery-data-url-input" type="text" value="${escapeAttr(d['撮影データ納品URL'] || '')}" placeholder="https://drive.google.com/...">
+            <button class="send-btn" id="delivery-data-url-submit">保存</button>
+            <button class="send-btn" id="delivery-data-url-clear" style="background:var(--color-muted);">取消</button>
+          </div>
+          <p class="hint-text">URLを登録するか、下からファイルを直接アップロードできます。登録・取消すると既定の手配課へ自動で通知されます。</p>
+          <div class="field-block" style="margin-top:8px;"><label>ファイルをアップロード</label><input type="file" id="delivery-data-upload-file"></div>
+          <button class="send-btn-sm" id="delivery-data-upload-submit">アップロード</button>
+          <p id="delivery-data-upload-error" class="error-text hidden"></p>`}
+          <div id="delivery-data-list" style="margin-top:10px;"><p class="hint-text">読み込み中...</p></div>
+        </div>
       </div>`;
 
     // ★機能：ステータス変更履歴とやり取り履歴を時系列にマージした「案件タイムライン」
@@ -1906,6 +1993,11 @@
       el.addEventListener('change', () => setInternalValue(el.dataset.internalValue, el.value));
     });
     $('drive-url-submit').addEventListener('click', submitDriveUrl);
+    // ★要件：現地支店に「撮影データ納品」という項目を作り、URLまたはファイルアップロードで
+    // 登録・取消できるようにする（現地支店ロールのみ操作可。日本側は閲覧のみ）
+    if ($('delivery-data-url-submit')) $('delivery-data-url-submit').addEventListener('click', submitDeliveryDataUrl);
+    if ($('delivery-data-url-clear')) $('delivery-data-url-clear').addEventListener('click', clearDeliveryDataUrl);
+    if ($('delivery-data-upload-submit')) $('delivery-data-upload-submit').addEventListener('click', submitDeliveryDataUpload);
     c.querySelectorAll('input[data-hid]').forEach(el => {
       el.addEventListener('change', () => toggleHistoryCheck(el.dataset.hid, el.checked));
     });
@@ -1925,6 +2017,7 @@
     loadTimeline();
     if ($('shop-upload-list')) loadShopUploadedDocsInto('shop-upload-list');
     if ($('form-urls-jp')) loadFormUrlsInto('form-urls-jp');
+    if ($('delivery-data-list')) loadDeliveryDataInto('delivery-data-list');
   }
 
   // ★機能追加（拡張要望8章）：店舗アップロード済みの書類一覧を取得して描画する（JP・支店の閲覧用）
@@ -1939,13 +2032,28 @@
       }
       const nonEmpty = (res.folders || []).filter(f => f.files.length > 0);
       if (!nonEmpty.length) { el.innerHTML = '<p class="hint-text">まだアップロードはありません。</p>'; return; }
+      // ★要件：一度アップロードしたものを店舗自身が削除（取消）できるようにする
+      const canDelete = session.role === 'SHOP';
       el.innerHTML = nonEmpty.map(f => `
         <div style="margin-bottom:8px;">
           <strong>${escapeHtml(f.docType)}</strong>
           <ul style="margin:4px 0 0 18px;">
-            ${f.files.map(file => `<li><a href="${escapeAttr(file.url)}" target="_blank" rel="noopener">${escapeHtml(file.name)}</a>（${escapeHtml(file.updatedAt || '')}）</li>`).join('')}
+            ${f.files.map(file => `<li><a href="${escapeAttr(file.url)}" target="_blank" rel="noopener">${escapeHtml(file.name)}</a>（${escapeHtml(file.updatedAt || '')}）
+              ${canDelete ? `<button type="button" class="history-link" data-shop-upload-delete="${escapeAttr(file.url)}">削除</button>` : ''}</li>`).join('')}
           </ul>
         </div>`).join('');
+      if (canDelete) {
+        el.querySelectorAll('[data-shop-upload-delete]').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            if (!confirm('このファイルを削除します。よろしいですか？')) return;
+            try {
+              await gsRun('apiShopDeleteUploadedDocument', session.token, currentKanri, btn.dataset.shopUploadDelete);
+              showToast('削除しました');
+              loadShopUploadedDocsInto(elId);
+            } catch (e) { handleAuthError(e); }
+          });
+        });
+      }
     } catch (e) {
       el.innerHTML = `<p class="error-text">${escapeHtml(e.message)}</p>`;
     }
@@ -2151,6 +2259,71 @@
       await gsRun('apiSetDriveUrl', session.token, currentKanri, val);
       showToast('DriveフォルダURLを通知しました');
     } catch (e) { handleAuthError(e); }
+  }
+
+  // ★要件：現地支店の「撮影データ納品」。URLの登録・取消と、ファイルアップロード・削除ができる
+  async function submitDeliveryDataUrl() {
+    const val = $('delivery-data-url-input').value.trim();
+    if (!val) { showToast('URLを入力してください'); return; }
+    try {
+      await gsRun('apiSetDeliveryDataUrl', session.token, currentKanri, val);
+      showToast('撮影データ納品URLを登録し、手配課へ通知しました');
+      openDetail(currentKanri, true);
+    } catch (e) { handleAuthError(e); }
+  }
+  async function clearDeliveryDataUrl() {
+    if (!confirm('撮影データ納品URLを取消します。よろしいですか？')) return;
+    try {
+      await gsRun('apiSetDeliveryDataUrl', session.token, currentKanri, '');
+      showToast('撮影データ納品URLを取消しました');
+      openDetail(currentKanri, true);
+    } catch (e) { handleAuthError(e); }
+  }
+  async function submitDeliveryDataUpload() {
+    $('delivery-data-upload-error').classList.add('hidden');
+    const fileInput = $('delivery-data-upload-file');
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) { showFieldError('delivery-data-upload-error', 'ファイルを選択してください。'); return; }
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(',').pop());
+        reader.onerror = () => reject(new Error('ファイルの読み込みに失敗しました。'));
+        reader.readAsDataURL(file);
+      });
+      await gsRun('apiBranchUploadDeliveryData', session.token, currentKanri, file.name, file.type, base64);
+      fileInput.value = '';
+      showToast('アップロードし、手配課へ通知しました');
+      loadDeliveryDataInto('delivery-data-list');
+    } catch (e) {
+      showFieldError('delivery-data-upload-error', e.message);
+    }
+  }
+  async function loadDeliveryDataInto(elId) {
+    const el = $(elId);
+    if (!el) return;
+    try {
+      const res = await gsRun('apiListDeliveryData', session.token, currentKanri);
+      if (!res.files.length) { el.innerHTML = '<p class="hint-text">アップロードされたファイルはまだありません。</p>'; return; }
+      const canDelete = session.role === 'BRANCH';
+      el.innerHTML = `<ul style="margin:0 0 0 18px;">${res.files.map(file => `
+        <li><a href="${escapeAttr(file.url)}" target="_blank" rel="noopener">${escapeHtml(file.name)}</a>（${escapeHtml(file.updatedAt || '')}）
+        ${canDelete ? `<button type="button" class="history-link" data-delivery-data-delete="${escapeAttr(file.url)}">削除</button>` : ''}</li>`).join('')}</ul>`;
+      if (canDelete) {
+        el.querySelectorAll('[data-delivery-data-delete]').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            if (!confirm('このファイルを削除します。よろしいですか？')) return;
+            try {
+              await gsRun('apiBranchDeleteDeliveryData', session.token, currentKanri, btn.dataset.deliveryDataDelete);
+              showToast('削除しました');
+              loadDeliveryDataInto(elId);
+            } catch (e) { handleAuthError(e); }
+          });
+        });
+      }
+    } catch (e) {
+      el.innerHTML = `<p class="error-text">${escapeHtml(e.message)}</p>`;
+    }
   }
 
   // ★機能：日本記入欄（日本側のみ）。3択（保存のみ／メッセージ／変更＋メッセージ）とは別に、

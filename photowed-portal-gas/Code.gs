@@ -194,6 +194,9 @@ const COL_ASSISTANT = 'アシスタント';
 const COL_PICKUP_TIME = '配車時間';
 const COL_LOCAL_MEMO = 'メモ（現地用）';
 const COL_REMARKS = '備考';
+// ★要件：日本の店舗がSTS(JP側)（案件全体・各オプションいずれも）をCR（キャンセル依頼）に
+// する際、キャンセル理由の入力を必須にする（validateCancelReason_参照）
+const COL_CANCEL_REASON = 'キャンセル理由';
 const COL_MEMO = '共有メモ';
 // ★機能追加：共有メモ・メモ（現地用）は「上書き」ではなく「積み上げ」で記録する（メモ履歴シート）。
 // 上の COL_MEMO / COL_LOCAL_MEMO の2列は、この機能を追加する前からある案件の
@@ -235,6 +238,12 @@ const COL_UNREAD_SHOP = '未読 店舗';    // trueなら店舗側に未読が�
 // 未登録なら新規作成したフォルダのURLをこの列とCOL_DRIVE_URLの両方に入れる（ensureShopUploadFolder_参照）。
 // システム列のため画面から直接編集はさせない（COMMITTABLE_FIELDSの対象外）。
 const COL_SHOP_UPLOAD_FOLDER_URL = '店舗アップロード用フォルダURL';
+// ★要件：現地支店が最終的な撮影データをURLまたはファイルアップロードで登録する「撮影データ納品」欄。
+// URLは自由入力、ファイルアップロードは専用フォルダ（COL_DELIVERY_DATA_FOLDER_URL）へ保存する。
+// どちらも取消（URLのクリア・ファイルの削除）ができる。登録・削除すると既定の手配課（案件の管轄）へ
+// 自動で通知する。システム列のため画面からの直接編集（3択フロー）はさせず、専用APIで扱う。
+const COL_DELIVERY_DATA_URL = '撮影データ納品URL';
+const COL_DELIVERY_DATA_FOLDER_URL = '撮影データ納品フォルダURL';
 
 const OPTION_COUNT = 5;
 function opNameCol_(n) { return `OP${n}`; }
@@ -259,7 +268,8 @@ function hopeStsBranchCol_(n) { return `${HOPE_COLS[n - 1]} STS 支店`; }
 // 通知アラートの要否は要望書自体が「未確定」としているため、今回はあえて何も送らない
 // （＝チェックの保存はapiSaveFieldsQuietの「保存のみ」を使う想定。メッセージを添えたい時は
 // 従来どおりapiCommitChangesで変更内容として送ればよい）。
-const CHECKLIST_ITEMS = ['ヘアメイク画像', '衣裳画像', '撮影指示書', '着付け指示書'];
+// ★要件：「婚姻受理証明書コピー（必要な場合）」を追加（該当しない案件も多いため項目名に注記）
+const CHECKLIST_ITEMS = ['ヘアメイク画像', '衣裳画像', '撮影指示書', '着付け指示書', '婚姻受理証明書コピー（必要な場合）'];
 function checklistCol_(item) { return `必要書類チェック:${item}`; }
 
 const RESERVATION_HEADERS = (() => {
@@ -274,10 +284,10 @@ const RESERVATION_HEADERS = (() => {
     COL_AREA, COL_BILLING_REGION, COL_JP_SHOP, COL_INVOICE_NO, COL_SHOP,
     COL_DAY_STAFF, COL_HAIR_MAKEUP, COL_HAIR_START_TIME, COL_PHOTOGRAPHER, COL_PHOTO_START_TIME,
     COL_ASSISTANT, COL_PICKUP_TIME, COL_LOCAL_MEMO,
-    COL_REMARKS, COL_MEMO,
+    COL_REMARKS, COL_MEMO, COL_CANCEL_REASON,
     COL_PHOTOBRIDGE, COL_PHOTOBRIDGE_BY, COL_PHOTOBRIDGE_AT, COL_AI_EDIT,
     COL_DATA_UPLOAD, COL_DATA_UPLOAD_BY, COL_DATA_UPLOAD_AT, COL_DELIVERY_EMAIL, COL_EARLY_DELIVERY,
-    COL_LAST_UPDATED, COL_DRIVE_URL, COL_SHOP_UPLOAD_FOLDER_URL, COL_ORIGIN_SHOP,
+    COL_LAST_UPDATED, COL_DRIVE_URL, COL_SHOP_UPLOAD_FOLDER_URL, COL_DELIVERY_DATA_URL, COL_DELIVERY_DATA_FOLDER_URL, COL_ORIGIN_SHOP,
     COL_UNREAD_JP, COL_UNREAD_BRANCH, COL_UNREAD_SHOP,
     ...CHECKLIST_ITEMS.map(checklistCol_)
   ];
@@ -324,7 +334,8 @@ const INTERNAL_VALUE_SPECS = {
 // 通常の3択フロー経由で誰でも自由な文字列を書き込めてしまい、ゲート・自動連動の仕組みが素通りされる。
 const HOPE_JP_STATUS_FIELDS = Array.from({ length: HOPE_COLS.length }, (_, i) => hopeStsJpCol_(i + 1));
 const COMMITTABLE_FIELDS = RESERVATION_HEADERS.filter(h => ![
-  COL_BRANCH_CODE, COL_KANRI_NO, COL_LAST_UPDATED, COL_DRIVE_URL, COL_SHOP_UPLOAD_FOLDER_URL, COL_ORIGIN_SHOP,
+  COL_BRANCH_CODE, COL_KANRI_NO, COL_LAST_UPDATED, COL_DRIVE_URL, COL_SHOP_UPLOAD_FOLDER_URL,
+  COL_DELIVERY_DATA_URL, COL_DELIVERY_DATA_FOLDER_URL, COL_ORIGIN_SHOP,
   COL_UNREAD_JP, COL_UNREAD_BRANCH, COL_UNREAD_SHOP, ...JP_INTERNAL_FIELDS, ...HOPE_JP_STATUS_FIELDS
 ].includes(h));
 
@@ -342,7 +353,12 @@ const SHOP_EDITABLE_FIELDS = [
   COL_PLAN, COL_SALE_NAME, COL_LOCATION, COL_PREP,
   COL_HOPE1, COL_HOPE2, COL_HOPE3, COL_HOPE4, COL_HOPE5, COL_PASSPORT_NO,
   ...Array.from({ length: OPTION_COUNT }, (_, i) => opNameCol_(i + 1)),
-  ...CHECKLIST_ITEMS.map(checklistCol_)
+  ...CHECKLIST_ITEMS.map(checklistCol_),
+  // ★要件：CR（キャンセル依頼）にする際のキャンセル理由（同じ送信の中で一緒に保存する）
+  COL_CANCEL_REASON,
+  // ★要件：お客様情報タブに、現地連絡先・滞在先・フライト情報も店舗から入力できるようにする
+  // （従来はJP/BRANCHの「お客様情報」タブにしか入力欄が無かった）
+  COL_LOCAL_EMAIL, COL_LOCAL_PHONE, COL_HOTEL, COL_HOTEL_ADDRESS, COL_FLIGHT_INFO
 ];
 // ★機能追加（店舗拡張）：店舗が案件作成後にSTS(JP側)を変更できる先。新規作成時のRQ／CHKの
 // 選択は apiShopCreateRequest 側で扱うため、ここには含めない（作成後の変更だけを対象にする）。
@@ -1347,6 +1363,15 @@ function buildShopReservationDetail_(session, kanriNo, headers, rowData) {
   // ★要件：パスポート番号欄は「日本の店舗画面」では支店の必須設定に関わらず常に表示する
   // （※ISWのみ必要、という注記を添えて店舗自身に判断してもらう運用に変更したため）。
   detail[COL_PASSPORT_NO] = getV(COL_PASSPORT_NO);
+  // ★要件：お客様情報タブに、現地連絡先・滞在ホテル・フライト情報も店舗から入力できるようにする
+  // （従来はJP/BRANCHの「お客様情報」タブにしか入力欄が無かった）
+  detail[COL_LOCAL_EMAIL] = getV(COL_LOCAL_EMAIL);
+  detail[COL_LOCAL_PHONE] = getV(COL_LOCAL_PHONE);
+  detail[COL_HOTEL] = getV(COL_HOTEL);
+  detail[COL_HOTEL_ADDRESS] = getV(COL_HOTEL_ADDRESS);
+  detail[COL_FLIGHT_INFO] = getV(COL_FLIGHT_INFO);
+  // ★要件：CRにする際のキャンセル理由（プラン・オプションのSTS欄近くに入力欄を出す）
+  detail[COL_CANCEL_REASON] = getV(COL_CANCEL_REASON);
 
   // ★機能追加：希望日ごとの空き確認ステータス（現地未確認ST→RQ→OK/UC）は店舗にも見せる（読み取り専用）
   for (let n = 1; n <= HOPE_COLS.length; n++) {
@@ -2056,6 +2081,7 @@ function apiSaveFieldsQuiet(token, kanriNo, changes) {
     if (session.role === SHOP_ROLE) assertShopOwnRow_(session, headers, rowData);
     else assertRowVisible_(session, headers, rowData);
     changes = withInquiryOnlyCascade_(session, headers, rowData, changes);
+    assertCancelReasonProvided_(session, headers, rowData, changes);
 
     const writes = Object.keys(changes).map(field => prepareFieldWrite_(session, headers, rowData, field, changes[field]));
     writes.forEach(w => sheet.getRange(rowIndex, w.colIdx).setValue(w.valueToStore));
@@ -2065,6 +2091,7 @@ function apiSaveFieldsQuiet(token, kanriNo, changes) {
     writes.forEach(w => logStatusChangeIfApplicable_(kanriNo, w, who));
     applyStatusCascade_(sheet, headers, rowIndex, kanriNo, writes);
     const hopeDateChanged = applyHopeStatusCascade_(sheet, headers, rowIndex, kanriNo, writes, who);
+    appendCwAutoNoticeIfApplicable_(sheet, headers, rowIndex, writes, session);
 
     if (hopeDateChanged || Object.keys(changes).includes(COL_CONFIRMED_DATE)) sortReservationSheet_(sheet);
   } finally {
@@ -2093,6 +2120,7 @@ function apiCommitChanges(token, kanriNo, changes, message, recipient) {
     if (session.role === SHOP_ROLE) assertShopOwnRow_(session, headers, rowData);
     else assertRowVisible_(session, headers, rowData);
     changes = withInquiryOnlyCascade_(session, headers, rowData, changes);
+    assertCancelReasonProvided_(session, headers, rowData, changes);
 
     const summaryLines = [];
     const writes = [];
@@ -2141,6 +2169,9 @@ function apiCommitChanges(token, kanriNo, changes, message, recipient) {
     appendHistory_(headers, freshRow, who, body, session.role, recipientRoleForDirection_(direction));
     markUnreadForDirection_(sheet, headers, rowIndex, direction);
     sendDirectionalMail_(headers, freshRow, direction, session, body, kind);
+    // ★要件：現地支店がSTS(支店側)をCWにした通常の「変更＋メッセージ」経路でも、書いた内容とは
+    // 別に自動注意書きを1件追加する（本人が書き忘れても必ず伝わるようにするため）
+    appendCwAutoNoticeIfApplicable_(sheet, headers, rowIndex, writes, session);
 
     if (dateChanged) sortReservationSheet_(sheet);
   } finally {
@@ -2194,6 +2225,39 @@ function logStatusChangeIfApplicable_(kanriNo, prepared, who) {
   const sheet = getSpreadsheet_().getSheetByName(STATUS_LOG_SHEET_NAME);
   if (!sheet) return;
   sheet.appendRow([kanriNo, prepared.field, prepared.oldDisplay, prepared.newDisplay, who, new Date()]);
+}
+
+// ★要件：日本の店舗がSTS(JP側)（案件全体・各オプションいずれも）をCR（キャンセル依頼）にする際は、
+// 同じ送信の中でキャンセル理由（COL_CANCEL_REASON）の入力を必須にする（画面側は入力欄を出して
+// promptする。サーバー側でも二重に検証し、画面を経由しない直接呼び出しでも必ずチェックされるようにする）。
+function assertCancelReasonProvided_(session, headers, rowData, changes) {
+  if (session.role !== SHOP_ROLE) return;
+  const settingCr = Object.keys(changes).some(f => isJpStatusField_(f) && changes[f] === 'CR');
+  if (!settingCr) return;
+  const reasonInChanges = String(changes[COL_CANCEL_REASON] || '').trim();
+  const existingReason = String(rowData[headers.indexOf(COL_CANCEL_REASON)] || '').trim();
+  if (!reasonInChanges && !existingReason) {
+    throw new Error('キャンセル理由を入力してください。');
+  }
+}
+
+// ★要件：現地支店がSTS(支店側)をCW（キャンセル成立）にしたら、「チャージの確認はしていない」旨を
+// 自動で日本側へ知らせる（操作した本人が書き忘れても必ず伝わるよう、保存のみ／メッセージのみ／
+// 変更＋メッセージのどの経路でも自動で1件別に追加する）。宛先は常に手配課（直結モードの支店↔店舗
+// 案件でも、resolveMessageDirection_のrecipient='JP'指定でBRANCH_TO_JPに固定する）。
+// メッセージ文面が「店舗側で確認してください」という手配課への依頼のため、店舗へ直接送っても
+// 意味が通らないため。
+const CW_AUTO_NOTICE_TEXT = '※キャンセル　チャージの確認はしていないので、店舗側で確認してください。';
+function appendCwAutoNoticeIfApplicable_(sheet, headers, rowIndex, writes, session) {
+  if (session.role !== BRANCH_ROLE) return;
+  const cw = writes.find(w => w.field === COL_STATUS_BRANCH && w.changed && w.valueToStore === 'CW');
+  if (!cw) return;
+  const freshRow = sheet.getRange(rowIndex, 1, 1, headers.length).getValues()[0];
+  const direction = resolveMessageDirection_(session, headers, freshRow, 'JP');
+  const body = `[自動通知]\n${CW_AUTO_NOTICE_TEXT}`;
+  appendHistory_(headers, freshRow, senderLabel_(session), body, session.role, recipientRoleForDirection_(direction));
+  markUnreadForDirection_(sheet, headers, rowIndex, direction);
+  sendDirectionalMail_(headers, freshRow, direction, session, body, 'キャンセル成立の自動通知');
 }
 
 // ★要件：「空き確認のみ」にチェックを入れて確定すると、STS JPを自動でCHK（確認依頼中）にする。
@@ -2429,6 +2493,143 @@ function apiSetDriveUrl(token, kanriNo, url) {
 }
 
 // =====================================================
+// 撮影データ納品（現地支店がURLまたはファイルアップロードで最終データを登録する）
+// =====================================================
+// ★要件：現地支店側に「撮影データ納品」という項目を作り、URLまたはファイルアップロードで
+// 登録できるようにする。取消（URLのクリア・ファイルの削除）もできる。登録・取消のたびに
+// 既定の手配課（案件の管轄）へ自動で通知する（直結モードの店舗連携案件でも、宛先は必ず
+// 手配課になるよう resolveMessageDirection_ に recipient='JP' を明示する）。
+
+// 案件専用の「撮影データ納品」フォルダを取得（無ければ作成）する。店舗アップロード用フォルダ
+// （ensureShopUploadFolder_）とは別のフォルダ・別の列（COL_DELIVERY_DATA_FOLDER_URL）で管理する
+// （用途が違う＝店舗提供の準備素材ではなく、現地から手配課への最終納品データのため）。
+function ensureDeliveryDataFolder_(sheet, headers, rowIndex, rowData) {
+  const getV = (name) => rowData[headers.indexOf(name)];
+  const existingFolderUrl = String(getV(COL_DELIVERY_DATA_FOLDER_URL) || '').trim();
+  if (existingFolderUrl) {
+    const id = driveFolderIdFromUrl_(existingFolderUrl);
+    if (id) return DriveApp.getFolderById(id);
+  }
+  const kanriNo = getV(COL_KANRI_NO);
+  const challengeNo = getV(COL_CHALLENGE_NO) || 'NoCH';
+  const folder = DriveApp.createFolder(`${challengeNo}_${kanriNo}_撮影データ納品`);
+  sheet.getRange(rowIndex, colIndexOrThrow_(headers, COL_DELIVERY_DATA_FOLDER_URL)).setValue(folder.getUrl());
+  return folder;
+}
+
+// 通知（履歴・未読フラグ・メール）をまとめて送る共通処理。「既定の手配課宛て」を徹底するため、
+// 直結モードの支店↔店舗案件でも常にresolveMessageDirection_へrecipient='JP'を明示する。
+function notifyDeliveryDataChange_(sheet, headers, rowIndex, session, body) {
+  const freshRow = sheet.getRange(rowIndex, 1, 1, headers.length).getValues()[0];
+  const direction = resolveMessageDirection_(session, headers, freshRow, 'JP');
+  appendHistory_(headers, freshRow, senderLabel_(session), body, session.role, recipientRoleForDirection_(direction));
+  markUnreadForDirection_(sheet, headers, rowIndex, direction);
+  sendDirectionalMail_(headers, freshRow, direction, session, body, '撮影データ納品');
+}
+
+// URLでの登録・取消（空文字を渡すと取消になる）
+function apiSetDeliveryDataUrl(token, kanriNo, url) {
+  const session = requireSession_(token);
+  if (session.role !== BRANCH_ROLE) throw new Error('この操作は現地支店ロールのみ実行できます。');
+  const trimmed = String(url || '').trim();
+  if (trimmed && !trimmed.startsWith('http')) throw new Error('有効なURLを入力してください。');
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
+  try {
+    const { sheet, headers, rowIndex, rowData } = findReservationRow_(kanriNo);
+    if (rowIndex === -1) throw new Error('対象の予約が見つかりません。');
+    assertRowVisible_(session, headers, rowData);
+
+    sheet.getRange(rowIndex, colIndexOrThrow_(headers, COL_DELIVERY_DATA_URL)).setValue(trimmed);
+    sheet.getRange(rowIndex, colIndexOrThrow_(headers, COL_LAST_UPDATED)).setValue(new Date());
+    notifyDeliveryDataChange_(sheet, headers, rowIndex, session,
+      trimmed ? `[撮影データ納品URLを登録]\n${trimmed}` : '[撮影データ納品URLを取消しました]');
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ファイルアップロード（1件）。base64Data: ブラウザ側でreadAsDataURLしヘッダを除いたBase64文字列
+function apiBranchUploadDeliveryData(token, kanriNo, filename, mimeType, base64Data) {
+  const session = requireSession_(token);
+  if (session.role !== BRANCH_ROLE) throw new Error('この操作は現地支店ロールのみ実行できます。');
+  const trimmedName = String(filename || '').trim();
+  if (!trimmedName) throw new Error('ファイル名を指定してください。');
+  if (!base64Data) throw new Error('アップロードするファイルを選択してください。');
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
+  try {
+    const { sheet, headers, rowIndex, rowData } = findReservationRow_(kanriNo);
+    if (rowIndex === -1) throw new Error('対象の予約が見つかりません。');
+    assertRowVisible_(session, headers, rowData);
+
+    const folder = ensureDeliveryDataFolder_(sheet, headers, rowIndex, rowData);
+    const blob = Utilities.newBlob(Utilities.base64Decode(base64Data), mimeType || 'application/octet-stream', trimmedName);
+    const file = folder.createFile(blob);
+    sheet.getRange(rowIndex, colIndexOrThrow_(headers, COL_LAST_UPDATED)).setValue(new Date());
+    notifyDeliveryDataChange_(sheet, headers, rowIndex, session, `[撮影データ納品アップロード]\n${trimmedName}`);
+    return { ok: true, fileUrl: file.getUrl(), folderUrl: folder.getUrl() };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// アップロード済みファイルの一覧
+function apiListDeliveryData(token, kanriNo) {
+  const session = requireSession_(token);
+  const { headers, rowIndex, rowData } = findReservationRow_(kanriNo);
+  if (rowIndex === -1) throw new Error('対象の予約が見つかりません。');
+  if (session.role === SHOP_ROLE) assertShopOwnRow_(session, headers, rowData);
+  else assertRowVisible_(session, headers, rowData);
+
+  const folderUrl = String(rowData[headers.indexOf(COL_DELIVERY_DATA_FOLDER_URL)] || '').trim();
+  if (!folderUrl) return { ok: true, folderUrl: '', files: [] };
+  const id = driveFolderIdFromUrl_(folderUrl);
+  if (!id) return { ok: true, folderUrl, files: [] };
+  try {
+    const folder = DriveApp.getFolderById(id);
+    const files = [];
+    const it = folder.getFiles();
+    while (it.hasNext()) {
+      const f = it.next();
+      files.push({ name: f.getName(), url: f.getUrl(), updatedAt: formatMaybeDate_(f.getLastUpdated()) });
+    }
+    return { ok: true, folderUrl, files };
+  } catch (e) {
+    // ★フォルダが削除された・権限を失った等の場合もエラーで落とさず、空リストで返す
+    return { ok: true, folderUrl, files: [], error: errorMessage_(e) };
+  }
+}
+
+// アップロード済みファイルの削除（取消）。実ファイルはsetTrashed(true)でゴミ箱行きにする
+function apiBranchDeleteDeliveryData(token, kanriNo, fileUrl) {
+  const session = requireSession_(token);
+  if (session.role !== BRANCH_ROLE) throw new Error('この操作は現地支店ロールのみ実行できます。');
+  const fileId = driveFileIdFromUrl_(fileUrl);
+  if (!fileId) throw new Error('削除対象のファイルを特定できません。');
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
+  try {
+    const { headers, rowIndex, rowData } = findReservationRow_(kanriNo);
+    if (rowIndex === -1) throw new Error('対象の予約が見つかりません。');
+    assertRowVisible_(session, headers, rowData);
+
+    try {
+      DriveApp.getFileById(fileId).setTrashed(true);
+    } catch (e) {
+      throw new Error('ファイルの削除に失敗しました: ' + errorMessage_(e));
+    }
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// =====================================================
 // ⑨-2 ドライブ連携（お客様提供画像・指示書のアップロード／機能：拡張要望8章）
 // =====================================================
 // 店舗スタッフが、ヘアメイク画像・衣裳画像・撮影指示書・着付け指示書等をアップロードするための機能。
@@ -2446,6 +2647,17 @@ function driveFolderIdFromUrl_(url) {
   const s = String(url || '').trim();
   if (!s) return '';
   let m = s.match(/\/folders\/([^/?#]+)/);
+  if (m) return m[1];
+  m = s.match(/[?&]id=([^&#]+)/);
+  if (m) return m[1];
+  const parts = s.split(/[/?#]/).filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : '';
+}
+// ファイルのURL（getUrl()の戻り値）からファイルIDを取り出す（削除（ゴミ箱行き）操作に使う）
+function driveFileIdFromUrl_(url) {
+  const s = String(url || '').trim();
+  if (!s) return '';
+  let m = s.match(/\/file\/d\/([^/?#]+)/);
   if (m) return m[1];
   m = s.match(/[?&]id=([^&#]+)/);
   if (m) return m[1];
@@ -2561,6 +2773,33 @@ function apiListShopUploadedDocuments(token, kanriNo) {
   } catch (e) {
     // ★フォルダが削除された・権限を失った等の場合もエラーで落とさず、空リストで返す
     return { ok: true, visible: true, folderUrl, folders: [], error: errorMessage_(e) };
+  }
+}
+
+// ★要件：一度アップロードした書類を店舗自身が削除（取消）できるようにする。
+// 実ファイルはハードデリートせず setTrashed(true)（Driveのゴミ箱行き）にする（誤操作からの
+// 復旧余地を残すため）。一覧（apiListShopUploadedDocuments）はゴミ箱行きのファイルを出さない。
+function apiShopDeleteUploadedDocument(token, kanriNo, fileUrl) {
+  const session = requireSession_(token);
+  if (session.role !== SHOP_ROLE) throw new Error('この操作は店舗ロールのみ実行できます。');
+  const fileId = driveFileIdFromUrl_(fileUrl);
+  if (!fileId) throw new Error('削除対象のファイルを特定できません。');
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
+  try {
+    const { headers, rowIndex, rowData } = findReservationRow_(kanriNo);
+    if (rowIndex === -1) throw new Error('対象の予約が見つかりません。');
+    assertShopOwnRow_(session, headers, rowData);
+
+    try {
+      DriveApp.getFileById(fileId).setTrashed(true);
+    } catch (e) {
+      throw new Error('ファイルの削除に失敗しました: ' + errorMessage_(e));
+    }
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -3307,6 +3546,8 @@ function matchesSearch_(r, c, branchMeta) {
   if (c.city && !norm(meta.city).includes(norm(c.city))) return false;
   if (c.statusJp && r[COL_STATUS_JP] !== c.statusJp) return false;
   if (c.statusBranch && r[COL_STATUS_BRANCH] !== c.statusBranch) return false;
+  // ★要件：一覧を日付範囲・ステータスに加えてプラン名でも絞り込めるようにする（部分一致）
+  if (c.plan && !norm(r[COL_PLAN]).includes(norm(c.plan))) return false;
 
   if (c.dateFrom || c.dateTo) {
     const shoot = toComparableDate_(r[COL_CONFIRMED_DATE]);

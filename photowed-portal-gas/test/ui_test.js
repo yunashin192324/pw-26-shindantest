@@ -603,7 +603,12 @@ function paneHidden(document, key) {
     check('店舗向け詳細でも許可された項目（プラン等）は編集できる（拡張要望2章・3-1）',
           !!document.querySelector('[data-pending="プラン名"]'));
     check('店舗向け詳細には請求先など内部項目の入力欄が出ない',
-          !document.querySelector('[data-pending="請求先"]') && !document.querySelector('[data-pending="ホテル"]'));
+          !document.querySelector('[data-pending="請求先"]'));
+    // ★要件：お客様情報タブに、現地連絡先・滞在ホテル・フライト情報も店舗から入力できるようにする
+    check('店舗向け詳細には現地連絡先・滞在ホテル・フライト情報の入力欄がある',
+          !!document.querySelector('[data-pending="ホテル"]') &&
+          !!document.querySelector('[data-pending="現地連絡先メール"]') &&
+          !!document.querySelector('[data-pending="フライト情報"]'));
 
     // 手配課（JP）が支店とのやり取りを経て、店舗へ中継する
     document.getElementById('nav-logout').click();
@@ -644,7 +649,7 @@ function paneHidden(document, key) {
       Object.keys(o).forEach(k => { const i = H.indexOf(k); if (i !== -1) row[i] = o[k]; });
       ctx.__ss.getSheetByName('予約一覧').appendRow(row);
     };
-    addCase({ '支店コード': 'ROW', '管理番号': 'R-951', '管轄': '関東', '新郎名（ローマ字）': 'Sts Ok', 'STS JP': 'OK', 'STS 支店': 'OK' });
+    addCase({ '支店コード': 'ROW', '管理番号': 'R-951', '管轄': '関東', '新郎名（ローマ字）': 'Sts Ok', 'STS JP': 'OK', 'STS 支店': 'OK', 'プラン名': 'プレミアムプラン' });
     addCase({ '支店コード': 'ROW', '管理番号': 'R-952', '管轄': '関東', '新郎名（ローマ字）': 'Sts Fn', 'STS JP': 'FN', 'STS 支店': 'FN' });
 
     document.getElementById('nav-logout').click();
@@ -674,6 +679,16 @@ function paneHidden(document, key) {
     await settle();
     const searchHtml = document.getElementById('search-results').innerHTML;
     check('STS JPを指定して検索すると該当案件だけ出る', searchHtml.includes('R-952') && !searchHtml.includes('R-951'));
+
+    // ★要件：一覧を日付範囲・ステータスに加えてプラン名でも絞り込める
+    document.getElementById('s-sts-jp').value = '';
+    document.getElementById('s-plan').value = 'プレミアム';
+    document.getElementById('search-submit').click();
+    await settle();
+    const planSearchHtml = document.getElementById('search-results').innerHTML;
+    check('プラン名でも検索できる（現地支店・日本の支店・手配課いずれも共通の検索画面）',
+          planSearchHtml.includes('R-951') && !planSearchHtml.includes('R-952'));
+    document.getElementById('s-plan').value = '';
   }
 
   // ---------------------------------------------------------------
@@ -771,10 +786,18 @@ function paneHidden(document, key) {
           !!opStatusSel && !!opStatusSel.closest('table.res-table'));
     opStatusSel.value = 'CR';
     opStatusSel.dispatchEvent(new dom.window.Event('change'));
+    // ★要件：CRを選ぶとキャンセル理由の入力欄が現れ、送信にはその入力が必須になる
+    const cancelReasonBlock = document.getElementById('shop-cancel-reason-block');
+    check('CRを選ぶとキャンセル理由の入力欄が表示される', !cancelReasonBlock.classList.contains('hidden'));
+    const cancelReasonInput = document.querySelector('[data-pending="キャンセル理由"]');
+    cancelReasonInput.value = 'お客様都合によるキャンセル';
+    cancelReasonInput.dispatchEvent(new dom.window.Event('change'));
     document.getElementById('btn-save-quiet').click();
     await settle();
     check('オプション①のSTS(JP側)がCRに変わる（サーバー側）',
           ctx.apiGetReservationDetail(jpTokenForCheck, kanri2).detail['OP1 STS JP'] === 'CR');
+    check('入力したキャンセル理由も保存される',
+          ctx.apiGetReservationDetail(jpTokenForCheck, kanri2).detail['キャンセル理由'] === 'お客様都合によるキャンセル');
 
     // ★要件：一度OK（現地確定）になったオプションは、店舗の選択肢がCR・FNのみに絞られる
     // （RQ・DC・PCは選べない）
@@ -816,6 +839,25 @@ function paneHidden(document, key) {
       .find(c => c.textContent.includes(kanri2)).click();
     await settle();
     check('アップロード済みの書類一覧が店舗の画面に表示される',
+          document.getElementById('shop-upload-list').innerHTML.includes('hair.jpg'));
+    // ★要件：一度アップロードしたものを店舗自身が削除（取消）できるようにする
+    // （hair.jpgは後段のJP側の表示確認でも使うため、削除の検証には別のファイルを使う）
+    ctx.apiShopUploadDocument(ctx.apiLogin('SHOP1', 'CHANGE-ME-SHOP1').session.token, kanri2,
+      '衣裳画像', 'dress-to-delete.jpg', 'image/jpeg', Buffer.from('dummy').toString('base64'));
+    document.getElementById('nav-dashboard').click();
+    await settle();
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanri2)).click();
+    await settle();
+    check('2件目のアップロードも一覧に表示される',
+          document.getElementById('shop-upload-list').innerHTML.includes('dress-to-delete.jpg'));
+    const deleteBtn = [...document.querySelectorAll('[data-shop-upload-delete]')]
+      .find(b => b.closest('li').textContent.includes('dress-to-delete.jpg'));
+    check('アップロード済みの書類に削除ボタンがある（店舗ロール）', !!deleteBtn);
+    deleteBtn.click();
+    await settle();
+    check('削除すると一覧から消える（他のファイルは残る）',
+          !document.getElementById('shop-upload-list').innerHTML.includes('dress-to-delete.jpg') &&
           document.getElementById('shop-upload-list').innerHTML.includes('hair.jpg'));
     // ★要件：entry ID未設定でも同意書フォームの素のURLは案内される（アンケートはURL自体が未設定なので出ない）
     check('同意書・アンケートURL欄に同意書フォームのリンクが表示される',
@@ -903,13 +945,19 @@ function paneHidden(document, key) {
           document.querySelectorAll('#reservation-list .res-card').length === 1);
     document.getElementById('shop-dashboard-search').value = '';
     document.getElementById('shop-dashboard-search').dispatchEvent(new dom.window.Event('input'));
-    document.getElementById('shop-dashboard-team').value = '関西';
-    document.getElementById('shop-dashboard-team').dispatchEvent(new dom.window.Event('change'));
     await settle();
-    check('担当（手配課）で絞り込むと関東の案件は出ない',
+    // ★要件：担当（手配課）の絞り込みは廃止し、代わりに撮影日の範囲・STS(JP側)・プラン名で絞り込める
+    check('担当（手配課）の絞り込み欄は無い', !document.getElementById('shop-dashboard-team'));
+    check('撮影日の範囲・STS(JP側)・プラン名の絞り込み欄がある',
+          !!document.getElementById('shop-dashboard-date-from') && !!document.getElementById('shop-dashboard-date-to') &&
+          !!document.getElementById('shop-dashboard-sts') && !!document.getElementById('shop-dashboard-plan'));
+    document.getElementById('shop-dashboard-plan').value = 'ぜったいに一致しないプラン名';
+    document.getElementById('shop-dashboard-plan').dispatchEvent(new dom.window.Event('input'));
+    await settle();
+    check('プラン名で絞り込むと一致しない案件は出ない',
           !document.getElementById('reservation-list').innerHTML.includes(kanri3));
-    document.getElementById('shop-dashboard-team').value = '';
-    document.getElementById('shop-dashboard-team').dispatchEvent(new dom.window.Event('change'));
+    document.getElementById('shop-dashboard-plan').value = '';
+    document.getElementById('shop-dashboard-plan').dispatchEvent(new dom.window.Event('input'));
     await settle();
 
     // --- 希望日ごとのSTSが店舗の画面にも表示される ---
@@ -1452,6 +1500,123 @@ function paneHidden(document, key) {
     await settle();
     const hopeDetailsShop = document.querySelector('.hope-collapse');
     check('店舗の画面でも、撮影日FIX未確定の間は希望日一覧が最初から開いている', hopeDetailsShop.open);
+  }
+
+  section('U28. 出発済み（撮影日が過去）の案件は一覧から既定で非表示・「過去を表示」で表示');
+  {
+    const jpTok3 = ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    const kanriPast = ctx.apiCreateReservation(jpTok3, 'ROW', '01 PastCase\n02 PastCase2').kanriNo;
+    ctx.apiSaveFieldsQuiet(jpTok3, kanriPast, { '撮影日FIX': '2020-01-01' });
+    const kanriFuture = ctx.apiCreateReservation(jpTok3, 'ROW', '01 FutureCase\n02 FutureCase2').kanriNo;
+    ctx.apiSaveFieldsQuiet(jpTok3, kanriFuture, { '撮影日FIX': '2099-01-01' });
+
+    // --- 日本の手配課（JP）の一覧 ---
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'KANTO', 'CHANGE-ME-KANTO');
+    check('既定では出発済み（過去の撮影日）の案件が一覧に出ない',
+          !document.getElementById('reservation-list').innerHTML.includes(kanriPast));
+    check('未来の撮影日の案件は既定でも表示される',
+          document.getElementById('reservation-list').innerHTML.includes(kanriFuture));
+    document.getElementById('show-past').checked = true;
+    document.getElementById('show-past').dispatchEvent(new dom.window.Event('change'));
+    await settle();
+    check('「過去を表示」にチェックすると出発済みの案件も表示される',
+          document.getElementById('reservation-list').innerHTML.includes(kanriPast));
+    document.getElementById('show-past').checked = false;
+    document.getElementById('show-past').dispatchEvent(new dom.window.Event('change'));
+    await settle();
+
+    // --- 現地支店（BRANCH）の一覧でも同じ挙動 ---
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'ROW', 'CHANGE-ME-ROW');
+    check('現地支店の一覧でも、既定では出発済みの案件が出ない',
+          !document.getElementById('reservation-list').innerHTML.includes(kanriPast));
+    document.getElementById('show-past').checked = true;
+    document.getElementById('show-past').dispatchEvent(new dom.window.Event('change'));
+    await settle();
+    check('現地支店でも「過去を表示」で出発済みの案件が表示される',
+          document.getElementById('reservation-list').innerHTML.includes(kanriPast));
+    document.getElementById('show-past').checked = false;
+    document.getElementById('show-past').dispatchEvent(new dom.window.Event('change'));
+    await settle();
+
+    // --- 店舗（SHOP）の一覧でも同じ挙動（店舗自身が起票した案件で確認） ---
+    const kanriShopPast = ctx.apiShopCreateRequest(ctx.apiLogin('SHOP1', 'CHANGE-ME-SHOP1').session.token, {
+      branchCode: 'VIE', team: '関東', groomLastName: 'Past', groomName: 'Shop', brideLastName: 'Past', brideName: 'ShopB',
+      hope1: '2026-10-01', challengeNo: 'PASTSHOP001'
+    }).kanriNo;
+    ctx.apiSaveFieldsQuiet(ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token, kanriShopPast, { '撮影日FIX': '2020-06-15' });
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'SHOP1', 'CHANGE-ME-SHOP1');
+    check('店舗の一覧でも、既定では出発済みの案件が出ない',
+          !document.getElementById('reservation-list').innerHTML.includes(kanriShopPast));
+    document.getElementById('show-past').checked = true;
+    document.getElementById('show-past').dispatchEvent(new dom.window.Event('change'));
+    await settle();
+    check('店舗でも「過去を表示」で出発済みの案件が表示される',
+          document.getElementById('reservation-list').innerHTML.includes(kanriShopPast));
+  }
+
+  section('U29. 現地支店の「撮影データ納品」（URL登録・ファイルアップロード・取消）');
+  {
+    const jpTok4 = ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    const kanriDelivery = ctx.apiCreateReservation(jpTok4, 'ROW', '01 Delivery\n02 DeliveryB').kanriNo;
+
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'ROW', 'CHANGE-ME-ROW');
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanriDelivery)).click();
+    await settle();
+    document.querySelector('[data-tab="drive"]').click();
+    await settle();
+
+    check('現地支店の画面に「撮影データ納品」の入力欄がある', !!document.getElementById('delivery-data-url-input'));
+    document.getElementById('delivery-data-url-input').value = 'https://drive.google.com/final-ui';
+    document.getElementById('delivery-data-url-submit').click();
+    await settle();
+    check('URLを登録できる（サーバー側）',
+          ctx.apiGetReservationDetail(jpTok4, kanriDelivery).detail['撮影データ納品URL'] === 'https://drive.google.com/final-ui');
+
+    document.getElementById('delivery-data-url-clear').click();
+    await settle();
+    check('取消ボタンでURLをクリアできる',
+          ctx.apiGetReservationDetail(jpTok4, kanriDelivery).detail['撮影データ納品URL'] === '');
+
+    // アップロード自体はAPIを直接呼び、一覧の表示・削除ボタンの動作だけ画面で確認する
+    ctx.apiBranchUploadDeliveryData(ctx.apiLogin('ROW', 'CHANGE-ME-ROW').session.token, kanriDelivery,
+      'final-ui.zip', 'application/zip', Buffer.from('x').toString('base64'));
+    document.getElementById('nav-dashboard').click();
+    await settle();
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanriDelivery)).click();
+    await settle();
+    document.querySelector('[data-tab="drive"]').click();
+    await settle();
+    check('アップロード済みのファイルが一覧に表示される（現地支店）',
+          document.getElementById('delivery-data-list').innerHTML.includes('final-ui.zip'));
+    const deleteDeliveryBtn = document.querySelector('[data-delivery-data-delete]');
+    check('現地支店の画面に削除ボタンがある', !!deleteDeliveryBtn);
+    deleteDeliveryBtn.click();
+    await settle();
+    check('削除すると一覧から消える', !document.getElementById('delivery-data-list').innerHTML.includes('final-ui.zip'));
+
+    // --- 日本側（JP）は閲覧のみ（登録・アップロード・削除の操作欄は出ない） ---
+    ctx.apiSetDeliveryDataUrl(ctx.apiLogin('ROW', 'CHANGE-ME-ROW').session.token, kanriDelivery, 'https://drive.google.com/jp-view');
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'KANTO', 'CHANGE-ME-KANTO');
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanriDelivery)).click();
+    await settle();
+    document.querySelector('[data-tab="drive"]').click();
+    await settle();
+    check('日本側には撮影データ納品のURL登録欄が出ない（閲覧のみ）', !document.getElementById('delivery-data-url-input'));
+    check('日本側にも登録済みのURLへのリンクは表示される',
+          document.getElementById('detail-content').innerHTML.includes('https://drive.google.com/jp-view'));
   }
 
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);

@@ -60,23 +60,37 @@
           </div>
         </div>
         <div id="scope-selector" class="scope-box jp-only hidden"></div>
-        <!-- ★機能追加：店舗ロール向けの一覧の絞り込み（担当の手配課・チャレンジ番号／お名前／管理番号で検索） -->
+        <!-- ★機能追加：店舗ロール向けの一覧の絞り込み（チャレンジ番号／お名前／管理番号・撮影日の範囲・
+             STS(JP側)・プラン名で検索。担当（手配課）の絞り込みは廃止した） -->
         <div id="shop-dashboard-filter" class="scope-box shop-only hidden" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
           <div style="flex:2;min-width:180px;">
             <label style="font-size:0.72rem;color:var(--color-muted);display:block;margin-bottom:4px;">検索（チャレンジ番号・お名前・管理番号）</label>
             <input id="shop-dashboard-search" type="text" placeholder="例）CH-2201 / Yamada / VIE-003">
           </div>
-          <div style="flex:1;min-width:130px;">
-            <label style="font-size:0.72rem;color:var(--color-muted);display:block;margin-bottom:4px;">担当（該当の手配課）</label>
-            <select id="shop-dashboard-team">
-              <option value="">すべて</option>
-              <option value="関東">関東手配課</option>
-              <option value="関西">関西手配課</option>
-            </select>
+          <div style="min-width:130px;">
+            <label style="font-size:0.72rem;color:var(--color-muted);display:block;margin-bottom:4px;">撮影日（から）</label>
+            <input id="shop-dashboard-date-from" type="date">
+          </div>
+          <div style="min-width:130px;">
+            <label style="font-size:0.72rem;color:var(--color-muted);display:block;margin-bottom:4px;">撮影日（まで）</label>
+            <input id="shop-dashboard-date-to" type="date">
+          </div>
+          <div style="min-width:130px;">
+            <label style="font-size:0.72rem;color:var(--color-muted);display:block;margin-bottom:4px;">STS(JP側)</label>
+            <select id="shop-dashboard-sts"><option value="">すべて</option></select>
+          </div>
+          <div style="min-width:150px;">
+            <label style="font-size:0.72rem;color:var(--color-muted);display:block;margin-bottom:4px;">プラン名</label>
+            <input id="shop-dashboard-plan" type="text" placeholder="例）プレミアムプラン">
           </div>
         </div>
         <label class="checkbox-label" style="margin:4px 0 10px;">
           <input id="show-cancelled" type="checkbox"> キャンセル（CW）済みも表示する
+        </label>
+        <!-- ★要件：出発済み（撮影日が現在の日付より過去）の案件は既定では一覧に出さない。
+             チェックすると表示する（現地支店・日本の支店・手配課いずれも共通の挙動） -->
+        <label class="checkbox-label" style="margin:0 0 10px;">
+          <input id="show-past" type="checkbox"> 過去を表示（撮影日が過去の案件も表示する）
         </label>
         <div id="reservation-list" class="card-list"></div>
         <div id="reservation-table-wrap" class="table-wrap hidden">
@@ -100,6 +114,7 @@
           <div class="full"><label>お名前（ローマ字・新郎/新婦どちらでも）</label><input id="s-name" type="text" placeholder="例）Yamada"></div>
           <div class="jp-only hidden"><label>国</label><input id="s-country" type="text"></div>
           <div class="jp-only hidden"><label>都市</label><input id="s-city" type="text"></div>
+          <div><label>プラン名</label><input id="s-plan" type="text" placeholder="例）プレミアムプラン"></div>
           <div><label>STS JP</label><select id="s-sts-jp"><option value="">指定なし</option></select></div>
           <div><label>STS 支店</label><select id="s-sts-branch"><option value="">指定なし</option></select></div>
           <div><label>日付の種類</label>
