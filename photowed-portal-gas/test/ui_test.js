@@ -23,7 +23,7 @@ function check(name, cond, extra) {
 function section(t) { console.log(`\n=== ${t} ===`); }
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 // google.script.run は非同期なので、描画が終わるまで少し待つ
-const settle = () => sleep(40);
+const settle = () => sleep(60);
 
 // --- Code.gs 側（サーバー）を用意して、動かせる状態のデータを入れる ---
 function makeServer() {
@@ -173,6 +173,23 @@ function paneHidden(document, key) {
   await login(dom, 'ROW', 'CHANGE-ME-ROW');
   check('ログインするとヘッダーが表示される',
         !document.getElementById('app-header').classList.contains('hidden'));
+  // ★要件：現地支店（BRANCH）の画面には「＋新規案件」ボタンを出さない（手配課のみ）
+  check('現地支店の画面には「＋新規案件」ボタンが出ない',
+        document.getElementById('nav-new').classList.contains('hidden'));
+  // ★要件：一覧表示の既定を表（テーブル）に変更した。ログイン直後は表が見えていて、
+  // カード一覧は隠れている状態になる
+  check('一覧表示の既定は表（テーブル）になっている',
+        !document.getElementById('reservation-table-wrap').classList.contains('hidden') &&
+        document.getElementById('reservation-list').classList.contains('hidden'));
+  check('表示切替ボタンも「表」がアクティブになっている',
+        document.getElementById('view-mode-table').classList.contains('active') &&
+        !document.getElementById('view-mode-card').classList.contains('active'));
+  // ★以降のテストはこれまでどおりカード表示を前提にしているため、ここでカード表示へ切り替える
+  document.getElementById('view-mode-card').click();
+  await settle();
+  check('「カード」ボタンでカード一覧に切り替えられる',
+        !document.getElementById('reservation-list').classList.contains('hidden') &&
+        document.getElementById('reservation-table-wrap').classList.contains('hidden'));
   check('案件一覧にカードが出る', document.querySelectorAll('#reservation-list .res-card').length === 1,
         document.getElementById('reservation-list').innerHTML.slice(0, 200));
 
@@ -350,6 +367,9 @@ function paneHidden(document, key) {
   document.getElementById('nav-logout').click();
   await settle();
   await login(dom, 'KANTO', 'CHANGE-ME-KANTO');
+  // ★要件：「＋新規案件」ボタンは手配課（JP）には引き続き表示される（現地支店だけ非表示にする）
+  check('手配課の画面には「＋新規案件」ボタンが引き続き表示される',
+        !document.getElementById('nav-new').classList.contains('hidden'));
   document.querySelector('#reservation-list .res-card').click();
   await settle();
   check('日本側には「記入欄」内に日本記入欄への切替タブが出る',
@@ -407,13 +427,15 @@ function paneHidden(document, key) {
   await settle();
 
   // ---------------------------------------------------------------
-  section('U11. メモ履歴（共有メモ・メモ（現地用）を画面から追記できる）');
+  section('U11. メモ履歴（共有メモ（現地支店）・メモ（現地用）を画面から追記できる）');
   // 直前のセクションで支店（ローマ）としてログイン済み・案件詳細の「予約内容」タブを開いている
   {
-    const memoInput = document.querySelector('[data-memo-input="共有メモ"]');
-    check('共有メモの入力欄がある', !!memoInput);
+    // ★要件：共有メモを現地支店・日本支店（店舗）・手配課で分離。現地支店ロールには
+    // 自分専用の「共有メモ（現地支店）」だけが出る
+    const memoInput = document.querySelector('[data-memo-input="共有メモ（現地支店）"]');
+    check('共有メモ（現地支店）の入力欄がある', !!memoInput);
     memoInput.value = '請求書を発送しました';
-    document.querySelector('[data-memo-add="共有メモ"]').click();
+    document.querySelector('[data-memo-add="共有メモ（現地支店）"]').click();
     await settle();
     const pane = document.querySelector('[data-tab-pane="reservation"]');
     check('追加した内容がすぐ画面に反映される', pane.textContent.includes('請求書を発送しました'));
@@ -581,15 +603,14 @@ function paneHidden(document, key) {
     document.getElementById('shop-new-bride-last').value = 'Yilmaz';
     document.getElementById('shop-new-bride').value = 'Elif';
     document.getElementById('shop-new-hope1').value = '2026-09-10';
-    // ★要件：新郎新婦それぞれの年齢欄・パスポート番号欄（いずれも※ISWのみ必要の注記付き）が
-    // 支店の必須設定に関わらず常に表示される
+    // ★要件：新郎新婦それぞれの年齢欄（※ISWのみ必要の注記付き）は支店の必須設定に関わらず常に表示される。
+    // パスポート番号欄は新規依頼フォームからは廃止（申し込み時点では不要とのこと。既存案件の
+    // 詳細画面では引き続き入力できる＝shop-new-passport-block自体がフォームに存在しない）
     check('新郎年齢欄が常に表示される（※ISWのみ必要）', !!document.getElementById('shop-new-groom-age'));
     check('新婦年齢欄が常に表示される（※ISWのみ必要）', !!document.getElementById('shop-new-bride-age'));
-    check('パスポート番号欄が支店の必須設定に関わらず常に表示される（VIE支店はパスポート必須ではない）',
-          !document.getElementById('shop-new-passport-block').classList.contains('hidden'));
+    check('新規依頼フォームにパスポート番号欄は無い', !document.getElementById('shop-new-passport-block'));
     document.getElementById('shop-new-groom-age').value = '29';
     document.getElementById('shop-new-bride-age').value = '27';
-    document.getElementById('shop-new-passport').value = 'TEST-PASSPORT-001';
     const planOpts = [...document.getElementById('shop-new-plan').options].map(o => o.value);
     check('プランはVIE支店のマスタ一覧から選べる（自由入力ではない）', planOpts.includes('プランA'), planOpts.join(','));
     document.getElementById('shop-new-plan').value = 'プランA';
@@ -602,9 +623,9 @@ function paneHidden(document, key) {
     check('依頼を送信できる', !document.getElementById('shop-new-success').classList.contains('hidden'),
           document.getElementById('shop-new-error').textContent);
     const createdKanri = document.getElementById('shop-new-success-text').textContent.match(/予約番号\s*(\S+)/)[1];
-    check('年齢・パスポート番号（必須支店でなくても）が保存される',
-          ctx.apiGetReservationDetail(ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token, createdKanri).detail['新郎年齢'] === '29' &&
-          ctx.apiGetReservationDetail(ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token, createdKanri).detail['パスポート番号'] === 'TEST-PASSPORT-001');
+    // ★要件：パスポート番号は新規依頼フォームから廃止したため、年齢のみ確認する
+    check('年齢（必須支店でなくても）が保存される',
+          ctx.apiGetReservationDetail(ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token, createdKanri).detail['新郎年齢'] === '29');
     check('選択したプラン・オプションが保存される',
           ctx.apiGetReservationDetail(ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token, createdKanri).detail['プラン名'] === 'プランA');
 
@@ -1093,10 +1114,10 @@ function paneHidden(document, key) {
     const nav = document.getElementById('shop-quick-nav');
     check('店舗の詳細画面上部にクイックナビが表示される', !!nav);
     const navBtns = [...nav.querySelectorAll('[data-scroll-to]')];
-    // ★要件：オプションはプラン・オプション明細表として「予約内容」に統合したため、
-    // 独立タブとしては無くなり6項目になる
-    check('クイックナビに依頼状況・お客様情報・予約内容・書類・メッセージ・履歴の6つがある',
-          navBtns.length === 6, navBtns.map(b => b.dataset.scrollTo).join(','));
+    // ★要件：オプションはプラン・オプション明細表として「予約内容」に統合したため独立タブが無くなり、
+    // 一方で共有メモ（日本支店）が新たに独立セクションとして加わったため7項目になる
+    check('クイックナビに依頼状況・お客様情報・予約内容・書類・共有メモ・メッセージ・履歴の7つがある',
+          navBtns.length === 7, navBtns.map(b => b.dataset.scrollTo).join(','));
     const missingTargets = navBtns.map(b => b.dataset.scrollTo).filter(id => !document.getElementById(id));
     check('クイックナビの全ボタンに対応するセクションが実在する', missingTargets.length === 0, missingTargets.join(','));
     // ★不具合防止：jsdomにはscrollIntoViewが無いが、押しても例外にならず安全に無視されること
@@ -1453,6 +1474,7 @@ function paneHidden(document, key) {
     const optStsJpSelect = optRow1.cells[2].querySelector('select');
     optStsJpSelect.value = 'FN';
     optStsJpSelect.dispatchEvent(new dom.window.Event('change'));
+    await settle();
     document.getElementById('btn-save-quiet').click();
     await settle();
     const afterOptSave = ctx.apiGetReservationDetail(ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token, kanri5).detail;
@@ -2062,6 +2084,288 @@ function paneHidden(document, key) {
     const planTableSelect = document.querySelector('.plan-option-card tr.plan-row select[data-pending="プラン名"]');
     check('JP側のプラン・オプション明細のプラン選択にも自動反映後の値が表示される',
           !!planTableSelect && planTableSelect.value === 'フィレンツェフォト', planTableSelect && planTableSelect.value);
+  }
+
+  // ---------------------------------------------------------------
+  section('U36. 新規依頼フォーム：AM/PM・複数プラン希望・備考欄を追加、パスポート番号欄は削除');
+  {
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'SHOP1', 'CHANGE-ME-SHOP1');
+    document.getElementById('nav-shop-new').click();
+    await settle();
+
+    check('新規依頼フォームにパスポート番号の入力欄は無い', !document.getElementById('shop-new-passport-block'));
+    check('新規依頼フォームの一番下に備考欄がある', !!document.getElementById('shop-new-remarks'));
+
+    document.getElementById('shop-new-branch').value = 'IST';
+    document.getElementById('shop-new-branch').dispatchEvent(new dom.window.Event('change'));
+    await settle();
+    check('希望日時間帯表示フラグがOFFの間は新規依頼フォームにも時間帯欄が出ない',
+          document.getElementById('shop-new-hopetime1').classList.contains('hidden'));
+
+    // ★U35でVIEの「希望日時間帯表示」フラグが既にONにされている（既存案件の詳細画面で確認済み）。
+    // ここでは新規依頼フォームでも同じフラグが反映されることを確認する
+    document.getElementById('shop-new-branch').value = 'VIE';
+    document.getElementById('shop-new-branch').dispatchEvent(new dom.window.Event('change'));
+    await settle();
+    check('支店マスタでONの支店を選ぶと新規依頼フォームにも時間帯欄が現れる（第一希望）',
+          !document.getElementById('shop-new-hopetime1').classList.contains('hidden'));
+    const newHopePlan1Opts = [...document.getElementById('shop-new-hopeplan1').options].map(o => o.value).filter(Boolean);
+    check('希望日ごとのプラン選択欄にプランマスタの候補が入る（第一希望）',
+          newHopePlan1Opts.includes('ローマ3時間フォト'), newHopePlan1Opts.join(','));
+    check('希望日ごとのプラン選択欄にプランマスタの候補が入る（第二希望）',
+          [...document.getElementById('shop-new-hopeplan2').options].map(o => o.value).includes('フィレンツェフォト'));
+
+    document.getElementById('shop-new-team').value = '関東';
+    document.getElementById('shop-new-challengeno').value = 'NEWFORM0001';
+    document.getElementById('shop-new-groom-last').value = 'New';
+    document.getElementById('shop-new-groom').value = 'Form';
+    document.getElementById('shop-new-bride-last').value = 'New';
+    document.getElementById('shop-new-bride').value = 'FormB';
+    document.getElementById('shop-new-hope1').value = '2026-10-01';
+    document.getElementById('shop-new-hopetime1').value = 'PM';
+    document.getElementById('shop-new-hopeplan1').value = 'ローマ3時間フォト';
+    document.getElementById('shop-new-hope2').value = '2026-10-02';
+    document.getElementById('shop-new-hopeplan2').value = 'フィレンツェフォト';
+    document.getElementById('shop-new-remarks').value = '雨天の場合は室内ロケに変更希望';
+    document.getElementById('shop-new-submit').click();
+    await settle();
+
+    const kanriU36 = document.getElementById('shop-new-success-text').textContent.match(/予約番号\s*(\S+)/)[1];
+    const jpTokU36 = ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    const detU36 = ctx.apiGetReservationDetail(jpTokU36, kanriU36).detail;
+    check('パスポート番号は送信されず空欄のまま作成される', !detU36['パスポート番号'], detU36['パスポート番号']);
+    check('備考が保存される', detU36['備考'] === '雨天の場合は室内ロケに変更希望', detU36['備考']);
+    check('希望日①の時間帯（PM）が保存される', detU36['希望日①時間帯'] === 'PM');
+    check('希望日①のプランが保存される', detU36['希望日①プラン'] === 'ローマ3時間フォト');
+    check('希望日②のプランが保存される', detU36['希望日②プラン'] === 'フィレンツェフォト');
+  }
+
+  // ---------------------------------------------------------------
+  section('U37. STS(支店側)が未回答の間は「未設定」ではなく「未確認」と表示される');
+  let kanriU37 = null;
+  {
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'SHOP1', 'CHANGE-ME-SHOP1');
+    document.getElementById('nav-shop-new').click();
+    await settle();
+    document.getElementById('shop-new-branch').value = 'VIE';
+    document.getElementById('shop-new-branch').dispatchEvent(new dom.window.Event('change'));
+    await settle();
+    document.getElementById('shop-new-team').value = '関東';
+    document.getElementById('shop-new-challengeno').value = 'UNCONFIRM01';
+    document.getElementById('shop-new-groom-last').value = 'Un';
+    document.getElementById('shop-new-groom').value = 'Confirm';
+    document.getElementById('shop-new-bride-last').value = 'Un';
+    document.getElementById('shop-new-bride').value = 'ConfirmB';
+    document.getElementById('shop-new-hope1').value = '2026-10-15';
+    document.getElementById('shop-new-submit').click();
+    await settle();
+    kanriU37 = document.getElementById('shop-new-success-text').textContent.match(/予約番号\s*(\S+)/)[1];
+    document.getElementById('nav-dashboard').click();
+    await settle();
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanriU37)).click();
+    await settle();
+
+    const statusJpChip = document.querySelector('#shop-sec-status [data-history-field="STS JP"]');
+    const statusBranchChip = document.querySelector('#shop-sec-status [data-history-field="STS 支店"]');
+    check('STS(支店側)が未回答の間は「未確認」と表示される（「未設定」ではない）',
+          !!statusBranchChip && statusBranchChip.textContent.trim() === '未確認', statusBranchChip && statusBranchChip.textContent);
+    check('STS(JP側)は依頼直後から必ず値が入るため「未確認」にはならない（値そのものが表示される）',
+          !!statusJpChip && statusJpChip.textContent.trim() !== '未確認' && statusJpChip.textContent.trim() !== '未設定',
+          statusJpChip && statusJpChip.textContent);
+
+    // プラン・オプション明細の表側の支店バッジも同様に「未確認」になる
+    const planRowShop = document.querySelector('.plan-table tbody tr.plan-row');
+    const planBranchChip = planRowShop.cells[3].querySelector('.chip.branch');
+    check('プラン・オプション明細のSTS（支店側）バッジも「未確認」になる',
+          !!planBranchChip && planBranchChip.textContent.trim() === '未確認');
+  }
+
+  // ---------------------------------------------------------------
+  section('U38. 同行者の有無で「有」を選ぶと人数入力欄（大人・子供・幼児）が現れる');
+  {
+    document.querySelector('[data-scroll-to="shop-sec-customer"]').click();
+    await settle();
+    const companionSel = document.querySelector('[data-pending="同行者の有無"]');
+    const countBlock = document.getElementById('companion-count-block');
+    check('人数入力欄は最初は隠れている（同行者の有無が未設定のため）',
+          !!countBlock && countBlock.style.display === 'none');
+    companionSel.value = '有';
+    companionSel.dispatchEvent(new dom.window.Event('change'));
+    check('「有」を選ぶと人数入力欄（大人・子供・幼児）が表示される',
+          countBlock.style.display !== 'none');
+    check('人数入力欄は大人・子供・幼児の3つ',
+          !!countBlock.querySelector('[data-pending="同行者（大人）"]') &&
+          !!countBlock.querySelector('[data-pending="同行者（子供）"]') &&
+          !!countBlock.querySelector('[data-pending="同行者（幼児）"]'));
+    countBlock.querySelector('[data-pending="同行者（大人）"]').value = '2';
+    countBlock.querySelector('[data-pending="同行者（子供）"]').value = '1';
+    countBlock.querySelector('[data-pending="同行者（幼児）"]').value = '0';
+    countBlock.querySelector('[data-pending="同行者（大人）"]').dispatchEvent(new dom.window.Event('change'));
+    countBlock.querySelector('[data-pending="同行者（子供）"]').dispatchEvent(new dom.window.Event('change'));
+    countBlock.querySelector('[data-pending="同行者（幼児）"]').dispatchEvent(new dom.window.Event('change'));
+    document.getElementById('btn-save-quiet').click();
+    await settle();
+    const jpTokU38 = ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    const kanriU38 = document.getElementById('detail-content').querySelector('.kanri').textContent.replace('管理番号: ', '');
+    const detU38 = ctx.apiGetReservationDetail(jpTokU38, kanriU38).detail;
+    check('大人の人数が保存される', String(detU38['同行者（大人）']) === '2', detU38['同行者（大人）']);
+    check('子供の人数が保存される', String(detU38['同行者（子供）']) === '1', detU38['同行者（子供）']);
+
+    companionSel.value = '無';
+    companionSel.dispatchEvent(new dom.window.Event('change'));
+    check('「無」に戻すと人数入力欄が再び隠れる', countBlock.style.display === 'none');
+  }
+
+  // ---------------------------------------------------------------
+  section('U39. チェックイン/アウト日のヒント表示・フライト情報のIN/OUT分割');
+  {
+    const checkinBlockJp = document.querySelector('[data-pending="チェックイン日"]').closest('.field-block');
+    const checkoutBlockJp = document.querySelector('[data-pending="チェックアウト日"]').closest('.field-block');
+    check('チェックイン日の欄に案内文が薄く入っている',
+          checkinBlockJp.textContent.includes('撮影地のチェックイン日を入れてください'));
+    check('チェックアウト日の欄に案内文が薄く入っている',
+          checkoutBlockJp.textContent.includes('撮影地のチェックアウト日を入れてください'));
+    const flightIn = document.querySelector('[data-pending="フライト情報"]');
+    const flightOut = document.querySelector('[data-pending="フライト情報（OUT）"]');
+    check('フライト情報がINとOUTの2つの欄に分かれている', !!flightIn && !!flightOut);
+    check('IN欄のラベルに「（IN）」と入っている',
+          flightIn.closest('.field-block').querySelector('label').textContent.includes('（IN）'));
+    check('OUT欄のラベルに「（OUT）」と入っている',
+          flightOut.closest('.field-block').querySelector('label').textContent.includes('（OUT）'));
+    flightIn.value = 'JL123 10/1 10:00羽田発';
+    flightIn.dispatchEvent(new dom.window.Event('change'));
+    flightOut.value = 'JL124 10/5 16:00現地発';
+    flightOut.dispatchEvent(new dom.window.Event('change'));
+    document.getElementById('btn-save-quiet').click();
+    await settle();
+    const jpTokU39 = ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    const kanriU39 = document.getElementById('detail-content').querySelector('.kanri').textContent.replace('管理番号: ', '');
+    const detU39 = ctx.apiGetReservationDetail(jpTokU39, kanriU39).detail;
+    check('フライト情報（IN）が保存される', detU39['フライト情報'] === 'JL123 10/1 10:00羽田発');
+    check('フライト情報（OUT）が保存される', detU39['フライト情報（OUT）'] === 'JL124 10/5 16:00現地発');
+  }
+
+  // ---------------------------------------------------------------
+  section('U40. 撮影日FIXと挙式日FIXを「撮影日(挙式日)FIX」として同じ欄にまとめる');
+  {
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'KANTO', 'CHANGE-ME-KANTO');
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanriU37)).click();
+    await settle();
+
+    check('予約内容タブに「撮影日(挙式日)FIX」という1つの欄しか無い（挙式日FIXの単独欄は無い）',
+          !document.querySelector('[data-pending="挙式日FIX"]') &&
+          !!document.querySelector('[data-pending="撮影日FIX"]'));
+    const mergedLabel = [...document.querySelectorAll('label')].find(l => l.textContent.trim() === '撮影日(挙式日)FIX');
+    check('欄のラベルが「撮影日(挙式日)FIX」になっている', !!mergedLabel);
+
+    const confirmedInput = document.querySelector('[data-pending="撮影日FIX"]');
+    confirmedInput.value = '2026-11-20';
+    confirmedInput.dispatchEvent(new dom.window.Event('change'));
+    document.getElementById('btn-save-quiet').click();
+    await settle();
+    const jpTokU40 = ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    const detU40 = ctx.apiGetReservationDetail(jpTokU40, kanriU37).detail;
+    check('撮影日FIXを設定すると挙式日FIXにも自動でミラーされる（同じ日付として扱う）',
+          detU40['撮影日FIX'] === '2026-11-20' && detU40['挙式日FIX'] === '2026-11-20',
+          JSON.stringify({ c: detU40['撮影日FIX'], w: detU40['挙式日FIX'] }));
+  }
+
+  // ---------------------------------------------------------------
+  section('U41. 共有メモを現地支店・日本支店（店舗）・手配課で分離した画面表示');
+  {
+    // 直前のU40まで手配課（JP）としてログイン済み・案件詳細を開いている
+    document.querySelector('[data-scroll-to="sec-reservation"]').click();
+    await settle();
+    // ★注意：document.body.textContentには<script>タグの中身（JSソースコード自体）も含まれ、
+    // フィールド名の文字列リテラルが常に含まれてしまうため、#detail-contentの中身だけを見る
+    const dcJp = document.getElementById('detail-content');
+    check('手配課の画面には「共有メモ（手配課）」の入力欄がある',
+          !!document.querySelector('[data-memo-input="共有メモ（手配課）"]'));
+    check('手配課の画面には「共有メモ（日本支店）」が閲覧のみで表示される（入力欄は無い）',
+          dcJp.textContent.includes('共有メモ（日本支店）') &&
+          !document.querySelector('[data-memo-input="共有メモ（日本支店）"]'));
+    check('手配課の画面には「共有メモ（現地支店）」は出ない（他ロール専用のため）',
+          !dcJp.textContent.includes('共有メモ（現地支店）'));
+
+    // ★U37の案件はウィーン支店（VIE）宛のため、現地支店側の確認はVIEでログインする
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'VIE', 'CHANGE-ME-VIE');
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanriU37)).click();
+    await settle();
+    const dcBranch = document.getElementById('detail-content');
+    check('現地支店の画面には「共有メモ（現地支店）」の入力欄がある',
+          !!document.querySelector('[data-memo-input="共有メモ（現地支店）"]'));
+    check('現地支店の画面には「共有メモ（手配課）」も「共有メモ（日本支店）」も出ない',
+          !dcBranch.textContent.includes('共有メモ（手配課）') &&
+          !dcBranch.textContent.includes('共有メモ（日本支店）'));
+
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'SHOP1', 'CHANGE-ME-SHOP1');
+    document.getElementById('nav-dashboard').click();
+    await settle();
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanriU37)).click();
+    await settle();
+    const dcShop = document.getElementById('detail-content');
+    check('店舗の画面には「共有メモ（日本支店）」の入力欄がある',
+          !!document.querySelector('[data-memo-input="共有メモ（日本支店）"]'));
+    check('店舗の画面には「共有メモ（現地支店）」も「共有メモ（手配課）」も出ない',
+          !dcShop.textContent.includes('共有メモ（現地支店）') &&
+          !dcShop.textContent.includes('共有メモ（手配課）'));
+  }
+
+  // ---------------------------------------------------------------
+  section('U42. メッセージは、相手がまだ見ていない間だけ送信者が削除できる');
+  {
+    // 直前のU41で店舗（新宿店）としてログイン済み・kanriU37の案件詳細を開いている
+    document.querySelector('[data-scroll-to="shop-sec-message"]').click();
+    await settle();
+    document.getElementById('msg-input').value = '削除できるはずの未読メッセージ';
+    document.getElementById('btn-msg-only').click();
+    await settle();
+
+    const deleteBtn = document.querySelector('[data-history-message-delete]');
+    check('送信直後・相手が未読の間は削除ボタンが出る', !!deleteBtn);
+
+    const origConfirm = dom.window.confirm;
+    dom.window.confirm = () => true;
+    deleteBtn.click();
+    await settle();
+    dom.window.confirm = origConfirm;
+
+    check('削除ボタンを押すとメッセージが履歴から消える',
+          !document.getElementById('shop-sec-history').textContent.includes('削除できるはずの未読メッセージ'));
+
+    // 相手（手配課）が既読にした後は削除ボタンが出ない
+    document.getElementById('msg-input').value = '既読後は削除できないメッセージ';
+    document.getElementById('btn-msg-only').click();
+    await settle();
+    const kanriU42 = document.getElementById('detail-content').querySelector('.kanri').textContent.replace('管理番号: ', '');
+    const jpTokU42 = ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    const hidU42 = ctx.apiGetReservationDetail(jpTokU42, kanriU42).detail.history
+      .find(h => h.body.includes('既読後は削除できないメッセージ')).id;
+    ctx.apiToggleHistoryCheck(jpTokU42, hidU42, true);
+    document.getElementById('nav-dashboard').click();
+    await settle();
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanriU42)).click();
+    await settle();
+    document.querySelector('[data-scroll-to="shop-sec-history"]').click();
+    await settle();
+    const readItem = [...document.querySelectorAll('.history-item')]
+      .find(el => el.textContent.includes('既読後は削除できないメッセージ'));
+    check('相手が既読にした後は削除ボタンが出ない', !!readItem && !readItem.querySelector('[data-history-message-delete]'));
   }
 
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);

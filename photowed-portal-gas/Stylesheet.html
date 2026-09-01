@@ -57,6 +57,10 @@
     font-size: 1rem; background: #fff; color: var(--color-text); }
   .login-card input { margin-bottom: 14px; }
   .view textarea { resize: vertical; font-family: inherit; }
+  /* ★要件：新規依頼フォームの希望日の行に、日付・時間帯（AM/PM）・プランを横並びで置く */
+  .shop-new-hope-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+  .shop-new-hope-row input, .shop-new-hope-row select { width: auto; flex: 1; min-width: 110px; margin-bottom: 0; }
+  .shop-new-hope-row select.shop-new-hopetime { flex: 0 0 74px; min-width: 74px; }
   .primary-btn { width: 100%; margin-top: 16px; background: var(--color-primary); color: #fff; border: none;
     padding: 13px; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; }
   .primary-btn:active { background: var(--color-primary-dark); }

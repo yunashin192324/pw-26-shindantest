@@ -18,7 +18,7 @@
         <button id="nav-delivery" class="nav-btn non-shop">納品待ち</button>
         <button id="nav-search" class="nav-btn non-shop">検索</button>
         <button id="nav-stats" class="nav-btn jp-only hidden">統計</button>
-        <button id="nav-new" class="nav-btn non-shop">＋新規案件</button>
+        <button id="nav-new" class="nav-btn jp-only">＋新規案件</button>
         <button id="nav-shop-new" class="nav-btn shop-only hidden">＋新規依頼</button>
         <button id="nav-settings" class="nav-btn non-shop">設定</button>
         <button id="nav-logout" class="nav-btn nav-logout">ログアウト</button>
@@ -54,8 +54,8 @@
               <option value="kanri">管理番号順</option>
             </select>
             <div class="view-toggle">
-              <button type="button" id="view-mode-card" class="view-toggle-btn active">カード</button>
-              <button type="button" id="view-mode-table" class="view-toggle-btn">表</button>
+              <button type="button" id="view-mode-card" class="view-toggle-btn">カード</button>
+              <button type="button" id="view-mode-table" class="view-toggle-btn active">表</button>
             </div>
           </div>
         </div>
@@ -121,8 +121,8 @@
         <label class="checkbox-label" style="margin:0 0 10px;">
           <input id="show-past" type="checkbox"> 過去を表示（撮影日が過去の案件も表示する）
         </label>
-        <div id="reservation-list" class="card-list"></div>
-        <div id="reservation-table-wrap" class="table-wrap hidden">
+        <div id="reservation-list" class="card-list hidden"></div>
+        <div id="reservation-table-wrap" class="table-wrap">
           <table class="res-table">
             <thead>
               <tr><th>日付</th><th>都市</th><th>チャレンジ番号</th><th>お名前</th><th>STS JP</th><th>STS 支店</th><th>予約番号</th><th>プラン名</th></tr>
@@ -267,21 +267,37 @@
           <label>準備場所</label>
           <select id="shop-new-prep"><option value="">-</option></select>
         </div>
+        <!-- ★要件：希望日ごとに時間帯（AM/PM。支店マスタの「希望日時間帯表示」がONの支店のみ）と
+             プラン（複数プラン希望）も入力できるようにする。既存案件の詳細画面と同じ考え方。 -->
         <label>希望日（第一希望）</label>
-        <input id="shop-new-hope1" type="date">
+        <div class="shop-new-hope-row">
+          <input id="shop-new-hope1" type="date">
+          <select id="shop-new-hopetime1" class="shop-new-hopetime hidden"><option value="">-</option><option value="AM">AM</option><option value="PM">PM</option></select>
+          <select id="shop-new-hopeplan1"><option value="">プラン未設定</option></select>
+        </div>
         <label>希望日（第二希望）</label>
-        <input id="shop-new-hope2" type="date">
+        <div class="shop-new-hope-row">
+          <input id="shop-new-hope2" type="date">
+          <select id="shop-new-hopetime2" class="shop-new-hopetime hidden"><option value="">-</option><option value="AM">AM</option><option value="PM">PM</option></select>
+          <select id="shop-new-hopeplan2"><option value="">プラン未設定</option></select>
+        </div>
         <label>希望日（第三希望）</label>
-        <input id="shop-new-hope3" type="date">
+        <div class="shop-new-hope-row">
+          <input id="shop-new-hope3" type="date">
+          <select id="shop-new-hopetime3" class="shop-new-hopetime hidden"><option value="">-</option><option value="AM">AM</option><option value="PM">PM</option></select>
+          <select id="shop-new-hopeplan3"><option value="">プラン未設定</option></select>
+        </div>
         <label>希望日（第四希望）</label>
-        <input id="shop-new-hope4" type="date">
+        <div class="shop-new-hope-row">
+          <input id="shop-new-hope4" type="date">
+          <select id="shop-new-hopetime4" class="shop-new-hopetime hidden"><option value="">-</option><option value="AM">AM</option><option value="PM">PM</option></select>
+          <select id="shop-new-hopeplan4"><option value="">プラン未設定</option></select>
+        </div>
         <label>希望日（第五希望）</label>
-        <input id="shop-new-hope5" type="date">
-        <!-- ★要件変更：パスポート番号欄は支店ごとの必須設定に関わらず常に表示する
-             （※ISWのみ必要、という注記を添えて店舗自身に判断してもらう運用にした） -->
-        <div id="shop-new-passport-block">
-          <label>パスポート番号（※ISWのみ必要）</label>
-          <input id="shop-new-passport" type="text" placeholder="任意入力">
+        <div class="shop-new-hope-row">
+          <input id="shop-new-hope5" type="date">
+          <select id="shop-new-hopetime5" class="shop-new-hopetime hidden"><option value="">-</option><option value="AM">AM</option><option value="PM">PM</option></select>
+          <select id="shop-new-hopeplan5"><option value="">プラン未設定</option></select>
         </div>
         <h3 style="margin-top:14px;">オプション（任意・最大10件・マスタ候補から選ぶか自由に入力できます）</h3>
         <input id="shop-new-option1" list="shop-new-option-datalist" placeholder="（未使用）">
@@ -298,6 +314,9 @@
           <input id="shop-new-option10" list="shop-new-option-datalist" placeholder="（未使用）">
         </details>
         <datalist id="shop-new-option-datalist"></datalist>
+        <!-- ★要件：新規依頼フォームの一番下に備考欄を追加 -->
+        <label style="margin-top:14px;">備考</label>
+        <textarea id="shop-new-remarks" placeholder="任意入力"></textarea>
         <button id="shop-new-submit" class="primary-btn" style="margin-top:14px;">この内容で送信</button>
         <p id="shop-new-error" class="error-text hidden"></p>
         <!-- ★要件：送信後の案内はPC幅では画面中央に目立つモーダル状で表示する（success-banner-prominent。

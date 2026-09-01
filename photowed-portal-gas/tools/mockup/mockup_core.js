@@ -330,6 +330,17 @@ return {
   pm.appendRow(['ROW', 'プレミアムプラン', true, 'checkbox', 'トレヴィの泉、コロッセオ、スペイン広場']);
   pm.appendRow(['ROW', 'スタンダードプラン', true, 'select', 'ナヴォーナ広場、パンテオン']);
   pm.appendRow(['ROW', 'シンプルプラン', true, '', '']); // 方式未設定＝従来どおり自由入力
+  // ★機能追加：新規依頼フォームの希望日ごとのプラン複数希望欄で選べるよう、モックアップ用に
+  // 実際の商品名に近いプランを仮登録しておく（イタリア方面はROW＝ローマ支店扱いでまとめる）
+  pm.appendRow(['ROW', 'フィレンツェ（3時間撮影）', true, '', '']);
+  pm.appendRow(['ROW', 'フィレンツェ（5時間撮影）', true, '', '']);
+  pm.appendRow(['ROW', 'ローマ（半日コース）', true, '', '']);
+  pm.appendRow(['ROW', 'ローマ（明るい時間＋夕方～夜撮影）', true, '', '']);
+  // トルコ方面（カッパドキア・塩湖）はIST＝イスタンブール支店扱いでまとめる
+  pm.appendRow(['IST', 'カッパドキア サンセットフォト', true, '', '']);
+  pm.appendRow(['IST', 'カッパドキア サンライズフォト', true, '', '']);
+  pm.appendRow(['IST', '塩湖の夕日フォト', true, '', '']);
+  pm.appendRow(['IST', 'カッパドキア サンライズフォト＆塩湖の夕日フォト', true, '', '']);
   const salem = ss.getSheetByName('セールマスタ');
   salem.appendRow(['ROW', '春の特典フェア', true, '']); // 対象プラン空欄＝ローマ支店の全プラン共通
   salem.appendRow(['ROW', 'プレミアム限定10%OFF', true, 'プレミアムプラン']); // このプランを選んだ時だけ出る

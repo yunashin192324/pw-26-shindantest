@@ -184,12 +184,18 @@ const COL_HOTEL_ADDRESS = 'ホテル住所';
 // ★要件：ホテル住所の隣にチェックイン日・チェックアウト日を追加
 const COL_CHECKIN_DATE = 'チェックイン日';
 const COL_CHECKOUT_DATE = 'チェックアウト日';
+// ★要件：フライト情報を往路（IN）・復路（OUT）の2欄に分ける（列名は既存互換のためCOL_FLIGHT_INFOを
+// 「フライト情報（IN）」として引き続き使い、「フライト情報（OUT）」を新設する）
 const COL_FLIGHT_INFO = 'フライト情報';
+const COL_FLIGHT_INFO_OUT = 'フライト情報（OUT）';
 // ★要件：お客様情報に衣裳会社（衣裳会社マスタから選択）を追加
 const COL_COSTUME_COMPANY = '衣装会社';
-// ★要件：お客様情報に同行者の有無を追加
+// ★要件：お客様情報に同行者の有無を追加。「有」を選んだ場合は人数（大人・子供・幼児）も入力する
 const COL_COMPANION = '同行者の有無';
 const COMPANION_CHOICES = ['有', '無'];
+const COL_COMPANION_ADULT = '同行者（大人）';
+const COL_COMPANION_CHILD = '同行者（子供）';
+const COL_COMPANION_INFANT = '同行者（幼児）';
 const COL_AREA = '管轄';
 const COL_BILLING_REGION = '請求先';
 const COL_JP_SHOP = '日本支店名';
@@ -212,10 +218,19 @@ const COL_MEMO = '共有メモ';
 // ★機能追加：共有メモ・メモ（現地用）は「上書き」ではなく「積み上げ」で記録する（メモ履歴シート）。
 // 上の COL_MEMO / COL_LOCAL_MEMO の2列は、この機能を追加する前からある案件の
 // 「移行前の最後のメモ」を表示するためだけに残しており、新しい書き込みはメモ履歴シートへ行う。
-const MEMO_TYPE_SHARED = COL_MEMO;          // '共有メモ'
+const MEMO_TYPE_SHARED = COL_MEMO;          // '共有メモ'（旧方式。分離後は新規の書き込み先としては使わない。後方互換のため残す）
+// ★機能追加：共有メモを現地支店・日本支店（店舗）・手配課ごとの独立したメモ欄に分離した。
+// 手配課は「共有メモ（手配課）」に書き込み、加えて「共有メモ（日本支店）」を閲覧のみできる。
+// 現地支店・店舗はそれぞれ自分専用の共有メモしか読み書きできない。
+const MEMO_TYPE_SHARED_BRANCH = '共有メモ（現地支店）';
+const MEMO_TYPE_SHARED_SHOP = '共有メモ（日本支店）';
+const MEMO_TYPE_SHARED_JP = '共有メモ（手配課）';
 const MEMO_TYPE_LOCAL = COL_LOCAL_MEMO;     // 'メモ（現地用）'
 const MEMO_TYPE_SURVEY = 'アンケート回答';   // お客様がGoogleフォームで回答した内容（自動反映・追記のみ）
-const MEMO_TYPES = [MEMO_TYPE_SHARED, MEMO_TYPE_LOCAL, MEMO_TYPE_SURVEY];
+const MEMO_TYPES = [
+  MEMO_TYPE_SHARED, MEMO_TYPE_SHARED_BRANCH, MEMO_TYPE_SHARED_SHOP, MEMO_TYPE_SHARED_JP,
+  MEMO_TYPE_LOCAL, MEMO_TYPE_SURVEY
+];
 // お客様入力（Googleフォーム）である目印。手入力のメモと見分けるために使う
 const MEMO_AUTHOR_CUSTOMER = 'お客様（Googleフォーム）';
 // ★機能追加：日本の手配課側のみが見る「日本記入欄」タブ（支店には一切表示しない）。
@@ -303,7 +318,8 @@ const RESERVATION_HEADERS = (() => {
     COL_GROOM_AGE, COL_BRIDE_AGE,
     COL_CONSENT, COL_PLAN, COL_SALE_NAME, COL_LOCATION, COL_PREP,
     COL_PASSPORT_NO, COL_LOCAL_EMAIL, COL_LOCAL_PHONE, COL_HOTEL, COL_HOTEL_ADDRESS,
-    COL_CHECKIN_DATE, COL_CHECKOUT_DATE, COL_FLIGHT_INFO, COL_COSTUME_COMPANY, COL_COMPANION,
+    COL_CHECKIN_DATE, COL_CHECKOUT_DATE, COL_FLIGHT_INFO, COL_FLIGHT_INFO_OUT, COL_COSTUME_COMPANY,
+    COL_COMPANION, COL_COMPANION_ADULT, COL_COMPANION_CHILD, COL_COMPANION_INFANT,
     COL_AREA, COL_BILLING_REGION, COL_JP_SHOP, COL_INVOICE_NO, COL_SHOP,
     COL_DAY_STAFF, COL_HAIR_MAKEUP, COL_HAIR_START_TIME, COL_PHOTOGRAPHER, COL_PHOTO_START_TIME,
     COL_ASSISTANT, COL_PICKUP_TIME, COL_LOCAL_MEMO,
@@ -384,9 +400,10 @@ const SHOP_EDITABLE_FIELDS = [
   COL_CANCEL_REASON,
   // ★要件：お客様情報タブに、現地連絡先・滞在先・フライト情報も店舗から入力できるようにする
   // （従来はJP/BRANCHの「お客様情報」タブにしか入力欄が無かった）
-  COL_LOCAL_EMAIL, COL_LOCAL_PHONE, COL_HOTEL, COL_HOTEL_ADDRESS, COL_FLIGHT_INFO,
+  COL_LOCAL_EMAIL, COL_LOCAL_PHONE, COL_HOTEL, COL_HOTEL_ADDRESS, COL_FLIGHT_INFO, COL_FLIGHT_INFO_OUT,
   // ★要件：チェックイン日・チェックアウト日・衣装会社・同行者の有無も店舗から入力できるようにする
-  COL_CHECKIN_DATE, COL_CHECKOUT_DATE, COL_COSTUME_COMPANY, COL_COMPANION
+  COL_CHECKIN_DATE, COL_CHECKOUT_DATE, COL_COSTUME_COMPANY,
+  COL_COMPANION, COL_COMPANION_ADULT, COL_COMPANION_CHILD, COL_COMPANION_INFANT
 ];
 // ★機能追加（店舗拡張）：店舗が案件作成後にSTS(JP側)を変更できる先。新規作成時のRQ／CHKの
 // 選択は apiShopCreateRequest 側で扱うため、ここには含めない（作成後の変更だけを対象にする）。
@@ -1381,6 +1398,18 @@ function visibleToRole_(viewerRole, senderRole, recipientRoleRaw) {
   return effectiveRecipientRole_(senderRole, recip) === viewerRole;
 }
 
+// ★要件：メッセージは「自分が送信した」かつ「相手（宛先）がまだ既読チェックを付けていない」
+// 間だけ削除できるようにする。apiDeleteHistoryMessageの認可条件と揃えてあり、画面側は
+// この判定結果（真偽値）をそのまま使って削除ボタンの表示可否を決めればよい。
+function messageDeletable_(session, r) {
+  const senderRole = String(r[H_COL_SENDER_ROLE] || '').trim().toUpperCase();
+  if (senderRole !== session.role) return false;
+  const recipientRole = effectiveRecipientRole_(senderRole, r[H_COL_RECIPIENT_ROLE]);
+  const checkVal = recipientRole === JP_ROLE ? r[H_COL_CHECK_JP]
+    : recipientRole === SHOP_ROLE ? r[H_COL_CHECK_SHOP] : r[H_COL_CHECK_BRANCH];
+  return !isActiveFlag_(checkVal);
+}
+
 // 店舗ロール向けの案件詳細：一般の項目（請求先・ホテル等）は含めず、依頼状況の確認と
 // メッセージのやり取りに必要な最小限の情報だけを返す。
 function buildShopReservationDetail_(session, kanriNo, headers, rowData) {
@@ -1437,9 +1466,13 @@ function buildShopReservationDetail_(session, kanriNo, headers, rowData) {
   detail[COL_CHECKIN_DATE] = formatDateForInput_(getV(COL_CHECKIN_DATE));
   detail[COL_CHECKOUT_DATE] = formatDateForInput_(getV(COL_CHECKOUT_DATE));
   detail[COL_FLIGHT_INFO] = getV(COL_FLIGHT_INFO);
-  // ★要件：衣装会社（マスタから選択）・同行者の有無を追加
+  detail[COL_FLIGHT_INFO_OUT] = getV(COL_FLIGHT_INFO_OUT);
+  // ★要件：衣装会社（マスタから選択）・同行者の有無を追加。「有」の場合は人数（大人/子供/幼児）も
   detail[COL_COSTUME_COMPANY] = getV(COL_COSTUME_COMPANY);
   detail[COL_COMPANION] = getV(COL_COMPANION);
+  detail[COL_COMPANION_ADULT] = getV(COL_COMPANION_ADULT);
+  detail[COL_COMPANION_CHILD] = getV(COL_COMPANION_CHILD);
+  detail[COL_COMPANION_INFANT] = getV(COL_COMPANION_INFANT);
   // ★要件：CRにする際のキャンセル理由（プラン・オプションのSTS欄近くに入力欄を出す）
   detail[COL_CANCEL_REASON] = getV(COL_CANCEL_REASON);
 
@@ -1465,9 +1498,10 @@ function buildShopReservationDetail_(session, kanriNo, headers, rowData) {
     });
   }
 
-  // ★要件：店舗が追加できる「共有メモ」は自分でも見えるようにする（メモ（現地用）・
-  // アンケート回答は支店・手配課側の運用情報のため店舗には見せない）
-  detail.memoLog = getMemoLog_(kanriNo).filter(m => m.type === MEMO_TYPE_SHARED);
+  // ★要件：店舗が追加できる「共有メモ（日本支店）」は自分でも見えるようにする（メモ（現地用）・
+  // アンケート回答は支店・手配課側の運用情報のため店舗には見せない。共有メモ（現地支店）・
+  // 共有メモ（手配課）も他ロール専用のため見せない）
+  detail.memoLog = getMemoLog_(kanriNo).filter(m => m.type === MEMO_TYPE_SHARED_SHOP);
 
   const hSheet = getSpreadsheet_().getSheetByName(HISTORY_SHEET_NAME);
   let hRows = getRowsAsObjects_(hSheet).filter(r => String(r[H_COL_KANRI]) === String(kanriNo));
@@ -1480,7 +1514,9 @@ function buildShopReservationDetail_(session, kanriNo, headers, rowData) {
     senderRole: r[H_COL_SENDER_ROLE],
     body: r[H_COL_BODY],
     // ★画面側が「自分宛でまだ未読のものだけ」既読チェックを送ればよいようにしておく
-    checkShop: isActiveFlag_(r[H_COL_CHECK_SHOP])
+    checkShop: isActiveFlag_(r[H_COL_CHECK_SHOP]),
+    // ★要件：相手がまだ見ていない、自分が送ったメッセージだけ削除できるようにする
+    deletable: messageDeletable_(session, r)
   }));
 
   return { ok: true, role: session.role, detail };
@@ -2070,11 +2106,19 @@ function apiGetReservationDetail(token, kanriNo) {
     dateJp: formatMaybeDate_(r[H_COL_DATE_JP]),
     checkBranch: isActiveFlag_(r[H_COL_CHECK_BRANCH]),
     checkedByBranch: r[H_COL_CHECKED_BY_BRANCH] || '',
-    dateBranch: formatMaybeDate_(r[H_COL_DATE_BRANCH])
+    dateBranch: formatMaybeDate_(r[H_COL_DATE_BRANCH]),
+    // ★要件：相手がまだ見ていない、自分が送ったメッセージだけ削除できるようにする
+    deletable: messageDeletable_(session, r)
   }));
 
-  // ★機能追加：共有メモ／メモ（現地用）／アンケート回答（積み上げ式）
-  detail.memoLog = getMemoLog_(kanriNo);
+  // ★機能追加：共有メモ／メモ（現地用）／アンケート回答（積み上げ式）。
+  // ★機能追加：共有メモは現地支店・日本支店（店舗）・手配課で分離しているため、閲覧できる範囲も
+  // ロールごとに絞り込む（手配課は「手配課」＋「日本支店」の2つ、現地支店は「現地支店」のみ）。
+  const visibleSharedMemoTypes = session.role === JP_ROLE
+    ? [MEMO_TYPE_SHARED_JP, MEMO_TYPE_SHARED_SHOP]
+    : [MEMO_TYPE_SHARED_BRANCH];
+  detail.memoLog = getMemoLog_(kanriNo).filter(m =>
+    visibleSharedMemoTypes.indexOf(m.type) !== -1 || m.type === MEMO_TYPE_LOCAL || m.type === MEMO_TYPE_SURVEY);
 
   // ★機能追加：現地スタッフ手配メール。宛先メールアドレス自体はここでは返さない
   // （送信時に改ざんできないよう、下書き作成・送信の両方でサーバー側が都度解決するため）。
@@ -2156,6 +2200,7 @@ function apiSaveFieldsQuiet(token, kanriNo, changes) {
     if (session.role === SHOP_ROLE) assertShopOwnRow_(session, headers, rowData);
     else assertRowVisible_(session, headers, rowData);
     changes = withInquiryOnlyCascade_(session, headers, rowData, changes);
+    changes = withCeremonyDateMirror_(changes);
     assertCancelReasonProvided_(session, headers, rowData, changes);
 
     const writes = Object.keys(changes).map(field => prepareFieldWrite_(session, headers, rowData, field, changes[field]));
@@ -2195,6 +2240,7 @@ function apiCommitChanges(token, kanriNo, changes, message, recipient) {
     if (session.role === SHOP_ROLE) assertShopOwnRow_(session, headers, rowData);
     else assertRowVisible_(session, headers, rowData);
     changes = withInquiryOnlyCascade_(session, headers, rowData, changes);
+    changes = withCeremonyDateMirror_(changes);
     assertCancelReasonProvided_(session, headers, rowData, changes);
 
     const summaryLines = [];
@@ -2345,6 +2391,15 @@ function withInquiryOnlyCascade_(session, headers, rowData, changes) {
   const before = rowData[headers.indexOf(COL_INQUIRY_ONLY)];
   if (before === '済') return changes; // 既にチェック済み（再送）なら何もしない
   return Object.assign({}, changes, { [COL_STATUS_JP]: 'CHK' });
+}
+
+// ★要件：画面上は「撮影日FIX」「挙式日FIX」を1つの欄「撮影日(挙式日)FIX」にまとめたため、
+// 撮影日FIXを変更したら挙式日FIXにも自動で同じ値を反映する（挙式日FIXが撮影日と異なる特殊な
+// 案件のために、changesに挙式日FIXが明示的に含まれている場合はそちらを優先し上書きしない）。
+function withCeremonyDateMirror_(changes) {
+  if (!(COL_CONFIRMED_DATE in changes)) return changes;
+  if (COL_CEREMONY_DATE in changes) return changes;
+  return Object.assign({}, changes, { [COL_CEREMONY_DATE]: changes[COL_CONFIRMED_DATE] });
 }
 
 // ★要件：支店が「CR（キャンセル依頼中）」にCWで回答したら日本側も自動でCWにする。
@@ -3101,14 +3156,28 @@ function latestLocalMemo_(kanriNo, legacyValue) {
   return found ? found.body : (legacyValue || '');
 }
 
+// ★機能追加：共有メモ（現地支店／日本支店／手配課）は、それぞれ担当ロールしか追加できない
+const SHARED_MEMO_OWNER_ROLE_ = {
+  [MEMO_TYPE_SHARED_BRANCH]: BRANCH_ROLE,
+  [MEMO_TYPE_SHARED_SHOP]: SHOP_ROLE,
+  [MEMO_TYPE_SHARED_JP]: JP_ROLE
+};
+
 function apiAddMemo(token, kanriNo, memoType, body) {
   const session = requireSession_(token);
-  if (memoType !== MEMO_TYPE_SHARED && memoType !== MEMO_TYPE_LOCAL) {
+  const isSharedType = Object.prototype.hasOwnProperty.call(SHARED_MEMO_OWNER_ROLE_, memoType);
+  if (!isSharedType && memoType !== MEMO_TYPE_LOCAL) {
     throw new Error('種別が正しくありません。');
   }
-  // ★機能追加（店舗拡張）：店舗が使えるのは共有メモだけ（メモ（現地用）は支店の内部運用メモのため）
-  if (session.role === SHOP_ROLE && memoType !== MEMO_TYPE_SHARED) {
-    throw new Error('店舗が追加できるのは共有メモだけです。');
+  // ★機能追加：共有メモを現地支店・日本支店（店舗）・手配課で分離。各ロールは自分専用の
+  // 共有メモ欄にしか書き込めない
+  if (isSharedType && session.role !== SHARED_MEMO_OWNER_ROLE_[memoType]) {
+    throw new Error('この共有メモは追加できません（担当ロール専用です）。');
+  }
+  // ★機能追加（店舗拡張）：店舗が使えるのは共有メモ（日本支店）だけ
+  // （メモ（現地用）は支店の内部運用メモのため）
+  if (session.role === SHOP_ROLE && memoType === MEMO_TYPE_LOCAL) {
+    throw new Error('店舗が追加できるのは共有メモ（日本支店）だけです。');
   }
   const text = String(body || '').trim();
   if (!text) throw new Error('内容を入力してください。');
@@ -3437,9 +3506,18 @@ function apiShopCreateRequest(token, payload) {
   const prep = String(payload.prep || '').trim();
   const hopes = [1, 2, 3, 4, 5].map(n => String(payload['hope' + n] || (n === 1 ? payload.hopeDate : '') || '').trim());
   if (!hopes[0]) throw new Error('希望日（第一希望）を入力してください。');
+  // ★要件：新規依頼の時点でも希望日ごとの時間帯（AM/PM）・プランを入力できるようにする
+  // （既存案件の詳細画面と同じhopeTimeCol_/hopePlanCol_を使う）
+  const hopeTimes = [1, 2, 3, 4, 5].map(n => {
+    const v = String(payload['hopeTime' + n] || '').trim().toUpperCase();
+    return HOPE_TIME_CHOICES.includes(v) ? v : '';
+  });
+  const hopePlans = [1, 2, 3, 4, 5].map(n => String(payload['hopePlan' + n] || '').trim());
   const options = Array.from({ length: OPTION_COUNT }, (_, i) => String(payload['option' + (i + 1)] || '').trim());
   // ★要件：パスポート番号欄は支店の必須設定に関わらず常に入力できる（※ISWのみ必要。任意入力）
   const passportNumber = String(payload.passportNumber || '').trim();
+  // ★要件：新規依頼フォームの一番下に備考欄を追加する
+  const remarks = String(payload.remarks || '').trim();
   const initialStatus = String(payload.initialStatus || 'RQ').trim().toUpperCase() || 'RQ';
   if (!SHOP_CREATE_INITIAL_STATUS_CHOICES.includes(initialStatus)) {
     throw new Error(`新規作成時のSTS(JP側)は ${SHOP_CREATE_INITIAL_STATUS_CHOICES.join('/')} のいずれかにしてください。`);
@@ -3474,10 +3552,13 @@ function apiShopCreateRequest(token, payload) {
     setV(COL_HOPE3, hopes[2]);
     setV(COL_HOPE4, hopes[3]);
     setV(COL_HOPE5, hopes[4]);
+    hopeTimes.forEach((t, i) => setV(hopeTimeCol_(i + 1), t));
+    hopePlans.forEach((p, i) => setV(hopePlanCol_(i + 1), p));
     setV(COL_PLAN, plan);
     setV(COL_SALE_NAME, saleName);
     setV(COL_LOCATION, location);
     setV(COL_PREP, prep);
+    setV(COL_REMARKS, remarks);
     options.forEach((name, i) => setV(opNameCol_(i + 1), name));
     // ★要件変更：パスポート番号は支店の必須設定に関わらず、入力があれば常に保存する
     // （日本の店舗画面では常に入力欄を表示し、「※ISWのみ必要」という注記で運用する方針に変更したため）
@@ -3499,7 +3580,8 @@ function apiShopCreateRequest(token, payload) {
       saleName ? `セール名: ${saleName}` : '',
       location ? `撮影希望場所: ${location}` : '',
       prep ? `準備場所: ${prep}` : '',
-      `該当の手配課: ${team}手配課`
+      `該当の手配課: ${team}手配課`,
+      remarks ? `【備考】\n${remarks}` : ''
     ].filter(Boolean).join('\n');
 
     // ★店舗自身の送信という扱いにする（appendHistory_のsenderRoleにSHOPを記録）。
@@ -3675,6 +3757,91 @@ function apiToggleHistoryCheck(token, historyId, checked) {
       const target = findReservationRow_(kanriNo);
       if (target.rowIndex !== -1) {
         setUnreadFlag_(target.sheet, target.headers, target.rowIndex, session.role, stillUnread);
+      }
+    }
+  } finally {
+    lock.releaseLock();
+  }
+  return { ok: true };
+}
+
+// ★要件：メッセージは、相手（宛先）がまだ見ていない（既読チェックが付いていない）間だけ、
+// 送信した本人が削除できるようにする。相手が既に既読チェックを付けた後は削除できない
+// （相手の画面から履歴が消えて「見たはずのやり取りが消えた」と混乱するのを防ぐため）。
+function apiDeleteHistoryMessage(token, historyId) {
+  const session = requireSession_(token);
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
+  try {
+    const sheet = getSpreadsheet_().getSheetByName(HISTORY_SHEET_NAME);
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) throw new Error('対象の履歴が見つかりません。');
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const values = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
+    const idColIdx = headers.indexOf(H_COL_ID);
+    const kanriColIdx = headers.indexOf(H_COL_KANRI);
+    const roleColIdx = headers.indexOf(H_COL_SENDER_ROLE);
+    const recipColIdx = headers.indexOf(H_COL_RECIPIENT_ROLE);
+
+    let targetIdx = -1;
+    for (let i = 0; i < values.length; i++) {
+      if (String(values[i][idColIdx]) === String(historyId)) { targetIdx = i; break; }
+    }
+    if (targetIdx === -1) throw new Error('対象の履歴が見つかりません。');
+    const targetRow = targetIdx + 2;
+
+    // ★認可：自分が送ったメッセージだけ削除できる（apiToggleHistoryCheckと同様、支店・店舗は
+    // 自分の案件かどうかも確認する）
+    const senderRole = roleColIdx === -1 ? '' : String(values[targetIdx][roleColIdx]).trim().toUpperCase();
+    if (senderRole !== session.role) {
+      throw new Error('自分が送信したメッセージのみ削除できます。');
+    }
+    if (session.role === BRANCH_ROLE) {
+      const branchColIdx = headers.indexOf(H_COL_BRANCH_CODE);
+      const rowBranch = branchColIdx === -1
+        ? '' : String(values[targetIdx][branchColIdx]).trim().toUpperCase();
+      if (rowBranch !== session.branchCode) {
+        throw new Error('この履歴を操作する権限がありません。');
+      }
+    }
+    if (session.role === SHOP_ROLE) {
+      const originColIdx = headers.indexOf(H_COL_ORIGIN_SHOP);
+      const rowOrigin = originColIdx === -1
+        ? '' : String(values[targetIdx][originColIdx]).trim().toUpperCase();
+      if (!rowOrigin || rowOrigin !== session.branchCode) {
+        throw new Error('この履歴を操作する権限がありません。');
+      }
+    }
+
+    // ★相手（宛先）がまだ既読チェックを付けていないことを確認する
+    const recipRaw = recipColIdx === -1 ? '' : values[targetIdx][recipColIdx];
+    const recipientRole = effectiveRecipientRole_(senderRole, recipRaw);
+    const recipCheckCol = recipientRole === JP_ROLE ? H_COL_CHECK_JP
+      : recipientRole === SHOP_ROLE ? H_COL_CHECK_SHOP : H_COL_CHECK_BRANCH;
+    const recipCheckColIdx = headers.indexOf(recipCheckCol);
+    if (recipCheckColIdx !== -1 && isActiveFlag_(values[targetIdx][recipCheckColIdx])) {
+      throw new Error('相手が既に確認済みのため削除できません。');
+    }
+
+    const kanriNo = kanriColIdx === -1 ? '' : String(values[targetIdx][kanriColIdx]);
+    sheet.deleteRow(targetRow);
+
+    // ★性能改善：削除後、相手側の未読フラグを再計算する（この案件について相手側から見て
+    // まだ未読の他のメッセージが残っていなければ、要対応フラグを下ろす）
+    if (kanriNo && recipientRole) {
+      let stillUnread = false;
+      for (let i = 0; i < values.length; i++) {
+        if (i === targetIdx) continue;
+        if (String(values[i][kanriColIdx]) !== kanriNo) continue;
+        const rowSenderRole = roleColIdx === -1 ? '' : String(values[i][roleColIdx]).trim().toUpperCase();
+        if (rowSenderRole !== session.role) continue; // 自分（削除した側）が送った他のメッセージだけが対象
+        const rowRecipRaw = recipColIdx === -1 ? '' : values[i][recipColIdx];
+        if (effectiveRecipientRole_(rowSenderRole, rowRecipRaw) !== recipientRole) continue;
+        if (recipCheckColIdx !== -1 && !isActiveFlag_(values[i][recipCheckColIdx])) { stillUnread = true; break; }
+      }
+      const target = findReservationRow_(kanriNo);
+      if (target.rowIndex !== -1) {
+        setUnreadFlag_(target.sheet, target.headers, target.rowIndex, recipientRole, stillUnread);
       }
     }
   } finally {

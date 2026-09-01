@@ -1544,55 +1544,105 @@ section('27. 日本記入欄（管轄・フォトブリッジ登録・AI加工�
 }
 
 // ---------------------------------------------------------------
-section('28. メモ履歴（共有メモ・メモ（現地用）の積み上げ記録）');
+section('28. メモ履歴（共有メモを現地支店・日本支店（店舗）・手配課で分離、メモ（現地用）は積み上げ記録）');
 {
-  const ctx = featureFixture();
+  const ctx = shopFixture();
   addCase(ctx, '予約一覧', { '支店コード':'VIE','管理番号':'VIE-601','管轄':'関東' });
   const jp = ctx.apiLogin('KANTO','pw');
   const vie = ctx.apiLogin('VIE','vp');
+  const shop = ctx.apiLogin('SHOP1','sp');
 
-  // 追加すると即座に反映され、日付・記入者は自動で入る（3択保留の対象外）
-  ctx.apiAddMemo(jp.session.token, 'VIE-601', '共有メモ', '請求書は月末締めで発行予定');
-  const afterFirst = ctx.apiGetReservationDetail(jp.session.token, 'VIE-601').detail;
+  // --- 現地支店の共有メモ：追加すると即座に反映され、日付・記入者は自動で入る（3択保留の対象外） ---
+  ctx.apiAddMemo(vie.session.token, 'VIE-601', '共有メモ（現地支店）', '請求書は月末締めで発行予定');
+  const afterFirst = ctx.apiGetReservationDetail(vie.session.token, 'VIE-601').detail;
   check('追加した内容が入る', afterFirst.memoLog[0].body === '請求書は月末締めで発行予定');
-  check('種別が共有メモになっている', afterFirst.memoLog[0].type === '共有メモ');
-  check('記入者が自動で入る（Googleアカウントの氏名）', afterFirst.memoLog[0].who.includes('tanaka'),
-        afterFirst.memoLog[0].who);
+  check('種別が共有メモ（現地支店）になっている', afterFirst.memoLog[0].type === '共有メモ（現地支店）');
+  check('記入者が自動で入る（Googleアカウントの氏名）', !!afterFirst.memoLog[0].who, afterFirst.memoLog[0].who);
   check('日時が自動で入る', /^\d{4}\/\d{2}\/\d{2}/.test(afterFirst.memoLog[0].datetime), afterFirst.memoLog[0].datetime);
 
   // 積み上げ式：追加するたびに増え、新しい順で返る
-  ctx.apiAddMemo(vie.session.token, 'VIE-601', '共有メモ', '請求書は届いています');
+  ctx.apiAddMemo(vie.session.token, 'VIE-601', '共有メモ（現地支店）', '請求書は届いています');
   ctx.apiAddMemo(vie.session.token, 'VIE-601', 'メモ（現地用）', '雨天時は屋内スタジオへ変更');
-  const afterThree = ctx.apiGetReservationDetail(jp.session.token, 'VIE-601').detail;
-  const sharedOnly = afterThree.memoLog.filter(m => m.type === '共有メモ');
+  const afterThree = ctx.apiGetReservationDetail(vie.session.token, 'VIE-601').detail;
+  const sharedOnly = afterThree.memoLog.filter(m => m.type === '共有メモ（現地支店）');
   const localOnly = afterThree.memoLog.filter(m => m.type === 'メモ（現地用）');
-  check('共有メモが2件積み上がっている', sharedOnly.length === 2, JSON.stringify(sharedOnly));
+  check('共有メモ（現地支店）が2件積み上がっている', sharedOnly.length === 2, JSON.stringify(sharedOnly));
   check('新しい順（最新が先頭）', sharedOnly[0].body === '請求書は届いています', JSON.stringify(sharedOnly));
   check('古い方も消えずに残っている', sharedOnly[1].body === '請求書は月末締めで発行予定');
   check('メモ（現地用）は種別で分かれて1件だけ', localOnly.length === 1 && localOnly[0].body === '雨天時は屋内スタジオへ変更');
 
-  // 空欄・不正な種別は拒否する
+  // --- 空欄・不正な種別は拒否する ---
   let emptyErr = null;
-  try { ctx.apiAddMemo(jp.session.token, 'VIE-601', '共有メモ', '   '); } catch (e) { emptyErr = e.message; }
+  try { ctx.apiAddMemo(vie.session.token, 'VIE-601', '共有メモ（現地支店）', '   '); } catch (e) { emptyErr = e.message; }
   check('空欄のメモは追加できない', emptyErr !== null, String(emptyErr));
   let typeErr = null;
   try { ctx.apiAddMemo(jp.session.token, 'VIE-601', 'アンケート回答', '手入力で紛れ込ませようとする内容'); } catch (e) { typeErr = e.message; }
   check('種別「アンケート回答」は手入力では追加できない（Googleフォーム専用）', typeErr !== null, String(typeErr));
+  let legacyErr = null;
+  try { ctx.apiAddMemo(jp.session.token, 'VIE-601', '共有メモ', '旧方式の書き込みはもう使えない'); } catch (e) { legacyErr = e.message; }
+  check('旧方式の種別「共有メモ」はもう追加できない（3分割後は使わない）', legacyErr !== null, String(legacyErr));
 
-  // 他支店の案件へは追加できない
+  // --- 他支店の案件へは追加できない ---
   const ist = ctx.apiLogin('IST','ip');
   let crossErr = null;
-  try { ctx.apiAddMemo(ist.session.token, 'VIE-601', '共有メモ', '侵入'); } catch (e) { crossErr = e.message; }
+  try { ctx.apiAddMemo(ist.session.token, 'VIE-601', '共有メモ（現地支店）', '侵入'); } catch (e) { crossErr = e.message; }
   check('他支店の案件へメモを追加できない', crossErr !== null, String(crossErr));
 
-  // 過去（移行前）のメモは、まだ1件も無いときだけフォールバックとして表示される
-  addCase(ctx, '予約一覧', { '支店コード':'VIE','管理番号':'VIE-602','管轄':'関東', '共有メモ':'旧方式で保存されていたメモ' });
-  const legacy = ctx.apiGetReservationDetail(jp.session.token, 'VIE-602').detail;
-  check('メモ履歴が空でも旧方式の値がフォールバック表示される', legacy['共有メモ'] === '旧方式で保存されていたメモ');
-  check('メモ履歴自体は空のまま（フォールバックは画面側の責務）', legacy.memoLog.length === 0);
-  ctx.apiAddMemo(jp.session.token, 'VIE-602', '共有メモ', '新方式の1件目');
-  const afterMigrate = ctx.apiGetReservationDetail(jp.session.token, 'VIE-602').detail;
-  check('新しく追加すればメモ履歴に乗る', afterMigrate.memoLog.some(m => m.body === '新方式の1件目'));
+  // ★要件：共有メモは現地支店・日本支店（店舗）・手配課それぞれ専用で、担当ロール以外は追加できない
+  let jpToBranchErr = null;
+  try { ctx.apiAddMemo(jp.session.token, 'VIE-601', '共有メモ（現地支店）', '手配課からの侵入'); } catch (e) { jpToBranchErr = e.message; }
+  check('手配課は共有メモ（現地支店）を追加できない', jpToBranchErr !== null, String(jpToBranchErr));
+  let branchToJpErr = null;
+  try { ctx.apiAddMemo(vie.session.token, 'VIE-601', '共有メモ（手配課）', '現地支店からの侵入'); } catch (e) { branchToJpErr = e.message; }
+  check('現地支店は共有メモ（手配課）を追加できない', branchToJpErr !== null, String(branchToJpErr));
+  let branchToShopErr = null;
+  try { ctx.apiAddMemo(vie.session.token, 'VIE-601', '共有メモ（日本支店）', '現地支店からの侵入'); } catch (e) { branchToShopErr = e.message; }
+  check('現地支店は共有メモ（日本支店）を追加できない', branchToShopErr !== null, String(branchToShopErr));
+
+  // ★要件：手配課は「共有メモ（手配課）」に書き込め、あわせて「共有メモ（日本支店）」も閲覧できる
+  // （現地支店の共有メモは見えない）
+  ctx.apiAddMemo(jp.session.token, 'VIE-601', '共有メモ（手配課）', '手配課内の連絡事項');
+  const jpView = ctx.apiGetReservationDetail(jp.session.token, 'VIE-601').detail;
+  check('手配課の画面には共有メモ（手配課）が見える', jpView.memoLog.some(m => m.type === '共有メモ（手配課）' && m.body === '手配課内の連絡事項'));
+  check('手配課の画面には共有メモ（現地支店）は見えない（他ロール専用のため）',
+        !jpView.memoLog.some(m => m.type === '共有メモ（現地支店）'));
+
+  // ★要件：現地支店の画面には自分の共有メモ（現地支店）だけが見える（手配課の共有メモは見えない）
+  const branchView = ctx.apiGetReservationDetail(vie.session.token, 'VIE-601').detail;
+  check('現地支店の画面には共有メモ（現地支店）が見える', branchView.memoLog.some(m => m.type === '共有メモ（現地支店）'));
+  check('現地支店の画面には共有メモ（手配課）は見えない', !branchView.memoLog.some(m => m.type === '共有メモ（手配課）'));
+
+  // --- 日本支店（店舗）の共有メモ：店舗が起票した案件で確認する ---
+  const shopCase = ctx.apiShopCreateRequest(shop.session.token, {
+    branchCode: 'VIE', team: '関東', groomLastName: 'Test', groomName: 'Taro', brideLastName: 'Test', brideName: 'Hanako',
+    challengeNo: 'DUMMYCHG028', hope1: '2026-09-10'
+  });
+  const shopKanri = shopCase.kanriNo;
+
+  // 店舗は共有メモ（日本支店）以外は追加できない（メモ（現地用）も不可）
+  let shopLocalErr = null;
+  try { ctx.apiAddMemo(shop.session.token, shopKanri, 'メモ（現地用）', '店舗からの侵入'); } catch (e) { shopLocalErr = e.message; }
+  check('店舗が追加できるのは共有メモ（日本支店）だけです', shopLocalErr !== null, String(shopLocalErr));
+  let shopBranchErr = null;
+  try { ctx.apiAddMemo(shop.session.token, shopKanri, '共有メモ（現地支店）', '店舗からの侵入'); } catch (e) { shopBranchErr = e.message; }
+  check('店舗は共有メモ（現地支店）を追加できない', shopBranchErr !== null, String(shopBranchErr));
+
+  ctx.apiAddMemo(shop.session.token, shopKanri, '共有メモ（日本支店）', '店舗内の連絡事項');
+  const shopView = ctx.apiGetReservationDetail(shop.session.token, shopKanri).detail;
+  check('店舗の画面には自分の共有メモ（日本支店）が見える', shopView.memoLog.some(m => m.type === '共有メモ（日本支店）' && m.body === '店舗内の連絡事項'));
+
+  // ★要件：手配課は「共有メモ（日本支店）」も見える（ただし追記はできない＝閲覧のみ）
+  const jpViewShop = ctx.apiGetReservationDetail(jp.session.token, shopKanri).detail;
+  check('手配課の画面には共有メモ（日本支店）も見える', jpViewShop.memoLog.some(m => m.type === '共有メモ（日本支店）' && m.body === '店舗内の連絡事項'));
+  let jpToShopErr = null;
+  try { ctx.apiAddMemo(jp.session.token, shopKanri, '共有メモ（日本支店）', '手配課からの書き込み'); } catch (e) { jpToShopErr = e.message; }
+  check('手配課は共有メモ（日本支店）には追記できない（閲覧のみ）', jpToShopErr !== null, String(jpToShopErr));
+
+  // 店舗の画面には共有メモ（現地支店）・共有メモ（手配課）は見えない
+  ctx.apiAddMemo(vie.session.token, shopKanri, '共有メモ（現地支店）', '現地支店内の連絡事項');
+  const shopViewAfterBranchMemo = ctx.apiGetReservationDetail(shop.session.token, shopKanri).detail;
+  check('店舗の画面には共有メモ（現地支店）は見えない',
+        !shopViewAfterBranchMemo.memoLog.some(m => m.type === '共有メモ（現地支店）'));
 }
 
 // ---------------------------------------------------------------
@@ -3050,6 +3100,168 @@ section('50. 希望日の時間帯(AM/PM)・複数プラン希望・お客様情
   d = ctx.apiGetReservationDetail(jpToken, kanri).detail;
   check('ヘアメイクアンケートにチェックを入れて保存できる',
         d.checklist.find(c => c.item === 'ヘアメイクアンケート').checked === true);
+}
+
+// ---------------------------------------------------------------
+section('51. 新規依頼フォームの拡張：AM/PM・複数プラン希望・備考欄を作成時から保存、パスポート番号は不要');
+{
+  const ctx = shopFixture();
+  const shop = ctx.apiLogin('SHOP1', 'sp');
+  const shopToken = shop.session.token;
+  const jp = ctx.apiLogin('KANTO', 'pw');
+  const jpToken = jp.session.token;
+
+  // --- パスポート番号を渡さずに作成できる（新規依頼フォームからは廃止。既存案件では引き続き編集可） ---
+  const created = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'VIE', team: '関東', groomLastName: 'Gl', groomName: 'G', brideLastName: 'Gbl', brideName: 'Gb',
+    hope1: '2026-12-01', hopeTime1: 'AM', hopePlan1: 'プランA',
+    hope2: '2026-12-02', hopeTime2: 'PM', hopePlan2: 'プランB',
+    remarks: '雨天時は屋内スタジオへ変更希望', challengeNo: 'DUMMYCHG052'
+  });
+  const kanri = created.kanriNo;
+  const d = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+  check('パスポート番号を渡さなくても作成できる', created.ok === true && !!kanri);
+  check('パスポート番号は空欄のまま', !d['パスポート番号']);
+  check('備考が保存される', d['備考'] === '雨天時は屋内スタジオへ変更希望');
+  check('初回メッセージに備考の内容が含まれる',
+        d.history.some(h => h.body.includes('【備考】') && h.body.includes('雨天時は屋内スタジオへ変更希望')));
+  check('希望日①の時間帯が保存される', d['希望日①時間帯'] === 'AM');
+  check('希望日①のプランが保存される', d['希望日①プラン'] === 'プランA');
+  check('希望日②の時間帯が保存される', d['希望日②時間帯'] === 'PM');
+  check('希望日②のプランが保存される', d['希望日②プラン'] === 'プランB');
+
+  // --- 不正な時間帯は無視される（AM/PM以外は保存しない） ---
+  const created2 = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'VIE', team: '関東', groomLastName: 'Hl', groomName: 'H', brideLastName: 'Hbl', brideName: 'Hb',
+    hope1: '2026-12-10', hopeTime1: '侵入値', challengeNo: 'DUMMYCHG053'
+  });
+  const d2 = ctx.apiGetReservationDetail(jpToken, created2.kanriNo).detail;
+  check('AM/PM以外の時間帯は保存されない（空欄になる）', !d2['希望日①時間帯']);
+
+  // --- 備考・希望日プランを省略しても従来どおり作成できる（後方互換） ---
+  const created3 = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'VIE', team: '関東', groomLastName: 'Il', groomName: 'I', brideLastName: 'Ibl', brideName: 'Ib',
+    hope1: '2026-12-15', challengeNo: 'DUMMYCHG054'
+  });
+  check('備考・希望日プランを省略しても作成できる', created3.ok === true);
+}
+
+// ---------------------------------------------------------------
+section('52. お客様情報の追加項目（同行者人数・フライトOUT）・撮影日(挙式日)FIXの自動ミラー');
+{
+  const ctx = featureFixture();
+  addCase(ctx, '予約一覧', { '支店コード': 'VIE', '管理番号': 'VIE-970', '管轄': '関東' });
+  const jp = ctx.apiLogin('KANTO', 'pw');
+  const jpToken = jp.session.token;
+  const shop = jp; // 同行者人数はJP/BRANCH/SHOPいずれからも編集できる項目のためJPで代表確認する
+
+  // --- 同行者（大人・子供・幼児）の人数 ---
+  ctx.apiSaveFieldsQuiet(jpToken, 'VIE-970', {
+    '同行者の有無': '有', '同行者（大人）': 2, '同行者（子供）': 1, '同行者（幼児）': 1
+  });
+  let d = ctx.apiGetReservationDetail(jpToken, 'VIE-970').detail;
+  check('同行者（大人）の人数が保存される', String(d['同行者（大人）']) === '2', d['同行者（大人）']);
+  check('同行者（子供）の人数が保存される', String(d['同行者（子供）']) === '1', d['同行者（子供）']);
+  check('同行者（幼児）の人数が保存される', String(d['同行者（幼児）']) === '1', d['同行者（幼児）']);
+
+  // --- フライト情報（IN／OUT） ---
+  ctx.apiSaveFieldsQuiet(jpToken, 'VIE-970', {
+    'フライト情報': 'JL123 12/1 10:00羽田発', 'フライト情報（OUT）': 'JL124 12/5 16:00現地発'
+  });
+  d = ctx.apiGetReservationDetail(jpToken, 'VIE-970').detail;
+  check('フライト情報（IN）が保存される', d['フライト情報'] === 'JL123 12/1 10:00羽田発');
+  check('フライト情報（OUT）が保存される', d['フライト情報（OUT）'] === 'JL124 12/5 16:00現地発');
+
+  // --- 撮影日FIXを設定すると挙式日FIXへ自動でミラーされる ---
+  ctx.apiSaveFieldsQuiet(jpToken, 'VIE-970', { '撮影日FIX': '2026-12-20' });
+  d = ctx.apiGetReservationDetail(jpToken, 'VIE-970').detail;
+  check('撮影日FIXを設定すると挙式日FIXにも同じ日付が入る',
+        d['撮影日FIX'] === '2026-12-20' && d['挙式日FIX'] === '2026-12-20',
+        JSON.stringify({ c: d['撮影日FIX'], w: d['挙式日FIX'] }));
+
+  // 挙式日FIXが同じ変更セットで明示的に指定された場合は、そちらを優先する（上書きしない）
+  ctx.apiSaveFieldsQuiet(jpToken, 'VIE-970', { '撮影日FIX': '2026-12-25', '挙式日FIX': '2026-12-24' });
+  d = ctx.apiGetReservationDetail(jpToken, 'VIE-970').detail;
+  check('挙式日FIXが明示的に指定されていればミラーで上書きしない',
+        d['撮影日FIX'] === '2026-12-25' && d['挙式日FIX'] === '2026-12-24',
+        JSON.stringify({ c: d['撮影日FIX'], w: d['挙式日FIX'] }));
+
+  // apiCommitChangesでも同様にミラーされる
+  ctx.apiCommitChanges(jpToken, 'VIE-970', { '撮影日FIX': '2027-01-10' }, '');
+  d = ctx.apiGetReservationDetail(jpToken, 'VIE-970').detail;
+  check('apiCommitChangesでも撮影日FIXの変更が挙式日FIXへミラーされる',
+        d['撮影日FIX'] === '2027-01-10' && d['挙式日FIX'] === '2027-01-10');
+}
+
+// ---------------------------------------------------------------
+section('53. メッセージは、相手がまだ見ていない間だけ送信者が削除できる（apiDeleteHistoryMessage）');
+{
+  const ctx = shopFixture();
+  addCase(ctx, '予約一覧', { '支店コード': 'VIE', '管理番号': 'VIE-980', '管轄': '関東' });
+  const jp = ctx.apiLogin('KANTO', 'pw');
+  const jpToken = jp.session.token;
+  const vie = ctx.apiLogin('VIE', 'vp');
+  const vieToken = vie.session.token;
+
+  // --- 送信直後・相手が未読の間は送信者本人が削除できる ---
+  ctx.apiCommitChanges(jpToken, 'VIE-980', {}, '削除できるはずの未読メッセージ');
+  let hist = ctx.apiGetReservationDetail(jpToken, 'VIE-980').detail.history;
+  let target = hist.find(h => h.body.includes('削除できるはずの未読メッセージ'));
+  check('送信直後は自分が送ったメッセージにdeletable=trueが付く', target.deletable === true, JSON.stringify(target));
+  check('相手（支店）から見ても未読の間はdeletable情報が別に持てる（自分が送ったものではないのでfalse）',
+        ctx.apiGetReservationDetail(vieToken, 'VIE-980').detail.history
+          .find(h => h.body.includes('削除できるはずの未読メッセージ')).deletable === false);
+
+  ctx.apiDeleteHistoryMessage(jpToken, target.id);
+  hist = ctx.apiGetReservationDetail(jpToken, 'VIE-980').detail.history;
+  check('削除すると履歴から消える', !hist.some(h => h.body.includes('削除できるはずの未読メッセージ')));
+
+  // --- 相手が既読にした後は削除できない ---
+  ctx.apiCommitChanges(jpToken, 'VIE-980', {}, '既読後は削除できないメッセージ');
+  hist = ctx.apiGetReservationDetail(jpToken, 'VIE-980').detail.history;
+  target = hist.find(h => h.body.includes('既読後は削除できないメッセージ'));
+  ctx.apiToggleHistoryCheck(vieToken, target.id, true);
+  let err = null;
+  try { ctx.apiDeleteHistoryMessage(jpToken, target.id); } catch (e) { err = e.message; }
+  check('相手が既読にした後は削除できない', err !== null, String(err));
+  hist = ctx.apiGetReservationDetail(jpToken, 'VIE-980').detail.history;
+  check('削除に失敗したメッセージは履歴に残っている', hist.some(h => h.body.includes('既読後は削除できないメッセージ')));
+
+  // --- 自分が送信したメッセージ以外は削除できない ---
+  ctx.apiCommitChanges(vieToken, 'VIE-980', {}, '支店が送ったメッセージ');
+  hist = ctx.apiGetReservationDetail(jpToken, 'VIE-980').detail.history;
+  target = hist.find(h => h.body.includes('支店が送ったメッセージ'));
+  err = null;
+  try { ctx.apiDeleteHistoryMessage(jpToken, target.id); } catch (e) { err = e.message; }
+  check('自分が送信したメッセージ以外は削除できない（送信者が別ロール）', err !== null, String(err));
+
+  // --- 他支店の職員は操作できない ---
+  const ist = ctx.apiLogin('IST', 'ip');
+  ctx.apiCommitChanges(vieToken, 'VIE-980', {}, '支店発・他支店からの削除試験用');
+  hist = ctx.apiGetReservationDetail(jpToken, 'VIE-980').detail.history;
+  target = hist.find(h => h.body.includes('支店発・他支店からの削除試験用'));
+  err = null;
+  try { ctx.apiDeleteHistoryMessage(ist.session.token, target.id); } catch (e) { err = e.message; }
+  check('他支店はよその案件のメッセージを削除できない', err !== null, String(err));
+
+  // --- 存在しない履歴IDはエラーになる ---
+  err = null;
+  try { ctx.apiDeleteHistoryMessage(jpToken, 'no-such-id'); } catch (e) { err = e.message; }
+  check('存在しない履歴IDはエラーになる', err !== null, String(err));
+
+  // --- 店舗が起票した案件でも、店舗自身が送ったメッセージは未読の間だけ削除できる ---
+  const shop = ctx.apiLogin('SHOP1', 'sp');
+  const shopCase = ctx.apiShopCreateRequest(shop.session.token, {
+    branchCode: 'VIE', team: '関東', groomLastName: 'Jl', groomName: 'J', brideLastName: 'Jbl', brideName: 'Jb',
+    challengeNo: 'DUMMYCHG055', hope1: '2026-12-01'
+  });
+  ctx.apiCommitChanges(shop.session.token, shopCase.kanriNo, {}, '店舗からの未読メッセージ');
+  hist = ctx.apiGetReservationDetail(shop.session.token, shopCase.kanriNo).detail.history;
+  target = hist.find(h => h.body.includes('店舗からの未読メッセージ'));
+  check('店舗が送ったメッセージにもdeletable=trueが付く（起票元店舗の案件）', target.deletable === true);
+  ctx.apiDeleteHistoryMessage(shop.session.token, target.id);
+  hist = ctx.apiGetReservationDetail(shop.session.token, shopCase.kanriNo).detail.history;
+  check('店舗も自分が送った未読メッセージを削除できる', !hist.some(h => h.body.includes('店舗からの未読メッセージ')));
 }
 
 // ---------------------------------------------------------------

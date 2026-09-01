@@ -62,7 +62,10 @@
     { key: 'transport', label: '送迎車' }
   ];
   // メモ履歴の種別（Code.gs の MEMO_TYPE_* と一致させる）
-  const MEMO_TYPE_SHARED = '共有メモ';
+  // ★機能追加：共有メモを現地支店・日本支店（店舗）・手配課ごとの独立したメモ欄に分離した
+  const MEMO_TYPE_SHARED_BRANCH = '共有メモ（現地支店）';
+  const MEMO_TYPE_SHARED_SHOP = '共有メモ（日本支店）';
+  const MEMO_TYPE_SHARED_JP = '共有メモ（手配課）';
   const MEMO_TYPE_LOCAL = 'メモ（現地用）';
   const MEMO_TYPE_SURVEY = 'アンケート回答';
 
@@ -74,7 +77,7 @@
   let detailActiveTab = 'local';
   let dashboardScope = { showAll: true, teams: [], branches: [] };
   let dashboardSortKey = 'default';  // 案件一覧の並び替え
-  let dashboardViewMode = 'card';    // 案件一覧の表示形式：'card'（カード）／'table'（表）
+  let dashboardViewMode = 'table';   // 案件一覧の表示形式：既定は表（'table'）／サブでカード（'card'）
   let searchScope = { showAll: true, teams: [], branches: [] };
   let statsScope = { showAll: true, teams: [], branches: [] };
   let dayScope = { showAll: true, teams: [], branches: [] };
@@ -849,7 +852,8 @@
       ? '<p class="hint-text">まだやり取りがありません。</p>'
       : d.history.map(h => `
         <div class="history-item">
-          <div class="history-meta"><span>${escapeHtml(h.sender)}</span><span>${escapeHtml(h.datetime)}</span></div>
+          <div class="history-meta"><span>${escapeHtml(h.sender)}</span><span>${escapeHtml(h.datetime)}</span>
+            ${h.deletable ? `<button type="button" class="history-link" data-history-message-delete="${escapeAttr(h.id)}">削除</button>` : ''}</div>
           <div class="history-body">${escapeHtml(h.body)}</div>
         </div>`).join('');
 
@@ -927,6 +931,7 @@
         <button type="button" class="tab-btn" data-scroll-to="shop-sec-customer">お客様情報</button>
         <button type="button" class="tab-btn" data-scroll-to="shop-sec-reservation">予約内容</button>
         <button type="button" class="tab-btn" data-scroll-to="shop-sec-docs">書類</button>
+        <button type="button" class="tab-btn" data-scroll-to="shop-sec-memo">共有メモ</button>
         <button type="button" class="tab-btn" data-scroll-to="shop-sec-message">メッセージ</button>
         <button type="button" class="tab-btn" data-scroll-to="shop-sec-history">履歴</button>
       </div>`;
@@ -961,13 +966,17 @@
           <div class="field-block"><label>パスポート番号（※ISWのみ必要）</label><input data-pending="パスポート番号" value="${escapeAttr(d['パスポート番号'])}"></div>
           <div class="field-block">${costumeCompanySelectHtml_(costumeList, d['衣装会社'])}</div>
           <div class="field-block"><label>同行者の有無</label>${companionSelectHtml_(d['同行者の有無'])}</div>
+          ${companionCountFieldsHtml_(d)}
           <div class="field-block"><label>現地で連絡可能なメールアドレス</label><input type="email" data-pending="現地連絡先メール" value="${escapeAttr(d['現地連絡先メール'])}"></div>
           <div class="field-block"><label>現地で連絡可能な電話番号</label><input data-pending="現地連絡先電話" value="${escapeAttr(d['現地連絡先電話'])}"></div>
           <div class="field-block"><label>滞在ホテル名</label><input data-pending="ホテル" value="${escapeAttr(d['ホテル'])}"></div>
           <div class="field-block"><label>ホテル住所</label><input data-pending="ホテル住所" value="${escapeAttr(d['ホテル住所'])}"></div>
-          <div class="field-block"><label>チェックイン日</label><input type="date" data-pending="チェックイン日" value="${escapeAttr(d['チェックイン日'])}"></div>
-          <div class="field-block"><label>チェックアウト日</label><input type="date" data-pending="チェックアウト日" value="${escapeAttr(d['チェックアウト日'])}"></div>
-          <div class="field-block" style="grid-column:1/-1;"><label>フライト情報</label><input data-pending="フライト情報" value="${escapeAttr(d['フライト情報'])}" placeholder="例）JL123 8/20 10:00羽田発 → 14:00現地着"></div>
+          <div class="field-block"><label>チェックイン日</label><input type="date" data-pending="チェックイン日" value="${escapeAttr(d['チェックイン日'])}">
+            <p class="hint-text" style="margin-top:3px;">撮影地のチェックイン日を入れてください</p></div>
+          <div class="field-block"><label>チェックアウト日</label><input type="date" data-pending="チェックアウト日" value="${escapeAttr(d['チェックアウト日'])}">
+            <p class="hint-text" style="margin-top:3px;">撮影地のチェックアウト日を入れてください</p></div>
+          <div class="field-block"><label>フライト情報（IN）</label><input data-pending="フライト情報" value="${escapeAttr(d['フライト情報'])}" placeholder="例）JL123 8/20 10:00羽田発 → 14:00現地着"></div>
+          <div class="field-block"><label>フライト情報（OUT）</label><input data-pending="フライト情報（OUT）" value="${escapeAttr(d['フライト情報（OUT）'])}" placeholder="例）JL124 8/25 16:00現地発 → 翌10:00羽田着"></div>
         </div>
       </div>
       <div id="shop-sec-reservation" style="scroll-margin-top:110px;">
@@ -1064,6 +1073,9 @@
         <p id="shop-upload-error" class="error-text hidden"></p>
         <div id="shop-upload-list" style="margin-top:10px;"><p class="hint-text">読み込み中...</p></div>
       </div>
+      <div id="shop-sec-memo" style="scroll-margin-top:110px;">
+        ${memoLogSectionHtml(d, MEMO_TYPE_SHARED_SHOP, '共有メモ（日本支店）', '店舗内向けの自由メモを入力')}
+      </div>
       <div class="section-card">
         <div style="display:flex;flex-direction:column;gap:8px;">
           <button type="button" class="send-btn" id="btn-commit" style="width:100%;">変更（＋メッセージ）を決定して送信</button>
@@ -1082,6 +1094,7 @@
       </div>`;
 
     wirePendingInputs(c);
+    wireCompanionToggle_(c);
     $('btn-msg-only').addEventListener('click', sendMessageOnly);
     $('btn-commit').addEventListener('click', commitChangesWithMessage);
     $('btn-save-quiet').addEventListener('click', saveQuiet);
@@ -1189,6 +1202,11 @@
     loadShopUploadedDocsInto('shop-upload-list');
     loadFormUrlsInto('shop-form-urls');
 
+    // ★要件：相手がまだ見ていない、自分が送ったメッセージは削除できるようにする
+    c.querySelectorAll('[data-history-message-delete]').forEach(btn => {
+      btn.addEventListener('click', () => deleteHistoryMessage(btn.dataset.historyMessageDelete));
+    });
+
     // ★開いた時点で、自分宛の未読メッセージをまとめて既読にする（店舗向けには個別チェックUIを設けていない）
     (d.history || []).forEach(h => {
       if (h.senderRole !== 'SHOP' && !h.checkShop) {
@@ -1294,8 +1312,12 @@
   // 編集はしない（編集は各タブの通常のSTS欄・3択フローで行う）ための、読み取り専用の簡易表示。
   function inlineStatusBadge(fieldName, current, chipClass) {
     const hid = 'fh-inline-' + fieldName.replace(/[^A-Za-z0-9]/g, '_');
+    // ★要件：STS(支店側)が空欄（＝現地がまだ確認していないだけで、案件自体は依頼済み）の間は
+    // 他の「未設定」（値そのものが決まっていない項目）と紛らわしいため「未確認」と表示する。
+    // STS(JP側)は依頼直後から必ずRQ等の値が入るため、この対象には含めない。
+    const emptyLabel = chipClass === 'branch' ? '未確認' : '未設定';
     return `<span class="chip ${chipClass}" data-history-field="${escapeAttr(fieldName)}" data-history-target="${hid}"
-        style="cursor:pointer;font-weight:700;">${escapeHtml(current || '未設定')}</span>
+        style="cursor:pointer;font-weight:700;">${escapeHtml(current || emptyLabel)}</span>
       <div class="history-panel hidden" id="${hid}" style="width:100%;margin-top:4px;"></div>`;
   }
 
@@ -1394,6 +1416,26 @@
       </div>`;
   }
 
+  // ★機能：他ロール専用の共有メモを「閲覧のみ」で表示する（追記ボタンは出さない）。
+  // 手配課が共有メモ（日本支店）を見られるようにする、という要件のためだけに使う。
+  function memoLogReadOnlySectionHtml_(d, memoType, title) {
+    const tlItem = (who, when, body) => `
+      <div class="tl-item">
+        <div class="tl-meta"><span>${escapeHtml(who)}</span><span>${escapeHtml(when)}</span></div>
+        <div class="tl-body">${escapeHtml(body)}</div>
+      </div>`;
+    const entries = (d.memoLog || []).filter(m => m.type === memoType);
+    const listHtml = entries.length
+      ? entries.map(m => tlItem(m.who, m.datetime, m.body)).join('')
+      : '<p class="hint-text">まだ記録はありません。</p>';
+    return `
+      <div class="section-card">
+        <h3>${escapeHtml(title)}</h3>
+        <p class="hint-text">閲覧のみです（追記はできません）。</p>
+        <div style="margin-top:10px;">${listHtml}</div>
+      </div>`;
+  }
+
   // ★機能：お客様がGoogleフォームで回答したアンケート内容を、案件ごとに時系列で表示する（読み取り専用）
   function surveyLogSectionHtml(d) {
     const entries = (d.memoLog || []).filter(m => m.type === MEMO_TYPE_SURVEY);
@@ -1480,6 +1522,22 @@
         <option value="">未設定</option>
         ${COMPANION_CHOICES_CLIENT.map(c => `<option value="${escapeAttr(c)}" ${c === current ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
       </select>`;
+  }
+  // ★要件：同行者の有無で「有」を選んだら、大人・子供・幼児の人数入力欄も出す
+  function companionCountFieldsHtml_(d) {
+    const show = d['同行者の有無'] === '有';
+    return `<div id="companion-count-block" class="detail-grid" style="grid-column:1/-1;${show ? '' : 'display:none;'}">
+        <div class="field-block"><label>大人　名</label><input type="number" min="0" data-pending="同行者（大人）" value="${escapeAttr(d['同行者（大人）'])}"></div>
+        <div class="field-block"><label>子供　名</label><input type="number" min="0" data-pending="同行者（子供）" value="${escapeAttr(d['同行者（子供）'])}"></div>
+        <div class="field-block"><label>幼児　名</label><input type="number" min="0" data-pending="同行者（幼児）" value="${escapeAttr(d['同行者（幼児）'])}"></div>
+      </div>`;
+  }
+  // ★要件：同行者の有無の選択が変わったら、人数欄の表示・非表示を切り替える
+  function wireCompanionToggle_(c) {
+    const sel = c.querySelector('[data-pending="同行者の有無"]');
+    const block = c.querySelector('#companion-count-block');
+    if (!sel || !block) return;
+    sel.addEventListener('change', () => { block.style.display = sel.value === '有' ? '' : 'none'; });
   }
 
   // ★要件：希望日の日付の隣に時間帯（AM／PM）を選べる欄を追加する（Code.gsのhopeTimeCol_と一致）。
@@ -1735,7 +1793,8 @@
       const branchCheckLabel = h.checkBranch ? `支店確認済み：${escapeHtml(h.checkedByBranch || '')}（${escapeHtml(h.dateBranch || '')}）` : '支店未確認';
       return `
       <div class="history-item ${unread ? 'unread' : ''}">
-        <div class="history-meta"><span>${escapeHtml(h.sender)}</span><span>${escapeHtml(h.datetime)}</span></div>
+        <div class="history-meta"><span>${escapeHtml(h.sender)}</span><span>${escapeHtml(h.datetime)}</span>
+          ${h.deletable ? `<button type="button" class="history-link" data-history-message-delete="${escapeAttr(h.id)}">削除</button>` : ''}</div>
         <div class="history-body">${escapeHtml(h.body)}</div>
         <div class="history-checks">
           <label><input type="checkbox" data-hid="${escapeAttr(h.id)}" data-side="JP" ${h.checkJp ? 'checked' : ''} ${session.role !== 'JP' ? 'disabled' : ''}> ${jpCheckLabel}</label>
@@ -1883,13 +1942,17 @@
             ${!d.passportRequired ? '' : `<div class="field-block"><label>パスポート番号（※ISWのみ必要）</label><input data-pending="パスポート番号" value="${escapeAttr(d['パスポート番号'])}"></div>`}
             <div class="field-block">${costumeCompanySelectHtml_(costumeList, d['衣装会社'])}</div>
             <div class="field-block"><label>同行者の有無</label>${companionSelectHtml_(d['同行者の有無'])}</div>
+          ${companionCountFieldsHtml_(d)}
             <div class="field-block"><label>現地で連絡可能なメールアドレス</label><input type="email" data-pending="現地連絡先メール" value="${escapeAttr(d['現地連絡先メール'])}"></div>
             <div class="field-block"><label>現地で連絡可能な電話番号</label><input data-pending="現地連絡先電話" value="${escapeAttr(d['現地連絡先電話'])}"></div>
             <div class="field-block"><label>滞在ホテル名</label><input data-pending="ホテル" value="${escapeAttr(d['ホテル'])}"></div>
             <div class="field-block"><label>ホテル住所</label><input data-pending="ホテル住所" value="${escapeAttr(d['ホテル住所'])}"></div>
-            <div class="field-block"><label>チェックイン日</label><input type="date" data-pending="チェックイン日" value="${escapeAttr(d['チェックイン日'])}"></div>
-            <div class="field-block"><label>チェックアウト日</label><input type="date" data-pending="チェックアウト日" value="${escapeAttr(d['チェックアウト日'])}"></div>
-            <div class="field-block" style="grid-column:1/-1;"><label>フライト情報</label><input data-pending="フライト情報" value="${escapeAttr(d['フライト情報'])}" placeholder="例）JL123 8/20 10:00羽田発 → 14:00現地着"></div>
+            <div class="field-block"><label>チェックイン日</label><input type="date" data-pending="チェックイン日" value="${escapeAttr(d['チェックイン日'])}">
+              <p class="hint-text" style="margin-top:3px;">撮影地のチェックイン日を入れてください</p></div>
+            <div class="field-block"><label>チェックアウト日</label><input type="date" data-pending="チェックアウト日" value="${escapeAttr(d['チェックアウト日'])}">
+              <p class="hint-text" style="margin-top:3px;">撮影地のチェックアウト日を入れてください</p></div>
+            <div class="field-block"><label>フライト情報（IN）</label><input data-pending="フライト情報" value="${escapeAttr(d['フライト情報'])}" placeholder="例）JL123 8/20 10:00羽田発 → 14:00現地着"></div>
+            <div class="field-block"><label>フライト情報（OUT）</label><input data-pending="フライト情報（OUT）" value="${escapeAttr(d['フライト情報（OUT）'])}" placeholder="例）JL124 8/25 16:00現地発 → 翌10:00羽田着"></div>
             <div class="field-block"><label>請求先</label>
               <select data-pending="請求先"><option value="">未設定</option>${BILLING_REGIONS.map(r => `<option value="${r}" ${d['請求先'] === r ? 'selected' : ''}>${r}</option>`).join('')}</select>
             </div>
@@ -1912,12 +1975,12 @@
         </div>
 
         <div class="section-card">
-          <!-- ★要件：CHG NOのすぐ隣に撮影日FIX・挙式日FIXを並べる（希望日のいずれかで
-               現地・日本双方がOKになると、applyHopeStatusCascade_により撮影日FIXへ自動で日付が入る） -->
+          <!-- ★要件：撮影日FIXと挙式日FIXは同じ欄「撮影日(挙式日)FIX」にまとめる（希望日のいずれかで
+               現地・日本双方がOKになると、applyHopeStatusCascade_により自動で日付が入る）。
+               挙式日FIX列は残してあり、保存時にwithCeremonyDateMirror_が同じ値を自動で反映する。 -->
           <div class="detail-grid">
             <div class="field-block"><label>CHG NO</label><input data-pending="CHG NO" value="${escapeAttr(d['CHG NO'])}"></div>
-            <div class="field-block"><label>撮影日FIX</label><input type="date" data-pending="撮影日FIX" value="${escapeAttr(d['撮影日FIX'])}"></div>
-            <div class="field-block"><label>挙式日FIX</label><input type="date" data-pending="挙式日FIX" value="${escapeAttr(d['挙式日FIX'])}"></div>
+            <div class="field-block"><label>撮影日(挙式日)FIX</label><input type="date" data-pending="撮影日FIX" value="${escapeAttr(d['撮影日FIX'])}"></div>
           </div>
         </div>
 
@@ -1987,7 +2050,10 @@
           </div>
         </div>
 
-        ${memoLogSectionHtml(d, MEMO_TYPE_SHARED, '共有メモ（支店・日本側どちらも自由に書けます）', '社内向けの自由メモを入力', d['共有メモ'])}
+        ${session.role === 'JP'
+          ? `${memoLogSectionHtml(d, MEMO_TYPE_SHARED_JP, '共有メモ（手配課）', '手配課内向けの自由メモを入力')}
+             ${memoLogReadOnlySectionHtml_(d, MEMO_TYPE_SHARED_SHOP, '共有メモ（日本支店）')}`
+          : memoLogSectionHtml(d, MEMO_TYPE_SHARED_BRANCH, '共有メモ（現地支店）', '現地支店内向けの自由メモを入力')}
 
         ${quickActionsHtml}
       </div>`;
@@ -2169,6 +2235,7 @@
     });
 
     wirePendingInputs(c);
+    wireCompanionToggle_(c);
     $('btn-msg-only').addEventListener('click', sendMessageOnly);
     $('btn-commit').addEventListener('click', commitChangesWithMessage);
     $('btn-save-quiet').addEventListener('click', saveQuiet);
@@ -2197,6 +2264,10 @@
     if ($('delivery-data-upload-submit')) $('delivery-data-upload-submit').addEventListener('click', submitDeliveryDataUpload);
     c.querySelectorAll('input[data-hid]').forEach(el => {
       el.addEventListener('change', () => toggleHistoryCheck(el.dataset.hid, el.checked));
+    });
+    // ★要件：相手がまだ見ていない、自分が送ったメッセージは削除できるようにする
+    c.querySelectorAll('[data-history-message-delete]').forEach(btn => {
+      btn.addEventListener('click', () => deleteHistoryMessage(btn.dataset.historyMessageDelete));
     });
     c.querySelectorAll('[data-history-field]').forEach(btn => {
       btn.addEventListener('click', () => toggleFieldHistory(btn.dataset.historyField, btn.dataset.historyTarget));
@@ -2547,6 +2618,17 @@
     } catch (e) { handleAuthError(e); }
   }
 
+  // ★要件：相手（宛先）がまだ見ていない、自分が送ったメッセージを削除できるようにする
+  // （相手が既読チェックを付けた後は、サーバー側（apiDeleteHistoryMessage）が拒否する）
+  async function deleteHistoryMessage(id) {
+    if (!confirm('このメッセージを削除します。よろしいですか？')) return;
+    try {
+      await gsRun('apiDeleteHistoryMessage', session.token, id);
+      showToast('削除しました');
+      openDetail(currentKanri, true);
+    } catch (e) { handleAuthError(e); }
+  }
+
   // ★機能：共有メモ／メモ（現地用）の追記。3択保留の対象外で、押した瞬間に単独保存する
   async function addMemo(memoType) {
     const el = document.querySelector(`[data-memo-input="${cssEscape_(memoType)}"]`);
@@ -2634,17 +2716,21 @@
 
   // ---------- 新規依頼（店舗ロール専用。拡張要望2章） ----------
   const SHOP_NEW_TEXT_FIELDS = ['challengeno', 'groom-last', 'groom', 'bride-last', 'bride', 'groom-age', 'bride-age',
-    'plan', 'sale', 'location', 'passport',
+    'plan', 'sale', 'location', 'remarks',
     // ★要件：オプションは最大10件（フリー入力）
     'option1', 'option2', 'option3', 'option4', 'option5',
     'option6', 'option7', 'option8', 'option9', 'option10'];
   const SHOP_NEW_DATE_FIELDS = ['hope1', 'hope2', 'hope3', 'hope4', 'hope5'];
+  // ★要件：希望日ごとの時間帯（AM/PM）・プラン欄
+  const SHOP_NEW_HOPE_TIME_FIELDS = ['hopetime1', 'hopetime2', 'hopetime3', 'hopetime4', 'hopetime5'];
+  const SHOP_NEW_HOPE_PLAN_FIELDS = ['hopeplan1', 'hopeplan2', 'hopeplan3', 'hopeplan4', 'hopeplan5'];
   async function openShopNewView() {
     showView('shop-new');
     $('shop-new-error').classList.add('hidden');
     $('shop-new-success').classList.add('hidden');
     SHOP_NEW_TEXT_FIELDS.forEach(k => { $('shop-new-' + k).value = ''; });
     SHOP_NEW_DATE_FIELDS.forEach(k => { $('shop-new-' + k).value = ''; });
+    SHOP_NEW_HOPE_TIME_FIELDS.forEach(k => { $('shop-new-' + k).value = ''; });
     // ★要件：希望日のカレンダーで今日より前の日付が選べてしまわないよう下限を付ける
     SHOP_NEW_DATE_FIELDS.forEach(k => { $('shop-new-' + k).min = todayIsoDate_(); });
     $('shop-new-initial-status').value = 'RQ';
@@ -2669,6 +2755,8 @@
     if (!branchCode) return;
     const meta = branchesCache.find(b => b.code === branchCode) || {};
     $('shop-new-prep-block').classList.toggle('hidden', meta.country !== 'イタリア');
+    // ★要件：希望日の時間帯（AM/PM）欄は、支店マスタの「希望日時間帯表示」がONの支店だけ表示する
+    document.querySelectorAll('.shop-new-hopetime').forEach(el => el.classList.toggle('hidden', !meta.showHopeTime));
     // ★要件変更：パスポート番号欄は支店の必須設定に関わらず常に表示する（※ISWのみ必要、と注記）
     try {
       const [plans, sales, locations, options] = await Promise.all([
@@ -2683,6 +2771,10 @@
       const planNames = activeNames(plans), optionNames = activeNames(options);
       $('shop-new-plan').innerHTML = '<option value="">未設定</option>' +
         planNames.map(n => `<option value="${escapeAttr(n)}">${escapeHtml(n)}</option>`).join('');
+      // ★要件：プランを複数希望できるように、希望日ごとのプラン選択欄にも同じ候補を入れる
+      const hopePlanOptsHtml = '<option value="">プラン未設定</option>' +
+        planNames.map(n => `<option value="${escapeAttr(n)}">${escapeHtml(n)}</option>`).join('');
+      SHOP_NEW_HOPE_PLAN_FIELDS.forEach(k => { $('shop-new-' + k).innerHTML = hopePlanOptsHtml; });
       $('shop-new-location-datalist').innerHTML = activeNames(locations).map(n => `<option value="${escapeAttr(n)}">`).join('');
       // ★要件：オプション名はマスタからの選択式ではなく、候補（datalist）を出しつつ自由に書ける
       // 入力欄にする（フリー入力）。マスタに無い名称も入力できる
@@ -2753,11 +2845,17 @@
       saleName: $('shop-new-sale').value.trim(),
       location: $('shop-new-location').value.trim(),
       prep: $('shop-new-prep-block').classList.contains('hidden') ? '' : $('shop-new-prep').value,
-      // ★要件変更：パスポート番号欄は常に表示するため、hiddenかどうかで送信有無を判断しない
-      passportNumber: $('shop-new-passport').value.trim(),
+      // ★要件：パスポート番号欄は新規依頼フォームからは廃止（申し込み時点では不要とのこと。
+      // 既存案件の詳細画面では引き続き入力できる）
       hope1: $('shop-new-hope1').value, hope2: $('shop-new-hope2').value, hope3: $('shop-new-hope3').value,
-      hope4: $('shop-new-hope4').value, hope5: $('shop-new-hope5').value
+      hope4: $('shop-new-hope4').value, hope5: $('shop-new-hope5').value,
+      remarks: $('shop-new-remarks').value.trim()
     };
+    // ★要件：希望日ごとの時間帯（AM/PM）・プラン（複数プラン希望）
+    for (let i = 1; i <= 5; i++) {
+      payload['hopeTime' + i] = $('shop-new-hopetime' + i).value;
+      payload['hopePlan' + i] = $('shop-new-hopeplan' + i).value;
+    }
     // ★要件：オプションは最大10件（フリー入力）
     for (let i = 1; i <= 10; i++) payload['option' + i] = $('shop-new-option' + i).value.trim();
     // ★要件：チャレンジ番号は任意ではなく必須。英数字11桁固定（0やアルファベットから始まる場合もある）
@@ -2787,6 +2885,8 @@
       }
       SHOP_NEW_TEXT_FIELDS.forEach(k => { $('shop-new-' + k).value = ''; });
       SHOP_NEW_DATE_FIELDS.forEach(k => { $('shop-new-' + k).value = ''; });
+      SHOP_NEW_HOPE_TIME_FIELDS.forEach(k => { $('shop-new-' + k).value = ''; });
+      SHOP_NEW_HOPE_PLAN_FIELDS.forEach(k => { $('shop-new-' + k).value = ''; });
       $('shop-new-initial-status').value = 'RQ';
     } catch (e) {
       showFieldError('shop-new-error', e.message);

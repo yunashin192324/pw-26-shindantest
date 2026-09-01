@@ -144,8 +144,9 @@ const API_SPECS = [
   { fn: 'apiGetPrefilledFormUrls', scope: 'any', args: (t) => [t, 'VIE-001'], target: 'VIE', reads: true },
   { fn: 'apiToggleHistoryCheck',   scope: 'any', args: (t, ctx) => [t, ctx.__someHistoryId || 'none', true], target: 'VIE', writes: true },
 
-  // メモ履歴（共有メモ／メモ（現地用）の積み上げ記録）
-  { fn: 'apiAddMemo', scope: 'any', args: (t) => [t, 'VIE-001', '共有メモ', '侵入テスト'], target: 'VIE', writes: true },
+  // メモ履歴（共有メモを現地支店・日本支店（店舗）・手配課で分離／メモ（現地用）の積み上げ記録）
+  { fn: 'apiAddMemo', scope: 'any', args: (t) => [t, 'VIE-001', '共有メモ（手配課）', '侵入テスト'], target: 'VIE', writes: true },
+  { fn: 'apiDeleteHistoryMessage', scope: 'any', args: (t, ctx) => [t, ctx.__someHistoryId || 'none'], target: 'VIE', writes: true },
 
   // 現地スタッフ手配メール（fixture()でVIEのカメラマン宛先のみ有効化済み）
   { fn: 'apiGetArrangementSettings',  scope: 'any', args: (t) => [t, 'VIE'], target: 'VIE', reads: true },
@@ -202,6 +203,7 @@ section('A1. 認可マトリクス：保護の書き忘れを機械的に検出'
   // 書き込みAPIは排他ロックが必要（読み取り専用は不要）
   const mustLock = ['apiSaveBranch','apiSetBranchActive','apiSaveFieldsQuiet','apiCommitChanges',
                     'apiSetDriveUrl','apiCreateReservation','apiShopCreateRequest','apiToggleHistoryCheck',
+                    'apiDeleteHistoryMessage',
                     'apiSaveStaffItem','apiSaveSaleItem','apiSavePlanItem','apiSaveOptionItem','apiSaveLocationItem',
                     'apiSaveCostumeCompanyItem',
                     'apiSaveArrangementSettings','apiShopUploadDocument','apiShopDeleteUploadedDocument',
