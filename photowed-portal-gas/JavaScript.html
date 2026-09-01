@@ -817,36 +817,38 @@
         const shopDetailRes = await gsRun('apiGetReservationDetail', session.token, kanriNo);
         // ★要件：プラン・セール名・オプションは自由入力ではなく、依頼先支店のマスタ一覧から選べるように
         const shopBranchCode = shopDetailRes.detail['支店コード'];
-        const [shopPlanList, shopOptionList, shopSaleList, shopCostumeList] = await Promise.all([
+        const [shopPlanList, shopOptionList, shopSaleList, shopCostumeList, shopAllPlanList] = await Promise.all([
           gsRun('apiListPlans', session.token, shopBranchCode),
           gsRun('apiListOptionItems', session.token, shopBranchCode),
           gsRun('apiListSales', session.token, shopBranchCode),
-          gsRun('apiListCostumeCompanies', session.token)
+          gsRun('apiListCostumeCompanies', session.token),
+          gsRun('apiListAllActivePlans', session.token)
         ]);
         currentDetail = shopDetailRes.detail;
-        renderShopDetail(shopDetailRes.detail, shopPlanList, shopOptionList, shopSaleList, shopCostumeList);
+        renderShopDetail(shopDetailRes.detail, shopPlanList, shopOptionList, shopSaleList, shopCostumeList, shopAllPlanList);
         return;
       }
       const detailRes = await gsRun('apiGetReservationDetail', session.token, kanriNo);
       const branchCode = detailRes.detail['支店コード'];
-      const [planList, optionList, locationList, staffList, phraseList, saleList, costumeList] = await Promise.all([
+      const [planList, optionList, locationList, staffList, phraseList, saleList, costumeList, allPlanList] = await Promise.all([
         gsRun('apiListPlans', session.token, branchCode),
         gsRun('apiListOptionItems', session.token, branchCode),
         gsRun('apiListLocations', session.token, branchCode),
         gsRun('apiListStaff', session.token, branchCode),
         gsRun('apiListPhrases', session.token, branchCode),
         gsRun('apiListSales', session.token, branchCode),
-        gsRun('apiListCostumeCompanies', session.token)
+        gsRun('apiListCostumeCompanies', session.token),
+        gsRun('apiListAllActivePlans', session.token)
       ]);
       currentDetail = detailRes.detail;
-      renderDetail(detailRes.detail, planList, optionList, locationList, staffList, phraseList, saleList, costumeList);
+      renderDetail(detailRes.detail, planList, optionList, locationList, staffList, phraseList, saleList, costumeList, allPlanList);
     } catch (e) { handleAuthError(e); }
   }
 
   // ★機能追加：店舗ロール向けの案件詳細（依頼状況の確認・許可された項目の編集・メッセージのやり取り）
   // 拡張要望2章・3章に対応し、当初の「読み取り専用＋メッセージのみ」から、
   // 通常の3択（保存のみ／メッセージのみ／変更＋メッセージ）で編集できる画面へ拡張した。
-  function renderShopDetail(d, planList, optionList, saleList, costumeList) {
+  function renderShopDetail(d, planList, optionList, saleList, costumeList, allPlanList) {
     const c = $('detail-content');
     const historyHtml = (d.history || []).length === 0
       ? '<p class="hint-text">まだやり取りがありません。</p>'
@@ -868,7 +870,8 @@
       return `
         <tr>
           <td>第${i + 1}希望</td>
-          <td>${hopePlanSelectHtml_(planList, hopePlanFieldFor_(f), d[hopePlanFieldFor_(f)])}</td>
+          <td>${hopeAllPlanSelectHtml_(allPlanList, hopePlanFieldFor_(f), d[hopePlanFieldFor_(f)])}</td>
+          <td><input data-pending="${escapeAttr(hopeLocationFieldFor_(f))}" value="${escapeAttr(d[hopeLocationFieldFor_(f)])}" placeholder="都市・場所" style="width:100%;"></td>
           <td><input type="date" data-pending="${escapeAttr(f)}" value="${escapeAttr(toIsoDate(d[f]))}" min="${todayIsoDate_()}" style="width:100%;"></td>
           ${timeCell}
           <td>${escapeHtml(jpVal || '')}</td>
@@ -880,12 +883,14 @@
     const hopeShouldExpandShop = !d['撮影日FIX'] || d['STS JP'] === 'DC';
     const hopeTableHtmlShop = `
       <details class="hope-collapse" ${hopeShouldExpandShop ? 'open' : ''}>
-        <summary>希望日一覧（優先順位・プラン・日付・STS）${hopeShouldExpandShop ? '' : '－ふだんは折りたたみ表示です。開くと確認できます'}</summary>
-        <div class="table-wrap" style="margin-top:6px;">
-          <table class="res-table">
-            <thead><tr><th>優先順位</th><th>プラン</th><th>日付</th>${showHopeTimeShop ? '<th>時間帯</th>' : ''}<th>日本STS</th><th>現地STS</th></tr></thead>
+        <summary>希望日一覧（優先順位・プラン・場所・日付・STS）${hopeShouldExpandShop ? '' : '－ふだんは折りたたみ表示です。開くと確認できます'}</summary>
+        <div class="hope-table-card" style="margin-top:6px;">
+        <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none;">
+          <table class="hope-plan-table">
+            <thead><tr><th>優先順位</th><th>プラン</th><th>場所</th><th>日付</th>${showHopeTimeShop ? '<th>時間帯</th>' : ''}<th>日本STS</th><th>現地STS</th></tr></thead>
             <tbody>${hopeTableRowsShop}</tbody>
           </table>
+        </div>
         </div>
       </details>`;
 
@@ -1560,6 +1565,32 @@
         ${names.map(n => `<option value="${escapeAttr(n)}" ${n === current ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}
       </select>`;
   }
+  // ★要件：希望日ごとのプラン希望は、案件自体の支店（国）だけでなく他の支店（国）のプランも
+  // 選べるようにする（第一希望はイタリア方面、第二希望はオーストリア方面…といった国をまたいだ
+  // 複数プラン希望に対応するため）。apiListAllActivePlansが返す全支店分の候補を、都市ごとの
+  // <optgroup>にまとめて表示する（どの国のプランかが一目でわかるように）。
+  function hopeLocationFieldFor_(hopeField) { return `${hopeField}場所`; }
+  function hopeAllPlanSelectHtml_(allPlanList, fieldName, current) {
+    const list = allPlanList || [];
+    const groups = {};
+    const order = [];
+    list.forEach(p => {
+      const label = p.city || p.branchName || p.branchCode;
+      if (!groups[label]) { groups[label] = []; order.push(label); }
+      groups[label].push(p.name);
+    });
+    const currentKnown = list.some(p => p.name === current);
+    const optgroups = order.map(label => `
+        <optgroup label="${escapeAttr(label)}">
+          ${groups[label].map(n => `<option value="${escapeAttr(n)}" ${n === current ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}
+        </optgroup>`).join('');
+    const extra = (current && !currentKnown) ? `<option value="${escapeAttr(current)}" selected>${escapeHtml(current)}</option>` : '';
+    return `<select data-pending="${escapeAttr(fieldName)}" style="width:100%;">
+        <option value="">未設定</option>
+        ${extra}
+        ${optgroups}
+      </select>`;
+  }
 
   // ★要件：撮影希望場所・セール名はプランにも紐づく（プランマスタの「撮影場所方式」・
   // 「撮影場所候補」、セールマスタの「対象プラン」）。店舗の案件詳細（renderShopDetail）でも
@@ -1614,7 +1645,7 @@
     return `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
   }
 
-  function renderDetail(d, planList, optionList, locationList, staffList, phraseList, saleList, costumeList) {
+  function renderDetail(d, planList, optionList, locationList, staffList, phraseList, saleList, costumeList, allPlanList) {
     const c = $('detail-content');
 
     const planNames = nameListWithCurrent(planList, d['プラン名']);
@@ -1680,7 +1711,8 @@
         <tr>
           ${checkCell}
           <td>第${i + 1}希望</td>
-          <td>${hopePlanSelectHtml_(planList, hopePlanFieldFor_(f), d[hopePlanFieldFor_(f)])}</td>
+          <td>${hopeAllPlanSelectHtml_(allPlanList, hopePlanFieldFor_(f), d[hopePlanFieldFor_(f)])}</td>
+          <td><input data-pending="${escapeAttr(hopeLocationFieldFor_(f))}" value="${escapeAttr(d[hopeLocationFieldFor_(f)])}" placeholder="都市・場所" style="width:100%;"></td>
           <td><input data-pending="${escapeAttr(f)}" value="${escapeAttr(d[f])}" style="width:100%;"></td>
           ${timeCell}
           <td>${jpCell}</td>
@@ -1695,11 +1727,13 @@
       </div>
       <p class="hint-text" style="margin-top:4px;">OK／UCを選ぶと、日本側のSTSにも自動で反映されます。下の3択（保存のみ／メッセージ／変更＋メッセージ）で確定してください。</p>`;
     const hopeFieldsHtml = `
-      <div class="table-wrap" style="margin-top:6px;">
-        <table class="res-table">
-          <thead><tr>${canBulkSetHope ? '<th></th>' : ''}<th>優先順位</th><th>プラン</th><th>日付</th>${showHopeTime ? '<th>時間帯</th>' : ''}<th>日本STS</th><th>現地STS</th></tr></thead>
-          <tbody>${hopeTableRows}</tbody>
-        </table>
+      <div class="hope-table-card" style="margin-top:6px;">
+        <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none;">
+          <table class="hope-plan-table">
+            <thead><tr>${canBulkSetHope ? '<th></th>' : ''}<th>優先順位</th><th>プラン</th><th>場所</th><th>日付</th>${showHopeTime ? '<th>時間帯</th>' : ''}<th>日本STS</th><th>現地STS</th></tr></thead>
+            <tbody>${hopeTableRows}</tbody>
+          </table>
+        </div>
       </div>
       ${hopeBulkBarHtml}`;
     // ★機能：希望日からのワンタップ回答（対象の希望日のSTS(支店側)をOKにする分かりやすいショートカット。
@@ -1987,7 +2021,7 @@
         <div class="section-card">
           ${inquiryBlock}
           <details class="hope-collapse" ${hopeShouldExpand ? 'open' : ''}>
-            <summary>希望日一覧（優先順位・プラン・日付・STS）${hopeShouldExpand ? '' : '－ふだんは折りたたみ表示です。開くと確認・変更できます'}</summary>
+            <summary>希望日一覧（優先順位・プラン・場所・日付・STS）${hopeShouldExpand ? '' : '－ふだんは折りたたみ表示です。開くと確認・変更できます'}</summary>
             ${hopeFieldsHtml}
             ${hopeBlock}
           </details>

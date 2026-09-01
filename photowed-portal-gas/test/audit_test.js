@@ -84,6 +84,9 @@ const API_SPECS = [
   { fn: 'apiSetBranchActive',    scope: 'jp',  args: (t) => [t, 'VIE', true], writes: true },
 
   { fn: 'apiListPlans',       scope: 'any', args: (t) => [t, 'VIE'], target: 'VIE', reads: true },
+  // ★要件：希望日ごとのプラン希望は他支店（他国）のプランも選べるようにするため、全支店横断で返す
+  // （引数に支店コードを取らない。衣装会社マスタと同じ考え方）
+  { fn: 'apiListAllActivePlans', scope: 'any', args: (t) => [t], reads: true },
   { fn: 'apiListOptionItems', scope: 'any', args: (t) => [t, 'VIE'], target: 'VIE', reads: true },
   { fn: 'apiListLocations',   scope: 'any', args: (t) => [t, 'VIE'], target: 'VIE', reads: true },
   { fn: 'apiListStaff',       scope: 'any', args: (t) => [t, 'VIE'], target: 'VIE', reads: true },

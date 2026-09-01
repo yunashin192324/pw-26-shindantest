@@ -147,18 +147,28 @@
      分かれていた）。カードの見出しバーだけ薄い水色（--color-primary-tint）にして、
      表そのもの（.res-tableと同じ濃紺ヘッダー）とは別に「明細票」らしい区切りを付ける。 */
   .plan-option-card { padding: 0; overflow: hidden; }
+  /* ★要件：希望日一覧も同じ.plan-tableの見た目（外部システムの明細票に寄せた配色・枠組み）を
+     使い回すための専用ラッパー。.plan-option-cardと見た目は同じだが、既存の
+     「プラン・オプション明細」カード（テストがdocument.querySelector('.plan-option-card')で
+     一意に取得する前提）と紐付けを分けるため、あえて別クラスにしている。 */
+  .hope-table-card { padding: 0; overflow: hidden; border: 1px solid var(--color-border); border-radius: 6px; }
   .plan-option-head { display: flex; align-items: center; gap: 8px; background: var(--color-primary-tint);
     color: var(--color-primary); padding: 12px 14px; border-bottom: 1px solid var(--color-border); }
   .plan-option-head .icon { font-size: 1.1rem; }
   .plan-option-head h3 { color: var(--color-primary); border-bottom: none; padding-bottom: 0; }
-  .plan-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
-  .plan-table th, .plan-table td { padding: 10px 12px; text-align: left; vertical-align: middle;
+  /* ★要件：希望日一覧にも同じ見た目を使うが、既存テストがdocument.querySelector('.plan-table')で
+     「プラン・オプション明細」の表を一意に取得する前提のため、あえて別クラス.hope-plan-tableに
+     同じ見た目を適用する（プロパティは全て.plan-tableと同一）。 */
+  .plan-table, .hope-plan-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+  .plan-table th, .plan-table td, .hope-plan-table th, .hope-plan-table td {
+    padding: 10px 12px; text-align: left; vertical-align: middle;
     border-bottom: 1px solid var(--color-border); border-right: 1px solid var(--color-border); }
-  .plan-table th:last-child, .plan-table td:last-child { border-right: none; }
-  .plan-table thead th { background: var(--color-primary-tint); color: var(--color-primary);
+  .plan-table th:last-child, .plan-table td:last-child,
+  .hope-plan-table th:last-child, .hope-plan-table td:last-child { border-right: none; }
+  .plan-table thead th, .hope-plan-table thead th { background: var(--color-primary-tint); color: var(--color-primary);
     font-size: 0.72rem; font-weight: 700; letter-spacing: 0.02em; }
-  .plan-table tbody tr:nth-child(even) { background: #f7f8fc; }
-  .plan-table tbody tr:last-child td { border-bottom: none; }
+  .plan-table tbody tr:nth-child(even), .hope-plan-table tbody tr:nth-child(even) { background: #f7f8fc; }
+  .plan-table tbody tr:last-child td, .hope-plan-table tbody tr:last-child td { border-bottom: none; }
   /* ★要件：プラン・オプション明細の表で「プラン」行だけひと目でわかるよう強調する
      （店舗・現地支店・手配課いずれの画面でも共通のplan-tableを使うため、ここ1箇所で揃う）。 */
   .plan-table tbody tr.plan-row { background: var(--color-primary-tint); }

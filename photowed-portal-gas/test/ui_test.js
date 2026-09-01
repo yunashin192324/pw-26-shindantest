@@ -2368,6 +2368,74 @@ function paneHidden(document, key) {
     check('相手が既読にした後は削除ボタンが出ない', !!readItem && !readItem.querySelector('[data-history-message-delete]'));
   }
 
+  // ---------------------------------------------------------------
+  section('U43. 希望日一覧に「場所」欄を追加、プランは他支店（他国）の候補も選べる');
+  {
+    // ★ここまでのプランマスタはVIE支店にしか登録されていないため、複数の国（支店）が
+    // 実際にoptgroupで並ぶことを確認するにはROW支店にもプランを1件登録しておく
+    ctx.__ss.getSheetByName('プランマスタ').appendRow(['ROW', 'ローマ半日プラン', true]);
+
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'KANTO', 'CHANGE-ME-KANTO');
+    document.querySelector('#reservation-list .res-card').click();
+    await settle();
+
+    // R-001はローマ支店（ROW）の案件。希望日一覧の見出しに「場所」列が増えている
+    const hopeCard = document.querySelector('.hope-table-card');
+    check('希望日一覧が専用のカード（.hope-table-card）で表示される', !!hopeCard);
+    const hopeHeaderText = hopeCard.querySelector('thead').textContent;
+    check('希望日一覧の見出しに「場所」列がある', hopeHeaderText.includes('場所'));
+    check('希望日一覧の見出しに「プラン」列もある', hopeHeaderText.includes('プラン'));
+
+    const hopePlanSelect1 = hopeCard.querySelector('[data-pending="希望日①プラン"]');
+    check('希望日①のプラン選択欄がある', !!hopePlanSelect1);
+    const optgroupLabels = [...hopePlanSelect1.querySelectorAll('optgroup')].map(g => g.label);
+    check('プラン選択欄は都市ごとのoptgroupにまとまっている（複数の国が並ぶ）',
+          optgroupLabels.length >= 2, optgroupLabels.join(','));
+    const allOptionValues = [...hopePlanSelect1.querySelectorAll('option')].map(o => o.value);
+    check('自支店（ローマ）のプランが候補にある', allOptionValues.includes('ローマ半日プラン'), allOptionValues.join(','));
+    check('他支店（ウィーン）のプランも候補にある（国をまたいだプラン希望に対応）',
+          allOptionValues.includes('フィレンツェフォト'), allOptionValues.join(','));
+
+    // 場所欄に自由入力で保存できる
+    const hopeLocationInput1 = hopeCard.querySelector('[data-pending="希望日①場所"]');
+    check('希望日①の場所入力欄がある', !!hopeLocationInput1);
+    hopeLocationInput1.value = 'ローマ';
+    hopeLocationInput1.dispatchEvent(new dom.window.Event('change'));
+    // 他支店（ウィーン方面）のプランを第二希望として選ぶ
+    const hopePlanSelect2 = hopeCard.querySelector('[data-pending="希望日②プラン"]');
+    hopePlanSelect2.value = 'フィレンツェフォト';
+    hopePlanSelect2.dispatchEvent(new dom.window.Event('change'));
+    const hopeLocationInput2 = hopeCard.querySelector('[data-pending="希望日②場所"]');
+    hopeLocationInput2.value = 'フィレンツェ';
+    hopeLocationInput2.dispatchEvent(new dom.window.Event('change'));
+    document.getElementById('btn-save-quiet').click();
+    await settle();
+
+    const jpTokU43 = ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    const detU43 = ctx.apiGetReservationDetail(jpTokU43, 'R-001').detail;
+    check('希望日①の場所が保存される', detU43['希望日①場所'] === 'ローマ');
+    check('希望日②のプラン（他支店のプラン）が保存される', detU43['希望日②プラン'] === 'フィレンツェフォト');
+    check('希望日②の場所が保存される', detU43['希望日②場所'] === 'フィレンツェ');
+
+    // 店舗の画面にも同じく「場所」欄・他支店のプラン候補が出る
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'SHOP1', 'CHANGE-ME-SHOP1');
+    document.getElementById('nav-dashboard').click();
+    await settle();
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanriU37)).click();
+    await settle();
+    const shopHopeCard = document.querySelector('.hope-table-card');
+    check('店舗の画面にも希望日一覧の場所欄がある', !!shopHopeCard.querySelector('[data-pending="希望日①場所"]'));
+    const shopHopePlanOpts = [...shopHopeCard.querySelectorAll('[data-pending="希望日①プラン"] option')].map(o => o.value);
+    check('店舗の画面のプラン選択欄にも他支店（他国）の候補が入る',
+          shopHopePlanOpts.includes('ローマ3時間フォト') || shopHopePlanOpts.includes('フィレンツェフォト'),
+          shopHopePlanOpts.join(','));
+  }
+
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error('テストが異常終了しました:', e); process.exit(1); });

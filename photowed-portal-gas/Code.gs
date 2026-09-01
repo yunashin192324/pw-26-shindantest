@@ -298,6 +298,11 @@ const HOPE_TIME_CHOICES = ['AM', 'PM'];
 // 案件全体のプラン名欄へ自動反映する（日付が撮影日FIXへ反映されるのと同じ考え方。
 // applyHopeStatusCascade_参照。プラン欄が空欄の希望日ならこれまでどおり何も上書きしない）。
 function hopePlanCol_(n) { return `${HOPE_COLS[n - 1]}プラン`; }
+// ★要件：希望日ごとに「場所（都市）」も持てるようにする。予約の時点でプランが複数の国に
+// またがることがある（例：第一希望＝フィレンツェのプラン、第二希望＝ウィーンのプラン）ため、
+// 希望日一覧の各行でどの都市の希望かが一目でわかるようにする（案件全体の支店＝1つとは別に、
+// 希望日ごとに任意の場所を書ける自由入力欄。プラン欄と同じく、日付・時間帯と一緒に運用する）。
+function hopeLocationCol_(n) { return `${HOPE_COLS[n - 1]}場所`; }
 
 // ★機能追加（拡張要望9章）：必要書類チェックリスト。店舗スタッフ（主）・現地(支店)のどちらからでも
 // チェックでき、どちらの変更も双方に反映される（＝どちらのロールにとっても普通のCOMMITTABLE_FIELDS）。
@@ -334,7 +339,7 @@ const RESERVATION_HEADERS = (() => {
     base.push(opNameCol_(n), opStsJpCol_(n), opStsBranchCol_(n));
   }
   for (let n = 1; n <= HOPE_COLS.length; n++) {
-    base.push(hopeStsJpCol_(n), hopeStsBranchCol_(n), hopeTimeCol_(n), hopePlanCol_(n));
+    base.push(hopeStsJpCol_(n), hopeStsBranchCol_(n), hopeTimeCol_(n), hopePlanCol_(n), hopeLocationCol_(n));
   }
   return base;
 })();
@@ -394,6 +399,7 @@ const SHOP_EDITABLE_FIELDS = [
   // ★要件：希望日ごとの時間帯（AM/PM）・希望プランも、日付と同じく店舗から入力できるようにする
   ...Array.from({ length: HOPE_COLS.length }, (_, i) => hopeTimeCol_(i + 1)),
   ...Array.from({ length: HOPE_COLS.length }, (_, i) => hopePlanCol_(i + 1)),
+  ...Array.from({ length: HOPE_COLS.length }, (_, i) => hopeLocationCol_(i + 1)),
   ...Array.from({ length: OPTION_COUNT }, (_, i) => opNameCol_(i + 1)),
   ...CHECKLIST_ITEMS.map(checklistCol_),
   // ★要件：CR（キャンセル依頼）にする際のキャンセル理由（同じ送信の中で一緒に保存する）
@@ -1098,6 +1104,27 @@ function apiListPlans(token, branchCode) {
       locationCandidates: splitLocationCandidates_(r[MM_COL_PLAN_LOCATION_CANDIDATES])
     }));
 }
+// ★要件：希望日ごとのプラン希望は、その案件自体の支店（国）だけでなく他の支店（国）の
+// プランも選べるようにする（例：第一希望はイタリア方面のプラン、第二希望はオーストリア方面の
+// プラン、といった国をまたいだ複数プラン希望に対応するため）。全支店のプランマスタを横断して
+// 返す（有効な支店・有効なプランのみ）。都市名を付けて返すので、画面側は「[都市] プラン名」の
+// ように表示すれば、どの国のプランかが一目でわかる。
+function apiListAllActivePlans(token) {
+  requireSession_(token);
+  const branchMeta = branchMetaMap_();
+  const sheet = getSpreadsheet_().getSheetByName(PLAN_MASTER_SHEET_NAME);
+  return getRowsAsObjects_(sheet)
+    .filter(r => isActiveFlag_(r[MM_COL_ACTIVE]))
+    .filter(r => {
+      const meta = branchMeta[String(r[MM_COL_BRANCH]).trim().toUpperCase()];
+      return !!meta && meta.active;
+    })
+    .map(r => {
+      const code = String(r[MM_COL_BRANCH]).trim().toUpperCase();
+      const meta = branchMeta[code] || {};
+      return { branchCode: code, branchName: meta.name || code, city: meta.city || '', name: r[MM_COL_NAME] };
+    });
+}
 function apiListOptionItems(token, branchCode) {
   const session = requireSession_(token);
   const target = session.role === BRANCH_ROLE ? session.branchCode : String(branchCode || '').toUpperCase();
@@ -1483,6 +1510,7 @@ function buildShopReservationDetail_(session, kanriNo, headers, rowData) {
     detail[hopeStsBranchCol_(n)] = getV(hopeStsBranchCol_(n));
     detail[hopeTimeCol_(n)] = getV(hopeTimeCol_(n));
     detail[hopePlanCol_(n)] = getV(hopePlanCol_(n));
+    detail[hopeLocationCol_(n)] = getV(hopeLocationCol_(n));
   }
 
   // ★機能追加（拡張要望9章）：必要書類チェックリストは店舗側にも見せる（双方向でチェックできる）

@@ -3265,5 +3265,49 @@ section('53. メッセージは、相手がまだ見ていない間だけ送信�
 }
 
 // ---------------------------------------------------------------
+section('54. 希望日ごとの場所・国をまたいだプラン希望（apiListAllActivePlans）');
+{
+  const ctx = featureFixture();
+  ctx.ensureSheetWithHeaders_(ctx.__ss, 'プランマスタ', ctx.PLAN_MASTER_HEADERS);
+  addCase(ctx, '予約一覧', { '支店コード': 'VIE', '管理番号': 'VIE-990', '管轄': '関東' });
+  const jp = ctx.apiLogin('KANTO', 'pw');
+  const jpToken = jp.session.token;
+
+  // プランマスタに複数支店（複数国）のプランを用意する
+  const pm = ctx.__ss.getSheetByName('プランマスタ');
+  pm.appendRow(['VIE', 'ウィーン半日プラン', true]);
+  pm.appendRow(['IST', 'カッパドキアサンライズ', true]);
+  pm.appendRow(['IST', '無効プラン', false]); // 無効なプランは候補に出ない
+
+  // --- 希望日ごとの「場所」を自由入力で保存できる ---
+  ctx.apiSaveFieldsQuiet(jpToken, 'VIE-990', {
+    '希望日①場所': 'ウィーン', '希望日②場所': 'カッパドキア'
+  });
+  let d = ctx.apiGetReservationDetail(jpToken, 'VIE-990').detail;
+  check('希望日①の場所が保存される', d['希望日①場所'] === 'ウィーン');
+  check('希望日②の場所が保存される', d['希望日②場所'] === 'カッパドキア');
+
+  // --- 希望日ごとのプランは、案件自体の支店（VIE）以外のプランも保存できる
+  //     （第一希望はウィーンのプラン、第二希望はイスタンブールのプラン、といった国をまたいだ希望） ---
+  ctx.apiSaveFieldsQuiet(jpToken, 'VIE-990', {
+    '希望日①プラン': 'ウィーン半日プラン', '希望日②プラン': 'カッパドキアサンライズ'
+  });
+  d = ctx.apiGetReservationDetail(jpToken, 'VIE-990').detail;
+  check('希望日①のプラン（自支店＝ウィーン）が保存される', d['希望日①プラン'] === 'ウィーン半日プラン');
+  check('希望日②のプラン（他支店＝イスタンブール）も保存できる（国をまたいだプラン希望）',
+        d['希望日②プラン'] === 'カッパドキアサンライズ');
+
+  // --- apiListAllActivePlans は全支店の有効なプランを横断して返す ---
+  const allPlans = ctx.apiListAllActivePlans(jpToken);
+  check('全支店横断でプランを取得できる', Array.isArray(allPlans) && allPlans.length > 0);
+  check('ウィーン支店のプランが含まれる（都市名つき）',
+        allPlans.some(p => p.branchCode === 'VIE' && p.name === 'ウィーン半日プラン' && !!p.city),
+        JSON.stringify(allPlans));
+  check('イスタンブール支店のプランも含まれる（他支店のプランも横断して見える）',
+        allPlans.some(p => p.branchCode === 'IST' && p.name === 'カッパドキアサンライズ'));
+  check('無効化されたプランは含まれない', !allPlans.some(p => p.name === '無効プラン'));
+}
+
+// ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
 process.exit(fail === 0 ? 0 : 1);
