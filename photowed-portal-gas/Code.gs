@@ -2640,6 +2640,10 @@ function apiBranchDeleteDeliveryData(token, kanriNo, fileUrl) {
 // 実際の運用環境でしか確認できない（このリポジトリの開発環境では検証不可）ため、
 // Driveの操作は必ずtry/catchで囲み、失敗しても案件そのものの作成・表示は絶対に壊さない設計にしている。
 const SHOP_UPLOAD_DOC_TYPES = ['ヘアメイク画像', '衣裳画像', '撮影指示書', '着付け指示書'];
+// ★要件：複数の書類種別をまとめて1つのZIPファイルでアップロードできるようにする。
+// 個別の書類種別フォルダには入れず、専用のサブフォルダにZIPをまとめて置き、
+// 「どの種別を含むZIPか」はファイルの説明欄（setDescription）に記録して一覧表示に使う。
+const SHOP_UPLOAD_ZIP_FOLDER_NAME = 'まとめてアップロード（ZIP）';
 
 // DriveのURL文字列からフォルダIDを取り出す。
 // 「.../folders/<ID>」「?id=<ID>」の代表的な2形式を優先的に拾い、
@@ -2696,6 +2700,15 @@ function ensureShopUploadFolder_(sheet, headers, rowIndex, rowData) {
   return folder;
 }
 
+// 書類種別のサブフォルダ（無ければ作成）に1ファイル入れる共通処理。
+// apiShopUploadDocument（単数）とapiShopUploadDocumentsBatch（複数一括）の両方から使う。
+function uploadShopDocFile_(folder, docType, filename, mimeType, base64Data) {
+  const subIter = folder.getFoldersByName(docType);
+  const targetFolder = subIter.hasNext() ? subIter.next() : folder.createFolder(docType);
+  const blob = Utilities.newBlob(Utilities.base64Decode(base64Data), mimeType || 'application/octet-stream', filename);
+  return targetFolder.createFile(blob);
+}
+
 // 店舗が、お客様提供の画像・指示書を1件アップロードする。
 // base64Data: ブラウザ側でFileReader.readAsDataURLしたものからヘッダを除いたBase64文字列を渡す想定。
 function apiShopUploadDocument(token, kanriNo, docType, filename, mimeType, base64Data) {
@@ -2716,14 +2729,100 @@ function apiShopUploadDocument(token, kanriNo, docType, filename, mimeType, base
     assertShopOwnRow_(session, headers, rowData);
 
     const folder = ensureShopUploadFolder_(sheet, headers, rowIndex, rowData);
-    const subIter = folder.getFoldersByName(docType);
-    const targetFolder = subIter.hasNext() ? subIter.next() : folder.createFolder(docType);
-    const blob = Utilities.newBlob(Utilities.base64Decode(base64Data), mimeType || 'application/octet-stream', trimmedName);
-    const file = targetFolder.createFile(blob);
+    const file = uploadShopDocFile_(folder, docType, trimmedName, mimeType, base64Data);
 
     const freshRow = sheet.getRange(rowIndex, 1, 1, headers.length).getValues()[0];
     const direction = resolveMessageDirection_(session, headers, freshRow);
     appendHistory_(headers, freshRow, senderLabel_(session), `[お客様提供データのアップロード]\n${docType}: ${trimmedName}`, SHOP_ROLE, recipientRoleForDirection_(direction));
+    markUnreadForDirection_(sheet, headers, rowIndex, direction);
+
+    return { ok: true, fileUrl: file.getUrl(), folderUrl: folder.getUrl() };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ★要件：一つ一つアップロードするのが面倒、との要望への対応①。複数の書類種別をチェックして
+// それぞれ個別のファイルを選び、まとめて一括アップロードする（1回のロック・1件の履歴で済ませる）。
+// uploads: [{ docType, filename, mimeType, base64Data }, ...]
+function apiShopUploadDocumentsBatch(token, kanriNo, uploads) {
+  const session = requireSession_(token);
+  if (session.role !== SHOP_ROLE) throw new Error('この操作は店舗ロールのみ実行できます。');
+  if (!Array.isArray(uploads) || uploads.length === 0) throw new Error('アップロードするファイルを選択してください。');
+  const cleaned = uploads.map(u => ({
+    docType: String((u && u.docType) || '').trim(),
+    filename: String((u && u.filename) || '').trim(),
+    mimeType: (u && u.mimeType) || 'application/octet-stream',
+    base64Data: u && u.base64Data
+  }));
+  cleaned.forEach(u => {
+    if (!SHOP_UPLOAD_DOC_TYPES.includes(u.docType)) {
+      throw new Error(`書類種別は ${SHOP_UPLOAD_DOC_TYPES.join('/')} のいずれかにしてください。`);
+    }
+    if (!u.filename) throw new Error('ファイル名を指定してください。');
+    if (!u.base64Data) throw new Error('アップロードするファイルを選択してください。');
+  });
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
+  try {
+    const { sheet, headers, rowIndex, rowData } = findReservationRow_(kanriNo);
+    if (rowIndex === -1) throw new Error('対象の予約が見つかりません。');
+    assertShopOwnRow_(session, headers, rowData);
+
+    const folder = ensureShopUploadFolder_(sheet, headers, rowIndex, rowData);
+    const results = cleaned.map(u => {
+      const file = uploadShopDocFile_(folder, u.docType, u.filename, u.mimeType, u.base64Data);
+      return { docType: u.docType, filename: u.filename, fileUrl: file.getUrl() };
+    });
+
+    const freshRow = sheet.getRange(rowIndex, 1, 1, headers.length).getValues()[0];
+    const direction = resolveMessageDirection_(session, headers, freshRow);
+    const body = `[お客様提供データのアップロード（まとめて${results.length}件）]\n` +
+      results.map(r => `${r.docType}: ${r.filename}`).join('\n');
+    appendHistory_(headers, freshRow, senderLabel_(session), body, SHOP_ROLE, recipientRoleForDirection_(direction));
+    markUnreadForDirection_(sheet, headers, rowIndex, direction);
+
+    return { ok: true, files: results, folderUrl: folder.getUrl() };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ★要件：一つ一つアップロードするのが面倒、との要望への対応②。複数の書類種別を「このZIPに
+// 含まれる項目」としてチェックし、ZIP1ファイルだけをまとめてアップロードする。
+// 対象種別はファイルの説明欄（setDescription）に保存し、一覧表示（apiListShopUploadedDocuments）
+// で「対象：ヘアメイク画像・衣裳画像」のように読み戻す。
+function apiShopUploadDocumentZip(token, kanriNo, docTypes, filename, mimeType, base64Data) {
+  const session = requireSession_(token);
+  if (session.role !== SHOP_ROLE) throw new Error('この操作は店舗ロールのみ実行できます。');
+  const types = Array.isArray(docTypes) ? docTypes.map(t => String(t || '').trim()).filter(Boolean) : [];
+  if (!types.length) throw new Error('ZIPに含まれる書類種別を1つ以上選んでください。');
+  const invalid = types.filter(t => !SHOP_UPLOAD_DOC_TYPES.includes(t));
+  if (invalid.length) throw new Error(`書類種別は ${SHOP_UPLOAD_DOC_TYPES.join('/')} のいずれかにしてください。`);
+  const trimmedName = String(filename || '').trim();
+  if (!trimmedName) throw new Error('ファイル名を指定してください。');
+  if (!base64Data) throw new Error('アップロードするファイルを選択してください。');
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
+  try {
+    const { sheet, headers, rowIndex, rowData } = findReservationRow_(kanriNo);
+    if (rowIndex === -1) throw new Error('対象の予約が見つかりません。');
+    assertShopOwnRow_(session, headers, rowData);
+
+    const folder = ensureShopUploadFolder_(sheet, headers, rowIndex, rowData);
+    const zipSubIter = folder.getFoldersByName(SHOP_UPLOAD_ZIP_FOLDER_NAME);
+    const zipFolder = zipSubIter.hasNext() ? zipSubIter.next() : folder.createFolder(SHOP_UPLOAD_ZIP_FOLDER_NAME);
+    const blob = Utilities.newBlob(Utilities.base64Decode(base64Data), mimeType || 'application/zip', trimmedName);
+    const file = zipFolder.createFile(blob);
+    // ★説明欄の設定に失敗しても（権限等）、アップロード自体は成功として扱う
+    try { file.setDescription(types.join('、')); } catch (e) { /* 致命的ではない */ }
+
+    const freshRow = sheet.getRange(rowIndex, 1, 1, headers.length).getValues()[0];
+    const direction = resolveMessageDirection_(session, headers, freshRow);
+    const body = `[お客様提供データのアップロード（まとめてZIP）]\n対象: ${types.join('、')}\nファイル: ${trimmedName}`;
+    appendHistory_(headers, freshRow, senderLabel_(session), body, SHOP_ROLE, recipientRoleForDirection_(direction));
     markUnreadForDirection_(sheet, headers, rowIndex, direction);
 
     return { ok: true, fileUrl: file.getUrl(), folderUrl: folder.getUrl() };
@@ -2770,6 +2869,21 @@ function apiListShopUploadedDocuments(token, kanriNo) {
       }
       return { docType, files };
     });
+    // ★要件：ZIPでまとめてアップロードした分も一覧に含める。対象の書類種別は
+    // ファイルの説明欄（setDescription）から復元してcoveredTypesとして返す
+    const zipFiles = [];
+    const zipIter = root.getFoldersByName(SHOP_UPLOAD_ZIP_FOLDER_NAME);
+    if (zipIter.hasNext()) {
+      const zipFolder = zipIter.next();
+      const fIter = zipFolder.getFiles();
+      while (fIter.hasNext()) {
+        const f = fIter.next();
+        let coveredTypes = '';
+        try { coveredTypes = f.getDescription() || ''; } catch (e) { coveredTypes = ''; }
+        zipFiles.push({ name: f.getName(), url: f.getUrl(), updatedAt: formatMaybeDate_(f.getLastUpdated()), coveredTypes });
+      }
+    }
+    folders.push({ docType: SHOP_UPLOAD_ZIP_FOLDER_NAME, files: zipFiles });
     return { ok: true, visible: true, folderUrl, folders };
   } catch (e) {
     // ★フォルダが削除された・権限を失った等の場合もエラーで落とさず、空リストで返す

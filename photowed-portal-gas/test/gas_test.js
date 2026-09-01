@@ -2830,5 +2830,93 @@ section('48. オプション枠を5件から10件に拡張（自由入力・OP6�
 }
 
 // ---------------------------------------------------------------
+section('49. お客様提供画像・指示書の一括アップロード（複数個別・ZIPまとめ）');
+{
+  const ctx = shopFixture();
+  const shop = ctx.apiLogin('SHOP1', 'sp');
+  const shopToken = shop.session.token;
+  const shop2 = ctx.apiLogin('SHOP2', 'sp2');
+  const jp = ctx.apiLogin('KANTO', 'pw');
+  const jpToken = jp.session.token;
+
+  const created = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomLastName: 'AL', groomName: 'A', brideLastName: 'ABL', brideName: 'AB', hope1: '2026-09-10', challengeNo: 'DUMMYCHG008' });
+  const kanri = created.kanriNo;
+  const b64 = Buffer.from('dummy-image-bytes').toString('base64');
+
+  // --- 複数を個別ファイルとしてまとめてアップロード（apiShopUploadDocumentsBatch） ---
+  let err = null;
+  try { ctx.apiShopUploadDocumentsBatch(shopToken, kanri, []); } catch (e) { err = e.message; }
+  check('空の配列では一括アップロードできない', err !== null, String(err));
+
+  err = null;
+  try {
+    ctx.apiShopUploadDocumentsBatch(shopToken, kanri, [
+      { docType: '存在しない種別', filename: 'a.jpg', mimeType: 'image/jpeg', base64Data: b64 }
+    ]);
+  } catch (e) { err = e.message; }
+  check('一括アップロードでも未定義の書類種別は拒否される', err !== null, String(err));
+
+  const batch1 = ctx.apiShopUploadDocumentsBatch(shopToken, kanri, [
+    { docType: 'ヘアメイク画像', filename: 'hairB.jpg', mimeType: 'image/jpeg', base64Data: b64 },
+    { docType: '衣裳画像', filename: 'dressB.jpg', mimeType: 'image/jpeg', base64Data: b64 },
+    { docType: '撮影指示書', filename: 'shootB.pdf', mimeType: 'application/pdf', base64Data: b64 }
+  ]);
+  check('複数の書類種別を1回の呼び出しでまとめてアップロードできる',
+        batch1.ok === true && batch1.files.length === 3, JSON.stringify(batch1));
+
+  const afterBatch = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+  check('やり取り履歴は1件にまとまる（種別ごとに別々の履歴にはならない）',
+        afterBatch.history.filter(h => h.body.includes('まとめて')).length === 1);
+  check('まとめた履歴の中に3件それぞれの種別・ファイル名が含まれる',
+        afterBatch.history.some(h => h.body.includes('ヘアメイク画像: hairB.jpg') && h.body.includes('衣裳画像: dressB.jpg') && h.body.includes('撮影指示書: shootB.pdf')));
+
+  const listAfterBatch = ctx.apiListShopUploadedDocuments(jpToken, kanri);
+  check('一括アップロードした分もそれぞれの書類種別フォルダに入る',
+        listAfterBatch.folders.find(f => f.docType === 'ヘアメイク画像').files.some(f => f.name === 'hairB.jpg') &&
+        listAfterBatch.folders.find(f => f.docType === '衣裳画像').files.some(f => f.name === 'dressB.jpg') &&
+        listAfterBatch.folders.find(f => f.docType === '撮影指示書').files.some(f => f.name === 'shootB.pdf'));
+
+  err = null;
+  try { ctx.apiShopUploadDocumentsBatch(shop2.session.token, kanri, [{ docType: 'ヘアメイク画像', filename: 'x.jpg', mimeType: 'image/jpeg', base64Data: b64 }]); } catch (e) { err = e.message; }
+  check('他の店舗は他の案件へ一括アップロードできない', err !== null, String(err));
+
+  // --- 複数種別をチェックしてZIP1ファイルでまとめてアップロード（apiShopUploadDocumentZip） ---
+  err = null;
+  try { ctx.apiShopUploadDocumentZip(shopToken, kanri, [], 'all.zip', 'application/zip', b64); } catch (e) { err = e.message; }
+  check('対象の書類種別が1つも無いとZIPアップロードできない', err !== null, String(err));
+
+  err = null;
+  try { ctx.apiShopUploadDocumentZip(shopToken, kanri, ['存在しない種別'], 'all.zip', 'application/zip', b64); } catch (e) { err = e.message; }
+  check('ZIPアップロードでも未定義の書類種別は拒否される', err !== null, String(err));
+
+  const zip1 = ctx.apiShopUploadDocumentZip(shopToken, kanri, ['ヘアメイク画像', '衣裳画像'], 'まとめ1.zip', 'application/zip', b64);
+  check('ZIPで複数種別をまとめてアップロードできる', zip1.ok === true && !!zip1.fileUrl, JSON.stringify(zip1));
+
+  const afterZip = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+  check('ZIPアップロードも履歴に対象の種別・ファイル名付きで1件記録される',
+        afterZip.history.some(h => h.body.includes('まとめてZIP') && h.body.includes('ヘアメイク画像、衣裳画像') && h.body.includes('まとめ1.zip')));
+
+  const listAfterZip = ctx.apiListShopUploadedDocuments(jpToken, kanri);
+  const zipFolder = listAfterZip.folders.find(f => f.docType === 'まとめてアップロード（ZIP）');
+  check('一覧にZIP専用のフォルダが追加される', !!zipFolder, JSON.stringify(listAfterZip.folders.map(f => f.docType)));
+  check('ZIPファイルが1件入っている', zipFolder && zipFolder.files.length === 1);
+  check('ZIPファイルの対象種別（coveredTypes）が読み戻せる',
+        zipFolder && zipFolder.files[0].coveredTypes === 'ヘアメイク画像、衣裳画像', zipFolder && JSON.stringify(zipFolder.files[0]));
+  check('個別種別フォルダ（ヘアメイク画像・衣裳画像）にはZIPファイルは入らない',
+        !listAfterZip.folders.find(f => f.docType === 'ヘアメイク画像').files.some(f => f.name === 'まとめ1.zip'));
+
+  // --- ZIPファイルも既存の削除APIでゴミ箱行きにできる ---
+  const delZip = ctx.apiShopDeleteUploadedDocument(shopToken, kanri, zipFolder.files[0].url);
+  check('ZIPファイルも既存の削除APIで削除（ゴミ箱行き）できる', delZip.ok === true);
+  const listAfterZipDelete = ctx.apiListShopUploadedDocuments(jpToken, kanri);
+  check('削除後は一覧のZIPフォルダが空になる',
+        listAfterZipDelete.folders.find(f => f.docType === 'まとめてアップロード（ZIP）').files.length === 0);
+
+  err = null;
+  try { ctx.apiShopUploadDocumentZip(shop2.session.token, kanri, ['ヘアメイク画像'], 'x.zip', 'application/zip', b64); } catch (e) { err = e.message; }
+  check('他の店舗は他の案件へZIPアップロードできない', err !== null, String(err));
+}
+
+// ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
 process.exit(fail === 0 ? 0 : 1);

@@ -135,7 +135,7 @@ function makeContext() {
       },
       createFile: (blob) => {
         const fid = `file-${++driveSeq}`;
-        driveFiles[fid] = { id: fid, name: blob.getName ? blob.getName() : 'file', blob, updatedAt: mkDate(2026, 0, 1), trashed: false };
+        driveFiles[fid] = { id: fid, name: blob.getName ? blob.getName() : 'file', blob, updatedAt: mkDate(2026, 0, 1), trashed: false, description: '' };
         driveFolders[id].fileIds.push(fid);
         return makeFileObj(fid);
       },
@@ -155,7 +155,10 @@ function makeContext() {
       getLastUpdated: () => driveFiles[id].updatedAt,
       // ★要件：一度アップロードしたものを削除（取消）できるようにする（実Driveのゴミ箱相当）
       setTrashed: (v) => { driveFiles[id].trashed = !!v; return makeFileObj(id); },
-      isTrashed: () => !!driveFiles[id].trashed
+      isTrashed: () => !!driveFiles[id].trashed,
+      // ★要件：ZIP一括アップロードが「どの書類種別を含むか」を説明欄に記録できるようにする
+      setDescription: (desc) => { driveFiles[id].description = String(desc || ''); return makeFileObj(id); },
+      getDescription: () => driveFiles[id].description || ''
     };
   }
   const ctx = {

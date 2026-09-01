@@ -122,6 +122,13 @@ const API_SPECS = [
   { fn: 'apiListShopUploadedDocuments', scope: 'shop', args: (t) => [t, 'VIE-950'], target: 'VIE', reads: true },
   { fn: 'apiShopDeleteUploadedDocument', scope: 'shop',
     args: (t) => [t, 'VIE-950', 'https://drive.mock/file/dummy'], target: 'VIE', writes: true },
+  // ★要件：一つ一つアップロードするのが面倒、との要望への対応（複数個別・ZIPまとめ）
+  { fn: 'apiShopUploadDocumentsBatch', scope: 'shop',
+    args: (t) => [t, 'VIE-950', [{ docType: 'ヘアメイク画像', filename: 'x.jpg', mimeType: 'image/jpeg', base64Data: Buffer.from('x').toString('base64') }]],
+    target: 'VIE', writes: true },
+  { fn: 'apiShopUploadDocumentZip', scope: 'shop',
+    args: (t) => [t, 'VIE-950', ['ヘアメイク画像'], 'x.zip', 'application/zip', Buffer.from('x').toString('base64')],
+    target: 'VIE', writes: true },
   // ★要件：現地支店の「撮影データ納品」（URL登録・ファイルアップロード・一覧・削除）
   { fn: 'apiSetDeliveryDataUrl', scope: 'branch',
     args: (t) => [t, 'VIE-001', 'https://drive.google.com/delivery'], target: 'VIE', writes: true },
@@ -193,6 +200,7 @@ section('A1. 認可マトリクス：保護の書き忘れを機械的に検出'
                     'apiSetDriveUrl','apiCreateReservation','apiShopCreateRequest','apiToggleHistoryCheck',
                     'apiSaveStaffItem','apiSaveSaleItem','apiSavePlanItem','apiSaveOptionItem','apiSaveLocationItem',
                     'apiSaveArrangementSettings','apiShopUploadDocument','apiShopDeleteUploadedDocument',
+                    'apiShopUploadDocumentsBatch','apiShopUploadDocumentZip',
                     'apiSetDeliveryDataUrl','apiBranchUploadDeliveryData','apiBranchDeleteDeliveryData'];
   const noLock = mustLock.filter(f => {
     const b = bodyOf(f);

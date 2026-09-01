@@ -1737,6 +1737,184 @@ function paneHidden(document, key) {
           !!shopTable.closest('.plan-option-card').querySelector('#shop-cancel-reason-block'));
   }
 
+  section('U32. 現地支店・手配課の案件詳細のセクション掲載順を日本の店舗と揃える');
+  {
+    const expectedLabels = ['お客様情報', '予約内容', '記入欄', '手配', 'ドライブ', 'メッセージ', '履歴'];
+    const expectedIds = ['sec-customer', 'sec-reservation', 'sec-entry', 'sec-arrangement', 'sec-drive', 'sec-message', 'sec-timeline'];
+
+    // --- JP（手配課） ---
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'KANTO', 'CHANGE-ME-KANTO');
+    document.querySelector('#reservation-list .res-card').click();
+    await settle();
+    const jpNavBtns = [...document.getElementById('detail-quick-nav').querySelectorAll('button')].map(b => b.textContent);
+    check('JPのクイックナビが店舗と同じ並び順（お客様情報→予約内容→記入欄→手配→ドライブ→メッセージ→履歴）になっている',
+          jpNavBtns.join(',') === expectedLabels.join(','), jpNavBtns.join(','));
+    const jpHtml = document.getElementById('detail-content').innerHTML;
+    const jpPositions = expectedIds.map(id => jpHtml.indexOf(`id="${id}"`));
+    check('JPのセクションの実際の掲載順（DOM上の並び）も同じ順番になっている',
+          jpPositions.every(p => p >= 0) && jpPositions.every((p, i) => i === 0 || p > jpPositions[i - 1]), jpPositions.join(','));
+
+    // --- BRANCH（現地支店） ---
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'VIE', 'CHANGE-ME-VIE');
+    [...document.querySelectorAll('#reservation-list .res-card')][0].click();
+    await settle();
+    const branchNavBtns = [...document.getElementById('detail-quick-nav').querySelectorAll('button')].map(b => b.textContent);
+    check('現地支店のクイックナビも店舗と同じ並び順になっている（項目数はJPと同じ7つ）',
+          branchNavBtns.join(',') === expectedLabels.join(','), branchNavBtns.join(','));
+    const branchHtml = document.getElementById('detail-content').innerHTML;
+    const branchPositions = expectedIds.map(id => branchHtml.indexOf(`id="${id}"`));
+    check('現地支店のセクションの実際の掲載順も同じ順番になっている',
+          branchPositions.every(p => p >= 0) && branchPositions.every((p, i) => i === 0 || p > branchPositions[i - 1]), branchPositions.join(','));
+  }
+
+  section('U33. 現地支店・手配課も店舗と同じく一覧画面の中で検索・絞り込みできる');
+  {
+    // --- JP（手配課）：一覧に絞り込み欄が出る。店舗用の欄は出ない ---
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'KANTO', 'CHANGE-ME-KANTO');
+    check('JPの一覧に絞り込み欄が表示される', !document.getElementById('nonshop-dashboard-filter').classList.contains('hidden'));
+    check('JPには店舗用の絞り込み欄は出ない', document.getElementById('shop-dashboard-filter').classList.contains('hidden'));
+
+    const jpTokU33 = ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    const kanriU33a = ctx.apiCreateReservation(jpTokU33, 'VIE', '01 U33 Alpha\n02 U33 Bride\nU33FILTER01').kanriNo;
+    ctx.apiSaveFieldsQuiet(jpTokU33, kanriU33a, { 'プラン名': 'U33専用プランA' });
+    document.getElementById('nav-dashboard').click();
+    await settle();
+
+    document.getElementById('nonshop-dashboard-search').value = 'U33FILTER01';
+    document.getElementById('nonshop-dashboard-search').dispatchEvent(new dom.window.Event('input'));
+    await settle();
+    check('チャレンジ番号で絞り込むと該当案件だけ表示される（JP）',
+          document.getElementById('reservation-list').innerHTML.includes(kanriU33a) &&
+          document.querySelectorAll('#reservation-list .res-card').length === 1);
+    document.getElementById('nonshop-dashboard-search').value = '';
+    document.getElementById('nonshop-dashboard-search').dispatchEvent(new dom.window.Event('input'));
+    await settle();
+
+    document.getElementById('nonshop-dashboard-plan').value = 'ぜったいに一致しないプラン名';
+    document.getElementById('nonshop-dashboard-plan').dispatchEvent(new dom.window.Event('input'));
+    await settle();
+    check('プラン名で絞り込むと一致しない案件は出ない（JP）',
+          !document.getElementById('reservation-list').innerHTML.includes(kanriU33a));
+    document.getElementById('nonshop-dashboard-plan').value = '';
+    document.getElementById('nonshop-dashboard-plan').dispatchEvent(new dom.window.Event('input'));
+    await settle();
+
+    ctx.apiSaveFieldsQuiet(jpTokU33, kanriU33a, { 'STS JP': 'FN' });
+    // ★一覧は開いた時点のデータをキャッシュしているため、サーバー側の更新を反映させるため再読込する
+    document.getElementById('nav-dashboard').click();
+    await settle();
+    document.getElementById('nonshop-dashboard-sts-jp').value = 'FN';
+    document.getElementById('nonshop-dashboard-sts-jp').dispatchEvent(new dom.window.Event('change'));
+    await settle();
+    check('STS(JP側)で絞り込むと一致する案件だけ表示される（JP）',
+          document.getElementById('reservation-list').innerHTML.includes(kanriU33a));
+    document.getElementById('nonshop-dashboard-sts-jp').value = 'CR';
+    document.getElementById('nonshop-dashboard-sts-jp').dispatchEvent(new dom.window.Event('change'));
+    await settle();
+    check('STS(JP側)で一致しない値を選ぶと出なくなる（JP）',
+          !document.getElementById('reservation-list').innerHTML.includes(kanriU33a));
+    document.getElementById('nonshop-dashboard-sts-jp').value = '';
+    document.getElementById('nonshop-dashboard-sts-jp').dispatchEvent(new dom.window.Event('change'));
+    await settle();
+
+    // --- 現地支店にも同じ絞り込み欄が出る ---
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'VIE', 'CHANGE-ME-VIE');
+    check('現地支店の一覧にも絞り込み欄が表示される', !document.getElementById('nonshop-dashboard-filter').classList.contains('hidden'));
+    document.getElementById('nonshop-dashboard-search').value = 'U33FILTER01';
+    document.getElementById('nonshop-dashboard-search').dispatchEvent(new dom.window.Event('input'));
+    await settle();
+    check('現地支店でもチャレンジ番号で絞り込める',
+          document.getElementById('reservation-list').innerHTML.includes(kanriU33a) &&
+          document.querySelectorAll('#reservation-list .res-card').length === 1);
+    document.getElementById('nonshop-dashboard-search').value = '';
+    document.getElementById('nonshop-dashboard-search').dispatchEvent(new dom.window.Event('input'));
+    await settle();
+  }
+
+  section('U34. お客様提供画像・指示書の一括アップロード（複数個別・ZIPまとめ）UI');
+  {
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'SHOP1', 'CHANGE-ME-SHOP1');
+    document.getElementById('nav-shop-new').click();
+    await settle();
+    document.getElementById('shop-new-branch').value = 'VIE';
+    document.getElementById('shop-new-team').value = '関東';
+    document.getElementById('shop-new-challengeno').value = 'BULKUPLOAD1';
+    document.getElementById('shop-new-groom-last').value = 'Bulk';
+    document.getElementById('shop-new-groom').value = 'Upload';
+    document.getElementById('shop-new-bride-last').value = 'Bulk';
+    document.getElementById('shop-new-bride').value = 'UploadB';
+    document.getElementById('shop-new-hope1').value = '2026-09-10';
+    document.getElementById('shop-new-submit').click();
+    await settle();
+    const kanriU34 = document.getElementById('shop-new-success-text').textContent.match(/予約番号\s*(\S+)/)[1];
+    document.getElementById('nav-dashboard').click();
+    await settle();
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanriU34)).click();
+    await settle();
+
+    // --- 個別モード（既定）：チェックすると該当種別のファイル欄だけが現れる ---
+    check('個別モードが既定で選ばれている', document.getElementById('shop-upload-mode-each').checked);
+    check('個別モードのブロックが表示されている', !document.getElementById('shop-upload-each-block').classList.contains('hidden'));
+    check('ZIPモードのブロックは隠れている', document.getElementById('shop-upload-zip-block').classList.contains('hidden'));
+    const hairCheck = document.querySelector('.shop-upload-each-check[value="ヘアメイク画像"]');
+    const hairFile = [...document.querySelectorAll('.shop-upload-each-file')].find(f => f.dataset.doctype === 'ヘアメイク画像');
+    check('未チェックの間はファイル選択欄が隠れている', hairFile.classList.contains('hidden'));
+    hairCheck.checked = true;
+    hairCheck.dispatchEvent(new dom.window.Event('change'));
+    await settle();
+    check('チェックするとその種別のファイル選択欄が現れる', !hairFile.classList.contains('hidden'));
+    hairCheck.checked = false;
+    hairCheck.dispatchEvent(new dom.window.Event('change'));
+    await settle();
+    check('チェックを外すとファイル選択欄がまた隠れる', hairFile.classList.contains('hidden'));
+
+    document.getElementById('shop-upload-submit').click();
+    await settle();
+    check('何もチェックせずに送信するとエラーになる（個別モード）',
+          !document.getElementById('shop-upload-error').classList.contains('hidden'));
+
+    // --- ZIPモードへ切替 ---
+    document.getElementById('shop-upload-mode-zip').checked = true;
+    document.getElementById('shop-upload-mode-zip').dispatchEvent(new dom.window.Event('change'));
+    await settle();
+    check('ZIPモードに切り替えると個別ブロックが隠れる', document.getElementById('shop-upload-each-block').classList.contains('hidden'));
+    check('ZIPモードのブロックが表示される', !document.getElementById('shop-upload-zip-block').classList.contains('hidden'));
+    document.getElementById('shop-upload-submit').click();
+    await settle();
+    check('対象種別を選ばずに送信するとエラーになる（ZIPモード）',
+          !document.getElementById('shop-upload-error').classList.contains('hidden'));
+
+    // --- 実際のアップロード結果（一覧表示）は、jsdomでファイル選択を再現できないため、
+    // 他のアップロード系テストと同様にサーバーAPIを直接呼んでから一覧の再読込を検証する ---
+    const shopTokU34 = ctx.apiLogin('SHOP1', 'CHANGE-ME-SHOP1').session.token;
+    ctx.apiShopUploadDocumentsBatch(shopTokU34, kanriU34, [
+      { docType: 'ヘアメイク画像', filename: 'hairU34.jpg', mimeType: 'image/jpeg', base64Data: Buffer.from('x').toString('base64') },
+      { docType: '衣裳画像', filename: 'dressU34.jpg', mimeType: 'image/jpeg', base64Data: Buffer.from('x').toString('base64') }
+    ]);
+    ctx.apiShopUploadDocumentZip(shopTokU34, kanriU34, ['ヘアメイク画像', '撮影指示書'], 'まとめU34.zip', 'application/zip', Buffer.from('x').toString('base64'));
+    document.getElementById('nav-dashboard').click();
+    await settle();
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanriU34)).click();
+    await settle();
+    const uploadListHtml = document.getElementById('shop-upload-list').innerHTML;
+    check('個別一括アップロードした2件が一覧に表示される', uploadListHtml.includes('hairU34.jpg') && uploadListHtml.includes('dressU34.jpg'));
+    check('ZIPアップロードしたファイルも一覧に表示される', uploadListHtml.includes('まとめU34.zip'));
+    check('ZIPファイルの対象種別が一覧にも表示される（対象: ヘアメイク画像、撮影指示書）',
+          uploadListHtml.includes('ヘアメイク画像、撮影指示書'));
+  }
+
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error('テストが異常終了しました:', e); process.exit(1); });

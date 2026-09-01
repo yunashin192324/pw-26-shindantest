@@ -33,13 +33,16 @@
   // クイックナビを押すと該当セクションへスムーズスクロールする形式）にする。ただし
   // 現地支店・手配課ならではの項目（現地記入欄／日本記入欄）はそのままタブとして残す
   // （「記入欄」セクション内の小さな切替タブとして実装。詳しくはrenderDetail参照）。
+  // ★要件：日本の店舗画面（依頼状況・お客様情報・予約内容・書類・メッセージ・履歴の順）と
+  // 掲載順を揃える。店舗に無い「記入欄・手配・ドライブ」は、店舗の「書類」に相当する位置
+  // （お客様情報・予約内容の直後、メッセージ・履歴の手前）にまとめて置く。
   const DETAIL_QUICK_NAV = [
-    { key: 'message', label: 'メッセージ' },
     { key: 'customer', label: 'お客様情報' },
     { key: 'reservation', label: '予約内容' },
     { key: 'entry', label: '記入欄' },
     { key: 'arrangement', label: '手配' },
     { key: 'drive', label: 'ドライブ' },
+    { key: 'message', label: 'メッセージ' },
     { key: 'timeline', label: '履歴' }
   ];
   // 日本記入欄：AI加工の選択肢（Code.gs の AI_EDIT_OPTIONS と一致させる）
@@ -137,6 +140,8 @@
     populateStatusSelect('s-sts-jp');
     populateStatusSelect('s-sts-branch');
     populateStatusSelect('shop-dashboard-sts');
+    populateStatusSelect('nonshop-dashboard-sts-jp');
+    populateStatusSelect('nonshop-dashboard-sts-branch');
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       session = JSON.parse(saved);
@@ -191,6 +196,13 @@
     // ★機能追加：店舗ロール向けの一覧絞り込み（チャレンジ番号／お名前／管理番号・撮影日の範囲・
     // STS(JP側)・プラン名で検索。担当（手配課）の絞り込みは廃止した）
     ['shop-dashboard-search', 'shop-dashboard-date-from', 'shop-dashboard-date-to', 'shop-dashboard-sts', 'shop-dashboard-plan']
+      .forEach(id => {
+        $(id).addEventListener('input', () => { if (lastDashboardData) renderDashboard(lastDashboardData); });
+        $(id).addEventListener('change', () => { if (lastDashboardData) renderDashboard(lastDashboardData); });
+      });
+    // ★要件：現地支店・手配課も店舗と同じく一覧画面の中で絞り込めるように
+    ['nonshop-dashboard-search', 'nonshop-dashboard-date-from', 'nonshop-dashboard-date-to',
+     'nonshop-dashboard-sts-jp', 'nonshop-dashboard-sts-branch', 'nonshop-dashboard-plan']
       .forEach(id => {
         $(id).addEventListener('input', () => { if (lastDashboardData) renderDashboard(lastDashboardData); });
         $(id).addEventListener('change', () => { if (lastDashboardData) renderDashboard(lastDashboardData); });
@@ -359,6 +371,32 @@
       const sts = $('shop-dashboard-sts').value;
       if (sts) list = list.filter(r => r.statusJp === sts || r.statusBranch === sts);
       const plan = $('shop-dashboard-plan').value.trim().toLowerCase();
+      if (plan) list = list.filter(r => String(r.plan || '').toLowerCase().includes(plan));
+    }
+
+    // ★要件：現地支店・手配課も、店舗と同じく一覧画面の中で絞り込めるようにする
+    // （別画面の「検索」に行かなくても、チャレンジ番号・撮影日の範囲・STS(JP側)・
+    // STS(支店側)・プラン名の複数条件を組み合わせて絞り込める）
+    if (data.role === 'JP' || data.role === 'BRANCH') {
+      const q = $('nonshop-dashboard-search').value.trim().toLowerCase();
+      if (q) {
+        list = list.filter(r => [r.challengeNo, r.groomName, r.brideName, r.kanriNo]
+          .some(v => String(v || '').toLowerCase().includes(q)));
+      }
+      const dFrom = $('nonshop-dashboard-date-from').value;
+      const dTo = $('nonshop-dashboard-date-to').value;
+      if (dFrom || dTo) {
+        list = list.filter(r => {
+          const iso = toIsoDate(r.confirmedDate);
+          if (!iso) return false;
+          return (!dFrom || iso >= dFrom) && (!dTo || iso <= dTo);
+        });
+      }
+      const stsJp = $('nonshop-dashboard-sts-jp').value;
+      if (stsJp) list = list.filter(r => r.statusJp === stsJp);
+      const stsBranch = $('nonshop-dashboard-sts-branch').value;
+      if (stsBranch) list = list.filter(r => r.statusBranch === stsBranch);
+      const plan = $('nonshop-dashboard-plan').value.trim().toLowerCase();
       if (plan) list = list.filter(r => String(r.plan || '').toLowerCase().includes(plan));
     }
 
@@ -986,11 +1024,26 @@
       </div>
       <div class="section-card">
         <h3>お客様提供画像・指示書のアップロード</h3>
-        <div class="detail-grid">
-          <div class="field-block"><label>書類種別</label>
-            <select id="shop-upload-doctype">${SHOP_UPLOAD_DOC_TYPES.map(t => `<option value="${escapeAttr(t)}">${escapeHtml(t)}</option>`).join('')}</select>
-          </div>
-          <div class="field-block"><label>ファイル</label><input type="file" id="shop-upload-file"></div>
+        <!-- ★要件：一つ一つアップロードするのが面倒、との要望への対応。
+             (1)個別モード：複数の書類種別をチェックして、それぞれ別ファイルを選び、まとめて一括送信
+             (2)ZIPモード：複数の書類種別をチェックし、それらをまとめた1つのZIPファイルだけを送信
+             モードはラジオボタンで切り替える。 -->
+        <div class="field-block" style="margin-bottom:10px;">
+          <label class="checkbox-label"><input type="radio" name="shop-upload-mode" id="shop-upload-mode-each" value="each" checked> 個別に複数アップロード（種別ごとに別ファイル）</label>
+          <label class="checkbox-label"><input type="radio" name="shop-upload-mode" id="shop-upload-mode-zip" value="zip"> まとめてZIPでアップロード（1つのZIPファイル）</label>
+        </div>
+        <div id="shop-upload-each-block">
+          ${SHOP_UPLOAD_DOC_TYPES.map(t => `
+            <div class="field-block" style="margin-bottom:8px;">
+              <label class="checkbox-label"><input type="checkbox" class="shop-upload-each-check" value="${escapeAttr(t)}"> ${escapeHtml(t)}</label>
+              <input type="file" class="shop-upload-each-file hidden" data-doctype="${escapeAttr(t)}" style="margin-top:4px;">
+            </div>`).join('')}
+        </div>
+        <div id="shop-upload-zip-block" class="hidden">
+          <p class="hint-text" style="margin-bottom:6px;">このZIPファイルに含まれる書類種別をチェックしてください（複数可）。</p>
+          ${SHOP_UPLOAD_DOC_TYPES.map(t => `
+            <label class="checkbox-label"><input type="checkbox" class="shop-upload-zip-check" value="${escapeAttr(t)}"> ${escapeHtml(t)}</label>`).join('')}
+          <div class="field-block" style="margin-top:8px;"><label>ZIPファイル</label><input type="file" id="shop-upload-zip-file" accept=".zip,application/zip"></div>
         </div>
         <button class="send-btn" id="shop-upload-submit" style="margin-top:8px;">アップロード</button>
         <p id="shop-upload-error" class="error-text hidden"></p>
@@ -1104,6 +1157,20 @@
     });
 
     $('shop-upload-submit').addEventListener('click', submitShopUpload);
+    // ★要件：個別モード／ZIPモードの切替。チェックした種別だけファイル選択欄を表示する（個別モード）
+    c.querySelectorAll('input[name="shop-upload-mode"]').forEach(r => {
+      r.addEventListener('change', () => {
+        const zipMode = $('shop-upload-mode-zip').checked;
+        $('shop-upload-each-block').classList.toggle('hidden', zipMode);
+        $('shop-upload-zip-block').classList.toggle('hidden', !zipMode);
+      });
+    });
+    c.querySelectorAll('.shop-upload-each-check').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const fileInput = [...c.querySelectorAll('.shop-upload-each-file')].find(f => f.dataset.doctype === cb.value);
+        if (fileInput) fileInput.classList.toggle('hidden', !cb.checked);
+      });
+    });
     loadShopUploadedDocsInto('shop-upload-list');
     loadFormUrlsInto('shop-form-urls');
 
@@ -1115,22 +1182,51 @@
     });
   }
 
-  // ★機能追加（拡張要望8章）：店舗が選んだファイルをBase64にしてアップロードする
+  // ファイルをBase64（データURLのヘッダを除いた部分）に変換する共通処理
+  function readFileAsBase64_(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result).split(',').pop());
+      reader.onerror = () => reject(new Error('ファイルの読み込みに失敗しました。'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // ★要件：一つ一つアップロードするのが面倒、との要望への対応。
+  // 個別モード：チェックした書類種別ごとにファイルを選び、まとめて一括送信（apiShopUploadDocumentsBatch）。
+  // ZIPモード：チェックした書類種別を「対象」として、1つのZIPファイルだけを送信（apiShopUploadDocumentZip）。
   async function submitShopUpload() {
     $('shop-upload-error').classList.add('hidden');
-    const fileInput = $('shop-upload-file');
-    const file = fileInput.files && fileInput.files[0];
-    if (!file) { showFieldError('shop-upload-error', 'ファイルを選択してください。'); return; }
-    const docType = $('shop-upload-doctype').value;
+    const zipMode = $('shop-upload-mode-zip').checked;
     try {
-      const base64 = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result).split(',').pop());
-        reader.onerror = () => reject(new Error('ファイルの読み込みに失敗しました。'));
-        reader.readAsDataURL(file);
-      });
-      await gsRun('apiShopUploadDocument', session.token, currentKanri, docType, file.name, file.type, base64);
-      fileInput.value = '';
+      if (zipMode) {
+        const types = [...document.querySelectorAll('.shop-upload-zip-check:checked')].map(cb => cb.value);
+        if (!types.length) { showFieldError('shop-upload-error', 'ZIPに含まれる書類種別を1つ以上選んでください。'); return; }
+        const fileInput = $('shop-upload-zip-file');
+        const file = fileInput.files && fileInput.files[0];
+        if (!file) { showFieldError('shop-upload-error', 'ZIPファイルを選択してください。'); return; }
+        const base64 = await readFileAsBase64_(file);
+        await gsRun('apiShopUploadDocumentZip', session.token, currentKanri, types, file.name, file.type, base64);
+        fileInput.value = '';
+        document.querySelectorAll('.shop-upload-zip-check').forEach(cb => { cb.checked = false; });
+      } else {
+        const checks = [...document.querySelectorAll('.shop-upload-each-check:checked')];
+        if (!checks.length) { showFieldError('shop-upload-error', 'アップロードする書類種別を1つ以上チェックしてください。'); return; }
+        const uploads = [];
+        for (const cb of checks) {
+          const fileInput = [...document.querySelectorAll('.shop-upload-each-file')].find(f => f.dataset.doctype === cb.value);
+          const file = fileInput && fileInput.files && fileInput.files[0];
+          if (!file) { showFieldError('shop-upload-error', `「${cb.value}」のファイルを選択してください。`); return; }
+          const base64 = await readFileAsBase64_(file);
+          uploads.push({ docType: cb.value, filename: file.name, mimeType: file.type, base64Data: base64 });
+        }
+        await gsRun('apiShopUploadDocumentsBatch', session.token, currentKanri, uploads);
+        checks.forEach(cb => {
+          cb.checked = false;
+          const fileInput = [...document.querySelectorAll('.shop-upload-each-file')].find(f => f.dataset.doctype === cb.value);
+          if (fileInput) { fileInput.value = ''; fileInput.classList.add('hidden'); }
+        });
+      }
       showToast('アップロードしました');
       loadShopUploadedDocsInto('shop-upload-list');
     } catch (e) {
@@ -1936,12 +2032,12 @@
         <button type="button" class="print-btn" id="print-arrangement-btn">🖨 手配内容をPDFで保存</button>
       </div>
       ${tabBarHtml}
-      ${messageTabHtml}
       ${customerTabHtml}
       ${reservationTabHtml}
       ${entryGroupHtml}
       ${arrangementTabHtml(d)}
       ${driveTabHtml}
+      ${messageTabHtml}
       ${timelineTabHtml}
     `;
 
@@ -2077,7 +2173,7 @@
         <div style="margin-bottom:8px;">
           <strong>${escapeHtml(f.docType)}</strong>
           <ul style="margin:4px 0 0 18px;">
-            ${f.files.map(file => `<li><a href="${escapeAttr(file.url)}" target="_blank" rel="noopener">${escapeHtml(file.name)}</a>（${escapeHtml(file.updatedAt || '')}）
+            ${f.files.map(file => `<li><a href="${escapeAttr(file.url)}" target="_blank" rel="noopener">${escapeHtml(file.name)}</a>（${escapeHtml(file.updatedAt || '')}）${file.coveredTypes ? `　<span class="hint-text">対象: ${escapeHtml(file.coveredTypes)}</span>` : ''}
               ${canDelete ? `<button type="button" class="history-link" data-shop-upload-delete="${escapeAttr(file.url)}">削除</button>` : ''}</li>`).join('')}
           </ul>
         </div>`).join('');
