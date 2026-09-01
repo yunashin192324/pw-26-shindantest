@@ -26,7 +26,11 @@
   // する「PUSH」ボタンの固定文面（急ぎで回答が欲しいことを伝えるためのボタン）
   const SHOP_PUSH_MESSAGE_TEXT = '【至急】ご回答をお願いいたします。恐れ入りますが、お早めのご確認・ご返信をお願いします。';
   // 必要書類チェックリスト（Code.gsのCHECKLIST_ITEMSと一致させる）
-  const CHECKLIST_ITEMS = ['ヘアメイク画像', '衣裳画像', '撮影指示書', '着付け指示書', '婚姻受理証明書コピー（必要な場合）'];
+  const CHECKLIST_ITEMS = ['ヘアメイク画像', '衣裳画像', '撮影指示書', '着付け指示書', '婚姻受理証明書コピー（必要な場合）', 'ヘアメイクアンケート'];
+  // 同行者の有無の選択肢（Code.gsのCOMPANION_CHOICESと一致させる）
+  const COMPANION_CHOICES_CLIENT = ['有', '無'];
+  // 希望日の時間帯の選択肢（Code.gsのHOPE_TIME_CHOICESと一致させる）
+  const HOPE_TIME_CHOICES_CLIENT = ['AM', 'PM'];
   // ドライブアップロードの書類種別（Code.gsのSHOP_UPLOAD_DOC_TYPESと一致させる）
   const SHOP_UPLOAD_DOC_TYPES = ['ヘアメイク画像', '衣裳画像', '撮影指示書', '着付け指示書'];
   // ★要件：日本の支店（店舗）画面と同じフォーマット（隠す/表示のタブ切替ではなく、上部の
@@ -810,34 +814,36 @@
         const shopDetailRes = await gsRun('apiGetReservationDetail', session.token, kanriNo);
         // ★要件：プラン・セール名・オプションは自由入力ではなく、依頼先支店のマスタ一覧から選べるように
         const shopBranchCode = shopDetailRes.detail['支店コード'];
-        const [shopPlanList, shopOptionList, shopSaleList] = await Promise.all([
+        const [shopPlanList, shopOptionList, shopSaleList, shopCostumeList] = await Promise.all([
           gsRun('apiListPlans', session.token, shopBranchCode),
           gsRun('apiListOptionItems', session.token, shopBranchCode),
-          gsRun('apiListSales', session.token, shopBranchCode)
+          gsRun('apiListSales', session.token, shopBranchCode),
+          gsRun('apiListCostumeCompanies', session.token)
         ]);
         currentDetail = shopDetailRes.detail;
-        renderShopDetail(shopDetailRes.detail, shopPlanList, shopOptionList, shopSaleList);
+        renderShopDetail(shopDetailRes.detail, shopPlanList, shopOptionList, shopSaleList, shopCostumeList);
         return;
       }
       const detailRes = await gsRun('apiGetReservationDetail', session.token, kanriNo);
       const branchCode = detailRes.detail['支店コード'];
-      const [planList, optionList, locationList, staffList, phraseList, saleList] = await Promise.all([
+      const [planList, optionList, locationList, staffList, phraseList, saleList, costumeList] = await Promise.all([
         gsRun('apiListPlans', session.token, branchCode),
         gsRun('apiListOptionItems', session.token, branchCode),
         gsRun('apiListLocations', session.token, branchCode),
         gsRun('apiListStaff', session.token, branchCode),
         gsRun('apiListPhrases', session.token, branchCode),
-        gsRun('apiListSales', session.token, branchCode)
+        gsRun('apiListSales', session.token, branchCode),
+        gsRun('apiListCostumeCompanies', session.token)
       ]);
       currentDetail = detailRes.detail;
-      renderDetail(detailRes.detail, planList, optionList, locationList, staffList, phraseList, saleList);
+      renderDetail(detailRes.detail, planList, optionList, locationList, staffList, phraseList, saleList, costumeList);
     } catch (e) { handleAuthError(e); }
   }
 
   // ★機能追加：店舗ロール向けの案件詳細（依頼状況の確認・許可された項目の編集・メッセージのやり取り）
   // 拡張要望2章・3章に対応し、当初の「読み取り専用＋メッセージのみ」から、
   // 通常の3択（保存のみ／メッセージのみ／変更＋メッセージ）で編集できる画面へ拡張した。
-  function renderShopDetail(d, planList, optionList, saleList) {
+  function renderShopDetail(d, planList, optionList, saleList, costumeList) {
     const c = $('detail-content');
     const historyHtml = (d.history || []).length === 0
       ? '<p class="hint-text">まだやり取りがありません。</p>'
@@ -848,14 +854,19 @@
         </div>`).join('');
 
     // ★機能追加：希望日ごとの空き確認ステータスは店舗にも見せる（編集はできない。読み取り専用）。
-    // 「優先順位・日付・日本STS・現地STS」の表で表示する（JP/支店の予約内容タブと同じ形式）。
+    // 「優先順位・プラン・日付・（時間帯）・日本STS・現地STS」の表で表示する
+    // （JP/支店の予約内容タブと同じ形式。プラン欄・時間帯欄は店舗からも入力できる）。
     const SHOP_HOPE_FIELDS = ['希望日①', '希望日②', '希望日③', '希望日④', '希望日⑤'];
+    const showHopeTimeShop = !!d.showHopeTime;
     const hopeTableRowsShop = SHOP_HOPE_FIELDS.map((f, i) => {
       const jpVal = d[`${f} STS JP`], branchVal = d[`${f} STS 支店`];
+      const timeCell = !showHopeTimeShop ? '' : `<td>${hopeTimeSelectHtml_(hopeTimeFieldFor_(f), d[hopeTimeFieldFor_(f)])}</td>`;
       return `
         <tr>
           <td>第${i + 1}希望</td>
+          <td>${hopePlanSelectHtml_(planList, hopePlanFieldFor_(f), d[hopePlanFieldFor_(f)])}</td>
           <td><input type="date" data-pending="${escapeAttr(f)}" value="${escapeAttr(toIsoDate(d[f]))}" min="${todayIsoDate_()}" style="width:100%;"></td>
+          ${timeCell}
           <td>${escapeHtml(jpVal || '')}</td>
           <td>${escapeHtml(branchVal || '')}</td>
         </tr>`;
@@ -865,10 +876,10 @@
     const hopeShouldExpandShop = !d['撮影日FIX'] || d['STS JP'] === 'DC';
     const hopeTableHtmlShop = `
       <details class="hope-collapse" ${hopeShouldExpandShop ? 'open' : ''}>
-        <summary>希望日一覧（優先順位・日付・STS）${hopeShouldExpandShop ? '' : '－ふだんは折りたたみ表示です。開くと確認できます'}</summary>
+        <summary>希望日一覧（優先順位・プラン・日付・STS）${hopeShouldExpandShop ? '' : '－ふだんは折りたたみ表示です。開くと確認できます'}</summary>
         <div class="table-wrap" style="margin-top:6px;">
           <table class="res-table">
-            <thead><tr><th>優先順位</th><th>日付</th><th>日本STS</th><th>現地STS</th></tr></thead>
+            <thead><tr><th>優先順位</th><th>プラン</th><th>日付</th>${showHopeTimeShop ? '<th>時間帯</th>' : ''}<th>日本STS</th><th>現地STS</th></tr></thead>
             <tbody>${hopeTableRowsShop}</tbody>
           </table>
         </div>
@@ -948,10 +959,14 @@
           <div class="field-block"><label>新郎年齢（※ISWのみ必要）</label><input type="number" min="0" data-pending="新郎年齢" value="${escapeAttr(d['新郎年齢'])}"></div>
           <div class="field-block"><label>新婦年齢（※ISWのみ必要）</label><input type="number" min="0" data-pending="新婦年齢" value="${escapeAttr(d['新婦年齢'])}"></div>
           <div class="field-block"><label>パスポート番号（※ISWのみ必要）</label><input data-pending="パスポート番号" value="${escapeAttr(d['パスポート番号'])}"></div>
+          <div class="field-block">${costumeCompanySelectHtml_(costumeList, d['衣装会社'])}</div>
+          <div class="field-block"><label>同行者の有無</label>${companionSelectHtml_(d['同行者の有無'])}</div>
           <div class="field-block"><label>現地で連絡可能なメールアドレス</label><input type="email" data-pending="現地連絡先メール" value="${escapeAttr(d['現地連絡先メール'])}"></div>
           <div class="field-block"><label>現地で連絡可能な電話番号</label><input data-pending="現地連絡先電話" value="${escapeAttr(d['現地連絡先電話'])}"></div>
           <div class="field-block"><label>滞在ホテル名</label><input data-pending="ホテル" value="${escapeAttr(d['ホテル'])}"></div>
           <div class="field-block"><label>ホテル住所</label><input data-pending="ホテル住所" value="${escapeAttr(d['ホテル住所'])}"></div>
+          <div class="field-block"><label>チェックイン日</label><input type="date" data-pending="チェックイン日" value="${escapeAttr(d['チェックイン日'])}"></div>
+          <div class="field-block"><label>チェックアウト日</label><input type="date" data-pending="チェックアウト日" value="${escapeAttr(d['チェックアウト日'])}"></div>
           <div class="field-block" style="grid-column:1/-1;"><label>フライト情報</label><input data-pending="フライト情報" value="${escapeAttr(d['フライト情報'])}" placeholder="例）JL123 8/20 10:00羽田発 → 14:00現地着"></div>
         </div>
       </div>
@@ -1449,6 +1464,45 @@
     return names;
   }
 
+  // ★要件：お客様情報に衣装会社（衣装会社マスタから選択）を追加。全社共通の候補のため
+  // SHOP・JP・BRANCHのどの画面でも同じ関数を使い回す。
+  function costumeCompanySelectHtml_(costumeList, current) {
+    const names = nameListWithCurrent(costumeList, current);
+    return `<label>衣装会社</label>
+      <select data-pending="衣装会社">
+        <option value="">未設定</option>
+        ${names.map(n => `<option value="${escapeAttr(n)}" ${n === current ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}
+      </select>`;
+  }
+  // ★要件：お客様情報に同行者の有無を追加（有／無の選択式）
+  function companionSelectHtml_(current) {
+    return `<select data-pending="同行者の有無">
+        <option value="">未設定</option>
+        ${COMPANION_CHOICES_CLIENT.map(c => `<option value="${escapeAttr(c)}" ${c === current ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+      </select>`;
+  }
+
+  // ★要件：希望日の日付の隣に時間帯（AM／PM）を選べる欄を追加する（Code.gsのhopeTimeCol_と一致）。
+  // 支店マスタの「希望日時間帯表示」がONの支店だけ表示する。
+  function hopeTimeFieldFor_(hopeField) { return `${hopeField}時間帯`; }
+  function hopeTimeSelectHtml_(fieldName, current) {
+    return `<select data-pending="${escapeAttr(fieldName)}">
+        <option value="">-</option>
+        ${HOPE_TIME_CHOICES_CLIENT.map(t => `<option value="${t}" ${t === current ? 'selected' : ''}>${t}</option>`).join('')}
+      </select>`;
+  }
+  // ★要件：プランを複数希望できるようにする（希望日ごとにプラン欄を追加。Code.gsのhopePlanCol_と一致）。
+  // その希望日がOK（現地確定）になると、選んだプランが案件全体のプラン名欄へ自動反映される
+  // （applyHopeStatusCascade_参照）。
+  function hopePlanFieldFor_(hopeField) { return `${hopeField}プラン`; }
+  function hopePlanSelectHtml_(planList, fieldName, current) {
+    const names = nameListWithCurrent(planList, current);
+    return `<select data-pending="${escapeAttr(fieldName)}" style="width:100%;">
+        <option value="">未設定</option>
+        ${names.map(n => `<option value="${escapeAttr(n)}" ${n === current ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}
+      </select>`;
+  }
+
   // ★要件：撮影希望場所・セール名はプランにも紐づく（プランマスタの「撮影場所方式」・
   // 「撮影場所候補」、セールマスタの「対象プラン」）。店舗の案件詳細（renderShopDetail）でも
   // プランを選び直すたびにこの2つを差し替える（新規依頼フォームのonShopNewPlanChangeと同じ考え方）。
@@ -1502,7 +1556,7 @@
     return `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
   }
 
-  function renderDetail(d, planList, optionList, locationList, staffList, phraseList, saleList) {
+  function renderDetail(d, planList, optionList, locationList, staffList, phraseList, saleList, costumeList) {
     const c = $('detail-content');
 
     const planNames = nameListWithCurrent(planList, d['プラン名']);
@@ -1552,6 +1606,7 @@
     // ★要件：現地・日本共に一括でステータスをセットできるように。チェックした希望日のSTS(支店側)を
     // まとめて選んだ値にする（OK/UCならJP側にも自動反映される＝applyHopeStatusCascade_が担当）。
     const canBulkSetHope = session.role === 'BRANCH';
+    const showHopeTime = !!d.showHopeTime;
     const hopeTableRows = HOPE_FIELDS.map((f, i) => {
       const jpField = `${f} STS JP`, branchField = `${f} STS 支店`;
       const gate = branchGateFor(d[jpField]);
@@ -1562,11 +1617,14 @@
         : (d[branchField] ? statusCell(branchField, d[branchField], false, null) : '');
       const checkCell = !canBulkSetHope ? '' :
         `<td><input type="checkbox" class="hope-bulk-check" data-hope-bulk-field="${escapeAttr(branchField)}" ${branchEditable ? '' : 'disabled'}></td>`;
+      const timeCell = !showHopeTime ? '' : `<td>${hopeTimeSelectHtml_(hopeTimeFieldFor_(f), d[hopeTimeFieldFor_(f)])}</td>`;
       return `
         <tr>
           ${checkCell}
           <td>第${i + 1}希望</td>
+          <td>${hopePlanSelectHtml_(planList, hopePlanFieldFor_(f), d[hopePlanFieldFor_(f)])}</td>
           <td><input data-pending="${escapeAttr(f)}" value="${escapeAttr(d[f])}" style="width:100%;"></td>
+          ${timeCell}
           <td>${jpCell}</td>
           <td>${branchCell}</td>
         </tr>`;
@@ -1581,7 +1639,7 @@
     const hopeFieldsHtml = `
       <div class="table-wrap" style="margin-top:6px;">
         <table class="res-table">
-          <thead><tr>${canBulkSetHope ? '<th></th>' : ''}<th>優先順位</th><th>日付</th><th>日本STS</th><th>現地STS</th></tr></thead>
+          <thead><tr>${canBulkSetHope ? '<th></th>' : ''}<th>優先順位</th><th>プラン</th><th>日付</th>${showHopeTime ? '<th>時間帯</th>' : ''}<th>日本STS</th><th>現地STS</th></tr></thead>
           <tbody>${hopeTableRows}</tbody>
         </table>
       </div>
@@ -1823,10 +1881,14 @@
             <div class="field-block"><label>新郎年齢（※ISWのみ必要）</label><input type="number" min="0" data-pending="新郎年齢" value="${escapeAttr(d['新郎年齢'])}"></div>
             <div class="field-block"><label>新婦年齢（※ISWのみ必要）</label><input type="number" min="0" data-pending="新婦年齢" value="${escapeAttr(d['新婦年齢'])}"></div>
             ${!d.passportRequired ? '' : `<div class="field-block"><label>パスポート番号（※ISWのみ必要）</label><input data-pending="パスポート番号" value="${escapeAttr(d['パスポート番号'])}"></div>`}
+            <div class="field-block">${costumeCompanySelectHtml_(costumeList, d['衣装会社'])}</div>
+            <div class="field-block"><label>同行者の有無</label>${companionSelectHtml_(d['同行者の有無'])}</div>
             <div class="field-block"><label>現地で連絡可能なメールアドレス</label><input type="email" data-pending="現地連絡先メール" value="${escapeAttr(d['現地連絡先メール'])}"></div>
             <div class="field-block"><label>現地で連絡可能な電話番号</label><input data-pending="現地連絡先電話" value="${escapeAttr(d['現地連絡先電話'])}"></div>
             <div class="field-block"><label>滞在ホテル名</label><input data-pending="ホテル" value="${escapeAttr(d['ホテル'])}"></div>
             <div class="field-block"><label>ホテル住所</label><input data-pending="ホテル住所" value="${escapeAttr(d['ホテル住所'])}"></div>
+            <div class="field-block"><label>チェックイン日</label><input type="date" data-pending="チェックイン日" value="${escapeAttr(d['チェックイン日'])}"></div>
+            <div class="field-block"><label>チェックアウト日</label><input type="date" data-pending="チェックアウト日" value="${escapeAttr(d['チェックアウト日'])}"></div>
             <div class="field-block" style="grid-column:1/-1;"><label>フライト情報</label><input data-pending="フライト情報" value="${escapeAttr(d['フライト情報'])}" placeholder="例）JL123 8/20 10:00羽田発 → 14:00現地着"></div>
             <div class="field-block"><label>請求先</label>
               <select data-pending="請求先"><option value="">未設定</option>${BILLING_REGIONS.map(r => `<option value="${r}" ${d['請求先'] === r ? 'selected' : ''}>${r}</option>`).join('')}</select>

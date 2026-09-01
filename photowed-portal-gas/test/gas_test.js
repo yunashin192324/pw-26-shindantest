@@ -1282,8 +1282,17 @@ section('24. setupPortal を実際に通す（初回セットアップ・再実�
   check('まっさらな状態から setupPortal が完走する', err === null, err);
 
   const SHEETS = ['支店マスタ','プランマスタ','オプションマスタ','撮影場所マスタ','スタッフマスタ',
-                  '定型文マスタ','セールマスタ','予約一覧','やり取り履歴','過去一覧','ステータス変更履歴'];
+                  '定型文マスタ','セールマスタ','衣装会社マスタ','予約一覧','やり取り履歴','過去一覧','ステータス変更履歴'];
   SHEETS.forEach(n => check(`シート「${n}」が作られる`, !!ss.getSheetByName(n)));
+
+  // ★要件：衣装会社（お客様情報タブ）の候補をあらかじめ登録しておく
+  const costumeSheet = ss.getSheetByName('衣装会社マスタ');
+  check('衣装会社マスタに5件シードされる', costumeSheet.getLastRow() === 6, `実際: ${costumeSheet.getLastRow()}`);
+  const costumeNamesSeeded = ctx.getRowsAsObjects_(costumeSheet).map(r => r['名称']);
+  ['ブライダルハウスTUTU', 'フォーシスアンドカンパニー', 'クチュールナオコ', 'ワタベウェディング', 'デスティニーライン']
+    .forEach(name => check(`衣装会社マスタのシードに「${name}」が含まれる`, costumeNamesSeeded.includes(name), costumeNamesSeeded.join(',')));
+  check('衣装会社マスタのシード行は全社共通（ALL）で登録される',
+        ctx.getRowsAsObjects_(costumeSheet).every(r => r['支店コード'] === 'ALL'));
 
   const bm = ss.getSheetByName('支店マスタ');
   const bmHead = bm.getRange(1,1,1,bm.getLastColumn()).getValues()[0];
@@ -1318,6 +1327,7 @@ section('24. setupPortal を実際に通す（初回セットアップ・再実�
   check('setupPortal を再実行しても完走する', err2 === null, err2);
   check('再実行で列が増えない', bm.getLastColumn() === colsBefore, `${colsBefore} → ${bm.getLastColumn()}`);
   check('再実行でシード行が重複しない', bm.getLastRow() === rowsBefore, `${rowsBefore} → ${bm.getLastRow()}`);
+  check('衣装会社マスタも再実行でシード行が重複しない', costumeSheet.getLastRow() === 6, `実際: ${costumeSheet.getLastRow()}`);
 }
 
 // ---------------------------------------------------------------
@@ -2915,6 +2925,131 @@ section('49. お客様提供画像・指示書の一括アップロード（複�
   err = null;
   try { ctx.apiShopUploadDocumentZip(shop2.session.token, kanri, ['ヘアメイク画像'], 'x.zip', 'application/zip', b64); } catch (e) { err = e.message; }
   check('他の店舗は他の案件へZIPアップロードできない', err !== null, String(err));
+}
+
+// ---------------------------------------------------------------
+section('50. 希望日の時間帯(AM/PM)・複数プラン希望・お客様情報の追加項目・チェックリスト追加');
+{
+  const ctx = shopFixture();
+  // ★featureFixtureは衣装会社マスタを作らない（33章参照の考え方と同じ）。setupPortal自身の
+  // シード内容の検証は24章で別途行っているため、ここでは機能テスト用に自前で用意する。
+  ctx.ensureSheetWithHeaders_(ctx.__ss, '衣装会社マスタ', ctx.COSTUME_MASTER_HEADERS);
+  const costumeSheetForTest = ctx.__ss.getSheetByName('衣装会社マスタ');
+  ['ブライダルハウスTUTU', 'フォーシスアンドカンパニー', 'クチュールナオコ', 'ワタベウェディング', 'デスティニーライン']
+    .forEach(name => costumeSheetForTest.appendRow(['ALL', name, true]));
+
+  const shop = ctx.apiLogin('SHOP1', 'sp');
+  const shopToken = shop.session.token;
+  const jp = ctx.apiLogin('KANTO', 'pw');
+  const jpToken = jp.session.token;
+  const vie = ctx.apiLogin('VIE', 'vp');
+  const vieToken = vie.session.token;
+
+  // --- 希望日の時間帯（AM/PM）：支店マスタの「希望日時間帯表示」で表示を制御 ---
+  const created = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'VIE', team: '関東', groomLastName: 'EL', groomName: 'E', brideLastName: 'EBL', brideName: 'EB',
+    hope1: '2026-11-01', hope2: '2026-11-02', hope3: '2026-11-03', challengeNo: 'DUMMYCHG050'
+  });
+  const kanri = created.kanriNo;
+
+  let d = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+  check('既定では希望日時間帯表示フラグはOFF', d.showHopeTime === false);
+  setBranchField(ctx, 'VIE', '希望日時間帯表示', true);
+  d = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+  check('支店マスタでONにすると希望日時間帯表示フラグがtrueで返る', d.showHopeTime === true);
+  const dShop = ctx.apiGetReservationDetail(shopToken, kanri).detail;
+  check('店舗向けの詳細でも同じフラグが返る', dShop.showHopeTime === true);
+
+  ctx.apiSaveFieldsQuiet(jpToken, kanri, { '希望日①時間帯': 'AM' });
+  ctx.apiSaveFieldsQuiet(shopToken, kanri, { '希望日②時間帯': 'PM' });
+  d = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+  check('日本側が設定した時間帯が保存される', d['希望日①時間帯'] === 'AM');
+  check('店舗が設定した時間帯も保存される', d['希望日②時間帯'] === 'PM');
+
+  // --- プランを複数希望できる（希望日ごとにプラン欄）。確定した希望日のプランが
+  //     案件全体のプラン名欄へ自動反映される（撮影日FIXと同じ考え方） ---
+  ctx.apiSaveFieldsQuiet(jpToken, kanri, {
+    '希望日①プラン': 'ローマ3時間フォト', '希望日②プラン': 'フィレンツェフォト'
+    // 希望日③プランは空欄のまま（従来どおりの使い方も引き続きできることの確認用）
+  });
+  d = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+  check('希望日①のプランが保存される', d['希望日①プラン'] === 'ローマ3時間フォト');
+  check('希望日②のプランも保存される', d['希望日②プラン'] === 'フィレンツェフォト');
+  check('プラン未指定の希望日③はプラン欄が空欄のまま', !d['希望日③プラン']);
+  check('この時点では案件全体のプラン名はまだ変わらない', !d['プラン名']);
+
+  // 希望日②が現地で取れた（第一希望ではなく第二希望が確定するケース）
+  ctx.apiSaveFieldsQuiet(vieToken, kanri, { '希望日② STS 支店': 'OK' });
+  d = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+  check('希望日②のSTS(支店側)がOKになる', d['希望日② STS 支店'] === 'OK');
+  check('撮影日FIXには希望日②の日付が反映される（従来どおり）', d['撮影日FIX'] === '2026-11-02', d['撮影日FIX']);
+  check('確定した希望日②のプランが、案件全体のプラン名欄へ自動反映される',
+        d['プラン名'] === 'フィレンツェフォト', d['プラン名']);
+  check('確定しなかった希望日①のプラン欄はそのまま残る（上書きされない）',
+        d['希望日①プラン'] === 'ローマ3時間フォト');
+
+  // プラン未指定の希望日が確定しても、案件全体のプラン名は上書きされない（空欄で潰さない）
+  const created2 = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'VIE', team: '関東', groomLastName: 'FL', groomName: 'F', brideLastName: 'FBL', brideName: 'FB',
+    hope1: '2026-11-10', challengeNo: 'DUMMYCHG051'
+  });
+  ctx.apiSaveFieldsQuiet(jpToken, created2.kanriNo, { 'プラン名': '既存プラン' });
+  ctx.apiSaveFieldsQuiet(vieToken, created2.kanriNo, { '希望日① STS 支店': 'OK' });
+  const d2 = ctx.apiGetReservationDetail(jpToken, created2.kanriNo).detail;
+  check('希望日にプラン指定が無ければ、確定してもプラン名は上書きされない（既存の値のまま）',
+        d2['プラン名'] === '既存プラン', d2['プラン名']);
+
+  // --- 衣装会社（マスタから選択） ---
+  const costumeList = ctx.apiListCostumeCompanies(jpToken);
+  ['ブライダルハウスTUTU', 'フォーシスアンドカンパニー', 'クチュールナオコ', 'ワタベウェディング', 'デスティニーライン']
+    .forEach(name => check(`衣装会社マスタに「${name}」があらかじめ登録されている`,
+          costumeList.some(c => c.name === name), JSON.stringify(costumeList.map(c => c.name))));
+
+  let err = null;
+  try { ctx.apiSaveCostumeCompanyItem(shopToken, '侵入会社', null, true); } catch (e) { err = e.message; }
+  check('衣装会社マスタの登録は店舗ロールではできない（全社共通のためJPのみ）', err !== null, String(err));
+  err = null;
+  try { ctx.apiSaveCostumeCompanyItem(vieToken, '侵入会社', null, true); } catch (e) { err = e.message; }
+  check('衣装会社マスタの登録は支店ロールでもできない（JPのみ）', err !== null, String(err));
+
+  ctx.apiSaveCostumeCompanyItem(jpToken, 'テスト衣装会社', null, true);
+  const costumeListAfter = ctx.apiListCostumeCompanies(shopToken);
+  check('JPが追加した衣装会社が一覧に反映される（店舗からも見える）',
+        costumeListAfter.some(c => c.name === 'テスト衣装会社'));
+
+  ctx.apiSaveFieldsQuiet(jpToken, kanri, { '衣装会社': 'ワタベウェディング' });
+  d = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+  check('案件へ衣装会社を保存できる', d['衣装会社'] === 'ワタベウェディング');
+  ctx.apiSaveFieldsQuiet(shopToken, kanri, { '衣装会社': 'クチュールナオコ' });
+  d = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+  check('店舗からも衣装会社を変更できる', d['衣装会社'] === 'クチュールナオコ');
+
+  // --- 同行者の有無 ---
+  ctx.apiSaveFieldsQuiet(jpToken, kanri, { '同行者の有無': '有' });
+  d = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+  check('同行者の有無を保存できる（日本側）', d['同行者の有無'] === '有');
+  ctx.apiSaveFieldsQuiet(shopToken, kanri, { '同行者の有無': '無' });
+  d = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+  check('同行者の有無を保存できる（店舗）', d['同行者の有無'] === '無');
+
+  // --- チェックイン日・チェックアウト日 ---
+  ctx.apiSaveFieldsQuiet(jpToken, kanri, { 'チェックイン日': '2026-11-01', 'チェックアウト日': '2026-11-04' });
+  d = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+  check('チェックイン日が保存される（日付として読み戻せる）', d['チェックイン日'] === '2026-11-01', d['チェックイン日']);
+  check('チェックアウト日が保存される', d['チェックアウト日'] === '2026-11-04', d['チェックアウト日']);
+  ctx.apiSaveFieldsQuiet(shopToken, kanri, { 'チェックイン日': '2026-11-02' });
+  d = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+  check('店舗からもチェックイン日を変更できる', d['チェックイン日'] === '2026-11-02');
+
+  // --- 必要書類チェックリストに「ヘアメイクアンケート」を追加 ---
+  d = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+  check('必要書類チェックリストに「ヘアメイクアンケート」が含まれる',
+        d.checklist.some(c => c.item === 'ヘアメイクアンケート' && c.checked === false),
+        JSON.stringify(d.checklist));
+  ctx.apiSaveFieldsQuiet(shopToken, kanri, { '必要書類チェック:ヘアメイクアンケート': true });
+  d = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+  check('ヘアメイクアンケートにチェックを入れて保存できる',
+        d.checklist.find(c => c.item === 'ヘアメイクアンケート').checked === true);
 }
 
 // ---------------------------------------------------------------

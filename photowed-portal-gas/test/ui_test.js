@@ -74,6 +74,22 @@ function makeServer() {
   return ctx;
 }
 
+// 既存の支店マスタ行の1列だけ値を書き換える（列名基準。gas_test.jsのsetBranchFieldと同じ考え方）
+function setBranchFieldUi_(ctx, branchCode, field, value) {
+  const bm = ctx.__ss.getSheetByName('支店マスタ');
+  const head = bm.getRange(1, 1, 1, bm.getLastColumn()).getValues()[0];
+  const codeCol = head.indexOf('支店コード') + 1;
+  const fieldCol = head.indexOf(field) + 1;
+  const codes = bm.getRange(2, codeCol, bm.getLastRow() - 1, 1).getValues();
+  for (let i = 0; i < codes.length; i++) {
+    if (String(codes[i][0]).trim().toUpperCase() === branchCode.toUpperCase()) {
+      bm.getRange(i + 2, fieldCol).setValue(value);
+      return;
+    }
+  }
+  throw new Error(`支店が見つかりません: ${branchCode}`);
+}
+
 // --- Index.html を jsdom で開けるHTMLに組み立てる ---
 function buildHtml() {
   const index = fs.readFileSync(path.join(BASE, 'Index.html'), 'utf8');
@@ -1913,6 +1929,139 @@ function paneHidden(document, key) {
     check('ZIPアップロードしたファイルも一覧に表示される', uploadListHtml.includes('まとめU34.zip'));
     check('ZIPファイルの対象種別が一覧にも表示される（対象: ヘアメイク画像、撮影指示書）',
           uploadListHtml.includes('ヘアメイク画像、撮影指示書'));
+  }
+
+  section('U35. お客様情報の追加項目（衣装会社・同行者・チェックイン/アウト日）・希望日の時間帯とプラン複数希望');
+  {
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'SHOP1', 'CHANGE-ME-SHOP1');
+    document.getElementById('nav-shop-new').click();
+    await settle();
+    document.getElementById('shop-new-branch').value = 'VIE';
+    document.getElementById('shop-new-branch').dispatchEvent(new dom.window.Event('change'));
+    await settle();
+    document.getElementById('shop-new-team').value = '関東';
+    document.getElementById('shop-new-challengeno').value = 'CUSTOMFLD01';
+    document.getElementById('shop-new-groom-last').value = 'Custom';
+    document.getElementById('shop-new-groom').value = 'Field';
+    document.getElementById('shop-new-bride-last').value = 'Custom';
+    document.getElementById('shop-new-bride').value = 'FieldB';
+    document.getElementById('shop-new-hope1').value = '2026-09-10';
+    document.getElementById('shop-new-hope2').value = '2026-09-11';
+    document.getElementById('shop-new-submit').click();
+    await settle();
+    const kanriU35 = document.getElementById('shop-new-success-text').textContent.match(/予約番号\s*(\S+)/)[1];
+    document.getElementById('nav-dashboard').click();
+    await settle();
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanriU35)).click();
+    await settle();
+
+    // --- お客様情報：衣装会社（マスタ選択式）・同行者の有無・チェックイン/アウト日 ---
+    document.querySelector('[data-scroll-to="shop-sec-customer"]').click();
+    await settle();
+    const costumeSelect = document.querySelector('[data-pending="衣装会社"]');
+    check('店舗のお客様情報に衣装会社の選択欄がある', !!costumeSelect);
+    const costumeOptionNames = [...costumeSelect.options].map(o => o.value).filter(Boolean);
+    ['ブライダルハウスTUTU', 'フォーシスアンドカンパニー', 'クチュールナオコ', 'ワタベウェディング', 'デスティニーライン']
+      .forEach(name => check(`衣装会社の候補に「${name}」がある`, costumeOptionNames.includes(name), costumeOptionNames.join(',')));
+    costumeSelect.value = 'ワタベウェディング';
+    costumeSelect.dispatchEvent(new dom.window.Event('change'));
+    const companionSelect = document.querySelector('[data-pending="同行者の有無"]');
+    check('店舗のお客様情報に同行者の有無の選択欄がある', !!companionSelect);
+    companionSelect.value = '有';
+    companionSelect.dispatchEvent(new dom.window.Event('change'));
+    const checkinInput = document.querySelector('[data-pending="チェックイン日"]');
+    const checkoutInput = document.querySelector('[data-pending="チェックアウト日"]');
+    check('店舗のお客様情報にチェックイン日・チェックアウト日の欄がある（ホテル住所の隣）', !!checkinInput && !!checkoutInput);
+    checkinInput.value = '2026-09-09';
+    checkinInput.dispatchEvent(new dom.window.Event('change'));
+    checkoutInput.value = '2026-09-12';
+    checkoutInput.dispatchEvent(new dom.window.Event('change'));
+    document.getElementById('btn-save-quiet').click();
+    await settle();
+
+    document.getElementById('nav-dashboard').click();
+    await settle();
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanriU35)).click();
+    await settle();
+    const jpTokU35 = ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    let detU35 = ctx.apiGetReservationDetail(jpTokU35, kanriU35).detail;
+    check('衣装会社が保存される', detU35['衣装会社'] === 'ワタベウェディング');
+    check('同行者の有無が保存される', detU35['同行者の有無'] === '有');
+    check('チェックイン日が保存される', detU35['チェックイン日'] === '2026-09-09', detU35['チェックイン日']);
+    check('チェックアウト日が保存される', detU35['チェックアウト日'] === '2026-09-12', detU35['チェックアウト日']);
+
+    // --- 必要書類チェックリストに「ヘアメイクアンケート」がある ---
+    document.querySelector('[data-scroll-to="shop-sec-docs"]').click();
+    await settle();
+    check('店舗の必要書類チェックリストに「ヘアメイクアンケート」がある',
+          [...document.querySelectorAll('.checkbox-label')].some(l => l.textContent.includes('ヘアメイクアンケート')));
+
+    // --- 希望日の時間帯（AM/PM）：支店マスタのフラグがOFFの間は列自体が出ない ---
+    document.querySelector('[data-scroll-to="shop-sec-reservation"]').click();
+    await settle();
+    check('希望日時間帯表示フラグがOFFの間は時間帯の選択欄が出ない',
+          ![...document.querySelectorAll('[data-pending]')].some(el => el.dataset.pending === '希望日①時間帯'));
+
+    setBranchFieldUi_(ctx, 'VIE', '希望日時間帯表示', true);
+    document.getElementById('nav-dashboard').click();
+    await settle();
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanriU35)).click();
+    await settle();
+    const hopeTimeSelect1 = document.querySelector('[data-pending="希望日①時間帯"]');
+    check('支店マスタでONにすると希望日①の時間帯選択欄が現れる', !!hopeTimeSelect1);
+    hopeTimeSelect1.value = 'AM';
+    hopeTimeSelect1.dispatchEvent(new dom.window.Event('change'));
+
+    // --- プランを複数希望できる（希望日ごとにプラン欄）。第一希望・第二希望それぞれにプランを指定 ---
+    const hopePlanSelect1 = document.querySelector('[data-pending="希望日①プラン"]');
+    const hopePlanSelect2 = document.querySelector('[data-pending="希望日②プラン"]');
+    check('希望日ごとにプラン選択欄がある（第一希望）', !!hopePlanSelect1);
+    check('希望日ごとにプラン選択欄がある（第二希望）', !!hopePlanSelect2);
+    hopePlanSelect1.value = 'ローマ3時間フォト';
+    hopePlanSelect1.dispatchEvent(new dom.window.Event('change'));
+    hopePlanSelect2.value = 'フィレンツェフォト';
+    hopePlanSelect2.dispatchEvent(new dom.window.Event('change'));
+    document.getElementById('btn-save-quiet').click();
+    await settle();
+
+    detU35 = ctx.apiGetReservationDetail(jpTokU35, kanriU35).detail;
+    check('希望日①の時間帯（AM）が保存される', detU35['希望日①時間帯'] === 'AM');
+    check('希望日①のプランが保存される', detU35['希望日①プラン'] === 'ローマ3時間フォト');
+    check('希望日②のプランも保存される', detU35['希望日②プラン'] === 'フィレンツェフォト');
+
+    // 現地支店が第二希望（フィレンツェフォト）を確定 → 案件全体のプラン名へ自動反映される
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'VIE', 'CHANGE-ME-VIE');
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanriU35)).click();
+    await settle();
+    const branchCell2 = document.querySelector('[data-pending="希望日② STS 支店"]');
+    check('現地支店の希望日②STS支店の選択欄がある', !!branchCell2);
+    branchCell2.value = 'OK';
+    branchCell2.dispatchEvent(new dom.window.Event('change'));
+    document.getElementById('btn-save-quiet').click();
+    await settle();
+
+    detU35 = ctx.apiGetReservationDetail(jpTokU35, kanriU35).detail;
+    check('現地確定した希望日②のプラン（フィレンツェフォト）が案件全体のプラン名へ反映される',
+          detU35['プラン名'] === 'フィレンツェフォト', detU35['プラン名']);
+
+    // 画面を開き直すと、プラン・オプション明細のプラン選択にも反映されている（JP側）
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'KANTO', 'CHANGE-ME-KANTO');
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanriU35)).click();
+    await settle();
+    const planTableSelect = document.querySelector('.plan-option-card tr.plan-row select[data-pending="プラン名"]');
+    check('JP側のプラン・オプション明細のプラン選択にも自動反映後の値が表示される',
+          !!planTableSelect && planTableSelect.value === 'フィレンツェフォト', planTableSelect && planTableSelect.value);
   }
 
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);

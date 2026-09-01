@@ -24,6 +24,9 @@ const LOCATION_MASTER_SHEET_NAME = '撮影場所マスタ';
 const STAFF_MASTER_SHEET_NAME = 'スタッフマスタ';   // 現地スタッフ（カメラマン・ヘアメイク等）の入力候補
 const PHRASE_MASTER_SHEET_NAME = '定型文マスタ';    // メッセージのテンプレート
 const SALE_MASTER_SHEET_NAME = 'セールマスタ';      // セール名の入力候補（支店ごと。自由入力も可）
+// ★要件：衣装会社（お客様情報タブ）はどの支店でも同じ候補を使うため、支店ごとではなく
+// 全社共通（COSTUME_SHARED_CODE）の1本のリストとして管理する（セールマスタのALL共通と同じ考え方）
+const COSTUME_MASTER_SHEET_NAME = '衣装会社マスタ';
 const RESERVATION_SHEET_NAME = '予約一覧';
 const HISTORY_SHEET_NAME = 'やり取り履歴';
 const ARCHIVE_SHEET_NAME = '過去一覧';
@@ -178,7 +181,15 @@ const COL_LOCAL_EMAIL = '現地連絡先メール';
 const COL_LOCAL_PHONE = '現地連絡先電話';
 const COL_HOTEL = 'ホテル'; // 画面表示名は「滞在ホテル名」（列名は既存互換のため変更しない）
 const COL_HOTEL_ADDRESS = 'ホテル住所';
+// ★要件：ホテル住所の隣にチェックイン日・チェックアウト日を追加
+const COL_CHECKIN_DATE = 'チェックイン日';
+const COL_CHECKOUT_DATE = 'チェックアウト日';
 const COL_FLIGHT_INFO = 'フライト情報';
+// ★要件：お客様情報に衣裳会社（衣裳会社マスタから選択）を追加
+const COL_COSTUME_COMPANY = '衣装会社';
+// ★要件：お客様情報に同行者の有無を追加
+const COL_COMPANION = '同行者の有無';
+const COMPANION_CHOICES = ['有', '無'];
 const COL_AREA = '管轄';
 const COL_BILLING_REGION = '請求先';
 const COL_JP_SHOP = '日本支店名';
@@ -263,14 +274,24 @@ function opStsBranchCol_(n) { return `OP${n} STS 支店`; }
 const HOPE_COLS = [COL_HOPE1, COL_HOPE2, COL_HOPE3, COL_HOPE4, COL_HOPE5];
 function hopeStsJpCol_(n) { return `${HOPE_COLS[n - 1]} STS JP`; }
 function hopeStsBranchCol_(n) { return `${HOPE_COLS[n - 1]} STS 支店`; }
+// ★要件：希望日の日付の隣に時間帯（AM／PM）を選べる欄を追加する。表示するかどうかは
+// 支店マスタの「希望日時間帯表示」列（showHopeTime）で支店ごとに制御する（既定は非表示）。
+function hopeTimeCol_(n) { return `${HOPE_COLS[n - 1]}時間帯`; }
+const HOPE_TIME_CHOICES = ['AM', 'PM'];
+// ★要件：プランを複数希望できるようにする（第一希望＝プランA・日付、第二希望＝プランB・日付…）。
+// 希望日ごとに「プラン」欄を追加し、その希望日がOK（現地確定）になった時点で、そのプランを
+// 案件全体のプラン名欄へ自動反映する（日付が撮影日FIXへ反映されるのと同じ考え方。
+// applyHopeStatusCascade_参照。プラン欄が空欄の希望日ならこれまでどおり何も上書きしない）。
+function hopePlanCol_(n) { return `${HOPE_COLS[n - 1]}プラン`; }
 
 // ★機能追加（拡張要望9章）：必要書類チェックリスト。店舗スタッフ（主）・現地(支店)のどちらからでも
 // チェックでき、どちらの変更も双方に反映される（＝どちらのロールにとっても普通のCOMMITTABLE_FIELDS）。
 // 通知アラートの要否は要望書自体が「未確定」としているため、今回はあえて何も送らない
 // （＝チェックの保存はapiSaveFieldsQuietの「保存のみ」を使う想定。メッセージを添えたい時は
 // 従来どおりapiCommitChangesで変更内容として送ればよい）。
-// ★要件：「婚姻受理証明書コピー（必要な場合）」を追加（該当しない案件も多いため項目名に注記）
-const CHECKLIST_ITEMS = ['ヘアメイク画像', '衣裳画像', '撮影指示書', '着付け指示書', '婚姻受理証明書コピー（必要な場合）'];
+// ★要件：「婚姻受理証明書コピー（必要な場合）」「ヘアメイクアンケート」を追加
+// （婚姻受理証明書コピーは該当しない案件も多いため項目名に注記）
+const CHECKLIST_ITEMS = ['ヘアメイク画像', '衣裳画像', '撮影指示書', '着付け指示書', '婚姻受理証明書コピー（必要な場合）', 'ヘアメイクアンケート'];
 function checklistCol_(item) { return `必要書類チェック:${item}`; }
 
 const RESERVATION_HEADERS = (() => {
@@ -281,7 +302,8 @@ const RESERVATION_HEADERS = (() => {
     COL_GROOM_LAST_NAME, COL_GROOM_NAME, COL_BRIDE_LAST_NAME, COL_BRIDE_NAME,
     COL_GROOM_AGE, COL_BRIDE_AGE,
     COL_CONSENT, COL_PLAN, COL_SALE_NAME, COL_LOCATION, COL_PREP,
-    COL_PASSPORT_NO, COL_LOCAL_EMAIL, COL_LOCAL_PHONE, COL_HOTEL, COL_HOTEL_ADDRESS, COL_FLIGHT_INFO,
+    COL_PASSPORT_NO, COL_LOCAL_EMAIL, COL_LOCAL_PHONE, COL_HOTEL, COL_HOTEL_ADDRESS,
+    COL_CHECKIN_DATE, COL_CHECKOUT_DATE, COL_FLIGHT_INFO, COL_COSTUME_COMPANY, COL_COMPANION,
     COL_AREA, COL_BILLING_REGION, COL_JP_SHOP, COL_INVOICE_NO, COL_SHOP,
     COL_DAY_STAFF, COL_HAIR_MAKEUP, COL_HAIR_START_TIME, COL_PHOTOGRAPHER, COL_PHOTO_START_TIME,
     COL_ASSISTANT, COL_PICKUP_TIME, COL_LOCAL_MEMO,
@@ -296,7 +318,7 @@ const RESERVATION_HEADERS = (() => {
     base.push(opNameCol_(n), opStsJpCol_(n), opStsBranchCol_(n));
   }
   for (let n = 1; n <= HOPE_COLS.length; n++) {
-    base.push(hopeStsJpCol_(n), hopeStsBranchCol_(n));
+    base.push(hopeStsJpCol_(n), hopeStsBranchCol_(n), hopeTimeCol_(n), hopePlanCol_(n));
   }
   return base;
 })();
@@ -353,13 +375,18 @@ const SHOP_EDITABLE_FIELDS = [
   COL_GROOM_AGE, COL_BRIDE_AGE,
   COL_PLAN, COL_SALE_NAME, COL_LOCATION, COL_PREP,
   COL_HOPE1, COL_HOPE2, COL_HOPE3, COL_HOPE4, COL_HOPE5, COL_PASSPORT_NO,
+  // ★要件：希望日ごとの時間帯（AM/PM）・希望プランも、日付と同じく店舗から入力できるようにする
+  ...Array.from({ length: HOPE_COLS.length }, (_, i) => hopeTimeCol_(i + 1)),
+  ...Array.from({ length: HOPE_COLS.length }, (_, i) => hopePlanCol_(i + 1)),
   ...Array.from({ length: OPTION_COUNT }, (_, i) => opNameCol_(i + 1)),
   ...CHECKLIST_ITEMS.map(checklistCol_),
   // ★要件：CR（キャンセル依頼）にする際のキャンセル理由（同じ送信の中で一緒に保存する）
   COL_CANCEL_REASON,
   // ★要件：お客様情報タブに、現地連絡先・滞在先・フライト情報も店舗から入力できるようにする
   // （従来はJP/BRANCHの「お客様情報」タブにしか入力欄が無かった）
-  COL_LOCAL_EMAIL, COL_LOCAL_PHONE, COL_HOTEL, COL_HOTEL_ADDRESS, COL_FLIGHT_INFO
+  COL_LOCAL_EMAIL, COL_LOCAL_PHONE, COL_HOTEL, COL_HOTEL_ADDRESS, COL_FLIGHT_INFO,
+  // ★要件：チェックイン日・チェックアウト日・衣装会社・同行者の有無も店舗から入力できるようにする
+  COL_CHECKIN_DATE, COL_CHECKOUT_DATE, COL_COSTUME_COMPANY, COL_COMPANION
 ];
 // ★機能追加（店舗拡張）：店舗が案件作成後にSTS(JP側)を変更できる先。新規作成時のRQ／CHKの
 // 選択は apiShopCreateRequest 側で扱うため、ここには含めない（作成後の変更だけを対象にする）。
@@ -384,7 +411,7 @@ const SHOP_STATUS_TARGETS_FROM_OK_CASE = ['CR', 'FN', 'DC', 'PC'];
 
 // 日付として保存すべきフィールド（<input type="date">で受け渡しし、実Dateとして保存する）
 // checkAlerts/archivePastReservations/sortReservationSheet_ は撮影日FIXがDate型であることを前提にしている
-const DATE_FIELDS = [COL_CONFIRMED_DATE, COL_CEREMONY_DATE];
+const DATE_FIELDS = [COL_CONFIRMED_DATE, COL_CEREMONY_DATE, COL_CHECKIN_DATE, COL_CHECKOUT_DATE];
 // 日付だけでなく時刻まで表示したいフィールド（社内進行管理欄のチェック日時など）
 const DATETIME_FIELDS = [COL_PHOTOBRIDGE_AT, COL_DATA_UPLOAD_AT];
 
@@ -439,6 +466,8 @@ const BM_COL_SHOP_BILLING = '請求先';
 // ★機能追加（店舗拡張）：店舗がアップロードした書類（8章）を現地支店にも見せるかどうか。
 // 既定（未設定）はOFF＝手配課のみ閲覧可。
 const BM_COL_SHOP_UPLOAD_VISIBLE_TO_BRANCH = '店舗アップロードの現地公開';
+// ★要件：希望日の日付の隣に時間帯（AM／PM）選択欄を出すかどうか（支店ごとに任意。既定は非表示）
+const BM_COL_SHOW_HOPE_TIME = '希望日時間帯表示';
 const BM_COL_ACTIVE = '有効';
 // ★不具合防止：既存のテスト・運用スプレッドシートは「有効」列が支店マスタの最後尾にある前提で
 // 位置決め打ちの行を作っている場合がある。新しい列（手配メール機能まわり）は、その並びを崩さないよう
@@ -449,6 +478,7 @@ const BRANCH_MASTER_HEADERS = [
   BM_COL_REMIND_DAYS, BM_COL_CONSENT_REQUIRED, BM_COL_ACTIVE,
   BM_COL_ARRANGEMENT_ENABLED, BM_COL_PASSPORT_REQUIRED, BM_COL_SHOP_DIRECT,
   BM_COL_SHOP_NOTIFY_HQ, BM_COL_SHOP_BILLING, BM_COL_SHOP_UPLOAD_VISIBLE_TO_BRANCH,
+  BM_COL_SHOW_HOPE_TIME,
   // カテゴリごとの手配先（名前・メール）。同じ宛先を複数カテゴリに入れれば「まとめて1件に依頼」にできる
   ...ARRANGEMENT_CATEGORIES.flatMap(c => [arrNameCol_(c.label), arrEmailCol_(c.label)])
 ];
@@ -485,6 +515,10 @@ function splitLocationCandidates_(v) {
 const SALE_COL_TARGET_PLAN = '対象プラン';
 const SALE_MASTER_HEADERS = [MM_COL_BRANCH, MM_COL_NAME, MM_COL_ACTIVE, SALE_COL_TARGET_PLAN];
 const SALE_SHARED_CODE = 'ALL';
+
+// --- 衣装会社マスタの列定義（全社共通の1本のリスト） ---
+const COSTUME_MASTER_HEADERS = MASTER_ITEM_HEADERS;
+const COSTUME_SHARED_CODE = 'ALL';
 
 // --- 定型文マスタの列定義 ---
 // 支店コードに ALL を入れると全支店・日本側の共通テンプレートとして使える
@@ -591,6 +625,7 @@ function setupPortal() {
   ensureSheetWithHeaders_(ss, STAFF_MASTER_SHEET_NAME, MASTER_ITEM_HEADERS);
   ensureSheetWithHeaders_(ss, PHRASE_MASTER_SHEET_NAME, PHRASE_MASTER_HEADERS);
   ensureSheetWithHeaders_(ss, SALE_MASTER_SHEET_NAME, SALE_MASTER_HEADERS);
+  ensureSheetWithHeaders_(ss, COSTUME_MASTER_SHEET_NAME, COSTUME_MASTER_HEADERS);
   ensureSheetWithHeaders_(ss, RESERVATION_SHEET_NAME, RESERVATION_HEADERS);
   ensureSheetWithHeaders_(ss, HISTORY_SHEET_NAME, HISTORY_HEADERS);
   ensureSheetWithHeaders_(ss, ARCHIVE_SHEET_NAME, RESERVATION_HEADERS);
@@ -647,6 +682,16 @@ function setupPortal() {
     });
     bm.getRange(2, 1, seedRows.length, BRANCH_MASTER_HEADERS.length).setValues(seedRows);
   }
+
+  // ★要件：衣装会社（お客様情報タブ）の候補をあらかじめ登録しておく（全社共通・1回だけ）
+  const costumeSheet = ss.getSheetByName(COSTUME_MASTER_SHEET_NAME);
+  if (costumeSheet.getLastRow() < 2) {
+    const costumeNames = ['ブライダルハウスTUTU', 'フォーシスアンドカンパニー', 'クチュールナオコ', 'ワタベウェディング', 'デスティニーライン'];
+    costumeSheet.getRange(2, 1, costumeNames.length, COSTUME_MASTER_HEADERS.length).setValues(
+      costumeNames.map(name => [COSTUME_SHARED_CODE, name, true])
+    );
+  }
+
   [
     bm,
     ss.getSheetByName(PLAN_MASTER_SHEET_NAME),
@@ -655,6 +700,7 @@ function setupPortal() {
     ss.getSheetByName(STAFF_MASTER_SHEET_NAME),
     ss.getSheetByName(PHRASE_MASTER_SHEET_NAME),
     ss.getSheetByName(SALE_MASTER_SHEET_NAME),
+    ss.getSheetByName(COSTUME_MASTER_SHEET_NAME),
     ss.getSheetByName(RESERVATION_SHEET_NAME),
     ss.getSheetByName(HISTORY_SHEET_NAME),
     ss.getSheetByName(ARCHIVE_SHEET_NAME),
@@ -900,6 +946,8 @@ function listBranchesRaw_() {
     remindDays: parseIntOrNull_(r[BM_COL_REMIND_DAYS]),
     consentRequired: isActiveFlag_(r[BM_COL_CONSENT_REQUIRED]),
     passportRequired: isActiveFlag_(r[BM_COL_PASSPORT_REQUIRED]),
+    // ★要件：希望日の時間帯（AM／PM）欄を出すかどうか（支店ごとに任意。既定は非表示）
+    showHopeTime: isActiveFlag_(r[BM_COL_SHOW_HOPE_TIME]),
     active: isActiveFlag_(r[BM_COL_ACTIVE])
     // ログインパスコードは一覧APIには返さない（画面表示上の漏洩防止）
   }));
@@ -1056,6 +1104,19 @@ function apiSaveStaffItem(token, branchCode, name, originalName, active) {
   const session = requireSession_(token);
   assertBranchAccess_(session, branchCode);
   return saveMasterItem_(STAFF_MASTER_SHEET_NAME, branchCode, name, originalName, active);
+}
+
+// ★要件：お客様情報の「衣装会社」欄の候補（マスタから選択）。どの支店でも同じ候補を使うため
+// 支店ごとの管理はせず、全社共通（COSTUME_SHARED_CODE）の1本のリストとして扱う。
+function apiListCostumeCompanies(token) {
+  requireSession_(token);
+  return listMasterItems_(COSTUME_MASTER_SHEET_NAME, COSTUME_SHARED_CODE);
+}
+// 全社共通のマスタのため、登録・編集はJPのみ（セールマスタのALL共通登録と同じ考え方）
+function apiSaveCostumeCompanyItem(token, name, originalName, active) {
+  const session = requireSession_(token);
+  assertJp_(session);
+  return saveMasterItem_(COSTUME_MASTER_SHEET_NAME, COSTUME_SHARED_CODE, name, originalName, active);
 }
 
 // ★機能追加：セール名（機能⑤）。プランマスタと同じく支店ごとの事前登録＋自由入力の両対応。
@@ -1359,7 +1420,9 @@ function buildShopReservationDetail_(session, kanriNo, headers, rowData) {
     passportRequired: !!meta.passportRequired,
     isItaly: meta.country === ITALY_COUNTRY_NAME,
     // ★要件：店舗発の案件の請求先表示は、店舗自身の支店マスタ行の「請求先」（営業本部）を使う
-    shopBilling: ownMeta.shopBilling || ''
+    shopBilling: ownMeta.shopBilling || '',
+    // ★要件：希望日の時間帯（AM／PM）欄を出すかどうか（支店マスタの「希望日時間帯表示」で制御）
+    showHopeTime: !!meta.showHopeTime
   };
   // ★要件：パスポート番号欄は「日本の店舗画面」では支店の必須設定に関わらず常に表示する
   // （※ISWのみ必要、という注記を添えて店舗自身に判断してもらう運用に変更したため）。
@@ -1370,14 +1433,23 @@ function buildShopReservationDetail_(session, kanriNo, headers, rowData) {
   detail[COL_LOCAL_PHONE] = getV(COL_LOCAL_PHONE);
   detail[COL_HOTEL] = getV(COL_HOTEL);
   detail[COL_HOTEL_ADDRESS] = getV(COL_HOTEL_ADDRESS);
+  // ★要件：ホテル住所の隣にチェックイン日・チェックアウト日を追加
+  detail[COL_CHECKIN_DATE] = formatDateForInput_(getV(COL_CHECKIN_DATE));
+  detail[COL_CHECKOUT_DATE] = formatDateForInput_(getV(COL_CHECKOUT_DATE));
   detail[COL_FLIGHT_INFO] = getV(COL_FLIGHT_INFO);
+  // ★要件：衣装会社（マスタから選択）・同行者の有無を追加
+  detail[COL_COSTUME_COMPANY] = getV(COL_COSTUME_COMPANY);
+  detail[COL_COMPANION] = getV(COL_COMPANION);
   // ★要件：CRにする際のキャンセル理由（プラン・オプションのSTS欄近くに入力欄を出す）
   detail[COL_CANCEL_REASON] = getV(COL_CANCEL_REASON);
 
-  // ★機能追加：希望日ごとの空き確認ステータス（現地未確認ST→RQ→OK/UC）は店舗にも見せる（読み取り専用）
+  // ★機能追加：希望日ごとの空き確認ステータス（現地未確認ST→RQ→OK/UC）は店舗にも見せる（読み取り専用）。
+  // 時間帯（AM/PM）・希望プランは店舗自身も入力できる項目として扱う。
   for (let n = 1; n <= HOPE_COLS.length; n++) {
     detail[hopeStsJpCol_(n)] = getV(hopeStsJpCol_(n));
     detail[hopeStsBranchCol_(n)] = getV(hopeStsBranchCol_(n));
+    detail[hopeTimeCol_(n)] = getV(hopeTimeCol_(n));
+    detail[hopePlanCol_(n)] = getV(hopePlanCol_(n));
   }
 
   // ★機能追加（拡張要望9章）：必要書類チェックリストは店舗側にも見せる（双方向でチェックできる）
@@ -1953,6 +2025,8 @@ function apiGetReservationDetail(token, kanriNo) {
   detail.passportRequired = !!meta.passportRequired;
   // ★要件：準備場所の選択式表示・同意書欄の表示はイタリアの支店だけに絞る
   detail.isItaly = detail.country === ITALY_COUNTRY_NAME;
+  // ★要件：希望日の時間帯（AM／PM）欄を出すかどうか（支店マスタの「希望日時間帯表示」で制御）
+  detail.showHopeTime = !!meta.showHopeTime;
   // ★機能追加：店舗が起票した案件かどうか（支店・JP双方の画面で「店舗発の依頼」であることを示す）。
   // 現地とのやり取りが直結モードかどうかも合わせて返す（JPの「宛先」選択、支店側の案内表示に使う）。
   detail.originShop = getV(COL_ORIGIN_SHOP) || '';
@@ -2342,6 +2416,19 @@ function applyHopeStatusCascade_(sheet, headers, rowIndex, kanriNo, writes, who)
         const parsed = parseDateFromInput_(String(dateVal));
         if (parsed) { sheet.getRange(rowIndex, colIndexOrThrow_(headers, COL_CONFIRMED_DATE)).setValue(parsed); dateChanged = true; }
       } catch (e) { /* 無視して続行 */ }
+    }
+
+    // ★要件：プランを複数希望できるようにした（希望日ごとにプラン欄を追加）ことに伴い、
+    // その希望日にプランが指定されていれば、日付と同様に案件全体のプラン名欄へも反映する
+    // （プラン欄が空欄の希望日（従来どおりの使い方）なら、これまでどおり何も上書きしない）
+    const planVal = String(sheet.getRange(rowIndex, colIndexOrThrow_(headers, hopePlanCol_(n))).getValue() || '').trim();
+    if (planVal) {
+      const planColIdx = colIndexOrThrow_(headers, COL_PLAN);
+      const currentPlan = sheet.getRange(rowIndex, planColIdx).getValue();
+      if (currentPlan !== planVal) {
+        sheet.getRange(rowIndex, planColIdx).setValue(planVal);
+        logChange(COL_PLAN, currentPlan, planVal);
+      }
     }
 
     // 他の希望日（入力済みのもの）は自動でUC／UCにする

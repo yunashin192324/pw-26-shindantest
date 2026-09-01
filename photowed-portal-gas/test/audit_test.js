@@ -89,12 +89,16 @@ const API_SPECS = [
   { fn: 'apiListStaff',       scope: 'any', args: (t) => [t, 'VIE'], target: 'VIE', reads: true },
   { fn: 'apiListSales',       scope: 'any', args: (t) => [t, 'VIE'], target: 'VIE', reads: true },
   { fn: 'apiListPhrases',     scope: 'any', args: (t) => [t, 'VIE'], target: 'VIE', reads: true },
+  // ★要件：衣装会社マスタは支店を問わない全社共通の1本のリスト（引数に支店コードを取らない）
+  { fn: 'apiListCostumeCompanies', scope: 'any', args: (t) => [t], reads: true },
 
   { fn: 'apiSaveStaffItem',    scope: 'any', args: (t) => [t, 'VIE', '侵入テスト', null, true], target: 'VIE', writes: true },
   { fn: 'apiSaveSaleItem',     scope: 'any', args: (t) => [t, 'VIE', '侵入テスト', null, true], target: 'VIE', writes: true },
   { fn: 'apiSaveLocationItem', scope: 'any', args: (t) => [t, 'VIE', '侵入テスト', null, true], target: 'VIE', writes: true },
   { fn: 'apiSavePlanItem',     scope: 'any', args: (t) => [t, 'VIE', '侵入テスト', null, true], target: 'VIE', writes: true },
   { fn: 'apiSaveOptionItem',   scope: 'any', args: (t) => [t, 'VIE', '侵入テスト', null, true], target: 'VIE', writes: true },
+  // 全社共通マスタのため登録はJPのみ（対象支店の概念が無いのでtargetは無し）
+  { fn: 'apiSaveCostumeCompanyItem', scope: 'jp', args: (t) => [t, '侵入テスト', null, true], writes: true },
 
   { fn: 'apiGetDashboard',        scope: 'any', args: (t) => [t, { showAll: true }] },
   { fn: 'apiGetStats',            scope: 'jp',  args: (t) => [t, { showAll: true }] },
@@ -199,6 +203,7 @@ section('A1. 認可マトリクス：保護の書き忘れを機械的に検出'
   const mustLock = ['apiSaveBranch','apiSetBranchActive','apiSaveFieldsQuiet','apiCommitChanges',
                     'apiSetDriveUrl','apiCreateReservation','apiShopCreateRequest','apiToggleHistoryCheck',
                     'apiSaveStaffItem','apiSaveSaleItem','apiSavePlanItem','apiSaveOptionItem','apiSaveLocationItem',
+                    'apiSaveCostumeCompanyItem',
                     'apiSaveArrangementSettings','apiShopUploadDocument','apiShopDeleteUploadedDocument',
                     'apiShopUploadDocumentsBatch','apiShopUploadDocumentZip',
                     'apiSetDeliveryDataUrl','apiBranchUploadDeliveryData','apiBranchDeleteDeliveryData'];
