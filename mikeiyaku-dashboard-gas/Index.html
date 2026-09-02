@@ -39,8 +39,10 @@
     .dm-sticky-4 { box-shadow: 2px 0 4px -2px rgba(0,0,0,.25); }
     /* アラート行でも固定列の背景が透けないようにする */
     tr.dm-alert-row .dm-sticky { background:#fff1f2; }
-    /* まだ保存していないリセールの変更を目立たせる */
+    /* まだ保存していない変更（リセール・STS・成約PAX）を目立たせる */
     .dm-resale-pending { outline:2px solid #f59e0b; outline-offset:-2px; border-radius:6px; }
+    /* STSを「成約」にしたのに成約PAXが未入力の欄 */
+    .dm-pax-required { color:#b45309; font-weight:600; font-size:11px; }
     .spinner { border-top-color:#1d4ed8; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
   </style>
@@ -334,10 +336,10 @@
       </div>
 
       <div class="bg-white rounded-xl shadow p-4">
-        <!-- リセールの変更は「まとめて保存」する。1件ずつ通信すると次の入力まで待たされるため。 -->
+        <!-- リセール・STS・成約PAXは「まとめて保存」する。1件ずつ通信すると次の入力まで待たされるため。 -->
         <div id="resale-pending-bar" class="hidden mb-3 flex flex-wrap items-center gap-3 bg-amber-50 border border-amber-300 rounded-lg px-3 py-2">
           <span class="text-sm font-semibold text-amber-800">
-            <i class="fa-solid fa-pen"></i> リセールの未保存の変更：<span id="resale-pending-count">0</span>件
+            <i class="fa-solid fa-pen"></i> 未保存の変更：<span id="resale-pending-count">0</span>件
           </span>
           <button id="btn-save-resale" class="bg-amber-600 hover:bg-amber-700 text-white rounded-lg px-4 py-1.5 text-sm font-semibold shadow">
             <i class="fa-solid fa-floppy-disk"></i> まとめて保存する
@@ -345,7 +347,9 @@
           <button id="btn-cancel-resale" class="border border-slate-300 text-slate-600 hover:bg-slate-100 rounded-lg px-3 py-1.5 text-sm font-semibold">
             取り消す
           </button>
-          <span class="text-xs text-amber-700">STS・ACT日・ACT内容・メモ・詳細はこれまでどおり、その場で保存されます。</span>
+          <span class="text-xs text-amber-700">
+            リセール・STS・成約PAXはこのボタンで保存します。ACT日・ACT内容・メモ・詳細はその場で保存されます。
+          </span>
         </div>
         <div class="overflow-auto max-h-[65vh]">
           <table class="min-w-full text-sm whitespace-nowrap">

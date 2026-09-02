@@ -29,9 +29,12 @@ let dmFilteredCache = [];
 let rankingSortState = { key: 'total', dir: 'desc' };
 // リセールリストの並べ替え（既定は対象年月日の新しい順）
 let dmSortState = { key: '対象年月日', dir: 'desc' };
-// まだ保存していない「リセール」の変更。{ "店舗名::行番号": { sheetName, rowIndex, value } }
-// 1件ずつ通信すると次の入力まで待たされるため、ためてから一括で送る。
-let pendingResaleChanges = {};
+// まだ保存していない変更。{ "店舗名::行番号": { sheetName, rowIndex, values: {列名: 値} } }
+// 対象は「リセール」「STS」「成約PAX」の3列。1件ずつ通信すると次の入力まで
+// 待たされるため、ためてから「まとめて保存する」で一括送信する。
+let pendingChanges = {};
+// まとめて保存の対象列（この3列は選んだ時点では保存されない）
+const PENDING_COLUMNS = ['リセール', 'STS', '成約PAX'];
 let loadCompletedCount = 0;
 const LOAD_TARGET = 4;
 let currentUserContext = {
@@ -60,7 +63,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // 画面側が前提としているサーバー（Code.gs）の版数。Code.gs の SERVER_VERSION と対で更新する。
-const REQUIRED_SERVER_VERSION = '2026-08-19';
+const REQUIRED_SERVER_VERSION = '2026-08-20';
 
 /**
  * Code.gs が画面と同じ版数まで更新されているか確認する。
@@ -1333,12 +1336,12 @@ function initDataManagerEvents() {
     if (dmCurrentPage < maxPage) { dmCurrentPage++; renderDataManagerGrid(); }
   });
 
-  document.getElementById('btn-save-resale').addEventListener('click', onSaveResaleChanges);
-  document.getElementById('btn-cancel-resale').addEventListener('click', onCancelResaleChanges);
+  document.getElementById('btn-save-resale').addEventListener('click', onSavePendingChanges);
+  document.getElementById('btn-cancel-resale').addEventListener('click', onCancelPendingChanges);
 
   // 未保存のまま画面を閉じようとしたときに警告する
   window.addEventListener('beforeunload', function (ev) {
-    if (pendingResaleCount() === 0) return;
+    if (pendingRowCount() === 0) return;
     ev.preventDefault();
     ev.returnValue = '';
   });
@@ -1507,9 +1510,13 @@ function renderDataManagerGrid() {
 
   tbody.innerHTML = pageRows.map(function (row) {
     const rid = row.__sheetName + '::' + row.__rowIndex;
+    // 未保存の変更があれば、保存前の値ではなくその値を表示する
+    const stsValue = pendingValueOf(row, 'STS');
     const stsOptions = ['失注', '成約', 'リセール中'].map(function (s) {
-      return '<option value="' + s + '"' + (row['STS'] === s ? ' selected' : '') + '>' + s + '</option>';
+      return '<option value="' + s + '"' + (stsValue === s ? ' selected' : '') + '>' + s + '</option>';
     }).join('');
+    const stsClass = 'sts-select border border-slate-300 rounded px-1 py-1 text-xs'
+      + (isPendingCell(row, 'STS') ? ' dm-resale-pending' : '');
     const alert = isAlertRow(row);
     const rowClass = (alert ? 'dm-alert-row hover:bg-rose-100 bg-rose-50' : 'hover:bg-blue-50');
     const alertDays = alert ? daysSince(alertBasisDate(row)) : null;
@@ -1517,14 +1524,12 @@ function renderDataManagerGrid() {
       ? '<td class="px-2 py-2 text-center text-rose-600" title="相談日から' + alertDays + '日経過・ACT日が未入力です">🔔</td>'
       : '<td class="px-2 py-2 text-center"></td>';
 
-    // 未保存のリセール変更があれば、保存前の状態ではなくその値を選択状態にする
-    const pendingResale = pendingResaleChanges[rid];
-    const resaleValue = (pendingResale !== undefined) ? pendingResale : (row['リセール'] || '');
+    const resaleValue = pendingValueOf(row, 'リセール');
     const resaleOpts = ['〇', '✖'].map(function (s) {
       return '<option value="' + s + '"' + (resaleValue === s ? ' selected' : '') + '>' + s + '</option>';
     }).join('');
     const resaleClass = 'resale-select border border-slate-300 rounded px-1 py-1 text-xs'
-      + (pendingResale !== undefined ? ' dm-resale-pending' : '');
+      + (isPendingCell(row, 'リセール') ? ' dm-resale-pending' : '');
 
     // 列順：スタッフが毎日触る編集項目（リセール〜メモ）を左端にまとめ、
     // 参照用のCSV由来項目をその右に並べる。
@@ -1536,11 +1541,11 @@ function renderDataManagerGrid() {
         '</select>' +
       '</td>' +
       '<td class="dm-sticky dm-sticky-2 px-2 py-1">' +
-        '<select class="sts-select border border-slate-300 rounded px-1 py-1 text-xs" data-sheet="' + escapeHtml(row.__sheetName) + '" data-row="' + row.__rowIndex + '">' +
+        '<select class="' + stsClass + '" data-sheet="' + escapeHtml(row.__sheetName) + '" data-row="' + row.__rowIndex + '" data-rid="' + escapeHtml(rid) + '">' +
           '<option value="">－</option>' + stsOptions +
         '</select>' +
       '</td>' +
-      editableCellTd(row, '成約PAX', 'number', 'dm-sticky dm-sticky-3') +
+      paxCellTd(row, stsValue) +
       editableCellTd(row, 'ACT日', 'date', 'dm-sticky dm-sticky-4') +
       editableCellTd(row, 'ACT内容', 'text') +
       longTextCellTd(row, '次回ACT・進捗★手入力') +
@@ -1558,6 +1563,27 @@ function renderDataManagerGrid() {
   }).join('');
 
   bindGridEditEvents();
+}
+
+/**
+ * 「成約PAX」のセル。STSと同じく、まとめて保存の対象。
+ * STSを「成約」にした行では、まだPAXが空でも入力を促すため枠を強調する。
+ */
+function paxCellTd(row, stsValue) {
+  const val = pendingValueOf(row, '成約PAX');
+  const pending = isPendingCell(row, '成約PAX');
+  const needsInput = (stsValue === '成約') && String(val).trim() === '';
+
+  let cls = 'editable-cell px-3 py-2 dm-sticky dm-sticky-3';
+  if (pending) cls += ' dm-resale-pending';
+  const hint = needsInput ? ' title="成約PAXを入力してください（ダブルクリック）"' : '';
+  const body = needsInput
+    ? '<span class="cell-display dm-pax-required">要入力</span>'
+    : '<span class="cell-display">' + escapeHtml(val) + '</span>';
+
+  return '<td class="' + cls + '"' + hint + ' data-column="成約PAX" data-type="number"' +
+    ' data-sheet="' + escapeHtml(row.__sheetName) + '" data-row="' + row.__rowIndex + '"' +
+    ' data-value="' + escapeHtml(val) + '">' + body + '</td>';
 }
 
 function editableCellTd(row, columnName, type, extraClass) {
@@ -1590,59 +1616,127 @@ function longTextCellTd(row, columnName) {
 }
 
 // ============================================================================
-// リセールのまとめて保存
+// まとめて保存（リセール・STS・成約PAX）
 // ----------------------------------------------------------------------------
-// リセール列だけは、選ぶたびに通信すると1行ごとに数秒待たされて次の入力ができない。
+// この3列は、選ぶたびに通信すると1行ごとに数秒待たされて次の入力ができない。
 // 変更を画面側にためておき、「まとめて保存する」で一括送信する。
+// ACT日・ACT内容・メモ・詳細はこれまでどおり、その場で保存する。
 // ============================================================================
 
-/** リセールの変更を保存待ちに積む（元の値に戻した場合は保存待ちから外す） */
-function stageResaleChange(rid, sheetName, rowIndex, value) {
+/** 保存待ちの中の値を返す（無ければ保存済みの値） */
+function pendingValueOf(row, column) {
+  const rid = row.__sheetName + '::' + row.__rowIndex;
+  const entry = pendingChanges[rid];
+  if (entry && Object.prototype.hasOwnProperty.call(entry.values, column)) {
+    return entry.values[column];
+  }
+  const v = row[column];
+  return (v === null || v === undefined) ? '' : v;
+}
+
+/** その行・その列が未保存かどうか */
+function isPendingCell(row, column) {
+  const entry = pendingChanges[row.__sheetName + '::' + row.__rowIndex];
+  return !!(entry && Object.prototype.hasOwnProperty.call(entry.values, column));
+}
+
+/**
+ * 変更を保存待ちに積む。元の値に戻した場合はその項目を保存待ちから外し、
+ * 行内に変更が1つも無くなればその行ごと外す。
+ */
+function stageChange(sheetName, rowIndex, column, value) {
+  const rid = sheetName + '::' + rowIndex;
   const row = dmFilteredCache.find(function (r) {
     return r.__sheetName === sheetName && String(r.__rowIndex) === String(rowIndex);
   });
-  const original = row ? (row['リセール'] || '') : '';
+  const original = row ? (row[column] === null || row[column] === undefined ? '' : row[column]) : '';
 
-  if (String(value || '') === String(original)) {
-    delete pendingResaleChanges[rid];   // 元の値に戻したので変更なし
-  } else {
-    pendingResaleChanges[rid] = { sheetName: sheetName, rowIndex: rowIndex, value: value };
+  if (!pendingChanges[rid]) {
+    pendingChanges[rid] = { sheetName: sheetName, rowIndex: rowIndex, values: {} };
   }
-  renderResalePendingBar();
+  const entry = pendingChanges[rid];
+
+  if (String(value) === String(original)) {
+    delete entry.values[column];        // 元の値に戻したので変更なし
+  } else {
+    entry.values[column] = value;
+  }
+
+  // STSを「成約」以外にしたら、成約PAXの変更は意味を失うので取り下げる
+  const nextSts = Object.prototype.hasOwnProperty.call(entry.values, 'STS')
+    ? entry.values['STS'] : (row ? (row['STS'] || '') : '');
+  if (nextSts !== '成約') delete entry.values['成約PAX'];
+
+  if (Object.keys(entry.values).length === 0) delete pendingChanges[rid];
+  renderPendingBar();
 }
 
-function pendingResaleCount() { return Object.keys(pendingResaleChanges).length; }
+function pendingRowCount() { return Object.keys(pendingChanges).length; }
 
 /** 未保存の件数バーの表示を更新する */
-function renderResalePendingBar() {
+function renderPendingBar() {
   const bar = document.getElementById('resale-pending-bar');
   const countEl = document.getElementById('resale-pending-count');
   if (!bar || !countEl) return;
-  const n = pendingResaleCount();
+  const n = pendingRowCount();
   countEl.textContent = n;
   bar.classList.toggle('hidden', n === 0);
 }
 
 /** 未保存の変更をすべて破棄して表示を元に戻す */
-function discardResaleChanges() {
-  pendingResaleChanges = {};
-  renderResalePendingBar();
+function discardPendingChanges() {
+  pendingChanges = {};
+  renderPendingBar();
   renderDataManagerGrid();
 }
 
-function onCancelResaleChanges() {
-  if (pendingResaleCount() === 0) return;
-  if (!window.confirm('保存していないリセールの変更を取り消します。よろしいですか？')) return;
-  discardResaleChanges();
+function onCancelPendingChanges() {
+  if (pendingRowCount() === 0) return;
+  if (!window.confirm('保存していない変更を取り消します。よろしいですか？')) return;
+  discardPendingChanges();
   showToast('変更を取り消しました。', 'info');
 }
 
-/** ためていたリセールの変更を一括で保存する */
-function onSaveResaleChanges() {
-  const keys = Object.keys(pendingResaleChanges);
+/**
+ * STSを「成約」にしたのに成約PAXが未入力の行数を数える。
+ * 保存はできるが、入れ忘れに気づけるよう保存前に確認する。
+ */
+function countContractRowsMissingPax() {
+  let n = 0;
+  Object.keys(pendingChanges).forEach(function (rid) {
+    const entry = pendingChanges[rid];
+    const row = dmFilteredCache.find(function (r) {
+      return (r.__sheetName + '::' + r.__rowIndex) === rid;
+    });
+    const sts = Object.prototype.hasOwnProperty.call(entry.values, 'STS')
+      ? entry.values['STS'] : (row ? (row['STS'] || '') : '');
+    if (sts !== '成約') return;
+    const pax = Object.prototype.hasOwnProperty.call(entry.values, '成約PAX')
+      ? entry.values['成約PAX'] : (row ? (row['成約PAX'] || '') : '');
+    if (String(pax).trim() === '') n++;
+  });
+  return n;
+}
+
+/** ためていた変更を一括で保存する */
+function onSavePendingChanges() {
+  const keys = Object.keys(pendingChanges);
   if (keys.length === 0) return;
 
-  const changes = keys.map(function (k) { return pendingResaleChanges[k]; });
+  const missing = countContractRowsMissingPax();
+  if (missing > 0 &&
+      !window.confirm('「成約」にした行のうち ' + missing + '件で成約PAXが未入力です。\n' +
+                      'このまま保存しますか？（あとから入力もできます）')) {
+    return;
+  }
+
+  const changes = keys.map(function (k) {
+    const entry = pendingChanges[k];
+    const change = { sheetName: entry.sheetName, rowIndex: entry.rowIndex };
+    Object.keys(entry.values).forEach(function (col) { change[col] = entry.values[col]; });
+    return change;
+  });
+
   const btn = document.getElementById('btn-save-resale');
   btn.disabled = true;
   showLoading(true);
@@ -1660,9 +1754,9 @@ function onSaveResaleChanges() {
       // 保存できた行だけ保存待ちから外す（失敗した行は残して、もう一度保存できるようにする）
       const failedRids = {};
       (res.failures || []).forEach(function (f) { failedRids[f.sheetName + '::' + f.rowIndex] = true; });
-      keys.forEach(function (k) { if (!failedRids[k]) delete pendingResaleChanges[k]; });
+      keys.forEach(function (k) { if (!failedRids[k]) delete pendingChanges[k]; });
 
-      renderResalePendingBar();
+      renderPendingBar();
       renderKpi(getDashboardFilteredData());
       renderRankingTable(getDashboardFilteredData());
       renderDataManagerGrid();
@@ -1671,44 +1765,33 @@ function onSaveResaleChanges() {
         showToast(res.updatedCount + '件を保存しましたが、' + res.failures.length +
           '件は保存できませんでした：' + res.failures[0].error, 'error');
       } else {
-        showToast('リセールを' + res.updatedCount + '件保存しました。', 'success');
+        showToast(res.updatedCount + '件を保存しました。', 'success');
       }
     })
     .withFailureHandler(function (err) {
       showLoading(false);
       btn.disabled = false;
-      showToast('通信エラー（updateResaleValues）: ' + err.message, 'error');
+      showToast('通信エラー（saveRowChanges）: ' + err.message, 'error');
     })
-    .updateResaleValues(changes);
+    .saveRowChanges(changes);
 }
 
 function bindGridEditEvents() {
-  // リセール：その場では保存せず、変更をためて「まとめて保存する」で一括送信する。
+  // リセール・STS：その場では保存せず、変更をためて「まとめて保存する」で一括送信する。
   // 1件ずつ通信すると1行あたり数秒待たされ、続けて入力できないため。
   document.querySelectorAll('.resale-select').forEach(function (sel) {
     sel.addEventListener('change', function () {
-      stageResaleChange(sel.dataset.rid, sel.dataset.sheet, sel.dataset.row, sel.value);
-      sel.classList.toggle('dm-resale-pending', pendingResaleChanges[sel.dataset.rid] !== undefined);
+      stageChange(sel.dataset.sheet, sel.dataset.row, 'リセール', sel.value);
+      renderDataManagerGrid();
     });
   });
 
-  // STS：常時表示のセレクトボックスで即時更新
   document.querySelectorAll('.sts-select').forEach(function (sel) {
     sel.addEventListener('change', function () {
-      const sheetName = sel.dataset.sheet;
-      const rowIndex = sel.dataset.row;
-      const newStatus = sel.value;
       // 空欄（－）は「未対応に戻す」操作。選び間違えたときに取り消せるようにする。
-
-      let contractPax = '';
-      if (newStatus === '成約') {
-        const row = dmFilteredCache.find(function (r) { return r.__sheetName === sheetName && String(r.__rowIndex) === String(rowIndex); });
-        contractPax = row ? row['成約PAX'] : '';
-        contractPax = window.prompt('成約PAX数を入力してください', contractPax || 0);
-        if (contractPax === null) { renderDataManagerGrid(); return; }
-      }
-
-      callUpdateStatus(sheetName, rowIndex, newStatus, contractPax);
+      stageChange(sel.dataset.sheet, sel.dataset.row, 'STS', sel.value);
+      // 「成約」にした行は成約PAXの入力欄を促す表示に切り替わるため、描き直す
+      renderDataManagerGrid();
     });
   });
 
@@ -1730,8 +1813,10 @@ function bindGridEditEvents() {
       if (td.querySelector('input, textarea')) return;
       hideDetailTooltip();
       const span = td.querySelector('.cell-display');
-      // 長文列は表示を切り詰めているため、編集には全文（data-full）を使う
-      const currentVal = span.dataset.full !== undefined ? span.dataset.full : span.textContent;
+      // 長文列は表示を切り詰めているため編集には全文（data-full）を、
+      // 成約PAXは「要入力」と表示している場合があるため実値（data-value）を使う
+      const currentVal = td.dataset.value !== undefined ? td.dataset.value
+        : (span.dataset.full !== undefined ? span.dataset.full : span.textContent);
       const type = td.dataset.type;
       const columnName = td.dataset.column;
       const isMultiline = MULTILINE_COLUMNS.indexOf(columnName) !== -1;
@@ -1764,14 +1849,16 @@ function bindGridEditEvents() {
         const columnName = td.dataset.column;
 
         if (columnName === '成約PAX') {
+          // 成約PAXもまとめて保存の対象。STSは保存待ちの値も含めて判定する
           const row = dmFilteredCache.find(function (r) { return r.__sheetName === sheetName && String(r.__rowIndex) === String(rowIndex); });
-          const currentSts = row ? row['STS'] : '';
-          if (currentSts !== '成約') {
-            showToast('成約PAXはSTSが「成約」の行のみ編集できます。', 'error');
+          const sts = row ? pendingValueOf(row, 'STS') : '';
+          if (sts !== '成約') {
+            showToast('成約PAXはSTSが「成約」の行のみ入力できます。', 'error');
             renderDataManagerGrid();
             return;
           }
-          callUpdateStatus(sheetName, rowIndex, '成約', newVal);
+          stageChange(sheetName, rowIndex, '成約PAX', newVal);
+          renderDataManagerGrid();
         } else {
           callUpdateCellValue(sheetName, rowIndex, columnName, newVal);
         }
@@ -1811,32 +1898,6 @@ function showDetailTooltip(targetEl, text) {
 
 function hideDetailTooltip() {
   document.getElementById('detail-tooltip').classList.add('hidden');
-}
-
-function callUpdateStatus(sheetName, rowIndex, newStatus, contractPax) {
-  showLoading(true);
-  google.script.run
-    .withSuccessHandler(function (res) {
-      showLoading(false);
-      if (res && res.success) {
-        applyUpdatedRowToCache(res.data);
-        showToast(newStatus
-          ? 'ステータスを更新しました（' + newStatus + '）'
-          : 'ステータスを未対応に戻しました', 'success');
-        renderKpi(getDashboardFilteredData());
-        renderRankingTable(getDashboardFilteredData());
-        renderDataManagerGrid();
-      } else {
-        showToast('更新に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
-        renderDataManagerGrid();
-      }
-    })
-    .withFailureHandler(function (err) {
-      showLoading(false);
-      showToast('通信エラー（updateStatus）: ' + err.message, 'error');
-      renderDataManagerGrid();
-    })
-    .updateStatus(sheetName, rowIndex, newStatus, contractPax);
 }
 
 function callUpdateCellValue(sheetName, rowIndex, columnName, value) {

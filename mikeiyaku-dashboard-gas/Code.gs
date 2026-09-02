@@ -967,7 +967,7 @@ function importUncontractedCsv(csvText) {
  * 「is not a function」という分かりにくいエラーになるため、
  * 画面側から版数を確認できるようにしている。
  */
-const SERVER_VERSION = '2026-08-19';
+const SERVER_VERSION = '2026-08-20';
 
 /**
  * サーバー側の版数を返す。画面側は、自分が期待する版数と一致するかを起動時に確認する。
@@ -1528,24 +1528,38 @@ function updateCellValue(sheetName, rowIndex, columnName, value) {
 }
 
 /**
- * 「リセール」列の変更をまとめて保存する。
+ * 「リセール」「STS」「成約PAX」の変更をまとめて保存する。
  * 1件ずつ通信すると1行あたり数秒の待ちが発生し、続けて入力できないため、
  * 画面側で変更をためておき、この関数で一度に書き込む。
- * @param {Array} changes [{sheetName, rowIndex, value}, ...]
+ *
+ * changes の各要素は次の形。変更した項目だけを持たせる（持っていない項目は触らない）。
+ *   { sheetName, rowIndex, 'リセール'?: string, 'STS'?: string, '成約PAX'?: number|string }
+ *
+ * 1件ずつ更新する updateStatus と同じ業務ルールを適用する。
+ *   ・STSを「成約」にした行は成約PAXを保存し、リセールが空欄なら「✖」を補う
+ *   ・STSを「成約」以外（失注／リセール中／未対応）にした行は成約PAXを消す
+ *   ・成約PAXだけを変えられるのは、STSが「成約」の行のみ
+ *
+ * @param {Array} changes 変更の配列
  * @return {Object} 成功件数・失敗した行の内訳・更新後の行データ
  */
-function updateResaleValues(changes) {
+function saveRowChanges(changes) {
   try {
     if (!Array.isArray(changes) || changes.length === 0) {
       return { success: true, updatedCount: 0, updatedRows: [], failures: [] };
     }
     if (changes.length > 500) {
-      throw new Error('一度に更新できるのは500件までです（指定: ' + changes.length + '件）。');
+      throw new Error('一度に保存できるのは500件までです（指定: ' + changes.length + '件）。');
     }
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const colIdx = HEADERS_MAIN.indexOf('リセール') + 1;
+    const COL_RESALE = HEADERS_MAIN.indexOf('リセール') + 1;
+    const COL_STS = HEADERS_MAIN.indexOf('STS') + 1;
+    const COL_PAX = HEADERS_MAIN.indexOf('成約PAX') + 1;
+    const COL_LAST_ACTION = HEADERS_MAIN.indexOf('最終アクション日') + 1;
     const todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    const VALID_STATUSES = ['', '失注', '成約', 'リセール中'];
+
     const updatedRows = [];
     const failures = [];
 
@@ -1558,16 +1572,73 @@ function updateResaleValues(changes) {
         const rIdx = parseInt(rowIndex, 10);
         if (isNaN(rIdx) || rIdx < 2) throw new Error('不正な行番号です: ' + rowIndex);
 
-        const value = String(change.value === undefined || change.value === null ? '' : change.value);
-        if (RESALE_VALUES.indexOf(value) === -1) {
-          throw new Error('リセール列には「〇」「✖」または空欄のみ設定できます: ' + change.value);
-        }
-
         const sheet = ss.getSheetByName(sheetName);
         if (!sheet) throw new Error('シートが見つかりません: ' + sheetName);
 
-        setTextCell_(sheet, rIdx, colIdx, value);
-        setTextCell_(sheet, rIdx, 21, todayStr); // 最終アクション日
+        const hasResale = Object.prototype.hasOwnProperty.call(change, 'リセール');
+        const hasSts = Object.prototype.hasOwnProperty.call(change, 'STS');
+        const hasPax = Object.prototype.hasOwnProperty.call(change, '成約PAX');
+        if (!hasResale && !hasSts && !hasPax) {
+          throw new Error('変更内容がありません。');
+        }
+
+        // ---- 入力値の検証（1つでも不正ならこの行は何も書き込まない） ----
+        let resaleValue = null;
+        if (hasResale) {
+          resaleValue = String(change['リセール'] === undefined || change['リセール'] === null ? '' : change['リセール']);
+          if (RESALE_VALUES.indexOf(resaleValue) === -1) {
+            throw new Error('リセール列には「〇」「✖」または空欄のみ設定できます: ' + change['リセール']);
+          }
+        }
+
+        let stsValue = null;
+        if (hasSts) {
+          stsValue = String(change['STS'] === undefined || change['STS'] === null ? '' : change['STS']).trim();
+          if (VALID_STATUSES.indexOf(stsValue) === -1) {
+            throw new Error('不正なステータスです: ' + change['STS']);
+          }
+        }
+
+        // 保存後のSTS（変更していなければ現在の値）
+        const currentSts = String(sheet.getRange(rIdx, COL_STS).getValue() || '').trim();
+        const nextSts = hasSts ? stsValue : currentSts;
+
+        let paxValue = null;
+        if (hasPax) {
+          if (nextSts !== '成約') {
+            throw new Error('成約PAXはSTSが「成約」の行のみ入力できます。');
+          }
+          paxValue = normalizeContractPax_(change['成約PAX']);
+        }
+
+        // ---- 書き込み ----
+        if (hasResale) {
+          setTextCell_(sheet, rIdx, COL_RESALE, resaleValue);
+        }
+
+        if (hasSts) {
+          if (stsValue === '') {
+            sheet.getRange(rIdx, COL_STS).clearContent();
+          } else {
+            sheet.getRange(rIdx, COL_STS).setValue(stsValue);
+          }
+        }
+
+        if (nextSts === '成約') {
+          // 成約PAXの指定があれば書き、無ければ既存の値を残す
+          if (hasPax) sheet.getRange(rIdx, COL_PAX).setValue(paxValue);
+          // ガードレール：成約になった際、リセールが空欄なら初期値を補う
+          const resaleCell = sheet.getRange(rIdx, COL_RESALE);
+          const resaleNow = resaleCell.getValue();
+          if (resaleNow === '' || resaleNow === null) {
+            setTextCell_(sheet, rIdx, COL_RESALE, '✖');
+          }
+        } else if (hasSts) {
+          // 成約以外へ変えた行は成約PAXを消す（未対応に戻した場合も含む）
+          sheet.getRange(rIdx, COL_PAX).clearContent();
+        }
+
+        setTextCell_(sheet, rIdx, COL_LAST_ACTION, todayStr);
 
         const values = sheet.getRange(rIdx, 1, 1, HEADERS_MAIN.length).getValues()[0];
         const obj = {};
