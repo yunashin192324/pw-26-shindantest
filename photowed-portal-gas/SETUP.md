@@ -1854,3 +1854,35 @@ URL登録、またはファイルの直接アップロードで最終データ�
   今回の統合で不要になったため削除し、`.plan-option-card`／`.plan-table`に一本化した
 
 テスト: `node run_all.js`で1241件全て成功（サーバー676・監査171・画面394）
+
+### 75. スプレッドシートIDを設定・setup系の関数がUIコンテキスト無しで失敗する不具合を修正
+
+実際にデプロイ先のスプレッドシートIDを`SPREADSHEET_ID`（`Code.gs`冒頭）に設定した。あわせて、
+Apps Scriptエディタから`setupPortal()`を手動実行したところ次の例外が発生する不具合が見つかり、
+修正した。
+
+```
+[rebuildUnreadFlags] 0 行の未読フラグを再計算しました
+Exception: Cannot call SpreadsheetApp.getUi() from this context.
+  setupPortal @ Code.gs:738
+```
+
+- **原因**：`SpreadsheetApp.getUi()`は、スプレッドシートのカスタムメニューやサイドバー等、
+  実際にスプレッドシートのUIから呼ばれた場合にしか使えない。`setupPortal`・`setupTriggers`・
+  `setupConsentFormTrigger`・`setupSurveyFormTrigger`はいずれも本SETUP.mdの手順どおり
+  Apps Scriptエディタの「実行」ボタンから直接手動実行する運用のため、UIコンテキストが無く、
+  完了メッセージを`SpreadsheetApp.getUi().alert(...)`で出そうとした最後の行が必ず例外になって
+  いた（シート作成・マスタのシード・未読フラグ再計算などそれ以前の処理は正常に完了していたが、
+  最後の完了通知だけが失敗し、実行ログ上はエラー終了に見えてしまっていた）
+- **修正**：4箇所の`SpreadsheetApp.getUi().alert(...)`を、共通ヘルパー`alertOrLog_(message)`
+  経由に置き換えた。`alertOrLog_`はまず`console.log`で実行ログに必ずメッセージを残し、
+  そのうえで`SpreadsheetApp.getUi().alert(...)`を`try/catch`で試みる（スプレッドシートの
+  カスタムメニュー経由で呼ばれた場合は従来どおりダイアログも表示される。UIコンテキストが
+  無い場合は例外を握りつぶして正常終了する）
+- **テスト追加**：これまでのテストハーネス（`gas_harness.js`）は`SpreadsheetApp.getUi()`を
+  常に成功するモックにしていたため、この不具合を検出できていなかった。`gas_test.js`
+  55章で`getUi()`が実際の本番同様に例外を投げるようモックし直し、それでも
+  `setupPortal`・`setupTriggers`・`setupConsentFormTrigger`・`setupSurveyFormTrigger`の
+  4つが最後まで完走することを確認するテストを追加した
+
+テスト: `node run_all.js`で1245件全て成功（サーバー680・監査171・画面394）

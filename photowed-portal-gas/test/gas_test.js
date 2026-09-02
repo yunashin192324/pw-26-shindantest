@@ -3309,5 +3309,36 @@ section('54. 希望日ごとの場所・国をまたいだプラン希望（apiL
 }
 
 // ---------------------------------------------------------------
+section('55. setup系の完了メッセージはUIコンテキストが無くても例外にならない（alertOrLog_）');
+{
+  // ★不具合修正：setupPortal・setupTriggers・setupConsentFormTrigger・setupSurveyFormTrigger は
+  // いずれもApps Scriptエディタから直接手動実行する運用（スプレッドシートのカスタムメニュー経由
+  // ではない）のため、実際の本番環境では SpreadsheetApp.getUi() が
+  // 「Cannot call SpreadsheetApp.getUi() from this context.」を投げる。これまでのテストハーネスは
+  // getUi() を常に成功するようモックしていたため、この失敗を一度も検出できていなかった
+  // （setupPortal自体は完走していたが、最後のgetUi().alert(...)だけが例外になっていた）。
+  // ここではgetUi()が実際の本番同様に例外を投げるようモックし直し、それでも4つのsetup系関数が
+  // 最後まで完走することを確認する。
+  const ctx = makeContext(); CTX = ctx;
+  ctx.SpreadsheetApp.getUi = () => { throw new Error('Cannot call SpreadsheetApp.getUi() from this context.'); };
+
+  let err = null;
+  try { ctx.setupPortal(); } catch (e) { err = e.message; }
+  check('UIコンテキストが無くても setupPortal が完走する', err === null, err);
+
+  let err2 = null;
+  try { ctx.setupTriggers(); } catch (e) { err2 = e.message; }
+  check('UIコンテキストが無くても setupTriggers が完走する', err2 === null, err2);
+
+  let err3 = null;
+  try { ctx.setupConsentFormTrigger(); } catch (e) { err3 = e.message; }
+  check('UIコンテキストが無くても setupConsentFormTrigger が完走する', err3 === null, err3);
+
+  let err4 = null;
+  try { ctx.setupSurveyFormTrigger(); } catch (e) { err4 = e.message; }
+  check('UIコンテキストが無くても setupSurveyFormTrigger が完走する', err4 === null, err4);
+}
+
+// ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
 process.exit(fail === 0 ? 0 : 1);

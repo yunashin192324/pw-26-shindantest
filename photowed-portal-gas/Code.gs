@@ -735,7 +735,14 @@ function setupPortal() {
   // 未読フラグ列を追加した直後は全て空欄になるため、履歴から実態を計算して反映する
   rebuildUnreadFlags();
 
-  SpreadsheetApp.getUi().alert(
+  // ★不具合修正：setupPortal()はApps Scriptエディタから直接手動実行する運用のため、
+  // スプレッドシートのUIコンテキストが存在せずSpreadsheetApp.getUi()が
+  // 「Cannot call SpreadsheetApp.getUi() from this context.」で例外になっていた
+  // （getUi()はカスタムメニュー等、スプレッドシート側から呼ばれた場合しか使えない）。
+  // ここまでの処理（シート作成・マスタのシード・未読フラグ再計算）は正常に完了しているため、
+  // 完了メッセージの表示に失敗して例外を投げるのは避け、実行ログ（表示 → 実行数/ログ）にも
+  // 必ず出るalertOrLog_を使う（下のsetupTriggers付近を参照）。
+  alertOrLog_(
     'セットアップが完了しました。\n\n' +
     '「支店マスタ」シートで各行のログインパスコード・通知先メールを実際の値に書き換えてから、\n' +
     'デプロイ（ウェブアプリとして導入）してください。\n' +
@@ -4562,7 +4569,23 @@ function setupTriggers() {
   ScriptApp.newTrigger('checkAlerts').timeBased().everyDays(1).atHour(8).create();
   ScriptApp.newTrigger('checkDeliveryAlerts').timeBased().everyDays(1).atHour(8).create();
   ScriptApp.newTrigger('checkUnansweredAlerts').timeBased().everyDays(1).atHour(9).create();
-  SpreadsheetApp.getUi().alert('日次トリガー（アーカイブ・撮影前アラート・納品期限アラート・未返信リマインド）を再設定しました。\n（同意書フォームのトリガーを設定済みの場合はそのまま残ります）');
+  // ★不具合修正：setupTriggers()もsetupPortal()と同様エディタから直接手動実行する運用のため、
+  // UIコンテキストが無くgetUi()が例外になっていた。実行ログにも出しつつ、alertはエラーを
+  // 無視する（スプレッドシートのカスタムメニュー経由で呼ばれた場合はそのまま表示される）。
+  alertOrLog_('日次トリガー（アーカイブ・撮影前アラート・納品期限アラート・未返信リマインド）を再設定しました。\n（同意書フォームのトリガーを設定済みの場合はそのまま残ります）');
+}
+
+// setupPortal/setupTriggers/setupConsentFormTrigger/setupSurveyFormTriggerのような「初回のみ
+// 手動実行」する関数は、スプレッドシートのカスタムメニューではなくApps Scriptエディタから
+// 直接実行される想定のため、SpreadsheetApp.getUi()を呼ぶとUIコンテキストが無く例外になる。
+// 実行ログには必ず残しつつ、alert表示はできる場合だけ試みる。
+function alertOrLog_(message) {
+  console.log(message);
+  try {
+    SpreadsheetApp.getUi().alert(message);
+  } catch (e) {
+    // UIコンテキストが無い（エディタから直接実行した等）場合はここに来る。想定内のため無視する。
+  }
 }
 
 // =====================================================
@@ -4600,7 +4623,7 @@ function setupConsentFormTrigger() {
     .forSpreadsheet(getSpreadsheet_())
     .onFormSubmit()
     .create();
-  SpreadsheetApp.getUi().alert('同意書フォームの自動反映トリガーを設定しました。以後、フォーム回答時に「同意書」欄が自動で更新されます。');
+  alertOrLog_('同意書フォームの自動反映トリガーを設定しました。以後、フォーム回答時に「同意書」欄が自動で更新されます。');
 }
 
 function onConsentFormSubmit_(e) {
@@ -4704,7 +4727,7 @@ function setupSurveyFormTrigger() {
     .forSpreadsheet(getSpreadsheet_())
     .onFormSubmit()
     .create();
-  SpreadsheetApp.getUi().alert('アンケートフォームの自動反映トリガーを設定しました。以後、フォーム回答時に案件の「メモ履歴」（アンケート回答）へ自動で追記されます。');
+  alertOrLog_('アンケートフォームの自動反映トリガーを設定しました。以後、フォーム回答時に案件の「メモ履歴」（アンケート回答）へ自動で追記されます。');
 }
 
 function onSurveyFormSubmit_(e) {
