@@ -846,17 +846,25 @@ function apiLogin(branchCode, passcode) {
   const sheet = getSpreadsheet_().getSheetByName(BRANCH_MASTER_SHEET_NAME);
   const rows = getRowsAsObjects_(sheet);
 
-  const match = rows.find(r =>
+  // ★不具合修正：以前は「支店コード一致・パスコード一致・有効=TRUE」を1つのfindで判定していたため、
+  // 支店マスタに行を追加したのに「有効」列をオンにし忘れているだけの場合でも、
+  // 「支店コードまたはパスコードが違います」という汎用エラーになり、原因が分かりにくかった。
+  // 支店コード・パスコードの一致は先に判定し、「有効」だけがオフの場合は専用のメッセージを返す。
+  const credentialMatch = rows.find(r =>
     String(r[BM_COL_CODE]).trim().toUpperCase() === code &&
-    String(r[BM_COL_PASSCODE]) === String(passcode === null || passcode === undefined ? '' : passcode) &&
-    isActiveFlag_(r[BM_COL_ACTIVE])
+    String(r[BM_COL_PASSCODE]) === String(passcode === null || passcode === undefined ? '' : passcode)
   );
 
-  if (!match) {
+  if (!credentialMatch) {
     // 失敗回数を加算（LOGIN_LOCKOUT_SEC 経過すればキャッシュ失効で自動的に解除される）
     cache.put(failKey, String(fails + 1), LOGIN_LOCKOUT_SEC);
     return { ok: false, error: '支店コードまたはパスコードが違います。' };
   }
+  if (!isActiveFlag_(credentialMatch[BM_COL_ACTIVE])) {
+    cache.put(failKey, String(fails + 1), LOGIN_LOCKOUT_SEC);
+    return { ok: false, error: 'この支店コードは「支店マスタ」シートの「有効」列がオンになっていないため、ログインできません。支店マスタで該当行の「有効」列にチェックを入れてください。' };
+  }
+  const match = credentialMatch;
   cache.remove(failKey); // 成功したら失敗回数をリセット
 
   const role = normalizeRole_(match[BM_COL_ROLE]);

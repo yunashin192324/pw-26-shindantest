@@ -30,9 +30,9 @@
       <section id="view-login" class="view">
         <div class="login-card">
           <div class="login-logo">📸<br>WEDLINK 支店ポータル</div>
-          <p class="login-desc">プルダウンから支店（または関東手配課／関西手配課）を選び、パスコードを入力してください。</p>
-          <label>支店 / ログインコード</label>
-          <select id="login-branchcode"><option value="">読み込み中...</option></select>
+          <p class="login-desc">支店コード（または関東手配課／関西手配課のログインコード）とパスコードを入力してください。</p>
+          <label>支店コード / ログインコード</label>
+          <input id="login-branchcode" type="text" placeholder="例：018" autocapitalize="characters" autocomplete="off">
           <label>ログインパスコード</label>
           <input id="login-passcode" type="password" placeholder="パスコード">
           <button id="login-submit" class="primary-btn">ログイン</button>

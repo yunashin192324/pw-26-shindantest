@@ -3340,5 +3340,41 @@ section('55. setup系の完了メッセージはUIコンテキストが無くて
 }
 
 // ---------------------------------------------------------------
+section('56. ログイン画面を支店選択プルダウンから支店コード直接入力に変更・「有効」オフ時の専用エラー');
+{
+  // ★要件：店舗が増えるとプルダウンの選択肢が長すぎて選びにくいため、ログイン画面を
+  // プルダウン選択から「支店コード＋パスコードを直接入力」に変更した（Index.html/JavaScript.html）。
+  // apiLogin自体は元々コードの文字列を受け取る仕様だったため、サーバー側の挙動は変わらない。
+  const ctx = makeContext(); CTX = ctx;
+  const ss = ctx.__ss;
+  ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
+  const bm = ss.getSheetByName('支店マスタ');
+  bm.appendRow(['018','新宿西口店','','','SHOP','','sp','shop018@his-world.com','','','','', '', true]);
+  // ★不具合の再現：支店マスタに行を追加したのに「有効」列をオンにし忘れているケース
+  // （実際にユーザーから報告された「018を登録したのにログインできない」の原因）
+  bm.appendRow(['019','未有効化店舗','','','SHOP','','sp2','shop019@his-world.com','','','','', '', false]);
+
+  const shopLogin = ctx.apiLogin('018', 'sp');
+  check('直接入力でも支店コード・パスコードでログインできる（プルダウン廃止後も同じapiLoginのまま）',
+        shopLogin.ok === true && shopLogin.session.role === 'SHOP', JSON.stringify(shopLogin));
+  // 支店コードは大文字小文字を問わない・前後の空白は無視される（既存仕様の再確認）
+  const shopLoginLower = ctx.apiLogin(' 018 ', 'sp');
+  check('支店コードの前後空白は無視される', shopLoginLower.ok === true);
+
+  const inactiveLogin = ctx.apiLogin('019', 'sp2');
+  check('「有効」列がオフの支店は、コード・パスコードが合っていてもログインできない',
+        inactiveLogin.ok === false, JSON.stringify(inactiveLogin));
+  check('「有効」列がオフの場合は「支店コードまたはパスコードが違います」ではなく専用のメッセージになる',
+        inactiveLogin.error.includes('有効'), inactiveLogin.error);
+
+  // 存在しない支店コード・パスコード違いは、これまでどおり汎用メッセージのまま
+  // （「有効な支店コードかどうか」を外部から探索されないようにするため）
+  const wrongCode = ctx.apiLogin('NOPE', 'sp');
+  check('存在しない支店コードは汎用メッセージのまま', wrongCode.error === '支店コードまたはパスコードが違います。');
+  const wrongPass = ctx.apiLogin('018', 'wrong');
+  check('パスコード違いは汎用メッセージのまま', wrongPass.error === '支店コードまたはパスコードが違います。');
+}
+
+// ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
 process.exit(fail === 0 ? 0 : 1);

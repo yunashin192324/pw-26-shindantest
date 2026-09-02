@@ -143,7 +143,6 @@
   // ---------- 起動 ----------
   window.addEventListener('DOMContentLoaded', () => {
     bindEvents();
-    populateLoginOptions();
     populateStatusSelect('s-sts-jp');
     populateStatusSelect('s-sts-branch');
     populateStatusSelect('shop-dashboard-sts');
@@ -162,18 +161,6 @@
     const sel = $(id);
     if (!sel) return;
     sel.innerHTML = '<option value="">指定なし</option>' + STATUS_CODES.map(c => `<option value="${c}">${c}</option>`).join('');
-  }
-
-  async function populateLoginOptions() {
-    try {
-      const options = await gsRun('apiListLoginOptions');
-      const sel = $('login-branchcode');
-      sel.innerHTML = '<option value="">選択してください</option>' +
-        // ★不具合修正：支店マスタ由来の値も念のためエスケープ（未ログインの公開画面のため特に）
-        options.map(o => `<option value="${escapeAttr(o.code)}">${escapeHtml(o.name)}${o.role === 'JP' ? '' : '（' + escapeHtml(o.code) + '）'}</option>`).join('');
-    } catch (e) {
-      $('login-branchcode').innerHTML = '<option value="">読み込みに失敗しました</option>';
-    }
   }
 
   function bindEvents() {

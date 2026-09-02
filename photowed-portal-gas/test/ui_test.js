@@ -167,8 +167,10 @@ function paneHidden(document, key) {
   const dom = await openApp(ctx);
   const { document } = dom.window;
 
-  const opts = [...document.getElementById('login-branchcode').options].map(o => o.value);
-  check('ログイン画面に支店の選択肢が出る', opts.includes('ROW'), opts.slice(0, 5).join(','));
+  // ★要件変更：店舗が増えるとプルダウンが長すぎるため、支店選択のプルダウンをやめて
+  // 支店コード直接入力（テキスト欄）に変更した（gas_test.js「56.」も参照）
+  check('ログイン画面の支店コード欄はテキスト入力（プルダウンではない）',
+        document.getElementById('login-branchcode').tagName === 'INPUT');
 
   await login(dom, 'ROW', 'CHANGE-ME-ROW');
   check('ログインするとヘッダーが表示される',
