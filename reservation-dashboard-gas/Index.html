@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <title>予約データ分析ダッシュボード</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    body { font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif; background:#f3f4f6; }
+    .tab-btn.active { background:#1d4ed8; color:#ffffff; }
+    .tab-btn { transition: all .15s ease; }
+    .kpi-card { transition: transform .15s ease, box-shadow .15s ease; }
+    .kpi-card:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(29,78,216,.15); }
+    ::-webkit-scrollbar { height:8px; width:8px; }
+    ::-webkit-scrollbar-thumb { background:#93c5fd; border-radius:4px; }
+    .sortable { cursor:pointer; user-select:none; }
+    .sortable:hover { background:#dbeafe; }
+    .sortable .sort-mark { color:#1d4ed8; font-size:10px; margin-left:2px; }
+    .toast { animation: slideIn .25s ease-out; }
+    @keyframes slideIn { from { opacity:0; transform:translateX(30px);} to {opacity:1; transform:translateX(0);} }
+    .data-thead { position:sticky; top:0; z-index:20; }
+    .spinner { border-top-color:#1d4ed8; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body class="text-slate-800">
+
+  <!-- ローディングスピナー -->
+  <div id="loading-overlay" class="fixed inset-0 bg-white/80 z-50 flex flex-col items-center justify-center gap-4">
+    <div class="spinner w-14 h-14 rounded-full border-4 border-blue-100"></div>
+    <p class="text-blue-700 font-semibold">データを読み込んでいます...</p>
+  </div>
+
+  <!-- トースト通知コンテナ -->
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 w-80"></div>
+
+  <!-- 永続ヘッダー -->
+  <header class="sticky top-0 z-40 bg-white shadow-sm border-b border-slate-200">
+    <div class="max-w-[1600px] mx-auto px-4 py-3">
+      <div class="flex items-center justify-between mb-3">
+        <h1 class="text-xl font-bold text-blue-800 flex items-center gap-2">
+          <i class="fa-solid fa-chart-line"></i> 予約データ分析ダッシュボード
+        </h1>
+        <div class="flex items-center gap-3">
+          <span id="last-imported-label" class="text-xs text-slate-400 hidden"></span>
+          <button id="btn-refresh" class="text-sm text-blue-700 border border-blue-200 rounded-lg px-3 py-1.5 hover:bg-blue-50">
+            <i class="fa-solid fa-rotate"></i> データ再読込
+          </button>
+        </div>
+      </div>
+
+      <!-- KPIサマリーカード -->
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div class="kpi-card bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-xl p-3 shadow">
+          <p class="text-xs opacity-80">総予約件数</p>
+          <p id="kpi-total" class="text-2xl font-bold">0</p>
+        </div>
+        <div class="kpi-card bg-gradient-to-br from-emerald-500 to-emerald-600 text-white rounded-xl p-3 shadow">
+          <p class="text-xs opacity-80">売上(商品請求金額)合計</p>
+          <p id="kpi-sales" class="text-2xl font-bold">¥0</p>
+        </div>
+        <div class="kpi-card bg-gradient-to-br from-amber-500 to-amber-600 text-white rounded-xl p-3 shadow">
+          <p class="text-xs opacity-80">入金額合計</p>
+          <p id="kpi-payment" class="text-2xl font-bold">¥0</p>
+        </div>
+        <div class="kpi-card kpi-card-main relative bg-gradient-to-br from-indigo-600 via-indigo-600 to-purple-700 text-white rounded-xl p-3 shadow-lg ring-2 ring-indigo-300" title="入金消化率 = 入金額合計 ÷ 売上(商品請求金額)合計">
+          <p class="absolute top-1.5 right-2 text-[10px] font-bold bg-white/20 rounded px-1.5 py-0.5">MAIN KPI</p>
+          <p class="text-xs opacity-90">⭐ 入金消化率</p>
+          <p id="kpi-payment-rate" class="text-3xl font-extrabold">0.0%</p>
+        </div>
+        <div class="kpi-card bg-gradient-to-br from-slate-600 to-slate-700 text-white rounded-xl p-3 shadow">
+          <p class="text-xs opacity-80">平均旅行日数</p>
+          <p id="kpi-avg-days" class="text-2xl font-bold">0.0<span class="text-base font-normal">日</span></p>
+        </div>
+      </div>
+
+      <!-- タブナビゲーション -->
+      <div class="flex gap-2 mt-4">
+        <button data-tab="dashboard" class="tab-btn active flex-1 md:flex-none px-4 py-2 rounded-lg text-sm font-semibold bg-slate-100 text-slate-600">
+          <i class="fa-solid fa-chart-pie"></i> 分析ダッシュボード
+        </button>
+        <button data-tab="data" class="tab-btn flex-1 md:flex-none px-4 py-2 rounded-lg text-sm font-semibold bg-slate-100 text-slate-600">
+          <i class="fa-solid fa-table-list"></i> 予約データ一覧
+        </button>
+        <button data-tab="admin" class="tab-btn flex-1 md:flex-none px-4 py-2 rounded-lg text-sm font-semibold bg-slate-100 text-slate-600">
+          <i class="fa-solid fa-gear"></i> データ管理
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-[1600px] mx-auto px-4 py-5">
+
+    <!-- ============ 初期セットアップ未実行のときだけ出る案内バー ============ -->
+    <div id="setup-banner" class="hidden mb-5 bg-amber-50 border border-amber-300 rounded-xl p-4">
+      <div class="flex flex-wrap items-start gap-3">
+        <i class="fa-solid fa-triangle-exclamation text-amber-500 text-xl mt-0.5"></i>
+        <div class="flex-1 min-w-0">
+          <p class="font-bold text-amber-800">初期セットアップがまだ完了していません</p>
+          <p class="text-sm text-amber-700 mt-1">
+            データを保存するシート「予約データ」が作られていないため、画面が正しく動きません。
+          </p>
+          <p id="setup-banner-detail" class="text-xs text-amber-600 mt-1"></p>
+        </div>
+        <button id="btn-run-setup" class="bg-amber-600 hover:bg-amber-700 text-white rounded-lg px-4 py-2 text-sm font-semibold shadow whitespace-nowrap">
+          <i class="fa-solid fa-wand-magic-sparkles"></i> 初期セットアップを実行する
+        </button>
+      </div>
+    </div>
+
+    <!-- ============ 共通フィルタバー ============ -->
+    <div class="bg-white rounded-xl shadow p-4 flex flex-wrap gap-4 items-end mb-5">
+      <div>
+        <label class="text-xs font-semibold text-slate-500 block mb-1">エリア</label>
+        <select id="filter-area" multiple class="border border-slate-300 rounded-lg text-sm p-2 min-w-[160px] h-20"></select>
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-slate-500 block mb-1">営業所</label>
+        <select id="filter-office" multiple class="border border-slate-300 rounded-lg text-sm p-2 min-w-[200px] h-20"></select>
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-slate-500 block mb-1">STS</label>
+        <select id="filter-sts" multiple class="border border-slate-300 rounded-lg text-sm p-2 min-w-[110px] h-20"></select>
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-slate-500 block mb-1">商品分類</label>
+        <select id="filter-category" multiple class="border border-slate-300 rounded-lg text-sm p-2 min-w-[140px] h-20"></select>
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-slate-500 block mb-1">基準日</label>
+        <select id="filter-date-field" class="border border-slate-300 rounded-lg text-sm p-2">
+          <option value="bookingDate">予約日</option>
+          <option value="departureDate">出発予定日</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-slate-500 block mb-1">From</label>
+        <input type="date" id="filter-date-from" class="border border-slate-300 rounded-lg text-sm p-2">
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-slate-500 block mb-1">To</label>
+        <input type="date" id="filter-date-to" class="border border-slate-300 rounded-lg text-sm p-2">
+      </div>
+      <div class="flex-1 min-w-[200px]">
+        <label class="text-xs font-semibold text-slate-500 block mb-1">キーワード検索</label>
+        <input type="text" id="filter-keyword" placeholder="顧客ID・予約番号・商品タイトル・担当者" class="w-full border border-slate-300 rounded-lg text-sm p-2">
+      </div>
+      <button id="btn-clear-filter" class="text-sm text-slate-500 hover:text-blue-700 px-3 py-2">
+        <i class="fa-solid fa-filter-circle-xmark"></i> フィルタ解除
+      </button>
+      <p id="filter-summary" class="text-xs text-slate-400 w-full"></p>
+    </div>
+
+    <!-- ============ タブ1: 分析ダッシュボード ============ -->
+    <section id="tab-panel-dashboard" class="tab-panel space-y-5">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div class="bg-white rounded-xl shadow p-4">
+          <h2 class="font-bold text-slate-700 mb-2"><i class="fa-solid fa-chart-column text-blue-600"></i> 月次推移（予約件数 / 売上合計）</h2>
+          <canvas id="chart-monthly" height="220"></canvas>
+        </div>
+        <div class="bg-white rounded-xl shadow p-4">
+          <h2 class="font-bold text-slate-700 mb-2"><i class="fa-solid fa-chart-pie text-blue-600"></i> STS別 件数</h2>
+          <canvas id="chart-sts" height="220"></canvas>
+          <p class="text-xs text-slate-400 mt-2">STSはCSV上の処理ステータスコードをそのまま表示しています（各コードの意味はCSV提供元の定義をご確認ください）。</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div class="bg-white rounded-xl shadow p-4">
+          <h2 class="font-bold text-slate-700 mb-2 text-sm"><i class="fa-solid fa-tags text-blue-600"></i> 商品分類別 件数</h2>
+          <canvas id="chart-category" height="200"></canvas>
+        </div>
+        <div class="bg-white rounded-xl shadow p-4">
+          <h2 class="font-bold text-slate-700 mb-2 text-sm"><i class="fa-solid fa-earth-asia text-blue-600"></i> 国籍別 件数（上位10）</h2>
+          <canvas id="chart-nationality" height="200"></canvas>
+        </div>
+        <div class="bg-white rounded-xl shadow p-4">
+          <h2 class="font-bold text-slate-700 mb-2 text-sm"><i class="fa-solid fa-plane text-blue-600"></i> キャリア別 件数（上位10）</h2>
+          <canvas id="chart-carrier" height="200"></canvas>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl shadow p-4 overflow-x-auto">
+        <h2 class="font-bold text-slate-700 mb-2"><i class="fa-solid fa-ranking-star text-blue-600"></i> 営業所別ランキング</h2>
+        <table class="min-w-full text-sm">
+          <thead>
+            <tr class="bg-slate-100 text-slate-600">
+              <th class="sortable px-3 py-2 text-left" data-sort="office">営業所</th>
+              <th class="sortable px-3 py-2 text-right" data-sort="count">件数</th>
+              <th class="sortable px-3 py-2 text-right" data-sort="salesAmount">売上合計</th>
+              <th class="sortable px-3 py-2 text-right" data-sort="paymentAmount">入金額合計</th>
+              <th class="sortable px-3 py-2 text-right bg-indigo-50" data-sort="paymentRate">⭐ 入金消化率</th>
+              <th class="sortable px-3 py-2 text-right" data-sort="avgDays">平均旅行日数</th>
+            </tr>
+          </thead>
+          <tbody id="ranking-tbody" class="divide-y divide-slate-100"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ タブ2: 予約データ一覧 ============ -->
+    <section id="tab-panel-data" class="tab-panel hidden space-y-5">
+      <div class="bg-white rounded-xl shadow p-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 class="text-base font-bold text-slate-800"><i class="fa-solid fa-table-list text-blue-600"></i> 予約データ一覧</h2>
+          <p class="text-xs text-slate-500 mt-0.5">営業日報CSVから抽出した19項目のみを表示する一覧です。上部のフィルタが反映されます。</p>
+        </div>
+        <button id="btn-open-csv-modal" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-semibold shadow">
+          <i class="fa-solid fa-file-csv"></i> CSVインポート
+        </button>
+      </div>
+
+      <div class="bg-white rounded-xl shadow p-4">
+        <div class="overflow-auto max-h-[65vh]">
+          <table class="min-w-full text-sm whitespace-nowrap">
+            <thead id="data-thead" class="data-thead bg-slate-100 text-slate-600"></thead>
+            <tbody id="data-tbody" class="divide-y divide-slate-100"></tbody>
+          </table>
+          <p id="data-empty" class="text-center text-slate-400 py-6 hidden">データがありません</p>
+        </div>
+        <div class="flex items-center justify-between mt-3 text-sm">
+          <p id="pagination-info" class="text-slate-500"></p>
+          <div class="flex gap-2">
+            <button id="btn-prev-page" class="border border-slate-300 rounded-lg px-3 py-1.5 hover:bg-slate-50">
+              <i class="fa-solid fa-chevron-left"></i> 前へ
+            </button>
+            <button id="btn-next-page" class="border border-slate-300 rounded-lg px-3 py-1.5 hover:bg-slate-50">
+              次へ <i class="fa-solid fa-chevron-right"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ タブ3: データ管理 ============ -->
+    <section id="tab-panel-admin" class="tab-panel hidden space-y-5">
+      <div class="bg-white rounded-xl shadow p-4">
+        <h2 class="text-base font-bold text-slate-800 mb-1"><i class="fa-solid fa-circle-info text-blue-600"></i> データの状態</h2>
+        <div id="admin-status" class="text-sm text-slate-600 space-y-1 mt-2"></div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="bg-white rounded-xl shadow p-4">
+          <p class="text-sm font-semibold text-slate-700">重複した行を削除する</p>
+          <p class="text-xs text-slate-500 mt-1 mb-3">
+            19項目すべてが完全一致する行を1件にまとめます。同じCSVを重ねて取り込んだ場合にご利用ください。
+          </p>
+          <button id="btn-remove-duplicates" class="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-1.5 text-xs font-semibold shadow">
+            <i class="fa-solid fa-broom"></i> 重複を削除する
+          </button>
+          <p id="duplicate-result" class="hidden text-xs mt-2"></p>
+        </div>
+
+        <div class="bg-white rounded-xl shadow p-4 border border-red-200 bg-red-50/40">
+          <p class="text-sm font-semibold text-red-700">取り込んだデータをすべて削除する</p>
+          <p class="text-xs text-slate-500 mt-1 mb-3">
+            「予約データ」シートのデータ行をすべて消し、CSVを入れ直せる状態に戻します。<b class="text-red-600">元に戻せません。</b>
+          </p>
+          <div class="flex gap-2 items-center">
+            <input type="text" id="clear-confirm-input" placeholder="削除 と入力" class="border border-slate-300 rounded-lg text-xs p-1.5 w-28">
+            <button id="btn-clear-all-data" class="bg-red-600 hover:bg-red-700 text-white rounded-lg px-3 py-1.5 text-xs font-semibold shadow">
+              <i class="fa-solid fa-trash"></i> すべて削除する
+            </button>
+          </div>
+          <p id="clear-result" class="hidden text-xs mt-2"></p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============ CSV一括インポートモーダル ============ -->
+  <div id="csv-import-modal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+        <h3 class="font-bold text-lg text-emerald-700"><i class="fa-solid fa-file-csv"></i> 予約データCSVの一括インポート</h3>
+        <button id="btn-close-csv-modal" class="text-slate-400 hover:text-slate-700 text-xl">&times;</button>
+      </div>
+      <div class="p-6 space-y-4">
+        <p class="text-sm text-slate-600">
+          営業日報から出力したCSVファイルを選択してください。「006:エリア」のような見出し行を自動検出し、
+          対象の19項目だけを抽出して取り込みます。列の並び順が異なっていても、見出しの文言で判定します。
+          19項目すべてが完全一致する行は重複としてスキップされます。
+        </p>
+        <p class="text-xs text-slate-400">
+          取り込むのは「エリア・営業所・最終目的地・予約日・出発予定日・顧客ID・予約番号・性別・国籍・商品分類・
+          キャリア・ツアーブランド区分・ツアーコード・売上(商品請求金額)・入金額・STS・担当者・商品タイトル・旅行日数」
+          の19項目のみです。それ以外の列が含まれていても自動的に無視されます。
+        </p>
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">CSVファイル</label>
+          <input type="file" id="csv-file-input" accept=".csv,text/csv,text/plain" class="w-full border border-slate-300 rounded-lg text-sm p-2 bg-white">
+          <p class="text-xs text-slate-400 mt-1">文字コードは UTF-8（BOM付き可）を想定しています。</p>
+          <p id="csv-file-summary" class="hidden text-xs text-slate-600 mt-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"></p>
+        </div>
+
+        <div id="csv-progress" class="hidden">
+          <div class="flex items-center justify-between text-xs text-slate-600 mb-1">
+            <span id="csv-progress-label">取り込んでいます…</span>
+            <span id="csv-progress-time" class="tabular-nums">0秒</span>
+          </div>
+          <div class="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+            <div id="csv-progress-bar" class="h-full bg-emerald-500 rounded-full" style="width:0%; transition:width .4s ease;"></div>
+          </div>
+          <p class="text-xs text-slate-400 mt-1">この画面を閉じたり再読み込みしたりせずにお待ちください。</p>
+        </div>
+        <div id="csv-import-result" class="hidden text-sm bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1"></div>
+        <div class="flex justify-end gap-3 pt-2 border-t border-slate-100">
+          <button type="button" id="btn-cancel-csv-modal" class="px-4 py-2 rounded-lg text-sm font-semibold text-slate-500 hover:bg-slate-100">閉じる</button>
+          <button type="button" id="btn-submit-csv" class="px-5 py-2 rounded-lg text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow" disabled>
+            <i class="fa-solid fa-upload"></i> 取り込む
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <?!= include('Javascript'); ?>
+</body>
+</html>

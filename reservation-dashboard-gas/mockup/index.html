@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>予約データ分析ダッシュボード（UI/UXモックアップ）</title>
+<style>
+/* ============================================================================
+   このファイルは単体で完結する「見た目確認専用」のモックアップです。
+   外部CDN（Tailwind / FontAwesome / Chart.js等）は一切使用していないため、
+   インターネットに接続していないPCでもダブルクリックするだけで開けます。
+   実際のGoogleスプレッドシートには接続しておらず、表示データはすべて
+   このファイル内で生成した架空のサンプルです。
+   ============================================================================ */
+:root{
+  --blue-50:#eff6ff; --blue-100:#dbeafe; --blue-200:#bfdbfe; --blue-300:#93c5fd;
+  --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af;
+  --amber-50:#fffbeb; --amber-300:#fcd34d; --amber-500:#f59e0b; --amber-600:#d97706; --amber-700:#b45309; --amber-800:#92400e;
+  --emerald-500:#10b981; --emerald-600:#059669; --emerald-700:#047857;
+  --indigo-300:#a5b4fc; --indigo-600:#4f46e5; --purple-700:#6d28d9;
+  --red-50:#fef2f2; --red-200:#fecaca; --red-300:#fca5a5; --red-600:#dc2626; --red-700:#b91c1c;
+  --slate-50:#f8fafc; --slate-100:#f1f5f9; --slate-200:#e2e8f0; --slate-300:#cbd5e1;
+  --slate-400:#94a3b8; --slate-500:#64748b; --slate-600:#475569; --slate-700:#334155; --slate-800:#1e293b;
+  color-scheme: light;
+}
+*{box-sizing:border-box;}
+body{
+  margin:0; background:var(--slate-100); color:var(--slate-800);
+  font-family:"Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo",sans-serif;
+  font-size:14px;
+}
+.wrap{max-width:1600px; margin:0 auto; padding:0 16px;}
+a{color:inherit;}
+button{font-family:inherit; cursor:pointer;}
+::-webkit-scrollbar{height:8px; width:8px;}
+::-webkit-scrollbar-thumb{background:var(--blue-300); border-radius:4px;}
+
+/* ---- ヘッダー ---- */
+header{position:sticky; top:0; z-index:40; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.06); border-bottom:1px solid var(--slate-200);}
+header .inner{padding:12px 0;}
+.header-top{display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; gap:12px; flex-wrap:wrap;}
+h1{font-size:20px; font-weight:700; color:var(--blue-800); margin:0; display:flex; align-items:center; gap:8px;}
+.btn-refresh{font-size:13px; color:var(--blue-700); border:1px solid var(--blue-200); border-radius:8px; padding:6px 12px; background:#fff;}
+.btn-refresh:hover{background:var(--blue-50);}
+.last-imported{font-size:11px; color:var(--slate-400);}
+
+.kpi-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:12px;}
+@media(min-width:768px){ .kpi-grid{grid-template-columns:repeat(5,1fr);} }
+.kpi-card{border-radius:12px; padding:12px; color:#fff; box-shadow:0 1px 3px rgba(0,0,0,.12); transition:transform .15s ease, box-shadow .15s ease; position:relative;}
+.kpi-card:hover{transform:translateY(-2px); box-shadow:0 8px 20px rgba(29,78,216,.15);}
+.kpi-card p.label{font-size:11px; opacity:.85; margin:0 0 4px;}
+.kpi-card p.value{font-size:22px; font-weight:700; margin:0;}
+.kpi-blue{background:linear-gradient(135deg,var(--blue-600),var(--blue-700));}
+.kpi-emerald{background:linear-gradient(135deg,var(--emerald-500),var(--emerald-700));}
+.kpi-amber{background:linear-gradient(135deg,var(--amber-500),var(--amber-600));}
+.kpi-slate{background:linear-gradient(135deg,var(--slate-600),var(--slate-700));}
+.kpi-main{background:linear-gradient(135deg,var(--indigo-600),var(--purple-700)); box-shadow:0 0 0 2px var(--indigo-300), 0 4px 14px rgba(0,0,0,.15);}
+.kpi-main .badge{position:absolute; top:6px; right:8px; font-size:9px; font-weight:700; background:rgba(255,255,255,.2); border-radius:4px; padding:2px 6px;}
+.kpi-main p.value{font-size:26px;}
+
+.tabs{display:flex; gap:8px; margin-top:16px; flex-wrap:wrap;}
+.tab-btn{flex:1 1 auto; padding:8px 16px; border-radius:8px; font-size:13px; font-weight:600; background:var(--slate-100); color:var(--slate-600); border:none;}
+.tab-btn.active{background:var(--blue-700); color:#fff;}
+
+main{padding:20px 0;}
+.card{background:#fff; border-radius:12px; box-shadow:0 1px 3px rgba(0,0,0,.08); padding:16px; margin-bottom:20px;}
+.card h2{font-size:15px; font-weight:700; color:var(--slate-700); margin:0 0 10px; display:flex; align-items:center; gap:6px;}
+.card h2.sm{font-size:13px;}
+.muted{color:var(--slate-400); font-size:12px;}
+
+.grid-2{display:grid; grid-template-columns:1fr; gap:20px;}
+.grid-3{display:grid; grid-template-columns:1fr; gap:20px;}
+@media(min-width:1024px){ .grid-2{grid-template-columns:1fr 1fr;} .grid-3{grid-template-columns:1fr 1fr 1fr;} }
+
+/* ---- 案内バー ---- */
+.banner{border-radius:12px; padding:16px; margin-bottom:20px; display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap;}
+.banner-amber{background:var(--amber-50); border:1px solid var(--amber-300);}
+.banner p.title{font-weight:700; color:var(--amber-800); margin:0 0 4px;}
+.banner p.desc{font-size:13px; color:var(--amber-700); margin:0;}
+.btn-primary{background:var(--blue-700); color:#fff; border:none; border-radius:8px; padding:9px 18px; font-size:13px; font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,.1);}
+.btn-primary:hover{background:var(--blue-800);}
+.btn-amber{background:var(--amber-600); color:#fff; border:none; border-radius:8px; padding:9px 18px; font-size:13px; font-weight:600;}
+.btn-amber:hover{background:var(--amber-700);}
+.btn-emerald{background:var(--emerald-600); color:#fff; border:none; border-radius:8px; padding:9px 18px; font-size:13px; font-weight:600;}
+.btn-emerald:hover{background:var(--emerald-700);}
+.btn-red{background:var(--red-600); color:#fff; border:none; border-radius:8px; padding:7px 12px; font-size:12px; font-weight:600;}
+.btn-red:hover{background:var(--red-700);}
+.btn-ghost{background:#fff; border:1px solid var(--slate-300); border-radius:8px; padding:7px 12px; font-size:12px; font-weight:600; color:var(--slate-600);}
+.btn-ghost:hover{background:var(--slate-50);}
+
+/* ---- フィルタバー ---- */
+.filter-bar{display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end;}
+.filter-field label{display:block; font-size:11px; font-weight:600; color:var(--slate-500); margin-bottom:4px;}
+select, input[type=date], input[type=text]{
+  border:1px solid var(--slate-300); border-radius:8px; font-size:13px; padding:7px 8px; background:#fff; color:var(--slate-800);
+}
+select[multiple]{min-width:150px; height:80px;}
+.filter-kw{flex:1 1 220px;}
+.filter-kw input{width:100%;}
+
+/* ---- グラフ（外部ライブラリ不使用：CSS/自作HTMLで描画） ---- */
+.legend{display:flex; flex-wrap:wrap; gap:8px 14px; margin-top:10px; font-size:11px; color:var(--slate-600);}
+.legend .dot{display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:5px; vertical-align:middle;}
+
+.donut-wrap{display:flex; align-items:center; gap:18px; flex-wrap:wrap;}
+.donut{width:150px; height:150px; border-radius:50%; flex:none; position:relative;}
+.donut::after{content:""; position:absolute; inset:22%; background:#fff; border-radius:50%;}
+
+.hbar-row{display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:12px;}
+.hbar-label{width:150px; flex:none; color:var(--slate-600); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.hbar-track{flex:1; background:var(--slate-100); border-radius:4px; height:14px; overflow:hidden;}
+.hbar-fill{height:100%; background:var(--blue-700); border-radius:4px;}
+.hbar-value{width:52px; flex:none; text-align:right; color:var(--slate-500); font-variant-numeric:tabular-nums;}
+
+.vbar-chart{display:flex; align-items:flex-end; gap:6px; height:200px; padding-top:20px;}
+.vbar-col{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; gap:2px;}
+.vbar-pair{display:flex; align-items:flex-end; gap:2px; height:100%; width:100%; justify-content:center;}
+.vbar{width:9px; border-radius:2px 2px 0 0; position:relative;}
+.vbar.count{background:var(--blue-300);}
+.vbar.sales{background:var(--blue-700);}
+.vbar-month{font-size:10px; color:var(--slate-400); margin-top:6px; white-space:nowrap;}
+
+/* ---- テーブル ---- */
+table{width:100%; border-collapse:collapse; font-size:13px;}
+thead th{background:var(--slate-100); color:var(--slate-600); text-align:left; padding:8px 10px; font-weight:600; white-space:nowrap;}
+tbody td{padding:8px 10px; border-top:1px solid var(--slate-100); white-space:nowrap;}
+tbody tr:hover{background:var(--slate-50);}
+th.sortable{cursor:pointer; user-select:none;}
+th.sortable:hover{background:var(--blue-100);}
+.sort-mark{color:var(--blue-700); font-size:9px; margin-left:3px;}
+.text-right{text-align:right;}
+.table-scroll{overflow:auto; max-height:65vh;}
+.table-scroll thead th{position:sticky; top:0; z-index:5;}
+.rank-rate{background:#eef2ff; color:var(--indigo-600); font-weight:700;}
+
+.pagination{display:flex; align-items:center; justify-content:space-between; margin-top:12px; font-size:13px;}
+.pagination .buttons{display:flex; gap:8px;}
+.pagination button:disabled{opacity:.4; cursor:default;}
+
+/* ---- モーダル ---- */
+.modal-overlay{position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:50; display:none; align-items:center; justify-content:center; padding:16px;}
+.modal-overlay.open{display:flex;}
+.modal-box{background:#fff; border-radius:16px; box-shadow:0 20px 40px rgba(0,0,0,.25); width:100%; max-width:520px; max-height:90vh; overflow-y:auto;}
+.modal-head{display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--slate-200);}
+.modal-head h3{font-size:16px; font-weight:700; margin:0; color:var(--emerald-700); display:flex; gap:8px; align-items:center;}
+.modal-close{background:none; border:none; font-size:20px; color:var(--slate-400);}
+.modal-body{padding:20px; display:flex; flex-direction:column; gap:14px;}
+.progress-track{width:100%; height:8px; background:var(--slate-200); border-radius:4px; overflow:hidden;}
+.progress-fill{height:100%; background:var(--emerald-500); width:0%; transition:width .4s ease;}
+.result-box{background:var(--slate-50); border:1px solid var(--slate-200); border-radius:8px; padding:12px; font-size:13px; display:none;}
+.result-box p{margin:2px 0;}
+
+/* ---- トースト ---- */
+.toast-container{position:fixed; top:16px; right:16px; z-index:60; display:flex; flex-direction:column; gap:8px; width:300px;}
+.toast{color:#fff; font-size:13px; border-radius:8px; box-shadow:0 6px 16px rgba(0,0,0,.18); padding:10px 14px; display:flex; gap:8px; align-items:flex-start; animation:slideIn .25s ease-out; transition:opacity .3s ease;}
+@keyframes slideIn{from{opacity:0; transform:translateX(30px);} to{opacity:1; transform:translateX(0);}}
+.toast.success{background:var(--emerald-600);}
+.toast.error{background:var(--red-600);}
+.toast.info{background:var(--slate-700);}
+
+/* ---- ローディング ---- */
+.loading-overlay{position:fixed; inset:0; background:rgba(255,255,255,.85); z-index:70; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;}
+.loading-overlay.hidden{display:none;}
+.spinner{width:52px; height:52px; border-radius:50%; border:4px solid var(--blue-100); border-top-color:var(--blue-700); animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.hidden{display:none !important;}
+.empty-msg{text-align:center; color:var(--slate-400); padding:24px 0;}
+</style>
+</head>
+<body>
+
+<div id="loading-overlay" class="loading-overlay hidden">
+  <div class="spinner"></div>
+  <p style="color:var(--blue-700); font-weight:600;">データを読み込んでいます...</p>
+</div>
+
+<div id="toast-container" class="toast-container"></div>
+
+<header>
+  <div class="wrap inner">
+    <div class="header-top">
+      <h1>📈 予約データ分析ダッシュボード <span style="font-size:11px; font-weight:600; color:var(--slate-400); background:var(--slate-100); border-radius:6px; padding:2px 8px;">UI/UXモックアップ（オフライン・サンプルデータ）</span></h1>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <span class="last-imported" id="last-imported-label"></span>
+        <button class="btn-refresh" id="btn-refresh">⟳ データ再読込</button>
+      </div>
+    </div>
+
+    <div class="kpi-grid">
+      <div class="kpi-card kpi-blue"><p class="label">総予約件数</p><p class="value" id="kpi-total">0</p></div>
+      <div class="kpi-card kpi-emerald"><p class="label">売上(商品請求金額)合計</p><p class="value" id="kpi-sales">¥0</p></div>
+      <div class="kpi-card kpi-amber"><p class="label">入金額合計</p><p class="value" id="kpi-payment">¥0</p></div>
+      <div class="kpi-card kpi-main"><span class="badge">MAIN KPI</span><p class="label">⭐ 入金消化率</p><p class="value" id="kpi-payment-rate">0.0%</p></div>
+      <div class="kpi-card kpi-slate"><p class="label">平均旅行日数</p><p class="value" id="kpi-avg-days">0.0日</p></div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="dashboard">📊 分析ダッシュボード</button>
+      <button class="tab-btn" data-tab="data">📋 予約データ一覧</button>
+      <button class="tab-btn" data-tab="admin">⚙️ データ管理</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="card filter-bar">
+    <div class="filter-field"><label>エリア</label><select id="filter-area" multiple></select></div>
+    <div class="filter-field"><label>営業所</label><select id="filter-office" multiple></select></div>
+    <div class="filter-field"><label>STS</label><select id="filter-sts" multiple></select></div>
+    <div class="filter-field"><label>商品分類</label><select id="filter-category" multiple></select></div>
+    <div class="filter-field">
+      <label>基準日</label>
+      <select id="filter-date-field">
+        <option value="bookingDate">予約日</option>
+        <option value="departureDate">出発予定日</option>
+      </select>
+    </div>
+    <div class="filter-field"><label>From</label><input type="date" id="filter-date-from"></div>
+    <div class="filter-field"><label>To</label><input type="date" id="filter-date-to"></div>
+    <div class="filter-field filter-kw"><label>キーワード検索</label><input type="text" id="filter-keyword" placeholder="顧客ID・予約番号・商品タイトル・担当者"></div>
+    <button class="btn-ghost" id="btn-clear-filter">✕ フィルタ解除</button>
+    <p class="muted" id="filter-summary" style="width:100%; margin:0;"></p>
+  </div>
+
+  <!-- ============ タブ1: 分析ダッシュボード ============ -->
+  <section id="panel-dashboard" class="panel">
+    <div class="grid-2">
+      <div class="card">
+        <h2>📊 月次推移（予約件数 / 売上合計）</h2>
+        <div id="chart-monthly" class="vbar-chart"></div>
+        <div class="legend">
+          <span><span class="dot" style="background:var(--blue-300)"></span>予約件数</span>
+          <span><span class="dot" style="background:var(--blue-700)"></span>売上合計（正規化表示）</span>
+        </div>
+      </div>
+      <div class="card">
+        <h2>🟢 STS別 件数</h2>
+        <div class="donut-wrap">
+          <div id="chart-sts" class="donut"></div>
+          <div id="chart-sts-legend" class="legend" style="flex-direction:column; gap:6px;"></div>
+        </div>
+        <p class="muted" style="margin-top:10px;">STSはCSV上の処理ステータスコードをそのまま表示しています（各コードの意味はCSV提供元の定義をご確認ください）。</p>
+      </div>
+    </div>
+
+    <div class="grid-3">
+      <div class="card">
+        <h2 class="sm">🏷️ 商品分類別 件数</h2>
+        <div class="donut-wrap">
+          <div id="chart-category" class="donut"></div>
+          <div id="chart-category-legend" class="legend" style="flex-direction:column; gap:6px;"></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2 class="sm">🌏 国籍別 件数（上位10）</h2>
+        <div id="chart-nationality"></div>
+      </div>
+      <div class="card">
+        <h2 class="sm">✈️ キャリア別 件数（上位10）</h2>
+        <div id="chart-carrier"></div>
+      </div>
+    </div>
+
+    <div class="card" style="overflow-x:auto;">
+      <h2>🏆 営業所別ランキング</h2>
+      <table>
+        <thead>
+          <tr>
+            <th class="sortable" data-sort="office">営業所</th>
+            <th class="sortable text-right" data-sort="count">件数</th>
+            <th class="sortable text-right" data-sort="salesAmount">売上合計</th>
+            <th class="sortable text-right" data-sort="paymentAmount">入金額合計</th>
+            <th class="sortable text-right" data-sort="paymentRate">⭐ 入金消化率</th>
+            <th class="sortable text-right" data-sort="avgDays">平均旅行日数</th>
+          </tr>
+        </thead>
+        <tbody id="ranking-tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ タブ2: 予約データ一覧 ============ -->
+  <section id="panel-data" class="panel hidden">
+    <div class="card" style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px;">
+      <div>
+        <h2 style="margin:0;">📋 予約データ一覧</h2>
+        <p class="muted" style="margin-top:4px;">営業日報CSVから抽出した19項目のみを表示する一覧です。上部のフィルタが反映されます。</p>
+      </div>
+      <button class="btn-emerald" id="btn-open-csv-modal">📄 CSVインポート</button>
+    </div>
+
+    <div class="card">
+      <div class="table-scroll">
+        <table>
+          <thead id="data-thead"></thead>
+          <tbody id="data-tbody"></tbody>
+        </table>
+        <p id="data-empty" class="empty-msg hidden">データがありません</p>
+      </div>
+      <div class="pagination">
+        <p class="muted" id="pagination-info"></p>
+        <div class="buttons">
+          <button class="btn-ghost" id="btn-prev-page">‹ 前へ</button>
+          <button class="btn-ghost" id="btn-next-page">次へ ›</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ タブ3: データ管理 ============ -->
+  <section id="panel-admin" class="panel hidden">
+    <div class="card">
+      <h2>ℹ️ データの状態</h2>
+      <div id="admin-status" style="font-size:13px; color:var(--slate-600); line-height:1.8;"></div>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <p style="font-weight:600; margin:0 0 4px;">重複した行を削除する</p>
+        <p class="muted" style="margin:0 0 12px;">19項目すべてが完全一致する行を1件にまとめます（このモックアップではダミー動作です）。</p>
+        <button class="btn-primary" id="btn-remove-duplicates">🧹 重複を削除する</button>
+        <p id="duplicate-result" class="muted hidden" style="margin-top:8px;"></p>
+      </div>
+      <div class="card" style="border:1px solid var(--red-200); background:var(--red-50);">
+        <p style="font-weight:600; margin:0 0 4px; color:var(--red-700);">取り込んだデータをすべて削除する</p>
+        <p class="muted" style="margin:0 0 12px;">元に戻せません（このモックアップではサンプルデータを消すだけのダミー動作です）。</p>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input type="text" id="clear-confirm-input" placeholder="削除 と入力" style="width:110px;">
+          <button class="btn-red" id="btn-clear-all-data">🗑️ すべて削除する</button>
+        </div>
+        <p id="clear-result" class="muted hidden" style="margin-top:8px;"></p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ============ CSVインポートモーダル ============ -->
+<div id="csv-import-modal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3>📄 予約データCSVの一括インポート</h3>
+      <button class="modal-close" id="btn-close-csv-modal">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px; color:var(--slate-600); line-height:1.6;">
+        営業日報から出力したCSVファイルを選択してください。「006:エリア」のような見出し行を自動検出し、
+        対象の19項目だけを抽出して取り込みます（実際のアプリの動作です）。
+      </p>
+      <p class="muted">このモックアップではファイルの中身をサーバーへ送信せず、取り込み画面の流れだけを再現しています。</p>
+      <div>
+        <label style="display:block; font-size:11px; font-weight:600; color:var(--slate-500); margin-bottom:4px;">CSVファイル</label>
+        <input type="file" id="csv-file-input" accept=".csv,text/csv,text/plain" style="width:100%;">
+        <p id="csv-file-summary" class="muted hidden" style="margin-top:8px; background:var(--slate-50); border:1px solid var(--slate-200); border-radius:8px; padding:8px 10px;"></p>
+      </div>
+      <div id="csv-progress" class="hidden">
+        <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--slate-600); margin-bottom:4px;">
+          <span>取り込んでいます…</span><span id="csv-progress-time">0秒</span>
+        </div>
+        <div class="progress-track"><div id="csv-progress-bar" class="progress-fill"></div></div>
+      </div>
+      <div id="csv-import-result" class="result-box"></div>
+      <div style="display:flex; justify-content:flex-end; gap:10px; border-top:1px solid var(--slate-100); padding-top:14px;">
+        <button class="btn-ghost" id="btn-cancel-csv-modal">閉じる</button>
+        <button class="btn-emerald" id="btn-submit-csv" disabled>⬆ 取り込む</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================================
+   サンプルデータ生成（すべて架空の値。実データは一切含みません）
+   実運用のCode.gsと同じ19項目・同じキー名で、シード付き乱数により
+   毎回同じ見た目になるダミーデータを生成しています。
+   ============================================================================ */
+function mulberry32(seed){
+  return function(){
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    var t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+var rand = mulberry32(20260902);
+function pick(arr){ return arr[Math.floor(rand() * arr.length)]; }
+function pickWeighted(pairs){
+  var total = pairs.reduce(function(s,p){return s+p[1];}, 0);
+  var r = rand() * total;
+  for (var i=0;i<pairs.length;i++){ r -= pairs[i][1]; if (r <= 0) return pairs[i][0]; }
+  return pairs[pairs.length-1][0];
+}
+function randInt(min, max){ return Math.floor(rand()*(max-min+1))+min; }
+function pad2(n){ return (n<10?'0':'')+n; }
+
+var AREA_LIST = ['10:郊外エリア', '13:アバンティ'];
+var OFFICE_LIST = [
+  '717:イーアスつくば','053:イオンモール甲府昭和','596:けやきウォーク前橋','046:水戸コムボックス310',
+  '054:宇都宮','763:長野','081:ららぽーと沼津','051:高崎オーパ','B66:イオンモール太田','038:さいたま新都心'
+];
+var DEST_LIST = ['SEL','HNL','TPE','GUM','BKK','SIN','PAR','HKG','LAX','CTS'];
+var NATIONALITY_LIST = [['JPN',0.92],['PHL',0.02],['IDN',0.02],['KOR',0.015],['CHN',0.01],['THA',0.01],['USA',0.005],['-',0.02]];
+var CATEGORY_LIST = [['2S:ツアー',0.6],['1A:エアー',0.38],['4J:代売',0.02]];
+var CARRIER_LIST = [['NH',0.22],['JL',0.10],['SQ',0.06],['KE',0.06],['TK',0.05],['OZ',0.05],['BX',0.04],['@@',0.06],['CX',0.04],['BR',0.04],['TG',0.04],['CI',0.04],['OTHER',0.20]];
+var TOUR_BRAND_LIST = [['AB:【使用不可】A＋H判別用（募集）',0.27],['CI:チャオ',0.25],['RA:WEB限定',0.14],['IP:インプレッソ',0.12],['WO:ワールド',0.03],['VL:クルーズ',0.02],['GR:法人・団体企画手配',0.01],['',0.16]];
+var STAFF_LIST = ['BGK078','BGK074','BGK073','BGK077','00L625','BGKG96','BGKG53','00J867','BGK040','BGK052'];
+var STS_LIST = [['FN',0.505],['OK',0.49],['WT',0.0025],['RQ',0.0025]];
+var PRODUCT_TITLES = [
+  'ANA ご利用往復航空券（大人）','JAL ご利用往復航空券（大人）','KOREAN AIR（大韓航空） ご利用往復航空券（大人）',
+  'ASIANA AIRLINES（アシアナ航空） ご利用往復航空券（大人）','SINGAPORE AIRLINES（シンガポール航空） ご利用往復航空券（大人）',
+  'CATHAY PACIFIC AIRWAYS（キャセイパシフィック航空） ご利用往復航空券（大人）','ホテル宿泊プラン（大人1名）','海外ツアーパッケージ（添乗員なし）'
+];
+
+function genSampleRows(n){
+  var rows = [];
+  for (var i=0;i<n;i++){
+    var y = 2026, m = randInt(1,9), d = randInt(1,28);
+    var bookingDate = y+'-'+pad2(m)+'-'+pad2(d);
+    var dm = m + randInt(0,3); var dy = y; if (dm > 12) { dm -= 12; dy += 1; }
+    var departureDate = dy+'-'+pad2(dm)+'-'+pad2(randInt(1,28));
+    var sales = randInt(5,400) * 1000;
+    var paidRatio = rand() < 0.15 ? 0 : (rand() < 0.6 ? 1 : rand());
+    var payment = Math.round(sales * paidRatio / 100) * 100;
+    rows.push({
+      area: pick(AREA_LIST),
+      office: pick(OFFICE_LIST),
+      destination: pick(DEST_LIST),
+      bookingDate: bookingDate,
+      departureDate: departureDate,
+      customerId: String(randInt(1000000000000, 9999999999999)),
+      reservationNo: pad2(randInt(1,99)) + String(randInt(100000000,999999999)),
+      gender: rand() < 0.58 ? '2:女性' : '1:男性',
+      nationality: pickWeighted(NATIONALITY_LIST),
+      productCategory: pickWeighted(CATEGORY_LIST),
+      carrier: pickWeighted(CARRIER_LIST),
+      tourBrand: pickWeighted(TOUR_BRAND_LIST),
+      tourCode: rand() < 0.4 ? '-' : ('T' + pick(['J','G','I','N']) + '-' + pick(['FZA','ZZA','KMI','FSS']) + randInt(1000,9999)),
+      salesAmount: sales,
+      paymentAmount: payment,
+      sts: pickWeighted(STS_LIST),
+      staff: pick(STAFF_LIST),
+      productTitle: pick(PRODUCT_TITLES),
+      travelDays: randInt(2,10)
+    });
+  }
+  return rows;
+}
+
+var COLUMNS = [
+  { key:'area', label:'エリア', type:'text' },
+  { key:'office', label:'営業所', type:'text' },
+  { key:'destination', label:'最終目的地', type:'text' },
+  { key:'bookingDate', label:'予約日', type:'date' },
+  { key:'departureDate', label:'出発予定日', type:'date' },
+  { key:'customerId', label:'顧客ID', type:'text' },
+  { key:'reservationNo', label:'予約番号', type:'text' },
+  { key:'gender', label:'性別', type:'text' },
+  { key:'nationality', label:'国籍', type:'text' },
+  { key:'productCategory', label:'商品分類', type:'text' },
+  { key:'carrier', label:'キャリア', type:'text' },
+  { key:'tourBrand', label:'ツアーブランド区分', type:'text' },
+  { key:'tourCode', label:'ツアーコード', type:'text' },
+  { key:'salesAmount', label:'売上(商品請求金額)', type:'number' },
+  { key:'paymentAmount', label:'入金額', type:'number' },
+  { key:'sts', label:'STS', type:'text' },
+  { key:'staff', label:'担当者', type:'text' },
+  { key:'productTitle', label:'商品タイトル', type:'text' },
+  { key:'travelDays', label:'旅行日数', type:'number' }
+];
+var COLUMN_BY_KEY = {};
+COLUMNS.forEach(function(c){ COLUMN_BY_KEY[c.key] = c; });
+
+var STATE = {
+  rows: genSampleRows(320),
+  filtered: [],
+  sortKey: 'bookingDate', sortDir: -1,
+  rankingSortKey: 'count', rankingSortDir: -1,
+  page: 1, pageSize: 50
+};
+
+var CHART_COLORS = ['#1d4ed8','#f59e0b','#10b981','#ef4444','#8b5cf6','#0ea5e9','#f97316','#84cc16','#ec4899','#64748b','#14b8a6','#a855f7'];
+
+document.addEventListener('DOMContentLoaded', function(){
+  bindEvents();
+  document.getElementById('last-imported-label').textContent = '最終取込：2026/09/01 18:24（サンプルデータ）';
+  boot();
+});
+
+function boot(){
+  showLoading(true);
+  setTimeout(function(){
+    populateFilterOptions();
+    renderDataThead();
+    applyFilters();
+    showLoading(false);
+  }, 350); // ローディング演出（実アプリのサーバー通信を模したウェイト）
+}
+
+function showLoading(v){ document.getElementById('loading-overlay').classList.toggle('hidden', !v); }
+
+/* ---- フィルタ ---- */
+function distinctValues(key){
+  var set = {};
+  STATE.rows.forEach(function(r){ if (r[key]) set[r[key]] = true; });
+  return Object.keys(set).sort(function(a,b){ return a.localeCompare(b,'ja'); });
+}
+function fillMultiSelect(id, values){
+  document.getElementById(id).innerHTML = values.map(function(v){
+    return '<option value="'+escapeHtml(v)+'">'+escapeHtml(v)+'</option>';
+  }).join('');
+}
+function populateFilterOptions(){
+  fillMultiSelect('filter-area', distinctValues('area'));
+  fillMultiSelect('filter-office', distinctValues('office'));
+  fillMultiSelect('filter-sts', distinctValues('sts'));
+  fillMultiSelect('filter-category', distinctValues('productCategory'));
+}
+function getSelected(id){ return Array.from(document.getElementById(id).selectedOptions).map(function(o){return o.value;}); }
+function toSet(arr){ if(!arr||arr.length===0) return null; var s={}; arr.forEach(function(v){s[v]=true;}); return s; }
+
+function applyFilters(){
+  var area = toSet(getSelected('filter-area'));
+  var office = toSet(getSelected('filter-office'));
+  var sts = toSet(getSelected('filter-sts'));
+  var category = toSet(getSelected('filter-category'));
+  var dateField = document.getElementById('filter-date-field').value;
+  var dateFrom = document.getElementById('filter-date-from').value;
+  var dateTo = document.getElementById('filter-date-to').value;
+  var keyword = document.getElementById('filter-keyword').value.trim().toLowerCase();
+
+  STATE.filtered = STATE.rows.filter(function(r){
+    if (area && !area[r.area]) return false;
+    if (office && !office[r.office]) return false;
+    if (sts && !sts[r.sts]) return false;
+    if (category && !category[r.productCategory]) return false;
+    var dv = r[dateField];
+    if (dateFrom && (!dv || dv < dateFrom)) return false;
+    if (dateTo && (!dv || dv > dateTo)) return false;
+    if (keyword){
+      var hay = [r.customerId, r.reservationNo, r.productTitle, r.staff].join(' ').toLowerCase();
+      if (hay.indexOf(keyword) === -1) return false;
+    }
+    return true;
+  });
+  STATE.page = 1;
+  document.getElementById('filter-summary').textContent = STATE.filtered.length + ' 件を表示中（全 ' + STATE.rows.length + ' 件中）';
+  renderAll();
+}
+function clearFilters(){
+  ['filter-area','filter-office','filter-sts','filter-category'].forEach(function(id){
+    Array.from(document.getElementById(id).options).forEach(function(o){ o.selected = false; });
+  });
+  document.getElementById('filter-date-from').value = '';
+  document.getElementById('filter-date-to').value = '';
+  document.getElementById('filter-keyword').value = '';
+  applyFilters();
+}
+
+function renderAll(){
+  renderKpis();
+  renderMonthlyChart();
+  renderDonut('chart-sts', 'chart-sts-legend', countBy(STATE.filtered,'sts'));
+  renderDonut('chart-category', 'chart-category-legend', countBy(STATE.filtered,'productCategory'));
+  renderHBar('chart-nationality', topEntries(countBy(STATE.filtered,'nationality'), 10));
+  renderHBar('chart-carrier', topEntries(countBy(STATE.filtered,'carrier'), 10));
+  renderRanking();
+  renderDataTable();
+  renderAdminStatus();
+}
+
+/* ---- KPI ---- */
+function sumBy(rows,key){ var s=0; rows.forEach(function(r){ if (typeof r[key]==='number') s+=r[key]; }); return s; }
+function avgBy(rows,key){ var s=0,n=0; rows.forEach(function(r){ if (typeof r[key]==='number'){s+=r[key];n++;} }); return n>0?s/n:0; }
+function countBy(rows,key){
+  var map = {};
+  rows.forEach(function(r){ var v = r[key] || '(空欄)'; map[v] = (map[v]||0)+1; });
+  return map;
+}
+function topEntries(map,n){
+  return Object.keys(map).map(function(k){return [k,map[k]];}).sort(function(a,b){return b[1]-a[1];}).slice(0,n);
+}
+function renderKpis(){
+  var rows = STATE.filtered;
+  var total = rows.length;
+  var sales = sumBy(rows,'salesAmount');
+  var payment = sumBy(rows,'paymentAmount');
+  var rate = sales>0 ? payment/sales*100 : 0;
+  var avgDays = avgBy(rows,'travelDays');
+  document.getElementById('kpi-total').textContent = formatNumber(total);
+  document.getElementById('kpi-sales').textContent = formatCurrency(sales);
+  document.getElementById('kpi-payment').textContent = formatCurrency(payment);
+  document.getElementById('kpi-payment-rate').textContent = rate.toFixed(1)+'%';
+  document.getElementById('kpi-avg-days').textContent = avgDays.toFixed(1)+'日';
+}
+
+/* ---- グラフ（CSS/HTMLのみで描画） ---- */
+function renderMonthlyChart(){
+  var field = document.getElementById('filter-date-field').value;
+  var byMonth = {};
+  STATE.filtered.forEach(function(r){
+    var v = r[field]; if (!v) return;
+    var month = v.slice(0,7);
+    if (!byMonth[month]) byMonth[month] = {count:0, sales:0};
+    byMonth[month].count++;
+    byMonth[month].sales += r.salesAmount || 0;
+  });
+  var months = Object.keys(byMonth).sort();
+  var maxCount = Math.max.apply(null, months.map(function(m){return byMonth[m].count;}).concat([1]));
+  var maxSales = Math.max.apply(null, months.map(function(m){return byMonth[m].sales;}).concat([1]));
+
+  var el = document.getElementById('chart-monthly');
+  if (months.length === 0){ el.innerHTML = '<p class="empty-msg">データがありません</p>'; return; }
+  el.innerHTML = months.map(function(m){
+    var b = byMonth[m];
+    var hCount = Math.max(2, Math.round(b.count / maxCount * 160));
+    var hSales = Math.max(2, Math.round(b.sales / maxSales * 160));
+    return '<div class="vbar-col">' +
+      '<div class="vbar-pair">' +
+        '<div class="vbar count" style="height:'+hCount+'px" title="'+m+' 予約件数: '+formatNumber(b.count)+'"></div>' +
+        '<div class="vbar sales" style="height:'+hSales+'px" title="'+m+' 売上合計: '+formatCurrency(b.sales)+'"></div>' +
+      '</div>' +
+      '<div class="vbar-month">'+m.slice(2)+'</div>' +
+    '</div>';
+  }).join('');
+}
+
+function renderDonut(chartId, legendId, map){
+  var entries = topEntries(map, 12);
+  var total = entries.reduce(function(s,e){return s+e[1];}, 0);
+  var el = document.getElementById(chartId);
+  var legend = document.getElementById(legendId);
+  if (total === 0){ el.style.background = '#e2e8f0'; legend.innerHTML = '<span class="muted">データがありません</span>'; return; }
+
+  var stops = [], acc = 0;
+  entries.forEach(function(e, i){
+    var pct = e[1] / total * 100;
+    var color = CHART_COLORS[i % CHART_COLORS.length];
+    stops.push(color + ' ' + acc.toFixed(2) + '% ' + (acc+pct).toFixed(2) + '%');
+    acc += pct;
+  });
+  el.style.background = 'conic-gradient(' + stops.join(',') + ')';
+
+  legend.innerHTML = entries.map(function(e, i){
+    var color = CHART_COLORS[i % CHART_COLORS.length];
+    var pct = (e[1] / total * 100).toFixed(1);
+    return '<span><span class="dot" style="background:'+color+'"></span>' + escapeHtml(e[0]) + '（' + formatNumber(e[1]) + '件・' + pct + '%）</span>';
+  }).join('');
+}
+
+function renderHBar(id, entries){
+  var el = document.getElementById(id);
+  if (entries.length === 0){ el.innerHTML = '<p class="empty-msg">データがありません</p>'; return; }
+  var max = entries[0][1];
+  el.innerHTML = entries.map(function(e){
+    var pct = Math.max(3, Math.round(e[1] / max * 100));
+    return '<div class="hbar-row">' +
+      '<div class="hbar-label" title="'+escapeHtml(e[0])+'">'+escapeHtml(e[0])+'</div>' +
+      '<div class="hbar-track"><div class="hbar-fill" style="width:'+pct+'%"></div></div>' +
+      '<div class="hbar-value">'+formatNumber(e[1])+'</div>' +
+    '</div>';
+  }).join('');
+}
+
+/* ---- 営業所別ランキング ---- */
+function buildOfficeRanking(rows){
+  var map = {};
+  rows.forEach(function(r){
+    var office = r.office || '(未設定)';
+    if (!map[office]) map[office] = {office:office, count:0, salesAmount:0, paymentAmount:0, daysSum:0, daysN:0};
+    var b = map[office];
+    b.count++;
+    b.salesAmount += r.salesAmount || 0;
+    b.paymentAmount += r.paymentAmount || 0;
+    if (typeof r.travelDays === 'number'){ b.daysSum += r.travelDays; b.daysN++; }
+  });
+  return Object.keys(map).map(function(k){
+    var b = map[k];
+    return {
+      office: b.office, count: b.count, salesAmount: b.salesAmount, paymentAmount: b.paymentAmount,
+      paymentRate: b.salesAmount>0 ? b.paymentAmount/b.salesAmount*100 : 0,
+      avgDays: b.daysN>0 ? b.daysSum/b.daysN : 0
+    };
+  });
+}
+function renderRanking(){
+  var list = buildOfficeRanking(STATE.filtered);
+  var key = STATE.rankingSortKey, dir = STATE.rankingSortDir;
+  list.sort(function(a,b){
+    if (key === 'office') return a.office.localeCompare(b.office,'ja') * dir;
+    return (a[key]-b[key]) * dir;
+  });
+  var tbody = document.getElementById('ranking-tbody');
+  if (list.length === 0){ tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">データがありません</td></tr>'; return; }
+  tbody.innerHTML = list.map(function(b){
+    return '<tr>' +
+      '<td>'+escapeHtml(b.office)+'</td>' +
+      '<td class="text-right">'+formatNumber(b.count)+'</td>' +
+      '<td class="text-right">'+formatCurrency(b.salesAmount)+'</td>' +
+      '<td class="text-right">'+formatCurrency(b.paymentAmount)+'</td>' +
+      '<td class="text-right rank-rate">'+b.paymentRate.toFixed(1)+'%</td>' +
+      '<td class="text-right">'+b.avgDays.toFixed(1)+'日</td>' +
+    '</tr>';
+  }).join('');
+}
+
+/* ---- データ一覧タブ ---- */
+function renderDataThead(){
+  var thead = document.getElementById('data-thead');
+  thead.innerHTML = '<tr>' + COLUMNS.map(function(c){
+    var mark = (STATE.sortKey === c.key) ? ('<span class="sort-mark">'+(STATE.sortDir>0?'▲':'▼')+'</span>') : '';
+    var align = c.type === 'number' ? 'text-right' : '';
+    return '<th class="sortable '+align+'" data-sort="'+c.key+'">'+escapeHtml(c.label)+mark+'</th>';
+  }).join('') + '</tr>';
+  thead.querySelectorAll('.sortable').forEach(function(th){
+    th.addEventListener('click', function(){
+      var key = th.getAttribute('data-sort');
+      if (STATE.sortKey === key) STATE.sortDir *= -1; else { STATE.sortKey = key; STATE.sortDir = 1; }
+      renderDataThead(); renderDataTable();
+    });
+  });
+}
+function compareCell(a,b,key){
+  var col = COLUMN_BY_KEY[key];
+  var va=a[key], vb=b[key];
+  var ae = (va===null||va===undefined||va===''), be=(vb===null||vb===undefined||vb==='');
+  if (ae&&be) return 0; if (ae) return 1; if (be) return -1;
+  if (col.type === 'number') return va-vb;
+  return String(va).localeCompare(String(vb),'ja');
+}
+function renderDataTable(){
+  var rows = STATE.filtered.slice();
+  rows.sort(function(a,b){ return compareCell(a,b,STATE.sortKey) * STATE.sortDir; });
+  var total = rows.length;
+  var totalPages = Math.max(1, Math.ceil(total / STATE.pageSize));
+  if (STATE.page > totalPages) STATE.page = totalPages;
+  var start = (STATE.page-1) * STATE.pageSize;
+  var pageRows = rows.slice(start, start+STATE.pageSize);
+
+  document.getElementById('data-empty').classList.toggle('hidden', total>0);
+  document.getElementById('data-tbody').innerHTML = pageRows.map(function(r){
+    return '<tr>' + COLUMNS.map(function(c){
+      var align = c.type==='number' ? 'text-right' : '';
+      return '<td class="'+align+'">'+formatCell(r[c.key], c)+'</td>';
+    }).join('') + '</tr>';
+  }).join('');
+
+  document.getElementById('pagination-info').textContent = total===0 ? '0件' : (start+1)+'〜'+Math.min(start+STATE.pageSize,total)+' / '+total+'件';
+  document.getElementById('btn-prev-page').disabled = STATE.page<=1;
+  document.getElementById('btn-next-page').disabled = STATE.page>=totalPages;
+}
+function formatCell(v, col){
+  if (v===null||v===undefined||v==='') return '<span style="color:var(--slate-300)">－</span>';
+  if (col.type==='number') return formatNumber(v);
+  if (col.type==='date') return escapeHtml(String(v).replace(/-/g,'/'));
+  return escapeHtml(String(v));
+}
+
+/* ---- データ管理タブ ---- */
+function renderAdminStatus(){
+  document.getElementById('admin-status').innerHTML =
+    '<p>保存件数（サンプル）：<b>'+formatNumber(STATE.rows.length)+'</b> 件</p>' +
+    '<p>現在の絞り込み結果：<b>'+formatNumber(STATE.filtered.length)+'</b> 件</p>';
+}
+
+/* ---- CSVインポート（見た目のみのダミー動作） ---- */
+var csvTimer = null;
+function openCsvModal(){
+  document.getElementById('csv-import-modal').classList.add('open');
+  document.getElementById('csv-file-input').value = '';
+  document.getElementById('csv-file-summary').classList.add('hidden');
+  document.getElementById('csv-import-result').style.display = 'none';
+  document.getElementById('csv-progress').classList.add('hidden');
+  document.getElementById('btn-submit-csv').disabled = true;
+}
+function closeCsvModal(){
+  document.getElementById('csv-import-modal').classList.remove('open');
+  if (csvTimer) { clearInterval(csvTimer); csvTimer = null; }
+}
+function onCsvFileSelected(e){
+  var file = e.target.files[0];
+  if (!file) { document.getElementById('btn-submit-csv').disabled = true; return; }
+  var summary = document.getElementById('csv-file-summary');
+  summary.textContent = 'ファイル：' + file.name + '（' + Math.ceil(file.size/1024) + ' KB）';
+  summary.classList.remove('hidden');
+  document.getElementById('btn-submit-csv').disabled = false;
+}
+function submitCsvImportDemo(){
+  document.getElementById('btn-submit-csv').disabled = true;
+  var box = document.getElementById('csv-progress');
+  var bar = document.getElementById('csv-progress-bar');
+  var timeLabel = document.getElementById('csv-progress-time');
+  box.classList.remove('hidden');
+  var elapsed = 0;
+  bar.style.width = '5%';
+  csvTimer = setInterval(function(){
+    elapsed++;
+    timeLabel.textContent = elapsed + '秒';
+    bar.style.width = Math.min(95, 5+elapsed*20) + '%';
+    if (elapsed >= 2){
+      clearInterval(csvTimer); csvTimer = null;
+      bar.style.width = '100%';
+      finishCsvImportDemo();
+    }
+  }, 300);
+}
+function finishCsvImportDemo(){
+  var addN = randInt(15, 40);
+  var added = genSampleRows(addN);
+  STATE.rows = STATE.rows.concat(added);
+  document.getElementById('last-imported-label').textContent = '最終取込：' + new Date().toLocaleString('ja-JP') + '（サンプル・デモ取込）';
+
+  var box = document.getElementById('csv-import-result');
+  box.style.display = 'block';
+  box.innerHTML =
+    '<p style="color:var(--emerald-700); font-weight:600;">✅ 取り込みが完了しました（デモ）</p>' +
+    '<p>新規登録：<b>'+formatNumber(addN)+'</b> 件</p>' +
+    '<p>取込後の合計件数：'+formatNumber(STATE.rows.length)+' 件</p>';
+  showToast('CSVを取り込みました（デモ・新規 '+addN+' 件）', 'success');
+  populateFilterOptions();
+  applyFilters();
+}
+
+/* ---- データ管理操作（ダミー） ---- */
+function removeDuplicatesDemo(){
+  if (!window.confirm('19項目すべてが完全一致する重複行を削除します。よろしいですか？（デモ動作）')) return;
+  var el = document.getElementById('duplicate-result');
+  el.textContent = '重複している行はありませんでした。（サンプルデータのためデモ動作です）';
+  el.classList.remove('hidden');
+  showToast('重複削除を実行しました（デモ）', 'success');
+}
+function clearAllDataDemo(){
+  var input = document.getElementById('clear-confirm-input');
+  if (input.value !== '削除'){ showToast('確認欄に「削除」と入力してください。', 'error'); return; }
+  if (!window.confirm('サンプルデータをすべて削除します（デモ動作。ページ再読込で元に戻ります）。よろしいですか？')) return;
+  STATE.rows = [];
+  input.value = '';
+  var el = document.getElementById('clear-result');
+  el.textContent = '削除しました（デモ）。';
+  el.classList.remove('hidden');
+  showToast('データを削除しました（デモ）', 'success');
+  populateFilterOptions();
+  applyFilters();
+}
+
+/* ---- イベント結線・タブ切り替え ---- */
+function bindEvents(){
+  document.querySelectorAll('.tab-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){ switchTab(btn.getAttribute('data-tab')); });
+  });
+  document.getElementById('btn-refresh').addEventListener('click', boot);
+
+  ['filter-area','filter-office','filter-sts','filter-category','filter-date-field'].forEach(function(id){
+    document.getElementById(id).addEventListener('change', applyFilters);
+  });
+  document.getElementById('filter-date-from').addEventListener('change', applyFilters);
+  document.getElementById('filter-date-to').addEventListener('change', applyFilters);
+  document.getElementById('filter-keyword').addEventListener('input', debounce(applyFilters, 250));
+  document.getElementById('btn-clear-filter').addEventListener('click', clearFilters);
+
+  document.querySelectorAll('#panel-dashboard [data-sort]').forEach(function(th){
+    th.addEventListener('click', function(){
+      var key = th.getAttribute('data-sort');
+      if (STATE.rankingSortKey === key) STATE.rankingSortDir *= -1; else { STATE.rankingSortKey = key; STATE.rankingSortDir = -1; }
+      renderRanking();
+    });
+  });
+
+  document.getElementById('btn-prev-page').addEventListener('click', function(){ STATE.page--; renderDataTable(); });
+  document.getElementById('btn-next-page').addEventListener('click', function(){ STATE.page++; renderDataTable(); });
+
+  document.getElementById('btn-open-csv-modal').addEventListener('click', openCsvModal);
+  document.getElementById('btn-close-csv-modal').addEventListener('click', closeCsvModal);
+  document.getElementById('btn-cancel-csv-modal').addEventListener('click', closeCsvModal);
+  document.getElementById('csv-file-input').addEventListener('change', onCsvFileSelected);
+  document.getElementById('btn-submit-csv').addEventListener('click', submitCsvImportDemo);
+
+  document.getElementById('btn-remove-duplicates').addEventListener('click', removeDuplicatesDemo);
+  document.getElementById('btn-clear-all-data').addEventListener('click', clearAllDataDemo);
+}
+function switchTab(tab){
+  document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-tab')===tab); });
+  document.querySelectorAll('.panel').forEach(function(p){ p.classList.toggle('hidden', p.id !== 'panel-'+tab); });
+}
+
+/* ---- 共通ユーティリティ ---- */
+function formatNumber(n){ return Number(n||0).toLocaleString('ja-JP'); }
+function formatCurrency(n){ return '¥'+Number(n||0).toLocaleString('ja-JP'); }
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; });
+}
+function debounce(fn, wait){
+  var t=null;
+  return function(){ var args=arguments; clearTimeout(t); t=setTimeout(function(){ fn.apply(null,args); }, wait); };
+}
+function showToast(message, type){
+  var container = document.getElementById('toast-container');
+  var toast = document.createElement('div');
+  toast.className = 'toast ' + (type||'info');
+  var icon = type==='error' ? '❗' : (type==='success' ? '✅' : 'ℹ️');
+  toast.innerHTML = '<span>'+icon+'</span><span>'+escapeHtml(message)+'</span>';
+  container.appendChild(toast);
+  setTimeout(function(){
+    toast.style.opacity = '0';
+    setTimeout(function(){ toast.remove(); }, 300);
+  }, 4000);
+}
+</script>
+</body>
+</html>
