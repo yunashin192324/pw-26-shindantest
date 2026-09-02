@@ -14,7 +14,7 @@
 // =====================================================
 
 // --- このWebアプリが使うスプレッドシートのID ---
-const SPREADSHEET_ID = 'PUT_YOUR_SPREADSHEET_ID_HERE';
+const SPREADSHEET_ID = '11YDN8mkD3ir9mR32JCpwtIfA2BCyspqw1Mn8rnI5cOE';
 
 // --- シート名 ---
 const BRANCH_MASTER_SHEET_NAME = '支店マスタ';
