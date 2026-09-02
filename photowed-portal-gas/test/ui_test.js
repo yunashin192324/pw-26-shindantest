@@ -1440,12 +1440,18 @@ function paneHidden(document, key) {
     // ★要件の肝：以前は「プラン名の下」に読み取り専用のSTSバッジ、CHG NOの下に編集用の
     // STS JP/STS 支店の欄が別々にあったが、添付いただいた既存システムのUIに寄せて、
     // プラン・オプションと同じ表の中にSTS列として並べ、その場で直接編集できるようにした
+    // ★要件変更：さらに「第◯希望」の一覧とも統合し、1つの明細票カードの中に
+    // 「希望日一覧（折りたたみ）」と「プラン・オプション明細」の2つの表として並べた
     const planCard = document.querySelector('.plan-option-card');
     check('プラン・オプションが1つの表（明細票）にまとまっている', !!planCard);
-    const planTable = planCard.querySelector('table.plan-table');
-    check('表のヘッダーに種別・名称・STS（JP側）・STS（支店側）の4列がある',
+    const cardTables = [...planCard.querySelectorAll('table.plan-table')];
+    // [0]は希望日一覧（<details>内）、[1]がプラン・オプション明細（プラン＋オプション①〜⑤）、
+    // [2]はオプション⑥〜⑩（別の<details>内。常に描画されるが名称は空のことが多い）
+    check('明細票カードの中に希望日・プラン・オプション⑥〜⑩の3つの表がある', cardTables.length === 3);
+    const planTable = cardTables[1];
+    check('表のヘッダーに希望・名称・場所・日付・STS JP・STS 現地の列がある',
           !!planTable && [...planTable.querySelectorAll('thead th')].map(th => th.textContent.trim()).join(',') ===
-          '種別,名称,STS（JP側）,STS（支店側）');
+          '希望,名称,場所,日付,STS JP,STS 現地');
     const rows = [...planTable.querySelectorAll('tbody tr')];
     check('先頭行がプラン、続く5行がオプション①〜⑤になっている', rows.length === 6 && rows[0].cells[0].textContent === 'プラン');
     check('もう「STS JP」「STS 支店」の独立したカード（status-row）は表示されない（表に一本化）',
@@ -1453,9 +1459,9 @@ function paneHidden(document, key) {
     check('同じフィールドを二重に編集できる状態になっていない（STS JPのdata-pendingは1つだけ）',
           document.querySelectorAll('[data-pending="STS JP"]').length === 1);
 
-    // プランの行のSTS(JP側)は、プラン名のすぐ隣（同じ行のセル）で直接編集できる
+    // プランの行のSTS(JP側)は、プラン名のすぐ隣（同じ行のセル。列は希望/名称/場所/日付の次＝4番目）で直接編集できる
     const planRow = rows[0];
-    const planStsJpSelect = planRow.cells[2].querySelector('select');
+    const planStsJpSelect = planRow.cells[4].querySelector('select');
     check('プランの行のSTS（JP側）が、プラン名の隣で直接プルダウン編集できる（FNなども選べる）',
           !!planStsJpSelect && [...planStsJpSelect.options].some(o => o.value === 'FN'));
     planStsJpSelect.value = 'OK';
@@ -1468,10 +1474,10 @@ function paneHidden(document, key) {
     // オプションもオプション名の隣（同じ行のセル）にSTS(JP側)があり、直接編集できる
     const optRow1 = rows[1];
     check('オプション①の行にも名称の隣にSTS（JP側）のプルダウンがある', optRow1.cells[0].textContent === 'オプション1' &&
-          !!optRow1.cells[2].querySelector('select'));
+          !!optRow1.cells[4].querySelector('select'));
     // ★要件：名称未設定（未使用）のオプション枠でも、日本側・支店側はSTS(JP側)の操作自体は
     // 従来から常に可能（名称の有無で制限しているのは店舗ロールだけ）
-    const optStsJpSelect = optRow1.cells[2].querySelector('select');
+    const optStsJpSelect = optRow1.cells[4].querySelector('select');
     optStsJpSelect.value = 'FN';
     optStsJpSelect.dispatchEvent(new dom.window.Event('change'));
     await settle();
@@ -1487,11 +1493,13 @@ function paneHidden(document, key) {
     [...document.querySelectorAll('#reservation-list .res-card')]
       .find(c => c.textContent.includes(kanri5)).click();
     await settle();
-    const branchPlanRow = document.querySelector('.plan-table tbody tr');
+    // ★BRANCHロールは希望日の一括設定チェックボックス列が先頭に増える分、列が1つ多い
+    const branchPlanTable = [...document.querySelectorAll('.plan-option-card table.plan-table')][1];
+    const branchPlanRow = branchPlanTable.querySelector('tbody tr');
     // ★注：STS(JP側)がOKの間は、支店側のSTSはBRANCH_EDIT_GATEの仕様により編集不可
     // （ロック表示になる。これは今回の表形式化とは無関係の既存の業務ルール）
     check('現地支店側でも同じ表で、プラン名の隣にSTS（支店側）の欄が表示される',
-          branchPlanRow.cells[3].textContent.includes('OK'));
+          branchPlanRow.cells[6].textContent.includes('OK'));
 
     // ★要件：希望日一覧は「最初の予約時」「日付変更依頼(DC)の対応中」以外はほとんど使わないため、
     // ふだんは折りたたんでおく。kanri5は撮影日FIXが未確定のまま（＝まだ回答待ち）なので開いている
@@ -1755,7 +1763,9 @@ function paneHidden(document, key) {
     check('店舗のクイックナビに「オプション」ボタンはもう無い', !document.querySelector('[data-scroll-to="shop-sec-options"]'));
     check('店舗の画面に独立した「オプション」セクション（shop-sec-options）はもう無い', !document.getElementById('shop-sec-options'));
 
-    const shopTable = document.querySelector('#shop-sec-reservation table.plan-table');
+    // ★希望日一覧もプラン・オプションと同じ明細票へ統合したため、#shop-sec-reservation内には
+    // table.plan-tableが複数（[0]希望日一覧・[1]プラン・オプション明細・[2]オプション⑥〜⑩）ある
+    const shopTable = document.querySelectorAll('#shop-sec-reservation table.plan-table')[1];
     check('店舗の「予約内容」内にプラン・オプション明細の表（plan-table）がある', !!shopTable);
     check('店舗のプラン選択（shop-detail-plan-select）が、この明細表の中にある',
           !!document.getElementById('shop-detail-plan-select').closest('table.plan-table'));
@@ -2180,7 +2190,7 @@ function paneHidden(document, key) {
 
     // プラン・オプション明細の表側の支店バッジも同様に「未確認」になる
     const planRowShop = document.querySelector('.plan-table tbody tr.plan-row');
-    const planBranchChip = planRowShop.cells[3].querySelector('.chip.branch');
+    const planBranchChip = planRowShop.querySelector('.chip.branch');
     check('プラン・オプション明細のSTS（支店側）バッジも「未確認」になる',
           !!planBranchChip && planBranchChip.textContent.trim() === '未確認');
   }
@@ -2381,12 +2391,12 @@ function paneHidden(document, key) {
     document.querySelector('#reservation-list .res-card').click();
     await settle();
 
-    // R-001はローマ支店（ROW）の案件。希望日一覧の見出しに「場所」列が増えている
-    const hopeCard = document.querySelector('.hope-table-card');
-    check('希望日一覧が専用のカード（.hope-table-card）で表示される', !!hopeCard);
-    const hopeHeaderText = hopeCard.querySelector('thead').textContent;
-    check('希望日一覧の見出しに「場所」列がある', hopeHeaderText.includes('場所'));
-    check('希望日一覧の見出しに「プラン」列もある', hopeHeaderText.includes('プラン'));
+    // R-001はローマ支店（ROW）の案件。希望日一覧はプラン・オプション明細と同じカードに統合されている
+    const hopeCard = document.querySelector('.plan-option-card');
+    check('希望日一覧がプラン・オプション明細と同じカード（.plan-option-card）に統合されている', !!hopeCard);
+    const hopeHeaderText = hopeCard.querySelector('table.plan-table thead').textContent;
+    check('明細表の見出しに「場所」列がある', hopeHeaderText.includes('場所'));
+    check('明細表の見出しに「名称」列もある', hopeHeaderText.includes('名称'));
 
     const hopePlanSelect1 = hopeCard.querySelector('[data-pending="希望日①プラン"]');
     check('希望日①のプラン選択欄がある', !!hopePlanSelect1);
@@ -2428,7 +2438,7 @@ function paneHidden(document, key) {
     [...document.querySelectorAll('#reservation-list .res-card')]
       .find(c => c.textContent.includes(kanriU37)).click();
     await settle();
-    const shopHopeCard = document.querySelector('.hope-table-card');
+    const shopHopeCard = document.querySelector('.plan-option-card');
     check('店舗の画面にも希望日一覧の場所欄がある', !!shopHopeCard.querySelector('[data-pending="希望日①場所"]'));
     const shopHopePlanOpts = [...shopHopeCard.querySelectorAll('[data-pending="希望日①プラン"] option')].map(o => o.value);
     check('店舗の画面のプラン選択欄にも他支店（他国）の候補が入る',

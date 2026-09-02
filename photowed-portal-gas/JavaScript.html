@@ -859,9 +859,11 @@
           <div class="history-body">${escapeHtml(h.body)}</div>
         </div>`).join('');
 
-    // ★機能追加：希望日ごとの空き確認ステータスは店舗にも見せる（編集はできない。読み取り専用）。
-    // 「優先順位・プラン・日付・（時間帯）・日本STS・現地STS」の表で表示する
-    // （JP/支店の予約内容タブと同じ形式。プラン欄・時間帯欄は店舗からも入力できる）。
+    // ★要件変更：「第◯希望」の一覧と「プラン・オプション明細」がバラバラだったのを、
+    // 添付いただいたレイアウト（希望／名称／日付／時間／STS JP／STS 現地の1枚の表）に
+    // 合わせて1つの明細表へ統合した（希望日①〜⑤の行の下に、プラン・オプション①〜⑩の行を
+    // そのまま続ける）。列を揃えるため、プラン・オプション行は場所・日付・時間帯の欄を
+    // 空欄のまま出す（これらは希望日にしか無い情報のため）。
     const SHOP_HOPE_FIELDS = ['希望日①', '希望日②', '希望日③', '希望日④', '希望日⑤'];
     const showHopeTimeShop = !!d.showHopeTime;
     const hopeTableRowsShop = SHOP_HOPE_FIELDS.map((f, i) => {
@@ -881,20 +883,8 @@
     // ★要件：希望日の一覧は「最初の予約時（回答待ち）」「日付変更依頼（DC）の対応中」以外は
     // ほとんど参照しないため、ふだんは折りたたんでおき、必要なときだけ自動で開いた状態にする。
     const hopeShouldExpandShop = !d['撮影日FIX'] || d['STS JP'] === 'DC';
-    const hopeTableHtmlShop = `
-      <details class="hope-collapse" ${hopeShouldExpandShop ? 'open' : ''}>
-        <summary>希望日一覧（優先順位・プラン・場所・日付・STS）${hopeShouldExpandShop ? '' : '－ふだんは折りたたみ表示です。開くと確認できます'}</summary>
-        <div class="hope-table-card" style="margin-top:6px;">
-        <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none;">
-          <table class="hope-plan-table">
-            <thead><tr><th>優先順位</th><th>プラン</th><th>場所</th><th>日付</th>${showHopeTimeShop ? '<th>時間帯</th>' : ''}<th>日本STS</th><th>現地STS</th></tr></thead>
-            <tbody>${hopeTableRowsShop}</tbody>
-          </table>
-        </div>
-        </div>
-      </details>`;
 
-    // ★要件：オプション名のすぐ隣にSTS（JP・支店）を、希望日テーブルと同じ表形式で表示する。
+    // ★要件：オプション名のすぐ隣にSTS（JP・支店）を、希望日と同じ表形式で表示する。
     // STS JPは店舗自身がその場でRQ→CR等へ直接変更できる（専用の「ステータス変更」欄は廃止）。
     // STS 支店は従来どおり読み取り専用（クリックで履歴）。
     // ★要件変更：オプション名はマスタからの選択式ではなく、候補（datalist）を出しつつ自由に
@@ -902,10 +892,21 @@
     const shopOptionDatalistId = 'shop-detail-option-datalist';
     const shopOptionDatalistHtml = `<datalist id="${shopOptionDatalistId}">${(optionList || []).filter(x => x.active)
       .map(x => `<option value="${escapeAttr(x.name)}">`).join('')}</datalist>`;
+    const emptyExtraCellsShop = `<td></td><td></td>${showHopeTimeShop ? '<td></td>' : ''}`;
+    const shopPlanRowHtml = `
+        <tr class="plan-row">
+          <td>プラン</td>
+          <td><select data-pending="プラン名" id="shop-detail-plan-select" style="width:100%;"><option value="">未設定</option>${nameListWithCurrent(planList, d['プラン名']).map(n =>
+            `<option value="${escapeAttr(n)}" ${n === d['プラン名'] ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}</select></td>
+          ${emptyExtraCellsShop}
+          <td>${shopStatusCell('STS JP', d['STS JP'])}</td>
+          <td>${inlineStatusBadge('STS 支店', d['STS 支店'], 'branch')}</td>
+        </tr>`;
     const buildOptionRowShop = (o) => `
       <tr>
         <td>オプション${o.n}</td>
         <td><input list="${shopOptionDatalistId}" data-pending="OP${o.n}" style="width:100%;" value="${escapeAttr(o.name)}" placeholder="（未使用）"></td>
+        ${emptyExtraCellsShop}
         <td>${shopStatusCell('OP' + o.n + ' STS JP', o.stsJp)}</td>
         <td>${inlineStatusBadge('OP' + o.n + ' STS 支店', o.stsBranch, 'branch')}</td>
       </tr>`;
@@ -919,6 +920,7 @@
     const optionsShopExtra = optionsAllShop.slice(5);
     const optionRowsShopExtra = optionsShopExtra.map(buildOptionRowShop).join('');
     const optionsShopExtraOpen = optionsShopExtra.some(o => o.name);
+    const unifiedTableHeadShop = `<tr><th>希望</th><th>名称</th><th>場所</th><th>日付</th>${showHopeTimeShop ? '<th>時間</th>' : ''}<th>STS JP</th><th>STS 現地</th></tr>`;
 
     const checklistHtml = (d.checklist || []).map(c2 => `
       <label class="checkbox-label">
@@ -994,25 +996,27 @@
               <select data-pending="準備場所"><option value="">未設定</option>${PREP_CHOICES.map(p =>
                 `<option value="${escapeAttr(p)}" ${d['準備場所'] === p ? 'selected' : ''}>${escapeHtml(p)}</option>`).join('')}</select></div>`}
           </div>
-          ${hopeTableHtmlShop}
         </div>
 
-        <!-- ★要件：JP/支店の「プラン・オプション明細」と同じ、プラン＋オプションを1枚の表にまとめた
-             形式に統一する（従来は店舗だけ「オプション」が別タブに分かれていた）。プラン行だけは
-             一番上の代表行として一目でわかるよう.plan-rowで強調する（背景色・太字）。 -->
+        <!-- ★要件変更：「第◯希望」の一覧と「プラン・オプション明細」がバラバラだったのを、
+             1つの明細表（希望／名称／場所／日付／時間／STS JP／STS 現地）へ統合した。
+             プラン行だけは一番上の代表行として一目でわかるよう.plan-rowで強調する（背景色・太字）。 -->
         <div class="section-card plan-option-card">
-          <div class="plan-option-head"><span class="icon">📋</span><h3 style="margin:0;">プラン・オプション明細（プラン＋オプション最大10件）</h3></div>
+          <div class="plan-option-head"><span class="icon">📋</span><h3 style="margin:0;">希望日・プラン・オプション明細</h3></div>
+          <details class="hope-collapse" ${hopeShouldExpandShop ? 'open' : ''}>
+            <summary>${hopeShouldExpandShop ? '希望日一覧を表示中' : '希望日一覧－ふだんは折りたたみ表示です。開くと確認できます'}</summary>
+            <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none;">
+              <table class="plan-table">
+                <thead>${unifiedTableHeadShop}</thead>
+                <tbody>${hopeTableRowsShop}</tbody>
+              </table>
+            </div>
+          </details>
           <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none;">
             <table class="plan-table">
-              <thead><tr><th>種別</th><th>名称</th><th>STS JP</th><th>STS 支店</th></tr></thead>
+              <thead>${unifiedTableHeadShop}</thead>
               <tbody>
-                <tr class="plan-row">
-                  <td>プラン</td>
-                  <td><select data-pending="プラン名" id="shop-detail-plan-select" style="width:100%;"><option value="">未設定</option>${nameListWithCurrent(planList, d['プラン名']).map(n =>
-                    `<option value="${escapeAttr(n)}" ${n === d['プラン名'] ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}</select></td>
-                  <td>${shopStatusCell('STS JP', d['STS JP'])}</td>
-                  <td>${inlineStatusBadge('STS 支店', d['STS 支店'], 'branch')}</td>
-                </tr>
+                ${shopPlanRowHtml}
                 ${optionRowsShopMain}
               </tbody>
             </table>
@@ -1022,7 +1026,7 @@
             <summary>オプション6〜10${optionsShopExtraOpen ? '' : '（ふだんは折りたたみ）'}</summary>
             <div class="table-wrap" style="margin-top:6px;">
               <table class="plan-table">
-                <thead><tr><th>種別</th><th>名称</th><th>STS JP</th><th>STS 支店</th></tr></thead>
+                <thead>${unifiedTableHeadShop}</thead>
                 <tbody>${optionRowsShopExtra}</tbody>
               </table>
             </div>
@@ -1726,16 +1730,14 @@
         <button type="button" class="send-btn-sm" id="hope-bulk-apply">まとめて設定</button>
       </div>
       <p class="hint-text" style="margin-top:4px;">OK／UCを選ぶと、日本側のSTSにも自動で反映されます。下の3択（保存のみ／メッセージ／変更＋メッセージ）で確定してください。</p>`;
-    const hopeFieldsHtml = `
-      <div class="hope-table-card" style="margin-top:6px;">
-        <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none;">
-          <table class="hope-plan-table">
-            <thead><tr>${canBulkSetHope ? '<th></th>' : ''}<th>優先順位</th><th>プラン</th><th>場所</th><th>日付</th>${showHopeTime ? '<th>時間帯</th>' : ''}<th>日本STS</th><th>現地STS</th></tr></thead>
-            <tbody>${hopeTableRows}</tbody>
-          </table>
-        </div>
-      </div>
-      ${hopeBulkBarHtml}`;
+    // ★要件変更：「第◯希望」の一覧と「プラン・オプション明細」がバラバラだったのを、
+    // 添付いただいたレイアウト（希望／名称／日付／時間／STS JP／STS 現地の1枚の表）に合わせて
+    // 統合した見出し行。プラン・オプションの行も同じ表で続けて表示するため、ここで1回だけ組み立てる。
+    const unifiedTableHead = `<tr>${canBulkSetHope ? '<th></th>' : ''}<th>希望</th><th>名称</th><th>場所</th><th>日付</th>${showHopeTime ? '<th>時間</th>' : ''}<th>STS JP</th><th>STS 現地</th></tr>`;
+    // プラン・オプション行は場所・日付・時間帯の欄を持たないため、列を揃えるための空セル
+    // （先頭のチェックボックス列も、対象がある行（希望日）以外は空セルで埋める）
+    const checkboxPlaceholderCell = canBulkSetHope ? '<td></td>' : '';
+    const locDateTimeEmptyCells = `<td></td><td></td>${showHopeTime ? '<td></td>' : ''}`;
     // ★機能：希望日からのワンタップ回答（対象の希望日のSTS(支店側)をOKにする分かりやすいショートカット。
     // 実際の反映はapplyHopeStatusCascade_を通る＝上のSTSセレクトで選んだ場合と全く同じ結果になる）
     const hopeButtons = HOPE_FIELDS.map((f, i) => {
@@ -1807,8 +1809,10 @@
       const gate = branchGateFor(o.stsJp);
       return `
         <tr>
+          ${checkboxPlaceholderCell}
           <td>オプション${o.n}</td>
           <td><input list="${optionDatalistId}" data-pending="OP${o.n}" style="width:100%;" value="${escapeAttr(o.name)}" placeholder="（未使用）"></td>
+          ${locDateTimeEmptyCells}
           <td>${statusCell('OP' + o.n + ' STS JP', o.stsJp, session.role === 'JP', null)}</td>
           <td>${statusCell('OP' + o.n + ' STS 支店', o.stsBranch, session.role === 'BRANCH' && gate.editable, gate.allowed, `STS JP: ${o.stsJp || '未設定'}`)}</td>
         </tr>`;
@@ -2020,11 +2024,6 @@
 
         <div class="section-card">
           ${inquiryBlock}
-          <details class="hope-collapse" ${hopeShouldExpand ? 'open' : ''}>
-            <summary>希望日一覧（優先順位・プラン・場所・日付・STS）${hopeShouldExpand ? '' : '－ふだんは折りたたみ表示です。開くと確認・変更できます'}</summary>
-            ${hopeFieldsHtml}
-            ${hopeBlock}
-          </details>
         </div>
 
         <div class="section-card">
@@ -2042,15 +2041,31 @@
           </div>
         </div>
 
+        <!-- ★要件変更：「第◯希望」の一覧と「プラン・オプション明細」がバラバラだったのを、
+             1つの明細表（希望／名称／場所／日付／時間／STS JP／STS 現地）へ統合した。
+             プラン行だけは一番上の代表行として一目でわかるよう.plan-rowで強調する（背景色・太字）。 -->
         <div class="section-card plan-option-card">
-          <div class="plan-option-head"><span class="icon">📋</span><h3 style="margin:0;">プラン・オプション明細（プラン＋オプション最大10件）</h3></div>
+          <div class="plan-option-head"><span class="icon">📋</span><h3 style="margin:0;">希望日・プラン・オプション明細</h3></div>
+          <details class="hope-collapse" ${hopeShouldExpand ? 'open' : ''}>
+            <summary>${hopeShouldExpand ? '希望日一覧を表示中' : '希望日一覧－ふだんは折りたたみ表示です。開くと確認・変更できます'}</summary>
+            <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none;">
+              <table class="plan-table">
+                <thead>${unifiedTableHead}</thead>
+                <tbody>${hopeTableRows}</tbody>
+              </table>
+            </div>
+            ${hopeBulkBarHtml}
+            ${hopeBlock}
+          </details>
           <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none;">
             <table class="plan-table">
-              <thead><tr><th>種別</th><th>名称</th><th>STS（JP側）</th><th>STS（支店側）</th></tr></thead>
+              <thead>${unifiedTableHead}</thead>
               <tbody>
                 <tr class="plan-row">
+                  ${checkboxPlaceholderCell}
                   <td>プラン</td>
                   <td>${planSelect}</td>
+                  ${locDateTimeEmptyCells}
                   <td>${statusCell('STS JP', d['STS JP'], session.role === 'JP', null)}</td>
                   <td>${statusCell('STS 支店', d['STS 支店'], session.role === 'BRANCH' && mainGate.editable, mainGate.allowed, `STS JP: ${d['STS JP'] || '未設定'}`)}</td>
                 </tr>
@@ -2063,7 +2078,7 @@
             <summary>オプション6〜10${optionsExtraOpen ? '' : '（ふだんは折りたたみ）'}</summary>
             <div class="table-wrap" style="margin-top:6px;">
               <table class="plan-table">
-                <thead><tr><th>種別</th><th>名称</th><th>STS（JP側）</th><th>STS（支店側）</th></tr></thead>
+                <thead>${unifiedTableHead}</thead>
                 <tbody>${optionRowsExtra}</tbody>
               </table>
             </div>
