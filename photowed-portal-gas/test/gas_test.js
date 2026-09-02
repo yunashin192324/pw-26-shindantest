@@ -3376,5 +3376,75 @@ section('56. ログイン画面を支店選択プルダウンから支店コー�
 }
 
 // ---------------------------------------------------------------
+section('57. 撮影データ納品先メールアドレス欄の追加・apiListAllActivePlansのlocationMode・新規依頼のプラン自動反映');
+{
+  const ctx = featureFixture();
+  ctx.ensureSheetWithHeaders_(ctx.__ss, 'プランマスタ', ctx.PLAN_MASTER_HEADERS);
+  addBranchRow(ctx, { '支店コード': 'SHOP1', '支店名': '新宿店', 'ロール': 'SHOP', 'ログインパスコード': 'sp', '通知先メール': 'shop1@example.com', '有効': true });
+  const pm = ctx.__ss.getSheetByName('プランマスタ');
+  pm.appendRow(['VIE', 'ウィーン半日プラン', true, 'checkbox', 'シェーンブルン宮殿、ベルヴェデーレ宮殿']);
+  pm.appendRow(['IST', 'カッパドキアサンライズ', true]);
+
+  const jpToken = ctx.apiLogin('KANTO', 'pw').session.token;
+  const shopToken = ctx.apiLogin('SHOP1', 'sp').session.token;
+
+  // --- ①撮影データ納品先メールアドレス：現地連絡先メールとは別の自由入力欄として追加された ---
+  addCase(ctx, '予約一覧', { '支店コード': 'VIE', '管理番号': 'VIE-970', '管轄': '関東' });
+  ctx.apiSaveFieldsQuiet(jpToken, 'VIE-970', { '撮影データ納品先メールアドレス': 'delivery@example.com' });
+  check('撮影データ納品先メールアドレスが保存できる（日本側・現地支店側どちらの画面でも扱う項目）',
+        ctx.apiGetReservationDetail(jpToken, 'VIE-970').detail['撮影データ納品先メールアドレス'] === 'delivery@example.com');
+
+  const vieToken2 = ctx.apiLogin('VIE', 'vp').session.token;
+  ctx.apiSaveFieldsQuiet(vieToken2, 'VIE-970', { '撮影データ納品先メールアドレス': 'branch-delivery@example.com' });
+  check('現地支店からも撮影データ納品先メールアドレスを更新できる',
+        ctx.apiGetReservationDetail(jpToken, 'VIE-970').detail['撮影データ納品先メールアドレス'] === 'branch-delivery@example.com');
+
+  // 店舗が起票した案件でも同じ欄を扱える（SHOP_EDITABLE_FIELDSに追加した）
+  const shopCase57 = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'VIE', team: '関東', groomLastName: 'Test', groomName: 'Taro',
+    brideLastName: 'Test', brideName: 'Hanako', challengeNo: 'DUMMYCHG057', hope1: '2026-09-10'
+  });
+  ctx.apiSaveFieldsQuiet(shopToken, shopCase57.kanriNo, { '撮影データ納品先メールアドレス': 'shop-delivery@example.com' });
+  check('店舗が起票した案件でも撮影データ納品先メールアドレスを保存できる',
+        ctx.apiGetReservationDetail(shopToken, shopCase57.kanriNo).detail['撮影データ納品先メールアドレス'] === 'shop-delivery@example.com');
+
+  // --- ②apiListAllActivePlansはlocationMode／locationCandidatesも返す（apiListPlansと同じ形） ---
+  const allPlans = ctx.apiListAllActivePlans(jpToken);
+  const vieAllPlan = allPlans.find(p => p.branchCode === 'VIE' && p.name === 'ウィーン半日プラン');
+  check('apiListAllActivePlansはlocationModeを含む', !!vieAllPlan && vieAllPlan.locationMode === 'checkbox', JSON.stringify(vieAllPlan));
+  check('apiListAllActivePlansはlocationCandidatesを含む',
+        !!vieAllPlan && vieAllPlan.locationCandidates.includes('シェーンブルン宮殿'), JSON.stringify(vieAllPlan));
+  const istAllPlan = allPlans.find(p => p.branchCode === 'IST' && p.name === 'カッパドキアサンライズ');
+  check('撮影場所方式が未設定のプランはlocationMode=free（自由入力）になる', !!istAllPlan && istAllPlan.locationMode === 'free');
+
+  // --- ③新規依頼フォームの案件全体「プラン」単独欄を廃止したため、第一希望のプランが
+  //     案件全体のプラン名の初期値として自動反映される（payload.plan省略時） ---
+  const createdA = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'VIE', team: '関東', groomLastName: 'Auto', groomName: 'Plan',
+    brideLastName: 'Auto', brideName: 'Plan', challengeNo: 'AUTOPLAN001',
+    hope1: '2026-09-10', hopePlan1: 'ウィーン半日プラン'
+  });
+  check('新規依頼でplan省略時は第一希望のプランが案件全体のプラン名になる',
+        ctx.apiGetReservationDetail(jpToken, createdA.kanriNo).detail['プラン名'] === 'ウィーン半日プラン');
+
+  // 明示的にplanを指定した場合はそちらを優先する（従来どおりの上書き優先度）
+  const createdB = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'VIE', team: '関東', groomLastName: 'Explicit', groomName: 'Plan',
+    brideLastName: 'Explicit', brideName: 'Plan', challengeNo: 'AUTOPLAN002',
+    plan: '明示的に指定したプラン', hope1: '2026-09-10', hopePlan1: 'ウィーン半日プラン'
+  });
+  check('新規依頼でplanを明示指定した場合はそちらが優先される（第一希望のプランでは上書きしない）',
+        ctx.apiGetReservationDetail(jpToken, createdB.kanriNo).detail['プラン名'] === '明示的に指定したプラン');
+
+  // 希望日を何も入力しない場合（第一希望の日付は必須のため常に何かは入るが、プランは省略可）は空欄のまま
+  const createdC = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'VIE', team: '関東', groomLastName: 'No', groomName: 'Plan',
+    brideLastName: 'No', brideName: 'Plan', challengeNo: 'AUTOPLAN003', hope1: '2026-09-10'
+  });
+  check('希望日にプランを何も指定しなければ案件全体のプラン名も空欄のまま',
+        ctx.apiGetReservationDetail(jpToken, createdC.kanriNo).detail['プラン名'] === '');
+}
+
+// ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
 process.exit(fail === 0 ? 0 : 1);

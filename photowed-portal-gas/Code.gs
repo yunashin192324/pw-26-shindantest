@@ -178,6 +178,9 @@ const PREP_CHOICES = ['ホテル', 'サロン'];
 // 日本側・現地側どちらからも入力できる（日本側が入れる想定）。
 const COL_PASSPORT_NO = 'パスポート番号';
 const COL_LOCAL_EMAIL = '現地連絡先メール';
+// ★要件：撮影データの納品先メールアドレス（現地連絡先メールとは別に、お客様情報タブから
+// 店舗・現地支店・手配課いずれも入力・閲覧できる自由入力欄として追加）
+const COL_DATA_DELIVERY_EMAIL = '撮影データ納品先メールアドレス';
 const COL_LOCAL_PHONE = '現地連絡先電話';
 const COL_HOTEL = 'ホテル'; // 画面表示名は「滞在ホテル名」（列名は既存互換のため変更しない）
 const COL_HOTEL_ADDRESS = 'ホテル住所';
@@ -322,7 +325,7 @@ const RESERVATION_HEADERS = (() => {
     COL_GROOM_LAST_NAME, COL_GROOM_NAME, COL_BRIDE_LAST_NAME, COL_BRIDE_NAME,
     COL_GROOM_AGE, COL_BRIDE_AGE,
     COL_CONSENT, COL_PLAN, COL_SALE_NAME, COL_LOCATION, COL_PREP,
-    COL_PASSPORT_NO, COL_LOCAL_EMAIL, COL_LOCAL_PHONE, COL_HOTEL, COL_HOTEL_ADDRESS,
+    COL_PASSPORT_NO, COL_LOCAL_EMAIL, COL_DATA_DELIVERY_EMAIL, COL_LOCAL_PHONE, COL_HOTEL, COL_HOTEL_ADDRESS,
     COL_CHECKIN_DATE, COL_CHECKOUT_DATE, COL_FLIGHT_INFO, COL_FLIGHT_INFO_OUT, COL_COSTUME_COMPANY,
     COL_COMPANION, COL_COMPANION_ADULT, COL_COMPANION_CHILD, COL_COMPANION_INFANT,
     COL_AREA, COL_BILLING_REGION, COL_JP_SHOP, COL_INVOICE_NO, COL_SHOP,
@@ -406,7 +409,7 @@ const SHOP_EDITABLE_FIELDS = [
   COL_CANCEL_REASON,
   // ★要件：お客様情報タブに、現地連絡先・滞在先・フライト情報も店舗から入力できるようにする
   // （従来はJP/BRANCHの「お客様情報」タブにしか入力欄が無かった）
-  COL_LOCAL_EMAIL, COL_LOCAL_PHONE, COL_HOTEL, COL_HOTEL_ADDRESS, COL_FLIGHT_INFO, COL_FLIGHT_INFO_OUT,
+  COL_LOCAL_EMAIL, COL_DATA_DELIVERY_EMAIL, COL_LOCAL_PHONE, COL_HOTEL, COL_HOTEL_ADDRESS, COL_FLIGHT_INFO, COL_FLIGHT_INFO_OUT,
   // ★要件：チェックイン日・チェックアウト日・衣装会社・同行者の有無も店舗から入力できるようにする
   COL_CHECKIN_DATE, COL_CHECKOUT_DATE, COL_COSTUME_COMPANY,
   COL_COMPANION, COL_COMPANION_ADULT, COL_COMPANION_CHILD, COL_COMPANION_INFANT
@@ -1124,6 +1127,9 @@ function apiListPlans(token, branchCode) {
 // プラン、といった国をまたいだ複数プラン希望に対応するため）。全支店のプランマスタを横断して
 // 返す（有効な支店・有効なプランのみ）。都市名を付けて返すので、画面側は「[都市] プラン名」の
 // ように表示すれば、どの国のプランかが一目でわかる。
+// ★要件変更：新規依頼フォームの案件全体の「プラン」単独欄を廃止し、希望日①（第一希望）の
+// プラン選択がその役目（撮影希望場所の入力方式切替・セール名のプラン別絞り込み）も兼ねる
+// ようにしたため、locationMode／locationCandidatesもapiListPlansと同じ形で返す。
 function apiListAllActivePlans(token) {
   requireSession_(token);
   const branchMeta = branchMetaMap_();
@@ -1137,7 +1143,11 @@ function apiListAllActivePlans(token) {
     .map(r => {
       const code = String(r[MM_COL_BRANCH]).trim().toUpperCase();
       const meta = branchMeta[code] || {};
-      return { branchCode: code, branchName: meta.name || code, city: meta.city || '', name: r[MM_COL_NAME] };
+      return {
+        branchCode: code, branchName: meta.name || code, city: meta.city || '', name: r[MM_COL_NAME],
+        locationMode: normalizePlanLocationMode_(r[MM_COL_PLAN_LOCATION_MODE]),
+        locationCandidates: splitLocationCandidates_(r[MM_COL_PLAN_LOCATION_CANDIDATES])
+      };
     });
 }
 function apiListOptionItems(token, branchCode) {
@@ -1501,6 +1511,7 @@ function buildShopReservationDetail_(session, kanriNo, headers, rowData) {
   // ★要件：お客様情報タブに、現地連絡先・滞在ホテル・フライト情報も店舗から入力できるようにする
   // （従来はJP/BRANCHの「お客様情報」タブにしか入力欄が無かった）
   detail[COL_LOCAL_EMAIL] = getV(COL_LOCAL_EMAIL);
+  detail[COL_DATA_DELIVERY_EMAIL] = getV(COL_DATA_DELIVERY_EMAIL);
   detail[COL_LOCAL_PHONE] = getV(COL_LOCAL_PHONE);
   detail[COL_HOTEL] = getV(COL_HOTEL);
   detail[COL_HOTEL_ADDRESS] = getV(COL_HOTEL_ADDRESS);
@@ -3543,7 +3554,6 @@ function apiShopCreateRequest(token, payload) {
   // ★要件：日本の店舗画面に新郎新婦それぞれの年齢欄を追加（※ISWのみ必要。任意入力）
   const groomAge = String(payload.groomAge || '').trim();
   const brideAge = String(payload.brideAge || '').trim();
-  const plan = String(payload.plan || '').trim();
   const saleName = String(payload.saleName || '').trim();
   const location = String(payload.location || '').trim();
   const prep = String(payload.prep || '').trim();
@@ -3555,7 +3565,12 @@ function apiShopCreateRequest(token, payload) {
     const v = String(payload['hopeTime' + n] || '').trim().toUpperCase();
     return HOPE_TIME_CHOICES.includes(v) ? v : '';
   });
+  // ★要件変更：新規依頼フォームから案件全体の「プラン」単独欄を廃止した（希望日ごとに
+  // プランを持てるため二重管理になっていたため）。案件全体のプラン名欄は、第一希望の
+  // プランをそのまま初期値として使う（既存案件でapplyHopeStatusCascade_がOK確定時に行う
+  // 「希望日のプランを案件全体のプラン名へ反映する」のと同じ考え方を、作成時にも適用する）。
   const hopePlans = [1, 2, 3, 4, 5].map(n => String(payload['hopePlan' + n] || '').trim());
+  const plan = String(payload.plan || '').trim() || hopePlans[0] || '';
   const options = Array.from({ length: OPTION_COUNT }, (_, i) => String(payload['option' + (i + 1)] || '').trim());
   // ★要件：パスポート番号欄は支店の必須設定に関わらず常に入力できる（※ISWのみ必要。任意入力）
   const passportNumber = String(payload.passportNumber || '').trim();

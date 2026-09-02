@@ -251,24 +251,25 @@
         <input id="shop-new-groom-age" type="number" min="0" placeholder="任意入力">
         <label>新婦年齢（※ISWのみ必要）</label>
         <input id="shop-new-bride-age" type="number" min="0" placeholder="任意入力">
-        <label>プラン</label>
-        <select id="shop-new-plan"><option value="">未設定</option></select>
+        <!-- ★要件変更：案件全体の「プラン」単独欄は廃止した（下の希望日ごとのプラン欄と
+             二重管理になっていたため。案件全体のプラン名は、確定した希望日のプランが
+             自動で反映される＝Code.gsのapplyHopeStatusCascade_・apiShopCreateRequest参照）。 -->
         <label>セール名</label>
         <select id="shop-new-sale"><option value="">未設定</option></select>
         <label>撮影希望場所</label>
-        <!-- ★要件：撮影希望場所はプランごとにチェックボックス（複数選択）／プルダウン（単一選択）／
-             自由入力のいずれかになる（プランマスタの「撮影場所方式」で設定。既定は自由入力）。
-             プラン選択時に onShopNewPlanChange がこの中身を差し替える。 -->
         <div id="shop-new-location-wrap">
           <input id="shop-new-location" type="text" list="shop-new-location-datalist" placeholder="任意入力">
           <datalist id="shop-new-location-datalist"></datalist>
         </div>
         <div id="shop-new-prep-block" class="hidden">
-          <label>準備場所</label>
+          <label>準備場所（ローマの場合は選択）</label>
           <select id="shop-new-prep"><option value="">-</option></select>
         </div>
         <!-- ★要件：希望日ごとに時間帯（AM/PM。支店マスタの「希望日時間帯表示」がONの支店のみ）と
-             プラン（複数プラン希望）も入力できるようにする。既存案件の詳細画面と同じ考え方。 -->
+             プラン（複数プラン希望）も入力できるようにする。既存案件の詳細画面と同じ考え方。
+             ★要件変更：希望日ごとのプランは、この案件の依頼先支店（都市）だけでなく全支店を
+             横断して選べる（例：第一希望はロンドン支店のロンドンフォト、第二希望はローマ支店の
+             ローマフォト、のように支店をまたいだ複数プラン希望に対応するため）。 -->
         <label>希望日（第一希望）</label>
         <div class="shop-new-hope-row">
           <input id="shop-new-hope1" type="date">

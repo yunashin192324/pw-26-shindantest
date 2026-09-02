@@ -613,9 +613,10 @@ function paneHidden(document, key) {
     check('新規依頼フォームにパスポート番号欄は無い', !document.getElementById('shop-new-passport-block'));
     document.getElementById('shop-new-groom-age').value = '29';
     document.getElementById('shop-new-bride-age').value = '27';
-    const planOpts = [...document.getElementById('shop-new-plan').options].map(o => o.value);
-    check('プランはVIE支店のマスタ一覧から選べる（自由入力ではない）', planOpts.includes('プランA'), planOpts.join(','));
-    document.getElementById('shop-new-plan').value = 'プランA';
+    // ★要件変更：案件全体の「プラン」単独欄は廃止し、希望日ごとのプラン欄（全支店横断）だけになった
+    const hopePlanOpts = [...document.getElementById('shop-new-hopeplan1').options].map(o => o.value);
+    check('希望日のプランは全支店のマスタ一覧から選べる（自由入力ではない）', hopePlanOpts.includes('プランA'), hopePlanOpts.join(','));
+    document.getElementById('shop-new-hopeplan1').value = 'プランA';
     // ★要件変更：オプション名はマスタ候補（datalist）を出しつつ自由に書ける入力欄になった
     const optionOpts = [...document.getElementById('shop-new-option-datalist').options].map(o => o.value);
     check('オプションはマスタの候補（datalist）が出る（自由入力も可）', optionOpts.includes('追加アルバム'), optionOpts.join(','));
@@ -628,7 +629,9 @@ function paneHidden(document, key) {
     // ★要件：パスポート番号は新規依頼フォームから廃止したため、年齢のみ確認する
     check('年齢（必須支店でなくても）が保存される',
           ctx.apiGetReservationDetail(ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token, createdKanri).detail['新郎年齢'] === '29');
-    check('選択したプラン・オプションが保存される',
+    // ★要件変更：案件全体の「プラン」欄は廃止されたため、第一希望のプランがそのまま
+    // 案件全体のプラン名の初期値として自動で反映される（apiShopCreateRequest参照）
+    check('第一希望のプランが案件全体のプラン名にも自動反映される',
           ctx.apiGetReservationDetail(ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token, createdKanri).detail['プラン名'] === 'プランA');
 
     document.getElementById('nav-dashboard').click();
@@ -640,8 +643,11 @@ function paneHidden(document, key) {
     await settle();
     check('店舗向け詳細に管理番号が表示される',
           document.getElementById('detail-content').innerHTML.includes(createdKanri));
-    check('店舗向け詳細でも許可された項目（プラン等）は編集できる（拡張要望2章・3-1）',
-          !!document.querySelector('[data-pending="プラン名"]'));
+    // ★要件変更：案件全体のプラン名欄は読み取り専用表示になった（希望日の欄から選ぶ）。
+    // 許可された項目が編集できることは、代わりに希望日①のプラン欄（希望日①プラン）で確認する
+    check('店舗向け詳細でも許可された項目（希望日のプラン等）は編集できる（拡張要望2章・3-1）',
+          !document.querySelector('[data-pending="プラン名"]') &&
+          !!document.querySelector('[data-pending="希望日①プラン"]'));
     check('店舗向け詳細には請求先など内部項目の入力欄が出ない',
           !document.querySelector('[data-pending="請求先"]'));
     // ★要件：お客様情報タブに、現地連絡先・滞在ホテル・フライト情報も店舗から入力できるようにする
@@ -790,10 +796,11 @@ function paneHidden(document, key) {
     check('FNを選ぶと警告は消える', document.getElementById('shop-status-warning').classList.contains('hidden'));
     statusSel.value = ''; statusSel.dispatchEvent(new dom.window.Event('change'));
 
-    // ★要件：案件詳細のプラン・セール名も自由入力ではなく依頼先支店のマスタ一覧から選べる
-    const planSelEl = document.querySelector('[data-pending="プラン名"]');
-    check('案件詳細のプラン欄もマスタ一覧のselectになっている（自由入力ではない）',
-          planSelEl.tagName === 'SELECT' && [...planSelEl.options].map(o => o.value).includes('プランA'));
+    // ★要件変更：案件全体のプラン欄は読み取り専用表示になった（希望日の欄から選ぶため二重管理をやめた）
+    // （プラン行にはSTS JP編集用のselectは残るが、プラン名のselectは無い）
+    const planRow = document.querySelector('tr.plan-row');
+    check('案件詳細のプラン欄は読み取り専用表示になっている（希望日の欄から選ぶ）',
+          !document.querySelector('[data-pending="プラン名"]') && !!planRow && !planRow.querySelector('[data-pending="プラン名"]'));
 
     // 必要書類チェックリストのチェック（拡張要望9章）
     const checklistBox = [...document.querySelectorAll('.checkbox-label input[type=checkbox]')]
@@ -1214,12 +1221,14 @@ function paneHidden(document, key) {
     check('プラン未選択のときは撮影希望場所が自由入力のまま',
           document.getElementById('shop-new-location').tagName === 'INPUT');
 
+    // ★要件変更：案件全体の「プラン」単独欄は廃止したため、希望日①（第一希望）のプラン選択が
+    // 撮影希望場所の入力方式切替・セール名のプラン別絞り込みを兼ねる。
     // --- チェックボックス方式のプランを選ぶと複数選択のチェックボックスに切り替わる ---
-    document.getElementById('shop-new-plan').value = 'ローマ3時間フォト';
-    document.getElementById('shop-new-plan').dispatchEvent(new dom.window.Event('change'));
+    document.getElementById('shop-new-hopeplan1').value = 'ローマ3時間フォト';
+    document.getElementById('shop-new-hopeplan1').dispatchEvent(new dom.window.Event('change'));
     await settle();
     const checks = [...document.querySelectorAll('.shop-new-location-cb')];
-    check('チェックボックス方式のプランを選ぶと候補が複数のチェックボックスで表示される',
+    check('希望日①にチェックボックス方式のプランを選ぶと候補が複数のチェックボックスで表示される',
           checks.length === 2 && checks.some(c => c.value === 'コロッセオ') && checks.some(c => c.value === 'トレビの泉'));
     checks.find(c => c.value === 'コロッセオ').checked = true;
     checks.find(c => c.value === 'コロッセオ').dispatchEvent(new dom.window.Event('change'));
@@ -1231,10 +1240,10 @@ function paneHidden(document, key) {
     check('このプラン専用のセールが候補に出る（対象プラン一致）', saleOptsRoma.includes('ローマ限定セール'));
 
     // --- プルダウン方式のプランに切り替えると単一選択のプルダウンになり、専用セールは消える ---
-    document.getElementById('shop-new-plan').value = 'フィレンツェフォト';
-    document.getElementById('shop-new-plan').dispatchEvent(new dom.window.Event('change'));
+    document.getElementById('shop-new-hopeplan1').value = 'フィレンツェフォト';
+    document.getElementById('shop-new-hopeplan1').dispatchEvent(new dom.window.Event('change'));
     await settle();
-    check('プルダウン方式のプランを選ぶと単一選択のselectに切り替わる',
+    check('希望日①にプルダウン方式のプランを選ぶと単一選択のselectに切り替わる',
           document.getElementById('shop-new-location').tagName === 'SELECT');
     const selectOpts = [...document.getElementById('shop-new-location').options].map(o => o.value).filter(Boolean);
     check('プルダウンの候補にこのプラン専用のものが入る', selectOpts.includes('ドゥオモ') && selectOpts.includes('ヴェッキオ橋'));
@@ -1259,29 +1268,19 @@ function paneHidden(document, key) {
     const kanriPlanLoc = document.getElementById('shop-new-success-text').textContent.match(/予約番号\s*(\S+)/)[1];
     const savedDetail = ctx.apiGetReservationDetail(ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token, kanriPlanLoc).detail;
     check('選んだプルダウンの撮影希望場所が保存される', savedDetail['撮影希望場所'] === 'ドゥオモ');
+    // ★要件変更：第一希望のプランが案件全体のプラン名の初期値としてそのまま反映される
+    check('第一希望のプランが案件全体のプラン名にも反映される', savedDetail['プラン名'] === 'フィレンツェフォト');
 
-    // --- 既存案件の店舗詳細画面でも、プランを選び直すと撮影希望場所・セール名が切り替わる ---
+    // --- 既存案件の店舗詳細画面では、プラン単独欄は廃止され読み取り専用表示になっている
+    //     （プランを変えたい場合は希望日の欄から選び直す。撮影希望場所・セール名切替はもう無い） ---
     document.getElementById('nav-dashboard').click();
     await settle();
     [...document.querySelectorAll('#reservation-list .res-card')]
       .find(c => c.textContent.includes(kanriPlanLoc)).click();
     await settle();
-    check('既存案件の詳細にもプラン選択欄がある', !!document.getElementById('shop-detail-plan-select'));
-    document.getElementById('shop-detail-plan-select').value = 'ローマ3時間フォト';
-    document.getElementById('shop-detail-plan-select').dispatchEvent(new dom.window.Event('change'));
-    await settle();
-    const detailChecks = [...document.querySelectorAll('.shop-detail-location-cb')];
-    check('既存案件の詳細でもプラン変更でチェックボックス方式に切り替わる',
-          detailChecks.length === 2 && detailChecks.some(c => c.value === 'コロッセオ'));
-    detailChecks.find(c => c.value === 'コロッセオ').checked = true;
-    detailChecks.find(c => c.value === 'コロッセオ').dispatchEvent(new dom.window.Event('change'));
-    const detailSaleOpts = [...document.getElementById('shop-detail-sale-wrap').querySelectorAll('option')].map(o => o.value).filter(Boolean);
-    check('既存案件の詳細でもプラン専用セールに絞り込まれる', detailSaleOpts.includes('ローマ限定セール'));
-    document.getElementById('btn-save-quiet').click();
-    await settle();
-    const afterPlanSwitch = ctx.apiGetReservationDetail(ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token, kanriPlanLoc).detail;
-    check('プラン変更後にチェックボックスで選んだ撮影希望場所が保存される', afterPlanSwitch['撮影希望場所'] === 'コロッセオ');
-    check('プラン自体の変更も保存される', afterPlanSwitch['プラン名'] === 'ローマ3時間フォト');
+    check('既存案件の詳細のプラン欄は読み取り専用表示になっている（プラン選択欄は無い）',
+          !document.getElementById('shop-detail-plan-select') &&
+          document.querySelector('tr.plan-row').textContent.includes('フィレンツェフォト'));
   }
 
   section('U24. 撮影日FIX未入力時の一覧表示：STSに応じた文言（撮影日未定の誤表示を修正）');
@@ -1769,16 +1768,16 @@ function paneHidden(document, key) {
     // table.plan-tableが複数（[0]希望日一覧・[1]プラン・オプション明細・[2]オプション⑥〜⑩）ある
     const shopTable = document.querySelectorAll('#shop-sec-reservation table.plan-table')[1];
     check('店舗の「予約内容」内にプラン・オプション明細の表（plan-table）がある', !!shopTable);
-    check('店舗のプラン選択（shop-detail-plan-select）が、この明細表の中にある',
-          !!document.getElementById('shop-detail-plan-select').closest('table.plan-table'));
     check('店舗の明細表にもオプション①の入力欄（data-pending="OP1"）が同じ表の中にある',
           document.querySelector('[data-pending="OP1"]').closest('table.plan-table') === shopTable);
 
     const shopPlanRow = shopTable.querySelector('tr.plan-row');
     check('店舗の明細表でも、プラン行に強調用のクラス（plan-row）が付いている', !!shopPlanRow);
     check('店舗のプラン行のいちばん左のセルが「プラン」', shopPlanRow && shopPlanRow.querySelector('td').textContent.trim() === 'プラン');
-    check('店舗のプラン行の中にプラン選択欄がある（プラン行＝代表行として明細の先頭にある）',
-          shopPlanRow.contains(document.getElementById('shop-detail-plan-select')));
+    // ★要件変更：案件全体のプラン単独欄は廃止され読み取り専用表示になった
+    // （プラン行にはSTS JP編集用のselectは残るが、プラン名のselectは無い）
+    check('店舗のプラン行にはもうプラン名の選択欄が無い（読み取り専用表示。プランは希望日の欄から選ぶ）',
+          !document.getElementById('shop-detail-plan-select') && !shopPlanRow.querySelector('[data-pending="プラン名"]'));
 
     // ★要件：PUSHボタン・キャンセル理由欄は、統合後も引き続きプラン・オプションの明細表のすぐ近くにある
     check('PUSHボタンは引き続きプラン・オプション明細表と同じカードの中にある',
@@ -2093,9 +2092,11 @@ function paneHidden(document, key) {
     [...document.querySelectorAll('#reservation-list .res-card')]
       .find(c => c.textContent.includes(kanriU35)).click();
     await settle();
-    const planTableSelect = document.querySelector('.plan-option-card tr.plan-row select[data-pending="プラン名"]');
-    check('JP側のプラン・オプション明細のプラン選択にも自動反映後の値が表示される',
-          !!planTableSelect && planTableSelect.value === 'フィレンツェフォト', planTableSelect && planTableSelect.value);
+    // ★要件変更：案件全体のプラン単独欄は読み取り専用表示になったため、selectの値ではなく
+    // 表示テキストで自動反映後の値を確認する
+    const planTableRow = document.querySelector('.plan-option-card tr.plan-row');
+    check('JP側のプラン・オプション明細のプラン表示にも自動反映後の値が表示される',
+          !!planTableRow && planTableRow.textContent.includes('フィレンツェフォト'));
   }
 
   // ---------------------------------------------------------------
@@ -2446,6 +2447,72 @@ function paneHidden(document, key) {
     check('店舗の画面のプラン選択欄にも他支店（他国）の候補が入る',
           shopHopePlanOpts.includes('ローマ3時間フォト') || shopHopePlanOpts.includes('フィレンツェフォト'),
           shopHopePlanOpts.join(','));
+  }
+
+  // ---------------------------------------------------------------
+  section('U44. 撮影データ納品先メールアドレス欄・準備場所のヒント表示・新規依頼フォームの希望日プランは支店選択前から全支店横断');
+  {
+    // --- JP側：準備場所のヒント表示（イタリアの支店＝ROW）と撮影データ納品先メールアドレス欄 ---
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'KANTO', 'CHANGE-ME-KANTO');
+    const jpTokU44 = ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    const kanriU44 = ctx.apiCreateReservation(jpTokU44, 'ROW', '01 Hint\n02 Test').kanriNo;
+    document.getElementById('nav-dashboard').click();
+    await settle();
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(kanriU44)).click();
+    await settle();
+    const resPaneU44 = document.querySelector('[data-tab-pane="reservation"]');
+    const prepLabelU44 = [...resPaneU44.querySelectorAll('label')].find(l => l.textContent.includes('準備場所'));
+    check('準備場所のラベルに「ローマの場合は選択」のヒントが付いている',
+          !!prepLabelU44 && prepLabelU44.textContent.includes('ローマの場合は選択'), prepLabelU44 && prepLabelU44.textContent);
+
+    const customerPaneU44 = document.querySelector('[data-tab-pane="customer"]');
+    const localEmailField = customerPaneU44.querySelector('[data-pending="現地連絡先メール"]');
+    const deliveryEmailField = customerPaneU44.querySelector('[data-pending="撮影データ納品先メールアドレス"]');
+    check('お客様情報タブに撮影データ納品先メールアドレスの入力欄がある', !!deliveryEmailField);
+    check('撮影データ納品先メールアドレスは現地で連絡可能なメールアドレスの直後に置かれている',
+          !!localEmailField && !!deliveryEmailField &&
+          localEmailField.closest('.field-block').nextElementSibling === deliveryEmailField.closest('.field-block'));
+    deliveryEmailField.value = 'jp-delivery@example.com';
+    deliveryEmailField.dispatchEvent(new dom.window.Event('change'));
+    document.getElementById('btn-save-quiet').click();
+    await settle();
+    check('撮影データ納品先メールアドレスが保存される',
+          ctx.apiGetReservationDetail(jpTokU44, kanriU44).detail['撮影データ納品先メールアドレス'] === 'jp-delivery@example.com');
+
+    // --- 店舗側：お客様情報にも同じ欄がある ---
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'SHOP1', 'CHANGE-ME-SHOP1');
+    const shopTokU44 = ctx.apiLogin('SHOP1', 'CHANGE-ME-SHOP1').session.token;
+    const shopKanriU44 = ctx.apiShopCreateRequest(shopTokU44, {
+      branchCode: 'VIE', team: '関東', groomLastName: 'Shop', groomName: 'Delivery',
+      brideLastName: 'Shop', brideName: 'Delivery', challengeNo: 'U44SHOPDEL1', hope1: '2026-09-10'
+    }).kanriNo;
+    document.getElementById('nav-dashboard').click();
+    await settle();
+    [...document.querySelectorAll('#reservation-list .res-card')]
+      .find(c => c.textContent.includes(shopKanriU44)).click();
+    await settle();
+    const shopLocalEmailField = document.querySelector('[data-pending="現地連絡先メール"]');
+    const shopDeliveryEmailField = document.querySelector('[data-pending="撮影データ納品先メールアドレス"]');
+    check('店舗の画面にも撮影データ納品先メールアドレスの入力欄がある', !!shopDeliveryEmailField);
+    check('店舗の画面でも現地で連絡可能なメールアドレスの直後に置かれている',
+          !!shopLocalEmailField && !!shopDeliveryEmailField &&
+          shopLocalEmailField.closest('.field-block').nextElementSibling === shopDeliveryEmailField.closest('.field-block'));
+
+    // --- 新規依頼フォーム：希望日のプラン選択欄は、支店（都市）を選ぶ前から全支店横断の候補が入っている ---
+    document.getElementById('nav-shop-new').click();
+    await settle();
+    const hopePlan2OptsU44 = [...document.getElementById('shop-new-hopeplan2').querySelectorAll('option')].map(o => o.value);
+    check('新規依頼フォームの希望日②プラン欄には、依頼先支店を選ぶ前から複数支店の候補が入っている（自支店＝ローマ）',
+          hopePlan2OptsU44.includes('ローマ半日プラン'), hopePlan2OptsU44.join(','));
+    check('新規依頼フォームの希望日②プラン欄には、依頼先支店を選ぶ前から複数支店の候補が入っている（他支店＝ウィーン）',
+          hopePlan2OptsU44.includes('プランA'), hopePlan2OptsU44.join(','));
+    const hopePlan2GroupsU44 = [...document.getElementById('shop-new-hopeplan2').querySelectorAll('optgroup')].length;
+    check('希望日②プラン欄も都市ごとのoptgroupにまとまっている（複数の国が並ぶ）', hopePlan2GroupsU44 >= 2);
   }
 
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);

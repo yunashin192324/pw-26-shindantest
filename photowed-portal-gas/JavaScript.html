@@ -88,11 +88,11 @@
   let pendingChanges = {}; // 「保存のみ／メッセージのみ送信／変更＋メッセージ送信」待ちの変更（既存予約の全項目が対象）
   let settingsBranchCode = ''; // 「設定」画面で編集対象にしている支店コード（JPは選べる／支店は自分の支店固定）
   let arrangementDraft = null; // 手配メールの下書き（確認モーダル表示中の内容）
-  // ★機能追加：新規依頼フォームで選んだプランに応じて撮影希望場所の入力方式・セール名候補を
-  // 切り替えるため、支店切り替え時に取得したプラン・セール一覧をキャッシュしておく
-  // （プラン変更のたびにサーバーへ取りに行かず、手元でフィルタするだけで済ませる）。
-  let shopNewPlansCache = [];
+  // ★機能追加：新規依頼フォームの支店切り替え時に取得したセール一覧をキャッシュしておく
   let shopNewSalesCache = [];
+  // ★機能追加：希望日①のプラン選択に応じて撮影希望場所・セール名を差し替えるため、
+  // 全支店横断のプラン一覧（apiListAllActivePlans）をキャッシュしておく
+  let shopNewAllPlansCache = [];
 
   function gsRun(fnName, ...args) {
     return new Promise((resolve, reject) => {
@@ -173,7 +173,7 @@
     $('nav-new').addEventListener('click', openNewView);
     $('nav-shop-new').addEventListener('click', openShopNewView);
     $('shop-new-branch').addEventListener('change', onShopNewBranchChange);
-    $('shop-new-plan').addEventListener('change', onShopNewPlanChange);
+    $('shop-new-hopeplan1').addEventListener('change', onShopNewHopePlan1Change);
     $('shop-new-submit').addEventListener('click', submitShopNewRequest);
     $('shop-new-success-top-btn').addEventListener('click', () => loadDashboard());
     $('nav-settings').addEventListener('click', openSettingsView);
@@ -880,11 +880,13 @@
     const shopOptionDatalistHtml = `<datalist id="${shopOptionDatalistId}">${(optionList || []).filter(x => x.active)
       .map(x => `<option value="${escapeAttr(x.name)}">`).join('')}</datalist>`;
     const emptyExtraCellsShop = `<td></td><td></td>${showHopeTimeShop ? '<td></td>' : ''}`;
+    // ★要件変更：希望日一覧の各行に既にプラン選択欄があり二重管理になっていたため、
+    // ここ（案件全体のプラン行）はプラン名を読み取り専用で表示するだけにした
+    // （プランを変えたい場合は希望日の欄から選び直す。STS JP/STS 現地の編集はこの行に残す）。
     const shopPlanRowHtml = `
         <tr class="plan-row">
           <td>プラン</td>
-          <td><select data-pending="プラン名" id="shop-detail-plan-select" style="width:100%;"><option value="">未設定</option>${nameListWithCurrent(planList, d['プラン名']).map(n =>
-            `<option value="${escapeAttr(n)}" ${n === d['プラン名'] ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}</select></td>
+          <td>${escapeHtml(d['プラン名'] || '未設定')}</td>
           ${emptyExtraCellsShop}
           <td>${shopStatusCell('STS JP', d['STS JP'])}</td>
           <td>${inlineStatusBadge('STS 支店', d['STS 支店'], 'branch')}</td>
@@ -962,6 +964,7 @@
           <div class="field-block"><label>同行者の有無</label>${companionSelectHtml_(d['同行者の有無'])}</div>
           ${companionCountFieldsHtml_(d)}
           <div class="field-block"><label>現地で連絡可能なメールアドレス</label><input type="email" data-pending="現地連絡先メール" value="${escapeAttr(d['現地連絡先メール'])}"></div>
+          <div class="field-block"><label>撮影データ納品先メールアドレス</label><input type="email" data-pending="撮影データ納品先メールアドレス" value="${escapeAttr(d['撮影データ納品先メールアドレス'])}"></div>
           <div class="field-block"><label>現地で連絡可能な電話番号</label><input data-pending="現地連絡先電話" value="${escapeAttr(d['現地連絡先電話'])}"></div>
           <div class="field-block"><label>滞在ホテル名</label><input data-pending="ホテル" value="${escapeAttr(d['ホテル'])}"></div>
           <div class="field-block"><label>ホテル住所</label><input data-pending="ホテル住所" value="${escapeAttr(d['ホテル住所'])}"></div>
@@ -979,7 +982,7 @@
           <div class="detail-grid">
             <div class="field-block" id="shop-detail-sale-wrap">${shopDetailSaleFieldHtml_(saleList, d['プラン名'], d['セール名'])}</div>
             <div class="field-block" id="shop-detail-location-wrap">${shopDetailLocationFieldHtml_(planForName_(planList, d['プラン名']), d['撮影希望場所'])}</div>
-            ${!d.isItaly ? '' : `<div class="field-block"><label>準備場所</label>
+            ${!d.isItaly ? '' : `<div class="field-block"><label>準備場所（ローマの場合は選択）</label>
               <select data-pending="準備場所"><option value="">未設定</option>${PREP_CHOICES.map(p =>
                 `<option value="${escapeAttr(p)}" ${d['準備場所'] === p ? 'selected' : ''}>${escapeHtml(p)}</option>`).join('')}</select></div>`}
           </div>
@@ -1095,28 +1098,10 @@
     $('btn-commit').addEventListener('click', commitChangesWithMessage);
     $('btn-save-quiet').addEventListener('click', saveQuiet);
 
-    // ★要件：プランを選び直すたびに、撮影希望場所（プランごとに方式・候補が変わる）と
-    // セール名（そのプラン専用のものだけに絞り込む）を差し替える
-    $('shop-detail-plan-select').addEventListener('change', () => {
-      const planName = $('shop-detail-plan-select').value;
-      $('shop-detail-sale-wrap').innerHTML = shopDetailSaleFieldHtml_(saleList, planName,
-        Object.prototype.hasOwnProperty.call(pendingChanges, 'セール名') ? pendingChanges['セール名'] : d['セール名']);
-      $('shop-detail-location-wrap').innerHTML = shopDetailLocationFieldHtml_(planForName_(planList, planName),
-        Object.prototype.hasOwnProperty.call(pendingChanges, '撮影希望場所') ? pendingChanges['撮影希望場所'] : d['撮影希望場所']);
-      wirePendingInputs($('shop-detail-sale-wrap'));
-      wirePendingInputs($('shop-detail-location-wrap'));
-      const locWrap = $('shop-detail-location-wrap');
-      locWrap.querySelectorAll('.shop-detail-location-cb').forEach(cb => {
-        cb.addEventListener('change', () => {
-          const vals = [...locWrap.querySelectorAll('.shop-detail-location-cb:checked')].map(x => x.value);
-          const hidden = locWrap.querySelector('[data-pending="撮影希望場所"]');
-          hidden.value = vals.join('、');
-          hidden.dispatchEvent(new Event('change'));
-        });
-      });
-      pendingChanges['プラン名'] = planName;
-      updatePendingIndicator();
-    });
+    // ★要件変更：案件全体のプラン単独欄を廃止したため、ここでプランを選び直すことはできない
+    // （希望日の欄から選ぶ）。撮影希望場所・セール名は画面を開いた時点のプラン名（d['プラン名']）
+    // を使った初期表示のままになる（shopDetailLocationFieldHtml_/shopDetailSaleFieldHtml_の
+    // 呼び出し元を参照）。
 
     // ★要件：メッセージ欄まで画面が長いので、上部のタブを押すと該当セクションまで
     // スムーズスクロールできるようにする（他のセクションを隠すタブ切替ではなく、あくまで移動用）
@@ -1561,7 +1546,9 @@
   // 複数プラン希望に対応するため）。apiListAllActivePlansが返す全支店分の候補を、都市ごとの
   // <optgroup>にまとめて表示する（どの国のプランかが一目でわかるように）。
   function hopeLocationFieldFor_(hopeField) { return `${hopeField}場所`; }
-  function hopeAllPlanSelectHtml_(allPlanList, fieldName, current) {
+  // 都市ごとの<optgroup>だけを組み立てる共通部分（希望日の<select data-pending>にも、
+  // 新規依頼フォームの希望日プラン<select>のinnerHTML差し替えにも、両方から使う）。
+  function allPlanOptionsHtml_(allPlanList, current, unsetLabel) {
     const list = allPlanList || [];
     const groups = {};
     const order = [];
@@ -1576,16 +1563,18 @@
           ${groups[label].map(n => `<option value="${escapeAttr(n)}" ${n === current ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}
         </optgroup>`).join('');
     const extra = (current && !currentKnown) ? `<option value="${escapeAttr(current)}" selected>${escapeHtml(current)}</option>` : '';
-    return `<select data-pending="${escapeAttr(fieldName)}" style="width:100%;">
-        <option value="">未設定</option>
-        ${extra}
-        ${optgroups}
-      </select>`;
+    return `<option value="">${escapeHtml(unsetLabel || '未設定')}</option>${extra}${optgroups}`;
+  }
+  function hopeAllPlanSelectHtml_(allPlanList, fieldName, current) {
+    return `<select data-pending="${escapeAttr(fieldName)}" style="width:100%;">${allPlanOptionsHtml_(allPlanList, current)}</select>`;
   }
 
   // ★要件：撮影希望場所・セール名はプランにも紐づく（プランマスタの「撮影場所方式」・
-  // 「撮影場所候補」、セールマスタの「対象プラン」）。店舗の案件詳細（renderShopDetail）でも
-  // プランを選び直すたびにこの2つを差し替える（新規依頼フォームのonShopNewPlanChangeと同じ考え方）。
+  // 「撮影場所候補」、セールマスタの「対象プラン」）。店舗の案件詳細（renderShopDetail）は
+  // 画面を開いた時点のプラン名（d['プラン名']）を使って初期表示を決める
+  // （★要件変更：案件全体のプラン単独欄を廃止したため、プランを選び直すたびに
+  // ライブで差し替える仕組みは無くなった。プランを変えたい場合は希望日の欄から選び直し、
+  // 保存後に画面を開き直すと反映される）。
   function planForName_(planList, planName) {
     return (planList || []).find(p => p.name === planName);
   }
@@ -1639,9 +1628,10 @@
   function renderDetail(d, planList, optionList, locationList, staffList, phraseList, saleList, costumeList, allPlanList) {
     const c = $('detail-content');
 
-    const planNames = nameListWithCurrent(planList, d['プラン名']);
-    const planSelect = `<select data-pending="プラン名" style="width:100%;"><option value="">未設定</option>${planNames.map(n =>
-      `<option value="${escapeAttr(n)}" ${n === d['プラン名'] ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}</select>`;
+    // ★要件変更：希望日一覧の各行に既にプラン選択欄があり二重管理になっていたため、
+    // ここ（案件全体のプラン行）はプラン名を読み取り専用で表示するだけにした
+    // （プランを変えたい場合は希望日の欄から選び直す）。
+    const planDisplay = escapeHtml(d['プラン名'] || '未設定');
 
     // ★機能：セールは頻度が高く名称も毎回変わるため、プラン名とは別の欄にする（機能⑤）。
     // マスターに事前登録した候補（datalist）から選べる＋自由入力もできる（撮影希望場所と同じ運用）
@@ -1759,7 +1749,7 @@
 
     // ★要件：準備場所はイタリアの支店のみ表示し、ホテル／サロンの選択式にする（他支店は非表示）
     const prepFieldHtml = !d.isItaly ? '' : `
-      <div class="field-block"><label>準備場所</label>
+      <div class="field-block"><label>準備場所（ローマの場合は選択）</label>
         <select data-pending="準備場所"><option value="">未設定</option>${PREP_CHOICES.map(p =>
           `<option value="${escapeAttr(p)}" ${d['準備場所'] === p ? 'selected' : ''}>${escapeHtml(p)}</option>`).join('')}</select>
       </div>`;
@@ -1969,6 +1959,7 @@
             <div class="field-block"><label>同行者の有無</label>${companionSelectHtml_(d['同行者の有無'])}</div>
           ${companionCountFieldsHtml_(d)}
             <div class="field-block"><label>現地で連絡可能なメールアドレス</label><input type="email" data-pending="現地連絡先メール" value="${escapeAttr(d['現地連絡先メール'])}"></div>
+            <div class="field-block"><label>撮影データ納品先メールアドレス</label><input type="email" data-pending="撮影データ納品先メールアドレス" value="${escapeAttr(d['撮影データ納品先メールアドレス'])}"></div>
             <div class="field-block"><label>現地で連絡可能な電話番号</label><input data-pending="現地連絡先電話" value="${escapeAttr(d['現地連絡先電話'])}"></div>
             <div class="field-block"><label>滞在ホテル名</label><input data-pending="ホテル" value="${escapeAttr(d['ホテル'])}"></div>
             <div class="field-block"><label>ホテル住所</label><input data-pending="ホテル住所" value="${escapeAttr(d['ホテル住所'])}"></div>
@@ -2051,7 +2042,7 @@
                 <tr class="plan-row">
                   ${checkboxPlaceholderCell}
                   <td>プラン</td>
-                  <td>${planSelect}</td>
+                  <td>${planDisplay}</td>
                   ${locDateTimeEmptyCells}
                   <td>${statusCell('STS JP', d['STS JP'], session.role === 'JP', null)}</td>
                   <td>${statusCell('STS 支店', d['STS 支店'], session.role === 'BRANCH' && mainGate.editable, mainGate.allowed, `STS JP: ${d['STS JP'] || '未設定'}`)}</td>
@@ -2752,7 +2743,7 @@
 
   // ---------- 新規依頼（店舗ロール専用。拡張要望2章） ----------
   const SHOP_NEW_TEXT_FIELDS = ['challengeno', 'groom-last', 'groom', 'bride-last', 'bride', 'groom-age', 'bride-age',
-    'plan', 'sale', 'location', 'remarks',
+    'sale', 'location', 'remarks',
     // ★要件：オプションは最大10件（フリー入力）
     'option1', 'option2', 'option3', 'option4', 'option5',
     'option6', 'option7', 'option8', 'option9', 'option10'];
@@ -2779,13 +2770,23 @@
     $('shop-new-team').innerHTML = JP_TEAMS.map(t => `<option value="${escapeAttr(t)}">${escapeHtml(t)}手配課</option>`).join('');
     $('shop-new-prep').innerHTML = '<option value="">-</option>' +
       PREP_CHOICES.map(p => `<option value="${escapeAttr(p)}">${escapeHtml(p)}</option>`).join('');
+    // ★要件変更：希望日ごとのプランは、この案件の依頼先支店（都市）だけでなく全支店を横断して
+    // 選べるようにする（例：第一希望はロンドン支店のロンドンフォト、第二希望はローマ支店の
+    // ローマフォト）。案件全体の「プラン」単独欄は廃止し、代わりに希望日①（第一希望）の
+    // プラン選択が、これまで単独のプラン欄が担っていた役目（撮影希望場所の入力方式切替・
+    // セール名のプラン別絞り込み）も兼ねる。支店切り替えに関わらず一度だけ全支店分の候補を
+    // 取得して都市ごとの<optgroup>にまとめる。
+    try {
+      shopNewAllPlansCache = await gsRun('apiListAllActivePlans', session.token);
+      const hopePlanOptsHtml = allPlanOptionsHtml_(shopNewAllPlansCache, '', 'プラン未設定');
+      SHOP_NEW_HOPE_PLAN_FIELDS.forEach(k => { $('shop-new-' + k).innerHTML = hopePlanOptsHtml; });
+    } catch (e) { shopNewAllPlansCache = []; /* 候補が取れなくても入力自体は続けられる（プランは未設定のまま） */ }
+    onShopNewHopePlan1Change();
     onShopNewBranchChange();
   }
 
-  // 支店（都市）を選ぶと、その支店のプラン・セール・オプションの候補を選択式（select）へ反映し、
+  // 支店（都市）を選ぶと、その支店のセール・撮影希望場所・オプションの候補を反映し、
   // 準備場所（イタリアのみ）・パスポート番号（必須の支店のみ）の表示を切り替える。
-  // ★要件：プラン・セール名・オプションは自由入力ではなく、必ずマスタ一覧から選べるようにする
-  // （撮影希望場所は各地でばらつきが大きいため、従来どおり任意入力＋候補のdatalistのまま）。
   async function onShopNewBranchChange() {
     const branchCode = $('shop-new-branch').value;
     if (!branchCode) return;
@@ -2795,36 +2796,27 @@
     document.querySelectorAll('.shop-new-hopetime').forEach(el => el.classList.toggle('hidden', !meta.showHopeTime));
     // ★要件変更：パスポート番号欄は支店の必須設定に関わらず常に表示する（※ISWのみ必要、と注記）
     try {
-      const [plans, sales, locations, options] = await Promise.all([
-        gsRun('apiListPlans', session.token, branchCode),
+      const [sales, locations, options] = await Promise.all([
         gsRun('apiListSales', session.token, branchCode),
         gsRun('apiListLocations', session.token, branchCode),
         gsRun('apiListOptionItems', session.token, branchCode)
       ]);
-      shopNewPlansCache = plans || [];
       shopNewSalesCache = sales || [];
       const activeNames = (list) => (list || []).filter(x => x.active).map(x => x.name);
-      const planNames = activeNames(plans), optionNames = activeNames(options);
-      $('shop-new-plan').innerHTML = '<option value="">未設定</option>' +
-        planNames.map(n => `<option value="${escapeAttr(n)}">${escapeHtml(n)}</option>`).join('');
-      // ★要件：プランを複数希望できるように、希望日ごとのプラン選択欄にも同じ候補を入れる
-      const hopePlanOptsHtml = '<option value="">プラン未設定</option>' +
-        planNames.map(n => `<option value="${escapeAttr(n)}">${escapeHtml(n)}</option>`).join('');
-      SHOP_NEW_HOPE_PLAN_FIELDS.forEach(k => { $('shop-new-' + k).innerHTML = hopePlanOptsHtml; });
+      const optionNames = activeNames(options);
       $('shop-new-location-datalist').innerHTML = activeNames(locations).map(n => `<option value="${escapeAttr(n)}">`).join('');
       // ★要件：オプション名はマスタからの選択式ではなく、候補（datalist）を出しつつ自由に書ける
       // 入力欄にする（フリー入力）。マスタに無い名称も入力できる
       $('shop-new-option-datalist').innerHTML = optionNames.map(n => `<option value="${escapeAttr(n)}">`).join('');
-      // ★要件：プラン未選択（＝支店切り替え直後）の状態にリセットする。撮影希望場所は自由入力に、
-      // セール名はその支店の全プラン共通のもの（対象プラン未指定）だけに戻る。
-      onShopNewPlanChange();
-    } catch (e) { /* 候補が取れなくても入力自体は続けられる（プラン等は未設定のまま） */ }
+      // ★要件：支店（＝セールの候補）を切り替えたら、希望日①のプランに応じたセール絞り込みを再適用する
+      onShopNewHopePlan1Change();
+    } catch (e) { /* 候補が取れなくても入力自体は続けられる（セール等は未設定のまま） */ }
   }
 
   // ★要件：プラン・セール名・撮影希望場所は支店に紐づくだけでなく、撮影希望場所とセール名は
   // 選んだプランにも紐づく（プランごとに撮影場所の入力方式・候補が変わり、セールも
-  // 「そのプラン専用」のものだけに絞り込まれる）。サーバーには取りに行かず、支店切り替え時に
-  // キャッシュしておいたプラン・セール一覧を手元でフィルタするだけで済ませる。
+  // 「そのプラン専用」のものだけに絞り込まれる）。サーバーには取りに行かず、キャッシュしておいた
+  // 全支店分のプラン一覧・この支店のセール一覧を手元でフィルタするだけで済ませる。
   function shopNewLocationFieldHtml_(planMeta) {
     const mode = planMeta ? planMeta.locationMode : 'free';
     const candidates = (planMeta && planMeta.locationCandidates) || [];
@@ -2844,9 +2836,12 @@
     return `<input id="shop-new-location" type="text" list="shop-new-location-datalist" placeholder="任意入力">
       <datalist id="shop-new-location-datalist"></datalist>`;
   }
-  function onShopNewPlanChange() {
-    const planName = $('shop-new-plan').value;
-    const planMeta = shopNewPlansCache.find(p => p.name === planName);
+  // ★要件変更：案件全体の「プラン」単独欄を廃止したため、希望日①（第一希望）のプラン選択が
+  // 変わるたびに、撮影希望場所の入力方式・セール名の絞り込みを差し替える
+  // （旧onShopNewPlanChangeと同じ役目。プランは全支店横断のためshopNewAllPlansCacheから探す）。
+  function onShopNewHopePlan1Change() {
+    const planName = $('shop-new-hopeplan1').value;
+    const planMeta = shopNewAllPlansCache.find(p => p.name === planName);
     $('shop-new-location-wrap').innerHTML = shopNewLocationFieldHtml_(planMeta);
     if (planMeta && planMeta.locationMode === 'checkbox') {
       const wrap = $('shop-new-location-wrap');
@@ -2877,7 +2872,6 @@
       brideName: $('shop-new-bride').value.trim(),
       groomAge: $('shop-new-groom-age').value.trim(),
       brideAge: $('shop-new-bride-age').value.trim(),
-      plan: $('shop-new-plan').value.trim(),
       saleName: $('shop-new-sale').value.trim(),
       location: $('shop-new-location').value.trim(),
       prep: $('shop-new-prep-block').classList.contains('hidden') ? '' : $('shop-new-prep').value,
