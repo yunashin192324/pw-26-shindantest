@@ -18,7 +18,6 @@
         <button id="nav-delivery" class="nav-btn non-shop">納品待ち</button>
         <button id="nav-search" class="nav-btn non-shop">検索</button>
         <button id="nav-stats" class="nav-btn jp-only hidden">統計</button>
-        <button id="nav-new" class="nav-btn jp-only">＋新規案件</button>
         <button id="nav-shop-new" class="nav-btn shop-only hidden">＋新規依頼</button>
         <button id="nav-settings" class="nav-btn non-shop">設定</button>
         <button id="nav-logout" class="nav-btn nav-logout">ログアウト</button>
@@ -125,7 +124,7 @@
         <div id="reservation-table-wrap" class="table-wrap">
           <table class="res-table">
             <thead>
-              <tr><th>日付</th><th>都市</th><th>チャレンジ番号</th><th>お名前</th><th>STS JP</th><th>STS 支店</th><th>予約番号</th><th>プラン名</th></tr>
+              <tr><th>日付</th><th>都市</th><th>チャレンジ番号</th><th>お名前</th><th>STS JP</th><th>STS 支店</th><th>予約番号</th><th>プラン名</th><th class="non-shop">撮影データ送付</th></tr>
             </thead>
             <tbody id="reservation-table-body"></tbody>
           </table>
@@ -210,18 +209,6 @@
       <section id="view-detail" class="view hidden">
         <button id="detail-back" class="link-btn">← 一覧へ戻る</button>
         <div id="detail-content"></div>
-      </section>
-
-      <!-- 新規案件作成 -->
-      <section id="view-new" class="view hidden">
-        <h2>新規案件作成</h2>
-        <label class="jp-only hidden">対象支店</label>
-        <select id="new-branch" class="jp-only hidden"></select>
-        <label>手配依頼テキストを貼り付け（自動解析）</label>
-        <textarea id="new-rawtext" rows="8" placeholder="日本側から届いた手配依頼テキストをそのまま貼り付けてください"></textarea>
-        <button id="new-submit" class="primary-btn">解析して作成</button>
-        <p id="new-error" class="error-text hidden"></p>
-        <p id="new-success" class="success-banner hidden"></p>
       </section>
 
       <!-- 新規依頼（店舗ロール専用） -->

@@ -170,7 +170,6 @@
     $('nav-stats').addEventListener('click', () => loadStats());
     $('nav-day').addEventListener('click', openDayView);
     $('nav-delivery').addEventListener('click', () => loadPendingDeliveries());
-    $('nav-new').addEventListener('click', openNewView);
     $('nav-shop-new').addEventListener('click', openShopNewView);
     $('shop-new-branch').addEventListener('change', onShopNewBranchChange);
     $('shop-new-hopeplan1').addEventListener('change', onShopNewHopePlan1Change);
@@ -179,7 +178,6 @@
     $('nav-settings').addEventListener('click', openSettingsView);
     $('nav-logout').addEventListener('click', doLogout);
     $('detail-back').addEventListener('click', () => loadDashboard());
-    $('new-submit').addEventListener('click', submitNewReservation);
     $('search-submit').addEventListener('click', submitSearch);
     $('export-submit').addEventListener('click', submitExport);
     $('day-submit').addEventListener('click', loadDaySchedule);
@@ -475,6 +473,10 @@
       const tr = document.createElement('tr');
       tr.className = r.needsAction ? 'needs-action-row' : '';
       // ★不具合修正：カード表示と同様、自由入力項目はエスケープしてから差し込む（保存型XSS対策）
+      // ★機能追加：手配課・現地支店の一覧に「撮影データ送付」有無を表示する（店舗ロールには
+      // 表示しない列のため、ヘッダー同様.non-shopクラスと同じ条件でtd自体を出し分ける）
+      const dataDeliveredCell = session.role === 'SHOP' ? '' :
+        `<td>${r.dataDelivered ? '<span class="chip" style="background:#dcfce7;color:#166534;">送付済</span>' : '<span class="chip" style="background:#fee2e2;color:#b91c1c;">未送付</span>'}</td>`;
       tr.innerHTML = `
         <td class="res-table-date">${caseDateCellHtml_(r)}</td>
         <td>${escapeHtml(r.city || '-')}</td>
@@ -483,7 +485,8 @@
         <td>${r.statusJp ? `<span class="chip hq">${escapeHtml(r.statusJp)}</span>` : '-'}</td>
         <td>${r.statusBranch ? `<span class="chip branch">${escapeHtml(r.statusBranch)}</span>` : '-'}</td>
         <td>${escapeHtml(r.kanriNo)}</td>
-        <td>${escapeHtml(r.plan || '-')}</td>`;
+        <td>${escapeHtml(r.plan || '-')}</td>
+        ${dataDeliveredCell}`;
       tr.addEventListener('click', () => openDetail(r.kanriNo));
       body.appendChild(tr);
     });
@@ -508,6 +511,9 @@
         ${r.statusBranch ? `<span class="chip branch">STS 支店: ${escapeHtml(r.statusBranch)}</span>` : ''}
         ${cancelled ? '<span class="chip" style="background:#fee2e2;color:#b91c1c;">キャンセル</span>' : ''}
         ${r.plan ? `<span class="chip">${escapeHtml(r.plan)}</span>` : ''}
+        ${session.role !== 'SHOP' ? (r.dataDelivered
+          ? '<span class="chip" style="background:#dcfce7;color:#166534;">撮影データ送付済</span>'
+          : '<span class="chip" style="background:#fee2e2;color:#b91c1c;">撮影データ未送付</span>') : ''}
       </div>`;
     card.addEventListener('click', () => openDetail(r.kanriNo));
     return card;
@@ -2704,38 +2710,6 @@
     } catch (e) { handleAuthError(e); }
   }
 
-  // ---------- 新規案件 ----------
-  async function openNewView() {
-    showView('new');
-    $('new-error').classList.add('hidden');
-    $('new-success').classList.add('hidden');
-    $('new-rawtext').value = '';
-    if (session.role === 'JP') {
-      if (!branchesCache.length) branchesCache = await gsRun('apiListBranches', session.token);
-      $('new-branch').innerHTML = branchesCache.filter(b => b.role !== 'JP' && b.active)
-        .map(b => `<option value="${escapeAttr(b.code)}">${escapeHtml(b.name)}（${escapeHtml(b.code)}）</option>`).join('');
-    }
-  }
-
-  async function submitNewReservation() {
-    const raw = $('new-rawtext').value.trim();
-    $('new-error').classList.add('hidden');
-    $('new-success').classList.add('hidden');
-    if (!raw) { showFieldError('new-error', '手配依頼テキストを貼り付けてください。'); return; }
-    const branchCode = session.role === 'JP' ? $('new-branch').value : session.branchCode;
-    try {
-      const res = await gsRun('apiCreateReservation', session.token, branchCode, raw);
-      $('new-success').textContent = `案件 ${res.kanriNo} を作成しました。`;
-      $('new-success').classList.remove('hidden');
-      if (typeof $('new-success').scrollIntoView === 'function') {
-        $('new-success').scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-      $('new-rawtext').value = '';
-    } catch (e) {
-      showFieldError('new-error', e.message);
-    }
-  }
-
   function showFieldError(id, msg) {
     $(id).textContent = msg;
     $(id).classList.remove('hidden');
@@ -2908,7 +2882,14 @@
       // 予約番号 ○○」に変更。PC幅では画面中央に目立つモーダルで表示し（success-banner-prominent、
       // Stylesheet.html参照）、あわせて「案件一覧（トップ）へ戻る」ボタンも併設する。
       const kindLabel = payload.initialStatus === 'CHK' ? '空き確認依頼' : '予約依頼';
-      $('shop-new-success-text').innerHTML = `${escapeHtml(kindLabel)}をしました。<br>回答までしばらくお待ちください。<br>予約番号 ${escapeHtml(res.kanriNo)}`;
+      // ★機能追加：希望日ごとに選んだプランが複数の支店（都市）にまたがっていた場合、
+      // apiShopCreateRequestが支店ごとに案件を自動分割して複数件作成する。その場合は
+      // 「支店をまたぐため◯件に分けて登録した」ことが分かるよう、予約番号を全件並べて案内する。
+      const kanriNos = res.kanriNos && res.kanriNos.length ? res.kanriNos : [res.kanriNo];
+      const kanriLine = kanriNos.length > 1
+        ? `予約番号 ${kanriNos.map(escapeHtml).join(' / ')}<br>（選択した希望日が複数の支店にまたがるため、支店ごとに${kanriNos.length}件に分けて登録しました）`
+        : `予約番号 ${escapeHtml(res.kanriNo)}`;
+      $('shop-new-success-text').innerHTML = `${escapeHtml(kindLabel)}をしました。<br>回答までしばらくお待ちください。<br>${kanriLine}`;
       $('shop-new-success').classList.remove('hidden');
       if (typeof $('shop-new-success').scrollIntoView === 'function') {
         $('shop-new-success').scrollIntoView({ behavior: 'smooth', block: 'center' });

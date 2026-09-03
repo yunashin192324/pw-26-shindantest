@@ -175,9 +175,6 @@ function paneHidden(document, key) {
   await login(dom, 'ROW', 'CHANGE-ME-ROW');
   check('ログインするとヘッダーが表示される',
         !document.getElementById('app-header').classList.contains('hidden'));
-  // ★要件：現地支店（BRANCH）の画面には「＋新規案件」ボタンを出さない（手配課のみ）
-  check('現地支店の画面には「＋新規案件」ボタンが出ない',
-        document.getElementById('nav-new').classList.contains('hidden'));
   // ★要件：一覧表示の既定を表（テーブル）に変更した。ログイン直後は表が見えていて、
   // カード一覧は隠れている状態になる
   check('一覧表示の既定は表（テーブル）になっている',
@@ -369,9 +366,6 @@ function paneHidden(document, key) {
   document.getElementById('nav-logout').click();
   await settle();
   await login(dom, 'KANTO', 'CHANGE-ME-KANTO');
-  // ★要件：「＋新規案件」ボタンは手配課（JP）には引き続き表示される（現地支店だけ非表示にする）
-  check('手配課の画面には「＋新規案件」ボタンが引き続き表示される',
-        !document.getElementById('nav-new').classList.contains('hidden'));
   document.querySelector('#reservation-list .res-card').click();
   await settle();
   check('日本側には「記入欄」内に日本記入欄への切替タブが出る',
@@ -577,12 +571,11 @@ function paneHidden(document, key) {
     document.getElementById('nav-logout').click();
     await settle();
     await login(dom, 'SHOP1', 'CHANGE-ME-SHOP1');
-    check('店舗ロールには一覧系メニュー（検索・当日表・納品待ち・設定・通常の新規案件）が出ない',
+    check('店舗ロールには一覧系メニュー（検索・当日表・納品待ち・設定）が出ない',
           document.getElementById('nav-search').classList.contains('hidden') &&
           document.getElementById('nav-day').classList.contains('hidden') &&
           document.getElementById('nav-delivery').classList.contains('hidden') &&
-          document.getElementById('nav-settings').classList.contains('hidden') &&
-          document.getElementById('nav-new').classList.contains('hidden'));
+          document.getElementById('nav-settings').classList.contains('hidden'));
     check('店舗ロールには「＋新規依頼」が出る', !document.getElementById('nav-shop-new').classList.contains('hidden'));
 
     document.getElementById('nav-shop-new').click();
@@ -2513,6 +2506,61 @@ function paneHidden(document, key) {
           hopePlan2OptsU44.includes('プランA'), hopePlan2OptsU44.join(','));
     const hopePlan2GroupsU44 = [...document.getElementById('shop-new-hopeplan2').querySelectorAll('optgroup')].length;
     check('希望日②プラン欄も都市ごとのoptgroupにまとまっている（複数の国が並ぶ）', hopePlan2GroupsU44 >= 2);
+  }
+
+  // ---------------------------------------------------------------
+  section('U45. 手配課・現地支店の一覧に「撮影データ送付」有無を表示（店舗の一覧には出さない）');
+  {
+    const H = ctx.RESERVATION_HEADERS;
+    const addCaseU45 = (o) => {
+      const row = new Array(H.length).fill('');
+      Object.keys(o).forEach(k => { const i = H.indexOf(k); if (i !== -1) row[i] = o[k]; });
+      ctx.__ss.getSheetByName('予約一覧').appendRow(row);
+    };
+    addCaseU45({ '支店コード': 'ROW', '管理番号': 'R-DELIVERTEST1', '管轄': '関東', '新郎名（ローマ字）': 'Delivered', 'DriveフォルダURL': 'https://drive.google.com/x' });
+    addCaseU45({ '支店コード': 'ROW', '管理番号': 'R-DELIVERTEST2', '管轄': '関東', '新郎名（ローマ字）': 'NotDelivered' });
+
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'KANTO', 'CHANGE-ME-KANTO');
+    document.getElementById('nav-dashboard').click();
+    await settle();
+    document.getElementById('view-mode-table').click();
+    await settle();
+
+    const headerTextU45 = document.querySelector('#reservation-table-wrap thead').textContent;
+    check('手配課の表のヘッダーに「撮影データ送付」列がある', headerTextU45.includes('撮影データ送付'));
+    const rowsU45 = [...document.querySelectorAll('#reservation-table-body tr')];
+    const deliveredRow = rowsU45.find(r => r.textContent.includes('R-DELIVERTEST1'));
+    check('DriveフォルダURL登録済みの案件は「送付済」と表示される',
+          !!deliveredRow && deliveredRow.textContent.includes('送付済'), deliveredRow ? deliveredRow.textContent : 'not found');
+    const notDeliveredRow = rowsU45.find(r => r.textContent.includes('R-DELIVERTEST2'));
+    check('DriveフォルダURL未登録の案件は「未送付」と表示される',
+          !!notDeliveredRow && notDeliveredRow.textContent.includes('未送付'), notDeliveredRow ? notDeliveredRow.textContent : 'not found');
+
+    // カード表示にも同じチップが出る
+    document.getElementById('view-mode-card').click();
+    await settle();
+    const deliveredCard = [...document.querySelectorAll('#reservation-list .res-card')].find(c => c.textContent.includes('R-DELIVERTEST1'));
+    check('カード表示にも「撮影データ送付済」のチップが出る',
+          !!deliveredCard && deliveredCard.textContent.includes('撮影データ送付済'));
+
+    // 現地支店（BRANCH）でも同じ列が出る
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'ROW', 'CHANGE-ME-ROW');
+    document.getElementById('view-mode-table').click();
+    await settle();
+    check('現地支店の表にも「撮影データ送付」列がある',
+          document.querySelector('#reservation-table-wrap thead').textContent.includes('撮影データ送付'));
+
+    // 店舗（SHOP）の一覧には出さない
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'SHOP1', 'CHANGE-ME-SHOP1');
+    await settle();
+    check('店舗の表には「撮影データ送付」列が出ない（.non-shopのため非表示）',
+          document.querySelector('#reservation-table-wrap thead th.non-shop').classList.contains('hidden'));
   }
 
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);

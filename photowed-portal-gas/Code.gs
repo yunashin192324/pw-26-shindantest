@@ -494,6 +494,13 @@ const BM_COL_SHOP_BILLING = '請求先';
 const BM_COL_SHOP_UPLOAD_VISIBLE_TO_BRANCH = '店舗アップロードの現地公開';
 // ★要件：希望日の日付の隣に時間帯（AM／PM）選択欄を出すかどうか（支店ごとに任意。既定は非表示）
 const BM_COL_SHOW_HOPE_TIME = '希望日時間帯表示';
+// ★機能追加（店舗発案件の起票フロー見直し）：店舗発の新規依頼を作成した際、現地支店へ
+// 通知メールを送るかどうか（支店ごとに任意）。BRANCHロールの行のみ意味を持つ。既定（未設定）は
+// ON＝現在と同じ挙動（従来どおり必ず支店にもメールする）。「店舗依頼の手配課通知」（手配課宛の
+// メールだけを止める）と対になる設定で、こちらは支店宛のメールだけを止める。案件の可視性・
+// 未読フラグ（一覧への表示・「要対応」表示）には影響しない（支店は常にその案件を閲覧できる。
+// あくまで作成時点のメール通知だけを止める）。
+const BM_COL_BRANCH_NOTIFY_NEW_CASE = '新規依頼の支店通知';
 const BM_COL_ACTIVE = '有効';
 // ★不具合防止：既存のテスト・運用スプレッドシートは「有効」列が支店マスタの最後尾にある前提で
 // 位置決め打ちの行を作っている場合がある。新しい列（手配メール機能まわり）は、その並びを崩さないよう
@@ -504,7 +511,7 @@ const BRANCH_MASTER_HEADERS = [
   BM_COL_REMIND_DAYS, BM_COL_CONSENT_REQUIRED, BM_COL_ACTIVE,
   BM_COL_ARRANGEMENT_ENABLED, BM_COL_PASSPORT_REQUIRED, BM_COL_SHOP_DIRECT,
   BM_COL_SHOP_NOTIFY_HQ, BM_COL_SHOP_BILLING, BM_COL_SHOP_UPLOAD_VISIBLE_TO_BRANCH,
-  BM_COL_SHOW_HOPE_TIME,
+  BM_COL_SHOW_HOPE_TIME, BM_COL_BRANCH_NOTIFY_NEW_CASE,
   // カテゴリごとの手配先（名前・メール）。同じ宛先を複数カテゴリに入れれば「まとめて1件に依頼」にできる
   ...ARRANGEMENT_CATEGORIES.flatMap(c => [arrNameCol_(c.label), arrEmailCol_(c.label)])
 ];
@@ -525,7 +532,12 @@ const MM_COL_PLAN_LOCATION_CANDIDATES = '撮影場所候補';  // 改行また�
 const PLAN_LOCATION_MODE_CHECKBOX = 'checkbox';
 const PLAN_LOCATION_MODE_SELECT = 'select';
 const PLAN_LOCATION_MODE_FREE = 'free';
-const PLAN_MASTER_HEADERS = [MM_COL_BRANCH, MM_COL_NAME, MM_COL_ACTIVE, MM_COL_PLAN_LOCATION_MODE, MM_COL_PLAN_LOCATION_CANDIDATES];
+// ★機能追加：納品期限（撮影後何日以内に撮影データを納品するか）はプランによって異なるため、
+// 支店マスタの「納品期限日数」（国・支店単位）とは別に、プラン単位でも上書き設定できるようにする。
+// 空欄ならプラン単位の指定なし＝支店マスタの設定（それも空欄なら既定日数）にフォールバックする
+// （deliveryOverdueInfo_参照）。他のマスタ列と同じく、スプレッドシート上で直接設定する運用。
+const MM_COL_PLAN_DELIVERY_DAYS = '納品期限日数';
+const PLAN_MASTER_HEADERS = [MM_COL_BRANCH, MM_COL_NAME, MM_COL_ACTIVE, MM_COL_PLAN_LOCATION_MODE, MM_COL_PLAN_LOCATION_CANDIDATES, MM_COL_PLAN_DELIVERY_DAYS];
 function normalizePlanLocationMode_(v) {
   const s = String(v || '').trim().toLowerCase();
   return (s === PLAN_LOCATION_MODE_CHECKBOX || s === PLAN_LOCATION_MODE_SELECT) ? s : PLAN_LOCATION_MODE_FREE;
@@ -989,6 +1001,8 @@ function listBranchesRaw_() {
     passportRequired: isActiveFlag_(r[BM_COL_PASSPORT_REQUIRED]),
     // ★要件：希望日の時間帯（AM／PM）欄を出すかどうか（支店ごとに任意。既定は非表示）
     showHopeTime: isActiveFlag_(r[BM_COL_SHOW_HOPE_TIME]),
+    // ★機能追加：店舗発の新規依頼で、この支店へ作成時点の通知メールを送るか（既定ON）
+    branchNotifyNewCase: isActiveFlagDefaultTrue_(r[BM_COL_BRANCH_NOTIFY_NEW_CASE]),
     active: isActiveFlag_(r[BM_COL_ACTIVE])
     // ログインパスコードは一覧APIには返さない（画面表示上の漏洩防止）
   }));
@@ -1150,6 +1164,26 @@ function apiListAllActivePlans(token) {
       };
     });
 }
+// ★機能追加（店舗発の複数支店またぎ依頼）：プラン名から「そのプランを提供している支店」を
+// 逆引きするためのマップ（プラン名 → 支店コード）。apiListAllActivePlansと同じ条件
+// （有効な支店・有効なプランのみ）で作る。プラン名は支店をまたいで重複しうる前提のため、
+// クライアント側のplanForName_と同じく「最初に見つかった支店を採用」で揃えている。
+// apiShopCreateRequestが、希望日ごとに選ばれたプランの提供元支店へ案件を振り分ける
+// （支店ごとに案件を自動分割する）ために使う。
+function planOwnerBranchMap_() {
+  const branchMeta = branchMetaMap_();
+  const sheet = getSpreadsheet_().getSheetByName(PLAN_MASTER_SHEET_NAME);
+  const map = {};
+  getRowsAsObjects_(sheet).forEach(r => {
+    if (!isActiveFlag_(r[MM_COL_ACTIVE])) return;
+    const code = String(r[MM_COL_BRANCH]).trim().toUpperCase();
+    const meta = branchMeta[code];
+    if (!meta || !meta.active) return;
+    const name = r[MM_COL_NAME];
+    if (name && !Object.prototype.hasOwnProperty.call(map, name)) map[name] = code;
+  });
+  return map;
+}
 function apiListOptionItems(token, branchCode) {
   const session = requireSession_(token);
   const target = session.role === BRANCH_ROLE ? session.branchCode : String(branchCode || '').toUpperCase();
@@ -1244,11 +1278,13 @@ function apiSaveLocationItem(token, branchCode, name, originalName, active) {
 }
 // locationMode/locationCandidatesTextは省略可（省略時は自由入力＝従来どおりのプランのまま）。
 // locationCandidatesTextは改行または読点（、）区切りの文字列で渡す。
-function apiSavePlanItem(token, branchCode, name, originalName, active, locationMode, locationCandidatesText) {
+// deliveryDaysも省略可（省略・空欄＝プラン単位の指定なし。支店マスタの設定にフォールバックする）。
+function apiSavePlanItem(token, branchCode, name, originalName, active, locationMode, locationCandidatesText, deliveryDays) {
   const session = requireSession_(token);
   assertBranchAccess_(session, branchCode);
   return saveMasterItem_(PLAN_MASTER_SHEET_NAME, branchCode, name, originalName, active,
-    [normalizePlanLocationMode_(locationMode) === PLAN_LOCATION_MODE_FREE ? '' : normalizePlanLocationMode_(locationMode), String(locationCandidatesText || '')]);
+    [normalizePlanLocationMode_(locationMode) === PLAN_LOCATION_MODE_FREE ? '' : normalizePlanLocationMode_(locationMode),
+     String(locationCandidatesText || ''), deliveryDays === undefined || deliveryDays === null || deliveryDays === '' ? '' : deliveryDays]);
 }
 function apiSaveOptionItem(token, branchCode, name, originalName, active) {
   const session = requireSession_(token);
@@ -1336,7 +1372,10 @@ function apiGetDashboard(token, scope) {
     area: r[COL_AREA],
     lastUpdated: formatMaybeDate_(r[COL_LAST_UPDATED]),
     // ★要件：相手側からの未読メッセージ／変更がある案件は一目でわかるように
-    needsAction: isNeedsAction(r)
+    needsAction: isNeedsAction(r),
+    // ★機能追加：手配課・現地支店の一覧に「撮影データ送付」有無を表示する（納品期限アラート・
+    // 「納品待ち」画面と同じ、DriveフォルダURL（COL_DRIVE_URL）の有無を判定に使う）
+    dataDelivered: !!String(r[COL_DRIVE_URL] || '').trim()
   }));
 
   // ★要件：まず要対応（未読あり）を最優先で上に、その中・その他はそれぞれ撮影日FIXが「今日に近い順」
@@ -1786,6 +1825,7 @@ function apiGetPendingDeliveries(token, scope) {
   const session = requireSession_(token);
   const ss = getSpreadsheet_();
   const branchMeta = branchMetaMap_();
+  const planDeliveryDays = planDeliveryDaysMap_();
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
@@ -1795,8 +1835,8 @@ function apiGetPendingDeliveries(token, scope) {
       if (!rowInScope_(session, scope, r)) return;
       const info = deliveryOverdueInfo_({
         driveUrl: r[COL_DRIVE_URL], stsJp: r[COL_STATUS_JP], stsBranch: r[COL_STATUS_BRANCH],
-        confirmedDate: r[COL_CONFIRMED_DATE], branchCode: r[COL_BRANCH_CODE]
-      }, branchMeta, todayMidnight);
+        confirmedDate: r[COL_CONFIRMED_DATE], branchCode: r[COL_BRANCH_CODE], planName: r[COL_PLAN]
+      }, branchMeta, todayMidnight, planDeliveryDays);
       if (!info || !info.overdue) return;
       const meta = branchMeta[r[COL_BRANCH_CODE]] || {};
       results.push({
@@ -3445,6 +3485,9 @@ function seedHopeStatuses_(headers, newRowData) {
   }
 }
 
+// ★要件変更：今後の新規案件作成は店舗（SHOP）発のみに一本化し、手配課（JP）の「＋新規案件」
+// 画面（テキスト貼り付け解析からの起票）はUIから廃止した。このAPI自体はテストのフィクスチャ作成や
+// 万一の代替経路のためサーバー側にはそのまま残しているが、通常のUI操作からは呼ばれない。
 function apiCreateReservation(token, branchCode, rawText) {
   const session = requireSession_(token);
   const targetBranch = session.role === JP_ROLE ? String(branchCode || '').trim().toUpperCase() : session.branchCode;
@@ -3570,7 +3613,9 @@ function apiShopCreateRequest(token, payload) {
   // プランをそのまま初期値として使う（既存案件でapplyHopeStatusCascade_がOK確定時に行う
   // 「希望日のプランを案件全体のプラン名へ反映する」のと同じ考え方を、作成時にも適用する）。
   const hopePlans = [1, 2, 3, 4, 5].map(n => String(payload['hopePlan' + n] || '').trim());
-  const plan = String(payload.plan || '').trim() || hopePlans[0] || '';
+  // ★後方互換：現在の画面はpayload.planを送らないが、外部からの呼び出し等で明示指定された場合は
+  // それを優先する（第一希望が属する支店の案件に反映する。下のgroups構築後に使う）。
+  const explicitPlan = String(payload.plan || '').trim();
   const options = Array.from({ length: OPTION_COUNT }, (_, i) => String(payload['option' + (i + 1)] || '').trim());
   // ★要件：パスポート番号欄は支店の必須設定に関わらず常に入力できる（※ISWのみ必要。任意入力）
   const passportNumber = String(payload.passportNumber || '').trim();
@@ -3586,84 +3631,134 @@ function apiShopCreateRequest(token, payload) {
   try {
     const sheet = getSpreadsheet_().getSheetByName(RESERVATION_SHEET_NAME);
     const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    const newNo = nextKanriNo_(branchCode);
-    const newRowIndex = sheet.getLastRow() + 1;
 
-    const newRowData = new Array(headers.length).fill('');
-    const setV = (name, val) => { const i = headers.indexOf(name); if (i !== -1 && val) newRowData[i] = val; };
-    setV(COL_BRANCH_CODE, branchCode);
-    setV(COL_KANRI_NO, newNo);
-    setV(COL_LAST_UPDATED, new Date());
-    setV(COL_STATUS_JP, initialStatus);
-    // ★不具合修正：STS(支店側)の初期値に「NC」を流用していたが、NCは今後ネームチェンジ専用の
-    // コードのため、名前を変える予定が無い新規案件で最初から「NC」と表示されるのは紛らわしい。
-    // 未着手を表す値は不要（空欄のまま。支店側はSTS(JP側)=RQ/CHKの間は自由に編集できる）。
-    setV(COL_CHALLENGE_NO, challengeNo);
-    setV(COL_GROOM_LAST_NAME, groomLastName);
-    setV(COL_GROOM_NAME, groomName);
-    setV(COL_BRIDE_LAST_NAME, brideLastName);
-    setV(COL_BRIDE_NAME, brideName);
-    setV(COL_GROOM_AGE, groomAge);
-    setV(COL_BRIDE_AGE, brideAge);
-    setV(COL_HOPE1, hopes[0]);
-    setV(COL_HOPE2, hopes[1]);
-    setV(COL_HOPE3, hopes[2]);
-    setV(COL_HOPE4, hopes[3]);
-    setV(COL_HOPE5, hopes[4]);
-    hopeTimes.forEach((t, i) => setV(hopeTimeCol_(i + 1), t));
-    hopePlans.forEach((p, i) => setV(hopePlanCol_(i + 1), p));
-    setV(COL_PLAN, plan);
-    setV(COL_SALE_NAME, saleName);
-    setV(COL_LOCATION, location);
-    setV(COL_PREP, prep);
-    setV(COL_REMARKS, remarks);
-    options.forEach((name, i) => setV(opNameCol_(i + 1), name));
-    // ★要件変更：パスポート番号は支店の必須設定に関わらず、入力があれば常に保存する
-    // （日本の店舗画面では常に入力欄を表示し、「※ISWのみ必要」という注記で運用する方針に変更したため）
-    setV(COL_PASSPORT_NO, passportNumber);
-    setV(COL_AREA, team);
-    setV(COL_ORIGIN_SHOP, session.branchCode);
-    seedHopeStatuses_(headers, newRowData);
+    // ★機能追加（複数支店にまたがる依頼への対応）：希望日ごとに選んだプランの提供元支店で
+    // グループ分けし、支店ごとに案件（管理番号）を自動分割して作成する。例：希望日①＝ローマ支店の
+    // 「フィレンツェ」、希望日②＝イスタンブール支店の「カッパドキア」を1回の依頼で選んだ場合、
+    // ローマ支店向けの案件・イスタンブール支店向けの案件の2件に分かれる（希望順位はそれぞれの
+    // 案件内で元の番号のまま保持し、他方の支店に属する希望日の欄は空欄のままにする）。
+    // プラン未選択・プランの提供元が判定できない希望日は、フォーム上部で選んだ「支店（都市）」の
+    // 案件にまとめる（この時、全ての希望日が同じ支店になれば従来どおり1件だけ作られる＝
+    // 大多数のケースでは今までと挙動は変わらない）。
+    const planOwnerMap = planOwnerBranchMap_();
+    const groupIndexByBranch = {};
+    const groups = []; // [{ branchCode, hopeIndexes: [0-based...] }]
+    hopes.forEach((d, i) => {
+      if (!d) return; // その希望日が未入力ならグループ分けの対象外
+      const p = hopePlans[i];
+      const ownerBranch = (p && planOwnerMap[p]) || branchCode;
+      if (!(ownerBranch in groupIndexByBranch)) {
+        groupIndexByBranch[ownerBranch] = groups.length;
+        groups.push({ branchCode: ownerBranch, hopeIndexes: [] });
+      }
+      groups[groupIndexByBranch[ownerBranch]].hopeIndexes.push(i);
+    });
 
-    sheet.getRange(newRowIndex, 1, 1, headers.length).setValues([newRowData]);
-
+    const allBranchMeta = branchMetaMap_();
     const initialStatusLabel = initialStatus === 'CHK' ? 'CHK（空き確認のみ）' : 'RQ（予約依頼）';
-    const initMsg = [
-      `店舗（${session.branchName}）からの新規依頼です。（${initialStatusLabel}）`,
-      challengeNo ? `チャレンジ番号: ${challengeNo}` : '',
-      `新郎名: ${fullName_(groomLastName, groomName)}`,
-      `新婦名: ${fullName_(brideLastName, brideName)}`,
-      `希望日: ${[hopes[0], hopes[1], hopes[2], hopes[3], hopes[4]].filter(Boolean).join(' / ')}`,
-      plan ? `プラン: ${plan}` : '',
-      saleName ? `セール名: ${saleName}` : '',
-      location ? `撮影希望場所: ${location}` : '',
-      prep ? `準備場所: ${prep}` : '',
-      `該当の手配課: ${team}手配課`,
-      remarks ? `【備考】\n${remarks}` : ''
-    ].filter(Boolean).join('\n');
+    const created = []; // { kanriNo, branchCode, branchName, rowIndex, newRowData, meta, hopeIndexes }
 
-    // ★店舗自身の送信という扱いにする（appendHistory_のsenderRoleにSHOPを記録）。
-    appendHistory_(headers, newRowData, senderLabel_(session), `[新規依頼（店舗より）]\n${initMsg}`, SHOP_ROLE, '');
-    setUnreadFlag_(sheet, headers, newRowIndex, JP_ROLE, true);
-    setUnreadFlag_(sheet, headers, newRowIndex, BRANCH_ROLE, true);
-    // ★機能追加（拡張要望5章）：支店マスタ「店舗依頼の手配課通知」がOFF（明示的にFALSE）の
-    // 直結支店については、手配課宛のメール通知だけを止める（手配課からの閲覧・監視は妨げない。
-    // 上のsetUnreadFlag_(JP_ROLE, true)は変えないため、手配課側の未読表示・一覧上の可視性は従来通り）。
-    sendDirectionalMail_(headers, newRowData, targetMeta.shopNotifyHq === false ? 'SHOP_NEW_CASE_BRANCH_ONLY' : 'SHOP_NEW_CASE', session, initMsg, '店舗からの新規依頼');
+    groups.forEach(group => {
+      const groupBranchCode = group.branchCode;
+      const groupMeta = groupBranchCode === branchCode ? targetMeta : (allBranchMeta[groupBranchCode] || targetMeta);
+      const newNo = nextKanriNo_(groupBranchCode);
+      const newRowIndex = sheet.getLastRow() + 1;
+
+      const newRowData = new Array(headers.length).fill('');
+      const setV = (name, val) => { const i = headers.indexOf(name); if (i !== -1 && val) newRowData[i] = val; };
+      setV(COL_BRANCH_CODE, groupBranchCode);
+      setV(COL_KANRI_NO, newNo);
+      setV(COL_LAST_UPDATED, new Date());
+      setV(COL_STATUS_JP, initialStatus);
+      // ★不具合修正：STS(支店側)の初期値に「NC」を流用していたが、NCは今後ネームチェンジ専用の
+      // コードのため、名前を変える予定が無い新規案件で最初から「NC」と表示されるのは紛らわしい。
+      // 未着手を表す値は不要（空欄のまま。支店側はSTS(JP側)=RQ/CHKの間は自由に編集できる）。
+      setV(COL_CHALLENGE_NO, challengeNo);
+      setV(COL_GROOM_LAST_NAME, groomLastName);
+      setV(COL_GROOM_NAME, groomName);
+      setV(COL_BRIDE_LAST_NAME, brideLastName);
+      setV(COL_BRIDE_NAME, brideName);
+      setV(COL_GROOM_AGE, groomAge);
+      setV(COL_BRIDE_AGE, brideAge);
+      const hopeCols = [COL_HOPE1, COL_HOPE2, COL_HOPE3, COL_HOPE4, COL_HOPE5];
+      hopeCols.forEach((col, i) => { if (group.hopeIndexes.includes(i)) setV(col, hopes[i]); });
+      group.hopeIndexes.forEach(i => {
+        setV(hopeTimeCol_(i + 1), hopeTimes[i]);
+        setV(hopePlanCol_(i + 1), hopePlans[i]);
+      });
+      const isHope1Group = group.hopeIndexes.includes(0);
+      const groupPlan = (isHope1Group && explicitPlan) || group.hopeIndexes.map(i => hopePlans[i]).find(Boolean) || '';
+      setV(COL_PLAN, groupPlan);
+      setV(COL_SALE_NAME, saleName);
+      setV(COL_LOCATION, location);
+      setV(COL_PREP, prep);
+      setV(COL_REMARKS, remarks);
+      options.forEach((name, i) => setV(opNameCol_(i + 1), name));
+      // ★要件変更：パスポート番号は支店の必須設定に関わらず、入力があれば常に保存する
+      // （日本の店舗画面では常に入力欄を表示し、「※ISWのみ必要」という注記で運用する方針に変更したため）
+      setV(COL_PASSPORT_NO, passportNumber);
+      setV(COL_AREA, team);
+      setV(COL_ORIGIN_SHOP, session.branchCode);
+      seedHopeStatuses_(headers, newRowData);
+
+      sheet.getRange(newRowIndex, 1, 1, headers.length).setValues([newRowData]);
+
+      created.push({
+        kanriNo: newNo, branchCode: groupBranchCode, branchName: (groupMeta && groupMeta.name) || groupBranchCode,
+        rowIndex: newRowIndex, newRowData, meta: groupMeta || {}, hopeIndexes: group.hopeIndexes, groupPlan
+      });
+    });
+
+    // ★通知・メッセージは全件作成後にまとめて送る（複数支店に分かれた場合、お互いの管理番号を
+    // メッセージ本文に載せて「他の支店分はこちら」と分かるようにするため）。
+    created.forEach((c, idx) => {
+      const groupHopeLines = c.hopeIndexes.map(i => hopes[i]).filter(Boolean);
+      const others = created.filter((_, j) => j !== idx);
+      const initMsg = [
+        `店舗（${session.branchName}）からの新規依頼です。（${initialStatusLabel}）`,
+        challengeNo ? `チャレンジ番号: ${challengeNo}` : '',
+        `新郎名: ${fullName_(groomLastName, groomName)}`,
+        `新婦名: ${fullName_(brideLastName, brideName)}`,
+        `希望日: ${groupHopeLines.join(' / ')}`,
+        c.groupPlan ? `プラン: ${c.groupPlan}` : '',
+        saleName ? `セール名: ${saleName}` : '',
+        location ? `撮影希望場所: ${location}` : '',
+        prep ? `準備場所: ${prep}` : '',
+        `該当の手配課: ${team}手配課`,
+        others.length ? `関連の他支店案件: ${others.map(o => `${o.kanriNo}（${o.branchName}）`).join(' / ')}` : '',
+        remarks ? `【備考】\n${remarks}` : ''
+      ].filter(Boolean).join('\n');
+
+      // ★店舗自身の送信という扱いにする（appendHistory_のsenderRoleにSHOPを記録）。
+      appendHistory_(headers, c.newRowData, senderLabel_(session), `[新規依頼（店舗より）]\n${initMsg}`, SHOP_ROLE, '');
+      setUnreadFlag_(sheet, headers, c.rowIndex, JP_ROLE, true);
+      setUnreadFlag_(sheet, headers, c.rowIndex, BRANCH_ROLE, true);
+      // ★機能追加（拡張要望5章／店舗発案件の起票フロー見直し）：支店マスタ「店舗依頼の手配課通知」
+      // 「新規依頼の支店通知」がそれぞれOFF（明示的にFALSE）の場合、そちら宛のメール通知だけを
+      // 止める（案件の可視性・未読フラグ自体は上のsetUnreadFlag_のとおり変えない）。
+      const jpMailOff = c.meta.shopNotifyHq === false;
+      const branchMailOff = c.meta.branchNotifyNewCase === false;
+      let direction = 'SHOP_NEW_CASE';
+      if (jpMailOff && branchMailOff) direction = null;
+      else if (jpMailOff) direction = 'SHOP_NEW_CASE_BRANCH_ONLY';
+      else if (branchMailOff) direction = 'SHOP_NEW_CASE_JP_ONLY';
+      if (direction) sendDirectionalMail_(headers, c.newRowData, direction, session, initMsg, '店舗からの新規依頼');
+    });
 
     // ★要件：請求先は先にマスタ登録しておく運用（支店マスタの「請求先」列）。万が一この店舗の
     // 請求先が未登録（空欄）のまま新規依頼が来た場合は、店舗直接やり取り許可がONの支店であっても
     // 必ず手配課へアラートが届くようにする。店舗には見せず、現地支店・手配課のみ閲覧できる
     // 専用チャネル（BRANCH→JP）で送る（appendHistory_のrecipientRoleにJP_ROLEを明示）。
-    const ownShopMeta = branchMetaMap_()[session.branchCode] || {};
-    if (!ownShopMeta.shopBilling) {
-      appendHistory_(headers, newRowData, 'システム（自動通知）',
+    // 支店ごとに分割された場合も、店舗自体のマスタ不備なので通知は最初の1件にのみ載せれば十分。
+    const ownShopMeta = allBranchMeta[session.branchCode] || {};
+    if (!ownShopMeta.shopBilling && created.length) {
+      appendHistory_(headers, created[0].newRowData, 'システム（自動通知）',
         `［請求先未登録アラート］\n店舗「${session.branchName}」の請求先が支店マスタに未登録です。手配課にてご確認・ご登録をお願いします。`,
         BRANCH_ROLE, JP_ROLE);
     }
 
     sortReservationSheet_(sheet);
-    return { ok: true, kanriNo: newNo };
+    return { ok: true, kanriNo: created[0].kanriNo, kanriNos: created.map(c => c.kanriNo) };
   } finally {
     lock.releaseLock();
   }
@@ -4092,6 +4187,9 @@ function sendDirectionalMail_(headers, rowData, direction, session, message, kin
   // ★機能追加（拡張要望5章）：直結支店で「店舗依頼の手配課通知」がOFFの場合、
   // 新規依頼通知は現地支店のみに送る（手配課の閲覧権限自体は変えない）
   else if (direction === 'SHOP_NEW_CASE_BRANCH_ONLY') recipients = branchEmail;
+  // ★機能追加：支店マスタ「新規依頼の支店通知」がOFFの場合、新規依頼通知は手配課のみに送る
+  // （支店の閲覧権限自体は変えない。上のBRANCH_ONLYと対になる設定）
+  else if (direction === 'SHOP_NEW_CASE_JP_ONLY') recipients = jpEmail;
   // 新規案件通知など：日本の該当手配課・現地支店の両方に知らせる
   else recipients = [jpEmail, branchEmail].filter(Boolean).join(',');
 
@@ -4227,6 +4325,73 @@ function checkAlertsCore_(errors) {
   console.log(`[checkAlerts] ${data.length}件を確認、${sent}件を通知`);
 }
 
+// ★機能追加：店舗発の案件（起票元店舗が設定されている案件）向けの専用アラート。
+// 撮影日の40日前を過ぎてもSTS(JP側)がまだFN（最終確定）になっていない場合、担当の日本支店
+// （起票元店舗）と該当の手配課へメールで知らせる。checkAlertsとの違いは、①判定基準がSTS(JP側)
+// 単独（オプション等の他ステータスは見ない）であること、②45日前ちょうどの単発通知ではなく
+// 「40日前を過ぎてから」を継続的に判定する（撮影日を過ぎてもFNのままなら引き続き対象になる）
+// こと、③宛先に日本側の手配課だけでなく起票元店舗（日本支店）も含むこと。
+// 撮影日を過ぎた案件は翌日に過去一覧へ移るため、checkDeliveryAlertsと同様「予約一覧」
+// 「過去一覧」の両方を走査する。
+const SHOP_ALERT_DAYS_BEFORE = 40;
+const SHOP_ALERT_REMIND_INTERVAL_DAYS = 7;
+const SHOP_ALERT_REMIND_UNTIL_DAYS = 120; // 40日前ラインを跨いでから最大120日（撮影日から概ね80日後）まで再通知
+function checkShopAlerts() { return runTrigger_('checkShopAlerts', checkShopAlertsCore_); }
+
+function checkShopAlertsCore_(errors) {
+  const ss = getSpreadsheet_();
+  const today = new Date();
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  let sent = 0;
+
+  [RESERVATION_SHEET_NAME, ARCHIVE_SHEET_NAME].forEach(sheetName => {
+    const sheet = ss.getSheetByName(sheetName);
+    if (!sheet || sheet.getLastRow() < 2) return;
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
+
+    data.forEach((row, i) => {
+      try {
+        const originShop = row[headers.indexOf(COL_ORIGIN_SHOP)];
+        if (!originShop) return; // 店舗発の案件（「担当の日本支店」が存在する案件）だけが対象
+        const stsJp = String(row[headers.indexOf(COL_STATUS_JP)] || '').trim();
+        if (stsJp === 'FN' || stsJp === 'CW') return; // 最終確定・キャンセル成立は対象外
+        const dVal = row[headers.indexOf(COL_CONFIRMED_DATE)];
+        if (!(dVal instanceof Date)) return; // 撮影日未確定はまだ対象にならない
+        const shootMidnight = new Date(dVal.getFullYear(), dVal.getMonth(), dVal.getDate());
+        const daysUntil = Math.round((shootMidnight.getTime() - todayMidnight.getTime()) / 86400000);
+        const daysSinceThreshold = SHOP_ALERT_DAYS_BEFORE - daysUntil; // 0になった日が「40日前」
+        if (daysSinceThreshold < 0) return; // まだ40日前になっていない
+        if (daysSinceThreshold > SHOP_ALERT_REMIND_UNTIL_DAYS) return; // 再通知の上限を超えた古い案件は打ち切り
+        if (daysSinceThreshold % SHOP_ALERT_REMIND_INTERVAL_DAYS !== 0) return; // 40日前の日、以降は7日おき
+
+        const area = row[headers.indexOf(COL_AREA)];
+        const jpEmail = getJpTeamEmail_(area);
+        const shopEmail = getShopEmail_(originShop);
+        const recipients = [jpEmail, shopEmail].filter(Boolean).join(',');
+        if (!recipients) return;
+
+        const kanri = row[headers.indexOf(COL_KANRI_NO)];
+        const chgNo = row[headers.indexOf(COL_CHALLENGE_NO)] || 'No CH';
+        const shootStr = Utilities.formatDate(dVal, 'Asia/Tokyo', 'yyyy/MM/dd');
+        MailApp.sendEmail(
+          recipients,
+          `[要確認] 撮影${SHOP_ALERT_DAYS_BEFORE}日前超過・未FN：${kanri}（${chgNo}）`,
+          `撮影日（${shootStr}）まで残り${daysUntil}日ですが、STS(JP側)がまだFN（最終確定）になっていません。` +
+          `ポータルをご確認ください。\n\n管理番号: ${kanri}\nChallenge No: ${chgNo}\n撮影日: ${shootStr}`
+        );
+        sent++;
+      } catch (e) {
+        errors.push({
+          where: `${sheetName} ${i + 2}行目（${row[headers.indexOf(COL_KANRI_NO)] || '管理番号不明'}）`,
+          message: errorMessage_(e), stack: e && e.stack ? String(e.stack) : ''
+        });
+      }
+    });
+  });
+  console.log(`[checkShopAlerts] ${sent}件を通知`);
+}
+
 // ★要件：撮影日から一定日数（国・支店ごとに支店マスタ「納品期限日数」で設定、未設定なら既定30日）過ぎても
 // DriveフォルダURL（納品）が未登録の案件を日本側へメール通知する。
 //
@@ -4234,10 +4399,31 @@ function checkAlertsCore_(errors) {
 // archivePastReservations() は撮影日を過ぎた案件を「翌日」には過去一覧へ移動させる仕様のため、
 // 「撮影日から30日後」を判定しようとした時点で、その案件はとっくに予約一覧から消えている。
 // 納品状況は撮影後（＝アーカイブ後）に確定するものなので、必ず過去一覧も走査する必要がある。
+// ★機能追加：納品期限（撮影後何日以内に納品するか）はプランによっても異なるため、プランマスタ
+// 「納品期限日数」（支店コード＋プラン名の組み合わせ単位）で個別に上書きできるようにした。
+// キーを支店コードとプラン名の組にしているのは、プラン名が支店をまたいで重複しうるため
+// （planOwnerBranchMap_と同じ考え方。ただしこちらは案件自体の支店コードが分かっているので、
+// 名前だけでなく支店コードも含めて引く方が正確）。
+function planDeliveryDaysMap_() {
+  const sheet = getSpreadsheet_().getSheetByName(PLAN_MASTER_SHEET_NAME);
+  if (!sheet) return {};
+  const map = {};
+  getRowsAsObjects_(sheet).forEach(r => {
+    const days = parseIntOrNull_(r[MM_COL_PLAN_DELIVERY_DAYS]);
+    if (days === null) return;
+    const code = String(r[MM_COL_BRANCH]).trim().toUpperCase();
+    const name = r[MM_COL_NAME];
+    if (!name) return;
+    map[`${code}\t${name}`] = days;
+  });
+  return map;
+}
+
 // 納品遅延の判定を1箇所にまとめる。納品期限アラート（メール）と
 // 「納品待ち」画面の両方で同じ基準を使うため。
 // 返り値 null = 判定対象外（納品済み／キャンセル／撮影日未定／撮影日が未来）
-function deliveryOverdueInfo_(o, branchMeta, todayMidnight) {
+// planDeliveryDaysはplanDeliveryDaysMap_()の戻り値（省略可。省略時は支店マスタの設定のみで判定する）。
+function deliveryOverdueInfo_(o, branchMeta, todayMidnight, planDeliveryDays) {
   if (String(o.driveUrl || '').trim()) return null;                       // 既に納品済み
   const stsJp = String(o.stsJp || '').trim();
   const stsBranch = String(o.stsBranch || '').trim();
@@ -4249,8 +4435,12 @@ function deliveryOverdueInfo_(o, branchMeta, todayMidnight) {
   if (daysPast <= 0) return null;                                          // 未来日・当日
   const meta = branchMeta[o.branchCode] || {};
   // ★不具合修正：`meta.deliveryDays || DEFAULT` だと0（即日設定）が消えるため、未設定のときだけ既定値を使う
-  const limitDays = (meta.deliveryDays === null || meta.deliveryDays === undefined)
+  const branchLimitDays = (meta.deliveryDays === null || meta.deliveryDays === undefined)
     ? DELIVERY_ALERT_DEFAULT_DAYS : meta.deliveryDays;
+  // ★機能追加：プラン単位の指定（プランマスタ「納品期限日数」）があれば支店マスタの設定より優先する
+  const planLimitDays = (planDeliveryDays && o.planName)
+    ? planDeliveryDays[`${o.branchCode}\t${o.planName}`] : undefined;
+  const limitDays = (planLimitDays === null || planLimitDays === undefined) ? branchLimitDays : planLimitDays;
   // 納品期限日数に0（＝撮影当日納品）を設定した場合でも、初回通知は最短で撮影翌日になるよう下限を1日に揃える
   const firstAlertDay = Math.max(limitDays, 1);
   return { daysPast, limitDays, firstAlertDay, overdue: daysPast >= firstAlertDay };
@@ -4261,6 +4451,7 @@ function checkDeliveryAlerts() { return runTrigger_('checkDeliveryAlerts', check
 function checkDeliveryAlertsCore_(errors) {
   const ss = getSpreadsheet_();
   const branchMeta = branchMetaMap_();
+  const planDeliveryDays = planDeliveryDaysMap_();
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   let sent = 0;
@@ -4278,8 +4469,9 @@ function checkDeliveryAlertsCore_(errors) {
         stsJp: row[headers.indexOf(COL_STATUS_JP)],
         stsBranch: row[headers.indexOf(COL_STATUS_BRANCH)],
         confirmedDate: row[headers.indexOf(COL_CONFIRMED_DATE)],
-        branchCode: row[headers.indexOf(COL_BRANCH_CODE)]
-      }, branchMeta, todayMidnight);
+        branchCode: row[headers.indexOf(COL_BRANCH_CODE)],
+        planName: row[headers.indexOf(COL_PLAN)]
+      }, branchMeta, todayMidnight, planDeliveryDays);
       if (!info || !info.overdue) return;
       const daysPast = info.daysPast;
       const limitDays = info.limitDays;
@@ -4294,14 +4486,18 @@ function checkDeliveryAlertsCore_(errors) {
 
       const shootStr = Utilities.formatDate(dVal, 'Asia/Tokyo', 'yyyy/MM/dd');
       const area = row[headers.indexOf(COL_AREA)];
-      const recipient = getJpTeamEmail_(area);
       const kanri = row[headers.indexOf(COL_KANRI_NO)];
       const branchCode = row[headers.indexOf(COL_BRANCH_CODE)];
+      // ★要件変更：以前は日本側（手配課）だけへの通知だったが、現地支店も自分の納品遅れに
+      // 気づけるよう、現地支店にも同じメールを送るようにした（「納品待ち」画面自体は元々
+      // 両ロールから見られるが、メール通知は手配課宛の1通だけだった）。
+      const recipients = [getJpTeamEmail_(area), getBranchEmail_(branchCode)].filter(Boolean).join(',');
+      if (!recipients) return;
       MailApp.sendEmail(
-        recipient,
+        recipients,
         `[要確認] 納品未登録：${kanri}（${branchCode}支店・撮影日から${daysPast}日経過）`,
         `撮影日から${daysPast}日が経過していますが、DriveフォルダURL（納品）が未登録です。ポータルをご確認ください。\n\n` +
-        `管理番号: ${kanri}\n撮影日: ${shootStr}\nこの支店の納品期限: 撮影日から${limitDays}日`
+        `管理番号: ${kanri}\n撮影日: ${shootStr}\nこの案件の納品期限: 撮影日から${limitDays}日`
       );
       sent++;
      } catch (e) {
@@ -4583,19 +4779,20 @@ function parseDateFromInput_(val) {
 // ★不具合修正：以前は無条件に全トリガーを削除していたため、setupConsentFormTriggerで
 // 設定した『同意書』フォームの自動反映トリガーも、setupTriggersを再実行すると消えてしまっていた。
 // このスクリプトが管理する日次トリガーだけを削除・再作成し、他のトリガーには触れないようにする。
-const MANAGED_DAILY_TRIGGERS = ['archivePastReservations', 'checkAlerts', 'checkDeliveryAlerts', 'checkUnansweredAlerts'];
+const MANAGED_DAILY_TRIGGERS = ['archivePastReservations', 'checkAlerts', 'checkShopAlerts', 'checkDeliveryAlerts', 'checkUnansweredAlerts'];
 function setupTriggers() {
   ScriptApp.getProjectTriggers().forEach(t => {
     if (MANAGED_DAILY_TRIGGERS.includes(t.getHandlerFunction())) ScriptApp.deleteTrigger(t);
   });
   ScriptApp.newTrigger('archivePastReservations').timeBased().everyDays(1).atHour(2).create();
   ScriptApp.newTrigger('checkAlerts').timeBased().everyDays(1).atHour(8).create();
+  ScriptApp.newTrigger('checkShopAlerts').timeBased().everyDays(1).atHour(8).create();
   ScriptApp.newTrigger('checkDeliveryAlerts').timeBased().everyDays(1).atHour(8).create();
   ScriptApp.newTrigger('checkUnansweredAlerts').timeBased().everyDays(1).atHour(9).create();
   // ★不具合修正：setupTriggers()もsetupPortal()と同様エディタから直接手動実行する運用のため、
   // UIコンテキストが無くgetUi()が例外になっていた。実行ログにも出しつつ、alertはエラーを
   // 無視する（スプレッドシートのカスタムメニュー経由で呼ばれた場合はそのまま表示される）。
-  alertOrLog_('日次トリガー（アーカイブ・撮影前アラート・納品期限アラート・未返信リマインド）を再設定しました。\n（同意書フォームのトリガーを設定済みの場合はそのまま残ります）');
+  alertOrLog_('日次トリガー（アーカイブ・撮影前アラート・撮影40日前(店舗発案件)アラート・納品期限アラート・未返信リマインド）を再設定しました。\n（同意書フォームのトリガーを設定済みの場合はそのまま残ります）');
 }
 
 // setupPortal/setupTriggers/setupConsentFormTrigger/setupSurveyFormTriggerのような「初回のみ

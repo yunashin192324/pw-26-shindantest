@@ -118,8 +118,11 @@ function deliveryScenario(opts) {
         '21+7=28, 21+14=35 のため30日は対象外が正しい');
   const m0 = deliveryScenario({ sheet: '過去一覧', daysPast: 1, deliveryDays: 0 });
   check('納品期限日数0（翌日から即アラート）が設定できる', m0.length === 1);
-  check('アラート宛先が管轄チーム（関東）になっている',
-        deliveryScenario({ sheet: '過去一覧', daysPast: 30 })[0].to === 'kanto@his-world.com');
+  const m1 = deliveryScenario({ sheet: '過去一覧', daysPast: 30 });
+  check('アラート宛先に管轄チーム（関東）が含まれる', m1[0].to.includes('kanto@his-world.com'), m1[0].to);
+  // ★要件変更：以前は日本側（手配課）だけへの通知だったが、現地支店にも同じメールを送るようにした
+  check('アラート宛先に現地支店（ウィーン）も含まれる（従来は手配課のみだった）',
+        m1[0].to.includes('vie@his-world.com'), m1[0].to);
 }
 
 // ---------------------------------------------------------------
@@ -3443,6 +3446,257 @@ section('57. 撮影データ納品先メールアドレス欄の追加・apiList
   });
   check('希望日にプランを何も指定しなければ案件全体のプラン名も空欄のまま',
         ctx.apiGetReservationDetail(jpToken, createdC.kanriNo).detail['プラン名'] === '');
+}
+
+// ---------------------------------------------------------------
+section('58. 店舗発新規依頼を支店ごとに自動分割・新規依頼の支店通知トグル');
+{
+  const ctx = featureFixture();
+  ctx.ensureSheetWithHeaders_(ctx.__ss, 'プランマスタ', ctx.PLAN_MASTER_HEADERS);
+  addBranchRow(ctx, { '支店コード': 'SHOP1', '支店名': '新宿店', 'ロール': 'SHOP', 'ログインパスコード': 'sp', '通知先メール': 'shop1@example.com', '有効': true });
+  const pm = ctx.__ss.getSheetByName('プランマスタ');
+  pm.appendRow(['VIE', 'ウィーン半日プラン', true]);
+  pm.appendRow(['IST', 'カッパドキアサンライズ', true]);
+
+  const jpToken = ctx.apiLogin('KANTO', 'pw').session.token;
+  const shopToken = ctx.apiLogin('SHOP1', 'sp').session.token;
+
+  // --- 希望日が全て同じ支店のプランなら、従来どおり1件だけ作られる（大多数のケース） ---
+  const single = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'VIE', team: '関東', groomLastName: 'Single', groomName: 'Case',
+    brideLastName: 'Single', brideName: 'Case', challengeNo: 'SPLIT000001',
+    hope1: '2026-10-01', hopePlan1: 'ウィーン半日プラン',
+    hope2: '2026-10-02', hopePlan2: 'ウィーン半日プラン'
+  });
+  check('希望日が全て同じ支店なら1件だけ作られる', single.kanriNos.length === 1, JSON.stringify(single));
+  check('kanriNoはkanriNos[0]と一致する', single.kanriNo === single.kanriNos[0]);
+
+  // --- 希望日①＝ウィーン支店のプラン、希望日②＝イスタンブール支店のプラン、
+  //     希望日③＝再びウィーン支店のプラン、という国をまたいだ複数プラン希望は、
+  //     支店ごとに案件を自動分割して作成する（元の希望順位はそれぞれの案件内で保持する） ---
+  ctx.__mail.length = 0;
+  const multi = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'VIE', team: '関東', groomLastName: 'Multi', groomName: 'Branch',
+    brideLastName: 'Multi', brideName: 'Branch', challengeNo: 'SPLIT000002',
+    hope1: '2026-10-10', hopePlan1: 'ウィーン半日プラン',
+    hope2: '2026-10-11', hopePlan2: 'カッパドキアサンライズ',
+    hope3: '2026-10-12', hopePlan3: 'ウィーン半日プラン'
+  });
+  check('支店をまたぐ希望日があると案件が支店ごとに分割される（2件）',
+        multi.kanriNos.length === 2, JSON.stringify(multi));
+
+  const vieCase = multi.kanriNos.map(k => ctx.apiGetReservationDetail(jpToken, k).detail).find(d => d['支店コード'] === 'VIE');
+  const istCase = multi.kanriNos.map(k => ctx.apiGetReservationDetail(jpToken, k).detail).find(d => d['支店コード'] === 'IST');
+  check('ウィーン支店分の案件ができている', !!vieCase);
+  check('イスタンブール支店分の案件ができている', !!istCase);
+
+  check('ウィーン支店分には希望日①・③が入り、他支店分の希望日②は空欄のまま',
+        vieCase['希望日①'] === '2026-10-10' && vieCase['希望日③'] === '2026-10-12' && !vieCase['希望日②'],
+        JSON.stringify(vieCase));
+  check('イスタンブール支店分には希望日②だけが入り、希望日①・③は空欄のまま',
+        istCase['希望日②'] === '2026-10-11' && !istCase['希望日①'] && !istCase['希望日③'],
+        JSON.stringify(istCase));
+  check('ウィーン支店分のプラン名は自分の希望日のプランから決まる（希望日①のプラン）',
+        vieCase['プラン名'] === 'ウィーン半日プラン');
+  check('イスタンブール支店分のプラン名も自分の希望日のプランから決まる',
+        istCase['プラン名'] === 'カッパドキアサンライズ');
+
+  // 新郎新婦名・チャレンジ番号など、案件全体で共通の項目はどちらの案件にも同じ内容がコピーされる
+  check('新郎新婦名は両方の案件に同じ内容が入る（依頼内容は同じ結婚式のため）',
+        vieCase['新郎名（ローマ字）'] === 'BRANCH' && istCase['新郎名（ローマ字）'] === 'BRANCH',
+        JSON.stringify({ vie: vieCase['新郎名（ローマ字）'], ist: istCase['新郎名（ローマ字）'] }));
+  check('チャレンジ番号も両方の案件に同じ内容が入る',
+        vieCase['CHG NO'] === 'SPLIT000002' && istCase['CHG NO'] === 'SPLIT000002',
+        JSON.stringify({ vie: vieCase['CHG NO'], ist: istCase['CHG NO'] }));
+
+  // それぞれのメッセージ履歴に、もう一方の支店の管理番号が案内される
+  const vieHist = ctx.apiGetReservationDetail(jpToken, vieCase['管理番号']).detail.history;
+  check('ウィーン支店分のメッセージに、イスタンブール支店分の管理番号が案内される',
+        vieHist.some(h => h.body.includes('関連の他支店案件') && h.body.includes(istCase['管理番号'])),
+        JSON.stringify(vieHist));
+  const istHist = ctx.apiGetReservationDetail(jpToken, istCase['管理番号']).detail.history;
+  check('イスタンブール支店分のメッセージにも、ウィーン支店分の管理番号が案内される',
+        istHist.some(h => h.body.includes('関連の他支店案件') && h.body.includes(vieCase['管理番号'])));
+
+  // 両支店とも既定（未設定）のため、手配課・両支店すべてにメールが届く
+  check('分割時も既定では手配課・両支店すべてに通知メールが届く',
+        ctx.__mail.some(m => m.to.includes('kanto@his-world.com')) &&
+        ctx.__mail.some(m => m.to.includes('vie@his-world.com')) &&
+        ctx.__mail.some(m => m.to.includes('ist@his-world.com')),
+        JSON.stringify(ctx.__mail.map(m => m.to)));
+
+  // --- 希望日にプランを指定しない場合は、フォーム上部で選んだ支店（都市）の案件に含める ---
+  const noPlanHope = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'VIE', team: '関東', groomLastName: 'NoPlan', groomName: 'Hope',
+    brideLastName: 'NoPlan', brideName: 'Hope', challengeNo: 'SPLIT000003',
+    hope1: '2026-10-20', hope2: '2026-10-21', hopePlan2: 'カッパドキアサンライズ'
+  });
+  check('プラン未選択の希望日と他支店のプランを選んだ希望日が混在しても、選んだ支店（都市）の案件に未選択分がまとまる',
+        noPlanHope.kanriNos.length === 2, JSON.stringify(noPlanHope));
+  const noPlanVie = noPlanHope.kanriNos.map(k => ctx.apiGetReservationDetail(jpToken, k).detail).find(d => d['支店コード'] === 'VIE');
+  check('プラン未選択の希望日①は、フォームで選んだウィーン支店の案件に入る', noPlanVie['希望日①'] === '2026-10-20');
+
+  // --- 新規依頼の支店通知トグル：OFFの支店へは作成時点のメールが飛ばない（可視性は変わらない） ---
+  setBranchField(ctx, 'IST', '新規依頼の支店通知', false);
+  ctx.__mail.length = 0;
+  const toggled = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'IST', team: '関東', groomLastName: 'Toggle', groomName: 'Off',
+    brideLastName: 'Toggle', brideName: 'Off', challengeNo: 'SPLIT000004', hope1: '2026-10-25'
+  });
+  check('支店通知OFFでも手配課へのメールは飛ぶ', ctx.__mail.some(m => m.to.includes('kanto@his-world.com')));
+  check('支店通知OFFの支店へはメールが飛ばない', !ctx.__mail.some(m => m.to.includes('ist@his-world.com')));
+  const istToken = ctx.apiLogin('IST', 'ip').session.token;
+  check('支店通知OFFでも案件自体は現地支店から閲覧できる（可視性は変えない）',
+        ctx.apiGetReservationDetail(istToken, toggled.kanriNo).detail['管理番号'] === toggled.kanriNo);
+  check('支店通知OFFでも支店側の一覧では未読（要対応）として表示される（メールだけを止める設定のため）',
+        ctx.apiGetDashboard(istToken, { showAll: true }).reservations.find(r => r.kanriNo === toggled.kanriNo).needsAction === true);
+
+  // 手配課側の通知もOFF、支店側の通知もOFFなら、メールは1通も飛ばない
+  setBranchField(ctx, 'IST', '店舗依頼の手配課通知', false);
+  ctx.__mail.length = 0;
+  ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'IST', team: '関東', groomLastName: 'Both', groomName: 'Off',
+    brideLastName: 'Both', brideName: 'Off', challengeNo: 'SPLIT000005', hope1: '2026-10-26'
+  });
+  check('手配課・支店の両方の通知がOFFならメールは1通も飛ばない', ctx.__mail.length === 0, JSON.stringify(ctx.__mail));
+}
+
+// ---------------------------------------------------------------
+section('59. 撮影40日前・STS(JP側)未FNアラート（店舗発案件専用・checkShopAlerts）');
+function shopAlertFixture() {
+  const ctx = makeContext(); CTX = ctx;
+  const ss = ctx.__ss;
+  ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
+  const bm = ss.getSheetByName('支店マスタ');
+  bm.appendRow(['KANTO', '関東手配課', '', '', 'JP', '関東', 'pw', 'kanto@his-world.com', '', '', '', '', '', true]);
+  bm.appendRow(['VIE', 'ウィーン支店', 'オーストリア', 'ウィーン', 'BRANCH', '', 'vp', 'vie@his-world.com', 'VIE', '', '', '', '', true]);
+  bm.appendRow(['SHOP1', '新宿店', '', '', 'SHOP', '', 'sp', 'shop1@his-world.com', '', '', '', '', '', true]);
+  ['予約一覧', '過去一覧'].forEach(n => ctx.ensureSheetWithHeaders_(ss, n, ctx.RESERVATION_HEADERS));
+  ctx.ensureSheetWithHeaders_(ss, 'やり取り履歴', ctx.HISTORY_HEADERS);
+  return ctx;
+}
+{
+  const ctx = shopAlertFixture();
+  const H = ctx.RESERVATION_HEADERS;
+  const mk = (sheetName, kanri, shootDate, stsJp, originShop) => {
+    const sheet = ctx.__ss.getSheetByName(sheetName);
+    const row = new Array(H.length).fill('');
+    row[H.indexOf('支店コード')] = 'VIE'; row[H.indexOf('管理番号')] = kanri;
+    row[H.indexOf('管轄')] = '関東'; row[H.indexOf('STS JP')] = stsJp;
+    row[H.indexOf('撮影日FIX')] = shootDate; row[H.indexOf('起票元店舗')] = originShop;
+    sheet.appendRow(row);
+  };
+
+  // 40日前ちょうど（daysSinceThreshold=0）・店舗発・未FN → 通知される
+  mk('予約一覧', 'SHOP-A', daysAhead(40), 'RQ', 'SHOP1');
+  // まだ40日前になっていない（daysSinceThreshold=-1） → 対象外
+  mk('予約一覧', 'SHOP-B', daysAhead(41), 'RQ', 'SHOP1');
+  // 40日前を過ぎているがFN（最終確定）済み → 対象外
+  mk('予約一覧', 'SHOP-C', daysAhead(40), 'FN', 'SHOP1');
+  // 40日前を過ぎているが起票元店舗が無い（従来のJP/BRANCH起票の案件） → 対象外
+  mk('予約一覧', 'SHOP-D', daysAhead(40), 'RQ', '');
+  // 40日前を1日過ぎただけ（daysSinceThreshold=1、7の倍数でない） → まだ再通知のタイミングではない
+  mk('予約一覧', 'SHOP-E', daysAhead(39), 'RQ', 'SHOP1');
+  // 撮影日が既に過ぎ、過去一覧に移動済みでも対象になる（daysSinceThreshold=42＝7の倍数）
+  mk('過去一覧', 'SHOP-F', daysAgo(2), 'RQ', 'SHOP1');
+  // 再通知の上限（120日）を超えた古い案件は対象外（daysSinceThreshold=126）
+  mk('過去一覧', 'SHOP-G', daysAgo(86), 'RQ', 'SHOP1');
+  // キャンセル成立（CW）は対象外
+  mk('予約一覧', 'SHOP-H', daysAhead(40), 'CW', 'SHOP1');
+
+  const result = ctx.checkShopAlerts();
+  check('エラー無く完走する', result.ok === true && result.errors === 0, JSON.stringify(result));
+
+  const alerted = ctx.__mail.filter(m => m.subj.includes('撮影40日前超過'));
+  const alertedKanri = alerted.map(m => m.subj.match(/：([\w-]+)（/)[1]);
+  check('40日前ちょうどの店舗発・未FN案件に通知される', alertedKanri.includes('SHOP-A'), JSON.stringify(alertedKanri));
+  check('まだ40日前になっていない案件には通知されない', !alertedKanri.includes('SHOP-B'));
+  check('FN済みの案件には通知されない', !alertedKanri.includes('SHOP-C'));
+  check('起票元店舗が無い（店舗発でない）案件には通知されない', !alertedKanri.includes('SHOP-D'));
+  check('40日前を過ぎたばかりで再通知間隔（7日）に満たない案件には通知されない', !alertedKanri.includes('SHOP-E'));
+  check('撮影日を過ぎ過去一覧に移動した案件でも、7日おきの再通知タイミングなら通知される',
+        alertedKanri.includes('SHOP-F'), JSON.stringify(alertedKanri));
+  check('再通知の上限（120日）を超えた古い案件には通知されない', !alertedKanri.includes('SHOP-G'));
+  check('キャンセル成立（CW）の案件には通知されない', !alertedKanri.includes('SHOP-H'));
+
+  const shopAMail = ctx.__mail.find(m => m.subj.includes('SHOP-A'));
+  check('通知は手配課・起票元店舗（日本支店）の両方に届く',
+        shopAMail && shopAMail.to.includes('kanto@his-world.com') && shopAMail.to.includes('shop1@his-world.com'),
+        shopAMail && shopAMail.to);
+}
+{
+  // setupTriggers に checkShopAlerts のトリガーが追加されていること
+  const ctx = shopAlertFixture();
+  let err = null;
+  try { ctx.setupTriggers(); } catch (e) { err = e.message; }
+  check('setupTriggersにcheckShopAlertsを追加してもエラーにならない', err === null, err);
+}
+
+// ---------------------------------------------------------------
+section('60. プランマスタの納品期限日数（支店マスタより優先）・納品待ち画面にも反映');
+{
+  const ctx = makeContext(); CTX = ctx;
+  const ss = ctx.__ss;
+  ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
+  const bm = ss.getSheetByName('支店マスタ');
+  bm.appendRow(['KANTO', '関東手配課', '', '', 'JP', '関東', 'p', 'kanto@his-world.com', '', '', '', '', '', true]);
+  // 支店マスタの納品期限日数は21日
+  bm.appendRow(['VIE', 'ウィーン支店', 'オーストリア', 'ウィーン', 'BRANCH', '', 'p', 'vie@his-world.com', 'VIE', '', 21, '', '', true]);
+  ctx.ensureSheetWithHeaders_(ss, 'プランマスタ', ctx.PLAN_MASTER_HEADERS);
+  const pm = ss.getSheetByName('プランマスタ');
+  // このプランだけ納品期限日数を10日に個別設定（支店マスタの21日より優先されるはず）
+  pm.appendRow(['VIE', '速報プラン', true, '', '', 10]);
+  pm.appendRow(['VIE', '通常プラン', true, '', '', '']); // 未設定なら支店マスタの21日のまま
+
+  ['予約一覧', '過去一覧'].forEach(n => ctx.ensureSheetWithHeaders_(ss, n, ctx.RESERVATION_HEADERS));
+  const H = ctx.RESERVATION_HEADERS;
+  const mk = (kanri, planName, daysPast) => {
+    const sheet = ss.getSheetByName('過去一覧');
+    const row = new Array(H.length).fill('');
+    row[H.indexOf('支店コード')] = 'VIE'; row[H.indexOf('管理番号')] = kanri;
+    row[H.indexOf('管轄')] = '関東'; row[H.indexOf('プラン名')] = planName;
+    row[H.indexOf('撮影日FIX')] = daysAgo(daysPast);
+    sheet.appendRow(row);
+  };
+
+  // 速報プラン：プラン単位の納品期限（10日）ちょうど経過（メールは期限日ちょうどに1通送る仕様）→ 通知される
+  mk('VIE-DL1', '速報プラン', 10);
+  // 通常プラン：プラン単位の指定が無いので支店マスタの21日を使う。10日経過ではまだ期限前 → 通知されない
+  mk('VIE-DL2', '通常プラン', 10);
+  // 通常プラン：支店マスタの21日ちょうど経過 → 通知される
+  mk('VIE-DL3', '通常プラン', 21);
+
+  ctx.checkDeliveryAlerts();
+  const kanriOf = (subj) => subj.match(/：([\w-]+)（/)[1];
+  const alertedKanri = ctx.__mail.map(m => kanriOf(m.subj));
+  check('プラン単位の納品期限（10日）を過ぎたら、支店の期限（21日）より先に通知される',
+        alertedKanri.includes('VIE-DL1'), JSON.stringify(alertedKanri));
+  check('プラン単位の指定が無いプランは、支店の期限（21日）が効くので10日経過ではまだ通知されない',
+        !alertedKanri.includes('VIE-DL2'), JSON.stringify(alertedKanri));
+  check('プラン単位の指定が無いプランでも、支店の期限（21日）を過ぎれば通知される',
+        alertedKanri.includes('VIE-DL3'), JSON.stringify(alertedKanri));
+
+  // 「納品待ち」一覧（apiGetPendingDeliveries）でも同じ基準が使われること
+  const jpToken = ctx.apiLogin('KANTO', 'p').session.token;
+  const pending = ctx.apiGetPendingDeliveries(jpToken, { showAll: true }).results.map(p => p.kanriNo);
+  check('納品待ち一覧にも、プラン単位の期限を過ぎた案件が出る（10日設定）', pending.includes('VIE-DL1'), JSON.stringify(pending));
+  check('納品待ち一覧では、プラン単位の期限前の案件は出ない', !pending.includes('VIE-DL2'), JSON.stringify(pending));
+  check('納品待ち一覧にも、支店単位の期限を過ぎた案件が出る', pending.includes('VIE-DL3'), JSON.stringify(pending));
+}
+
+// ---------------------------------------------------------------
+section('61. 一覧（apiGetDashboard）に撮影データ送付有無を追加');
+{
+  const ctx = featureFixture();
+  const jpToken = ctx.apiLogin('KANTO', 'pw').session.token;
+  addCase(ctx, '予約一覧', { '支店コード': 'VIE', '管理番号': 'VIE-980', '管轄': '関東', 'DriveフォルダURL': 'https://drive.google.com/x' });
+  addCase(ctx, '予約一覧', { '支店コード': 'VIE', '管理番号': 'VIE-981', '管轄': '関東' });
+
+  const dash = ctx.apiGetDashboard(jpToken, { showAll: true }).reservations;
+  const delivered = dash.find(r => r.kanriNo === 'VIE-980');
+  const notDelivered = dash.find(r => r.kanriNo === 'VIE-981');
+  check('DriveフォルダURLが登録済みの案件はdataDelivered=trueになる', delivered.dataDelivered === true);
+  check('DriveフォルダURL未登録の案件はdataDelivered=falseになる', notDelivered.dataDelivered === false);
 }
 
 // ---------------------------------------------------------------
