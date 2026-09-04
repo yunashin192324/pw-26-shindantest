@@ -101,6 +101,13 @@
     }
   }
   .hint-text { color: var(--color-muted); font-size: 0.82rem; }
+  /* ★不具合修正：新郎新婦年齢欄の入力期限（FN確定まで）をラベルの文言に埋め込んでいたが、
+     欄ごとに繰り返されて冗長・見づらいとの指摘を受け、対象の欄（新郎年齢・新婦年齢）の
+     まとまりの上に小さな帯として1つだけ出す形に変更した。detail-grid（案件詳細のお客様情報
+     タブ）内ではgrid-column:1/-1で行いっぱいに広げ、新規依頼フォーム（gridを使っていない
+     単純な縦積み）ではその指定は無視され、ふつうのブロックとして表示される。 */
+  .field-group-hint { grid-column: 1 / -1; background: var(--color-primary-tint); color: var(--color-primary-dark);
+    font-size: 0.75rem; padding: 5px 10px; border-radius: 6px; margin: 4px 0 2px; }
   /* ★不具合修正：新規依頼フォームの一番上「支店（都市）」欄が単一選択のため、複数の現地支店に
      またがる依頼（希望日ごとに別の支店のプランを選ぶ）ができることが伝わりにくいとの指摘への対応。
      気づいてもらえるよう、フォーム冒頭で目立つ案内を出す。 */

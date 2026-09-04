@@ -1020,8 +1020,9 @@
           <div class="field-block"><label>新郎名（ローマ字）</label><input data-pending="新郎名（ローマ字）" value="${escapeAttr(d['新郎名（ローマ字）'])}"></div>
           <div class="field-block"><label>新婦姓（ローマ字）</label><input data-pending="新婦姓（ローマ字）" value="${escapeAttr(d['新婦姓（ローマ字）'])}"></div>
           <div class="field-block"><label>新婦名（ローマ字）</label><input data-pending="新婦名（ローマ字）" value="${escapeAttr(d['新婦名（ローマ字）'])}"></div>
-          <div class="field-block"><label>新郎年齢（※ISWのみ必要・FN確定までに入力してください）</label><input type="number" min="0" data-pending="新郎年齢" value="${escapeAttr(d['新郎年齢'])}"></div>
-          <div class="field-block"><label>新婦年齢（※ISWのみ必要・FN確定までに入力してください）</label><input type="number" min="0" data-pending="新婦年齢" value="${escapeAttr(d['新婦年齢'])}"></div>
+          <div class="field-group-hint">下記はFN確定までに要入力</div>
+          <div class="field-block"><label>新郎年齢（※ISWのみ必要）</label><input type="number" min="0" data-pending="新郎年齢" value="${escapeAttr(d['新郎年齢'])}"></div>
+          <div class="field-block"><label>新婦年齢（※ISWのみ必要）</label><input type="number" min="0" data-pending="新婦年齢" value="${escapeAttr(d['新婦年齢'])}"></div>
           <div class="field-block"><label>パスポート番号（※ISWのみ必要）</label><input data-pending="パスポート番号" value="${escapeAttr(d['パスポート番号'])}"></div>
           <div class="field-block">${costumeCompanySelectHtml_(costumeList, d['衣装会社'])}</div>
           <div class="field-block"><label>同行者の有無</label>${companionSelectHtml_(d['同行者の有無'])}</div>
@@ -2015,8 +2016,9 @@
       <div class="tab-pane" data-tab-pane="customer" id="sec-customer">
         <div class="section-card">
           <div class="detail-grid">
-            <div class="field-block"><label>新郎年齢（※ISWのみ必要・FN確定までに入力してください）</label><input type="number" min="0" data-pending="新郎年齢" value="${escapeAttr(d['新郎年齢'])}"></div>
-            <div class="field-block"><label>新婦年齢（※ISWのみ必要・FN確定までに入力してください）</label><input type="number" min="0" data-pending="新婦年齢" value="${escapeAttr(d['新婦年齢'])}"></div>
+            <div class="field-group-hint">下記はFN確定までに要入力</div>
+            <div class="field-block"><label>新郎年齢（※ISWのみ必要）</label><input type="number" min="0" data-pending="新郎年齢" value="${escapeAttr(d['新郎年齢'])}"></div>
+            <div class="field-block"><label>新婦年齢（※ISWのみ必要）</label><input type="number" min="0" data-pending="新婦年齢" value="${escapeAttr(d['新婦年齢'])}"></div>
             ${!d.passportRequired ? '' : `<div class="field-block"><label>パスポート番号（※ISWのみ必要）</label><input data-pending="パスポート番号" value="${escapeAttr(d['パスポート番号'])}"></div>`}
             <div class="field-block">${costumeCompanySelectHtml_(costumeList, d['衣装会社'])}</div>
             <div class="field-block"><label>同行者の有無</label>${companionSelectHtml_(d['同行者の有無'])}</div>

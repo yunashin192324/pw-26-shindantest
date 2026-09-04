@@ -2750,10 +2750,16 @@ function paneHidden(document, key) {
 
     const groomAgeLabel = [...document.querySelectorAll('#view-shop-new label')].find(l => l.textContent.includes('新郎年齢'));
     const brideAgeLabel = [...document.querySelectorAll('#view-shop-new label')].find(l => l.textContent.includes('新婦年齢'));
-    check('新規依頼フォームの新郎年齢欄に「FN確定までに入力してください」のヒントが付いている',
-          !!groomAgeLabel && groomAgeLabel.textContent.includes('FN確定までに入力してください'), groomAgeLabel && groomAgeLabel.textContent);
-    check('新規依頼フォームの新婦年齢欄にも同じヒントが付いている',
-          !!brideAgeLabel && brideAgeLabel.textContent.includes('FN確定までに入力してください'), brideAgeLabel && brideAgeLabel.textContent);
+    check('新規依頼フォームの新郎年齢・新婦年齢のラベル自体には期限の文言を埋め込まない（元の文言のまま）',
+          !!groomAgeLabel && groomAgeLabel.textContent.trim() === '新郎年齢（※ISWのみ必要）' &&
+          !!brideAgeLabel && brideAgeLabel.textContent.trim() === '新婦年齢（※ISWのみ必要）',
+          groomAgeLabel && groomAgeLabel.textContent + ' / ' + brideAgeLabel && brideAgeLabel.textContent);
+    const ageHintBand = [...document.querySelectorAll('#view-shop-new .field-group-hint')]
+      .find(el => el.textContent.includes('FN確定までに要入力'));
+    check('新郎新婦年齢欄のまとまりの上に「下記はFN確定までに要入力」の帯が1つ出る', !!ageHintBand, ageHintBand && ageHintBand.textContent);
+    check('その帯は新郎年齢欄より前（フォーム上で上）にある',
+          !!ageHintBand && !!groomAgeLabel &&
+          (ageHintBand.compareDocumentPosition(groomAgeLabel) & 4) /* Node.DOCUMENT_POSITION_FOLLOWING */);
 
     // --- 希望日②〜⑤にも、それぞれ独立した撮影希望場所欄がある（希望日①と同じプラン連動の仕組み） ---
     check('希望日②の撮影希望場所欄は最初は自由入力（プラン未選択のため）',
@@ -2814,9 +2820,10 @@ function paneHidden(document, key) {
     [...document.querySelectorAll('#reservation-list .res-card, #reservation-table-body tr')]
       .find(c => c.textContent.includes(kanriU49)).click();
     await settle();
-    const jpAgeLabel = [...document.querySelectorAll('[data-tab-pane="customer"] label')].find(l => l.textContent.includes('新郎年齢'));
-    check('既存案件の詳細画面（日本側・お客様情報タブ）にも同じヒントが付いている',
-          !!jpAgeLabel && jpAgeLabel.textContent.includes('FN確定までに入力してください'), jpAgeLabel && jpAgeLabel.textContent);
+    const jpAgeHintBand = [...document.querySelectorAll('[data-tab-pane="customer"] .field-group-hint')]
+      .find(el => el.textContent.includes('FN確定までに要入力'));
+    check('既存案件の詳細画面（日本側・お客様情報タブ）にも同じ帯が1つ出る',
+          !!jpAgeHintBand, jpAgeHintBand && jpAgeHintBand.textContent);
   }
 
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
