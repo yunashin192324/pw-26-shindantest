@@ -218,11 +218,8 @@
         <div class="multi-branch-note">
           💡 <strong>複数の現地支店にまたがるご依頼も、1回でまとめて送れます。</strong><br>
           下の「希望日ごとのプラン」欄（希望日①・②…それぞれの右側）で、希望日ごとに違う支店のプランを
-          選ぶだけでOKです。送信すると支店ごとに自動で分けて登録されます（下の「支店（都市）」は、
-          プランを選ばなかった希望日の登録先になる基本の支店です）。
+          選ぶだけでOKです。送信すると支店ごとに自動で分けて登録されます。
         </div>
-        <label>支店（都市）</label>
-        <select id="shop-new-branch"></select>
         <label>該当の手配課</label>
         <select id="shop-new-team"></select>
         <label>新規作成時のSTS(JP側)</label>
@@ -249,11 +246,6 @@
              自動で反映される＝Code.gsのapplyHopeStatusCascade_・apiShopCreateRequest参照）。 -->
         <label>セール名</label>
         <select id="shop-new-sale"><option value="">未設定</option></select>
-        <label>撮影希望場所</label>
-        <div id="shop-new-location-wrap">
-          <input id="shop-new-location" type="text" list="shop-new-location-datalist" placeholder="任意入力">
-          <datalist id="shop-new-location-datalist"></datalist>
-        </div>
         <div id="shop-new-prep-block" class="hidden">
           <label>準備場所（ローマの場合は選択）</label>
           <select id="shop-new-prep"><option value="">-</option></select>
@@ -262,12 +254,21 @@
              プラン（複数プラン希望）も入力できるようにする。既存案件の詳細画面と同じ考え方。
              ★要件変更：希望日ごとのプランは、この案件の依頼先支店（都市）だけでなく全支店を
              横断して選べる（例：第一希望はロンドン支店のロンドンフォト、第二希望はローマ支店の
-             ローマフォト、のように支店をまたいだ複数プラン希望に対応するため）。 -->
+             ローマフォト、のように支店をまたいだ複数プラン希望に対応するため）。
+             ★仕様変更：フォーム上部の「支店（都市）」単独選択欄を廃止し、希望日（第一希望）の
+             プランで基準支店を自動的に決めるようにした（onShopNewHopePlan1Change参照）。あわせて
+             「撮影希望場所」欄は、希望日①のプランを選ぶとすぐ下にそのプラン用の候補が出るよう、
+             このすぐ下に移動した（旧位置＝セール名の直後からここへ）。 -->
         <label>希望日（第一希望）</label>
         <div class="shop-new-hope-row">
           <input id="shop-new-hope1" type="date">
           <select id="shop-new-hopetime1" class="shop-new-hopetime hidden"><option value="">-</option><option value="AM">AM</option><option value="PM">PM</option></select>
           <select id="shop-new-hopeplan1"><option value="">プラン未設定</option></select>
+        </div>
+        <label>撮影希望場所</label>
+        <div id="shop-new-location-wrap">
+          <input id="shop-new-location" type="text" list="shop-new-location-datalist" placeholder="希望日①のプランを選ぶと候補が出ます">
+          <datalist id="shop-new-location-datalist"></datalist>
         </div>
         <label>希望日（第二希望）</label>
         <div class="shop-new-hope-row">
@@ -334,6 +335,15 @@
     </main>
 
     <div id="toast" class="toast hidden"></div>
+
+    <!-- ★機能追加：新規予約の送信中など、通信に時間がかかる処理の間は画面全体を覆う
+         ロード表示を出す（ボタンの文言変化だけでは気づかれず、何度も押されてしまうため）。 -->
+    <div id="loading-overlay" class="loading-overlay hidden">
+      <div class="loading-overlay-card">
+        <div class="loading-spinner" aria-hidden="true"></div>
+        <div id="loading-overlay-text" class="loading-overlay-text">処理中です。しばらくお待ちください…</div>
+      </div>
+    </div>
 
     <!-- 現地スタッフ手配メールの下書き確認モーダル -->
     <div id="arrangement-modal" class="modal-overlay hidden">

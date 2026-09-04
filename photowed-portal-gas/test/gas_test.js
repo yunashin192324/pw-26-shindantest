@@ -3700,5 +3700,72 @@ section('61. 一覧（apiGetDashboard）に撮影データ送付有無を追加'
 }
 
 // ---------------------------------------------------------------
+section('62. 新規依頼フォーム上部の支店（都市）欄廃止（希望日①のプランから基準支店を自動特定）・通知メールに希望日ごとの全プランを記載・WEBAPP_URL');
+{
+  const ctx = shopFixture();
+  ctx.ensureSheetWithHeaders_(ctx.__ss, 'プランマスタ', ctx.PLAN_MASTER_HEADERS);
+  const pm62 = ctx.__ss.getSheetByName('プランマスタ');
+  pm62.appendRow(['VIE', 'ウィーンフォト', true]);
+  pm62.appendRow(['VIE', 'プランA', true]);
+  pm62.appendRow(['IST', 'カッパドキアサンライズ', true]);
+  const shopToken = ctx.apiLogin('SHOP1', 'sp').session.token;
+
+  // --- branchCodeを送らず、希望日①のプランだけで基準支店を特定できる ---
+  const created = ctx.apiShopCreateRequest(shopToken, {
+    team: '関東', groomLastName: 'Firenze', groomName: 'Test',
+    brideLastName: 'Roma', brideName: 'Test',
+    hope1: '2026-10-09', hopePlan1: 'ウィーンフォト',
+    challengeNo: 'NOBRANCH001'
+  });
+  check('branchCodeを送らなくても希望日①のプランから基準支店（VIE）が特定され、正常に作成できる',
+        created.ok === true && String(created.kanriNo).startsWith('VIE-'), JSON.stringify(created));
+
+  // --- 希望日①のプランが未選択だと作成できない（基準支店が決まらないため） ---
+  let err = null;
+  try {
+    ctx.apiShopCreateRequest(shopToken, {
+      team: '関東', groomLastName: 'A', groomName: 'B', brideLastName: 'C', brideName: 'D',
+      hope1: '2026-10-09', challengeNo: 'NOBRANCH002'
+    });
+  } catch (e) { err = e.message; }
+  check('branchCodeも希望日①のプランも無いと作成できない', err !== null && err.includes('プラン'), String(err));
+
+  // --- プラン名がどの支店のマスタにも存在しない場合もエラーになる ---
+  err = null;
+  try {
+    ctx.apiShopCreateRequest(shopToken, {
+      team: '関東', groomLastName: 'A', groomName: 'B', brideLastName: 'C', brideName: 'D',
+      hope1: '2026-10-09', hopePlan1: '存在しないプラン名', challengeNo: 'NOBRANCH003'
+    });
+  } catch (e) { err = e.message; }
+  check('希望日①のプランがどの支店のマスタにも無いと作成できない', err !== null && err.includes('提供元支店'), String(err));
+
+  // --- 通知メールに希望日ごとの全プランが記載される（第一希望しか出ない不具合の修正） ---
+  const created2 = ctx.apiShopCreateRequest(shopToken, {
+    team: '関東', groomLastName: 'Multi', groomName: 'Plan',
+    brideLastName: 'Multi', brideName: 'Plan',
+    hope1: '2026-10-09', hopePlan1: 'ウィーンフォト',
+    hope2: '2026-10-11', hopePlan2: 'プランA',
+    hope3: '2026-10-12', hopePlan3: 'カッパドキアサンライズ',
+    challengeNo: 'MULTIPLAN01'
+  });
+  // hope3（カッパドキアサンライズ＝IST）は別支店のため案件が分割される
+  check('希望日ごとに支店が異なるプランを選ぶと案件が分割される', created2.kanriNos.length === 2, JSON.stringify(created2.kanriNos));
+  const vieMail = ctx.__mail.find(m => m.body.includes('MULTIPLAN01') && m.body.includes('ウィーンフォト'));
+  check('通知メールに第一希望のプランが記載される', !!vieMail && vieMail.body.includes('第一希望') && vieMail.body.includes('ウィーンフォト'));
+  check('同じ通知メールに、同じ支店（VIE）の第二希望のプランも記載される（以前は第一希望しか出ない不具合があった）',
+        !!vieMail && vieMail.body.includes('第二希望') && vieMail.body.includes('プランA'), vieMail && vieMail.body);
+  const istMail = ctx.__mail.find(m => m.body.includes('MULTIPLAN01') && m.body.includes('カッパドキアサンライズ'));
+  check('別支店に分割された案件の通知メールには、その支店の希望日（第三希望）のプランが記載される',
+        !!istMail && istMail.body.includes('第三希望') && istMail.body.includes('カッパドキアサンライズ'), istMail && istMail.body);
+
+  // --- 通知メールの「ポータルで確認する」リンクにWEBAPP_URLが載る ---
+  check('通知メールにWebアプリのURL（WEBAPP_URL）が記載される（プレースホルダのままではない）',
+        !!vieMail && vieMail.body.includes('https://script.google.com/a/macros/his-world.com/s/'), vieMail && vieMail.body);
+  check('WEBAPP_URLのプレースホルダ文言は残っていない',
+        !vieMail || !vieMail.body.includes('Webアプリのデプロイ後のURLをここに記載してください'));
+}
+
+// ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
 process.exit(fail === 0 ? 0 : 1);

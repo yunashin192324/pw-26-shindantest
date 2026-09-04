@@ -580,17 +580,12 @@ function paneHidden(document, key) {
 
     document.getElementById('nav-shop-new').click();
     await settle();
-    const branchOpts = [...document.getElementById('shop-new-branch').options].map(o => o.value);
-    check('依頼先の支店（都市）が選べる', branchOpts.includes('VIE'), branchOpts.join(','));
+    check('フォーム上部に「支店（都市）」単独選択欄は無い（希望日①のプランが基準支店を兼ねる）',
+          !document.getElementById('shop-new-branch'));
     // ★要件：希望日のカレンダーで過去日が選べないよう min 属性が今日の日付になっている
     const todayIsoNew = new Date().toISOString().slice(0, 10);
     check('新規依頼フォームの希望日欄もカレンダーで過去日を選べない（min=今日）',
           document.getElementById('shop-new-hope1').min === todayIsoNew, document.getElementById('shop-new-hope1').min);
-    document.getElementById('shop-new-branch').value = 'VIE';
-    // ★要件：プラン・セール名・オプションは支店ごとのマスタから選ぶ選択式にしたため、
-    // 支店を切り替えたら候補が入れ替わる（change時に発火するonShopNewBranchChangeを待つ）
-    document.getElementById('shop-new-branch').dispatchEvent(new dom.window.Event('change'));
-    await settle();
     document.getElementById('shop-new-team').value = '関東';
     document.getElementById('shop-new-challengeno').value = '0A2B3C4D5E6';
     document.getElementById('shop-new-groom-last').value = 'Yilmaz';
@@ -610,6 +605,10 @@ function paneHidden(document, key) {
     const hopePlanOpts = [...document.getElementById('shop-new-hopeplan1').options].map(o => o.value);
     check('希望日のプランは全支店のマスタ一覧から選べる（自由入力ではない）', hopePlanOpts.includes('プランA'), hopePlanOpts.join(','));
     document.getElementById('shop-new-hopeplan1').value = 'プランA';
+    // ★仕様変更：希望日①のプラン選択が基準支店の決定を兼ねるため、選ぶとプラン・セール名・
+    // オプションの候補が支店ごとのマスタから入れ替わる（onShopNewHopePlan1Changeを待つ）
+    document.getElementById('shop-new-hopeplan1').dispatchEvent(new dom.window.Event('change'));
+    await settle();
     // ★要件変更：オプション名はマスタ候補（datalist）を出しつつ自由に書ける入力欄になった
     const optionOpts = [...document.getElementById('shop-new-option-datalist').options].map(o => o.value);
     check('オプションはマスタの候補（datalist）が出る（自由入力も可）', optionOpts.includes('追加アルバム'), optionOpts.join(','));
@@ -750,7 +749,6 @@ function paneHidden(document, key) {
     document.getElementById('view-mode-card').click();
     document.getElementById('nav-shop-new').click();
     await settle();
-    document.getElementById('shop-new-branch').value = 'VIE';
     document.getElementById('shop-new-team').value = '関東';
     document.getElementById('shop-new-challengeno').value = 'EXT0001AAAA';
     document.getElementById('shop-new-groom-last').value = 'Extended';
@@ -758,6 +756,9 @@ function paneHidden(document, key) {
     document.getElementById('shop-new-bride-last').value = 'Extended';
     document.getElementById('shop-new-bride').value = 'Bride';
     document.getElementById('shop-new-hope1').value = '2026-10-01';
+    document.getElementById('shop-new-hopeplan1').value = 'プランA';
+    document.getElementById('shop-new-hopeplan1').dispatchEvent(new dom.window.Event('change'));
+    await settle();
     document.getElementById('shop-new-initial-status').value = 'CHK';
     document.getElementById('shop-new-submit').click();
     await settle();
@@ -937,7 +938,6 @@ function paneHidden(document, key) {
     document.getElementById('view-mode-card').click();
     document.getElementById('nav-shop-new').click();
     await settle();
-    document.getElementById('shop-new-branch').value = 'VIE';
     document.getElementById('shop-new-team').value = '関東';
     document.getElementById('shop-new-groom-last').value = 'Hope';
     document.getElementById('shop-new-groom').value = 'Tester';
@@ -945,6 +945,9 @@ function paneHidden(document, key) {
     document.getElementById('shop-new-bride').value = 'Bride';
     document.getElementById('shop-new-hope1').value = '2026-08-01';
     document.getElementById('shop-new-hope2').value = '2026-08-05';
+    document.getElementById('shop-new-hopeplan1').value = 'プランA';
+    document.getElementById('shop-new-hopeplan1').dispatchEvent(new dom.window.Event('change'));
+    await settle();
 
     // ★要件：チャレンジ番号は任意ではなく必須。英数字11桁固定
     document.getElementById('shop-new-submit').click();
@@ -1141,9 +1144,6 @@ function paneHidden(document, key) {
     check('店舗の新規依頼フォームに新郎姓・新郎名・新婦姓・新婦名の4欄がある',
           !!document.getElementById('shop-new-groom-last') && !!document.getElementById('shop-new-groom') &&
           !!document.getElementById('shop-new-bride-last') && !!document.getElementById('shop-new-bride'));
-    document.getElementById('shop-new-branch').value = 'VIE';
-    document.getElementById('shop-new-branch').dispatchEvent(new dom.window.Event('change'));
-    await settle();
     document.getElementById('shop-new-team').value = '関東';
     document.getElementById('shop-new-challengeno').value = 'NAMESPLIT03';
     document.getElementById('shop-new-groom-last').value = 'Rossi';
@@ -1151,6 +1151,9 @@ function paneHidden(document, key) {
     document.getElementById('shop-new-bride-last').value = 'Bianchi';
     document.getElementById('shop-new-bride').value = 'Giulia';
     document.getElementById('shop-new-hope1').value = '2026-09-10';
+    document.getElementById('shop-new-hopeplan1').value = 'プランA';
+    document.getElementById('shop-new-hopeplan1').dispatchEvent(new dom.window.Event('change'));
+    await settle();
     document.getElementById('shop-new-submit').click();
     await settle();
     check('姓・名を分けて送信できる', !document.getElementById('shop-new-success').classList.contains('hidden'),
@@ -1205,9 +1208,6 @@ function paneHidden(document, key) {
     await settle();
     await login(dom, 'SHOP1', 'CHANGE-ME-SHOP1');
     document.getElementById('nav-shop-new').click();
-    await settle();
-    document.getElementById('shop-new-branch').value = 'VIE';
-    document.getElementById('shop-new-branch').dispatchEvent(new dom.window.Event('change'));
     await settle();
 
     // --- 既定（プラン未選択）は従来どおり自由入力 ---
@@ -1679,9 +1679,6 @@ function paneHidden(document, key) {
     check('新規依頼フォームのオプション6〜10はアコーディオン（details）に収納されている', !!newOptionAccordion);
     check('未入力の間はアコーディオンが閉じている', !newOptionAccordion.open);
 
-    document.getElementById('shop-new-branch').value = 'VIE';
-    document.getElementById('shop-new-branch').dispatchEvent(new dom.window.Event('change'));
-    await settle();
     document.getElementById('shop-new-team').value = '関東';
     document.getElementById('shop-new-challengeno').value = 'TENOPTUI001';
     document.getElementById('shop-new-groom-last').value = 'Ten';
@@ -1689,6 +1686,9 @@ function paneHidden(document, key) {
     document.getElementById('shop-new-bride-last').value = 'Ten';
     document.getElementById('shop-new-bride').value = 'OptionsB';
     document.getElementById('shop-new-hope1').value = '2026-09-10';
+    document.getElementById('shop-new-hopeplan1').value = 'プランA';
+    document.getElementById('shop-new-hopeplan1').dispatchEvent(new dom.window.Event('change'));
+    await settle();
     for (let n = 1; n <= 10; n++) document.getElementById('shop-new-option' + n).value = `オプション${n}番`;
     document.getElementById('shop-new-submit').click();
     await settle();
@@ -1888,7 +1888,6 @@ function paneHidden(document, key) {
     await login(dom, 'SHOP1', 'CHANGE-ME-SHOP1');
     document.getElementById('nav-shop-new').click();
     await settle();
-    document.getElementById('shop-new-branch').value = 'VIE';
     document.getElementById('shop-new-team').value = '関東';
     document.getElementById('shop-new-challengeno').value = 'BULKUPLOAD1';
     document.getElementById('shop-new-groom-last').value = 'Bulk';
@@ -1896,6 +1895,9 @@ function paneHidden(document, key) {
     document.getElementById('shop-new-bride-last').value = 'Bulk';
     document.getElementById('shop-new-bride').value = 'UploadB';
     document.getElementById('shop-new-hope1').value = '2026-09-10';
+    document.getElementById('shop-new-hopeplan1').value = 'プランA';
+    document.getElementById('shop-new-hopeplan1').dispatchEvent(new dom.window.Event('change'));
+    await settle();
     document.getElementById('shop-new-submit').click();
     await settle();
     const kanriU34 = document.getElementById('shop-new-success-text').textContent.match(/予約番号\s*(\S+)/)[1];
@@ -1964,9 +1966,6 @@ function paneHidden(document, key) {
     await login(dom, 'SHOP1', 'CHANGE-ME-SHOP1');
     document.getElementById('nav-shop-new').click();
     await settle();
-    document.getElementById('shop-new-branch').value = 'VIE';
-    document.getElementById('shop-new-branch').dispatchEvent(new dom.window.Event('change'));
-    await settle();
     document.getElementById('shop-new-team').value = '関東';
     document.getElementById('shop-new-challengeno').value = 'CUSTOMFLD01';
     document.getElementById('shop-new-groom-last').value = 'Custom';
@@ -1975,6 +1974,9 @@ function paneHidden(document, key) {
     document.getElementById('shop-new-bride').value = 'FieldB';
     document.getElementById('shop-new-hope1').value = '2026-09-10';
     document.getElementById('shop-new-hope2').value = '2026-09-11';
+    document.getElementById('shop-new-hopeplan1').value = 'プランA';
+    document.getElementById('shop-new-hopeplan1').dispatchEvent(new dom.window.Event('change'));
+    await settle();
     document.getElementById('shop-new-submit').click();
     await settle();
     const kanriU35 = document.getElementById('shop-new-success-text').textContent.match(/予約番号\s*(\S+)/)[1];
@@ -2097,6 +2099,10 @@ function paneHidden(document, key) {
   {
     document.getElementById('nav-logout').click();
     await settle();
+    // ★仕様変更：フォーム上部の支店（都市）単独選択欄は廃止したため、AM/PM表示ON/OFFの確認は
+    // 希望日①のプランを切り替えて行う。イスタンブール支店にはこのテスト専用のプランを1件
+    // 登録しておく（表示OFF＝プラン未登録の支店の確認用）。
+    ctx.__ss.getSheetByName('プランマスタ').appendRow(['IST', 'イスタンブール新規テスト用プラン', true]);
     await login(dom, 'SHOP1', 'CHANGE-ME-SHOP1');
     document.getElementById('nav-shop-new').click();
     await settle();
@@ -2104,18 +2110,19 @@ function paneHidden(document, key) {
     check('新規依頼フォームにパスポート番号の入力欄は無い', !document.getElementById('shop-new-passport-block'));
     check('新規依頼フォームの一番下に備考欄がある', !!document.getElementById('shop-new-remarks'));
 
-    document.getElementById('shop-new-branch').value = 'IST';
-    document.getElementById('shop-new-branch').dispatchEvent(new dom.window.Event('change'));
+    document.getElementById('shop-new-hopeplan1').value = 'イスタンブール新規テスト用プラン';
+    document.getElementById('shop-new-hopeplan1').dispatchEvent(new dom.window.Event('change'));
     await settle();
     check('希望日時間帯表示フラグがOFFの間は新規依頼フォームにも時間帯欄が出ない',
           document.getElementById('shop-new-hopetime1').classList.contains('hidden'));
 
     // ★U35でVIEの「希望日時間帯表示」フラグが既にONにされている（既存案件の詳細画面で確認済み）。
-    // ここでは新規依頼フォームでも同じフラグが反映されることを確認する
-    document.getElementById('shop-new-branch').value = 'VIE';
-    document.getElementById('shop-new-branch').dispatchEvent(new dom.window.Event('change'));
+    // ここでは新規依頼フォームでも、希望日①のプランをVIEのものに切り替えると同じフラグが
+    // 反映されることを確認する
+    document.getElementById('shop-new-hopeplan1').value = 'ローマ3時間フォト';
+    document.getElementById('shop-new-hopeplan1').dispatchEvent(new dom.window.Event('change'));
     await settle();
-    check('支店マスタでONの支店を選ぶと新規依頼フォームにも時間帯欄が現れる（第一希望）',
+    check('支店マスタでONの支店のプランを選ぶと新規依頼フォームにも時間帯欄が現れる（第一希望）',
           !document.getElementById('shop-new-hopetime1').classList.contains('hidden'));
     const newHopePlan1Opts = [...document.getElementById('shop-new-hopeplan1').options].map(o => o.value).filter(Boolean);
     check('希望日ごとのプラン選択欄にプランマスタの候補が入る（第一希望）',
@@ -2131,7 +2138,6 @@ function paneHidden(document, key) {
     document.getElementById('shop-new-bride').value = 'FormB';
     document.getElementById('shop-new-hope1').value = '2026-10-01';
     document.getElementById('shop-new-hopetime1').value = 'PM';
-    document.getElementById('shop-new-hopeplan1').value = 'ローマ3時間フォト';
     document.getElementById('shop-new-hope2').value = '2026-10-02';
     document.getElementById('shop-new-hopeplan2').value = 'フィレンツェフォト';
     document.getElementById('shop-new-remarks').value = '雨天の場合は室内ロケに変更希望';
@@ -2157,9 +2163,6 @@ function paneHidden(document, key) {
     await login(dom, 'SHOP1', 'CHANGE-ME-SHOP1');
     document.getElementById('nav-shop-new').click();
     await settle();
-    document.getElementById('shop-new-branch').value = 'VIE';
-    document.getElementById('shop-new-branch').dispatchEvent(new dom.window.Event('change'));
-    await settle();
     document.getElementById('shop-new-team').value = '関東';
     document.getElementById('shop-new-challengeno').value = 'UNCONFIRM01';
     document.getElementById('shop-new-groom-last').value = 'Un';
@@ -2167,6 +2170,9 @@ function paneHidden(document, key) {
     document.getElementById('shop-new-bride-last').value = 'Un';
     document.getElementById('shop-new-bride').value = 'ConfirmB';
     document.getElementById('shop-new-hope1').value = '2026-10-15';
+    document.getElementById('shop-new-hopeplan1').value = 'プランA';
+    document.getElementById('shop-new-hopeplan1').dispatchEvent(new dom.window.Event('change'));
+    await settle();
     document.getElementById('shop-new-submit').click();
     await settle();
     kanriU37 = document.getElementById('shop-new-success-text').textContent.match(/予約番号\s*(\S+)/)[1];
@@ -2574,9 +2580,6 @@ function paneHidden(document, key) {
     await login(dom, 'SHOP1', 'CHANGE-ME-SHOP1');
     document.getElementById('nav-shop-new').click();
     await settle();
-    document.getElementById('shop-new-branch').value = 'VIE';
-    document.getElementById('shop-new-branch').dispatchEvent(new dom.window.Event('change'));
-    await settle();
     document.getElementById('shop-new-team').value = '関東';
     document.getElementById('shop-new-challengeno').value = 'DBLCLICK001';
     document.getElementById('shop-new-groom-last').value = 'Double';
@@ -2584,6 +2587,9 @@ function paneHidden(document, key) {
     document.getElementById('shop-new-bride-last').value = 'Double';
     document.getElementById('shop-new-bride').value = 'ClickB';
     document.getElementById('shop-new-hope1').value = '2026-11-01';
+    document.getElementById('shop-new-hopeplan1').value = 'プランA';
+    document.getElementById('shop-new-hopeplan1').dispatchEvent(new dom.window.Event('change'));
+    await settle();
 
     const submitBtnU46 = document.getElementById('shop-new-submit');
     const originalLabelU46 = submitBtnU46.textContent;
@@ -2607,8 +2613,9 @@ function paneHidden(document, key) {
   // ---------------------------------------------------------------
   section('U47. 新規依頼フォームに複数支店にまたがる依頼ができる旨の案内を追加');
   {
-    // ★不具合修正：一番上の「支店（都市）」欄が単一選択のため、下の希望日ごとのプラン欄で
-    // 支店をまたいで選べることが伝わりにくいという指摘への対応。フォーム冒頭に案内を追加した。
+    // ★不具合修正：以前は一番上の「支店（都市）」欄が単一選択のため、下の希望日ごとのプラン欄で
+    // 支店をまたいで選べることが伝わりにくいという指摘への対応。フォーム冒頭に案内を追加した
+    // （その後U48でその「支店（都市）」欄自体を廃止したため、案内文言・位置チェックも合わせて更新）。
     document.getElementById('nav-logout').click();
     await settle();
     await login(dom, 'SHOP1', 'CHANGE-ME-SHOP1');
@@ -2617,9 +2624,119 @@ function paneHidden(document, key) {
     const noteU47 = document.querySelector('#view-shop-new .multi-branch-note');
     check('新規依頼フォームに複数支店にまたがる依頼ができる案内が出る', !!noteU47, document.getElementById('view-shop-new').innerHTML.slice(0, 300));
     check('案内には「複数の現地支店にまたがる」という文言が含まれる', !!noteU47 && noteU47.textContent.includes('複数の現地支店にまたがる'));
-    check('案内は「支店（都市）」欄より前（フォーム冒頭）に出る',
-          !!noteU47 && noteU47.compareDocumentPosition(document.getElementById('shop-new-branch')) & 4 /* Node.DOCUMENT_POSITION_FOLLOWING */,
+    check('案内は該当の手配課欄より前（フォーム冒頭）に出る',
+          !!noteU47 && noteU47.compareDocumentPosition(document.getElementById('shop-new-team')) & 4 /* Node.DOCUMENT_POSITION_FOLLOWING */,
           'compareDocumentPosition');
+  }
+
+  // ---------------------------------------------------------------
+  section('U48. メッセージ・保存ボタンの送信中表示、新規依頼のロード画面、支店（都市）欄廃止、完了案内の明るい配色');
+  {
+    // --- ①②メッセージ・保存・決定ボタンを押すと「送信中...」「保存中...」に変わり、連打できなくなる ---
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'KANTO', 'CHANGE-ME-KANTO');
+    document.querySelector('#reservation-list .res-card, #reservation-table-body tr').click();
+    await settle();
+    document.getElementById('msg-input').value = 'ロード表示確認用メッセージ';
+    const msgBtn = document.getElementById('btn-msg-only');
+    const msgBtnLabel = msgBtn.textContent;
+    msgBtn.click();
+    check('メッセージ送信ボタンを押すと文言が「送信中...」に変わる', msgBtn.textContent === '送信中...');
+    check('メッセージ送信ボタンを押すと無効化される（連打防止）', msgBtn.disabled === true);
+    await settle();
+    check('通信が終わるとメッセージ送信ボタンの文言が元に戻る', msgBtn.textContent === msgBtnLabel);
+    check('通信が終わるとメッセージ送信ボタンが再度押せる状態に戻る', msgBtn.disabled === false);
+
+    // 予約内容タブ下部の「保存のみ」クイックボタンでも同様（quick-save-btn。複数箇所に同じハンドラが
+    // querySelectorAllで登録されているため、押した実際のボタンだけが busy 表示になることも確認する）
+    const remarksField = document.querySelector('[data-tab-pane="reservation"] [data-pending="備考"]');
+    if (remarksField) { remarksField.value = 'U48保存中表示確認'; remarksField.dispatchEvent(new dom.window.Event('change')); }
+    const quickSaveBtn = document.querySelector('[data-tab-pane="reservation"] .quick-save-btn');
+    const quickSaveLabel = quickSaveBtn.textContent;
+    quickSaveBtn.click();
+    check('クイック保存ボタンを押すと文言が「保存中...」に変わる', quickSaveBtn.textContent === '保存中...');
+    await settle();
+    check('通信が終わるとクイック保存ボタンの文言が元に戻る', quickSaveBtn.textContent === quickSaveLabel);
+
+    // --- ⑦完了案内（success-banner）の配色が白背景＋青文字になっている（以前は緑背景で暗いと指摘された） ---
+    const styleText = [...document.querySelectorAll('style')].map(s => s.textContent).join('\n');
+    const successBannerRule = (styleText.match(/\.success-banner\s*\{[^}]*\}/) || [''])[0];
+    check('完了案内（success-banner）の背景が白になっている（以前の緑背景から変更）',
+          /background:\s*#fff/i.test(successBannerRule), successBannerRule);
+    check('完了案内（success-banner）の文字色が他の案内文と同じ青系（--color-primary-dark）になっている',
+          successBannerRule.includes('--color-primary-dark'), successBannerRule);
+
+    // --- ②新規依頼フォーム上部の「支店（都市）」単独選択欄が廃止されている ---
+    await login(dom, 'SHOP1', 'CHANGE-ME-SHOP1');
+    document.getElementById('nav-shop-new').click();
+    await settle();
+    check('新規依頼フォームに「支店（都市）」の単独選択欄はもう無い', !document.getElementById('shop-new-branch'));
+    check('撮影希望場所欄は希望日（第一希望）の行の直後に配置されている',
+          (document.getElementById('shop-new-hope1').closest('.shop-new-hope-row').nextElementSibling.tagName === 'LABEL' &&
+           document.getElementById('shop-new-hope1').closest('.shop-new-hope-row').nextElementSibling.nextElementSibling.id === 'shop-new-location-wrap'));
+
+    // --- ②希望日①のプランを選ぶとすぐ下の撮影希望場所欄に、その支店・そのプランの候補が反映される ---
+    document.getElementById('shop-new-hopeplan1').value = 'ローマ3時間フォト';
+    document.getElementById('shop-new-hopeplan1').dispatchEvent(new dom.window.Event('change'));
+    await settle();
+    check('希望日①にチェックボックス方式のプランを選ぶと、すぐ下の撮影希望場所欄が複数選択のチェックボックスになる',
+          document.querySelectorAll('.shop-new-location-cb').length === 2);
+
+    // --- ⑥別のプランを選び直すと、前のプランの撮影地（チェックボックス）が残らず、新しいプランの
+    //     入力方式（この場合はプルダウン）に確実に切り替わる ---
+    document.getElementById('shop-new-hopeplan1').value = 'フィレンツェフォト';
+    document.getElementById('shop-new-hopeplan1').dispatchEvent(new dom.window.Event('change'));
+    await settle();
+    check('別のプラン（プルダウン方式）に切り替えると、前のプランのチェックボックスは残らない',
+          document.querySelectorAll('.shop-new-location-cb').length === 0);
+    check('切り替え後は新しいプランの入力方式（プルダウン）になっている',
+          document.getElementById('shop-new-location').tagName === 'SELECT');
+    const locOptsAfterSwitch = [...document.getElementById('shop-new-location').options].map(o => o.value).filter(Boolean);
+    check('切り替え後の候補は新しいプラン（フィレンツェフォト）専用のものだけになっている（前のプランの候補は残らない）',
+          locOptsAfterSwitch.includes('ドゥオモ') && !locOptsAfterSwitch.includes('コロッセオ'), locOptsAfterSwitch.join(','));
+
+    // 再度、自由入力モードのプラン（プランA）に戻しても、候補（datalist）が空にならず反映される
+    // （以前は支店切り替えと希望日①プラン変更の非同期処理の順序次第でdatalistが空になる不具合があった）
+    document.getElementById('shop-new-hopeplan1').value = 'プランA';
+    document.getElementById('shop-new-hopeplan1').dispatchEvent(new dom.window.Event('change'));
+    await settle();
+    check('自由入力方式のプランに戻すと撮影希望場所が自由入力欄に戻る',
+          document.getElementById('shop-new-location').tagName === 'INPUT');
+
+    // --- ②希望日①のプラン未選択のまま送信しようとするとエラーになる（基準支店が決まらないため） ---
+    document.getElementById('shop-new-hopeplan1').value = '';
+    document.getElementById('shop-new-hopeplan1').dispatchEvent(new dom.window.Event('change'));
+    await settle();
+    document.getElementById('shop-new-team').value = '関東';
+    document.getElementById('shop-new-challengeno').value = 'U48NOPLAN01';
+    document.getElementById('shop-new-groom-last').value = 'No';
+    document.getElementById('shop-new-groom').value = 'Plan';
+    document.getElementById('shop-new-bride-last').value = 'No';
+    document.getElementById('shop-new-bride').value = 'PlanB';
+    document.getElementById('shop-new-hope1').value = '2026-09-10';
+    document.getElementById('shop-new-submit').click();
+    await settle();
+    check('希望日①のプラン未選択のままだと送信できない',
+          document.getElementById('shop-new-success').classList.contains('hidden') &&
+          !document.getElementById('shop-new-error').classList.contains('hidden'),
+          document.getElementById('shop-new-error').textContent);
+
+    // --- ④新規依頼の送信中は、画面全体を覆うロード表示が出る ---
+    document.getElementById('shop-new-hopeplan1').value = 'プランA';
+    document.getElementById('shop-new-hopeplan1').dispatchEvent(new dom.window.Event('change'));
+    await settle();
+    const overlay = document.getElementById('loading-overlay');
+    check('送信前はロード表示が隠れている', overlay.classList.contains('hidden'));
+    document.getElementById('shop-new-submit').click();
+    check('新規依頼を送信するとロード表示が出る', !overlay.classList.contains('hidden'));
+    check('ロード表示に「しばらくお待ちください」の案内が出る',
+          document.getElementById('loading-overlay-text').textContent.includes('お待ちください'));
+    await settle();
+    check('通信が終わるとロード表示が隠れる', overlay.classList.contains('hidden'));
+    check('この送信自体は成功する（プランを選んだので基準支店が決まる）',
+          !document.getElementById('shop-new-success').classList.contains('hidden'),
+          document.getElementById('shop-new-error').textContent);
   }
 
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);

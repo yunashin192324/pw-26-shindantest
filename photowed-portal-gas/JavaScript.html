@@ -93,6 +93,16 @@
   // ★機能追加：希望日①のプラン選択に応じて撮影希望場所・セール名を差し替えるため、
   // 全支店横断のプラン一覧（apiListAllActivePlans）をキャッシュしておく
   let shopNewAllPlansCache = [];
+  // ★仕様変更：フォーム上部の「支店（都市）」単独選択欄を廃止したため、希望日①のプランから
+  // 逆引きした「この依頼の基準支店」をJS側の状態としてここに持つ（以前はDOM上の
+  // #shop-new-branch セレクトの値がこの役目を兼ねていた）。
+  let shopNewActiveBranch = '';
+  // ★不具合修正：希望日①のプラン変更のたびに非同期でセール・撮影場所・オプション候補を
+  // 取り直すが、素早く連続でプランを切り替えると通信の完了順が前後し、古い応答で新しい選択の
+  // 表示を上書きしてしまうことがあった（「別のプランにしたら前のプランの撮影地が出ている」不具合の
+  // 一因）。呼び出しごとに増える番号を持たせ、応答が返ってきた時点で最新の呼び出しでなければ
+  // 反映しない（後着優先）ようにする。
+  let shopNewPlan1ChangeToken = 0;
 
   function gsRun(fnName, ...args) {
     return new Promise((resolve, reject) => {
@@ -103,7 +113,33 @@
     });
   }
 
+  // ★機能追加：メッセージ送信・保存系のボタンを押しても「送信中」「保存中」等の見た目の変化が無く、
+  // 通信が終わったのか分からず何度も押してしまう、という指摘への対応。ボタンを渡すと、処理中は
+  // 無効化＋文言を busyLabel に差し替え、終わったら元に戻す（二重送信防止も兼ねる）。
+  // 同じハンドラが「メッセージ」タブのボタンと詳細画面下部のクイックボタンの両方から
+  // querySelectorAllで複数登録されることがあるため、押された実際のボタン要素（event.currentTarget）
+  // を受け取れるようにしてある。
+  async function withButtonBusy_(btn, busyLabel, fn) {
+    if (btn && btn.disabled) return; // 連打防止
+    const originalLabel = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = busyLabel; }
+    try {
+      await fn();
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
+    }
+  }
+
   function $(id) { return document.getElementById(id); }
+
+  // ★機能追加：画面全体を覆うロード表示（新規予約の送信中など）
+  function showLoadingOverlay_(text) {
+    $('loading-overlay-text').textContent = text || '処理中です。しばらくお待ちください…';
+    $('loading-overlay').classList.remove('hidden');
+  }
+  function hideLoadingOverlay_() {
+    $('loading-overlay').classList.add('hidden');
+  }
 
   function showToast(msg) {
     const t = $('toast');
@@ -171,7 +207,9 @@
     $('nav-day').addEventListener('click', openDayView);
     $('nav-delivery').addEventListener('click', () => loadPendingDeliveries());
     $('nav-shop-new').addEventListener('click', openShopNewView);
-    $('shop-new-branch').addEventListener('change', onShopNewBranchChange);
+    // ★仕様変更：フォーム上部の「支店（都市）」単独選択欄を廃止したため、支店切り替え時の処理
+    // （onShopNewBranchChange）は無くなり、希望日①のプラン変更（＝基準支店の変更を兼ねる）だけで
+    // 一本化した（onShopNewHopePlan1Change参照）。
     $('shop-new-hopeplan1').addEventListener('change', onShopNewHopePlan1Change);
     $('shop-new-submit').addEventListener('click', submitShopNewRequest);
     $('shop-new-success-top-btn').addEventListener('click', () => loadDashboard());
@@ -319,7 +357,19 @@
       if (data.role === 'JP' || data.role === 'SHOP') branchesCache = data.branches;
       lastDashboardData = data;
       renderDashboard(data);
-    } catch (e) { handleAuthError(e); }
+    } catch (e) {
+      // ★不具合修正：以前は読み込み失敗時にトースト（数秒で自動的に消える）だけで、
+      // 一覧欄自体は空のまま何のヒントも残らなかった。「一覧に戻っても何も出てこない」
+      // （実際には通信エラーで一覧を取得できていなかった）という報告に対応し、
+      // ①devtoolsで原因を追えるようconsoleにも詳細を残す ②一覧欄にも消えない案内を出す、
+      // の2点で「何も起きていないように見える」状態を無くす。
+      console.error('[loadDashboard] 一覧の読み込みに失敗しました', e);
+      handleAuthError(e);
+      $('reservation-table-wrap').classList.add('hidden');
+      $('reservation-list').classList.add('hidden');
+      $('dashboard-empty').textContent = '一覧の読み込みに失敗しました。通信状況をご確認のうえ、もう一度お試しください。';
+      $('dashboard-empty').classList.remove('hidden');
+    }
   }
 
   function renderDashboard(data) {
@@ -394,6 +444,8 @@
 
     list = sortReservations(list, dashboardSortKey);
 
+    // ★読み込み失敗時の案内文言（loadDashboardのcatch側）を、正常に描画できたときは元に戻す
+    $('dashboard-empty').textContent = '案件がありません。';
     $('dashboard-empty').classList.toggle('hidden', list.length > 0);
 
     if (dashboardViewMode === 'table') {
@@ -2513,44 +2565,53 @@
   }
 
   // メッセージのみ送信（保留中の変更フィールドはそのまま残る＝未保存のまま）
-  async function sendMessageOnly() {
+  async function sendMessageOnly(evt) {
     const msg = $('msg-input').value.trim();
     if (!msg) { showToast('メッセージを入力してください'); return; }
-    try {
-      await gsRun('apiCommitChanges', session.token, currentKanri, {}, msg, currentMsgRecipient());
-      // ★機能追加：店舗ロールには送信後「回答までお待ちください」の案内を添える
-      showToast(session.role === 'SHOP' ? 'メッセージを送信しました。ご回答まで今しばらくお待ちください。' : 'メッセージを送信しました');
-      $('msg-input').value = '';
-      openDetail(currentKanri);
-    } catch (e) { handleAuthError(e); }
+    const btn = evt && evt.currentTarget;
+    await withButtonBusy_(btn, '送信中...', async () => {
+      try {
+        await gsRun('apiCommitChanges', session.token, currentKanri, {}, msg, currentMsgRecipient());
+        // ★機能追加：店舗ロールには送信後「回答までお待ちください」の案内を添える
+        showToast(session.role === 'SHOP' ? 'メッセージを送信しました。ご回答まで今しばらくお待ちください。' : 'メッセージを送信しました');
+        $('msg-input').value = '';
+        openDetail(currentKanri);
+      } catch (e) { handleAuthError(e); }
+    });
   }
 
   // 変更内容（＋任意でメッセージ）をまとめて決定・送信
-  async function commitChangesWithMessage() {
+  async function commitChangesWithMessage(evt) {
     if (Object.keys(pendingChanges).length === 0) { showToast('変更内容がありません'); return; }
     const msg = $('msg-input').value.trim();
-    try {
-      const res = await gsRun('apiCommitChanges', session.token, currentKanri, pendingChanges, msg, currentMsgRecipient());
-      pendingChanges = {};
-      if (res.noChange) {
-        showToast('変更はありませんでした');
-      } else {
-        // ★機能追加：店舗ロールには送信後「回答までお待ちください」の案内を添える
-        showToast(session.role === 'SHOP' ? '変更を決定し、相手へ通知しました。ご回答まで今しばらくお待ちください。' : '変更を決定し、相手へ通知しました');
-      }
-      openDetail(currentKanri, true); // 今開いているタブのまま留まる
-    } catch (e) { handleAuthError(e); }
+    const btn = evt && evt.currentTarget;
+    await withButtonBusy_(btn, '送信中...', async () => {
+      try {
+        const res = await gsRun('apiCommitChanges', session.token, currentKanri, pendingChanges, msg, currentMsgRecipient());
+        pendingChanges = {};
+        if (res.noChange) {
+          showToast('変更はありませんでした');
+        } else {
+          // ★機能追加：店舗ロールには送信後「回答までお待ちください」の案内を添える
+          showToast(session.role === 'SHOP' ? '変更を決定し、相手へ通知しました。ご回答まで今しばらくお待ちください。' : '変更を決定し、相手へ通知しました');
+        }
+        openDetail(currentKanri, true); // 今開いているタブのまま留まる
+      } catch (e) { handleAuthError(e); }
+    });
   }
 
   // 保存のみ（通知しない）
-  async function saveQuiet() {
+  async function saveQuiet(evt) {
     if (Object.keys(pendingChanges).length === 0) { showToast('保存する変更がありません'); return; }
-    try {
-      await gsRun('apiSaveFieldsQuiet', session.token, currentKanri, pendingChanges);
-      pendingChanges = {};
-      showToast('変更を保存しました（通知は送信していません）');
-      openDetail(currentKanri, true); // 今開いているタブのまま留まる
-    } catch (e) { handleAuthError(e); }
+    const btn = evt && evt.currentTarget;
+    await withButtonBusy_(btn, '保存中...', async () => {
+      try {
+        await gsRun('apiSaveFieldsQuiet', session.token, currentKanri, pendingChanges);
+        pendingChanges = {};
+        showToast('変更を保存しました（通知は送信していません）');
+        openDetail(currentKanri, true); // 今開いているタブのまま留まる
+      } catch (e) { handleAuthError(e); }
+    });
   }
 
   async function submitDriveUrl() {
@@ -2735,12 +2796,11 @@
     // ★要件：希望日のカレンダーで今日より前の日付が選べてしまわないよう下限を付ける
     SHOP_NEW_DATE_FIELDS.forEach(k => { $('shop-new-' + k).min = todayIsoDate_(); });
     $('shop-new-initial-status').value = 'RQ';
+    shopNewActiveBranch = '';
     if (!branchesCache.length) {
       const data = await gsRun('apiGetDashboard', session.token, { showAll: true });
       branchesCache = data.branches || [];
     }
-    $('shop-new-branch').innerHTML = branchesCache
-      .map(b => `<option value="${escapeAttr(b.code)}">${escapeHtml(b.name)}（${escapeHtml(b.country || '')}/${escapeHtml(b.city || '')}）</option>`).join('');
     $('shop-new-team').innerHTML = JP_TEAMS.map(t => `<option value="${escapeAttr(t)}">${escapeHtml(t)}手配課</option>`).join('');
     $('shop-new-prep').innerHTML = '<option value="">-</option>' +
       PREP_CHOICES.map(p => `<option value="${escapeAttr(p)}">${escapeHtml(p)}</option>`).join('');
@@ -2748,43 +2808,14 @@
     // 選べるようにする（例：第一希望はロンドン支店のロンドンフォト、第二希望はローマ支店の
     // ローマフォト）。案件全体の「プラン」単独欄は廃止し、代わりに希望日①（第一希望）の
     // プラン選択が、これまで単独のプラン欄が担っていた役目（撮影希望場所の入力方式切替・
-    // セール名のプラン別絞り込み）も兼ねる。支店切り替えに関わらず一度だけ全支店分の候補を
+    // セール名のプラン別絞り込み・この依頼の基準支店の決定）も兼ねる。一度だけ全支店分の候補を
     // 取得して都市ごとの<optgroup>にまとめる。
     try {
       shopNewAllPlansCache = await gsRun('apiListAllActivePlans', session.token);
       const hopePlanOptsHtml = allPlanOptionsHtml_(shopNewAllPlansCache, '', 'プラン未設定');
       SHOP_NEW_HOPE_PLAN_FIELDS.forEach(k => { $('shop-new-' + k).innerHTML = hopePlanOptsHtml; });
     } catch (e) { shopNewAllPlansCache = []; /* 候補が取れなくても入力自体は続けられる（プランは未設定のまま） */ }
-    onShopNewHopePlan1Change();
-    onShopNewBranchChange();
-  }
-
-  // 支店（都市）を選ぶと、その支店のセール・撮影希望場所・オプションの候補を反映し、
-  // 準備場所（イタリアのみ）・パスポート番号（必須の支店のみ）の表示を切り替える。
-  async function onShopNewBranchChange() {
-    const branchCode = $('shop-new-branch').value;
-    if (!branchCode) return;
-    const meta = branchesCache.find(b => b.code === branchCode) || {};
-    $('shop-new-prep-block').classList.toggle('hidden', meta.country !== 'イタリア');
-    // ★要件：希望日の時間帯（AM/PM）欄は、支店マスタの「希望日時間帯表示」がONの支店だけ表示する
-    document.querySelectorAll('.shop-new-hopetime').forEach(el => el.classList.toggle('hidden', !meta.showHopeTime));
-    // ★要件変更：パスポート番号欄は支店の必須設定に関わらず常に表示する（※ISWのみ必要、と注記）
-    try {
-      const [sales, locations, options] = await Promise.all([
-        gsRun('apiListSales', session.token, branchCode),
-        gsRun('apiListLocations', session.token, branchCode),
-        gsRun('apiListOptionItems', session.token, branchCode)
-      ]);
-      shopNewSalesCache = sales || [];
-      const activeNames = (list) => (list || []).filter(x => x.active).map(x => x.name);
-      const optionNames = activeNames(options);
-      $('shop-new-location-datalist').innerHTML = activeNames(locations).map(n => `<option value="${escapeAttr(n)}">`).join('');
-      // ★要件：オプション名はマスタからの選択式ではなく、候補（datalist）を出しつつ自由に書ける
-      // 入力欄にする（フリー入力）。マスタに無い名称も入力できる
-      $('shop-new-option-datalist').innerHTML = optionNames.map(n => `<option value="${escapeAttr(n)}">`).join('');
-      // ★要件：支店（＝セールの候補）を切り替えたら、希望日①のプランに応じたセール絞り込みを再適用する
-      onShopNewHopePlan1Change();
-    } catch (e) { /* 候補が取れなくても入力自体は続けられる（セール等は未設定のまま） */ }
+    await onShopNewHopePlan1Change();
   }
 
   // ★要件：プラン・セール名・撮影希望場所は支店に紐づくだけでなく、撮影希望場所とセール名は
@@ -2807,15 +2838,25 @@
         </div>
         <input type="hidden" id="shop-new-location">`;
     }
-    return `<input id="shop-new-location" type="text" list="shop-new-location-datalist" placeholder="任意入力">
+    return `<input id="shop-new-location" type="text" list="shop-new-location-datalist" placeholder="希望日①のプランを選ぶと候補が出ます">
       <datalist id="shop-new-location-datalist"></datalist>`;
   }
-  // ★要件変更：案件全体の「プラン」単独欄を廃止したため、希望日①（第一希望）のプラン選択が
-  // 変わるたびに、撮影希望場所の入力方式・セール名の絞り込みを差し替える
-  // （旧onShopNewPlanChangeと同じ役目。プランは全支店横断のためshopNewAllPlansCacheから探す）。
-  function onShopNewHopePlan1Change() {
+  // ★仕様変更：フォーム上部の「支店（都市）」単独選択欄を廃止したため、希望日①（第一希望）の
+  // プラン選択が変わるたびに ①撮影希望場所の入力方式・候補 ②セール名の絞り込み ③この依頼の
+  // 基準支店（準備場所・AM/PM表示・オプション候補などに使う）の3つをまとめて更新する
+  // （旧onShopNewPlanChange＋onShopNewBranchChangeを1つに統合。プランは全支店横断のため
+  // shopNewAllPlansCacheから探す）。
+  // ★不具合修正：以前は「支店切り替え→非同期でセール等を取得→完了後に改めて
+  // プラン変更処理を呼ぶ」という2段構えで、応答が前後すると古い支店の候補が後から表示に
+  // 残ってしまうことがあった。1つの関数にまとめ、shopNewPlan1ChangeTokenで「今の呼び出しより
+  // 後に呼ばれていたら古い応答は捨てる」ようにして、常に最後に選んだプランの内容だけが残るようにした。
+  async function onShopNewHopePlan1Change() {
+    const token = ++shopNewPlan1ChangeToken;
     const planName = $('shop-new-hopeplan1').value;
     const planMeta = shopNewAllPlansCache.find(p => p.name === planName);
+    shopNewActiveBranch = planMeta ? planMeta.branchCode : '';
+
+    // 撮影希望場所欄は、選んだプランの設定（入力方式・候補）だけで決まるので、通信を待たずすぐ描画する
     $('shop-new-location-wrap').innerHTML = shopNewLocationFieldHtml_(planMeta);
     if (planMeta && planMeta.locationMode === 'checkbox') {
       const wrap = $('shop-new-location-wrap');
@@ -2826,17 +2867,51 @@
         });
       });
     }
-    const saleNames = shopNewSalesCache.filter(s => s.active && (!s.targetPlan || s.targetPlan === planName)).map(s => s.name);
-    const currentSale = $('shop-new-sale').value;
-    $('shop-new-sale').innerHTML = '<option value="">未設定</option>' +
-      saleNames.map(n => `<option value="${escapeAttr(n)}" ${n === currentSale ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('');
+
+    if (!shopNewActiveBranch) {
+      // プラン未選択（＝基準支店が定まらない）間は、支店に紐づく項目をいったんリセットしておく
+      $('shop-new-prep-block').classList.add('hidden');
+      document.querySelectorAll('.shop-new-hopetime').forEach(el => el.classList.add('hidden'));
+      shopNewSalesCache = [];
+      $('shop-new-sale').innerHTML = '<option value="">未設定</option>';
+      $('shop-new-option-datalist').innerHTML = '';
+      return;
+    }
+
+    const meta = branchesCache.find(b => b.code === shopNewActiveBranch) || {};
+    $('shop-new-prep-block').classList.toggle('hidden', meta.country !== 'イタリア');
+    // ★要件：希望日の時間帯（AM/PM）欄は、支店マスタの「希望日時間帯表示」がONの支店だけ表示する
+    document.querySelectorAll('.shop-new-hopetime').forEach(el => el.classList.toggle('hidden', !meta.showHopeTime));
+    try {
+      const [sales, locations, options] = await Promise.all([
+        gsRun('apiListSales', session.token, shopNewActiveBranch),
+        gsRun('apiListLocations', session.token, shopNewActiveBranch),
+        gsRun('apiListOptionItems', session.token, shopNewActiveBranch)
+      ]);
+      if (token !== shopNewPlan1ChangeToken) return; // その間にさらにプランが変わっていたら、古い応答は反映しない
+      shopNewSalesCache = sales || [];
+      const activeNames = (list) => (list || []).filter(x => x.active).map(x => x.name);
+      // ★不具合修正：撮影希望場所が「選択式」「チェックボックス」モードのプランの場合、
+      // 上で描画したshop-new-location-wrapにはdatalist要素自体が無い（shopNewLocationFieldHtml_参照）。
+      // その場合は候補を反映する先が無いので、要素があるとき（自由入力モード）だけ設定する。
+      const locationDatalist = $('shop-new-location-datalist');
+      if (locationDatalist) locationDatalist.innerHTML = activeNames(locations).map(n => `<option value="${escapeAttr(n)}">`).join('');
+      // ★要件：オプション名はマスタからの選択式ではなく、候補（datalist）を出しつつ自由に書ける
+      // 入力欄にする（フリー入力）。マスタに無い名称も入力できる
+      $('shop-new-option-datalist').innerHTML = activeNames(options).map(n => `<option value="${escapeAttr(n)}">`).join('');
+      const saleNames = shopNewSalesCache.filter(s => s.active && (!s.targetPlan || s.targetPlan === planName)).map(s => s.name);
+      const currentSale = $('shop-new-sale').value;
+      $('shop-new-sale').innerHTML = '<option value="">未設定</option>' +
+        saleNames.map(n => `<option value="${escapeAttr(n)}" ${n === currentSale ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('');
+    } catch (e) { /* 候補が取れなくても入力自体は続けられる（セール等は未設定のまま） */ }
   }
 
   async function submitShopNewRequest() {
     $('shop-new-error').classList.add('hidden');
     $('shop-new-success').classList.add('hidden');
     const payload = {
-      branchCode: $('shop-new-branch').value,
+      // ★仕様変更：フォーム上部の「支店（都市）」単独選択欄を廃止したため、branchCodeは送らない
+      // （サーバー側apiShopCreateRequestが希望日①のプランから基準支店を自動的に特定する）。
       team: $('shop-new-team').value,
       initialStatus: $('shop-new-initial-status').value,
       challengeNo: $('shop-new-challengeno').value.trim(),
@@ -2875,15 +2950,20 @@
     if (!payload.brideLastName) { showFieldError('shop-new-error', '新婦姓（ローマ字）を入力してください。'); return; }
     if (!payload.brideName) { showFieldError('shop-new-error', '新婦名（ローマ字）を入力してください。'); return; }
     if (!payload.hope1) { showFieldError('shop-new-error', '希望日（第一希望）を入力してください。'); return; }
+    // ★仕様変更：フォーム上部の「支店（都市）」単独選択欄を廃止したため、希望日（第一希望）の
+    // プランで基準支店を決める。プラン未選択のままだと基準支店が定まらないため必須にする。
+    if (!payload.hopePlan1) { showFieldError('shop-new-error', '希望日（第一希望）のプランを選択してください。'); return; }
     // ★不具合修正：送信ボタンに二重送信防止が無く、通信が終わる前に連打すると同じ内容の案件が
     // 複数作成されてしまっていた（「予約が複数できてしまう」「送信できたか分かりづらくて
-    // 何度も押してしまう」）。送信中はボタンを無効化し、「送信中...」に文言を変えて、
-    // 何が起きているか分かるようにする。
+    // 何度も押してしまう」）。送信中はボタンを無効化し、「送信中...」に文言を変えるだけでなく、
+    // ★機能追加：画面全体を覆うロード表示も出す（ボタンの文言変化だけでは気づかれなかった
+    // ため、「しばらくお待ちください」の案内をより目立つ形でも出してほしいとの要望に対応）。
     const submitBtn = $('shop-new-submit');
     if (submitBtn.disabled) return; // 万一の多重呼び出しをここでも防ぐ
     submitBtn.disabled = true;
     const submitBtnLabel = submitBtn.textContent;
     submitBtn.textContent = '送信中...';
+    showLoadingOverlay_('送信中です。しばらくお待ちください…');
     try {
       const res = await gsRun('apiShopCreateRequest', session.token, payload);
       // ★機能追加：送信後に「回答までお待ちください」の案内を出す
@@ -2913,6 +2993,7 @@
     } finally {
       submitBtn.disabled = false;
       submitBtn.textContent = submitBtnLabel;
+      hideLoadingOverlay_();
     }
   }
 

@@ -16,6 +16,10 @@
 // --- このWebアプリが使うスプレッドシートのID ---
 const SPREADSHEET_ID = '11YDN8mkD3ir9mR32JCpwtIfA2BCyspqw1Mn8rnI5cOE';
 
+// ★機能追加：デプロイ後のWebアプリURL（通知メール本文の「ポータルで確認する」リンクに使用）。
+// 再デプロイでURLが変わった場合はここを書き換える。
+const WEBAPP_URL = 'https://script.google.com/a/macros/his-world.com/s/AKfycbz143-qasWEQoJB87kpPH_2Pjmv_6499TKKGKW3ddQ06JFM9H5gkPiTtOJl7RcWm9A/exec';
+
 // --- シート名 ---
 const BRANCH_MASTER_SHEET_NAME = '支店マスタ';
 const PLAN_MASTER_SHEET_NAME = 'プランマスタ';
@@ -3551,8 +3555,11 @@ function apiCreateReservation(token, branchCode, rawText) {
 // =====================================================
 // ⑩-2 店舗発の新規依頼（機能：店舗スタッフからの起票）
 // =====================================================
-// ★機能追加：日本の店舗スタッフが、希望日・お客様名・支店（＝都市）・プラン・該当の手配課を
+// ★機能追加：日本の店舗スタッフが、希望日・お客様名・プラン・該当の手配課を
 // 選んで送信すると、新規案件として作成され、日本の該当手配課と現地支店の両方に通知が届く。
+// ★仕様変更：フォーム上部にあった「支店（都市）」単独選択欄は廃止し、希望日（第一希望）で
+// 選んだプランの提供元支店（プランマスタの支店コード）を自動的にこの案件の基準支店とする
+// （下のgroups構築ロジックで、他の希望日が別支店のプランなら自動的に案件を分割する）。
 // 店舗が起票したことが分かるよう起票元店舗（COL_ORIGIN_SHOP）を記録し、以後のメッセージは
 // 支店マスタの「店舗直接やり取り許可」がONの支店なら現地と直接、OFFなら日本の手配課を介して行う
 // （resolveMessageDirection_ が案件ごとに毎回この設定を見て向きを決める）。
@@ -3568,12 +3575,6 @@ function apiShopCreateRequest(token, payload) {
   if (session.role !== SHOP_ROLE) throw new Error('この操作は店舗ロールのみ実行できます。');
   payload = payload || {};
 
-  const branchCode = String(payload.branchCode || '').trim().toUpperCase();
-  if (!branchCode) throw new Error('支店（都市）を選択してください。');
-  const targetMeta = branchMetaMap_()[branchCode];
-  if (!targetMeta || targetMeta.role !== BRANCH_ROLE || !targetMeta.active) {
-    throw new Error(`支店コード「${branchCode}」は支店マスタに存在しないか、無効になっています。`);
-  }
   const team = String(payload.team || '').trim();
   if (!JP_TEAMS.includes(team)) throw new Error(`該当の手配課は ${JP_TEAMS.join('/')} のいずれかにしてください。`);
   // ★要件：チャレンジ番号は任意ではなく必須。英数字11桁固定（0やアルファベットから始まる場合もある）。
@@ -3613,6 +3614,24 @@ function apiShopCreateRequest(token, payload) {
   // プランをそのまま初期値として使う（既存案件でapplyHopeStatusCascade_がOK確定時に行う
   // 「希望日のプランを案件全体のプラン名へ反映する」のと同じ考え方を、作成時にも適用する）。
   const hopePlans = [1, 2, 3, 4, 5].map(n => String(payload['hopePlan' + n] || '').trim());
+  const planOwnerMap = planOwnerBranchMap_();
+  // ★仕様変更：新規依頼フォーム上部にあった「支店（都市）」単独選択欄を廃止した。画面からは
+  // もうbranchCodeが送られてこないため、希望日（第一希望）で選んだプランの提供元支店を
+  // この依頼の基準支店として自動的に特定する（他の希望日が別支店のプランなら、下のgroups構築
+  // ロジックで案件を自動分割する）。payload.branchCodeが明示的に渡された場合はそれを優先する
+  // （外部からの呼び出し・テスト等との後方互換のため）。
+  let branchCode = String(payload.branchCode || '').trim().toUpperCase();
+  if (!branchCode) {
+    if (!hopePlans[0]) throw new Error('希望日（第一希望）のプランを選択してください。');
+    branchCode = planOwnerMap[hopePlans[0]];
+    if (!branchCode) {
+      throw new Error(`プラン「${hopePlans[0]}」の提供元支店が特定できませんでした。プランマスタの登録内容をご確認ください。`);
+    }
+  }
+  const targetMeta = branchMetaMap_()[branchCode];
+  if (!targetMeta || targetMeta.role !== BRANCH_ROLE || !targetMeta.active) {
+    throw new Error(`支店コード「${branchCode}」は支店マスタに存在しないか、無効になっています。`);
+  }
   // ★後方互換：現在の画面はpayload.planを送らないが、外部からの呼び出し等で明示指定された場合は
   // それを優先する（第一希望が属する支店の案件に反映する。下のgroups構築後に使う）。
   const explicitPlan = String(payload.plan || '').trim();
@@ -3637,10 +3656,9 @@ function apiShopCreateRequest(token, payload) {
     // 「フィレンツェ」、希望日②＝イスタンブール支店の「カッパドキア」を1回の依頼で選んだ場合、
     // ローマ支店向けの案件・イスタンブール支店向けの案件の2件に分かれる（希望順位はそれぞれの
     // 案件内で元の番号のまま保持し、他方の支店に属する希望日の欄は空欄のままにする）。
-    // プラン未選択・プランの提供元が判定できない希望日は、フォーム上部で選んだ「支店（都市）」の
-    // 案件にまとめる（この時、全ての希望日が同じ支店になれば従来どおり1件だけ作られる＝
-    // 大多数のケースでは今までと挙動は変わらない）。
-    const planOwnerMap = planOwnerBranchMap_();
+    // プラン未選択・プランの提供元が判定できない希望日は、第一希望のプランから特定した
+    // 基準支店（branchCode）の案件にまとめる（この時、全ての希望日が同じ支店になれば従来どおり
+    // 1件だけ作られる＝大多数のケースでは今までと挙動は変わらない）。
     const groupIndexByBranch = {};
     const groups = []; // [{ branchCode, hopeIndexes: [0-based...] }]
     hopes.forEach((d, i) => {
@@ -3711,16 +3729,27 @@ function apiShopCreateRequest(token, payload) {
 
     // ★通知・メッセージは全件作成後にまとめて送る（複数支店に分かれた場合、お互いの管理番号を
     // メッセージ本文に載せて「他の支店分はこちら」と分かるようにするため）。
+    // ★不具合修正：以前は希望日ごとに違うプランを選んでいても、グループ内で最初に見つかった
+    // プラン1件しか通知メールに載らなかった（例：第一希望フィレンツェフォト／第二希望ローマフォト
+    // ／第三希望ウィーンフォトのように希望日ごとにプランが違う場合、フィレンツェフォトしか
+    // メールに記載されない不具合があった）。希望日ごとに「希望順位: 日付（時間帯） ／ プラン」の
+    // 形で1行ずつ列挙するよう修正。
+    const hopeOrdinalLabels = ['第一希望', '第二希望', '第三希望', '第四希望', '第五希望'];
     created.forEach((c, idx) => {
-      const groupHopeLines = c.hopeIndexes.map(i => hopes[i]).filter(Boolean);
+      const groupHopeLines = c.hopeIndexes
+        .filter(i => hopes[i])
+        .map(i => {
+          const timeLabel = hopeTimes[i] ? `（${hopeTimes[i]}）` : '';
+          const planLabel = hopePlans[i] ? ` ／ ${hopePlans[i]}` : '';
+          return `${hopeOrdinalLabels[i] || `第${i + 1}希望`}: ${hopes[i]}${timeLabel}${planLabel}`;
+        });
       const others = created.filter((_, j) => j !== idx);
       const initMsg = [
         `店舗（${session.branchName}）からの新規依頼です。（${initialStatusLabel}）`,
         challengeNo ? `チャレンジ番号: ${challengeNo}` : '',
         `新郎名: ${fullName_(groomLastName, groomName)}`,
         `新婦名: ${fullName_(brideLastName, brideName)}`,
-        `希望日: ${groupHopeLines.join(' / ')}`,
-        c.groupPlan ? `プラン: ${c.groupPlan}` : '',
+        `希望日:\n${groupHopeLines.map(l => `  ${l}`).join('\n')}`,
         saleName ? `セール名: ${saleName}` : '',
         location ? `撮影希望場所: ${location}` : '',
         prep ? `準備場所: ${prep}` : '',
@@ -4199,7 +4228,7 @@ function sendDirectionalMail_(headers, rowData, direction, session, message, kin
   const body = `${senderLabel_(session)} から更新がありました。\n\n` +
                `管理番号: ${kanri}\nChallenge No: ${chgNo}\n新郎: ${groom}\n新婦: ${bride}\n\n` +
                `--- ${kind} ---\n${message}\n\n` +
-               `ポータルで確認する: (Webアプリのデプロイ後のURLをここに記載してください)`;
+               `ポータルで確認する: ${WEBAPP_URL}`;
 
   MailApp.sendEmail(recipients, subj, body);
 }
