@@ -967,7 +967,7 @@ function importUncontractedCsv(csvText) {
  * 「is not a function」という分かりにくいエラーになるため、
  * 画面側から版数を確認できるようにしている。
  */
-const SERVER_VERSION = '2026-08-20';
+const SERVER_VERSION = '2026-08-21';
 
 /**
  * サーバー側の版数を返す。画面側は、自分が期待する版数と一致するかを起動時に確認する。
@@ -1556,6 +1556,7 @@ function saveRowChanges(changes) {
     const COL_RESALE = HEADERS_MAIN.indexOf('リセール') + 1;
     const COL_STS = HEADERS_MAIN.indexOf('STS') + 1;
     const COL_PAX = HEADERS_MAIN.indexOf('成約PAX') + 1;
+    const COL_ACT_DATE = HEADERS_MAIN.indexOf('ACT日') + 1;
     const COL_LAST_ACTION = HEADERS_MAIN.indexOf('最終アクション日') + 1;
     const todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
     const VALID_STATUSES = ['', '失注', '成約', 'リセール中'];
@@ -1636,6 +1637,17 @@ function saveRowChanges(changes) {
         } else if (hasSts) {
           // 成約以外へ変えた行は成約PAXを消す（未対応に戻した場合も含む）
           sheet.getRange(rIdx, COL_PAX).clearContent();
+        }
+
+        // リセールを「✖」（対象外）にした行は、以後アクションが発生しないため
+        // ACT日が未入力ならこの保存日を自動で入れる（長期未対応アラートを止めるため）。
+        // すでにACT日が入っている行は上書きしない。
+        if (hasResale && resaleValue === '✖') {
+          const actDateCell = sheet.getRange(rIdx, COL_ACT_DATE);
+          const actDateNow = actDateCell.getValue();
+          if (actDateNow === '' || actDateNow === null || actDateNow === undefined) {
+            setTextCell_(sheet, rIdx, COL_ACT_DATE, todayStr);
+          }
         }
 
         setTextCell_(sheet, rIdx, COL_LAST_ACTION, todayStr);

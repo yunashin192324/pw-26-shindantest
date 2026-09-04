@@ -35,6 +35,138 @@ let dmSortState = { key: '対象年月日', dir: 'desc' };
 let pendingChanges = {};
 // まとめて保存の対象列（この3列は選んだ時点では保存されない）
 const PENDING_COLUMNS = ['リセール', 'STS', '成約PAX'];
+
+// ============================================================================
+// 元に戻す／やり直す（誤って更新したときの復元用）
+// ----------------------------------------------------------------------------
+// リセールリストで行った編集（リセール・STS・成約PAX・ACT日・ACT内容・メモ・詳細）を
+// このブラウザを開いている間、順番に記録しておく。committed:false はまだ
+// サーバーに保存していない変更（元に戻すのも画面上だけ）、true はもう保存済みの
+// 変更（元に戻すにはサーバーへ再保存する）。
+// ============================================================================
+let editHistory = [];
+let editHistoryIndex = 0;   // editHistory[0..editHistoryIndex-1] が「今の状態」に反映済み
+const EDIT_HISTORY_LIMIT = 50;
+
+/** 1件の編集を履歴に積む。値が実質変わっていなければ何もしない。 */
+function recordEdit(sheetName, rowIndex, column, oldValue, newValue, committed) {
+  const before = String(oldValue === null || oldValue === undefined ? '' : oldValue);
+  const after = String(newValue === null || newValue === undefined ? '' : newValue);
+  if (before === after) return;
+
+  if (editHistoryIndex < editHistory.length) {
+    editHistory = editHistory.slice(0, editHistoryIndex); // 元に戻した先で新しく編集したら、やり直し分は捨てる
+  }
+  editHistory.push({
+    sheetName: sheetName, rowIndex: rowIndex, column: column,
+    oldValue: before, newValue: after, committed: !!committed
+  });
+  if (editHistory.length > EDIT_HISTORY_LIMIT) {
+    editHistory = editHistory.slice(editHistory.length - EDIT_HISTORY_LIMIT);
+  }
+  editHistoryIndex = editHistory.length;
+  renderUndoRedoButtons();
+}
+
+/** まとめて保存が成功したとき、対象の列ぶんの履歴を「確定済み」にする */
+function markHistoryCommitted(sheetName, rowIndex, columns) {
+  editHistory.forEach(function (h) {
+    if (!h.committed && h.sheetName === sheetName && String(h.rowIndex) === String(rowIndex) &&
+        columns.indexOf(h.column) !== -1) {
+      h.committed = true;
+    }
+  });
+}
+
+function renderUndoRedoButtons() {
+  const undoBtn = document.getElementById('btn-undo-edit');
+  const redoBtn = document.getElementById('btn-redo-edit');
+  if (undoBtn) undoBtn.disabled = editHistoryIndex <= 0;
+  if (redoBtn) redoBtn.disabled = editHistoryIndex >= editHistory.length;
+}
+
+/**
+ * 確定済み（サーバー保存済み）のセルを指定の値に戻す／やり直す。
+ * リセール・STS・成約PAXはまとめて保存と同じ業務ルールを通すため saveRowChanges、
+ * それ以外（ACT日・ACT内容・メモ・詳細）は updateCellValue を使う。
+ */
+function restoreCellValue(sheetName, rowIndex, column, value, callback) {
+  if (PENDING_COLUMNS.indexOf(column) !== -1) {
+    const change = { sheetName: sheetName, rowIndex: rowIndex };
+    change[column] = value;
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || !res.success) { callback(false, res ? res.error : '不明なエラー'); return; }
+        if (res.failures && res.failures.length > 0) { callback(false, res.failures[0].error); return; }
+        (res.updatedRows || []).forEach(applyUpdatedRowToCache);
+        callback(true);
+      })
+      .withFailureHandler(function (err) { callback(false, err.message); })
+      .saveRowChanges([change]);
+  } else {
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || !res.success) { callback(false, res ? res.error : '不明なエラー'); return; }
+        applyUpdatedRowToCache(res.data);
+        callback(true);
+      })
+      .withFailureHandler(function (err) { callback(false, err.message); })
+      .updateCellValue(sheetName, rowIndex, column, value);
+  }
+}
+
+function onUndoEdit() {
+  if (editHistoryIndex <= 0) return;
+  const entry = editHistory[editHistoryIndex - 1];
+
+  if (!entry.committed) {
+    // まだ保存していない変更なら、画面上の保存待ちを戻すだけでよい
+    stageChange(entry.sheetName, entry.rowIndex, entry.column, entry.oldValue, true);
+    editHistoryIndex--;
+    renderUndoRedoButtons();
+    renderDataManagerGrid();
+    showToast('元に戻しました（' + entry.column + '）', 'info');
+    return;
+  }
+
+  showLoading(true);
+  restoreCellValue(entry.sheetName, entry.rowIndex, entry.column, entry.oldValue, function (ok, err) {
+    showLoading(false);
+    if (!ok) { showToast('元に戻せませんでした: ' + err, 'error'); return; }
+    editHistoryIndex--;
+    renderUndoRedoButtons();
+    renderKpi(getDashboardFilteredData());
+    renderRankingTable(getDashboardFilteredData());
+    renderDataManagerGrid();
+    showToast('元に戻しました（' + entry.column + '）', 'success');
+  });
+}
+
+function onRedoEdit() {
+  if (editHistoryIndex >= editHistory.length) return;
+  const entry = editHistory[editHistoryIndex];
+
+  if (!entry.committed) {
+    stageChange(entry.sheetName, entry.rowIndex, entry.column, entry.newValue, true);
+    editHistoryIndex++;
+    renderUndoRedoButtons();
+    renderDataManagerGrid();
+    showToast('やり直しました（' + entry.column + '）', 'info');
+    return;
+  }
+
+  showLoading(true);
+  restoreCellValue(entry.sheetName, entry.rowIndex, entry.column, entry.newValue, function (ok, err) {
+    showLoading(false);
+    if (!ok) { showToast('やり直せませんでした: ' + err, 'error'); return; }
+    editHistoryIndex++;
+    renderUndoRedoButtons();
+    renderKpi(getDashboardFilteredData());
+    renderRankingTable(getDashboardFilteredData());
+    renderDataManagerGrid();
+    showToast('やり直しました（' + entry.column + '）', 'success');
+  });
+}
 let loadCompletedCount = 0;
 const LOAD_TARGET = 4;
 let currentUserContext = {
@@ -63,7 +195,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // 画面側が前提としているサーバー（Code.gs）の版数。Code.gs の SERVER_VERSION と対で更新する。
-const REQUIRED_SERVER_VERSION = '2026-08-20';
+const REQUIRED_SERVER_VERSION = '2026-08-21';
 
 /**
  * Code.gs が画面と同じ版数まで更新されているか確認する。
@@ -1320,7 +1452,8 @@ function renderEmployeeDetailBreakdown(containerId, rows, columnName) {
 // ============================================================================
 function initDataManagerEvents() {
   ['dm-filter-shop', 'dm-filter-month', 'dm-filter-sts', 'dm-filter-contact', 'dm-filter-purpose',
-    'dm-filter-employee', 'dm-filter-date-from', 'dm-filter-date-to', 'dm-filter-alert-only'].forEach(function (id) {
+    'dm-filter-employee', 'dm-filter-date-from', 'dm-filter-date-to',
+    'dm-filter-act-date-from', 'dm-filter-act-date-to', 'dm-filter-alert-only'].forEach(function (id) {
     document.getElementById(id).addEventListener('change', function () {
       // 店舗を選んだら、社員の選択肢もその店舗の人だけに絞る
       if (id === 'dm-filter-shop') populateDmEmployeeSelect();
@@ -1338,6 +1471,8 @@ function initDataManagerEvents() {
 
   document.getElementById('btn-save-resale').addEventListener('click', onSavePendingChanges);
   document.getElementById('btn-cancel-resale').addEventListener('click', onCancelPendingChanges);
+  document.getElementById('btn-undo-edit').addEventListener('click', onUndoEdit);
+  document.getElementById('btn-redo-edit').addEventListener('click', onRedoEdit);
 
   // 未保存のまま画面を閉じようとしたときに警告する
   window.addEventListener('beforeunload', function (ev) {
@@ -1388,6 +1523,8 @@ function renderDataManagerTab() {
   const employee = document.getElementById('dm-filter-employee').value;
   const dateFrom = document.getElementById('dm-filter-date-from').value.replace(/-/g, '');
   const dateTo = document.getElementById('dm-filter-date-to').value.replace(/-/g, '');
+  const actDateFrom = document.getElementById('dm-filter-act-date-from').value.replace(/-/g, '');
+  const actDateTo = document.getElementById('dm-filter-act-date-to').value.replace(/-/g, '');
   const alertOnly = document.getElementById('dm-filter-alert-only').checked;
 
   dmFilteredCache = allDataCache.filter(function (row) {
@@ -1403,6 +1540,12 @@ function renderDataManagerTab() {
     if (employee && row['社員名'] !== employee) return false;
     if (dateFrom && String(row['対象年月日']) < dateFrom) return false;
     if (dateTo && String(row['対象年月日']) > dateTo) return false;
+    if (actDateFrom || actDateTo) {
+      // ACT日は「2026-08-01」「20260801」どちらの表記もあるため、8桁に揃えてから比較する
+      const actDate8 = toDateInputValue(row['ACT日']).replace(/-/g, '');
+      if (actDateFrom && (!actDate8 || actDate8 < actDateFrom)) return false;
+      if (actDateTo && (!actDate8 || actDate8 > actDateTo)) return false;
+    }
     if (alertOnly && !isAlertRow(row)) return false;
     return true;
   });
@@ -1547,7 +1690,7 @@ function renderDataManagerGrid() {
       '</td>' +
       paxCellTd(row, stsValue) +
       editableCellTd(row, 'ACT日', 'date', 'dm-sticky dm-sticky-4') +
-      editableCellTd(row, 'ACT内容', 'text') +
+      longTextCellTd(row, 'ACT内容') +
       longTextCellTd(row, '次回ACT・進捗★手入力') +
       alertCell +
       '<td class="px-3 py-2">' + escapeHtml(row.__sheetName) + '</td>' +
@@ -1594,25 +1737,59 @@ function editableCellTd(row, columnName, type, extraClass) {
 
 // 表示だけを切り詰める文字数。長文が入ると右側の列がどんどん右へ押し出されるため、
 // 一覧では先頭だけを見せ、全文はカーソルを合わせたときにポップアップで表示する。
-const LONG_TEXT_PREVIEW_LENGTH = 20;
+const LONG_TEXT_PREVIEW_LENGTH = 10;
+
+// URLらしき文字列を検出する正規表現（http(s)://～ を、空白や日本語の句読点の手前まで拾う）
+const URL_PATTERN = /https?:\/\/[^\s<>"'　、。」』（）]+/g;
 
 /**
- * 「メモ」「詳細」のような長文列のセル。
- * ・表示は先頭20文字まで（続きがあれば「…」）
- * ・カーソルを合わせると全文をポップアップ表示
- * ・ダブルクリックで編集（どちらも編集可）
+ * テキストをHTMLエスケープしつつ、URLだけ<a target="_blank">に変換する。
+ * ACT内容・メモ・詳細の3列（cell-display・ポップアップの両方）で使う。
+ */
+function linkifyHtml(text) {
+  const s = String(text === null || text === undefined ? '' : text);
+  let out = '';
+  let lastIndex = 0;
+  URL_PATTERN.lastIndex = 0;
+  let m;
+  while ((m = URL_PATTERN.exec(s)) !== null) {
+    out += escapeHtml(s.slice(lastIndex, m.index));
+    // 末尾の句読点・括弧はリンクに含めない（文中でURLの後にすぐ文章が続くケースへの配慮）
+    let url = m[0];
+    let trailing = '';
+    const trailMatch = url.match(/[.,;:)）】」』]+$/);
+    if (trailMatch) {
+      trailing = trailMatch[0];
+      url = url.slice(0, url.length - trailing.length);
+    }
+    out += '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer" ' +
+      'class="text-blue-600 underline hover:text-blue-800" onclick="event.stopPropagation()">' +
+      escapeHtml(url) + '</a>' + escapeHtml(trailing);
+    lastIndex = m.index + m[0].length;
+  }
+  out += escapeHtml(s.slice(lastIndex));
+  return out;
+}
+
+/**
+ * 「ACT内容」「メモ」「詳細」のような長文列のセル。
+ * ・表示は先頭10文字まで（続きがあれば「…」）。URLはリンクとして表示・クリックできる
+ * ・カーソルを合わせると全文をポップアップ表示（こちらもURLはリンクになる）
+ * ・ダブルクリックで編集
  */
 function longTextCellTd(row, columnName) {
   const raw = row[columnName] !== undefined && row[columnName] !== null ? String(row[columnName]) : '';
   const oneLine = raw.replace(/\s+/g, ' ');
-  const preview = oneLine.length > LONG_TEXT_PREVIEW_LENGTH
-    ? oneLine.substring(0, LONG_TEXT_PREVIEW_LENGTH) + '…'
-    : oneLine;
+  const truncated = oneLine.length > LONG_TEXT_PREVIEW_LENGTH;
+  const preview = truncated ? oneLine.substring(0, LONG_TEXT_PREVIEW_LENGTH) + '…' : oneLine;
+  // 途中で切れている場合、URLも途中で切れてリンク先が壊れてしまうため一覧ではリンク化しない。
+  // 全文はホバーのポップアップ（showDetailTooltip）でリンクとして確認・クリックできる。
+  const previewHtml = truncated ? escapeHtml(preview) : linkifyHtml(preview);
   return '<td class="editable-cell detail-cell px-3 py-2" data-detail="1"' +
     ' data-column="' + escapeHtml(columnName) + '" data-type="text"' +
     ' data-sheet="' + escapeHtml(row.__sheetName) + '" data-row="' + row.__rowIndex + '">' +
     // 全文は data-full に持たせ、ポップアップと編集開始時にこちらを使う
-    '<span class="cell-display" data-full="' + escapeHtml(raw) + '">' + escapeHtml(preview) + '</span></td>';
+    '<span class="cell-display" data-full="' + escapeHtml(raw) + '">' + previewHtml + '</span></td>';
 }
 
 // ============================================================================
@@ -1644,7 +1821,7 @@ function isPendingCell(row, column) {
  * 変更を保存待ちに積む。元の値に戻した場合はその項目を保存待ちから外し、
  * 行内に変更が1つも無くなればその行ごと外す。
  */
-function stageChange(sheetName, rowIndex, column, value) {
+function stageChange(sheetName, rowIndex, column, value, skipHistory) {
   const rid = sheetName + '::' + rowIndex;
   const row = dmFilteredCache.find(function (r) {
     return r.__sheetName === sheetName && String(r.__rowIndex) === String(rowIndex);
@@ -1656,11 +1833,19 @@ function stageChange(sheetName, rowIndex, column, value) {
   }
   const entry = pendingChanges[rid];
 
+  // 元に戻す機能のため、「このセルを直前どういう状態から変えたか」を記録しておく。
+  // 保存前に同じ欄を何度も変えることがあるため、サーバー上の値ではなく
+  // 直前に画面が示していた値（保存待ちの値があればそちら）を基準にする。
+  const beforeValue = Object.prototype.hasOwnProperty.call(entry.values, column)
+    ? entry.values[column] : original;
+
   if (String(value) === String(original)) {
     delete entry.values[column];        // 元の値に戻したので変更なし
   } else {
     entry.values[column] = value;
   }
+
+  if (!skipHistory) recordEdit(sheetName, rowIndex, column, beforeValue, value, false);
 
   // STSを「成約」以外にしたら、成約PAXの変更は意味を失うので取り下げる
   const nextSts = Object.prototype.hasOwnProperty.call(entry.values, 'STS')
@@ -1686,6 +1871,11 @@ function renderPendingBar() {
 /** 未保存の変更をすべて破棄して表示を元に戻す */
 function discardPendingChanges() {
   pendingChanges = {};
+  // まだ保存していない編集の履歴は、取り消すと画面上の実体が無くなるため一緒に捨てる
+  // （保存済みの編集の履歴はそのまま残し、引き続き元に戻せるようにする）
+  editHistory = editHistory.filter(function (h) { return h.committed; });
+  editHistoryIndex = editHistory.length;
+  renderUndoRedoButtons();
   renderPendingBar();
   renderDataManagerGrid();
 }
@@ -1754,7 +1944,13 @@ function onSavePendingChanges() {
       // 保存できた行だけ保存待ちから外す（失敗した行は残して、もう一度保存できるようにする）
       const failedRids = {};
       (res.failures || []).forEach(function (f) { failedRids[f.sheetName + '::' + f.rowIndex] = true; });
-      keys.forEach(function (k) { if (!failedRids[k]) delete pendingChanges[k]; });
+      keys.forEach(function (k) {
+        if (failedRids[k]) return;
+        // 保存できた列ぶんの履歴を「確定済み」にする（元に戻すときにサーバーへ再保存できるように）
+        const savedColumns = Object.keys(pendingChanges[k].values);
+        markHistoryCommitted(pendingChanges[k].sheetName, pendingChanges[k].rowIndex, savedColumns);
+        delete pendingChanges[k];
+      });
 
       renderPendingBar();
       renderKpi(getDashboardFilteredData());
@@ -1795,17 +1991,26 @@ function bindGridEditEvents() {
     });
   });
 
-  // 「メモ」「詳細」列：カーソルを合わせると全文をポップアップ表示（一覧では20文字まで）
+  // 「ACT内容」「メモ」「詳細」列：カーソルを合わせると全文をポップアップ表示（一覧では10文字まで）。
+  // ポップアップ内のURLをクリックできるよう、セルとポップアップの間にマウスが
+  // 一瞬離れても消えないよう少し待ってから隠す（scheduleHideDetailTooltip）。
   document.querySelectorAll('[data-detail="1"]').forEach(function (td) {
     td.addEventListener('mouseenter', function () {
       if (td.querySelector('textarea, input')) return; // 編集中は出さない
       const span = td.querySelector('.cell-display');
       const text = span.dataset.full || span.textContent;
       if (!text) return;
+      cancelHideDetailTooltip();
       showDetailTooltip(td, text);
     });
-    td.addEventListener('mouseleave', hideDetailTooltip);
+    td.addEventListener('mouseleave', scheduleHideDetailTooltip);
   });
+  const tooltipEl = document.getElementById('detail-tooltip');
+  if (tooltipEl && !tooltipEl.dataset.hoverBound) {
+    tooltipEl.dataset.hoverBound = '1';
+    tooltipEl.addEventListener('mouseenter', cancelHideDetailTooltip);
+    tooltipEl.addEventListener('mouseleave', scheduleHideDetailTooltip);
+  }
 
   // テキストセル（成約PAX／詳細／ACT日／ACT内容／備考／進捗メモ）：ダブルクリックでインライン編集
   document.querySelectorAll('.editable-cell').forEach(function (td) {
@@ -1860,7 +2065,7 @@ function bindGridEditEvents() {
           stageChange(sheetName, rowIndex, '成約PAX', newVal);
           renderDataManagerGrid();
         } else {
-          callUpdateCellValue(sheetName, rowIndex, columnName, newVal);
+          callUpdateCellValue(sheetName, rowIndex, columnName, newVal, currentVal);
         }
       };
 
@@ -1883,7 +2088,8 @@ function bindGridEditEvents() {
 // ============================================================================
 function showDetailTooltip(targetEl, text) {
   const tooltip = document.getElementById('detail-tooltip');
-  tooltip.textContent = text;
+  // URLがあればポップアップの中でもクリックできるようにする
+  tooltip.innerHTML = linkifyHtml(text);
   tooltip.classList.remove('hidden');
 
   const rect = targetEl.getBoundingClientRect();
@@ -1896,16 +2102,37 @@ function showDetailTooltip(targetEl, text) {
   tooltip.style.top = (rect.bottom + 6) + 'px';
 }
 
+let detailTooltipHideTimer = null;
+
 function hideDetailTooltip() {
+  cancelHideDetailTooltip();
   document.getElementById('detail-tooltip').classList.add('hidden');
 }
 
-function callUpdateCellValue(sheetName, rowIndex, columnName, value) {
+/** 少し待ってから隠す。セル→ポップアップへマウスが移動する一瞬の空白を許容するため。 */
+function scheduleHideDetailTooltip() {
+  cancelHideDetailTooltip();
+  detailTooltipHideTimer = setTimeout(function () {
+    document.getElementById('detail-tooltip').classList.add('hidden');
+  }, 200);
+}
+
+function cancelHideDetailTooltip() {
+  if (detailTooltipHideTimer) { clearTimeout(detailTooltipHideTimer); detailTooltipHideTimer = null; }
+}
+
+/**
+ * @param {string} oldValue 元に戻す機能のために記録する、編集前の値（省略時は履歴を残さない）
+ */
+function callUpdateCellValue(sheetName, rowIndex, columnName, value, oldValue) {
   google.script.run
     .withSuccessHandler(function (res) {
       if (res && res.success) {
         applyUpdatedRowToCache(res.data);
         showToast('「' + columnName + '」を更新しました', 'success');
+        if (oldValue !== undefined) {
+          recordEdit(sheetName, rowIndex, columnName, oldValue, value, true);
+        }
       } else {
         showToast('更新に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
       }
