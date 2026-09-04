@@ -2604,6 +2604,24 @@ function paneHidden(document, key) {
     check('連打しても案件は1件だけ作成される', createdU46.length === 1, JSON.stringify(createdU46.map(r => r.kanriNo)));
   }
 
+  // ---------------------------------------------------------------
+  section('U47. 新規依頼フォームに複数支店にまたがる依頼ができる旨の案内を追加');
+  {
+    // ★不具合修正：一番上の「支店（都市）」欄が単一選択のため、下の希望日ごとのプラン欄で
+    // 支店をまたいで選べることが伝わりにくいという指摘への対応。フォーム冒頭に案内を追加した。
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'SHOP1', 'CHANGE-ME-SHOP1');
+    document.getElementById('nav-shop-new').click();
+    await settle();
+    const noteU47 = document.querySelector('#view-shop-new .multi-branch-note');
+    check('新規依頼フォームに複数支店にまたがる依頼ができる案内が出る', !!noteU47, document.getElementById('view-shop-new').innerHTML.slice(0, 300));
+    check('案内には「複数の現地支店にまたがる」という文言が含まれる', !!noteU47 && noteU47.textContent.includes('複数の現地支店にまたがる'));
+    check('案内は「支店（都市）」欄より前（フォーム冒頭）に出る',
+          !!noteU47 && noteU47.compareDocumentPosition(document.getElementById('shop-new-branch')) & 4 /* Node.DOCUMENT_POSITION_FOLLOWING */,
+          'compareDocumentPosition');
+  }
+
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error('テストが異常終了しました:', e); process.exit(1); });
