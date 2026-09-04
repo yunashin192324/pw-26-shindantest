@@ -237,9 +237,9 @@
         <input id="shop-new-bride-last" type="text" placeholder="例）YAMADA" style="text-transform:uppercase;">
         <label>新婦名（ローマ字・必須・大文字で入力）</label>
         <input id="shop-new-bride" type="text" placeholder="例）HANAKO" style="text-transform:uppercase;">
-        <label>新郎年齢（※ISWのみ必要）</label>
+        <label>新郎年齢（※ISWのみ必要・FN確定までに入力してください）</label>
         <input id="shop-new-groom-age" type="number" min="0" placeholder="任意入力">
-        <label>新婦年齢（※ISWのみ必要）</label>
+        <label>新婦年齢（※ISWのみ必要・FN確定までに入力してください）</label>
         <input id="shop-new-bride-age" type="number" min="0" placeholder="任意入力">
         <!-- ★要件変更：案件全体の「プラン」単独欄は廃止した（下の希望日ごとのプラン欄と
              二重管理になっていたため。案件全体のプラン名は、確定した希望日のプランが
@@ -276,11 +276,21 @@
           <select id="shop-new-hopetime2" class="shop-new-hopetime hidden"><option value="">-</option><option value="AM">AM</option><option value="PM">PM</option></select>
           <select id="shop-new-hopeplan2"><option value="">プラン未設定</option></select>
         </div>
+        <label>撮影希望場所（第二希望）</label>
+        <div id="shop-new-hopelocation-wrap2">
+          <input id="shop-new-hopelocation2" type="text" list="shop-new-hopelocation-datalist2" placeholder="希望日②のプランを選ぶと候補が出ます">
+          <datalist id="shop-new-hopelocation-datalist2"></datalist>
+        </div>
         <label>希望日（第三希望）</label>
         <div class="shop-new-hope-row">
           <input id="shop-new-hope3" type="date">
           <select id="shop-new-hopetime3" class="shop-new-hopetime hidden"><option value="">-</option><option value="AM">AM</option><option value="PM">PM</option></select>
           <select id="shop-new-hopeplan3"><option value="">プラン未設定</option></select>
+        </div>
+        <label>撮影希望場所（第三希望）</label>
+        <div id="shop-new-hopelocation-wrap3">
+          <input id="shop-new-hopelocation3" type="text" list="shop-new-hopelocation-datalist3" placeholder="希望日③のプランを選ぶと候補が出ます">
+          <datalist id="shop-new-hopelocation-datalist3"></datalist>
         </div>
         <label>希望日（第四希望）</label>
         <div class="shop-new-hope-row">
@@ -288,11 +298,21 @@
           <select id="shop-new-hopetime4" class="shop-new-hopetime hidden"><option value="">-</option><option value="AM">AM</option><option value="PM">PM</option></select>
           <select id="shop-new-hopeplan4"><option value="">プラン未設定</option></select>
         </div>
+        <label>撮影希望場所（第四希望）</label>
+        <div id="shop-new-hopelocation-wrap4">
+          <input id="shop-new-hopelocation4" type="text" list="shop-new-hopelocation-datalist4" placeholder="希望日④のプランを選ぶと候補が出ます">
+          <datalist id="shop-new-hopelocation-datalist4"></datalist>
+        </div>
         <label>希望日（第五希望）</label>
         <div class="shop-new-hope-row">
           <input id="shop-new-hope5" type="date">
           <select id="shop-new-hopetime5" class="shop-new-hopetime hidden"><option value="">-</option><option value="AM">AM</option><option value="PM">PM</option></select>
           <select id="shop-new-hopeplan5"><option value="">プラン未設定</option></select>
+        </div>
+        <label>撮影希望場所（第五希望）</label>
+        <div id="shop-new-hopelocation-wrap5">
+          <input id="shop-new-hopelocation5" type="text" list="shop-new-hopelocation-datalist5" placeholder="希望日⑤のプランを選ぶと候補が出ます">
+          <datalist id="shop-new-hopelocation-datalist5"></datalist>
         </div>
         <h3 style="margin-top:14px;">オプション（任意・最大10件・マスタ候補から選ぶか自由に入力できます）</h3>
         <input id="shop-new-option1" list="shop-new-option-datalist" placeholder="（未使用）">

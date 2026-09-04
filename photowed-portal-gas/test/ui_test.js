@@ -2739,6 +2739,86 @@ function paneHidden(document, key) {
           document.getElementById('shop-new-error').textContent);
   }
 
+  // ---------------------------------------------------------------
+  section('U49. 新郎新婦年齢欄にFN確定までの入力ヒントを追加・希望日②〜⑤にも撮影希望場所欄を追加');
+  {
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'SHOP1', 'CHANGE-ME-SHOP1');
+    document.getElementById('nav-shop-new').click();
+    await settle();
+
+    const groomAgeLabel = [...document.querySelectorAll('#view-shop-new label')].find(l => l.textContent.includes('新郎年齢'));
+    const brideAgeLabel = [...document.querySelectorAll('#view-shop-new label')].find(l => l.textContent.includes('新婦年齢'));
+    check('新規依頼フォームの新郎年齢欄に「FN確定までに入力してください」のヒントが付いている',
+          !!groomAgeLabel && groomAgeLabel.textContent.includes('FN確定までに入力してください'), groomAgeLabel && groomAgeLabel.textContent);
+    check('新規依頼フォームの新婦年齢欄にも同じヒントが付いている',
+          !!brideAgeLabel && brideAgeLabel.textContent.includes('FN確定までに入力してください'), brideAgeLabel && brideAgeLabel.textContent);
+
+    // --- 希望日②〜⑤にも、それぞれ独立した撮影希望場所欄がある（希望日①と同じプラン連動の仕組み） ---
+    check('希望日②の撮影希望場所欄は最初は自由入力（プラン未選択のため）',
+          document.getElementById('shop-new-hopelocation2').tagName === 'INPUT');
+    document.getElementById('shop-new-hopeplan2').value = 'ローマ3時間フォト';
+    document.getElementById('shop-new-hopeplan2').dispatchEvent(new dom.window.Event('change'));
+    await settle();
+    check('希望日②にチェックボックス方式のプランを選ぶと、希望日②の撮影希望場所欄がチェックボックスになる',
+          document.querySelectorAll('.shop-new-hopelocation-cb2').length === 2);
+    check('希望日①の撮影希望場所欄は希望日②の選択の影響を受けない（自由入力のまま）',
+          document.getElementById('shop-new-location').tagName === 'INPUT');
+
+    document.getElementById('shop-new-hopeplan3').value = 'フィレンツェフォト';
+    document.getElementById('shop-new-hopeplan3').dispatchEvent(new dom.window.Event('change'));
+    await settle();
+    check('希望日③にプルダウン方式のプランを選ぶと、希望日③の撮影希望場所欄がプルダウンになる',
+          document.getElementById('shop-new-hopelocation3').tagName === 'SELECT');
+
+    // --- 実際に入力して送信し、希望日ごとに違う撮影希望場所が保存されることを確認 ---
+    document.getElementById('shop-new-team').value = '関東';
+    document.getElementById('shop-new-challengeno').value = 'HOPELOCUI01';
+    document.getElementById('shop-new-groom-last').value = 'Hope';
+    document.getElementById('shop-new-groom').value = 'Location';
+    document.getElementById('shop-new-bride-last').value = 'Hope';
+    document.getElementById('shop-new-bride').value = 'LocationB';
+    document.getElementById('shop-new-hope1').value = '2026-09-10';
+    document.getElementById('shop-new-hopeplan1').value = 'プランA';
+    document.getElementById('shop-new-hopeplan1').dispatchEvent(new dom.window.Event('change'));
+    await settle();
+    document.getElementById('shop-new-hope2').value = '2026-09-11';
+    const hopeLoc2Checks = [...document.querySelectorAll('.shop-new-hopelocation-cb2')];
+    hopeLoc2Checks.find(c => c.value === 'コロッセオ').checked = true;
+    hopeLoc2Checks.find(c => c.value === 'コロッセオ').dispatchEvent(new dom.window.Event('change'));
+    document.getElementById('shop-new-hope3').value = '2026-09-12';
+    document.getElementById('shop-new-hopelocation3').value = 'ドゥオモ';
+
+    document.getElementById('shop-new-submit').click();
+    await settle();
+    check('希望日ごとに違う撮影希望場所を指定して送信できる',
+          !document.getElementById('shop-new-success').classList.contains('hidden'),
+          document.getElementById('shop-new-error').textContent);
+    const kanriU49 = document.getElementById('shop-new-success-text').textContent.match(/予約番号\s*(\S+)/)[1];
+    const jpTokU49 = ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    const detU49 = ctx.apiGetReservationDetail(jpTokU49, kanriU49).detail;
+    check('希望日②の場所（チェックボックスで選んだ値）が保存される', detU49['希望日②場所'] === 'コロッセオ', detU49['希望日②場所']);
+    check('希望日③の場所（プルダウンで選んだ値）が保存される', detU49['希望日③場所'] === 'ドゥオモ', detU49['希望日③場所']);
+
+    // --- 送信後はフォームがリセットされ、希望日②の撮影希望場所欄も自由入力に戻っている ---
+    check('送信後は希望日②の撮影希望場所欄も自由入力に戻る（前のプランのチェックボックスが残らない）',
+          document.getElementById('shop-new-hopelocation2').tagName === 'INPUT');
+
+    // --- 既存案件の詳細画面（日本側・お客様情報タブ）にも同じヒントが付いている ---
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'KANTO', 'CHANGE-ME-KANTO');
+    document.getElementById('nav-dashboard').click();
+    await settle();
+    [...document.querySelectorAll('#reservation-list .res-card, #reservation-table-body tr')]
+      .find(c => c.textContent.includes(kanriU49)).click();
+    await settle();
+    const jpAgeLabel = [...document.querySelectorAll('[data-tab-pane="customer"] label')].find(l => l.textContent.includes('新郎年齢'));
+    check('既存案件の詳細画面（日本側・お客様情報タブ）にも同じヒントが付いている',
+          !!jpAgeLabel && jpAgeLabel.textContent.includes('FN確定までに入力してください'), jpAgeLabel && jpAgeLabel.textContent);
+  }
+
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error('テストが異常終了しました:', e); process.exit(1); });

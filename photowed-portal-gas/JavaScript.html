@@ -211,6 +211,11 @@
     // （onShopNewBranchChange）は無くなり、希望日①のプラン変更（＝基準支店の変更を兼ねる）だけで
     // 一本化した（onShopNewHopePlan1Change参照）。
     $('shop-new-hopeplan1').addEventListener('change', onShopNewHopePlan1Change);
+    // ★要件追加：希望日②〜⑤も、それぞれ選んだプランに応じて撮影希望場所欄（すぐ下）の
+    // 入力方式・候補が変わるようにする（基準支店の決定・セール名絞り込みは希望日①のみの役目）。
+    [2, 3, 4, 5].forEach(n => {
+      $('shop-new-hopeplan' + n).addEventListener('change', () => renderShopNewHopeLocation_(n));
+    });
     $('shop-new-submit').addEventListener('click', submitShopNewRequest);
     $('shop-new-success-top-btn').addEventListener('click', () => loadDashboard());
     $('nav-settings').addEventListener('click', openSettingsView);
@@ -1015,8 +1020,8 @@
           <div class="field-block"><label>新郎名（ローマ字）</label><input data-pending="新郎名（ローマ字）" value="${escapeAttr(d['新郎名（ローマ字）'])}"></div>
           <div class="field-block"><label>新婦姓（ローマ字）</label><input data-pending="新婦姓（ローマ字）" value="${escapeAttr(d['新婦姓（ローマ字）'])}"></div>
           <div class="field-block"><label>新婦名（ローマ字）</label><input data-pending="新婦名（ローマ字）" value="${escapeAttr(d['新婦名（ローマ字）'])}"></div>
-          <div class="field-block"><label>新郎年齢（※ISWのみ必要）</label><input type="number" min="0" data-pending="新郎年齢" value="${escapeAttr(d['新郎年齢'])}"></div>
-          <div class="field-block"><label>新婦年齢（※ISWのみ必要）</label><input type="number" min="0" data-pending="新婦年齢" value="${escapeAttr(d['新婦年齢'])}"></div>
+          <div class="field-block"><label>新郎年齢（※ISWのみ必要・FN確定までに入力してください）</label><input type="number" min="0" data-pending="新郎年齢" value="${escapeAttr(d['新郎年齢'])}"></div>
+          <div class="field-block"><label>新婦年齢（※ISWのみ必要・FN確定までに入力してください）</label><input type="number" min="0" data-pending="新婦年齢" value="${escapeAttr(d['新婦年齢'])}"></div>
           <div class="field-block"><label>パスポート番号（※ISWのみ必要）</label><input data-pending="パスポート番号" value="${escapeAttr(d['パスポート番号'])}"></div>
           <div class="field-block">${costumeCompanySelectHtml_(costumeList, d['衣装会社'])}</div>
           <div class="field-block"><label>同行者の有無</label>${companionSelectHtml_(d['同行者の有無'])}</div>
@@ -2010,8 +2015,8 @@
       <div class="tab-pane" data-tab-pane="customer" id="sec-customer">
         <div class="section-card">
           <div class="detail-grid">
-            <div class="field-block"><label>新郎年齢（※ISWのみ必要）</label><input type="number" min="0" data-pending="新郎年齢" value="${escapeAttr(d['新郎年齢'])}"></div>
-            <div class="field-block"><label>新婦年齢（※ISWのみ必要）</label><input type="number" min="0" data-pending="新婦年齢" value="${escapeAttr(d['新婦年齢'])}"></div>
+            <div class="field-block"><label>新郎年齢（※ISWのみ必要・FN確定までに入力してください）</label><input type="number" min="0" data-pending="新郎年齢" value="${escapeAttr(d['新郎年齢'])}"></div>
+            <div class="field-block"><label>新婦年齢（※ISWのみ必要・FN確定までに入力してください）</label><input type="number" min="0" data-pending="新婦年齢" value="${escapeAttr(d['新婦年齢'])}"></div>
             ${!d.passportRequired ? '' : `<div class="field-block"><label>パスポート番号（※ISWのみ必要）</label><input data-pending="パスポート番号" value="${escapeAttr(d['パスポート番号'])}"></div>`}
             <div class="field-block">${costumeCompanySelectHtml_(costumeList, d['衣装会社'])}</div>
             <div class="field-block"><label>同行者の有無</label>${companionSelectHtml_(d['同行者の有無'])}</div>
@@ -2816,30 +2821,62 @@
       SHOP_NEW_HOPE_PLAN_FIELDS.forEach(k => { $('shop-new-' + k).innerHTML = hopePlanOptsHtml; });
     } catch (e) { shopNewAllPlansCache = []; /* 候補が取れなくても入力自体は続けられる（プランは未設定のまま） */ }
     await onShopNewHopePlan1Change();
+    // ★要件追加：希望日②〜⑤の撮影希望場所欄も、開いた時点の（未選択の）状態で初期化しておく
+    [2, 3, 4, 5].forEach(n => renderShopNewHopeLocation_(n));
   }
 
   // ★要件：プラン・セール名・撮影希望場所は支店に紐づくだけでなく、撮影希望場所とセール名は
   // 選んだプランにも紐づく（プランごとに撮影場所の入力方式・候補が変わり、セールも
   // 「そのプラン専用」のものだけに絞り込まれる）。サーバーには取りに行かず、キャッシュしておいた
   // 全支店分のプラン一覧・この支店のセール一覧を手元でフィルタするだけで済ませる。
-  function shopNewLocationFieldHtml_(planMeta) {
+  // ★要件追加：撮影希望場所は希望日①だけでなく②〜⑤にも同じ仕組みを持たせたため、
+  // 対象の希望順位nでID（入力欄・datalist・チェックボックス）を出し分けられるようにする
+  // （①は既存のID（shop-new-location等）をそのまま使い、後方互換を保つ）。
+  const HOPE_ORDINAL_MARKS = ['①', '②', '③', '④', '⑤'];
+  function shopNewHopeLocationInputId_(n) { return n === 1 ? 'shop-new-location' : `shop-new-hopelocation${n}`; }
+  function shopNewHopeLocationDatalistId_(n) { return n === 1 ? 'shop-new-location-datalist' : `shop-new-hopelocation-datalist${n}`; }
+  function shopNewHopeLocationWrapId_(n) { return n === 1 ? 'shop-new-location-wrap' : `shop-new-hopelocation-wrap${n}`; }
+  function shopNewHopeLocationCbClass_(n) { return n === 1 ? 'shop-new-location-cb' : `shop-new-hopelocation-cb${n}`; }
+  function shopNewLocationFieldHtml_(n, planMeta) {
     const mode = planMeta ? planMeta.locationMode : 'free';
     const candidates = (planMeta && planMeta.locationCandidates) || [];
+    const inputId = shopNewHopeLocationInputId_(n);
     if (mode === 'select') {
-      return `<select id="shop-new-location">
+      return `<select id="${inputId}">
         <option value="">未設定</option>
         ${candidates.map(c => `<option value="${escapeAttr(c)}">${escapeHtml(c)}</option>`).join('')}
       </select>`;
     }
     if (mode === 'checkbox') {
       return `
-        <div id="shop-new-location-checks">
-          ${candidates.map(c => `<label class="checkbox-label"><input type="checkbox" class="shop-new-location-cb" value="${escapeAttr(c)}"> ${escapeHtml(c)}</label>`).join('')}
+        <div>
+          ${candidates.map(c => `<label class="checkbox-label"><input type="checkbox" class="${shopNewHopeLocationCbClass_(n)}" value="${escapeAttr(c)}"> ${escapeHtml(c)}</label>`).join('')}
         </div>
-        <input type="hidden" id="shop-new-location">`;
+        <input type="hidden" id="${inputId}">`;
     }
-    return `<input id="shop-new-location" type="text" list="shop-new-location-datalist" placeholder="希望日①のプランを選ぶと候補が出ます">
-      <datalist id="shop-new-location-datalist"></datalist>`;
+    return `<input id="${inputId}" type="text" list="${shopNewHopeLocationDatalistId_(n)}" placeholder="希望日${HOPE_ORDINAL_MARKS[n - 1]}のプランを選ぶと候補が出ます">
+      <datalist id="${shopNewHopeLocationDatalistId_(n)}"></datalist>`;
+  }
+  // 希望日nのプラン選択に応じて、そのすぐ下の撮影希望場所欄（入力方式・候補）だけを描き直す。
+  // どのプランを選んでも支店マスタへの再取得は不要（プランのメタ情報はshopNewAllPlansCacheに
+  // キャッシュ済みのため）。希望日①のみ、この描画に加えて基準支店の決定なども行う
+  // （onShopNewHopePlan1Change参照）。
+  function renderShopNewHopeLocation_(n) {
+    const planName = $('shop-new-hopeplan' + n).value;
+    const planMeta = shopNewAllPlansCache.find(p => p.name === planName);
+    const wrap = $(shopNewHopeLocationWrapId_(n));
+    wrap.innerHTML = shopNewLocationFieldHtml_(n, planMeta);
+    if (planMeta && planMeta.locationMode === 'checkbox') {
+      const inputId = shopNewHopeLocationInputId_(n);
+      const cbClass = shopNewHopeLocationCbClass_(n);
+      wrap.querySelectorAll('.' + cbClass).forEach(cb => {
+        cb.addEventListener('change', () => {
+          const vals = [...wrap.querySelectorAll('.' + cbClass + ':checked')].map(x => x.value);
+          $(inputId).value = vals.join('、');
+        });
+      });
+    }
+    return planMeta;
   }
   // ★仕様変更：フォーム上部の「支店（都市）」単独選択欄を廃止したため、希望日①（第一希望）の
   // プラン選択が変わるたびに ①撮影希望場所の入力方式・候補 ②セール名の絞り込み ③この依頼の
@@ -2852,21 +2889,10 @@
   // 後に呼ばれていたら古い応答は捨てる」ようにして、常に最後に選んだプランの内容だけが残るようにした。
   async function onShopNewHopePlan1Change() {
     const token = ++shopNewPlan1ChangeToken;
-    const planName = $('shop-new-hopeplan1').value;
-    const planMeta = shopNewAllPlansCache.find(p => p.name === planName);
-    shopNewActiveBranch = planMeta ? planMeta.branchCode : '';
-
     // 撮影希望場所欄は、選んだプランの設定（入力方式・候補）だけで決まるので、通信を待たずすぐ描画する
-    $('shop-new-location-wrap').innerHTML = shopNewLocationFieldHtml_(planMeta);
-    if (planMeta && planMeta.locationMode === 'checkbox') {
-      const wrap = $('shop-new-location-wrap');
-      wrap.querySelectorAll('.shop-new-location-cb').forEach(cb => {
-        cb.addEventListener('change', () => {
-          const vals = [...wrap.querySelectorAll('.shop-new-location-cb:checked')].map(x => x.value);
-          $('shop-new-location').value = vals.join('、');
-        });
-      });
-    }
+    const planMeta = renderShopNewHopeLocation_(1);
+    shopNewActiveBranch = planMeta ? planMeta.branchCode : '';
+    const planName = $('shop-new-hopeplan1').value;
 
     if (!shopNewActiveBranch) {
       // プラン未選択（＝基準支店が定まらない）間は、支店に紐づく項目をいったんリセットしておく
@@ -2930,10 +2956,12 @@
       hope4: $('shop-new-hope4').value, hope5: $('shop-new-hope5').value,
       remarks: $('shop-new-remarks').value.trim()
     };
-    // ★要件：希望日ごとの時間帯（AM/PM）・プラン（複数プラン希望）
+    // ★要件：希望日ごとの時間帯（AM/PM）・プラン（複数プラン希望）・撮影希望場所
     for (let i = 1; i <= 5; i++) {
       payload['hopeTime' + i] = $('shop-new-hopetime' + i).value;
       payload['hopePlan' + i] = $('shop-new-hopeplan' + i).value;
+      // ★要件追加：希望日②〜⑤の撮影希望場所（①は上のlocationで送る＝後方互換）
+      if (i >= 2) payload['hopeLocation' + i] = $('shop-new-hopelocation' + i).value.trim();
     }
     // ★要件：オプションは最大10件（フリー入力）
     for (let i = 1; i <= 10; i++) payload['option' + i] = $('shop-new-option' + i).value.trim();
@@ -2988,6 +3016,11 @@
       SHOP_NEW_HOPE_TIME_FIELDS.forEach(k => { $('shop-new-' + k).value = ''; });
       SHOP_NEW_HOPE_PLAN_FIELDS.forEach(k => { $('shop-new-' + k).value = ''; });
       $('shop-new-initial-status').value = 'RQ';
+      // ★不具合修正：プラン欄の値だけ空に戻しても、その下の撮影希望場所欄（select/checkboxに
+      // 差し替わっている場合がある）が古いプランのまま残ってしまっていたため、プラン未選択の
+      // 状態（自由入力欄）へ描き直す。
+      onShopNewHopePlan1Change();
+      [2, 3, 4, 5].forEach(n => renderShopNewHopeLocation_(n));
     } catch (e) {
       showFieldError('shop-new-error', e.message);
     } finally {

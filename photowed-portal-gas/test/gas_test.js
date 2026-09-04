@@ -3767,5 +3767,31 @@ section('62. 新規依頼フォーム上部の支店（都市）欄廃止（希�
 }
 
 // ---------------------------------------------------------------
+section('63. 新規依頼の希望日②〜⑤にも撮影希望場所を保存できるように');
+{
+  const ctx = shopFixture();
+  ctx.ensureSheetWithHeaders_(ctx.__ss, 'プランマスタ', ctx.PLAN_MASTER_HEADERS);
+  const pm63 = ctx.__ss.getSheetByName('プランマスタ');
+  pm63.appendRow(['VIE', 'ウィーンフォト', true]);
+  const shopToken = ctx.apiLogin('SHOP1', 'sp').session.token;
+  const jpToken = ctx.apiLogin('KANTO', 'pw').session.token;
+
+  const created = ctx.apiShopCreateRequest(shopToken, {
+    team: '関東', groomLastName: 'Loc', groomName: 'Test', brideLastName: 'Loc', brideName: 'Test',
+    challengeNo: 'HOPELOC0001',
+    hope1: '2026-10-01', hopePlan1: 'ウィーンフォト', location: 'シェーンブルン宮殿',
+    hope2: '2026-10-02', hopePlan2: 'ウィーンフォト', hopeLocation2: 'ベルヴェデーレ宮殿',
+    hope3: '2026-10-03', hopeLocation3: '自由入力の場所'
+  });
+  check('希望日②〜⑤の撮影希望場所を指定しても作成できる', created.ok === true, JSON.stringify(created));
+  const detail = ctx.apiGetReservationDetail(jpToken, created.kanriNo).detail;
+  check('希望日①の場所（従来のlocation）が希望日①場所にも反映される', detail['希望日①場所'] === 'シェーンブルン宮殿', detail['希望日①場所']);
+  check('希望日①の場所は案件全体の撮影希望場所（COL_LOCATION）にも従来どおり入る', detail['撮影希望場所'] === 'シェーンブルン宮殿');
+  check('希望日②の場所が保存される', detail['希望日②場所'] === 'ベルヴェデーレ宮殿', detail['希望日②場所']);
+  check('希望日③の場所が保存される（プラン未選択でも自由入力は保存できる）', detail['希望日③場所'] === '自由入力の場所', detail['希望日③場所']);
+  check('希望日④・⑤は未入力なので空欄のまま', !detail['希望日④場所'] && !detail['希望日⑤場所']);
+}
+
+// ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
 process.exit(fail === 0 ? 0 : 1);

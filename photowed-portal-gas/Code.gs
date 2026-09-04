@@ -3614,6 +3614,11 @@ function apiShopCreateRequest(token, payload) {
   // プランをそのまま初期値として使う（既存案件でapplyHopeStatusCascade_がOK確定時に行う
   // 「希望日のプランを案件全体のプラン名へ反映する」のと同じ考え方を、作成時にも適用する）。
   const hopePlans = [1, 2, 3, 4, 5].map(n => String(payload['hopePlan' + n] || '').trim());
+  // ★要件追加：希望日ごとの撮影希望場所も、新規依頼の時点から入力できるようにする（既存案件の
+  // 詳細画面で使っている「希望日{n}場所」＝hopeLocationCol_と同じ列に保存する）。第一希望分は
+  // これまでどおり画面上部の「撮影希望場所」欄（＝上のlocation。案件全体のCOL_LOCATIONにも
+  // 使う後方互換の値）をそのまま使う。
+  const hopeLocations = [1, 2, 3, 4, 5].map(n => n === 1 ? location : String(payload['hopeLocation' + n] || '').trim());
   const planOwnerMap = planOwnerBranchMap_();
   // ★仕様変更：新規依頼フォーム上部にあった「支店（都市）」単独選択欄を廃止した。画面からは
   // もうbranchCodeが送られてこないため、希望日（第一希望）で選んだプランの提供元支店を
@@ -3703,6 +3708,7 @@ function apiShopCreateRequest(token, payload) {
       group.hopeIndexes.forEach(i => {
         setV(hopeTimeCol_(i + 1), hopeTimes[i]);
         setV(hopePlanCol_(i + 1), hopePlans[i]);
+        setV(hopeLocationCol_(i + 1), hopeLocations[i]);
       });
       const isHope1Group = group.hopeIndexes.includes(0);
       const groupPlan = (isHope1Group && explicitPlan) || group.hopeIndexes.map(i => hopePlans[i]).find(Boolean) || '';
