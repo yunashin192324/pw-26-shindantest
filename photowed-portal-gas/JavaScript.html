@@ -2875,6 +2875,15 @@
     if (!payload.brideLastName) { showFieldError('shop-new-error', '新婦姓（ローマ字）を入力してください。'); return; }
     if (!payload.brideName) { showFieldError('shop-new-error', '新婦名（ローマ字）を入力してください。'); return; }
     if (!payload.hope1) { showFieldError('shop-new-error', '希望日（第一希望）を入力してください。'); return; }
+    // ★不具合修正：送信ボタンに二重送信防止が無く、通信が終わる前に連打すると同じ内容の案件が
+    // 複数作成されてしまっていた（「予約が複数できてしまう」「送信できたか分かりづらくて
+    // 何度も押してしまう」）。送信中はボタンを無効化し、「送信中...」に文言を変えて、
+    // 何が起きているか分かるようにする。
+    const submitBtn = $('shop-new-submit');
+    if (submitBtn.disabled) return; // 万一の多重呼び出しをここでも防ぐ
+    submitBtn.disabled = true;
+    const submitBtnLabel = submitBtn.textContent;
+    submitBtn.textContent = '送信中...';
     try {
       const res = await gsRun('apiShopCreateRequest', session.token, payload);
       // ★機能追加：送信後に「回答までお待ちください」の案内を出す
@@ -2901,6 +2910,9 @@
       $('shop-new-initial-status').value = 'RQ';
     } catch (e) {
       showFieldError('shop-new-error', e.message);
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = submitBtnLabel;
     }
   }
 

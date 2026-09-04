@@ -90,8 +90,11 @@
       z-index: 300; width: 480px; max-width: 90vw; box-shadow: 0 12px 40px rgba(0,0,0,0.35);
       border-width: 2px; font-size: 1.05rem;
     }
+    /* ★不具合修正：背景の暗幕が黒に近く濃すぎて「表示が暗い」と感じさせていたため、
+       同じ用途（案内の後ろに他の操作が透けて誤操作しないようにする）を保ったまま、
+       うんと薄い色に変更した。 */
     .success-banner-prominent:not(.hidden)::after {
-      content: ""; position: fixed; inset: 0; background: rgba(15,15,30,0.45); z-index: -1;
+      content: ""; position: fixed; inset: 0; background: rgba(28,31,46,0.16); z-index: -1;
     }
   }
   .hint-text { color: var(--color-muted); font-size: 0.82rem; }

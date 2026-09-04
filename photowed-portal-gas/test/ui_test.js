@@ -2563,6 +2563,47 @@ function paneHidden(document, key) {
           document.querySelector('#reservation-table-wrap thead th.non-shop').classList.contains('hidden'));
   }
 
+  // ---------------------------------------------------------------
+  section('U46. 新規依頼フォームの二重送信防止（連打しても1件だけ作成される）');
+  {
+    // ★不具合修正：送信ボタンに二重送信防止が無く、通信中に連打すると同じ内容の案件が
+    // 複数作成されてしまっていた（「予約が複数できてしまう」「送信できたか分かりづらくて
+    // 何度も押してしまう」というユーザーからの報告に対応）。
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'SHOP1', 'CHANGE-ME-SHOP1');
+    document.getElementById('nav-shop-new').click();
+    await settle();
+    document.getElementById('shop-new-branch').value = 'VIE';
+    document.getElementById('shop-new-branch').dispatchEvent(new dom.window.Event('change'));
+    await settle();
+    document.getElementById('shop-new-team').value = '関東';
+    document.getElementById('shop-new-challengeno').value = 'DBLCLICK001';
+    document.getElementById('shop-new-groom-last').value = 'Double';
+    document.getElementById('shop-new-groom').value = 'Click';
+    document.getElementById('shop-new-bride-last').value = 'Double';
+    document.getElementById('shop-new-bride').value = 'ClickB';
+    document.getElementById('shop-new-hope1').value = '2026-11-01';
+
+    const submitBtnU46 = document.getElementById('shop-new-submit');
+    const originalLabelU46 = submitBtnU46.textContent;
+    submitBtnU46.click();
+    // ★通信（setTimeoutで疑似非同期化されている）が終わる前、settle()を待つより先に確認する
+    check('送信直後はボタンが無効化される（二重送信防止）', submitBtnU46.disabled === true);
+    check('送信中はボタンの文言が「送信中...」に変わる', submitBtnU46.textContent === '送信中...');
+    // 無効化されている間にもう一度押しても、無効なボタンなのでハンドラは実行されない
+    submitBtnU46.click();
+    await settle();
+
+    check('通信が終わるとボタンの文言が元に戻る', submitBtnU46.textContent === originalLabelU46);
+    check('通信が終わるとボタンは再度押せる状態に戻る', submitBtnU46.disabled === false);
+
+    const jpTokenU46 = ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    const createdU46 = ctx.apiGetDashboard(jpTokenU46, { showAll: true }).reservations
+      .filter(r => r.groomName && r.groomName.includes('DOUBLE') && r.groomName.includes('CLICK'));
+    check('連打しても案件は1件だけ作成される', createdU46.length === 1, JSON.stringify(createdU46.map(r => r.kanriNo)));
+  }
+
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error('テストが異常終了しました:', e); process.exit(1); });
