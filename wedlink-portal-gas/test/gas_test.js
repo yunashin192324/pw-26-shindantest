@@ -3842,5 +3842,142 @@ section('64. 新規依頼のセール名・準備場所も希望日ごとに独�
 }
 
 // ---------------------------------------------------------------
+section('65. マーレ支店など英語専用支店対応（表示言語・支店メール通知・自動翻訳）');
+{
+  const ctx = makeContext(); CTX = ctx;
+  const ss = ctx.__ss;
+  ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
+  const bm = ss.getSheetByName('支店マスタ');
+  bm.appendRow(['KANTO','関東手配課','','','JP','関東','pw','kanto@his-world.com','','','','', '', true]);
+  bm.appendRow(['MLE','マーレ支店','モルディブ','マーレ','BRANCH','','mp','male@his-world.com','MLE','','','', '', true]);
+  ['予約一覧','過去一覧'].forEach(n => ctx.ensureSheetWithHeaders_(ss, n, ctx.RESERVATION_HEADERS));
+  ctx.ensureSheetWithHeaders_(ss, 'やり取り履歴', ctx.HISTORY_HEADERS);
+  ctx.ensureSheetWithHeaders_(ss, 'ステータス変更履歴', ctx.STATUS_LOG_HEADERS);
+
+  // --- 表示言語・支店メール通知の既定値 ---
+  const mleBefore = ctx.branchMetaMap_()['MLE'];
+  check('表示言語を設定していない支店は既定で日本語（ja）になる', mleBefore.displayLang === 'ja', mleBefore.displayLang);
+  check('支店メール通知も未設定なら既定でON', mleBefore.branchMailNotify === true);
+
+  setBranchField(ctx, 'MLE', '表示言語', 'en');
+  check('表示言語をenに設定すると反映される', ctx.branchMetaMap_()['MLE'].displayLang === 'en');
+
+  // --- ログインセッションに表示言語が乗る（BRANCHロールのみ意味を持つ） ---
+  const mleLogin = ctx.apiLogin('MLE', 'mp');
+  check('マーレ支店としてログインするとセッションのdisplayLangがenになる', mleLogin.session.displayLang === 'en');
+  const jpLogin = ctx.apiLogin('KANTO', 'pw');
+  check('日本側（JP）は支店の表示言語設定に関わらず常にja', jpLogin.session.displayLang === 'ja');
+
+  // --- apiTranslateBatch：英語支店としてログイン中のときだけ実際に翻訳される ---
+  const mleTr = ctx.apiTranslateBatch(mleLogin.session.token, ['こんにちは', '']);
+  check('英語支店（マーレ）としてログイン中は翻訳される', mleTr.translations[0] === 'EN:こんにちは', JSON.stringify(mleTr));
+  check('空文字はそのまま（翻訳APIを無駄に呼ばない）', mleTr.translations[1] === '');
+  const jpTr = ctx.apiTranslateBatch(jpLogin.session.token, ['こんにちは']);
+  check('日本側（JP）は翻訳されず原文のまま返る', jpTr.translations[0] === 'こんにちは', JSON.stringify(jpTr));
+
+  // --- 新規案件通知（日本側が作成＝支店だけが宛先になるケース）：マーレ支店には英訳された件名・本文で届く ---
+  ctx.__mail.length = 0;
+  const created1 = ctx.apiCreateReservation(jpLogin.session.token, 'MLE', '01 Taro Tanaka\n02 Hanako Tanaka\nRQ 2026/12/03');
+  check('通知は1通（支店のみが宛先のため、従来どおり分割はされない）', ctx.__mail.length === 1, JSON.stringify(ctx.__mail));
+  check('マーレ支店宛の件名が英訳されている', ctx.__mail[0].to === 'male@his-world.com' && ctx.__mail[0].subj.startsWith('EN:'), ctx.__mail[0]);
+  check('マーレ支店宛の本文も英訳されている', ctx.__mail[0].body.startsWith('EN:'), ctx.__mail[0].body);
+
+  // --- メッセージ（JP→支店の連絡）も英訳される ---
+  ctx.__mail.length = 0;
+  ctx.apiCommitChanges(jpLogin.session.token, 'MLE-001', {}, 'よろしくお願いします');
+  check('メッセージのみ：宛先はマーレ支店の1通', ctx.__mail.length === 1 && ctx.__mail[0].to === 'male@his-world.com');
+  check('日本側からの連絡文（メッセージ本文）が英訳されて届く', ctx.__mail[0].body.startsWith('EN:'), ctx.__mail[0].body);
+
+  // --- 支店メール通知OFF：getBranchEmail_を経由する全通知が一括で止まる（可視性は変えない） ---
+  setBranchField(ctx, 'MLE', '支店メール通知', false);
+  ctx.__mail.length = 0;
+  const created2 = ctx.apiCreateReservation(jpLogin.session.token, 'MLE', '01 A B\n02 C D');
+  check('支店メール通知OFFにすると、マーレ支店へは新規案件通知メールが飛ばない',
+        !ctx.__mail.some(m => m.to === 'male@his-world.com'), JSON.stringify(ctx.__mail));
+  check('支店メール通知OFFでも案件自体はマーレ支店から閲覧できる（可視性は変えない）',
+        ctx.apiGetReservationDetail(mleLogin.session.token, created2.kanriNo).detail['管理番号'] === created2.kanriNo);
+  check('支店メール通知OFFでも支店側の一覧では未読（要対応）として表示される（メールだけを止める設定のため）',
+        ctx.apiGetDashboard(mleLogin.session.token, { showAll: true }).reservations.find(r => r.kanriNo === created2.kanriNo).needsAction === true);
+  setBranchField(ctx, 'MLE', '支店メール通知', true); // 以降のため戻す
+}
+
+// ---------------------------------------------------------------
+section('66. マーレ支店など英語専用支店対応：宛先に日本側と支店の両方が含まれる通知は、支店だけ英語で別メールになる');
+{
+  const ctx = featureFixture(); // KANTO / VIE / IST が既にいる
+  addBranchRow(ctx, { '支店コード': 'MLE', '支店名': 'マーレ支店', '国': 'モルディブ', '都市': 'マーレ',
+    'ロール': 'BRANCH', 'ログインパスコード': 'mp', '通知先メール': 'male@his-world.com',
+    '案件番号プレフィックス': 'MLE', '有効': true, '表示言語': 'en' });
+  addBranchRow(ctx, { '支店コード': 'SHOP1', '支店名': '新宿店', 'ロール': 'SHOP',
+    'ログインパスコード': 'sp', '通知先メール': 'shop1@example.com', '有効': true });
+
+  const shopToken = ctx.apiLogin('SHOP1', 'sp').session.token;
+  ctx.__mail.length = 0;
+  // 店舗発の新規依頼は、既定では日本の該当手配課・現地支店の両方に通知される（sendDirectionalMail_のelse節）
+  const created = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'MLE', team: '関東', groomLastName: 'Smith', groomName: 'John',
+    brideLastName: 'Smith', brideName: 'Jane', challengeNo: 'MALEEN00001', hopeDate: '2026-09-10'
+  });
+  check('起票が成功する', created.ok === true && !!created.kanriNo, JSON.stringify(created));
+
+  const jpMail = ctx.__mail.find(m => m.to.includes('kanto@his-world.com'));
+  const mleMail = ctx.__mail.find(m => m.to.includes('male@his-world.com'));
+  check('日本の手配課には日本語のまま届く', !!jpMail && !jpMail.subj.startsWith('EN:'), jpMail);
+  check('マーレ支店には英訳された別メールとして届く（1通にまとめると言語を分けられないため）',
+        !!mleMail && mleMail.subj.startsWith('EN:') && mleMail.body.startsWith('EN:'), mleMail);
+  check('通知は2通に分かれる（日本語1通・英語1通）', ctx.__mail.length === 2, JSON.stringify(ctx.__mail.map(m => m.to)));
+
+  // 対比：日本語支店（VIE）は従来どおり1通にまとまる
+  ctx.__mail.length = 0;
+  ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'VIE', team: '関東', groomLastName: 'Yama', groomName: 'Taro',
+    brideLastName: 'Yama', brideName: 'Hana', challengeNo: 'VIEJA000001', hopeDate: '2026-09-10'
+  });
+  check('日本語支店（VIE）は従来どおり1通にまとまる（回帰確認）', ctx.__mail.length === 1, JSON.stringify(ctx.__mail));
+  check('その1通に日本の手配課・ウィーン支店の両方が宛先として含まれる',
+        ctx.__mail[0].to.includes('kanto@his-world.com') && ctx.__mail[0].to.includes('vie@his-world.com'), ctx.__mail[0].to);
+}
+
+// ---------------------------------------------------------------
+section('67. マーレ支店など英語専用支店対応：納品期限アラート・未返信督促も英訳・分割される');
+{
+  const ctx = makeContext(); CTX = ctx;
+  const ss = ctx.__ss;
+  ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
+  const bm = ss.getSheetByName('支店マスタ');
+  bm.appendRow(['KANTO','関東手配課','','','JP','関東','p','kanto@his-world.com','','','','', '', true]);
+  bm.appendRow(['MLE','マーレ支店','モルディブ','マーレ','BRANCH','','p','male@his-world.com','MLE','','','', '', true]);
+  setBranchField(ctx, 'MLE', '表示言語', 'en');
+  ['予約一覧','過去一覧'].forEach(n => ctx.ensureSheetWithHeaders_(ss, n, ctx.RESERVATION_HEADERS));
+  ctx.ensureSheetWithHeaders_(ss, 'やり取り履歴', ctx.HISTORY_HEADERS);
+  ctx.ensureSheetWithHeaders_(ss, 'ステータス変更履歴', ctx.STATUS_LOG_HEADERS);
+
+  // --- 納品未登録アラート ---
+  const res = ss.getSheetByName('予約一覧');
+  const H = ctx.RESERVATION_HEADERS;
+  const row = new Array(H.length).fill('');
+  row[H.indexOf('支店コード')] = 'MLE'; row[H.indexOf('管理番号')] = 'MLE-D1';
+  row[H.indexOf('管轄')] = '関東'; row[H.indexOf('撮影日FIX')] = daysAgo(30);
+  res.appendRow(row);
+  ctx.checkDeliveryAlerts();
+  const jpMail = ctx.__mail.find(m => m.to === 'kanto@his-world.com');
+  const mleMail = ctx.__mail.find(m => m.to === 'male@his-world.com');
+  check('納品未登録アラート：日本側には日本語のまま届く', !!jpMail && !jpMail.subj.startsWith('EN:'), jpMail);
+  check('納品未登録アラート：マーレ支店には英訳された別メールが届く', !!mleMail && mleMail.subj.startsWith('EN:'), mleMail);
+  check('納品未登録アラートは2通に分かれる', ctx.__mail.length === 2, JSON.stringify(ctx.__mail.map(m => m.to)));
+
+  // --- 未返信督促（ダイジェスト） ---
+  const jp = ctx.apiLogin('KANTO', 'p');
+  ctx.apiCommitChanges(jp.session.token, 'MLE-D1', {}, '空き確認をお願いします');
+  ctx.__mail.length = 0;
+  const hs = ss.getSheetByName('やり取り履歴');
+  const HH = ctx.HISTORY_HEADERS;
+  hs.getRange(2, HH.indexOf('日時') + 1, 1, 1).setValue(ctx.__daysFromToday(-3));
+  ctx.checkUnansweredAlerts();
+  const remindMail = ctx.__mail.find(m => m.to === 'male@his-world.com' && m.subj.indexOf('未返信') !== -1);
+  check('未返信督促：マーレ支店宛のダイジェストも英訳される', !!remindMail && remindMail.subj.startsWith('EN:'), remindMail);
+}
+
+// ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
 process.exit(fail === 0 ? 0 : 1);

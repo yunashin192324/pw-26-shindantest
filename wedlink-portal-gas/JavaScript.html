@@ -290,6 +290,7 @@
   function doLogout() {
     if (session) gsRun('apiLogout', session.token).catch(() => {});
     localStorage.removeItem(STORAGE_KEY);
+    stopAutoTranslate_();
     session = null;
     currentUserName = '';
     $('app-header').classList.add('hidden');
@@ -301,6 +302,7 @@
   function afterLogin() {
     $('app-header').classList.remove('hidden');
     applyRoleUI();
+    startAutoTranslateIfNeeded_();
     loadCurrentUserName();
     dashboardScope = { showAll: true, teams: [], branches: [] };
     searchScope = { showAll: true, teams: [], branches: [] };
@@ -3141,5 +3143,154 @@
       await gsRun('apiSaveArrangementSettings', session.token, settingsBranchCode, { enabled, categories });
       showToast('設定を保存しました');
     } catch (e) { handleAuthError(e); }
+  }
+
+  // =====================================================
+  // 英語専用支店（マーレ支店など。表示言語＝'en'）向けの画面自動翻訳
+  // =====================================================
+  // ★機能追加：画面のあらゆる日本語テキスト（固定のメニュー・ボタン・見出しも、日本側が
+  // 書いた自由記述＝メッセージ・備考・メモ等も区別しない）を、その場でLanguageApp（サーバー側の
+  // apiTranslateBatch経由）に投げて英訳し、画面に書き戻す。既存の画面コード（1200箇所以上ある
+  // 日本語文言）には一切手を入れず、MutationObserverで#app配下のDOM変化を監視するだけで
+  // 実現する。対象はログイン中セッションの表示言語が'en'（現状マーレ支店のみ）の場合だけで、
+  // 日本語支店・手配課・店舗の表示は一切変わらない。
+  let i18nObserver = null;
+  // 直近に「自分がこのノードへ書き込んだ翻訳結果」を覚えておく（書き込み自体がまた
+  // MutationObserverを発火させるが、書き込んだ値と同じなら再翻訳しないことで無限ループを防ぐ。
+  // ★不具合防止：翻訳結果に元の日本語がそのまま残る場合がある（固有名詞・記号混じりの文字列等、
+  // LanguageAppが訳しきれない場合）。そのままだとcontainsJapanese_が毎回trueになり、
+  // 「訳した結果にさらに訳した結果を継ぎ足す」形でどんどん長くなってしまうため必須のチェック）
+  const i18nLastWritten = new WeakMap();
+  // 属性は1要素に複数（placeholder・title・aria-label）あり得るため、属性名ごとに覚える
+  const i18nLastWrittenAttr = new WeakMap(); // el -> { [attr]: 直近に書き込んだ値 }
+  // 同じ文字列を画面内で何度も翻訳API経由にしないためのクライアント側キャッシュ
+  // （サーバー側 translateJaToEn_ にもキャッシュがあるが、通信そのものを減らす目的で別に持つ）
+  const i18nCache = {};
+  let i18nPendingNodes = [];
+  let i18nPendingAttrs = []; // { el, attr }
+  let i18nFlushTimer = null;
+  const I18N_ATTRS = ['placeholder', 'title', 'aria-label'];
+  const JA_CHAR_RE = /[぀-ヿ㐀-鿿]/; // ひらがな・カタカナ・漢字を含むか（含まなければ翻訳不要）
+
+  function containsJapanese_(s) {
+    return typeof s === 'string' && JA_CHAR_RE.test(s);
+  }
+
+  // ログイン中セッションが英語専用支店かどうか
+  function isEnglishBranchSession_() {
+    return !!(session && session.role === 'BRANCH' && session.displayLang === 'en');
+  }
+
+  function startAutoTranslateIfNeeded_() {
+    if (!isEnglishBranchSession_()) return;
+    if (i18nObserver) return; // 既に開始済み
+    const root = $('app');
+    if (!root) return;
+    queueSubtreeForTranslation_(root);
+    i18nObserver = new MutationObserver((mutations) => {
+      mutations.forEach(m => {
+        if (m.type === 'characterData') {
+          queueTextNode_(m.target);
+        } else if (m.type === 'childList') {
+          m.addedNodes.forEach(n => queueSubtreeForTranslation_(n));
+        } else if (m.type === 'attributes') {
+          queueAttr_(m.target, m.attributeName);
+        }
+      });
+    });
+    i18nObserver.observe(root, {
+      childList: true, subtree: true, characterData: true,
+      attributes: true, attributeFilter: I18N_ATTRS
+    });
+  }
+
+  // ログアウト時は監視を止め、次のログインで新しいセッションに応じて張り直す
+  function stopAutoTranslate_() {
+    if (i18nObserver) { i18nObserver.disconnect(); i18nObserver = null; }
+    i18nPendingNodes = [];
+    i18nPendingAttrs = [];
+    clearTimeout(i18nFlushTimer);
+  }
+
+  function queueTextNode_(node) {
+    i18nPendingNodes.push(node);
+    scheduleTranslateFlush_();
+  }
+  function queueAttr_(el, attr) {
+    if (I18N_ATTRS.includes(attr)) { i18nPendingAttrs.push({ el, attr }); scheduleTranslateFlush_(); }
+  }
+  function scheduleTranslateFlush_() {
+    clearTimeout(i18nFlushTimer);
+    // ★不具合防止：一覧など大量のDOMがまとめて追加される画面で、ノード1つごとに通信すると
+    // 通信回数・応答待ちの両方で表示が遅くなる。短い時間だけ待って、その間にたまった分を
+    // まとめて1回のapiTranslateBatch呼び出しで処理する。
+    i18nFlushTimer = setTimeout(flushTranslateQueue_, 80);
+  }
+
+  function queueSubtreeForTranslation_(node) {
+    if (node.nodeType === Node.TEXT_NODE) { queueTextNode_(node); return; }
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+    const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT, null);
+    let n;
+    while ((n = walker.nextNode())) queueTextNode_(n);
+    I18N_ATTRS.forEach(attr => {
+      if (node.hasAttribute && node.hasAttribute(attr)) queueAttr_(node, attr);
+    });
+    if (node.querySelectorAll) {
+      node.querySelectorAll(I18N_ATTRS.map(a => `[${a}]`).join(',')).forEach(el => {
+        I18N_ATTRS.forEach(attr => { if (el.hasAttribute(attr)) queueAttr_(el, attr); });
+      });
+    }
+  }
+
+  async function flushTranslateQueue_() {
+    const nodes = i18nPendingNodes.splice(0);
+    const attrs = i18nPendingAttrs.splice(0);
+    if (!nodes.length && !attrs.length) return;
+
+    const jobs = []; // { kind: 'node'|'attr', target, attr?, text }
+    const texts = [];
+    nodes.forEach(n => {
+      if (!n.isConnected) return;
+      const t = n.nodeValue;
+      if (!t || !t.trim() || !containsJapanese_(t)) return;
+      if (i18nLastWritten.get(n) === t) return; // 直前に自分が書いた値そのもの（再翻訳ループ防止）
+      jobs.push({ kind: 'node', target: n, text: t });
+      texts.push(t);
+    });
+    attrs.forEach(({ el, attr }) => {
+      if (!el.isConnected) return;
+      const t = el.getAttribute(attr);
+      if (!t || !t.trim() || !containsJapanese_(t)) return;
+      const writtenRec = i18nLastWrittenAttr.get(el);
+      if (writtenRec && writtenRec[attr] === t) return; // 直前に自分が書いた値そのもの（再翻訳ループ防止）
+      jobs.push({ kind: 'attr', target: el, attr, text: t });
+      texts.push(t);
+    });
+    if (!jobs.length) return;
+
+    const toFetch = [...new Set(texts.filter(t => !(t in i18nCache)))];
+    if (toFetch.length) {
+      try {
+        const res = await gsRun('apiTranslateBatch', session.token, toFetch);
+        toFetch.forEach((t, i) => { i18nCache[t] = res.translations[i]; });
+      } catch (e) {
+        return; // 翻訳に失敗した分は諦めて原文のまま表示を続ける（画面自体は止めない）
+      }
+    }
+
+    jobs.forEach(job => {
+      const translated = i18nCache[job.text];
+      if (translated === undefined || translated === job.text) return;
+      if (job.kind === 'node') {
+        job.target.nodeValue = translated;
+        i18nLastWritten.set(job.target, translated);
+      } else {
+        job.target.setAttribute(job.attr, translated);
+        const rec = i18nLastWrittenAttr.get(job.target) || {};
+        rec[job.attr] = translated;
+        i18nLastWrittenAttr.set(job.target, rec);
+      }
+    });
   }
 </script>

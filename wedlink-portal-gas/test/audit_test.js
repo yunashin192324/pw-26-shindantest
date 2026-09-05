@@ -79,6 +79,9 @@ const API_SPECS = [
   { fn: 'apiLogout',           scope: 'public', args: (t) => [t] },
 
   { fn: 'apiGetCurrentUserName', scope: 'any', args: (t) => [t] },
+  // ★機能追加（マーレ支店など英語専用支店対応）：セッションさえあれば誰でも呼べる（支店固有の
+  // データには触れず、英語支店以外は入力をそのまま返すだけ）
+  { fn: 'apiTranslateBatch',     scope: 'any', args: (t) => [t, ['テスト']] },
   { fn: 'apiListBranches',       scope: 'jp',  args: (t) => [t] },
   { fn: 'apiSaveBranch',         scope: 'jp',  args: (t) => [t, { code: 'TST', name: 'テスト支店', passcode: 'p' }], writes: true },
   { fn: 'apiSetBranchActive',    scope: 'jp',  args: (t) => [t, 'VIE', true], writes: true },

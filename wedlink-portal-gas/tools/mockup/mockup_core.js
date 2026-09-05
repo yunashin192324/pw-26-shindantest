@@ -145,8 +145,22 @@ function buildScripts({ codeGs, javascriptHtml, apiNames }) {
       for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i); return arr; },
     newBlob: (data, mimeType, name) => ({
       getName: () => name || 'file', getContentType: () => mimeType || 'application/octet-stream', getBytes: () => data
-    })
+    }),
+    // ★機能追加（マーレ支店など英語専用支店対応）：translateJaToEn_のキャッシュキー生成に使う。
+    // 本物の暗号学的ハッシュである必要はなく、同じ文字列に同じキーが振られれば十分なため、
+    // ブラウザの同期APIだけで済む簡易ハッシュ（実DigestAlgorithmの値そのものは使わない）。
+    computeDigest: (algorithm, text) => {
+      let h = 0;
+      const s = String(text);
+      for (let i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0; }
+      return [h & 0xff, (h >> 8) & 0xff, (h >> 16) & 0xff, (h >> 24) & 0xff];
+    },
+    DigestAlgorithm: { MD5: 'MD5' },
+    Charset: { UTF_8: 'UTF_8' }
   };
+  // ★機能追加（マーレ支店など英語専用支店対応）：本物のLanguageAppは呼べないため、
+  // 「翻訳された」ことが分かる簡易モック（EN:接頭辞）。gas_harness.jsのモックと同じ考え方。
+  window.LanguageApp = { translate: (text) => 'EN:' + text };
   // ★DriveApp簡易モック（拡張要望8章：店舗アップロード用フォルダの自動作成・書類一覧）。
   // 実DriveAppとの互換は最小サブセットのみ（gas_harness.jsのDriveAppモックと同じ設計）。
   (function () {
@@ -320,6 +334,13 @@ return {
   // ★機能追加（拡張要望5章）：イスタンブール支店は「手配課への通知メールを送らない」デモにする
   setBmByCode('IST', '店舗依頼の手配課通知', false);
 
+  // ★機能追加（マーレ支店など英語専用支店対応）：英語しか読めない支店のデモ。
+  // 画面表示・日本側からの連絡（メッセージ・通知メール本文）が自動的に英訳される一方、
+  // メール通知そのものは（今後必要になった時にすぐON/OFFを切り替えられるよう）OFFにしてある。
+  addBranchRow({ '支店コード': 'MLE', '支店名': 'マーレ支店', '国': 'モルディブ', '都市': 'マーレ',
+    'ロール': 'BRANCH', 'ログインパスコード': 'CHANGE-ME-MLE', '通知先メール': 'male-branch@his-world.com',
+    '案件番号プレフィックス': 'MLE', '有効': true, '表示言語': 'en', '支店メール通知': false });
+
   // 店舗ロール（デモ用に2店舗。請求先（拡張要望6章）も設定しておく）
   addBranchRow({ '支店コード': 'SHOP1', '支店名': '新宿店', 'ロール': 'SHOP', 'ログインパスコード': 'CHANGE-ME-SHOP1', '通知先メール': 'shop1@example.com', '有効': true, '請求先': '関東営業本部' });
   addBranchRow({ '支店コード': 'SHOP2', '支店名': '梅田店', 'ロール': 'SHOP', 'ログインパスコード': 'CHANGE-ME-SHOP2', '通知先メール': 'shop2@example.com', '有効': true, '請求先': '関西営業本部' });
@@ -393,6 +414,18 @@ return {
     '希望日②': '2026-11-08', '希望日② STS JP': 'RQ', '希望日② STS 支店': 'ST',
     '希望日③': '2026-11-15', '希望日③ STS JP': 'RQ', '希望日③ STS 支店': 'ST'
   });
+
+  // --- マーレ支店（英語専用支店のデモ。日本側から見た内容は日本語のままで、
+  //     マーレ支店としてログインすると画面・このメッセージ本文が自動的に英訳される） ---
+  addCase({
+    '支店コード': 'MLE', '管理番号': 'MLE-401', '管轄': '関東', 'STS JP': 'RQ', 'STS 支店': '',
+    '撮影日FIX': daysFromToday(60), '新郎姓（ローマ字）': 'Smith', '新郎名（ローマ字）': 'John',
+    '新婦姓（ローマ字）': 'Smith', '新婦名（ローマ字）': 'Jane',
+    'CHG NO': 'CH-2204', 'プラン名': 'オーバーウォーターヴィラプラン',
+    '希望日①': '2026-11-20', '撮影希望場所': 'サンセットビーチ', '備考': '日本語入力例：新婦の希望で夕日の時間帯に撮影してほしい'
+  });
+  apiCommitChanges(apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token, 'MLE-401', {},
+    '撮影時間は現地の日没時刻に合わせて調整しますので、確定次第ご連絡します。');
 
   // --- 共有メモ・現地用メモ（積み上げ式）のサンプル ---
   const memoSheet = ss.getSheetByName('メモ履歴');

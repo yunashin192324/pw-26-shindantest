@@ -39,6 +39,7 @@ html, body { background: #f5f5fa; }
     <option value="ROW,CHANGE-ME-ROW">ローマ支店（イタリア・同意書必須）</option>
     <option value="IST,CHANGE-ME-IST">イスタンブール支店（パスポート欄あり）</option>
     <option value="VIE,CHANGE-ME-VIE">ウィーン支店（店舗直結ON）</option>
+    <option value="MLE,CHANGE-ME-MLE">マーレ支店（英語表示・メール通知OFF）</option>
     <option value="SHOP1,CHANGE-ME-SHOP1">新宿店（店舗ロール）</option>
   </select>
 </div>

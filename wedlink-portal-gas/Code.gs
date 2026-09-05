@@ -505,6 +505,18 @@ const BM_COL_SHOW_HOPE_TIME = '希望日時間帯表示';
 // 未読フラグ（一覧への表示・「要対応」表示）には影響しない（支店は常にその案件を閲覧できる。
 // あくまで作成時点のメール通知だけを止める）。
 const BM_COL_BRANCH_NOTIFY_NEW_CASE = '新規依頼の支店通知';
+// ★機能追加（マーレ支店など英語専用支店対応）：この支店の画面表示・自動翻訳の対象言語。
+// 空欄／'ja' = 日本語（既定・従来どおり）、'en' = 英語。'en'の支店としてログインすると、
+// 画面の表示が自動的に英訳され（apiTranslateBatch参照）、日本側からの連絡（メッセージ本文・
+// 通知メールの本文）もLanguageAppで自動的に英訳される。日本側（JP・SHOP）の表示・通知には
+// 一切影響しない（この支店宛の分だけが英語になる）。
+const BM_COL_DISPLAY_LANG = '表示言語';
+// ★機能追加（マーレ支店など英語専用支店対応）：この支店へのメール通知（新規依頼・メッセージ・
+// キャンセル成立・納品データ変更・納品期限アラート・未返信督促など、支店宛の通知メール全般）を
+// 送るかどうか。既定（未設定）はON＝従来どおり送る。「新規依頼の支店通知」（新規依頼作成時の
+// 通知だけを止める設定）とは異なり、この列は支店宛のメール通知そのものを一括で止める
+// （getBranchEmail_参照）。案件の可視性・未読フラグ（一覧の「要対応」表示等）には影響しない。
+const BM_COL_BRANCH_MAIL_NOTIFY = '支店メール通知';
 const BM_COL_ACTIVE = '有効';
 // ★不具合防止：既存のテスト・運用スプレッドシートは「有効」列が支店マスタの最後尾にある前提で
 // 位置決め打ちの行を作っている場合がある。新しい列（手配メール機能まわり）は、その並びを崩さないよう
@@ -515,7 +527,7 @@ const BRANCH_MASTER_HEADERS = [
   BM_COL_REMIND_DAYS, BM_COL_CONSENT_REQUIRED, BM_COL_ACTIVE,
   BM_COL_ARRANGEMENT_ENABLED, BM_COL_PASSPORT_REQUIRED, BM_COL_SHOP_DIRECT,
   BM_COL_SHOP_NOTIFY_HQ, BM_COL_SHOP_BILLING, BM_COL_SHOP_UPLOAD_VISIBLE_TO_BRANCH,
-  BM_COL_SHOW_HOPE_TIME, BM_COL_BRANCH_NOTIFY_NEW_CASE,
+  BM_COL_SHOW_HOPE_TIME, BM_COL_BRANCH_NOTIFY_NEW_CASE, BM_COL_DISPLAY_LANG, BM_COL_BRANCH_MAIL_NOTIFY,
   // カテゴリごとの手配先（名前・メール）。同じ宛先を複数カテゴリに入れれば「まとめて1件に依頼」にできる
   ...ARRANGEMENT_CATEGORIES.flatMap(c => [arrNameCol_(c.label), arrEmailCol_(c.label)])
 ];
@@ -895,7 +907,10 @@ function apiLogin(branchCode, passcode) {
     branchCode: String(match[BM_COL_CODE]).trim().toUpperCase(),
     branchName: match[BM_COL_NAME],
     role,
-    team: role === JP_ROLE ? match[BM_COL_TEAM] : ''
+    team: role === JP_ROLE ? match[BM_COL_TEAM] : '',
+    // ★機能追加（マーレ支店など英語専用支店対応）：BRANCHロールだけが意味を持つ表示言語。
+    // JP・SHOPは常に'ja'（この2ロールの表示・通知は変更しない）。
+    displayLang: role === BRANCH_ROLE ? normalizeDisplayLang_(match[BM_COL_DISPLAY_LANG]) : 'ja'
   };
   CacheService.getScriptCache().put('sess_' + token, JSON.stringify(session), SESSION_TTL_SEC);
 
@@ -968,6 +983,13 @@ function apiListBranches(token) {
   return listBranchesRaw_();
 }
 
+// ★機能追加（マーレ支店など英語専用支店対応）：表示言語列を正規化する。'en'（大文字小文字を
+// 問わない）以外はすべて日本語扱い（空欄はもちろん、typoで変な値が入っていた場合も安全側＝
+// 日本語に倒す）。
+function normalizeDisplayLang_(raw) {
+  return String(raw || '').trim().toLowerCase() === 'en' ? 'en' : 'ja';
+}
+
 // 支店マスタの「ロール」列を正規化する（JP／SHOP／それ以外はBRANCHとして扱う）。
 // listBranchesRaw_・apiLogin・apiListLoginOptions で必ずこれを通す：どれか1箇所だけ
 // 表記ゆれに寛容な独自ロジックを持つと、ロールごとの判定がずれる不具合につながるため。
@@ -1007,6 +1029,10 @@ function listBranchesRaw_() {
     showHopeTime: isActiveFlag_(r[BM_COL_SHOW_HOPE_TIME]),
     // ★機能追加：店舗発の新規依頼で、この支店へ作成時点の通知メールを送るか（既定ON）
     branchNotifyNewCase: isActiveFlagDefaultTrue_(r[BM_COL_BRANCH_NOTIFY_NEW_CASE]),
+    // ★機能追加（マーレ支店など英語専用支店対応）：この支店の表示言語（'ja'/'en'）と、
+    // この支店へのメール通知全般を送るか（既定ON）
+    displayLang: normalizeDisplayLang_(r[BM_COL_DISPLAY_LANG]),
+    branchMailNotify: isActiveFlagDefaultTrue_(r[BM_COL_BRANCH_MAIL_NOTIFY]),
     active: isActiveFlag_(r[BM_COL_ACTIVE])
     // ログインパスコードは一覧APIには返さない（画面表示上の漏洩防止）
   }));
@@ -4247,18 +4273,77 @@ function sendDirectionalMail_(headers, rowData, direction, session, message, kin
 
   if (!recipients) return;
 
-  const subj = `[WEDLINK][${branchCode}] 【${kanri} ｜ ${chgNo}】${kind}のお知らせ`;
-  const body = `${senderLabel_(session)} から更新がありました。\n\n` +
+  const subjJa = `[WEDLINK][${branchCode}] 【${kanri} ｜ ${chgNo}】${kind}のお知らせ`;
+  const bodyJa = `${senderLabel_(session)} から更新がありました。\n\n` +
                `管理番号: ${kanri}\nChallenge No: ${chgNo}\n新郎: ${groom}\n新婦: ${bride}\n\n` +
                `--- ${kind} ---\n${message}\n\n` +
                `ポータルで確認する: ${WEBAPP_URL}`;
 
-  MailApp.sendEmail(recipients, subj, body);
+  // ★機能追加（マーレ支店など英語専用支店対応）：宛先に支店のメールアドレスが含まれ、かつ
+  // その支店の表示言語が英語（'en'）の場合だけ特別扱いする。日本語支店（既定）はここに
+  // 入らず、従来とまったく同じ「宛先をまとめて1通で送る」挙動のままになる（既存の挙動・
+  // 既存テストへの影響を避けるため、分割するのは英語支店が絡む場合だけにする）。
+  const branchMeta = branchMetaMap_()[branchCode];
+  const branchIsEn = !!branchMeta && branchMeta.displayLang === 'en' && !!branchEmail;
+  const recipientList = recipients.split(',');
+  const recipientsIncludeBranch = branchIsEn && recipientList.includes(branchEmail);
+
+  if (recipientsIncludeBranch) {
+    // 支店以外の宛先（日本の手配課・店舗）には、これまでどおり日本語のまま送る
+    const others = recipientList.filter(r => r && r !== branchEmail).join(',');
+    if (others) MailApp.sendEmail(others, subjJa, bodyJa);
+    // 支店には英訳した件名・本文を別メールで送る（1通にまとめると宛先ごとに言語を変えられないため）
+    MailApp.sendEmail(branchEmail, translateJaToEn_(subjJa), translateJaToEn_(bodyJa));
+    return;
+  }
+
+  MailApp.sendEmail(recipients, subjJa, bodyJa);
 }
 
+// ★機能追加（マーレ支店など英語専用支店対応）：支店マスタ「支店メール通知」がOFFの支店には
+// 空文字を返す。この関数を経由するすべての支店宛メール送信（新規案件・メッセージ・キャンセル・
+// 納品データ変更・納品期限アラート・未返信督促など）に自動的に適用される。
 function getBranchEmail_(branchCode) {
   const meta = branchMetaMap_()[branchCode];
-  return meta ? meta.email : '';
+  if (!meta || !meta.branchMailNotify) return '';
+  return meta.email;
+}
+
+// ★機能追加（マーレ支店など英語専用支店対応）：LanguageAppを使った簡易的な日本語→英語翻訳。
+// 同じ文字列を何度も翻訳し直さないよう、文字列のハッシュ値をキーにスクリプトキャッシュへ
+// 結果を保存する（画面の固定文言は何度も同じ文字列が渡されるため、キャッシュ無しだと
+// 翻訳APIの呼び出し回数・応答時間の両方で無視できない負荷になる）。翻訳サービスが失敗しても
+// 例外を投げず原文を返し、画面表示・メール送信自体は止めない。
+function translateJaToEn_(text) {
+  const s = String(text === null || text === undefined ? '' : text);
+  if (!s.trim()) return s;
+  const cache = CacheService.getScriptCache();
+  const digestBytes = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, s, Utilities.Charset.UTF_8);
+  const key = 'i18n_en_' + digestBytes.map(b => ((b + 256) % 256).toString(16).padStart(2, '0')).join('');
+  const cached = cache.get(key);
+  if (cached !== null) return cached;
+  let translated = s;
+  try {
+    translated = LanguageApp.translate(s, 'ja', 'en');
+  } catch (e) {
+    translated = s; // 翻訳サービス障害時は原文のまま返す（表示・送信を止めないことを優先）
+  }
+  try { cache.put(key, translated, 21600); } catch (e) { /* キャッシュ保存の失敗は無視してよい */ }
+  return translated;
+}
+
+// ★機能追加（マーレ支店など英語専用支店対応）：画面側が表示中のテキストをまとめて英訳して
+// もらうためのAPI。表示言語が英語（'en'）の支店としてログインしている場合のみ実際に翻訳し、
+// それ以外（日本語支店・手配課・店舗）は入力をそのまま返す（誰でも呼べてしまうと
+// LanguageAppのクォータを無駄に消費するため、対象外のセッションでは早期リターンする）。
+function apiTranslateBatch(token, texts) {
+  const session = requireSession_(token);
+  const list = Array.isArray(texts) ? texts : [];
+  const asStr = list.map(t => String(t === null || t === undefined ? '' : t));
+  if (!(session.role === BRANCH_ROLE && session.displayLang === 'en')) {
+    return { ok: true, translations: asStr };
+  }
+  return { ok: true, translations: asStr.map(t => translateJaToEn_(t)) };
 }
 
 // ★機能追加：起票元店舗コードから通知先メールを引く（支店マスタの ロール=SHOP の行）
@@ -4543,14 +4628,25 @@ function checkDeliveryAlertsCore_(errors) {
       // ★要件変更：以前は日本側（手配課）だけへの通知だったが、現地支店も自分の納品遅れに
       // 気づけるよう、現地支店にも同じメールを送るようにした（「納品待ち」画面自体は元々
       // 両ロールから見られるが、メール通知は手配課宛の1通だけだった）。
-      const recipients = [getJpTeamEmail_(area), getBranchEmail_(branchCode)].filter(Boolean).join(',');
-      if (!recipients) return;
-      MailApp.sendEmail(
-        recipients,
-        `[要確認] 納品未登録：${kanri}（${branchCode}支店・撮影日から${daysPast}日経過）`,
-        `撮影日から${daysPast}日が経過していますが、DriveフォルダURL（納品）が未登録です。ポータルをご確認ください。\n\n` +
-        `管理番号: ${kanri}\n撮影日: ${shootStr}\nこの案件の納品期限: 撮影日から${limitDays}日`
-      );
+      const jpEmail = getJpTeamEmail_(area);
+      const branchEmail = getBranchEmail_(branchCode);
+      if (!jpEmail && !branchEmail) return;
+      const subjJa = `[要確認] 納品未登録：${kanri}（${branchCode}支店・撮影日から${daysPast}日経過）`;
+      const bodyJa = `撮影日から${daysPast}日が経過していますが、DriveフォルダURL（納品）が未登録です。ポータルをご確認ください。\n\n` +
+        `管理番号: ${kanri}\n撮影日: ${shootStr}\nこの案件の納品期限: 撮影日から${limitDays}日`;
+      // ★機能追加（マーレ支店など英語専用支店対応）：この支店の表示言語が英語の場合だけ、
+      // 支店宛は別メール・英訳した件名/本文で送る（日本語支店は従来どおり1通にまとめる）。
+      const meta = branchMeta[branchCode];
+      const branchIsEn = !!meta && meta.displayLang === 'en' && !!branchEmail;
+      if (branchIsEn && jpEmail) {
+        MailApp.sendEmail(jpEmail, subjJa, bodyJa);
+        MailApp.sendEmail(branchEmail, translateJaToEn_(subjJa), translateJaToEn_(bodyJa));
+      } else {
+        const recipients = [jpEmail, branchEmail].filter(Boolean).join(',');
+        const subj = branchIsEn ? translateJaToEn_(subjJa) : subjJa;
+        const body = branchIsEn ? translateJaToEn_(bodyJa) : bodyJa;
+        MailApp.sendEmail(recipients, subj, body);
+      }
       sent++;
      } catch (e) {
       errors.push({
@@ -4607,10 +4703,12 @@ function checkUnansweredAlertsCore_(errors) {
   }
 
   // 2) 進行中の案件だけを対象に、未読フラグが立っていて放置日数を超えたものを集める
-  const digests = {};   // 宛先メール -> { label, items: [] }
-  const addItem = (email, label, item) => {
+  const digests = {};   // 宛先メール -> { label, items: [], displayLang }
+  // ★機能追加（マーレ支店など英語専用支店対応）：宛先メールごとに表示言語も持たせ、
+  // 送信時にその宛先（＝支店）が英語対象なら件名・本文を英訳する
+  const addItem = (email, label, item, displayLang) => {
     if (!email) return;
-    if (!digests[email]) digests[email] = { label, items: [] };
+    if (!digests[email]) digests[email] = { label, items: [], displayLang: displayLang || 'ja' };
     digests[email].items.push(item);
   };
 
@@ -4654,7 +4752,7 @@ function checkUnansweredAlertsCore_(errors) {
           shootDate: formatMaybeDate_(row[headers.indexOf(COL_CONFIRMED_DATE)]) || '撮影日未定'
         };
         if (receiver === BRANCH_ROLE) {
-          addItem(getBranchEmail_(branchCode), meta.name || branchCode, item);
+          addItem(getBranchEmail_(branchCode), meta.name || branchCode, item, meta.displayLang);
         } else {
           addItem(getJpTeamEmail_(area), `${area || ''}手配課`, item);
         }
@@ -4676,15 +4774,15 @@ function checkUnansweredAlertsCore_(errors) {
       const lines = d.items.map(it =>
         `・${it.kanriNo}（${it.branchName}）${it.names}　撮影日: ${it.shootDate}　※${it.waitingDays}日 未確認`
       ).join('\n');
-      MailApp.sendEmail(
-        email,
-        `[WEDLINK] 未返信のお知らせ：${d.items.length}件`,
-        `${d.label} ご担当者さま\n\n` +
+      const subjJa = `[WEDLINK] 未返信のお知らせ：${d.items.length}件`;
+      const bodyJa = `${d.label} ご担当者さま\n\n` +
         `相手側から届いたメッセージ・変更のうち、まだ確認（既読チェック）されていない案件が ${d.items.length} 件あります。\n` +
         `ポータルで内容をご確認のうえ、ご対応をお願いします。\n\n` +
         `--- 対象案件 ---\n${lines}\n\n` +
-        `※このメールは未確認の案件がある間、毎日お送りします。ポータルで既読にすると対象から外れます。`
-      );
+        `※このメールは未確認の案件がある間、毎日お送りします。ポータルで既読にすると対象から外れます。`;
+      // ★機能追加（マーレ支店など英語専用支店対応）：この宛先が英語支店なら件名・本文を英訳する
+      const useEn = d.displayLang === 'en';
+      MailApp.sendEmail(email, useEn ? translateJaToEn_(subjJa) : subjJa, useEn ? translateJaToEn_(bodyJa) : bodyJa);
       sent++;
     } catch (e) {
       errors.push({ where: `督促メール送信（${email}）`, message: errorMessage_(e), stack: e && e.stack ? String(e.stack) : '' });

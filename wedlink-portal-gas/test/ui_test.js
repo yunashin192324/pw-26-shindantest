@@ -90,6 +90,17 @@ function setBranchFieldUi_(ctx, branchCode, field, value) {
   throw new Error(`支店が見つかりません: ${branchCode}`);
 }
 
+// 支店マスタへ列名基準で1行追加する（gas_test.jsのaddBranchRowと同じ考え方。列位置がずれても壊れない）
+function addBranchRowUi_(ctx, o) {
+  const bm = ctx.__ss.getSheetByName('支店マスタ');
+  const head = bm.getRange(1, 1, 1, bm.getLastColumn()).getValues()[0];
+  const rowIdx = bm.getLastRow() + 1;
+  Object.keys(o).forEach(k => {
+    const i = head.indexOf(k);
+    if (i !== -1) bm.getRange(rowIdx, i + 1).setValue(o[k]);
+  });
+}
+
 // --- Index.html を jsdom で開けるHTMLに組み立てる ---
 function buildHtml() {
   const index = fs.readFileSync(path.join(BASE, 'Index.html'), 'utf8');
@@ -2904,6 +2915,51 @@ function paneHidden(document, key) {
     // --- 送信後はフォームがリセットされ、希望日②の準備場所欄も非表示に戻っている ---
     check('送信後は希望日②の準備場所欄も非表示に戻る（前のプランの状態が残らない）',
           document.getElementById('shop-new-hopeprep-block2').classList.contains('hidden'));
+  }
+
+  // ---------------------------------------------------------------
+  // ★機能追加：マーレ支店など、表示言語を'en'にした支店としてログインすると、画面のあらゆる
+  // 日本語テキスト（固定のメニュー・見出しも、サーバーから来た動的なデータも区別しない）が
+  // その場で自動的に英訳される（MutationObserverでDOM変化を監視し、apiTranslateBatchへ
+  // まとめて投げる仕組み。JavaScript.html参照）。このセクションは今後のテストに影響しないよう
+  // 最後に置く（一度英語化されたDOM要素は、別の支店へログインし直しても元の日本語には
+  // 自動的に戻らないため）。
+  section('U51. マーレ支店など英語専用支店対応：画面表示の自動翻訳');
+  {
+    addBranchRowUi_(ctx, {
+      '支店コード': 'MLE', '支店名': 'マーレ支店', '国': 'モルディブ', '都市': 'マーレ',
+      'ロール': 'BRANCH', 'ログインパスコード': 'CHANGE-ME-MLE', '通知先メール': 'male@his-world.com',
+      '案件番号プレフィックス': 'MLE', '有効': true, '表示言語': 'en'
+    });
+
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'MLE', 'CHANGE-ME-MLE');
+    // 自動翻訳はDOM変化からデバウンス（80ms）した後にまとめてAPIを呼ぶ仕組みのため、
+    // 通常のsettle()（60ms）だけでは翻訳結果の書き戻しが間に合わないことがある
+    await sleep(300);
+
+    check('マーレ支店としてログインすると、固定のナビゲーションラベルが英訳される',
+          document.getElementById('nav-dashboard').textContent.startsWith('EN:'),
+          document.getElementById('nav-dashboard').textContent);
+    check('案件一覧の見出しも英訳される',
+          document.getElementById('dashboard-title').textContent.startsWith('EN:'),
+          document.getElementById('dashboard-title').textContent);
+    check('一覧に読み込まれた案件データ（サーバー由来の動的テキスト）も英訳される',
+          document.getElementById('view-dashboard').textContent.includes('EN:'),
+          document.getElementById('view-dashboard').textContent.slice(0, 300));
+
+    // ★不具合防止：placeholder等の属性は、翻訳結果にも元の日本語（固有名詞・記号混じり等）が
+    // 残っていると、対策前は「訳した結果にさらに訳した結果を継ぎ足す」形でどんどん伸びる
+    // 不具合があった（テキストノードには元々あった再翻訳防止チェックが、属性には抜けていた）。
+    const searchPh1 = document.getElementById('nonshop-dashboard-search').placeholder;
+    check('検索欄のplaceholderが英訳される', searchPh1.startsWith('EN:'), searchPh1);
+    check('プレースホルダーの英訳は1回分だけ（EN:が重複しない）',
+          (searchPh1.match(/EN:/g) || []).length === 1, searchPh1);
+    await sleep(300);
+    const searchPh2 = document.getElementById('nonshop-dashboard-search').placeholder;
+    check('時間が経っても英訳結果が安定している（属性が無限に再翻訳されない）',
+          searchPh2 === searchPh1, searchPh2);
   }
 
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);

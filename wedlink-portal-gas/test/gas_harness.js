@@ -2,6 +2,7 @@
 const fs = require('fs');
 const vm = require('vm');
 const path = require('path');
+const crypto = require('crypto');
 
 function pad(n, w) { return String(n).padStart(w, '0'); }
 
@@ -163,7 +164,7 @@ function makeContext() {
     };
   }
   const ctx = {
-    __ss: ss, __mail: sentMail, console,
+    __ss: ss, __mail: sentMail, __translateCalls: [], console,
     SpreadsheetApp: { openById: () => ss, getUi: () => ({ alert: () => {} }) },
     Utilities: {
       getUuid: () => `uuid-${++uuid}`,
@@ -187,8 +188,23 @@ function makeContext() {
       base64Decode: (s) => Buffer.from(String(s || ''), 'base64'),
       newBlob: (data, mimeType, name) => ({
         getName: () => name || 'file', getContentType: () => mimeType || 'application/octet-stream', getBytes: () => data
-      })
+      }),
+      // ★機能追加（マーレ支店など英語専用支店対応）：translateJaToEn_のキャッシュキー生成に使う。
+      // 実GASは符号付きバイト（-128〜127）の配列を返すため、Node側のcrypto（0〜255）から変換する。
+      computeDigest: (algorithm, text) => {
+        const buf = crypto.createHash('md5').update(String(text), 'utf8').digest();
+        return Array.from(buf).map(b => (b > 127 ? b - 256 : b));
+      },
+      DigestAlgorithm: { MD5: 'MD5' },
+      Charset: { UTF_8: 'UTF_8' }
     },
+    // ★機能追加（マーレ支店など英語専用支店対応）：本物のLanguageAppは呼べないので、
+    // 「翻訳された」ことが分かる決まった変換（EN:接頭辞）を返す簡易モック。呼び出し履歴も
+    // __translateCallsに記録し、テストから「何が何回翻訳されたか」を検証できるようにする。
+    LanguageApp: { translate: (text, source, target) => {
+      ctx.__translateCalls.push({ text, source, target });
+      return `EN:${text}`;
+    } },
     DriveApp: {
       createFolder: (name) => {
         const id = `fld-${++driveSeq}`;

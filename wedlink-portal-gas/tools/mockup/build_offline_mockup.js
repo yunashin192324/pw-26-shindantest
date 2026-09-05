@@ -45,6 +45,7 @@ ${stylesheetHtml.replace(/<\/?style>/g, '')}
   <button type="button" data-demo-login="ROW,CHANGE-ME-ROW">ローマ支店（伊・同意書必須）</button>
   <button type="button" data-demo-login="IST,CHANGE-ME-IST">イスタンブール支店（パスポート欄）</button>
   <button type="button" data-demo-login="VIE,CHANGE-ME-VIE">ウィーン支店（店舗直結ON）</button>
+  <button type="button" data-demo-login="MLE,CHANGE-ME-MLE">マーレ支店（英語表示・メール通知OFF）</button>
   <button type="button" data-demo-login="SHOP1,CHANGE-ME-SHOP1">新宿店（店舗ロール）</button>
 </div>
 ${bodyInner}
