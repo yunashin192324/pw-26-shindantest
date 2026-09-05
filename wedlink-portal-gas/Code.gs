@@ -3488,7 +3488,10 @@ function apiSendArrangementRequest(token, kanriNo, categoryKey, subject, body) {
   if (!text) throw new Error('本文を入力してください。');
 
   const mailOptions = { to: contact.email, subject: subj, body: text };
-  const branchEmail = getBranchEmail_(branchCode);
+  // ★不具合修正：ここは「手配先の業者からの返信先」であって支店宛の通知ではないため、
+  // 支店マスタ「支店メール通知」がOFFでも必ず支店の連絡先を入れる（以前は getBranchEmail_ を
+  // 使っていたため、通知OFFの支店では業者の返信が支店に届かなくなっていた）。
+  const branchEmail = branchContactEmail_(branchCode);
   if (branchEmail) mailOptions.replyTo = branchEmail;
   MailApp.sendEmail(mailOptions);
 
@@ -4255,21 +4258,27 @@ function sendDirectionalMail_(headers, rowData, direction, session, message, kin
   // ★機能追加：起票元店舗が絡む案件だけで使う（それ以外の案件では起票元店舗が空欄のため常に空文字）
   const shopEmail = getShopEmail_(getV(COL_ORIGIN_SHOP));
 
-  let recipients;
-  if (direction === 'JP_TO_BRANCH') recipients = branchEmail;
-  else if (direction === 'BRANCH_TO_JP') recipients = jpEmail;
-  else if (direction === 'JP_TO_SHOP') recipients = shopEmail;
-  else if (direction === 'SHOP_TO_JP') recipients = jpEmail;
-  else if (direction === 'BRANCH_TO_SHOP') recipients = shopEmail;
-  else if (direction === 'SHOP_TO_BRANCH') recipients = branchEmail;
+  // ★機能追加（マーレ支店など英語専用支店対応）：宛先を「メールアドレスの文字列」だけでなく
+  // 「支店が宛先に含まれるか」「支店以外（手配課・店舗）の宛先は何か」という役割でも持つ。
+  // 支店だけ英語で送る場合に、アドレスの文字列比較で支店を取り除こうとすると、手配課と支店に
+  // 同じアドレスが設定されているときに日本語版のメールが消えてしまうため（役割で判定する）。
+  let recipients;          // 従来どおり「1通にまとめて送る」ときの宛先（日本語支店＝既定の経路）
+  let targetsBranch = false;   // この通知の宛先に現地支店が含まれるか
+  let otherRecipients = '';    // 支店以外（手配課・店舗）の宛先
+  if (direction === 'JP_TO_BRANCH') { recipients = branchEmail; targetsBranch = true; }
+  else if (direction === 'BRANCH_TO_JP') { recipients = jpEmail; otherRecipients = jpEmail; }
+  else if (direction === 'JP_TO_SHOP') { recipients = shopEmail; otherRecipients = shopEmail; }
+  else if (direction === 'SHOP_TO_JP') { recipients = jpEmail; otherRecipients = jpEmail; }
+  else if (direction === 'BRANCH_TO_SHOP') { recipients = shopEmail; otherRecipients = shopEmail; }
+  else if (direction === 'SHOP_TO_BRANCH') { recipients = branchEmail; targetsBranch = true; }
   // ★機能追加（拡張要望5章）：直結支店で「店舗依頼の手配課通知」がOFFの場合、
   // 新規依頼通知は現地支店のみに送る（手配課の閲覧権限自体は変えない）
-  else if (direction === 'SHOP_NEW_CASE_BRANCH_ONLY') recipients = branchEmail;
+  else if (direction === 'SHOP_NEW_CASE_BRANCH_ONLY') { recipients = branchEmail; targetsBranch = true; }
   // ★機能追加：支店マスタ「新規依頼の支店通知」がOFFの場合、新規依頼通知は手配課のみに送る
   // （支店の閲覧権限自体は変えない。上のBRANCH_ONLYと対になる設定）
-  else if (direction === 'SHOP_NEW_CASE_JP_ONLY') recipients = jpEmail;
+  else if (direction === 'SHOP_NEW_CASE_JP_ONLY') { recipients = jpEmail; otherRecipients = jpEmail; }
   // 新規案件通知など：日本の該当手配課・現地支店の両方に知らせる
-  else recipients = [jpEmail, branchEmail].filter(Boolean).join(',');
+  else { recipients = [jpEmail, branchEmail].filter(Boolean).join(','); targetsBranch = true; otherRecipients = jpEmail; }
 
   if (!recipients) return;
 
@@ -4279,19 +4288,18 @@ function sendDirectionalMail_(headers, rowData, direction, session, message, kin
                `--- ${kind} ---\n${message}\n\n` +
                `ポータルで確認する: ${WEBAPP_URL}`;
 
-  // ★機能追加（マーレ支店など英語専用支店対応）：宛先に支店のメールアドレスが含まれ、かつ
-  // その支店の表示言語が英語（'en'）の場合だけ特別扱いする。日本語支店（既定）はここに
-  // 入らず、従来とまったく同じ「宛先をまとめて1通で送る」挙動のままになる（既存の挙動・
-  // 既存テストへの影響を避けるため、分割するのは英語支店が絡む場合だけにする）。
+  // ★機能追加（マーレ支店など英語専用支店対応）：宛先に支店が含まれ、かつその支店の表示言語が
+  // 英語（'en'）の場合だけ特別扱いする。日本語支店（既定）はここに入らず、従来とまったく同じ
+  // 「宛先をまとめて1通で送る」挙動のままになる（既存の挙動・既存テストへの影響を避けるため、
+  // 分割するのは英語支店が絡む場合だけにする）。
   const branchMeta = branchMetaMap_()[branchCode];
   const branchIsEn = !!branchMeta && branchMeta.displayLang === 'en' && !!branchEmail;
-  const recipientList = recipients.split(',');
-  const recipientsIncludeBranch = branchIsEn && recipientList.includes(branchEmail);
 
-  if (recipientsIncludeBranch) {
-    // 支店以外の宛先（日本の手配課・店舗）には、これまでどおり日本語のまま送る
-    const others = recipientList.filter(r => r && r !== branchEmail).join(',');
-    if (others) MailApp.sendEmail(others, subjJa, bodyJa);
+  if (branchIsEn && targetsBranch) {
+    // 支店以外の宛先（日本の手配課・店舗）には、これまでどおり日本語のまま送る。
+    // ★不具合防止：手配課と支店に同じアドレスが設定されている場合でも、ここは役割で判定して
+    // いるため日本語版のメールが消えない（同じ受信箱に日本語版と英語版が1通ずつ届く）。
+    if (otherRecipients) MailApp.sendEmail(otherRecipients, subjJa, bodyJa);
     // 支店には英訳した件名・本文を別メールで送る（1通にまとめると宛先ごとに言語を変えられないため）
     MailApp.sendEmail(branchEmail, translateJaToEn_(subjJa), translateJaToEn_(bodyJa));
     return;
@@ -4303,10 +4311,21 @@ function sendDirectionalMail_(headers, rowData, direction, session, message, kin
 // ★機能追加（マーレ支店など英語専用支店対応）：支店マスタ「支店メール通知」がOFFの支店には
 // 空文字を返す。この関数を経由するすべての支店宛メール送信（新規案件・メッセージ・キャンセル・
 // 納品データ変更・納品期限アラート・未返信督促など）に自動的に適用される。
+// ★注意：「この支店へ通知を送るか」を判定する関数であり、「この支店の連絡先アドレスは何か」を
+// 引く用途には使わないこと（通知OFFでも連絡先そのものは存在するため）。後者には
+// branchContactEmail_ を使う（例：現地スタッフ手配メールのreplyTo。手配先の業者からの返信は
+// 通知設定に関わらず支店に届く必要がある）。
 function getBranchEmail_(branchCode) {
   const meta = branchMetaMap_()[branchCode];
   if (!meta || !meta.branchMailNotify) return '';
   return meta.email;
+}
+
+// ★不具合修正：支店の連絡先アドレスそのものを引く（「支店メール通知」の設定に左右されない）。
+// 支店宛の通知を送るかどうかの判定には使わないこと（それは getBranchEmail_ の役目）。
+function branchContactEmail_(branchCode) {
+  const meta = branchMetaMap_()[branchCode];
+  return meta ? meta.email : '';
 }
 
 // ★機能追加（マーレ支店など英語専用支店対応）：LanguageAppを使った簡易的な日本語→英語翻訳。
@@ -4336,14 +4355,25 @@ function translateJaToEn_(text) {
 // もらうためのAPI。表示言語が英語（'en'）の支店としてログインしている場合のみ実際に翻訳し、
 // それ以外（日本語支店・手配課・店舗）は入力をそのまま返す（誰でも呼べてしまうと
 // LanguageAppのクォータを無駄に消費するため、対象外のセッションでは早期リターンする）。
+//
+// ★性能上の注意：LanguageAppは1文字列につき1回の通信が発生するため、1回の呼び出しに大量の
+// 文字列を入れるとGASの実行時間上限（6分）に近づき、画面が長時間待たされる。画面側は
+// I18N_BATCH_LIMIT より十分小さい塊（40件）に分割して並行に呼ぶ実装になっている
+// （JavaScript.html の flushTranslateQueue_ 参照）。ここでの上限は、万一それより大きな
+// 呼び出しが来た場合にクォータと実行時間を守るための安全網。
+const I18N_BATCH_LIMIT = 200;
 function apiTranslateBatch(token, texts) {
   const session = requireSession_(token);
   const list = Array.isArray(texts) ? texts : [];
   const asStr = list.map(t => String(t === null || t === undefined ? '' : t));
   if (!(session.role === BRANCH_ROLE && session.displayLang === 'en')) {
-    return { ok: true, translations: asStr };
+    return { ok: true, translations: asStr, truncated: false };
   }
-  return { ok: true, translations: asStr.map(t => translateJaToEn_(t)) };
+  // 上限を超えた分は翻訳せずそのまま返し、truncated で「ここから先は未翻訳」と伝える
+  // （画面側は未翻訳のまま覚え込まないよう、truncatedのときは翻訳できた分だけを使う）。
+  const limit = Math.min(asStr.length, I18N_BATCH_LIMIT);
+  const translations = asStr.map((t, i) => (i < limit ? translateJaToEn_(t) : t));
+  return { ok: true, translations, truncated: asStr.length > I18N_BATCH_LIMIT, translatedCount: limit };
 }
 
 // ★機能追加：起票元店舗コードから通知先メールを引く（支店マスタの ロール=SHOP の行）

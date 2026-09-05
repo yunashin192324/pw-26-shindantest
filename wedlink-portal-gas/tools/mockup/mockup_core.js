@@ -175,10 +175,16 @@ function buildScripts({ codeGs, javascriptHtml, apiNames }) {
   window.LanguageApp = (function () {
     const DICT = ${JSON.stringify(I18N_DEMO_DICT)};
     const KEYS = ${JSON.stringify(I18N_DEMO_KEYS_BY_LEN_DESC)};
+    // ★不具合防止：「有」「無」「表」「国」のような1文字の語を部分一致で置き換えると、
+    // 「有効」→「Yes効」、「所有者」→「所Yes者」のように別の語を壊してしまう。
+    // 1文字の語は「文字列全体がその1文字のとき」（プルダウンの選択肢など）だけ置き換える。
+    const SUBSTRING_KEYS = KEYS.filter(k => k.length >= 2);
     return {
       translate: (text) => {
-        let result = String(text === null || text === undefined ? '' : text);
-        KEYS.forEach(k => { if (result.indexOf(k) !== -1) result = result.split(k).join(DICT[k]); });
+        const src = String(text === null || text === undefined ? '' : text);
+        if (Object.prototype.hasOwnProperty.call(DICT, src)) return DICT[src]; // 全体が辞書にある場合が最優先
+        let result = src;
+        SUBSTRING_KEYS.forEach(k => { if (result.indexOf(k) !== -1) result = result.split(k).join(DICT[k]); });
         return result;
       }
     };

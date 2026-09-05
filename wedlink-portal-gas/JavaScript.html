@@ -3170,6 +3170,8 @@
   let i18nPendingAttrs = []; // { el, attr }
   let i18nFlushTimer = null;
   const I18N_ATTRS = ['placeholder', 'title', 'aria-label'];
+  // 1回のapiTranslateBatchに入れる最大件数（サーバー側のI18N_BATCH_LIMIT=200より十分小さくする）
+  const I18N_FETCH_CHUNK_SIZE = 40;
   const JA_CHAR_RE = /[぀-ヿ㐀-鿿]/; // ひらがな・カタカナ・漢字を含むか（含まなければ翻訳不要）
 
   function containsJapanese_(s) {
@@ -3212,7 +3214,25 @@
     clearTimeout(i18nFlushTimer);
   }
 
+  // ★不具合防止：翻訳して書き換えてはいけない場所。
+  //  - TEXTAREA：中身は「表示用の文字」ではなく編集対象の値そのもの。ここを英訳で書き換えると、
+  //    支店側がその欄に触れて保存した時点で、日本側が書いた日本語の内容が機械翻訳の英語で
+  //    上書きされてしまう（例：案件詳細の「キャンセル理由」）。
+  //  - SCRIPT / STYLE：画面に見えるテキストではなく、書き換えると動作・見た目が壊れる。
+  // なお <option> は value 属性を必ず持たせてあるため、表示文字を英訳しても送信される値は
+  // 変わらない（value属性は翻訳対象にしていない）。<input> の中身も value 属性なので同様に安全。
+  const I18N_SKIP_TEXT_IN_TAGS = ['TEXTAREA', 'SCRIPT', 'STYLE'];
+  function inSkippedElement_(textNode) {
+    let el = textNode.parentElement;
+    while (el) {
+      if (I18N_SKIP_TEXT_IN_TAGS.indexOf(el.tagName) !== -1) return true;
+      el = el.parentElement;
+    }
+    return false;
+  }
+
   function queueTextNode_(node) {
+    if (inSkippedElement_(node)) return;
     i18nPendingNodes.push(node);
     scheduleTranslateFlush_();
   }
@@ -3271,21 +3291,44 @@
 
     const toFetch = [...new Set(texts.filter(t => !(t in i18nCache)))];
     if (toFetch.length) {
-      try {
-        const res = await gsRun('apiTranslateBatch', session.token, toFetch);
-        toFetch.forEach((t, i) => { i18nCache[t] = res.translations[i]; });
-      } catch (e) {
-        return; // 翻訳に失敗した分は諦めて原文のまま表示を続ける（画面自体は止めない）
+      // ★性能対応：サーバー側のLanguageAppは1文字列につき1回の通信が発生するため、
+      // 画面1枚ぶん（実測で案件一覧135件・案件詳細169件）をまとめて1回で頼むと、
+      // その1リクエストの中で百数十回の通信が直列に走り、最初の表示が何十秒も待たされる
+      // （GASの実行時間上限6分にも近づく）。小さな塊に分けて並行に頼み、返ってきた塊から
+      // 順に画面へ反映することで、待ち時間を実質的に「一番遅い塊1つぶん」まで縮める。
+      const chunks = [];
+      for (let i = 0; i < toFetch.length; i += I18N_FETCH_CHUNK_SIZE) {
+        chunks.push(toFetch.slice(i, i + I18N_FETCH_CHUNK_SIZE));
       }
+      await Promise.all(chunks.map(async (chunk) => {
+        try {
+          const res = await gsRun('apiTranslateBatch', session.token, chunk);
+          const list = (res && res.translations) || [];
+          // サーバー側の上限で切り詰められた分は覚え込まない（次の機会に翻訳し直せるようにする）
+          const usable = (res && res.truncated) ? (res.translatedCount || 0) : list.length;
+          chunk.forEach((t, i) => { if (i < usable) i18nCache[t] = list[i]; });
+        } catch (e) {
+          // この塊は諦めて原文のまま表示を続ける（画面自体は止めない。覚え込まないので次回再挑戦する）
+          return;
+        }
+        applyTranslations_(jobs); // 届いた塊のぶんだけ先に反映する（全部揃うのを待たない）
+      }));
     }
 
+    applyTranslations_(jobs);
+  }
+
+  // 翻訳が終わっているものだけを画面へ書き戻す（同じ内容を二度書いても実害は無い）
+  function applyTranslations_(jobs) {
     jobs.forEach(job => {
       const translated = i18nCache[job.text];
       if (translated === undefined || translated === job.text) return;
       if (job.kind === 'node') {
+        if (!job.target.isConnected || job.target.nodeValue === translated) return;
         job.target.nodeValue = translated;
         i18nLastWritten.set(job.target, translated);
       } else {
+        if (!job.target.isConnected || job.target.getAttribute(job.attr) === translated) return;
         job.target.setAttribute(job.attr, translated);
         const rec = i18nLastWrittenAttr.get(job.target) || {};
         rec[job.attr] = translated;

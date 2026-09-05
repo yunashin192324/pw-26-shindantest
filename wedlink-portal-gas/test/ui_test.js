@@ -2960,6 +2960,31 @@ function paneHidden(document, key) {
     const searchPh2 = document.getElementById('nonshop-dashboard-search').placeholder;
     check('時間が経っても英訳結果が安定している（属性が無限に再翻訳されない）',
           searchPh2 === searchPh1, searchPh2);
+
+    // ★不具合防止（データ破損）：textareaの中身は「表示用の文字」ではなく編集対象の値そのもの。
+    // 英訳で書き換えると、支店側がその欄に触れて保存した時点で日本側が書いた日本語の内容が
+    // 機械翻訳の英語で上書きされてしまう（例：案件詳細の「キャンセル理由」）。
+    // 同じ理由で <script> / <style> の中身も書き換えてはいけない。
+    {
+      const probe = document.createElement('div');
+      probe.innerHTML =
+        '<textarea id="i18n-probe-ta">先方都合により中止となりました</textarea>' +
+        '<p id="i18n-probe-p">先方都合により中止となりました</p>' +
+        '<select id="i18n-probe-sel"><option value="ホテル">ホテル</option></select>';
+      document.getElementById('app').appendChild(probe);
+      await sleep(400);
+      check('textareaの中身は英訳で書き換えられない（保存時に日本語データが失われないこと）',
+            document.getElementById('i18n-probe-ta').value === '先方都合により中止となりました',
+            document.getElementById('i18n-probe-ta').value);
+      check('同じ文言でも、ただの表示テキストならきちんと英訳される（除外しすぎていない）',
+            document.getElementById('i18n-probe-p').textContent.startsWith('EN:'),
+            document.getElementById('i18n-probe-p').textContent);
+      const opt = document.getElementById('i18n-probe-sel').options[0];
+      check('プルダウンは表示文字を英訳しても、送信される値（value）は日本語のまま変わらない',
+            opt.value === 'ホテル' && opt.textContent.startsWith('EN:'),
+            JSON.stringify({ value: opt.value, text: opt.textContent }));
+      probe.remove();
+    }
   }
 
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);

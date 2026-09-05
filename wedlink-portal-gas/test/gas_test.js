@@ -3979,5 +3979,90 @@ section('67. マーレ支店など英語専用支店対応：納品期限アラ�
 }
 
 // ---------------------------------------------------------------
+section('68. 【不具合修正】英語専用支店まわりの総点検で見つかった2件');
+{
+  const ctx = featureFixture();
+  addBranchRow(ctx, { '支店コード': 'MLE', '支店名': 'マーレ支店', '国': 'モルディブ', '都市': 'マーレ',
+    'ロール': 'BRANCH', 'ログインパスコード': 'mp', '通知先メール': 'male@his-world.com',
+    '案件番号プレフィックス': 'MLE', '有効': true, '表示言語': 'en', '支店メール通知': false,
+    '手配メール機能': true, '手配先名-カメラマン': 'Ali', '手配先メール-カメラマン': 'photo@vendor.example' });
+  addCase(ctx, '予約一覧', { '支店コード': 'MLE', '管理番号': 'MLE-800', '管轄': '関東', '新郎名（ローマ字）': 'A' });
+
+  // --- ① 手配メールのreplyToは「支店への通知」ではなく「業者からの返信先」なので、
+  //        支店メール通知がOFFでも必ず支店のアドレスが入らなければならない ---
+  const mleToken = ctx.apiLogin('MLE', 'mp').session.token;
+  ctx.__mail.length = 0;
+  ctx.apiSendArrangementRequest(mleToken, 'MLE-800', 'photographer', '撮影のお願い', '本文です');
+  const arrMail = ctx.__mail[0];
+  check('手配メールは外部の手配先に届く', !!arrMail && arrMail.to === 'photo@vendor.example', JSON.stringify(arrMail));
+  check('支店メール通知OFFでも、手配メールのreplyToには支店のアドレスが入る（業者の返信が支店に届く）',
+        !!arrMail && arrMail.replyTo === 'male@his-world.com', JSON.stringify(arrMail && arrMail.replyTo));
+  check('外部の手配先へのメール本文は英訳しない（支店担当者が書いた原文のまま送る）',
+        !!arrMail && arrMail.body === '本文です', arrMail && arrMail.body);
+
+  // --- ② 手配課と支店に同じアドレスが設定されていても、日本語版のメールが消えないこと ---
+  setBranchField(ctx, 'MLE', '支店メール通知', true);
+  setBranchField(ctx, 'MLE', '通知先メール', 'shared@his-world.com');
+  setBranchField(ctx, 'KANTO', '通知先メール', 'shared@his-world.com');
+  const jpToken = ctx.apiLogin('KANTO', 'pw').session.token;
+  ctx.__mail.length = 0;
+  ctx.apiSetDriveUrl(jpToken, 'MLE-800', 'https://drive.google.com/drive/folders/x');
+  check('同じアドレスでも日本語版のメールが届く（日本側が英語だけにならない）',
+        ctx.__mail.some(m => !String(m.subj).startsWith('EN:')),
+        JSON.stringify(ctx.__mail.map(m => ({ to: m.to, subj: String(m.subj).slice(0, 24) }))));
+  check('同じアドレスでも英語版のメールも届く（支店ぶんが失われない）',
+        ctx.__mail.some(m => String(m.subj).startsWith('EN:')),
+        JSON.stringify(ctx.__mail.map(m => String(m.subj).slice(0, 24))));
+
+  // --- ③ 翻訳APIの安全網（大量の文字列を一度に投げられてもクォータ・実行時間を守る） ---
+  setBranchField(ctx, 'MLE', '通知先メール', 'male@his-world.com');
+  const many = Array.from({ length: 250 }, (_, i) => `文言${i}`);
+  const res = ctx.apiTranslateBatch(mleToken, many);
+  check('上限（200件）を超える依頼でも例外にならず件数どおり返る', res.translations.length === 250, res.translations.length);
+  check('上限までは翻訳される', res.translations[199].startsWith('EN:'), res.translations[199]);
+  check('上限を超えた分は翻訳せず原文のまま返す', res.translations[200] === '文言200', res.translations[200]);
+  check('切り詰めたことを画面側へ伝える（未翻訳を覚え込ませないため）',
+        res.truncated === true && res.translatedCount === 200, JSON.stringify({ t: res.truncated, c: res.translatedCount }));
+  const small = ctx.apiTranslateBatch(mleToken, ['あ']);
+  check('上限以下なら truncated は立たない', small.truncated === false, JSON.stringify(small));
+}
+
+// ---------------------------------------------------------------
+section('69. 既に運用中のスプレッドシートへの列追加（表示言語・支店メール通知のマイグレーション）');
+{
+  const ctx = makeContext(); CTX = ctx;
+  const ss = ctx.__ss;
+  // 新しい2列がまだ無い「今、実際に運用されている」状態の支店マスタを再現する
+  const OLD = ctx.BRANCH_MASTER_HEADERS.filter(h => h !== '表示言語' && h !== '支店メール通知');
+  const bm = ss.insertSheet('支店マスタ');
+  bm.getRange(1, 1, 1, OLD.length).setValues([OLD]);
+  const row = new Array(OLD.length).fill('');
+  const set = (k, v) => { const i = OLD.indexOf(k); if (i !== -1) row[i] = v; };
+  set('支店コード', 'VIE'); set('支店名', 'ウィーン支店'); set('ロール', 'BRANCH');
+  set('ログインパスコード', 'vp'); set('通知先メール', 'vie@his-world.com');
+  set('案件番号プレフィックス', 'VIE'); set('有効', true);
+  set('納品期限日数', 21); set('手配先メール-カメラマン', 'cam@example.com');
+  bm.appendRow(row);
+
+  ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
+  const after = bm.getRange(1, 1, 1, bm.getLastColumn()).getValues()[0];
+  check('新しい2列（表示言語・支店メール通知）が追加される',
+        after.includes('表示言語') && after.includes('支店メール通知'), JSON.stringify(after.slice(-4)));
+  check('既存の列の並びは変わらない（位置決め打ちの運用を壊さない）', OLD.every((c, i) => after[i] === c));
+  check('既存データが消えない（納品期限日数）', ctx.branchMetaMap_()['VIE'].deliveryDays === 21);
+  check('既存データが消えない（手配先メール）',
+        String(bm.getRange(2, after.indexOf('手配先メール-カメラマン') + 1, 1, 1).getValue()) === 'cam@example.com');
+  check('列を足しただけでは表示は日本語のまま（既存支店の見え方が変わらない）',
+        ctx.branchMetaMap_()['VIE'].displayLang === 'ja');
+  check('列を足しただけではメール通知もON（既存支店に通知が届かなくなったりしない）',
+        ctx.branchMetaMap_()['VIE'].branchMailNotify === true);
+  check('移行後もログインできる', ctx.apiLogin('VIE', 'vp').ok === true);
+  ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
+  const after2 = bm.getRange(1, 1, 1, bm.getLastColumn()).getValues()[0];
+  check('2回実行しても列が重複しない（この関数は何度でも安全に実行できる）',
+        after2.filter(c => c === '表示言語').length === 1 && after2.length === after.length);
+}
+
+// ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
 process.exit(fail === 0 ? 0 : 1);
