@@ -290,6 +290,16 @@ function loadAllData() {
   showLoading(true);
   loadCompletedCount = 0;
 
+  // 取り込み直後などは行の並び（行番号）が入れ替わることがある。
+  // 保存待ちの変更と元に戻す履歴は「シート名＋行番号」で行を指しているため、
+  // 読み込み直しのタイミングで必ず捨てる。残したままだと、
+  // 元に戻す／まとめて保存で「別の案件の行」を書き換えてしまう。
+  pendingChanges = {};
+  editHistory = [];
+  editHistoryIndex = 0;
+  renderUndoRedoButtons();
+  renderPendingBar();
+
   google.script.run
     .withSuccessHandler(function (res) {
       try {
@@ -454,6 +464,11 @@ function initTabs() {
 
 function initHeaderEvents() {
   document.getElementById('btn-refresh').addEventListener('click', function () {
+    // 読み込み直すと保存待ちの変更は消えるため、消える前に必ず確認する
+    if (pendingRowCount() > 0 &&
+        !window.confirm('保存していない変更が' + pendingRowCount() + '件あります。\n最新データを読み込むとこの変更は破棄されます。よろしいですか？')) {
+      return;
+    }
     loadAllData();
   });
 }
@@ -1823,9 +1838,12 @@ function isPendingCell(row, column) {
  */
 function stageChange(sheetName, rowIndex, column, value, skipHistory) {
   const rid = sheetName + '::' + rowIndex;
-  const row = dmFilteredCache.find(function (r) {
+  // 元に戻す操作は、絞り込みを変えた後（＝その行が今の一覧に出ていない状態）でも
+  // 呼ばれ得るため、表示中の一覧に無ければ全データから探す。
+  const matches = function (r) {
     return r.__sheetName === sheetName && String(r.__rowIndex) === String(rowIndex);
-  });
+  };
+  const row = dmFilteredCache.find(matches) || allDataCache.find(matches);
   const original = row ? (row[column] === null || row[column] === undefined ? '' : row[column]) : '';
 
   if (!pendingChanges[rid]) {
