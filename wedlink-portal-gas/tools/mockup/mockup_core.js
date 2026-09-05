@@ -13,6 +13,16 @@ const path = require('path');
 // tools/mockup/ から2つ上がリポジトリ直下（Code.gs等がある場所）
 const REPO = path.join(__dirname, '..', '..');
 
+// ★機能追加（マーレ支店など英語専用支店対応）：モックアップでは本物のLanguageAppを
+// 呼べないため、代表的な単語・定型句を部分一致で置き換える簡易和英辞書
+// （i18n_demo_dict.js）で「それらしい英語画面」に見せる。完全な翻訳ではない
+// （辞書に無い語句は日本語のまま残る）ことに注意。
+const I18N_DEMO_DICT = require('./i18n_demo_dict');
+// キーが長いものから順に置換しないと、短い語が先にマッチして長いフレーズが
+// 中途半端に置き換わってしまう（例：「希望日」が先にマッチすると
+// 「希望日（第一希望）」全体には二度とマッチしない）
+const I18N_DEMO_KEYS_BY_LEN_DESC = Object.keys(I18N_DEMO_DICT).sort((a, b) => b.length - a.length);
+
 function readSource() {
   let codeGs = fs.readFileSync(path.join(REPO, 'Code.gs'), 'utf8');
   codeGs = codeGs.replace(
@@ -159,8 +169,20 @@ function buildScripts({ codeGs, javascriptHtml, apiNames }) {
     Charset: { UTF_8: 'UTF_8' }
   };
   // ★機能追加（マーレ支店など英語専用支店対応）：本物のLanguageAppは呼べないため、
-  // 「翻訳された」ことが分かる簡易モック（EN:接頭辞）。gas_harness.jsのモックと同じ考え方。
-  window.LanguageApp = { translate: (text) => 'EN:' + text };
+  // 代表的な単語・定型句を辞書で部分置換する簡易モック（i18n_demo_dict.js参照）。
+  // 辞書に無い語句はそのまま日本語で残る（完全な機械翻訳の代わりではなく、あくまで
+  // デモで「それらしい英語画面」を見せるためのもの）。
+  window.LanguageApp = (function () {
+    const DICT = ${JSON.stringify(I18N_DEMO_DICT)};
+    const KEYS = ${JSON.stringify(I18N_DEMO_KEYS_BY_LEN_DESC)};
+    return {
+      translate: (text) => {
+        let result = String(text === null || text === undefined ? '' : text);
+        KEYS.forEach(k => { if (result.indexOf(k) !== -1) result = result.split(k).join(DICT[k]); });
+        return result;
+      }
+    };
+  })();
   // ★DriveApp簡易モック（拡張要望8章：店舗アップロード用フォルダの自動作成・書類一覧）。
   // 実DriveAppとの互換は最小サブセットのみ（gas_harness.jsのDriveAppモックと同じ設計）。
   (function () {
