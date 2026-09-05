@@ -42,9 +42,11 @@
 - テスト：`node run_all.js` で **1419件 全て成功 / 0件失敗**（サーバー786・監査171・画面462）
 - デプロイ済みWebアプリURL（`Code.gs` の `WEBAPP_URL` に設定済み。**旧スレッドの記載を引き継いだだけで今回未確認**）：
   `https://script.google.com/a/macros/his-world.com/s/AKfycbz143-qasWEQoJB87kpPH_2Pjmv_6499TKKGKW3ddQ06JFM9H5gkPiTtOJl7RcWm9A/exec`
-- スマホ用プレビューArtifact（**旧スレッドの記載を引き継いだだけで今回未確認・未更新**。
-  毎回同じURLを更新すること）：
-  `https://claude.ai/code/artifact/b09ea622-77f6-44f2-9e5e-9f4dad6355c0`
+- スマホ用プレビューArtifact（**このリポジトリ・このセッションで新規公開したもの。
+  以後はこのURLを`action:"publish"`＋`url`指定で更新すること**）：
+  `https://claude.ai/code/artifact/9290350e-2176-4f04-8ac7-d5750921942c`
+  （旧スレッドのArtifact `b09ea622-...` は別セッション・別Googleアカウント環境のもので、
+  このセッションからは更新できなかったため、新規に公開し直した）
 
 ---
 
