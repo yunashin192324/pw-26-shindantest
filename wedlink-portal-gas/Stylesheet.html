@@ -1,0 +1,401 @@
+<style>
+  /* ★UI刷新：参考UI（ARW=arluis.me系の管理画面／WED=Q orders系のログイン画面）に寄せた配色・意匠。
+     指定色 #10069F を基準に、ログイン画面はWED（白背景・中央寄せ・淡い装飾）、案件一覧はARW×WEDの
+     折衷（濃紺のヘッダーバー＋WEDの軽やかなカード）、案件詳細・検索等の管理系画面はARW寄り
+     （濃紺の情報バー・表のヘッダー行を濃色に・見出しに下線）にしている。画面構成（1画面SPA・
+     タブ切替）自体は変更していない。 */
+  :root {
+    --color-primary: #10069f;
+    --color-primary-dark: #0a0470;
+    --color-primary-tint: #ecebfa;
+    --color-bg: #f5f5fa;
+    --color-card: #ffffff;
+    --color-border: #dfe0ec;
+    --color-text: #1c1f2e;
+    --color-muted: #686c82;
+    --color-hq: #be185d;
+    --color-branch: #0d9488;
+    --color-danger: #dc2626;
+    --color-success: #16a34a;
+    --color-unread: #fff3b0;
+    font-size: 16px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--color-bg); color: var(--color-text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif; }
+  #app { min-height: 100vh; display: flex; flex-direction: column; }
+  .hidden { display: none !important; }
+
+  /* Header */
+  .app-header { position: sticky; top: 0; z-index: 10; background: var(--color-primary-dark); color: #fff;
+    display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; flex-wrap: wrap; gap: 8px; }
+  .header-left { display: flex; align-items: center; gap: 8px; }
+  .brand { font-weight: 700; font-size: 1.05rem; }
+  .badge { background: rgba(255,255,255,0.18); border-radius: 999px; padding: 3px 10px; font-size: 0.78rem; }
+  .header-nav { display: flex; gap: 6px; flex-wrap: wrap; }
+  .nav-btn { background: rgba(255,255,255,0.12); border: none; color: #fff; padding: 8px 12px; border-radius: 8px;
+    font-size: 0.82rem; cursor: pointer; }
+  .nav-btn:active { background: rgba(255,255,255,0.28); }
+  .nav-logout { background: rgba(220,38,38,0.35); }
+
+  /* Main */
+  /* ★要件：現地側はスマホで見ることが多い一方、日本側はほぼPC専用のため、
+     スマホ幅はそのまま維持しつつ、PC相当の広い画面ではもっと横幅を使えるようにする（下の @media (min-width: 960px) 参照） */
+  .app-main { flex: 1; max-width: 720px; width: 100%; margin: 0 auto; padding: 14px; }
+  .view h2 { margin: 4px 0 12px; font-size: 1.15rem; }
+  .view h3 { margin: 18px 0 8px; font-size: 1rem; }
+
+  /* Login（WED＝Q orders系を参考：白背景・中央寄せ・カードの縁取りをせず余白で見せるシンプルな構成） */
+  .login-card { max-width: 380px; margin: 14vh auto 0; background: transparent;
+    padding: 0 22px; text-align: center; }
+  .login-logo { font-size: 1.55rem; font-weight: 700; margin-bottom: 8px; color: var(--color-primary); letter-spacing: 0.02em; }
+  .login-desc { color: var(--color-muted); font-size: 0.85rem; margin-bottom: 26px; }
+  .login-card label, .view label { display: block; text-align: left; font-size: 0.78rem; color: var(--color-muted);
+    margin: 12px 0 4px; }
+  .login-card input, .view input, .view select, .view textarea {
+    width: 100%; padding: 12px 13px; border: 1px solid var(--color-border); border-radius: 6px;
+    font-size: 1rem; background: #fff; color: var(--color-text); }
+  .login-card input { margin-bottom: 14px; }
+  /* ★要件：店舗が増えるとプルダウン選択が長すぎるため、支店コード直接入力に変更した。
+     見た目上だけ大文字化する（送信時はサーバー側でtrim+大文字化するため実害はない） */
+  #login-branchcode { text-transform: uppercase; }
+  .view textarea { resize: vertical; font-family: inherit; }
+  /* ★要件：新規依頼フォームの希望日の行に、日付・時間帯（AM/PM）・プランを横並びで置く */
+  .shop-new-hope-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+  .shop-new-hope-row input, .shop-new-hope-row select { width: auto; flex: 1; min-width: 110px; margin-bottom: 0; }
+  .shop-new-hope-row select.shop-new-hopetime { flex: 0 0 74px; min-width: 74px; }
+  .primary-btn { width: 100%; margin-top: 16px; background: var(--color-primary); color: #fff; border: none;
+    padding: 13px; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; }
+  .primary-btn:active { background: var(--color-primary-dark); }
+  .link-btn { background: none; border: none; color: var(--color-primary-dark); font-size: 0.9rem;
+    padding: 6px 0; margin-bottom: 8px; cursor: pointer; }
+  .error-text { color: var(--color-danger); font-size: 0.85rem; margin-top: 10px; }
+  .success-text { color: var(--color-success); font-size: 0.85rem; margin-top: 10px; }
+  /* ★要件：予約・依頼を送信した直後の案内が地味で気づきにくいとの指摘への対応。
+     小さな緑文字ではなく、色付きの目立つ帯（バナー）で表示する。 */
+  /* ★不具合修正：以前は背景が濃い緑（#ecfdf5＋緑文字）で「暗くて見づらい」との指摘があった。
+     背景を白、文字を他の案内文言と同じ青（--color-primary-dark）にして、とにかく明るく
+     読みやすい配色に変更（枠線・チェックのアイコンは元の成功色を控えめに残す）。 */
+  .success-banner {
+    display: flex; align-items: flex-start; gap: 10px;
+    margin-top: 16px; padding: 16px 18px; border-radius: 8px;
+    background: #ffffff; border: 1px solid var(--color-success);
+    color: var(--color-primary-dark); font-size: 1rem; font-weight: 600; line-height: 1.6;
+    box-shadow: 0 2px 10px rgba(22, 163, 74, 0.12);
+  }
+  .success-banner::before { content: "✅"; font-size: 1.3rem; line-height: 1.4; flex: none; }
+  /* ★要件：店舗の新規依頼送信後の案内は、PC幅では特に目立つよう画面中央にモーダル状で表示する
+     （狭い画面＝スマホではフォーム内の通常のバナー表示のまま。中央固定にすると狭い画面では
+     かえって操作の邪魔になるため）。あわせて「案件一覧（トップ）へ戻る」ボタンを併設する。 */
+  @media (min-width: 960px) {
+    .success-banner-prominent:not(.hidden) {
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      z-index: 300; width: 480px; max-width: 90vw; box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+      border-width: 2px; font-size: 1.05rem;
+    }
+    /* ★不具合修正：背景の暗幕が黒に近く濃すぎて「表示が暗い」と感じさせていたため、
+       同じ用途（案内の後ろに他の操作が透けて誤操作しないようにする）を保ったまま、
+       うんと薄い色に変更した。 */
+    .success-banner-prominent:not(.hidden)::after {
+      content: ""; position: fixed; inset: 0; background: rgba(28,31,46,0.16); z-index: -1;
+    }
+  }
+  .hint-text { color: var(--color-muted); font-size: 0.82rem; }
+  /* ★不具合修正：新郎新婦年齢欄の入力期限（FN確定まで）をラベルの文言に埋め込んでいたが、
+     欄ごとに繰り返されて冗長・見づらいとの指摘を受け、対象の欄（新郎年齢・新婦年齢）の
+     まとまりの上に小さな帯として1つだけ出す形に変更した。detail-grid（案件詳細のお客様情報
+     タブ）内ではgrid-column:1/-1で行いっぱいに広げ、新規依頼フォーム（gridを使っていない
+     単純な縦積み）ではその指定は無視され、ふつうのブロックとして表示される。 */
+  .field-group-hint { grid-column: 1 / -1; background: var(--color-primary-tint); color: var(--color-primary-dark);
+    font-size: 0.75rem; padding: 5px 10px; border-radius: 6px; margin: 4px 0 2px; }
+  /* ★不具合修正：新規依頼フォームの一番上「支店（都市）」欄が単一選択のため、複数の現地支店に
+     またがる依頼（希望日ごとに別の支店のプランを選ぶ）ができることが伝わりにくいとの指摘への対応。
+     気づいてもらえるよう、フォーム冒頭で目立つ案内を出す。 */
+  .multi-branch-note { background: var(--color-primary-tint); border: 1px solid var(--color-border);
+    border-radius: 8px; padding: 10px 12px; margin: 10px 0 16px; font-size: 0.85rem; color: var(--color-primary-dark);
+    line-height: 1.6; }
+  .checkbox-label { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--color-text); }
+  .checkbox-label input { width: auto; }
+
+  /* Toolbar */
+  .view-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  #branch-filter { max-width: 180px; }
+  .toolbar-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .sort-select { width: auto; padding: 8px 10px; font-size: 0.82rem; border: 1px solid var(--color-border);
+    border-radius: 6px; background: #fff; color: var(--color-text); }
+  .view-toggle { display: flex; border: 1px solid var(--color-border); border-radius: 6px; overflow: hidden; flex: none; }
+  .view-toggle-btn { background: #fff; border: none; padding: 8px 12px; font-size: 0.82rem; cursor: pointer;
+    color: var(--color-text); }
+  .view-toggle-btn + .view-toggle-btn { border-left: 1px solid var(--color-border); }
+  .view-toggle-btn.active { background: var(--color-primary); color: #fff; }
+
+  /* Cards */
+  .card-list { display: flex; flex-direction: column; gap: 10px; }
+  .res-card { background: var(--color-card); border-radius: 12px; padding: 12px 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    cursor: pointer; border-left: 4px solid var(--color-primary); }
+  .res-card:active { background: var(--color-primary-tint); }
+  .res-card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; font-size: 0.85rem; color: var(--color-muted); }
+  /* ★要件：一覧の日付はお名前より大きく、パッと見て日付がわかるようにする */
+  .res-card-date-cell { text-align: right; white-space: nowrap; }
+  /* ★要件：撮影日FIXが未入力／既入力どちらでも、STSに応じた文言（予約確定・リクエスト中等）と
+     撮影日FIXの両方が分かるように併記する（case-status-label＝文言、case-status-date＝日付）。
+     文言は日付より小さく色付きで、日付は従来どおり大きく太字で目立たせる。 */
+  .case-status-label { display: block; font-size: 0.78rem; font-weight: 700; color: var(--color-primary); }
+  .case-status-date { display: block; font-size: 1.12rem; font-weight: 700; color: var(--color-text); }
+  .res-card-names { font-size: 1rem; font-weight: 600; margin: 4px 0; }
+  .res-card-bottom { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .chip { font-size: 0.72rem; padding: 3px 8px; border-radius: 999px; background: #eef2f7; color: var(--color-text); }
+  .chip.hq { background: #fce7f3; color: var(--color-hq); }
+  .chip.branch { background: #ccfbf1; color: var(--color-branch); }
+  .empty-text { color: var(--color-muted); text-align: center; margin-top: 30px; }
+
+  /* 案件一覧の「表」表示（並び替え・都市/チャレンジ番号/プラン名などを一目で見たいとき用）。
+     ★ARW寄り：表のヘッダー行は濃紺の地に白文字（arluis.meの検索結果表を参考） */
+  .table-wrap { overflow-x: auto; background: var(--color-card); border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    border: 1px solid var(--color-border); }
+  .res-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; white-space: nowrap; }
+  .res-table th, .res-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--color-border); }
+  .res-table th { font-size: 0.72rem; font-weight: 700; color: #fff; background: var(--color-primary); letter-spacing: 0.02em; }
+  .res-table tbody tr { cursor: pointer; }
+  .res-table tbody tr:last-child td { border-bottom: none; }
+  .res-table tbody tr:hover, .res-table tbody tr:active { background: var(--color-primary-tint); }
+  .res-table tbody tr.needs-action-row { background: #fffbeb; }
+  .res-table tbody tr.needs-action-row:hover { background: #fef3c7; }
+  .res-table td.res-table-date { font-weight: 700; }
+
+  /* ★要件：現地支店・手配課の「プラン・オプション明細」を、実際に使っている外部システムの
+     画面（薄い水色のヘッダーバー＋表形式でSTSが列として並ぶ）に近づける。プラン・各オプションの
+     名称のすぐ隣にSTS(JP側)・STS(支店側)を編集できる列として置く（従来は名称の下や別の場所に
+     分かれていた）。カードの見出しバーだけ薄い水色（--color-primary-tint）にして、
+     表そのもの（.res-tableと同じ濃紺ヘッダー）とは別に「明細票」らしい区切りを付ける。 */
+  .plan-option-card { padding: 0; overflow: hidden; }
+  .plan-option-head { display: flex; align-items: center; gap: 8px; background: var(--color-primary-tint);
+    color: var(--color-primary); padding: 12px 14px; border-bottom: 1px solid var(--color-border); }
+  .plan-option-head .icon { font-size: 1.1rem; }
+  .plan-option-head h3 { color: var(--color-primary); border-bottom: none; padding-bottom: 0; }
+  /* ★要件変更：「第◯希望」の一覧（希望日・プラン・場所・日付・時間）と「プラン・オプション明細」
+     （プラン・オプション名・STS）がバラバラだったのを、1つの明細表（希望／名称／場所／日付／
+     時間／STS JP／STS 現地）へ統合したため、どちらも同じ.plan-tableを使う。 */
+  .plan-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+  .plan-table th, .plan-table td {
+    padding: 10px 12px; text-align: left; vertical-align: middle;
+    border-bottom: 1px solid var(--color-border); border-right: 1px solid var(--color-border); }
+  .plan-table th:last-child, .plan-table td:last-child { border-right: none; }
+  .plan-table thead th { background: var(--color-primary-tint); color: var(--color-primary);
+    font-size: 0.72rem; font-weight: 700; letter-spacing: 0.02em; }
+  .plan-table tbody tr:nth-child(even) { background: #f7f8fc; }
+  .plan-table tbody tr:last-child td { border-bottom: none; }
+  /* ★要件：プラン・オプション明細の表で「プラン」行だけひと目でわかるよう強調する
+     （店舗・現地支店・手配課いずれの画面でも共通のplan-tableを使うため、ここ1箇所で揃う）。 */
+  .plan-table tbody tr.plan-row { background: var(--color-primary-tint); }
+  .plan-table tbody tr.plan-row td:first-child { font-weight: 700; color: var(--color-primary); }
+
+  /* ★要件：希望日一覧は「最初の予約時」「日付変更依頼(DC)の対応中」以外はほとんど使わないため、
+     ふだんは折りたたんでおき（<details>）、必要なときだけ自動で開いた状態にする。 */
+  .hope-collapse { margin-top: 6px; }
+  .hope-collapse summary { cursor: pointer; font-weight: 700; color: var(--color-primary);
+    padding: 6px 0; list-style: none; }
+  .hope-collapse summary::-webkit-details-marker { display: none; }
+  .hope-collapse summary::before { content: '▶'; display: inline-block; margin-right: 6px;
+    font-size: 0.7rem; transition: transform 0.15s; }
+  .hope-collapse[open] summary::before { transform: rotate(90deg); }
+
+  /* Detail ★ARW寄り：案件詳細の先頭は、arluis.meの「REF・新郎・新婦」情報バーを参考に
+     濃紺の帯＋白文字で表示する（要対応・案件の要点をまず視認できるようにするため） */
+  .detail-header { background: var(--color-primary); color: #fff; border-radius: 8px; padding: 14px; margin-bottom: 14px; }
+  .detail-header .kanri { font-size: 0.82rem; color: rgba(255,255,255,0.78); }
+  /* ★要件：CHG NOは現地とのやり取りで頻繁に参照するため、少し大きく強調して表示する */
+  .detail-header .chg-no { font-size: 1.05rem; font-weight: 700; color: #fff; }
+  .detail-header .names { font-size: 1.2rem; font-weight: 700; margin: 4px 0; }
+  .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+  .field-block { background: #f9fafb; border-radius: 6px; padding: 8px 10px; }
+  .field-block label { font-size: 0.72rem; color: var(--color-muted); display: block; margin-bottom: 3px; }
+  .field-block input, .field-block select { border: 1px solid var(--color-border); border-radius: 6px; padding: 6px 8px;
+    font-size: 0.9rem; width: 100%; background: #fff; }
+  .section-card { background: var(--color-card); border-radius: 8px; padding: 14px; margin-bottom: 14px;
+    border: 1px solid var(--color-border);
+    /* ★要件：店舗画面のクイックナビ（.tab-bar流用）でスクロールジャンプした際、
+       sticky固定の.app-header（上端）＋クイックナビ自体のtab-bar（top:54px）の
+       2段ぶんに見出しが隠れないよう、スクロール停止位置に余白を確保する */
+    scroll-margin-top: 110px; }
+  /* ★ARW寄り：セクション見出しを濃紺の下線で強調する */
+  .section-card > h3:first-child, .view h3 { color: var(--color-primary); border-bottom: 2px solid var(--color-primary-tint);
+    padding-bottom: 6px; }
+  .msg-row { display: flex; gap: 8px; margin-top: 8px; }
+  .msg-row textarea { flex: 1; min-height: 60px; }
+  .msg-row button { white-space: nowrap; }
+  .send-btn { background: var(--color-primary); color: #fff; border: none; border-radius: 6px; padding: 0 16px; font-weight: 600; cursor: pointer; }
+
+  .history-item { border-bottom: 1px solid var(--color-border); padding: 10px 0; }
+  .history-item:last-child { border-bottom: none; }
+  .history-item.unread { background: var(--color-unread); border-radius: 8px; padding: 10px; margin-bottom: 4px; }
+  .history-meta { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--color-muted); margin-bottom: 4px; }
+  .history-body { white-space: pre-wrap; font-size: 0.92rem; }
+  .history-checks { display: flex; gap: 14px; margin-top: 6px; font-size: 0.78rem; color: var(--color-muted); }
+  .history-checks label { display: flex; align-items: center; gap: 4px; }
+
+  .val { font-size: 0.9rem; }
+  .val.locked-val { font-weight: 700; color: var(--color-muted); display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .history-link { display: block; background: none; border: none; color: var(--color-primary-dark); font-size: 0.72rem;
+    padding: 4px 0 0; cursor: pointer; text-decoration: underline; }
+  .history-panel { margin-top: 4px; background: #f3f4f6; border-radius: 8px; padding: 8px 10px; font-size: 0.78rem; }
+  .history-log-item { padding: 3px 0; border-bottom: 1px solid #e5e7eb; color: var(--color-text); }
+  .history-log-item:last-child { border-bottom: none; }
+
+  .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: #111827; color: #fff;
+    padding: 10px 18px; border-radius: 999px; font-size: 0.85rem; box-shadow: 0 4px 14px rgba(0,0,0,0.2); z-index: 50; }
+
+  /* ★機能追加：新規予約の送信中など、通信に時間がかかる操作の間は画面全体を覆うロード表示を出す。
+     トーストやボタン文言の変化だけでは気づかれず「できたか分からず何度も押してしまう」との
+     指摘への対応（送信中はこの画面より奥のボタン等を押せなくする意味もある）。 */
+  .loading-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.8); z-index: 500;
+    display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .loading-overlay-card { background: #ffffff; border-radius: 10px; padding: 26px 32px;
+    box-shadow: 0 12px 32px rgba(10,4,112,0.18); border: 1px solid var(--color-border);
+    display: flex; flex-direction: column; align-items: center; gap: 14px; max-width: 320px; text-align: center; }
+  .loading-spinner { width: 34px; height: 34px; border-radius: 50%; border: 4px solid var(--color-primary-tint);
+    border-top-color: var(--color-primary); animation: loading-spin 0.8s linear infinite; }
+  @keyframes loading-spin { to { transform: rotate(360deg); } }
+  .loading-overlay-text { color: var(--color-primary-dark); font-weight: 600; font-size: 0.95rem; line-height: 1.6; }
+  @media (prefers-reduced-motion: reduce) {
+    .loading-spinner { animation-duration: 2.4s; }
+  }
+
+  /* 現地スタッフ手配メールの下書き確認モーダル */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(17,24,39,0.5); z-index: 60;
+    display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .modal-card { background: var(--color-card); border-radius: 8px; padding: 18px; max-width: 480px; width: 100%;
+    max-height: 86vh; overflow-y: auto; box-shadow: 0 12px 32px rgba(0,0,0,0.25); }
+  .modal-card h3 { margin: 0 0 8px; }
+  .modal-card textarea { min-height: 220px; }
+
+  /* 表示範囲スコープ選択（全国／関東／関西／支店） */
+  .scope-box { background: var(--color-card); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px;
+    border: 1px solid var(--color-border); border-left: 3px solid var(--color-primary); }
+  .scope-title { font-size: 0.72rem; color: var(--color-muted); margin-bottom: 6px; }
+  .scope-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .scope-chip { display: inline-flex; align-items: center; gap: 5px; background: #eef2f7; border-radius: 999px;
+    padding: 5px 11px; font-size: 0.78rem; cursor: pointer; user-select: none; border: 1px solid transparent; }
+  .scope-chip input { width: auto; margin: 0; }
+  .scope-chip.active { background: var(--color-primary); color: #fff; }
+
+  /* 検索 */
+  .search-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  .search-grid .full { grid-column: 1 / -1; }
+  .search-grid label { font-size: 0.72rem; color: var(--color-muted); display: block; margin-bottom: 4px; }
+
+  /* プラン・オプション管理 */
+  .inline-form { display: flex; gap: 8px; margin-top: 8px; }
+  .inline-form input { flex: 1; }
+  .send-btn-sm { background: var(--color-primary); color: #fff; border: none; border-radius: 6px; padding: 0 14px;
+    font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .master-item-card { display: flex; justify-content: space-between; align-items: center; background: var(--color-card);
+    border-radius: 10px; padding: 9px 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); font-size: 0.88rem; }
+  .master-item-card .switch-sm { width: 34px; height: 20px; border-radius: 999px; background: #e2e5e9; position: relative;
+    border: none; cursor: pointer; flex: none; }
+  .master-item-card .switch-sm::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+    border-radius: 50%; background: #fff; transition: transform .15s ease; }
+  .master-item-card .switch-sm.on { background: var(--color-primary); }
+  .master-item-card .switch-sm.on::after { transform: translateX(14px); }
+
+  /* ★要件：要対応（相手からの未読メッセージ・変更あり）の案件は一目でわかるよう色を変えて上位に表示 */
+  .res-card.needs-action { border-left-color: #d97706; background: #fffbeb; }
+  .chip.needs-action-chip { background: #fef3c7; color: #b45309; font-weight: 700; }
+
+  /* 案件詳細のタブ切替（メッセージ／予約内容／現地記入欄） */
+  .tab-bar { display: flex; gap: 6px; margin-bottom: 12px; position: sticky; top: 54px; z-index: 5;
+    background: var(--color-bg); padding: 4px 0; }
+  .tab-btn { flex: 1; background: var(--color-card); border: 1px solid var(--color-border); color: var(--color-text);
+    padding: 10px 6px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+  .tab-btn.active { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
+  /* ★要件：現地支店・手配課の画面も店舗画面と同じクイックナビ形式にしたため、.tab-paneが
+     スクロールジャンプ先になる。.section-cardと同じ理由でsticky2段分の見出しに隠れないよう
+     余白を確保する（.section-card自身にも同じ値が付くが、入れ子でも問題ない）。 */
+  .tab-pane { scroll-margin-top: 110px; }
+
+  /* 統計ダッシュボード（JPのみ） */
+  .stats-total { font-size: 1.3rem; font-weight: 700; }
+  .stats-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 0.92rem;
+    border-bottom: 1px dashed var(--color-border); }
+  .stats-row:last-child { border-bottom: none; }
+
+  /* 統計：月カード（直近3ヶ月は大きく、残りの月は小さく下に） */
+  .stats-month-grid-lg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
+  .stats-month-card-lg { background: var(--color-card); border-radius: 14px; padding: 12px 10px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+  .stats-month-card-lg .stats-month-label { font-size: 0.76rem; color: var(--color-muted); }
+  .stats-month-card-lg .stats-month-total { font-size: 1.5rem; font-weight: 800; margin: 2px 0 8px; }
+  .stats-month-grid-sm { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 14px; }
+  .stats-month-card-sm { background: var(--color-card); border-radius: 10px; padding: 8px 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  .stats-month-card-sm .stats-month-label { font-size: 0.68rem; color: var(--color-muted); }
+  .stats-month-card-sm .stats-month-total { font-size: 1.05rem; font-weight: 700; margin: 1px 0 5px; }
+  .stats-status-line { display: flex; align-items: center; gap: 5px; font-size: 0.78rem; margin: 2px 0; }
+  .stats-status-line.sm { font-size: 0.66rem; gap: 3px; margin: 0; white-space: nowrap; }
+  .stats-dots-row { display: flex; flex-wrap: wrap; gap: 6px 8px; }
+  .stats-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .stats-dot.needs-action { background: #d03b3b; }
+  .stats-dot.rq { background: #2a78d6; }
+  .stats-dot.ok { background: #eb6834; }
+  .stats-dot.fn { background: #1baf7a; }
+
+  /* 希望日からのワンタップ回答 */
+  .hope-box { background: var(--color-primary-tint); border: 1px solid var(--color-border); border-radius: 8px; padding: 10px 12px; }
+  .hope-btn { display: block; width: 100%; margin-top: 6px; background: var(--color-primary); color: #fff;
+    border: none; border-radius: 6px; padding: 10px; font-size: 0.86rem; font-weight: 600; cursor: pointer; }
+  .hope-btn:active { background: var(--color-primary-dark); }
+
+  /* スタッフのダブルブッキング警告 */
+  .conflict-box { margin-top: 10px; background: #fef3c7; border: 1px solid #fcd34d; border-radius: 10px;
+    padding: 10px 12px; font-size: 0.85rem; color: #92400e; }
+  .conflict-box strong { display: block; margin-bottom: 4px; }
+
+  /* 当日スケジュール表 */
+  .day-card { cursor: pointer; }
+  .day-card:active { background: var(--color-primary-tint); }
+  .day-card-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .day-time { font-size: 1.1rem; font-weight: 800; color: var(--color-primary-dark); }
+
+  /* 案件タイムライン */
+  .tl-item { border-left: 2px solid var(--color-border); padding: 8px 0 8px 12px; margin-left: 4px; }
+  .tl-item.tl-sts { border-left-color: var(--color-hq); }
+  .tl-item.tl-msg { border-left-color: var(--color-primary); }
+  .tl-meta { display: flex; justify-content: space-between; gap: 8px; font-size: 0.72rem;
+    color: var(--color-muted); margin-bottom: 3px; flex-wrap: wrap; }
+  .tl-body { font-size: 0.88rem; white-space: pre-wrap; }
+
+  @media (min-width: 640px) {
+    .detail-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+
+  /* ★要件：PCでの利用が中心のため、広い画面ではコンテンツ幅を広げて余白を有効活用する。
+     スマホ〜タブレット幅（960px未満）は従来どおりの1カラム表示のまま変更しない。 */
+  @media (min-width: 960px) {
+    .app-main { max-width: 1120px; padding: 22px 28px; }
+    /* 一覧系（案件一覧・検索結果・納品待ち・請求不備チェック）はカードを並べて表示する */
+    .card-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+    .search-grid { grid-template-columns: repeat(3, 1fr); }
+    .detail-grid { grid-template-columns: repeat(4, 1fr); }
+    .stats-month-grid-lg { grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .stats-month-grid-sm { grid-template-columns: repeat(6, 1fr); }
+    /* メッセージ本文・入力欄は横幅いっぱいに伸ばすと逆に読みにくくなるため、読みやすい幅で頭打ちにする */
+    #view-detail .tab-pane[data-tab-pane="message"] .section-card { max-width: 760px; }
+  }
+
+  /* ★要件：手配内容をPDFにできるように。画面には出さず（.print-only）、印刷時（=ブラウザの
+     「PDFに保存」）にだけ #print-arrangement を表示し、それ以外は隠す。 */
+  .print-only { display: none; }
+  .print-btn { background: #fff; color: var(--color-primary); border: 1px solid #fff;
+    border-radius: 6px; padding: 6px 12px; font-size: 0.82rem; font-weight: 600; cursor: pointer; margin-top: 8px; }
+  @media print {
+    body { background: #fff; }
+    body * { visibility: hidden; }
+    #print-arrangement, #print-arrangement * { visibility: visible; }
+    #print-arrangement { display: block; position: absolute; left: 0; top: 0; width: 100%; padding: 24px; color: #000; background: #fff; }
+    #print-arrangement h1 { font-size: 1.3rem; }
+    #print-arrangement h2 { font-size: 1.05rem; margin: 18px 0 6px; border-bottom: 1px solid #999; padding-bottom: 4px; }
+    #print-arrangement table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+    #print-arrangement th, #print-arrangement td { border: 1px solid #999; padding: 5px 8px; font-size: 0.85rem; text-align: left; }
+    #print-arrangement .print-kv th { width: 110px; background: #f0f0f0; }
+  }
+</style>
