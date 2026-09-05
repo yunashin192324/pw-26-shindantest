@@ -2672,9 +2672,19 @@ function paneHidden(document, key) {
     document.getElementById('nav-shop-new').click();
     await settle();
     check('新規依頼フォームに「支店（都市）」の単独選択欄はもう無い', !document.getElementById('shop-new-branch'));
-    check('撮影希望場所欄は希望日（第一希望）の行の直後に配置されている',
-          (document.getElementById('shop-new-hope1').closest('.shop-new-hope-row').nextElementSibling.tagName === 'LABEL' &&
-           document.getElementById('shop-new-hope1').closest('.shop-new-hope-row').nextElementSibling.nextElementSibling.id === 'shop-new-location-wrap'));
+    // ★要件変更：セール名・準備場所・撮影希望場所は、希望日①の行のすぐ下に「セール名→準備場所
+    // （非表示のことも）→撮影希望場所」の順で並び、次の希望日②の行より前に収まる
+    check('希望日①の直後にセール名欄・撮影希望場所欄が、この順で希望日②より前に配置されている',
+          (() => {
+            const DOCUMENT_POSITION_FOLLOWING = 4;
+            const hope1Row = document.getElementById('shop-new-hope1').closest('.shop-new-hope-row');
+            const saleSelect = document.getElementById('shop-new-sale');
+            const locationWrap = document.getElementById('shop-new-location-wrap');
+            const hope2Row = document.getElementById('shop-new-hope2').closest('.shop-new-hope-row');
+            return !!(hope1Row.compareDocumentPosition(saleSelect) & DOCUMENT_POSITION_FOLLOWING) &&
+                   !!(saleSelect.compareDocumentPosition(locationWrap) & DOCUMENT_POSITION_FOLLOWING) &&
+                   !!(locationWrap.compareDocumentPosition(hope2Row) & DOCUMENT_POSITION_FOLLOWING);
+          })());
 
     // --- ②希望日①のプランを選ぶとすぐ下の撮影希望場所欄に、その支店・そのプランの候補が反映される ---
     document.getElementById('shop-new-hopeplan1').value = 'ローマ3時間フォト';
@@ -2824,6 +2834,76 @@ function paneHidden(document, key) {
       .find(el => el.textContent.includes('FN確定までに要入力'));
     check('既存案件の詳細画面（日本側・お客様情報タブ）にも同じ帯が1つ出る',
           !!jpAgeHintBand, jpAgeHintBand && jpAgeHintBand.textContent);
+  }
+
+  // ---------------------------------------------------------------
+  section('U50. セール名・準備場所も希望日ごとに独立した欄に（希望日①のプランの下だけでなく②〜⑤にも）');
+  {
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'SHOP1', 'CHANGE-ME-SHOP1');
+    document.getElementById('nav-shop-new').click();
+    await settle();
+
+    check('希望日②にもセール名欄がある（希望日①と同じ位置関係）', !!document.getElementById('shop-new-hopesale2'));
+    check('希望日②にも準備場所欄がある（既定では非表示）',
+          !!document.getElementById('shop-new-hopeprep-block2') &&
+          document.getElementById('shop-new-hopeprep-block2').classList.contains('hidden'));
+
+    // --- 希望日①＝ウィーンのプラン（イタリアではない）。準備場所は出ない ---
+    document.getElementById('shop-new-hopeplan1').value = 'ローマ3時間フォト';
+    document.getElementById('shop-new-hopeplan1').dispatchEvent(new dom.window.Event('change'));
+    await settle();
+    check('希望日①のプランがイタリア以外の支店なら準備場所は出ない',
+          document.getElementById('shop-new-prep-block').classList.contains('hidden'));
+
+    // --- 希望日②＝ローマ（イタリア）のプラン。希望日②の準備場所だけが出る（希望日①は無関係） ---
+    document.getElementById('shop-new-hopeplan2').value = 'ローマ半日プラン';
+    document.getElementById('shop-new-hopeplan2').dispatchEvent(new dom.window.Event('change'));
+    await settle();
+    check('希望日②のプランがイタリアの支店なら、希望日②の準備場所欄が現れる',
+          !document.getElementById('shop-new-hopeprep-block2').classList.contains('hidden'));
+    check('希望日①の準備場所欄は希望日②の選択の影響を受けない（非表示のまま）',
+          document.getElementById('shop-new-prep-block').classList.contains('hidden'));
+    const hopeSale2Opts = [...document.getElementById('shop-new-hopesale2').options].map(o => o.value).filter(Boolean);
+    check('希望日②のセール名欄には、希望日②のプランの支店（ローマ）専用の候補が入る',
+          hopeSale2Opts.includes('春の特典フェア'), hopeSale2Opts.join(','));
+
+    // --- 実際に入力して送信し、希望日ごとのセール名・準備場所が保存されることを確認 ---
+    document.getElementById('shop-new-team').value = '関東';
+    document.getElementById('shop-new-challengeno').value = 'HOPESALEUI1';
+    document.getElementById('shop-new-groom-last').value = 'Sale';
+    document.getElementById('shop-new-groom').value = 'Test';
+    document.getElementById('shop-new-bride-last').value = 'Sale';
+    document.getElementById('shop-new-bride').value = 'TestB';
+    document.getElementById('shop-new-hope1').value = '2026-09-10';
+    document.getElementById('shop-new-hope2').value = '2026-09-11';
+    document.getElementById('shop-new-hopesale2').value = '春の特典フェア';
+    document.getElementById('shop-new-hopeprep2').value = 'サロン';
+
+    document.getElementById('shop-new-submit').click();
+    await settle();
+    check('希望日ごとに違うセール名・準備場所を指定して送信できる',
+          !document.getElementById('shop-new-success').classList.contains('hidden'),
+          document.getElementById('shop-new-error').textContent);
+    const jpTokU50 = ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    const matchedU50 = ctx.apiGetDashboard(jpTokU50, { showAll: true }).reservations
+      .filter(r => r.challengeNo === 'HOPESALEUI1');
+    check('チャレンジ番号で検索すると希望日①・②の2件が見つかる（支店ごとに分割された）',
+          matchedU50.length === 2, JSON.stringify(matchedU50.map(r => r.kanriNo)));
+    const detailsU50 = matchedU50.map(r => ctx.apiGetReservationDetail(jpTokU50, r.kanriNo).detail);
+    const vieDetailU50 = detailsU50.find(d => d['支店コード'] === 'VIE');
+    const rowDetailU50 = detailsU50.find(d => d['支店コード'] === 'ROW');
+    check('希望日①（ウィーン）の案件には希望日②のセール名・準備場所は入らない',
+          !!vieDetailU50 && !vieDetailU50['準備場所'], vieDetailU50 && JSON.stringify(vieDetailU50['準備場所']));
+    check('希望日②（ローマ）の案件には希望日②で指定したセール名が入る',
+          !!rowDetailU50 && rowDetailU50['セール名'] === '春の特典フェア', rowDetailU50 && rowDetailU50['セール名']);
+    check('希望日②（ローマ）の案件には希望日②で指定した準備場所が入る',
+          !!rowDetailU50 && rowDetailU50['準備場所'] === 'サロン', rowDetailU50 && rowDetailU50['準備場所']);
+
+    // --- 送信後はフォームがリセットされ、希望日②の準備場所欄も非表示に戻っている ---
+    check('送信後は希望日②の準備場所欄も非表示に戻る（前のプランの状態が残らない）',
+          document.getElementById('shop-new-hopeprep-block2').classList.contains('hidden'));
   }
 
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);

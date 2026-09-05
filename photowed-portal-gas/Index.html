@@ -244,27 +244,29 @@
         <input id="shop-new-bride-age" type="number" min="0" placeholder="任意入力">
         <!-- ★要件変更：案件全体の「プラン」単独欄は廃止した（下の希望日ごとのプラン欄と
              二重管理になっていたため。案件全体のプラン名は、確定した希望日のプランが
-             自動で反映される＝Code.gsのapplyHopeStatusCascade_・apiShopCreateRequest参照）。 -->
-        <label>セール名</label>
-        <select id="shop-new-sale"><option value="">未設定</option></select>
-        <div id="shop-new-prep-block" class="hidden">
-          <label>準備場所（ローマの場合は選択）</label>
-          <select id="shop-new-prep"><option value="">-</option></select>
-        </div>
-        <!-- ★要件：希望日ごとに時間帯（AM/PM。支店マスタの「希望日時間帯表示」がONの支店のみ）と
+             自動で反映される＝Code.gsのapplyHopeStatusCascade_・apiShopCreateRequest参照）。
+             ★要件：希望日ごとに時間帯（AM/PM。支店マスタの「希望日時間帯表示」がONの支店のみ）と
              プラン（複数プラン希望）も入力できるようにする。既存案件の詳細画面と同じ考え方。
              ★要件変更：希望日ごとのプランは、この案件の依頼先支店（都市）だけでなく全支店を
              横断して選べる（例：第一希望はロンドン支店のロンドンフォト、第二希望はローマ支店の
              ローマフォト、のように支店をまたいだ複数プラン希望に対応するため）。
              ★仕様変更：フォーム上部の「支店（都市）」単独選択欄を廃止し、希望日（第一希望）の
-             プランで基準支店を自動的に決めるようにした（onShopNewHopePlan1Change参照）。あわせて
-             「撮影希望場所」欄は、希望日①のプランを選ぶとすぐ下にそのプラン用の候補が出るよう、
-             このすぐ下に移動した（旧位置＝セール名の直後からここへ）。 -->
+             プランで基準支店を自動的に決めるようにした（onShopNewHopePlan1Change参照）。
+             ★要件変更：セール名・準備場所は、これまで案件全体で1つずつの単独欄だったが、
+             希望日ごとに違う支店のプランを選べるようになったため、希望日ごとのプラン欄の
+             直下（撮影希望場所のすぐ上）にそれぞれ独立して置くようにした。準備場所は、
+             その希望日のプランの提供元支店がイタリア（ローマ）の場合だけ表示する。 -->
         <label>希望日（第一希望）</label>
         <div class="shop-new-hope-row">
           <input id="shop-new-hope1" type="date">
           <select id="shop-new-hopetime1" class="shop-new-hopetime hidden"><option value="">-</option><option value="AM">AM</option><option value="PM">PM</option></select>
           <select id="shop-new-hopeplan1"><option value="">プラン未設定</option></select>
+        </div>
+        <label>セール名</label>
+        <select id="shop-new-sale"><option value="">未設定</option></select>
+        <div id="shop-new-prep-block" class="hidden">
+          <label>準備場所（ローマの場合は選択）</label>
+          <select id="shop-new-prep"><option value="">-</option></select>
         </div>
         <label>撮影希望場所</label>
         <div id="shop-new-location-wrap">
@@ -277,6 +279,12 @@
           <select id="shop-new-hopetime2" class="shop-new-hopetime hidden"><option value="">-</option><option value="AM">AM</option><option value="PM">PM</option></select>
           <select id="shop-new-hopeplan2"><option value="">プラン未設定</option></select>
         </div>
+        <label>セール名（第二希望）</label>
+        <select id="shop-new-hopesale2"><option value="">未設定</option></select>
+        <div id="shop-new-hopeprep-block2" class="hidden">
+          <label>準備場所（第二希望・ローマの場合は選択）</label>
+          <select id="shop-new-hopeprep2"><option value="">-</option></select>
+        </div>
         <label>撮影希望場所（第二希望）</label>
         <div id="shop-new-hopelocation-wrap2">
           <input id="shop-new-hopelocation2" type="text" list="shop-new-hopelocation-datalist2" placeholder="希望日②のプランを選ぶと候補が出ます">
@@ -287,6 +295,12 @@
           <input id="shop-new-hope3" type="date">
           <select id="shop-new-hopetime3" class="shop-new-hopetime hidden"><option value="">-</option><option value="AM">AM</option><option value="PM">PM</option></select>
           <select id="shop-new-hopeplan3"><option value="">プラン未設定</option></select>
+        </div>
+        <label>セール名（第三希望）</label>
+        <select id="shop-new-hopesale3"><option value="">未設定</option></select>
+        <div id="shop-new-hopeprep-block3" class="hidden">
+          <label>準備場所（第三希望・ローマの場合は選択）</label>
+          <select id="shop-new-hopeprep3"><option value="">-</option></select>
         </div>
         <label>撮影希望場所（第三希望）</label>
         <div id="shop-new-hopelocation-wrap3">
@@ -299,6 +313,12 @@
           <select id="shop-new-hopetime4" class="shop-new-hopetime hidden"><option value="">-</option><option value="AM">AM</option><option value="PM">PM</option></select>
           <select id="shop-new-hopeplan4"><option value="">プラン未設定</option></select>
         </div>
+        <label>セール名（第四希望）</label>
+        <select id="shop-new-hopesale4"><option value="">未設定</option></select>
+        <div id="shop-new-hopeprep-block4" class="hidden">
+          <label>準備場所（第四希望・ローマの場合は選択）</label>
+          <select id="shop-new-hopeprep4"><option value="">-</option></select>
+        </div>
         <label>撮影希望場所（第四希望）</label>
         <div id="shop-new-hopelocation-wrap4">
           <input id="shop-new-hopelocation4" type="text" list="shop-new-hopelocation-datalist4" placeholder="希望日④のプランを選ぶと候補が出ます">
@@ -309,6 +329,12 @@
           <input id="shop-new-hope5" type="date">
           <select id="shop-new-hopetime5" class="shop-new-hopetime hidden"><option value="">-</option><option value="AM">AM</option><option value="PM">PM</option></select>
           <select id="shop-new-hopeplan5"><option value="">プラン未設定</option></select>
+        </div>
+        <label>セール名（第五希望）</label>
+        <select id="shop-new-hopesale5"><option value="">未設定</option></select>
+        <div id="shop-new-hopeprep-block5" class="hidden">
+          <label>準備場所（第五希望・ローマの場合は選択）</label>
+          <select id="shop-new-hopeprep5"><option value="">-</option></select>
         </div>
         <label>撮影希望場所（第五希望）</label>
         <div id="shop-new-hopelocation-wrap5">

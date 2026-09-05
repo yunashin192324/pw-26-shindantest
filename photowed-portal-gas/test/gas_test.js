@@ -3793,5 +3793,41 @@ section('63. 新規依頼の希望日②〜⑤にも撮影希望場所を保存�
 }
 
 // ---------------------------------------------------------------
+section('64. 新規依頼のセール名・準備場所も希望日ごとに独立させ、支店分割時に他の希望日の値が混ざらないよう修正');
+{
+  const ctx = shopFixture();
+  // ★このフィクスチャにはローマ（イタリア）支店が無いため、準備場所（イタリアのみ表示）の
+  // 確認用に1件追加登録する
+  addBranchRow(ctx, { '支店コード': 'ROW', '支店名': 'ローマ支店', '国': 'イタリア', '都市': 'ローマ',
+    'ロール': 'BRANCH', 'ログインパスコード': 'rp', '通知先メール': 'row@example.com', '有効': true });
+  ctx.ensureSheetWithHeaders_(ctx.__ss, 'プランマスタ', ctx.PLAN_MASTER_HEADERS);
+  const pm64 = ctx.__ss.getSheetByName('プランマスタ');
+  pm64.appendRow(['VIE', 'ウィーンフォト', true]);
+  pm64.appendRow(['ROW', 'ローマ半日プラン', true]);
+  ctx.__ss.getSheetByName('セールマスタ').appendRow(['VIE', 'ウィーン限定セール', true]);
+  ctx.__ss.getSheetByName('セールマスタ').appendRow(['ROW', 'ローマ限定セール', true]);
+  const shopToken = ctx.apiLogin('SHOP1', 'sp').session.token;
+  const jpToken = ctx.apiLogin('KANTO', 'pw').session.token;
+
+  // 希望日①＝ウィーンのプラン、希望日②＝ローマのプラン（支店が違うため案件は自動分割される）。
+  // それぞれ自分の支店のセール名・準備場所を指定する（ローマは準備場所が使える、ウィーンは無い）。
+  const created = ctx.apiShopCreateRequest(shopToken, {
+    team: '関東', groomLastName: 'Split', groomName: 'Test', brideLastName: 'Split', brideName: 'Test',
+    challengeNo: 'HOPESALE001',
+    hope1: '2026-10-01', hopePlan1: 'ウィーンフォト', saleName: 'ウィーン限定セール',
+    hope2: '2026-10-02', hopePlan2: 'ローマ半日プラン', hopeSale2: 'ローマ限定セール', hopePrep2: 'ホテル'
+  });
+  check('支店が異なる希望日を指定すると案件が2件に分割される', created.kanriNos.length === 2, JSON.stringify(created));
+
+  const vieDetail = created.kanriNos.map(k => ctx.apiGetReservationDetail(jpToken, k).detail).find(d => d['支店コード'] === 'VIE');
+  const romeDetail = created.kanriNos.map(k => ctx.apiGetReservationDetail(jpToken, k).detail).find(d => d['支店コード'] === 'ROW');
+  check('ウィーン支店分の案件には希望日①のセール名だけが反映される', vieDetail['セール名'] === 'ウィーン限定セール', vieDetail['セール名']);
+  check('ウィーン支店分の案件には準備場所は反映されない（希望日②のホテルが紛れ込まない）', !vieDetail['準備場所'], vieDetail['準備場所']);
+  check('ローマ支店分の案件には希望日②のセール名だけが反映される（希望日①のウィーン限定セールが紛れ込まない）',
+        romeDetail['セール名'] === 'ローマ限定セール', romeDetail['セール名']);
+  check('ローマ支店分の案件には希望日②の準備場所が反映される', romeDetail['準備場所'] === 'ホテル', romeDetail['準備場所']);
+}
+
+// ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
 process.exit(fail === 0 ? 0 : 1);

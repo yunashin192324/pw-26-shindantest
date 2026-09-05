@@ -3619,6 +3619,12 @@ function apiShopCreateRequest(token, payload) {
   // これまでどおり画面上部の「撮影希望場所」欄（＝上のlocation。案件全体のCOL_LOCATIONにも
   // 使う後方互換の値）をそのまま使う。
   const hopeLocations = [1, 2, 3, 4, 5].map(n => n === 1 ? location : String(payload['hopeLocation' + n] || '').trim());
+  // ★要件追加：セール名・準備場所も、希望日ごとに違う支店のプランを選べるようになったことに
+  // 合わせて希望日ごとに入力できるようにした（第一希望分はこれまでどおりsaleName/prepを使う）。
+  // 支店ごとに案件が分割された場合、各案件にはその案件に属する希望日のセール名・準備場所だけが
+  // 反映される（下のgroups構築後、groupSale/groupPrepとして希望日インデックスで絞り込む）。
+  const hopeSaleNames = [1, 2, 3, 4, 5].map(n => n === 1 ? saleName : String(payload['hopeSale' + n] || '').trim());
+  const hopePreps = [1, 2, 3, 4, 5].map(n => n === 1 ? prep : String(payload['hopePrep' + n] || '').trim());
   const planOwnerMap = planOwnerBranchMap_();
   // ★仕様変更：新規依頼フォーム上部にあった「支店（都市）」単独選択欄を廃止した。画面からは
   // もうbranchCodeが送られてこないため、希望日（第一希望）で選んだプランの提供元支店を
@@ -3713,9 +3719,16 @@ function apiShopCreateRequest(token, payload) {
       const isHope1Group = group.hopeIndexes.includes(0);
       const groupPlan = (isHope1Group && explicitPlan) || group.hopeIndexes.map(i => hopePlans[i]).find(Boolean) || '';
       setV(COL_PLAN, groupPlan);
-      setV(COL_SALE_NAME, saleName);
-      setV(COL_LOCATION, location);
-      setV(COL_PREP, prep);
+      // ★不具合修正：以前はセール名・撮影希望場所・準備場所を案件全体の単独値として、支店ごとに
+      // 分割された全ての案件へ無条件でコピーしていた（この案件に属さない希望日の入力内容が
+      // 紛れ込むことがあった）。プラン（groupPlan）と同じく、この案件に属する希望日
+      // （group.hopeIndexes）の中から値がある最初のものだけを反映するようにした。
+      const groupSale = group.hopeIndexes.map(i => hopeSaleNames[i]).find(Boolean) || '';
+      const groupLocation = group.hopeIndexes.map(i => hopeLocations[i]).find(Boolean) || '';
+      const groupPrep = group.hopeIndexes.map(i => hopePreps[i]).find(Boolean) || '';
+      setV(COL_SALE_NAME, groupSale);
+      setV(COL_LOCATION, groupLocation);
+      setV(COL_PREP, groupPrep);
       setV(COL_REMARKS, remarks);
       options.forEach((name, i) => setV(opNameCol_(i + 1), name));
       // ★要件変更：パスポート番号は支店の必須設定に関わらず、入力があれば常に保存する
