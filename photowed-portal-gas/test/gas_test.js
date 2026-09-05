@@ -3826,6 +3826,19 @@ section('64. 新規依頼のセール名・準備場所も希望日ごとに独�
   check('ローマ支店分の案件には希望日②のセール名だけが反映される（希望日①のウィーン限定セールが紛れ込まない）',
         romeDetail['セール名'] === 'ローマ限定セール', romeDetail['セール名']);
   check('ローマ支店分の案件には希望日②の準備場所が反映される', romeDetail['準備場所'] === 'ホテル', romeDetail['準備場所']);
+
+  // ★不具合修正：通知メールの本文にも、シートに保存した内容と同じ「その案件（グループ）の
+  // セール名・撮影希望場所・準備場所」が載ること（以前は分割後の全案件のメールに、常に
+  // 希望日①の値が載ってしまい、シートの内容と食い違っていた）
+  const vieMail64 = ctx.__mail.find(m => m.subj.includes(vieDetail['管理番号']));
+  const romeMail64 = ctx.__mail.find(m => m.subj.includes(romeDetail['管理番号']));
+  check('ウィーン支店分の通知メールには希望日①のセール名が載る', !!vieMail64 && vieMail64.body.includes('セール名: ウィーン限定セール'), vieMail64 && vieMail64.body);
+  check('ウィーン支店分の通知メールには希望日②の準備場所（ホテル）は載らない', !!vieMail64 && !vieMail64.body.includes('準備場所'), vieMail64 && vieMail64.body);
+  check('ローマ支店分の通知メールには希望日②のセール名・準備場所が載る',
+        !!romeMail64 && romeMail64.body.includes('セール名: ローマ限定セール') && romeMail64.body.includes('準備場所: ホテル'),
+        romeMail64 && romeMail64.body);
+  check('ローマ支店分の通知メールに希望日①のセール名（ウィーン限定セール）は載らない',
+        !!romeMail64 && !romeMail64.body.includes('ウィーン限定セール'), romeMail64 && romeMail64.body);
 }
 
 // ---------------------------------------------------------------

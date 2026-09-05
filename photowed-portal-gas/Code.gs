@@ -3742,7 +3742,8 @@ function apiShopCreateRequest(token, payload) {
 
       created.push({
         kanriNo: newNo, branchCode: groupBranchCode, branchName: (groupMeta && groupMeta.name) || groupBranchCode,
-        rowIndex: newRowIndex, newRowData, meta: groupMeta || {}, hopeIndexes: group.hopeIndexes, groupPlan
+        rowIndex: newRowIndex, newRowData, meta: groupMeta || {}, hopeIndexes: group.hopeIndexes,
+        groupPlan, groupSale, groupLocation, groupPrep
       });
     });
 
@@ -3769,9 +3770,12 @@ function apiShopCreateRequest(token, payload) {
         `新郎名: ${fullName_(groomLastName, groomName)}`,
         `新婦名: ${fullName_(brideLastName, brideName)}`,
         `希望日:\n${groupHopeLines.map(l => `  ${l}`).join('\n')}`,
-        saleName ? `セール名: ${saleName}` : '',
-        location ? `撮影希望場所: ${location}` : '',
-        prep ? `準備場所: ${prep}` : '',
+        // ★不具合修正：支店ごとに案件が分割されたとき、通知メールの本文には常に希望日①の
+        // セール名・撮影希望場所・準備場所が載ってしまい、シートに保存された内容（その案件に
+        // 属する希望日の分）と食い違っていた。案件（グループ）ごとの値を載せるよう修正。
+        c.groupSale ? `セール名: ${c.groupSale}` : '',
+        c.groupLocation ? `撮影希望場所: ${c.groupLocation}` : '',
+        c.groupPrep ? `準備場所: ${c.groupPrep}` : '',
         `該当の手配課: ${team}手配課`,
         others.length ? `関連の他支店案件: ${others.map(o => `${o.kanriNo}（${o.branchName}）`).join(' / ')}` : '',
         remarks ? `【備考】\n${remarks}` : ''
