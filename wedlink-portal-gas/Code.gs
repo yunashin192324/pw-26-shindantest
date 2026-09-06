@@ -2376,6 +2376,8 @@ function apiCommitChanges(token, kanriNo, changes, message, recipient) {
   }
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
+  // 通知メールの送信に失敗した理由（空文字＝正常）。保存自体は止めず、画面へ注意書きとして返す
+  let mailWarning = '';
   try {
     const { sheet, headers, rowIndex, rowData } = findReservationRow_(kanriNo);
     if (rowIndex === -1) throw new Error('対象の予約が見つかりません。');
@@ -2431,7 +2433,8 @@ function apiCommitChanges(token, kanriNo, changes, message, recipient) {
 
     appendHistory_(headers, freshRow, who, body, session.role, recipientRoleForDirection_(direction));
     markUnreadForDirection_(sheet, headers, rowIndex, direction);
-    sendDirectionalMail_(headers, freshRow, direction, session, body, kind);
+    // 保存自体は済んでいるので、送信に失敗しても処理は止めず、画面へ注意書きとして返す
+    mailWarning = sendDirectionalMail_(headers, freshRow, direction, session, body, kind);
     // ★要件：現地支店がSTS(支店側)をCWにした通常の「変更＋メッセージ」経路でも、書いた内容とは
     // 別に自動注意書きを1件追加する（本人が書き忘れても必ず伝わるようにするため）
     appendCwAutoNoticeIfApplicable_(sheet, headers, rowIndex, writes, session);
@@ -2440,7 +2443,7 @@ function apiCommitChanges(token, kanriNo, changes, message, recipient) {
   } finally {
     lock.releaseLock();
   }
-  return { ok: true };
+  return { ok: true, mailWarning: mailWarning };
 }
 
 // シート上の列位置（1始まり）を返す。列が無ければ「原因と対処」が分かるエラーにする。
@@ -3343,8 +3346,17 @@ function apiAddMemo(token, kanriNo, memoType, body) {
   if (session.role === SHOP_ROLE) assertShopOwnRow_(session, headers, rowData);
   else assertRowVisible_(session, headers, rowData);
 
-  const sheet = getSpreadsheet_().getSheetByName(MEMO_LOG_SHEET_NAME);
-  sheet.appendRow([kanriNo, memoType, text, senderLabel_(session), new Date()]);
+  // ★堅牢性：他の書き込み処理と同じくロックを取る。ロックが無いと、2人が同時にメモを
+  // 追加したときに同じ行へ書き込まれ、片方のメモが消える可能性がある（Apps Scriptの
+  // appendRow は同時実行に対して安全ではない）。
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
+  try {
+    const sheet = getSpreadsheet_().getSheetByName(MEMO_LOG_SHEET_NAME);
+    sheet.appendRow([kanriNo, memoType, text, senderLabel_(session), new Date()]);
+  } finally {
+    lock.releaseLock();
+  }
   return { ok: true };
 }
 
@@ -3719,6 +3731,8 @@ function apiShopCreateRequest(token, payload) {
 
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
+  // 通知メールの送信に失敗した理由（空文字＝正常）
+  let mailWarning = '';
   try {
     const sheet = getSpreadsheet_().getSheetByName(RESERVATION_SHEET_NAME);
     const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
@@ -3855,7 +3869,11 @@ function apiShopCreateRequest(token, payload) {
       if (jpMailOff && branchMailOff) direction = null;
       else if (jpMailOff) direction = 'SHOP_NEW_CASE_BRANCH_ONLY';
       else if (branchMailOff) direction = 'SHOP_NEW_CASE_JP_ONLY';
-      if (direction) sendDirectionalMail_(headers, c.newRowData, direction, session, initMsg, '店舗からの新規依頼');
+      // 通知メールの送信に失敗しても依頼の登録自体は成立させる（理由は画面へ注意書きとして返す）
+      if (direction) {
+        const warn = sendDirectionalMail_(headers, c.newRowData, direction, session, initMsg, '店舗からの新規依頼');
+        if (warn && !mailWarning) mailWarning = warn;
+      }
     });
 
     // ★要件：請求先は先にマスタ登録しておく運用（支店マスタの「請求先」列）。万が一この店舗の
@@ -3871,7 +3889,7 @@ function apiShopCreateRequest(token, payload) {
     }
 
     sortReservationSheet_(sheet);
-    return { ok: true, kanriNo: created[0].kanriNo, kanriNos: created.map(c => c.kanriNo) };
+    return { ok: true, kanriNo: created[0].kanriNo, kanriNos: created.map(c => c.kanriNo), mailWarning: mailWarning };
   } finally {
     lock.releaseLock();
   }
@@ -4276,7 +4294,26 @@ function appendHistory_(headers, rowData, sender, body, senderRole, recipientRol
   h.appendRow(row);
 }
 
+// ★不具合修正：通知メールの送信に失敗しても、保存済みのデータまで「失敗」にしない。
+// 送信上限に達した場合や、支店マスタのメールアドレスが1文字違っている場合、MailAppは例外を投げる。
+// 以前はデータを書き終えたあとにその例外がそのまま外へ出ていたため、利用者の画面には
+// 「保存できなかった」と見えるのに実際には保存済み、という状態になり、もう一度同じ操作をすると
+// 同じメッセージが二重に保存されていた（実際に再現を確認済み）。
+// 定期処理側は以前から1件ずつ例外を捕まえて止まらないようにしてあり、ここも同じ考え方に揃える。
+// 戻り値：成功なら空文字、失敗ならその理由（呼び出し元は利用者への注意書きとして使う）。
 function sendDirectionalMail_(headers, rowData, direction, session, message, kind) {
+  try {
+    sendDirectionalMailCore_(headers, rowData, direction, session, message, kind);
+    return '';
+  } catch (e) {
+    const reason = errorMessage_(e);
+    // 記録は残す（Apps Scriptの実行ログから後で原因を追えるようにするため）
+    console.error(`[通知メール送信失敗] ${kind || ''} ${rowData[headers.indexOf(COL_KANRI_NO)] || ''}: ${reason}`);
+    return reason;
+  }
+}
+
+function sendDirectionalMailCore_(headers, rowData, direction, session, message, kind) {
   const getV = (name) => rowData[headers.indexOf(name)] || '';
   const branchCode = getV(COL_BRANCH_CODE);
   const area = getV(COL_AREA);

@@ -383,6 +383,13 @@
 
     <div id="toast" class="toast hidden"></div>
 
+    <!-- ★不具合修正：通知メールの送信に失敗したときの注意書き。トースト（2.6秒で消える）では
+         見逃されるため、利用者が自分で閉じるまで消えない帯として画面上部に出す。 -->
+    <div id="notice-bar" class="notice-bar hidden">
+      <span id="notice-bar-text"></span>
+      <button type="button" id="notice-bar-close" class="notice-bar-close">閉じる</button>
+    </div>
+
     <!-- ★機能追加：新規予約の送信中など、通信に時間がかかる処理の間は画面全体を覆う
          ロード表示を出す（ボタンの文言変化だけでは気づかれず、何度も押されてしまうため）。 -->
     <div id="loading-overlay" class="loading-overlay hidden">

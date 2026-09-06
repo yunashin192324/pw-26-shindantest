@@ -3012,6 +3012,151 @@ function paneHidden(document, key) {
     ctx.apiListCostumeCompanies = oc; ctx.apiListAllActivePlans = oa; // 元に戻す
   }
 
+  // ---------------------------------------------------------------
+  section('U53. 【不具合修正】確認ダイアログ（ブラウザ標準）も英語専用支店では英語で出す');
+  {
+    // ブラウザ標準の confirm/alert は画面のDOMの外に出るため、DOMを監視する自動翻訳が届かず、
+    // 英語しか読めない支店にも日本語のまま表示されていた（実ブラウザでの巡回で確認）。
+    // 表示する直前に翻訳してから出すよう修正した。
+    const ctx53 = makeServer();
+    addBranchRowUi_(ctx53, {
+      '支店コード': 'MLE', '支店名': 'マーレ支店', '国': 'モルディブ', '都市': 'マーレ',
+      'ロール': 'BRANCH', 'ログインパスコード': 'CHANGE-ME-MLE', '通知先メール': 'male@his-world.com',
+      '案件番号プレフィックス': 'MLE', '有効': true, '表示言語': 'en'
+    });
+    const dom53 = await openApp(ctx53);
+    const doc53 = dom53.window.document;
+    // 確認ダイアログの文言を横取りして記録する
+    const shown = [];
+    dom53.window.confirm = (msg) => { shown.push(msg); return false; }; // falseで実際の削除は行わない
+
+    await login(dom53, 'MLE', 'CHANGE-ME-MLE');
+    await sleep(300);
+    // 画面のヘルパーを直接呼び、実際にダイアログへ渡る文言を確かめる
+    const okEn = await dom53.window.eval("confirmI18n_('このメッセージを削除します。よろしいですか？')");
+    check('英語表示の支店では、確認ダイアログの文言が翻訳されてから表示される',
+          shown.length === 1 && shown[0].startsWith('EN:'), JSON.stringify(shown));
+    check('確認ダイアログの戻り値（利用者が押した結果）はそのまま返る', okEn === false, String(okEn));
+
+    // 日本語の支店では従来どおり日本語のまま（余計な通信もしない）
+    const ctx53b = makeServer();
+    const dom53b = await openApp(ctx53b);
+    const shownJa = [];
+    dom53b.window.confirm = (msg) => { shownJa.push(msg); return true; };
+    await login(dom53b, 'ROW', 'CHANGE-ME-ROW');
+    await settle();
+    const okJa = await dom53b.window.eval("confirmI18n_('このメッセージを削除します。よろしいですか？')");
+    check('日本語の支店では従来どおり日本語のまま表示される',
+          shownJa.length === 1 && shownJa[0] === 'このメッセージを削除します。よろしいですか？', JSON.stringify(shownJa));
+    check('日本語の支店でも戻り値はそのまま返る', okJa === true, String(okJa));
+  }
+
+  // ---------------------------------------------------------------
+  section('U54. 【不具合修正】通知メールの送信に失敗したら、消えない帯で利用者へ知らせる');
+  {
+    const ctx54 = makeServer();
+    const dom54 = await openApp(ctx54);
+    const doc54 = dom54.window.document;
+    await login(dom54, 'ROW', 'CHANGE-ME-ROW');
+    await settle();
+
+    check('最初は注意書きの帯が出ていない',
+          doc54.getElementById('notice-bar').classList.contains('hidden'));
+
+    // メール送信だけが失敗する状態にする
+    const realSend = ctx54.MailApp.sendEmail;
+    ctx54.MailApp.sendEmail = () => { throw new Error('Service invoked too many times for one day: email.'); };
+
+    // 案件を開いてメッセージだけ送信する
+    const rows54 = doc54.querySelectorAll('.res-table tbody tr, [data-open]');
+    if (rows54[0]) { rows54[0].click(); await settle(); await settle(); }
+    doc54.getElementById('msg-input').value = 'メール失敗時の確認';
+    doc54.getElementById('btn-msg-only').click();
+    await settle(); await settle(); await settle();
+
+    const bar = doc54.getElementById('notice-bar');
+    check('通知メールが送れなかったときは注意書きの帯が出る', !bar.classList.contains('hidden'));
+    check('帯には「保存は完了している」ことと理由が書かれている',
+          doc54.getElementById('notice-bar-text').textContent.includes('保存は完了') &&
+          doc54.getElementById('notice-bar-text').textContent.includes('通知メール'),
+          doc54.getElementById('notice-bar-text').textContent);
+    check('やり直しを促さない（同じメッセージが二重に保存されるのを防ぐため）',
+          doc54.getElementById('notice-bar-text').textContent.includes('やり直す必要はありません'),
+          doc54.getElementById('notice-bar-text').textContent);
+
+    // メッセージ自体は保存されている
+    const jp54 = ctx54.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    const d54 = ctx54.apiGetReservationDetail(jp54, 'R-001').detail;
+    check('画面がエラーにならず、メッセージは保存されている',
+          (d54.history || []).some(h => h.body.includes('メール失敗時の確認')),
+          JSON.stringify((d54.history || []).map(h => h.body)));
+
+    // 閉じるボタンで消せる
+    doc54.getElementById('notice-bar-close').click();
+    check('「閉じる」で帯を消せる', doc54.getElementById('notice-bar').classList.contains('hidden'));
+
+    // 送信できる状態では帯が出ない
+    ctx54.MailApp.sendEmail = realSend;
+    doc54.getElementById('msg-input').value = '正常時の確認';
+    doc54.getElementById('btn-msg-only').click();
+    await settle(); await settle(); await settle();
+    check('メールが送れたときは帯が出ない',
+          doc54.getElementById('notice-bar').classList.contains('hidden'));
+  }
+
+  // ---------------------------------------------------------------
+  section('U55. 【堅牢性】記号・引用符・タグを含む入力でも画面が壊れない（表示の乗っ取り防止）');
+  {
+    // お名前やホテル名に引用符やHTMLのタグを入れられても、
+    // 画面が壊れたり、書かれた内容がそのまま命令として実行されたりしないことを確認する。
+    const HOSTILE_QUOTE = 'Anne "Annie" O\'Brien';
+    const HOSTILE_TAG = '<script>window.__XSS_FIRED = true;</script>';
+    const HOSTILE_IMG = '<img src=x onerror="window.__XSS_FIRED=true">';
+    const HOSTILE_AMP = 'A & B < C > D';
+
+    const ctx55 = makeServer();
+    const H55 = ctx55.RESERVATION_HEADERS;
+    const row55 = new Array(H55.length).fill('');
+    const set55 = (k, v) => { const i = H55.indexOf(k); if (i !== -1) row55[i] = v; };
+    set55('支店コード', 'ROW'); set55('管理番号', 'R-055'); set55('管轄', '関東');
+    set55('新郎姓（ローマ字）', HOSTILE_QUOTE); set55('新郎名（ローマ字）', HOSTILE_TAG);
+    set55('新婦姓（ローマ字）', HOSTILE_IMG); set55('新婦名（ローマ字）', HOSTILE_AMP);
+    set55('ホテル', HOSTILE_QUOTE); set55('STS JP', 'RQ'); set55('CHG NO', 'CH-0055');
+    ctx55.__ss.getSheetByName('予約一覧').appendRow(row55);
+
+    const dom55 = await openApp(ctx55);
+    const doc55 = dom55.window.document;
+    dom55.window.__XSS_FIRED = false;
+    await login(dom55, 'KANTO', 'CHANGE-ME-KANTO');
+    await settle();
+
+    check('一覧を表示しても、書かれた内容が命令として実行されない', dom55.window.__XSS_FIRED === false);
+    check('タグの文字列は、そのまま文字として表示される',
+          doc55.body.textContent.includes('<script>window.__XSS_FIRED = true;</script>'));
+    check('注入された画像要素（onerror付き）は作られていない',
+          ![...doc55.querySelectorAll('img')].some(i => i.getAttribute('onerror')));
+
+    const target = [...doc55.querySelectorAll('tr')].filter(tr => tr.textContent.includes('CH-0055'));
+    check('一覧に対象の案件が出る', target.length > 0);
+    if (target.length) {
+      target[0].click();
+      await settle(); await settle();
+      check('詳細を開いても、書かれた内容が命令として実行されない', dom55.window.__XSS_FIRED === false);
+      const valOf = (f) => {
+        const el = doc55.querySelector(`[data-pending="${f}"]`);
+        return el ? el.value : null;
+      };
+      check('引用符を含む値が入力欄へ正確に入る（属性が途中で切れない）',
+            valOf('新郎姓（ローマ字）') === HOSTILE_QUOTE, JSON.stringify(valOf('新郎姓（ローマ字）')));
+      check('タグの文字列も入力欄へ正確に入る',
+            valOf('新郎名（ローマ字）') === HOSTILE_TAG, JSON.stringify(valOf('新郎名（ローマ字）')));
+      check('& < > を含む値も入力欄へ正確に入る',
+            valOf('新婦名（ローマ字）') === HOSTILE_AMP, JSON.stringify(valOf('新婦名（ローマ字）')));
+      check('詳細画面でも注入された画像要素は作られていない',
+            ![...doc55.querySelectorAll('img')].some(i => i.getAttribute('onerror')));
+    }
+  }
+
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error('テストが異常終了しました:', e); process.exit(1); });

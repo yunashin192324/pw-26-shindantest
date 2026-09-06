@@ -4160,5 +4160,81 @@ section('71. マーレ支店など英語専用支店対応：支店→日本方�
 }
 
 // ---------------------------------------------------------------
+section('72. 【不具合修正】通知メールの送信に失敗しても、保存済みの操作をエラーにしない');
+{
+  // 背景：メール送信は「1日の送信上限に達した」「支店マスタのメールアドレスが1文字違う」等で失敗する。
+  // 以前はデータを書き終えたあとに例外がそのまま外へ出ていたため、利用者の画面には
+  // 「保存できなかった」と見えるのに実際は保存済みで、やり直すと同じメッセージが二重に保存されていた。
+  const ctx = shopFixture();
+  const jpToken = ctx.apiLogin('KANTO', 'pw').session.token;
+  addCase(ctx, '予約一覧', {
+    '支店コード': 'VIE', '管理番号': 'VIE-601', '管轄': '関東', 'STS JP': 'RQ',
+    '新郎名（ローマ字）': 'Taro', '新婦名（ローマ字）': 'Hanako'
+  });
+
+  // メール送信だけが失敗する状態にする（送信上限に達した状況を模したもの）
+  const realSend = ctx.MailApp.sendEmail;
+  ctx.MailApp.sendEmail = () => { throw new Error('Service invoked too many times for one day: email.'); };
+
+  let err = null, res = null;
+  try { res = ctx.apiCommitChanges(jpToken, 'VIE-601', {}, 'テスト連絡'); } catch (e) { err = e.message; }
+  check('メール送信が失敗しても例外にならない（保存済みの操作をエラーにしない）', err === null, err);
+  check('保存自体は成功として返る', !!res && res.ok === true, JSON.stringify(res));
+  check('送信できなかった理由が戻り値に入る（画面で利用者へ知らせるため）',
+        !!(res && res.mailWarning), JSON.stringify(res));
+
+  const detail = ctx.apiGetReservationDetail(jpToken, 'VIE-601').detail;
+  check('メッセージはきちんと保存されている',
+        (detail.history || []).some(h => h.body.includes('テスト連絡')),
+        JSON.stringify((detail.history || []).map(h => h.body)));
+
+  // 送信できる状態に戻すと、注意書きは付かない
+  ctx.MailApp.sendEmail = realSend;
+  const ok = ctx.apiCommitChanges(jpToken, 'VIE-601', {}, '通常の連絡');
+  check('送信できたときは注意書きが付かない', !ok.mailWarning, JSON.stringify(ok));
+
+  // 店舗の新規依頼でも同じ（依頼の登録自体は成立させる）
+  ctx.MailApp.sendEmail = () => { throw new Error('Service invoked too many times for one day: email.'); };
+  const shopToken = ctx.apiLogin('SHOP1', 'sp').session.token;
+  let err2 = null, created = null;
+  try {
+    created = ctx.apiShopCreateRequest(shopToken, {
+      branchCode: 'VIE', team: '関東', groomLastName: 'A', groomName: 'B',
+      brideLastName: 'C', brideName: 'D', hope1: '2027-05-01', challengeNo: 'DUMMYCHG072'
+    });
+  } catch (e) { err2 = e.message; }
+  check('店舗の新規依頼も、メール送信の失敗で例外にならない', err2 === null, err2);
+  check('新規依頼は登録されている', !!(created && created.kanriNo), JSON.stringify(created));
+  check('新規依頼でも送信できなかった理由が返る', !!(created && created.mailWarning), JSON.stringify(created));
+  ctx.MailApp.sendEmail = realSend;
+}
+
+// ---------------------------------------------------------------
+section('73. 【堅牢性】メモ追加も他の書き込みと同じくロックを取る');
+{
+  const ctx = featureFixture();
+  const jpToken = ctx.apiLogin('KANTO', 'pw').session.token;
+  addCase(ctx, '予約一覧', {
+    '支店コード': 'VIE', '管理番号': 'VIE-701', '管轄': '関東', 'STS JP': 'RQ',
+    '新郎名（ローマ字）': 'Taro', '新婦名（ローマ字）': 'Hanako'
+  });
+  const memo = ctx.apiAddMemo(jpToken, 'VIE-701', '共有メモ（手配課）', 'ロック確認のメモ');
+  check('メモを追加できる（ロックを入れても従来どおり動く）', memo && memo.ok === true, JSON.stringify(memo));
+  const detail = ctx.apiGetReservationDetail(jpToken, 'VIE-701').detail;
+  const memos = (detail.memoLogs || []).concat(detail.memos || []);
+  check('追加したメモが保存されている',
+        JSON.stringify(detail).includes('ロック確認のメモ'), JSON.stringify(memos).slice(0, 200));
+
+  // ロックが取れない状況では、他の書き込みAPIと同じ案内が出る
+  const realLock = ctx.LockService.getScriptLock;
+  ctx.LockService.getScriptLock = () => ({ tryLock: () => false, releaseLock: () => {} });
+  let err = null;
+  try { ctx.apiAddMemo(jpToken, 'VIE-701', '共有メモ（手配課）', '同時実行のメモ'); } catch (e) { err = e.message; }
+  check('ロックが取れないときは他の書き込みと同じ案内になる',
+        err !== null && err.includes('他の処理が実行中'), String(err));
+  ctx.LockService.getScriptLock = realLock;
+}
+
+// ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
 process.exit(fail === 0 ? 0 : 1);

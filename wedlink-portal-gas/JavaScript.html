@@ -174,6 +174,46 @@
     showToast._t = setTimeout(() => t.classList.add('hidden'), 2600);
   }
 
+  // ★不具合修正：通知メールの送信に失敗したことを、消えない帯で知らせる。
+  // 保存自体は成功しているので操作はやり直させず、「相手にメールが届いていない」ことだけを伝える
+  // （やり直しを促すと、同じメッセージが二重に保存されてしまうため）。
+  function showNotice_(text) {
+    const bar = $('notice-bar');
+    if (!bar) return;
+    $('notice-bar-text').textContent = text;
+    bar.classList.remove('hidden');
+  }
+  function hideNotice_() {
+    const bar = $('notice-bar');
+    if (bar) bar.classList.add('hidden');
+  }
+  // サーバーからの応答に通知メールの失敗理由が入っていれば帯で知らせる
+  function noticeIfMailFailed_(res) {
+    if (res && res.mailWarning) {
+      showNotice_(`保存は完了しましたが、通知メールの送信に失敗しました（${res.mailWarning}）。相手にはメールが届いていないため、別の方法で連絡してください。この操作をやり直す必要はありません。`);
+    }
+  }
+
+  // ★不具合修正：ブラウザ標準の確認ダイアログ（confirm/alert）は画面のDOMの外に出るため、
+  // 英語専用支店向けの自動翻訳（DOMを監視する仕組み）が届かず、日本語のまま表示されていた。
+  // 英語表示の支店のときだけ、表示する直前に文言を翻訳してから出す。
+  async function translateForDialog_(text) {
+    if (!isEnglishBranchSession_()) return text;
+    if (i18nCache[text]) return i18nCache[text];
+    try {
+      const res = await gsRun('apiTranslateBatch', session.token, [text]);
+      const t = res && res.translations && res.translations[0];
+      if (t) { i18nCache[text] = t; return t; }
+    } catch (e) { /* 翻訳できないときは原文のまま出す（操作自体は止めない） */ }
+    return text;
+  }
+  async function confirmI18n_(text) {
+    return window.confirm(await translateForDialog_(text));
+  }
+  async function alertI18n_(text) {
+    window.alert(await translateForDialog_(text));
+  }
+
   function showView(name) {
     document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
     $('view-' + name).classList.remove('hidden');
@@ -246,6 +286,8 @@
     $('shop-new-success-top-btn').addEventListener('click', () => loadDashboard());
     $('nav-settings').addEventListener('click', openSettingsView);
     $('nav-logout').addEventListener('click', doLogout);
+    // ★不具合修正：通知メール送信失敗の帯を閉じられるようにする
+    if ($('notice-bar-close')) $('notice-bar-close').addEventListener('click', hideNotice_);
     $('detail-back').addEventListener('click', () => loadDashboard());
     $('search-submit').addEventListener('click', submitSearch);
     $('export-submit').addEventListener('click', submitExport);
@@ -282,6 +324,7 @@
 
   // ---------- ログイン ----------
   async function doLogin() {
+    hideNotice_(); // 前回の注意書きを持ち越さない
     const branchCode = $('login-branchcode').value;
     const passcode = $('login-passcode').value;
     $('login-error').classList.add('hidden');
@@ -784,9 +827,10 @@
   async function sendDeliveryReminder(kanriNo, btn) {
     btn.disabled = true;
     try {
-      await gsRun('apiCommitChanges', session.token, kanriNo, {},
+      const remindRes = await gsRun('apiCommitChanges', session.token, kanriNo, {},
         '撮影データ（DriveフォルダURL）のご登録をお願いします。ポータルの「ドライブ」タブから登録できます。');
       showToast(`${kanriNo} へ督促を送信しました`);
+      noticeIfMailFailed_(remindRes);
       btn.textContent = '督促済み';
     } catch (e) {
       btn.disabled = false;
@@ -1277,8 +1321,9 @@
     // と同じ経路でその場で送信する）
     $('shop-push-btn').addEventListener('click', async () => {
       try {
-        await gsRun('apiCommitChanges', session.token, currentKanri, {}, SHOP_PUSH_MESSAGE_TEXT, currentMsgRecipient());
+        const pushRes = await gsRun('apiCommitChanges', session.token, currentKanri, {}, SHOP_PUSH_MESSAGE_TEXT, currentMsgRecipient());
         showToast('現地支店へ急ぎの回答を依頼しました');
+        noticeIfMailFailed_(pushRes);
         openDetail(currentKanri, true);
       } catch (e) { handleAuthError(e); }
     });
@@ -2364,7 +2409,7 @@
       hopeBulkApplyBtn.addEventListener('click', () => {
         const value = $('hope-bulk-value').value;
         const checked = Array.from(c.querySelectorAll('.hope-bulk-check:checked'));
-        if (!checked.length) { alert('希望日を1つ以上選択してください。'); return; }
+        if (!checked.length) { alertI18n_('希望日を1つ以上選択してください。'); return; }
         checked.forEach(cb => {
           const field = cb.dataset.hopeBulkField;
           pendingChanges[field] = value;
@@ -2459,7 +2504,7 @@
       if (canDelete) {
         el.querySelectorAll('[data-shop-upload-delete]').forEach(btn => {
           btn.addEventListener('click', async () => {
-            if (!confirm('このファイルを削除します。よろしいですか？')) return;
+            if (!await confirmI18n_('このファイルを削除します。よろしいですか？')) return;
             try {
               await gsRun('apiShopDeleteUploadedDocument', session.token, currentKanri, btn.dataset.shopUploadDelete);
               showToast('削除しました');
@@ -2480,12 +2525,13 @@
   // 希望日の自動UC・案件全体のSTS昇格は全てapplyHopeStatusCascade_（サーバー側の自動連動）が行う。
   async function answerWithHopeDate(hopeField, iso, label) {
     const shown = iso.replace(/-/g, '/');
-    if (!confirm(`${label}（${shown}）で確定し、日本側へ通知します。よろしいですか？`)) return;
+    if (!await confirmI18n_(`${label}（${shown}）で確定し、日本側へ通知します。よろしいですか？`)) return;
     try {
-      await gsRun('apiCommitChanges', session.token, currentKanri,
+      const answerRes = await gsRun('apiCommitChanges', session.token, currentKanri,
         { [hopeField]: 'OK' },
         `${label}（${shown}）で確定します。`);
       pendingChanges = {};
+      noticeIfMailFailed_(answerRes);
       showToast(`${shown} で確定し、日本側へ通知しました`);
       openDetail(currentKanri);
     } catch (e) { handleAuthError(e); }
@@ -2632,9 +2678,10 @@
     const btn = evt && evt.currentTarget;
     await withButtonBusy_(btn, '送信中...', async () => {
       try {
-        await gsRun('apiCommitChanges', session.token, currentKanri, {}, msg, currentMsgRecipient());
+        const msgRes = await gsRun('apiCommitChanges', session.token, currentKanri, {}, msg, currentMsgRecipient());
         // ★機能追加：店舗ロールには送信後「回答までお待ちください」の案内を添える
         showToast(session.role === 'SHOP' ? 'メッセージを送信しました。ご回答まで今しばらくお待ちください。' : 'メッセージを送信しました');
+        noticeIfMailFailed_(msgRes);
         $('msg-input').value = '';
         openDetail(currentKanri);
       } catch (e) { handleAuthError(e); }
@@ -2656,6 +2703,7 @@
           // ★機能追加：店舗ロールには送信後「回答までお待ちください」の案内を添える
           showToast(session.role === 'SHOP' ? '変更を決定し、相手へ通知しました。ご回答まで今しばらくお待ちください。' : '変更を決定し、相手へ通知しました');
         }
+        noticeIfMailFailed_(res);
         openDetail(currentKanri, true); // 今開いているタブのまま留まる
       } catch (e) { handleAuthError(e); }
     });
@@ -2695,7 +2743,7 @@
     } catch (e) { handleAuthError(e); }
   }
   async function clearDeliveryDataUrl() {
-    if (!confirm('撮影データ納品URLを取消します。よろしいですか？')) return;
+    if (!await confirmI18n_('撮影データ納品URLを取消します。よろしいですか？')) return;
     try {
       await gsRun('apiSetDeliveryDataUrl', session.token, currentKanri, '');
       showToast('撮影データ納品URLを取消しました');
@@ -2735,7 +2783,7 @@
       if (canDelete) {
         el.querySelectorAll('[data-delivery-data-delete]').forEach(btn => {
           btn.addEventListener('click', async () => {
-            if (!confirm('このファイルを削除します。よろしいですか？')) return;
+            if (!await confirmI18n_('このファイルを削除します。よろしいですか？')) return;
             try {
               await gsRun('apiBranchDeleteDeliveryData', session.token, currentKanri, btn.dataset.deliveryDataDelete);
               showToast('削除しました');
@@ -2776,7 +2824,7 @@
   // ★要件：相手（宛先）がまだ見ていない、自分が送ったメッセージを削除できるようにする
   // （相手が既読チェックを付けた後は、サーバー側（apiDeleteHistoryMessage）が拒否する）
   async function deleteHistoryMessage(id) {
-    if (!confirm('このメッセージを削除します。よろしいですか？')) return;
+    if (!await confirmI18n_('このメッセージを削除します。よろしいですか？')) return;
     try {
       await gsRun('apiDeleteHistoryMessage', session.token, id);
       showToast('削除しました');
@@ -3106,6 +3154,7 @@
         : `予約番号 ${escapeHtml(res.kanriNo)}`;
       $('shop-new-success-text').innerHTML = `${escapeHtml(kindLabel)}をしました。<br>回答までしばらくお待ちください。<br>${kanriLine}`;
       $('shop-new-success').classList.remove('hidden');
+      noticeIfMailFailed_(res);
       if (typeof $('shop-new-success').scrollIntoView === 'function') {
         $('shop-new-success').scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
