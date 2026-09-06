@@ -4361,5 +4361,66 @@ section('75. 【機能追加】翻訳の用語集（業務用語の訳を固定�
 }
 
 // ---------------------------------------------------------------
+section('76. 【機能追加】通知メールの送信失敗を管理者へまとめて知らせる・送信上限の事前警告');
+{
+  const ctx = featureFixture();
+  const jpToken = ctx.apiLogin('KANTO', 'pw').session.token;
+  addCase(ctx, '予約一覧', {
+    '支店コード': 'VIE', '管理番号': 'VIE-801', '管轄': '関東', 'STS JP': 'RQ',
+    '新郎名（ローマ字）': 'Taro', '新婦名（ローマ字）': 'Hanako'
+  });
+
+  // メール送信だけを失敗させ、通知を伴う操作を2回行う
+  const realSend = ctx.MailApp.sendEmail;
+  ctx.MailApp.sendEmail = () => { throw new Error('Service invoked too many times for one day: email.'); };
+  ctx.apiCommitChanges(jpToken, 'VIE-801', {}, '1回目の連絡');
+  ctx.apiCommitChanges(jpToken, 'VIE-801', {}, '2回目の連絡');
+  ctx.MailApp.sendEmail = realSend;
+
+  const failSheet = ctx.__ss.getSheetByName('通知メール失敗履歴');
+  check('送信失敗がシートに記録される', !!failSheet && failSheet.getLastRow() === 3, failSheet && failSheet.getLastRow());
+  const failRows = failSheet.getRange(2, 1, 2, 5).getValues();
+  check('記録に管理番号が入る', failRows.every(r => String(r[1]) === 'VIE-801'), JSON.stringify(failRows));
+  check('記録に理由が入る', failRows.every(r => String(r[3]).includes('too many times')), JSON.stringify(failRows));
+  check('最初は「管理者へ通知済み」が立っていない', failRows.every(r => r[4] !== true), JSON.stringify(failRows));
+
+  // 日次の状態確認を実行すると、管理者へ1通にまとめて届く
+  ctx.__mail.length = 0;
+  ctx.checkMailHealth();
+  const adminMails = ctx.__mail.filter(m => String(m.subj).includes('通知メール送信失敗'));
+  check('管理者へ1通にまとめて届く（案件ごとに送らない）', adminMails.length === 1,
+        JSON.stringify(ctx.__mail.map(m => m.subj)));
+  check('本文に失敗した案件が並ぶ', adminMails[0] && adminMails[0].body.includes('VIE-801'), adminMails[0] && adminMails[0].body);
+  check('本文で「データは保存されている」ことを明記している',
+        adminMails[0] && adminMails[0].body.includes('データは保存されています'), adminMails[0] && adminMails[0].body);
+
+  const afterRows = failSheet.getRange(2, 1, 2, 5).getValues();
+  check('通知した記録には「通知済み」が付く', afterRows.every(r => r[4] === true), JSON.stringify(afterRows));
+
+  // 2回目の実行では同じ内容を再通知しない
+  ctx.__mail.length = 0;
+  ctx.checkMailHealth();
+  check('同じ失敗を毎日繰り返し通知しない',
+        ctx.__mail.filter(m => String(m.subj).includes('通知メール送信失敗')).length === 0,
+        JSON.stringify(ctx.__mail.map(m => m.subj)));
+
+  // 送信の残り回数が少なくなったら、上限に達する前に知らせる
+  ctx.__mail.length = 0;
+  ctx.__mailQuota = 10;
+  ctx.checkMailHealth();
+  const quotaMails = ctx.__mail.filter(m => String(m.subj).includes('残り回数'));
+  check('残り送信回数が少ないと事前に警告が届く', quotaMails.length === 1,
+        JSON.stringify(ctx.__mail.map(m => m.subj)));
+  check('警告に残り回数が入っている', quotaMails[0] && quotaMails[0].body.includes('10 通'), quotaMails[0] && quotaMails[0].body);
+
+  ctx.__mail.length = 0;
+  ctx.__mailQuota = 1500;
+  ctx.checkMailHealth();
+  check('残り回数に余裕があるときは警告しない',
+        ctx.__mail.filter(m => String(m.subj).includes('残り回数')).length === 0,
+        JSON.stringify(ctx.__mail.map(m => m.subj)));
+}
+
+// ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
 process.exit(fail === 0 ? 0 : 1);

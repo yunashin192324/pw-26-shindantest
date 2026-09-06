@@ -164,7 +164,7 @@ function makeContext() {
     };
   }
   const ctx = {
-    __ss: ss, __mail: sentMail, __translateCalls: [], console,
+    __ss: ss, __mail: sentMail, __translateCalls: [], __mailQuota: 1500, console,
     SpreadsheetApp: { openById: () => ss, getUi: () => ({ alert: () => {} }) },
     Utilities: {
       getUuid: () => `uuid-${++uuid}`,
@@ -246,7 +246,11 @@ function makeContext() {
     }) },
     // 実際のMailAppは sendEmail(to, subject, body) と sendEmail({to, subject, body, replyTo, ...}) の
     // どちらの呼び出し方も受け付けるため、モックも両方を同じ形に正規化して記録する
-    MailApp: { sendEmail: (...args) => {
+    MailApp: {
+      // ★機能追加（項目93）：メール送信の残り回数。テストから自由に差し替えられるよう
+      // 既定値は十分大きい値にしておく（警告が出ない状態）。
+      getRemainingDailyQuota: () => ctx.__mailQuota,
+      sendEmail: (...args) => {
       if (args.length === 1 && args[0] && typeof args[0] === 'object') {
         const m = args[0];
         sentMail.push({ to: m.to, subj: m.subject, body: m.body, replyTo: m.replyTo });

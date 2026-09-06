@@ -47,6 +47,9 @@ const KANRI_LEDGER_SHEET_NAME = '採番管理';
 // ★機能追加：翻訳の用語集。機械翻訳は同じ言葉を毎回同じ訳にするとは限らないため、
 // 業務用語（同意書・手配課・撮影日FIX など）は決まった訳に固定する。
 const GLOSSARY_SHEET_NAME = '用語集';
+// ★機能追加：通知メールの送信に失敗した記録。管理者が後から気づけるようにする
+// （利用者の画面には項目89で知らせているが、管理者は実行ログを見ないと分からなかった）。
+const MAIL_FAILURE_SHEET_NAME = '通知メール失敗履歴';
 
 // --- システムエラー通知先 ---
 const SYSTEM_ALERT_EMAIL = 'it-planning@his-world.com';
@@ -660,6 +663,11 @@ const KANRI_LEDGER_HEADERS = ['支店コード', '最終採番番号', '最終�
 // ★機能追加：用語集の列。「日本語」＝原文、「英訳」＝必ずこう訳す、という対応表。
 const GLOSSARY_HEADERS = ['日本語', '英訳', '有効'];
 
+// ★機能追加：通知メール失敗履歴の列
+const MAIL_FAILURE_HEADERS = ['日時', '管理番号', '種類', '理由', '管理者へ通知済み'];
+// メール送信の残り回数がこれを下回ったら、上限に達する前に管理者へ知らせる
+const MAIL_QUOTA_WARN_THRESHOLD = 50;
+
 // =====================================================
 // ⓪ Webアプリのエントリポイント
 // =====================================================
@@ -700,6 +708,7 @@ function setupPortal() {
   ensureSheetWithHeaders_(ss, ARRANGEMENT_LOG_SHEET_NAME, ARRANGEMENT_LOG_HEADERS);
   ensureSheetWithHeaders_(ss, KANRI_LEDGER_SHEET_NAME, KANRI_LEDGER_HEADERS);
   ensureSheetWithHeaders_(ss, GLOSSARY_SHEET_NAME, GLOSSARY_HEADERS);
+  ensureSheetWithHeaders_(ss, MAIL_FAILURE_SHEET_NAME, MAIL_FAILURE_HEADERS);
 
   const bm = ss.getSheetByName(BRANCH_MASTER_SHEET_NAME);
   if (bm.getLastRow() < 2) {
@@ -4484,8 +4493,11 @@ function sendDirectionalMail_(headers, rowData, direction, session, message, kin
     return '';
   } catch (e) {
     const reason = errorMessage_(e);
+    const kanri = rowData[headers.indexOf(COL_KANRI_NO)] || '';
     // 記録は残す（Apps Scriptの実行ログから後で原因を追えるようにするため）
-    console.error(`[通知メール送信失敗] ${kind || ''} ${rowData[headers.indexOf(COL_KANRI_NO)] || ''}: ${reason}`);
+    console.error(`[通知メール送信失敗] ${kind || ''} ${kanri}: ${reason}`);
+    // ★機能追加：管理者が後からまとめて気づけるよう、シートにも残す（日次で集約通知する）
+    logMailFailure_(kanri, kind || '', reason);
     return reason;
   }
 }
@@ -4796,6 +4808,80 @@ function errorMessage_(e) {
 }
 
 // システム管理者へ障害を通知する。通知自体の失敗で定期処理を落とさないよう内側でも捕捉する。
+// ★機能追加：通知メールの送信失敗をシートへ記録する。
+// 記録そのものに失敗しても本来の処理は止めない（あくまで補助的な記録のため）。
+function logMailFailure_(kanriNo, kind, reason) {
+  try {
+    const sheet = ensureSheetWithHeaders_(getSpreadsheet_(), MAIL_FAILURE_SHEET_NAME, MAIL_FAILURE_HEADERS);
+    sheet.appendRow([new Date(), String(kanriNo || ''), String(kind || ''), String(reason || ''), false]);
+  } catch (e) {
+    console.error(`[通知メール失敗の記録に失敗] ${errorMessage_(e)}`);
+  }
+}
+
+// ★機能追加：日次で、①未通知の送信失敗をまとめて管理者へ知らせる
+// ②その日のメール送信の残り回数が少なくなっていたら、上限に達する前に知らせる。
+// 上限に達してから気づくと、その日の通知が全部届かないまま業務が進んでしまうため。
+function checkMailHealth() { return runTrigger_('checkMailHealth', checkMailHealthCore_); }
+
+function checkMailHealthCore_(errors) {
+  const ss = getSpreadsheet_();
+  const sheet = ensureSheetWithHeaders_(ss, MAIL_FAILURE_SHEET_NAME, MAIL_FAILURE_HEADERS);
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+  const notifiedIdx = headers.indexOf('管理者へ通知済み');
+  const pending = [];
+  if (sheet.getLastRow() >= 2) {
+    const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
+    values.forEach((row, i) => {
+      if (isActiveFlag_(row[notifiedIdx])) return;
+      pending.push({ rowIndex: i + 2, when: row[headers.indexOf('日時')], kanri: row[headers.indexOf('管理番号')],
+                     kind: row[headers.indexOf('種類')], reason: row[headers.indexOf('理由')] });
+    });
+  }
+
+  // ① 未通知の失敗をまとめて1通で知らせる（案件ごとに送ると受信箱が埋まるため）
+  if (pending.length && SYSTEM_ALERT_EMAIL) {
+    const lines = pending.slice(0, 50).map((p, i) => {
+      const when = p.when instanceof Date ? Utilities.formatDate(p.when, 'Asia/Tokyo', 'MM/dd HH:mm') : String(p.when || '');
+      return `${i + 1}. ${when} ${p.kanri || '(案件不明)'} [${p.kind || ''}] ${p.reason}`;
+    }).join('\n');
+    const rest = pending.length > 50 ? `\n…ほか ${pending.length - 50} 件` : '';
+    try {
+      MailApp.sendEmail(
+        SYSTEM_ALERT_EMAIL,
+        `[WEDLINK][通知メール送信失敗] ${pending.length}件`,
+        `通知メールの送信に失敗した記録があります。\n` +
+        `※操作した担当者の画面には「保存は完了・通知は未送信」と表示済みです。データは保存されています。\n` +
+        `※相手にはメールが届いていないため、必要なら別の方法で連絡してください。\n\n` +
+        `--- 内容 ---\n${lines}${rest}\n\n` +
+        `よくある原因：1日のメール送信上限に達した／支店マスタの通知先メールの記載誤り。\n` +
+        `スプレッドシートの「${MAIL_FAILURE_SHEET_NAME}」シートで全件を確認できます。`
+      );
+      pending.forEach(p => sheet.getRange(p.rowIndex, notifiedIdx + 1).setValue(true));
+      console.log(`[checkMailHealth] 送信失敗 ${pending.length} 件を通知`);
+    } catch (e) {
+      errors.push({ where: '送信失敗のまとめ通知', message: errorMessage_(e), stack: e && e.stack ? String(e.stack) : '' });
+    }
+  }
+
+  // ② メール送信の残り回数が少なければ、上限に達する前に知らせる
+  try {
+    const remaining = MailApp.getRemainingDailyQuota();
+    if (typeof remaining === 'number' && remaining <= MAIL_QUOTA_WARN_THRESHOLD && SYSTEM_ALERT_EMAIL) {
+      MailApp.sendEmail(
+        SYSTEM_ALERT_EMAIL,
+        `[WEDLINK][メール送信の残り回数が少なくなっています] 残り${remaining}通`,
+        `本日のメール送信の残り回数が ${remaining} 通になりました（警告する基準：${MAIL_QUOTA_WARN_THRESHOLD}通以下）。\n` +
+        `上限に達すると、その時点から通知メールが届かなくなります（データの保存自体は続きます）。\n` +
+        `急ぎの連絡は別の方法で行ってください。回数は日付が変わると回復します。`
+      );
+      console.log(`[checkMailHealth] 残り送信回数 ${remaining} 通を通知`);
+    }
+  } catch (e) {
+    errors.push({ where: 'メール送信の残り回数の確認', message: errorMessage_(e), stack: e && e.stack ? String(e.stack) : '' });
+  }
+}
+
 function notifySystemError_(name, errors, elapsedMs) {
   try {
     if (!SYSTEM_ALERT_EMAIL) return;
@@ -5331,7 +5417,7 @@ function parseDateFromInput_(val) {
 // ★不具合修正：以前は無条件に全トリガーを削除していたため、setupConsentFormTriggerで
 // 設定した『同意書』フォームの自動反映トリガーも、setupTriggersを再実行すると消えてしまっていた。
 // このスクリプトが管理する日次トリガーだけを削除・再作成し、他のトリガーには触れないようにする。
-const MANAGED_DAILY_TRIGGERS = ['archivePastReservations', 'checkAlerts', 'checkShopAlerts', 'checkDeliveryAlerts', 'checkUnansweredAlerts'];
+const MANAGED_DAILY_TRIGGERS = ['archivePastReservations', 'checkAlerts', 'checkShopAlerts', 'checkDeliveryAlerts', 'checkUnansweredAlerts', 'checkMailHealth'];
 function setupTriggers() {
   ScriptApp.getProjectTriggers().forEach(t => {
     if (MANAGED_DAILY_TRIGGERS.includes(t.getHandlerFunction())) ScriptApp.deleteTrigger(t);
@@ -5341,10 +5427,12 @@ function setupTriggers() {
   ScriptApp.newTrigger('checkShopAlerts').timeBased().everyDays(1).atHour(8).create();
   ScriptApp.newTrigger('checkDeliveryAlerts').timeBased().everyDays(1).atHour(8).create();
   ScriptApp.newTrigger('checkUnansweredAlerts').timeBased().everyDays(1).atHour(9).create();
+  // ★機能追加：通知メールの送信失敗のまとめ通知・送信上限の事前警告（項目93）
+  ScriptApp.newTrigger('checkMailHealth').timeBased().everyDays(1).atHour(18).create();
   // ★不具合修正：setupTriggers()もsetupPortal()と同様エディタから直接手動実行する運用のため、
   // UIコンテキストが無くgetUi()が例外になっていた。実行ログにも出しつつ、alertはエラーを
   // 無視する（スプレッドシートのカスタムメニュー経由で呼ばれた場合はそのまま表示される）。
-  alertOrLog_('日次トリガー（アーカイブ・撮影前アラート・撮影40日前(店舗発案件)アラート・納品期限アラート・未返信リマインド）を再設定しました。\n（同意書フォームのトリガーを設定済みの場合はそのまま残ります）');
+  alertOrLog_('日次トリガー（アーカイブ・撮影前アラート・撮影40日前(店舗発案件)アラート・納品期限アラート・未返信リマインド・通知メールの状態確認）を再設定しました。\n（同意書フォームのトリガーを設定済みの場合はそのまま残ります）');
 }
 
 // setupPortal/setupTriggers/setupConsentFormTrigger/setupSurveyFormTriggerのような「初回のみ
