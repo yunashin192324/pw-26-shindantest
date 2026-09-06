@@ -4236,5 +4236,70 @@ section('73. 【堅牢性】メモ追加も他の書き込みと同じくロッ�
 }
 
 // ---------------------------------------------------------------
+section('74. 管理番号を二度と再利用しない（採番台帳）');
+{
+  // 背景：以前は予約一覧・過去一覧に残っている番号の最大値だけを見て採番していたため、
+  // キャンセルになった案件の行を人がスプレッドシートから消すと最大値が下がり、
+  // 次の新規案件へ同じ管理番号が振られてしまう状態だった。過去のメール・PDF・請求書に
+  // 書かれた番号が、別のお客様の案件を指すことになるため、番号は戻らない作りにする。
+  const ctx = shopFixture();
+  const shopToken = ctx.apiLogin('SHOP1', 'sp').session.token;
+
+  const c1 = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'VIE', team: '関東', groomLastName: 'A', groomName: 'B',
+    brideLastName: 'C', brideName: 'D', hope1: '2027-06-01', challengeNo: 'DUMMYCHG074'
+  });
+  const c2 = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'VIE', team: '関東', groomLastName: 'E', groomName: 'F',
+    brideLastName: 'G', brideName: 'H', hope1: '2027-06-02', challengeNo: 'DUMMYCHG075'
+  });
+  check('1件目の管理番号が採番される', /-001$/.test(c1.kanriNo), c1.kanriNo);
+  check('2件目は次の番号になる', /-002$/.test(c2.kanriNo), c2.kanriNo);
+
+  // 採番台帳に記録が残っている
+  const ledger = ctx.__ss.getSheetByName('採番管理');
+  check('採番台帳シートが作られている', !!ledger);
+  const ledgerRows = ledger.getRange(2, 1, Math.max(ledger.getLastRow() - 1, 1), 2).getValues();
+  const vieRow = ledgerRows.find(r => String(r[0]).toUpperCase() === 'VIE');
+  check('採番台帳にその支店の最終採番番号が記録される', !!vieRow && Number(vieRow[1]) === 2,
+        JSON.stringify(ledgerRows));
+
+  // 2件目をキャンセルし、その行をスプレッドシートから人が消した状況を作る
+  const sheet = ctx.__ss.getSheetByName('予約一覧');
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const kanriIdx = headers.indexOf('管理番号');
+  const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
+  for (let i = rows.length - 1; i >= 0; i--) {
+    if (String(rows[i][kanriIdx]) === c2.kanriNo) sheet.deleteRow(i + 2);
+  }
+  const afterDelete = ctx.apiGetDashboard(ctx.apiLogin('KANTO', 'pw').session.token, {});
+  check('消した案件は一覧から消えている',
+        !(afterDelete.reservations || []).some(r => r.kanriNo === c2.kanriNo),
+        JSON.stringify((afterDelete.reservations || []).map(r => r.kanriNo)));
+
+  // その状態で次の新規依頼を作る
+  const c3 = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'VIE', team: '関東', groomLastName: 'I', groomName: 'J',
+    brideLastName: 'K', brideName: 'L', hope1: '2027-06-03', challengeNo: 'DUMMYCHG076'
+  });
+  check('【不具合修正】消した案件の番号は再利用されない',
+        c3.kanriNo !== c2.kanriNo, `消した番号=${c2.kanriNo} 新しい番号=${c3.kanriNo}`);
+  check('番号は続きから振られる（-003）', /-003$/.test(c3.kanriNo), c3.kanriNo);
+
+  // 過去一覧へ移動した案件の番号も従来どおり再利用しない（回帰確認）
+  const archive = ctx.__ss.getSheetByName('過去一覧');
+  const archHeaders = archive.getRange(1, 1, 1, archive.getLastColumn()).getValues()[0];
+  const archRow = new Array(archHeaders.length).fill('');
+  archRow[archHeaders.indexOf('支店コード')] = 'VIE';
+  archRow[archHeaders.indexOf('管理番号')] = 'VIE-010';
+  archive.appendRow(archRow);
+  const c4 = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'VIE', team: '関東', groomLastName: 'M', groomName: 'N',
+    brideLastName: 'O', brideName: 'P', hope1: '2027-06-04', challengeNo: 'DUMMYCHG077'
+  });
+  check('過去一覧にある番号より後ろから採番される', /-011$/.test(c4.kanriNo), c4.kanriNo);
+}
+
+// ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
 process.exit(fail === 0 ? 0 : 1);

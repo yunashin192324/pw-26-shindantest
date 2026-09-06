@@ -41,6 +41,9 @@ const MEMO_LOG_SHEET_NAME = 'メモ履歴';
 // ★機能追加：カメラマン・ヘアメイク等の現地スタッフ手配リクエストを送った履歴
 // （機能：現地スタッフ手配メール）
 const ARRANGEMENT_LOG_SHEET_NAME = '手配履歴';
+// ★機能追加：管理番号の採番台帳。支店ごとに「これまでに発行した最大の番号」を記録し、
+// 予約一覧・過去一覧から行が消えても番号を貼り直さない（＝二度と同じ番号を再利用しない）ため。
+const KANRI_LEDGER_SHEET_NAME = '採番管理';
 
 // --- システムエラー通知先 ---
 const SYSTEM_ALERT_EMAIL = 'it-planning@his-world.com';
@@ -648,6 +651,9 @@ const ARRANGEMENT_LOG_HEADERS = [
   AL_COL_KANRI, AL_COL_CATEGORY, AL_COL_TO_NAME, AL_COL_TO_EMAIL, AL_COL_SUBJECT, AL_COL_BODY, AL_COL_WHO, AL_COL_WHEN
 ];
 
+// ★機能追加：管理番号の採番台帳（KANRI_LEDGER_SHEET_NAME）の列
+const KANRI_LEDGER_HEADERS = ['支店コード', '最終採番番号', '最終更新日時'];
+
 // =====================================================
 // ⓪ Webアプリのエントリポイント
 // =====================================================
@@ -686,6 +692,7 @@ function setupPortal() {
   ensureSheetWithHeaders_(ss, STATUS_LOG_SHEET_NAME, STATUS_LOG_HEADERS);
   ensureSheetWithHeaders_(ss, MEMO_LOG_SHEET_NAME, MEMO_LOG_HEADERS);
   ensureSheetWithHeaders_(ss, ARRANGEMENT_LOG_SHEET_NAME, ARRANGEMENT_LOG_HEADERS);
+  ensureSheetWithHeaders_(ss, KANRI_LEDGER_SHEET_NAME, KANRI_LEDGER_HEADERS);
 
   const bm = ss.getSheetByName(BRANCH_MASTER_SHEET_NAME);
   if (bm.getLastRow() < 2) {
@@ -3914,7 +3921,48 @@ function nextKanriNo_(branchCode) {
       if (m) max = Math.max(max, parseInt(m[1], 10));
     });
   });
-  return `${prefix}-${String(max + 1).padStart(3, '0')}`;
+  // ★機能追加：管理番号を絶対に再利用しないための採番台帳。
+  // 予約一覧・過去一覧を数えるだけだと、キャンセルになった案件の行を人が消したときに
+  // 最大値が下がり、次の新規案件へ同じ番号が振られてしまう（過去のメール・PDF・請求書に
+  // 書かれた番号が、別のお客様の案件を指すことになる）。
+  // 台帳に「これまで発行した最大の番号」を残し、行が消えても番号が戻らないようにする。
+  const issued = Math.max(max, readKanriLedger_(branchCode)) + 1;
+  writeKanriLedger_(branchCode, issued);
+  return `${prefix}-${String(issued).padStart(3, '0')}`;
+}
+
+// 採番台帳から、その支店でこれまでに発行した最大の番号を読む（無ければ0）
+function readKanriLedger_(branchCode) {
+  const sheet = ensureSheetWithHeaders_(getSpreadsheet_(), KANRI_LEDGER_SHEET_NAME, KANRI_LEDGER_HEADERS);
+  if (sheet.getLastRow() < 2) return 0;
+  const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues();
+  const code = String(branchCode || '').trim().toUpperCase();
+  for (let i = 0; i < values.length; i++) {
+    if (String(values[i][0] || '').trim().toUpperCase() !== code) continue;
+    const n = parseInt(String(values[i][1] || '0').replace(/[^0-9]/g, ''), 10);
+    return isNaN(n) ? 0 : n;
+  }
+  return 0;
+}
+
+// 採番台帳へ、その支店で発行した番号を記録する（既存の記録より小さい値では上書きしない）
+function writeKanriLedger_(branchCode, issuedNumber) {
+  const sheet = ensureSheetWithHeaders_(getSpreadsheet_(), KANRI_LEDGER_SHEET_NAME, KANRI_LEDGER_HEADERS);
+  const code = String(branchCode || '').trim().toUpperCase();
+  const lastRow = sheet.getLastRow();
+  if (lastRow >= 2) {
+    const values = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+    for (let i = 0; i < values.length; i++) {
+      if (String(values[i][0] || '').trim().toUpperCase() !== code) continue;
+      const current = parseInt(String(values[i][1] || '0').replace(/[^0-9]/g, ''), 10) || 0;
+      if (issuedNumber > current) {
+        sheet.getRange(i + 2, 2).setValue(issuedNumber);
+        sheet.getRange(i + 2, 3).setValue(new Date());
+      }
+      return;
+    }
+  }
+  sheet.appendRow([code, issuedNumber, new Date()]);
 }
 
 function getBranchPrefix_(branchCode) {
