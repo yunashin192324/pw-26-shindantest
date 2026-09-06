@@ -3196,7 +3196,9 @@
     { key: 'sale', label: 'セール', perBranch: true, list: 'apiListSales', save: 'apiSaveSaleItem', extra: 'sale' },
     { key: 'phrase', label: '定型文', perBranch: true, list: 'apiListPhrasesAdmin', save: 'apiSavePhraseItem', extra: 'phrase' },
     { key: 'costume', label: '衣装会社（全社共通）', perBranch: false, jpOnly: true, list: 'apiListCostumeCompanies', save: 'apiSaveCostumeCompanyItem' },
-    { key: 'branch', label: '支店・手配課・店舗', perBranch: false, jpOnly: true, list: 'apiListBranches', save: 'apiSaveBranch' }
+    { key: 'branch', label: '支店・手配課・店舗', perBranch: false, jpOnly: true, list: 'apiListBranches', save: 'apiSaveBranch' },
+    // ★機能追加：翻訳の用語集。英語表示の支店へ出す訳を、業務用語だけ決まった訳に固定する
+    { key: 'glossary', label: '翻訳の用語集（英語支店向け）', perBranch: false, jpOnly: true, list: 'apiListGlossary', save: 'apiSaveGlossaryItem', extra: 'glossary' }
   ];
   let mastersType = 'plan';
   let mastersBranchCode = '';
@@ -3263,15 +3265,19 @@
     if (def.extra === 'phrase') {
       cells += `<td><input data-m-field="body" data-m-row="${i}" value="${escapeAttr(row.body || '')}" style="width:100%;" placeholder="本文"></td>`;
     }
+    if (def.extra === 'glossary') {
+      cells += `<td><input data-m-field="en" data-m-row="${i}" value="${escapeAttr(row.en || '')}" style="width:100%;" placeholder="必ずこう訳す英語"></td>`;
+    }
     return cells;
   }
 
   function masterHeadCells_(def) {
     if (def.key === 'branch') return ['支店コード', '名称', 'ロール', '通知先メール'];
-    const head = ['名称'];
+    const head = [def.extra === 'glossary' ? '日本語' : '名称'];
     if (def.extra === 'plan') head.push('撮影場所の入力方式', '撮影場所の候補', '納品期限日数');
     if (def.extra === 'sale') head.push('対象プラン');
     if (def.extra === 'phrase') head.push('本文');
+    if (def.extra === 'glossary') head.push('英訳（この訳に固定する）');
     return head;
   }
 
@@ -3302,9 +3308,10 @@
       <div class="section-card">
         <h3>新しく追加する</h3>
         <div class="detail-grid">
-          <div class="field-block"><label>名称</label><input id="masters-new-name" placeholder="例）プレミアムプラン"></div>
+          <div class="field-block"><label>${def.extra === 'glossary' ? '日本語' : '名称'}</label><input id="masters-new-name" placeholder="${def.extra === 'glossary' ? '例）同意書' : '例）プレミアムプラン'}"></div>
           ${def.extra === 'phrase' ? `<div class="field-block" style="grid-column:1/-1;"><label>本文</label><input id="masters-new-body" placeholder="定型文の本文"></div>` : ''}
           ${def.extra === 'sale' ? `<div class="field-block"><label>対象プラン（空欄なら全プラン共通）</label><input id="masters-new-target"></div>` : ''}
+          ${def.extra === 'glossary' ? `<div class="field-block"><label>英訳（この訳に固定する）</label><input id="masters-new-en" placeholder="例）Consent Form"></div>` : ''}
         </div>
         <button type="button" class="primary-btn" id="masters-add">この内容で追加する</button>
       </div>`}`;
@@ -3347,6 +3354,8 @@
         } else if (def.extra === 'phrase') {
           await gsRun('apiSavePhraseItem', session.token, row.branchCode || mastersBranchCode, name, row.name, active,
             masterInputValue_(i, 'body'));
+        } else if (def.extra === 'glossary') {
+          await gsRun('apiSaveGlossaryItem', session.token, name, row.name, active, masterInputValue_(i, 'en'));
         } else if (def.perBranch) {
           await gsRun(def.save, session.token, mastersBranchCode, name, row.name, active);
         } else {
@@ -3374,6 +3383,8 @@
           await gsRun('apiSaveSaleItem', session.token, mastersBranchCode, name, '', true, target);
         } else if (def.extra === 'phrase') {
           await gsRun('apiSavePhraseItem', session.token, mastersBranchCode, name, '', true, body);
+        } else if (def.extra === 'glossary') {
+          await gsRun('apiSaveGlossaryItem', session.token, name, '', true, ($('masters-new-en') ? $('masters-new-en').value.trim() : ''));
         } else if (def.perBranch) {
           await gsRun(def.save, session.token, mastersBranchCode, name, '', true);
         } else {

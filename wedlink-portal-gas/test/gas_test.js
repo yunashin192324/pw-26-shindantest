@@ -4301,5 +4301,65 @@ section('74. 管理番号を二度と再利用しない（採番台帳）');
 }
 
 // ---------------------------------------------------------------
+section('75. 【機能追加】翻訳の用語集（業務用語の訳を固定する）');
+{
+  // 機械翻訳は同じ言葉を毎回同じ訳にするとは限らない。「同意書」「手配課」のような業務用語が
+  // ぶれると英語専用支店の担当者が混乱するため、用語集にある言葉は必ず決まった訳を使う。
+  const ctx = featureFixture();
+  const glossary = ctx.ensureSheetWithHeaders_(ctx.__ss, '用語集', ['日本語', '英訳', '有効']);
+  glossary.appendRow(['同意書', 'Consent Form', true]);
+  glossary.appendRow(['手配課', 'HQ Booking Desk', true]);
+  glossary.appendRow(['使わない用語', 'Should Not Appear', false]); // 無効な行は使わない
+
+  // ① 文字列そのものが用語集にあれば、その訳をそのまま使う（機械翻訳を呼ばない）
+  const before = ctx.__translateCalls.length;
+  check('用語集にある言葉は、その訳がそのまま使われる',
+        ctx.translateJaToEn_('同意書') === 'Consent Form', ctx.translateJaToEn_('同意書'));
+  check('その場合は機械翻訳を呼ばない（通信を減らし、訳が必ず同じになる）',
+        ctx.__translateCalls.length === before, `呼び出し増加=${ctx.__translateCalls.length - before}`);
+
+  // ② 文中に用語が含まれる場合は、その部分だけ決まった訳に置き換わる
+  const sentence = ctx.translateJaToEn_('同意書を手配課へ送ってください。');
+  check('文の中の用語も決まった訳に置き換わる（同意書）', sentence.includes('Consent Form'), sentence);
+  check('文の中の用語も決まった訳に置き換わる（手配課）', sentence.includes('HQ Booking Desk'), sentence);
+  check('目印用の文字列が画面に出ない（置き換えの痕跡が残らない）',
+        !/TERM\d+Z/.test(sentence), sentence);
+
+  // ③ 無効にした用語は使わない
+  const off = ctx.translateJaToEn_('使わない用語');
+  check('「有効」を外した用語は使われない', !off.includes('Should Not Appear'), off);
+
+  // ④ 用語集に無い言葉は今までどおり機械翻訳される
+  const plain = ctx.translateJaToEn_('本日は晴天です');
+  check('用語集に無い言葉は従来どおり機械翻訳される', plain.startsWith('EN:'), plain);
+
+  // ⑤ 英→日でも、用語集の英訳と一致すれば日本語に戻す
+  check('英語支店が用語集どおりの英語を書いてきたら、日本語に戻せる',
+        ctx.translateEnToJa_('Consent Form') === '同意書', ctx.translateEnToJa_('Consent Form'));
+
+  // ⑥ 用語集を書き換えたら、以前の訳を使い回さない（キャッシュの版番号）
+  const jpToken = ctx.apiLogin('KANTO', 'pw').session.token;
+  ctx.apiSaveGlossaryItem(jpToken, '同意書', '同意書', true, 'Consent Agreement');
+  check('用語集を変えると、次の翻訳から新しい訳になる',
+        ctx.translateJaToEn_('同意書') === 'Consent Agreement', ctx.translateJaToEn_('同意書'));
+
+  // ⑦ 用語集の編集はJPロールのみ
+  const vieToken = ctx.apiLogin('VIE', 'vp').session.token;
+  let err = null;
+  try { ctx.apiSaveGlossaryItem(vieToken, '勝手な用語', '', true, 'X'); } catch (e) { err = e.message; }
+  check('用語集の編集は支店ロールではできない（全社共通の設定のため）', err !== null, String(err));
+  let err2 = null;
+  try { ctx.apiListGlossary(vieToken); } catch (e) { err2 = e.message; }
+  check('用語集の閲覧も支店ロールではできない', err2 !== null, String(err2));
+
+  const list = ctx.apiListGlossary(jpToken);
+  check('用語集の一覧が取得できる（無効なものも含む）',
+        list.length >= 3 && list.some(g => g.name === '同意書' && g.en === 'Consent Agreement'),
+        JSON.stringify(list));
+  check('無効にした用語は無効として返る',
+        !!list.find(g => g.name === '使わない用語' && g.active === false), JSON.stringify(list));
+}
+
+// ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
 process.exit(fail === 0 ? 0 : 1);

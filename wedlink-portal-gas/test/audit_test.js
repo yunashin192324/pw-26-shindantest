@@ -98,6 +98,9 @@ const API_SPECS = [
   // ★機能追加（マスタ管理画面）：定型文の管理用API。店舗ロールは使えない
   { fn: 'apiListPhrasesAdmin', scope: 'any', args: (t) => [t, 'VIE'], target: 'VIE', reads: true },
   { fn: 'apiSavePhraseItem',  scope: 'any', args: (t) => [t, 'VIE', '侵入テスト', null, true, '本文'], target: 'VIE', writes: true },
+  // ★機能追加：翻訳の用語集は全社共通の設定のためJPのみ
+  { fn: 'apiListGlossary',    scope: 'jp', args: (t) => [t], reads: true },
+  { fn: 'apiSaveGlossaryItem', scope: 'jp', args: (t) => [t, '侵入テスト', null, true, 'Intruder'], writes: true },
   // ★要件：衣装会社マスタは支店を問わない全社共通の1本のリスト（引数に支店コードを取らない）
   { fn: 'apiListCostumeCompanies', scope: 'any', args: (t) => [t], reads: true },
 

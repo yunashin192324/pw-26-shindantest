@@ -44,6 +44,9 @@ const ARRANGEMENT_LOG_SHEET_NAME = '手配履歴';
 // ★機能追加：管理番号の採番台帳。支店ごとに「これまでに発行した最大の番号」を記録し、
 // 予約一覧・過去一覧から行が消えても番号を貼り直さない（＝二度と同じ番号を再利用しない）ため。
 const KANRI_LEDGER_SHEET_NAME = '採番管理';
+// ★機能追加：翻訳の用語集。機械翻訳は同じ言葉を毎回同じ訳にするとは限らないため、
+// 業務用語（同意書・手配課・撮影日FIX など）は決まった訳に固定する。
+const GLOSSARY_SHEET_NAME = '用語集';
 
 // --- システムエラー通知先 ---
 const SYSTEM_ALERT_EMAIL = 'it-planning@his-world.com';
@@ -654,6 +657,9 @@ const ARRANGEMENT_LOG_HEADERS = [
 // ★機能追加：管理番号の採番台帳（KANRI_LEDGER_SHEET_NAME）の列
 const KANRI_LEDGER_HEADERS = ['支店コード', '最終採番番号', '最終更新日時'];
 
+// ★機能追加：用語集の列。「日本語」＝原文、「英訳」＝必ずこう訳す、という対応表。
+const GLOSSARY_HEADERS = ['日本語', '英訳', '有効'];
+
 // =====================================================
 // ⓪ Webアプリのエントリポイント
 // =====================================================
@@ -693,6 +699,7 @@ function setupPortal() {
   ensureSheetWithHeaders_(ss, MEMO_LOG_SHEET_NAME, MEMO_LOG_HEADERS);
   ensureSheetWithHeaders_(ss, ARRANGEMENT_LOG_SHEET_NAME, ARRANGEMENT_LOG_HEADERS);
   ensureSheetWithHeaders_(ss, KANRI_LEDGER_SHEET_NAME, KANRI_LEDGER_HEADERS);
+  ensureSheetWithHeaders_(ss, GLOSSARY_SHEET_NAME, GLOSSARY_HEADERS);
 
   const bm = ss.getSheetByName(BRANCH_MASTER_SHEET_NAME);
   if (bm.getLastRow() < 2) {
@@ -1333,6 +1340,53 @@ function apiListPhrasesAdmin(token, branchCode) {
       active: isActiveFlag_(r[PH_COL_ACTIVE]),
       shared: String(r[PH_COL_BRANCH]).trim().toUpperCase() === PHRASE_SHARED_CODE
     }));
+}
+
+// ★機能追加：翻訳の用語集を画面から編集するためのAPI（JPのみ。全社共通の設定のため）
+function apiListGlossary(token) {
+  const session = requireSession_(token);
+  assertJp_(session);
+  const sheet = ensureSheetWithHeaders_(getSpreadsheet_(), GLOSSARY_SHEET_NAME, GLOSSARY_HEADERS);
+  if (sheet.getLastRow() < 2) return [];
+  return sheet.getRange(2, 1, sheet.getLastRow() - 1, 3).getValues()
+    .filter(r => String(r[0] || '').trim())
+    .map(r => ({
+      name: String(r[0]).trim(),          // 日本語（画面では「名称」として扱う）
+      en: String(r[1] || '').trim(),
+      active: String(r[2]) === '' ? true : isActiveFlag_(r[2])
+    }));
+}
+
+function apiSaveGlossaryItem(token, name, originalName, active, en) {
+  const session = requireSession_(token);
+  assertJp_(session);
+  const ja = String(name || '').trim();
+  const enText = String(en || '').trim();
+  if (!ja) throw new Error('日本語を入力してください。');
+  if (!enText) throw new Error('英訳を入力してください。');
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
+  try {
+    const sheet = ensureSheetWithHeaders_(getSpreadsheet_(), GLOSSARY_SHEET_NAME, GLOSSARY_HEADERS);
+    const matchName = String(originalName || name).trim();
+    const lastRow = sheet.getLastRow();
+    let targetRow = -1;
+    if (lastRow > 1) {
+      const values = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+      for (let i = 0; i < values.length; i++) {
+        if (String(values[i][0] || '').trim() === matchName) { targetRow = i + 2; break; }
+      }
+    }
+    const rowData = [ja, enText, active !== false];
+    if (targetRow === -1) sheet.appendRow(rowData);
+    else sheet.getRange(targetRow, 1, 1, 3).setValues([rowData]);
+  } finally {
+    lock.releaseLock();
+  }
+  // 用語集を変えたら、この実行内の読み込み結果も捨てる（次回の翻訳から新しい内容で効く）
+  glossaryCache_ = null;
+  return { ok: true };
 }
 
 function apiSavePhraseItem(token, branchCode, name, originalName, active, body) {
@@ -4525,17 +4579,80 @@ function branchContactEmail_(branchCode) {
 // 結果を保存する（画面の固定文言は何度も同じ文字列が渡されるため、キャッシュ無しだと
 // 翻訳APIの呼び出し回数・応答時間の両方で無視できない負荷になる）。翻訳サービスが失敗しても
 // 例外を投げず原文を返し、画面表示・メール送信自体は止めない。
+// ★機能追加：翻訳の用語集。1回の実行中は読み直さない（同じ実行内で何十回も翻訳するため）。
+let glossaryCache_ = null;
+function loadGlossary_() {
+  if (glossaryCache_) return glossaryCache_;
+  const entries = [];
+  try {
+    const sheet = getSpreadsheet_().getSheetByName(GLOSSARY_SHEET_NAME);
+    if (sheet && sheet.getLastRow() >= 2) {
+      const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, 3).getValues();
+      values.forEach(r => {
+        const ja = String(r[0] || '').trim();
+        const en = String(r[1] || '').trim();
+        if (!ja || !en) return;
+        if (String(r[2]) !== '' && !isActiveFlag_(r[2])) return; // 空欄は有効扱い
+        entries.push({ ja: ja, en: en });
+      });
+    }
+  } catch (e) {
+    // 用語集が読めなくても翻訳自体は続ける（機械翻訳だけで動く）
+  }
+  // 長い語から先に置き換える（「撮影日」より「撮影日FIX」を優先して当てるため）
+  entries.sort((a, b) => b.ja.length - a.ja.length);
+  // 用語集の内容が変わったら、以前の翻訳結果のキャッシュを使わないようにするための版番号
+  const stamp = entries.map(e => e.ja + '=' + e.en).join('|');
+  glossaryCache_ = { entries: entries, version: stamp ? md5Hex_(stamp).slice(0, 8) : '0' };
+  return glossaryCache_;
+}
+
+function md5Hex_(text) {
+  const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, String(text), Utilities.Charset.UTF_8);
+  return bytes.map(b => ((b + 256) % 256).toString(16).padStart(2, '0')).join('');
+}
+
+// 用語集を使って日本語→英語に翻訳する。
+//  ① 文字列そのものが用語集にあれば、その訳をそのまま使う（機械翻訳を呼ばない＝必ず同じ訳になる）
+//  ② 文中に用語が含まれる場合は、いったん目印（TERM1 のような英数字）へ置き換えてから機械翻訳し、
+//     戻ってきた文の目印を決まった訳へ戻す。目印が1つでも消えていたら、安全のため
+//     置き換えを使わず、原文をそのまま機械翻訳した結果を使う（意味の欠けた文を出さないため）。
+function translateWithGlossary_(text) {
+  const glossary = loadGlossary_();
+  const s = String(text);
+  const exact = glossary.entries.find(e => e.ja === s.trim());
+  if (exact) return exact.en;
+
+  const used = [];
+  let marked = s;
+  glossary.entries.forEach((e, i) => {
+    if (marked.indexOf(e.ja) === -1) return;
+    const token = 'TERM' + (used.length + 1) + 'Z';
+    marked = marked.split(e.ja).join(token);
+    used.push({ token: token, en: e.en });
+  });
+  if (!used.length) return LanguageApp.translate(s, 'ja', 'en');
+
+  const translatedMarked = LanguageApp.translate(marked, 'ja', 'en');
+  const allTokensKept = used.every(u => String(translatedMarked).indexOf(u.token) !== -1);
+  if (!allTokensKept) return LanguageApp.translate(s, 'ja', 'en');
+  let out = String(translatedMarked);
+  used.forEach(u => { out = out.split(u.token).join(u.en); });
+  return out;
+}
+
 function translateJaToEn_(text) {
   const s = String(text === null || text === undefined ? '' : text);
   if (!s.trim()) return s;
   const cache = CacheService.getScriptCache();
-  const digestBytes = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, s, Utilities.Charset.UTF_8);
-  const key = 'i18n_en_' + digestBytes.map(b => ((b + 256) % 256).toString(16).padStart(2, '0')).join('');
+  // ★用語集の内容を変えたら、以前の（用語集を当てていない）翻訳結果を使い回さないよう
+  // キャッシュのキーに用語集の版番号を混ぜる。
+  const key = 'i18n_en_' + loadGlossary_().version + '_' + md5Hex_(s);
   const cached = cache.get(key);
   if (cached !== null) return cached;
   let translated = s;
   try {
-    translated = LanguageApp.translate(s, 'ja', 'en');
+    translated = translateWithGlossary_(s);
   } catch (e) {
     translated = s; // 翻訳サービス障害時は原文のまま返す（表示・送信を止めないことを優先）
   }
@@ -4554,12 +4671,17 @@ function translateEnToJa_(text) {
   if (!s.trim()) return s;
   const cache = CacheService.getScriptCache();
   const digestBytes = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, 'enja:' + s, Utilities.Charset.UTF_8);
-  const key = 'i18n_ja_' + digestBytes.map(b => ((b + 256) % 256).toString(16).padStart(2, '0')).join('');
+  // ★用語集の版番号をキーに混ぜる（用語集を変えたら古い訳を使い回さない）
+  const key = 'i18n_ja_' + loadGlossary_().version + '_' +
+    digestBytes.map(b => ((b + 256) % 256).toString(16).padStart(2, '0')).join('');
   const cached = cache.get(key);
   if (cached !== null) return cached;
   let translated = s;
   try {
-    translated = LanguageApp.translate(s, 'en', 'ja');
+    // ★機能追加：用語集の英訳と完全に一致する文字列は、機械翻訳を呼ばずに日本語へ戻す
+    // （英語支店が定型のラベルをそのまま書いてきた場合に、訳がぶれないようにするため）。
+    const back = loadGlossary_().entries.find(e => e.en.toLowerCase() === s.trim().toLowerCase());
+    translated = back ? back.ja : LanguageApp.translate(s, 'en', 'ja');
   } catch (e) {
     translated = s; // 翻訳サービス障害時は原文のまま返す
   }
