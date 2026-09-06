@@ -242,6 +242,9 @@
   .history-log-item { padding: 3px 0; border-bottom: 1px solid #e5e7eb; color: var(--color-text); }
   .history-log-item:last-child { border-bottom: none; }
 
+  /* ★機能追加：マスタ管理画面の絞り込み（種類・対象支店）を横並びにする */
+  .master-toolbar { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 12px; }
+  .master-toolbar .field-block { min-width: 200px; }
   /* ★不具合修正：通知メール送信失敗などの、消えては困る注意書き用の帯 */
   .notice-bar { position: fixed; top: 0; left: 0; right: 0; z-index: 60; background: #fef3c7;
     color: #92400e; border-bottom: 2px solid #f59e0b; padding: 10px 14px; font-size: 13px;

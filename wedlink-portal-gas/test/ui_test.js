@@ -3157,6 +3157,100 @@ function paneHidden(document, key) {
     }
   }
 
+  // ---------------------------------------------------------------
+  section('U56. 【機能追加】マスタ管理画面（スプレッドシートを直接編集しなくてよくする）');
+  {
+    const ctx56 = makeServer();
+    const dom56 = await openApp(ctx56);
+    const doc56 = dom56.window.document;
+    await login(dom56, 'KANTO', 'CHANGE-ME-KANTO');
+    await settle();
+
+    check('手配課の画面に「マスタ管理」ボタンがある',
+          !doc56.getElementById('nav-masters').classList.contains('hidden'));
+
+    doc56.getElementById('nav-masters').click();
+    await settle(); await settle();
+    check('マスタ管理画面が開く', !doc56.getElementById('view-masters').classList.contains('hidden'));
+
+    const typeOptions = [...doc56.getElementById('masters-type').options].map(o => o.value);
+    check('プラン・オプションなど各マスタを選べる',
+          typeOptions.includes('plan') && typeOptions.includes('option') && typeOptions.includes('sale') &&
+          typeOptions.includes('phrase') && typeOptions.includes('branch'), JSON.stringify(typeOptions));
+
+    // VIE支店のプランを対象にする（makeServerでVIEにプランAが登録済み）
+    doc56.getElementById('masters-branch').value = 'VIE';
+    doc56.getElementById('masters-branch').dispatchEvent(new dom56.window.Event('change'));
+    await settle(); await settle();
+    check('選んだ支店のプラン一覧が表示される',
+          [...doc56.querySelectorAll('[data-m-field="name"]')].some(el => el.value === 'プランA'),
+          JSON.stringify([...doc56.querySelectorAll('[data-m-field="name"]')].map(el => el.value)) +
+          ' / 支店=' + doc56.getElementById('masters-branch').value);
+
+    // 新しいプランを追加する
+    doc56.getElementById('masters-new-name').value = '新設テストプラン';
+    doc56.getElementById('masters-add').click();
+    await settle(); await settle(); await settle();
+    check('画面から追加したプランが一覧に出る',
+          [...doc56.querySelectorAll('[data-m-field="name"]')].some(el => el.value === '新設テストプラン'),
+          JSON.stringify([...doc56.querySelectorAll('[data-m-field="name"]')].map(el => el.value)));
+    const plansAfterAdd = ctx56.apiListPlans(ctx56.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token, 'VIE');
+    check('サーバー側（スプレッドシート）にも保存されている',
+          plansAfterAdd.some(p => p.name === '新設テストプラン'), JSON.stringify(plansAfterAdd.map(p => p.name)));
+
+    // 名称を変更して保存する
+    const nameInputs = [...doc56.querySelectorAll('[data-m-field="name"]')];
+    const targetIdx = nameInputs.findIndex(el => el.value === '新設テストプラン');
+    check('追加した行が編集できる状態で並んでいる', targetIdx !== -1);
+    if (targetIdx !== -1) {
+      nameInputs[targetIdx].value = '名称を変えたプラン';
+      doc56.querySelector(`[data-m-save="${targetIdx}"]`).click();
+      await settle(); await settle(); await settle();
+      const plansAfterRename = ctx56.apiListPlans(ctx56.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token, 'VIE');
+      check('名称の変更が保存される',
+            plansAfterRename.some(p => p.name === '名称を変えたプラン') &&
+            !plansAfterRename.some(p => p.name === '新設テストプラン'),
+            JSON.stringify(plansAfterRename.map(p => p.name)));
+      check('行が増えずに書き換わる（重複登録にならない）',
+            plansAfterRename.filter(p => p.name === '名称を変えたプラン').length === 1,
+            JSON.stringify(plansAfterRename.map(p => p.name)));
+    }
+
+    // 「有効」を外すと選択肢から消える
+    const nameInputs2 = [...doc56.querySelectorAll('[data-m-field="name"]')];
+    const offIdx = nameInputs2.findIndex(el => el.value === '名称を変えたプラン');
+    if (offIdx !== -1) {
+      doc56.querySelector(`[data-m-row="${offIdx}"][data-m-field="active"]`).checked = false;
+      doc56.querySelector(`[data-m-save="${offIdx}"]`).click();
+      await settle(); await settle(); await settle();
+      const plansAfterOff = ctx56.apiListPlans(ctx56.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token, 'VIE');
+      const row = plansAfterOff.find(p => p.name === '名称を変えたプラン');
+      check('「有効」を外すと無効として保存される（行自体は消さない）',
+            !!row && row.active === false, JSON.stringify(plansAfterOff));
+    }
+
+    // 定型文マスタも追加できる（本文つき）
+    doc56.getElementById('masters-type').value = 'phrase';
+    doc56.getElementById('masters-type').dispatchEvent(new dom56.window.Event('change'));
+    await settle(); await settle();
+    doc56.getElementById('masters-new-name').value = 'お礼の定型文';
+    doc56.getElementById('masters-new-body').value = 'ご対応ありがとうございました。';
+    doc56.getElementById('masters-add').click();
+    await settle(); await settle(); await settle();
+    const phrases = ctx56.apiListPhrasesAdmin(ctx56.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token, 'VIE');
+    check('定型文も画面から追加できる（本文つき）',
+          phrases.some(p => p.name === 'お礼の定型文' && p.body === 'ご対応ありがとうございました。'),
+          JSON.stringify(phrases));
+
+    // 店舗ロールにはマスタ管理を出さない
+    const ctx56b = makeServer();
+    const dom56b = await openApp(ctx56b);
+    await login(dom56b, 'SHOP1', 'CHANGE-ME-SHOP1');
+    await settle();
+    check('店舗ロールには「マスタ管理」ボタンを出さない',
+          dom56b.window.document.getElementById('nav-masters').classList.contains('hidden'));
+  }
+
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error('テストが異常終了しました:', e); process.exit(1); });

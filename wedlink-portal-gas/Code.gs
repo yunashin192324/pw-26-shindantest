@@ -1170,7 +1170,11 @@ function apiListPlans(token, branchCode) {
       name: r[MM_COL_NAME],
       active: isActiveFlag_(r[MM_COL_ACTIVE]),
       locationMode: normalizePlanLocationMode_(r[MM_COL_PLAN_LOCATION_MODE]),
-      locationCandidates: splitLocationCandidates_(r[MM_COL_PLAN_LOCATION_CANDIDATES])
+      locationCandidates: splitLocationCandidates_(r[MM_COL_PLAN_LOCATION_CANDIDATES]),
+      // ★機能追加（マスタ管理画面）：画面から編集できるように納品期限日数も返す。
+      // これを返さないと、管理画面で保存したときに設定済みの日数が消えてしまう。
+      deliveryDays: r[MM_COL_PLAN_DELIVERY_DAYS] === '' || r[MM_COL_PLAN_DELIVERY_DAYS] === null ||
+                    r[MM_COL_PLAN_DELIVERY_DAYS] === undefined ? '' : r[MM_COL_PLAN_DELIVERY_DAYS]
     }));
 }
 // ★要件：希望日ごとのプラン希望は、その案件自体の支店（国）だけでなく他の支店（国）の
@@ -1306,6 +1310,77 @@ function apiListPhrases(token, branchCode) {
       body: r[PH_COL_BODY] || r[PH_COL_NAME],
       shared: String(r[PH_COL_BRANCH]).trim().toUpperCase() === PHRASE_SHARED_CODE
     }));
+}
+
+// ★機能追加（マスタ管理画面）：定型文マスタは今まで「読むAPI」しか無く、追加・修正は
+// スプレッドシートを直接編集するしかなかった。管理画面から編集できるように、
+// 無効なものも含めて一覧するAPIと、保存するAPIを追加する。
+// 支店コードに ALL を入れた行は全員が使える共通テンプレート（登録できるのはJPのみ）。
+function apiListPhrasesAdmin(token, branchCode) {
+  const session = requireSession_(token);
+  const target = String(session.role === BRANCH_ROLE ? session.branchCode : (branchCode || '')).trim().toUpperCase();
+  if (session.role === SHOP_ROLE) throw new Error('この操作は店舗ロールでは実行できません。');
+  const sheet = getSpreadsheet_().getSheetByName(PHRASE_MASTER_SHEET_NAME);
+  return getRowsAsObjects_(sheet)
+    .filter(r => {
+      const code = String(r[PH_COL_BRANCH]).trim().toUpperCase();
+      return code === PHRASE_SHARED_CODE || code === target;
+    })
+    .map(r => ({
+      branchCode: String(r[PH_COL_BRANCH]).trim().toUpperCase(),
+      name: r[PH_COL_NAME] || '',
+      body: r[PH_COL_BODY] || '',
+      active: isActiveFlag_(r[PH_COL_ACTIVE]),
+      shared: String(r[PH_COL_BRANCH]).trim().toUpperCase() === PHRASE_SHARED_CODE
+    }));
+}
+
+function apiSavePhraseItem(token, branchCode, name, originalName, active, body) {
+  const session = requireSession_(token);
+  const code = String(branchCode || '').trim().toUpperCase();
+  if (code === PHRASE_SHARED_CODE) {
+    if (session.role !== JP_ROLE) throw new Error('全支店共通（ALL）の定型文はJPロールのみ登録できます。');
+  } else {
+    assertBranchAccess_(session, branchCode);
+  }
+  const title = String(name || '').trim();
+  const text = String(body || '').trim();
+  if (!title) throw new Error('表示名を入力してください。');
+  if (!text) throw new Error('本文を入力してください。');
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
+  try {
+    const sheet = ensureSheetWithHeaders_(getSpreadsheet_(), PHRASE_MASTER_SHEET_NAME, PHRASE_MASTER_HEADERS);
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+    const idx = (n) => headers.indexOf(n);
+    const matchName = String(originalName || name).trim();
+    const lastRow = sheet.getLastRow();
+    let targetRow = -1;
+    if (lastRow > 1) {
+      const values = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
+      for (let i = 0; i < values.length; i++) {
+        if (String(values[i][idx(PH_COL_BRANCH)]).trim().toUpperCase() !== code) continue;
+        if (String(values[i][idx(PH_COL_NAME)]).trim() !== matchName) continue;
+        targetRow = i + 2;
+        break;
+      }
+    }
+    const rowData = headers.map(h => {
+      switch (h) {
+        case PH_COL_BRANCH: return code;
+        case PH_COL_NAME: return title;
+        case PH_COL_BODY: return text;
+        case PH_COL_ACTIVE: return active !== false;
+        default: return '';
+      }
+    });
+    if (targetRow === -1) sheet.getRange(sheet.getLastRow() + 1, 1, 1, headers.length).setValues([rowData]);
+    else sheet.getRange(targetRow, 1, 1, headers.length).setValues([rowData]);
+  } finally {
+    lock.releaseLock();
+  }
+  return { ok: true };
 }
 
 function apiSaveLocationItem(token, branchCode, name, originalName, active) {

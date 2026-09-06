@@ -284,6 +284,9 @@
     });
     $('shop-new-submit').addEventListener('click', submitShopNewRequest);
     $('shop-new-success-top-btn').addEventListener('click', () => loadDashboard());
+    $('nav-masters').addEventListener('click', openMastersView);
+    $('masters-type').addEventListener('change', () => { mastersType = $('masters-type').value; openMastersView(); });
+    $('masters-branch').addEventListener('change', () => { mastersBranchCode = $('masters-branch').value; loadMasters(); });
     $('nav-settings').addEventListener('click', openSettingsView);
     $('nav-logout').addEventListener('click', doLogout);
     // ★不具合修正：通知メール送信失敗の帯を閉じられるようにする
@@ -3177,6 +3180,212 @@
   }
 
   // ---------- 設定（現地スタッフ手配メール。自支店 or JPが編集可能） ----------
+  // =====================================================
+  // マスタ管理画面（プラン・オプション・撮影場所・スタッフ・セール・衣装会社・定型文・支店）
+  // -----------------------------------------------------
+  // これまで各マスタの追加・修正はスプレッドシートを直接編集するしか手段が無かった。
+  // 保存用のAPIは以前から用意されていたので、それを使う画面をここで追加する。
+  // 「削除」は用意しない（過去の案件が名前で参照しているため、消すと過去のデータの意味が
+  // 分からなくなる）。使わなくなったものは「有効」を外して今後の選択肢から消す運用にする。
+  // =====================================================
+  const MASTER_TYPES = [
+    { key: 'plan', label: 'プラン', perBranch: true, list: 'apiListPlans', save: 'apiSavePlanItem', extra: 'plan' },
+    { key: 'option', label: 'オプション', perBranch: true, list: 'apiListOptionItems', save: 'apiSaveOptionItem' },
+    { key: 'location', label: '撮影場所', perBranch: true, list: 'apiListLocations', save: 'apiSaveLocationItem' },
+    { key: 'staff', label: '現地スタッフ', perBranch: true, list: 'apiListStaff', save: 'apiSaveStaffItem' },
+    { key: 'sale', label: 'セール', perBranch: true, list: 'apiListSales', save: 'apiSaveSaleItem', extra: 'sale' },
+    { key: 'phrase', label: '定型文', perBranch: true, list: 'apiListPhrasesAdmin', save: 'apiSavePhraseItem', extra: 'phrase' },
+    { key: 'costume', label: '衣装会社（全社共通）', perBranch: false, jpOnly: true, list: 'apiListCostumeCompanies', save: 'apiSaveCostumeCompanyItem' },
+    { key: 'branch', label: '支店・手配課・店舗', perBranch: false, jpOnly: true, list: 'apiListBranches', save: 'apiSaveBranch' }
+  ];
+  let mastersType = 'plan';
+  let mastersBranchCode = '';
+  let mastersRows = [];
+
+  function mastersDef_() { return MASTER_TYPES.find(m => m.key === mastersType) || MASTER_TYPES[0]; }
+
+  async function openMastersView() {
+    showView('masters');
+    const isJp = session.role === 'JP';
+    $('masters-type').innerHTML = MASTER_TYPES
+      .filter(m => !m.jpOnly || isJp)
+      .map(m => `<option value="${escapeAttr(m.key)}">${escapeHtml(m.label)}</option>`).join('');
+    $('masters-type').value = mastersType;
+
+    if (isJp) {
+      if (!branchesCache.length) branchesCache = await gsRun('apiListBranches', session.token);
+      const targets = branchesCache.filter(b => b.active);
+      $('masters-branch').innerHTML = targets
+        .map(b => `<option value="${escapeAttr(b.code)}">${escapeHtml(b.name)}（${escapeHtml(b.code)}）</option>`).join('')
+        + '<option value="ALL">全支店共通（ALL）</option>';
+      if (!mastersBranchCode && targets.length) mastersBranchCode = targets[0].code;
+      $('masters-branch').value = mastersBranchCode;
+    } else {
+      mastersBranchCode = session.branchCode;
+      $('masters-branch').innerHTML =
+        `<option value="${escapeAttr(session.branchCode)}">${escapeHtml(session.branchName)}</option>`;
+    }
+    await loadMasters();
+  }
+
+  async function loadMasters() {
+    const def = mastersDef_();
+    $('masters-branch-wrap').classList.toggle('hidden', !def.perBranch);
+    $('masters-content').innerHTML = '<p class="hint-text">読み込み中...</p>';
+    try {
+      mastersRows = def.perBranch
+        ? await gsRun(def.list, session.token, mastersBranchCode)
+        : await gsRun(def.list, session.token);
+      renderMasters();
+    } catch (e) { showLoadFailure_($('masters-content'), e); }
+  }
+
+  function masterRowFieldsHtml_(def, row, i) {
+    if (def.key === 'branch') {
+      return `
+        <td>${escapeHtml(row.code || '')}</td>
+        <td><input data-m-field="name" data-m-row="${i}" value="${escapeAttr(row.name || '')}" style="width:100%;"></td>
+        <td>${escapeHtml(row.role || '')}</td>
+        <td><input data-m-field="email" data-m-row="${i}" value="${escapeAttr(row.email || '')}" style="width:100%;" placeholder="通知先メール"></td>`;
+    }
+    let cells = `<td><input data-m-field="name" data-m-row="${i}" value="${escapeAttr(row.name || '')}" style="width:100%;"></td>`;
+    if (def.extra === 'plan') {
+      cells += `
+        <td><select data-m-field="locationMode" data-m-row="${i}">
+          ${['', 'select', 'checkbox'].map(v => `<option value="${v}" ${(row.locationMode || '') === v || (v === '' && !row.locationMode) ? 'selected' : ''}>${v === '' ? '自由入力' : v === 'select' ? '候補から選択' : '複数選択（チェック）'}</option>`).join('')}
+        </select></td>
+        <td><input data-m-field="locationCandidates" data-m-row="${i}" value="${escapeAttr((row.locationCandidates || []).join('、'))}" style="width:100%;" placeholder="候補を「、」区切りで"></td>
+        <td><input data-m-field="deliveryDays" data-m-row="${i}" value="${escapeAttr(row.deliveryDays === undefined ? '' : row.deliveryDays)}" style="width:70px;" placeholder="日数"></td>`;
+    }
+    if (def.extra === 'sale') {
+      cells += `<td><input data-m-field="targetPlan" data-m-row="${i}" value="${escapeAttr(row.targetPlan || '')}" style="width:100%;" placeholder="全プラン共通なら空欄"></td>`;
+    }
+    if (def.extra === 'phrase') {
+      cells += `<td><input data-m-field="body" data-m-row="${i}" value="${escapeAttr(row.body || '')}" style="width:100%;" placeholder="本文"></td>`;
+    }
+    return cells;
+  }
+
+  function masterHeadCells_(def) {
+    if (def.key === 'branch') return ['支店コード', '名称', 'ロール', '通知先メール'];
+    const head = ['名称'];
+    if (def.extra === 'plan') head.push('撮影場所の入力方式', '撮影場所の候補', '納品期限日数');
+    if (def.extra === 'sale') head.push('対象プラン');
+    if (def.extra === 'phrase') head.push('本文');
+    return head;
+  }
+
+  function renderMasters() {
+    const def = mastersDef_();
+    const heads = masterHeadCells_(def);
+    const rowsHtml = (mastersRows || []).map((row, i) => `
+      <tr>
+        ${masterRowFieldsHtml_(def, row, i)}
+        <td style="text-align:center;">
+          <input type="checkbox" data-m-field="active" data-m-row="${i}" ${row.active !== false ? 'checked' : ''}>
+        </td>
+        <td><button type="button" class="send-btn-sm" data-m-save="${i}">保存</button></td>
+      </tr>`).join('');
+
+    const newHead = heads.map(h => `<th>${escapeHtml(h)}</th>`).join('');
+    $('masters-content').innerHTML = `
+      <div class="section-card">
+        <h3>${escapeHtml(def.label)}の一覧</h3>
+        <div style="overflow-x:auto;">
+          <table class="plan-table">
+            <thead><tr>${newHead}<th>有効</th><th></th></tr></thead>
+            <tbody>${rowsHtml || `<tr><td colspan="${heads.length + 2}" class="hint-text">まだ登録がありません</td></tr>`}</tbody>
+          </table>
+        </div>
+      </div>
+      ${def.key === 'branch' ? `<p class="hint-text">支店の新規追加・パスコードの変更はスプレッドシートの「支店マスタ」で行ってください（ここでは名称・通知先メール・有効の変更だけができます）。</p>` : `
+      <div class="section-card">
+        <h3>新しく追加する</h3>
+        <div class="detail-grid">
+          <div class="field-block"><label>名称</label><input id="masters-new-name" placeholder="例）プレミアムプラン"></div>
+          ${def.extra === 'phrase' ? `<div class="field-block" style="grid-column:1/-1;"><label>本文</label><input id="masters-new-body" placeholder="定型文の本文"></div>` : ''}
+          ${def.extra === 'sale' ? `<div class="field-block"><label>対象プラン（空欄なら全プラン共通）</label><input id="masters-new-target"></div>` : ''}
+        </div>
+        <button type="button" class="primary-btn" id="masters-add">この内容で追加する</button>
+      </div>`}`;
+
+    $('masters-content').querySelectorAll('[data-m-save]').forEach(btn => {
+      btn.addEventListener('click', (e) => saveMasterRow(Number(btn.dataset.mSave), e));
+    });
+    const addBtn = $('masters-add');
+    if (addBtn) addBtn.addEventListener('click', (e) => addMasterRow(e));
+  }
+
+  function masterInputValue_(i, field) {
+    const el = document.querySelector(`[data-m-row="${i}"][data-m-field="${field}"]`);
+    if (!el) return undefined;
+    return el.type === 'checkbox' ? el.checked : el.value.trim();
+  }
+
+  async function saveMasterRow(i, evt) {
+    const def = mastersDef_();
+    const row = mastersRows[i];
+    if (!row) return;
+    const active = masterInputValue_(i, 'active');
+    const name = masterInputValue_(i, 'name');
+    await withButtonBusy_(evt && evt.currentTarget, '保存中...', async () => {
+      try {
+        if (def.key === 'branch') {
+          await gsRun('apiSaveBranch', session.token, {
+            code: row.code, name: name, role: row.role, country: row.country || '', city: row.city || '',
+            team: row.team || '', email: masterInputValue_(i, 'email'), prefix: row.prefix || '',
+            passcode: '', active: active
+          });
+        } else if (def.extra === 'plan') {
+          await gsRun('apiSavePlanItem', session.token, mastersBranchCode, name, row.name, active,
+            masterInputValue_(i, 'locationMode'),
+            (masterInputValue_(i, 'locationCandidates') || '').split(/[、,\n]/).map(v => v.trim()).filter(Boolean).join('\n'),
+            masterInputValue_(i, 'deliveryDays'));
+        } else if (def.extra === 'sale') {
+          await gsRun('apiSaveSaleItem', session.token, mastersBranchCode, name, row.name, active,
+            masterInputValue_(i, 'targetPlan'));
+        } else if (def.extra === 'phrase') {
+          await gsRun('apiSavePhraseItem', session.token, row.branchCode || mastersBranchCode, name, row.name, active,
+            masterInputValue_(i, 'body'));
+        } else if (def.perBranch) {
+          await gsRun(def.save, session.token, mastersBranchCode, name, row.name, active);
+        } else {
+          await gsRun(def.save, session.token, name, row.name, active);
+        }
+        showToast('保存しました');
+        clearMasterCaches_(); // 案件詳細で使い回しているマスタのキャッシュを捨てる
+        branchesCache = [];
+        await loadMasters();
+      } catch (e) { handleAuthError(e); }
+    });
+  }
+
+  async function addMasterRow(evt) {
+    const def = mastersDef_();
+    const name = ($('masters-new-name') && $('masters-new-name').value.trim()) || '';
+    if (!name) { showToast('名称を入力してください'); return; }
+    const body = $('masters-new-body') ? $('masters-new-body').value.trim() : '';
+    const target = $('masters-new-target') ? $('masters-new-target').value.trim() : '';
+    await withButtonBusy_(evt && evt.currentTarget, '追加中...', async () => {
+      try {
+        if (def.extra === 'plan') {
+          await gsRun('apiSavePlanItem', session.token, mastersBranchCode, name, '', true, '', '', '');
+        } else if (def.extra === 'sale') {
+          await gsRun('apiSaveSaleItem', session.token, mastersBranchCode, name, '', true, target);
+        } else if (def.extra === 'phrase') {
+          await gsRun('apiSavePhraseItem', session.token, mastersBranchCode, name, '', true, body);
+        } else if (def.perBranch) {
+          await gsRun(def.save, session.token, mastersBranchCode, name, '', true);
+        } else {
+          await gsRun(def.save, session.token, name, '', true);
+        }
+        showToast('追加しました');
+        clearMasterCaches_();
+        await loadMasters();
+      } catch (e) { handleAuthError(e); }
+    });
+  }
+
   async function openSettingsView() {
     showView('settings');
     if (session.role === 'JP') {
