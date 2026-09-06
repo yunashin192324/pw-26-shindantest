@@ -2578,7 +2578,7 @@ function applyStatusCascade_(sheet, headers, rowIndex, kanriNo, writes) {
 // ★機能追加：希望日ごとの空き確認ステータス（hopeStsBranchCol_/hopeStsJpCol_）専用の自動連動。
 //   1. 現地側がある希望日のSTS(支店側)をOK／UCに変えたら、対になる希望日のSTS(JP側)にも同じ値を
 //      反映する（DC/PCの回答と同じ「支店側の回答がJP側にも映る」例外パターン）
-//   2. OKになった場合は、撮影日FIX（COL_CONFIRMED_DATE）へその希望日の日付を反映し、
+//   2. OKになった場合は、撮影日FIX（COL_CONFIRMED_DATE）へその希望日の日付・プラン・場所を反映し、
 //      他の入力済みの希望日（まだOK/UCでないもの）を自動でUC／UCにする
 //      （複数の希望日が同時にOKになることは無い前提のため）
 //   3. 案件全体のSTS(JP側)がまだ初期値のRQのままなら、案件全体のSTS(JP側)・STS(支店側)もOKにする
@@ -2625,6 +2625,20 @@ function applyHopeStatusCascade_(sheet, headers, rowIndex, kanriNo, writes, who)
       if (currentPlan !== planVal) {
         sheet.getRange(rowIndex, planColIdx).setValue(planVal);
         logChange(COL_PLAN, currentPlan, planVal);
+      }
+    }
+
+    // ★不具合修正：この希望日の「場所」も、日付・プランと同じ考え方で案件全体の撮影希望場所欄
+    // （COL_LOCATION、記入欄タブの単独欄）へ反映する。これまでは日付・プランだけ自動反映されており、
+    // 場所だけ手動で書き直さないと、希望日一覧側の場所と単独欄の表示（当日表・メール本文等が
+    // 参照する）が食い違ったままになっていた。
+    const locationVal = String(sheet.getRange(rowIndex, colIndexOrThrow_(headers, hopeLocationCol_(n))).getValue() || '').trim();
+    if (locationVal) {
+      const locationColIdx = colIndexOrThrow_(headers, COL_LOCATION);
+      const currentLocation = sheet.getRange(rowIndex, locationColIdx).getValue();
+      if (currentLocation !== locationVal) {
+        sheet.getRange(rowIndex, locationColIdx).setValue(locationVal);
+        logChange(COL_LOCATION, currentLocation, locationVal);
       }
     }
 
