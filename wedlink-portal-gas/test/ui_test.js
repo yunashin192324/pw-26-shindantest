@@ -2987,6 +2987,31 @@ function paneHidden(document, key) {
     }
   }
 
+  // ---------------------------------------------------------------
+  section('U52. 【性能改善】案件詳細を開くたびに全社共通マスタを取り直さない（衣装会社・全支店プラン）');
+  {
+    document.getElementById('nav-logout').click();
+    await settle();
+    await login(dom, 'KANTO', 'CHANGE-ME-KANTO');
+    await settle();
+    const calls = { costume: 0, allPlan: 0 };
+    const oc = ctx.apiListCostumeCompanies, oa = ctx.apiListAllActivePlans;
+    ctx.apiListCostumeCompanies = (...a) => { calls.costume++; return oc(...a); };
+    ctx.apiListAllActivePlans = (...a) => { calls.allPlan++; return oa(...a); };
+    document.getElementById('nav-dashboard').click(); await settle();
+    const firstRow = document.querySelector('.res-table tbody tr, [data-open]');
+    firstRow.click(); await settle();
+    check('1件目を開くと両APIとも呼ばれる', calls.costume >= 1 && calls.allPlan >= 1, JSON.stringify(calls));
+    const afterFirst = { ...calls };
+    document.getElementById('detail-back').click(); await settle();
+    document.getElementById('nav-dashboard').click(); await settle();
+    const rows = document.querySelectorAll('.res-table tbody tr, [data-open]');
+    if (rows[1]) { rows[1].click(); await settle(); }
+    check('2件目を開いても追加で呼ばれない（同じセッション内はキャッシュを使い回す）',
+          calls.costume === afterFirst.costume && calls.allPlan === afterFirst.allPlan, JSON.stringify(calls));
+    ctx.apiListCostumeCompanies = oc; ctx.apiListAllActivePlans = oa; // 元に戻す
+  }
+
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error('テストが異常終了しました:', e); process.exit(1); });

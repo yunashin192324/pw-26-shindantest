@@ -199,11 +199,13 @@ function makeContext() {
       Charset: { UTF_8: 'UTF_8' }
     },
     // ★機能追加（マーレ支店など英語専用支店対応）：本物のLanguageAppは呼べないので、
-    // 「翻訳された」ことが分かる決まった変換（EN:接頭辞）を返す簡易モック。呼び出し履歴も
-    // __translateCallsに記録し、テストから「何が何回翻訳されたか」を検証できるようにする。
+    // 「翻訳された」ことが分かる決まった変換（ja→enは EN:接頭辞、en→jaは JA:接頭辞）を返す
+    // 簡易モック。呼び出し履歴も__translateCallsに記録し、テストから「何が何回・どの方向に
+    // 翻訳されたか」を検証できるようにする。
     LanguageApp: { translate: (text, source, target) => {
       ctx.__translateCalls.push({ text, source, target });
-      return `EN:${text}`;
+      const prefix = (source === 'en' && target === 'ja') ? 'JA:' : 'EN:';
+      return `${prefix}${text}`;
     } },
     DriveApp: {
       createFolder: (name) => {

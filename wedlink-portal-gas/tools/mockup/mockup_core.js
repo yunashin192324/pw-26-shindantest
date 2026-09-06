@@ -180,8 +180,11 @@ function buildScripts({ codeGs, javascriptHtml, apiNames }) {
     // 1文字の語は「文字列全体がその1文字のとき」（プルダウンの選択肢など）だけ置き換える。
     const SUBSTRING_KEYS = KEYS.filter(k => k.length >= 2);
     return {
-      translate: (text) => {
+      translate: (text, source, target) => {
         const src = String(text === null || text === undefined ? '' : text);
+        // ★機能追加（支店→日本方向の翻訳）：en→jaはこの簡易和英辞書の対象外（辞書はja→en専用）
+        // なので、「翻訳されたこと」だけが分かる接頭辞を付ける（gas_harness.jsのモックと同じ考え方）。
+        if (source === 'en' && target === 'ja') return '（日本語訳）' + src;
         if (Object.prototype.hasOwnProperty.call(DICT, src)) return DICT[src]; // 全体が辞書にある場合が最優先
         let result = src;
         SUBSTRING_KEYS.forEach(k => { if (result.indexOf(k) !== -1) result = result.split(k).join(DICT[k]); });
@@ -454,6 +457,11 @@ return {
   });
   apiCommitChanges(apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token, 'MLE-401', {},
     '撮影時間は現地の日没時刻に合わせて調整しますので、確定次第ご連絡します。');
+  // ★機能追加（支店→日本方向の翻訳）：マーレ支店から英語で届いた返信のデモ。
+  // 日本側（関東手配課）でログインしてこの案件を開くと、この本文が自動的に日本語へ翻訳されて
+  // 表示される（サーバー側のapiGetReservationDetail／apiGetCaseTimelineが翻訳する）。
+  apiCommitChanges(apiLogin('MLE', 'CHANGE-ME-MLE').session.token, 'MLE-401', {},
+    'Understood. We will confirm the exact shoot time once we check the sunset schedule for that day.');
 
   // --- 共有メモ・現地用メモ（積み上げ式）のサンプル ---
   const memoSheet = ss.getSheetByName('メモ履歴');

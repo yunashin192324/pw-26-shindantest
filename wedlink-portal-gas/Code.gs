@@ -1723,12 +1723,17 @@ function branchMetaMap_() {
 }
 
 function rowInScope_(session, scope, row) {
+  // ★不具合防止：session.branchCodeはapiLoginで必ずtrim+大文字化されているが、
+  // 案件側の支店コード（COL_BRANCH_CODE / COL_ORIGIN_SHOP）はスプレッドシートに
+  // 直接入力・貼り付けされる経路もあり、末尾に半角/全角スペースが紛れ込むことがある。
+  // ここでtrimしていないと、その1件だけ「一覧に出ない（自分の支店なのに一致しない）」
+  // という気づきにくい不具合になる。
   if (session.role === SHOP_ROLE) {
     // ★機能追加：店舗ロールは自分が起票した案件だけが対象（一覧・検索・納品待ち等、共通で使う）
-    return String(row[COL_ORIGIN_SHOP] || '').toUpperCase() === session.branchCode;
+    return String(row[COL_ORIGIN_SHOP] || '').trim().toUpperCase() === session.branchCode;
   }
   if (session.role === BRANCH_ROLE) {
-    return String(row[COL_BRANCH_CODE]).toUpperCase() === session.branchCode;
+    return String(row[COL_BRANCH_CODE] || '').trim().toUpperCase() === session.branchCode;
   }
   // JPロール
   if (!scope || scope.showAll) return true;
@@ -2011,16 +2016,25 @@ function apiGetCaseTimeline(token, kanriNo) {
   const ss = getSpreadsheet_();
   const items = [];
 
+  // ★機能追加（マーレ支店など英語専用支店対応）：apiGetReservationDetailの履歴と同じ考え方で、
+  // 日本側（JP）が英語専用支店の案件のタイムラインを見るときは、支店が書いたメッセージ本文を
+  // 日本語に翻訳する。
+  const branchCode = rowData[headers.indexOf(COL_BRANCH_CODE)];
+  const branchMeta = branchMetaMap_()[branchCode] || {};
+  const translateBranchMsgToJa = session.role === JP_ROLE && branchMeta.displayLang === 'en';
+
   getRowsAsObjects_(ss.getSheetByName(HISTORY_SHEET_NAME))
     .filter(r => String(r[H_COL_KANRI]) === String(kanriNo))
     .forEach(r => {
+      const body = (translateBranchMsgToJa && r[H_COL_SENDER_ROLE] === BRANCH_ROLE)
+        ? translateEnToJa_(r[H_COL_BODY]) : r[H_COL_BODY];
       items.push({
         type: 'message',
         at: r[H_COL_DATETIME] instanceof Date ? r[H_COL_DATETIME].getTime() : Date.parse(r[H_COL_DATETIME]) || 0,
         datetime: formatDateTime_(r[H_COL_DATETIME]),
         who: r[H_COL_SENDER],
         role: r[H_COL_SENDER_ROLE],
-        body: r[H_COL_BODY]
+        body: body
       });
     });
 
@@ -2219,12 +2233,16 @@ function apiGetReservationDetail(token, kanriNo) {
   hRows = hRows.filter(r => visibleToRole_(session.role, r[H_COL_SENDER_ROLE], r[H_COL_RECIPIENT_ROLE]));
   // ★要件：メッセージは新しい日付が上（降順）
   hRows.sort((a, b) => new Date(b[H_COL_DATETIME]) - new Date(a[H_COL_DATETIME]));
+  // ★機能追加（マーレ支店など英語専用支店対応）：日本側（JP）が英語専用支店の案件を見るとき、
+  // 支店が書いたメッセージ本文を日本語に翻訳する（逆方向はSETUP.md参照）。読み取り専用の
+  // 表示データにだけ適用し、翻訳結果が保存に使われることはない。
+  const translateBranchMsgToJa = session.role === JP_ROLE && meta.displayLang === 'en';
   detail.history = hRows.map(r => ({
     id: r[H_COL_ID],
     datetime: formatMaybeDate_(r[H_COL_DATETIME]),
     sender: r[H_COL_SENDER],
     senderRole: r[H_COL_SENDER_ROLE],
-    body: r[H_COL_BODY],
+    body: (translateBranchMsgToJa && r[H_COL_SENDER_ROLE] === BRANCH_ROLE) ? translateEnToJa_(r[H_COL_BODY]) : r[H_COL_BODY],
     checkJp: isActiveFlag_(r[H_COL_CHECK_JP]),
     checkedByJp: r[H_COL_CHECKED_BY_JP] || '',
     dateJp: formatMaybeDate_(r[H_COL_DATE_JP]),
@@ -4351,6 +4369,30 @@ function translateJaToEn_(text) {
   return translated;
 }
 
+// ★機能追加（マーレ支店など英語専用支店対応）：逆方向（英語支店→日本側）の翻訳。
+// 日本側の担当者も英語が読めないケースに対応するため、英語支店が書いたメッセージ本文を
+// 日本側（JPロール）が見るときは日本語に翻訳する。対象はメッセージ・やり取り履歴のみ
+// （読み取り専用の表示データ）に限定している。案件詳細の入力欄（備考・現地記入欄等）は
+// 編集可能なため、ここで翻訳してしまうと「翻訳後の日本語のまま保存」で支店が書いた原文
+// （英語）が失われる恐れがあり、対象に含めていない。
+function translateEnToJa_(text) {
+  const s = String(text === null || text === undefined ? '' : text);
+  if (!s.trim()) return s;
+  const cache = CacheService.getScriptCache();
+  const digestBytes = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, 'enja:' + s, Utilities.Charset.UTF_8);
+  const key = 'i18n_ja_' + digestBytes.map(b => ((b + 256) % 256).toString(16).padStart(2, '0')).join('');
+  const cached = cache.get(key);
+  if (cached !== null) return cached;
+  let translated = s;
+  try {
+    translated = LanguageApp.translate(s, 'en', 'ja');
+  } catch (e) {
+    translated = s; // 翻訳サービス障害時は原文のまま返す
+  }
+  try { cache.put(key, translated, 21600); } catch (e) { /* キャッシュ保存の失敗は無視してよい */ }
+  return translated;
+}
+
 // ★機能追加（マーレ支店など英語専用支店対応）：画面側が表示中のテキストをまとめて英訳して
 // もらうためのAPI。表示言語が英語（'en'）の支店としてログインしている場合のみ実際に翻訳し、
 // それ以外（日本語支店・手配課・店舗）は入力をそのまま返す（誰でも呼べてしまうと
@@ -4400,6 +4442,11 @@ function getJpTeamEmail_(teamLabel) {
 //   ・失敗しても誰にも通知されず、アラートが止まったことに気づけない
 // という状態だった。ここで全体を包み、失敗を SYSTEM_ALERT_EMAIL へ通知する。
 // あわせて各処理の中では「行単位」でも例外を捕まえ、1件の異常で全体が止まらないようにする。
+// ★性能監視：GASの実行時間上限は6分（360,000ms）。案件数（特に過去一覧＝アーカイブ済み分）が
+// 増えるほど、予約一覧・過去一覧を毎回全件読み込むこれらの定期処理は線形に遅くなっていく。
+// 上限に達して処理が失敗してから気づくのでは遅いため、上限の半分（3分）を超えた時点で
+// 「そろそろ危ない」という早期警告を1回だけ送る（閾値は下の定数で調整できる）。
+const TRIGGER_SLOW_WARNING_MS = 180000; // 3分
 function runTrigger_(name, coreFn) {
   const startedAt = new Date();
   const errors = [];
@@ -4415,8 +4462,37 @@ function runTrigger_(name, coreFn) {
     notifySystemError_(name, errors, elapsedMs);
   } else {
     console.log(`[${name}] 正常終了（${elapsedMs}ms）`);
+    if (elapsedMs >= TRIGGER_SLOW_WARNING_MS) notifySlowTrigger_(name, elapsedMs);
   }
   return { ok: errors.length === 0, errors: errors.length };
+}
+
+// 実行時間が長くなってきた定期処理を管理者へ知らせる（1日1回まで＝同じ処理からの連投を防ぐ）。
+// 「そろそろ案件数が増えてきて処理が重くなっている」ことに、実際に6分制限へ引っかかって
+// 処理が止まる前に気づけるようにするための早期警告。
+function notifySlowTrigger_(name, elapsedMs) {
+  try {
+    if (!SYSTEM_ALERT_EMAIL) return;
+    const cache = CacheService.getScriptCache();
+    const key = 'slow_trigger_notified_' + name;
+    if (cache.get(key)) return; // 直近24時間以内に通知済みなら送らない
+    cache.put(key, '1', 86400);
+    MailApp.sendEmail(
+      SYSTEM_ALERT_EMAIL,
+      `[WEDLINK][要確認] 定期処理「${name}」の実行時間が長くなっています（${Math.round(elapsedMs / 1000)}秒）`,
+      `定期処理「${name}」の実行に${Math.round(elapsedMs / 1000)}秒かかりました` +
+      `（GASの実行時間上限は6分=360秒です）。
+
+` +
+      `案件数（特に過去一覧＝アーカイブ済み案件）が増えてくると、この処理は徐々に遅くなっていきます。
+` +
+      `上限に達すると処理が失敗する（アラートやアーカイブが止まる）ため、早めの対応をおすすめします。
+` +
+      `このメールは同じ処理につき24時間に1回までしか送りません。`
+    );
+  } catch (e) {
+    // 通知自体の失敗で定期処理を落とさない
+  }
 }
 
 function errorMessage_(e) {

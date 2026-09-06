@@ -4064,5 +4064,91 @@ section('69. 既に運用中のスプレッドシートへの列追加（表示�
 }
 
 // ---------------------------------------------------------------
+section('70. 【不具合修正】支店コードの表記ゆれ（末尾スペース）で一覧から漏れる問題');
+{
+  const ctx = featureFixture();
+  addCase(ctx, '予約一覧', { '支店コード': 'VIE ', '管理番号': 'VIE-999', '管轄': '関東', '新郎名（ローマ字）': 'Space' });
+  const vieToken = ctx.apiLogin('VIE', 'vp').session.token;
+  const list = ctx.apiGetDashboard(vieToken, { showAll: true }).reservations;
+  check('支店コードの末尾に空白が入っていても、その支店の一覧に表示される',
+        list.some(r => r.kanriNo === 'VIE-999'), JSON.stringify(list.map(r => r.kanriNo)));
+}
+
+// ---------------------------------------------------------------
+section('71. マーレ支店など英語専用支店対応：支店→日本方向（メッセージ・タイムラインの英→日翻訳）');
+{
+  const ctx = makeContext(); CTX = ctx;
+  const ss = ctx.__ss;
+  ctx.ensureSheetWithHeaders_(ss, '支店マスタ', ctx.BRANCH_MASTER_HEADERS);
+  const bm = ss.getSheetByName('支店マスタ');
+  bm.appendRow(['KANTO','関東手配課','','','JP','関東','pw','kanto@his-world.com','','','','', '', true]);
+  bm.appendRow(['MLE','マーレ支店','モルディブ','マーレ','BRANCH','','mp','male@his-world.com','MLE','','','', '', true]);
+  bm.appendRow(['VIE','ウィーン支店','オーストリア','ウィーン','BRANCH','','vp','vie@his-world.com','VIE','','','', '', true]);
+  setBranchField(ctx, 'MLE', '表示言語', 'en');
+  ['予約一覧','過去一覧'].forEach(n => ctx.ensureSheetWithHeaders_(ss, n, ctx.RESERVATION_HEADERS));
+  ctx.ensureSheetWithHeaders_(ss, 'やり取り履歴', ctx.HISTORY_HEADERS);
+  ctx.ensureSheetWithHeaders_(ss, 'ステータス変更履歴', ctx.STATUS_LOG_HEADERS);
+
+  const H = ctx.RESERVATION_HEADERS;
+  const mkRow = (branchCode, kanri) => {
+    const row = new Array(H.length).fill('');
+    row[H.indexOf('支店コード')] = branchCode; row[H.indexOf('管理番号')] = kanri; row[H.indexOf('管轄')] = '関東';
+    ss.getSheetByName('予約一覧').appendRow(row);
+  };
+  mkRow('MLE', 'MLE-501');
+  mkRow('VIE', 'VIE-501');
+
+  const jpToken = ctx.apiLogin('KANTO', 'pw').session.token;
+  const mleToken = ctx.apiLogin('MLE', 'mp').session.token;
+  const vieToken = ctx.apiLogin('VIE', 'vp').session.token;
+
+  // JP→マーレ支店（英語支店）：既存機能どおり届いたメッセージは英訳される
+  ctx.apiCommitChanges(jpToken, 'MLE-501', {}, 'ご確認をお願いします');
+  // マーレ支店→JP：支店が英語で書いたメッセージ
+  ctx.apiCommitChanges(mleToken, 'MLE-501', {}, 'Confirmed, thank you.');
+
+  const jpView = ctx.apiGetReservationDetail(jpToken, 'MLE-501').detail.history;
+  const jpMsg = jpView.find(h => h.senderRole === 'JP');
+  const branchMsg = jpView.find(h => h.senderRole === 'BRANCH');
+  check('JPが見る画面：自分（JP）が書いたメッセージは翻訳されず原文のまま',
+        !!jpMsg && jpMsg.body.includes('ご確認をお願いします') && !jpMsg.body.startsWith('JA:'), jpMsg && jpMsg.body);
+  check('JPが見る画面：マーレ支店（英語）が書いたメッセージは日本語に翻訳される',
+        !!branchMsg && branchMsg.body.startsWith('JA:') && branchMsg.body.includes('Confirmed, thank you.'),
+        branchMsg && branchMsg.body);
+
+  const mleView = ctx.apiGetReservationDetail(mleToken, 'MLE-501').detail.history;
+  const mleSeesOwn = mleView.find(h => h.senderRole === 'BRANCH');
+  const mleSeesJp = mleView.find(h => h.senderRole === 'JP');
+  check('マーレ支店が見る画面：自分（支店）が書いたメッセージは翻訳されず原文のまま',
+        !!mleSeesOwn && mleSeesOwn.body.includes('Confirmed, thank you.'), mleSeesOwn && mleSeesOwn.body);
+  // ★注：支店側の画面の英語化はサーバー側の翻訳ではなく、クライアント側の自動翻訳
+  // （apiTranslateBatch・JavaScript.htmlのMutationObserver）が担当する設計のため、
+  // apiGetReservationDetailが返す生データ自体は（支店が見る場合も）日本語のまま。
+  check('マーレ支店が見る画面：JPからのメッセージも、サーバーから返る生データは日本語のまま（英語化は画面側の役目）',
+        !!mleSeesJp && mleSeesJp.body.includes('ご確認をお願いします') && !mleSeesJp.body.startsWith('EN:'),
+        mleSeesJp && mleSeesJp.body);
+
+  // 日本語支店（VIE）は対象外：JPが見ても翻訳されない
+  ctx.apiCommitChanges(vieToken, 'VIE-501', {}, '承知いたしました。');
+  const jpViewVie = ctx.apiGetReservationDetail(jpToken, 'VIE-501').detail.history;
+  const vieMsg = jpViewVie.find(h => h.senderRole === 'BRANCH');
+  check('日本語支店（VIE）のメッセージは、JPが見ても翻訳されない（対象外）',
+        !!vieMsg && vieMsg.body.includes('承知いたしました。') && !vieMsg.body.startsWith('JA:'), vieMsg && vieMsg.body);
+
+  // 案件タイムライン（apiGetCaseTimeline）でも同様
+  const timeline = ctx.apiGetCaseTimeline(jpToken, 'MLE-501').items;
+  const tlBranchMsg = timeline.find(it => it.type === 'message' && it.role === 'BRANCH');
+  check('案件タイムラインでも、マーレ支店のメッセージがJP向けに日本語訳される',
+        !!tlBranchMsg && tlBranchMsg.body.startsWith('JA:') && tlBranchMsg.body.includes('Confirmed, thank you.'),
+        tlBranchMsg && tlBranchMsg.body);
+
+  // 備考欄などの入力データは対象外（翻訳されない）であることの確認
+  ctx.apiSaveFieldsQuiet(mleToken, 'MLE-501', { '備考': 'Please adjust the shoot time.' });
+  const savedRemarks = ctx.apiGetReservationDetail(jpToken, 'MLE-501').detail['備考'];
+  check('備考欄など編集可能なデータは翻訳対象外（原文のまま保存・表示される。誤って上書き保存されるのを防ぐため）',
+        savedRemarks === 'Please adjust the shoot time.', savedRemarks);
+}
+
+// ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
 process.exit(fail === 0 ? 0 : 1);
