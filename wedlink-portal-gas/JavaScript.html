@@ -2437,6 +2437,7 @@
         <div class="kanri">管理番号: ${escapeHtml(d['管理番号'])} ｜ CHG NO: <span class="chg-no">${escapeHtml(d['CHG NO'] || 'なし')}</span></div>
         <div class="kanri">${escapeHtml(d.branchName)}（${escapeHtml(d['支店コード'])}）${d.country ? ' ・ ' + escapeHtml(d.country) : ''}${d.city ? ' ／ ' + escapeHtml(d.city) : ''}</div>
         <div class="kanri">担当: ${d['管轄'] ? escapeHtml(d['管轄']) + '手配課' : '未設定'}</div>
+        ${!d.branchLocalNow ? '' : `<div class="kanri">現地の今の時刻: <strong>${escapeHtml(d.branchLocalNow)}</strong>（日本時間との時差にご注意ください）</div>`}
         ${!d.originShop ? '' : `<div class="kanri">日本の店舗: <strong>${escapeHtml(d.originShopName || d.originShop)}</strong></div>`}
         <div class="names">新郎: ${escapeHtml(fullNameClient_(d['新郎姓（ローマ字）'], d['新郎名（ローマ字）']))}<br>新婦: ${escapeHtml(fullNameClient_(d['新婦姓（ローマ字）'], d['新婦名（ローマ字）']))}</div>
         <button type="button" class="print-btn" id="print-arrangement-btn">🖨 手配内容をPDFで保存</button>
@@ -3388,7 +3389,8 @@
         <td>${escapeHtml(row.code || '')}</td>
         <td><input data-m-field="name" data-m-row="${i}" value="${escapeAttr(row.name || '')}" style="width:100%;"></td>
         <td>${escapeHtml(row.role || '')}</td>
-        <td><input data-m-field="email" data-m-row="${i}" value="${escapeAttr(row.email || '')}" style="width:100%;" placeholder="通知先メール"></td>`;
+        <td><input data-m-field="email" data-m-row="${i}" value="${escapeAttr(row.email || '')}" style="width:100%;" placeholder="通知先メール"></td>
+        <td><input data-m-field="timezone" data-m-row="${i}" value="${escapeAttr(row.timezone || '')}" style="width:100%;" placeholder="例）Europe/Rome"></td>`;
     }
     let cells = `<td><input data-m-field="name" data-m-row="${i}" value="${escapeAttr(row.name || '')}" style="width:100%;"></td>`;
     if (def.extra === 'plan') {
@@ -3412,7 +3414,7 @@
   }
 
   function masterHeadCells_(def) {
-    if (def.key === 'branch') return ['支店コード', '名称', 'ロール', '通知先メール'];
+    if (def.key === 'branch') return ['支店コード', '名称', 'ロール', '通知先メール', '現地のタイムゾーン'];
     const head = [def.extra === 'glossary' ? '日本語' : '名称'];
     if (def.extra === 'plan') head.push('撮影場所の入力方式', '撮影場所の候補', '納品期限日数');
     if (def.extra === 'sale') head.push('対象プラン');
@@ -3481,7 +3483,7 @@
           await gsRun('apiSaveBranch', session.token, {
             code: row.code, name: name, role: row.role, country: row.country || '', city: row.city || '',
             team: row.team || '', email: masterInputValue_(i, 'email'), prefix: row.prefix || '',
-            passcode: '', active: active
+            passcode: '', active: active, timezone: masterInputValue_(i, 'timezone')
           });
         } else if (def.extra === 'plan') {
           await gsRun('apiSavePlanItem', session.token, mastersBranchCode, name, row.name, active,

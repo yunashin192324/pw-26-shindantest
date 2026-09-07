@@ -4622,5 +4622,70 @@ section('79. 【機能追加】支店マスタの不整合を検出する（ス�
 }
 
 // ---------------------------------------------------------------
+section('80. 【機能追加】現地時間と日本時間の併記');
+{
+  const ctx = featureFixture();
+  const jpToken = ctx.apiLogin('KANTO', 'pw').session.token;
+  const vieToken = ctx.apiLogin('VIE', 'vp').session.token;
+  addCase(ctx, '予約一覧', {
+    '支店コード': 'VIE', '管理番号': 'VIE-T01', '管轄': '関東', 'STS JP': 'RQ',
+    '新郎名（ローマ字）': 'Taro', '新婦名（ローマ字）': 'Hanako'
+  });
+  addCase(ctx, '予約一覧', {
+    '支店コード': 'IST', '管理番号': 'IST-T01', '管轄': '関東', 'STS JP': 'RQ',
+    '新郎名（ローマ字）': 'X', '新婦名（ローマ字）': 'Y'
+  });
+
+  // タイムゾーン未設定のうちは、従来どおり日本時間だけ
+  ctx.apiCommitChanges(jpToken, 'IST-T01', {}, '時差なしの確認');
+  const noTz = ctx.apiGetReservationDetail(jpToken, 'IST-T01').detail;
+  check('タイムゾーン未設定の支店は現地時間を併記しない（従来どおりの表示）',
+        !!noTz.history.length && !noTz.history[0].datetime.includes('現地'), noTz.history[0].datetime);
+  check('その場合は現地の現在時刻も出さない', !noTz.branchLocalNow, String(noTz.branchLocalNow));
+
+  // ウィーン支店にタイムゾーンを設定する
+  setBranchField(ctx, 'VIE', 'タイムゾーン', 'Europe/Vienna');
+  ctx.apiCommitChanges(jpToken, 'VIE-T01', {}, '時差ありの確認');
+  const withTz = ctx.apiGetReservationDetail(jpToken, 'VIE-T01').detail;
+  check('タイムゾーンを設定すると日時に現地時間が併記される',
+        withTz.history[0].datetime.includes('（日本）') && withTz.history[0].datetime.includes('（現地）'),
+        withTz.history[0].datetime);
+  check('日本時間の表示は今までどおり残る（時差の取り違えを防ぐため）',
+        /^\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}（日本）/.test(withTz.history[0].datetime),
+        withTz.history[0].datetime);
+  check('日本時間と現地時間が実際にずれている（時差が反映されている）',
+        withTz.history[0].datetime.split('（日本）')[0].slice(-5) !==
+        withTz.history[0].datetime.split('／')[1].slice(6, 11),
+        withTz.history[0].datetime);
+  check('現地の現在時刻も返る（電話する前に確認できる）', !!withTz.branchLocalNow, String(withTz.branchLocalNow));
+  check('設定したタイムゾーンが返る', withTz.branchTimezone === 'Europe/Vienna', withTz.branchTimezone);
+
+  // 支店側から見ても同じように併記される
+  const branchView = ctx.apiGetReservationDetail(vieToken, 'VIE-T01').detail;
+  check('支店の画面でも同じように併記される',
+        branchView.history[0].datetime.includes('（現地）'), branchView.history[0].datetime);
+
+  // タイムゾーン名が正しくない場合は日本時間だけを出す（表示を止めない）
+  setBranchField(ctx, 'VIE', 'タイムゾーン', 'Not/AZone');
+  const badTz = ctx.apiGetReservationDetail(jpToken, 'VIE-T01').detail;
+  check('タイムゾーン名が正しくなくても表示は壊れない（日本時間だけ出す）',
+        !badTz.history[0].datetime.includes('（現地）') &&
+        /^\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}$/.test(badTz.history[0].datetime),
+        badTz.history[0].datetime);
+
+  // 画面（マスタ管理）から設定できる
+  ctx.apiSaveBranch(jpToken, { code: 'VIE', name: 'ウィーン支店', role: 'BRANCH', email: 'vie@his-world.com',
+                               prefix: 'VIE', passcode: '', active: true, timezone: 'Europe/Vienna' });
+  const saved = ctx.apiListBranches(jpToken).find(b => b.code === 'VIE');
+  check('マスタ管理画面からタイムゾーンを設定できる', saved.timezone === 'Europe/Vienna', JSON.stringify(saved));
+
+  // タイムゾーンを渡さずに保存しても、設定済みの値が消えない
+  ctx.apiSaveBranch(jpToken, { code: 'VIE', name: 'ウィーン支店', role: 'BRANCH', email: 'vie@his-world.com',
+                               prefix: 'VIE', passcode: '', active: true });
+  const kept = ctx.apiListBranches(jpToken).find(b => b.code === 'VIE');
+  check('タイムゾーンを指定せずに保存しても設定が消えない', kept.timezone === 'Europe/Vienna', JSON.stringify(kept));
+}
+
+// ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
 process.exit(fail === 0 ? 0 : 1);

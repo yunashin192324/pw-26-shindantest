@@ -526,6 +526,10 @@ const BM_COL_DISPLAY_LANG = '表示言語';
 // 通知だけを止める設定）とは異なり、この列は支店宛のメール通知そのものを一括で止める
 // （getBranchEmail_参照）。案件の可視性・未読フラグ（一覧の「要対応」表示等）には影響しない。
 const BM_COL_BRANCH_MAIL_NOTIFY = '支店メール通知';
+// ★機能追加（項目97）：支店の現地時間。'Europe/Rome' のようなタイムゾーン名を入れると、
+// 日時の表示に現地時間を併記する（空欄なら従来どおり日本時間だけ）。
+// 日本時間の表示自体は変えない。時差の取り違えを防ぐため、どちらの時刻かを必ず添える。
+const BM_COL_TIMEZONE = 'タイムゾーン';
 const BM_COL_ACTIVE = '有効';
 // ★不具合防止：既存のテスト・運用スプレッドシートは「有効」列が支店マスタの最後尾にある前提で
 // 位置決め打ちの行を作っている場合がある。新しい列（手配メール機能まわり）は、その並びを崩さないよう
@@ -536,7 +540,7 @@ const BRANCH_MASTER_HEADERS = [
   BM_COL_REMIND_DAYS, BM_COL_CONSENT_REQUIRED, BM_COL_ACTIVE,
   BM_COL_ARRANGEMENT_ENABLED, BM_COL_PASSPORT_REQUIRED, BM_COL_SHOP_DIRECT,
   BM_COL_SHOP_NOTIFY_HQ, BM_COL_SHOP_BILLING, BM_COL_SHOP_UPLOAD_VISIBLE_TO_BRANCH,
-  BM_COL_SHOW_HOPE_TIME, BM_COL_BRANCH_NOTIFY_NEW_CASE, BM_COL_DISPLAY_LANG, BM_COL_BRANCH_MAIL_NOTIFY,
+  BM_COL_SHOW_HOPE_TIME, BM_COL_BRANCH_NOTIFY_NEW_CASE, BM_COL_DISPLAY_LANG, BM_COL_BRANCH_MAIL_NOTIFY, BM_COL_TIMEZONE,
   // カテゴリごとの手配先（名前・メール）。同じ宛先を複数カテゴリに入れれば「まとめて1件に依頼」にできる
   ...ARRANGEMENT_CATEGORIES.flatMap(c => [arrNameCol_(c.label), arrEmailCol_(c.label)])
 ];
@@ -1047,6 +1051,8 @@ function listBranchesRaw_() {
     shopUploadVisibleToBranch: isActiveFlag_(r[BM_COL_SHOP_UPLOAD_VISIBLE_TO_BRANCH]),
     deliveryDays: parseIntOrNull_(r[BM_COL_DELIVERY_DAYS]),
     remindDays: parseIntOrNull_(r[BM_COL_REMIND_DAYS]),
+    // ★機能追加（項目97）：支店の現地時間の地域名（空欄なら現地時間を併記しない）
+    timezone: String(r[BM_COL_TIMEZONE] || '').trim(),
     consentRequired: isActiveFlag_(r[BM_COL_CONSENT_REQUIRED]),
     passportRequired: isActiveFlag_(r[BM_COL_PASSPORT_REQUIRED]),
     // ★要件：希望日の時間帯（AM／PM）欄を出すかどうか（支店ごとに任意。既定は非表示）
@@ -1126,6 +1132,12 @@ function apiSaveBranch(token, branch) {
         case BM_COL_EMAIL: return branch.email || '';
         case BM_COL_PREFIX: return prefix;
         case BM_COL_ACTIVE: return branch.active !== false;
+        // ★機能追加（項目97）：現地時間の併記に使うタイムゾーン。
+        // 指定が無い場合は既存の値をそのまま残す（この画面で扱わない列と同じ考え方）。
+        case BM_COL_TIMEZONE:
+          return branch.timezone === undefined
+            ? (existingRowValues ? existingRowValues[idx] : '')
+            : String(branch.timezone || '').trim();
         // ★不具合修正：このAPIが直接扱わない列（請求番号欄名称・納品期限日数など、今後追加される
         // 列も含む）は、新規行なら空欄、既存行の編集なら元の値をそのまま維持する。
         // 以前は無条件に空文字で上書きしていたため、このAPI経由で支店情報を保存すると
@@ -1776,9 +1788,14 @@ function buildShopReservationDetail_(session, kanriNo, headers, rowData) {
   let hRows = getRowsAsObjects_(hSheet).filter(r => String(r[H_COL_KANRI]) === String(kanriNo));
   hRows = hRows.filter(r => visibleToRole_(session.role, r[H_COL_SENDER_ROLE], r[H_COL_RECIPIENT_ROLE]));
   hRows.sort((a, b) => new Date(b[H_COL_DATETIME]) - new Date(a[H_COL_DATETIME]));
+  // ★機能追加（項目97）：支店マスタにタイムゾーンが設定されていれば、日時に現地時間を併記する
+  // （時差の取り違えを防ぐため、日本時間の表示は残したまま「どちらの時刻か」を必ず添える）
+  detail.branchTimezone = meta.timezone || '';
+  detail.branchLocalNow = branchLocalNow_(meta.timezone);
   detail.history = hRows.map(r => ({
     id: r[H_COL_ID],
-    datetime: formatMaybeDate_(r[H_COL_DATETIME]),
+    datetime: r[H_COL_DATETIME] instanceof Date
+      ? formatDualTime_(r[H_COL_DATETIME], meta.timezone) : formatMaybeDate_(r[H_COL_DATETIME]),
     sender: r[H_COL_SENDER],
     senderRole: r[H_COL_SENDER_ROLE],
     body: r[H_COL_BODY],
@@ -2383,9 +2400,14 @@ function apiGetReservationDetail(token, kanriNo) {
   // 支店が書いたメッセージ本文を日本語に翻訳する（逆方向はSETUP.md参照）。読み取り専用の
   // 表示データにだけ適用し、翻訳結果が保存に使われることはない。
   const translateBranchMsgToJa = session.role === JP_ROLE && meta.displayLang === 'en';
+  // ★機能追加（項目97）：支店マスタにタイムゾーンが設定されていれば、日時に現地時間を併記する
+  // （時差の取り違えを防ぐため、日本時間の表示は残したまま「どちらの時刻か」を必ず添える）
+  detail.branchTimezone = meta.timezone || '';
+  detail.branchLocalNow = branchLocalNow_(meta.timezone);
   detail.history = hRows.map(r => ({
     id: r[H_COL_ID],
-    datetime: formatMaybeDate_(r[H_COL_DATETIME]),
+    datetime: r[H_COL_DATETIME] instanceof Date
+      ? formatDualTime_(r[H_COL_DATETIME], meta.timezone) : formatMaybeDate_(r[H_COL_DATETIME]),
     sender: r[H_COL_SENDER],
     senderRole: r[H_COL_SENDER_ROLE],
     body: (translateBranchMsgToJa && r[H_COL_SENDER_ROLE] === BRANCH_ROLE) ? translateEnToJa_(r[H_COL_BODY]) : r[H_COL_BODY],
@@ -4944,6 +4966,34 @@ function branchMasterIssuesMessage_() {
   if (!issues.length) return '';
   return '★支店マスタに確認が必要な記載があります：\n' +
     issues.map((m, i) => `　${i + 1}. ${m}`).join('\n') + '\n\n';
+}
+
+// ★機能追加（項目97）：日時を「日本時間」と「支店の現地時間」の両方で表す。
+// 支店マスタの「タイムゾーン」が空欄なら、従来どおり日本時間だけを返す。
+// どちらの時刻かを必ず添えるのは、時差の取り違え（現地9時と日本9時の混同）を防ぐため。
+function formatDualTime_(date, timezone) {
+  if (!(date instanceof Date)) return String(date === null || date === undefined ? '' : date);
+  const jp = Utilities.formatDate(date, 'Asia/Tokyo', 'yyyy/MM/dd HH:mm');
+  const tz = String(timezone || '').trim();
+  if (!tz || tz === 'Asia/Tokyo') return jp;
+  let local = '';
+  try {
+    local = Utilities.formatDate(date, tz, 'MM/dd HH:mm');
+  } catch (e) {
+    return jp; // タイムゾーン名が正しくない場合は日本時間だけを出す（表示を止めない）
+  }
+  return `${jp}（日本）／${local}（現地）`;
+}
+
+// その支店の現在時刻（現地）。タイムゾーン未設定なら空文字。
+function branchLocalNow_(timezone) {
+  const tz = String(timezone || '').trim();
+  if (!tz || tz === 'Asia/Tokyo') return '';
+  try {
+    return Utilities.formatDate(new Date(), tz, 'MM/dd HH:mm');
+  } catch (e) {
+    return '';
+  }
 }
 
 function checkBranchMasterIssues_() {

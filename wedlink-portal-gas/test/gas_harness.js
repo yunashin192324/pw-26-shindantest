@@ -168,9 +168,18 @@ function makeContext() {
     SpreadsheetApp: { openById: () => ss, getUi: () => ({ alert: () => {} }) },
     Utilities: {
       getUuid: () => `uuid-${++uuid}`,
+      // ★機能追加（項目97）：現地時間の併記をテストできるよう、日本時間以外のタイムゾーンは
+      // 「日本との時差」ぶんずらして整形する。'Asia/Tokyo'（既存の全ての呼び出し）の挙動は
+      // 従来と1文字も変えていない（既存テストの日付境界の判定に影響を与えないため）。
       formatDate: (d, tz, fmt) => {
-        const Y = d.getFullYear(), M = pad(d.getMonth() + 1, 2), D = pad(d.getDate(), 2);
-        const h = pad(d.getHours(), 2), m = pad(d.getMinutes(), 2), s = pad(d.getSeconds(), 2);
+        const HOURS_FROM_TOKYO = { 'Europe/Rome': -8, 'Europe/Vienna': -8, 'Indian/Maldives': -4, 'UTC': -9 };
+        const shift = (tz && tz !== 'Asia/Tokyo') ? HOURS_FROM_TOKYO[tz] : 0;
+        if (tz && tz !== 'Asia/Tokyo' && shift === undefined) {
+          throw new Error(`Unsupported timezone in test harness: ${tz}`); // 実GASも不正な地域名では例外になる
+        }
+        const t = shift ? new Date(d.getTime() + shift * 3600000) : d;
+        const Y = t.getFullYear(), M = pad(t.getMonth() + 1, 2), D = pad(t.getDate(), 2);
+        const h = pad(t.getHours(), 2), m = pad(t.getMinutes(), 2), s = pad(t.getSeconds(), 2);
         return fmt.replace('yyyy', Y).replace('MM', M).replace('dd', D)
                   .replace('HH', h).replace('mm', m).replace('ss', s);
       },
