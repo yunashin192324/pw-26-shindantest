@@ -967,7 +967,7 @@ function importUncontractedCsv(csvText) {
  * 「is not a function」という分かりにくいエラーになるため、
  * 画面側から版数を確認できるようにしている。
  */
-const SERVER_VERSION = '2026-08-23';
+const SERVER_VERSION = '2026-08-24';
 
 /**
  * サーバー側の版数を返す。画面側は、自分が期待する版数と一致するかを起動時に確認する。
@@ -2620,18 +2620,24 @@ function applyStaffRenameOrTransfer_(beforeOfficeCode, beforeEmployeeNo, beforeE
         : (shop.code === beforeOfficeCode && empName === beforeEmployeeName);
       if (!isMatch) return;
 
-      updatedCount++;
       const rIdx = i + 2;
 
       if (canMoveSheet && shop.code !== afterOfficeCode) {
+        // 転記（異動）：店舗をまたぐので必ず「変更あり」
         const moved = row.slice();
         moved[IDX_EMPNAME] = afterEmployeeName;
         moved[IDX_OFFICE] = afterOfficeCode;
         rowsToAppend.push(moved);
         rowsToDelete.push(rIdx);
+        updatedCount++;
       } else if (empName !== afterEmployeeName) {
+        // 同じ店舗のまま社員名だけ修正
         setTextCell_(sheet, rIdx, COL_EMPNAME, afterEmployeeName);
+        updatedCount++;
       }
+      // どちらでもない場合（本部異動で名前も変わっていない等）は、実際には何も
+      // 書き換わっていないので件数に含めない。「N件修正しました」の表示が
+      // 実態と食い違う（何もしていないのに件数だけ出る）ことを防ぐため。
     });
 
     // 転記・削除する行は後ろから消す（前から消すと残りの行番号がずれるため）
