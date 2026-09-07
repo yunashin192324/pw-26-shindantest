@@ -1296,11 +1296,12 @@ function paneHidden(document, key) {
     const rowToken = ctx.apiLogin('ROW', 'CHANGE-ME-ROW').session.token;
 
     // --- STS JP・STS 支店がどちらもOKなのに撮影日FIX未入力（不整合データ）でも「予約確定」と出る ---
-    // （STS 支店はBRANCH_EDIT_GATEにより「現在のSTS JP」次第で書き込める値が変わるため、
-    //   まずSTS 支店をRQ状態のうちにOKへ、そのあとでSTS JPを別途OKにする順で組み立てる）
+    // （★仕様変更（report5）：案件全体のSTS(支店側)はSTS(JP側)がCR/DC/PC/FNの間しか支店が
+    //   直接編集できなくなった（BRANCH_MAIN_EDIT_GATE）ため、いったんDCでゲートを開けて
+    //   支店にOKを書き込ませる。DC+OKの自動連動でSTS JP側も同時にOKになる）
     const kOk = ctx.apiCreateReservation(jpToken, 'ROW', '01 Status Ok\n02 Status Bride').kanriNo;
-    ctx.apiSaveFieldsQuiet(rowToken, kOk, { 'STS 支店': 'OK' });
-    ctx.apiSaveFieldsQuiet(jpToken, kOk, { 'STS JP': 'OK' });
+    ctx.apiSaveFieldsQuiet(jpToken, kOk, { 'STS JP': 'DC' });
+    ctx.apiSaveFieldsQuiet(rowToken, kOk, { 'STS 支店': 'OK' }); // DC+OK→STS JPも自動でOKになる
     document.getElementById('nav-dashboard').click();
     await settle();
     const cardOk = [...document.querySelectorAll('#reservation-list .res-card')].find(c => c.textContent.includes(kOk));
@@ -1308,8 +1309,11 @@ function paneHidden(document, key) {
           cardOk.textContent.includes('予約確定') && !cardOk.textContent.includes('撮影日未定'), cardOk.textContent);
 
     // --- どちらかがRQのままなら「リクエスト中」（OKが片方にあっても、まだ確定扱いにしない） ---
+    // （同じくDCで一時的にゲートを開けてSTS支店をOKにしたあと、表示テストのためJP側だけRQへ戻す）
     const kRq = ctx.apiCreateReservation(jpToken, 'ROW', '01 Status Rq\n02 Status Bride2').kanriNo;
-    ctx.apiSaveFieldsQuiet(rowToken, kRq, { 'STS 支店': 'OK' }); // STS JPはRQのまま
+    ctx.apiSaveFieldsQuiet(jpToken, kRq, { 'STS JP': 'DC' });
+    ctx.apiSaveFieldsQuiet(rowToken, kRq, { 'STS 支店': 'OK' }); // DC+OK→STS JPは一旦自動でOKになる
+    ctx.apiSaveFieldsQuiet(jpToken, kRq, { 'STS JP': 'RQ' }); // 表示テストのためJP側だけRQに戻す（支店側はOKのまま）
     document.getElementById('nav-dashboard').click();
     await settle();
     const cardRq = [...document.querySelectorAll('#reservation-list .res-card')].find(c => c.textContent.includes(kRq));
@@ -1337,8 +1341,9 @@ function paneHidden(document, key) {
 
     // --- ★要件変更：撮影日FIXが入っている案件でも、文言（予約確定など）と日付の両方を併記する ---
     const kDated = ctx.apiCreateReservation(jpToken, 'ROW', '01 Status Dated\n02 Status Bride6').kanriNo;
-    ctx.apiSaveFieldsQuiet(rowToken, kDated, { 'STS 支店': 'OK' });
-    ctx.apiSaveFieldsQuiet(jpToken, kDated, { 'STS JP': 'OK', '撮影日FIX': '2026-12-01' });
+    ctx.apiSaveFieldsQuiet(jpToken, kDated, { 'STS JP': 'DC' });
+    ctx.apiSaveFieldsQuiet(rowToken, kDated, { 'STS 支店': 'OK' }); // DC+OK→STS JPも自動でOKになる
+    ctx.apiSaveFieldsQuiet(jpToken, kDated, { '撮影日FIX': '2026-12-01' });
     document.getElementById('nav-dashboard').click();
     await settle();
     const cardDated = [...document.querySelectorAll('#reservation-list .res-card')].find(c => c.textContent.includes(kDated));
@@ -1350,8 +1355,12 @@ function paneHidden(document, key) {
           !!cardDated.querySelector('.case-status-label') && !!cardDated.querySelector('.case-status-date'));
 
     // --- UC／CHK／DC／PCもそれぞれの文言になる ---
+    // （★仕様変更（report5）：STS JPがRQのままでは支店がSTS支店を直接編集する経路が
+    //   ロックされたため、ここもDCで一時的にゲートを開けてUCを書き込ませる。DC+UCの自動連動で
+    //   STS JP側も同時にUCになるが、この表示テストが見るのはSTS(支店側)の文言のみ）
     const kUc = ctx.apiCreateReservation(jpToken, 'ROW', '01 Status Uc\n02 Status Bride7').kanriNo;
-    ctx.apiSaveFieldsQuiet(rowToken, kUc, { 'STS 支店': 'UC' }); // JPはRQのまま→支店の回答はJP側にも自動連動しUCになる
+    ctx.apiSaveFieldsQuiet(jpToken, kUc, { 'STS JP': 'DC' });
+    ctx.apiSaveFieldsQuiet(rowToken, kUc, { 'STS 支店': 'UC' }); // DC+UC→STS JP側も自動連動しUCになる
     const kChk = ctx.apiCreateReservation(jpToken, 'ROW', '01 Status Chk\n02 Status Bride8').kanriNo;
     ctx.apiSaveFieldsQuiet(jpToken, kChk, { 'STS JP': 'CHK' });
     const kDc = ctx.apiCreateReservation(jpToken, 'ROW', '01 Status Dc\n02 Status Bride9').kanriNo;

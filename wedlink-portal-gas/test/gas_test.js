@@ -298,7 +298,12 @@ section('7. ステータス権限ゲート');
 
   check('日本側はSTS 支店を変更できない', tryIt(jp.session.token, {'STS 支店':'OK'}) !== null);
   check('支店側はSTS JPを変更できない', tryIt(br.session.token, {'STS JP':'OK'}) !== null);
-  check('STS JP=RQ のとき支店はUCで回答できる', tryIt(br.session.token, {'STS 支店':'UC'}) === null);
+  // ★不具合修正（項目99）：以前は案件全体のSTS(JP側)がRQ/CHK（未確定）の間も、案件全体の
+  // STS(支店側)（プラン行）を自由に編集できてしまい、「上の希望日一覧」と「下のプラン行」の
+  // 2箇所から同じ回答ができる二重入力になっていた（現地の担当者からどちらで回答すべきか
+  // 分からないとの報告）。未確定の間は「希望日一覧」からだけ回答する運用に統一する。
+  check('STS JP=RQ（未確定）のとき、案件全体のSTS支店（プラン行）はロックされる',
+        tryIt(br.session.token, {'STS 支店':'UC'}) !== null);
   // STS JP を CR にする
   tryIt(jp.session.token, {'STS JP':'CR'});
   check('STS JP=CR のとき支店はCFで回答できる', tryIt(br.session.token, {'STS 支店':'CF'}) === null);
@@ -1863,7 +1868,7 @@ section('32. 「空きだけ確認」チェックでSTS JPが自動でCHKにな�
 }
 
 // ---------------------------------------------------------------
-section('33. STSの自動連動（日本CR＋支店CW→日本もCW／日本RQ＋支店UC→日本もUC）');
+section('33. STSの自動連動（日本CR＋支店CW→日本もCW／未確定中の直接編集は今はロック）');
 {
   const ctx = featureFixture();
   addCase(ctx, '予約一覧', { '支店コード': 'VIE', '管理番号': 'VIE-711', '管轄': '関東', '新郎名（ローマ字）': 'A' });
@@ -1882,26 +1887,34 @@ section('33. STSの自動連動（日本CR＋支店CW→日本もCW／日本RQ�
   check('自動連動もSTS JPの変更履歴に残る（自動反映（ステータス連動）が担当者名）',
         cascadeLog1.some(h => h.who === '自動反映（ステータス連動）'), JSON.stringify(cascadeLog1));
 
-  // 日本側がRQ（依頼中）、現地がUC（空きなし）で回答 → 日本側も自動でUCになる
+  // ★仕様変更（report5）：以前はここで「日本側がRQ（依頼中）、現地がUC（空きなし）で回答 →
+  // 日本側も自動でUC」という自動連動を確認していたが、STS JPが未確定（RQ／CHK）の間は
+  // 支店が案件全体のSTS(支店側)を直接編集する経路自体がBRANCH_MAIN_EDIT_GATEでロックされた
+  // （確定前の回答は「希望日一覧」からのみ行う仕様。詳細・希望日経由の連動確認はセクション82）。
+  // そのためこの旧ルールはSTATUS_AUTO_CASCADEから削除済みで、ここではロックされて
+  // 到達できないことだけを確認する。
   addCase(ctx, '予約一覧', { '支店コード': 'VIE', '管理番号': 'VIE-712', '管轄': '関東', '新郎名（ローマ字）': 'B' });
   ctx.apiSaveFieldsQuiet(t, 'VIE-712', { 'STS JP': 'RQ' });
-  ctx.apiSaveFieldsQuiet(vt, 'VIE-712', { 'STS 支店': 'UC' });
-  const after2 = ctx.apiGetReservationDetail(t, 'VIE-712').detail;
-  check('現地がUCに回答すると日本側も自動でUCになる', after2['STS JP'] === 'UC', String(after2['STS JP']));
+  let err712 = null;
+  try { ctx.apiSaveFieldsQuiet(vt, 'VIE-712', { 'STS 支店': 'UC' }); } catch (e) { err712 = e.message; }
+  check('STS JPがRQの間は、支店が案件全体のSTS(支店側)を直接UCにする経路はロックされている（旧仕様の自動連動は到達不能）',
+        err712 !== null, String(err712));
 
-  // ルールに当てはまらない組み合わせでは連動しない（例：日本側がCHKのまま支店だけCWにする）
+  // CHK（空き確認中）も同様にBRANCH_MAIN_EDIT_GATEに含まれないため、直接編集はロックされる
   addCase(ctx, '予約一覧', { '支店コード': 'VIE', '管理番号': 'VIE-713', '管轄': '関東', '新郎名（ローマ字）': 'C' });
   ctx.apiSaveFieldsQuiet(t, 'VIE-713', { 'STS JP': 'CHK' });
-  ctx.apiSaveFieldsQuiet(vt, 'VIE-713', { 'STS 支店': 'CW' });
-  check('対象外の組み合わせでは日本側のSTSは変わらない（CHKのまま）',
-        ctx.apiGetReservationDetail(t, 'VIE-713').detail['STS JP'] === 'CHK');
+  let err713 = null;
+  try { ctx.apiSaveFieldsQuiet(vt, 'VIE-713', { 'STS 支店': 'CW' }); } catch (e) { err713 = e.message; }
+  check('STS JPがCHKの間も同様にロックされている（BRANCH_MAIN_EDIT_GATEにCHKは無い）',
+        err713 !== null, String(err713));
 
   // 通知メール：STSの自動連動そのものはメッセージ通知には乗らない（監査ログのみ）。
-  // ただしVIE-711は支店がCW（キャンセル成立）で回答しているため、別の要件（現地支店がCWにしたら
+  // VIE-712・VIE-713はいずれも保存自体がロックで失敗するためメールも増えないはず。
+  // VIE-711は支店がCW（キャンセル成立）で回答しているため、別の要件（現地支店がCWにしたら
   // 自動で注意書きを送る＝appendCwAutoNoticeIfApplicable_）によりメールが1通だけ飛ぶ
-  // （自動連動そのものが飛ばしているのではないことを、UCの回答＝VIE-712の側で確認する）。
-  check('自動連動そのものはメールを増やさない（UCの回答＝VIE-712分にはメールが無い）',
-        !ctx.__mail.some(m => /VIE-712/.test(m.subj + m.body)));
+  // （自動連動そのものが飛ばしているのではないことを確認する）。
+  check('自動連動そのものはメールを増やさない（VIE-712・VIE-713はロックで保存自体が失敗しメール無し）',
+        !ctx.__mail.some(m => /VIE-712|VIE-713/.test(m.subj + m.body)));
   check('支店がCWにした分だけ、自動注意書きのメールが1通飛ぶ（VIE-711）',
         ctx.__mail.some(m => /VIE-711/.test(m.subj + m.body) && m.body.includes('チャージの確認はしていない')));
 }
@@ -2654,9 +2667,11 @@ section('44. ステータス連動の不具合修正（CR→CF・FNの支店側�
 
   // --- FN確定後、現地側も自分のSTS(支店側)をFNにできる（従来はロックされて変更不可だった不具合） ---
   const created2 = ctx.apiShopCreateRequest(shopToken, { branchCode: 'VIE', team: '関東', groomLastName: 'BL', groomName: 'B', brideLastName: 'BBL', brideName: 'BB', hope1: '2026-10-01', challengeNo: 'DUMMYCHG009' });
-  // STS(JP側)がRQの間に支店がOKで回答（このAPI設計ではRQ→OKの自動連動は無いため、JP側も別途OKにする）
-  ctx.apiSaveFieldsQuiet(vieToken, created2.kanriNo, { 'STS 支店': 'OK' });
-  ctx.apiSaveFieldsQuiet(jpToken, created2.kanriNo, { 'STS JP': 'OK' });
+  // ★仕様変更（report5）：STS(JP側)がRQ（未確定）の間は、案件全体のSTS(支店側)を支店が
+  // 直接編集する経路はロックされている（BRANCH_MAIN_EDIT_GATE）。確定前の回答は希望日一覧
+  // からOKで行い、applyHopeStatusCascade_により案件全体のSTS(JP側)・STS(支店側)双方が
+  // 自動でOKへ進む。
+  ctx.apiSaveFieldsQuiet(vieToken, created2.kanriNo, { '希望日① STS 支店': 'OK' });
   ctx.apiSaveFieldsQuiet(jpToken, created2.kanriNo, { 'STS JP': 'FN' });
   let err = null;
   try { ctx.apiSaveFieldsQuiet(vieToken, created2.kanriNo, { 'STS 支店': 'OK' }); } catch (e) { err = e.message; }
@@ -3483,7 +3498,9 @@ section('58. 店舗発新規依頼を支店ごとに自動分割・新規依頼�
 
   // --- 希望日①＝ウィーン支店のプラン、希望日②＝イスタンブール支店のプラン、
   //     希望日③＝再びウィーン支店のプラン、という国をまたいだ複数プラン希望は、
-  //     支店ごとに案件を自動分割して作成する（元の希望順位はそれぞれの案件内で保持する） ---
+  //     支店ごとに案件を自動分割して作成する（各案件の中では希望日を詰めて①から
+  //     連番に振り直す。実際に現地の担当者が使う画面で「希望日③にしかデータが無く
+  //     ①②が空欄」という分かりにくい状態にならないようにするため） ---
   ctx.__mail.length = 0;
   const multi = ctx.apiShopCreateRequest(shopToken, {
     branchCode: 'VIE', team: '関東', groomLastName: 'Multi', groomName: 'Branch',
@@ -3500,11 +3517,11 @@ section('58. 店舗発新規依頼を支店ごとに自動分割・新規依頼�
   check('ウィーン支店分の案件ができている', !!vieCase);
   check('イスタンブール支店分の案件ができている', !!istCase);
 
-  check('ウィーン支店分には希望日①・③が入り、他支店分の希望日②は空欄のまま',
-        vieCase['希望日①'] === '2026-10-10' && vieCase['希望日③'] === '2026-10-12' && !vieCase['希望日②'],
+  check('ウィーン支店分は希望日①②に詰めて入り（元の①③）、希望日③は空欄になる',
+        vieCase['希望日①'] === '2026-10-10' && vieCase['希望日②'] === '2026-10-12' && !vieCase['希望日③'],
         JSON.stringify(vieCase));
-  check('イスタンブール支店分には希望日②だけが入り、希望日①・③は空欄のまま',
-        istCase['希望日②'] === '2026-10-11' && !istCase['希望日①'] && !istCase['希望日③'],
+  check('イスタンブール支店分は希望日①に詰めて入り（元の②）、希望日②③は空欄になる',
+        istCase['希望日①'] === '2026-10-11' && !istCase['希望日②'] && !istCase['希望日③'],
         JSON.stringify(istCase));
   check('ウィーン支店分のプラン名は自分の希望日のプランから決まる（希望日①のプラン）',
         vieCase['プラン名'] === 'ウィーン半日プラン');
@@ -3766,8 +3783,11 @@ section('62. 新規依頼フォーム上部の支店（都市）欄廃止（希�
   check('同じ通知メールに、同じ支店（VIE）の第二希望のプランも記載される（以前は第一希望しか出ない不具合があった）',
         !!vieMail && vieMail.body.includes('第二希望') && vieMail.body.includes('プランA'), vieMail && vieMail.body);
   const istMail = ctx.__mail.find(m => m.body.includes('MULTIPLAN01') && m.body.includes('カッパドキアサンライズ'));
-  check('別支店に分割された案件の通知メールには、その支店の希望日（第三希望）のプランが記載される',
-        !!istMail && istMail.body.includes('第三希望') && istMail.body.includes('カッパドキアサンライズ'), istMail && istMail.body);
+  // ★不具合修正：分割後の案件では希望日を詰めて①から振り直すため、元は第三希望だった
+  // イスタンブール分の希望日も、その案件では唯一の希望日＝第一希望として案内される
+  // （案件詳細画面の「希望日①」に入る内容と、メッセージの表記を一致させるため）。
+  check('別支店に分割された案件の通知メールには、その支店の希望日（詰め直し後は第一希望）のプランが記載される',
+        !!istMail && istMail.body.includes('第一希望') && istMail.body.includes('カッパドキアサンライズ'), istMail && istMail.body);
 
   // --- 通知メールの「ポータルで確認する」リンクにWEBAPP_URLが載る ---
   check('通知メールにWebアプリのURL（WEBAPP_URL）が記載される（プレースホルダのままではない）',
@@ -4454,8 +4474,12 @@ section('77. 【機能追加】複数案件のステータスをまとめて更�
         JSON.stringify((d1.history || []).map(h => h.body)));
 
   // 支店ロールは自分の支店のSTS(支店側)をまとめて更新できる
+  // ★仕様変更（report5）：STS(JP側)が未確定（RQ）の間は、案件全体のSTS(支店側)を支店が
+  // 直接編集する経路自体がロックされたため、ここでは先にJP側をCRへ進めてから、支店が
+  // CWで応答する形（BRANCH_MAIN_EDIT_GATEで許可されている組み合わせ）でテストする。
+  ctx.apiSaveFieldsQuiet(jpToken, 'VIE-903', { 'STS JP': 'CR' });
   const vieToken = ctx.apiLogin('VIE', 'vp').session.token;
-  const res2 = ctx.apiBulkUpdateStatus(vieToken, ['VIE-903'], 'STS 支店', 'ST', '');
+  const res2 = ctx.apiBulkUpdateStatus(vieToken, ['VIE-903'], 'STS 支店', 'CW', '');
   check('支店ロールも自分の案件をまとめて更新できる', res2.updated === 1, JSON.stringify(res2));
 
   // 他支店の案件が混ざっていたら、何も変更せずに止める
@@ -4784,6 +4808,61 @@ section('81. 【機能追加】支店の撮影不可日（休業日カレンダ�
         ctx.apiListBlackoutDates(jpToken, 'VIE').items.length >= 1);
   check('その場合は管理者へ知らせが届く',
         ctx.__mail.some(m => String(m.subj).includes('システムエラー')), JSON.stringify(ctx.__mail.map(m => m.subj)));
+}
+
+// ---------------------------------------------------------------
+section('82. 【機能追加】未確定の間は「希望日一覧」からだけ回答する（プラン行の二重入力を防ぐ）');
+{
+  // 背景：現地の担当者が、案件全体のSTS(JP側)が未確定（RQ/CHK）の間、上の「希望日一覧」の
+  // STS(支店側)と、下の「プラン・オプション明細」のSTS(支店側)の両方を編集できてしまい、
+  // どちらで回答すればよいか分からない、という報告を受けて対応した。
+  const ctx = featureFixture();
+  const jpToken = ctx.apiLogin('KANTO', 'pw').session.token;
+  const vieToken = ctx.apiLogin('VIE', 'vp').session.token;
+  addCase(ctx, '予約一覧', {
+    '支店コード': 'VIE', '管理番号': 'VIE-901', '管轄': '関東', 'STS JP': 'RQ',
+    '新郎名（ローマ字）': 'Taro', '新婦名（ローマ字）': 'Hanako',
+    '希望日①': '2027-06-01', '希望日① STS JP': 'RQ', '希望日② STS JP': 'RQ',
+    'OP1': 'アルバム追加', 'OP1 STS JP': 'RQ'
+  });
+
+  const tryIt = (token, changes) => {
+    try { ctx.apiCommitChanges(token, 'VIE-901', changes, ''); return null; }
+    catch (e) { return e.message; }
+  };
+
+  check('未確定（RQ）の間、案件全体のSTS(支店側)（プラン行）は編集できない',
+        tryIt(vieToken, { 'STS 支店': 'OK' }) !== null);
+  // ★変更していないことの確認：希望日ごとのSTS(支店側)は、未確定の間も従来どおり自由に編集できる
+  // （これが「希望日一覧から回答する」唯一の入り口として残るべきもののため）
+  check('未確定の間も、希望日ごとのSTS(支店側)は従来どおり編集できる（唯一の回答経路として残す）',
+        tryIt(vieToken, { '希望日① STS 支店': 'OK' }) === null);
+  // ★変更していないことの確認：オプションのSTS(支店側)は、希望日のような代替入力経路が無いため
+  // 従来どおり未確定の間も編集できる（対象は案件全体のSTS支店だけに限定した）
+  check('未確定の間も、オプションのSTS(支店側)は従来どおり編集できる（希望日のような代替経路が無いため）',
+        tryIt(vieToken, { 'OP1 STS 支店': 'OK' }) === null);
+
+  // 希望日①をOKにしたことで、案件全体のSTS(JP側)もOKへ自動遷移しているはず
+  const afterHopeOk = ctx.apiGetReservationDetail(jpToken, 'VIE-901').detail;
+  check('希望日①のOK回答で、案件全体のSTS(JP側)もOKへ自動遷移する（従来どおり）',
+        afterHopeOk['STS JP'] === 'OK', afterHopeOk['STS JP']);
+
+  // OK確定後も、案件全体のSTS(支店側)は引き続きロックされたまま（従来どおり）
+  check('OK確定後も、案件全体のSTS(支店側)は編集できない（従来どおりのロック）',
+        tryIt(vieToken, { 'STS 支店': 'OK' }) !== null);
+
+  // 日本側からCRが来たら、案件全体のSTS(支店側)がCW/CFで回答できるようになる（従来どおり）
+  ctx.apiCommitChanges(jpToken, 'VIE-901', { 'STS JP': 'CR' }, '');
+  check('STS(JP側)がCRになったら、案件全体のSTS(支店側)をCWで回答できる（従来どおり）',
+        tryIt(vieToken, { 'STS 支店': 'CW' }) === null);
+
+  // 別の案件で、CHK（空き確認のみ）の間もロックされることを確認する
+  addCase(ctx, '予約一覧', {
+    '支店コード': 'VIE', '管理番号': 'VIE-902', '管轄': '関東', 'STS JP': 'CHK',
+    '新郎名（ローマ字）': 'X', '新婦名（ローマ字）': 'Y'
+  });
+  check('STS(JP側)=CHK（空き確認中）の間も、案件全体のSTS(支店側)は編集できない',
+        tryIt(vieToken, { 'STS 支店': 'UC' }) !== null);
 }
 
 // ---------------------------------------------------------------

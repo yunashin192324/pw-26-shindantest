@@ -16,6 +16,11 @@
   // （Code.gsのSTATUS_AUTO_CASCADE参照）。FNはSTS(JP側)がFNになった後、現地側が自分のSTS(支店側)を
   // FNにするためだけに使う。
   const BRANCH_EDIT_GATE = { 'RQ': null, 'CHK': null, 'CR': ['CW', 'CF'], 'DC': ['OK', 'UC'], 'PC': ['OK', 'UC'], 'FN': ['FN'] };
+  // ★機能追加（項目99）：案件全体のSTS(支店側)（プラン・オプション明細の一番上の行）専用のゲート。
+  // Code.gsのBRANCH_MAIN_EDIT_GATEと同じ内容（両方に同じ分岐があるので、片方だけ直すと
+  // 画面とサーバーで挙動がずれる。CLAUDE.md参照）。未確定（RQ/CHK）の間は「希望日一覧」から
+  // だけ回答する運用に統一するため、RQ/CHKをキーに含めず編集不可（ロック）にする。
+  const BRANCH_MAIN_EDIT_GATE = { 'CR': ['CW', 'CF'], 'DC': ['OK', 'UC'], 'PC': ['OK', 'UC'], 'FN': ['FN'] };
   // 希望日ごとのSTS(支店側)は、現地が自由に選べる（Code.gsのapplyHopeStatusCascade_が連動を担当するため、
   // ここでは値の範囲を絞らずSTATUS_CODESすべてから選べるようにする）
   // ★機能追加（拡張要望3章）：店舗が案件作成後に設定できるSTS(JP側)（Code.gsのSHOP_STATUS_TARGETSと一致）
@@ -1524,6 +1529,23 @@
     if (!(key in BRANCH_EDIT_GATE)) return { editable: false, allowed: null };
     return { editable: true, allowed: BRANCH_EDIT_GATE[key] };
   }
+  // ★機能追加（項目99）：案件全体のSTS(支店側)専用（対になるのは案件全体のSTS(JP側)）。
+  // 希望日ごと・オプションのSTS(支店側)は従来どおりbranchGateFor（BRANCH_EDIT_GATE）を使う。
+  function branchMainGateFor(jpValue) {
+    const key = jpValue || '';
+    if (!(key in BRANCH_MAIN_EDIT_GATE)) return { editable: false, allowed: null };
+    return { editable: true, allowed: BRANCH_MAIN_EDIT_GATE[key] };
+  }
+  // ★機能追加（項目99）：プラン行のSTS(支店側)がロック表示になっているとき、なぜロックされて
+  // いるのかを一目で分かるようにする（未確定＝上の希望日一覧から回答すべき、なのか、
+  // 確定済み＝日本側からのCR/DC/PC等の連絡待ち、なのかで案内を変える）。
+  function mainStatusLockReason_(d) {
+    const jp = d['STS JP'] || '未設定';
+    if (jp === 'RQ' || jp === 'CHK') {
+      return `STS JP: ${jp}（確定前は上の「希望日一覧」から回答してください）`;
+    }
+    return `STS JP: ${jp}`;
+  }
 
   // STSセレクト（編集可なら<select data-pending>、不可なら読み取り専用表示）＋変更履歴リンク付き
   function statusCell(fieldName, current, editableByMe, allowedValues, lockedReason) {
@@ -1999,7 +2021,7 @@
     // 「プラン・オプションの隣でSTSを編集したい」というご要望を受け、プランの行に一本化した
     // （下のplanOptionTableHtml参照。同じフィールドを2箇所で編集できる状態を避けるため、
     // ここでの表示・編集は廃止した）。
-    const mainGate = branchGateFor(d['STS JP']);
+    const mainGate = branchMainGateFor(d['STS JP']);
 
     // ★要件：準備場所はイタリアの支店のみ表示し、ホテル／サロンの選択式にする（他支店は非表示）
     const prepFieldHtml = !d.isItaly ? '' : `
@@ -2300,7 +2322,7 @@
                   <td>${planDisplay}</td>
                   ${locDateTimeEmptyCells}
                   <td>${statusCell('STS JP', d['STS JP'], session.role === 'JP', null)}</td>
-                  <td>${statusCell('STS 支店', d['STS 支店'], session.role === 'BRANCH' && mainGate.editable, mainGate.allowed, `STS JP: ${d['STS JP'] || '未設定'}`)}</td>
+                  <td>${statusCell('STS 支店', d['STS 支店'], session.role === 'BRANCH' && mainGate.editable, mainGate.allowed, mainStatusLockReason_(d))}</td>
                 </tr>
                 ${optionRowsMain}
               </tbody>
@@ -3109,9 +3131,23 @@
   // プランの内容だけが残るようにした。
   async function onShopNewHopePlanNChange_(n) {
     const token = (shopNewHopeChangeTokens[n] = (shopNewHopeChangeTokens[n] || 0) + 1);
-    // 撮影希望場所欄は、選んだプランの設定（入力方式・候補）だけで決まるので、通信を待たずすぐ描画する
-    const planMeta = renderShopNewHopeLocation_(n);
     const planName = $('shop-new-hopeplan' + n).value;
+    // ★不具合防止：「プランを選んでもセール名・撮影希望場所が表示されない」という報告があった。
+    // 撮影希望場所欄の描画（renderShopNewHopeLocation_）はこの関数の先頭でtryの外に置いていたため、
+    // 万一そこで例外が起きると、その後に続くセール名・準備場所の取得処理まで巻き込んで
+    // 実行されなくなる構造だった。原因はまだ特定できていないが、この構造上のリスクはここで塞ぐ。
+    let planMeta;
+    try {
+      planMeta = renderShopNewHopeLocation_(n);
+    } catch (e) {
+      console.error(`[onShopNewHopePlanNChange_] 撮影希望場所欄の描画に失敗しました（希望日${n}、プラン「${planName}」）`, e);
+      planMeta = shopNewAllPlansCache.find(p => p.name === planName);
+    }
+    if (planName && !planMeta) {
+      // プランは選ばれているのに候補一覧に見つからない＝プラン名の不一致（マスタの表記ゆれ等）の
+      // 疑いがある。次に同じ現象が起きたとき、devtoolsのコンソールで原因を絞り込めるようにする。
+      console.warn(`[onShopNewHopePlanNChange_] 選択したプラン「${planName}」が候補一覧に見つかりません（希望日${n}）。プランマスタの登録内容をご確認ください。`);
+    }
     const branchCode = planMeta ? planMeta.branchCode : '';
     const saleSelect = $(shopNewHopeSaleId_(n));
     const prepBlock = $(shopNewHopePrepBlockId_(n));

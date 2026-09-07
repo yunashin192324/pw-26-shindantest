@@ -128,6 +128,21 @@ const BRANCH_EDIT_GATE = {
   // 自分のSTS(支店側)をFNにできる（それまでは編集不可のロックのまま）。
   'FN': ['FN']
 };
+// ★機能追加（項目99）：案件全体のSTS(支店側)（プラン・オプション明細の一番上の行）専用のゲート。
+// 上のBRANCH_EDIT_GATEは希望日ごとのSTS(支店側)にも使われており、そちらは対になるのが
+// 「その希望日自身のJP側ステータス」（通常RQ）なのでRQ/CHKでも編集できる必要がある
+// （希望日一覧から回答する唯一の入り口のため）。一方この案件全体側は、対になるのが
+// 「案件全体のSTS(JP側)」で、未確定（RQ/CHK）の間にここを自由に編集できてしまうと、
+// 「希望日一覧」と「プラン行」の2箇所から同じ回答を入れられる二重入力になり、現地の担当者が
+// どちらで回答すればよいか分からなくなる、という報告があった。未確定の間は「希望日一覧」
+// からだけ回答する運用に統一するため、RQ/CHKをキーに含めず編集不可（ロック）にする。
+// OKになった後の遷移（CR→CW/CF、DC/PC→OK/UC、FN→FN）は従来のBRANCH_EDIT_GATEと同じ。
+const BRANCH_MAIN_EDIT_GATE = {
+  'CR': ['CW', 'CF'],
+  'DC': ['OK', 'UC'],
+  'PC': ['OK', 'UC'],
+  'FN': ['FN']
+};
 // 請求先（日本の地域区分）
 const BILLING_REGIONS = ['北海道', '東北', '関東', '中部', '関西', '中四国', '九州'];
 // ★要件：準備場所の選択式表示・同意書欄の表示は「イタリアの支店」だけに絞る（他支店は非表示）。
@@ -1207,7 +1222,7 @@ function apiSetBranchActive(token, code, active) {
 // 既存の呼び出し側はname/activeしか見ないため、この拡張だけでは何も壊れない。
 function apiListPlans(token, branchCode) {
   const session = requireSession_(token);
-  const target = session.role === BRANCH_ROLE ? session.branchCode : String(branchCode || '').toUpperCase();
+  const target = session.role === BRANCH_ROLE ? session.branchCode : String(branchCode || '').trim().toUpperCase();
   const sheet = getSpreadsheet_().getSheetByName(PLAN_MASTER_SHEET_NAME);
   return getRowsAsObjects_(sheet)
     .filter(r => String(r[MM_COL_BRANCH]).trim().toUpperCase() === String(target).trim().toUpperCase())
@@ -1272,13 +1287,13 @@ function planOwnerBranchMap_() {
 }
 function apiListOptionItems(token, branchCode) {
   const session = requireSession_(token);
-  const target = session.role === BRANCH_ROLE ? session.branchCode : String(branchCode || '').toUpperCase();
+  const target = session.role === BRANCH_ROLE ? session.branchCode : String(branchCode || '').trim().toUpperCase();
   return listMasterItems_(OPTION_MASTER_SHEET_NAME, target);
 }
 // 撮影希望場所：支店ごとのマスター候補一覧（任意入力の補助用。強制の選択式にはしない）
 function apiListLocations(token, branchCode) {
   const session = requireSession_(token);
-  const target = session.role === BRANCH_ROLE ? session.branchCode : String(branchCode || '').toUpperCase();
+  const target = session.role === BRANCH_ROLE ? session.branchCode : String(branchCode || '').trim().toUpperCase();
   return listMasterItems_(LOCATION_MASTER_SHEET_NAME, target);
 }
 // ★機能追加：現地スタッフ（カメラマン・ヘアメイク等）の入力候補。
@@ -1286,7 +1301,7 @@ function apiListLocations(token, branchCode) {
 // 候補から選べるようにして表記を揃える狙い。
 function apiListStaff(token, branchCode) {
   const session = requireSession_(token);
-  const target = session.role === BRANCH_ROLE ? session.branchCode : String(branchCode || '').toUpperCase();
+  const target = session.role === BRANCH_ROLE ? session.branchCode : String(branchCode || '').trim().toUpperCase();
   return listMasterItems_(STAFF_MASTER_SHEET_NAME, target);
 }
 function apiSaveStaffItem(token, branchCode, name, originalName, active) {
@@ -1342,7 +1357,7 @@ function apiSaveSaleItem(token, branchCode, name, originalName, active, targetPl
 // ★機能追加：メッセージの定型文。支店コードに ALL を入れた行は全員が使える共通テンプレート。
 function apiListPhrases(token, branchCode) {
   const session = requireSession_(token);
-  const target = session.role === BRANCH_ROLE ? session.branchCode : String(branchCode || '').toUpperCase();
+  const target = session.role === BRANCH_ROLE ? session.branchCode : String(branchCode || '').trim().toUpperCase();
   const sheet = getSpreadsheet_().getSheetByName(PHRASE_MASTER_SHEET_NAME);
   return getRowsAsObjects_(sheet)
     .filter(r => {
@@ -1657,7 +1672,7 @@ function resolveMessageDirection_(session, headers, rowData, recipient) {
   if (!originShop) {
     return session.role === JP_ROLE ? 'JP_TO_BRANCH' : 'BRANCH_TO_JP';
   }
-  const branchCode = String(rowData[headers.indexOf(COL_BRANCH_CODE)] || '').toUpperCase();
+  const branchCode = String(rowData[headers.indexOf(COL_BRANCH_CODE)] || '').trim().toUpperCase();
   const direct = !!(branchMetaMap_()[branchCode] || {}).shopDirect;
 
   if (session.role === SHOP_ROLE) return direct ? 'SHOP_TO_BRANCH' : 'SHOP_TO_JP';
@@ -1920,7 +1935,7 @@ function rowInScope_(session, scope, row) {
   const branches = scope.branches || [];
   if (teams.length === 0 && branches.length === 0) return true; // 何も選択されていない場合は全件表示
   const matchesTeam = teams.includes(row[COL_AREA]);
-  const matchesBranch = branches.map(b => String(b).toUpperCase()).includes(String(row[COL_BRANCH_CODE]).toUpperCase());
+  const matchesBranch = branches.map(b => String(b).trim().toUpperCase()).includes(String(row[COL_BRANCH_CODE] || '').trim().toUpperCase());
   return matchesTeam || matchesBranch;
 }
 
@@ -2139,7 +2154,7 @@ function apiCheckStaffConflict(token, kanriNo, dateStr, staffNames) {
   if (rowIndex === -1) throw new Error('対象の予約が見つかりません。');
   assertRowVisible_(session, headers, rowData);
 
-  const branchCode = String(rowData[headers.indexOf(COL_BRANCH_CODE)]).toUpperCase();
+  const branchCode = String(rowData[headers.indexOf(COL_BRANCH_CODE)] || '').trim().toUpperCase();
   const target = toComparableDate_(String(dateStr || '').replace(/-/g, '/'));
   const names = staffNames || {};
   const wanted = {};
@@ -2155,7 +2170,7 @@ function apiCheckStaffConflict(token, kanriNo, dateStr, staffNames) {
   [RESERVATION_SHEET_NAME, ARCHIVE_SHEET_NAME].forEach(sheetName => {
     getRowsAsObjects_(ss.getSheetByName(sheetName)).forEach(r => {
       if (String(r[COL_KANRI_NO]) === String(kanriNo)) return;              // 自分自身は除く
-      if (String(r[COL_BRANCH_CODE]).toUpperCase() !== branchCode) return;  // 同一支店のみ
+      if (String(r[COL_BRANCH_CODE] || '').trim().toUpperCase() !== branchCode) return;  // 同一支店のみ
       if (r[COL_STATUS_JP] === 'CW' || r[COL_STATUS_BRANCH] === 'CW') return;
       if (toComparableDate_(r[COL_CONFIRMED_DATE]) !== target) return;
       staffCols.forEach(col => {
@@ -2462,12 +2477,16 @@ function apiGetReservationDetail(token, kanriNo) {
 // 大半はこの関数を経由しているため、ここでJPロール・BRANCHロールと同列にSHOPロールも
 // 「自分の案件なら通す」形にしてしまうと、そうした既存APIまで意図せず店舗に開いてしまう。
 // 店舗に見せてよい範囲（案件詳細の閲覧・メッセージ送受信）は assertShopOwnRow_ を個別に使う。
+// ★不具合修正（重大）：rowInScope_（一覧の絞り込み）は支店コードの末尾スペース等の表記ゆれに
+// 対応するため.trim()してから比較していたが、この詳細画面用の権限チェックにはtrim()が
+// 抜けていた。表記ゆれのある案件が「一覧には出るのに、開こうとすると権限エラーになる」という
+// 気づきにくい不具合の原因になっていた。rowInScope_と同じ正規化に揃える。
 function assertRowVisible_(session, headers, rowData) {
   if (session.role === JP_ROLE) return;
   if (session.role === SHOP_ROLE) {
     throw new Error('この案件を閲覧・操作する権限がありません。');
   }
-  const branchOfRow = String(rowData[headers.indexOf(COL_BRANCH_CODE)]).toUpperCase();
+  const branchOfRow = String(rowData[headers.indexOf(COL_BRANCH_CODE)] || '').trim().toUpperCase();
   if (branchOfRow !== session.branchCode) {
     throw new Error('この案件を閲覧・操作する権限がありません。');
   }
@@ -2475,8 +2494,9 @@ function assertRowVisible_(session, headers, rowData) {
 
 // ★機能追加：店舗ロールに個別に許可するAPI（案件詳細の閲覧、メッセージ送受信、既読チェック）専用の
 // 可視性チェック。「自分（自店舗）が起票した案件か」だけを見る。
+// ★不具合修正（重大）：上のassertRowVisible_と同じ理由で.trim()を追加。
 function assertShopOwnRow_(session, headers, rowData) {
-  const origin = String(rowData[headers.indexOf(COL_ORIGIN_SHOP)] || '').toUpperCase();
+  const origin = String(rowData[headers.indexOf(COL_ORIGIN_SHOP)] || '').trim().toUpperCase();
   if (session.role !== SHOP_ROLE || !origin || origin !== session.branchCode) {
     throw new Error('この案件を閲覧・操作する権限がありません。');
   }
@@ -2798,18 +2818,22 @@ function withCeremonyDateMirror_(changes) {
 }
 
 // ★要件：支店が「CR（キャンセル依頼中）」にCWで回答したら日本側も自動でCWにする。
-// 「RQ（依頼中）」にUC（空きなし）で回答したら日本側も自動でUCにする。
 // 支店が正しく回答しているのに日本側のSTSだけ古いまま気づかれない、という事故を防ぐための自動連動。
 // ★機能追加（店舗拡張）：DC（日付変更依頼）・PC（プラン・式場変更依頼）は、支店側の回答
 // （OK／UC）がそのままSTS(JP側)にも反映される仕様（通常は支店側はSTS(支店側)しか
 // 変更できないが、この2コードの回答に限り例外）。setJpTo が branchValue と同じ＝
 // 「支店が入れた値をそのままJP側にも映す」ことを表す。
+// ★仕様変更（report5）：以前はここに「RQ（依頼中）」にUC（空きなし）で回答したら日本側も
+// 自動でUCにする、というルールもあったが、STS JPが未確定（RQ／CHK）の間は支店が案件全体の
+// STS(支店側)を直接編集する経路自体をBRANCH_MAIN_EDIT_GATEでロックした（確定前の回答は
+// 「希望日一覧」からのみ行う仕様にしたため）。この直接編集の経路を前提にしていたルールは
+// 到達不能になったので削除した。希望日ごとのOK／UC回答とJP側への反映はapplyHopeStatusCascade_
+// が別途担当している。
 const STATUS_AUTO_CASCADE = [
   { whenJpIs: 'CR', branchValue: 'CW', setJpTo: 'CW' },
   // ★不具合修正：CWだけキャンセル成立を自動反映していたが、キャンセルチャージが発生するCFの
   // 回答だけJP側に反映されず「支店側はCFなのにJP側はCRのまま」という食い違いが起きていた。
   { whenJpIs: 'CR', branchValue: 'CF', setJpTo: 'CF' },
-  { whenJpIs: 'RQ', branchValue: 'UC', setJpTo: 'UC' },
   { whenJpIs: 'DC', branchValue: 'OK', setJpTo: 'OK' },
   { whenJpIs: 'DC', branchValue: 'UC', setJpTo: 'UC' },
   { whenJpIs: 'PC', branchValue: 'OK', setJpTo: 'OK' },
@@ -2966,10 +2990,14 @@ function validateFieldPermission_(session, headers, rowData, field, value) {
     if (session.role !== BRANCH_ROLE) throw new Error(`「${field}」は支店側のみ変更できます。`);
     const pairedField = pairedJpFieldFor_(field);
     const pairedValue = pairedField ? (rowData[headers.indexOf(pairedField)] || '') : '';
-    if (!(pairedValue in BRANCH_EDIT_GATE)) {
+    // ★機能追加（項目99）：案件全体のSTS(支店側)だけは、未確定（RQ/CHK）の間は「希望日一覧」から
+    // だけ回答する運用に統一するため専用のゲートを使う（希望日ごと・オプションのSTS(支店側)は
+    // 従来どおりBRANCH_EDIT_GATEのまま。BRANCH_MAIN_EDIT_GATEのコメント参照）。
+    const gate = (field === COL_STATUS_BRANCH) ? BRANCH_MAIN_EDIT_GATE : BRANCH_EDIT_GATE;
+    if (!(pairedValue in gate)) {
       throw new Error(`現在の${pairedField}（${pairedValue || '未設定'}）の状態では「${field}」は変更できません。`);
     }
-    const allowed = BRANCH_EDIT_GATE[pairedValue];
+    const allowed = gate[pairedValue];
     if (allowed !== null && value && !allowed.includes(value)) {
       throw new Error(`${pairedField}が${pairedValue}のときは「${field}」は ${allowed.join('/')} のいずれかにしてください。`);
     }
@@ -3393,7 +3421,7 @@ function apiListShopUploadedDocuments(token, kanriNo) {
   else assertRowVisible_(session, headers, rowData);
 
   if (session.role === BRANCH_ROLE) {
-    const targetMeta = branchMetaMap_()[String(rowData[headers.indexOf(COL_BRANCH_CODE)] || '').toUpperCase()] || {};
+    const targetMeta = branchMetaMap_()[String(rowData[headers.indexOf(COL_BRANCH_CODE)] || '').trim().toUpperCase()] || {};
     const originShop = String(rowData[headers.indexOf(COL_ORIGIN_SHOP)] || '').trim();
     if (!originShop || !targetMeta.shopUploadVisibleToBranch) {
       return { ok: true, visible: false, folders: [] };
@@ -3837,7 +3865,19 @@ function apiCreateReservation(token, branchCode, rawText) {
     const parsed = parseReservationText_(rawText);
 
     const newRowData = new Array(headers.length).fill('');
-    const setV = (name, val) => { const i = headers.indexOf(name); if (i !== -1 && val) newRowData[i] = val; };
+    // ★不具合修正（重大）：以前は列が無い場合に値を静かに捨てていたため、運用スプレッドシートが
+    // 最新の列構成に更新されていない（setupPortal未実行）と、書き込んだつもりの項目が
+    // 実際には保存されず、原因の分からない不具合として現れていた（例：起票元店舗列が無いまま
+    // 店舗が案件を作ると、支店側には正しく届くのに、作った店舗自身の一覧からは消えて見える）。
+    // 値がある項目を書き込もうとしたのに列が無い場合は、その場で分かるエラーにする。
+    const setV = (name, val) => {
+      const i = headers.indexOf(name);
+      if (i === -1) {
+        if (val) throw new Error(`スプレッドシートに「${name}」列がありません。スプレッドシートのメニューから setupPortal を一度実行して、不足している列を追加してください。`);
+        return;
+      }
+      if (val) newRowData[i] = val;
+    };
     setV(COL_BRANCH_CODE, targetBranch);
     setV(COL_KANRI_NO, newNo);
     setV(COL_LAST_UPDATED, new Date());
@@ -4039,7 +4079,17 @@ function apiShopCreateRequest(token, payload) {
       const newRowIndex = sheet.getLastRow() + 1;
 
       const newRowData = new Array(headers.length).fill('');
-      const setV = (name, val) => { const i = headers.indexOf(name); if (i !== -1 && val) newRowData[i] = val; };
+      // ★不具合修正（重大）：列が無い場合に値を静かに捨てないようにする（上のapiCreateReservationと同じ理由）。
+      // 実際にこれが原因で、店舗発の案件は支店側には正しく届くのに、作った店舗自身の一覧からだけ
+      // 消えて見える不具合が起きていた（起票元店舗＝COL_ORIGIN_SHOP列が無い運用シートで発生）。
+      const setV = (name, val) => {
+        const i = headers.indexOf(name);
+        if (i === -1) {
+          if (val) throw new Error(`スプレッドシートに「${name}」列がありません。スプレッドシートのメニューから setupPortal を一度実行して、不足している列を追加してください。`);
+          return;
+        }
+        if (val) newRowData[i] = val;
+      };
       setV(COL_BRANCH_CODE, groupBranchCode);
       setV(COL_KANRI_NO, newNo);
       setV(COL_LAST_UPDATED, new Date());
@@ -4055,11 +4105,18 @@ function apiShopCreateRequest(token, payload) {
       setV(COL_GROOM_AGE, groomAge);
       setV(COL_BRIDE_AGE, brideAge);
       const hopeCols = [COL_HOPE1, COL_HOPE2, COL_HOPE3, COL_HOPE4, COL_HOPE5];
-      hopeCols.forEach((col, i) => { if (group.hopeIndexes.includes(i)) setV(col, hopes[i]); });
-      group.hopeIndexes.forEach(i => {
-        setV(hopeTimeCol_(i + 1), hopeTimes[i]);
-        setV(hopePlanCol_(i + 1), hopePlans[i]);
-        setV(hopeLocationCol_(i + 1), hopeLocations[i]);
+      // ★不具合修正（重大）：以前は元の希望順位（i）のまま列へ書き込んでいたため、支店をまたぐ
+      // 依頼で分割された案件のうち、元の希望順位が後ろの方だった支店の案件は「希望日③にしか
+      // データが入らず①②は空欄のまま」という分かりにくい状態になっていた（現地の担当者から見て、
+      // なぜ自分の支店の希望日が③にしかないのか判断できない・誤って空欄の①②を確定操作の対象と
+      // 思い込む恐れもある）。分割後は各案件の中で希望日を詰めて①から連番に振り直す
+      // （group.hopeIndexesの並び順＝元の希望順位の昇順は保ったまま、書き込み先の列だけを
+      // その案件専用の①②③…に変える。通知メッセージの「第◯希望」表記も同じ考え方で揃える）。
+      group.hopeIndexes.forEach((i, localIdx) => {
+        setV(hopeCols[localIdx], hopes[i]);
+        setV(hopeTimeCol_(localIdx + 1), hopeTimes[i]);
+        setV(hopePlanCol_(localIdx + 1), hopePlans[i]);
+        setV(hopeLocationCol_(localIdx + 1), hopeLocations[i]);
       });
       const isHope1Group = group.hopeIndexes.includes(0);
       const groupPlan = (isHope1Group && explicitPlan) || group.hopeIndexes.map(i => hopePlans[i]).find(Boolean) || '';
@@ -4099,14 +4156,18 @@ function apiShopCreateRequest(token, payload) {
     // ／第三希望ウィーンフォトのように希望日ごとにプランが違う場合、フィレンツェフォトしか
     // メールに記載されない不具合があった）。希望日ごとに「希望順位: 日付（時間帯） ／ プラン」の
     // 形で1行ずつ列挙するよう修正。
+    // ★不具合修正：シート上の列（希望日①②③…）を案件ごとに詰め直したのに合わせ、
+    // メッセージ本文の「第◯希望」表記もその案件内での新しい順位で揃える（シートを開いた
+    // 内容とメッセージの内容が食い違わないようにするため）。
     const hopeOrdinalLabels = ['第一希望', '第二希望', '第三希望', '第四希望', '第五希望'];
     created.forEach((c, idx) => {
       const groupHopeLines = c.hopeIndexes
-        .filter(i => hopes[i])
-        .map(i => {
+        .map((i, localIdx) => ({ i, localIdx }))
+        .filter(({ i }) => hopes[i])
+        .map(({ i, localIdx }) => {
           const timeLabel = hopeTimes[i] ? `（${hopeTimes[i]}）` : '';
           const planLabel = hopePlans[i] ? ` ／ ${hopePlans[i]}` : '';
-          return `${hopeOrdinalLabels[i] || `第${i + 1}希望`}: ${hopes[i]}${timeLabel}${planLabel}`;
+          return `${hopeOrdinalLabels[localIdx] || `第${localIdx + 1}希望`}: ${hopes[i]}${timeLabel}${planLabel}`;
         });
       const others = created.filter((_, j) => j !== idx);
       const initMsg = [
@@ -4179,7 +4240,7 @@ function nextKanriNo_(branchCode) {
     const kanriColIdx = headers.indexOf(COL_KANRI_NO);
     const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
     values.forEach(row => {
-      if (String(row[branchColIdx]).toUpperCase() !== branchCode) return;
+      if (String(row[branchColIdx] || '').trim().toUpperCase() !== branchCode) return;
       const m = String(row[kanriColIdx]).match(/-(\d+)$/);
       if (m) max = Math.max(max, parseInt(m[1], 10));
     });
@@ -4912,7 +4973,7 @@ function apiTranslateBatch(token, texts) {
 // ★機能追加：起票元店舗コードから通知先メールを引く（支店マスタの ロール=SHOP の行）
 function getShopEmail_(shopCode) {
   if (!shopCode) return '';
-  const meta = branchMetaMap_()[String(shopCode).toUpperCase()];
+  const meta = branchMetaMap_()[String(shopCode || '').trim().toUpperCase()];
   return meta ? meta.email : '';
 }
 
@@ -5658,7 +5719,7 @@ function checkUnansweredAlertsCore_(errors) {
 
       const kanri = String(row[headers.indexOf(COL_KANRI_NO)] || '');
       if (!kanri) return;
-      const branchCode = String(row[headers.indexOf(COL_BRANCH_CODE)] || '').toUpperCase();
+      const branchCode = String(row[headers.indexOf(COL_BRANCH_CODE)] || '').trim().toUpperCase();
       const area = row[headers.indexOf(COL_AREA)];
       const meta = branchMeta[branchCode] || {};
 
@@ -6142,7 +6203,7 @@ function apiGetPrefilledFormUrls(token, kanriNo) {
   if (session.role === SHOP_ROLE) assertShopOwnRow_(session, headers, rowData);
   else assertRowVisible_(session, headers, rowData);
 
-  const branchCode = String(rowData[headers.indexOf(COL_BRANCH_CODE)] || '').toUpperCase();
+  const branchCode = String(rowData[headers.indexOf(COL_BRANCH_CODE)] || '').trim().toUpperCase();
   const meta = branchMetaMap_()[branchCode] || {};
   const isItaly = meta.country === ITALY_COUNTRY_NAME;
   const consentUrl = isItaly ? ITALY_CONSENT_FORM_URL : CONSENT_FORM_URL;
