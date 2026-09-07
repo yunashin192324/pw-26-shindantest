@@ -195,7 +195,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // 画面側が前提としているサーバー（Code.gs）の版数。Code.gs の SERVER_VERSION と対で更新する。
-const REQUIRED_SERVER_VERSION = '2026-08-21';
+const REQUIRED_SERVER_VERSION = '2026-08-22';
 
 /**
  * Code.gs が画面と同じ版数まで更新されているか確認する。
@@ -1752,7 +1752,9 @@ function editableCellTd(row, columnName, type, extraClass) {
 
 // 表示だけを切り詰める文字数。長文が入ると右側の列がどんどん右へ押し出されるため、
 // 一覧では先頭だけを見せ、全文はカーソルを合わせたときにポップアップで表示する。
+// ACT内容は短め（10文字）、メモ・詳細はやや長め（15文字）にする。
 const LONG_TEXT_PREVIEW_LENGTH = 10;
+const LONG_TEXT_PREVIEW_LENGTH_WIDE = 15;
 
 // URLらしき文字列を検出する正規表現（http(s)://～ を、空白や日本語の句読点の手前まで拾う）
 const URL_PATTERN = /https?:\/\/[^\s<>"'　、。」』（）]+/g;
@@ -1788,15 +1790,17 @@ function linkifyHtml(text) {
 
 /**
  * 「ACT内容」「メモ」「詳細」のような長文列のセル。
- * ・表示は先頭10文字まで（続きがあれば「…」）。URLはリンクとして表示・クリックできる
+ * ・表示は先頭10文字（ACT内容）または15文字（メモ・詳細）まで（続きがあれば「…」）。
+ *   URLはリンクとして表示・クリックできる
  * ・カーソルを合わせると全文をポップアップ表示（こちらもURLはリンクになる）
  * ・ダブルクリックで編集
  */
 function longTextCellTd(row, columnName) {
+  const previewLength = (columnName === 'ACT内容') ? LONG_TEXT_PREVIEW_LENGTH : LONG_TEXT_PREVIEW_LENGTH_WIDE;
   const raw = row[columnName] !== undefined && row[columnName] !== null ? String(row[columnName]) : '';
   const oneLine = raw.replace(/\s+/g, ' ');
-  const truncated = oneLine.length > LONG_TEXT_PREVIEW_LENGTH;
-  const preview = truncated ? oneLine.substring(0, LONG_TEXT_PREVIEW_LENGTH) + '…' : oneLine;
+  const truncated = oneLine.length > previewLength;
+  const preview = truncated ? oneLine.substring(0, previewLength) + '…' : oneLine;
   // 途中で切れている場合、URLも途中で切れてリンク先が壊れてしまうため一覧ではリンク化しない。
   // 全文はホバーのポップアップ（showDetailTooltip）でリンクとして確認・クリックできる。
   const previewHtml = truncated ? escapeHtml(preview) : linkifyHtml(preview);

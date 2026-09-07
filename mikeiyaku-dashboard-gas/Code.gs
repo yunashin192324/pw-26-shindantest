@@ -967,7 +967,7 @@ function importUncontractedCsv(csvText) {
  * 「is not a function」という分かりにくいエラーになるため、
  * 画面側から版数を確認できるようにしている。
  */
-const SERVER_VERSION = '2026-08-21';
+const SERVER_VERSION = '2026-08-22';
 
 /**
  * サーバー側の版数を返す。画面側は、自分が期待する版数と一致するかを起動時に確認する。
@@ -1648,6 +1648,11 @@ function saveRowChanges(changes) {
           if (actDateNow === '' || actDateNow === null || actDateNow === undefined) {
             setTextCell_(sheet, rIdx, COL_ACT_DATE, todayStr);
           }
+        } else if (hasResale && resaleValue === '') {
+          // リセールを「－」（未対応）に選び直した＝入力を取り消したいということなので、
+          // STSを「－」に戻すと成約PAXも消えるのと同様、ACT日も空欄に戻す。
+          // （✖にした際の自動登録はもちろん、手入力したACT日もこの操作で一緒に取り消せる）
+          setTextCell_(sheet, rIdx, COL_ACT_DATE, '');
         }
 
         setTextCell_(sheet, rIdx, COL_LAST_ACTION, todayStr);
