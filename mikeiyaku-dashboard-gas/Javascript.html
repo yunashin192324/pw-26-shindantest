@@ -22,8 +22,11 @@ let availablePeriods = [];           // getAvailablePeriods() が返す直近2�
 let currentEmployeePeriod = null;    // 現在選択中の期キー
 let myChart1 = null;
 let myChart2 = null;
-// 都市コード・接客方法・旅行目的(小) の内訳グラフ
-const breakdownCharts = { 'chart-city': null, 'chart-contact': null, 'chart-purpose': null };
+// 都市コード・接客方法・旅行目的(小)・種別・出発年月 の内訳グラフ
+const breakdownCharts = {
+  'chart-city': null, 'chart-contact': null, 'chart-purpose': null,
+  'chart-type': null, 'chart-departure': null
+};
 let dmCurrentPage = 1;
 let dmFilteredCache = [];
 let rankingSortState = { key: 'total', dir: 'desc' };
@@ -1072,15 +1075,21 @@ function renderDashboardTab() {
   renderBreakdownChart('chart-city', filtered, '都市コード');
   renderBreakdownChart('chart-contact', filtered, '接客方法');
   renderBreakdownChart('chart-purpose', filtered, '旅行目的(小)');
+  renderBreakdownChart('chart-type', filtered, '種別');
+  // 出発年月は「Ciao」等の分類と違い時系列の値のため、件数順ではなく古い順（直近12か月）に並べる
+  renderBreakdownChart('chart-departure', filtered, '出発年月', { sort: 'chrono' });
   renderRankingTable(filtered);
 }
 
 /**
- * 指定した列（都市コード・接客方法・旅行目的(小)など）ごとの内訳グラフを描く。
- * 棒＝未成約数、折れ線＝リセール継続率(%)。件数の多い順に上位10区分を表示する。
- * 「どの区分でフォローが手薄か」を1枚で読み取れるようにするのが狙い。
+ * 指定した列（都市コード・接客方法・旅行目的(小)・種別など）ごとの内訳グラフを描く。
+ * 棒＝未成約数、折れ線＝リセール継続率(%)。
+ * 既定は件数の多い順に上位10区分（「どの区分でフォローが手薄か」を読み取る用途）。
+ * options.sort === 'chrono' を指定すると、出発年月のような時系列の値を
+ * 古い順・直近12件に揃えて表示する（頻度順だと時系列がバラバラで読みにくいため）。
  */
-function renderBreakdownChart(canvasId, data, columnName) {
+function renderBreakdownChart(canvasId, data, columnName, options) {
+  options = options || {};
   const counts = {};
   data.forEach(function (r) {
     const key = String(r[columnName] || '').trim() || '(未設定)';
@@ -1089,9 +1098,17 @@ function renderBreakdownChart(canvasId, data, columnName) {
     if (r['リセール'] === '〇') counts[key].resale += 1;
   });
 
-  const labels = Object.keys(counts)
-    .sort(function (a, b) { return counts[b].total - counts[a].total; })
-    .slice(0, 10);
+  let labels;
+  if (options.sort === 'chrono') {
+    // 「(未設定)」は時系列に並べられないため、実データを古い順に並べたあとへ回す
+    const known = Object.keys(counts).filter(function (k) { return k !== '(未設定)'; }).sort();
+    labels = known.slice(Math.max(0, known.length - 12));
+    if (counts['(未設定)']) labels.push('(未設定)');
+  } else {
+    labels = Object.keys(counts)
+      .sort(function (a, b) { return counts[b].total - counts[a].total; })
+      .slice(0, 10);
+  }
   const totals = labels.map(function (l) { return counts[l].total; });
   const rates = labels.map(function (l) {
     return counts[l].total > 0 ? Number(((counts[l].resale / counts[l].total) * 100).toFixed(1)) : 0;
@@ -1717,6 +1734,7 @@ function renderDataManagerGrid() {
       '<td class="px-3 py-2">' + escapeHtml(row['種別']) + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(row['旅行目的(小)']) + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(row['接客方法']) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(row['出発年月']) + '</td>' +
       '</tr>';
   }).join('');
 
