@@ -102,6 +102,8 @@ const API_SPECS = [
   // ★機能追加：複数案件のまとめて更新。中身は単件のapiCommitChangesを回すだけなので、
   // 権限は単件と同じ（他支店の案件は個別に失敗して結果に載る）
   { fn: 'apiBulkUpdateStatus', scope: 'any', args: (t) => [t, ['VIE-001'], 'STS JP', 'OK', ''], target: 'VIE', writes: true },
+  // ★機能追加：全案件横断の操作履歴。全支店の内容が並ぶためJPのみ
+  { fn: 'apiGetAuditLog',     scope: 'jp', args: (t) => [t, {}], reads: true },
   { fn: 'apiListGlossary',    scope: 'jp', args: (t) => [t], reads: true },
   { fn: 'apiSaveGlossaryItem', scope: 'jp', args: (t) => [t, '侵入テスト', null, true, 'Intruder'], writes: true },
   // ★要件：衣装会社マスタは支店を問わない全社共通の1本のリスト（引数に支店コードを取らない）

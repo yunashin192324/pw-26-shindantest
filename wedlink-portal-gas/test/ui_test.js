@@ -3320,6 +3320,50 @@ function paneHidden(document, key) {
           [...doc57.querySelectorAll('.bulk-check')].every(cb => !cb.checked));
   }
 
+  // ---------------------------------------------------------------
+  section('U58. 【機能追加】操作履歴（全案件横断）の画面');
+  {
+    const ctx58 = makeServer();
+    const dom58 = await openApp(ctx58);
+    const doc58 = dom58.window.document;
+    await login(dom58, 'KANTO', 'CHANGE-ME-KANTO');
+    await settle();
+    check('手配課には「操作履歴」ボタンが出る',
+          !doc58.getElementById('nav-audit').classList.contains('hidden'));
+
+    // 変更をいくつか作る
+    const jp58 = ctx58.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    ctx58.apiSaveFieldsQuiet(jp58, 'R-001', { 'ホテル': 'Hotel Audit 1' });
+    ctx58.apiSaveFieldsQuiet(jp58, 'R-001', { 'ホテル': 'Hotel Audit 2' });
+
+    doc58.getElementById('nav-audit').click();
+    await settle(); await settle();
+    check('操作履歴の画面が開く', !doc58.getElementById('view-audit').classList.contains('hidden'));
+    check('変更した内容が一覧に出る',
+          doc58.getElementById('audit-content').textContent.includes('Hotel Audit 2'),
+          doc58.getElementById('audit-content').textContent.slice(0, 300));
+    check('変更前の値も出る（何から何へ変わったかが分かる）',
+          doc58.getElementById('audit-content').textContent.includes('Hotel Audit 1'),
+          doc58.getElementById('audit-content').textContent.slice(0, 300));
+
+    // 条件で絞り込む
+    doc58.getElementById('audit-field').value = '存在しない項目名';
+    doc58.getElementById('audit-search').click();
+    await settle(); await settle();
+    check('条件で絞り込める（一致しなければ0件と分かる表示になる）',
+          doc58.getElementById('audit-content').textContent.includes('0件') ||
+          doc58.getElementById('audit-content').textContent.includes('記録がありません'),
+          doc58.getElementById('audit-content').textContent.slice(0, 200));
+
+    // 支店には出さない
+    const ctx58b = makeServer();
+    const dom58b = await openApp(ctx58b);
+    await login(dom58b, 'ROW', 'CHANGE-ME-ROW');
+    await settle();
+    check('現地支店には「操作履歴」ボタンを出さない',
+          dom58b.window.document.getElementById('nav-audit').classList.contains('hidden'));
+  }
+
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error('テストが異常終了しました:', e); process.exit(1); });

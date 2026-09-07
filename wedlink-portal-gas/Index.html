@@ -19,6 +19,7 @@
         <button id="nav-search" class="nav-btn non-shop">検索</button>
         <button id="nav-stats" class="nav-btn jp-only hidden">統計</button>
         <button id="nav-shop-new" class="nav-btn shop-only hidden">＋新規依頼</button>
+        <button id="nav-audit" class="nav-btn jp-only">操作履歴</button>
         <button id="nav-masters" class="nav-btn non-shop">マスタ管理</button>
         <button id="nav-settings" class="nav-btn non-shop">設定</button>
         <button id="nav-logout" class="nav-btn nav-logout">ログアウト</button>
@@ -384,6 +385,24 @@
       </section>
 
       <!-- 設定（現地スタッフ手配メール。自支店 or JPが編集可能） -->
+      <!-- ★機能追加：全案件を横断した操作履歴（監査ログ）。案件ごとの履歴は以前からあったが、
+           「今週このシステム全体で誰が何を変えたか」をまとめて見る手段が無かった。
+           全支店の内容が並ぶため、手配課（JP）だけに表示する。 -->
+      <section id="view-audit" class="view hidden">
+        <h2>操作履歴</h2>
+        <p class="hint-text">すべての案件について、いつ・誰が・どの項目を・何から何へ変更したかの記録です。
+          新しい順に並びます。</p>
+        <div class="master-toolbar">
+          <div class="field-block"><label for="audit-from">期間（から）</label><input type="date" id="audit-from"></div>
+          <div class="field-block"><label for="audit-to">期間（まで）</label><input type="date" id="audit-to"></div>
+          <div class="field-block"><label for="audit-kanri">予約番号</label><input id="audit-kanri" placeholder="一部でも可"></div>
+          <div class="field-block"><label for="audit-field">項目名</label><input id="audit-field" placeholder="例）STS JP"></div>
+          <div class="field-block"><label for="audit-who">担当者</label><input id="audit-who" placeholder="一部でも可"></div>
+          <div class="field-block"><label>&nbsp;</label><button type="button" id="audit-search" class="primary-btn">この条件で表示</button></div>
+        </div>
+        <div id="audit-content"><p class="hint-text">条件を指定して「この条件で表示」を押してください。</p></div>
+      </section>
+
       <!-- ★機能追加：マスタ管理画面。これまでプラン・オプション・撮影場所・スタッフ・セール・
            衣装会社・定型文・支店の各マスタは、スプレッドシートを直接編集するしか手段が無かった。
            保存用のAPIは以前から用意されていたので、それを使う画面をここで追加する。 -->

@@ -4493,5 +4493,68 @@ section('77. 【機能追加】複数案件のステータスをまとめて更�
 }
 
 // ---------------------------------------------------------------
+section('78. 【機能追加】全案件を横断した操作履歴（監査ログ）');
+{
+  const ctx = shopFixture();
+  const jpToken = ctx.apiLogin('KANTO', 'pw').session.token;
+  const vieToken = ctx.apiLogin('VIE', 'vp').session.token;
+  addCase(ctx, '予約一覧', {
+    '支店コード': 'VIE', '管理番号': 'VIE-A01', '管轄': '関東', 'STS JP': 'RQ',
+    '新郎名（ローマ字）': 'Taro', '新婦名（ローマ字）': 'Hanako'
+  });
+  addCase(ctx, '予約一覧', {
+    '支店コード': 'IST', '管理番号': 'IST-A01', '管轄': '関東', 'STS JP': 'RQ',
+    '新郎名（ローマ字）': 'X', '新婦名（ローマ字）': 'Y'
+  });
+
+  ctx.apiSaveFieldsQuiet(jpToken, 'VIE-A01', { 'ホテル': 'Hotel A' });
+  ctx.apiSaveFieldsQuiet(jpToken, 'VIE-A01', { 'ホテル': 'Hotel B' });
+  ctx.apiSaveFieldsQuiet(jpToken, 'IST-A01', { 'ホテル': 'Hotel C' });
+
+  const all = ctx.apiGetAuditLog(jpToken, {});
+  check('全案件の変更履歴が取得できる', all.total >= 3, JSON.stringify(all.total));
+  check('支店をまたいで並ぶ（1つの画面で全体を見られる）',
+        all.items.some(i => i.kanriNo === 'VIE-A01') && all.items.some(i => i.kanriNo === 'IST-A01'),
+        JSON.stringify(all.items.map(i => i.kanriNo)));
+  check('新しい順に並ぶ', all.items[0].newValue === 'Hotel C' || all.items[0].kanriNo === 'IST-A01',
+        JSON.stringify(all.items.slice(0, 2)));
+  check('変更前・変更後・担当者が入っている',
+        all.items.every(i => i.who && i.field && i.datetime), JSON.stringify(all.items[0]));
+
+  const byKanri = ctx.apiGetAuditLog(jpToken, { kanriNo: 'VIE-A01' });
+  check('予約番号で絞り込める',
+        byKanri.items.length >= 2 && byKanri.items.every(i => i.kanriNo === 'VIE-A01'),
+        JSON.stringify(byKanri.items.map(i => i.kanriNo)));
+
+  const byField = ctx.apiGetAuditLog(jpToken, { field: 'ホテル' });
+  check('項目名で絞り込める', byField.items.every(i => i.field.includes('ホテル')),
+        JSON.stringify(byField.items.map(i => i.field)));
+
+  const byWho = ctx.apiGetAuditLog(jpToken, { who: '関東' });
+  check('担当者で絞り込める', byWho.items.length >= 1 && byWho.items.every(i => i.who.includes('関東')),
+        JSON.stringify(byWho.items.map(i => i.who)));
+
+  const future = ctx.apiGetAuditLog(jpToken, { dateFrom: '2099-01-01' });
+  check('期間（から）で絞り込める（未来を指定すれば0件）', future.total === 0, JSON.stringify(future.total));
+  const today = ctx.apiGetAuditLog(jpToken, { dateFrom: ctx.__todayIso ? ctx.__todayIso() : '2000-01-01' });
+  check('今日以降で絞り込むと今日の変更が入る', today.total >= 3, JSON.stringify(today.total));
+
+  // 権限：手配課のみ（全支店の内容が並ぶため）
+  let err = null;
+  try { ctx.apiGetAuditLog(vieToken, {}); } catch (e) { err = e.message; }
+  check('支店ロールは操作履歴を見られない（全支店の内容が並ぶため）', err !== null, String(err));
+  const shopToken = ctx.apiLogin('SHOP1', 'sp').session.token;
+  let err2 = null;
+  try { ctx.apiGetAuditLog(shopToken, {}); } catch (e) { err2 = e.message; }
+  check('店舗ロールも操作履歴を見られない', err2 !== null, String(err2));
+
+  // 条件が壊れていても内部エラーにしない
+  let err3 = null;
+  try { ctx.apiGetAuditLog(jpToken, '文字列'); } catch (e) { err3 = e.message; }
+  check('条件が正しくない場合も分かる言葉で返る',
+        err3 !== null && !/is not a function|undefined/.test(err3), String(err3));
+}
+
+// ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
 process.exit(fail === 0 ? 0 : 1);

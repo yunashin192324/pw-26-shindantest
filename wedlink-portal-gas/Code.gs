@@ -2495,7 +2495,7 @@ function apiSaveFieldsQuiet(token, kanriNo, changes) {
     sheet.getRange(rowIndex, colIndexOrThrow_(headers, COL_LAST_UPDATED)).setValue(new Date());
 
     const who = senderLabel_(session);
-    writes.forEach(w => logStatusChangeIfApplicable_(kanriNo, w, who));
+    logFieldChanges_(kanriNo, writes, who);
     applyStatusCascade_(sheet, headers, rowIndex, kanriNo, writes);
     const hopeDateChanged = applyHopeStatusCascade_(sheet, headers, rowIndex, kanriNo, writes, who);
     appendCwAutoNoticeIfApplicable_(sheet, headers, rowIndex, writes, session);
@@ -2551,7 +2551,7 @@ function apiCommitChanges(token, kanriNo, changes, message, recipient) {
     if (writes.length > 0) {
       writes.forEach(w => sheet.getRange(rowIndex, w.colIdx).setValue(w.valueToStore));
       sheet.getRange(rowIndex, colIndexOrThrow_(headers, COL_LAST_UPDATED)).setValue(new Date());
-      writes.forEach(w => logStatusChangeIfApplicable_(kanriNo, w, who));
+      logFieldChanges_(kanriNo, writes, who);
       applyStatusCascade_(sheet, headers, rowIndex, kanriNo, writes);
       if (applyHopeStatusCascade_(sheet, headers, rowIndex, kanriNo, writes, who)) dateChanged = true;
     }
@@ -2686,12 +2686,22 @@ function prepareFieldWrite_(session, headers, rowData, field, value) {
 }
 
 // STS(JP側)／STS(支店側)（メイン・オプション共通）の変更を「誰が・いつ・何から何に」変更したか記録する
-function logStatusChangeIfApplicable_(kanriNo, prepared, who) {
-  if (!prepared.changed) return;
-  if (!isJpStatusField_(prepared.field) && !isBranchStatusField_(prepared.field)) return;
+// ★機能追加（項目95）：記録の対象をステータス列だけでなく、その送信で変わったすべての項目へ広げた。
+// 「今週このシステム全体で誰が何を変えたか」を後から追えるようにするため（操作履歴画面で見る）。
+// 1項目ずつ書き足すとシートへの書き込み回数が項目数ぶん増えるので、まとめて1回で書く。
+function logFieldChanges_(kanriNo, writes, who) {
+  const changed = (writes || []).filter(w => w && w.changed);
+  if (!changed.length) return;
   const sheet = getSpreadsheet_().getSheetByName(STATUS_LOG_SHEET_NAME);
   if (!sheet) return;
-  sheet.appendRow([kanriNo, prepared.field, prepared.oldDisplay, prepared.newDisplay, who, new Date()]);
+  const now = new Date();
+  const rows = changed.map(w => [kanriNo, w.field, w.oldDisplay, w.newDisplay, who, now]);
+  sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, 6).setValues(rows);
+}
+
+// 従来の1件ずつの入口（既存の呼び出しを壊さないために残す）
+function logStatusChangeIfApplicable_(kanriNo, prepared, who) {
+  logFieldChanges_(kanriNo, [prepared], who);
 }
 
 // ★要件：日本の店舗がSTS(JP側)（案件全体・各オプションいずれも）をCR（キャンセル依頼）にする際は、
@@ -4377,6 +4387,64 @@ function apiDeleteHistoryMessage(token, historyId) {
 }
 
 // ★要件：STSの値（OK/RQ等）をタップしたら「誰が・いつ・何から何に変更したか」を確認できるようにする
+// ★機能追加：全案件を横断した操作履歴（監査ログ）。
+// 案件ごとの履歴（apiGetFieldHistory・案件タイムライン）は以前からあったが、
+// 「今週このシステム全体で誰が何を変えたか」をまとめて見る手段が無かった。
+// 全支店の内容が並ぶため、閲覧できるのは手配課（JP）だけにしている。
+const AUDIT_LOG_MAX_ROWS = 500; // 1回に返す上限（画面が固まらないようにするため）
+function apiGetAuditLog(token, criteria) {
+  const session = requireSession_(token);
+  assertJp_(session);
+  criteria = criteria || {};
+  if (typeof criteria !== 'object' || Array.isArray(criteria)) {
+    throw new Error('検索条件が正しく送信されませんでした。');
+  }
+  const norm = (v) => String(v === null || v === undefined ? '' : v).trim().toLowerCase();
+  const kanriQuery = norm(criteria.kanriNo);
+  const fieldQuery = norm(criteria.field);
+  const whoQuery = norm(criteria.who);
+  const from = criteria.dateFrom ? parseDateFromInput_(String(criteria.dateFrom)) : null;
+  const to = criteria.dateTo ? parseDateFromInput_(String(criteria.dateTo)) : null;
+  // 「まで」はその日の終わりまでを含める（日付だけを指定した場合に当日分が漏れないように）
+  const toEnd = to ? new Date(to.getTime() + 86400000 - 1) : null;
+
+  const sheet = getSpreadsheet_().getSheetByName(STATUS_LOG_SHEET_NAME);
+  // ★同じ操作でまとめて変えた項目は日時が完全に同じになるため、日時だけで並べると
+  // 順番が安定しない。シートに書かれた順（後の行ほど新しい）を第2の基準にする。
+  const rows = getRowsAsObjects_(sheet).map((r, i) => { r.__order = i; return r; }).filter(r => {
+    if (kanriQuery && norm(r[SL_COL_KANRI]).indexOf(kanriQuery) === -1) return false;
+    if (fieldQuery && norm(r[SL_COL_FIELD]).indexOf(fieldQuery) === -1) return false;
+    if (whoQuery && norm(r[SL_COL_WHO]).indexOf(whoQuery) === -1) return false;
+    if (from || toEnd) {
+      const when = r[SL_COL_WHEN];
+      if (!(when instanceof Date)) return false; // 日付で絞る場合、日付として読めない行は対象外
+      if (from && when < from) return false;
+      if (toEnd && when > toEnd) return false;
+    }
+    return true;
+  });
+  rows.sort((a, b) => {
+    const diff = new Date(b[SL_COL_WHEN]) - new Date(a[SL_COL_WHEN]);
+    return diff !== 0 ? diff : (b.__order - a.__order);
+  });
+  const total = rows.length;
+  return {
+    ok: true,
+    total: total,
+    truncated: total > AUDIT_LOG_MAX_ROWS,
+    limit: AUDIT_LOG_MAX_ROWS,
+    items: rows.slice(0, AUDIT_LOG_MAX_ROWS).map(r => ({
+      kanriNo: String(r[SL_COL_KANRI] || ''),
+      field: String(r[SL_COL_FIELD] || ''),
+      oldValue: String(r[SL_COL_OLD] === null || r[SL_COL_OLD] === undefined ? '' : r[SL_COL_OLD]),
+      newValue: String(r[SL_COL_NEW] === null || r[SL_COL_NEW] === undefined ? '' : r[SL_COL_NEW]),
+      who: String(r[SL_COL_WHO] || ''),
+      datetime: r[SL_COL_WHEN] instanceof Date
+        ? Utilities.formatDate(r[SL_COL_WHEN], 'Asia/Tokyo', 'yyyy/MM/dd HH:mm') : String(r[SL_COL_WHEN] || '')
+    }))
+  };
+}
+
 function apiGetFieldHistory(token, kanriNo, field) {
   const session = requireSession_(token);
   const { headers, rowIndex, rowData } = findReservationRow_(kanriNo);

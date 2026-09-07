@@ -296,6 +296,8 @@
       });
       renderBulkBar_();
     });
+    $('nav-audit').addEventListener('click', openAuditView);
+    $('audit-search').addEventListener('click', loadAuditLog);
     $('nav-masters').addEventListener('click', openMastersView);
     $('masters-type').addEventListener('change', () => { mastersType = $('masters-type').value; openMastersView(); });
     $('masters-branch').addEventListener('change', () => { mastersBranchCode = $('masters-branch').value; loadMasters(); });
@@ -3266,6 +3268,43 @@
   }
 
   // ---------- 設定（現地スタッフ手配メール。自支店 or JPが編集可能） ----------
+  // ★機能追加：全案件を横断した操作履歴（監査ログ）。手配課のみ。
+  async function openAuditView() {
+    showView('audit');
+    await loadAuditLog();
+  }
+  async function loadAuditLog() {
+    $('audit-content').innerHTML = '<p class="hint-text">読み込み中...</p>';
+    try {
+      const res = await gsRun('apiGetAuditLog', session.token, {
+        dateFrom: $('audit-from').value,
+        dateTo: $('audit-to').value,
+        kanriNo: $('audit-kanri').value.trim(),
+        field: $('audit-field').value.trim(),
+        who: $('audit-who').value.trim()
+      });
+      const rows = (res.items || []).map(it => `
+        <tr>
+          <td>${escapeHtml(it.datetime)}</td>
+          <td>${escapeHtml(it.kanriNo)}</td>
+          <td>${escapeHtml(it.field)}</td>
+          <td>${escapeHtml(it.oldValue || '（空欄）')}</td>
+          <td>${escapeHtml(it.newValue || '（空欄）')}</td>
+          <td>${escapeHtml(it.who)}</td>
+        </tr>`).join('');
+      $('audit-content').innerHTML = `
+        <div class="section-card">
+          <p class="hint-text">${res.total}件の記録が条件に一致しました${res.truncated ? `（多いため新しい方から${res.limit}件だけ表示しています。期間で絞り込んでください）` : ''}。</p>
+          <div style="overflow-x:auto;">
+            <table class="plan-table">
+              <thead><tr><th>日時</th><th>予約番号</th><th>項目</th><th>変更前</th><th>変更後</th><th>担当者</th></tr></thead>
+              <tbody>${rows || '<tr><td colspan="6" class="hint-text">記録がありません</td></tr>'}</tbody>
+            </table>
+          </div>
+        </div>`;
+    } catch (e) { showLoadFailure_($('audit-content'), e); }
+  }
+
   // =====================================================
   // マスタ管理画面（プラン・オプション・撮影場所・スタッフ・セール・衣装会社・定型文・支店）
   // -----------------------------------------------------
