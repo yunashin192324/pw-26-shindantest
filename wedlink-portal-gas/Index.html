@@ -121,11 +121,22 @@
         <label class="checkbox-label" style="margin:0 0 10px;">
           <input id="show-past" type="checkbox"> 過去を表示（撮影日が過去の案件も表示する）
         </label>
+        <!-- ★機能追加：複数の案件のステータスをまとめて更新する。表表示のときだけ使える。
+             誤操作の影響が大きいため、選んだ件数と変更内容を確認してから実行する。 -->
+        <div id="bulk-bar" class="bulk-bar hidden">
+          <span id="bulk-count">0件を選択中</span>
+          <label for="bulk-status">まとめて変更するステータス</label>
+          <select id="bulk-status"></select>
+          <input id="bulk-message" placeholder="相手へ伝えるメッセージ（任意）" style="min-width:220px;">
+          <button type="button" id="bulk-apply" class="send-btn-sm">選んだ案件をまとめて更新</button>
+          <button type="button" id="bulk-clear" class="history-link">選択を解除</button>
+        </div>
+        <div id="bulk-result" class="hidden"></div>
         <div id="reservation-list" class="card-list hidden"></div>
         <div id="reservation-table-wrap" class="table-wrap">
           <table class="res-table">
             <thead>
-              <tr><th>日付</th><th>都市</th><th>チャレンジ番号</th><th>お名前</th><th>STS JP</th><th>STS 支店</th><th>予約番号</th><th>プラン名</th><th class="non-shop">撮影データ送付</th></tr>
+              <tr><th class="bulk-col"><input type="checkbox" id="bulk-select-all" title="表示中のすべてを選ぶ"></th><th>日付</th><th>都市</th><th>チャレンジ番号</th><th>お名前</th><th>STS JP</th><th>STS 支店</th><th>予約番号</th><th>プラン名</th><th class="non-shop">撮影データ送付</th></tr>
             </thead>
             <tbody id="reservation-table-body"></tbody>
           </table>

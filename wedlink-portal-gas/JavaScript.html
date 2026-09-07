@@ -284,6 +284,18 @@
     });
     $('shop-new-submit').addEventListener('click', submitShopNewRequest);
     $('shop-new-success-top-btn').addEventListener('click', () => loadDashboard());
+    // ★機能追加：まとめて更新の操作バー
+    $('bulk-apply').addEventListener('click', applyBulkStatus);
+    $('bulk-clear').addEventListener('click', clearBulkSelection_);
+    $('bulk-select-all').addEventListener('change', () => {
+      const on = $('bulk-select-all').checked;
+      document.querySelectorAll('.bulk-check').forEach(cb => {
+        cb.checked = on;
+        const no = cb.dataset.bulkKanri;
+        if (on) bulkSelected.add(no); else bulkSelected.delete(no);
+      });
+      renderBulkBar_();
+    });
     $('nav-masters').addEventListener('click', openMastersView);
     $('masters-type').addEventListener('change', () => { mastersType = $('masters-type').value; openMastersView(); });
     $('masters-branch').addEventListener('change', () => { mastersBranchCode = $('masters-branch').value; loadMasters(); });
@@ -635,6 +647,7 @@
       const dataDeliveredCell = session.role === 'SHOP' ? '' :
         `<td>${r.dataDelivered ? '<span class="chip" style="background:#dcfce7;color:#166534;">送付済</span>' : '<span class="chip" style="background:#fee2e2;color:#b91c1c;">未送付</span>'}</td>`;
       tr.innerHTML = `
+        <td class="bulk-col"><input type="checkbox" class="bulk-check" data-bulk-kanri="${escapeAttr(r.kanriNo)}" ${bulkSelected.has(r.kanriNo) ? 'checked' : ''}></td>
         <td class="res-table-date">${caseDateCellHtml_(r)}</td>
         <td>${escapeHtml(r.city || '-')}</td>
         <td>${escapeHtml(r.challengeNo || 'なし')}</td>
@@ -644,8 +657,81 @@
         <td>${escapeHtml(r.kanriNo)}</td>
         <td>${escapeHtml(r.plan || '-')}</td>
         ${dataDeliveredCell}`;
-      tr.addEventListener('click', () => openDetail(r.kanriNo));
+      tr.addEventListener('click', (e) => {
+        // チェックボックスを押したときは詳細を開かない（選択操作と閲覧操作を分ける）
+        if (e.target && e.target.classList && e.target.classList.contains('bulk-check')) return;
+        openDetail(r.kanriNo);
+      });
       body.appendChild(tr);
+    });
+    // まとめて更新用のチェックボックスを配線する
+    body.querySelectorAll('.bulk-check').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const no = cb.dataset.bulkKanri;
+        if (cb.checked) bulkSelected.add(no); else bulkSelected.delete(no);
+        renderBulkBar_();
+      });
+    });
+    renderBulkBar_();
+  }
+
+  // ★機能追加：複数案件のステータスをまとめて更新する
+  const bulkSelected = new Set();
+  // まとめて設定できるステータスは、自分のロールが単件でも設定できる範囲に限る
+  function bulkStatusField_() { return session.role === 'BRANCH' ? 'STS 支店' : 'STS JP'; }
+  function bulkStatusChoices_() {
+    if (session.role === 'BRANCH') return STATUS_CODES;
+    if (session.role === 'SHOP') return SHOP_STATUS_TARGETS;
+    return STATUS_CODES;
+  }
+  function renderBulkBar_() {
+    const bar = $('bulk-bar');
+    if (!bar) return;
+    // 表表示のときだけ使える（カード表示には選択欄が無いため）
+    const usable = dashboardViewMode === 'table';
+    bar.classList.toggle('hidden', !usable || bulkSelected.size === 0);
+    $('bulk-count').textContent = `${bulkSelected.size}件を選択中`;
+    const sel = $('bulk-status');
+    if (sel && !sel.options.length) {
+      sel.innerHTML = bulkStatusChoices_().map(c => `<option value="${escapeAttr(c)}">${escapeHtml(c)}</option>`).join('');
+    }
+    const all = $('bulk-select-all');
+    const boxes = [...document.querySelectorAll('.bulk-check')];
+    if (all) all.checked = boxes.length > 0 && boxes.every(b => b.checked);
+  }
+  function clearBulkSelection_() {
+    bulkSelected.clear();
+    document.querySelectorAll('.bulk-check').forEach(cb => { cb.checked = false; });
+    const all = $('bulk-select-all');
+    if (all) all.checked = false;
+    $('bulk-result').classList.add('hidden');
+    renderBulkBar_();
+  }
+  async function applyBulkStatus(evt) {
+    if (!bulkSelected.size) { showToast('案件が選ばれていません'); return; }
+    const field = bulkStatusField_();
+    const value = $('bulk-status').value;
+    const list = [...bulkSelected];
+    const ok = await confirmI18n_(
+      `選んだ${list.length}件の「${field}」をまとめて「${value}」に変更し、相手へ通知します。よろしいですか？`);
+    if (!ok) return;
+    await withButtonBusy_(evt && evt.currentTarget, '更新中...', async () => {
+      try {
+        const res = await gsRun('apiBulkUpdateStatus', session.token, list, field, value, $('bulk-message').value.trim());
+        const failed = (res.results || []).filter(r => !r.ok);
+        const box = $('bulk-result');
+        box.classList.remove('hidden');
+        box.innerHTML = `
+          <div class="section-card">
+            <h3>まとめて更新の結果</h3>
+            <p>更新できたもの：${res.updated}件${res.unchanged ? ` ／ 変更なし：${res.unchanged}件` : ''}${res.failed ? ` ／ できなかったもの：${res.failed}件` : ''}</p>
+            ${failed.length ? `<ul class="hint-text">${failed.map(f => `<li>${escapeHtml(f.kanriNo)}：${escapeHtml(f.error)}</li>`).join('')}</ul>` : ''}
+          </div>`;
+        noticeIfMailFailed_(res);
+        bulkSelected.clear();
+        $('bulk-message').value = '';
+        await loadDashboard();
+      } catch (e) { handleAuthError(e); }
     });
   }
 

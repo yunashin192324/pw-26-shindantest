@@ -242,6 +242,12 @@
   .history-log-item { padding: 3px 0; border-bottom: 1px solid #e5e7eb; color: var(--color-text); }
   .history-log-item:last-child { border-bottom: none; }
 
+  /* ★機能追加：複数案件のまとめて更新の操作バー */
+  .bulk-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; background: var(--color-primary-tint, #eef2ff);
+    border: 1px solid var(--color-primary, #1e3a8a); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; font-size: 0.82rem; }
+  .bulk-bar select, .bulk-bar input { padding: 5px 8px; }
+  .bulk-col { width: 34px; text-align: center; }
+  .res-table td.bulk-col { text-align: center; }
   /* ★機能追加：マスタ管理画面の絞り込み（種類・対象支店）を横並びにする */
   .master-toolbar { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 12px; }
   .master-toolbar .field-block { min-width: 200px; }

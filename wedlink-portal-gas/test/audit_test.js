@@ -99,6 +99,9 @@ const API_SPECS = [
   { fn: 'apiListPhrasesAdmin', scope: 'any', args: (t) => [t, 'VIE'], target: 'VIE', reads: true },
   { fn: 'apiSavePhraseItem',  scope: 'any', args: (t) => [t, 'VIE', '侵入テスト', null, true, '本文'], target: 'VIE', writes: true },
   // ★機能追加：翻訳の用語集は全社共通の設定のためJPのみ
+  // ★機能追加：複数案件のまとめて更新。中身は単件のapiCommitChangesを回すだけなので、
+  // 権限は単件と同じ（他支店の案件は個別に失敗して結果に載る）
+  { fn: 'apiBulkUpdateStatus', scope: 'any', args: (t) => [t, ['VIE-001'], 'STS JP', 'OK', ''], target: 'VIE', writes: true },
   { fn: 'apiListGlossary',    scope: 'jp', args: (t) => [t], reads: true },
   { fn: 'apiSaveGlossaryItem', scope: 'jp', args: (t) => [t, '侵入テスト', null, true, 'Intruder'], writes: true },
   // ★要件：衣装会社マスタは支店を問わない全社共通の1本のリスト（引数に支店コードを取らない）

@@ -4422,5 +4422,76 @@ section('76. 【機能追加】通知メールの送信失敗を管理者へま�
 }
 
 // ---------------------------------------------------------------
+section('77. 【機能追加】複数案件のステータスをまとめて更新する');
+{
+  const ctx = shopFixture();
+  const jpToken = ctx.apiLogin('KANTO', 'pw').session.token;
+  ['VIE-901', 'VIE-902', 'VIE-903'].forEach((no, i) => {
+    addCase(ctx, '予約一覧', {
+      '支店コード': 'VIE', '管理番号': no, '管轄': '関東', 'STS JP': 'RQ',
+      '新郎名（ローマ字）': 'G' + i, '新婦名（ローマ字）': 'B' + i
+    });
+  });
+  addCase(ctx, '予約一覧', {
+    '支店コード': 'IST', '管理番号': 'IST-901', '管轄': '関東', 'STS JP': 'RQ',
+    '新郎名（ローマ字）': 'X', '新婦名（ローマ字）': 'Y'
+  });
+
+  ctx.__mail.length = 0;
+  const res = ctx.apiBulkUpdateStatus(jpToken, ['VIE-901', 'VIE-902'], 'STS JP', 'OK', 'まとめて確定します。');
+  check('まとめて更新できる', res.ok === true && res.updated === 2, JSON.stringify(res));
+  check('更新できなかった件数は0', res.failed === 0, JSON.stringify(res.results));
+  const d1 = ctx.apiGetReservationDetail(jpToken, 'VIE-901').detail;
+  const d2 = ctx.apiGetReservationDetail(jpToken, 'VIE-902').detail;
+  const d3 = ctx.apiGetReservationDetail(jpToken, 'VIE-903').detail;
+  check('選んだ案件のステータスが変わる（1件目）', d1['STS JP'] === 'OK', d1['STS JP']);
+  check('選んだ案件のステータスが変わる（2件目）', d2['STS JP'] === 'OK', d2['STS JP']);
+  check('選ばなかった案件は変わらない', d3['STS JP'] === 'RQ', d3['STS JP']);
+  check('案件ごとに相手へ通知が届く', ctx.__mail.length >= 2, ctx.__mail.length);
+  check('入力したメッセージが各案件のやり取り履歴に残る',
+        (d1.history || []).some(h => h.body.includes('まとめて確定します。')) &&
+        (d2.history || []).some(h => h.body.includes('まとめて確定します。')),
+        JSON.stringify((d1.history || []).map(h => h.body)));
+
+  // 支店ロールは自分の支店のSTS(支店側)をまとめて更新できる
+  const vieToken = ctx.apiLogin('VIE', 'vp').session.token;
+  const res2 = ctx.apiBulkUpdateStatus(vieToken, ['VIE-903'], 'STS 支店', 'ST', '');
+  check('支店ロールも自分の案件をまとめて更新できる', res2.updated === 1, JSON.stringify(res2));
+
+  // 他支店の案件が混ざっていたら、何も変更せずに止める
+  let err = null;
+  try { ctx.apiBulkUpdateStatus(vieToken, ['VIE-901', 'IST-901'], 'STS 支店', 'ST', ''); } catch (e) { err = e.message; }
+  check('他支店の案件が混ざっていたらエラーになる', err !== null, String(err));
+  const stillRq = ctx.apiGetReservationDetail(jpToken, 'IST-901').detail;
+  check('その場合は1件も変更されない（一部だけ実行されない）', stillRq['STS JP'] === 'RQ', stillRq['STS JP']);
+
+  // 上限・入力チェック
+  let err2 = null;
+  try { ctx.apiBulkUpdateStatus(jpToken, [], 'STS JP', 'OK', ''); } catch (e) { err2 = e.message; }
+  check('1件も選ばれていないとエラーになる', err2 !== null && err2.includes('選ばれていません'), String(err2));
+  let err3 = null;
+  try { ctx.apiBulkUpdateStatus(jpToken, ['VIE-901'], 'ホテル', 'X', ''); } catch (e) { err3 = e.message; }
+  check('ステータス以外の項目はまとめて更新できない', err3 !== null, String(err3));
+  let err4 = null;
+  const many = [];
+  for (let i = 0; i < 51; i++) many.push('VIE-901');
+  try { ctx.apiBulkUpdateStatus(jpToken, many, 'STS JP', 'OK', ''); } catch (e) { err4 = e.message; }
+  check('一度に更新できる件数に上限がある（実行時間切れを防ぐため）',
+        err4 !== null && err4.includes('50件'), String(err4));
+  let err5 = null;
+  try { ctx.apiBulkUpdateStatus(jpToken, '文字列', 'STS JP', 'OK', ''); } catch (e) { err5 = e.message; }
+  check('配列以外が渡っても内部エラーにならず、分かる言葉で返る',
+        err5 !== null && !/is not a function/.test(err5), String(err5));
+
+  // メール送信に失敗しても、まとめて更新自体は成立する（項目89の方針と同じ）
+  const realSend = ctx.MailApp.sendEmail;
+  ctx.MailApp.sendEmail = () => { throw new Error('Service invoked too many times for one day: email.'); };
+  const res3 = ctx.apiBulkUpdateStatus(jpToken, ['VIE-903'], 'STS JP', 'FN', '');
+  check('メール送信が失敗してもまとめて更新は成立する', res3.updated === 1, JSON.stringify(res3));
+  check('送信できなかった理由が返る（画面で知らせるため）', !!res3.mailWarning, JSON.stringify(res3));
+  ctx.MailApp.sendEmail = realSend;
+}
+
+// ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
 process.exit(fail === 0 ? 0 : 1);

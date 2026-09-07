@@ -2591,6 +2591,62 @@ function apiCommitChanges(token, kanriNo, changes, message, recipient) {
   return { ok: true, mailWarning: mailWarning };
 }
 
+// ★機能追加：複数の案件のステータスをまとめて更新する。
+// 実装は「1件ずつ既存の apiCommitChanges を呼ぶ」形にしている。権限チェック・履歴の記録・
+// 相手への通知・ステータスの自動連動といった処理を二重に書かずに済み、単件で操作したときと
+// 完全に同じ結果になるため（別実装にすると、片方だけ直して挙動がずれる事故が起きる）。
+// 1件が失敗しても残りは続行し、どれが成功してどれが失敗したかを画面へ返す。
+const BULK_STATUS_MAX = 50; // 1回の実行時間（GASは6分）を超えないための上限
+function apiBulkUpdateStatus(token, kanriNos, field, value, message) {
+  const session = requireSession_(token);
+  // ★配列以外（未入力・数値・文字列など）が渡ってもGAS内部の英語エラーにならないようにする
+  if (kanriNos !== null && kanriNos !== undefined && !Array.isArray(kanriNos)) {
+    throw new Error('対象の案件が正しく送信されませんでした。選び直してから実行してください。');
+  }
+  const list = (kanriNos || []).map(k => String(k || '').trim()).filter(Boolean);
+  if (!list.length) throw new Error('対象の案件が選ばれていません。');
+  if (list.length > BULK_STATUS_MAX) {
+    throw new Error(`一度にまとめて更新できるのは${BULK_STATUS_MAX}件までです（選ばれているのは${list.length}件）。`);
+  }
+  const targetField = String(field || '').trim();
+  if (targetField !== COL_STATUS_JP && targetField !== COL_STATUS_BRANCH) {
+    throw new Error('まとめて更新できるのは案件全体のステータスだけです。');
+  }
+  const targetValue = String(value || '').trim();
+  if (!targetValue) throw new Error('変更後のステータスを選んでください。');
+
+  // ★安全策：1件でも自分が扱えない案件（他支店・他店舗の案件）が混ざっていたら、
+  // 何も変更せずにその場で止める。まとめて更新は影響が大きいため、「一部だけ実行された」
+  // 状態を作らない。画面は自分に見えている一覧から選ぶので、通常ここには来ない。
+  list.forEach(kanriNo => {
+    const found = findReservationRow_(kanriNo);
+    if (found.rowIndex === -1) throw new Error(`対象の予約が見つかりません：${kanriNo}`);
+    if (session.role === SHOP_ROLE) assertShopOwnRow_(session, found.headers, found.rowData);
+    else assertRowVisible_(session, found.headers, found.rowData);
+  });
+
+  const results = [];
+  let mailWarning = '';
+  list.forEach(kanriNo => {
+    try {
+      const res = apiCommitChanges(token, kanriNo, { [targetField]: targetValue }, String(message || ''));
+      if (res && res.mailWarning && !mailWarning) mailWarning = res.mailWarning;
+      results.push({ kanriNo: kanriNo, ok: true, noChange: !!(res && res.noChange) });
+    } catch (e) {
+      // 1件の失敗で全体を止めない（権限が無い案件・既に同じ値の案件などが混ざりうるため）
+      results.push({ kanriNo: kanriNo, ok: false, error: errorMessage_(e) });
+    }
+  });
+  return {
+    ok: true,
+    results: results,
+    updated: results.filter(r => r.ok && !r.noChange).length,
+    unchanged: results.filter(r => r.ok && r.noChange).length,
+    failed: results.filter(r => !r.ok).length,
+    mailWarning: mailWarning
+  };
+}
+
 // シート上の列位置（1始まり）を返す。列が無ければ「原因と対処」が分かるエラーにする。
 // ★不具合修正：以前は indexOf の -1 をそのまま使っていたため、列が存在しないと
 // getRange(row, 0) という不正な呼び出しになり、Apps Scriptの意味不明な内部エラーで落ちていた。

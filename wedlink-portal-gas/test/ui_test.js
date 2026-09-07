@@ -3251,6 +3251,75 @@ function paneHidden(document, key) {
           dom56b.window.document.getElementById('nav-masters').classList.contains('hidden'));
   }
 
+  // ---------------------------------------------------------------
+  section('U57. 【機能追加】一覧から複数案件のステータスをまとめて更新する');
+  {
+    const ctx57 = makeServer();
+    // 対象の案件を3件用意する
+    const H57 = ctx57.RESERVATION_HEADERS;
+    ['R-101', 'R-102', 'R-103'].forEach((no, i) => {
+      const row = new Array(H57.length).fill('');
+      const set = (k, v) => { const idx = H57.indexOf(k); if (idx !== -1) row[idx] = v; };
+      set('支店コード', 'ROW'); set('管理番号', no); set('管轄', '関東'); set('STS JP', 'RQ');
+      set('新郎名（ローマ字）', 'G' + i); set('新婦名（ローマ字）', 'B' + i);
+      ctx57.__ss.getSheetByName('予約一覧').appendRow(row);
+    });
+    const dom57 = await openApp(ctx57);
+    const doc57 = dom57.window.document;
+    dom57.window.confirm = () => true;
+    await login(dom57, 'KANTO', 'CHANGE-ME-KANTO');
+    await settle(); await settle();
+
+    check('最初はまとめて更新のバーが隠れている',
+          doc57.getElementById('bulk-bar').classList.contains('hidden'));
+
+    const checks = [...doc57.querySelectorAll('.bulk-check')];
+    check('一覧の各行に選択欄がある', checks.length >= 3, checks.length);
+
+    // 2件だけ選ぶ
+    const pick = checks.filter(cb => ['R-101', 'R-102'].includes(cb.dataset.bulkKanri));
+    check('選びたい案件の行が見つかる', pick.length === 2, JSON.stringify(checks.map(c => c.dataset.bulkKanri)));
+    pick.forEach(cb => { cb.checked = true; cb.dispatchEvent(new dom57.window.Event('change')); });
+    await settle();
+    check('選ぶとまとめて更新のバーが出る', !doc57.getElementById('bulk-bar').classList.contains('hidden'));
+    check('選択件数が表示される', doc57.getElementById('bulk-count').textContent.includes('2件'),
+          doc57.getElementById('bulk-count').textContent);
+
+    // 行のチェックボックスを押しても詳細画面へ飛ばない
+    check('選択操作では詳細画面へ移動しない',
+          !doc57.getElementById('view-dashboard').classList.contains('hidden'));
+
+    // まとめてOKにする
+    doc57.getElementById('bulk-status').value = 'OK';
+    doc57.getElementById('bulk-message').value = 'まとめて確定します。';
+    doc57.getElementById('bulk-apply').click();
+    await settle(); await settle(); await settle(); await settle();
+
+    const jp57 = ctx57.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    const a = ctx57.apiGetReservationDetail(jp57, 'R-101').detail;
+    const b = ctx57.apiGetReservationDetail(jp57, 'R-102').detail;
+    const c = ctx57.apiGetReservationDetail(jp57, 'R-103').detail;
+    check('選んだ案件がまとめて更新される（1件目）', a['STS JP'] === 'OK', a['STS JP']);
+    check('選んだ案件がまとめて更新される（2件目）', b['STS JP'] === 'OK', b['STS JP']);
+    check('選ばなかった案件は変わらない', c['STS JP'] === 'RQ', c['STS JP']);
+    check('結果が画面に表示される',
+          doc57.getElementById('bulk-result').textContent.includes('更新できたもの'),
+          doc57.getElementById('bulk-result').textContent.slice(0, 150));
+    check('実行後は選択が解除される（同じ操作を続けて誤爆しない）',
+          doc57.getElementById('bulk-bar').classList.contains('hidden'));
+
+    // 全選択のチェックボックス
+    doc57.getElementById('bulk-select-all').checked = true;
+    doc57.getElementById('bulk-select-all').dispatchEvent(new dom57.window.Event('change'));
+    await settle();
+    const allChecked = [...doc57.querySelectorAll('.bulk-check')].every(cb => cb.checked);
+    check('見出しのチェックで表示中のすべてを選べる', allChecked);
+    doc57.getElementById('bulk-clear').click();
+    await settle();
+    check('「選択を解除」で全部外れる',
+          [...doc57.querySelectorAll('.bulk-check')].every(cb => !cb.checked));
+  }
+
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error('テストが異常終了しました:', e); process.exit(1); });
