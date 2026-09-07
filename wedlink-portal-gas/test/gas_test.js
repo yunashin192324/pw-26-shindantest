@@ -4625,7 +4625,7 @@ section('79. 【機能追加】支店マスタの不整合を検出する（ス�
   // 日次の確認で管理者へ届く
   ctx.__mail.length = 0;
   ctx.checkMasterIntegrity();
-  const mails = ctx.__mail.filter(m => String(m.subj).includes('支店マスタの確認'));
+  const mails = ctx.__mail.filter(m => String(m.subj).includes('スプレッドシートの確認'));
   check('日次の確認で管理者へ知らせが届く', mails.length === 1, JSON.stringify(ctx.__mail.map(m => m.subj)));
   check('本文に問題の内容が並ぶ', mails[0] && mails[0].body.includes('DUP'), mails[0] && mails[0].body);
 
@@ -4635,7 +4635,7 @@ section('79. 【機能追加】支店マスタの不整合を検出する（ス�
   ctx.__mail.length = 0;
   ctx.checkMasterIntegrity();
   check('問題が無ければ通知しない（毎日鳴り続けない）',
-        ctx.__mail.filter(m => String(m.subj).includes('支店マスタの確認')).length === 0,
+        ctx.__mail.filter(m => String(m.subj).includes('スプレッドシートの確認')).length === 0,
         JSON.stringify(ctx.__mail.map(m => m.subj)));
 
   // 権限
@@ -4863,6 +4863,103 @@ section('82. 【機能追加】未確定の間は「希望日一覧」からだ�
   });
   check('STS(JP側)=CHK（空き確認中）の間も、案件全体のSTS(支店側)は編集できない',
         tryIt(vieToken, { 'STS 支店': 'UC' }) !== null);
+}
+
+// ---------------------------------------------------------------
+section('83. 【不具合修正】店舗が作った案件が店舗の一覧に出ない（起票元店舗の復元・列不足の検知）');
+{
+  // 背景：「起票元店舗」列が無いスプレッドシートで店舗が新規依頼を作ると、案件はできるのに
+  // 店舗コードだけが保存されず、手配課・現地支店からは見えるのに店舗の一覧にだけ出てこない、
+  // という状態になっていた。項目99で「これから作る案件」は列が無ければエラーにしたが、
+  // それ以前に作られてしまった案件は空欄のまま残るため、履歴から店舗を特定して埋め直す。
+  const ctx = shopFixture();
+  const ss = ctx.__ss;
+  const jpToken = ctx.apiLogin('KANTO', 'pw').session.token;
+  const shopToken = ctx.apiLogin('SHOP1', 'sp').session.token;
+
+  // 旧コードで作られた「起票元店舗が空欄の案件」を2件用意する
+  addCase(ctx, '予約一覧', {
+    '支店コード': 'VIE', '管理番号': 'VIE-801', '管轄': '関東', 'STS JP': 'RQ',
+    '新郎名（ローマ字）': 'Lost', '新婦名（ローマ字）': 'Case1', '希望日①': '2027-10-01'
+  });
+  addCase(ctx, '予約一覧', {
+    '支店コード': 'VIE', '管理番号': 'VIE-802', '管轄': '関東', 'STS JP': 'RQ',
+    '新郎名（ローマ字）': 'Lost', '新婦名（ローマ字）': 'Case2', '希望日①': '2027-10-02'
+  });
+  // 起票元店舗が入っている正常な案件（上書きされないことの確認用）
+  addCase(ctx, '予約一覧', {
+    '支店コード': 'VIE', '管理番号': 'VIE-803', '管轄': '関東', 'STS JP': 'RQ',
+    '起票元店舗': 'SHOP2', '新郎名（ローマ字）': 'Normal', '新婦名（ローマ字）': 'Case3'
+  });
+  // やり取り履歴（店舗発の新規依頼）を用意する。VIE-801は送信者ラベルから、
+  // VIE-802は送信者名が変わっていて本文からしか辿れない状況を再現する。
+  const addHistory = (kanri, sender, body) => {
+    const h = ss.getSheetByName('やり取り履歴');
+    const head = h.getRange(1, 1, 1, h.getLastColumn()).getValues()[0];
+    const row = new Array(head.length).fill('');
+    const set = (n, v) => { const i = head.indexOf(n); if (i !== -1) row[i] = v; };
+    set('__id', 'h-' + kanri); set('支店コード', 'VIE'); set('管理番号', kanri);
+    set('日時', new Date()); set('送信者', sender); set('送信者ロール', 'SHOP'); set('内容', body);
+    h.appendRow(row);
+  };
+  addCase(ctx, '予約一覧', {
+    '支店コード': 'VIE', '管理番号': 'VIE-804', '管轄': '関東', 'STS JP': 'RQ',
+    '新郎名（ローマ字）': 'Unknown', '新婦名（ローマ字）': 'Shop'
+  });
+  // 手配課が作った通常の案件（店舗発ではないので、報告に混ざってはいけない）
+  addCase(ctx, '予約一覧', {
+    '支店コード': 'VIE', '管理番号': 'VIE-805', '管轄': '関東', 'STS JP': 'RQ',
+    '新郎名（ローマ字）': 'Jp', '新婦名（ローマ字）': 'Made'
+  });
+  addHistory('VIE-801', 'yamamoto（新宿店）', '[新規依頼（店舗より）]\n店舗（新宿店）からの新規依頼です。');
+  addHistory('VIE-802', '（退職済み）', '[新規依頼（店舗より）]\n店舗（新宿店）からの新規依頼です。');
+  addHistory('VIE-803', 'だれか（存在しない店）', '[新規依頼（店舗より）]');
+  // VIE-804：店舗発だと分かるが、店舗名がマスタに無く特定できない（＝報告してほしい案件）
+  addHistory('VIE-804', 'tanaka（閉店した店）', '[新規依頼（店舗より）]');
+
+  check('修復前：店舗の一覧に自分の案件が出てこない（報告された症状）',
+        ctx.apiGetDashboard(shopToken).reservations.filter(r => r.kanriNo.startsWith('VIE-80')).length === 0);
+  check('修復前でも手配課からは見えている（データ自体は残っている）',
+        ctx.apiGetDashboard(jpToken).reservations.some(r => r.kanriNo === 'VIE-801'));
+
+  const res = ctx.repairOriginShop();
+  check('履歴から2件の起票元店舗を復元する', res.repaired === 2, JSON.stringify(res));
+  const after = ctx.apiGetDashboard(shopToken).reservations.map(r => r.kanriNo);
+  check('修復後：送信者ラベルから特定した案件が店舗の一覧に出る', after.includes('VIE-801'), JSON.stringify(after));
+  check('修復後：本文からしか辿れない案件も店舗の一覧に出る', after.includes('VIE-802'), JSON.stringify(after));
+  check('店舗から詳細も開けるようになる（権限チェックも起票元店舗を見ているため）', (() => {
+    try { ctx.apiGetReservationDetail(shopToken, 'VIE-801'); return true; } catch (e) { return false; }
+  })());
+  check('既に起票元店舗が入っている案件は上書きしない（別の店舗の案件を横取りしない）',
+        ctx.apiGetReservationDetail(jpToken, 'VIE-803').detail['起票元店舗'] === 'SHOP2');
+  check('店舗発だと分かるのに特定できなかった案件は、触らず報告だけする',
+        res.unresolved.includes('VIE-804'), JSON.stringify(res.unresolved));
+  check('手配課が作った通常の案件は報告に混ざらない（起票元店舗が空欄で正しいため）',
+        !res.unresolved.includes('VIE-805'), JSON.stringify(res.unresolved));
+  check('既に値が入っている案件も報告に混ざらない',
+        !res.unresolved.includes('VIE-803'), JSON.stringify(res.unresolved));
+
+  const again = ctx.repairOriginShop();
+  check('もう一度実行しても二重に書き換えない（何度でも安全に実行できる）', again.repaired === 0, JSON.stringify(again));
+
+  // --- 列の不足そのものを点検で知らせる（同じ事故の再発を早く見つけるため） ---
+  const ctx2 = shopFixture();
+  check('列が揃っていれば、列不足の指摘は出ない',
+        ctx2.checkSheetColumnIssues_().length === 0, JSON.stringify(ctx2.checkSheetColumnIssues_()));
+  // 「起票元店舗」列を落とした予約一覧を作り直す
+  const ss2 = ctx2.__ss;
+  const res2 = ss2.getSheetByName('予約一覧');
+  const cols2 = res2.getRange(1, 1, 1, res2.getLastColumn()).getValues()[0].filter(h => h !== '起票元店舗');
+  delete ss2.sheets['予約一覧'];
+  ss2.insertSheet('予約一覧').getRange(1, 1, 1, cols2.length).setValues([cols2]);
+  const issues = ctx2.checkSheetColumnIssues_();
+  check('列が足りないとその場で指摘される', issues.length === 1, JSON.stringify(issues));
+  check('どのシートのどの列が足りないかが書かれている',
+        issues[0].includes('予約一覧') && issues[0].includes('起票元店舗'), issues[0]);
+  check('直し方（setupPortalの実行）まで案内している', issues[0].includes('setupPortal'), issues[0]);
+  check('マスタ管理画面の点検結果にも列不足が出る',
+        ctx2.apiGetBranchMasterIssues(ctx2.apiLogin('KANTO', 'pw').session.token)
+          .issues.some(m => m.includes('起票元店舗')));
 }
 
 // ---------------------------------------------------------------

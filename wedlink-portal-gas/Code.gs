@@ -821,6 +821,10 @@ function setupPortal() {
 
   // 未読フラグ列を追加した直後は全て空欄になるため、履歴から実態を計算して反映する
   rebuildUnreadFlags();
+  // ★不具合修正（項目100）：「起票元店舗」列を後から追加した場合、それより前に店舗が作った案件は
+  // 店舗コードが空欄のままで、手配課・現地支店からは見えるのに店舗の一覧にだけ出てこない。
+  // 列を足したこの場で、やり取り履歴から店舗を特定して埋め直す（既に値がある行は触らない）。
+  const originRepair = repairOriginShop();
 
   // ★不具合修正：setupPortal()はApps Scriptエディタから直接手動実行する運用のため、
   // スプレッドシートのUIコンテキストが存在せずSpreadsheetApp.getUi()が
@@ -836,6 +840,14 @@ function setupPortal() {
     '支店を追加したいときは「支店マスタ」シートに1行追加するだけでOKです（コード変更不要）。\n' +
     '案件番号プレフィックスは支店ごとに一意である必要があります（ローマ支店は既存運用のため "R" のまま変更しないでください）。\n\n' +
     branchMasterIssuesMessage_() +
+    (originRepair.repaired
+      ? `★店舗の一覧に出てこなくなっていた案件 ${originRepair.repaired} 件の「起票元店舗」を復元しました。\n` +
+        `　（起票元店舗が空欄だと、その案件は手配課・現地支店からは見えても店舗の一覧に出ません）\n\n`
+      : '') +
+    (originRepair.unresolved && originRepair.unresolved.length
+      ? `※次の案件は起票した店舗を特定できなかったため、そのままにしています：${originRepair.unresolved.join(', ')}\n` +
+        `　「予約一覧」シートの「起票元店舗」列に、起票した店舗の支店コードを直接入力してください。\n\n`
+      : '') +
     '※この関数は何度でも安全に実行できます。コードを新しい版に差し替えたあとに再実行すると、\n' +
     '　新しく増えた列だけが各シートの右端に追加されます（既存のデータや入力済みの値は消えません）。'
   );
@@ -1908,6 +1920,124 @@ function rebuildUnreadFlags() {
   });
   console.log(`[rebuildUnreadFlags] ${updated} 行の未読フラグを再計算しました`);
   return { ok: true, rows: updated };
+}
+
+// ★不具合修正（項目100）：「起票元店舗」列が無いスプレッドシートで店舗が新規依頼を作ると、
+// 案件は作られるのに店舗コード（COL_ORIGIN_SHOP）だけが保存されない状態になっていた
+// （列が見つからないとき setV が静かに書き込みを飛ばしていたため。項目99でこの書き込み自体は
+// エラーにしたが、それ以前に作られてしまった案件は空欄のまま残る）。
+// 起票元店舗が空欄だと rowInScope_ の絞り込み（店舗ロールは自分が起票した案件だけを見る）に
+// 一致しないため、手配課・現地支店からは見えているのに「店舗の一覧にだけ出てこない」という、
+// 気づきにくい状態になる。setupPortal で列を足しただけでは既存の案件は直らないため、
+// やり取り履歴に残っている「店舗からの新規依頼」の送信者から店舗を特定して埋め直す。
+//
+// 安全のための決まりごと：
+//   ・既に値が入っている行には絶対に触らない（上書きしない）
+//   ・店舗が一つに特定できない行も触らない（候補が複数／支店名が重複している場合など）
+//   ・何度実行しても結果は変わらない（直せるものだけ直し、直せないものは報告する）
+function repairOriginShop() {
+  const ss = getSpreadsheet_();
+
+  // 1) 支店マスタから「店舗名 → 店舗コード」の対応表を作る（ロール=SHOPの行だけ）。
+  //    同じ支店名が複数ある場合はどちらか判断できないため、対応表から除外する。
+  const nameToCode = {};
+  const duplicatedNames = {};
+  listBranchesRaw_().filter(b => b.role === SHOP_ROLE).forEach(b => {
+    const name = String(b.name || '').trim();
+    if (!name) return;
+    if (Object.prototype.hasOwnProperty.call(nameToCode, name)) { duplicatedNames[name] = true; return; }
+    nameToCode[name] = b.code;
+  });
+  Object.keys(duplicatedNames).forEach(n => { delete nameToCode[n]; });
+
+  // 2) やり取り履歴から、管理番号ごとに「起票した店舗コード」を推定する
+  const guessByKanri = {};   // 管理番号 -> 特定できた店舗コード（'' は候補が食い違っていて確定できない印）
+  const shopSourced = {};    // 管理番号 -> true（履歴を見るかぎり店舗発の案件だと分かるもの）
+  const hSheet = ss.getSheetByName(HISTORY_SHEET_NAME);
+  if (hSheet && hSheet.getLastRow() >= 2) {
+    const hHeaders = hSheet.getRange(1, 1, 1, hSheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+    const hValues = hSheet.getRange(2, 1, hSheet.getLastRow() - 1, hHeaders.length).getValues();
+    const kanriIdx = hHeaders.indexOf(H_COL_KANRI);
+    const roleIdx = hHeaders.indexOf(H_COL_SENDER_ROLE);
+    const senderIdx = hHeaders.indexOf(H_COL_SENDER);
+    const bodyIdx = hHeaders.indexOf(H_COL_BODY);
+    const originIdx = hHeaders.indexOf(H_COL_ORIGIN_SHOP);
+    if (kanriIdx !== -1 && roleIdx !== -1) {
+      hValues.forEach(v => {
+        const kanri = String(v[kanriIdx] || '').trim();
+        if (!kanri) return;
+        // 送信者ロールがSHOPのレコードがあれば、店舗発の案件だと分かる
+        // （店舗コードまで特定できなくても「直せなかった案件」として報告するために覚えておく）
+        if (String(v[roleIdx] || '').trim().toUpperCase() === SHOP_ROLE) shopSourced[kanri] = true;
+        let code = '';
+        // ①履歴側に起票元店舗が残っていれば、それがいちばん確実
+        if (originIdx !== -1) {
+          const raw = String(v[originIdx] || '').trim().toUpperCase();
+          if (raw) code = raw;
+        }
+        // ②送信者ロールがSHOPのレコードの送信者ラベル（「氏名（店舗名）」または「店舗名」）から引く
+        if (!code && String(v[roleIdx] || '').trim().toUpperCase() === SHOP_ROLE && senderIdx !== -1) {
+          code = shopCodeFromLabel_(String(v[senderIdx] || ''), nameToCode);
+        }
+        // ③新規依頼の本文「店舗（○○）からの新規依頼です。」からも引く（送信者名が変わっていた場合の保険）
+        if (!code && bodyIdx !== -1) {
+          const m = String(v[bodyIdx] || '').match(/店舗（([^）]+)）からの新規依頼/);
+          if (m) {
+            const name = m[1].trim();
+            if (Object.prototype.hasOwnProperty.call(nameToCode, name)) code = nameToCode[name];
+          }
+        }
+        if (!code) return;
+        if (!Object.prototype.hasOwnProperty.call(guessByKanri, kanri) || !guessByKanri[kanri]) {
+          guessByKanri[kanri] = code;
+          return;
+        }
+        // 同じ案件に別々の店舗が出てきた場合は、取り違えを避けるため触らない
+        if (guessByKanri[kanri] !== code) guessByKanri[kanri] = '';
+      });
+    }
+  }
+
+  // 3) 予約一覧・過去一覧の「起票元店舗が空欄の行」だけを埋める
+  let repaired = 0;
+  const unresolved = [];
+  [RESERVATION_SHEET_NAME, ARCHIVE_SHEET_NAME].forEach(sheetName => {
+    const sheet = ss.getSheetByName(sheetName);
+    if (!sheet || sheet.getLastRow() < 2) return;
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+    const originIdx = headers.indexOf(COL_ORIGIN_SHOP);
+    const kanriIdx = headers.indexOf(COL_KANRI_NO);
+    if (originIdx === -1 || kanriIdx === -1) return;   // 列がまだ無いシートは対象外（先にsetupPortalを実行する）
+    const n = sheet.getLastRow() - 1;
+    const kanris = sheet.getRange(2, kanriIdx + 1, n, 1).getValues();
+    const origins = sheet.getRange(2, originIdx + 1, n, 1).getValues();
+    let changed = false;
+    for (let i = 0; i < n; i++) {
+      if (String(origins[i][0] || '').trim()) continue;   // 既に入っている行は触らない
+      const kanri = String(kanris[i][0] || '').trim();
+      if (!kanri) continue;
+      const code = guessByKanri[kanri];
+      if (code) { origins[i][0] = code; repaired++; changed = true; }
+      // 履歴上は店舗発なのに店舗を特定できなかったものだけ報告する
+      // （手配課が作った通常の案件は起票元店舗が空欄で正しいので、報告に混ぜない）
+      else if (shopSourced[kanri]) unresolved.push(kanri);
+    }
+    if (changed) sheet.getRange(2, originIdx + 1, n, 1).setValues(origins);
+  });
+
+  console.log(`[repairOriginShop] ${repaired} 件の起票元店舗を復元しました` +
+              (unresolved.length ? `（特定できなかった案件: ${unresolved.join(', ')}）` : ''));
+  return { ok: true, repaired, unresolved };
+}
+
+// 送信者ラベル（senderLabel_が作る「氏名（店舗名）」または「店舗名」）から店舗コードを引く。
+// 該当する店舗が無ければ空文字を返す（推測で埋めない）。
+function shopCodeFromLabel_(label, nameToCode) {
+  const s = String(label || '').trim();
+  if (!s) return '';
+  const m = s.match(/（([^）]+)）\s*$/);
+  const name = m ? m[1].trim() : s;
+  return Object.prototype.hasOwnProperty.call(nameToCode, name) ? nameToCode[name] : '';
 }
 
 function branchMetaMap_() {
@@ -5210,9 +5340,9 @@ function syncBlackoutCalendarsCore_(errors) {
 // 支店コードの重複・必須項目の欠落もあわせて調べる。
 // setupPortal の完了メッセージに載せる、支店マスタの確認結果
 function branchMasterIssuesMessage_() {
-  const issues = checkBranchMasterIssues_();
+  const issues = allIntegrityIssues_();
   if (!issues.length) return '';
-  return '★支店マスタに確認が必要な記載があります：\n' +
+  return '★スプレッドシートに確認が必要な点があります：\n' +
     issues.map((m, i) => `　${i + 1}. ${m}`).join('\n') + '\n\n';
 }
 
@@ -5285,11 +5415,49 @@ function checkBranchMasterIssues_() {
   return issues;
 }
 
+// ★不具合修正（項目100）：機能追加で増えた列が運用中のスプレッドシートに無いと、その列へ入る
+// はずだった値だけが保存されないまま案件ができてしまう（実際に「起票元店舗」列が無く、店舗が
+// 作った案件が店舗自身の一覧に出てこない、という気づきにくい事故が起きた）。列の不足そのものを
+// 日次の点検・マスタ管理画面で知らせて、早い段階で気づけるようにする。直し方はsetupPortalの実行のみ。
+function checkSheetColumnIssues_() {
+  const issues = [];
+  const ss = getSpreadsheet_();
+  const targets = [
+    { name: RESERVATION_SHEET_NAME, headers: RESERVATION_HEADERS },
+    { name: ARCHIVE_SHEET_NAME, headers: RESERVATION_HEADERS },
+    { name: HISTORY_SHEET_NAME, headers: HISTORY_HEADERS },
+    { name: BRANCH_MASTER_SHEET_NAME, headers: BRANCH_MASTER_HEADERS }
+  ];
+  targets.forEach(t => {
+    const sheet = ss.getSheetByName(t.name);
+    if (!sheet) {
+      issues.push(`「${t.name}」シートがありません。スプレッドシートのメニューから setupPortal を一度実行してください。`);
+      return;
+    }
+    const lastCol = sheet.getLastColumn();
+    const existing = lastCol > 0
+      ? sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim())
+      : [];
+    const missing = t.headers.filter(h => existing.indexOf(h) === -1);
+    if (missing.length) {
+      issues.push(`「${t.name}」シートに列が足りません（${missing.join('・')}）。` +
+                  `このままだとその項目の値が保存されず、案件が一覧に出ないなどの不具合につながります。` +
+                  `スプレッドシートのメニューから setupPortal を一度実行してください。`);
+    }
+  });
+  return issues;
+}
+
+// 点検の結果をひとまとめにする（列の不足＋支店マスタの記載内容）
+function allIntegrityIssues_() {
+  return checkSheetColumnIssues_().concat(checkBranchMasterIssues_());
+}
+
 // 画面（マスタ管理の支店一覧）から不整合を確認するためのAPI
 function apiGetBranchMasterIssues(token) {
   const session = requireSession_(token);
   assertJp_(session);
-  return { ok: true, issues: checkBranchMasterIssues_() };
+  return { ok: true, issues: allIntegrityIssues_() };
 }
 
 // 日次で支店マスタの不整合を確認し、見つかったら管理者へ知らせる。
@@ -5297,16 +5465,16 @@ function apiGetBranchMasterIssues(token) {
 function checkMasterIntegrity() { return runTrigger_('checkMasterIntegrity', checkMasterIntegrityCore_); }
 
 function checkMasterIntegrityCore_(errors) {
-  const issues = checkBranchMasterIssues_();
+  const issues = allIntegrityIssues_();
   if (!issues.length) return;
-  console.log(`[checkMasterIntegrity] 支店マスタの不整合 ${issues.length} 件`);
+  console.log(`[checkMasterIntegrity] スプレッドシートの不整合 ${issues.length} 件`);
   if (!SYSTEM_ALERT_EMAIL) return;
   try {
     MailApp.sendEmail(
       SYSTEM_ALERT_EMAIL,
-      `[WEDLINK][支店マスタの確認] ${issues.length}件の問題`,
-      `支店マスタに、そのままにしておくと事故につながる可能性がある記載が見つかりました。\n` +
-      `スプレッドシートの「${BRANCH_MASTER_SHEET_NAME}」シートをご確認ください。\n\n` +
+      `[WEDLINK][スプレッドシートの確認] ${issues.length}件の問題`,
+      `そのままにしておくと事故につながる可能性がある点が見つかりました。\n` +
+      `スプレッドシート（「${BRANCH_MASTER_SHEET_NAME}」シートほか）をご確認ください。\n\n` +
       `--- 内容 ---\n${issues.map((m, i) => `${i + 1}. ${m}`).join('\n')}\n`
     );
   } catch (e) {
