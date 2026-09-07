@@ -3231,7 +3231,26 @@
     submitBtn.textContent = '送信中...';
     showLoadingOverlay_('送信中です。しばらくお待ちください…');
     try {
-      const res = await gsRun('apiShopCreateRequest', session.token, payload);
+      // ★機能追加（項目98）：希望日が現地支店の撮影不可日にあたる場合、サーバー側が理由を添えて
+      // 断ってくる。その内容をそのまま見せて、それでも依頼するかを確認してから送り直す
+      // （現地へ相談したい場合もあるため、一律に禁止はしない）。
+      let res;
+      try {
+        res = await gsRun('apiShopCreateRequest', session.token, payload);
+      } catch (firstError) {
+        const msg = String((firstError && firstError.message) || '');
+        if (msg.indexOf('撮影不可日') === -1) throw firstError;
+        hideLoadingOverlay_();
+        const goAhead = await confirmI18n_(msg + '\n\nこのまま依頼しますか？');
+        if (!goAhead) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = submitBtnLabel;
+          return;
+        }
+        showLoadingOverlay_('送信中です。しばらくお待ちください…');
+        res = await gsRun('apiShopCreateRequest', session.token,
+          Object.assign({}, payload, { acknowledgeBlackout: true }));
+      }
       // ★機能追加：送信後に「回答までお待ちください」の案内を出す
       // ★要件：文言を「予約依頼（空き確認の時は空き確認依頼）をしました。回答までしばらくお待ちください。
       // 予約番号 ○○」に変更。PC幅では画面中央に目立つモーダルで表示し（success-banner-prominent、
@@ -3324,7 +3343,9 @@
     { key: 'costume', label: '衣装会社（全社共通）', perBranch: false, jpOnly: true, list: 'apiListCostumeCompanies', save: 'apiSaveCostumeCompanyItem' },
     { key: 'branch', label: '支店・手配課・店舗', perBranch: false, jpOnly: true, list: 'apiListBranches', save: 'apiSaveBranch' },
     // ★機能追加：翻訳の用語集。英語表示の支店へ出す訳を、業務用語だけ決まった訳に固定する
-    { key: 'glossary', label: '翻訳の用語集（英語支店向け）', perBranch: false, jpOnly: true, list: 'apiListGlossary', save: 'apiSaveGlossaryItem', extra: 'glossary' }
+    { key: 'glossary', label: '翻訳の用語集（英語支店向け）', perBranch: false, jpOnly: true, list: 'apiListGlossary', save: 'apiSaveGlossaryItem', extra: 'glossary' },
+    // ★機能追加：撮影不可日（支店の休業日など）。店舗が依頼を出す前に気づけるようにするための情報
+    { key: 'blackout', label: '撮影不可日', perBranch: true, list: 'apiListBlackoutDates', save: 'apiSaveBlackoutDate', extra: 'blackout' }
   ];
   let mastersType = 'plan';
   let mastersBranchCode = '';
@@ -3361,9 +3382,11 @@
     $('masters-branch-wrap').classList.toggle('hidden', !def.perBranch);
     $('masters-content').innerHTML = '<p class="hint-text">読み込み中...</p>';
     try {
-      mastersRows = def.perBranch
+      const listed = def.perBranch
         ? await gsRun(def.list, session.token, mastersBranchCode)
         : await gsRun(def.list, session.token);
+      // 撮影不可日は { ok, items:[] } の形で返る（他のマスタは配列そのもの）
+      mastersRows = Array.isArray(listed) ? listed : (listed && listed.items) || [];
       renderMasters();
       // ★機能追加：支店一覧を開いたときは、支店マスタの不整合（案件番号プレフィックスの重複など）も
       // その場で確認して知らせる（スプレッドシートを直接編集して壊れた場合に気づけるようにするため）
@@ -3410,6 +3433,15 @@
     if (def.extra === 'glossary') {
       cells += `<td><input data-m-field="en" data-m-row="${i}" value="${escapeAttr(row.en || '')}" style="width:100%;" placeholder="必ずこう訳す英語"></td>`;
     }
+    if (def.extra === 'blackout') {
+      // 撮影不可日は「名称」ではなく開始日・終了日・理由で扱う
+      const readOnly = row.editable === false ? 'disabled' : '';
+      return `
+        <td><input type="date" data-m-field="start" data-m-row="${i}" value="${escapeAttr(row.start || '')}" ${readOnly}></td>
+        <td><input type="date" data-m-field="end" data-m-row="${i}" value="${escapeAttr(row.end || '')}" ${readOnly}></td>
+        <td><input data-m-field="reason" data-m-row="${i}" value="${escapeAttr(row.reason || '')}" style="width:100%;" ${readOnly}></td>
+        <td>${escapeHtml(row.source || '')}</td>`;
+    }
     return cells;
   }
 
@@ -3420,6 +3452,7 @@
     if (def.extra === 'sale') head.push('対象プラン');
     if (def.extra === 'phrase') head.push('本文');
     if (def.extra === 'glossary') head.push('英訳（この訳に固定する）');
+    if (def.extra === 'blackout') return ['開始日', '終了日', '理由', '登録方法'];
     return head;
   }
 
@@ -3429,19 +3462,21 @@
     const rowsHtml = (mastersRows || []).map((row, i) => `
       <tr>
         ${masterRowFieldsHtml_(def, row, i)}
-        <td style="text-align:center;">
+        ${def.extra === 'blackout' ? '' : `<td style="text-align:center;">
           <input type="checkbox" data-m-field="active" data-m-row="${i}" ${row.active !== false ? 'checked' : ''}>
-        </td>
-        <td><button type="button" class="send-btn-sm" data-m-save="${i}">保存</button></td>
+        </td>`}
+        <td>${row.editable === false ? '<span class="hint-text">カレンダー側で編集</span>'
+          : `<button type="button" class="send-btn-sm" data-m-save="${i}">保存</button>` +
+            (def.extra === 'blackout' ? ` <button type="button" class="history-link" data-m-delete="${i}">削除</button>` : '')}</td>
       </tr>`).join('');
 
-    const newHead = heads.map(h => `<th>${escapeHtml(h)}</th>`).join('');
+    const newHead = heads.map(h => `<th>${escapeHtml(h)}</th>`).join('') + (def.extra === 'blackout' ? '' : '<th>有効</th>');
     $('masters-content').innerHTML = `
       <div class="section-card">
         <h3>${escapeHtml(def.label)}の一覧</h3>
         <div style="overflow-x:auto;">
           <table class="plan-table">
-            <thead><tr>${newHead}<th>有効</th><th></th></tr></thead>
+            <thead><tr>${newHead}<th></th></tr></thead>
             <tbody>${rowsHtml || `<tr><td colspan="${heads.length + 2}" class="hint-text">まだ登録がありません</td></tr>`}</tbody>
           </table>
         </div>
@@ -3450,7 +3485,12 @@
       <div class="section-card">
         <h3>新しく追加する</h3>
         <div class="detail-grid">
-          <div class="field-block"><label>${def.extra === 'glossary' ? '日本語' : '名称'}</label><input id="masters-new-name" placeholder="${def.extra === 'glossary' ? '例）同意書' : '例）プレミアムプラン'}"></div>
+          ${def.extra === 'blackout' ? `
+            <div class="field-block"><label>開始日</label><input type="date" id="masters-new-start"></div>
+            <div class="field-block"><label>終了日（1日だけなら空欄）</label><input type="date" id="masters-new-end"></div>
+            <div class="field-block"><label>理由</label><input id="masters-new-reason" placeholder="例）現地の祝日で休業"></div>
+          ` : `
+          <div class="field-block"><label>${def.extra === 'glossary' ? '日本語' : '名称'}</label><input id="masters-new-name" placeholder="${def.extra === 'glossary' ? '例）同意書' : '例）プレミアムプラン'}"></div>`}
           ${def.extra === 'phrase' ? `<div class="field-block" style="grid-column:1/-1;"><label>本文</label><input id="masters-new-body" placeholder="定型文の本文"></div>` : ''}
           ${def.extra === 'sale' ? `<div class="field-block"><label>対象プラン（空欄なら全プラン共通）</label><input id="masters-new-target"></div>` : ''}
           ${def.extra === 'glossary' ? `<div class="field-block"><label>英訳（この訳に固定する）</label><input id="masters-new-en" placeholder="例）Consent Form"></div>` : ''}
@@ -3460,6 +3500,9 @@
 
     $('masters-content').querySelectorAll('[data-m-save]').forEach(btn => {
       btn.addEventListener('click', (e) => saveMasterRow(Number(btn.dataset.mSave), e));
+    });
+    $('masters-content').querySelectorAll('[data-m-delete]').forEach(btn => {
+      btn.addEventListener('click', (e) => deleteMasterRow(Number(btn.dataset.mDelete), e));
     });
     const addBtn = $('masters-add');
     if (addBtn) addBtn.addEventListener('click', (e) => addMasterRow(e));
@@ -3498,6 +3541,9 @@
             masterInputValue_(i, 'body'));
         } else if (def.extra === 'glossary') {
           await gsRun('apiSaveGlossaryItem', session.token, name, row.name, active, masterInputValue_(i, 'en'));
+        } else if (def.extra === 'blackout') {
+          await gsRun('apiSaveBlackoutDate', session.token, mastersBranchCode,
+            masterInputValue_(i, 'start'), masterInputValue_(i, 'end'), masterInputValue_(i, 'reason'), row.start);
         } else if (def.perBranch) {
           await gsRun(def.save, session.token, mastersBranchCode, name, row.name, active);
         } else {
@@ -3511,10 +3557,26 @@
     });
   }
 
+  // 撮影不可日だけは削除できる（予定が変わって撮影できるようになることが普通にあるため）
+  async function deleteMasterRow(i, evt) {
+    const row = mastersRows[i];
+    if (!row) return;
+    if (!await confirmI18n_(`${row.start}${row.end && row.end !== row.start ? '〜' + row.end : ''} の撮影不可日を削除します。よろしいですか？`)) return;
+    await withButtonBusy_(evt && evt.currentTarget, '削除中...', async () => {
+      try {
+        await gsRun('apiDeleteBlackoutDate', session.token, mastersBranchCode, row.start);
+        showToast('削除しました');
+        await loadMasters();
+      } catch (e) { handleAuthError(e); }
+    });
+  }
+
   async function addMasterRow(evt) {
     const def = mastersDef_();
     const name = ($('masters-new-name') && $('masters-new-name').value.trim()) || '';
-    if (!name) { showToast('名称を入力してください'); return; }
+    if (def.extra === 'blackout') {
+      if (!$('masters-new-start').value) { showToast('開始日を入力してください'); return; }
+    } else if (!name) { showToast('名称を入力してください'); return; }
     const body = $('masters-new-body') ? $('masters-new-body').value.trim() : '';
     const target = $('masters-new-target') ? $('masters-new-target').value.trim() : '';
     await withButtonBusy_(evt && evt.currentTarget, '追加中...', async () => {
@@ -3527,6 +3589,9 @@
           await gsRun('apiSavePhraseItem', session.token, mastersBranchCode, name, '', true, body);
         } else if (def.extra === 'glossary') {
           await gsRun('apiSaveGlossaryItem', session.token, name, '', true, ($('masters-new-en') ? $('masters-new-en').value.trim() : ''));
+        } else if (def.extra === 'blackout') {
+          await gsRun('apiSaveBlackoutDate', session.token, mastersBranchCode,
+            $('masters-new-start').value, $('masters-new-end').value, $('masters-new-reason').value.trim(), '');
         } else if (def.perBranch) {
           await gsRun(def.save, session.token, mastersBranchCode, name, '', true);
         } else {

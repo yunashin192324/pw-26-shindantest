@@ -164,7 +164,7 @@ function makeContext() {
     };
   }
   const ctx = {
-    __ss: ss, __mail: sentMail, __translateCalls: [], __mailQuota: 1500, console,
+    __ss: ss, __mail: sentMail, __translateCalls: [], __mailQuota: 1500, __calendars: {}, console,
     SpreadsheetApp: { openById: () => ss, getUi: () => ({ alert: () => {} }) },
     Utilities: {
       getUuid: () => `uuid-${++uuid}`,
@@ -268,6 +268,25 @@ function makeContext() {
         sentMail.push({ to, subj, body });
       }
     } },
+    // ★機能追加（項目98）：撮影不可日のGoogleカレンダー取込を検証するためのモック。
+    // テストから ctx.__calendars['カレンダーID'] = [{title, start, end, allDay}] を入れると、
+    // その予定が取り込まれる。存在しないIDにはnullを返す（実GASと同じ挙動）。
+    CalendarApp: {
+      getCalendarById: (id) => {
+        const events = ctx.__calendars[id];
+        if (!events) return null;
+        return {
+          getEvents: (from, to) => events
+            .filter(e => e.start >= from && e.start <= to)
+            .map(e => ({
+              getTitle: () => e.title,
+              getStartTime: () => e.start,
+              getEndTime: () => e.end || e.start,
+              isAllDayEvent: () => !!e.allDay
+            }))
+        };
+      }
+    },
     Session: { getActiveUser: () => ({ getEmail: () => 'tanaka@his-world.com' }) },
     ScriptApp: { getProjectTriggers: () => [], deleteTrigger: () => {},
       newTrigger: (fnName) => {

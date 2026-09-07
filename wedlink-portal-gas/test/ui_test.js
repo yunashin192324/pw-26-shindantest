@@ -3364,6 +3364,86 @@ function paneHidden(document, key) {
           dom58b.window.document.getElementById('nav-audit').classList.contains('hidden'));
   }
 
+  // ---------------------------------------------------------------
+  section('U59. 【機能追加】撮影不可日：画面から登録し、店舗の新規依頼で気づけるようにする');
+  {
+    const ctx59 = makeServer();
+    const dom59 = await openApp(ctx59);
+    const doc59 = dom59.window.document;
+    await login(dom59, 'KANTO', 'CHANGE-ME-KANTO');
+    await settle();
+
+    // 手配課がマスタ管理から、ウィーン支店の撮影不可日を登録する
+    doc59.getElementById('nav-masters').click();
+    await settle(); await settle();
+    doc59.getElementById('masters-type').value = 'blackout';
+    doc59.getElementById('masters-type').dispatchEvent(new dom59.window.Event('change'));
+    await settle(); await settle();
+    doc59.getElementById('masters-branch').value = 'VIE';
+    doc59.getElementById('masters-branch').dispatchEvent(new dom59.window.Event('change'));
+    await settle(); await settle();
+    check('マスタ管理に「撮影不可日」の登録欄が出る', !!doc59.getElementById('masters-new-start'));
+
+    doc59.getElementById('masters-new-start').value = '2027-05-03';
+    doc59.getElementById('masters-new-end').value = '2027-05-05';
+    doc59.getElementById('masters-new-reason').value = '現地の祝日で休業';
+    doc59.getElementById('masters-add').click();
+    await settle(); await settle(); await settle();
+
+    const jp59 = ctx59.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    const saved = ctx59.apiListBlackoutDates(jp59, 'VIE');
+    check('画面から撮影不可日を登録できる',
+          saved.items.length === 1 && saved.items[0].start === '2027-05-03', JSON.stringify(saved.items));
+    check('登録した内容が一覧に表示される',
+          [...doc59.querySelectorAll('[data-m-field="reason"]')].some(el => el.value === '現地の祝日で休業'),
+          JSON.stringify([...doc59.querySelectorAll('[data-m-field="reason"]')].map(el => el.value)));
+
+    // 店舗が不可日を希望日にして依頼すると確認が出る
+    const dom59b = await openApp(ctx59);
+    const doc59b = dom59b.window.document;
+    const dialogs = [];
+    dom59b.window.confirm = (msg) => { dialogs.push(msg); return false; }; // まずは「やめる」を選ぶ
+    await login(dom59b, 'SHOP1', 'CHANGE-ME-SHOP1');
+    await settle();
+    // 新規依頼フォームを開く（プラン等の候補はこのときに読み込まれる）
+    doc59b.getElementById('nav-shop-new').click();
+    await settle(); await settle();
+
+    const fill = (id, val) => { const el = doc59b.getElementById(id); if (el) el.value = val; };
+    fill('shop-new-groom-last', 'YAMADA'); fill('shop-new-groom', 'TARO');
+    fill('shop-new-bride-last', 'YAMADA'); fill('shop-new-bride', 'HANAKO');
+    fill('shop-new-challengeno', 'DUMMYCHG059');
+    fill('shop-new-hope1', '2027-05-04');
+    const teamSel = doc59b.getElementById('shop-new-team');
+    if (teamSel && teamSel.options.length) teamSel.value = teamSel.options[0].value;
+    // 希望日①のプラン（makeServerが登録しているのはウィーン支店のプラン）を選ぶ
+    const planSel = doc59b.getElementById('shop-new-hopeplan1');
+    const planOpt = planSel ? [...planSel.options].find(o => o.value) : null;
+    check('新規依頼フォームにプランの選択肢が読み込まれている', !!planOpt,
+          JSON.stringify([...(planSel || { options: [] }).options].map(o => o.textContent)));
+    if (planOpt) { planSel.value = planOpt.value; planSel.dispatchEvent(new dom59b.window.Event('change')); }
+    await settle(); await settle();
+    doc59b.getElementById('shop-new-submit').click();
+    await settle(); await settle(); await settle(); await settle();
+
+    check('撮影不可日を選ぶと確認のダイアログが出る',
+          dialogs.some(m => m.includes('撮影不可日')),
+          'ダイアログ=' + JSON.stringify(dialogs).slice(0, 250));
+    check('どの希望日がなぜ駄目かがダイアログに書かれている',
+          dialogs.some(m => m.includes('現地の祝日で休業')), JSON.stringify(dialogs).slice(0, 250));
+    const notCreated = ctx59.apiSearchReservations(jp59, { challengeNo: 'DUMMYCHG059' });
+    check('「やめる」を選べば依頼は登録されない',
+          (notCreated.results || []).length === 0, JSON.stringify(notCreated.results));
+
+    // 「それでも依頼する」を選べば登録できる
+    dom59b.window.confirm = () => true;
+    doc59b.getElementById('shop-new-submit').click();
+    await settle(); await settle(); await settle(); await settle();
+    const created = ctx59.apiSearchReservations(jp59, { challengeNo: 'DUMMYCHG059' });
+    check('確認したうえで「はい」を選べば依頼できる（現地に相談したい場合もあるため）',
+          (created.results || []).length === 1, JSON.stringify(created.results));
+  }
+
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error('テストが異常終了しました:', e); process.exit(1); });

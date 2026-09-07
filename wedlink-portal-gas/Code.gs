@@ -50,6 +50,9 @@ const GLOSSARY_SHEET_NAME = '用語集';
 // ★機能追加：通知メールの送信に失敗した記録。管理者が後から気づけるようにする
 // （利用者の画面には項目89で知らせているが、管理者は実行ログを見ないと分からなかった）。
 const MAIL_FAILURE_SHEET_NAME = '通知メール失敗履歴';
+// ★機能追加（項目98）：支店が撮影を受けられない日（休業日・貸切・スタッフ不在など）。
+// 店舗が新規依頼でその日を選んだときに、依頼を出す前に気づけるようにするためのもの。
+const BLACKOUT_SHEET_NAME = '撮影不可日';
 
 // --- システムエラー通知先 ---
 const SYSTEM_ALERT_EMAIL = 'it-planning@his-world.com';
@@ -530,6 +533,9 @@ const BM_COL_BRANCH_MAIL_NOTIFY = '支店メール通知';
 // 日時の表示に現地時間を併記する（空欄なら従来どおり日本時間だけ）。
 // 日本時間の表示自体は変えない。時差の取り違えを防ぐため、どちらの時刻かを必ず添える。
 const BM_COL_TIMEZONE = 'タイムゾーン';
+// ★機能追加（項目98）：撮影不可日を自動で取り込むGoogleカレンダーのID（空欄なら取り込まない）。
+// 既にGoogleカレンダーで休業日を管理している支店のために用意した経路。
+const BM_COL_BLACKOUT_CALENDAR = '不可日カレンダーID';
 const BM_COL_ACTIVE = '有効';
 // ★不具合防止：既存のテスト・運用スプレッドシートは「有効」列が支店マスタの最後尾にある前提で
 // 位置決め打ちの行を作っている場合がある。新しい列（手配メール機能まわり）は、その並びを崩さないよう
@@ -540,7 +546,7 @@ const BRANCH_MASTER_HEADERS = [
   BM_COL_REMIND_DAYS, BM_COL_CONSENT_REQUIRED, BM_COL_ACTIVE,
   BM_COL_ARRANGEMENT_ENABLED, BM_COL_PASSPORT_REQUIRED, BM_COL_SHOP_DIRECT,
   BM_COL_SHOP_NOTIFY_HQ, BM_COL_SHOP_BILLING, BM_COL_SHOP_UPLOAD_VISIBLE_TO_BRANCH,
-  BM_COL_SHOW_HOPE_TIME, BM_COL_BRANCH_NOTIFY_NEW_CASE, BM_COL_DISPLAY_LANG, BM_COL_BRANCH_MAIL_NOTIFY, BM_COL_TIMEZONE,
+  BM_COL_SHOW_HOPE_TIME, BM_COL_BRANCH_NOTIFY_NEW_CASE, BM_COL_DISPLAY_LANG, BM_COL_BRANCH_MAIL_NOTIFY, BM_COL_TIMEZONE, BM_COL_BLACKOUT_CALENDAR,
   // カテゴリごとの手配先（名前・メール）。同じ宛先を複数カテゴリに入れれば「まとめて1件に依頼」にできる
   ...ARRANGEMENT_CATEGORIES.flatMap(c => [arrNameCol_(c.label), arrEmailCol_(c.label)])
 ];
@@ -669,6 +675,13 @@ const GLOSSARY_HEADERS = ['日本語', '英訳', '有効'];
 
 // ★機能追加：通知メール失敗履歴の列
 const MAIL_FAILURE_HEADERS = ['日時', '管理番号', '種類', '理由', '管理者へ通知済み'];
+
+// ★機能追加（項目98）：撮影不可日の列。「取込元」は手入力かGoogleカレンダーからの自動取込かの区別。
+const BLACKOUT_HEADERS = ['支店コード', '開始日', '終了日', '理由', '取込元'];
+const BLACKOUT_SOURCE_MANUAL = '手入力';
+const BLACKOUT_SOURCE_CALENDAR = 'Googleカレンダー';
+// Googleカレンダーから取り込む期間（今日から何日先まで見るか）
+const BLACKOUT_SYNC_DAYS_AHEAD = 180;
 // メール送信の残り回数がこれを下回ったら、上限に達する前に管理者へ知らせる
 const MAIL_QUOTA_WARN_THRESHOLD = 50;
 
@@ -713,6 +726,7 @@ function setupPortal() {
   ensureSheetWithHeaders_(ss, KANRI_LEDGER_SHEET_NAME, KANRI_LEDGER_HEADERS);
   ensureSheetWithHeaders_(ss, GLOSSARY_SHEET_NAME, GLOSSARY_HEADERS);
   ensureSheetWithHeaders_(ss, MAIL_FAILURE_SHEET_NAME, MAIL_FAILURE_HEADERS);
+  ensureSheetWithHeaders_(ss, BLACKOUT_SHEET_NAME, BLACKOUT_HEADERS);
 
   const bm = ss.getSheetByName(BRANCH_MASTER_SHEET_NAME);
   if (bm.getLastRow() < 2) {
@@ -1053,6 +1067,8 @@ function listBranchesRaw_() {
     remindDays: parseIntOrNull_(r[BM_COL_REMIND_DAYS]),
     // ★機能追加（項目97）：支店の現地時間の地域名（空欄なら現地時間を併記しない）
     timezone: String(r[BM_COL_TIMEZONE] || '').trim(),
+    // ★機能追加（項目98）：撮影不可日を取り込むGoogleカレンダーのID（空欄なら取り込まない）
+    blackoutCalendarId: String(r[BM_COL_BLACKOUT_CALENDAR] || '').trim(),
     consentRequired: isActiveFlag_(r[BM_COL_CONSENT_REQUIRED]),
     passportRequired: isActiveFlag_(r[BM_COL_PASSPORT_REQUIRED]),
     // ★要件：希望日の時間帯（AM／PM）欄を出すかどうか（支店ごとに任意。既定は非表示）
@@ -3992,6 +4008,26 @@ function apiShopCreateRequest(token, payload) {
       groups[groupIndexByBranch[ownerBranch]].hopeIndexes.push(i);
     });
 
+    // ★機能追加（項目98）：選ばれた希望日が、その支店の撮影不可日にあたっていないか確認する。
+    // あたっていた場合は、店舗が「承知のうえで依頼する」と選ばない限り登録しない
+    // （現地へ確認して断られる往復を、依頼を出す前に減らすため）。
+    const blackoutHits = [];
+    groups.forEach(group => {
+      group.hopeIndexes.forEach(i => {
+        const hit = findBlackoutForDate_(group.branchCode, hopes[i]);
+        if (hit) {
+          blackoutHits.push(`第${i + 1}希望（${blackoutDateKey_(hopes[i])}）：${(allBranchMetaForBlackout_()[group.branchCode] || {}).name || group.branchCode}は撮影を受けられない日です` +
+            (hit.reason ? `（理由：${hit.reason}）` : ''));
+        }
+      });
+    });
+    if (blackoutHits.length && payload.acknowledgeBlackout !== true) {
+      const err = new Error('選ばれた希望日が、現地支店の撮影不可日にあたっています。\n' +
+        blackoutHits.join('\n') + '\n別の日を選ぶか、それでも依頼する場合は確認のうえ再度送信してください。');
+      err.blackoutHits = blackoutHits;
+      throw err;
+    }
+
     const allBranchMeta = branchMetaMap_();
     const initialStatusLabel = initialStatus === 'CHK' ? 'CHK（空き確認のみ）' : 'RQ（予約依頼）';
     const created = []; // { kanriNo, branchCode, branchName, rowIndex, newRowData, meta, hopeIndexes }
@@ -4955,6 +4991,157 @@ function errorMessage_(e) {
 }
 
 // システム管理者へ障害を通知する。通知自体の失敗で定期処理を落とさないよう内側でも捕捉する。
+// =====================================================
+// ⑯ 撮影不可日（支店が撮影を受けられない日）
+// =====================================================
+// ★機能追加（項目98）：支店の休業日・貸切・スタッフ不在などで撮影を受けられない日を登録し、
+// 店舗が新規依頼でその日を選んだときに、依頼を出す前に気づけるようにする。
+// 既にGoogleカレンダーで休業日を管理している支店のために、カレンダーからの自動取込も用意した。
+
+// 日付を「yyyy-MM-dd」の文字列にそろえる（シートに文字列で入っていても日付型で入っていても同じ形にする）
+function blackoutDateKey_(value) {
+  if (value instanceof Date) return Utilities.formatDate(value, 'Asia/Tokyo', 'yyyy-MM-dd');
+  const s = String(value === null || value === undefined ? '' : value).trim();
+  if (!s) return '';
+  const parsed = parseDateFromInput_(s);
+  return parsed ? Utilities.formatDate(parsed, 'Asia/Tokyo', 'yyyy-MM-dd') : s;
+}
+
+// その支店の撮影不可日を返す（期間は開始日〜終了日。終了日が空欄なら1日だけ）
+function listBlackoutRanges_(branchCode) {
+  const code = String(branchCode || '').trim().toUpperCase();
+  const sheet = ensureSheetWithHeaders_(getSpreadsheet_(), BLACKOUT_SHEET_NAME, BLACKOUT_HEADERS);
+  if (sheet.getLastRow() < 2) return [];
+  return sheet.getRange(2, 1, sheet.getLastRow() - 1, BLACKOUT_HEADERS.length).getValues()
+    .map((r, i) => ({
+      rowIndex: i + 2,
+      branchCode: String(r[0] || '').trim().toUpperCase(),
+      start: blackoutDateKey_(r[1]),
+      end: blackoutDateKey_(r[2]) || blackoutDateKey_(r[1]),
+      reason: String(r[3] || '').trim(),
+      source: String(r[4] || '').trim() || BLACKOUT_SOURCE_MANUAL
+    }))
+    .filter(r => r.start && (!code || r.branchCode === code));
+}
+
+// 撮影不可日の案内文で支店名を出すために使う（branchMetaMap_の薄い別名）
+function allBranchMetaForBlackout_() { return branchMetaMap_(); }
+
+// 指定日がその支店の撮影不可日にあたるか。あたる場合はその理由等を返す。
+function findBlackoutForDate_(branchCode, dateValue) {
+  const key = blackoutDateKey_(dateValue);
+  if (!key) return null;
+  return listBlackoutRanges_(branchCode).find(r => key >= r.start && key <= r.end) || null;
+}
+
+// 撮影不可日の一覧。店舗も見られる（依頼を出す前に気づくためのものなので、隠す意味が無い）。
+function apiListBlackoutDates(token, branchCode) {
+  const session = requireSession_(token);
+  const target = String(session.role === BRANCH_ROLE ? session.branchCode : (branchCode || '')).trim().toUpperCase();
+  if (!target) throw new Error('支店を指定してください。');
+  return {
+    ok: true,
+    branchCode: target,
+    items: listBlackoutRanges_(target).map(r => ({
+      start: r.start, end: r.end, reason: r.reason, source: r.source,
+      editable: r.source !== BLACKOUT_SOURCE_CALENDAR   // カレンダー取込分は元のカレンダー側で直す
+    })).sort((a, b) => a.start.localeCompare(b.start))
+  };
+}
+
+// 撮影不可日を追加・更新する（手入力ぶんのみ）。JPと、その支店の担当者が登録できる。
+function apiSaveBlackoutDate(token, branchCode, startDate, endDate, reason, originalStart) {
+  const session = requireSession_(token);
+  if (session.role === SHOP_ROLE) throw new Error('撮影不可日を登録できるのは現地支店と手配課だけです。');
+  assertBranchAccess_(session, branchCode);
+  const code = String(branchCode || '').trim().toUpperCase();
+  const start = blackoutDateKey_(startDate);
+  if (!start) throw new Error('開始日を入力してください。');
+  const end = blackoutDateKey_(endDate) || start;
+  if (end < start) throw new Error('終了日は開始日と同じか、それより後の日にしてください。');
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
+  try {
+    const sheet = ensureSheetWithHeaders_(getSpreadsheet_(), BLACKOUT_SHEET_NAME, BLACKOUT_HEADERS);
+    const matchStart = blackoutDateKey_(originalStart || startDate);
+    const existing = listBlackoutRanges_(code).find(r => r.start === matchStart && r.source !== BLACKOUT_SOURCE_CALENDAR);
+    const rowData = [code, start, end, String(reason || '').trim(), BLACKOUT_SOURCE_MANUAL];
+    if (existing) sheet.getRange(existing.rowIndex, 1, 1, BLACKOUT_HEADERS.length).setValues([rowData]);
+    else sheet.appendRow(rowData);
+  } finally {
+    lock.releaseLock();
+  }
+  return { ok: true };
+}
+
+// 撮影不可日を削除する（手入力ぶんのみ。予定が変わって撮影できるようになることは普通にあるため、
+// マスタと違ってここは削除できるようにしている）
+function apiDeleteBlackoutDate(token, branchCode, startDate) {
+  const session = requireSession_(token);
+  if (session.role === SHOP_ROLE) throw new Error('撮影不可日を削除できるのは現地支店と手配課だけです。');
+  assertBranchAccess_(session, branchCode);
+  const code = String(branchCode || '').trim().toUpperCase();
+  const key = blackoutDateKey_(startDate);
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
+  try {
+    const sheet = ensureSheetWithHeaders_(getSpreadsheet_(), BLACKOUT_SHEET_NAME, BLACKOUT_HEADERS);
+    const target = listBlackoutRanges_(code).find(r => r.start === key && r.source !== BLACKOUT_SOURCE_CALENDAR);
+    if (!target) throw new Error('対象の撮影不可日が見つかりません（カレンダーから取り込んだ日は、元のカレンダー側で消してください）。');
+    sheet.deleteRow(target.rowIndex);
+  } finally {
+    lock.releaseLock();
+  }
+  return { ok: true };
+}
+
+// Googleカレンダーから撮影不可日を取り込む（日次）。
+// 支店マスタの「不可日カレンダーID」が入っている支店だけが対象。
+// カレンダーを閲覧するには、そのカレンダーがこのスクリプトを動かしているGoogleアカウントに
+// 共有されている必要がある（共有されていない場合はその支店だけ飛ばして続行する）。
+function syncBlackoutCalendars() { return runTrigger_('syncBlackoutCalendars', syncBlackoutCalendarsCore_); }
+
+function syncBlackoutCalendarsCore_(errors) {
+  const targets = listBranchesRaw_().filter(b => b.role === BRANCH_ROLE && b.blackoutCalendarId);
+  if (!targets.length) return;
+  const sheet = ensureSheetWithHeaders_(getSpreadsheet_(), BLACKOUT_SHEET_NAME, BLACKOUT_HEADERS);
+  const today = new Date();
+  const until = new Date(today.getTime() + BLACKOUT_SYNC_DAYS_AHEAD * 86400000);
+
+  targets.forEach(branch => {
+    try {
+      const calendar = CalendarApp.getCalendarById(branch.blackoutCalendarId);
+      if (!calendar) {
+        errors.push({ where: `${branch.name}（${branch.code}）のカレンダー`,
+                      message: 'カレンダーが見つかりません。IDが正しいか、このスクリプトのGoogleアカウントに共有されているか確認してください。', stack: '' });
+        return;
+      }
+      const events = calendar.getEvents(today, until) || [];
+      // この支店のカレンダー取込ぶんを一度消してから入れ直す（カレンダー側で消された予定を残さないため）
+      listBlackoutRanges_(branch.code)
+        .filter(r => r.source === BLACKOUT_SOURCE_CALENDAR)
+        .sort((a, b) => b.rowIndex - a.rowIndex)   // 下の行から消す（行番号がずれないように）
+        .forEach(r => sheet.deleteRow(r.rowIndex));
+
+      const rows = events.map(ev => {
+        const start = ev.getStartTime();
+        let end = ev.getEndTime();
+        // 終日予定の終了日は「翌日の0時」なので、表示上の最終日は1日前になる
+        if (ev.isAllDayEvent && ev.isAllDayEvent() && end) end = new Date(end.getTime() - 86400000);
+        return [branch.code, blackoutDateKey_(start), blackoutDateKey_(end || start),
+                String(ev.getTitle() || '').trim(), BLACKOUT_SOURCE_CALENDAR];
+      }).filter(r => r[1]);
+      if (rows.length) sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, BLACKOUT_HEADERS.length).setValues(rows);
+      console.log(`[syncBlackoutCalendars] ${branch.code}: ${rows.length}件を取り込みました`);
+    } catch (e) {
+      // 1つの支店の失敗で他の支店の取込を止めない
+      errors.push({ where: `${branch.name}（${branch.code}）のカレンダー取込`,
+                    message: errorMessage_(e), stack: e && e.stack ? String(e.stack) : '' });
+    }
+  });
+}
+
 // ★機能追加（項目96）：支店マスタの不整合を検出する。
 // 案件番号プレフィックスの重複チェックは画面から保存したときにしか効いておらず、
 // スプレッドシートを直接編集して重複させると、2つの支店が同じ番号を採番してしまう
@@ -5675,7 +5862,7 @@ function parseDateFromInput_(val) {
 // ★不具合修正：以前は無条件に全トリガーを削除していたため、setupConsentFormTriggerで
 // 設定した『同意書』フォームの自動反映トリガーも、setupTriggersを再実行すると消えてしまっていた。
 // このスクリプトが管理する日次トリガーだけを削除・再作成し、他のトリガーには触れないようにする。
-const MANAGED_DAILY_TRIGGERS = ['archivePastReservations', 'checkAlerts', 'checkShopAlerts', 'checkDeliveryAlerts', 'checkUnansweredAlerts', 'checkMailHealth', 'checkMasterIntegrity'];
+const MANAGED_DAILY_TRIGGERS = ['archivePastReservations', 'checkAlerts', 'checkShopAlerts', 'checkDeliveryAlerts', 'checkUnansweredAlerts', 'checkMailHealth', 'checkMasterIntegrity', 'syncBlackoutCalendars'];
 function setupTriggers() {
   ScriptApp.getProjectTriggers().forEach(t => {
     if (MANAGED_DAILY_TRIGGERS.includes(t.getHandlerFunction())) ScriptApp.deleteTrigger(t);
@@ -5689,10 +5876,12 @@ function setupTriggers() {
   ScriptApp.newTrigger('checkMailHealth').timeBased().everyDays(1).atHour(18).create();
   // ★機能追加（項目96）：支店マスタの不整合（番号プレフィックスの重複等）の確認
   ScriptApp.newTrigger('checkMasterIntegrity').timeBased().everyDays(1).atHour(7).create();
+  // ★機能追加（項目98）：撮影不可日のGoogleカレンダーからの取込
+  ScriptApp.newTrigger('syncBlackoutCalendars').timeBased().everyDays(1).atHour(3).create();
   // ★不具合修正：setupTriggers()もsetupPortal()と同様エディタから直接手動実行する運用のため、
   // UIコンテキストが無くgetUi()が例外になっていた。実行ログにも出しつつ、alertはエラーを
   // 無視する（スプレッドシートのカスタムメニュー経由で呼ばれた場合はそのまま表示される）。
-  alertOrLog_('日次トリガー（アーカイブ・撮影前アラート・撮影40日前(店舗発案件)アラート・納品期限アラート・未返信リマインド・通知メールの状態確認・支店マスタの確認）を再設定しました。\n（同意書フォームのトリガーを設定済みの場合はそのまま残ります）');
+  alertOrLog_('日次トリガー（アーカイブ・撮影前アラート・撮影40日前(店舗発案件)アラート・納品期限アラート・未返信リマインド・通知メールの状態確認・支店マスタの確認・撮影不可日の取込）を再設定しました。\n（同意書フォームのトリガーを設定済みの場合はそのまま残ります）');
 }
 
 // setupPortal/setupTriggers/setupConsentFormTrigger/setupSurveyFormTriggerのような「初回のみ

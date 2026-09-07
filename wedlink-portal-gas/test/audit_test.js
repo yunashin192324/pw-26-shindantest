@@ -106,6 +106,10 @@ const API_SPECS = [
   { fn: 'apiGetAuditLog',     scope: 'jp', args: (t) => [t, {}], reads: true },
   // ★機能追加：支店マスタの不整合の確認（全支店の設定を見るためJPのみ）
   { fn: 'apiGetBranchMasterIssues', scope: 'jp', args: (t) => [t], reads: true },
+  // ★機能追加：撮影不可日。閲覧は店舗も可（依頼前に気づくための情報）、登録・削除は支店と手配課のみ
+  { fn: 'apiListBlackoutDates', scope: 'any', args: (t) => [t, 'VIE'], target: 'VIE', reads: true },
+  { fn: 'apiSaveBlackoutDate', scope: 'any', args: (t) => [t, 'VIE', '2027-12-01', '', '侵入テスト', ''], target: 'VIE', writes: true },
+  { fn: 'apiDeleteBlackoutDate', scope: 'any', args: (t) => [t, 'VIE', '2027-12-01'], target: 'VIE', writes: true },
   { fn: 'apiListGlossary',    scope: 'jp', args: (t) => [t], reads: true },
   { fn: 'apiSaveGlossaryItem', scope: 'jp', args: (t) => [t, '侵入テスト', null, true, 'Intruder'], writes: true },
   // ★要件：衣装会社マスタは支店を問わない全社共通の1本のリスト（引数に支店コードを取らない）

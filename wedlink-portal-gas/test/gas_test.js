@@ -4687,5 +4687,105 @@ section('80. 【機能追加】現地時間と日本時間の併記');
 }
 
 // ---------------------------------------------------------------
+section('81. 【機能追加】支店の撮影不可日（休業日カレンダー）');
+{
+  const ctx = shopFixture();
+  const jpToken = ctx.apiLogin('KANTO', 'pw').session.token;
+  const vieToken = ctx.apiLogin('VIE', 'vp').session.token;
+  const shopToken = ctx.apiLogin('SHOP1', 'sp').session.token;
+
+  // 支店が自分の撮影不可日を登録する
+  ctx.apiSaveBlackoutDate(vieToken, 'VIE', '2027-05-03', '2027-05-05', '現地の祝日で休業', '');
+  const listed = ctx.apiListBlackoutDates(vieToken, 'VIE');
+  check('支店が自分の撮影不可日を登録できる', listed.items.length === 1, JSON.stringify(listed));
+  check('期間（開始日〜終了日）で登録できる',
+        listed.items[0].start === '2027-05-03' && listed.items[0].end === '2027-05-05', JSON.stringify(listed.items[0]));
+  check('理由も残る', listed.items[0].reason === '現地の祝日で休業', JSON.stringify(listed.items[0]));
+
+  // 店舗も見られる（依頼を出す前に気づくためのものなので隠さない）
+  const shopView = ctx.apiListBlackoutDates(shopToken, 'VIE');
+  check('店舗も撮影不可日を確認できる', shopView.items.length === 1, JSON.stringify(shopView));
+
+  // 店舗は登録できない
+  let err = null;
+  try { ctx.apiSaveBlackoutDate(shopToken, 'VIE', '2027-06-01', '', 'かってに登録', ''); } catch (e) { err = e.message; }
+  check('店舗は撮影不可日を登録できない', err !== null, String(err));
+  // 他支店のぶんも登録できない
+  let err2 = null;
+  try { ctx.apiSaveBlackoutDate(vieToken, 'IST', '2027-06-01', '', '他支店へ登録', ''); } catch (e) { err2 = e.message; }
+  check('他の支店の撮影不可日は登録できない', err2 !== null, String(err2));
+
+  // 不可日に希望日を入れた依頼は、そのままでは登録できない
+  let err3 = null;
+  try {
+    ctx.apiShopCreateRequest(shopToken, {
+      branchCode: 'VIE', team: '関東', groomLastName: 'A', groomName: 'B', brideLastName: 'C', brideName: 'D',
+      hope1: '2027-05-04', challengeNo: 'DUMMYCHG081'
+    });
+  } catch (e) { err3 = e.message; }
+  check('撮影不可日を希望日に選ぶと、そのままでは依頼できない', err3 !== null, String(err3));
+  check('どの希望日がなぜ駄目かを具体的に伝える',
+        err3 && err3.includes('第1希望') && err3.includes('現地の祝日で休業'), String(err3));
+
+  // 承知のうえなら依頼できる
+  const forced = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'VIE', team: '関東', groomLastName: 'A', groomName: 'B', brideLastName: 'C', brideName: 'D',
+    hope1: '2027-05-04', challengeNo: 'DUMMYCHG081', acknowledgeBlackout: true
+  });
+  check('確認したうえでなら依頼できる（現地に相談したい場合もあるため）', !!forced.kanriNo, JSON.stringify(forced));
+
+  // 不可日でない日は今までどおり
+  const normal = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'VIE', team: '関東', groomLastName: 'E', groomName: 'F', brideLastName: 'G', brideName: 'H',
+    hope1: '2027-05-10', challengeNo: 'DUMMYCHG082'
+  });
+  check('不可日でなければ従来どおり依頼できる', !!normal.kanriNo, JSON.stringify(normal));
+
+  // 削除できる（予定が変わって撮影できるようになる場合があるため）
+  ctx.apiDeleteBlackoutDate(vieToken, 'VIE', '2027-05-03');
+  check('撮影不可日を削除できる', ctx.apiListBlackoutDates(vieToken, 'VIE').items.length === 0);
+
+  // Googleカレンダーからの取込
+  setBranchField(ctx, 'VIE', '不可日カレンダーID', 'vie-holiday@group.calendar.google.com');
+  const d1 = ctx.__daysFromToday(10);
+  const d2 = ctx.__daysFromToday(11);
+  ctx.__calendars['vie-holiday@group.calendar.google.com'] = [
+    { title: '社員旅行のため休業', start: d1, end: d1, allDay: false },
+    { title: '設備点検', start: d2, end: d2, allDay: false }
+  ];
+  ctx.syncBlackoutCalendars();
+  const synced = ctx.apiListBlackoutDates(jpToken, 'VIE');
+  check('Googleカレンダーの予定が撮影不可日として取り込まれる', synced.items.length === 2, JSON.stringify(synced.items));
+  check('予定の件名が理由として入る',
+        synced.items.some(i => i.reason === '社員旅行のため休業'), JSON.stringify(synced.items));
+  check('取込ぶんは画面から編集できない印が付く（元のカレンダー側で直すため）',
+        synced.items.every(i => i.editable === false), JSON.stringify(synced.items));
+
+  // カレンダー側で予定が消えたら、取込ぶんも消える
+  ctx.__calendars['vie-holiday@group.calendar.google.com'] = [
+    { title: '設備点検', start: d2, end: d2, allDay: false }
+  ];
+  ctx.syncBlackoutCalendars();
+  const synced2 = ctx.apiListBlackoutDates(jpToken, 'VIE');
+  check('カレンダー側で消した予定は、取込側からも消える', synced2.items.length === 1, JSON.stringify(synced2.items));
+
+  // 手入力ぶんはカレンダー取込で消えない
+  ctx.apiSaveBlackoutDate(vieToken, 'VIE', '2027-09-01', '', '手入力の休業日', '');
+  ctx.syncBlackoutCalendars();
+  const mixed = ctx.apiListBlackoutDates(jpToken, 'VIE');
+  check('手入力した撮影不可日は、カレンダー取込で消えない',
+        mixed.items.some(i => i.reason === '手入力の休業日'), JSON.stringify(mixed.items));
+
+  // カレンダーIDが間違っていても、他の支店の取込は止まらない
+  setBranchField(ctx, 'IST', '不可日カレンダーID', 'not-shared@example.com');
+  ctx.__mail.length = 0;
+  ctx.syncBlackoutCalendars();
+  check('共有されていないカレンダーがあっても処理は止まらない',
+        ctx.apiListBlackoutDates(jpToken, 'VIE').items.length >= 1);
+  check('その場合は管理者へ知らせが届く',
+        ctx.__mail.some(m => String(m.subj).includes('システムエラー')), JSON.stringify(ctx.__mail.map(m => m.subj)));
+}
+
+// ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
 process.exit(fail === 0 ? 0 : 1);
