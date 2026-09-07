@@ -39,7 +39,7 @@
 ### 現在の状態
 
 - リポジトリ：`yunashin192324/pw-26-shindantest`、ブランチ：`claude/thread-migration-y2nh9p`（**pushまで完了済み**）
-- テスト：`node test/run_all.js` で **1647件 全て成功 / 0件失敗**（サーバー934・監査187・画面526）
+- テスト：`node test/run_all.js` で **1661件 全て成功 / 0件失敗**（サーバー934・監査187・画面540）
 - デプロイ済みWebアプリURL（`Code.gs` の `WEBAPP_URL` に設定済み。**旧スレッドの記載を引き継いだだけで今回未確認**）：
   `https://script.google.com/a/macros/his-world.com/s/AKfycbz143-qasWEQoJB87kpPH_2Pjmv_6499TKKGKW3ddQ06JFM9H5gkPiTtOJl7RcWm9A/exec`
 - スマホ用プレビューArtifact（**このリポジトリ・このセッションで新規公開したもの。
@@ -232,7 +232,14 @@ Googleカレンダー取込を使う支店は、そのカレンダーをスク�
 「未確定の間にプラン行を直接編集する」という前提の書き方から、希望日一覧経由の回答や
 ロックの確認に書き換えた。`ui_test.js`のU24も同様の理由で組み替えた（詳細はSETUP.md項目99）。
 一時的に作成した再現用スクリプト（`test/_repro5.js`等）は確認後に削除済み。
-`node test/run_all.js`で1647件全て成功（サーバー934・監査187・画面526）。
+
+**実装後の総点検で見つけて直した1件**：空き確認のみ（CHK）の案件は、現地が希望日一覧で回答しても
+案件全体のSTS(JP側)がCHKのまま据え置かれる（従来からの正しい仕様）ため、回答済みなのに
+プラン行のロック理由が「確定前は上の『希望日一覧』から回答してください」と出続けていた。
+`mainStatusLockReason_`に判定を足し、回答済みなら「希望日一覧で回答済みです。日本側の確定を
+お待ちください」に切り替わるようにした（表示のみの変更）。あわせて`ui_test.js`にU60を新設し、
+⑤の画面の動きを通しで検証している。
+`node test/run_all.js`で1661件全て成功（サーバー934・監査187・画面540）。
 
 ---
 
@@ -343,7 +350,7 @@ onShopNewHopePlanNChange_(n)   ← 希望日nのプラン変更でも呼ばれ�
 
 ```bash
 cd wedlink-portal-gas
-cd test && node run_all.js        # まず全部グリーンか確認（1647件想定）
+cd test && node run_all.js        # まず全部グリーンか確認（1661件想定）
 ```
 
 そのうえで、

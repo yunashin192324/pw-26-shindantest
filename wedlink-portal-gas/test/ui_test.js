@@ -3453,6 +3453,95 @@ function paneHidden(document, key) {
           (created.results || []).length === 1, JSON.stringify(created.results));
   }
 
+  // ---------------------------------------------------------------
+  section('U60. 【項目99】未確定の間はプラン行のSTS(支店側)がロックされ、回答は希望日一覧から行う');
+  {
+    const ctx60 = makeServer();
+    const jp60 = ctx60.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    // 希望日つきの案件を2件用意する（1件は通常のRQ、もう1件は空き確認のみ＝CHK）
+    const kRq = ctx60.apiCreateReservation(jp60, 'VIE', '01 Lock Rq\n02 Lock Bride\nRQ 2027/10/05').kanriNo;
+    const kChk = ctx60.apiCreateReservation(jp60, 'VIE', '01 Lock Chk\n02 Lock Bride2\nRQ 2027/11/05').kanriNo;
+    ctx60.apiSaveFieldsQuiet(jp60, kChk, { 'STS JP': 'CHK' });
+
+    const dom60 = await openApp(ctx60);
+    const doc60 = dom60.window.document;
+    await login(dom60, 'VIE', 'CHANGE-ME-VIE');
+    await settle();
+
+    const openCase = async (kanri) => {
+      doc60.getElementById('nav-dashboard').click();
+      await settle();
+      const row = [...doc60.querySelectorAll('#reservation-table-body tr')].find(r => r.textContent.includes(kanri));
+      row.click();
+      await settle(); await settle();
+    };
+
+    // --- ① 未確定（RQ）の状態：プラン行はロック、希望日一覧は編集できる ---
+    await openCase(kRq);
+    const planRow = doc60.querySelector('tr.plan-row');
+    check('プラン行のSTS(支店側)に編集用のselectが無い（ロックされている）',
+          !planRow.querySelector('[data-pending="STS 支店"]'), planRow.innerHTML.slice(0, 200));
+    check('ロック理由に「希望日一覧」から回答する案内が出る',
+          planRow.textContent.includes('希望日一覧'), planRow.textContent.replace(/\s+/g, ' ').slice(0, 200));
+    check('希望日①のSTS(支店側)は編集できる（唯一の回答経路として残っている）',
+          !!doc60.querySelector('[data-pending="希望日① STS 支店"]'));
+    const hopeDetails = doc60.querySelector('details.hope-collapse');
+    check('撮影日FIX未確定の間は希望日一覧が自動で開いている', hopeDetails.open === true);
+
+    // --- ② 希望日一覧からOKで回答すると、プラン行にも反映される ---
+    const hopeSel = doc60.querySelector('[data-pending="希望日① STS 支店"]');
+    hopeSel.value = 'OK';
+    hopeSel.dispatchEvent(new dom60.window.Event('change'));
+    await settle();
+    doc60.querySelector('.quick-commit-btn').click();
+    await settle(); await settle(); await settle();
+
+    const afterDetail = ctx60.apiGetReservationDetail(jp60, kRq).detail;
+    check('希望日①のOK回答で撮影日FIXに日付が入る', afterDetail['撮影日FIX'] === '2027-10-05', afterDetail['撮影日FIX']);
+    check('案件全体のSTS(JP側)・STS(支店側)がどちらもOKになる',
+          afterDetail['STS JP'] === 'OK' && afterDetail['STS 支店'] === 'OK',
+          `${afterDetail['STS JP']} / ${afterDetail['STS 支店']}`);
+    const planRow2 = doc60.querySelector('tr.plan-row');
+    check('確定後もプラン行のSTS(支店側)はロックのまま（日本側のCR等を待つ）',
+          !planRow2.querySelector('[data-pending="STS 支店"]'));
+    const hopeDetails2 = doc60.querySelector('details.hope-collapse');
+    check('確定後は希望日一覧が自動で折りたたまれる', hopeDetails2.open === false);
+
+    // --- ③ 日本側がCRにすると、プラン行のSTS(支店側)が編集できるようになる ---
+    ctx60.apiSaveFieldsQuiet(jp60, kRq, { 'STS JP': 'CR' });
+    await openCase(kRq);
+    const planRow3 = doc60.querySelector('tr.plan-row');
+    const branchSel = planRow3.querySelector('[data-pending="STS 支店"]');
+    check('CR後はプラン行のSTS(支店側)を編集できる', !!branchSel);
+    check('選べる値はCW・CFだけに絞られる',
+          branchSel && [...branchSel.options].map(o => o.value).filter(Boolean).join(',') === 'CW,CF',
+          branchSel && [...branchSel.options].map(o => o.value).join(','));
+
+    // --- ④ 空き確認のみ（CHK）：回答が済んだら案内文言が実態に合わせて変わる ---
+    await openCase(kChk);
+    const chkPlanRow = doc60.querySelector('tr.plan-row');
+    check('CHKの案件も、回答前はプラン行がロックされ「希望日一覧から回答してください」と案内される',
+          !chkPlanRow.querySelector('[data-pending="STS 支店"]') &&
+          chkPlanRow.textContent.includes('希望日一覧') && chkPlanRow.textContent.includes('から回答してください'),
+          chkPlanRow.textContent.replace(/\s+/g, ' ').slice(0, 200));
+    const chkHopeSel = doc60.querySelector('[data-pending="希望日① STS 支店"]');
+    chkHopeSel.value = 'UC';
+    chkHopeSel.dispatchEvent(new dom60.window.Event('change'));
+    await settle();
+    doc60.querySelector('.quick-commit-btn').click();
+    await settle(); await settle(); await settle();
+
+    const chkAfter = ctx60.apiGetReservationDetail(jp60, kChk).detail;
+    check('空き確認のみの案件は、希望日に回答しても案件全体のSTS(JP側)がCHKのまま（勝手に確定しない）',
+          chkAfter['STS JP'] === 'CHK', chkAfter['STS JP']);
+    const chkPlanRow2 = doc60.querySelector('tr.plan-row');
+    check('回答後は「希望日一覧で回答済み・日本側の確定待ち」という案内に変わる',
+          chkPlanRow2.textContent.includes('回答済み'), chkPlanRow2.textContent.replace(/\s+/g, ' ').slice(0, 200));
+    check('回答後は「希望日一覧から回答してください」の案内は出ない（実態と食い違わない）',
+          !chkPlanRow2.textContent.includes('から回答してください'),
+          chkPlanRow2.textContent.replace(/\s+/g, ' ').slice(0, 200));
+  }
+
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error('テストが異常終了しました:', e); process.exit(1); });

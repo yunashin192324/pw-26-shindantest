@@ -1542,7 +1542,18 @@
   function mainStatusLockReason_(d) {
     const jp = d['STS JP'] || '未設定';
     if (jp === 'RQ' || jp === 'CHK') {
-      return `STS JP: ${jp}（確定前は上の「希望日一覧」から回答してください）`;
+      // ★不具合修正（項目99の総点検で発見）：空き確認のみ（CHK）の案件は、現地が希望日一覧で
+      // 回答しても案件全体のSTS(JP側)がCHKのまま据え置かれる（applyHopeStatusCascade_は
+      // 初期値RQのときだけOKへ進める＝空き確認の案件を勝手に予約確定にしないための仕様）。
+      // そのため回答が済んだ後もこの案内が出続け、「まだ回答していない」ように見えてしまっていた。
+      // 既にいずれかの希望日へ回答（OK／UC）していれば、実態に合わせた案内に切り替える。
+      const answered = ['①', '②', '③', '④', '⑤'].some(mark => {
+        const v = d[`希望日${mark} STS 支店`];
+        return v === 'OK' || v === 'UC';
+      });
+      return answered
+        ? `STS JP: ${jp}（希望日一覧で回答済みです。日本側の確定をお待ちください）`
+        : `STS JP: ${jp}（確定前は上の「希望日一覧」から回答してください）`;
     }
     return `STS JP: ${jp}`;
   }
