@@ -4556,5 +4556,71 @@ section('78. 【機能追加】全案件を横断した操作履歴（監査ロ�
 }
 
 // ---------------------------------------------------------------
+section('79. 【機能追加】支店マスタの不整合を検出する（スプレッドシート直接編集への備え）');
+{
+  // 案件番号プレフィックスの重複チェックは、画面から保存したときにしか効いていなかった。
+  // スプレッドシートを直接編集して重複させると、2つの支店が同じ管理番号を発行してしまう。
+  const ctx = featureFixture();
+  const jpToken = ctx.apiLogin('KANTO', 'pw').session.token;
+
+  const clean = ctx.apiGetBranchMasterIssues(jpToken);
+  check('問題が無ければ何も報告しない', clean.issues.length === 0, JSON.stringify(clean.issues));
+
+  // プレフィックスを重複させる（人がシートを直接編集した状況）
+  const bm = ctx.__ss.getSheetByName('支店マスタ');
+  const head = bm.getRange(1, 1, 1, bm.getLastColumn()).getValues()[0];
+  const prefixCol = head.indexOf('案件番号プレフィックス') + 1;
+  const codeCol = head.indexOf('支店コード') + 1;
+  const codes = bm.getRange(2, codeCol, bm.getLastRow() - 1, 1).getValues();
+  let vieRow = -1, istRow = -1;
+  codes.forEach((c, i) => {
+    if (String(c[0]).trim().toUpperCase() === 'VIE') vieRow = i + 2;
+    if (String(c[0]).trim().toUpperCase() === 'IST') istRow = i + 2;
+  });
+  bm.getRange(vieRow, prefixCol).setValue('DUP');
+  bm.getRange(istRow, prefixCol).setValue('DUP');
+
+  const dup = ctx.apiGetBranchMasterIssues(jpToken);
+  check('案件番号プレフィックスの重複を検出する',
+        dup.issues.some(m => m.includes('プレフィックス') && m.includes('DUP')), JSON.stringify(dup.issues));
+  check('そのまま運用すると何が起きるかを書いている',
+        dup.issues.some(m => m.includes('同じ管理番号')), JSON.stringify(dup.issues));
+
+  // 支店コードの重複・必須項目の欠落も検出する
+  const newRow = bm.getLastRow() + 1;
+  bm.getRange(newRow, codeCol).setValue('VIE');
+  bm.getRange(newRow, head.indexOf('ロール') + 1).setValue('BRANCH');
+  const dup2 = ctx.apiGetBranchMasterIssues(jpToken);
+  check('支店コードの重複を検出する',
+        dup2.issues.some(m => m.includes('支店コード「VIE」')), JSON.stringify(dup2.issues));
+  check('支店名が空欄なのを検出する',
+        dup2.issues.some(m => m.includes('支店名が空欄')), JSON.stringify(dup2.issues));
+  check('ログインパスコードが空欄なのを検出する',
+        dup2.issues.some(m => m.includes('パスコードが空欄')), JSON.stringify(dup2.issues));
+
+  // 日次の確認で管理者へ届く
+  ctx.__mail.length = 0;
+  ctx.checkMasterIntegrity();
+  const mails = ctx.__mail.filter(m => String(m.subj).includes('支店マスタの確認'));
+  check('日次の確認で管理者へ知らせが届く', mails.length === 1, JSON.stringify(ctx.__mail.map(m => m.subj)));
+  check('本文に問題の内容が並ぶ', mails[0] && mails[0].body.includes('DUP'), mails[0] && mails[0].body);
+
+  // 問題が無ければ通知しない
+  bm.getRange(istRow, prefixCol).setValue('IST');
+  bm.deleteRow(newRow);
+  ctx.__mail.length = 0;
+  ctx.checkMasterIntegrity();
+  check('問題が無ければ通知しない（毎日鳴り続けない）',
+        ctx.__mail.filter(m => String(m.subj).includes('支店マスタの確認')).length === 0,
+        JSON.stringify(ctx.__mail.map(m => m.subj)));
+
+  // 権限
+  const vieToken = ctx.apiLogin('VIE', 'vp').session.token;
+  let err = null;
+  try { ctx.apiGetBranchMasterIssues(vieToken); } catch (e) { err = e.message; }
+  check('支店ロールは支店マスタの確認結果を見られない', err !== null, String(err));
+}
+
+// ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
 process.exit(fail === 0 ? 0 : 1);

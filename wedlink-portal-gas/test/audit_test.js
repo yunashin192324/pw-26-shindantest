@@ -104,6 +104,8 @@ const API_SPECS = [
   { fn: 'apiBulkUpdateStatus', scope: 'any', args: (t) => [t, ['VIE-001'], 'STS JP', 'OK', ''], target: 'VIE', writes: true },
   // ★機能追加：全案件横断の操作履歴。全支店の内容が並ぶためJPのみ
   { fn: 'apiGetAuditLog',     scope: 'jp', args: (t) => [t, {}], reads: true },
+  // ★機能追加：支店マスタの不整合の確認（全支店の設定を見るためJPのみ）
+  { fn: 'apiGetBranchMasterIssues', scope: 'jp', args: (t) => [t], reads: true },
   { fn: 'apiListGlossary',    scope: 'jp', args: (t) => [t], reads: true },
   { fn: 'apiSaveGlossaryItem', scope: 'jp', args: (t) => [t, '侵入テスト', null, true, 'Intruder'], writes: true },
   // ★要件：衣装会社マスタは支店を問わない全社共通の1本のリスト（引数に支店コードを取らない）

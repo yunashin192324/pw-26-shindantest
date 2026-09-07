@@ -3364,6 +3364,21 @@
         ? await gsRun(def.list, session.token, mastersBranchCode)
         : await gsRun(def.list, session.token);
       renderMasters();
+      // ★機能追加：支店一覧を開いたときは、支店マスタの不整合（案件番号プレフィックスの重複など）も
+      // その場で確認して知らせる（スプレッドシートを直接編集して壊れた場合に気づけるようにするため）
+      if (def.key === 'branch' && session.role === 'JP') {
+        try {
+          const res = await gsRun('apiGetBranchMasterIssues', session.token);
+          if (res && res.issues && res.issues.length) {
+            const box = document.createElement('div');
+            box.className = 'section-card';
+            box.style.borderColor = '#f59e0b';
+            box.innerHTML = `<h3>支店マスタに確認が必要な記載があります</h3>
+              <ul class="hint-text">${res.issues.map(m => `<li>${escapeHtml(m)}</li>`).join('')}</ul>`;
+            $('masters-content').prepend(box);
+          }
+        } catch (e) { /* 確認できなくても一覧の表示自体は続ける */ }
+      }
     } catch (e) { showLoadFailure_($('masters-content'), e); }
   }
 

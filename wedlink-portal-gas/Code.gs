@@ -802,6 +802,7 @@ function setupPortal() {
     'デプロイ（ウェブアプリとして導入）してください。\n' +
     '支店を追加したいときは「支店マスタ」シートに1行追加するだけでOKです（コード変更不要）。\n' +
     '案件番号プレフィックスは支店ごとに一意である必要があります（ローマ支店は既存運用のため "R" のまま変更しないでください）。\n\n' +
+    branchMasterIssuesMessage_() +
     '※この関数は何度でも安全に実行できます。コードを新しい版に差し替えたあとに再実行すると、\n' +
     '　新しく増えた列だけが各シートの右端に追加されます（既存のデータや入力済みの値は消えません）。'
   );
@@ -4932,6 +4933,89 @@ function errorMessage_(e) {
 }
 
 // システム管理者へ障害を通知する。通知自体の失敗で定期処理を落とさないよう内側でも捕捉する。
+// ★機能追加（項目96）：支店マスタの不整合を検出する。
+// 案件番号プレフィックスの重複チェックは画面から保存したときにしか効いておらず、
+// スプレッドシートを直接編集して重複させると、2つの支店が同じ番号を採番してしまう
+// （過去のメール・請求書に書かれた番号が、どちらの案件を指すのか分からなくなる）。
+// 支店コードの重複・必須項目の欠落もあわせて調べる。
+// setupPortal の完了メッセージに載せる、支店マスタの確認結果
+function branchMasterIssuesMessage_() {
+  const issues = checkBranchMasterIssues_();
+  if (!issues.length) return '';
+  return '★支店マスタに確認が必要な記載があります：\n' +
+    issues.map((m, i) => `　${i + 1}. ${m}`).join('\n') + '\n\n';
+}
+
+function checkBranchMasterIssues_() {
+  const issues = [];
+  const sheet = getSpreadsheet_().getSheetByName(BRANCH_MASTER_SHEET_NAME);
+  if (!sheet || sheet.getLastRow() < 2) return issues;
+  const rows = getRowsAsObjects_(sheet);
+
+  const codeSeen = {};
+  const prefixSeen = {};
+  rows.forEach((r, i) => {
+    const line = i + 2; // シート上の行番号（1行目は見出し）
+    const code = String(r[BM_COL_CODE] || '').trim().toUpperCase();
+    const name = String(r[BM_COL_NAME] || '').trim();
+    const role = String(r[BM_COL_ROLE] || '').trim().toUpperCase();
+    const prefix = String(r[BM_COL_PREFIX] || '').trim().toUpperCase();
+
+    if (!code) { issues.push(`${line}行目：支店コードが空欄です。`); return; }
+    if (!name) issues.push(`${line}行目（${code}）：支店名が空欄です。`);
+    if (role !== JP_ROLE && role !== BRANCH_ROLE && role !== SHOP_ROLE) {
+      issues.push(`${line}行目（${code}）：ロールが「${role || '空欄'}」になっています。JP／BRANCH／SHOP のいずれかにしてください。`);
+    }
+    if (!String(r[BM_COL_PASSCODE] || '').trim()) {
+      issues.push(`${line}行目（${code}）：ログインパスコードが空欄のためログインできません。`);
+    }
+    if (codeSeen[code]) {
+      issues.push(`${line}行目：支店コード「${code}」が${codeSeen[code]}行目と重複しています。どちらか一方に統一してください。`);
+    } else {
+      codeSeen[code] = line;
+    }
+    // 案件番号プレフィックスはBRANCHロールだけが使う（重複すると採番が衝突する）
+    if (role === BRANCH_ROLE && prefix) {
+      if (prefixSeen[prefix]) {
+        issues.push(`${line}行目（${code}）：案件番号プレフィックス「${prefix}」が${prefixSeen[prefix]}行目と重複しています。` +
+                    `このままだと2つの支店が同じ管理番号を発行してしまいます。`);
+      } else {
+        prefixSeen[prefix] = line;
+      }
+    }
+  });
+  return issues;
+}
+
+// 画面（マスタ管理の支店一覧）から不整合を確認するためのAPI
+function apiGetBranchMasterIssues(token) {
+  const session = requireSession_(token);
+  assertJp_(session);
+  return { ok: true, issues: checkBranchMasterIssues_() };
+}
+
+// 日次で支店マスタの不整合を確認し、見つかったら管理者へ知らせる。
+// スプレッドシートを直接編集して壊れた場合でも、実際に事故が起きる前に気づけるようにするため。
+function checkMasterIntegrity() { return runTrigger_('checkMasterIntegrity', checkMasterIntegrityCore_); }
+
+function checkMasterIntegrityCore_(errors) {
+  const issues = checkBranchMasterIssues_();
+  if (!issues.length) return;
+  console.log(`[checkMasterIntegrity] 支店マスタの不整合 ${issues.length} 件`);
+  if (!SYSTEM_ALERT_EMAIL) return;
+  try {
+    MailApp.sendEmail(
+      SYSTEM_ALERT_EMAIL,
+      `[WEDLINK][支店マスタの確認] ${issues.length}件の問題`,
+      `支店マスタに、そのままにしておくと事故につながる可能性がある記載が見つかりました。\n` +
+      `スプレッドシートの「${BRANCH_MASTER_SHEET_NAME}」シートをご確認ください。\n\n` +
+      `--- 内容 ---\n${issues.map((m, i) => `${i + 1}. ${m}`).join('\n')}\n`
+    );
+  } catch (e) {
+    errors.push({ where: '支店マスタの確認通知', message: errorMessage_(e), stack: e && e.stack ? String(e.stack) : '' });
+  }
+}
+
 // ★機能追加：通知メールの送信失敗をシートへ記録する。
 // 記録そのものに失敗しても本来の処理は止めない（あくまで補助的な記録のため）。
 function logMailFailure_(kanriNo, kind, reason) {
@@ -5541,7 +5625,7 @@ function parseDateFromInput_(val) {
 // ★不具合修正：以前は無条件に全トリガーを削除していたため、setupConsentFormTriggerで
 // 設定した『同意書』フォームの自動反映トリガーも、setupTriggersを再実行すると消えてしまっていた。
 // このスクリプトが管理する日次トリガーだけを削除・再作成し、他のトリガーには触れないようにする。
-const MANAGED_DAILY_TRIGGERS = ['archivePastReservations', 'checkAlerts', 'checkShopAlerts', 'checkDeliveryAlerts', 'checkUnansweredAlerts', 'checkMailHealth'];
+const MANAGED_DAILY_TRIGGERS = ['archivePastReservations', 'checkAlerts', 'checkShopAlerts', 'checkDeliveryAlerts', 'checkUnansweredAlerts', 'checkMailHealth', 'checkMasterIntegrity'];
 function setupTriggers() {
   ScriptApp.getProjectTriggers().forEach(t => {
     if (MANAGED_DAILY_TRIGGERS.includes(t.getHandlerFunction())) ScriptApp.deleteTrigger(t);
@@ -5553,10 +5637,12 @@ function setupTriggers() {
   ScriptApp.newTrigger('checkUnansweredAlerts').timeBased().everyDays(1).atHour(9).create();
   // ★機能追加：通知メールの送信失敗のまとめ通知・送信上限の事前警告（項目93）
   ScriptApp.newTrigger('checkMailHealth').timeBased().everyDays(1).atHour(18).create();
+  // ★機能追加（項目96）：支店マスタの不整合（番号プレフィックスの重複等）の確認
+  ScriptApp.newTrigger('checkMasterIntegrity').timeBased().everyDays(1).atHour(7).create();
   // ★不具合修正：setupTriggers()もsetupPortal()と同様エディタから直接手動実行する運用のため、
   // UIコンテキストが無くgetUi()が例外になっていた。実行ログにも出しつつ、alertはエラーを
   // 無視する（スプレッドシートのカスタムメニュー経由で呼ばれた場合はそのまま表示される）。
-  alertOrLog_('日次トリガー（アーカイブ・撮影前アラート・撮影40日前(店舗発案件)アラート・納品期限アラート・未返信リマインド・通知メールの状態確認）を再設定しました。\n（同意書フォームのトリガーを設定済みの場合はそのまま残ります）');
+  alertOrLog_('日次トリガー（アーカイブ・撮影前アラート・撮影40日前(店舗発案件)アラート・納品期限アラート・未返信リマインド・通知メールの状態確認・支店マスタの確認）を再設定しました。\n（同意書フォームのトリガーを設定済みの場合はそのまま残ります）');
 }
 
 // setupPortal/setupTriggers/setupConsentFormTrigger/setupSurveyFormTriggerのような「初回のみ
