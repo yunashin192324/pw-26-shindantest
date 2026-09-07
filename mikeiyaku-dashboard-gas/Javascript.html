@@ -198,7 +198,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // 画面側が前提としているサーバー（Code.gs）の版数。Code.gs の SERVER_VERSION と対で更新する。
-const REQUIRED_SERVER_VERSION = '2026-08-22';
+const REQUIRED_SERVER_VERSION = '2026-08-23';
 
 /**
  * Code.gs が画面と同じ版数まで更新されているか確認する。
@@ -3154,7 +3154,13 @@ function onSubmitStaffForm(ev) {
     .withSuccessHandler(function (res) {
       showLoading(false);
       if (res && res.success) {
-        showToast(rowIndexRaw ? 'スタッフ情報を更新しました。' : 'スタッフを追加しました。', 'success');
+        // 社員名・所属店舗（異動）を直した場合、過去に取り込み済みのリセールリストの
+        // 該当行も一緒に修正されるため、その件数があれば併せて知らせる
+        const updatedRecordCount = res.updatedRecordCount || 0;
+        const message = rowIndexRaw
+          ? ('スタッフ情報を更新しました。' + (updatedRecordCount > 0 ? '（過去のリセールリスト ' + updatedRecordCount + '件も修正しました）' : ''))
+          : 'スタッフを追加しました。';
+        showToast(message, 'success');
         closeAdminModal('staff-modal');
         loadAdminData();
         loadAllData(); // フィルタ等の社員一覧・権限コンテキストを最新化

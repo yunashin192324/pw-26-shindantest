@@ -967,7 +967,7 @@ function importUncontractedCsv(csvText) {
  * 「is not a function」という分かりにくいエラーになるため、
  * 画面側から版数を確認できるようにしている。
  */
-const SERVER_VERSION = '2026-08-22';
+const SERVER_VERSION = '2026-08-23';
 
 /**
  * サーバー側の版数を返す。画面側は、自分が期待する版数と一致するかを起動時に確認する。
@@ -2548,6 +2548,7 @@ function updateStaffMaster(rowIndex, officeCode, employeeNo, employeeName, googl
     if (googleAccount && existing.some(function (s) { return s.rowIndex !== rIdx && s.googleAccount && s.googleAccount.toLowerCase() === googleAccount.toLowerCase(); })) {
       throw new Error('同じGoogleアカウントが既に別のスタッフに登録されています。');
     }
+    const before = existing.find(function (s) { return s.rowIndex === rIdx; });
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(STAFF_MASTER_SHEET_NAME);
@@ -2556,10 +2557,104 @@ function updateStaffMaster(rowIndex, officeCode, employeeNo, employeeName, googl
     }
     sheet.getRange(rIdx, 1, 1, 5).setValues([[officeCode, employeeNo === undefined || employeeNo === null ? '' : employeeNo, employeeName, googleAccount, role]]);
 
-    return { success: true };
+    // 社員名・所属店舗（異動）が変わっていれば、過去に取り込み済みのリセールリストの
+    // 該当行（各店舗シート）も合わせて修正する。スタッフマスタの編集だけでは
+    // CSV取込時点の値が残ったままの過去データに反映されないため。
+    let updatedRecordCount = 0;
+    if (before && (before.employeeName !== employeeName || before.officeCode !== officeCode)) {
+      updatedRecordCount = applyStaffRenameOrTransfer_(
+        before.officeCode, before.employeeNo, before.employeeName,
+        officeCode, employeeName
+      );
+    }
+
+    return { success: true, updatedRecordCount: updatedRecordCount };
   } catch (err) {
     return { success: false, error: err.message + '\n' + err.stack };
   }
+}
+
+/**
+ * スタッフマスタで社員名・所属店舗（異動）を変更したとき、過去に取り込み済みの
+ * リセールリスト（各店舗シート）の該当行も合わせて修正する。
+ * ・社員番号があれば、それを手がかりに全店舗シートを横断的に探す（本人が過去に
+ *   別の店舗で登録されていた行も拾えるようにするため＝異動対応）。
+ * ・社員番号が無い場合は、社員番号だけでは本人を特定できないため、変更前の
+ *   「所属店舗＋社員名」が完全一致する行だけを対象にする（別人を巻き込まないため）。
+ * 対象行は社員名を新しい名前に書き換え、所属店舗が変わっていれば、その行を
+ * リセール・STS・ACT日・メモなど入力済みの内容ごと新しい店舗のシートへ転記する。
+ * @return {number} 修正した過去データの件数
+ */
+function applyStaffRenameOrTransfer_(beforeOfficeCode, beforeEmployeeNo, beforeEmployeeName, afterOfficeCode, afterEmployeeName) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const shopList = getShopList_();
+  const lastCol = HEADERS_MAIN.length;
+  const IDX_EMPNO = HEADERS_MAIN.indexOf('社員番号');
+  const IDX_EMPNAME = HEADERS_MAIN.indexOf('社員名');
+  const IDX_OFFICE = HEADERS_MAIN.indexOf('営業所コード');
+  const COL_EMPNAME = IDX_EMPNAME + 1;
+
+  const afterShop = shopList.find(function (s) { return s.code === afterOfficeCode; });
+  // 本部（店舗を持たない）へ異動した場合、実績データの転記先が無いため名前だけ直す
+  const canMoveSheet = !!afterShop && afterOfficeCode !== beforeOfficeCode;
+
+  let updatedCount = 0;
+  const rowsToAppend = [];
+
+  shopList.forEach(function (shop) {
+    const sheet = ss.getSheetByName(shop.name);
+    if (!sheet) return;
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return;
+
+    const values = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+    const rowsToDelete = [];
+
+    values.forEach(function (row, i) {
+      const isBlank = row.every(function (c) { return c === '' || c === null; });
+      if (isBlank) return;
+
+      const empName = String(row[IDX_EMPNAME] || '').trim();
+      const isMatch = beforeEmployeeNo
+        ? canonicalKeyPart_(row[IDX_EMPNO]) === canonicalKeyPart_(beforeEmployeeNo)
+        : (shop.code === beforeOfficeCode && empName === beforeEmployeeName);
+      if (!isMatch) return;
+
+      updatedCount++;
+      const rIdx = i + 2;
+
+      if (canMoveSheet && shop.code !== afterOfficeCode) {
+        const moved = row.slice();
+        moved[IDX_EMPNAME] = afterEmployeeName;
+        moved[IDX_OFFICE] = afterOfficeCode;
+        rowsToAppend.push(moved);
+        rowsToDelete.push(rIdx);
+      } else if (empName !== afterEmployeeName) {
+        setTextCell_(sheet, rIdx, COL_EMPNAME, afterEmployeeName);
+      }
+    });
+
+    // 転記・削除する行は後ろから消す（前から消すと残りの行番号がずれるため）
+    rowsToDelete.sort(function (a, b) { return b - a; }).forEach(function (r) { sheet.deleteRow(r); });
+  });
+
+  if (rowsToAppend.length) {
+    const destSheet = ss.getSheetByName(afterShop.name);
+    if (!destSheet) {
+      throw new Error('異動先の店舗シートが見つかりません: ' + afterShop.name);
+    }
+    const startRow = destSheet.getLastRow() + 1;
+    ensureRowCapacity_(destSheet, startRow + rowsToAppend.length - 1);
+    destSheet.getRange(startRow, 1, rowsToAppend.length, lastCol).setValues(rowsToAppend);
+    // 転記先の列がテキスト書式のはずだが、念のため転記した行にも改めて適用しておく
+    // （0落ち・日付化を防ぐため。TEXT_CELL_COLUMNSは列全体に書式済みなので通常は不要）
+    Object.keys(TEXT_CELL_COLUMNS).forEach(function (colName) {
+      const c = HEADERS_MAIN.indexOf(colName) + 1;
+      if (c > 0) destSheet.getRange(startRow, c, rowsToAppend.length, 1).setNumberFormat('@');
+    });
+  }
+
+  return updatedCount;
 }
 
 /**
