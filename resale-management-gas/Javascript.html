@@ -1,0 +1,2893 @@
+<script>
+/**
+ * ============================================================================
+ * Javascript.html
+ * 「46期未成約リスト」ダッシュボード - クライアントサイド制御ロジック
+ * ============================================================================
+ */
+
+// ---- 定数 ------------------------------------------------------------------
+// 46期は11月始まり・10月終わり
+const MONTH_CODES = ['11', '12', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10'];
+const MONTH_LABELS = MONTH_CODES.map(function (c) { return (c.indexOf('0') === 0 ? c.substring(1) : c) + '月'; });
+const PAGE_SIZE = 50;
+const ALERT_THRESHOLD_DAYS = 7; // 相談日（対象年月日）からこの日数以上経過してもSTS未入力（未対応）の場合にアラート対象とする
+const MULTILINE_COLUMNS = ['次回ACT・進捗★手入力', '詳細']; // インライン編集時にテキストエリアを使う列（メモ・詳細）
+
+// ---- グローバル状態 ----------------------------------------------------------
+let allDataCache = [];              // getDashboardData() の統合生データ（超高速フィルタの元データ・直近2年分）
+let metaMasters = {};                // getMetaMasters() のマスタ一式
+let employeeSummaryCache = {};       // periodKey（例: "46_second_half"）をキーに取得結果をキャッシュ
+let availablePeriods = [];           // getAvailablePeriods() が返す直近2年（4半期）の期一覧
+let currentEmployeePeriod = null;    // 現在選択中の期キー
+let myChart1 = null;
+let myChart2 = null;
+// 都市コード・接客方法・旅行目的(小)・種別・出発年月 の内訳グラフ
+const breakdownCharts = { 'chart-city': null, 'chart-contact': null, 'chart-purpose': null, 'chart-type': null, 'chart-departure-month': null };
+let dmCurrentPage = 1;
+let dmFilteredCache = [];
+let rankingSortState = { key: 'total', dir: 'desc' };
+// リセールリストの並べ替え（既定は対象年月日の新しい順）
+let dmSortState = { key: '対象年月日', dir: 'desc' };
+// まだ保存していない「リセール」の変更。{ "店舗名::行番号": { sheetName, rowIndex, value } }
+// 1件ずつ通信すると次の入力まで待たされるため、ためてから一括で送る。
+let pendingResaleChanges = {};
+let loadCompletedCount = 0;
+const LOAD_TARGET = 4;
+let currentUserContext = {
+  email: '', identified: false, role: 'マスタ管理', officeCode: null, officeName: null, employeeName: null,
+  canViewAllStores: true, canImportCsv: true, canManageMaster: true
+};
+
+// ============================================================================
+// 初期化
+// ============================================================================
+document.addEventListener('DOMContentLoaded', function () {
+  initTabs();
+  initHeaderEvents();
+  initDashboardEvents();
+  initEmployeeEvents();
+  initDataManagerEvents();
+  initDataManagerSort();
+  initModalEvents();
+  initCsvImportEvents();
+  initAdminEvents();
+  initStaffMasterControls();
+  initSetupEvents();
+  checkServerVersion();
+  checkSetupStatus();
+  loadAllData();
+});
+
+// 画面側が前提としているサーバー（Code.gs）の版数。Code.gs の SERVER_VERSION と対で更新する。
+const REQUIRED_SERVER_VERSION = '2026-08-19';
+
+/**
+ * Code.gs が画面と同じ版数まで更新されているか確認する。
+ * 古いままだと新機能の呼び出しが「is not a function」という分かりにくいエラーになるため、
+ * 起動時に気づけるようにする。
+ */
+function checkServerVersion() {
+  const banner = document.getElementById('version-banner');
+  const detail = document.getElementById('version-banner-detail');
+
+  const showMismatch = function (serverVersion) {
+    banner.classList.remove('hidden');
+    detail.textContent = '画面が必要とする版数：' + REQUIRED_SERVER_VERSION +
+      ' ／ サーバー側の版数：' + (serverVersion || '（この版数より前）');
+  };
+
+  // 古いCode.gsには getServerVersion 自体が無いため、その場合も更新漏れとみなす
+  if (typeof google.script.run.getServerVersion !== 'function') {
+    showMismatch(null);
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (res && res.success && res.version === REQUIRED_SERVER_VERSION) {
+        banner.classList.add('hidden');
+      } else {
+        showMismatch(res && res.version);
+      }
+    })
+    .withFailureHandler(function () { showMismatch(null); })
+    .getServerVersion();
+}
+
+// ============================================================================
+// 初期セットアップ（店舗マスタ・スタッフマスタが未作成のときの案内）
+// ============================================================================
+function initSetupEvents() {
+  document.getElementById('btn-run-setup').addEventListener('click', onRunInitialSetup);
+}
+
+/** シートが揃っているか確認し、未完了なら画面上部に案内バーを出す */
+function checkSetupStatus() {
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success || res.ready) {
+        document.getElementById('setup-banner').classList.add('hidden');
+        return;
+      }
+      const banner = document.getElementById('setup-banner');
+      banner.classList.remove('hidden');
+      document.getElementById('setup-banner-detail').textContent =
+        '未作成のシート：' + res.missingSheets.join('、');
+      // マスタ管理権限が無い人はボタンを押せないため、担当者への依頼を促す
+      document.getElementById('btn-run-setup').classList.toggle('hidden', !res.canRunSetup);
+      document.getElementById('setup-banner-note').textContent = res.canRunSetup
+        ? 'このボタンは何度押しても安全です。既にあるシートのデータが消えることはありません。'
+        : 'マスタ管理権限を持つ担当者に、初期セットアップの実行を依頼してください。';
+    })
+    .withFailureHandler(function () {
+      // 状態確認そのものが失敗した場合は、通常のエラー表示に任せる
+    })
+    .getSetupStatus();
+}
+
+function onRunInitialSetup() {
+  const btn = document.getElementById('btn-run-setup');
+  btn.disabled = true;
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false);
+      btn.disabled = false;
+      if (res && res.success) {
+        document.getElementById('setup-banner').classList.add('hidden');
+        showToast('初期セットアップが完了しました（' + res.shopCount + '店舗を登録）。', 'success');
+        loadAllData();
+        loadAdminData();
+      } else {
+        showToast('初期セットアップに失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false);
+      btn.disabled = false;
+      showToast('通信エラー（runInitialSetup）: ' + err.message, 'error');
+    })
+    .runInitialSetup();
+}
+
+function loadAllData() {
+  showLoading(true);
+  loadCompletedCount = 0;
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      try {
+        if (res && res.success) {
+          allDataCache = res.data;
+        } else {
+          showToast('ダッシュボードデータの取得に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+        }
+      } catch (e) {
+        showToast('ダッシュボードデータの処理中にエラーが発生しました: ' + e.message, 'error');
+      } finally {
+        onLoadStepComplete();
+      }
+    })
+    .withFailureHandler(function (err) {
+      showToast('通信エラー（getDashboardData）: ' + err.message, 'error');
+      onLoadStepComplete();
+    })
+    .getDashboardData();
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      try {
+        if (res && res.success) {
+          metaMasters = res;
+          populateAllMasterSelects();
+        } else {
+          showToast('マスタデータの取得に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+        }
+      } catch (e) {
+        showToast('マスタデータの処理中にエラーが発生しました: ' + e.message, 'error');
+      } finally {
+        onLoadStepComplete();
+      }
+    })
+    .withFailureHandler(function (err) {
+      showToast('通信エラー（getMetaMasters）: ' + err.message, 'error');
+      onLoadStepComplete();
+    })
+    .getMetaMasters();
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      try {
+        if (res && res.success) {
+          availablePeriods = res.periods;
+          renderEmpPeriodTabs();
+          if (availablePeriods.length) {
+            currentEmployeePeriod = availablePeriods[availablePeriods.length - 1].key; // 直近（最新）の期を初期選択
+          }
+        } else {
+          showToast('対象期間の取得に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+        }
+      } catch (e) {
+        showToast('対象期間の処理中にエラーが発生しました: ' + e.message, 'error');
+      } finally {
+        onLoadStepComplete();
+      }
+    })
+    .withFailureHandler(function (err) {
+      showToast('通信エラー（getAvailablePeriods）: ' + err.message, 'error');
+      onLoadStepComplete();
+    })
+    .getAvailablePeriods();
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      try {
+        if (res && res.success) {
+          currentUserContext = res.context;
+          applyUserContextToUi();
+        } else {
+          showToast('権限情報の取得に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+        }
+      } catch (e) {
+        showToast('権限情報の処理中にエラーが発生しました: ' + e.message, 'error');
+      } finally {
+        onLoadStepComplete();
+      }
+    })
+    .withFailureHandler(function (err) {
+      showToast('通信エラー（getCurrentUserContext）: ' + err.message, 'error');
+      onLoadStepComplete();
+    })
+    .getCurrentUserContext();
+}
+
+// ログイン中ユーザーの権限（マスタ管理／管理者（所長・チーフ）／一般）をUIへ反映する。
+// ・マスタ管理：CSVインポートボタン・「店舗・スタッフ管理」タブを表示
+// ・管理者（所長・チーフ）：全店舗閲覧はできるがCSV・マスタ管理タブは非表示
+// ・一般：CSVインポート・マスタ管理タブを非表示にし、閲覧スコープ（自店舗）をヘッダーに表示
+function applyUserContextToUi() {
+  const csvBtn = document.getElementById('btn-open-csv-modal');
+  csvBtn.classList.toggle('hidden', !currentUserContext.canImportCsv);
+
+  // Geminiの回答をダッシュボードへ保存する欄（全員の画面に出る全社共有の掲示物にあたるため
+  // マスタ管理権限のみ）。読むこと・Geminiに渡すサマリを作ることは従来どおり誰でもできる。
+  const pasteSection = document.getElementById('ai-paste-section');
+  const pasteNote = document.getElementById('ai-paste-readonly-note');
+  if (pasteSection) pasteSection.classList.toggle('hidden', !currentUserContext.canManageMaster);
+  if (pasteNote) pasteNote.classList.toggle('hidden', !!currentUserContext.canManageMaster);
+
+  const adminTabBtn = document.getElementById('tab-btn-admin');
+  adminTabBtn.classList.toggle('hidden', !currentUserContext.canManageMaster);
+  if (!currentUserContext.canManageMaster && adminTabBtn.classList.contains('active')) {
+    document.querySelector('.tab-btn[data-tab="dashboard"]').click();
+  }
+
+  const badge = document.getElementById('user-scope-badge');
+  const badgeText = document.getElementById('user-scope-badge-text');
+  if (!currentUserContext.canViewAllStores && currentUserContext.officeName) {
+    badgeText.textContent = '表示範囲：' + currentUserContext.officeName + '（自店舗のみ）';
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+  }
+}
+
+function onLoadStepComplete() {
+  loadCompletedCount++;
+  if (loadCompletedCount >= LOAD_TARGET) {
+    showLoading(false);
+    renderDashboardTab();
+    renderDataManagerTab();
+    ensureEmployeeSummaryLoaded();
+    loadAiReports();
+  }
+}
+
+function showLoading(flag) {
+  document.getElementById('loading-overlay').classList.toggle('hidden', !flag);
+}
+
+// ============================================================================
+// 共通UI（タブ・トースト・ヘッダー）
+// ============================================================================
+function initTabs() {
+  document.querySelectorAll('.tab-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('.tab-btn').forEach(function (b) {
+        b.classList.remove('active', 'bg-blue-700', 'text-white');
+        b.classList.add('bg-slate-100', 'text-slate-600');
+      });
+      btn.classList.add('active');
+      btn.classList.remove('bg-slate-100', 'text-slate-600');
+
+      document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.add('hidden'); });
+      document.getElementById('tab-panel-' + btn.dataset.tab).classList.remove('hidden');
+
+      // 非表示（display:none）だったcanvasはサイズを正しく測れないため、
+      // ダッシュボードタブに戻ってきたタイミングでグラフを再生成してレイアウト崩れを防ぐ
+      if (btn.dataset.tab === 'dashboard') {
+        renderDashboardTab();
+      }
+      // 店舗・スタッフ管理タブは開くたびに最新状態を取得する（頻繁に変わる画面ではないため）
+      if (btn.dataset.tab === 'admin') {
+        loadAdminData();
+      }
+    });
+  });
+}
+
+function initHeaderEvents() {
+  document.getElementById('btn-refresh').addEventListener('click', function () {
+    loadAllData();
+  });
+}
+
+function showToast(message, type) {
+  const container = document.getElementById('toast-container');
+  const colors = {
+    success: 'bg-emerald-600',
+    error: 'bg-red-600',
+    info: 'bg-blue-600'
+  };
+  const icon = {
+    success: 'fa-circle-check',
+    error: 'fa-circle-exclamation',
+    info: 'fa-circle-info'
+  };
+  const t = type || 'info';
+
+  const div = document.createElement('div');
+  div.className = 'toast text-white text-sm rounded-lg shadow-lg px-4 py-3 flex items-start gap-2 ' + colors[t];
+  div.innerHTML = '<i class="fa-solid ' + icon[t] + ' mt-0.5"></i><span>' + escapeHtml(message) + '</span>';
+  container.appendChild(div);
+
+  setTimeout(function () {
+    div.style.opacity = '0';
+    div.style.transition = 'opacity .3s';
+    setTimeout(function () { div.remove(); }, 300);
+  }, 3200);
+}
+
+function escapeHtml(str) {
+  return String(str === undefined || str === null ? '' : str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ============================================================================
+// 日付ユーティリティ（長期未対応アラート判定用）
+// ============================================================================
+// 日付として読み取る。CSV由来は「20260801」、画面から入力した日付やシステムが
+// 記録する最終アクション日は「2026-08-01」と表記が混在するため、どちらも受け付ける。
+function parseYyyymmdd(str) {
+  const s = String(str === null || str === undefined ? '' : str).trim();
+  if (!s) return null;
+
+  // 「2026-08-01」「2026/8/1」のように区切り記号があるもの
+  const sep = s.match(/^(\d{4})\D(\d{1,2})\D(\d{1,2})/);
+  if (sep) return buildDate(Number(sep[1]), Number(sep[2]), Number(sep[3]));
+
+  // 「20260801」のように区切りが無いもの
+  if (s.length < 8) return null;
+  return buildDate(Number(s.substring(0, 4)), Number(s.substring(4, 6)), Number(s.substring(6, 8)));
+}
+
+function buildDate(y, m, d) {
+  if (!y || !m || !d || m > 12 || d > 31) return null;
+  return new Date(y, m - 1, d);
+}
+
+// <input type="date"> に渡せる「yyyy-MM-dd」に変換する。読み取れない場合は空文字。
+function toDateInputValue(value) {
+  const date = parseYyyymmdd(value);
+  if (!date) return '';
+  return date.getFullYear() + '-' +
+    String(date.getMonth() + 1).padStart(2, '0') + '-' +
+    String(date.getDate()).padStart(2, '0');
+}
+
+function daysSince(dateStr) {
+  const target = parseYyyymmdd(dateStr);
+  if (!target) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  target.setHours(0, 0, 0, 0);
+  return Math.floor((today.getTime() - target.getTime()) / 86400000);
+}
+
+// 相談日（対象年月日）から ALERT_THRESHOLD_DAYS 日たっても「ACT日」が未入力の行を
+// 「要フォロー」とみなす。
+// 基準は相談日そのもの。判定に使うのは ACT日 の有無だけで、STSは見ない。
+// （商品の販売待ちなど、まだ結果が出ない案件もあるため。何か動いた＝ACT日が入った
+//   時点でアラートは消える。）
+function alertBasisDate(row) {
+  return row['対象年月日'];
+}
+
+function isAlertRow(row) {
+  if (String(row['ACT日'] === null || row['ACT日'] === undefined ? '' : row['ACT日']).trim()) {
+    return false; // ACT日が入っていれば対応済みとみなす
+  }
+  const days = daysSince(alertBasisDate(row));
+  return days !== null && days >= ALERT_THRESHOLD_DAYS;
+}
+
+// ============================================================================
+// マスタ反映（フィルタ／モーダルの各種セレクトボックス）
+// ============================================================================
+function populateAllMasterSelects() {
+  const shopList = metaMasters.shopList || [];
+
+  fillOptions('filter-shop', shopList.map(function (s) { return { value: s, label: s }; }), true);
+  fillOptions('filter-month', MONTH_CODES.map(function (c, i) { return { value: c, label: MONTH_LABELS[i] }; }), true);
+
+  fillSelectWithBlank('dm-filter-shop', shopList);
+  fillSelectWithBlank('dm-filter-month', MONTH_CODES.map(function (c, i) { return MONTH_LABELS[i]; }), MONTH_CODES);
+  fillSelectWithBlank('dm-filter-contact', metaMasters.contactMaster || []);
+  fillSelectWithBlank('dm-filter-purpose', metaMasters.purposeMaster || []);
+
+  // 社員の選択肢は、選ばれている店舗に合わせて絞り込む
+  populateDmEmployeeSelect();
+
+  const modalShopSelect = document.querySelector('#register-form select[name="sheetName"]');
+  modalShopSelect.innerHTML = '<option value="">選択してください</option>' +
+    shopList.map(function (s) { return '<option value="' + escapeHtml(s) + '">' + escapeHtml(s) + '</option>'; }).join('');
+
+  fillSelectSimple('#register-form select[name="未成約理由(大)"]', metaMasters.reasonMaster || []);
+  fillSelectSimple('#register-form select[name="種別"]', metaMasters.typeMaster || []);
+  fillSelectSimple('#register-form select[name="旅行目的(小)"]', metaMasters.purposeMaster || []);
+  fillSelectSimple('#register-form select[name="接客方法"]', metaMasters.contactMaster || []);
+}
+
+function fillOptions(elId, items, multi) {
+  const el = document.getElementById(elId);
+  el.innerHTML = items.map(function (it) {
+    return '<option value="' + escapeHtml(it.value) + '">' + escapeHtml(it.label) + '</option>';
+  }).join('');
+}
+
+function fillSelectWithBlank(elId, labels, values) {
+  const el = document.getElementById(elId);
+  const opts = ['<option value="">すべて</option>'];
+  labels.forEach(function (label, i) {
+    const v = values ? values[i] : label;
+    opts.push('<option value="' + escapeHtml(v) + '">' + escapeHtml(label) + '</option>');
+  });
+  el.innerHTML = opts.join('');
+}
+
+function fillSelectSimple(selector, labels) {
+  const el = document.querySelector(selector);
+  const opts = ['<option value="">－</option>'];
+  labels.forEach(function (label) {
+    opts.push('<option value="' + escapeHtml(label) + '">' + escapeHtml(label) + '</option>');
+  });
+  el.innerHTML = opts.join('');
+}
+
+function getSelectedMultiValues(elId) {
+  return Array.from(document.getElementById(elId).selectedOptions).map(function (o) { return o.value; });
+}
+
+// ============================================================================
+// タブ1: 店舗分析ダッシュボード
+// ============================================================================
+function initDashboardEvents() {
+  document.getElementById('filter-shop').addEventListener('change', renderDashboardTab);
+  document.getElementById('filter-month').addEventListener('change', renderDashboardTab);
+  document.getElementById('btn-clear-dashboard-filter').addEventListener('click', function () {
+    Array.from(document.getElementById('filter-shop').options).forEach(function (o) { o.selected = false; });
+    Array.from(document.getElementById('filter-month').options).forEach(function (o) { o.selected = false; });
+    renderDashboardTab();
+  });
+  document.querySelectorAll('#tab-panel-dashboard .sortable').forEach(function (th) {
+    th.addEventListener('click', function () {
+      const key = th.dataset.sort;
+      if (rankingSortState.key === key) {
+        rankingSortState.dir = rankingSortState.dir === 'asc' ? 'desc' : 'asc';
+      } else {
+        rankingSortState = { key: key, dir: 'desc' };
+      }
+      renderRankingTable(getDashboardFilteredData());
+    });
+  });
+  document.getElementById('btn-open-ai-summary').addEventListener('click', openAiSummaryModal);
+  document.getElementById('btn-copy-ai-summary').addEventListener('click', copyAiSummaryToClipboard);
+  document.getElementById('btn-save-ai-report').addEventListener('click', onSaveAiReport);
+  document.getElementById('btn-clear-ai-report-latest')
+    .addEventListener('click', function () { onClearAiReports(true); });
+  document.getElementById('btn-clear-ai-report-all')
+    .addEventListener('click', function () { onClearAiReports(false); });
+}
+
+// ============================================================================
+// Gemini分析用サマリ（外部APIは使わず、集計値をテキスト化して貼り付けてもらう方式）
+// ============================================================================
+
+// 対象年月日(YYYYMMDD)から会計期を判定する。サーバー側 getFiscalPeriodInfo_() と同じ規則。
+function fiscalPeriodLabelOf(yyyymmdd) {
+  const s = String(yyyymmdd || '');
+  if (s.length < 6) return null;
+  const y = parseInt(s.substring(0, 4), 10);
+  const m = parseInt(s.substring(4, 6), 10);
+  if (!y || !m) return null;
+  const startYear = (m >= 11) ? y : y - 1;
+  return (46 + (startYear - 2025)) + '期' + ((m >= 11 || m <= 4) ? '上期' : '下期');
+}
+
+function pct(numerator, denominator) {
+  return denominator > 0 ? ((numerator / denominator) * 100).toFixed(1) : '0.0';
+}
+
+// 1グループ分の集計（未成約数・リセール数・継続率・成約・PAX）を求める
+function aggregateRows(rows) {
+  const contractRows = rows.filter(function (r) { return r['STS'] === '成約'; });
+  const resaleAction = rows.filter(function (r) { return r['リセール'] === '〇'; }).length;
+  return {
+    total: rows.length,
+    resaleAction: resaleAction,
+    resaleProgress: rows.filter(function (r) { return r['STS'] === 'リセール中'; }).length,
+    lost: rows.filter(function (r) { return r['STS'] === '失注'; }).length,
+    contract: contractRows.length,
+    pax: contractRows.reduce(function (s, r) { return s + (Number(r['成約PAX']) || 0); }, 0),
+    alert: rows.filter(isAlertRow).length
+  };
+}
+
+function buildAiSummaryText() {
+  const data = getDashboardFilteredData();
+  const selectedShops = getSelectedMultiValues('filter-shop');
+  const selectedMonths = getSelectedMultiValues('filter-month');
+  const isSingleShop = selectedShops.length === 1; // 1店舗だけに絞っているか（依頼文の出し分けに使う）
+  const all = aggregateRows(data);
+  const L = [];
+
+  const now = new Date();
+  const pad = function (n) { return String(n).padStart(2, '0'); };
+  L.push('# 未成約リセール 傾向分析用サマリ');
+  L.push('作成日時: ' + now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()));
+  L.push('閲覧範囲: ' + (currentUserContext.canViewAllStores ? '全店舗' : (currentUserContext.officeName || '自店舗') + 'のみ'));
+  L.push('表示期間: 直近2年（' + availablePeriods.map(function (p) { return p.label; }).join('・') + '）');
+  L.push('絞り込み: 店舗=' + (selectedShops.length ? selectedShops.join('/') : 'すべて') +
+    ' , 月=' + (selectedMonths.length ? selectedMonths.join('/') : 'すべて'));
+  L.push('');
+  L.push('## 用語');
+  L.push('- 未成約: その場で成約に至らなかった相談（失注ではない）');
+  L.push('- リセール: 未成約案件への再提案・フォローの実施');
+  L.push('- リセール継続率 = リセール数 ÷ 未成約数（最重要指標。低いほどフォローされず失注していく）');
+  L.push('- リセール成約率 = 成約数 ÷ リセール数');
+  L.push('  ※リセールをしていない案件がお客様都合で成約することもあるため、この値は100%を超える場合があります。');
+  L.push('  その場合は「リセール以外の経路で成約した案件が多い」と解釈してください。');
+  L.push('');
+  L.push('## 全体');
+  L.push('- 未成約相談総数: ' + all.total + ' 件');
+  L.push('- リセール実施数: ' + all.resaleAction + ' 件');
+  L.push('- リセール継続率: ' + pct(all.resaleAction, all.total) + ' %');
+  L.push('- リセール中: ' + all.resaleProgress + ' 件 / 失注: ' + all.lost + ' 件');
+  L.push('- 成約: ' + all.contract + ' 件 / PAX: ' + all.pax);
+  L.push('- 長期未対応（相談日から' + ALERT_THRESHOLD_DAYS + '日以上STS未入力）: ' + all.alert + ' 件');
+  L.push('');
+
+  // ---- 店舗別 ----
+  const shopNames = (metaMasters.shopList || []).slice();
+  const shopStats = shopNames.map(function (name) {
+    const s = aggregateRows(data.filter(function (r) { return r.__sheetName === name; }));
+    s.name = name;
+    return s;
+  }).filter(function (s) { return s.total > 0; });
+  shopStats.sort(function (a, b) { return b.total - a.total; });
+
+  L.push('## 店舗別（未成約数の多い順）');
+  L.push('店舗\t未成約数\tリセール数\t継続率%\t成約数\tPAX\tリセール成約率%\t長期未対応');
+  shopStats.forEach(function (s) {
+    L.push([s.name, s.total, s.resaleAction, pct(s.resaleAction, s.total), s.contract, s.pax,
+      pct(s.contract, s.resaleAction), s.alert].join('\t'));
+  });
+  L.push('');
+
+  // ---- 未成約理由 ----
+  const reasonCounts = {};
+  data.forEach(function (r) {
+    const k = r['未成約理由(大)'] || '(未設定)';
+    if (!reasonCounts[k]) reasonCounts[k] = { total: 0, resale: 0, contract: 0 };
+    reasonCounts[k].total++;
+    if (r['リセール'] === '〇') reasonCounts[k].resale++;
+    if (r['STS'] === '成約') reasonCounts[k].contract++;
+  });
+  L.push('## 未成約理由(大)の内訳');
+  L.push('理由\t件数\t構成比%\tリセール継続率%\t成約数');
+  Object.keys(reasonCounts).sort(function (a, b) { return reasonCounts[b].total - reasonCounts[a].total; })
+    .forEach(function (k) {
+      const c = reasonCounts[k];
+      L.push([k, c.total, pct(c.total, all.total), pct(c.resale, c.total), c.contract].join('\t'));
+    });
+  L.push('');
+
+  // ---- 期別 ----
+  const periodMap = {};
+  data.forEach(function (r) {
+    const label = fiscalPeriodLabelOf(r['対象年月日']);
+    if (!label) return;
+    if (!periodMap[label]) periodMap[label] = [];
+    periodMap[label].push(r);
+  });
+  L.push('## 期別の推移（46期は2025年11月始まり。上期=11〜4月 / 下期=5〜10月）');
+  L.push('期\t未成約数\tリセール数\t継続率%\t成約数\tPAX');
+  availablePeriods.forEach(function (p) {
+    const rows = periodMap[p.label] || [];
+    const s = aggregateRows(rows);
+    L.push([p.label, s.total, s.resaleAction, pct(s.resaleAction, s.total), s.contract, s.pax].join('\t'));
+  });
+  L.push('');
+
+  // ---- 月別 ----
+  L.push('## 月別の推移');
+  L.push('月\t未成約数\tリセール数\t継続率%\t成約数');
+  MONTH_CODES.forEach(function (code, i) {
+    const rows = data.filter(function (r) { return String(r['月']) === code; });
+    if (rows.length === 0) return;
+    const s = aggregateRows(rows);
+    L.push([MONTH_LABELS[i], s.total, s.resaleAction, pct(s.resaleAction, s.total), s.contract].join('\t'));
+  });
+  L.push('');
+
+  // ---- 接客方法別 ----
+  const cityCounts = {};
+  data.forEach(function (r) {
+    const k = r['都市コード'] || '(未設定)';
+    if (!cityCounts[k]) cityCounts[k] = { total: 0, resale: 0, contract: 0 };
+    cityCounts[k].total++;
+    if (r['リセール'] === '〇') cityCounts[k].resale++;
+    if (r['STS'] === '成約') cityCounts[k].contract++;
+  });
+  L.push('## 都市コード別');
+  L.push('都市コード\t未成約数\t構成比%\tリセール継続率%\t成約数');
+  Object.keys(cityCounts).sort(function (a, b) { return cityCounts[b].total - cityCounts[a].total; })
+    .forEach(function (k) {
+      const c = cityCounts[k];
+      L.push([k, c.total, pct(c.total, all.total), pct(c.resale, c.total), c.contract].join('\t'));
+    });
+  L.push('');
+
+  const contactCounts = {};
+  data.forEach(function (r) {
+    const k = r['接客方法'] || '(未設定)';
+    if (!contactCounts[k]) contactCounts[k] = { total: 0, resale: 0, contract: 0 };
+    contactCounts[k].total++;
+    if (r['リセール'] === '〇') contactCounts[k].resale++;
+    if (r['STS'] === '成約') contactCounts[k].contract++;
+  });
+  L.push('## 接客方法別');
+  L.push('接客方法\t未成約数\t継続率%\t成約数');
+  Object.keys(contactCounts).sort(function (a, b) { return contactCounts[b].total - contactCounts[a].total; })
+    .forEach(function (k) {
+      const c = contactCounts[k];
+      L.push([k, c.total, pct(c.resale, c.total), c.contract].join('\t'));
+    });
+  L.push('');
+
+  // ---- 旅行目的(小)別 ----
+  const purposeCounts = {};
+  data.forEach(function (r) {
+    const k = r['旅行目的(小)'] || '(未設定)';
+    if (!purposeCounts[k]) purposeCounts[k] = { total: 0, resale: 0, contract: 0 };
+    purposeCounts[k].total++;
+    if (r['リセール'] === '〇') purposeCounts[k].resale++;
+    if (r['STS'] === '成約') purposeCounts[k].contract++;
+  });
+  L.push('## 旅行目的(小)別');
+  L.push('旅行目的\t未成約数\t構成比%\tリセール継続率%\t成約数');
+  Object.keys(purposeCounts).sort(function (a, b) { return purposeCounts[b].total - purposeCounts[a].total; })
+    .forEach(function (k) {
+      const c = purposeCounts[k];
+      L.push([k, c.total, pct(c.total, all.total), pct(c.resale, c.total), c.contract].join('\t'));
+    });
+  L.push('');
+
+  // ---- 社員別（店舗単位で見るときに「誰のフォローが手薄か」を判断するための内訳） ----
+  const empCounts = {};
+  data.forEach(function (r) {
+    const name = String(r['社員名'] || '').trim();
+    if (!name) return;
+    const k = isSingleShop ? name : (r.__sheetName + ' / ' + name);
+    if (!empCounts[k]) empCounts[k] = { total: 0, resale: 0, progress: 0, contract: 0, pax: 0 };
+    const c = empCounts[k];
+    c.total++;
+    if (r['リセール'] === '〇') c.resale++;
+    if (r['STS'] === 'リセール中') c.progress++;
+    if (r['STS'] === '成約') { c.contract++; c.pax += Number(r['成約PAX']) || 0; }
+  });
+  const empKeys = Object.keys(empCounts)
+    .sort(function (a, b) { return empCounts[b].total - empCounts[a].total; })
+    .slice(0, 20);
+  if (empKeys.length) {
+    L.push('## 社員別（未成約数の多い順・上位' + empKeys.length + '名）');
+    L.push((isSingleShop ? '社員名' : '店舗 / 社員名') + '\t未成約数\tリセール数\t継続率%\tリセール中\t成約数\tPAX');
+    empKeys.forEach(function (k) {
+      const c = empCounts[k];
+      L.push([k, c.total, c.resale, pct(c.resale, c.total), c.progress, c.contract, c.pax].join('\t'));
+    });
+    L.push('');
+  }
+
+  // ---- 依頼文は絞り込みの粒度に合わせて変える（1店舗なら店舗内の課題として聞く） ----
+  L.push('## お願いしたい分析');
+  L.push('上のデータをもとに、次の点を日本語で分析してください。');
+  if (isSingleShop) {
+    L.push('※これは「' + selectedShops[0] + '」1店舗だけのデータです。店舗内の課題として分析してください。');
+    L.push('1. この店舗のリセール継続率は、期や月で見てどう推移しているか。落ち込んでいる時期はあるか。');
+    L.push('2. 継続率が低いのはどの未成約理由・都市コード・接客方法・旅行目的か。偏りがあれば指摘してほしい。');
+    L.push('3. 社員によって継続率に差はあるか。差が大きい場合、どこに原因がありそうか。');
+    L.push('4. 長期未対応は未成約数に対してどのくらいの比率か。多いなら要因の仮説がほしい。');
+    L.push('5. この店舗が明日から実行できる改善策を、優先度の高い順に3つ提案してほしい。');
+  } else {
+    L.push('1. リセール継続率が低い店舗はどこか。全体平均と比べてどれくらい差があるか。');
+    L.push('2. 継続率が低い店舗は、未成約理由・都市コード・接客方法・旅行目的に偏りがあるか。');
+    L.push('3. 期や月をまたいで継続率が落ちている時期はあるか。季節要因か、フォロー漏れか。');
+    L.push('4. 長期未対応が多い店舗はどこか。件数だけでなく未成約数に対する比率でも見てほしい。');
+    L.push('5. 社員別に見て継続率が特に低い人・高い人はいるか。高い人のやり方から学べる点はあるか。');
+    L.push('6. 明日から店舗で実行できる改善策を、優先度の高い順に3つ提案してほしい。');
+  }
+  L.push('');
+  L.push('※このサマリは集計値のみで、お客様の個人情報（お名前・相談内容）は含まれていません。');
+  L.push('※社員別の集計には社内の社員名が含まれます。');
+
+  return L.join('\n');
+}
+
+// この分析がどの範囲を対象にしているか（保存時の記録用）
+function currentScopeLabel() {
+  const shops = getSelectedMultiValues('filter-shop');
+  const months = getSelectedMultiValues('filter-month');
+  return (shops.length ? shops.join('・') : '全店舗') + ' / ' + (months.length ? months.join('・') + '月' : '全期間');
+}
+
+// ---- AI分析レポート（Geminiの回答をこの画面に保存して共有する） ----------------
+function loadAiReports() {
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (res && res.success) renderAiReports(res.reports || []);
+    })
+    .withFailureHandler(function () { /* レポートは補助情報のため、取得失敗時は黙って空表示にする */ })
+    .getAiReports(5);
+}
+
+/**
+ * 保存済みレポートを消すボタンの表示を切り替える。
+ * 消せるのはマスタ管理権限のみ。レポートが1件も無いときは出さない。
+ */
+function updateAiClearButtons(reportCount) {
+  const show = !!currentUserContext.canManageMaster && reportCount > 0;
+  ['btn-clear-ai-report-latest', 'btn-clear-ai-report-all'].forEach(function (id) {
+    const btn = document.getElementById(id);
+    if (btn) btn.classList.toggle('hidden', !show);
+  });
+  // 履歴が無ければ「表示中を消す」と「すべて消す」が同じ意味になるため、片方だけ出す
+  const latestBtn = document.getElementById('btn-clear-ai-report-latest');
+  if (latestBtn && show && reportCount <= 1) latestBtn.classList.add('hidden');
+}
+
+/** 保存済みレポートを消す（latestOnly: 表示中の1件だけか、全件か） */
+function onClearAiReports(latestOnly) {
+  const message = latestOnly
+    ? '今表示している最新のレポートを消します。\n過去の履歴は残ります。よろしいですか？'
+    : '保存した分析レポートを、過去の履歴も含めてすべて消します。\n元に戻せません。よろしいですか？';
+  if (!window.confirm(message)) return;
+
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false);
+      if (res && res.success) {
+        showToast(res.clearedCount > 0
+          ? '分析レポートを消しました（' + res.clearedCount + '件）'
+          : '消すレポートはありませんでした。', 'success');
+        loadAiReports();
+      } else {
+        showToast('削除に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false);
+      showToast('通信エラー（clearAiReports）: ' + err.message, 'error');
+    })
+    .clearAiReports(!!latestOnly);
+}
+
+function renderAiReports(reports) {
+  const bodyEl = document.getElementById('ai-report-body');
+  const metaEl = document.getElementById('ai-report-meta');
+  const histBox = document.getElementById('ai-report-history');
+  const histList = document.getElementById('ai-report-history-list');
+
+  if (!reports.length) {
+    bodyEl.innerHTML = currentUserContext.canManageMaster
+      ? '<p class="text-slate-400 text-sm">まだ分析レポートはありません。'
+        + '右上の「Geminiで分析する」から、集計サマリをGeminiに渡して所見をもらい、'
+        + 'その回答をこの画面に保存すると、ここに表示され全員が確認できるようになります。</p>'
+      : '<p class="text-slate-400 text-sm">まだ分析レポートはありません。'
+        + 'マスタ管理者が分析結果を保存すると、ここに表示されます。</p>';
+    metaEl.textContent = '';
+    histBox.classList.add('hidden');
+    updateAiClearButtons(0);
+    return;
+  }
+  updateAiClearButtons(reports.length);
+
+  const latest = reports[0];
+  bodyEl.textContent = latest.body;
+  metaEl.textContent = latest.savedAt + '　' + latest.author + '　（対象：' + latest.scope + '）';
+
+  const past = reports.slice(1);
+  if (past.length === 0) { histBox.classList.add('hidden'); return; }
+  histBox.classList.remove('hidden');
+  histList.innerHTML = past.map(function (r, i) {
+    return '<details class="text-xs text-slate-600">' +
+      '<summary class="cursor-pointer hover:text-violet-700">' + escapeHtml(r.savedAt) + '　' +
+      escapeHtml(r.author) + '　（対象：' + escapeHtml(r.scope) + '）</summary>' +
+      '<div class="whitespace-pre-wrap mt-1 pl-3 border-l-2 border-slate-200 leading-relaxed">' +
+      escapeHtml(r.body) + '</div></details>';
+  }).join('');
+}
+
+function onSaveAiReport() {
+  const input = document.getElementById('ai-report-input');
+  const body = input.value.trim();
+  if (!body) { showToast('Geminiの回答を貼り付けてください。', 'error'); return; }
+
+  const btn = document.getElementById('btn-save-ai-report');
+  btn.disabled = true;
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false);
+      btn.disabled = false;
+      if (res && res.success) {
+        input.value = '';
+        closeAiSummaryModal();
+        showToast('分析レポートを保存しました。ダッシュボードに表示されます。', 'success');
+        loadAiReports();
+      } else {
+        showToast('保存に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false);
+      btn.disabled = false;
+      showToast('通信エラー（saveAiReport）: ' + err.message, 'error');
+    })
+    .saveAiReport(currentScopeLabel(), body);
+}
+
+function closeAiSummaryModal() {
+  const modal = document.getElementById('ai-summary-modal');
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+}
+
+function openAiSummaryModal() {
+  // 分析レポートの保存はマスタ管理権限のみ（全員の画面に出る全社共有の掲示物のため）。
+  // 権限が変わったあとに開き直しても正しく切り替わるよう、開くたびに判定する。
+  const pasteSection = document.getElementById('ai-paste-section');
+  const pasteNote = document.getElementById('ai-paste-readonly-note');
+  if (pasteSection) pasteSection.classList.toggle('hidden', !currentUserContext.canManageMaster);
+  if (pasteNote) pasteNote.classList.toggle('hidden', !!currentUserContext.canManageMaster);
+  document.getElementById('ai-summary-text').value = buildAiSummaryText();
+  document.getElementById('ai-summary-copy-status').classList.add('hidden');
+  const modal = document.getElementById('ai-summary-modal');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+}
+
+function copyAiSummaryToClipboard() {
+  const ta = document.getElementById('ai-summary-text');
+  const status = document.getElementById('ai-summary-copy-status');
+  const done = function (ok) {
+    if (ok) {
+      status.classList.remove('hidden');
+      showToast('サマリをコピーしました。Geminiに貼り付けてください。', 'success');
+    } else {
+      showToast('自動コピーできませんでした。枠内を選択してCtrl+C（Macは⌘+C）でコピーしてください。', 'info');
+    }
+  };
+  // GASのWebアプリはiframe内で動くため、まず execCommand を試し、駄目なら Clipboard API を使う
+  ta.focus();
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  if (ok) { done(true); return; }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(ta.value).then(function () { done(true); }, function () { done(false); });
+    return;
+  }
+  done(false);
+}
+
+function getDashboardFilteredData() {
+  const shops = getSelectedMultiValues('filter-shop');
+  const months = getSelectedMultiValues('filter-month');
+
+  return allDataCache.filter(function (row) {
+    if (shops.length && shops.indexOf(row.__sheetName) === -1) return false;
+    if (months.length && months.indexOf(String(row['月'])) === -1) return false;
+    return true;
+  });
+}
+
+function renderDashboardTab() {
+  const filtered = getDashboardFilteredData();
+  renderKpi(filtered);
+  renderChart1(filtered);
+  renderChart2(filtered);
+  renderBreakdownChart('chart-city', filtered, '都市コード');
+  renderBreakdownChart('chart-contact', filtered, '接客方法');
+  renderBreakdownChart('chart-purpose', filtered, '旅行目的(小)');
+  renderBreakdownChart('chart-type', filtered, '種別');
+  renderBreakdownChart('chart-departure-month', filtered, '出発年月');
+  renderRankingTable(filtered);
+}
+
+/**
+ * 指定した列（都市コード・接客方法・旅行目的(小)など）ごとの内訳グラフを描く。
+ * 棒＝未成約数、折れ線＝リセール継続率(%)。件数の多い順に上位10区分を表示する。
+ * 「どの区分でフォローが手薄か」を1枚で読み取れるようにするのが狙い。
+ */
+function renderBreakdownChart(canvasId, data, columnName) {
+  const counts = {};
+  data.forEach(function (r) {
+    const key = String(r[columnName] || '').trim() || '(未設定)';
+    if (!counts[key]) counts[key] = { total: 0, resale: 0 };
+    counts[key].total += 1;
+    if (r['リセール'] === '〇') counts[key].resale += 1;
+  });
+
+  const labels = Object.keys(counts)
+    .sort(function (a, b) { return counts[b].total - counts[a].total; })
+    .slice(0, 10);
+  const totals = labels.map(function (l) { return counts[l].total; });
+  const rates = labels.map(function (l) {
+    return counts[l].total > 0 ? Number(((counts[l].resale / counts[l].total) * 100).toFixed(1)) : 0;
+  });
+
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  if (breakdownCharts[canvasId]) { breakdownCharts[canvasId].destroy(); }
+
+  // データが1件も無い場合は空のグラフを描いて「該当なし」を明示する
+  breakdownCharts[canvasId] = new Chart(canvas.getContext('2d'), {
+    data: {
+      labels: labels.length ? labels : ['該当なし'],
+      datasets: [
+        {
+          type: 'bar', label: '未成約数', data: labels.length ? totals : [0],
+          backgroundColor: '#93c5fd', borderRadius: 4, yAxisID: 'y', order: 2
+        },
+        {
+          type: 'line', label: 'リセール継続率(%)', data: labels.length ? rates : [0],
+          borderColor: '#4338ca', backgroundColor: '#4338ca', borderWidth: 2,
+          tension: 0.3, pointRadius: 3, yAxisID: 'y1', order: 1
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top', labels: { boxWidth: 10, font: { size: 10 } } },
+        tooltip: {
+          callbacks: {
+            label: function (c) {
+              if (c.dataset.type === 'line') return 'リセール継続率: ' + c.parsed.y + '%';
+              return '未成約数: ' + c.parsed.y + '件';
+            }
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { font: { size: 9 }, maxRotation: 60, minRotation: 30, autoSkip: false } },
+        y: { beginAtZero: true, position: 'left', ticks: { precision: 0, font: { size: 9 } }, title: { display: false } },
+        y1: {
+          beginAtZero: true, max: 100, position: 'right',
+          grid: { drawOnChartArea: false },
+          ticks: { font: { size: 9 }, callback: function (v) { return v + '%'; } }
+        }
+      }
+    }
+  });
+}
+
+function renderKpi(data) {
+  const total = data.length;
+  const contractRows = data.filter(function (r) { return r['STS'] === '成約'; });
+  const contract = contractRows.length;
+  const pax = contractRows.reduce(function (sum, r) { return sum + (Number(r['成約PAX']) || 0); }, 0);
+  const resaleAction = data.filter(function (r) { return r['リセール'] === '〇'; }).length;
+  const resaleProgress = data.filter(function (r) { return r['STS'] === 'リセール中'; }).length;
+  // リセール継続率 = リセールアクション数 ÷ 未成約件数（リセールをしない場合＝失注）。最重要KPI。
+  const resaleContinueRate = total > 0 ? (resaleAction / total) * 100 : 0;
+  const alertCount = data.filter(isAlertRow).length;
+
+  document.getElementById('kpi-total').textContent = total.toLocaleString();
+  document.getElementById('kpi-contract').textContent = contract.toLocaleString();
+  document.getElementById('kpi-pax').textContent = pax.toLocaleString();
+  document.getElementById('kpi-resale-action').textContent = resaleAction.toLocaleString();
+  document.getElementById('kpi-resale-progress').textContent = resaleProgress.toLocaleString();
+  document.getElementById('kpi-resale-rate').textContent = resaleContinueRate.toFixed(1) + '%';
+  document.getElementById('kpi-alert-count').textContent = alertCount.toLocaleString();
+}
+
+function renderChart1(data) {
+  const totalByMonth = MONTH_CODES.map(function (code) {
+    return data.filter(function (r) { return String(r['月']) === code; }).length;
+  });
+  const resaleActionByMonth = MONTH_CODES.map(function (code) {
+    return data.filter(function (r) { return String(r['月']) === code && r['リセール'] === '〇'; }).length;
+  });
+
+  const ctx = document.getElementById('chart1').getContext('2d');
+  if (myChart1) { myChart1.destroy(); }
+  myChart1 = new Chart(ctx, {
+    data: {
+      labels: MONTH_LABELS,
+      datasets: [
+        {
+          type: 'bar',
+          label: '未成約数',
+          data: totalByMonth,
+          backgroundColor: '#93c5fd',
+          yAxisID: 'y'
+        },
+        {
+          type: 'line',
+          label: 'リセール実施数',
+          data: resaleActionByMonth,
+          borderColor: '#4f46e5',
+          backgroundColor: '#4f46e5',
+          tension: 0.3,
+          yAxisID: 'y1'
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        y: { type: 'linear', position: 'left', beginAtZero: true, title: { display: true, text: '未成約数' } },
+        y1: { type: 'linear', position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: 'リセール実施数' } }
+      }
+    }
+  });
+}
+
+function renderChart2(data) {
+  const counts = {};
+  data.forEach(function (r) {
+    const reason = r['未成約理由(大)'] || '未設定';
+    counts[reason] = (counts[reason] || 0) + 1;
+  });
+  const labels = Object.keys(counts);
+  const values = labels.map(function (l) { return counts[l]; });
+  const total = values.reduce(function (a, b) { return a + b; }, 0);
+  const palette = ['#1d4ed8', '#3b82f6', '#60a5fa', '#93c5fd', '#f59e0b', '#fbbf24', '#10b981', '#34d399', '#ef4444', '#f87171', '#8b5cf6', '#a78bfa'];
+
+  const ctx = document.getElementById('chart2').getContext('2d');
+  if (myChart2) { myChart2.destroy(); }
+  myChart2 = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: labels,
+      datasets: [{ data: values, backgroundColor: labels.map(function (_, i) { return palette[i % palette.length]; }) }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            label: function (ctx) {
+              const v = ctx.parsed;
+              const pct = total > 0 ? ((v / total) * 100).toFixed(1) : '0.0';
+              return ctx.label + ': ' + v + '件 (' + pct + '%)';
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+function renderRankingTable(data) {
+  const shopList = metaMasters.shopList || [];
+  const rows = shopList.map(function (shopName) {
+    const shopRows = data.filter(function (r) { return r.__sheetName === shopName; });
+    const total = shopRows.length;
+    const resaleAction = shopRows.filter(function (r) { return r['リセール'] === '〇'; }).length;
+    const contractRows = shopRows.filter(function (r) { return r['STS'] === '成約'; });
+    const contract = contractRows.length;
+    const pax = contractRows.reduce(function (sum, r) { return sum + (Number(r['成約PAX']) || 0); }, 0);
+    const resaleRate = resaleAction > 0 ? (contract / resaleAction) * 100 : 0;
+    // リセール継続率：どの営業所がリセールをちゃんとやっているか（未成約のうちリセールしている割合）
+    const resaleContinueRate = total > 0 ? (resaleAction / total) * 100 : 0;
+    return { shopName: shopName, total: total, resaleAction: resaleAction, contract: contract, pax: pax, resaleRate: resaleRate, resaleContinueRate: resaleContinueRate };
+  });
+
+  const key = rankingSortState.key;
+  const dir = rankingSortState.dir === 'asc' ? 1 : -1;
+  rows.sort(function (a, b) {
+    if (typeof a[key] === 'string') return a[key].localeCompare(b[key]) * dir;
+    return (a[key] - b[key]) * dir;
+  });
+
+  const tbody = document.getElementById('ranking-tbody');
+  tbody.innerHTML = rows.map(function (r) {
+    return '<tr class="hover:bg-blue-50">' +
+      '<td class="px-3 py-2">' + escapeHtml(r.shopName) + '</td>' +
+      '<td class="px-3 py-2 text-right">' + r.total.toLocaleString() + '</td>' +
+      '<td class="px-3 py-2 text-right">' + r.resaleAction.toLocaleString() + '</td>' +
+      '<td class="px-3 py-2 text-right font-semibold text-indigo-700 bg-indigo-50">' + r.resaleContinueRate.toFixed(1) + '%</td>' +
+      '<td class="px-3 py-2 text-right">' + r.contract.toLocaleString() + '</td>' +
+      '<td class="px-3 py-2 text-right">' + r.pax.toLocaleString() + '</td>' +
+      '<td class="px-3 py-2 text-right">' + r.resaleRate.toFixed(1) + '%</td>' +
+      '</tr>';
+  }).join('');
+}
+
+// ============================================================================
+// タブ2: 個人別サマリー
+// ============================================================================
+function initEmployeeEvents() {
+  document.getElementById('emp-search').addEventListener('input', renderEmployeeTab);
+}
+
+// 直近2年（4半期）分のタブボタンを動的に生成する（例: 45期上期・45期下期・46期上期・46期下期）
+function renderEmpPeriodTabs() {
+  const container = document.getElementById('emp-period-tabs');
+  container.innerHTML = availablePeriods.map(function (p) {
+    const active = p.key === currentEmployeePeriod;
+    return '<button type="button" class="emp-toggle-btn px-4 py-2 rounded-lg text-sm font-semibold ' +
+      (active ? 'bg-blue-700 text-white' : 'bg-slate-100 text-slate-600') + '" data-period-key="' + escapeHtml(p.key) + '">' +
+      escapeHtml(p.label) + '</button>';
+  }).join('');
+  container.querySelectorAll('[data-period-key]').forEach(function (btn) {
+    btn.addEventListener('click', function () { selectEmployeePeriod(btn.dataset.periodKey); });
+  });
+}
+
+function selectEmployeePeriod(periodKey) {
+  currentEmployeePeriod = periodKey;
+  document.querySelectorAll('#emp-period-tabs [data-period-key]').forEach(function (btn) {
+    const active = btn.dataset.periodKey === periodKey;
+    btn.classList.toggle('bg-blue-700', active);
+    btn.classList.toggle('text-white', active);
+    btn.classList.toggle('bg-slate-100', !active);
+    btn.classList.toggle('text-slate-600', !active);
+  });
+  ensureEmployeeSummaryLoaded();
+}
+
+// 選択中の期のデータがキャッシュに無ければ取得してから描画する（初回ロード・タブ切替の両方で使う）
+function ensureEmployeeSummaryLoaded() {
+  if (!currentEmployeePeriod) return;
+  if (employeeSummaryCache[currentEmployeePeriod]) {
+    renderEmployeeTab();
+    return;
+  }
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false);
+      if (res && res.success) {
+        employeeSummaryCache[res.period.key] = res;
+        renderEmployeeTab();
+      } else {
+        showToast('個人別サマリの取得に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false);
+      showToast('通信エラー（getEmployeeSummary）: ' + err.message, 'error');
+    })
+    .getEmployeeSummary(currentEmployeePeriod);
+}
+
+function renderEmployeeTab() {
+  const cache = employeeSummaryCache[currentEmployeePeriod];
+  const thead = document.getElementById('employee-thead');
+  const tbody = document.getElementById('employee-tbody');
+  const emptyMsg = document.getElementById('employee-empty');
+
+  if (!cache) {
+    thead.innerHTML = '';
+    tbody.innerHTML = '';
+    return;
+  }
+
+  thead.innerHTML = '<tr>' +
+    '<th class="px-3 py-2 text-left">営業所名</th>' +
+    '<th class="px-3 py-2 text-left">社員名</th>' +
+    '<th class="px-3 py-2 text-right">未成約数</th>' +
+    '<th class="px-3 py-2 text-right">リセール数</th>' +
+    '<th class="px-3 py-2 text-right">リセール中</th>' +
+    '<th class="px-3 py-2 text-right bg-indigo-50 text-indigo-700" title="⭐継続率＝リセール継続率（リセール数÷未成約数）">⭐ 継続率</th>' +
+    '<th class="px-3 py-2 text-right">成約件数</th>' +
+    '<th class="px-3 py-2 text-right">PAX数</th>' +
+    '</tr>';
+
+  const keyword = document.getElementById('emp-search').value.trim().toLowerCase();
+  const employees = cache.employees.filter(function (e) {
+    if (!keyword) return true;
+    return String(e.employeeName).toLowerCase().indexOf(keyword) !== -1 ||
+      String(e.employeeNo).toLowerCase().indexOf(keyword) !== -1 ||
+      String(e.officeName).toLowerCase().indexOf(keyword) !== -1;
+  });
+
+  if (employees.length === 0) {
+    tbody.innerHTML = '';
+    emptyMsg.classList.remove('hidden');
+    return;
+  }
+  emptyMsg.classList.add('hidden');
+
+  tbody.innerHTML = employees.map(function (e) {
+    const s = e.stats;
+    const denom = Number(s['未成約数']) || 0;
+    const numer = Number(s['リセール数']) || 0;
+    const rate = denom > 0 ? (numer / denom) * 100 : 0;
+    return '<tr class="hover:bg-blue-50">' +
+      '<td class="px-3 py-2">' + escapeHtml(e.officeName) + '</td>' +
+      '<td class="px-3 py-2">' +
+        '<button type="button" class="text-blue-700 hover:underline font-semibold emp-detail-link" data-emp-no="' + escapeHtml(e.employeeNo) + '" data-emp-name="' + escapeHtml(e.employeeName) + '">' +
+          escapeHtml(e.employeeName) +
+        '</button>' +
+      '</td>' +
+      '<td class="px-3 py-2 text-right">' + denom + '</td>' +
+      '<td class="px-3 py-2 text-right">' + (s['リセール数'] || 0) + '</td>' +
+      '<td class="px-3 py-2 text-right">' + (s['リセール中'] || 0) + '</td>' +
+      '<td class="px-3 py-2 text-right bg-indigo-50/50 text-indigo-700 font-semibold">' + (denom > 0 ? rate.toFixed(1) + '%' : '－') + '</td>' +
+      '<td class="px-3 py-2 text-right">' + (s['成約件数'] || 0) + '</td>' +
+      '<td class="px-3 py-2 text-right">' + (s['PAX数'] || 0) + '</td>' +
+      '</tr>';
+  }).join('');
+
+  tbody.querySelectorAll('.emp-detail-link').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      openEmployeeDetailModal(btn.dataset.empNo, btn.dataset.empName);
+    });
+  });
+}
+
+// ============================================================================
+// 個人詳細ドリルダウン（都市コード別／未成約理由別の内訳）
+// ============================================================================
+function openEmployeeDetailModal(employeeNo, employeeName) {
+  // 期間（上期/下期）の縛りを受けず、全期間のデータから該当社員の行を横断的に抽出する
+  const rows = allDataCache.filter(function (r) {
+    return String(r['社員番号']) === String(employeeNo) && r['社員名'] === employeeName;
+  });
+
+  document.getElementById('employee-detail-name').textContent = employeeName;
+
+  const total = rows.length;
+  const resaleAction = rows.filter(function (r) { return r['リセール'] === '〇'; }).length;
+  const contract = rows.filter(function (r) { return r['STS'] === '成約'; }).length;
+  const continueRate = total > 0 ? (resaleAction / total) * 100 : 0;
+
+  const kpiHtml = [
+    { label: '未成約数', value: total.toLocaleString(), cls: 'bg-blue-50 text-blue-700' },
+    { label: 'リセール数', value: resaleAction.toLocaleString(), cls: 'bg-amber-50 text-amber-700' },
+    { label: '⭐ リセール継続率', value: continueRate.toFixed(1) + '%', cls: 'bg-indigo-50 text-indigo-700' },
+    { label: '成約件数', value: contract.toLocaleString(), cls: 'bg-emerald-50 text-emerald-700' }
+  ].map(function (k) {
+    return '<div class="rounded-lg p-3 text-center ' + k.cls + '"><p class="text-xs font-semibold opacity-80">' + k.label + '</p><p class="text-xl font-bold">' + k.value + '</p></div>';
+  }).join('');
+  document.getElementById('employee-detail-kpis').innerHTML = kpiHtml;
+
+  renderEmployeeDetailBreakdown('employee-detail-city-list', rows, '都市コード');
+  renderEmployeeDetailBreakdown('employee-detail-reason-list', rows, '未成約理由(大)');
+
+  openAdminModal('employee-detail-modal');
+}
+
+function renderEmployeeDetailBreakdown(containerId, rows, columnName) {
+  const counts = {};
+  rows.forEach(function (r) {
+    const key = r[columnName] || '未設定';
+    counts[key] = (counts[key] || 0) + 1;
+  });
+  const total = rows.length;
+  const entries = Object.keys(counts).map(function (k) { return { label: k, count: counts[k] }; })
+    .sort(function (a, b) { return b.count - a.count; });
+
+  const container = document.getElementById(containerId);
+  if (entries.length === 0) {
+    container.innerHTML = '<p class="text-slate-400">データがありません</p>';
+    return;
+  }
+  container.innerHTML = entries.map(function (e) {
+    const pct = total > 0 ? ((e.count / total) * 100).toFixed(1) : '0.0';
+    return '<div class="flex items-center gap-2">' +
+      '<span class="flex-1 truncate">' + escapeHtml(e.label) + '</span>' +
+      '<span class="w-24 bg-slate-100 rounded-full h-2 overflow-hidden"><span class="block h-2 bg-blue-500" style="width:' + pct + '%"></span></span>' +
+      '<span class="w-20 text-right text-slate-500">' + e.count + '件（' + pct + '%）</span>' +
+      '</div>';
+  }).join('');
+}
+
+// ============================================================================
+// タブ3: リセールリスト（CRUD）
+// ============================================================================
+function initDataManagerEvents() {
+  ['dm-filter-shop', 'dm-filter-month', 'dm-filter-sts', 'dm-filter-contact', 'dm-filter-purpose',
+    'dm-filter-employee', 'dm-filter-date-from', 'dm-filter-date-to', 'dm-filter-alert-only'].forEach(function (id) {
+    document.getElementById(id).addEventListener('change', function () {
+      // 店舗を選んだら、社員の選択肢もその店舗の人だけに絞る
+      if (id === 'dm-filter-shop') populateDmEmployeeSelect();
+      dmCurrentPage = 1;
+      renderDataManagerTab();
+    });
+  });
+  document.getElementById('btn-prev-page').addEventListener('click', function () {
+    if (dmCurrentPage > 1) { dmCurrentPage--; renderDataManagerGrid(); }
+  });
+  document.getElementById('btn-next-page').addEventListener('click', function () {
+    const maxPage = Math.max(1, Math.ceil(dmFilteredCache.length / PAGE_SIZE));
+    if (dmCurrentPage < maxPage) { dmCurrentPage++; renderDataManagerGrid(); }
+  });
+
+  document.getElementById('btn-save-resale').addEventListener('click', onSaveResaleChanges);
+  document.getElementById('btn-cancel-resale').addEventListener('click', onCancelResaleChanges);
+
+  // 未保存のまま画面を閉じようとしたときに警告する
+  window.addEventListener('beforeunload', function (ev) {
+    if (pendingResaleCount() === 0) return;
+    ev.preventDefault();
+    ev.returnValue = '';
+  });
+}
+
+/**
+ * リセールリストの「社員」絞り込みの選択肢を作り直す。
+ * 店舗が選ばれている場合は、その店舗に実績のある社員だけを並べる。
+ * （全店舗ぶんの名前が並ぶと、目的の人を探すのに時間がかかるため）
+ */
+function populateDmEmployeeSelect() {
+  const select = document.getElementById('dm-filter-employee');
+  if (!select) return;
+  const shop = document.getElementById('dm-filter-shop').value;
+  const keep = select.value;
+
+  // 店舗未選択のときは、マスタの全社員（従来どおり）
+  let names;
+  if (!shop) {
+    names = (metaMasters.employeeList || []).map(function (e) { return e.employeeName; });
+  } else {
+    names = allDataCache
+      .filter(function (r) { return r.__sheetName === shop; })
+      .map(function (r) { return r['社員名']; });
+  }
+  names = names
+    .filter(function (n, i, arr) { return n && arr.indexOf(n) === i; })
+    .sort(function (a, b) {
+      return dmCollator ? dmCollator.compare(String(a), String(b))
+                        : String(a).localeCompare(String(b), 'ja');
+    });
+
+  fillSelectWithBlank('dm-filter-employee', names);
+  // 絞り込み後も同じ社員が選べるなら選択を保つ
+  select.value = (keep && names.indexOf(keep) !== -1) ? keep : '';
+}
+
+function renderDataManagerTab() {
+  const shop = document.getElementById('dm-filter-shop').value;
+  const month = document.getElementById('dm-filter-month').value;
+  const sts = document.getElementById('dm-filter-sts').value;
+  const contact = document.getElementById('dm-filter-contact').value;
+  const purpose = document.getElementById('dm-filter-purpose').value;
+  const employee = document.getElementById('dm-filter-employee').value;
+  const dateFrom = document.getElementById('dm-filter-date-from').value.replace(/-/g, '');
+  const dateTo = document.getElementById('dm-filter-date-to').value.replace(/-/g, '');
+  const alertOnly = document.getElementById('dm-filter-alert-only').checked;
+
+  dmFilteredCache = allDataCache.filter(function (row) {
+    if (shop && row.__sheetName !== shop) return false;
+    if (month && String(row['月']) !== month) return false;
+    if (sts === '__blank__') {
+      if (row['STS']) return false;
+    } else if (sts && row['STS'] !== sts) {
+      return false;
+    }
+    if (contact && row['接客方法'] !== contact) return false;
+    if (purpose && row['旅行目的(小)'] !== purpose) return false;
+    if (employee && row['社員名'] !== employee) return false;
+    if (dateFrom && String(row['対象年月日']) < dateFrom) return false;
+    if (dateTo && String(row['対象年月日']) > dateTo) return false;
+    if (alertOnly && !isAlertRow(row)) return false;
+    return true;
+  });
+
+  sortDataManagerRows();
+  renderDataManagerGrid();
+}
+
+// 五十音順に並べるため、日本語を考慮した比較を行う（ブラウザの照合順序に任せる）
+const dmCollator = (typeof Intl !== 'undefined' && Intl.Collator)
+  ? new Intl.Collator('ja', { numeric: true, sensitivity: 'base' })
+  : null;
+
+/** 並べ替えに使う値を取り出す（空欄は常に最後になるよう扱う） */
+function dmSortValue(row, key) {
+  if (key === '店舗') return String(row.__sheetName || row['店舗'] || '');
+  const v = row[key];
+  return (v === null || v === undefined) ? '' : v;
+}
+
+function sortDataManagerRows() {
+  const key = dmSortState.key;
+  const dir = dmSortState.dir === 'asc' ? 1 : -1;
+  const numericKeys = { '成約PAX': true };
+
+  dmFilteredCache.sort(function (a, b) {
+    const va = dmSortValue(a, key);
+    const vb = dmSortValue(b, key);
+
+    // 空欄は並び順に関わらず末尾へ送る（未入力が上に来ると探しにくいため）
+    const aEmpty = String(va).trim() === '';
+    const bEmpty = String(vb).trim() === '';
+    if (aEmpty && bEmpty) return 0;
+    if (aEmpty) return 1;
+    if (bEmpty) return -1;
+
+    let cmp;
+    if (numericKeys[key]) {
+      cmp = (Number(va) || 0) - (Number(vb) || 0);
+    } else if (dmCollator) {
+      cmp = dmCollator.compare(String(va), String(vb));
+    } else {
+      cmp = String(va) < String(vb) ? -1 : (String(va) > String(vb) ? 1 : 0);
+    }
+    if (cmp !== 0) return cmp * dir;
+
+    // 同値のときは対象年月日の新しい順で安定させる
+    return String(dmSortValue(b, '対象年月日')).localeCompare(String(dmSortValue(a, '対象年月日')));
+  });
+}
+
+/** 見出しのクリックで並べ替えを切り替える */
+function initDataManagerSort() {
+  document.querySelectorAll('#tab-panel-data .dm-sortable').forEach(function (th) {
+    th.addEventListener('click', function () {
+      const key = th.dataset.sort;
+      if (dmSortState.key === key) {
+        dmSortState.dir = dmSortState.dir === 'asc' ? 'desc' : 'asc';
+      } else {
+        dmSortState.key = key;
+        // 日付は新しい順、それ以外は五十音・昇順から始めるのが自然
+        dmSortState.dir = (key === '対象年月日' || key === 'ACT日') ? 'desc' : 'asc';
+      }
+      dmCurrentPage = 1; // 並べ替えたら1ページ目に戻す
+      sortDataManagerRows();
+      renderDataManagerGrid();
+      renderDataManagerSortMarks();
+    });
+  });
+  renderDataManagerSortMarks();
+}
+
+/** 見出しに現在の並び順（▲▼）を表示する */
+function renderDataManagerSortMarks() {
+  document.querySelectorAll('#tab-panel-data .dm-sortable').forEach(function (th) {
+    const mark = th.querySelector('.sort-mark');
+    if (mark) mark.remove();
+    if (th.dataset.sort === dmSortState.key) {
+      const span = document.createElement('span');
+      span.className = 'sort-mark';
+      span.textContent = dmSortState.dir === 'asc' ? '▲' : '▼';
+      th.appendChild(span);
+    }
+  });
+}
+
+function renderDataManagerGrid() {
+  const tbody = document.getElementById('data-tbody');
+  const emptyMsg = document.getElementById('data-empty');
+  const maxPage = Math.max(1, Math.ceil(dmFilteredCache.length / PAGE_SIZE));
+  if (dmCurrentPage > maxPage) dmCurrentPage = maxPage;
+
+  const startIdx = (dmCurrentPage - 1) * PAGE_SIZE;
+  const pageRows = dmFilteredCache.slice(startIdx, startIdx + PAGE_SIZE);
+
+  document.getElementById('pagination-info').textContent =
+    dmFilteredCache.length === 0 ? '0 件' : (startIdx + 1) + ' - ' + Math.min(startIdx + PAGE_SIZE, dmFilteredCache.length) + ' 件 / 全 ' + dmFilteredCache.length + ' 件（' + dmCurrentPage + ' / ' + maxPage + ' ページ）';
+
+  if (pageRows.length === 0) {
+    tbody.innerHTML = '';
+    emptyMsg.classList.remove('hidden');
+    return;
+  }
+  emptyMsg.classList.add('hidden');
+
+  tbody.innerHTML = pageRows.map(function (row) {
+    const rid = row.__sheetName + '::' + row.__rowIndex;
+    const stsOptions = ['失注', '成約', 'リセール中'].map(function (s) {
+      return '<option value="' + s + '"' + (row['STS'] === s ? ' selected' : '') + '>' + s + '</option>';
+    }).join('');
+    const alert = isAlertRow(row);
+    const rowClass = (alert ? 'dm-alert-row hover:bg-rose-100 bg-rose-50' : 'hover:bg-blue-50');
+    const alertDays = alert ? daysSince(alertBasisDate(row)) : null;
+    const alertCell = alert
+      ? '<td class="px-2 py-2 text-center text-rose-600" title="相談日から' + alertDays + '日経過・ACT日が未入力です">🔔</td>'
+      : '<td class="px-2 py-2 text-center"></td>';
+
+    // 未保存のリセール変更があれば、保存前の状態ではなくその値を選択状態にする
+    const pendingResale = pendingResaleChanges[rid];
+    const resaleValue = (pendingResale !== undefined) ? pendingResale : (row['リセール'] || '');
+    const resaleOpts = ['〇', '✖'].map(function (s) {
+      return '<option value="' + s + '"' + (resaleValue === s ? ' selected' : '') + '>' + s + '</option>';
+    }).join('');
+    const resaleClass = 'resale-select border border-slate-300 rounded px-1 py-1 text-xs'
+      + (pendingResale !== undefined ? ' dm-resale-pending' : '');
+
+    // 列順：スタッフが毎日触る編集項目（リセール〜メモ）を左端にまとめ、
+    // 参照用のCSV由来項目をその右に並べる。
+    // リセール〜ACT日の4列は横スクロールしても隠れないよう固定する（dm-sticky）。
+    return '<tr class="' + rowClass + '" data-rid="' + rid + '">' +
+      '<td class="dm-sticky dm-sticky-1 px-2 py-1">' +
+        '<select class="' + resaleClass + '" data-sheet="' + escapeHtml(row.__sheetName) + '" data-row="' + row.__rowIndex + '" data-rid="' + escapeHtml(rid) + '">' +
+          '<option value="">－</option>' + resaleOpts +
+        '</select>' +
+      '</td>' +
+      '<td class="dm-sticky dm-sticky-2 px-2 py-1">' +
+        '<select class="sts-select border border-slate-300 rounded px-1 py-1 text-xs" data-sheet="' + escapeHtml(row.__sheetName) + '" data-row="' + row.__rowIndex + '">' +
+          '<option value="">－</option>' + stsOptions +
+        '</select>' +
+      '</td>' +
+      editableCellTd(row, '成約PAX', 'number', 'dm-sticky dm-sticky-3') +
+      editableCellTd(row, 'ACT日', 'date', 'dm-sticky dm-sticky-4') +
+      editableCellTd(row, 'ACT内容', 'text') +
+      longTextCellTd(row, '次回ACT・進捗★手入力') +
+      alertCell +
+      '<td class="px-3 py-2">' + escapeHtml(row.__sheetName) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(row['社員名']) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(row['対象年月日']) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(row['都市コード']) + '</td>' +
+      longTextCellTd(row, '詳細') +
+      '<td class="px-3 py-2">' + escapeHtml(row['未成約理由(大)']) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(row['種別']) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(row['旅行目的(小)']) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(row['接客方法']) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(row['出発年月']) + '</td>' +
+      '</tr>';
+  }).join('');
+
+  bindGridEditEvents();
+}
+
+function editableCellTd(row, columnName, type, extraClass) {
+  const val = row[columnName] !== undefined && row[columnName] !== null ? row[columnName] : '';
+  return '<td class="editable-cell px-3 py-2 ' + (extraClass || '') + '" data-column="' + escapeHtml(columnName) + '" data-type="' + type + '" data-sheet="' + escapeHtml(row.__sheetName) + '" data-row="' + row.__rowIndex + '">' +
+    '<span class="cell-display">' + escapeHtml(val) + '</span></td>';
+}
+
+// 表示だけを切り詰める文字数。長文が入ると右側の列がどんどん右へ押し出されるため、
+// 一覧では先頭だけを見せ、全文はカーソルを合わせたときにポップアップで表示する。
+const LONG_TEXT_PREVIEW_LENGTH = 20;
+
+/**
+ * 「メモ」「詳細」のような長文列のセル。
+ * ・表示は先頭20文字まで（続きがあれば「…」）
+ * ・カーソルを合わせると全文をポップアップ表示
+ * ・ダブルクリックで編集（どちらも編集可）
+ */
+function longTextCellTd(row, columnName) {
+  const raw = row[columnName] !== undefined && row[columnName] !== null ? String(row[columnName]) : '';
+  const oneLine = raw.replace(/\s+/g, ' ');
+  const preview = oneLine.length > LONG_TEXT_PREVIEW_LENGTH
+    ? oneLine.substring(0, LONG_TEXT_PREVIEW_LENGTH) + '…'
+    : oneLine;
+  return '<td class="editable-cell detail-cell px-3 py-2" data-detail="1"' +
+    ' data-column="' + escapeHtml(columnName) + '" data-type="text"' +
+    ' data-sheet="' + escapeHtml(row.__sheetName) + '" data-row="' + row.__rowIndex + '">' +
+    // 全文は data-full に持たせ、ポップアップと編集開始時にこちらを使う
+    '<span class="cell-display" data-full="' + escapeHtml(raw) + '">' + escapeHtml(preview) + '</span></td>';
+}
+
+// ============================================================================
+// リセールのまとめて保存
+// ----------------------------------------------------------------------------
+// リセール列だけは、選ぶたびに通信すると1行ごとに数秒待たされて次の入力ができない。
+// 変更を画面側にためておき、「まとめて保存する」で一括送信する。
+// ============================================================================
+
+/** リセールの変更を保存待ちに積む（元の値に戻した場合は保存待ちから外す） */
+function stageResaleChange(rid, sheetName, rowIndex, value) {
+  const row = dmFilteredCache.find(function (r) {
+    return r.__sheetName === sheetName && String(r.__rowIndex) === String(rowIndex);
+  });
+  const original = row ? (row['リセール'] || '') : '';
+
+  if (String(value || '') === String(original)) {
+    delete pendingResaleChanges[rid];   // 元の値に戻したので変更なし
+  } else {
+    pendingResaleChanges[rid] = { sheetName: sheetName, rowIndex: rowIndex, value: value };
+  }
+  renderResalePendingBar();
+}
+
+function pendingResaleCount() { return Object.keys(pendingResaleChanges).length; }
+
+/** 未保存の件数バーの表示を更新する */
+function renderResalePendingBar() {
+  const bar = document.getElementById('resale-pending-bar');
+  const countEl = document.getElementById('resale-pending-count');
+  if (!bar || !countEl) return;
+  const n = pendingResaleCount();
+  countEl.textContent = n;
+  bar.classList.toggle('hidden', n === 0);
+}
+
+/** 未保存の変更をすべて破棄して表示を元に戻す */
+function discardResaleChanges() {
+  pendingResaleChanges = {};
+  renderResalePendingBar();
+  renderDataManagerGrid();
+}
+
+function onCancelResaleChanges() {
+  if (pendingResaleCount() === 0) return;
+  if (!window.confirm('保存していないリセールの変更を取り消します。よろしいですか？')) return;
+  discardResaleChanges();
+  showToast('変更を取り消しました。', 'info');
+}
+
+/** ためていたリセールの変更を一括で保存する */
+function onSaveResaleChanges() {
+  const keys = Object.keys(pendingResaleChanges);
+  if (keys.length === 0) return;
+
+  const changes = keys.map(function (k) { return pendingResaleChanges[k]; });
+  const btn = document.getElementById('btn-save-resale');
+  btn.disabled = true;
+  showLoading(true);
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false);
+      btn.disabled = false;
+      if (!res || !res.success) {
+        showToast('保存に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+        return;
+      }
+      (res.updatedRows || []).forEach(applyUpdatedRowToCache);
+
+      // 保存できた行だけ保存待ちから外す（失敗した行は残して、もう一度保存できるようにする）
+      const failedRids = {};
+      (res.failures || []).forEach(function (f) { failedRids[f.sheetName + '::' + f.rowIndex] = true; });
+      keys.forEach(function (k) { if (!failedRids[k]) delete pendingResaleChanges[k]; });
+
+      renderResalePendingBar();
+      renderKpi(getDashboardFilteredData());
+      renderRankingTable(getDashboardFilteredData());
+      renderDataManagerGrid();
+
+      if (res.failures && res.failures.length > 0) {
+        showToast(res.updatedCount + '件を保存しましたが、' + res.failures.length +
+          '件は保存できませんでした：' + res.failures[0].error, 'error');
+      } else {
+        showToast('リセールを' + res.updatedCount + '件保存しました。', 'success');
+      }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false);
+      btn.disabled = false;
+      showToast('通信エラー（updateResaleValues）: ' + err.message, 'error');
+    })
+    .updateResaleValues(changes);
+}
+
+function bindGridEditEvents() {
+  // リセール：その場では保存せず、変更をためて「まとめて保存する」で一括送信する。
+  // 1件ずつ通信すると1行あたり数秒待たされ、続けて入力できないため。
+  document.querySelectorAll('.resale-select').forEach(function (sel) {
+    sel.addEventListener('change', function () {
+      stageResaleChange(sel.dataset.rid, sel.dataset.sheet, sel.dataset.row, sel.value);
+      sel.classList.toggle('dm-resale-pending', pendingResaleChanges[sel.dataset.rid] !== undefined);
+    });
+  });
+
+  // STS：常時表示のセレクトボックスで即時更新
+  document.querySelectorAll('.sts-select').forEach(function (sel) {
+    sel.addEventListener('change', function () {
+      const sheetName = sel.dataset.sheet;
+      const rowIndex = sel.dataset.row;
+      const newStatus = sel.value;
+      // 空欄（－）は「未対応に戻す」操作。選び間違えたときに取り消せるようにする。
+
+      let contractPax = '';
+      if (newStatus === '成約') {
+        const row = dmFilteredCache.find(function (r) { return r.__sheetName === sheetName && String(r.__rowIndex) === String(rowIndex); });
+        contractPax = row ? row['成約PAX'] : '';
+        contractPax = window.prompt('成約PAX数を入力してください', contractPax || 0);
+        if (contractPax === null) { renderDataManagerGrid(); return; }
+      }
+
+      callUpdateStatus(sheetName, rowIndex, newStatus, contractPax);
+    });
+  });
+
+  // 「メモ」「詳細」列：カーソルを合わせると全文をポップアップ表示（一覧では20文字まで）
+  document.querySelectorAll('[data-detail="1"]').forEach(function (td) {
+    td.addEventListener('mouseenter', function () {
+      if (td.querySelector('textarea, input')) return; // 編集中は出さない
+      const span = td.querySelector('.cell-display');
+      const text = span.dataset.full || span.textContent;
+      if (!text) return;
+      showDetailTooltip(td, text);
+    });
+    td.addEventListener('mouseleave', hideDetailTooltip);
+  });
+
+  // テキストセル（成約PAX／詳細／ACT日／ACT内容／備考／進捗メモ）：ダブルクリックでインライン編集
+  document.querySelectorAll('.editable-cell').forEach(function (td) {
+    td.addEventListener('dblclick', function () {
+      if (td.querySelector('input, textarea')) return;
+      hideDetailTooltip();
+      const span = td.querySelector('.cell-display');
+      // 長文列は表示を切り詰めているため、編集には全文（data-full）を使う
+      const currentVal = span.dataset.full !== undefined ? span.dataset.full : span.textContent;
+      const type = td.dataset.type;
+      const columnName = td.dataset.column;
+      const isMultiline = MULTILINE_COLUMNS.indexOf(columnName) !== -1;
+
+      // ACT日はカレンダーから選べるようにする（絞り込み検索の日付欄と同じ操作感）。
+      // ただし既存の値が日付として読み取れない場合は、消えてしまわないよう文字入力にする。
+      const dateValue = type === 'date' ? toDateInputValue(currentVal) : '';
+      const useDatePicker = type === 'date' && (currentVal === '' || dateValue !== '');
+
+      const input = document.createElement(isMultiline ? 'textarea' : 'input');
+      if (isMultiline) {
+        input.rows = 3;
+      } else if (useDatePicker) {
+        input.type = 'date';
+      } else {
+        input.type = type === 'number' ? 'number' : 'text';
+      }
+      input.value = useDatePicker ? dateValue : currentVal;
+      input.className = 'w-full border border-blue-400 rounded px-1 py-0.5 text-sm';
+
+      td.innerHTML = '';
+      td.appendChild(input);
+      input.focus();
+      input.select();
+
+      const commit = function () {
+        const newVal = input.value;
+        const sheetName = td.dataset.sheet;
+        const rowIndex = td.dataset.row;
+        const columnName = td.dataset.column;
+
+        if (columnName === '成約PAX') {
+          const row = dmFilteredCache.find(function (r) { return r.__sheetName === sheetName && String(r.__rowIndex) === String(rowIndex); });
+          const currentSts = row ? row['STS'] : '';
+          if (currentSts !== '成約') {
+            showToast('成約PAXはSTSが「成約」の行のみ編集できます。', 'error');
+            renderDataManagerGrid();
+            return;
+          }
+          callUpdateStatus(sheetName, rowIndex, '成約', newVal);
+        } else {
+          callUpdateCellValue(sheetName, rowIndex, columnName, newVal);
+        }
+      };
+
+      input.addEventListener('blur', commit);
+      // カレンダーで日付を選んだ時点で確定させる（別のセルをクリックしなくても保存される）
+      if (useDatePicker) {
+        input.addEventListener('change', function () { input.blur(); });
+      }
+      input.addEventListener('keydown', function (ev) {
+        // 複数行入力（textarea）ではEnterは改行として使うため、Ctrl/Cmd+Enterのみ確定とする
+        if (ev.key === 'Enter' && (!isMultiline || ev.ctrlKey || ev.metaKey)) { input.blur(); }
+        if (ev.key === 'Escape') { input.removeEventListener('blur', commit); renderDataManagerGrid(); }
+      });
+    });
+  });
+}
+
+// ============================================================================
+// 「詳細」列ホバーポップアップ
+// ============================================================================
+function showDetailTooltip(targetEl, text) {
+  const tooltip = document.getElementById('detail-tooltip');
+  tooltip.textContent = text;
+  tooltip.classList.remove('hidden');
+
+  const rect = targetEl.getBoundingClientRect();
+  const tooltipWidth = 384; // max-w-md相当
+  let left = rect.left;
+  if (left + tooltipWidth > window.innerWidth - 16) {
+    left = Math.max(16, window.innerWidth - tooltipWidth - 16);
+  }
+  tooltip.style.left = left + 'px';
+  tooltip.style.top = (rect.bottom + 6) + 'px';
+}
+
+function hideDetailTooltip() {
+  document.getElementById('detail-tooltip').classList.add('hidden');
+}
+
+function callUpdateStatus(sheetName, rowIndex, newStatus, contractPax) {
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false);
+      if (res && res.success) {
+        applyUpdatedRowToCache(res.data);
+        showToast(newStatus
+          ? 'ステータスを更新しました（' + newStatus + '）'
+          : 'ステータスを未対応に戻しました', 'success');
+        renderKpi(getDashboardFilteredData());
+        renderRankingTable(getDashboardFilteredData());
+        renderDataManagerGrid();
+      } else {
+        showToast('更新に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+        renderDataManagerGrid();
+      }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false);
+      showToast('通信エラー（updateStatus）: ' + err.message, 'error');
+      renderDataManagerGrid();
+    })
+    .updateStatus(sheetName, rowIndex, newStatus, contractPax);
+}
+
+function callUpdateCellValue(sheetName, rowIndex, columnName, value) {
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (res && res.success) {
+        applyUpdatedRowToCache(res.data);
+        showToast('「' + columnName + '」を更新しました', 'success');
+      } else {
+        showToast('更新に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+      renderDataManagerGrid();
+    })
+    .withFailureHandler(function (err) {
+      showToast('通信エラー（updateCellValue）: ' + err.message, 'error');
+      renderDataManagerGrid();
+    })
+    .updateCellValue(sheetName, rowIndex, columnName, value);
+}
+
+function applyUpdatedRowToCache(updatedRow) {
+  const idx = allDataCache.findIndex(function (r) {
+    return r.__sheetName === updatedRow.__sheetName && String(r.__rowIndex) === String(updatedRow.__rowIndex);
+  });
+  if (idx !== -1) {
+    allDataCache[idx] = updatedRow;
+  }
+  const dmIdx = dmFilteredCache.findIndex(function (r) {
+    return r.__sheetName === updatedRow.__sheetName && String(r.__rowIndex) === String(updatedRow.__rowIndex);
+  });
+  if (dmIdx !== -1) {
+    dmFilteredCache[dmIdx] = updatedRow;
+  }
+}
+
+// ============================================================================
+// 新規相談登録モーダル
+// ============================================================================
+function initModalEvents() {
+  document.getElementById('btn-open-modal').addEventListener('click', openModal);
+  document.getElementById('btn-close-modal').addEventListener('click', closeModal);
+  document.getElementById('btn-cancel-modal').addEventListener('click', closeModal);
+  document.getElementById('register-form').addEventListener('submit', onSubmitRegisterForm);
+}
+
+function openModal() {
+  document.getElementById('register-modal').classList.remove('hidden');
+  document.getElementById('register-modal').classList.add('flex');
+}
+
+function closeModal() {
+  document.getElementById('register-modal').classList.add('hidden');
+  document.getElementById('register-modal').classList.remove('flex');
+  document.getElementById('register-form').reset();
+}
+
+function onSubmitRegisterForm(ev) {
+  ev.preventDefault();
+  const form = ev.target;
+  const formData = new FormData(form);
+
+  const rowObject = { sheetName: formData.get('sheetName') };
+  ['リセール', 'STS', '成約PAX', '営業所コード', '社員番号', '社員名', '未成約理由(大)', '都市コード', '種別',
+    '旅行目的(小)', '接客方法', 'HIS利用歴', '詳細', 'ACT日', 'ACT内容', '備考', '予約番号'].forEach(function (key) {
+    rowObject[key] = formData.get(key) || '';
+  });
+
+  const dateVal = formData.get('対象年月日');
+  rowObject['対象年月日'] = dateVal ? dateVal.replace(/-/g, '') : '';
+
+  const monthVal = formData.get('出発年月_month');
+  rowObject['出発年月'] = monthVal ? monthVal.replace('-', '') : '';
+
+  if (!rowObject.sheetName || !rowObject['対象年月日']) {
+    showToast('店舗名と対象年月日は必須です。', 'error');
+    return;
+  }
+
+  const submitBtn = document.getElementById('btn-submit-modal');
+  submitBtn.disabled = true;
+  showLoading(true);
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false);
+      submitBtn.disabled = false;
+      if (res && res.success) {
+        showToast('新規相談を登録しました。', 'success');
+        closeModal();
+        loadAllData();
+      } else {
+        showToast('登録に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false);
+      submitBtn.disabled = false;
+      showToast('通信エラー（addUncontractedData）: ' + err.message, 'error');
+    })
+    .addUncontractedData(rowObject);
+}
+
+// ============================================================================
+// CSV一括インポート（営業日報からの抽出データ投入）
+// ============================================================================
+let selectedCsvFile = null;
+
+function initCsvImportEvents() {
+  document.getElementById('btn-open-csv-modal').addEventListener('click', openCsvModal);
+  document.getElementById('btn-close-csv-modal').addEventListener('click', closeCsvModal);
+  document.getElementById('btn-cancel-csv-modal').addEventListener('click', closeCsvModal);
+
+  document.getElementById('csv-file-input').addEventListener('change', function (ev) {
+    selectedCsvFile = ev.target.files && ev.target.files[0] ? ev.target.files[0] : null;
+    document.getElementById('btn-submit-csv').disabled = !selectedCsvFile;
+    document.getElementById('csv-import-result').classList.add('hidden');
+    previewSelectedCsv();
+  });
+
+  document.getElementById('btn-submit-csv').addEventListener('click', onSubmitCsvImport);
+}
+
+function openCsvModal() {
+  document.getElementById('csv-import-modal').classList.remove('hidden');
+  document.getElementById('csv-import-modal').classList.add('flex');
+}
+
+function closeCsvModal() {
+  document.getElementById('csv-import-modal').classList.add('hidden');
+  document.getElementById('csv-import-modal').classList.remove('flex');
+  document.getElementById('csv-file-input').value = '';
+  document.getElementById('csv-import-result').classList.add('hidden');
+  document.getElementById('btn-submit-csv').disabled = true;
+  document.getElementById('csv-file-summary').classList.add('hidden');
+  if (csvProgressTimer) { clearInterval(csvProgressTimer); csvProgressTimer = null; }
+  document.getElementById('csv-progress').classList.add('hidden');
+  csvEstimatedRows = 0;
+  selectedCsvFile = null;
+}
+
+// 拡張子ではなくファイルの中身の先頭バイトを見て、Excelのブック形式かどうかを判定する。
+// 営業日報の抽出ファイルは拡張子が .xls でも中身はタブ区切りテキストという場合があるため、
+// 「拡張子が .xls だから駄目」ではなく「中身がバイナリだから駄目」と判断する必要がある。
+function detectBinaryWorkbook(buffer) {
+  const bytes = new Uint8Array(buffer);
+  if (bytes.length >= 4 &&
+      bytes[0] === 0x50 && bytes[1] === 0x4B &&
+      (bytes[2] === 0x03 || bytes[2] === 0x05 || bytes[2] === 0x07)) {
+    return '.xlsx';
+  }
+  // .xls（OLE2複合ドキュメント）のシグネチャ
+  if (bytes.length >= 8 &&
+      bytes[0] === 0xD0 && bytes[1] === 0xCF && bytes[2] === 0x11 && bytes[3] === 0xE0) {
+    return '.xls';
+  }
+  return null;
+}
+
+/** ArrayBufferをBase64文字列にする（Excelブックをサーバーへ送るため） */
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunk = 0x8000; // 一度に渡す量が多すぎると環境によっては失敗するため分割する
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+// 選択されたファイルを読み込み、取り込み方法を判定する。
+// ・Excelのブック（.xls / .xlsx）→ Base64のまま送り、サーバー側でスプレッドシートに変換する
+// ・テキスト（CSV/TSV）→ UTF-8で厳密デコードし、失敗した場合はShift_JISで読み直す
+function readImportFile(file) {
+  return file.arrayBuffer().then(function (buffer) {
+    const workbookType = detectBinaryWorkbook(buffer);
+    if (workbookType) {
+      return {
+        kind: 'workbook',
+        extension: workbookType,
+        base64: arrayBufferToBase64(buffer),
+        fileName: file.name,
+        mimeType: file.type || (workbookType === '.xlsx'
+          ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+          : 'application/vnd.ms-excel')
+      };
+    }
+    let text;
+    try {
+      text = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+    } catch (e) {
+      text = new TextDecoder('shift_jis').decode(buffer);
+    }
+    return { kind: 'text', text: text };
+  });
+}
+
+// ---- 取り込みの進行状況表示 -------------------------------------------------
+// サーバー側の処理は1回の呼び出しで完結するため、途中経過は取得できない。
+// そのため「何件を処理中か」「何秒経ったか」を示し、止まっていないことが分かるようにする。
+let csvProgressTimer = null;
+let csvEstimatedRows = 0;
+
+/** 選択されたファイルの行数を先に数えて表示する（取り込み前の確認用） */
+function previewSelectedCsv() {
+  const box = document.getElementById('csv-file-summary');
+  csvEstimatedRows = 0;
+  if (!selectedCsvFile) { box.classList.add('hidden'); return; }
+
+  box.classList.remove('hidden');
+  box.textContent = 'ファイルを確認しています…';
+  readImportFile(selectedCsvFile).then(function (payload) {
+    const sizeKb = Math.max(1, Math.round(selectedCsvFile.size / 1024));
+
+    if (payload.kind === 'workbook') {
+      // Excelブックは中身を開かないと行数が分からないため、件数は取り込み時に判明する
+      box.textContent = selectedCsvFile.name + '（' + sizeKb + 'KB）：Excelブック（' + payload.extension + '）です。'
+        + '取り込み時にスプレッドシート形式へ自動変換します。CSVに変換しておく必要はありません。';
+      return;
+    }
+
+    // ヘッダー行を含む、内容のある行を数える（正確な件数はサーバー側で判定される）
+    const lines = payload.text.split(/\r\n|\r|\n/).filter(function (l) { return l.trim() !== ''; });
+    let headerIdx = -1;
+    for (let i = 0; i < lines.length && i < 100; i++) {
+      if (lines[i].indexOf('対象年月日') !== -1) { headerIdx = i; break; }
+    }
+    csvEstimatedRows = headerIdx === -1 ? 0 : lines.length - headerIdx - 1;
+    box.textContent = headerIdx === -1
+      ? selectedCsvFile.name + '（' + sizeKb + 'KB）：見出し行が見つかりませんでした。取り込むと詳しい理由が表示されます。'
+      : selectedCsvFile.name + '（' + sizeKb + 'KB）：データ ' + csvEstimatedRows + ' 行を検出しました。'
+        + 'このうち、取り込み済みと重なる行は自動でスキップされます。';
+  }).catch(function (err) {
+    box.textContent = '確認できませんでした：' + err.message;
+  });
+}
+
+function startCsvProgress() {
+  const wrap = document.getElementById('csv-progress');
+  const bar = document.getElementById('csv-progress-bar');
+  const label = document.getElementById('csv-progress-label');
+  const time = document.getElementById('csv-progress-time');
+  wrap.classList.remove('hidden');
+  label.textContent = csvEstimatedRows > 0
+    ? csvEstimatedRows + ' 行を取り込んでいます…'
+    : '取り込んでいます…';
+
+  // 経過時間の目安（1000行あたり約10秒）。あくまで目安なので95%で頭打ちにする
+  const estimatedSec = Math.max(5, Math.ceil((csvEstimatedRows || 200) / 100));
+  const startedAt = Date.now();
+  bar.style.width = '2%';
+  time.textContent = '0秒';
+
+  csvProgressTimer = setInterval(function () {
+    const elapsed = (Date.now() - startedAt) / 1000;
+    time.textContent = Math.floor(elapsed) + '秒';
+    const ratio = Math.min(0.95, elapsed / estimatedSec);
+    bar.style.width = Math.round(ratio * 100) + '%';
+    if (elapsed > estimatedSec) {
+      label.textContent = '取り込んでいます…（件数が多いため時間がかかっています）';
+    }
+  }, 250);
+}
+
+function finishCsvProgress() {
+  if (csvProgressTimer) { clearInterval(csvProgressTimer); csvProgressTimer = null; }
+  const bar = document.getElementById('csv-progress-bar');
+  bar.style.width = '100%';
+  setTimeout(function () {
+    document.getElementById('csv-progress').classList.add('hidden');
+    bar.style.width = '0%';
+  }, 600);
+}
+
+function onSubmitCsvImport() {
+  if (!selectedCsvFile) return;
+  const submitBtn = document.getElementById('btn-submit-csv');
+  submitBtn.disabled = true;
+  document.getElementById('csv-import-result').classList.add('hidden');
+  startCsvProgress();
+  showLoading(true);
+
+  readImportFile(selectedCsvFile).then(function (payload) {
+    const runner = google.script.run
+      .withSuccessHandler(function (res) {
+        showLoading(false);
+        finishCsvProgress();
+        submitBtn.disabled = false;
+        renderCsvImportResult(res);
+        if (res && res.success) {
+          if (res.importedCount > 0) {
+            showToast(res.importedCount + '件のデータを取り込みました。', 'success');
+            loadAllData();
+          } else {
+            showToast('取り込める新規データがありませんでした。', 'info');
+          }
+        } else {
+          showToast('CSVの取り込みに失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+        }
+      })
+      .withFailureHandler(function (err) {
+        showLoading(false);
+        finishCsvProgress();
+        submitBtn.disabled = false;
+        renderCsvImportResult({ success: false, error: '通信エラーが発生しました：' + err.message });
+        showToast('通信エラー（CSVインポート）: ' + err.message, 'error');
+      });
+
+    // Excelブックはサーバー側でスプレッドシートに変換してから取り込む
+    if (payload.kind === 'workbook') {
+      // google.script.run は、サーバー側（Code.gs）に実在する関数だけを持つ。
+      // 画面側だけ新しくてCode.gsが古いと、ここで「is not a function」になるため、
+      // 原因が分かる案内に置き換える。
+      if (typeof runner.importUncontractedWorkbook !== 'function') {
+        showLoading(false);
+        finishCsvProgress();
+        submitBtn.disabled = false;
+        renderCsvImportResult({
+          success: false,
+          error: 'Excelブックの取り込み機能が、サーバー側（Code.gs）に見つかりません。\n' +
+            '画面のファイルだけが新しく、Code.gs が古いままの可能性があります。\n' +
+            '次の順にご確認ください。\n' +
+            '1. Apps Scriptの「Code.gs」を最新のものに貼り替えて保存する\n' +
+            '2. 「デプロイを管理」→ 鉛筆マーク → バージョンで「新バージョン」を選んでデプロイする\n' +
+            '（保存しただけでは、公開中の画面には反映されません）\n' +
+            'お急ぎの場合は、Excelで「CSV UTF-8（コンマ区切り）」として保存し直したファイルをお使いください。'
+        });
+        showToast('サーバー側の更新が必要です。詳しくは画面の説明をご覧ください。', 'error');
+        return;
+      }
+      runner.importUncontractedWorkbook(payload.base64, payload.fileName, payload.mimeType);
+    } else {
+      runner.importUncontractedCsv(payload.text);
+    }
+  }).catch(function (err) {
+    showLoading(false);
+    finishCsvProgress();
+    submitBtn.disabled = false;
+    // 対処手順を含む複数行のメッセージになるため、消えるトーストではなく結果欄に残す
+    renderCsvImportResult({ success: false, error: err.message });
+    showToast('ファイルを読み込めませんでした。詳しくは画面の説明をご覧ください。', 'error');
+  });
+}
+
+function renderCsvImportResult(res) {
+  const box = document.getElementById('csv-import-result');
+  box.classList.remove('hidden');
+
+  if (!res || !res.success) {
+    // エラー文は複数行で手順を案内することがあるため、改行をそのまま表示する
+    let html = '<p class="text-red-600 font-semibold">取り込みに失敗しました</p>' +
+      '<p class="text-red-500 whitespace-pre-line">' + escapeHtml(res ? res.error : '不明なエラー') + '</p>';
+    if (res && res.detail) {
+      html += '<details class="mt-2"><summary class="text-xs text-slate-400 cursor-pointer">技術的な詳細</summary>' +
+        '<pre class="text-xs text-slate-400 whitespace-pre-wrap mt-1">' + escapeHtml(res.detail) + '</pre></details>';
+    }
+    box.innerHTML = html;
+    return;
+  }
+
+  let html = '<p class="text-emerald-700 font-semibold">取り込み結果</p>';
+  html += '<p>取込件数：<b>' + res.importedCount + '</b> 件</p>';
+  html += '<p>重複スキップ：' + res.skippedDuplicateCount + ' 件</p>';
+  if (res.skippedBlankCount) html += '<p>対象年月日／営業所コード未入力によるスキップ：' + res.skippedBlankCount + ' 件</p>';
+  if (res.autoRegisteredStaffCount) {
+    html += '<p class="text-blue-600">スタッフマスタへ自動登録：<b>' + res.autoRegisteredStaffCount + '</b> 名</p>';
+  }
+  if (res.autoRegisteredShopCodes && res.autoRegisteredShopCodes.length) {
+    html += '<p class="text-amber-600">未登録の営業所コードを仮店舗名で自動登録：' +
+      res.autoRegisteredShopCodes.map(escapeHtml).join(', ') +
+      '（「店舗・スタッフ管理」で正式名称に変更してください）</p>';
+  }
+  if (res.perSheetCounts && Object.keys(res.perSheetCounts).length) {
+    html += '<p class="mt-1 text-slate-500">内訳：' + Object.keys(res.perSheetCounts).map(function (k) {
+      return escapeHtml(k) + ' ' + res.perSheetCounts[k] + '件';
+    }).join(' / ') + '</p>';
+  }
+  box.innerHTML = html;
+}
+
+// ============================================================================
+// 店舗・スタッフ管理
+// ============================================================================
+let shopMasterCache = [];
+let staffMasterCache = [];
+
+function initAdminEvents() {
+  document.querySelectorAll('[data-close-modal]').forEach(function (btn) {
+    btn.addEventListener('click', function () { closeAdminModal(btn.dataset.closeModal); });
+  });
+
+  document.getElementById('btn-open-shop-modal').addEventListener('click', function () { openShopModal('add'); });
+  document.getElementById('shop-form').addEventListener('submit', onSubmitShopForm);
+
+  document.getElementById('btn-open-staff-modal').addEventListener('click', function () { openStaffModal('add'); });
+  document.getElementById('staff-form').addEventListener('submit', onSubmitStaffForm);
+
+  document.getElementById('btn-check-duplicates').addEventListener('click', function () { runDuplicateCleanup(true); });
+  document.getElementById('btn-remove-duplicates').addEventListener('click', function () { runDuplicateCleanup(false); });
+  document.getElementById('btn-clear-all-data').addEventListener('click', onClearAllImportedData);
+  document.getElementById('btn-merge-placeholders').addEventListener('click', onMergePlaceholderShops);
+}
+
+/** 「未設定(店番)」の仮店舗を、同じ店番の正式な店舗へ統合する */
+function onMergePlaceholderShops() {
+  const box = document.getElementById('merge-result');
+  const btn = document.getElementById('btn-merge-placeholders');
+  if (!window.confirm('「未設定(店番)」の店舗を、同じ店番の正式な店舗へまとめます。\nよろしいですか？')) return;
+
+  btn.disabled = true;
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false);
+      btn.disabled = false;
+      box.classList.remove('hidden');
+      if (!res || !res.success) {
+        box.className = 'text-xs mt-2 text-red-600';
+        box.textContent = '失敗しました：' + (res ? res.error : '不明なエラー');
+        return;
+      }
+      const renamed = res.renamedCount || 0;
+      if (res.mergedCount === 0 && renamed === 0) {
+        box.className = 'text-xs mt-2 text-slate-500';
+        box.textContent = '直す対象の「未設定」店舗はありませんでした。';
+        return;
+      }
+      const messages = [];
+      if (renamed > 0) {
+        messages.push(renamed + '件の店舗名を復元しました（' + res.renamedDetails.join(' / ') + '）。');
+      }
+      if (res.mergedCount > 0) {
+        messages.push(res.mergedCount + '件の店舗をまとめ、' + res.movedRowCount +
+          '件のデータを移しました（' + res.details.join(' / ') + '）。');
+      }
+      box.className = 'text-xs mt-2 text-emerald-700';
+      box.textContent = messages.join(' ');
+      loadAllData();
+      loadAdminData();
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false);
+      btn.disabled = false;
+      box.classList.remove('hidden');
+      box.className = 'text-xs mt-2 text-red-600';
+      box.textContent = '通信エラー：' + err.message;
+    })
+    .mergePlaceholderShops();
+}
+
+// ---- 取り込み済みデータの整理 -----------------------------------------------
+
+/** @param {boolean} dryRun trueなら件数を数えるだけ */
+function runDuplicateCleanup(dryRun) {
+  const box = document.getElementById('duplicate-result');
+  const buttons = ['btn-check-duplicates', 'btn-remove-duplicates'].map(function (id) { return document.getElementById(id); });
+
+  if (!dryRun && !window.confirm('重複した行を削除します。よろしいですか？\n（スタッフが入力した内容がある行は残ります）')) return;
+
+  buttons.forEach(function (b) { b.disabled = true; });
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false);
+      buttons.forEach(function (b) { b.disabled = false; });
+      box.classList.remove('hidden');
+      if (!res || !res.success) {
+        box.className = 'text-xs mt-2 text-red-600';
+        box.textContent = '失敗しました：' + (res ? res.error : '不明なエラー');
+        return;
+      }
+      if (res.removedCount === 0) {
+        box.className = 'text-xs mt-2 text-slate-500';
+        box.textContent = '重複した行はありませんでした。';
+        return;
+      }
+      const breakdown = Object.keys(res.perSheetCounts).map(function (k) {
+        return k + ' ' + res.perSheetCounts[k] + '件';
+      }).join(' / ');
+      if (res.dryRun) {
+        box.className = 'text-xs mt-2 text-amber-700';
+        box.textContent = '重複が ' + res.removedCount + ' 件見つかりました（内訳：' + breakdown +
+          '）。「重複を削除する」を押すと削除されます。';
+      } else {
+        box.className = 'text-xs mt-2 text-emerald-700';
+        box.textContent = res.removedCount + ' 件の重複を削除しました（内訳：' + breakdown + '）。';
+        loadAllData();
+      }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false);
+      buttons.forEach(function (b) { b.disabled = false; });
+      box.classList.remove('hidden');
+      box.className = 'text-xs mt-2 text-red-600';
+      box.textContent = '通信エラー：' + err.message;
+    })
+    .removeDuplicateRows(dryRun);
+}
+
+function onClearAllImportedData() {
+  const input = document.getElementById('clear-confirm-input');
+  const box = document.getElementById('clear-result');
+  const btn = document.getElementById('btn-clear-all-data');
+  const confirmText = input.value.trim();
+
+  box.classList.remove('hidden');
+  if (confirmText !== '削除') {
+    box.className = 'text-xs mt-2 text-red-600';
+    box.textContent = '確認のため、左の欄に「削除」と入力してください。';
+    return;
+  }
+  if (!window.confirm('全店舗の取り込み済みデータを削除します。\nスタッフが入力した内容も消え、元に戻せません。\n本当に実行しますか？')) return;
+
+  btn.disabled = true;
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false);
+      btn.disabled = false;
+      input.value = '';
+      if (res && res.success) {
+        box.className = 'text-xs mt-2 text-emerald-700';
+        box.textContent = res.clearedCount + ' 行を削除しました。CSVを入れ直せます。';
+        loadAllData();
+      } else {
+        box.className = 'text-xs mt-2 text-red-600';
+        box.textContent = '失敗しました：' + (res ? res.error : '不明なエラー');
+      }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false);
+      btn.disabled = false;
+      box.className = 'text-xs mt-2 text-red-600';
+      box.textContent = '通信エラー：' + err.message;
+    })
+    .clearAllImportedData(confirmText);
+}
+
+function openAdminModal(id) {
+  document.getElementById(id).classList.remove('hidden');
+  document.getElementById(id).classList.add('flex');
+}
+function closeAdminModal(id) {
+  document.getElementById(id).classList.add('hidden');
+  document.getElementById(id).classList.remove('flex');
+}
+
+function loadAdminData() {
+  showLoading(true);
+  let doneCount = 0;
+  const onEachDone = function () {
+    doneCount++;
+    if (doneCount >= 2) showLoading(false);
+  };
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (res && res.success) {
+        shopMasterCache = res.shops;
+        renderShopMasterTable();
+        populateStaffShopSelect();
+      } else {
+        showToast('店舗マスタの取得に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+      onEachDone();
+    })
+    .withFailureHandler(function (err) {
+      showToast('通信エラー（getShopMasterList）: ' + err.message, 'error');
+      onEachDone();
+    })
+    .getShopMasterList();
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (res && res.success) {
+        staffMasterCache = res.staff;
+        renderStaffMasterTable(res.unregistered || []);
+      } else {
+        showToast('スタッフマスタの取得に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+      onEachDone();
+    })
+    .withFailureHandler(function (err) {
+      showToast('通信エラー（getStaffMasterList）: ' + err.message, 'error');
+      onEachDone();
+    })
+    .getStaffMasterList();
+}
+
+// ---- 店舗管理 ---------------------------------------------------------------
+function renderShopMasterTable() {
+  const tbody = document.getElementById('shop-master-tbody');
+  tbody.innerHTML = shopMasterCache.map(function (shop) {
+    const statusBadge = shop.active
+      ? '<span class="inline-block px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold">有効</span>'
+      : '<span class="inline-block px-2 py-0.5 rounded-full bg-slate-200 text-slate-500 text-xs font-semibold">無効</span>';
+
+    return '<tr class="hover:bg-blue-50' + (shop.active ? '' : ' opacity-60') + '">' +
+      '<td class="px-3 py-2">' + escapeHtml(shop.code) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(shop.name) + '</td>' +
+      '<td class="px-3 py-2 text-center">' + statusBadge + '</td>' +
+      '<td class="px-3 py-2 text-right whitespace-nowrap">' +
+        '<button class="text-blue-600 hover:underline text-xs mr-2" data-shop-edit="' + escapeHtml(shop.code) + '">編集</button>' +
+        '<button class="text-amber-600 hover:underline text-xs mr-2" data-shop-toggle="' + escapeHtml(shop.code) + '">' + (shop.active ? '無効化' : '有効化') + '</button>' +
+        '<button class="text-red-600 hover:underline text-xs" data-shop-delete="' + escapeHtml(shop.code) + '">削除</button>' +
+      '</td></tr>';
+  }).join('');
+
+  tbody.querySelectorAll('[data-shop-edit]').forEach(function (btn) {
+    btn.addEventListener('click', function () { openShopModal('edit', btn.dataset.shopEdit); });
+  });
+  tbody.querySelectorAll('[data-shop-toggle]').forEach(function (btn) {
+    btn.addEventListener('click', function () { onToggleShopActive(btn.dataset.shopToggle); });
+  });
+  tbody.querySelectorAll('[data-shop-delete]').forEach(function (btn) {
+    btn.addEventListener('click', function () { onDeleteShop(btn.dataset.shopDelete); });
+  });
+}
+
+function openShopModal(mode, code) {
+  document.getElementById('shop-form-mode').value = mode;
+  const codeInput = document.getElementById('shop-form-code');
+  const nameInput = document.getElementById('shop-form-name');
+
+  if (mode === 'edit') {
+    const shop = shopMasterCache.find(function (s) { return s.code === code; });
+    document.getElementById('shop-modal-title').textContent = '店舗名を編集';
+    codeInput.value = shop ? shop.code : '';
+    codeInput.disabled = true;
+    nameInput.value = shop ? shop.name : '';
+  } else {
+    document.getElementById('shop-modal-title').textContent = '店舗を追加';
+    codeInput.value = '';
+    codeInput.disabled = false;
+    nameInput.value = '';
+  }
+  openAdminModal('shop-modal');
+}
+
+function onSubmitShopForm(ev) {
+  ev.preventDefault();
+  const mode = document.getElementById('shop-form-mode').value;
+  const code = document.getElementById('shop-form-code').value.trim();
+  const name = document.getElementById('shop-form-name').value.trim();
+  if (!code || !name) { showToast('店番と店舗名は必須です。', 'error'); return; }
+
+  showLoading(true);
+  const runner = google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false);
+      if (res && res.success) {
+        showToast(mode === 'edit' ? '店舗名を更新しました。' : '店舗を追加しました。', 'success');
+        closeAdminModal('shop-modal');
+        loadAdminData();
+        loadAllData(); // 店舗一覧が変わるため、ダッシュボード側のマスタ・データも再取得する
+      } else {
+        showToast('保存に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false);
+      showToast('通信エラー: ' + err.message, 'error');
+    });
+
+  if (mode === 'edit') {
+    runner.renameShopMaster(code, name);
+  } else {
+    runner.addShopMaster(code, name);
+  }
+}
+
+function onToggleShopActive(code) {
+  const shop = shopMasterCache.find(function (s) { return s.code === code; });
+  if (!shop) return;
+  const nextActive = !shop.active;
+
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false);
+      if (res && res.success) {
+        showToast('店舗を' + (nextActive ? '有効化' : '無効化') + 'しました。', 'success');
+        loadAdminData();
+        loadAllData();
+      } else {
+        showToast('更新に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false);
+      showToast('通信エラー: ' + err.message, 'error');
+    })
+    .setShopActive(code, nextActive);
+}
+
+function onDeleteShop(code) {
+  const shop = shopMasterCache.find(function (s) { return s.code === code; });
+  const label = shop ? shop.name : code;
+  if (!window.confirm('店舗「' + label + '」を削除します。よろしいですか？\n（データが残っている店舗は削除できません）')) return;
+
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false);
+      if (res && res.success) {
+        showToast('店舗を削除しました。', 'success');
+        loadAdminData();
+        loadAllData();
+      } else {
+        showToast('削除に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false);
+      showToast('通信エラー: ' + err.message, 'error');
+    })
+    .deleteShopMaster(code);
+}
+
+// ---- スタッフ管理 -------------------------------------------------------------
+/**
+ * スタッフ登録フォームの「所属店舗」プルダウンを店舗マスタから作り直す。
+ * @return {number} 選択肢として並べた有効店舗の件数
+ */
+function populateStaffShopSelect() {
+  const select = document.getElementById('staff-form-shop');
+  const activeShops = shopMasterCache.filter(function (s) { return s.active; });
+  select.innerHTML = '<option value="">選択してください</option>' +
+    activeShops.map(function (s) {
+      return '<option value="' + escapeHtml(s.code) + '">' + escapeHtml(s.name) + '</option>';
+    }).join('') +
+    // 本部の社員はCSVに出てこないため店舗マスタにも載らない。
+    // どの店舗にも属さない所属として選べるようにしておく。
+    '<option value="HQ">本部（店舗に属さない）</option>';
+  return activeShops.length;
+}
+
+/** 所属店舗プルダウンの下に出す案内文を切り替える */
+function setStaffShopHint(message, tone) {
+  const hint = document.getElementById('staff-form-shop-hint');
+  if (!hint) return;
+  if (!message) {
+    hint.classList.add('hidden');
+    hint.textContent = '';
+    return;
+  }
+  hint.classList.remove('hidden');
+  hint.textContent = message;
+  hint.className = 'text-xs mt-1 ' + (tone === 'error' ? 'text-red-600' : 'text-slate-400');
+}
+
+/**
+ * 店舗マスタの取得が終わる前にフォームを開いた場合、プルダウンが空のままになってしまうため、
+ * 空だったときはこの場で取得し直してから選択肢を並べる。
+ * @param {string} keepValue 取得後に選択状態へ戻したい店番（編集時に使う）
+ */
+function ensureStaffShopOptions(keepValue) {
+  if (populateStaffShopSelect() > 0) {
+    setStaffShopHint('');
+    if (keepValue) document.getElementById('staff-form-shop').value = keepValue;
+    return;
+  }
+
+  setStaffShopHint('店舗マスタを読み込んでいます…');
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (res && res.success) {
+        shopMasterCache = res.shops;
+        const count = populateStaffShopSelect();
+        if (count > 0) {
+          setStaffShopHint('');
+          if (keepValue) document.getElementById('staff-form-shop').value = keepValue;
+        } else {
+          setStaffShopHint('選択できる店舗がありません。先に「店舗を追加」から店舗を登録してください。', 'error');
+        }
+      } else {
+        setStaffShopHint('店舗マスタを読み込めませんでした: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+    })
+    .withFailureHandler(function (err) {
+      setStaffShopHint('店舗マスタの読み込みで通信エラーが発生しました: ' + err.message, 'error');
+    })
+    .getShopMasterList();
+}
+
+const ROLE_BADGE_CLASSES = {
+  'マスタ管理': 'bg-purple-100 text-purple-700',
+  '管理者': 'bg-indigo-100 text-indigo-700',
+  '一般': 'bg-slate-100 text-slate-500'
+};
+
+// ---- スタッフ管理の絞り込み・並べ替え -------------------------------------
+// 初期表示は所属店舗の五十音順（同じ店舗内は社員名の五十音順）。
+let staffSortState = { key: 'officeName', dir: 'asc' };
+let staffUnregisteredCache = [];
+
+// 権限は「重い順」に並ぶほうが分かりやすいので、五十音ではなく段階の順で比較する
+const ROLE_ORDER = { 'マスタ管理': 0, '管理者': 1, '一般': 2 };
+
+/** 検索欄・権限セレクトの条件でスタッフを絞り込む */
+function filterStaffRows(rows) {
+  const searchEl = document.getElementById('staff-search');
+  const roleEl = document.getElementById('staff-filter-role');
+  const keyword = searchEl ? searchEl.value.trim().toLowerCase() : '';
+  const role = roleEl ? roleEl.value : '';
+
+  return rows.filter(function (s) {
+    if (role && (s.role || '一般') !== role) return false;
+    if (!keyword) return true;
+    // 社員番号は「01234」「1234」どちらの入力でも見つかるようにする
+    const empNo = String(s.employeeNo || '');
+    const haystack = [
+      s.officeName, s.employeeNo, s.employeeName, s.googleAccount,
+      empNo.replace(/^0+/, '')
+    ].join(' ').toLowerCase();
+    return haystack.indexOf(keyword) !== -1;
+  });
+}
+
+/** 選択中の列で並べ替える（五十音順は個人別サマリーと同じ照合順を使う） */
+function sortStaffRows(rows) {
+  const key = staffSortState.key;
+  const sign = staffSortState.dir === 'desc' ? -1 : 1;
+
+  return rows.slice().sort(function (a, b) {
+    let diff;
+    if (key === 'role') {
+      const ra = ROLE_ORDER[a.role || '一般'];
+      const rb = ROLE_ORDER[b.role || '一般'];
+      diff = (ra === undefined ? 99 : ra) - (rb === undefined ? 99 : rb);
+    } else {
+      const va = String(a[key] === null || a[key] === undefined ? '' : a[key]);
+      const vb = String(b[key] === null || b[key] === undefined ? '' : b[key]);
+      if (va === '' && vb !== '') return 1;   // 空欄は並び順に関わらず末尾へ
+      if (vb === '' && va !== '') return -1;
+      diff = dmCollator ? dmCollator.compare(va, vb) : (va < vb ? -1 : va > vb ? 1 : 0);
+    }
+    if (diff !== 0) return diff * sign;
+
+    // 同順位は「店舗 → 社員名」の五十音順で安定させる
+    const sa = String(a.officeName || '') + ' ' + String(a.employeeName || '');
+    const sb = String(b.officeName || '') + ' ' + String(b.employeeName || '');
+    return dmCollator ? dmCollator.compare(sa, sb) : (sa < sb ? -1 : sa > sb ? 1 : 0);
+  });
+}
+
+function renderStaffSortMarks() {
+  document.querySelectorAll('.staff-sortable').forEach(function (th) {
+    const mark = th.querySelector('.sort-mark');
+    if (mark) mark.remove();
+    if (th.dataset.sort !== staffSortState.key) return;
+    const span = document.createElement('span');
+    span.className = 'sort-mark';
+    span.textContent = staffSortState.dir === 'asc' ? '▲' : '▼';
+    th.appendChild(span);
+  });
+}
+
+function initStaffMasterControls() {
+  const search = document.getElementById('staff-search');
+  const role = document.getElementById('staff-filter-role');
+  if (search) search.addEventListener('input', function () { renderStaffMasterTable(); });
+  if (role) role.addEventListener('change', function () { renderStaffMasterTable(); });
+
+  document.querySelectorAll('.staff-sortable').forEach(function (th) {
+    th.addEventListener('click', function () {
+      const key = th.dataset.sort;
+      if (staffSortState.key === key) {
+        staffSortState.dir = staffSortState.dir === 'asc' ? 'desc' : 'asc';
+      } else {
+        staffSortState = { key: key, dir: 'asc' };
+      }
+      renderStaffMasterTable();
+    });
+  });
+}
+
+function renderStaffMasterTable(unregistered) {
+  // 検索・並べ替えの再描画では引数が無いため、前回の未登録リストを引き継ぐ
+  if (unregistered !== undefined) staffUnregisteredCache = unregistered || [];
+  unregistered = staffUnregisteredCache;
+
+  const tbody = document.getElementById('staff-master-tbody');
+  const visibleRows = sortStaffRows(filterStaffRows(staffMasterCache));
+
+  const countEl = document.getElementById('staff-count');
+  if (countEl) {
+    countEl.textContent = visibleRows.length === staffMasterCache.length
+      ? staffMasterCache.length + '名'
+      : visibleRows.length + '名 / 全' + staffMasterCache.length + '名';
+  }
+  const emptyMsg = document.getElementById('staff-empty-msg');
+  if (emptyMsg) emptyMsg.classList.toggle('hidden', visibleRows.length !== 0);
+  renderStaffSortMarks();
+
+  tbody.innerHTML = visibleRows.map(function (s) {
+    const role = s.role || '一般';
+    const roleBadge = '<span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold ' +
+      (ROLE_BADGE_CLASSES[role] || ROLE_BADGE_CLASSES['一般']) + '">' + escapeHtml(role) + '</span>';
+    return '<tr class="hover:bg-blue-50">' +
+      '<td class="px-3 py-2">' + escapeHtml(s.officeName) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(s.employeeNo) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(s.employeeName) + '</td>' +
+      '<td class="px-3 py-2 text-slate-500">' + escapeHtml(s.googleAccount) + '</td>' +
+      '<td class="px-3 py-2 text-center">' + roleBadge + '</td>' +
+      '<td class="px-3 py-2 text-right whitespace-nowrap">' +
+        '<button class="text-blue-600 hover:underline text-xs mr-2" data-staff-edit="' + s.rowIndex + '">編集</button>' +
+        '<button class="text-red-600 hover:underline text-xs" data-staff-delete="' + s.rowIndex + '">削除</button>' +
+      '</td></tr>';
+  }).join('');
+
+  tbody.querySelectorAll('[data-staff-edit]').forEach(function (btn) {
+    btn.addEventListener('click', function () { openStaffModal('edit', Number(btn.dataset.staffEdit)); });
+  });
+  tbody.querySelectorAll('[data-staff-delete]').forEach(function (btn) {
+    btn.addEventListener('click', function () { onDeleteStaff(Number(btn.dataset.staffDelete)); });
+  });
+
+  const box = document.getElementById('staff-unregistered-box');
+  const list = document.getElementById('staff-unregistered-list');
+  if (!unregistered || unregistered.length === 0) {
+    box.classList.add('hidden');
+    list.innerHTML = '';
+    return;
+  }
+  box.classList.remove('hidden');
+  list.innerHTML = unregistered.map(function (u) {
+    return '<div class="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 text-xs">' +
+      '<span>' + escapeHtml(u.officeName) + ' ・ ' + escapeHtml(u.employeeName) + (u.employeeNo ? '（' + escapeHtml(u.employeeNo) + '）' : '') + '</span>' +
+      '<button class="text-blue-600 hover:underline font-semibold" data-quick-add="' + escapeHtml(JSON.stringify(u)) + '">マスタに登録</button>' +
+      '</div>';
+  }).join('');
+  list.querySelectorAll('[data-quick-add]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      const u = JSON.parse(btn.dataset.quickAdd);
+      quickAddStaff(u.officeCode, u.employeeNo, u.employeeName);
+    });
+  });
+}
+
+function openStaffModal(mode, rowIndex) {
+  document.getElementById('staff-form-rowindex').value = mode === 'edit' ? rowIndex : '';
+  const shopSelect = document.getElementById('staff-form-shop');
+  const empNoInput = document.getElementById('staff-form-empno');
+  const empNameInput = document.getElementById('staff-form-empname');
+  const googleAccountInput = document.getElementById('staff-form-google-account');
+  const roleSelect = document.getElementById('staff-form-role');
+
+  if (mode === 'edit') {
+    const staff = staffMasterCache.find(function (s) { return s.rowIndex === rowIndex; });
+    document.getElementById('staff-modal-title').textContent = 'スタッフを編集';
+    // 選択肢を先に並べてから値を入れないと、value指定が空振りしてしまう
+    ensureStaffShopOptions(staff ? staff.officeCode : '');
+    shopSelect.value = staff ? staff.officeCode : '';
+    empNoInput.value = staff ? staff.employeeNo : '';
+    empNameInput.value = staff ? staff.employeeName : '';
+    googleAccountInput.value = staff ? staff.googleAccount : '';
+    roleSelect.value = staff ? (staff.role || '一般') : '一般';
+  } else {
+    document.getElementById('staff-modal-title').textContent = 'スタッフを追加';
+    ensureStaffShopOptions('');
+    shopSelect.value = '';
+    empNoInput.value = '';
+    empNameInput.value = '';
+    googleAccountInput.value = '';
+    roleSelect.value = '一般';
+  }
+  openAdminModal('staff-modal');
+}
+
+function onSubmitStaffForm(ev) {
+  ev.preventDefault();
+  const rowIndexRaw = document.getElementById('staff-form-rowindex').value;
+  const officeCode = document.getElementById('staff-form-shop').value;
+  const empNo = document.getElementById('staff-form-empno').value.trim();
+  const empName = document.getElementById('staff-form-empname').value.trim();
+  const googleAccount = document.getElementById('staff-form-google-account').value.trim();
+  const role = document.getElementById('staff-form-role').value;
+  if (!officeCode || !empName) { showToast('所属店舗と社員名は必須です。', 'error'); return; }
+  if (role !== '一般' && !googleAccount) { showToast('管理者・マスタ管理権限を付与するスタッフは、Googleアカウントの登録が必須です。', 'error'); return; }
+  if (officeCode === 'HQ' && role === '一般') {
+    showToast('本部の所属で登録できるのは「管理者」「マスタ管理」のみです。本部は担当店舗を持たないため、「一般」権限では表示できるデータがありません。', 'error');
+    return;
+  }
+
+  showLoading(true);
+  const runner = google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false);
+      if (res && res.success) {
+        showToast(rowIndexRaw ? 'スタッフ情報を更新しました。' : 'スタッフを追加しました。', 'success');
+        closeAdminModal('staff-modal');
+        loadAdminData();
+        loadAllData(); // フィルタ等の社員一覧・権限コンテキストを最新化
+      } else {
+        showToast('保存に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false);
+      showToast('通信エラー: ' + err.message, 'error');
+    });
+
+  if (rowIndexRaw) {
+    runner.updateStaffMaster(Number(rowIndexRaw), officeCode, empNo, empName, googleAccount, role);
+  } else {
+    runner.addStaffMaster(officeCode, empNo, empName, googleAccount, role);
+  }
+}
+
+function onDeleteStaff(rowIndex) {
+  const staff = staffMasterCache.find(function (s) { return s.rowIndex === rowIndex; });
+  const label = staff ? staff.employeeName : rowIndex;
+  if (!window.confirm('スタッフ「' + label + '」をマスタから削除します。よろしいですか？\n（過去の実績データは削除されません）')) return;
+
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false);
+      if (res && res.success) {
+        showToast('スタッフを削除しました。', 'success');
+        loadAdminData();
+      } else {
+        showToast('削除に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false);
+      showToast('通信エラー: ' + err.message, 'error');
+    })
+    .deleteStaffMaster(rowIndex);
+}
+
+function quickAddStaff(officeCode, employeeNo, employeeName) {
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false);
+      if (res && res.success) {
+        showToast('スタッフをマスタに登録しました。', 'success');
+        loadAdminData();
+      } else {
+        showToast('登録に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false);
+      showToast('通信エラー: ' + err.message, 'error');
+    })
+    .addStaffMaster(officeCode, employeeNo, employeeName);
+}
+</script>
