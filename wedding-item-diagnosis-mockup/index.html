@@ -233,19 +233,19 @@
   };
 
   var PRODUCTS = [
-    { id: "prod-candle", name: "キャンドルウォーターサービス", icon: "candle",
+    { id: "prod-candle", name: "キャンドルウォーターサービス", icon: "candle", photo: "images/table-candles.webp",
       desc: "灯りを灯しながら会場を巡る、定番の演出です。幻想的な雰囲気を演出します。",
       tags: ["romantic", "candle", "light"] },
-    { id: "prod-petal", name: "フラワーシャワーロード", icon: "petals",
+    { id: "prod-petal", name: "フラワーシャワーロード", icon: "petals", photo: "images/balloons.webp",
       desc: "退場時にゲストが花びらを撒く、写真映えする演出です。",
       tags: ["romantic", "floral"] },
-    { id: "prod-fire", name: "スパークルファイヤーパフォーマンス", icon: "flame",
+    { id: "prod-fire", name: "スパークルファイヤーパフォーマンス", icon: "flame", photo: "images/fireworks.jpg",
       desc: "会場の照明を落として行う炎の演出です。特別な瞬間を華やかに彩ります。",
       tags: ["dramatic", "fire", "luxury"] },
-    { id: "prod-table", name: "エレガントテーブルコーディネート", icon: "centerpiece",
+    { id: "prod-table", name: "エレガントテーブルコーディネート", icon: "centerpiece", photo: "images/table-candles.webp",
       desc: "上質な花材とキャンドルで整える、テーブル装飾の演出です。",
       tags: ["elegant", "table-decoration", "luxury"] },
-    { id: "prod-champagne", name: "シャンパンタワー & ライトアップ", icon: "champagne",
+    { id: "prod-champagne", name: "シャンパンタワー & ライトアップ", icon: "champagne", photo: "images/champagne-tower.jpg",
       desc: "ライトアップされたシャンパンタワーで乾杯。豪華な演出です。",
       tags: ["luxury", "light", "dramatic"] }
   ];
@@ -253,8 +253,8 @@
   var Q1 = {
     text: "どちらの披露宴の雰囲気が好き？",
     options: [
-      { id: "romantic", label: "ロマンチック＆ナチュラル", icon: "bouquet", tags: ["romantic", "floral"] },
-      { id: "luxury",   label: "ラグジュアリー＆ドラマチック", icon: "sparkle", tags: ["luxury", "dramatic"] }
+      { id: "romantic", label: "ロマンチック＆ナチュラル", icon: "bouquet", photo: "images/garden-couple.webp", tags: ["romantic", "floral"] },
+      { id: "luxury",   label: "ラグジュアリー＆ドラマチック", icon: "sparkle", photo: "images/fireworks.jpg", tags: ["luxury", "dramatic"] }
     ]
   };
 
@@ -262,18 +262,20 @@
     romantic: {
       text: "会場を彩る演出は、どちらが好き？",
       options: [
-        { id: "candlelight", label: "キャンドルの灯り", icon: "candle", tags: ["candle", "light"] },
-        { id: "petals",      label: "花びらが舞う演出", icon: "petals", tags: ["floral", "romantic"] }
+        { id: "candlelight", label: "キャンドルの灯り", icon: "candle", photo: "images/table-candles.webp", tags: ["candle", "light"] },
+        { id: "petals",      label: "花びらが舞う演出", icon: "petals", photo: "images/balloons.webp", tags: ["floral", "romantic"] }
       ]
     },
     luxury: {
       text: "特別感を演出するなら、どちらが好き？",
       options: [
-        { id: "fire",      label: "炎・スパークルの演出", icon: "flame", tags: ["fire", "dramatic", "luxury"] },
-        { id: "tabledeco", label: "上質なテーブル装飾", icon: "centerpiece", tags: ["table-decoration", "elegant", "luxury"] }
+        { id: "fire",      label: "炎・スパークルの演出", icon: "flame", photo: "images/fireworks.jpg", tags: ["fire", "dramatic", "luxury"] },
+        { id: "tabledeco", label: "上質なテーブル装飾", icon: "centerpiece", photo: "images/table-candles.webp", tags: ["table-decoration", "elegant", "luxury"] }
       ]
     }
   };
+
+  var HERO_PHOTO = "images/balloons.webp";
 
   // ---------------------------------------------------------------
   // 状態
@@ -361,6 +363,21 @@
     inner.appendChild(wrap);
   }
 
+  // 実写真があればそれを表示し、なければデュオトーン＋線画アイコンのプレース
+  // ホルダーに戻る。写真には可読性のための薄いトーンを重ねる。
+  function setPlateVisual(inner, v, photo, icon, small){
+    if (photo) {
+      inner.style.backgroundImage =
+        "linear-gradient(180deg,rgba(10,8,6,.28),rgba(10,8,6,.4))," +
+        "url(\"" + photo + "\")";
+      inner.style.backgroundSize = "cover";
+      inner.style.backgroundPosition = "center";
+    } else {
+      inner.style.backgroundImage = photoGradient(v);
+      appendIcon(inner, icon, small);
+    }
+  }
+
   // ---------------------------------------------------------------
   // タイムライン: スクロール量で写真を連続的に変形させるエンジン
   // ---------------------------------------------------------------
@@ -428,8 +445,7 @@
     plate.className = "plate";
     var inner = document.createElement("div");
     inner.className = "plate-inner";
-    inner.style.background = photoGradient(v);
-    appendIcon(inner, "bouquet", false);
+    setPlateVisual(inner, v, HERO_PHOTO, "bouquet", false);
     var scrim = document.createElement("div");
     scrim.className = "plate-scrim";
     inner.appendChild(scrim);
@@ -501,9 +517,8 @@
 
       var inner = document.createElement("div");
       inner.className = "plate-inner";
-      inner.style.background = photoGradient(v);
       inner.setAttribute("data-id", opt.id);
-      appendIcon(inner, opt.icon, true);
+      setPlateVisual(inner, v, opt.photo, opt.icon, true);
 
       var scrimTop = document.createElement("div");
       scrimTop.className = "plate-scrim scrim-top";
@@ -581,8 +596,7 @@
     plate.className = "plate";
     var inner = document.createElement("div");
     inner.className = "plate-inner";
-    inner.style.background = photoGradient(v);
-    appendIcon(inner, product.icon, false);
+    setPlateVisual(inner, v, product.photo, product.icon, false);
     var scrim = document.createElement("div");
     scrim.className = "plate-scrim";
     inner.appendChild(scrim);
