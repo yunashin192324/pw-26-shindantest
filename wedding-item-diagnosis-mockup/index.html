@@ -6,24 +6,29 @@
 <title>披露宴演出アイテム診断 | モックアップ</title>
 <style>
   :root{
+    --ink:#221e1a;
+    --ink-soft:#6b6257;
+    --ink-faint:#a49a8c;
+    --paper:#f8f4ec;
+    --paper-deep:#efe7d8;
+    --card:#fffdf8;
+    --line:rgba(34,30,26,.12);
+    --line-strong:rgba(34,30,26,.28);
+    --gold:#a9824f;
+    --gold-soft:rgba(169,130,79,.14);
     --primary:#b8896f;
     --primary-dark:#96694f;
-    --accent:#d8b26a;
-    --bg:#fdf8f3;
-    --card:#ffffff;
-    --ink:#2b2420;
-    --ink-soft:#6b6058;
-    --line:#e7ddd0;
-    --radius:20px;
-    --radius-sm:14px;
-    --shadow:0 8px 24px rgba(43,36,32,.10);
+    --radius:2px;
+    --radius-md:4px;
+    --serif:"Yu Mincho","YuMincho","Hiragino Mincho ProN","Noto Serif JP",serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;
   }
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
   html{-webkit-text-size-adjust:100%}
   body{
-    background:#efe6da;
+    background:var(--paper-deep);
     color:var(--ink);
-    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;
+    font-family:var(--sans);
     -webkit-font-smoothing:antialiased;
     padding-top:env(safe-area-inset-top,0px);
     padding-bottom:env(safe-area-inset-bottom,0px);
@@ -32,76 +37,91 @@
   button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;-webkit-tap-highlight-color:transparent}
   [hidden],.hidden{display:none!important}
 
-  .app{max-width:640px;margin:0 auto;min-height:100vh;min-height:100dvh;background:var(--bg);position:relative;overflow:hidden}
+  .app{max-width:640px;margin:0 auto;min-height:100vh;min-height:100dvh;background:var(--paper);position:relative}
 
-  .venue-bar{display:flex;align-items:center;gap:10px;padding:14px 20px;border-bottom:1px solid var(--line);background:var(--card)}
-  .venue-bar .logo-badge{width:34px;height:34px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700;flex-shrink:0}
-  .venue-bar .venue-name{font-size:.82rem;font-weight:700;letter-spacing:.02em;color:var(--ink-soft)}
+  .eyebrow{font-family:var(--sans);font-size:.68rem;letter-spacing:.28em;color:var(--gold);font-weight:600;text-transform:uppercase}
 
-  .screen{display:none;padding:0 0 56px}
-  .screen.active{display:block;animation:fadeIn .35s ease both}
-  @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  .ornament{display:flex;align-items:center;justify-content:center;gap:10px;margin:18px 0}
+  .ornament .rule{width:34px;height:1px;background:var(--line-strong)}
+  .ornament .mark{width:5px;height:5px;background:var(--gold);transform:rotate(45deg)}
+
+  /* ---- venue bar ---- */
+  .venue-bar{display:flex;align-items:center;gap:12px;padding:16px 24px;border-bottom:1px solid var(--line)}
+  .venue-bar .mono{width:34px;height:34px;border-radius:50%;border:1px solid var(--gold);color:var(--gold);display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-size:.82rem;letter-spacing:.02em;flex-shrink:0}
+  .venue-bar .venue-name{font-size:.72rem;letter-spacing:.16em;color:var(--ink-soft);font-weight:600}
+
+  .screen{display:none;padding:0 0 64px}
+  .screen.active{display:block;animation:fadeIn .5s ease both}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+  /* ---- photo frame (shared placeholder style for all "photo" slots) ---- */
+  .photo-frame{position:relative;overflow:hidden;background-color:#1c1815}
+  .photo-frame::before{content:"";position:absolute;inset:9px;border:1px solid rgba(255,255,255,.3);pointer-events:none;z-index:2}
+  .photo-frame::after{content:"";position:absolute;inset:0;opacity:.05;mix-blend-mode:overlay;pointer-events:none;z-index:1;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>")}
 
   /* ---- start screen ---- */
-  .hero{padding:40px 24px 8px;text-align:center}
-  .hero .logo-badge-lg{width:64px;height:64px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.3rem;font-weight:700;margin:0 auto 14px}
-  .hero .brand{font-size:.78rem;letter-spacing:.14em;color:var(--ink-soft);font-weight:600;margin-bottom:28px}
-  .hero-visual{width:100%;aspect-ratio:4/3;border-radius:var(--radius);display:flex;align-items:center;justify-content:center;font-size:4rem;box-shadow:var(--shadow);margin-bottom:28px}
-  .hero h1{font-size:1.5rem;line-height:1.6;font-weight:700;white-space:pre-line;margin-bottom:14px}
-  .hero p.desc{font-size:.92rem;line-height:1.9;color:var(--ink-soft);margin-bottom:22px}
-  .duration-chip{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;color:var(--primary-dark);background:rgba(184,137,111,.12);border-radius:999px;padding:6px 16px;margin-bottom:30px;font-weight:600}
-  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:17px 24px;border-radius:999px;font-size:1rem;font-weight:700;letter-spacing:.03em;transition:transform .15s ease,opacity .15s ease}
-  .btn:active{transform:scale(.98)}
-  .btn-primary{background:var(--primary);color:#fff;box-shadow:0 10px 24px -8px rgba(150,105,79,.55)}
-  .btn-outline{background:var(--card);color:var(--ink);border:1.5px solid var(--line)}
-  .btn-text{width:auto;padding:10px 12px;color:var(--primary-dark);font-size:.85rem;font-weight:600}
-  .btn-row{padding:0 24px;display:flex;flex-direction:column;gap:12px}
+  .hero{padding:52px 28px 8px;text-align:center}
+  .hero .mono-lg{width:56px;height:56px;border-radius:50%;border:1px solid var(--gold);color:var(--gold);display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-size:1.1rem;margin:0 auto 16px}
+  .hero .brand{font-size:.72rem;letter-spacing:.24em;color:var(--ink-soft);font-weight:600;margin-bottom:34px}
+  .hero-visual{width:100%;aspect-ratio:5/6;border-radius:var(--radius);margin-bottom:32px}
+  .hero h1{font-family:var(--serif);font-size:1.5rem;line-height:1.85;font-weight:500;white-space:pre-line;letter-spacing:.03em;margin-bottom:16px}
+  .hero p.desc{font-size:.86rem;line-height:2;color:var(--ink-soft);margin-bottom:22px;letter-spacing:.02em}
+  .duration-line{font-size:.72rem;letter-spacing:.14em;color:var(--ink-faint);margin-bottom:36px}
+  .duration-line b{color:var(--ink-soft);font-weight:600}
+
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:18px 24px;border-radius:var(--radius-md);font-size:.86rem;font-weight:600;letter-spacing:.14em;transition:opacity .2s ease,transform .15s ease}
+  .btn:active{transform:scale(.98);opacity:.85}
+  .btn-primary{background:var(--ink);color:var(--paper)}
+  .btn-outline{background:transparent;color:var(--ink);border:1px solid var(--line-strong)}
+  .btn-text{width:auto;padding:10px 4px;color:var(--gold);font-size:.78rem;letter-spacing:.1em;border-bottom:1px solid var(--gold)}
+  .btn-row{padding:0 28px;display:flex;flex-direction:column;gap:12px}
 
   /* ---- question screen ---- */
-  .q-head{padding:20px 24px 4px}
-  .q-back{font-size:.82rem;color:var(--ink-soft);font-weight:600;margin-bottom:16px;display:inline-flex;align-items:center;gap:4px}
-  .progress-track{height:4px;background:var(--line);border-radius:999px;overflow:hidden;margin-bottom:22px}
-  .progress-fill{height:100%;background:var(--primary);border-radius:999px;transition:width .5s ease}
-  .q-step{font-size:.74rem;color:var(--primary-dark);font-weight:700;letter-spacing:.08em;margin-bottom:8px}
-  .q-text{font-size:1.2rem;font-weight:700;line-height:1.6;margin-bottom:22px}
+  .q-head{padding:26px 28px 6px}
+  .q-back{font-size:.78rem;letter-spacing:.06em;color:var(--ink-soft);font-weight:600;margin-bottom:22px;display:inline-flex;align-items:center;gap:4px}
+  .q-note{font-size:.72rem;color:var(--ink-faint);letter-spacing:.03em;margin-bottom:20px;line-height:1.7}
+  .progress-track{height:1px;background:var(--line-strong);margin-bottom:26px}
+  .progress-fill{height:100%;background:var(--gold);transition:width .6s ease}
+  .q-step{font-size:.68rem;letter-spacing:.28em;color:var(--gold);font-weight:600;margin-bottom:12px}
+  .q-text{font-family:var(--serif);font-size:1.14rem;font-weight:500;line-height:1.85;letter-spacing:.02em;margin-bottom:26px}
 
-  .option-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;padding:0 24px}
-  .option-card{position:relative;aspect-ratio:3/4;border-radius:var(--radius-sm);overflow:hidden;border:3px solid transparent;box-shadow:var(--shadow)}
-  .option-card:active{transform:scale(.97)}
-  .option-visual{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:2.8rem}
-  .option-overlay{position:absolute;left:0;right:0;bottom:0;padding:16px 14px 14px;background:linear-gradient(180deg,transparent,rgba(0,0,0,.64));color:#fff;font-size:.94rem;font-weight:700;line-height:1.4;white-space:pre-line;text-align:left}
-  .option-check{position:absolute;top:10px;right:10px;width:26px;height:26px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:.85rem;opacity:0;transform:scale(.5);transition:all .2s ease}
-  .option-card.selected{border-color:var(--primary)}
-  .option-card.selected .option-check{opacity:1;transform:scale(1)}
+  .option-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px;padding:0 28px}
+  .option-card{position:relative;aspect-ratio:4/5;border-radius:var(--radius);outline:1px solid transparent;outline-offset:3px;transition:outline-color .25s ease}
+  .option-card:active{transform:scale(.98)}
+  .option-overlay{position:absolute;left:0;right:0;bottom:0;z-index:3;padding:18px 16px 16px;background:linear-gradient(180deg,transparent,rgba(10,8,6,.7));text-align:left}
+  .option-eyebrow{display:block;font-size:.62rem;letter-spacing:.22em;color:rgba(248,244,236,.68);margin-bottom:6px}
+  .option-label{display:block;font-family:var(--serif);color:#fff;font-size:1rem;font-weight:500;line-height:1.5;white-space:pre-line}
+  .option-tag{position:absolute;top:10px;right:10px;z-index:3;font-size:.6rem;letter-spacing:.14em;color:var(--ink);background:var(--paper);padding:5px 9px;opacity:0;transform:translateY(-4px);transition:all .25s ease}
+  .option-card.selected{outline-color:var(--gold)}
+  .option-card.selected .option-tag{opacity:1;transform:translateY(0)}
 
   /* ---- result screen ---- */
-  .result-head{padding:32px 24px 4px;text-align:center}
-  .result-eyebrow{font-size:.76rem;color:var(--primary-dark);font-weight:700;letter-spacing:.16em;margin-bottom:8px}
-  .result-head h2{font-size:1.3rem;font-weight:700;margin-bottom:24px}
-  .result-card{margin:0 24px;background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
-  .result-visual{width:100%;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;font-size:3.6rem}
-  .result-body{padding:22px}
-  .result-body h3{font-size:1.15rem;font-weight:700;margin-bottom:10px}
-  .result-body p{font-size:.9rem;line-height:1.9;color:var(--ink-soft);margin-bottom:18px}
-  .result-tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px}
-  .tag-pill{font-size:.7rem;color:var(--primary-dark);background:rgba(184,137,111,.12);border-radius:999px;padding:4px 10px;font-weight:600}
-  .result-actions{padding:22px 24px 0;display:flex;flex-direction:column;gap:12px}
-  .retry-row{padding:20px 24px 0;text-align:center}
+  .result-head{padding:40px 28px 6px;text-align:center}
+  .result-head h2{font-family:var(--serif);font-size:1.22rem;font-weight:500;line-height:1.8;margin-top:10px;margin-bottom:0}
+  .result-card{margin:26px 28px 0}
+  .result-visual{width:100%;aspect-ratio:5/4}
+  .result-body{padding:24px 2px 0}
+  .result-body h3{font-family:var(--serif);font-size:1.2rem;font-weight:500;letter-spacing:.02em;margin-bottom:14px}
+  .result-body p{font-size:.86rem;line-height:2;color:var(--ink-soft);margin-bottom:18px;letter-spacing:.02em}
+  .result-tags{font-size:.68rem;letter-spacing:.1em;color:var(--gold);margin-bottom:6px}
+  .result-actions{padding:30px 28px 0;display:flex;flex-direction:column;gap:12px}
+  .retry-row{padding:26px 28px 0;text-align:center}
 
   /* ---- modal ---- */
-  .modal-overlay{position:fixed;inset:0;background:rgba(20,16,12,.5);display:flex;align-items:flex-end;justify-content:center;z-index:50}
-  .modal-overlay.center{align-items:center;padding:24px}
-  .modal-box{background:#fff;border-radius:20px 20px 0 0;padding:26px 24px calc(26px + env(safe-area-inset-bottom,0px));max-width:640px;width:100%;box-shadow:0 -8px 30px rgba(0,0,0,.15)}
-  .modal-overlay.center .modal-box{border-radius:20px;max-width:340px}
-  .modal-box p{font-size:.9rem;line-height:1.8;color:var(--ink-soft);margin-bottom:18px}
+  .modal-overlay{position:fixed;inset:0;background:rgba(20,17,14,.55);display:flex;align-items:flex-end;justify-content:center;z-index:50}
+  .modal-overlay.center{align-items:center;padding:28px}
+  .modal-box{background:var(--card);border-radius:var(--radius) var(--radius) 0 0;padding:28px 26px calc(28px + env(safe-area-inset-bottom,0px));max-width:640px;width:100%;border-top:1px solid var(--line)}
+  .modal-overlay.center .modal-box{border-radius:var(--radius);max-width:340px;border-top:none;border:1px solid var(--line)}
+  .modal-box p{font-size:.84rem;line-height:1.9;color:var(--ink-soft);margin-bottom:20px}
   .modal-box .btn{margin-top:2px}
 
-  /* ---- demo venue switcher (for internal review only) ---- */
-  .demo-toggle{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));width:44px;height:44px;border-radius:50%;background:#2b2420;color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.1rem;box-shadow:0 6px 18px rgba(0,0,0,.28);z-index:40}
-  .demo-panel-title{font-size:.72rem;color:#9a8f83;font-weight:700;letter-spacing:.06em;margin-bottom:14px}
-  .demo-venue-opt{display:flex;align-items:center;gap:10px;padding:12px 4px;border-bottom:1px solid var(--line);font-size:.9rem;font-weight:600}
+  /* ---- demo venue switcher (internal review only) ---- */
+  .demo-toggle{position:fixed;right:0;bottom:calc(18px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--paper);font-size:.62rem;letter-spacing:.2em;padding:11px 16px 11px 14px;border-radius:2px 0 0 2px;z-index:40}
+  .demo-panel-title{font-size:.66rem;letter-spacing:.16em;color:var(--ink-faint);font-weight:600;margin-bottom:16px}
+  .demo-venue-opt{display:flex;align-items:center;gap:12px;padding:13px 2px;border-bottom:1px solid var(--line);font-size:.86rem;letter-spacing:.02em}
   .demo-venue-opt:last-child{border-bottom:none}
-  .demo-venue-opt .swatch{width:18px;height:18px;border-radius:50%;flex-shrink:0}
+  .demo-venue-opt .swatch{width:14px;height:14px;border-radius:50%;flex-shrink:0}
 
   @media (min-width:640px){
     .option-grid{grid-template-columns:repeat(2,1fr)}
@@ -113,19 +133,19 @@
 <div class="app" id="app">
 
   <div class="venue-bar" id="venueBar" hidden>
-    <span class="logo-badge" id="venueBadge"></span>
+    <span class="mono" id="venueBadge"></span>
     <span class="venue-name" id="venueNameLabel"></span>
   </div>
 
   <!-- 画面1: スタート -->
   <section class="screen active" id="screen-start">
     <div class="hero">
-      <div class="logo-badge-lg" id="startBadge"></div>
+      <div class="mono-lg" id="startBadge"></div>
       <div class="brand" id="startBrand"></div>
-      <div class="hero-visual" id="startVisual">💍</div>
+      <div class="hero-visual photo-frame" id="startVisual"></div>
       <h1 id="startTitle"></h1>
       <p class="desc" id="startDesc"></p>
-      <div class="duration-chip">⏱ <span id="startDuration"></span></div>
+      <p class="duration-line">所要時間　<b id="startDuration"></b></p>
     </div>
     <div class="btn-row">
       <button class="btn btn-primary" id="btnStart">診断をはじめる</button>
@@ -135,7 +155,7 @@
   <!-- 画面2/3: 質問 -->
   <section class="screen" id="screen-question">
     <div class="q-head">
-      <button class="q-back" id="btnBack">← 戻る</button>
+      <button class="q-back" id="btnBack">‹ 戻る</button>
       <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
       <div class="q-step" id="qStep"></div>
       <h2 class="q-text" id="qText"></h2>
@@ -146,11 +166,11 @@
   <!-- 画面4: 診断結果 -->
   <section class="screen" id="screen-result">
     <div class="result-head">
-      <div class="result-eyebrow">DIAGNOSIS RESULT</div>
+      <div class="eyebrow">Diagnosis Result</div>
       <h2>あなたにおすすめの演出アイテムは</h2>
     </div>
     <div class="result-card">
-      <div class="result-visual" id="resultVisual"></div>
+      <div class="result-visual photo-frame" id="resultVisual"></div>
       <div class="result-body">
         <h3 id="resultName"></h3>
         <p id="resultDesc"></p>
@@ -169,7 +189,7 @@
 
 </div>
 
-<button class="demo-toggle" id="demoToggle" aria-label="会場プレビュー切替">⚙</button>
+<button class="demo-toggle" id="demoToggle">VENUE</button>
 
 <div class="modal-overlay hidden" id="modalGeneric">
   <div class="modal-box">
@@ -182,7 +202,7 @@
   <div class="modal-box">
     <div class="demo-panel-title">会場プレビュー切替（社内確認用）</div>
     <div id="venueOptList"></div>
-    <button class="btn btn-outline" id="modalVenueClose" style="margin-top:16px">閉じる</button>
+    <button class="btn btn-outline" id="modalVenueClose" style="margin-top:18px">閉じる</button>
   </div>
 </div>
 
@@ -199,7 +219,6 @@
       brand: "SAMPLE WEDDING HALL",
       initial: "SW",
       theme: { primary: "#b8896f", primaryDark: "#96694f" },
-      visualIcon: "💍",
       title: "あなたにぴったりの\n演出アイテムを診断",
       desc: "いくつかの質問に答えるだけで、お二人の披露宴にぴったりの演出アイテムをご提案します。",
       duration: "約30秒"
@@ -209,7 +228,6 @@
       brand: "GRAND HILLS WEDDING",
       initial: "GH",
       theme: { primary: "#a8506b", primaryDark: "#833f53" },
-      visualIcon: "🏛️",
       title: "お二人にふさわしい\n演出を見つけよう",
       desc: "写真を選ぶだけの簡単診断。グランヒルズ厳選の演出アイテムをご提案します。",
       duration: "約30秒"
@@ -219,7 +237,6 @@
       brand: "AQUA TERRACE WEDDING",
       initial: "AT",
       theme: { primary: "#2f7d78", primaryDark: "#235f5b" },
-      visualIcon: "🌊",
       title: "あなたの理想の演出を\n診断してみよう",
       desc: "2つの質問に答えて、アクアテラスでおすすめの演出アイテムをチェックしましょう。",
       duration: "約30秒"
@@ -241,19 +258,19 @@
   };
 
   var PRODUCTS = [
-    { id: "prod-candle", name: "キャンドルウォーターサービス", icon: "🕯️",
+    { id: "prod-candle", name: "キャンドルウォーターサービス",
       desc: "灯りを灯しながら会場を巡る、定番の演出です。幻想的な雰囲気を演出します。",
       tags: ["romantic", "candle", "light"] },
-    { id: "prod-petal", name: "フラワーシャワーロード", icon: "🌸",
+    { id: "prod-petal", name: "フラワーシャワーロード",
       desc: "退場時にゲストが花びらを撒く、写真映えする演出です。",
       tags: ["romantic", "floral"] },
-    { id: "prod-fire", name: "スパークルファイヤーパフォーマンス", icon: "🔥",
+    { id: "prod-fire", name: "スパークルファイヤーパフォーマンス",
       desc: "会場の照明を落として行う炎の演出です。特別な瞬間を華やかに彩ります。",
       tags: ["dramatic", "fire", "luxury"] },
-    { id: "prod-table", name: "エレガントテーブルコーディネート", icon: "💐",
+    { id: "prod-table", name: "エレガントテーブルコーディネート",
       desc: "上質な花材とキャンドルで整える、テーブル装飾の演出です。",
       tags: ["elegant", "table-decoration", "luxury"] },
-    { id: "prod-champagne", name: "シャンパンタワー & ライトアップ", icon: "🥂",
+    { id: "prod-champagne", name: "シャンパンタワー & ライトアップ",
       desc: "ライトアップされたシャンパンタワーで乾杯。豪華な演出です。",
       tags: ["luxury", "light", "dramatic"] }
   ];
@@ -262,8 +279,8 @@
     step: 1,
     text: "どちらの披露宴の雰囲気がお好みですか？",
     options: [
-      { id: "romantic", label: "ロマンチック\n＆ナチュラル", icon: "🌷", tags: ["romantic", "floral"] },
-      { id: "luxury",   label: "ラグジュアリー\n＆ドラマチック", icon: "🎇", tags: ["luxury", "dramatic"] }
+      { id: "romantic", label: "ロマンチック\n＆ナチュラル", tags: ["romantic", "floral"] },
+      { id: "luxury",   label: "ラグジュアリー\n＆ドラマチック", tags: ["luxury", "dramatic"] }
     ]
   };
 
@@ -272,16 +289,16 @@
       step: 2,
       text: "会場を彩る演出は、どちらがお好みですか？",
       options: [
-        { id: "candlelight", label: "キャンドルの灯り", icon: "🕯️", tags: ["candle", "light"] },
-        { id: "petals",      label: "花びらが舞う演出", icon: "🌺", tags: ["floral", "romantic"] }
+        { id: "candlelight", label: "キャンドルの灯り", tags: ["candle", "light"] },
+        { id: "petals",      label: "花びらが舞う演出", tags: ["floral", "romantic"] }
       ]
     },
     luxury: {
       step: 2,
       text: "特別感を演出するなら、どちらがお好みですか？",
       options: [
-        { id: "fire",     label: "炎・スパークルの演出", icon: "✨", tags: ["fire", "dramatic", "luxury"] },
-        { id: "tabledeco", label: "上質なテーブル装飾", icon: "💐", tags: ["table-decoration", "elegant", "luxury"] }
+        { id: "fire",      label: "炎・スパークルの演出", tags: ["fire", "dramatic", "luxury"] },
+        { id: "tabledeco", label: "上質なテーブル装飾", tags: ["table-decoration", "elegant", "luxury"] }
       ]
     }
   };
@@ -307,7 +324,7 @@
   }
 
   // ---------------------------------------------------------------
-  // テーマ適用
+  // テーマ適用 / 写真プレースホルダーの見た目
   // ---------------------------------------------------------------
 
   function applyTheme(){
@@ -316,8 +333,10 @@
     document.documentElement.style.setProperty("--primary-dark", v.theme.primaryDark);
   }
 
-  function gradientFor(v){
-    return "linear-gradient(150deg," + v.theme.primary + "," + v.theme.primaryDark + ")";
+  // 実写真が入るまでの仮表示。黒からブランドカラーへ落ちるデュオトーンで
+  // 「写真スロット」であることが伝わるようにする（絵文字・アイコンは使わない）。
+  function photoGradient(v){
+    return "linear-gradient(165deg,#1c1815 0%," + v.theme.primaryDark + " 58%," + v.theme.primary + " 100%)";
   }
 
   // ---------------------------------------------------------------
@@ -328,11 +347,10 @@
     var v = currentVenue();
     el("startBadge").textContent = v.initial;
     el("startBrand").textContent = v.brand;
-    el("startVisual").textContent = v.visualIcon;
-    el("startVisual").style.background = gradientFor(v);
+    el("startVisual").style.backgroundImage = photoGradient(v);
     el("startTitle").textContent = v.title;
     el("startDesc").textContent = v.desc;
-    el("startDuration").textContent = "所要時間 " + v.duration;
+    el("startDuration").textContent = v.duration;
 
     el("venueBadge").textContent = v.initial;
     el("venueNameLabel").textContent = v.name;
@@ -344,34 +362,38 @@
 
   function renderQuestion(question, selectedId){
     var v = currentVenue();
-    el("qStep").textContent = "質問 " + question.step + " / 2";
+    el("qStep").textContent = "Question " + (question.step === 1 ? "01" : "02") + " / 02";
     el("qText").textContent = question.text;
     el("progressFill").style.width = (question.step / 2 * 100) + "%";
 
     var grid = el("optionGrid");
     grid.innerHTML = "";
-    question.options.forEach(function(opt){
+    question.options.forEach(function(opt, idx){
       var card = document.createElement("button");
       card.type = "button";
-      card.className = "option-card" + (opt.id === selectedId ? " selected" : "");
+      card.className = "option-card photo-frame" + (opt.id === selectedId ? " selected" : "");
       card.setAttribute("data-id", opt.id);
+      card.style.backgroundImage = photoGradient(v);
 
-      var visual = document.createElement("div");
-      visual.className = "option-visual";
-      visual.style.background = gradientFor(v);
-      visual.textContent = opt.icon;
+      var tag = document.createElement("span");
+      tag.className = "option-tag";
+      tag.textContent = "SELECTED";
 
       var overlay = document.createElement("div");
       overlay.className = "option-overlay";
-      overlay.textContent = opt.label;
 
-      var check = document.createElement("div");
-      check.className = "option-check";
-      check.textContent = "✓";
+      var eyebrow = document.createElement("span");
+      eyebrow.className = "option-eyebrow";
+      eyebrow.textContent = "Photo " + String(idx + 1).padStart(2, "0");
 
-      card.appendChild(visual);
+      var label = document.createElement("span");
+      label.className = "option-label";
+      label.textContent = opt.label;
+
+      overlay.appendChild(eyebrow);
+      overlay.appendChild(label);
+      card.appendChild(tag);
       card.appendChild(overlay);
-      card.appendChild(check);
 
       card.addEventListener("click", function(){ onSelectOption(question, opt); });
       grid.appendChild(card);
@@ -425,19 +447,10 @@
     var overrides = VENUE_OVERRIDES[state.venueId] || {};
     var override = (overrides.productOverrides || {})[product.id] || {};
 
-    el("resultVisual").textContent = product.icon;
-    el("resultVisual").style.background = gradientFor(v);
+    el("resultVisual").style.backgroundImage = photoGradient(v);
     el("resultName").textContent = override.name || product.name;
     el("resultDesc").textContent = override.desc || product.desc;
-
-    var tagsEl = el("resultTags");
-    tagsEl.innerHTML = "";
-    product.tags.forEach(function(t){
-      var pill = document.createElement("span");
-      pill.className = "tag-pill";
-      pill.textContent = "#" + t;
-      tagsEl.appendChild(pill);
-    });
+    el("resultTags").textContent = product.tags.join("  ·  ");
   }
 
   function showResult(){
@@ -520,7 +533,7 @@
     });
 
     el("btnBack").addEventListener("click", function(){
-      var onStep2 = el("qStep").textContent.indexOf("2 / 2") !== -1;
+      var onStep2 = el("qStep").textContent.indexOf("02 / 02") !== -1;
       if (onStep2) {
         renderQuestion(Q1, state.q1 ? state.q1.id : null);
       } else {
