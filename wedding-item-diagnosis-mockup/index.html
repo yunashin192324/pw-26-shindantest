@@ -64,6 +64,13 @@
     background:linear-gradient(180deg,transparent,rgba(10,8,6,.72) 78%)}
   .plate-scrim.scrim-top{top:0;bottom:auto;background:linear-gradient(0deg,transparent,rgba(10,8,6,.5) 100%)}
 
+  /* ---- illustrative motif (no real photos yet, so a matching line-art mark
+         stands in for each option/product instead of a blank gradient) ---- */
+  .plate-icon{position:absolute;inset:0;z-index:2;display:flex;align-items:center;justify-content:center;
+    pointer-events:none;color:rgba(255,255,255,.82)}
+  .plate-icon svg{width:clamp(96px,32vw,200px);height:clamp(96px,32vw,200px);opacity:.9}
+  .plate-icon.icon-sm svg{width:clamp(60px,24vw,116px);height:clamp(60px,24vw,116px)}
+
   /* ---- start beat ---- */
   .beat-start .beat-content{position:relative;z-index:5;height:100%;display:flex;flex-direction:column;
     align-items:center;justify-content:flex-end;text-align:center;padding:0 28px calc(56px + env(safe-area-inset-bottom,0px))}
@@ -226,19 +233,19 @@
   };
 
   var PRODUCTS = [
-    { id: "prod-candle", name: "キャンドルウォーターサービス",
+    { id: "prod-candle", name: "キャンドルウォーターサービス", icon: "candle",
       desc: "灯りを灯しながら会場を巡る、定番の演出です。幻想的な雰囲気を演出します。",
       tags: ["romantic", "candle", "light"] },
-    { id: "prod-petal", name: "フラワーシャワーロード",
+    { id: "prod-petal", name: "フラワーシャワーロード", icon: "petals",
       desc: "退場時にゲストが花びらを撒く、写真映えする演出です。",
       tags: ["romantic", "floral"] },
-    { id: "prod-fire", name: "スパークルファイヤーパフォーマンス",
+    { id: "prod-fire", name: "スパークルファイヤーパフォーマンス", icon: "flame",
       desc: "会場の照明を落として行う炎の演出です。特別な瞬間を華やかに彩ります。",
       tags: ["dramatic", "fire", "luxury"] },
-    { id: "prod-table", name: "エレガントテーブルコーディネート",
+    { id: "prod-table", name: "エレガントテーブルコーディネート", icon: "centerpiece",
       desc: "上質な花材とキャンドルで整える、テーブル装飾の演出です。",
       tags: ["elegant", "table-decoration", "luxury"] },
-    { id: "prod-champagne", name: "シャンパンタワー & ライトアップ",
+    { id: "prod-champagne", name: "シャンパンタワー & ライトアップ", icon: "champagne",
       desc: "ライトアップされたシャンパンタワーで乾杯。豪華な演出です。",
       tags: ["luxury", "light", "dramatic"] }
   ];
@@ -246,8 +253,8 @@
   var Q1 = {
     text: "どちらの披露宴の雰囲気が好き？",
     options: [
-      { id: "romantic", label: "ロマンチック＆ナチュラル", tags: ["romantic", "floral"] },
-      { id: "luxury",   label: "ラグジュアリー＆ドラマチック", tags: ["luxury", "dramatic"] }
+      { id: "romantic", label: "ロマンチック＆ナチュラル", icon: "bouquet", tags: ["romantic", "floral"] },
+      { id: "luxury",   label: "ラグジュアリー＆ドラマチック", icon: "sparkle", tags: ["luxury", "dramatic"] }
     ]
   };
 
@@ -255,15 +262,15 @@
     romantic: {
       text: "会場を彩る演出は、どちらが好き？",
       options: [
-        { id: "candlelight", label: "キャンドルの灯り", tags: ["candle", "light"] },
-        { id: "petals",      label: "花びらが舞う演出", tags: ["floral", "romantic"] }
+        { id: "candlelight", label: "キャンドルの灯り", icon: "candle", tags: ["candle", "light"] },
+        { id: "petals",      label: "花びらが舞う演出", icon: "petals", tags: ["floral", "romantic"] }
       ]
     },
     luxury: {
       text: "特別感を演出するなら、どちらが好き？",
       options: [
-        { id: "fire",      label: "炎・スパークルの演出", tags: ["fire", "dramatic", "luxury"] },
-        { id: "tabledeco", label: "上質なテーブル装飾", tags: ["table-decoration", "elegant", "luxury"] }
+        { id: "fire",      label: "炎・スパークルの演出", icon: "flame", tags: ["fire", "dramatic", "luxury"] },
+        { id: "tabledeco", label: "上質なテーブル装飾", icon: "centerpiece", tags: ["table-decoration", "elegant", "luxury"] }
       ]
     }
   };
@@ -288,10 +295,70 @@
     document.documentElement.style.setProperty("--primary-dark", v.theme.primaryDark);
   }
 
-  // 実写真が入るまでの仮の見え方。黒からブランドカラーへ落ちるデュオトーンで
-  // 「写真スロット」であることを伝える（絵文字・アイコンは使わない）。
+  // 実写真が入るまでの仮の見え方。黒からブランドカラーへ落ちるデュオトーンの上に、
+  // 内容に合う線画のモチーフを重ねる（実在しない画像URLは使わない）。
   function photoGradient(v){
     return "linear-gradient(165deg,#141210 0%," + v.theme.primaryDark + " 58%," + v.theme.primary + " 100%)";
+  }
+
+  // ---------------------------------------------------------------
+  // 演出アイテムのモチーフ（線画アイコン）
+  // ---------------------------------------------------------------
+
+  function flowerGlyph(cx, cy, r){
+    return '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '"/>' +
+      '<line x1="' + cx + '" y1="' + (cy - r - 3) + '" x2="' + cx + '" y2="' + (cy - r + 1) + '"/>' +
+      '<line x1="' + cx + '" y1="' + (cy + r - 1) + '" x2="' + cx + '" y2="' + (cy + r + 3) + '"/>' +
+      '<line x1="' + (cx - r - 3) + '" y1="' + cy + '" x2="' + (cx - r + 1) + '" y2="' + cy + '"/>' +
+      '<line x1="' + (cx + r - 1) + '" y1="' + cy + '" x2="' + (cx + r + 3) + '" y2="' + cy + '"/>';
+  }
+
+  function petalGlyph(cx, cy, size, rot){
+    return '<path transform="rotate(' + rot + ' ' + cx + ' ' + cy + ')" ' +
+      'd="M' + (cx - size) + ',' + cy + ' Q' + cx + ',' + (cy - size * 1.5) + ' ' + (cx + size) + ',' + cy +
+      ' Q' + cx + ',' + (cy + size * 1.5) + ' ' + (cx - size) + ',' + cy + ' Z"/>';
+  }
+
+  var ICON_PATHS = {
+    bouquet:
+      '<path d="M32,58 C31,47 33,39 30,27"/>' +
+      '<path d="M31,46 C26,44 24,40 26,36"/>' +
+      '<path d="M31,40 C37,38 39,34 37,30"/>' +
+      flowerGlyph(23, 22, 4) + flowerGlyph(32, 13, 5) + flowerGlyph(41, 22, 4),
+    petals:
+      petalGlyph(19, 20, 4.5, 20) + petalGlyph(45, 16, 5, -20) +
+      petalGlyph(24, 43, 4, 55) + petalGlyph(46, 45, 5, -50) + petalGlyph(33, 30, 3.5, 10),
+    sparkle:
+      '<path d="M32,9 L35,27 L53,32 L35,37 L32,55 L29,37 L11,32 L29,27 Z"/>',
+    flame:
+      '<path d="M32,10 C41,21 45,30 40,39 C37,45 27,45 24,39 C21,33 23,27 27,23 C25,29 27,33 30,35 C27,28 29,21 32,10 Z"/>',
+    candle:
+      '<rect x="26" y="27" width="12" height="29" rx="2"/>' +
+      '<path d="M32,9 C36,15 37,19 34,23 C32,25 29,24 28,21 C27,18 29,15 32,9 Z"/>',
+    centerpiece:
+      '<line x1="13" y1="53" x2="51" y2="53"/>' +
+      '<path d="M27,53 L25,37 C25,34 39,34 39,37 L37,53 Z"/>' +
+      flowerGlyph(24, 24, 3) + flowerGlyph(32, 18, 4) + flowerGlyph(40, 24, 3) +
+      '<line x1="24" y1="27" x2="27" y2="36"/><line x1="32" y1="22" x2="32" y2="34"/><line x1="40" y1="27" x2="37" y2="36"/>',
+    champagne:
+      '<path d="M18,18 L28,18 L25,30 C25,33 21,33 21,30 Z"/><line x1="23" y1="30" x2="23" y2="45"/><line x1="18" y1="47" x2="28" y2="47"/>' +
+      '<path d="M34,24 L44,24 L41,36 C41,39 37,39 37,36 Z"/><line x1="39" y1="36" x2="39" y2="45"/><line x1="34" y1="47" x2="44" y2="47"/>' +
+      '<circle cx="21" cy="14" r=".8"/><circle cx="25" cy="10" r=".8"/><circle cx="37" cy="20" r=".8"/>'
+  };
+
+  function iconSVG(key){
+    var paths = ICON_PATHS[key];
+    if (!paths) return "";
+    return '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.5" ' +
+      'stroke-linecap="round" stroke-linejoin="round">' + paths + '</svg>';
+  }
+
+  function appendIcon(inner, key, small){
+    if (!key) return;
+    var wrap = document.createElement("div");
+    wrap.className = "plate-icon" + (small ? " icon-sm" : "");
+    wrap.innerHTML = iconSVG(key);
+    inner.appendChild(wrap);
   }
 
   // ---------------------------------------------------------------
@@ -362,6 +429,7 @@
     var inner = document.createElement("div");
     inner.className = "plate-inner";
     inner.style.background = photoGradient(v);
+    appendIcon(inner, "bouquet", false);
     var scrim = document.createElement("div");
     scrim.className = "plate-scrim";
     inner.appendChild(scrim);
@@ -435,6 +503,7 @@
       inner.className = "plate-inner";
       inner.style.background = photoGradient(v);
       inner.setAttribute("data-id", opt.id);
+      appendIcon(inner, opt.icon, true);
 
       var scrimTop = document.createElement("div");
       scrimTop.className = "plate-scrim scrim-top";
@@ -513,6 +582,7 @@
     var inner = document.createElement("div");
     inner.className = "plate-inner";
     inner.style.background = photoGradient(v);
+    appendIcon(inner, product.icon, false);
     var scrim = document.createElement("div");
     scrim.className = "plate-scrim";
     inner.appendChild(scrim);
