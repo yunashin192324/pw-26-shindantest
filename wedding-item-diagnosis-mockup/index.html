@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>披露宴演出アイテム診断 | モックアップ</title>
+<style>
+  :root{
+    --primary:#b8896f;
+    --primary-dark:#96694f;
+    --accent:#d8b26a;
+    --bg:#fdf8f3;
+    --card:#ffffff;
+    --ink:#2b2420;
+    --ink-soft:#6b6058;
+    --line:#e7ddd0;
+    --radius:20px;
+    --radius-sm:14px;
+    --shadow:0 8px 24px rgba(43,36,32,.10);
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    background:#efe6da;
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  img{max-width:100%}
+  button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  [hidden],.hidden{display:none!important}
+
+  .app{max-width:640px;margin:0 auto;min-height:100vh;min-height:100dvh;background:var(--bg);position:relative;overflow:hidden}
+
+  .venue-bar{display:flex;align-items:center;gap:10px;padding:14px 20px;border-bottom:1px solid var(--line);background:var(--card)}
+  .venue-bar .logo-badge{width:34px;height:34px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700;flex-shrink:0}
+  .venue-bar .venue-name{font-size:.82rem;font-weight:700;letter-spacing:.02em;color:var(--ink-soft)}
+
+  .screen{display:none;padding:0 0 56px}
+  .screen.active{display:block;animation:fadeIn .35s ease both}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+  /* ---- start screen ---- */
+  .hero{padding:40px 24px 8px;text-align:center}
+  .hero .logo-badge-lg{width:64px;height:64px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.3rem;font-weight:700;margin:0 auto 14px}
+  .hero .brand{font-size:.78rem;letter-spacing:.14em;color:var(--ink-soft);font-weight:600;margin-bottom:28px}
+  .hero-visual{width:100%;aspect-ratio:4/3;border-radius:var(--radius);display:flex;align-items:center;justify-content:center;font-size:4rem;box-shadow:var(--shadow);margin-bottom:28px}
+  .hero h1{font-size:1.5rem;line-height:1.6;font-weight:700;white-space:pre-line;margin-bottom:14px}
+  .hero p.desc{font-size:.92rem;line-height:1.9;color:var(--ink-soft);margin-bottom:22px}
+  .duration-chip{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;color:var(--primary-dark);background:rgba(184,137,111,.12);border-radius:999px;padding:6px 16px;margin-bottom:30px;font-weight:600}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:17px 24px;border-radius:999px;font-size:1rem;font-weight:700;letter-spacing:.03em;transition:transform .15s ease,opacity .15s ease}
+  .btn:active{transform:scale(.98)}
+  .btn-primary{background:var(--primary);color:#fff;box-shadow:0 10px 24px -8px rgba(150,105,79,.55)}
+  .btn-outline{background:var(--card);color:var(--ink);border:1.5px solid var(--line)}
+  .btn-text{width:auto;padding:10px 12px;color:var(--primary-dark);font-size:.85rem;font-weight:600}
+  .btn-row{padding:0 24px;display:flex;flex-direction:column;gap:12px}
+
+  /* ---- question screen ---- */
+  .q-head{padding:20px 24px 4px}
+  .q-back{font-size:.82rem;color:var(--ink-soft);font-weight:600;margin-bottom:16px;display:inline-flex;align-items:center;gap:4px}
+  .progress-track{height:4px;background:var(--line);border-radius:999px;overflow:hidden;margin-bottom:22px}
+  .progress-fill{height:100%;background:var(--primary);border-radius:999px;transition:width .5s ease}
+  .q-step{font-size:.74rem;color:var(--primary-dark);font-weight:700;letter-spacing:.08em;margin-bottom:8px}
+  .q-text{font-size:1.2rem;font-weight:700;line-height:1.6;margin-bottom:22px}
+
+  .option-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;padding:0 24px}
+  .option-card{position:relative;aspect-ratio:3/4;border-radius:var(--radius-sm);overflow:hidden;border:3px solid transparent;box-shadow:var(--shadow)}
+  .option-card:active{transform:scale(.97)}
+  .option-visual{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:2.8rem}
+  .option-overlay{position:absolute;left:0;right:0;bottom:0;padding:16px 14px 14px;background:linear-gradient(180deg,transparent,rgba(0,0,0,.64));color:#fff;font-size:.94rem;font-weight:700;line-height:1.4;white-space:pre-line;text-align:left}
+  .option-check{position:absolute;top:10px;right:10px;width:26px;height:26px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:.85rem;opacity:0;transform:scale(.5);transition:all .2s ease}
+  .option-card.selected{border-color:var(--primary)}
+  .option-card.selected .option-check{opacity:1;transform:scale(1)}
+
+  /* ---- result screen ---- */
+  .result-head{padding:32px 24px 4px;text-align:center}
+  .result-eyebrow{font-size:.76rem;color:var(--primary-dark);font-weight:700;letter-spacing:.16em;margin-bottom:8px}
+  .result-head h2{font-size:1.3rem;font-weight:700;margin-bottom:24px}
+  .result-card{margin:0 24px;background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+  .result-visual{width:100%;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;font-size:3.6rem}
+  .result-body{padding:22px}
+  .result-body h3{font-size:1.15rem;font-weight:700;margin-bottom:10px}
+  .result-body p{font-size:.9rem;line-height:1.9;color:var(--ink-soft);margin-bottom:18px}
+  .result-tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px}
+  .tag-pill{font-size:.7rem;color:var(--primary-dark);background:rgba(184,137,111,.12);border-radius:999px;padding:4px 10px;font-weight:600}
+  .result-actions{padding:22px 24px 0;display:flex;flex-direction:column;gap:12px}
+  .retry-row{padding:20px 24px 0;text-align:center}
+
+  /* ---- modal ---- */
+  .modal-overlay{position:fixed;inset:0;background:rgba(20,16,12,.5);display:flex;align-items:flex-end;justify-content:center;z-index:50}
+  .modal-overlay.center{align-items:center;padding:24px}
+  .modal-box{background:#fff;border-radius:20px 20px 0 0;padding:26px 24px calc(26px + env(safe-area-inset-bottom,0px));max-width:640px;width:100%;box-shadow:0 -8px 30px rgba(0,0,0,.15)}
+  .modal-overlay.center .modal-box{border-radius:20px;max-width:340px}
+  .modal-box p{font-size:.9rem;line-height:1.8;color:var(--ink-soft);margin-bottom:18px}
+  .modal-box .btn{margin-top:2px}
+
+  /* ---- demo venue switcher (for internal review only) ---- */
+  .demo-toggle{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));width:44px;height:44px;border-radius:50%;background:#2b2420;color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.1rem;box-shadow:0 6px 18px rgba(0,0,0,.28);z-index:40}
+  .demo-panel-title{font-size:.72rem;color:#9a8f83;font-weight:700;letter-spacing:.06em;margin-bottom:14px}
+  .demo-venue-opt{display:flex;align-items:center;gap:10px;padding:12px 4px;border-bottom:1px solid var(--line);font-size:.9rem;font-weight:600}
+  .demo-venue-opt:last-child{border-bottom:none}
+  .demo-venue-opt .swatch{width:18px;height:18px;border-radius:50%;flex-shrink:0}
+
+  @media (min-width:640px){
+    .option-grid{grid-template-columns:repeat(2,1fr)}
+  }
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+
+  <div class="venue-bar" id="venueBar" hidden>
+    <span class="logo-badge" id="venueBadge"></span>
+    <span class="venue-name" id="venueNameLabel"></span>
+  </div>
+
+  <!-- 画面1: スタート -->
+  <section class="screen active" id="screen-start">
+    <div class="hero">
+      <div class="logo-badge-lg" id="startBadge"></div>
+      <div class="brand" id="startBrand"></div>
+      <div class="hero-visual" id="startVisual">💍</div>
+      <h1 id="startTitle"></h1>
+      <p class="desc" id="startDesc"></p>
+      <div class="duration-chip">⏱ <span id="startDuration"></span></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btnStart">診断をはじめる</button>
+    </div>
+  </section>
+
+  <!-- 画面2/3: 質問 -->
+  <section class="screen" id="screen-question">
+    <div class="q-head">
+      <button class="q-back" id="btnBack">← 戻る</button>
+      <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+      <div class="q-step" id="qStep"></div>
+      <h2 class="q-text" id="qText"></h2>
+    </div>
+    <div class="option-grid" id="optionGrid"></div>
+  </section>
+
+  <!-- 画面4: 診断結果 -->
+  <section class="screen" id="screen-result">
+    <div class="result-head">
+      <div class="result-eyebrow">DIAGNOSIS RESULT</div>
+      <h2>あなたにおすすめの演出アイテムは</h2>
+    </div>
+    <div class="result-card">
+      <div class="result-visual" id="resultVisual"></div>
+      <div class="result-body">
+        <h3 id="resultName"></h3>
+        <p id="resultDesc"></p>
+        <div class="result-tags" id="resultTags"></div>
+      </div>
+    </div>
+    <div class="result-actions">
+      <button class="btn btn-primary" id="btnApply">申し込み・相談はこちら</button>
+      <button class="btn btn-outline" id="btnDetail">商品詳細を見る</button>
+      <button class="btn btn-outline" id="btnVideo">商品動画を見る</button>
+    </div>
+    <div class="retry-row">
+      <button class="btn-text" id="btnRetry">もう一度診断する</button>
+    </div>
+  </section>
+
+</div>
+
+<button class="demo-toggle" id="demoToggle" aria-label="会場プレビュー切替">⚙</button>
+
+<div class="modal-overlay hidden" id="modalGeneric">
+  <div class="modal-box">
+    <p id="modalGenericText"></p>
+    <button class="btn btn-outline" id="modalGenericClose">閉じる</button>
+  </div>
+</div>
+
+<div class="modal-overlay center hidden" id="modalVenue">
+  <div class="modal-box">
+    <div class="demo-panel-title">会場プレビュー切替（社内確認用）</div>
+    <div id="venueOptList"></div>
+    <button class="btn btn-outline" id="modalVenueClose" style="margin-top:16px">閉じる</button>
+  </div>
+</div>
+
+<script>
+(function(){
+
+  // ---------------------------------------------------------------
+  // マスターデータ（本番では管理画面 / DB から取得する想定のダミーデータ）
+  // ---------------------------------------------------------------
+
+  var VENUES = {
+    "default": {
+      name: "サンプルウェディング",
+      brand: "SAMPLE WEDDING HALL",
+      initial: "SW",
+      theme: { primary: "#b8896f", primaryDark: "#96694f" },
+      visualIcon: "💍",
+      title: "あなたにぴったりの\n演出アイテムを診断",
+      desc: "いくつかの質問に答えるだけで、お二人の披露宴にぴったりの演出アイテムをご提案します。",
+      duration: "約30秒"
+    },
+    "venue-a": {
+      name: "グランヒルズウェディング",
+      brand: "GRAND HILLS WEDDING",
+      initial: "GH",
+      theme: { primary: "#a8506b", primaryDark: "#833f53" },
+      visualIcon: "🏛️",
+      title: "お二人にふさわしい\n演出を見つけよう",
+      desc: "写真を選ぶだけの簡単診断。グランヒルズ厳選の演出アイテムをご提案します。",
+      duration: "約30秒"
+    },
+    "venue-b": {
+      name: "アクアテラスウェディング",
+      brand: "AQUA TERRACE WEDDING",
+      initial: "AT",
+      theme: { primary: "#2f7d78", primaryDark: "#235f5b" },
+      visualIcon: "🌊",
+      title: "あなたの理想の演出を\n診断してみよう",
+      desc: "2つの質問に答えて、アクアテラスでおすすめの演出アイテムをチェックしましょう。",
+      duration: "約30秒"
+    }
+  };
+
+  // 会場ごとの上書き設定（非表示商品 / 商品名などの上書き）
+  var VENUE_OVERRIDES = {
+    "venue-a": {
+      hideProducts: [],
+      productOverrides: {
+        "prod-candle": { name: "グランヒルズ特製 キャンドルロードサービス" }
+      }
+    },
+    "venue-b": {
+      hideProducts: ["prod-fire"],
+      productOverrides: {}
+    }
+  };
+
+  var PRODUCTS = [
+    { id: "prod-candle", name: "キャンドルウォーターサービス", icon: "🕯️",
+      desc: "灯りを灯しながら会場を巡る、定番の演出です。幻想的な雰囲気を演出します。",
+      tags: ["romantic", "candle", "light"] },
+    { id: "prod-petal", name: "フラワーシャワーロード", icon: "🌸",
+      desc: "退場時にゲストが花びらを撒く、写真映えする演出です。",
+      tags: ["romantic", "floral"] },
+    { id: "prod-fire", name: "スパークルファイヤーパフォーマンス", icon: "🔥",
+      desc: "会場の照明を落として行う炎の演出です。特別な瞬間を華やかに彩ります。",
+      tags: ["dramatic", "fire", "luxury"] },
+    { id: "prod-table", name: "エレガントテーブルコーディネート", icon: "💐",
+      desc: "上質な花材とキャンドルで整える、テーブル装飾の演出です。",
+      tags: ["elegant", "table-decoration", "luxury"] },
+    { id: "prod-champagne", name: "シャンパンタワー & ライトアップ", icon: "🥂",
+      desc: "ライトアップされたシャンパンタワーで乾杯。豪華な演出です。",
+      tags: ["luxury", "light", "dramatic"] }
+  ];
+
+  var Q1 = {
+    step: 1,
+    text: "どちらの披露宴の雰囲気がお好みですか？",
+    options: [
+      { id: "romantic", label: "ロマンチック\n＆ナチュラル", icon: "🌷", tags: ["romantic", "floral"] },
+      { id: "luxury",   label: "ラグジュアリー\n＆ドラマチック", icon: "🎇", tags: ["luxury", "dramatic"] }
+    ]
+  };
+
+  var Q2_BY_Q1 = {
+    romantic: {
+      step: 2,
+      text: "会場を彩る演出は、どちらがお好みですか？",
+      options: [
+        { id: "candlelight", label: "キャンドルの灯り", icon: "🕯️", tags: ["candle", "light"] },
+        { id: "petals",      label: "花びらが舞う演出", icon: "🌺", tags: ["floral", "romantic"] }
+      ]
+    },
+    luxury: {
+      step: 2,
+      text: "特別感を演出するなら、どちらがお好みですか？",
+      options: [
+        { id: "fire",     label: "炎・スパークルの演出", icon: "✨", tags: ["fire", "dramatic", "luxury"] },
+        { id: "tabledeco", label: "上質なテーブル装飾", icon: "💐", tags: ["table-decoration", "elegant", "luxury"] }
+      ]
+    }
+  };
+
+  // ---------------------------------------------------------------
+  // 状態
+  // ---------------------------------------------------------------
+
+  var state = {
+    venueId: "default",
+    q1: null,
+    q2: null
+  };
+
+  function getVenueIdFromUrl(){
+    var params = new URLSearchParams(window.location.search);
+    var v = params.get("venue");
+    return (v && VENUES[v]) ? v : "default";
+  }
+
+  function currentVenue(){
+    return VENUES[state.venueId];
+  }
+
+  // ---------------------------------------------------------------
+  // テーマ適用
+  // ---------------------------------------------------------------
+
+  function applyTheme(){
+    var v = currentVenue();
+    document.documentElement.style.setProperty("--primary", v.theme.primary);
+    document.documentElement.style.setProperty("--primary-dark", v.theme.primaryDark);
+  }
+
+  function gradientFor(v){
+    return "linear-gradient(150deg," + v.theme.primary + "," + v.theme.primaryDark + ")";
+  }
+
+  // ---------------------------------------------------------------
+  // 画面描画: スタート
+  // ---------------------------------------------------------------
+
+  function renderStart(){
+    var v = currentVenue();
+    el("startBadge").textContent = v.initial;
+    el("startBrand").textContent = v.brand;
+    el("startVisual").textContent = v.visualIcon;
+    el("startVisual").style.background = gradientFor(v);
+    el("startTitle").textContent = v.title;
+    el("startDesc").textContent = v.desc;
+    el("startDuration").textContent = "所要時間 " + v.duration;
+
+    el("venueBadge").textContent = v.initial;
+    el("venueNameLabel").textContent = v.name;
+  }
+
+  // ---------------------------------------------------------------
+  // 画面描画: 質問
+  // ---------------------------------------------------------------
+
+  function renderQuestion(question, selectedId){
+    var v = currentVenue();
+    el("qStep").textContent = "質問 " + question.step + " / 2";
+    el("qText").textContent = question.text;
+    el("progressFill").style.width = (question.step / 2 * 100) + "%";
+
+    var grid = el("optionGrid");
+    grid.innerHTML = "";
+    question.options.forEach(function(opt){
+      var card = document.createElement("button");
+      card.type = "button";
+      card.className = "option-card" + (opt.id === selectedId ? " selected" : "");
+      card.setAttribute("data-id", opt.id);
+
+      var visual = document.createElement("div");
+      visual.className = "option-visual";
+      visual.style.background = gradientFor(v);
+      visual.textContent = opt.icon;
+
+      var overlay = document.createElement("div");
+      overlay.className = "option-overlay";
+      overlay.textContent = opt.label;
+
+      var check = document.createElement("div");
+      check.className = "option-check";
+      check.textContent = "✓";
+
+      card.appendChild(visual);
+      card.appendChild(overlay);
+      card.appendChild(check);
+
+      card.addEventListener("click", function(){ onSelectOption(question, opt); });
+      grid.appendChild(card);
+    });
+  }
+
+  function onSelectOption(question, opt){
+    var cards = el("optionGrid").querySelectorAll(".option-card");
+    cards.forEach(function(c){
+      c.classList.toggle("selected", c.getAttribute("data-id") === opt.id);
+    });
+
+    if (question.step === 1) {
+      state.q1 = opt;
+      setTimeout(function(){
+        renderQuestion(Q2_BY_Q1[opt.id], state.q2 ? state.q2.id : null);
+      }, 380);
+    } else {
+      state.q2 = opt;
+      setTimeout(function(){
+        showResult();
+      }, 380);
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // 診断ロジック（タグ一致度によるおすすめ商品の決定）
+  // ---------------------------------------------------------------
+
+  function pickProduct(){
+    var selectedTags = [].concat(state.q1.tags, state.q2.tags);
+    var overrides = VENUE_OVERRIDES[state.venueId] || { hideProducts: [], productOverrides: {} };
+    var hidden = overrides.hideProducts || [];
+
+    var candidates = PRODUCTS.filter(function(p){ return hidden.indexOf(p.id) === -1; });
+
+    var best = null;
+    var bestScore = -1;
+    candidates.forEach(function(p){
+      var score = p.tags.filter(function(t){ return selectedTags.indexOf(t) !== -1; }).length;
+      if (score > bestScore) {
+        bestScore = score;
+        best = p;
+      }
+    });
+    return best;
+  }
+
+  function renderResult(product){
+    var v = currentVenue();
+    var overrides = VENUE_OVERRIDES[state.venueId] || {};
+    var override = (overrides.productOverrides || {})[product.id] || {};
+
+    el("resultVisual").textContent = product.icon;
+    el("resultVisual").style.background = gradientFor(v);
+    el("resultName").textContent = override.name || product.name;
+    el("resultDesc").textContent = override.desc || product.desc;
+
+    var tagsEl = el("resultTags");
+    tagsEl.innerHTML = "";
+    product.tags.forEach(function(t){
+      var pill = document.createElement("span");
+      pill.className = "tag-pill";
+      pill.textContent = "#" + t;
+      tagsEl.appendChild(pill);
+    });
+  }
+
+  function showResult(){
+    var product = pickProduct();
+    renderResult(product);
+    showScreen("screen-result");
+  }
+
+  // ---------------------------------------------------------------
+  // 画面遷移
+  // ---------------------------------------------------------------
+
+  function showScreen(id){
+    document.querySelectorAll(".screen").forEach(function(s){ s.classList.remove("active"); });
+    el(id).classList.add("active");
+    el("venueBar").hidden = (id === "screen-start");
+    window.scrollTo(0, 0);
+  }
+
+  function resetDiagnosis(){
+    state.q1 = null;
+    state.q2 = null;
+    showScreen("screen-start");
+  }
+
+  // ---------------------------------------------------------------
+  // モーダル（商品詳細・動画・申し込み導線 ※モックアップのためプレースホルダー）
+  // ---------------------------------------------------------------
+
+  function showGenericModal(text){
+    el("modalGenericText").textContent = text;
+    el("modalGeneric").classList.remove("hidden");
+  }
+
+  // ---------------------------------------------------------------
+  // 会場プレビュー切替（社内確認用の簡易デモ機能）
+  // ---------------------------------------------------------------
+
+  function renderVenueSwitcher(){
+    var list = el("venueOptList");
+    list.innerHTML = "";
+    Object.keys(VENUES).forEach(function(id){
+      var v = VENUES[id];
+      var row = document.createElement("button");
+      row.type = "button";
+      row.className = "demo-venue-opt";
+      row.style.width = "100%";
+      row.style.textAlign = "left";
+
+      var swatch = document.createElement("span");
+      swatch.className = "swatch";
+      swatch.style.background = v.theme.primary;
+
+      var label = document.createElement("span");
+      label.textContent = v.name + (id === state.venueId ? "（現在表示中）" : "");
+
+      row.appendChild(swatch);
+      row.appendChild(label);
+      row.addEventListener("click", function(){
+        window.location.search = "?venue=" + id;
+      });
+      list.appendChild(row);
+    });
+  }
+
+  // ---------------------------------------------------------------
+  // イベント登録
+  // ---------------------------------------------------------------
+
+  function el(id){ return document.getElementById(id); }
+
+  function init(){
+    state.venueId = getVenueIdFromUrl();
+    applyTheme();
+    renderStart();
+
+    el("btnStart").addEventListener("click", function(){
+      renderQuestion(Q1, state.q1 ? state.q1.id : null);
+      showScreen("screen-question");
+    });
+
+    el("btnBack").addEventListener("click", function(){
+      var onStep2 = el("qStep").textContent.indexOf("2 / 2") !== -1;
+      if (onStep2) {
+        renderQuestion(Q1, state.q1 ? state.q1.id : null);
+      } else {
+        showScreen("screen-start");
+      }
+    });
+
+    el("btnRetry").addEventListener("click", resetDiagnosis);
+
+    el("btnDetail").addEventListener("click", function(){
+      showGenericModal("こちらは商品詳細ページへのリンクです。本番環境では、会場ごとに設定した商品詳細URLへ遷移します。（モックアップのため準備中）");
+    });
+    el("btnVideo").addEventListener("click", function(){
+      showGenericModal("こちらは商品紹介動画へのリンクです。本番環境では、会場ごとに設定した動画URLへ遷移します。（モックアップのため準備中）");
+    });
+    el("btnApply").addEventListener("click", function(){
+      showGenericModal("こちらは申し込み・相談フォームへのリンクです。本番環境では、会場ごとに設定した申し込みURLへ遷移します。（モックアップのため準備中）");
+    });
+
+    el("modalGenericClose").addEventListener("click", function(){
+      el("modalGeneric").classList.add("hidden");
+    });
+
+    el("demoToggle").addEventListener("click", function(){
+      renderVenueSwitcher();
+      el("modalVenue").classList.remove("hidden");
+    });
+    el("modalVenueClose").addEventListener("click", function(){
+      el("modalVenue").classList.add("hidden");
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", init);
+})();
+</script>
+</body>
+</html>
