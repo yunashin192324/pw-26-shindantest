@@ -236,9 +236,9 @@
     { id: "prod-candle", name: "キャンドルウォーターサービス", icon: "candle", photo: "images/table-candles.webp",
       desc: "灯りを灯しながら会場を巡る、定番の演出です。幻想的な雰囲気を演出します。",
       tags: ["romantic", "candle", "light"] },
-    { id: "prod-petal", name: "フラワーシャワーロード", icon: "petals", photo: "images/balloons.webp",
-      desc: "退場時にゲストが花びらを撒く、写真映えする演出です。",
-      tags: ["romantic", "floral"] },
+    { id: "prod-lantern", name: "スカイランタンリリース", icon: "lantern", photo: "images/sky-lanterns.jpg",
+      desc: "夜空にたくさんのランタンを放つ、幻想的な人気の演出です。",
+      tags: ["romantic", "lantern"] },
     { id: "prod-fire", name: "スパークルファイヤーパフォーマンス", icon: "flame", photo: "images/fireworks.jpg",
       desc: "会場の照明を落として行う炎の演出です。特別な瞬間を華やかに彩ります。",
       tags: ["dramatic", "fire", "luxury"] },
@@ -263,7 +263,7 @@
       text: "会場を彩る演出は、どちらが好き？",
       options: [
         { id: "candlelight", label: "キャンドルの灯り", icon: "candle", photo: "images/table-candles.webp", tags: ["candle", "light"] },
-        { id: "petals",      label: "花びらが舞う演出", icon: "petals", photo: "images/balloons.webp", tags: ["floral", "romantic"] }
+        { id: "lantern",     label: "灯りが夜空に舞う演出", icon: "lantern", photo: "images/sky-lanterns.jpg", tags: ["romantic", "lantern"] }
       ]
     },
     luxury: {
@@ -345,7 +345,11 @@
     champagne:
       '<path d="M18,18 L28,18 L25,30 C25,33 21,33 21,30 Z"/><line x1="23" y1="30" x2="23" y2="45"/><line x1="18" y1="47" x2="28" y2="47"/>' +
       '<path d="M34,24 L44,24 L41,36 C41,39 37,39 37,36 Z"/><line x1="39" y1="36" x2="39" y2="45"/><line x1="34" y1="47" x2="44" y2="47"/>' +
-      '<circle cx="21" cy="14" r=".8"/><circle cx="25" cy="10" r=".8"/><circle cx="37" cy="20" r=".8"/>'
+      '<circle cx="21" cy="14" r=".8"/><circle cx="25" cy="10" r=".8"/><circle cx="37" cy="20" r=".8"/>',
+    lantern:
+      '<line x1="32" y1="8" x2="32" y2="15"/><ellipse cx="32" cy="8" rx="3" ry="1.6"/>' +
+      '<path d="M24,15 L40,15 L37,52 C37,56 27,56 27,52 Z"/>' +
+      '<line x1="24" y1="15" x2="27" y2="52"/><line x1="32" y1="15" x2="32" y2="53"/><line x1="40" y1="15" x2="37" y2="52"/>'
   };
 
   function iconSVG(key){
