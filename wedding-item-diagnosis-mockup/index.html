@@ -103,13 +103,13 @@
   .plate-pair .plate-inner{cursor:pointer}
   .plate-pair.has-chosen .plate-inner:not(.chosen){transform:scale(.94);filter:brightness(.45) saturate(.85);opacity:.75}
   .plate-pair.has-chosen .plate-inner.chosen{transform:scale(1.05);filter:brightness(1.1)}
-  .option-caption{position:absolute;left:0;right:0;top:calc(66px + env(safe-area-inset-top,0px));z-index:3;
+  .option-caption{position:absolute;left:0;right:0;bottom:calc(50px + env(safe-area-inset-bottom,0px));z-index:3;
     padding:0 16px;text-align:center;font-family:var(--serif);font-size:.86rem;color:#fff;letter-spacing:.02em;pointer-events:none}
   .option-caption .n{display:block;font-family:var(--sans);font-size:.6rem;letter-spacing:.24em;color:rgba(248,244,236,.6);margin-bottom:6px}
-  .beat-caption{position:absolute;left:0;right:0;bottom:0;z-index:4;height:180px;
-    background:linear-gradient(180deg,transparent,rgba(10,8,6,.78) 58%);
-    display:flex;flex-direction:column;align-items:center;justify-content:flex-end;
-    padding:0 28px calc(30px + env(safe-area-inset-bottom,0px));text-align:center;pointer-events:none}
+  .beat-caption{position:absolute;left:0;right:0;top:0;z-index:4;height:170px;
+    background:linear-gradient(to bottom,rgba(10,8,6,.8),transparent);
+    display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
+    padding:calc(64px + env(safe-area-inset-top,0px)) 28px 0;text-align:center;pointer-events:none}
   .beat-caption .q-eyebrow{font-size:.62rem;letter-spacing:.3em;color:var(--gold);margin-bottom:10px}
   .beat-caption .q-text{font-family:var(--serif);font-size:1.02rem;line-height:1.7;color:#fff;letter-spacing:.02em}
 
@@ -527,6 +527,9 @@
       var scrimTop = document.createElement("div");
       scrimTop.className = "plate-scrim scrim-top";
       inner.appendChild(scrimTop);
+      var scrimBottom = document.createElement("div");
+      scrimBottom.className = "plate-scrim";
+      inner.appendChild(scrimBottom);
 
       var caption = document.createElement("div");
       caption.className = "option-caption";
