@@ -98,20 +98,26 @@
   .arrow-link.dark::after{background:var(--primary-dark)}
 
   /* ---- question beats ---- */
-  .plate-pair{position:absolute;inset:0;display:flex}
-  .plate-pair .plate{position:relative;inset:auto;flex:1;transition:flex-grow .48s cubic-bezier(.16,1,.3,1)}
+  /* 写真は横長のため、横に2分割すると極端に細い枠に収まらず大きく
+     切れてしまう。縦に2分割し、写真本来の比率に近い枠で見せる。 */
+  .plate-pair{position:absolute;inset:0;display:flex;flex-direction:column}
+  .plate-pair .plate{position:relative;inset:auto;flex:1;min-height:0}
   .plate-pair .plate-inner{cursor:pointer}
-  .plate-pair.has-chosen .plate-inner:not(.chosen){transform:scale(.94);filter:brightness(.45) saturate(.85);opacity:.75}
-  .plate-pair.has-chosen .plate-inner.chosen{transform:scale(1.05);filter:brightness(1.1)}
-  .option-caption{position:absolute;left:0;right:0;bottom:calc(50px + env(safe-area-inset-bottom,0px));z-index:3;
-    padding:0 16px;text-align:center;font-family:var(--serif);font-size:.86rem;color:#fff;letter-spacing:.02em;pointer-events:none}
-  .option-caption .n{display:block;font-family:var(--sans);font-size:.6rem;letter-spacing:.24em;color:rgba(248,244,236,.6);margin-bottom:6px}
-  .beat-caption{position:absolute;left:0;right:0;top:0;z-index:4;height:170px;
-    background:linear-gradient(to bottom,rgba(10,8,6,.8),transparent);
+  .plate-pair.has-chosen .plate-inner:not(.chosen){transform:scale(.97);filter:brightness(.4) saturate(.85);opacity:.8}
+  .plate-pair.has-chosen .plate-inner.chosen{transform:scale(1.02);filter:brightness(1.1)}
+  .option-caption{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;padding:0 24px;text-align:center;font-family:var(--serif);font-size:1.05rem;
+    color:#fff;letter-spacing:.03em;line-height:1.6;white-space:pre-line;pointer-events:none;
+    text-shadow:0 2px 20px rgba(0,0,0,.9),0 1px 5px rgba(0,0,0,.95)}
+  .option-caption .n{display:block;font-family:var(--sans);font-size:.64rem;letter-spacing:.28em;
+    color:rgba(248,244,236,.8);margin-bottom:10px;text-shadow:0 1px 8px rgba(0,0,0,.9)}
+  .beat-caption{position:absolute;left:0;right:0;top:0;z-index:4;height:150px;
+    background:linear-gradient(to bottom,rgba(10,8,6,.82),transparent);
     display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
-    padding:calc(64px + env(safe-area-inset-top,0px)) 28px 0;text-align:center;pointer-events:none}
+    padding:calc(60px + env(safe-area-inset-top,0px)) 28px 0;text-align:center;pointer-events:none}
   .beat-caption .q-eyebrow{font-size:.62rem;letter-spacing:.3em;color:var(--gold);margin-bottom:10px}
-  .beat-caption .q-text{font-family:var(--serif);font-size:1.02rem;line-height:1.7;color:#fff;letter-spacing:.02em}
+  .beat-caption .q-text{font-family:var(--serif);font-size:1.02rem;line-height:1.65;color:#fff;
+    letter-spacing:.02em;white-space:pre-line}
 
   /* ---- result beat ---- */
   .beat-result .beat-content{position:relative;z-index:5;height:100%;display:flex;flex-direction:column;
@@ -251,26 +257,26 @@
   ];
 
   var Q1 = {
-    text: "どちらの披露宴の雰囲気が好き？",
+    text: "どちらの披露宴の\n雰囲気が好き？",
     options: [
-      { id: "romantic", label: "ロマンチック＆ナチュラル", icon: "bouquet", photo: "images/garden-couple.webp", tags: ["romantic", "floral"] },
-      { id: "luxury",   label: "ラグジュアリー＆ドラマチック", icon: "sparkle", photo: "images/fireworks.jpg", tags: ["luxury", "dramatic"] }
+      { id: "romantic", label: "ロマンチック\n＆ナチュラル", icon: "bouquet", photo: "images/garden-couple.webp", tags: ["romantic", "floral"] },
+      { id: "luxury",   label: "ラグジュアリー\n＆ドラマチック", icon: "sparkle", photo: "images/fireworks.jpg", tags: ["luxury", "dramatic"] }
     ]
   };
 
   var Q2_BY_Q1 = {
     romantic: {
-      text: "会場を彩る演出は、どちらが好き？",
+      text: "会場を彩る演出は、\nどちらが好き？",
       options: [
-        { id: "candlelight", label: "キャンドルの灯り", icon: "candle", photo: "images/table-candles.webp", tags: ["candle", "light"] },
-        { id: "lantern",     label: "灯りが夜空に舞う演出", icon: "lantern", photo: "images/sky-lanterns.jpg", tags: ["romantic", "lantern"] }
+        { id: "candlelight", label: "キャンドルの\n灯り", icon: "candle", photo: "images/table-candles.webp", tags: ["candle", "light"] },
+        { id: "lantern",     label: "灯りが夜空に\n舞う演出", icon: "lantern", photo: "images/sky-lanterns.jpg", tags: ["romantic", "lantern"] }
       ]
     },
     luxury: {
-      text: "特別感を演出するなら、どちらが好き？",
+      text: "特別感を演出するなら、\nどちらが好き？",
       options: [
-        { id: "fire",      label: "炎・スパークルの演出", icon: "flame", photo: "images/fireworks.jpg", tags: ["fire", "dramatic", "luxury"] },
-        { id: "tabledeco", label: "上質なテーブル装飾", icon: "centerpiece", photo: "images/table-candles.webp", tags: ["table-decoration", "elegant", "luxury"] }
+        { id: "fire",      label: "炎・スパークルの\n演出", icon: "flame", photo: "images/fireworks.jpg", tags: ["fire", "dramatic", "luxury"] },
+        { id: "tabledeco", label: "上質な\nテーブル装飾", icon: "centerpiece", photo: "images/table-candles.webp", tags: ["table-decoration", "elegant", "luxury"] }
       ]
     }
   };
