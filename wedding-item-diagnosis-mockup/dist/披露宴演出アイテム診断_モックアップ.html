@@ -129,6 +129,10 @@
   .plate-pair.has-chosen .plate-inner.chosen{transform:scale(1.02);filter:brightness(1.1)}
   .option-caption{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;align-items:center;
     justify-content:center;padding:0 24px;text-align:center;pointer-events:none}
+  /* 上段の写真は質問文の帯（画面上部に固定表示）と重なる可能性があるため、
+     ビューア側のUIぶん実際の高さが縮んでも必ずクリアできるよう
+     見出しの中心位置を下側へ逃がしておく。 */
+  .plate-pair .plate:first-child .option-caption{padding-top:132px}
   .option-caption .en{display:block;font-family:var(--sans);font-weight:700;font-size:clamp(1.3rem,7vw,1.7rem);
     letter-spacing:.05em;text-transform:uppercase;color:#fff;margin-bottom:10px;
     text-shadow:0 2px 20px rgba(0,0,0,.9),0 1px 5px rgba(0,0,0,.95)}
