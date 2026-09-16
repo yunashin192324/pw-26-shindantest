@@ -53,7 +53,10 @@
   /* ---- timeline (scroll = the experience) ---- */
   #timeline{position:relative;height:100%;height:100dvh;overflow-y:auto;overflow-x:hidden;
     scroll-snap-type:y mandatory;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch}
-  .beat{position:relative;min-height:100%;min-height:100dvh;scroll-snap-align:start;overflow:hidden}
+  /* height（min-heightではなく）を明示することで、中の .beat-content 等が
+     height:100% で正しく親いっぱいに広がるようにする。min-heightだけだと
+     子要素のパーセンテージ指定が効かず、中身の高さぶんしか広がらない。 */
+  .beat{position:relative;height:100%;height:100dvh;scroll-snap-align:start;overflow:hidden}
 
   .plate{position:absolute;inset:0;will-change:transform,opacity}
   .plate-inner{position:relative;width:100%;height:100%;overflow:hidden;background-color:#141210;
@@ -97,6 +100,25 @@
   .arrow-link.dark{color:var(--ink)}
   .arrow-link.dark::after{background:var(--primary-dark)}
 
+  /* ---- editorial motifs: rule-flanked labels, oversized ghost type,
+     solid CTA with a circular arrow badge ---- */
+  .divider{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:14px}
+  .divider .rule{width:26px;height:1px;background:rgba(255,255,255,.42)}
+  .divider .label{font-size:.62rem;letter-spacing:.32em;color:var(--gold);white-space:nowrap}
+
+  .ghost-text{position:absolute;left:0;right:0;text-align:center;pointer-events:none;overflow:hidden;
+    font-family:var(--serif);font-weight:700;color:rgba(255,255,255,.08);letter-spacing:.04em;
+    white-space:nowrap;line-height:1;font-size:clamp(3.2rem,20vw,6.5rem)}
+
+  .btn-solid{position:relative;display:inline-flex;align-items:center;gap:16px;background:var(--gold);
+    color:var(--ink);padding:15px 16px 15px 26px;font-size:.84rem;letter-spacing:.1em;font-weight:600;
+    opacity:0;animation:fadeUp .8s ease .78s both;transition:opacity .2s ease}
+  .btn-solid:active{opacity:.85}
+  .btn-solid .ring{width:30px;height:30px;border-radius:50%;background:rgba(28,24,21,.14);
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:.86rem;
+    transition:transform .3s cubic-bezier(.16,1,.3,1)}
+  .btn-solid:active .ring{transform:translateX(3px)}
+
   /* ---- question beats ---- */
   /* 写真は横長のため、横に2分割すると極端に細い枠に収まらず大きく
      切れてしまう。縦に2分割し、写真本来の比率に近い枠で見せる。 */
@@ -106,23 +128,27 @@
   .plate-pair.has-chosen .plate-inner:not(.chosen){transform:scale(.97);filter:brightness(.4) saturate(.85);opacity:.8}
   .plate-pair.has-chosen .plate-inner.chosen{transform:scale(1.02);filter:brightness(1.1)}
   .option-caption{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;align-items:center;
-    justify-content:center;padding:0 24px;text-align:center;font-family:var(--serif);font-size:1.05rem;
-    color:#fff;letter-spacing:.03em;line-height:1.6;white-space:pre-line;pointer-events:none;
+    justify-content:center;padding:0 24px;text-align:center;pointer-events:none}
+  .option-caption .en{display:block;font-family:var(--sans);font-weight:700;font-size:clamp(1.3rem,7vw,1.7rem);
+    letter-spacing:.05em;text-transform:uppercase;color:#fff;margin-bottom:10px;
     text-shadow:0 2px 20px rgba(0,0,0,.9),0 1px 5px rgba(0,0,0,.95)}
-  .option-caption .n{display:block;font-family:var(--sans);font-size:.64rem;letter-spacing:.28em;
-    color:rgba(248,244,236,.8);margin-bottom:10px;text-shadow:0 1px 8px rgba(0,0,0,.9)}
+  .option-caption .ja{display:block;font-family:var(--serif);font-size:.86rem;letter-spacing:.03em;
+    line-height:1.6;color:rgba(255,255,255,.88);white-space:pre-line;
+    text-shadow:0 2px 16px rgba(0,0,0,.9),0 1px 4px rgba(0,0,0,.95)}
+  .option-caption .ring{width:32px;height:32px;border-radius:50%;border:1px solid rgba(255,255,255,.6);
+    display:flex;align-items:center;justify-content:center;margin-top:16px;font-size:.78rem;color:#fff}
   .beat-caption{position:absolute;left:0;right:0;top:0;z-index:4;height:150px;
     background:linear-gradient(to bottom,rgba(10,8,6,.82),transparent);
     display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
     padding:calc(60px + env(safe-area-inset-top,0px)) 28px 0;text-align:center;pointer-events:none}
-  .beat-caption .q-eyebrow{font-size:.62rem;letter-spacing:.3em;color:var(--gold);margin-bottom:10px}
+  .beat-caption .divider{margin-bottom:14px}
   .beat-caption .q-text{font-family:var(--serif);font-size:1.02rem;line-height:1.65;color:#fff;
     letter-spacing:.02em;white-space:pre-line}
 
   /* ---- result beat ---- */
   .beat-result .beat-content{position:relative;z-index:5;height:100%;display:flex;flex-direction:column;
     align-items:center;justify-content:flex-end;text-align:center;padding:0 28px calc(50px + env(safe-area-inset-bottom,0px))}
-  .result-eyebrow{font-size:.64rem;letter-spacing:.32em;color:var(--gold);opacity:0;margin-bottom:14px}
+  .result-eyebrow{opacity:0;margin-bottom:14px}
   .result-kicker{font-family:var(--serif);font-size:.92rem;color:var(--paper-soft);opacity:0;margin-bottom:6px}
   .result-name{font-family:var(--serif);font-size:1.5rem;font-weight:500;color:#fff;opacity:0;margin-bottom:14px;letter-spacing:.02em}
   .result-desc{font-size:.82rem;line-height:1.9;color:var(--paper-soft);max-width:30em;opacity:0;margin-bottom:22px}
@@ -239,19 +265,19 @@
   };
 
   var PRODUCTS = [
-    { id: "prod-candle", name: "キャンドルウォーターサービス", icon: "candle", photo: "images/table-candles.webp",
+    { id: "prod-candle", name: "キャンドルウォーターサービス", enLabel: "CANDLE SERVICE", icon: "candle", photo: "images/table-candles.webp",
       desc: "灯りを灯しながら会場を巡る、定番の演出です。幻想的な雰囲気を演出します。",
       tags: ["romantic", "candle", "light"] },
-    { id: "prod-lantern", name: "スカイランタンリリース", icon: "lantern", photo: "images/sky-lanterns.jpg",
+    { id: "prod-lantern", name: "スカイランタンリリース", enLabel: "SKY LANTERN", icon: "lantern", photo: "images/sky-lanterns.jpg",
       desc: "夜空にたくさんのランタンを放つ、幻想的な人気の演出です。",
       tags: ["romantic", "lantern"] },
-    { id: "prod-fire", name: "スパークルファイヤーパフォーマンス", icon: "flame", photo: "images/fireworks.jpg",
+    { id: "prod-fire", name: "スパークルファイヤーパフォーマンス", enLabel: "FIRE & SPARKLE", icon: "flame", photo: "images/fireworks.jpg",
       desc: "会場の照明を落として行う炎の演出です。特別な瞬間を華やかに彩ります。",
       tags: ["dramatic", "fire", "luxury"] },
-    { id: "prod-table", name: "エレガントテーブルコーディネート", icon: "centerpiece", photo: "images/table-candles.webp",
+    { id: "prod-table", name: "エレガントテーブルコーディネート", enLabel: "TABLE DECOR", icon: "centerpiece", photo: "images/table-candles.webp",
       desc: "上質な花材とキャンドルで整える、テーブル装飾の演出です。",
       tags: ["elegant", "table-decoration", "luxury"] },
-    { id: "prod-champagne", name: "シャンパンタワー & ライトアップ", icon: "champagne", photo: "images/champagne-tower.jpg",
+    { id: "prod-champagne", name: "シャンパンタワー & ライトアップ", enLabel: "CHAMPAGNE TOWER", icon: "champagne", photo: "images/champagne-tower.jpg",
       desc: "ライトアップされたシャンパンタワーで乾杯。豪華な演出です。",
       tags: ["luxury", "light", "dramatic"] }
   ];
@@ -259,8 +285,8 @@
   var Q1 = {
     text: "どちらの披露宴の\n雰囲気が好き？",
     options: [
-      { id: "romantic", label: "ロマンチック\n＆ナチュラル", icon: "bouquet", photo: "images/garden-couple.webp", tags: ["romantic", "floral"] },
-      { id: "luxury",   label: "ラグジュアリー\n＆ドラマチック", icon: "sparkle", photo: "images/fireworks.jpg", tags: ["luxury", "dramatic"] }
+      { id: "romantic", enLabel: "ROMANTIC", label: "ロマンチック＆ナチュラル", icon: "bouquet", photo: "images/garden-couple.webp", tags: ["romantic", "floral"] },
+      { id: "luxury",   enLabel: "LUXURY", label: "ラグジュアリー＆ドラマチック", icon: "sparkle", photo: "images/fireworks.jpg", tags: ["luxury", "dramatic"] }
     ]
   };
 
@@ -268,15 +294,15 @@
     romantic: {
       text: "会場を彩る演出は、\nどちらが好き？",
       options: [
-        { id: "candlelight", label: "キャンドルの\n灯り", icon: "candle", photo: "images/table-candles.webp", tags: ["candle", "light"] },
-        { id: "lantern",     label: "灯りが夜空に\n舞う演出", icon: "lantern", photo: "images/sky-lanterns.jpg", tags: ["romantic", "lantern"] }
+        { id: "candlelight", enLabel: "CANDLE LIGHT", label: "キャンドルの灯り", icon: "candle", photo: "images/table-candles.webp", tags: ["candle", "light"] },
+        { id: "lantern",     enLabel: "SKY LANTERN", label: "灯りが夜空に舞う演出", icon: "lantern", photo: "images/sky-lanterns.jpg", tags: ["romantic", "lantern"] }
       ]
     },
     luxury: {
       text: "特別感を演出するなら、\nどちらが好き？",
       options: [
-        { id: "fire",      label: "炎・スパークルの\n演出", icon: "flame", photo: "images/fireworks.jpg", tags: ["fire", "dramatic", "luxury"] },
-        { id: "tabledeco", label: "上質な\nテーブル装飾", icon: "centerpiece", photo: "images/table-candles.webp", tags: ["table-decoration", "elegant", "luxury"] }
+        { id: "fire",      enLabel: "FIRE & SPARKLE", label: "炎・スパークルの演出", icon: "flame", photo: "images/fireworks.jpg", tags: ["fire", "dramatic", "luxury"] },
+        { id: "tabledeco", enLabel: "TABLE DECOR", label: "上質なテーブル装飾", icon: "centerpiece", photo: "images/table-candles.webp", tags: ["table-decoration", "elegant", "luxury"] }
       ]
     }
   };
@@ -389,6 +415,34 @@
   }
 
   // ---------------------------------------------------------------
+  // エディトリアル系の見出し部品（罫線ラベル／巨大な薄い透かし文字）
+  // ---------------------------------------------------------------
+
+  function buildDivider(text){
+    var wrap = document.createElement("div");
+    wrap.className = "divider";
+    var r1 = document.createElement("span");
+    r1.className = "rule";
+    var label = document.createElement("span");
+    label.className = "label";
+    label.textContent = text;
+    var r2 = document.createElement("span");
+    r2.className = "rule";
+    wrap.appendChild(r1);
+    wrap.appendChild(label);
+    wrap.appendChild(r2);
+    return wrap;
+  }
+
+  function buildGhostText(word, bottomOffset){
+    var ghost = document.createElement("div");
+    ghost.className = "ghost-text";
+    ghost.style.bottom = bottomOffset;
+    ghost.textContent = word;
+    return ghost;
+  }
+
+  // ---------------------------------------------------------------
   // タイムライン: スクロール量で写真を連続的に変形させるエンジン
   // ---------------------------------------------------------------
 
@@ -464,6 +518,9 @@
     var content = document.createElement("div");
     content.className = "beat-content";
 
+    // 透かし文字は最初に挿入し、他のテキストの背後に自然に配置する
+    content.appendChild(buildGhostText(v.brand, "calc(210px + env(safe-area-inset-bottom,0px))"));
+
     var brand = document.createElement("div");
     brand.className = "start-brand";
     brand.textContent = v.brand;
@@ -489,8 +546,8 @@
 
     var startLink = document.createElement("button");
     startLink.type = "button";
-    startLink.className = "arrow-link";
-    startLink.innerHTML = "はじめる <span class=\"arrow\">→</span>";
+    startLink.className = "btn-solid";
+    startLink.innerHTML = "はじめる <span class=\"ring\">→</span>";
     startLink.addEventListener("click", function(){ scrollToBeat(q1Beat); });
 
     content.appendChild(brand);
@@ -539,11 +596,18 @@
 
       var caption = document.createElement("div");
       caption.className = "option-caption";
-      var n = document.createElement("span");
-      n.className = "n";
-      n.textContent = String.fromCharCode(65 + idx);
-      caption.appendChild(n);
-      caption.appendChild(document.createTextNode(opt.label));
+      var enLabel = document.createElement("span");
+      enLabel.className = "en";
+      enLabel.textContent = opt.enLabel;
+      var jaLabel = document.createElement("span");
+      jaLabel.className = "ja";
+      jaLabel.textContent = opt.label;
+      var ring = document.createElement("span");
+      ring.className = "ring";
+      ring.textContent = "→";
+      caption.appendChild(enLabel);
+      caption.appendChild(jaLabel);
+      caption.appendChild(ring);
       inner.appendChild(caption);
 
       inner.addEventListener("click", function(){
@@ -561,13 +625,10 @@
 
     var caption = document.createElement("div");
     caption.className = "beat-caption";
-    var eyebrow = document.createElement("div");
-    eyebrow.className = "q-eyebrow";
-    eyebrow.textContent = "Question " + (dotIndex);
     var text = document.createElement("div");
     text.className = "q-text";
     text.textContent = question.text;
-    caption.appendChild(eyebrow);
+    caption.appendChild(buildDivider("QUESTION " + dotIndex));
     caption.appendChild(text);
 
     beat.appendChild(pair);
@@ -618,9 +679,10 @@
     var content = document.createElement("div");
     content.className = "beat-content";
 
-    var eyebrow = document.createElement("div");
-    eyebrow.className = "result-eyebrow";
-    eyebrow.textContent = "YOUR WEDDING STYLE";
+    content.appendChild(buildGhostText(product.enLabel, "calc(250px + env(safe-area-inset-bottom,0px))"));
+
+    var eyebrow = buildDivider("YOUR WEDDING STYLE");
+    eyebrow.classList.add("result-eyebrow");
 
     var kicker = document.createElement("div");
     kicker.className = "result-kicker";
@@ -637,6 +699,14 @@
     var actions = document.createElement("div");
     actions.className = "result-actions";
 
+    var primaryBtn = document.createElement("button");
+    primaryBtn.type = "button";
+    primaryBtn.className = "btn-solid";
+    primaryBtn.innerHTML = "この演出を相談する <span class=\"ring\">→</span>";
+    primaryBtn.addEventListener("click", function(){
+      showOverlay("こちらは申し込み・相談フォームへの導線です。本番環境では、会場ごとに設定した申し込みURLへ遷移します。（モックアップのため準備中）");
+    });
+
     function actionLink(label, message){
       var b = document.createElement("button");
       b.type = "button";
@@ -646,7 +716,7 @@
       return b;
     }
 
-    actions.appendChild(actionLink("この演出を相談する", "こちらは申し込み・相談フォームへの導線です。本番環境では、会場ごとに設定した申し込みURLへ遷移します。（モックアップのため準備中）"));
+    actions.appendChild(primaryBtn);
     actions.appendChild(actionLink("動画を見る", "こちらは商品紹介動画の全画面再生です。本番環境では、会場ごとに設定した動画が再生されます。（モックアップのため準備中）"));
     actions.appendChild(actionLink("演出の詳細を見る", "こちらは商品詳細ページへの導線です。本番環境では、会場ごとに設定した詳細URLへ遷移します。（モックアップのため準備中）"));
 
