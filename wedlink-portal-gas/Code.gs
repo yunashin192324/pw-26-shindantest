@@ -230,6 +230,11 @@ const COMPANION_CHOICES = ['有', '無'];
 const COL_COMPANION_ADULT = '同行者（大人）';
 const COL_COMPANION_CHILD = '同行者（子供）';
 const COL_COMPANION_INFANT = '同行者（幼児）';
+// ★要件（項目101）：予約依頼（RQ）の時点で、挙式への列席者がいるかどうかを確認できるようにする。
+// 「有り予定」は人数が固まっていない段階の回答（人数欄は空欄のままでよい）。
+const COL_ATTENDANCE = '列席';
+const ATTENDANCE_CHOICES = ['有り', '無し', '有り予定'];
+const COL_ATTENDANCE_COUNT = '列席人数';
 const COL_AREA = '管轄';
 const COL_BILLING_REGION = '請求先';
 const COL_JP_SHOP = '日本支店名';
@@ -260,10 +265,19 @@ const MEMO_TYPE_SHARED_BRANCH = '共有メモ（現地支店）';
 const MEMO_TYPE_SHARED_SHOP = '共有メモ（日本支店）';
 const MEMO_TYPE_SHARED_JP = '共有メモ（手配課）';
 const MEMO_TYPE_LOCAL = COL_LOCAL_MEMO;     // 'メモ（現地用）'
+// ★要件（項目101）：これまで拠点ごとの「書き込める履歴欄」は現地支店（メモ（現地用））だけにあり、
+// 日本の店舗・手配課には自分たちだけが読める「共有メモ」しか無かった。全拠点が同じように
+// 記録を積み上げられるよう、店舗用・手配課用のメモを新設する。
+// 共有メモ（自分の拠点だけが読む内部メモ）との違いは「3拠点すべてが読める」こと。
+// どの拠点が書いた記録も1か所で追えるようにするのが目的なので、書けるのは自分の拠点のものだけ。
+const MEMO_TYPE_SHOP_LOCAL = 'メモ（店舗用）';
+const MEMO_TYPE_JP_LOCAL = 'メモ（手配課用）';
+// 全拠点が読める「拠点メモ」3種（共有メモとは別扱い）
+const CROSS_SITE_MEMO_TYPES = [MEMO_TYPE_LOCAL, MEMO_TYPE_SHOP_LOCAL, MEMO_TYPE_JP_LOCAL];
 const MEMO_TYPE_SURVEY = 'アンケート回答';   // お客様がGoogleフォームで回答した内容（自動反映・追記のみ）
 const MEMO_TYPES = [
   MEMO_TYPE_SHARED, MEMO_TYPE_SHARED_BRANCH, MEMO_TYPE_SHARED_SHOP, MEMO_TYPE_SHARED_JP,
-  MEMO_TYPE_LOCAL, MEMO_TYPE_SURVEY
+  MEMO_TYPE_LOCAL, MEMO_TYPE_SHOP_LOCAL, MEMO_TYPE_JP_LOCAL, MEMO_TYPE_SURVEY
 ];
 // お客様入力（Googleフォーム）である目印。手入力のメモと見分けるために使う
 const MEMO_AUTHOR_CUSTOMER = 'お客様（Googleフォーム）';
@@ -302,6 +316,13 @@ const COL_SHOP_UPLOAD_FOLDER_URL = '店舗アップロード用フォルダURL';
 // URLは自由入力、ファイルアップロードは専用フォルダ（COL_DELIVERY_DATA_FOLDER_URL）へ保存する。
 // どちらも取消（URLのクリア・ファイルの削除）ができる。登録・削除すると既定の手配課（案件の管轄）へ
 // 自動で通知する。システム列のため画面からの直接編集（3択フロー）はさせず、専用APIで扱う。
+// ★要件（項目101）：撮影データをアップしたかどうかを現地支店がチェックで示せるようにする。
+// 撮影データ納品URL（この仕組みの中に登録する場合）とは別に、別の手段で渡した場合も
+// 「渡したかどうか」だけは一目で分かるようにするための欄。チェックした担当者と日時を自動で残す。
+const COL_DATA_UPLOADED = '撮影データアップ済み';
+const COL_DATA_UPLOADED_BY = '撮影データアップ済み者';
+const COL_DATA_UPLOADED_AT = '撮影データアップ済み日時';
+const DATA_UPLOADED_DONE_VALUE = '済';
 const COL_DELIVERY_DATA_URL = '撮影データ納品URL';
 const COL_DELIVERY_DATA_FOLDER_URL = '撮影データ納品フォルダURL';
 
@@ -359,6 +380,7 @@ const RESERVATION_HEADERS = (() => {
     COL_PASSPORT_NO, COL_LOCAL_EMAIL, COL_DATA_DELIVERY_EMAIL, COL_LOCAL_PHONE, COL_HOTEL, COL_HOTEL_ADDRESS,
     COL_CHECKIN_DATE, COL_CHECKOUT_DATE, COL_FLIGHT_INFO, COL_FLIGHT_INFO_OUT, COL_COSTUME_COMPANY,
     COL_COMPANION, COL_COMPANION_ADULT, COL_COMPANION_CHILD, COL_COMPANION_INFANT,
+    COL_ATTENDANCE, COL_ATTENDANCE_COUNT,
     COL_AREA, COL_BILLING_REGION, COL_JP_SHOP, COL_INVOICE_NO, COL_SHOP,
     COL_DAY_STAFF, COL_HAIR_MAKEUP, COL_HAIR_START_TIME, COL_PHOTOGRAPHER, COL_PHOTO_START_TIME,
     COL_ASSISTANT, COL_PICKUP_TIME, COL_LOCAL_MEMO,
@@ -366,6 +388,7 @@ const RESERVATION_HEADERS = (() => {
     COL_PHOTOBRIDGE, COL_PHOTOBRIDGE_BY, COL_PHOTOBRIDGE_AT, COL_AI_EDIT,
     COL_DATA_UPLOAD, COL_DATA_UPLOAD_BY, COL_DATA_UPLOAD_AT, COL_DELIVERY_EMAIL, COL_EARLY_DELIVERY,
     COL_LAST_UPDATED, COL_DRIVE_URL, COL_SHOP_UPLOAD_FOLDER_URL, COL_DELIVERY_DATA_URL, COL_DELIVERY_DATA_FOLDER_URL, COL_ORIGIN_SHOP,
+    COL_DATA_UPLOADED, COL_DATA_UPLOADED_BY, COL_DATA_UPLOADED_AT,
     COL_UNREAD_JP, COL_UNREAD_BRANCH, COL_UNREAD_SHOP,
     ...CHECKLIST_ITEMS.map(checklistCol_)
   ];
@@ -413,6 +436,7 @@ const INTERNAL_VALUE_SPECS = {
 const HOPE_JP_STATUS_FIELDS = Array.from({ length: HOPE_COLS.length }, (_, i) => hopeStsJpCol_(i + 1));
 const COMMITTABLE_FIELDS = RESERVATION_HEADERS.filter(h => ![
   COL_BRANCH_CODE, COL_KANRI_NO, COL_LAST_UPDATED, COL_DRIVE_URL, COL_SHOP_UPLOAD_FOLDER_URL,
+  COL_DATA_UPLOADED_BY, COL_DATA_UPLOADED_AT,
   COL_DELIVERY_DATA_URL, COL_DELIVERY_DATA_FOLDER_URL, COL_ORIGIN_SHOP,
   COL_UNREAD_JP, COL_UNREAD_BRANCH, COL_UNREAD_SHOP, ...JP_INTERNAL_FIELDS, ...HOPE_JP_STATUS_FIELDS
 ].includes(h));
@@ -443,7 +467,9 @@ const SHOP_EDITABLE_FIELDS = [
   COL_LOCAL_EMAIL, COL_DATA_DELIVERY_EMAIL, COL_LOCAL_PHONE, COL_HOTEL, COL_HOTEL_ADDRESS, COL_FLIGHT_INFO, COL_FLIGHT_INFO_OUT,
   // ★要件：チェックイン日・チェックアウト日・衣装会社・同行者の有無も店舗から入力できるようにする
   COL_CHECKIN_DATE, COL_CHECKOUT_DATE, COL_COSTUME_COMPANY,
-  COL_COMPANION, COL_COMPANION_ADULT, COL_COMPANION_CHILD, COL_COMPANION_INFANT
+  COL_COMPANION, COL_COMPANION_ADULT, COL_COMPANION_CHILD, COL_COMPANION_INFANT,
+  // ★要件（項目101）：列席の有無は予約依頼の時点で店舗が入力する
+  COL_ATTENDANCE, COL_ATTENDANCE_COUNT
 ];
 // ★機能追加（店舗拡張）：店舗が案件作成後にSTS(JP側)を変更できる先。新規作成時のRQ／CHKの
 // 選択は apiShopCreateRequest 側で扱うため、ここには含めない（作成後の変更だけを対象にする）。
@@ -470,7 +496,7 @@ const SHOP_STATUS_TARGETS_FROM_OK_CASE = ['CR', 'FN', 'DC', 'PC'];
 // checkAlerts/archivePastReservations/sortReservationSheet_ は撮影日FIXがDate型であることを前提にしている
 const DATE_FIELDS = [COL_CONFIRMED_DATE, COL_CEREMONY_DATE, COL_CHECKIN_DATE, COL_CHECKOUT_DATE];
 // 日付だけでなく時刻まで表示したいフィールド（社内進行管理欄のチェック日時など）
-const DATETIME_FIELDS = [COL_PHOTOBRIDGE_AT, COL_DATA_UPLOAD_AT];
+const DATETIME_FIELDS = [COL_PHOTOBRIDGE_AT, COL_DATA_UPLOAD_AT, COL_DATA_UPLOADED_AT];
 
 // ★機能追加：現地スタッフ手配メール（機能：スタッフ手配）
 // カメラマン・ヘアメイク等、押すボタンごとに「宛先（名前・メール）」を支店マスタに持つ。
@@ -551,6 +577,10 @@ const BM_COL_TIMEZONE = 'タイムゾーン';
 // ★機能追加（項目98）：撮影不可日を自動で取り込むGoogleカレンダーのID（空欄なら取り込まない）。
 // 既にGoogleカレンダーで休業日を管理している支店のために用意した経路。
 const BM_COL_BLACKOUT_CALENDAR = '不可日カレンダーID';
+// ★要件（項目101）：案件一覧を「方面」（ヨーロッパ方面・アジア方面…といった地域のまとまり）で
+// 絞り込めるようにするための列。支店ごとに自由な文字列を入れる（未記入の支店は「方面未設定」扱い）。
+// 特定の方面名をコードに埋め込まないので、方面を増やす・呼び方を変える場合もシートの編集だけで済む。
+const BM_COL_REGION = '方面';
 const BM_COL_ACTIVE = '有効';
 // ★不具合防止：既存のテスト・運用スプレッドシートは「有効」列が支店マスタの最後尾にある前提で
 // 位置決め打ちの行を作っている場合がある。新しい列（手配メール機能まわり）は、その並びを崩さないよう
@@ -562,6 +592,7 @@ const BRANCH_MASTER_HEADERS = [
   BM_COL_ARRANGEMENT_ENABLED, BM_COL_PASSPORT_REQUIRED, BM_COL_SHOP_DIRECT,
   BM_COL_SHOP_NOTIFY_HQ, BM_COL_SHOP_BILLING, BM_COL_SHOP_UPLOAD_VISIBLE_TO_BRANCH,
   BM_COL_SHOW_HOPE_TIME, BM_COL_BRANCH_NOTIFY_NEW_CASE, BM_COL_DISPLAY_LANG, BM_COL_BRANCH_MAIL_NOTIFY, BM_COL_TIMEZONE, BM_COL_BLACKOUT_CALENDAR,
+  BM_COL_REGION,
   // カテゴリごとの手配先（名前・メール）。同じ宛先を複数カテゴリに入れれば「まとめて1件に依頼」にできる
   ...ARRANGEMENT_CATEGORIES.flatMap(c => [arrNameCol_(c.label), arrEmailCol_(c.label)])
 ];
@@ -1094,6 +1125,8 @@ function listBranchesRaw_() {
     remindDays: parseIntOrNull_(r[BM_COL_REMIND_DAYS]),
     // ★機能追加（項目97）：支店の現地時間の地域名（空欄なら現地時間を併記しない）
     timezone: String(r[BM_COL_TIMEZONE] || '').trim(),
+    // ★要件（項目101）：案件一覧の「方面」絞り込みに使う（未記入なら空文字＝方面未設定）
+    region: String(r[BM_COL_REGION] || '').trim(),
     // ★機能追加（項目98）：撮影不可日を取り込むGoogleカレンダーのID（空欄なら取り込まない）
     blackoutCalendarId: String(r[BM_COL_BLACKOUT_CALENDAR] || '').trim(),
     consentRequired: isActiveFlag_(r[BM_COL_CONSENT_REQUIRED]),
@@ -1181,6 +1214,12 @@ function apiSaveBranch(token, branch) {
           return branch.timezone === undefined
             ? (existingRowValues ? existingRowValues[idx] : '')
             : String(branch.timezone || '').trim();
+        // ★要件（項目101）：案件一覧を方面で絞り込むための欄。タイムゾーンと同じく、
+        // 指定が無い場合は既存の値をそのまま残す。
+        case BM_COL_REGION:
+          return branch.region === undefined
+            ? (existingRowValues ? existingRowValues[idx] : '')
+            : String(branch.region || '').trim();
         // ★不具合修正：このAPIが直接扱わない列（請求番号欄名称・納品期限日数など、今後追加される
         // 列も含む）は、新規行なら空欄、既存行の編集なら元の値をそのまま維持する。
         // 以前は無条件に空文字で上書きしていたため、このAPI経由で支店情報を保存すると
@@ -1606,7 +1645,10 @@ function apiGetDashboard(token, scope) {
     needsAction: isNeedsAction(r),
     // ★機能追加：手配課・現地支店の一覧に「撮影データ送付」有無を表示する（納品期限アラート・
     // 「納品待ち」画面と同じ、DriveフォルダURL（COL_DRIVE_URL）の有無を判定に使う）
-    dataDelivered: !!String(r[COL_DRIVE_URL] || '').trim()
+    // ★要件（項目101）：DriveフォルダURLの登録に加えて、現地支店の「撮影データアップ済み」
+    // チェックでも送付済みとみなす（この仕組みを通さずに渡した場合も一覧で分かるようにするため）
+    dataDelivered: !!String(r[COL_DRIVE_URL] || '').trim() ||
+                   String(r[COL_DATA_UPLOADED] || '').trim() === DATA_UPLOADED_DONE_VALUE
   }));
 
   // ★要件：まず要対応（未読あり）を最優先で上に、その中・その他はそれぞれ撮影日FIXが「今日に近い順」
@@ -1796,6 +1838,14 @@ function buildShopReservationDetail_(session, kanriNo, headers, rowData) {
   detail[COL_COMPANION_ADULT] = getV(COL_COMPANION_ADULT);
   detail[COL_COMPANION_CHILD] = getV(COL_COMPANION_CHILD);
   detail[COL_COMPANION_INFANT] = getV(COL_COMPANION_INFANT);
+  // ★要件（項目101）：列席の有無（予約依頼の時点で確認する項目）
+  detail[COL_ATTENDANCE] = getV(COL_ATTENDANCE);
+  detail[COL_ATTENDANCE_COUNT] = getV(COL_ATTENDANCE_COUNT);
+  // ★要件（項目101）：撮影データをアップしたかどうか。チェックするのは現地支店だけだが、
+  // 店舗からも「済／未」が見えるようにする（読み取り専用）。
+  detail[COL_DATA_UPLOADED] = getV(COL_DATA_UPLOADED);
+  detail[COL_DATA_UPLOADED_BY] = getV(COL_DATA_UPLOADED_BY);
+  detail[COL_DATA_UPLOADED_AT] = formatDateTime_(getV(COL_DATA_UPLOADED_AT));
   // ★要件：CRにする際のキャンセル理由（プラン・オプションのSTS欄近くに入力欄を出す）
   detail[COL_CANCEL_REASON] = getV(COL_CANCEL_REASON);
 
@@ -1825,7 +1875,10 @@ function buildShopReservationDetail_(session, kanriNo, headers, rowData) {
   // ★要件：店舗が追加できる「共有メモ（日本支店）」は自分でも見えるようにする（メモ（現地用）・
   // アンケート回答は支店・手配課側の運用情報のため店舗には見せない。共有メモ（現地支店）・
   // 共有メモ（手配課）も他ロール専用のため見せない）
-  detail.memoLog = getMemoLog_(kanriNo).filter(m => m.type === MEMO_TYPE_SHARED_SHOP);
+  // ★要件（項目101）：自分たちの共有メモに加え、拠点メモ（現地用・店舗用・手配課用）も読める
+  // （どの拠点が何を書いたかを1か所で追えるようにするため。共有メモは引き続き自分の拠点のものだけ）
+  detail.memoLog = getMemoLog_(kanriNo).filter(m =>
+    m.type === MEMO_TYPE_SHARED_SHOP || CROSS_SITE_MEMO_TYPES.indexOf(m.type) !== -1);
 
   const hSheet = getSpreadsheet_().getSheetByName(HISTORY_SHEET_NAME);
   let hRows = getRowsAsObjects_(hSheet).filter(r => String(r[H_COL_KANRI]) === String(kanriNo));
@@ -2588,8 +2641,10 @@ function apiGetReservationDetail(token, kanriNo) {
   const visibleSharedMemoTypes = session.role === JP_ROLE
     ? [MEMO_TYPE_SHARED_JP, MEMO_TYPE_SHARED_SHOP]
     : [MEMO_TYPE_SHARED_BRANCH];
+  // ★要件（項目101）：拠点メモ（現地用・店舗用・手配課用）は3拠点すべてが読める
   detail.memoLog = getMemoLog_(kanriNo).filter(m =>
-    visibleSharedMemoTypes.indexOf(m.type) !== -1 || m.type === MEMO_TYPE_LOCAL || m.type === MEMO_TYPE_SURVEY);
+    visibleSharedMemoTypes.indexOf(m.type) !== -1 ||
+    CROSS_SITE_MEMO_TYPES.indexOf(m.type) !== -1 || m.type === MEMO_TYPE_SURVEY);
 
   // ★機能追加：現地スタッフ手配メール。宛先メールアドレス自体はここでは返さない
   // （送信時に改ざんできないよう、下書き作成・送信の両方でサーバー側が都度解決するため）。
@@ -2686,6 +2741,7 @@ function apiSaveFieldsQuiet(token, kanriNo, changes) {
     const who = senderLabel_(session);
     logFieldChanges_(kanriNo, writes, who);
     applyStatusCascade_(sheet, headers, rowIndex, kanriNo, writes);
+    applyDataUploadedStamp_(sheet, headers, rowIndex, writes, session);
     const hopeDateChanged = applyHopeStatusCascade_(sheet, headers, rowIndex, kanriNo, writes, who);
     appendCwAutoNoticeIfApplicable_(sheet, headers, rowIndex, writes, session);
 
@@ -2742,6 +2798,7 @@ function apiCommitChanges(token, kanriNo, changes, message, recipient) {
       sheet.getRange(rowIndex, colIndexOrThrow_(headers, COL_LAST_UPDATED)).setValue(new Date());
       logFieldChanges_(kanriNo, writes, who);
       applyStatusCascade_(sheet, headers, rowIndex, kanriNo, writes);
+      applyDataUploadedStamp_(sheet, headers, rowIndex, writes, session);
       if (applyHopeStatusCascade_(sheet, headers, rowIndex, kanriNo, writes, who)) dateChanged = true;
     }
     // ★不具合修正（重大）：以前はここで先に sortReservationSheet_() を呼んでいた。
@@ -2982,6 +3039,19 @@ function applyStatusCascade_(sheet, headers, rowIndex, kanriNo, writes) {
   if (logSheet) logSheet.appendRow([kanriNo, COL_STATUS_JP, currentJp, rule.setJpTo, '自動反映（ステータス連動）', new Date()]);
 }
 
+// ★要件（項目101）：撮影データアップ済みのチェックが変わったら、チェックした担当者と日時を
+// 自動で記録する（日本記入欄のフォトブリッジ登録・データアップロードと同じ考え方。
+// チェックを外したときは記録も消して、いつでも実態と一致するようにする）。
+function applyDataUploadedStamp_(sheet, headers, rowIndex, writes, session) {
+  const write = writes.find(w => w.field === COL_DATA_UPLOADED && w.changed);
+  if (!write) return;
+  const done = write.valueToStore === DATA_UPLOADED_DONE_VALUE;
+  const byIdx = headers.indexOf(COL_DATA_UPLOADED_BY);
+  const atIdx = headers.indexOf(COL_DATA_UPLOADED_AT);
+  if (byIdx !== -1) sheet.getRange(rowIndex, byIdx + 1).setValue(done ? senderLabel_(session) : '');
+  if (atIdx !== -1) sheet.getRange(rowIndex, atIdx + 1).setValue(done ? new Date() : '');
+}
+
 // ★機能追加：希望日ごとの空き確認ステータス（hopeStsBranchCol_/hopeStsJpCol_）専用の自動連動。
 //   1. 現地側がある希望日のSTS(支店側)をOK／UCに変えたら、対になる希望日のSTS(JP側)にも同じ値を
 //      反映する（DC/PCの回答と同じ「支店側の回答がJP側にも映る」例外パターン）
@@ -3143,6 +3213,18 @@ function validateFieldPermission_(session, headers, rowData, field, value) {
   }
   if (field === COL_BILLING_REGION && value && !BILLING_REGIONS.includes(value)) {
     throw new Error(`請求先は ${BILLING_REGIONS.join('/')} のいずれかにしてください。`);
+  }
+  // ★要件（項目101）：列席の有無は決められた3つの答え方からだけ選ぶ
+  if (field === COL_ATTENDANCE && value && !ATTENDANCE_CHOICES.includes(value)) {
+    throw new Error(`列席は ${ATTENDANCE_CHOICES.join('/')} のいずれかにしてください。`);
+  }
+  // ★要件（項目101）：撮影データをアップしたかどうかは、実際にアップする現地支店だけがチェックする
+  // （手配課・店舗からは状態が見えるだけ。日本側には従来どおり日本記入欄の「データアップロード」がある）
+  if (field === COL_DATA_UPLOADED) {
+    if (session.role !== BRANCH_ROLE) throw new Error('撮影データアップ済みのチェックは現地支店のみ変更できます。');
+    if (value && value !== DATA_UPLOADED_DONE_VALUE) {
+      throw new Error(`撮影データアップ済みは「${DATA_UPLOADED_DONE_VALUE}」か空欄のどちらかです。`);
+    }
   }
   // ★要件：チャレンジ番号（CHG NO）は英数字11桁固定。通常の3択フローで変更する場合も同じ形式を強制する
   // （新規作成時の必須チェックはapiShopCreateRequest側で行う。ここでは「値を入れるならこの形式のみ」）
@@ -3729,22 +3811,28 @@ const SHARED_MEMO_OWNER_ROLE_ = {
   [MEMO_TYPE_SHARED_SHOP]: SHOP_ROLE,
   [MEMO_TYPE_SHARED_JP]: JP_ROLE
 };
+// ★要件（項目101）：拠点メモ（3拠点すべてが読める記録）も、書けるのは自分の拠点のものだけ
+const CROSS_SITE_MEMO_OWNER_ROLE_ = {
+  [MEMO_TYPE_LOCAL]: BRANCH_ROLE,
+  [MEMO_TYPE_SHOP_LOCAL]: SHOP_ROLE,
+  [MEMO_TYPE_JP_LOCAL]: JP_ROLE
+};
 
 function apiAddMemo(token, kanriNo, memoType, body) {
   const session = requireSession_(token);
   const isSharedType = Object.prototype.hasOwnProperty.call(SHARED_MEMO_OWNER_ROLE_, memoType);
-  if (!isSharedType && memoType !== MEMO_TYPE_LOCAL) {
+  const isCrossSiteType = Object.prototype.hasOwnProperty.call(CROSS_SITE_MEMO_OWNER_ROLE_, memoType);
+  if (!isSharedType && !isCrossSiteType) {
     throw new Error('種別が正しくありません。');
+  }
+  // ★要件（項目101）：拠点メモは3拠点すべてが読めるが、書けるのは自分の拠点のものだけ
+  if (isCrossSiteType && session.role !== CROSS_SITE_MEMO_OWNER_ROLE_[memoType]) {
+    throw new Error('このメモは追加できません（担当ロール専用です）。');
   }
   // ★機能追加：共有メモを現地支店・日本支店（店舗）・手配課で分離。各ロールは自分専用の
   // 共有メモ欄にしか書き込めない
   if (isSharedType && session.role !== SHARED_MEMO_OWNER_ROLE_[memoType]) {
     throw new Error('この共有メモは追加できません（担当ロール専用です）。');
-  }
-  // ★機能追加（店舗拡張）：店舗が使えるのは共有メモ（日本支店）だけ
-  // （メモ（現地用）は支店の内部運用メモのため）
-  if (session.role === SHOP_ROLE && memoType === MEMO_TYPE_LOCAL) {
-    throw new Error('店舗が追加できるのは共有メモ（日本支店）だけです。');
   }
   const text = String(body || '').trim();
   if (!text) throw new Error('内容を入力してください。');
@@ -4142,6 +4230,12 @@ function apiShopCreateRequest(token, payload) {
   const options = Array.from({ length: OPTION_COUNT }, (_, i) => String(payload['option' + (i + 1)] || '').trim());
   // ★要件：パスポート番号欄は支店の必須設定に関わらず常に入力できる（※ISWのみ必要。任意入力）
   const passportNumber = String(payload.passportNumber || '').trim();
+  // ★要件（項目101）：予約依頼（RQ）の時点で、挙式への列席者の有無を確認する
+  const attendance = String(payload.attendance || '').trim();
+  if (attendance && !ATTENDANCE_CHOICES.includes(attendance)) {
+    throw new Error(`列席は ${ATTENDANCE_CHOICES.join('/')} のいずれかにしてください。`);
+  }
+  const attendanceCount = String(payload.attendanceCount || '').trim();
   // ★要件：新規依頼フォームの一番下に備考欄を追加する
   const remarks = String(payload.remarks || '').trim();
   const initialStatus = String(payload.initialStatus || 'RQ').trim().toUpperCase() || 'RQ';
@@ -4266,6 +4360,8 @@ function apiShopCreateRequest(token, payload) {
       // ★要件変更：パスポート番号は支店の必須設定に関わらず、入力があれば常に保存する
       // （日本の店舗画面では常に入力欄を表示し、「※ISWのみ必要」という注記で運用する方針に変更したため）
       setV(COL_PASSPORT_NO, passportNumber);
+      setV(COL_ATTENDANCE, attendance);
+      setV(COL_ATTENDANCE_COUNT, attendanceCount);
       setV(COL_AREA, team);
       setV(COL_ORIGIN_SHOP, session.branchCode);
       seedHopeStatuses_(headers, newRowData);
@@ -6019,6 +6115,155 @@ function archivePastReservationsCore_(errors) {
   console.log(`[archivePastReservations] ${moved}件を過去一覧へ移動`);
 }
 
+// =====================================================
+// ⑮-2 古い過去案件の退避（項目101）
+// =====================================================
+// ★要件：カコの情報は半年で消す。ただし同じスプレッドシート内に置いたままだと重くなるため、
+// 別のスプレッドシート（保管用ファイル）へ移してから、運用中のスプレッドシートからは消す。
+// 案件の行だけでなく、その案件に紐づくやり取り履歴・ステータス変更履歴・メモ履歴もまとめて移す
+// （件数がいちばん増えるのは履歴系のため、これを残すと「重くなる」問題が解決しない）。
+const ARCHIVE_RETENTION_MONTHS = 6;
+// 保管用スプレッドシートのIDを覚えておく場所（スクリプトのプロパティ）。
+// 最初の1回だけ自動で新しいスプレッドシートを作り、以後は同じファイルに追記していく。
+const ARCHIVE_FILE_PROPERTY_KEY = 'WEDLINK_ARCHIVE_SPREADSHEET_ID';
+// 1回の実行で移す案件数の上限（GASの実行時間6分に達しないように。残りは翌日の実行で処理される）
+const PURGE_MAX_CASES_PER_RUN = 300;
+// 案件に紐づく履歴系シート（管理番号でひも付く。退避先にも同じ名前のシートを作る）
+const PURGE_LINKED_SHEETS = [
+  { name: HISTORY_SHEET_NAME, headers: HISTORY_HEADERS, keyColumn: H_COL_KANRI },
+  { name: STATUS_LOG_SHEET_NAME, headers: STATUS_LOG_HEADERS, keyColumn: SL_COL_KANRI },
+  { name: MEMO_LOG_SHEET_NAME, headers: MEMO_LOG_HEADERS, keyColumn: ML_COL_KANRI }
+];
+
+// 保管用スプレッドシートを取得する（無ければ作ってIDを覚える）。
+function getOrCreateArchiveFile_() {
+  const props = PropertiesService.getScriptProperties();
+  const savedId = props.getProperty(ARCHIVE_FILE_PROPERTY_KEY);
+  if (savedId) {
+    try { return SpreadsheetApp.openById(savedId); } catch (e) { /* 消された等。下で作り直す */ }
+  }
+  const created = SpreadsheetApp.create('WEDLINK 過去案件の保管庫');
+  props.setProperty(ARCHIVE_FILE_PROPERTY_KEY, created.getId());
+  console.log(`[purgeOldArchivedCases] 保管用スプレッドシートを新しく作りました: ${created.getUrl()}`);
+  return created;
+}
+
+// 保管用スプレッドシート側の受け皿シートを用意する（同じ列構成で作る）
+function ensureArchiveFileSheet_(file, name, headers) {
+  let sheet = file.getSheetByName(name);
+  if (!sheet) {
+    sheet = file.insertSheet(name);
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  }
+  return sheet;
+}
+
+// 退避の基準日：この日より前の撮影日（挙式日）の案件が対象
+function purgeCutoffDate_(today) {
+  const base = today instanceof Date ? today : new Date();
+  const cutoff = new Date(base.getFullYear(), base.getMonth() - ARCHIVE_RETENTION_MONTHS, base.getDate());
+  return cutoff;
+}
+
+// その案件が「半年たった」かどうかを判定する。
+// 撮影日FIXを基準にし、入っていなければ挙式日FIX、どちらも無ければ最終更新日を見る
+// （日付がまったく分からない行は、判断材料が無いので退避しない＝消さない）。
+function purgeBaseDate_(row, headers) {
+  const pick = (name) => {
+    const i = headers.indexOf(name);
+    return i === -1 ? null : row[i];
+  };
+  const candidates = [pick(COL_CONFIRMED_DATE), pick(COL_CEREMONY_DATE), pick(COL_LAST_UPDATED)];
+  for (const v of candidates) {
+    if (v instanceof Date) return v;
+    const iso = toComparableDate_(v);
+    if (iso) return new Date(iso.replace(/-/g, '/'));
+  }
+  return null;
+}
+
+function purgeOldArchivedCases() { return runTrigger_('purgeOldArchivedCases', purgeOldArchivedCasesCore_); }
+
+function purgeOldArchivedCasesCore_(errors) {
+  const ss = getSpreadsheet_();
+  const archive = ss.getSheetByName(ARCHIVE_SHEET_NAME);
+  if (!archive || archive.getLastRow() < 2) return;
+
+  const headers = archive.getRange(1, 1, 1, archive.getLastColumn()).getValues()[0].map(h => String(h).trim());
+  const values = archive.getRange(2, 1, archive.getLastRow() - 1, headers.length).getValues();
+  const cutoff = purgeCutoffDate_(new Date());
+  const kanriIdx = headers.indexOf(COL_KANRI_NO);
+
+  const movingRows = [];
+  const keptRows = [];
+  const movingKanri = {};
+  values.forEach(row => {
+    if (movingRows.length >= PURGE_MAX_CASES_PER_RUN) { keptRows.push(row); return; }
+    const base = purgeBaseDate_(row, headers);
+    if (!base || base >= cutoff) { keptRows.push(row); return; }
+    movingRows.push(row);
+    if (kanriIdx !== -1) movingKanri[String(row[kanriIdx] || '').trim()] = true;
+  });
+  if (!movingRows.length) {
+    console.log('[purgeOldArchivedCases] 退避する案件はありません');
+    return;
+  }
+
+  const file = getOrCreateArchiveFile_();
+
+  // 1) 案件の行を保管用スプレッドシートへ移す（列名で対応付けるので、列順が違っても崩れない）
+  const destSheet = ensureArchiveFileSheet_(file, ARCHIVE_SHEET_NAME, RESERVATION_HEADERS);
+  const destHeaders = destSheet.getRange(1, 1, 1, destSheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+  movingRows.forEach(row => {
+    destSheet.appendRow(destHeaders.map(h => {
+      const i = headers.indexOf(h);
+      return i === -1 ? '' : row[i];
+    }));
+  });
+
+  // 2) その案件に紐づく履歴（やり取り・ステータス変更・メモ）も移す
+  let movedLinked = 0;
+  PURGE_LINKED_SHEETS.forEach(spec => {
+    const sheet = ss.getSheetByName(spec.name);
+    if (!sheet || sheet.getLastRow() < 2) return;
+    const h = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(x => String(x).trim());
+    const keyIdx = h.indexOf(spec.keyColumn);
+    if (keyIdx === -1) return;
+    const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, h.length).getValues();
+    const moving = [];
+    const kept = [];
+    rows.forEach(r => {
+      if (movingKanri[String(r[keyIdx] || '').trim()]) moving.push(r); else kept.push(r);
+    });
+    if (!moving.length) return;
+    const dest = ensureArchiveFileSheet_(file, spec.name, spec.headers);
+    const dh = dest.getRange(1, 1, 1, dest.getLastColumn()).getValues()[0].map(x => String(x).trim());
+    moving.forEach(r => dest.appendRow(dh.map(name => {
+      const i = h.indexOf(name);
+      return i === -1 ? '' : r[i];
+    })));
+    rewriteSheetRows_(sheet, h.length, kept);
+    movedLinked += moving.length;
+  });
+
+  // 3) 元の過去一覧から、移した案件の行を消す
+  rewriteSheetRows_(archive, headers.length, keptRows);
+
+  console.log(`[purgeOldArchivedCases] ${movingRows.length}件の案件と${movedLinked}件の履歴を保管庫へ移しました` +
+              `（${ARCHIVE_RETENTION_MONTHS}か月より前の案件。保管先: ${file.getUrl()}）`);
+}
+
+// 残す行だけでシートを書き直す（1行ずつ消すより速い）。
+// 先に残す行を上から詰めて書き、余った末尾の行をまとめて1回で削除する。
+function rewriteSheetRows_(sheet, columnCount, keptRows) {
+  const before = sheet.getLastRow() - 1;
+  if (keptRows.length) {
+    sheet.getRange(2, 1, keptRows.length, columnCount).setValues(keptRows);
+  }
+  const extra = before - keptRows.length;
+  if (extra > 0) sheet.deleteRows(2 + keptRows.length, extra);
+}
+
 function sortReservationSheet_(sheet) {
   if (!sheet || sheet.getLastRow() < 2) return;
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
@@ -6091,7 +6336,7 @@ function parseDateFromInput_(val) {
 // ★不具合修正：以前は無条件に全トリガーを削除していたため、setupConsentFormTriggerで
 // 設定した『同意書』フォームの自動反映トリガーも、setupTriggersを再実行すると消えてしまっていた。
 // このスクリプトが管理する日次トリガーだけを削除・再作成し、他のトリガーには触れないようにする。
-const MANAGED_DAILY_TRIGGERS = ['archivePastReservations', 'checkAlerts', 'checkShopAlerts', 'checkDeliveryAlerts', 'checkUnansweredAlerts', 'checkMailHealth', 'checkMasterIntegrity', 'syncBlackoutCalendars'];
+const MANAGED_DAILY_TRIGGERS = ['archivePastReservations', 'checkAlerts', 'checkShopAlerts', 'checkDeliveryAlerts', 'checkUnansweredAlerts', 'checkMailHealth', 'checkMasterIntegrity', 'syncBlackoutCalendars', 'purgeOldArchivedCases'];
 function setupTriggers() {
   ScriptApp.getProjectTriggers().forEach(t => {
     if (MANAGED_DAILY_TRIGGERS.includes(t.getHandlerFunction())) ScriptApp.deleteTrigger(t);
@@ -6107,6 +6352,8 @@ function setupTriggers() {
   ScriptApp.newTrigger('checkMasterIntegrity').timeBased().everyDays(1).atHour(7).create();
   // ★機能追加（項目98）：撮影不可日のGoogleカレンダーからの取込
   ScriptApp.newTrigger('syncBlackoutCalendars').timeBased().everyDays(1).atHour(3).create();
+  // ★要件（項目101）：半年たった過去案件を保管用スプレッドシートへ移す（深夜に実行する）
+  ScriptApp.newTrigger('purgeOldArchivedCases').timeBased().everyDays(1).atHour(4).create();
   // ★不具合修正：setupTriggers()もsetupPortal()と同様エディタから直接手動実行する運用のため、
   // UIコンテキストが無くgetUi()が例外になっていた。実行ログにも出しつつ、alertはエラーを
   // 無視する（スプレッドシートのカスタムメニュー経由で呼ばれた場合はそのまま表示される）。

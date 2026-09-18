@@ -4,7 +4,7 @@
 最終更新：2026-09-07（セッション `session_01Gg7njnTaKt8s1j9dR4GGQk`）
 
 - 「このリポジトリでどう作業するか」→ `CLAUDE.md`（作業手順・ハマりどころ）
-- 「各機能がどういう仕様か・なぜそうなったか」→ `SETUP.md`（項目1〜100の全変更履歴。**これが一次情報**）
+- 「各機能がどういう仕様か・なぜそうなったか」→ `SETUP.md`（項目1〜101の全変更履歴。**これが一次情報**）
 - 「いま何が終わっていて、次に何をすべきか」→ **このファイル**
 
 **★リポジトリの引っ越しについて**：このプロジェクトは今回のセッションで、別スレッド
@@ -39,7 +39,7 @@
 ### 現在の状態
 
 - リポジトリ：`yunashin192324/pw-26-shindantest`、ブランチ：`claude/thread-migration-y2nh9p`（**pushまで完了済み**）
-- テスト：`node test/run_all.js` で **1677件 全て成功 / 0件失敗**（サーバー950・監査187・画面540）
+- テスト：`node test/run_all.js` で **1761件 全て成功 / 0件失敗**（サーバー987・監査187・画面587）
 - デプロイ済みWebアプリURL（`Code.gs` の `WEBAPP_URL` に設定済み。**旧スレッドの記載を引き継いだだけで今回未確認**）：
   `https://script.google.com/a/macros/his-world.com/s/AKfycbz143-qasWEQoJB87kpPH_2Pjmv_6499TKKGKW3ddQ06JFM9H5gkPiTtOJl7RcWm9A/exec`
 - スマホ用プレビューArtifact（**このリポジトリ・このセッションで新規公開したもの。
@@ -257,6 +257,35 @@ Googleカレンダー取込を使う支店は、そのカレンダーをスク�
 ⑤の画面の動きを通しで検証している。
 `node test/run_all.js`で1661件全て成功（サーバー934・監査187・画面540）。
 
+### ラウンド12（項目101）：現場からの11点の改善要望
+
+詳細は`SETUP.md`項目101。実装上、次に触るときに引っかかりやすい点だけ書いておく。
+
+- **拠点メモは3つで1組**。`CROSS_SITE_MEMO_TYPES`（メモ（現地用）／メモ（店舗用）／メモ（手配課用））
+  が全拠点から読めて、書けるのは`CROSS_SITE_MEMO_OWNER_ROLE_`で決めた自分の拠点の欄だけ。
+  画面側は`crossSiteMemoSectionsHtml_`が3つまとめて出す。**新しい拠点メモを足すときは、
+  この2つの定数と`CROSS_SITE_MEMO_DEFS`（JavaScript.html）の3箇所を必ず揃えること。**
+- **手配課・現地支店のクイックナビは8項目になった**（「拠点メモ」を追加）。
+  `DETAIL_QUICK_NAV`を変えたら`ui_test.js`の並び順チェック（U38・U48付近）も直すこと。
+- **一覧のSTSは`listStatusHtml_`を通す**。`chip hq`／`chip branch`は使わない（詳細画面の
+  `inlineStatusBadge`は従来どおり札のままで、こちらは要望の対象外）。赤字の対象は
+  `LIST_STATUS_RED`（CR・RQ・PU・UC）。**PUは現在のSTATUS_CODESに無い**が、指定どおり入れてある。
+- **方面は案件ではなく支店が持つ**。絞り込みは画面側で「その方面の支店コード群」に展開する方式
+  （`filterByRegion_`）。サーバー側の`rowInScope_`は行ごとに呼ばれるため、ここに方面の判定を
+  足すと重くなる。足したくなったら先に性能を測ること。
+- **撮影データアップ済みはBRANCHだけが書ける**（`validateFieldPermission_`で拒否）。記入者・日時は
+  `applyDataUploadedStamp_`が`apiSaveFieldsQuiet`／`apiCommitChanges`の両方で自動記録する。
+  **新しく「保存する経路」を足すときは、この関数の呼び出しも足すこと**（片方だけだと記録が漏れる）。
+- **過去の退避先は別ファイル**。`PropertiesService`のスクリプトプロパティ
+  `WEDLINK_ARCHIVE_SPREADSHEET_ID`に保管庫のIDを持つ。**このプロパティを消すと新しい保管庫が
+  作られ、前の保管庫は見えなくなる**（消えはしないが、ポータルからは辿れなくなる）ので注意。
+- **店舗画面のメモの「追加」ボタンは、これまで何の動作も割り当てられていなかった**（押しても
+  何も起きなかった）。`renderShopDetail`の配線を足して直した。店舗画面に新しいボタンを足すときは、
+  `renderDetail`側だけに配線して満足しないこと（両方に別々の配線処理がある）。
+
+テスト：`gas_test.js`にセクション84・85、`ui_test.js`にU61を追加。既存のU38・U48・U52の
+期待値（クイックナビの項目数・メモの置き場所・フライト情報のラベル）を今回の変更に合わせて更新した。
+
 ---
 
 ## 3. 新規依頼フォームの現在の構造（いちばん複雑なので詳述）
@@ -366,7 +395,7 @@ onShopNewHopePlanNChange_(n)   ← 希望日nのプラン変更でも呼ばれ�
 
 ```bash
 cd wedlink-portal-gas
-cd test && node run_all.js        # まず全部グリーンか確認（1677件想定）
+cd test && node run_all.js        # まず全部グリーンか確認（1761件想定）
 ```
 
 そのうえで、

@@ -85,20 +85,29 @@ class Sheet {
   }
   appendRow(arr) { const r = this.getLastRow() + 1; arr.forEach((v, i) => this._set(r, i + 1, v)); }
   deleteRow(r) { this.data.splice(r - 1, 1); }
+  // ★項目101：古い過去案件の退避で、残す行を書き直したあと余った末尾の行をまとめて消すのに使う
+  deleteRows(r, howMany) { this.data.splice(r - 1, Math.max(0, howMany || 0)); }
   setFrozenRows() {}
   getName() { return this.name; }
 }
 
+let __ssSeq = 0;
 class Spreadsheet {
   constructor() { this.sheets = {}; }
   getSheetByName(n) { return this.sheets[n] || null; }
   insertSheet(n) { this.sheets[n] = new Sheet(n); return this.sheets[n]; }
+  // ★項目101：保管用スプレッドシート（別ファイル）を扱うために最小限だけ用意する
+  getId() { if (!this.__id) this.__id = 'ss-' + (++__ssSeq); return this.__id; }
+  getUrl() { return 'https://docs.google.com/spreadsheets/d/' + this.getId(); }
 }
 
 function makeContext() {
   const ss = new Spreadsheet();
   const sentMail = [];
   const cache = {};
+  // ★項目101：SpreadsheetApp.create で作った保管用ファイルと、スクリプトプロパティの保存先
+  const createdFiles = {};
+  const scriptProps = {};
   let uuid = 0;
   // vm コンテキスト生成後に「vm内のDateを作る関数」が入る（下の __newDate と同じもの）。
   // Utilities.parseDate から参照するため、先に宣言だけしておく。
@@ -165,7 +174,24 @@ function makeContext() {
   }
   const ctx = {
     __ss: ss, __mail: sentMail, __translateCalls: [], __mailQuota: 1500, __calendars: {}, console,
-    SpreadsheetApp: { openById: () => ss, getUi: () => ({ alert: () => {} }) },
+    // ★項目101：古い過去案件を「別のスプレッドシート」へ退避する機能のため、
+    // create（新しいファイルを作る）と、IDでそのファイルを開き直す経路を用意する。
+    SpreadsheetApp: {
+      openById: (id) => (id && createdFiles[id]) ? createdFiles[id] : ss,
+      create: (name) => {
+        const file = new Spreadsheet();
+        file.__name = name;
+        createdFiles[file.getId()] = file;
+        return file;
+      },
+      getUi: () => ({ alert: () => {} })
+    },
+    // ★項目101：保管用スプレッドシートのIDを覚えておく場所（実GASのスクリプトプロパティ）
+    PropertiesService: { getScriptProperties: () => ({
+      getProperty: (k) => (k in scriptProps ? scriptProps[k] : null),
+      setProperty: (k, v) => { scriptProps[k] = String(v); },
+      deleteProperty: (k) => { delete scriptProps[k]; }
+    }) },
     Utilities: {
       getUuid: () => `uuid-${++uuid}`,
       // ★機能追加（項目97）：現地時間の併記をテストできるよう、日本時間以外のタイムゾーンは
@@ -289,8 +315,13 @@ function makeContext() {
     },
     Session: { getActiveUser: () => ({ getEmail: () => 'tanaka@his-world.com' }) },
     ScriptApp: { getProjectTriggers: () => [], deleteTrigger: () => {},
+      // テストから「どの関数のトリガーが作られたか」を確認できるように記録しておく
+      __createdTriggers: [],
       newTrigger: (fnName) => {
-        const created = () => ({ getUniqueId: () => `trg-${fnName}`, getHandlerFunction: () => fnName });
+        const created = () => {
+          ctx.ScriptApp.__createdTriggers.push(fnName);
+          return { getUniqueId: () => `trg-${fnName}`, getHandlerFunction: () => fnName };
+        };
         return {
           timeBased: () => ({ everyDays: () => ({ atHour: () => ({ create: created }) }) }),
           forSpreadsheet: () => ({ onFormSubmit: () => ({ create: created }) })

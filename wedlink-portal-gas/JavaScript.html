@@ -34,6 +34,8 @@
   const CHECKLIST_ITEMS = ['ヘアメイク画像', '衣裳画像', '撮影指示書', '着付け指示書', '婚姻受理証明書コピー（必要な場合）', 'ヘアメイクアンケート'];
   // 同行者の有無の選択肢（Code.gsのCOMPANION_CHOICESと一致させる）
   const COMPANION_CHOICES_CLIENT = ['有', '無'];
+  // 列席の選択肢（Code.gsのATTENDANCE_CHOICESと一致させる）
+  const ATTENDANCE_CHOICES_CLIENT = ['有り', '無し', '有り予定'];
   // 希望日の時間帯の選択肢（Code.gsのHOPE_TIME_CHOICESと一致させる）
   const HOPE_TIME_CHOICES_CLIENT = ['AM', 'PM'];
   // ドライブアップロードの書類種別（Code.gsのSHOP_UPLOAD_DOC_TYPESと一致させる）
@@ -49,11 +51,39 @@
     { key: 'customer', label: 'お客様情報' },
     { key: 'reservation', label: '予約内容' },
     { key: 'entry', label: '記入欄' },
+    { key: 'memo', label: '拠点メモ' },
     { key: 'arrangement', label: '手配' },
     { key: 'drive', label: 'ドライブ' },
     { key: 'message', label: 'メッセージ' },
     { key: 'timeline', label: '履歴' }
   ];
+  // ★要件（項目101）：案件一覧のSTSは、色の付いた丸い札ではなく素の文字で出す。
+  // CR・RQ・PU・UC の4つだけ赤い文字にして、他は色を付けない。
+  // （PU はこのシステムの正式なステータスには今のところ無いが、指定どおり赤の対象に含めてある）
+  const LIST_STATUS_RED = ['CR', 'RQ', 'PU', 'UC'];
+  function listStatusHtml_(value, prefix) {
+    const v = (value || '').toString().trim();
+    if (!v) return '';
+    const cls = LIST_STATUS_RED.indexOf(v.toUpperCase()) !== -1 ? 'sts-text sts-text-red' : 'sts-text';
+    return `<span class="${cls}">${escapeHtml((prefix || '') + v)}</span>`;
+  }
+
+  // ★要件（項目101）：新規依頼フォームの「新規作成時のSTS(JP側)」をチェック形にした。
+  // 画面で選ばれた値は、これまでどおり隠し欄 #shop-new-initial-status が持つ
+  // （送信処理・テストがこの欄を読む作りのままで済むようにするため）。
+  function setShopNewInitialStatus_(value) {
+    const hidden = $('shop-new-initial-status');
+    if (hidden) hidden.value = value;
+    document.querySelectorAll('input[name="shop-new-initial-status-radio"]').forEach(r => {
+      r.checked = (r.value === value);
+    });
+  }
+  function wireShopNewInitialStatus_() {
+    document.querySelectorAll('input[name="shop-new-initial-status-radio"]').forEach(r => {
+      r.addEventListener('change', () => { if (r.checked) setShopNewInitialStatus_(r.value); });
+    });
+  }
+
   // 日本記入欄：AI加工の選択肢（Code.gs の AI_EDIT_OPTIONS と一致させる）
   const AI_EDIT_OPTIONS = ['美肌・小顔・痩身加工', '美肌加工'];
   // 予約内容：準備場所の選択肢（イタリアの支店のみ表示。Code.gs の PREP_CHOICES と一致させる）
@@ -72,6 +102,10 @@
   const MEMO_TYPE_SHARED_SHOP = '共有メモ（日本支店）';
   const MEMO_TYPE_SHARED_JP = '共有メモ（手配課）';
   const MEMO_TYPE_LOCAL = 'メモ（現地用）';
+  // ★要件（項目101）：拠点ごとの書き込める履歴欄。3拠点すべてが読めて、書けるのは自分の拠点のものだけ
+  // （Code.gs の CROSS_SITE_MEMO_TYPES と一致させること）
+  const MEMO_TYPE_SHOP_LOCAL = 'メモ（店舗用）';
+  const MEMO_TYPE_JP_LOCAL = 'メモ（手配課用）';
   const MEMO_TYPE_SURVEY = 'アンケート回答';
 
   let session = null;
@@ -249,6 +283,7 @@
   // ---------- 起動 ----------
   window.addEventListener('DOMContentLoaded', () => {
     bindEvents();
+    wireShopNewInitialStatus_();
     populateStatusSelect('s-sts-jp');
     populateStatusSelect('s-sts-branch');
     populateStatusSelect('shop-dashboard-sts');
@@ -320,14 +355,14 @@
     $('show-past').addEventListener('change', () => { if (lastDashboardData) renderDashboard(lastDashboardData); });
     // ★機能追加：店舗ロール向けの一覧絞り込み（チャレンジ番号／お名前／管理番号・撮影日の範囲・
     // STS(JP側)・プラン名で検索。担当（手配課）の絞り込みは廃止した）
-    ['shop-dashboard-search', 'shop-dashboard-date-from', 'shop-dashboard-date-to', 'shop-dashboard-sts', 'shop-dashboard-plan']
+    ['shop-dashboard-search', 'shop-dashboard-date-from', 'shop-dashboard-date-to', 'shop-dashboard-sts', 'shop-dashboard-region', 'shop-dashboard-plan']
       .forEach(id => {
         $(id).addEventListener('input', () => { if (lastDashboardData) renderDashboard(lastDashboardData); });
         $(id).addEventListener('change', () => { if (lastDashboardData) renderDashboard(lastDashboardData); });
       });
     // ★要件：現地支店・手配課も店舗と同じく一覧画面の中で絞り込めるように
     ['nonshop-dashboard-search', 'nonshop-dashboard-date-from', 'nonshop-dashboard-date-to',
-     'nonshop-dashboard-sts-jp', 'nonshop-dashboard-sts-branch', 'nonshop-dashboard-plan']
+     'nonshop-dashboard-sts-jp', 'nonshop-dashboard-sts-branch', 'nonshop-dashboard-region', 'nonshop-dashboard-plan']
       .forEach(id => {
         $(id).addEventListener('input', () => { if (lastDashboardData) renderDashboard(lastDashboardData); });
         $(id).addEventListener('change', () => { if (lastDashboardData) renderDashboard(lastDashboardData); });
@@ -423,6 +458,42 @@
       `<span class="hint-text">詳細: ${escapeHtml(String((e && e.message) || '不明なエラー'))}</span></p>`;
   }
 
+  // ★要件（項目101）：方面（ヨーロッパ・アジアなど）での絞り込み。
+  // 方面は支店マスタの「方面」列で支店ごとに決めるので、画面側では「その方面に属する支店コード」に
+  // 展開して案件を絞る（案件そのものは方面を持たない）。
+  function branchRegionMap_() {
+    const map = {};
+    (branchesCache || []).forEach(b => { if (b && b.code) map[b.code] = (b.region || '').trim(); });
+    return map;
+  }
+  function filterByRegion_(list, region) {
+    const r = (region || '').trim();
+    if (!r) return list;
+    const map = branchRegionMap_();
+    return list.filter(x => map[x.branchCode] === r);
+  }
+  // 方面の選択肢を支店マスタの内容から作り直す（並びは五十音・アルファベット順）
+  function refreshRegionOptions_() {
+    const regions = [];
+    (branchesCache || []).forEach(b => {
+      const r = ((b && b.region) || '').trim();
+      if (r && regions.indexOf(r) === -1) regions.push(r);
+    });
+    regions.sort((a, b) => a.localeCompare(b, 'ja'));
+    [['nonshop-dashboard-region', 'nonshop-dashboard-region-wrap'],
+     ['shop-dashboard-region', 'shop-dashboard-region-wrap']].forEach(([selId, wrapId]) => {
+      const sel = $(selId);
+      const wrap = $(wrapId);
+      if (!sel) return;
+      // 方面が1つも設定されていない間は、選びようがないので欄ごと隠す
+      if (wrap) wrap.classList.toggle('hidden', regions.length === 0);
+      const keep = sel.value;
+      sel.innerHTML = ['<option value="">すべて</option>']
+        .concat(regions.map(r => `<option value="${escapeAttr(r)}">${escapeHtml(r)}</option>`)).join('');
+      if (keep && regions.indexOf(keep) !== -1) sel.value = keep;
+    });
+  }
+
   // ---------- 表示範囲スコープ（全国／関東手配課／関西手配課／支店ごと） ----------
   function renderScopeSelector(container, scope, onChange) {
     if (session.role !== 'JP') { container.classList.add('hidden'); return; }
@@ -476,6 +547,8 @@
     try {
       const data = await gsRun('apiGetDashboard', session.token, dashboardScope);
       if (data.role === 'JP' || data.role === 'SHOP') branchesCache = data.branches;
+      // ★要件（項目101）：方面の選択肢は支店マスタの内容から毎回作り直す
+      refreshRegionOptions_();
       lastDashboardData = data;
       renderDashboard(data);
     } catch (e) {
@@ -536,6 +609,7 @@
       }
       const sts = $('shop-dashboard-sts').value;
       if (sts) list = list.filter(r => r.statusJp === sts || r.statusBranch === sts);
+      list = filterByRegion_(list, $('shop-dashboard-region').value);
       const plan = $('shop-dashboard-plan').value.trim().toLowerCase();
       if (plan) list = list.filter(r => String(r.plan || '').toLowerCase().includes(plan));
     }
@@ -562,6 +636,7 @@
       if (stsJp) list = list.filter(r => r.statusJp === stsJp);
       const stsBranch = $('nonshop-dashboard-sts-branch').value;
       if (stsBranch) list = list.filter(r => r.statusBranch === stsBranch);
+      list = filterByRegion_(list, $('nonshop-dashboard-region').value);
       const plan = $('nonshop-dashboard-plan').value.trim().toLowerCase();
       if (plan) list = list.filter(r => String(r.plan || '').toLowerCase().includes(plan));
     }
@@ -659,8 +734,8 @@
         <td>${escapeHtml(r.city || '-')}</td>
         <td>${escapeHtml(r.challengeNo || 'なし')}</td>
         <td>${escapeHtml(r.groomName || '')}${r.brideName ? '／' + escapeHtml(r.brideName) : ''}${r.needsAction ? ' ●' : ''}${cancelled ? '（キャンセル）' : ''}</td>
-        <td>${r.statusJp ? `<span class="chip hq">${escapeHtml(r.statusJp)}</span>` : '-'}</td>
-        <td>${r.statusBranch ? `<span class="chip branch">${escapeHtml(r.statusBranch)}</span>` : '-'}</td>
+        <td>${r.statusJp ? listStatusHtml_(r.statusJp) : '-'}</td>
+        <td>${r.statusBranch ? listStatusHtml_(r.statusBranch) : '-'}</td>
         <td>${escapeHtml(r.kanriNo)}</td>
         <td>${escapeHtml(r.plan || '-')}</td>
         ${dataDeliveredCell}`;
@@ -757,8 +832,8 @@
         ${r.needsAction ? '<span class="chip needs-action-chip">● 要対応</span>' : ''}
         <span class="chip branch">${escapeHtml(r.branchName || r.branchCode)}${r.city ? '・' + escapeHtml(r.city) : ''}</span>
         ${r.area ? `<span class="chip hq">担当: ${escapeHtml(r.area)}手配課</span>` : ''}
-        ${r.statusJp ? `<span class="chip hq">STS JP: ${escapeHtml(r.statusJp)}</span>` : ''}
-        ${r.statusBranch ? `<span class="chip branch">STS 支店: ${escapeHtml(r.statusBranch)}</span>` : ''}
+        ${listStatusHtml_(r.statusJp, 'STS JP: ')}
+        ${listStatusHtml_(r.statusBranch, 'STS 支店: ')}
         ${cancelled ? '<span class="chip" style="background:#fee2e2;color:#b91c1c;">キャンセル</span>' : ''}
         ${r.plan ? `<span class="chip">${escapeHtml(r.plan)}</span>` : ''}
         ${session.role !== 'SHOP' ? (r.dataDelivered
@@ -812,8 +887,8 @@
             <span class="chip branch">${escapeHtml(r.branchName)}${r.city ? '・' + escapeHtml(r.city) : ''}</span>
             ${r.area ? `<span class="chip hq">担当: ${escapeHtml(r.area)}手配課</span>` : ''}
             <span class="chip">${escapeHtml(r.source)}</span>
-            ${r.statusJp ? `<span class="chip hq">STS JP: ${escapeHtml(r.statusJp)}</span>` : ''}
-            ${r.statusBranch ? `<span class="chip branch">STS 支店: ${escapeHtml(r.statusBranch)}</span>` : ''}
+            ${listStatusHtml_(r.statusJp, 'STS JP: ')}
+            ${listStatusHtml_(r.statusBranch, 'STS 支店: ')}
           </div>`;
         card.addEventListener('click', () => openDetail(r.kanriNo));
         list.appendChild(card);
@@ -862,7 +937,7 @@
             ${session.role === 'JP' ? `<span class="chip branch">${escapeHtml(r.branchName)}</span>` : ''}
             ${r.plan ? `<span class="chip">${escapeHtml(r.plan)}</span>` : ''}
             ${r.saleName ? `<span class="chip">${escapeHtml(r.saleName)}</span>` : ''}
-            ${r.statusBranch ? `<span class="chip branch">STS 支店: ${escapeHtml(r.statusBranch)}</span>` : ''}
+            ${listStatusHtml_(r.statusBranch, 'STS 支店: ')}
           </div>
           ${consentChip(r)}
           <div class="detail-grid" style="margin-top:8px;">
@@ -1126,7 +1201,7 @@
     }).join('');
     // ★要件：希望日の一覧は「最初の予約時（回答待ち）」「日付変更依頼（DC）の対応中」以外は
     // ほとんど参照しないため、ふだんは折りたたんでおき、必要なときだけ自動で開いた状態にする。
-    const hopeShouldExpandShop = !d['撮影日FIX'] || d['STS JP'] === 'DC';
+    const hopeShouldExpandShop = !d['撮影日FIX'] || d['STS JP'] === 'DC' || d['STS JP'] === 'PC';
 
     // ★要件：オプション名のすぐ隣にSTS（JP・支店）を、希望日と同じ表形式で表示する。
     // STS JPは店舗自身がその場でRQ→CR等へ直接変更できる（専用の「ステータス変更」欄は廃止）。
@@ -1193,6 +1268,8 @@
       <div class="detail-header">
         <div class="kanri">管理番号: ${escapeHtml(d['管理番号'])}</div>
         <div class="chg-no">CHG NO: ${escapeHtml(d['CHG NO'] || 'なし')}</div>
+        <!-- ★要件（項目101）：確定した日付はいちばん上のヘッダーで分かるようにする -->
+        <div class="kanri">${fixedDateHeaderHtml_(d)}</div>
         <button type="button" class="print-btn" id="print-arrangement-btn">🖨 手配内容をPDFで保存</button>
       </div>
       ${shopQuickNavHtml}
@@ -1204,6 +1281,9 @@
           <div class="field-block"><label>STS JP</label><div>${inlineStatusBadge('STS JP', d['STS JP'], 'hq')}</div></div>
           <div class="field-block"><label>STS 支店</label><div>${inlineStatusBadge('STS 支店', d['STS 支店'], 'branch')}</div></div>
           <div class="field-block"><label>撮影日FIX</label><div>${escapeHtml(d['撮影日FIX'] || '未定')}</div></div>
+          <!-- ★要件（項目101）：撮影データをアップしたかどうか。チェックするのは現地支店だけで、
+               店舗からは状態が見えるだけにする。 -->
+          <div class="field-block"><label>撮影データのアップ</label><div>${d['撮影データアップ済み'] === '済' ? '済' : '未'}</div></div>
           ${!d.shopBilling ? '' : `<div class="field-block"><label>請求先</label><div>${escapeHtml(d.shopBilling)}</div></div>`}
         </div>
       </div>
@@ -1221,6 +1301,8 @@
           <div class="field-block">${costumeCompanySelectHtml_(costumeList, d['衣装会社'])}</div>
           <div class="field-block"><label>同行者の有無</label>${companionSelectHtml_(d['同行者の有無'])}</div>
           ${companionCountFieldsHtml_(d)}
+          <div class="field-block"><label>列席</label>${attendanceSelectHtml_(d['列席'])}</div>
+          <div class="field-block"><label>列席人数（名）</label><input type="number" min="0" data-pending="列席人数" value="${escapeAttr(d['列席人数'])}" placeholder="有り／有り予定の場合に入力"></div>
           <div class="field-block"><label>現地で連絡可能なメールアドレス</label><input type="email" data-pending="現地連絡先メール" value="${escapeAttr(d['現地連絡先メール'])}"></div>
           <div class="field-block"><label>撮影データ納品先メールアドレス</label><input type="email" data-pending="撮影データ納品先メールアドレス" value="${escapeAttr(d['撮影データ納品先メールアドレス'])}"></div>
           <div class="field-block"><label>現地で連絡可能な電話番号</label><input data-pending="現地連絡先電話" value="${escapeAttr(d['現地連絡先電話'])}"></div>
@@ -1230,9 +1312,20 @@
             <p class="hint-text" style="margin-top:3px;">撮影地のチェックイン日を入れてください</p></div>
           <div class="field-block"><label>チェックアウト日</label><input type="date" data-pending="チェックアウト日" value="${escapeAttr(d['チェックアウト日'])}">
             <p class="hint-text" style="margin-top:3px;">撮影地のチェックアウト日を入れてください</p></div>
-          <div class="field-block"><label>フライト情報（IN）</label><input data-pending="フライト情報" value="${escapeAttr(d['フライト情報'])}" placeholder="例）JL123 8/20 10:00羽田発 → 14:00現地着"></div>
-          <div class="field-block"><label>フライト情報（OUT）</label><input data-pending="フライト情報（OUT）" value="${escapeAttr(d['フライト情報（OUT）'])}" placeholder="例）JL124 8/25 16:00現地発 → 翌10:00羽田着"></div>
+          <div class="field-block" style="grid-column:1/-1;"><label>フライト情報（IN・往路）</label>
+            <textarea data-pending="フライト情報" rows="3" placeholder="例）JL123 8/20 10:00羽田発 → 14:00現地着&#10;（乗り継ぎがある場合は改行して続けて書けます）">${escapeHtml(d['フライト情報'])}</textarea></div>
+          <div class="field-block" style="grid-column:1/-1;"><label>フライト情報（OUT・復路）</label>
+            <textarea data-pending="フライト情報（OUT）" rows="3" placeholder="例）JL124 8/25 16:00現地発 → 翌10:00羽田着&#10;（乗り継ぎがある場合は改行して続けて書けます）">${escapeHtml(d['フライト情報（OUT）'])}</textarea></div>
         </div>
+      </div>
+      <!-- ★要件（項目101）：確定用の2つのボタンは画面のいちばん下ではなく、
+           お客様情報（フライト情報）のすぐ下に置く。 -->
+      <div class="section-card">
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <button type="button" class="send-btn" id="btn-commit" style="width:100%;">変更（＋メッセージ）を決定して送信</button>
+          <button type="button" class="send-btn" id="btn-save-quiet" style="width:100%;background:var(--color-muted);">保存のみ（通知しない）</button>
+        </div>
+        <p class="hint-text" style="margin-top:8px;">この画面で変えた内容は、ここを押すまで保存されません。</p>
       </div>
       <div id="shop-sec-reservation" style="scroll-margin-top:110px;">
         <div class="section-card">
@@ -1251,7 +1344,8 @@
              プラン行だけは一番上の代表行として一目でわかるよう.plan-rowで強調する（背景色・太字）。 -->
         <div class="section-card plan-option-card">
           <div class="plan-option-head"><span class="icon">📋</span><h3 style="margin:0;">希望日・プラン・オプション明細</h3></div>
-          <details class="hope-collapse" ${hopeShouldExpandShop ? 'open' : ''}>
+          ${changeAfterFixButtonsHtml_(d)}
+          <details class="hope-collapse" id="hope-collapse" ${hopeShouldExpandShop ? 'open' : ''}>
             <summary>${hopeShouldExpandShop ? '希望日一覧を表示中' : '希望日一覧－ふだんは折りたたみ表示です。開くと確認できます'}</summary>
             <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none;">
               <table class="plan-table">
@@ -1332,12 +1426,7 @@
       </div>
       <div id="shop-sec-memo" style="scroll-margin-top:110px;">
         ${memoLogSectionHtml(d, MEMO_TYPE_SHARED_SHOP, '共有メモ（日本支店）', '店舗内向けの自由メモを入力')}
-      </div>
-      <div class="section-card">
-        <div style="display:flex;flex-direction:column;gap:8px;">
-          <button type="button" class="send-btn" id="btn-commit" style="width:100%;">変更（＋メッセージ）を決定して送信</button>
-          <button type="button" class="send-btn" id="btn-save-quiet" style="width:100%;background:var(--color-muted);">保存のみ（通知しない）</button>
-        </div>
+        ${crossSiteMemoSectionsHtml_(d)}
       </div>
       <div class="section-card" id="shop-sec-message">
         <h3>メッセージ・変更の送信</h3>
@@ -1447,11 +1536,42 @@
       btn.addEventListener('click', () => deleteHistoryMessage(btn.dataset.historyMessageDelete));
     });
 
+    // ★不具合修正（項目101）：店舗画面のメモの「追加」ボタンに、これまで何の動作も割り当てて
+    // いなかった（手配課・現地支店の画面にしか割り当てが無かった）。押しても何も起きない状態
+    // だったため、ここで割り当てる。
+    c.querySelectorAll('[data-memo-add]').forEach(btn => {
+      btn.addEventListener('click', () => addMemo(btn.dataset.memoAdd));
+    });
+    wireChangeAfterFixButtons_(c);
+
     // ★開いた時点で、自分宛の未読メッセージをまとめて既読にする（店舗向けには個別チェックUIを設けていない）
     (d.history || []).forEach(h => {
       if (h.senderRole !== 'SHOP' && !h.checkShop) {
         gsRun('apiToggleHistoryCheck', session.token, h.id, true).catch(() => {});
       }
+    });
+  }
+
+  // ★要件（項目101）：「日付を変更する」「プランを変更する」を押したときの動き。
+  // STS(JP側)を DC／PC にして（まだ保存はしない＝未保存の変更として持つ）、希望日一覧を開く。
+  function wireChangeAfterFixButtons_(c) {
+    c.querySelectorAll('[data-change-after-fix]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = btn.dataset.changeAfterFix;
+        pendingChanges['STS JP'] = target;
+        // 画面上のSTS(JP側)の欄にも同じ値を映す（手配課はdata-pending、店舗はdata-shop-status-field）
+        const sel = c.querySelector('[data-pending="STS JP"]') || c.querySelector('[data-shop-status-field="STS JP"]');
+        if (sel) sel.value = target;
+        updatePendingIndicator();
+        const box = c.querySelector('#hope-collapse');
+        if (box) {
+          box.open = true;
+          if (typeof box.scrollIntoView === 'function') box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        showToast(target === 'DC'
+          ? 'STS(JP側)を DC（日付変更）にしました。希望日一覧に新しい希望日を入れて、「変更（＋メッセージ）を決定して送信」を押してください。'
+          : 'STS(JP側)を PC（プラン変更）にしました。希望日一覧で新しいプランを選んでから、「変更（＋メッセージ）を決定して送信」を押してください。');
+      });
     });
   }
 
@@ -1684,9 +1804,23 @@
       </div>`;
   }
 
+  // ★要件（項目101）：これまで「メモ（現地用）」は現地支店だけが書ける欄だったが、
+  // 日本の店舗・手配課にも同じ「日付と記入者が自動で残る書き込める履歴欄」を作る。
+  // 3つの欄は全拠点から見えるが、書けるのは自分の拠点の欄だけ（他拠点の欄は閲覧のみ）。
+  const CROSS_SITE_MEMO_DEFS = [
+    { type: MEMO_TYPE_JP_LOCAL, role: 'JP', title: 'メモ（手配課用）', placeholder: '手配課の記入欄。経緯や申し送りを書いてください' },
+    { type: MEMO_TYPE_LOCAL, role: 'BRANCH', title: 'メモ（現地用）', placeholder: '現地スタッフ向けのメモを入力' },
+    { type: MEMO_TYPE_SHOP_LOCAL, role: 'SHOP', title: 'メモ（店舗用）', placeholder: '店舗の記入欄。お客様とのやり取りや申し送りを書いてください' }
+  ];
+  function crossSiteMemoSectionsHtml_(d) {
+    return CROSS_SITE_MEMO_DEFS.map(def => session.role === def.role
+      ? memoLogSectionHtml(d, def.type, def.title, def.placeholder, def.type === MEMO_TYPE_LOCAL ? d['メモ（現地用）'] : '')
+      : memoLogReadOnlySectionHtml_(d, def.type, def.title, def.type === MEMO_TYPE_LOCAL ? d['メモ（現地用）'] : '')).join('');
+  }
+
   // ★機能：他ロール専用の共有メモを「閲覧のみ」で表示する（追記ボタンは出さない）。
   // 手配課が共有メモ（日本支店）を見られるようにする、という要件のためだけに使う。
-  function memoLogReadOnlySectionHtml_(d, memoType, title) {
+  function memoLogReadOnlySectionHtml_(d, memoType, title, legacyValue) {
     const tlItem = (who, when, body) => `
       <div class="tl-item">
         <div class="tl-meta"><span>${escapeHtml(who)}</span><span>${escapeHtml(when)}</span></div>
@@ -1695,7 +1829,7 @@
     const entries = (d.memoLog || []).filter(m => m.type === memoType);
     const listHtml = entries.length
       ? entries.map(m => tlItem(m.who, m.datetime, m.body)).join('')
-      : '<p class="hint-text">まだ記録はありません。</p>';
+      : (legacyValue ? tlItem('（この機能を追加する前の記録）', '', legacyValue) : '<p class="hint-text">まだ記録はありません。</p>');
     return `
       <div class="section-card">
         <h3>${escapeHtml(title)}</h3>
@@ -1789,6 +1923,53 @@
     return `<select data-pending="同行者の有無">
         <option value="">未設定</option>
         ${COMPANION_CHOICES_CLIENT.map(c => `<option value="${escapeAttr(c)}" ${c === current ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+      </select>`;
+  }
+  // ★要件（項目101）：予約依頼（RQ）の時点で挙式への列席者の有無を確認する。
+  // 「有り予定」は人数が固まっていない段階の回答で、人数欄は空欄のままでよい。
+  // ★要件（項目101）：日付が確定したあとでも「日付を変える」「プランを変える」ができるように、
+  // 希望日一覧のすぐ上にボタンを置く。押すと STS(JP側) が DC（日付変更）／PC（プラン変更）に
+  // セットされ、折りたたまれていた希望日一覧が開いて、そこで新しい希望を書き直せる。
+  // 実際に相手へ伝わるのは、いつもどおり下の「変更（＋メッセージ）を決定して送信」を押したとき。
+  function changeAfterFixButtonsHtml_(d) {
+    // 確定前（撮影日FIXが空）は、そもそも希望日一覧が開いているので出さない
+    if (!d['撮影日FIX']) return '';
+    // STS(JP側)を動かせるのは手配課と店舗だけ（現地支店は動かせない）
+    if (session.role !== 'JP' && session.role !== 'SHOP') return '';
+    const jp = d['STS JP'] || '';
+    // 店舗がDC／PCを選べるのは、案件全体がOK（確定済み）になってからだけ
+    // （Code.gsのSHOP_STATUS_TARGETS_FROM_OK_CASEと同じ条件。ここを緩めると送信時にはじかれる）
+    if (session.role === 'SHOP' && jp !== 'OK' && jp !== 'DC' && jp !== 'PC') return '';
+    const inProgress = jp === 'DC' || jp === 'PC';
+    if (inProgress) {
+      return `<p class="hint-text" style="margin:0 0 8px;">いま${jp === 'DC' ? '日付' : 'プラン'}の変更を進めています。下の希望日一覧に新しい希望を入れてから、「変更（＋メッセージ）を決定して送信」を押してください。</p>`;
+    }
+    return `
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin:0 0 8px;">
+        <button type="button" class="send-btn-sm" data-change-after-fix="DC">日付を変更する</button>
+        <button type="button" class="send-btn-sm" data-change-after-fix="PC">プランを変更する</button>
+      </div>
+      <p class="hint-text" style="margin:0 0 8px;">確定後に日付やプランを変えたいときはここから始めてください。押すと希望日一覧が開きます。</p>`;
+  }
+
+  // ★要件（項目101）：詳細画面のいちばん上に「確定した日付」を出す。
+  // 撮影日FIXが入っていればその日付、入っていなければ「未確定」と出す。挙式日FIXが別に
+  // 入っている場合は併記する（どちらも同じ欄で運用している案件があるため）。
+  function fixedDateHeaderHtml_(d) {
+    const shoot = (d['撮影日FIX'] || '').toString().trim();
+    const wedding = (d['挙式日FIX'] || '').toString().trim();
+    const parts = [];
+    parts.push(shoot
+      ? `確定日: <strong>${escapeHtml(shoot)}</strong>`
+      : '確定日: <strong>未確定</strong>');
+    if (wedding && wedding !== shoot) parts.push(`挙式日: <strong>${escapeHtml(wedding)}</strong>`);
+    return parts.join(' ｜ ');
+  }
+
+  function attendanceSelectHtml_(current) {
+    return `<select data-pending="列席">
+        <option value="">未設定</option>
+        ${ATTENDANCE_CHOICES_CLIENT.map(c => `<option value="${escapeAttr(c)}" ${c === current ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
       </select>`;
   }
   // ★要件：同行者の有無で「有」を選んだら、大人・子供・幼児の人数入力欄も出す
@@ -1959,7 +2140,7 @@
     // ★要件：希望日の一覧は「最初の予約時（回答待ち）」「日付変更依頼（DC）の対応中」以外は
     // ほとんど参照しないため、ふだんは折りたたんでおき、必要なときだけ自動で開いた状態にする
     // （撮影日FIXが未確定＝まだ回答待ちの間、またはSTS JPがDC＝日付変更依頼の対応中の間は開く）。
-    const hopeShouldExpand = !d['撮影日FIX'] || d['STS JP'] === 'DC';
+    const hopeShouldExpand = !d['撮影日FIX'] || d['STS JP'] === 'DC' || d['STS JP'] === 'PC';
     // ★要件：現地・日本共に一括でステータスをセットできるように。チェックした希望日のSTS(支店側)を
     // まとめて選んだ値にする（OK/UCならJP側にも自動反映される＝applyHopeStatusCascade_が担当）。
     const canBulkSetHope = session.role === 'BRANCH';
@@ -2246,6 +2427,8 @@
             <div class="field-block">${costumeCompanySelectHtml_(costumeList, d['衣装会社'])}</div>
             <div class="field-block"><label>同行者の有無</label>${companionSelectHtml_(d['同行者の有無'])}</div>
           ${companionCountFieldsHtml_(d)}
+            <div class="field-block"><label>列席</label>${attendanceSelectHtml_(d['列席'])}</div>
+            <div class="field-block"><label>列席人数（名）</label><input type="number" min="0" data-pending="列席人数" value="${escapeAttr(d['列席人数'])}" placeholder="有り／有り予定の場合に入力"></div>
             <div class="field-block"><label>現地で連絡可能なメールアドレス</label><input type="email" data-pending="現地連絡先メール" value="${escapeAttr(d['現地連絡先メール'])}"></div>
             <div class="field-block"><label>撮影データ納品先メールアドレス</label><input type="email" data-pending="撮影データ納品先メールアドレス" value="${escapeAttr(d['撮影データ納品先メールアドレス'])}"></div>
             <div class="field-block"><label>現地で連絡可能な電話番号</label><input data-pending="現地連絡先電話" value="${escapeAttr(d['現地連絡先電話'])}"></div>
@@ -2255,12 +2438,16 @@
               <p class="hint-text" style="margin-top:3px;">撮影地のチェックイン日を入れてください</p></div>
             <div class="field-block"><label>チェックアウト日</label><input type="date" data-pending="チェックアウト日" value="${escapeAttr(d['チェックアウト日'])}">
               <p class="hint-text" style="margin-top:3px;">撮影地のチェックアウト日を入れてください</p></div>
-            <div class="field-block"><label>フライト情報（IN）</label><input data-pending="フライト情報" value="${escapeAttr(d['フライト情報'])}" placeholder="例）JL123 8/20 10:00羽田発 → 14:00現地着"></div>
-            <div class="field-block"><label>フライト情報（OUT）</label><input data-pending="フライト情報（OUT）" value="${escapeAttr(d['フライト情報（OUT）'])}" placeholder="例）JL124 8/25 16:00現地発 → 翌10:00羽田着"></div>
             <div class="field-block"><label>請求先</label>
               <select data-pending="請求先"><option value="">未設定</option>${BILLING_REGIONS.map(r => `<option value="${r}" ${d['請求先'] === r ? 'selected' : ''}>${r}</option>`).join('')}</select>
             </div>
             <div class="field-block"><label>日本支店名</label><input data-pending="日本支店名" value="${escapeAttr(d['日本支店名'])}" placeholder="例）新宿西口店"></div>
+            <!-- ★要件（項目101）：確定ボタンをフライト情報のすぐ下に置くため、フライト情報を
+                 この欄のいちばん最後にしている（請求先・日本支店名を上へ移動した） -->
+            <div class="field-block" style="grid-column:1/-1;"><label>フライト情報（IN・往路）</label>
+              <textarea data-pending="フライト情報" rows="3" placeholder="例）JL123 8/20 10:00羽田発 → 14:00現地着&#10;（乗り継ぎがある場合は改行して続けて書けます）">${escapeHtml(d['フライト情報'])}</textarea></div>
+            <div class="field-block" style="grid-column:1/-1;"><label>フライト情報（OUT・復路）</label>
+              <textarea data-pending="フライト情報（OUT）" rows="3" placeholder="例）JL124 8/25 16:00現地発 → 翌10:00羽田着&#10;（乗り継ぎがある場合は改行して続けて書けます）">${escapeHtml(d['フライト情報（OUT）'])}</textarea></div>
           </div>
         </div>
 
@@ -2312,7 +2499,8 @@
              プラン行だけは一番上の代表行として一目でわかるよう.plan-rowで強調する（背景色・太字）。 -->
         <div class="section-card plan-option-card">
           <div class="plan-option-head"><span class="icon">📋</span><h3 style="margin:0;">希望日・プラン・オプション明細</h3></div>
-          <details class="hope-collapse" ${hopeShouldExpand ? 'open' : ''}>
+          ${changeAfterFixButtonsHtml_(d)}
+          <details class="hope-collapse" id="hope-collapse" ${hopeShouldExpand ? 'open' : ''}>
             <summary>${hopeShouldExpand ? '希望日一覧を表示中' : '希望日一覧－ふだんは折りたたみ表示です。開くと確認・変更できます'}</summary>
             <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none;">
               <table class="plan-table">
@@ -2390,13 +2578,31 @@
             <div class="field-block"><label>配車時間</label><input data-pending="配車時間" value="${escapeAttr(d['配車時間'])}" placeholder="例）9:00"></div>
             <div class="field-block"><label>店舗／担当（現地）</label><input data-pending="店舗／担当（現地）" value="${escapeAttr(d['店舗／担当（現地）'])}"></div>
           </div>
+          <!-- ★要件（項目101）：撮影データをアップしたかどうかのチェック欄。
+               チェックできるのはアップした本人＝現地支店だけで、手配課からは状態が見えるだけにする。 -->
+          <div style="margin-top:10px;">
+            ${session.role === 'BRANCH' ? `
+            <label class="checkbox-label">
+              <input type="checkbox" data-pending="撮影データアップ済み" data-consent-checkbox="1" ${d['撮影データアップ済み'] === '済' ? 'checked' : ''}>
+              撮影データをアップしました（${d['撮影データアップ済み'] === '済' ? '済' : '未'}）
+            </label>` : `
+            <div class="field-block"><label>撮影データのアップ</label><div>${d['撮影データアップ済み'] === '済' ? '済' : '未'}</div></div>`}
+            <p class="hint-text" style="margin:4px 0 0 26px;">${d['撮影データアップ済み者']
+              ? `記入者: ${escapeHtml(d['撮影データアップ済み者'])}${d['撮影データアップ済み日時'] ? `（${escapeHtml(d['撮影データアップ済み日時'])}）` : ''}`
+              : (session.role === 'BRANCH' ? 'チェックして保存すると、記入者と日時が自動で残ります。' : '現地支店からのチェックはまだありません。')}</p>
+          </div>
           ${staffDatalist}
           <div id="staff-conflict" class="conflict-box hidden"></div>
         </div>
 
-        ${memoLogSectionHtml(d, MEMO_TYPE_LOCAL, 'メモ（現地用）', '現地スタッフ向けのメモを入力', d['メモ（現地用）'])}
-
         ${quickActionsHtml}
+      </div>`;
+
+    // ★要件（項目101）：拠点ごとの書き込める履歴欄。クイックナビの1セクションとして独立させ、
+    // 記入欄の切替タブ（日本記入欄／現地記入欄）に隠れず、どのロールからも必ず見えるようにする。
+    const siteMemoGroupHtml = `
+      <div class="tab-pane" data-tab-pane="memo" id="sec-memo">
+        ${crossSiteMemoSectionsHtml_(d)}
       </div>`;
 
     // ★要件：現地支店・手配課の画面フォーマットを日本の支店（店舗）画面と統一するクイックナビ化に伴い、
@@ -2470,6 +2676,9 @@
         <div class="kanri">管理番号: ${escapeHtml(d['管理番号'])} ｜ CHG NO: <span class="chg-no">${escapeHtml(d['CHG NO'] || 'なし')}</span></div>
         <div class="kanri">${escapeHtml(d.branchName)}（${escapeHtml(d['支店コード'])}）${d.country ? ' ・ ' + escapeHtml(d.country) : ''}${d.city ? ' ／ ' + escapeHtml(d.city) : ''}</div>
         <div class="kanri">担当: ${d['管轄'] ? escapeHtml(d['管轄']) + '手配課' : '未設定'}</div>
+        <!-- ★要件（項目101）：確定した日付はいちばん上のヘッダーで分かるようにする。
+             下の「予約内容」まで開かなくても、案件を開いた瞬間に確定日が目に入るようにした。 -->
+        <div class="kanri">${fixedDateHeaderHtml_(d)}</div>
         ${!d.branchLocalNow ? '' : `<div class="kanri">現地の今の時刻: <strong>${escapeHtml(d.branchLocalNow)}</strong>（日本時間との時差にご注意ください）</div>`}
         ${!d.originShop ? '' : `<div class="kanri">日本の店舗: <strong>${escapeHtml(d.originShopName || d.originShop)}</strong></div>`}
         <div class="names">新郎: ${escapeHtml(fullNameClient_(d['新郎姓（ローマ字）'], d['新郎名（ローマ字）']))}<br>新婦: ${escapeHtml(fullNameClient_(d['新婦姓（ローマ字）'], d['新婦名（ローマ字）']))}</div>
@@ -2479,6 +2688,7 @@
       ${customerTabHtml}
       ${reservationTabHtml}
       ${entryGroupHtml}
+      ${siteMemoGroupHtml}
       ${arrangementTabHtml(d)}
       ${driveTabHtml}
       ${messageTabHtml}
@@ -2592,6 +2802,7 @@
     c.querySelectorAll('[data-memo-add]').forEach(btn => {
       btn.addEventListener('click', () => addMemo(btn.dataset.memoAdd));
     });
+    wireChangeAfterFixButtons_(c);
     // ★機能：現地スタッフ手配メール。カテゴリのボタンを押すと下書きモーダルを開く
     c.querySelectorAll('[data-arrangement-category]').forEach(btn => {
       btn.addEventListener('click', () => openArrangementDraft(btn.dataset.arrangementCategory));
@@ -3031,7 +3242,7 @@
     SHOP_NEW_HOPE_TIME_FIELDS.forEach(k => { $('shop-new-' + k).value = ''; });
     // ★要件：希望日のカレンダーで今日より前の日付が選べてしまわないよう下限を付ける
     SHOP_NEW_DATE_FIELDS.forEach(k => { $('shop-new-' + k).min = todayIsoDate_(); });
-    $('shop-new-initial-status').value = 'RQ';
+    setShopNewInitialStatus_('RQ');
     shopNewActiveBranch = '';
     // ★仕様変更：セール名・撮影希望場所の候補は支店コースごとにキャッシュし直す（前回開いたときの
     // 古い候補が残らないように、開くたびにリセットする）
@@ -3320,7 +3531,7 @@
       SHOP_NEW_DATE_FIELDS.forEach(k => { $('shop-new-' + k).value = ''; });
       SHOP_NEW_HOPE_TIME_FIELDS.forEach(k => { $('shop-new-' + k).value = ''; });
       SHOP_NEW_HOPE_PLAN_FIELDS.forEach(k => { $('shop-new-' + k).value = ''; });
-      $('shop-new-initial-status').value = 'RQ';
+      setShopNewInitialStatus_('RQ');
       // ★不具合修正：プラン欄の値だけ空に戻しても、その下の撮影希望場所・セール名・準備場所欄
       // （select/checkboxに差し替わっている場合がある）が古いプランのまま残ってしまっていたため、
       // プラン未選択の状態へ描き直す。
@@ -3460,7 +3671,9 @@
         <td><input data-m-field="name" data-m-row="${i}" value="${escapeAttr(row.name || '')}" style="width:100%;"></td>
         <td>${escapeHtml(row.role || '')}</td>
         <td><input data-m-field="email" data-m-row="${i}" value="${escapeAttr(row.email || '')}" style="width:100%;" placeholder="通知先メール"></td>
-        <td><input data-m-field="timezone" data-m-row="${i}" value="${escapeAttr(row.timezone || '')}" style="width:100%;" placeholder="例）Europe/Rome"></td>`;
+        <td><input data-m-field="timezone" data-m-row="${i}" value="${escapeAttr(row.timezone || '')}" style="width:100%;" placeholder="例）Europe/Rome"></td>
+        <!-- ★要件（項目101）：案件一覧を方面でまとめて絞り込むための欄。空欄なら方面なし。 -->
+        <td><input data-m-field="region" data-m-row="${i}" value="${escapeAttr(row.region || '')}" style="width:100%;" placeholder="例）ヨーロッパ"></td>`;
     }
     let cells = `<td><input data-m-field="name" data-m-row="${i}" value="${escapeAttr(row.name || '')}" style="width:100%;"></td>`;
     if (def.extra === 'plan') {
@@ -3493,7 +3706,7 @@
   }
 
   function masterHeadCells_(def) {
-    if (def.key === 'branch') return ['支店コード', '名称', 'ロール', '通知先メール', '現地のタイムゾーン'];
+    if (def.key === 'branch') return ['支店コード', '名称', 'ロール', '通知先メール', '現地のタイムゾーン', '方面'];
     const head = [def.extra === 'glossary' ? '日本語' : '名称'];
     if (def.extra === 'plan') head.push('撮影場所の入力方式', '撮影場所の候補', '納品期限日数');
     if (def.extra === 'sale') head.push('対象プラン');
@@ -3573,7 +3786,8 @@
           await gsRun('apiSaveBranch', session.token, {
             code: row.code, name: name, role: row.role, country: row.country || '', city: row.city || '',
             team: row.team || '', email: masterInputValue_(i, 'email'), prefix: row.prefix || '',
-            passcode: '', active: active, timezone: masterInputValue_(i, 'timezone')
+            passcode: '', active: active, timezone: masterInputValue_(i, 'timezone'),
+            region: masterInputValue_(i, 'region')
           });
         } else if (def.extra === 'plan') {
           await gsRun('apiSavePlanItem', session.token, mastersBranchCode, name, row.name, active,

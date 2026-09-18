@@ -4962,6 +4962,157 @@ section('83. 【不具合修正】店舗が作った案件が店舗の一覧に�
           .issues.some(m => m.includes('起票元店舗')));
 }
 
+
+section('84. 【機能追加】全拠点の書き込める履歴欄・列席・撮影データのアップ・方面・過去の退避（項目101）');
+{
+  const ctx = shopFixture();
+  const jpToken = ctx.apiLogin('KANTO', 'pw').session.token;
+  const vieToken = ctx.apiLogin('VIE', 'vp').session.token;
+  const shopToken = ctx.apiLogin('SHOP1', 'sp').session.token;
+
+  const created = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'VIE', team: '関東', challengeNo: 'ATTEND00001',
+    groomLastName: 'YAMADA', groomName: 'TARO', brideLastName: 'YAMADA', brideName: 'HANAKO',
+    hope1: '2027-11-01',
+    attendance: '有り予定', attendanceCount: 4
+  });
+  const kanri = created.kanriNo;
+
+  // --- ⑦ 列席（有り／無し／有り予定＋人数） ---
+  check('新規依頼のときに列席と人数を登録できる', (() => {
+    const d = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+    return d['列席'] === '有り予定' && String(d['列席人数']) === '4';
+  })(), JSON.stringify(ctx.apiGetReservationDetail(jpToken, kanri).detail['列席']));
+  ctx.apiSaveFieldsQuiet(shopToken, kanri, { '列席': '有り', '列席人数': 2 });
+  check('店舗からも列席を直せる',
+        ctx.apiGetReservationDetail(shopToken, kanri).detail['列席'] === '有り');
+  ctx.apiSaveFieldsQuiet(jpToken, kanri, { '列席': '無し' });
+  check('手配課からも列席を直せる',
+        ctx.apiGetReservationDetail(jpToken, kanri).detail['列席'] === '無し');
+  let err = null;
+  try { ctx.apiSaveFieldsQuiet(jpToken, kanri, { '列席': 'たぶん有り' }); } catch (e) { err = e.message; }
+  check('列席は有り／無し／有り予定の3つ以外は保存できない', err !== null, String(err));
+
+  // --- ⑩ 撮影データのアップ（チェックできるのは現地支店だけ） ---
+  err = null;
+  try { ctx.apiSaveFieldsQuiet(jpToken, kanri, { '撮影データアップ済み': '済' }); } catch (e) { err = e.message; }
+  check('手配課は撮影データのアップにチェックできない', err !== null, String(err));
+  err = null;
+  try { ctx.apiSaveFieldsQuiet(shopToken, kanri, { '撮影データアップ済み': '済' }); } catch (e) { err = e.message; }
+  check('店舗も撮影データのアップにチェックできない', err !== null, String(err));
+  ctx.apiSaveFieldsQuiet(vieToken, kanri, { '撮影データアップ済み': '済' });
+  const afterUpload = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+  check('現地支店はチェックできる', afterUpload['撮影データアップ済み'] === '済');
+  check('チェックすると記入者が自動で残る', !!afterUpload['撮影データアップ済み者'], String(afterUpload['撮影データアップ済み者']));
+  check('チェックすると日時が自動で残る', !!afterUpload['撮影データアップ済み日時'], String(afterUpload['撮影データアップ済み日時']));
+  check('手配課・店舗からも「済」であることは見える',
+        ctx.apiGetReservationDetail(shopToken, kanri).detail['撮影データアップ済み'] === '済');
+  check('撮影データをアップ済みにすると一覧にも反映される',
+        ctx.apiGetDashboard(jpToken).reservations.find(r => r.kanriNo === kanri).dataDelivered === true);
+  ctx.apiSaveFieldsQuiet(vieToken, kanri, { '撮影データアップ済み': '' });
+  check('チェックを外すと記入者・日時も消える', (() => {
+    const d = ctx.apiGetReservationDetail(jpToken, kanri).detail;
+    return !d['撮影データアップ済み者'] && !d['撮影データアップ済み日時'];
+  })());
+
+  // --- ① 書き込める履歴欄を全拠点に（自分の拠点の欄だけ書ける／3拠点とも全員が読める） ---
+  ctx.apiAddMemo(shopToken, kanri, 'メモ（店舗用）', 'お客様へ日程の候補をお伝えしました');
+  ctx.apiAddMemo(jpToken, kanri, 'メモ（手配課用）', '現地へ空き状況を確認中');
+  ctx.apiAddMemo(vieToken, kanri, 'メモ（現地用）', 'カメラマンの仮押さえ済み');
+  err = null;
+  try { ctx.apiAddMemo(jpToken, kanri, 'メモ（店舗用）', '横取り'); } catch (e) { err = e.message; }
+  check('店舗用の欄に手配課は書き込めない', err !== null, String(err));
+  err = null;
+  try { ctx.apiAddMemo(shopToken, kanri, 'メモ（手配課用）', '横取り'); } catch (e) { err = e.message; }
+  check('手配課用の欄に店舗は書き込めない', err !== null, String(err));
+  err = null;
+  try { ctx.apiAddMemo(shopToken, kanri, 'メモ（現地用）', '横取り'); } catch (e) { err = e.message; }
+  check('現地用の欄に店舗は書き込めない', err !== null, String(err));
+  const typesFor = (token) => (ctx.apiGetReservationDetail(token, kanri).detail.memoLog || []).map(m => m.type);
+  ['メモ（店舗用）', 'メモ（手配課用）', 'メモ（現地用）'].forEach(t => {
+    check(`手配課からは「${t}」が読める`, typesFor(jpToken).includes(t), typesFor(jpToken).join(','));
+    check(`現地支店からは「${t}」が読める`, typesFor(vieToken).includes(t), typesFor(vieToken).join(','));
+    check(`店舗からは「${t}」が読める`, typesFor(shopToken).includes(t), typesFor(shopToken).join(','));
+  });
+  check('書き込むと記入者が自動で残る', (ctx.apiGetReservationDetail(jpToken, kanri).detail.memoLog || [])
+        .filter(m => m.type === 'メモ（店舗用）').every(m => !!m.who));
+  check('書き込むと日時が自動で残る', (ctx.apiGetReservationDetail(jpToken, kanri).detail.memoLog || [])
+        .filter(m => m.type === 'メモ（店舗用）').every(m => !!m.datetime));
+
+  // --- ⑥ 方面（支店マスタの列。一覧の絞り込みに使う） ---
+  ctx.apiSaveBranch(jpToken, {
+    code: 'VIE', name: 'ウィーン支店', role: 'BRANCH', country: 'オーストリア', city: 'ウィーン',
+    team: '', email: 'vie@example.com', prefix: 'VIE', passcode: '', active: true,
+    timezone: 'Europe/Vienna', region: 'ヨーロッパ'
+  });
+  check('支店マスタに方面を保存できる',
+        ctx.listBranchesRaw_().find(b => b.code === 'VIE').region === 'ヨーロッパ');
+  check('一覧の画面へ方面が届く（画面側はこれで絞り込む）',
+        (ctx.apiGetStats(jpToken).branches || []).find(b => b.code === 'VIE').region === 'ヨーロッパ');
+  ctx.apiSaveBranch(jpToken, {
+    code: 'VIE', name: 'ウィーン支店', role: 'BRANCH', country: 'オーストリア', city: 'ウィーン',
+    team: '', email: 'vie@example.com', prefix: 'VIE', passcode: '', active: true,
+    timezone: 'Europe/Vienna'
+  });
+  check('方面を指定せずに支店を保存しても、前の方面は消えない',
+        ctx.listBranchesRaw_().find(b => b.code === 'VIE').region === 'ヨーロッパ');
+}
+
+section('85. 【機能追加】半年より前の過去案件を別のスプレッドシートへ退避する（項目101⑪）');
+{
+  const ctx = shopFixture();
+  const jpToken = ctx.apiLogin('KANTO', 'pw').session.token;
+  const monthsAgo = (m) => ctx.__daysFromToday(-Math.round(m * 30.5));
+  const addOld = (kanri, months) => {
+    addCase(ctx, '過去一覧', {
+      '支店コード': 'VIE', '管理番号': kanri, '管轄': '関東', 'STS JP': 'FN',
+      '新郎名（ローマ字）': 'Old', '新婦名（ローマ字）': kanri, '撮影日FIX': monthsAgo(months)
+    });
+  };
+  addOld('VIE-901', 8);   // 半年より前 → 退避する
+  addOld('VIE-902', 7);   // 半年より前 → 退避する
+  addOld('VIE-903', 2);   // まだ半年たっていない → 残す
+  const hist = ctx.__ss.getSheetByName('やり取り履歴');
+  const head = hist.getRange(1, 1, 1, hist.getLastColumn()).getValues()[0];
+  const addHist = (kanri) => {
+    const row = new Array(head.length).fill('');
+    const set = (n, v) => { const i = head.indexOf(n); if (i !== -1) row[i] = v; };
+    set('__id', 'h-' + kanri); set('支店コード', 'VIE'); set('管理番号', kanri);
+    set('日時', new Date()); set('送信者', 'だれか'); set('送信者ロール', 'JP'); set('内容', 'むかしのやり取り');
+    hist.appendRow(row);
+  };
+  ['VIE-901', 'VIE-902', 'VIE-903'].forEach(addHist);
+
+  const sheetKanri = (name) => {
+    const sh = ctx.__ss.getSheetByName(name);
+    if (sh.getLastRow() < 2) return [];
+    const h = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    const i = h.indexOf('管理番号');
+    return sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues()
+      .map(r => String(r[i] || '')).filter(Boolean);
+  };
+  const res = ctx.purgeOldArchivedCases();
+  check('退避処理がエラー無く終わる', res.ok === true && res.errors === 0, JSON.stringify(res));
+  const leftKanri = sheetKanri('過去一覧');
+  check('退避した案件は過去一覧から消える', !leftKanri.includes('VIE-901') && !leftKanri.includes('VIE-902'), leftKanri.join(','));
+  check('まだ半年たっていない案件は残る', leftKanri.includes('VIE-903'), leftKanri.join(','));
+  const histLeft = sheetKanri('やり取り履歴');
+  check('退避した案件のやり取り履歴も元から消える',
+        !histLeft.includes('VIE-901') && !histLeft.includes('VIE-902'), histLeft.join(','));
+  check('残した案件のやり取り履歴は消えない', histLeft.includes('VIE-903'), histLeft.join(','));
+  check('退避先として元とは別のスプレッドシートが作られている',
+        !!ctx.PropertiesService.getScriptProperties().getProperty('WEDLINK_ARCHIVE_SPREADSHEET_ID'));
+
+  const again = ctx.purgeOldArchivedCases();
+  check('もう一度実行しても何も動かない（何度でも安全に実行できる）',
+        again.ok === true && sheetKanri('過去一覧').join(',') === leftKanri.join(','), JSON.stringify(again));
+  ctx.ScriptApp.__createdTriggers.length = 0;
+  ctx.setupTriggers();
+  check('毎日の自動実行に退避処理が登録される',
+        ctx.ScriptApp.__createdTriggers.includes('purgeOldArchivedCases'),
+        ctx.ScriptApp.__createdTriggers.join(','));
+}
+
 // ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
 process.exit(fail === 0 ? 0 : 1);

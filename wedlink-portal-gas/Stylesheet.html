@@ -316,6 +316,12 @@
   /* ★要件：要対応（相手からの未読メッセージ・変更あり）の案件は一目でわかるよう色を変えて上位に表示 */
   .res-card.needs-action { border-left-color: #d97706; background: #fffbeb; }
   .chip.needs-action-chip { background: #fef3c7; color: #b45309; font-weight: 700; }
+  /* ★要件（項目101）：案件一覧のSTSは色の付いた札をやめ、素の文字で出す。
+     CR・RQ・PU・UC だけ赤い文字にする。 */
+  .sts-text { font-size: 0.78rem; font-weight: 700; color: var(--color-text); }
+  .sts-text-red { color: #dc2626; }
+  /* ★要件（項目101）：新規依頼フォームのSTS(JP側)をチェック形にしたときの並び */
+  .status-check-group { display: flex; flex-wrap: wrap; gap: 14px; margin: 4px 0 10px; }
 
   /* 案件詳細のタブ切替（メッセージ／予約内容／現地記入欄） */
   .tab-bar { display: flex; gap: 6px; margin-bottom: 12px; position: sticky; top: 54px; z-index: 5;

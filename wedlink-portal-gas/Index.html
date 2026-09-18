@@ -85,6 +85,12 @@
             <label style="font-size:0.72rem;color:var(--color-muted);display:block;margin-bottom:4px;">STS(支店側)</label>
             <select id="nonshop-dashboard-sts-branch"><option value="">すべて</option></select>
           </div>
+          <!-- ★要件（項目101）：方面（ヨーロッパ・アジアなど）でまとめて絞り込めるようにする。
+               方面は支店マスタの「方面」列で支店ごとに設定する。 -->
+          <div style="min-width:140px;" id="nonshop-dashboard-region-wrap">
+            <label style="font-size:0.72rem;color:var(--color-muted);display:block;margin-bottom:4px;">方面</label>
+            <select id="nonshop-dashboard-region"><option value="">すべて</option></select>
+          </div>
           <div style="min-width:150px;">
             <label style="font-size:0.72rem;color:var(--color-muted);display:block;margin-bottom:4px;">プラン名</label>
             <input id="nonshop-dashboard-plan" type="text" placeholder="例）プレミアムプラン">
@@ -108,6 +114,11 @@
           <div style="min-width:130px;">
             <label style="font-size:0.72rem;color:var(--color-muted);display:block;margin-bottom:4px;">STS(JP側)</label>
             <select id="shop-dashboard-sts"><option value="">すべて</option></select>
+          </div>
+          <!-- ★要件（項目101）：方面（ヨーロッパ・アジアなど）でまとめて絞り込めるようにする -->
+          <div style="min-width:140px;" id="shop-dashboard-region-wrap">
+            <label style="font-size:0.72rem;color:var(--color-muted);display:block;margin-bottom:4px;">方面</label>
+            <select id="shop-dashboard-region"><option value="">すべて</option></select>
           </div>
           <div style="min-width:150px;">
             <label style="font-size:0.72rem;color:var(--color-muted);display:block;margin-bottom:4px;">プラン名</label>
@@ -236,10 +247,14 @@
         <label>該当の手配課</label>
         <select id="shop-new-team"></select>
         <label>新規作成時のSTS(JP側)</label>
-        <select id="shop-new-initial-status">
-          <option value="RQ">RQ（予約依頼）</option>
-          <option value="CHK">CHK（空き確認のみ）</option>
-        </select>
+        <!-- ★要件（項目101）：ここは「選ぶ」形のプルダウンではなく、チェックして選ぶ形にする。
+             RQとCHKは同時には成り立たない（どちらか一方）ので、両方にチェックが入らない
+             ラジオ形式のチェック欄にしている。 -->
+        <div id="shop-new-initial-status-group" class="status-check-group">
+          <label class="checkbox-label"><input type="radio" name="shop-new-initial-status-radio" value="RQ" checked> RQ（予約依頼）</label>
+          <label class="checkbox-label"><input type="radio" name="shop-new-initial-status-radio" value="CHK"> CHK（空き確認のみ）</label>
+        </div>
+        <input type="hidden" id="shop-new-initial-status" value="RQ">
         <label>チャレンジ番号（必須・英数字11桁）</label>
         <input id="shop-new-challengeno" type="text" placeholder="例）14126000123" maxlength="11">
         <label>新郎姓（ローマ字・必須・大文字で入力）</label>

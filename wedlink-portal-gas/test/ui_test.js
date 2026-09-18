@@ -454,8 +454,9 @@ function paneHidden(document, key) {
     localInput.value = '雨天時は屋内スタジオへ変更';
     document.querySelector('[data-memo-add="メモ（現地用）"]').click();
     await settle();
-    const localPane = document.querySelector('[data-tab-pane="local"]');
-    check('現地記入欄タブにも追記した内容が出る', localPane.textContent.includes('雨天時は屋内スタジオへ変更'));
+    // ★項目101：メモ（現地用）は現地記入欄の中ではなく、独立した「拠点メモ」セクションへ移動した
+    const localPane = document.querySelector('[data-tab-pane="memo"]');
+    check('拠点メモのセクションに追記した内容が出る', localPane.textContent.includes('雨天時は屋内スタジオへ変更'));
     check('種別が分かれるので共有メモ欄には現地用メモが出ない',
           !document.querySelector('[data-tab-pane="reservation"]').textContent.includes('雨天時は屋内スタジオへ変更'));
   }
@@ -1395,8 +1396,8 @@ function paneHidden(document, key) {
     const nav = document.getElementById('detail-quick-nav');
     check('日本側の詳細画面にもクイックナビが表示される（店舗画面と同じ仕組み）', !!nav);
     const navBtns = [...nav.querySelectorAll('[data-scroll-to]')];
-    check('クイックナビにメッセージ・お客様情報・予約内容・記入欄・手配・ドライブ・履歴の7つがある',
-          navBtns.length === 7, navBtns.map(b => b.dataset.scrollTo).join(','));
+    check('クイックナビにお客様情報・予約内容・記入欄・拠点メモ・手配・ドライブ・メッセージ・履歴の8つがある',
+          navBtns.length === 8, navBtns.map(b => b.dataset.scrollTo).join(','));
     const missingTargets = navBtns.map(b => b.dataset.scrollTo).filter(id => !document.getElementById(id));
     check('クイックナビの全ボタンに対応するセクションが実在する', missingTargets.length === 0, missingTargets.join(','));
     // ★不具合防止：jsdomにはscrollIntoViewが無いが、押しても例外にならず安全に無視されること
@@ -1426,8 +1427,8 @@ function paneHidden(document, key) {
     const navBranch = document.getElementById('detail-quick-nav');
     check('現地支店の詳細画面にも同じクイックナビが表示される', !!navBranch);
     const navBranchBtns = [...navBranch.querySelectorAll('[data-scroll-to]')];
-    check('現地支店のクイックナビも7項目（日本記入欄が無いだけで項目数は変わらない）',
-          navBranchBtns.length === 7, navBranchBtns.map(b => b.dataset.scrollTo).join(','));
+    check('現地支店のクイックナビも8項目（日本記入欄が無いだけで項目数は変わらない）',
+          navBranchBtns.length === 8, navBranchBtns.map(b => b.dataset.scrollTo).join(','));
     ['message', 'customer', 'reservation', 'arrangement', 'drive', 'timeline', 'local'].forEach(key => {
       check(`現地支店でも「${key}」セクションが最初から表示されている`,
             paneHidden(document, key) === false, String(paneHidden(document, key)));
@@ -1801,8 +1802,8 @@ function paneHidden(document, key) {
 
   section('U32. 現地支店・手配課の案件詳細のセクション掲載順を日本の店舗と揃える');
   {
-    const expectedLabels = ['お客様情報', '予約内容', '記入欄', '手配', 'ドライブ', 'メッセージ', '履歴'];
-    const expectedIds = ['sec-customer', 'sec-reservation', 'sec-entry', 'sec-arrangement', 'sec-drive', 'sec-message', 'sec-timeline'];
+    const expectedLabels = ['お客様情報', '予約内容', '記入欄', '拠点メモ', '手配', 'ドライブ', 'メッセージ', '履歴'];
+    const expectedIds = ['sec-customer', 'sec-reservation', 'sec-entry', 'sec-memo', 'sec-arrangement', 'sec-drive', 'sec-message', 'sec-timeline'];
 
     // --- JP（手配課） ---
     document.getElementById('nav-logout').click();
@@ -1811,7 +1812,7 @@ function paneHidden(document, key) {
     document.querySelector('#reservation-list .res-card').click();
     await settle();
     const jpNavBtns = [...document.getElementById('detail-quick-nav').querySelectorAll('button')].map(b => b.textContent);
-    check('JPのクイックナビが店舗と同じ並び順（お客様情報→予約内容→記入欄→手配→ドライブ→メッセージ→履歴）になっている',
+    check('JPのクイックナビが店舗と同じ並び順（お客様情報→予約内容→記入欄→拠点メモ→手配→ドライブ→メッセージ→履歴）になっている',
           jpNavBtns.join(',') === expectedLabels.join(','), jpNavBtns.join(','));
     const jpHtml = document.getElementById('detail-content').innerHTML;
     const jpPositions = expectedIds.map(id => jpHtml.indexOf(`id="${id}"`));
@@ -1825,7 +1826,7 @@ function paneHidden(document, key) {
     [...document.querySelectorAll('#reservation-list .res-card')][0].click();
     await settle();
     const branchNavBtns = [...document.getElementById('detail-quick-nav').querySelectorAll('button')].map(b => b.textContent);
-    check('現地支店のクイックナビも店舗と同じ並び順になっている（項目数はJPと同じ7つ）',
+    check('現地支店のクイックナビも店舗と同じ並び順になっている（項目数はJPと同じ8つ）',
           branchNavBtns.join(',') === expectedLabels.join(','), branchNavBtns.join(','));
     const branchHtml = document.getElementById('detail-content').innerHTML;
     const branchPositions = expectedIds.map(id => branchHtml.indexOf(`id="${id}"`));
@@ -2265,10 +2266,10 @@ function paneHidden(document, key) {
     const flightIn = document.querySelector('[data-pending="フライト情報"]');
     const flightOut = document.querySelector('[data-pending="フライト情報（OUT）"]');
     check('フライト情報がINとOUTの2つの欄に分かれている', !!flightIn && !!flightOut);
-    check('IN欄のラベルに「（IN）」と入っている',
-          flightIn.closest('.field-block').querySelector('label').textContent.includes('（IN）'));
-    check('OUT欄のラベルに「（OUT）」と入っている',
-          flightOut.closest('.field-block').querySelector('label').textContent.includes('（OUT）'));
+    check('IN欄のラベルに「IN・往路」と入っている',
+          flightIn.closest('.field-block').querySelector('label').textContent.includes('IN・往路'));
+    check('OUT欄のラベルに「OUT・復路」と入っている',
+          flightOut.closest('.field-block').querySelector('label').textContent.includes('OUT・復路'));
     flightIn.value = 'JL123 10/1 10:00羽田発';
     flightIn.dispatchEvent(new dom.window.Event('change'));
     flightOut.value = 'JL124 10/5 16:00現地発';
@@ -3540,6 +3541,212 @@ function paneHidden(document, key) {
     check('回答後は「希望日一覧から回答してください」の案内は出ない（実態と食い違わない）',
           !chkPlanRow2.textContent.includes('から回答してください'),
           chkPlanRow2.textContent.replace(/\s+/g, ' ').slice(0, 200));
+  }
+
+  section('U61. 【項目101】拠点メモ・確定日の表示・撮影データのアップ・STSの色・日付/プラン変更・方面・新規STSのチェック欄');
+  {
+    const ctx61 = makeServer();
+    const jp61 = ctx61.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    const shopTok61 = ctx61.apiLogin('SHOP1', 'CHANGE-ME-SHOP1').session.token;
+    const vie61 = ctx61.apiLogin('VIE', 'CHANGE-ME-VIE').session.token;
+
+    // 確定済みの案件（撮影日FIXあり・STS JPがOK）を店舗発で1件用意する
+    const created61 = ctx61.apiShopCreateRequest(shopTok61, {
+      branchCode: 'VIE', team: '関東', challengeNo: 'ITEM1010001',
+      groomLastName: 'SATO', groomName: 'ICHIRO', brideLastName: 'SATO', brideName: 'HANA',
+      hope1: '2027-12-01', attendance: '有り予定', attendanceCount: 3
+    });
+    const k61 = created61.kanriNo;
+    ctx61.apiSaveFieldsQuiet(jp61, k61, { '撮影日FIX': '2027-12-01', 'STS JP': 'OK' });
+    // 一覧のSTSの色を確かめるため、赤字になるはずの案件（RQ）も1件用意する
+    const kRed61 = ctx61.apiCreateReservation(jp61, 'VIE', '01 Red Case\n02 Red Bride\nRQ 2027/12/20').kanriNo;
+    // 方面の絞り込みを確かめるため、VIE支店に方面を設定する
+    ctx61.apiSaveBranch(jp61, {
+      code: 'VIE', name: 'ウィーン支店', role: 'BRANCH', country: 'オーストリア', city: 'ウィーン',
+      team: '', email: 'vie@example.com', prefix: 'VIE', passcode: '', active: true, region: 'ヨーロッパ'
+    });
+    // 「別の方面を選ぶと消える」ことを確かめるため、もう1つ別の方面を持つ支店を用意する
+    ctx61.apiSaveBranch(jp61, {
+      code: 'ROW', name: 'ローマ支店', role: 'BRANCH', country: 'イタリア', city: 'ローマ',
+      team: '', email: 'row@example.com', prefix: 'R', passcode: '', active: true, region: 'アジア'
+    });
+
+    // --- 手配課の画面 ---
+    const dom61 = await openApp(ctx61);
+    const doc61 = dom61.window.document;
+    await login(dom61, 'KANTO', 'CHANGE-ME-KANTO');
+    await settle();
+
+    // ④ 一覧のSTSは色の付いた札ではなく素の文字で、CR/RQ/PU/UCだけ赤字
+    const redRow = [...doc61.querySelectorAll('#reservation-table-body tr')].find(r => r.textContent.includes(kRed61));
+    check('一覧のSTSに色付きの札（chip）を使っていない',
+          !redRow.querySelector('.chip.hq') && !redRow.querySelector('.chip.branch'), redRow.innerHTML.slice(0, 300));
+    check('RQは赤字になる', !!redRow.querySelector('.sts-text-red'), redRow.innerHTML.slice(0, 300));
+    const okRow = [...doc61.querySelectorAll('#reservation-table-body tr')].find(r => r.textContent.includes(k61));
+    check('OKは赤字にならない',
+          !!okRow.querySelector('.sts-text') && !okRow.querySelector('.sts-text-red'), okRow.innerHTML.slice(0, 300));
+
+    // ⑥ 方面の絞り込み欄が出る
+    const regionSel = doc61.getElementById('nonshop-dashboard-region');
+    check('一覧に方面の絞り込み欄がある', !!regionSel);
+    check('支店マスタに設定した方面が選択肢に出る',
+          [...regionSel.options].map(o => o.value).includes('ヨーロッパ'),
+          [...regionSel.options].map(o => o.value).join(','));
+    regionSel.value = 'ヨーロッパ';
+    regionSel.dispatchEvent(new dom61.window.Event('change'));
+    await settle();
+    check('方面で絞り込んでも、その方面の支店の案件は残る',
+          [...doc61.querySelectorAll('#reservation-table-body tr')].some(r => r.textContent.includes(k61)));
+    regionSel.value = 'アジア';
+    regionSel.dispatchEvent(new dom61.window.Event('change'));
+    await settle();
+    check('別の方面を選ぶとその支店の案件は消える',
+          ![...doc61.querySelectorAll('#reservation-table-body tr')].some(r => r.textContent.includes(k61)));
+    regionSel.value = '';
+    regionSel.dispatchEvent(new dom61.window.Event('change'));
+    await settle();
+
+    const open61 = async (kanri) => {
+      doc61.getElementById('nav-dashboard').click();
+      await settle();
+      [...doc61.querySelectorAll('#reservation-table-body tr')].find(r => r.textContent.includes(kanri)).click();
+      await settle(); await settle();
+    };
+    await open61(k61);
+
+    // ⑨ 詳細のいちばん上に確定した日付が出る
+    const header61 = doc61.querySelector('.detail-header');
+    check('詳細のいちばん上に確定した日付が出る',
+          header61.textContent.includes('確定日') && header61.textContent.includes('2027-12-01'),
+          header61.textContent.replace(/\s+/g, ' ').slice(0, 200));
+
+    // ① 拠点メモ（3拠点分）が1つのセクションにまとまっている
+    const memoPane = doc61.querySelector('[data-tab-pane="memo"]');
+    check('拠点メモのセクションがある', !!memoPane);
+    ['メモ（手配課用）', 'メモ（現地用）', 'メモ（店舗用）'].forEach(t => {
+      check(`手配課の画面に「${t}」の欄がある`, memoPane.textContent.includes(t));
+    });
+    check('手配課は自分の欄（メモ（手配課用））に書き込める',
+          !!memoPane.querySelector('[data-memo-input="メモ（手配課用）"]'));
+    check('手配課は現地の欄には書き込めない（閲覧のみ）',
+          !memoPane.querySelector('[data-memo-input="メモ（現地用）"]'));
+    check('手配課は店舗の欄にも書き込めない（閲覧のみ）',
+          !memoPane.querySelector('[data-memo-input="メモ（店舗用）"]'));
+    const jpMemoInput = memoPane.querySelector('[data-memo-input="メモ（手配課用）"]');
+    jpMemoInput.value = '現地へ日程を再確認中';
+    memoPane.querySelector('[data-memo-add="メモ（手配課用）"]').click();
+    await settle(); await settle();
+    check('書き込むとすぐ画面に出る',
+          doc61.querySelector('[data-tab-pane="memo"]').textContent.includes('現地へ日程を再確認中'));
+
+    // ⑩ 撮影データのアップは手配課からは見えるだけ
+    check('手配課の画面に撮影データのアップの状態が出る',
+          doc61.getElementById('detail-content').textContent.includes('撮影データのアップ'));
+    check('手配課の画面にはチェックできる欄は出ない',
+          !doc61.querySelector('[data-pending="撮影データアップ済み"]'));
+
+    // ⑤ 確定後に日付・プランを変えるボタンが出る
+    const changeBtns = [...doc61.querySelectorAll('[data-change-after-fix]')].map(b => b.dataset.changeAfterFix);
+    check('確定後に「日付を変更する」「プランを変更する」のボタンが出る',
+          changeBtns.includes('DC') && changeBtns.includes('PC'), changeBtns.join(','));
+    const hopeBox61 = doc61.querySelector('details.hope-collapse');
+    check('押す前は希望日一覧が折りたたまれている', hopeBox61.open === false);
+    doc61.querySelector('[data-change-after-fix="DC"]').click();
+    await settle();
+    check('「日付を変更する」を押すと希望日一覧が開く',
+          doc61.querySelector('details.hope-collapse').open === true);
+    check('「日付を変更する」を押すとSTS(JP側)の欄がDCになる',
+          doc61.querySelector('[data-pending="STS JP"]').value === 'DC',
+          doc61.querySelector('[data-pending="STS JP"]').value);
+    check('押しただけではまだ保存されない（未保存の変更として持つ）',
+          ctx61.apiGetReservationDetail(jp61, k61).detail['STS JP'] === 'OK');
+    doc61.querySelector('.quick-commit-btn').click();
+    await settle(); await settle(); await settle();
+    check('送信するとSTS(JP側)がDCになる',
+          ctx61.apiGetReservationDetail(jp61, k61).detail['STS JP'] === 'DC');
+    await open61(k61);
+    check('DCの対応中は希望日一覧が自動で開く',
+          doc61.querySelector('details.hope-collapse').open === true);
+
+    // --- 現地支店の画面（⑩のチェック） ---
+    doc61.getElementById('nav-logout').click();
+    await settle();
+    await login(dom61, 'VIE', 'CHANGE-ME-VIE');
+    await settle();
+    [...doc61.querySelectorAll('#reservation-table-body tr')].find(r => r.textContent.includes(k61)).click();
+    await settle(); await settle();
+    const uploadCb = doc61.querySelector('[data-pending="撮影データアップ済み"]');
+    check('現地支店の画面には撮影データのアップのチェック欄が出る', !!uploadCb);
+    check('現地支店には日付・プランの変更ボタンは出さない（STS(JP側)を動かせないため）',
+          doc61.querySelectorAll('[data-change-after-fix]').length === 0);
+    const branchMemoPane = doc61.querySelector('[data-tab-pane="memo"]');
+    check('現地支店は自分の欄（メモ（現地用））に書き込める',
+          !!branchMemoPane.querySelector('[data-memo-input="メモ（現地用）"]'));
+    check('現地支店からも手配課が書いた内容が読める',
+          branchMemoPane.textContent.includes('現地へ日程を再確認中'));
+    uploadCb.checked = true;
+    uploadCb.dispatchEvent(new dom61.window.Event('change'));
+    await settle();
+    doc61.querySelector('.quick-commit-btn').click();
+    await settle(); await settle(); await settle();
+    const afterUp61 = ctx61.apiGetReservationDetail(jp61, k61).detail;
+    check('現地支店がチェックして送信すると「済」になる', afterUp61['撮影データアップ済み'] === '済',
+          String(afterUp61['撮影データアップ済み']));
+    check('チェックすると記入者が自動で残る', !!afterUp61['撮影データアップ済み者'],
+          String(afterUp61['撮影データアップ済み者']));
+
+    // --- 店舗の画面（②確定ボタンの位置・⑦列席・⑧新規のチェック欄） ---
+    doc61.getElementById('nav-logout').click();
+    await settle();
+    await login(dom61, 'SHOP1', 'CHANGE-ME-SHOP1');
+    await settle();
+    [...doc61.querySelectorAll('#reservation-table-body tr')]
+      .find(r => r.textContent.includes(k61)).click();
+    await settle(); await settle();
+    const shopHtml61 = doc61.getElementById('detail-content').innerHTML;
+    const posFlight = shopHtml61.indexOf('data-pending="フライト情報（OUT）"');
+    const posCommit = shopHtml61.indexOf('id="btn-commit"');
+    const posReservation = shopHtml61.indexOf('id="shop-sec-reservation"');
+    check('店舗の確定ボタンがフライト情報より後ろにある',
+          posFlight !== -1 && posCommit > posFlight, `${posFlight} / ${posCommit}`);
+    check('店舗の確定ボタンが予約内容より前（＝フライト情報のすぐ下）にある',
+          posReservation !== -1 && posCommit < posReservation, `${posCommit} / ${posReservation}`);
+    check('店舗の画面にも確定した日付がいちばん上に出る',
+          doc61.querySelector('.detail-header').textContent.includes('2027-12-01'),
+          doc61.querySelector('.detail-header').textContent.replace(/\s+/g, ' ').slice(0, 200));
+    const attendSel61 = doc61.querySelector('[data-pending="列席"]');
+    check('店舗の画面に列席の欄がある', !!attendSel61);
+    check('列席の選択肢が有り・無し・有り予定の3つ',
+          [...attendSel61.options].map(o => o.value).filter(Boolean).join(',') === '有り,無し,有り予定',
+          [...attendSel61.options].map(o => o.value).join(','));
+    check('新規依頼のときに入れた列席が画面にも出ている', attendSel61.value === '有り予定', attendSel61.value);
+    check('店舗の画面にも列席人数の欄がある', !!doc61.querySelector('[data-pending="列席人数"]'));
+    const shopMemoPane61 = doc61.getElementById('shop-sec-memo');
+    check('店舗は自分の欄（メモ（店舗用））に書き込める',
+          !!shopMemoPane61.querySelector('[data-memo-input="メモ（店舗用）"]'));
+    check('店舗からも手配課が書いた内容が読める',
+          shopMemoPane61.textContent.includes('現地へ日程を再確認中'));
+    check('店舗の画面にも撮影データのアップの状態が出る',
+          doc61.getElementById('shop-sec-status').textContent.includes('撮影データのアップ'));
+    check('店舗はチェックできない（見えるだけ）',
+          !doc61.querySelector('[data-pending="撮影データアップ済み"]'));
+
+    // ⑧ 新規依頼フォームのSTS(JP側)はチェック欄
+    doc61.getElementById('nav-shop-new').click();
+    await settle();
+    const stsRadios = [...doc61.querySelectorAll('input[name="shop-new-initial-status-radio"]')];
+    check('新規依頼のSTS(JP側)がチェック欄になっている（プルダウンではない）',
+          stsRadios.length === 2, String(stsRadios.length));
+    check('選べるのはRQとCHKの2つ',
+          stsRadios.map(r => r.value).join(',') === 'RQ,CHK', stsRadios.map(r => r.value).join(','));
+    check('最初はRQにチェックが入っている', stsRadios[0].checked === true);
+    stsRadios[1].checked = true;
+    stsRadios[1].dispatchEvent(new dom61.window.Event('change'));
+    await settle();
+    check('CHKにチェックすると送信される値もCHKになる',
+          doc61.getElementById('shop-new-initial-status').value === 'CHK',
+          doc61.getElementById('shop-new-initial-status').value);
+    check('もう一方（RQ）のチェックは外れる（両方は選べない）', stsRadios[0].checked === false);
   }
 
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
