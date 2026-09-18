@@ -1608,12 +1608,14 @@ section('28. メモ履歴（共有メモを現地支店・日本支店（店舗�
   check('現地支店は共有メモ（日本支店）を追加できない', branchToShopErr !== null, String(branchToShopErr));
 
   // ★要件：手配課は「共有メモ（手配課）」に書き込め、あわせて「共有メモ（日本支店）」も閲覧できる
-  // （現地支店の共有メモは見えない）
+  // ★要件変更（項目102）：手配課はすべての拠点の記録を見られるようにしたため、
+  // 「共有メモ（現地支店）」も閲覧できる（書き込みは現地支店だけ）。
   ctx.apiAddMemo(jp.session.token, 'VIE-601', '共有メモ（手配課）', '手配課内の連絡事項');
   const jpView = ctx.apiGetReservationDetail(jp.session.token, 'VIE-601').detail;
   check('手配課の画面には共有メモ（手配課）が見える', jpView.memoLog.some(m => m.type === '共有メモ（手配課）' && m.body === '手配課内の連絡事項'));
-  check('手配課の画面には共有メモ（現地支店）は見えない（他ロール専用のため）',
-        !jpView.memoLog.some(m => m.type === '共有メモ（現地支店）'));
+  check('手配課の画面には共有メモ（現地支店）も見える（手配課だけが全拠点を見られる）',
+        jpView.memoLog.some(m => m.type === '共有メモ（現地支店）'),
+        jpView.memoLog.map(m => m.type).join(','));
 
   // ★要件：現地支店の画面には自分の共有メモ（現地支店）だけが見える（手配課の共有メモは見えない）
   const branchView = ctx.apiGetReservationDetail(vie.session.token, 'VIE-601').detail;
@@ -5015,29 +5017,42 @@ section('84. 【機能追加】全拠点の書き込める履歴欄・列席・�
     return !d['撮影データアップ済み者'] && !d['撮影データアップ済み日時'];
   })());
 
-  // --- ① 書き込める履歴欄を全拠点に（自分の拠点の欄だけ書ける／3拠点とも全員が読める） ---
-  ctx.apiAddMemo(shopToken, kanri, 'メモ（店舗用）', 'お客様へ日程の候補をお伝えしました');
-  ctx.apiAddMemo(jpToken, kanri, 'メモ（手配課用）', '現地へ空き状況を確認中');
+  // --- ① 拠点ごとの書き込める履歴欄（現地は現地、店舗は店舗。手配課だけが全部を見られる） ---
+  ctx.apiAddMemo(shopToken, kanri, '共有メモ（日本支店）', 'お客様へ日程の候補をお伝えしました');
+  ctx.apiAddMemo(jpToken, kanri, '共有メモ（手配課）', '現地へ空き状況を確認中');
+  ctx.apiAddMemo(vieToken, kanri, '共有メモ（現地支店）', '現地スタッフの手配を開始');
   ctx.apiAddMemo(vieToken, kanri, 'メモ（現地用）', 'カメラマンの仮押さえ済み');
   err = null;
-  try { ctx.apiAddMemo(jpToken, kanri, 'メモ（店舗用）', '横取り'); } catch (e) { err = e.message; }
-  check('店舗用の欄に手配課は書き込めない', err !== null, String(err));
+  try { ctx.apiAddMemo(jpToken, kanri, '共有メモ（日本支店）', '横取り'); } catch (e) { err = e.message; }
+  check('店舗の欄に手配課は書き込めない', err !== null, String(err));
   err = null;
-  try { ctx.apiAddMemo(shopToken, kanri, 'メモ（手配課用）', '横取り'); } catch (e) { err = e.message; }
-  check('手配課用の欄に店舗は書き込めない', err !== null, String(err));
+  try { ctx.apiAddMemo(shopToken, kanri, '共有メモ（手配課）', '横取り'); } catch (e) { err = e.message; }
+  check('手配課の欄に店舗は書き込めない', err !== null, String(err));
   err = null;
   try { ctx.apiAddMemo(shopToken, kanri, 'メモ（現地用）', '横取り'); } catch (e) { err = e.message; }
-  check('現地用の欄に店舗は書き込めない', err !== null, String(err));
+  check('現地の欄に店舗は書き込めない', err !== null, String(err));
   const typesFor = (token) => (ctx.apiGetReservationDetail(token, kanri).detail.memoLog || []).map(m => m.type);
-  ['メモ（店舗用）', 'メモ（手配課用）', 'メモ（現地用）'].forEach(t => {
-    check(`手配課からは「${t}」が読める`, typesFor(jpToken).includes(t), typesFor(jpToken).join(','));
-    check(`現地支店からは「${t}」が読める`, typesFor(vieToken).includes(t), typesFor(vieToken).join(','));
-    check(`店舗からは「${t}」が読める`, typesFor(shopToken).includes(t), typesFor(shopToken).join(','));
+  check('店舗の画面には店舗自身の記録だけが届く',
+        typesFor(shopToken).join(',') === '共有メモ（日本支店）', typesFor(shopToken).join(','));
+  check('店舗の画面に現地の記録は届かない',
+        typesFor(shopToken).indexOf('メモ（現地用）') === -1, typesFor(shopToken).join(','));
+  check('店舗の画面に手配課の記録は届かない',
+        typesFor(shopToken).indexOf('共有メモ（手配課）') === -1, typesFor(shopToken).join(','));
+  check('現地支店の画面に店舗の記録は届かない',
+        typesFor(vieToken).indexOf('共有メモ（日本支店）') === -1, typesFor(vieToken).join(','));
+  check('現地支店の画面に手配課の記録は届かない',
+        typesFor(vieToken).indexOf('共有メモ（手配課）') === -1, typesFor(vieToken).join(','));
+  check('現地支店の画面には現地自身の記録が届く',
+        typesFor(vieToken).indexOf('メモ（現地用）') !== -1 &&
+        typesFor(vieToken).indexOf('共有メモ（現地支店）') !== -1, typesFor(vieToken).join(','));
+  ['共有メモ（手配課）', '共有メモ（現地支店）', '共有メモ（日本支店）', 'メモ（現地用）'].forEach(t => {
+    check(`手配課の画面には「${t}」も届く（全拠点を見られる）`,
+          typesFor(jpToken).indexOf(t) !== -1, typesFor(jpToken).join(','));
   });
   check('書き込むと記入者が自動で残る', (ctx.apiGetReservationDetail(jpToken, kanri).detail.memoLog || [])
-        .filter(m => m.type === 'メモ（店舗用）').every(m => !!m.who));
+        .filter(m => m.type === '共有メモ（日本支店）').every(m => !!m.who));
   check('書き込むと日時が自動で残る', (ctx.apiGetReservationDetail(jpToken, kanri).detail.memoLog || [])
-        .filter(m => m.type === 'メモ（店舗用）').every(m => !!m.datetime));
+        .filter(m => m.type === '共有メモ（日本支店）').every(m => !!m.datetime));
 
   // --- ⑥ 方面（支店マスタの列。一覧の絞り込みに使う） ---
   ctx.apiSaveBranch(jpToken, {

@@ -265,19 +265,15 @@ const MEMO_TYPE_SHARED_BRANCH = '共有メモ（現地支店）';
 const MEMO_TYPE_SHARED_SHOP = '共有メモ（日本支店）';
 const MEMO_TYPE_SHARED_JP = '共有メモ（手配課）';
 const MEMO_TYPE_LOCAL = COL_LOCAL_MEMO;     // 'メモ（現地用）'
-// ★要件（項目101）：これまで拠点ごとの「書き込める履歴欄」は現地支店（メモ（現地用））だけにあり、
-// 日本の店舗・手配課には自分たちだけが読める「共有メモ」しか無かった。全拠点が同じように
-// 記録を積み上げられるよう、店舗用・手配課用のメモを新設する。
-// 共有メモ（自分の拠点だけが読む内部メモ）との違いは「3拠点すべてが読める」こと。
-// どの拠点が書いた記録も1か所で追えるようにするのが目的なので、書けるのは自分の拠点のものだけ。
-const MEMO_TYPE_SHOP_LOCAL = 'メモ（店舗用）';
-const MEMO_TYPE_JP_LOCAL = 'メモ（手配課用）';
-// 全拠点が読める「拠点メモ」3種（共有メモとは別扱い）
-const CROSS_SITE_MEMO_TYPES = [MEMO_TYPE_LOCAL, MEMO_TYPE_SHOP_LOCAL, MEMO_TYPE_JP_LOCAL];
+// ★要件（項目102）：拠点ごとの書き込める履歴欄は、拠点ごとに既にある欄（現地支店＝メモ（現地用）
+// ／日本の店舗＝共有メモ（日本支店）／手配課＝共有メモ（手配課））をそのまま使う。
+// 項目101でいったん「メモ（店舗用）」「メモ（手配課用）」を新設したが、既にある共有メモと
+// 中身が同じで画面に同じ欄が2つ並んでしまったため取りやめた。
+// 見える範囲の考え方：現地の記録は現地、店舗の記録は店舗だけが見る。手配課だけが全部を見る。
 const MEMO_TYPE_SURVEY = 'アンケート回答';   // お客様がGoogleフォームで回答した内容（自動反映・追記のみ）
 const MEMO_TYPES = [
   MEMO_TYPE_SHARED, MEMO_TYPE_SHARED_BRANCH, MEMO_TYPE_SHARED_SHOP, MEMO_TYPE_SHARED_JP,
-  MEMO_TYPE_LOCAL, MEMO_TYPE_SHOP_LOCAL, MEMO_TYPE_JP_LOCAL, MEMO_TYPE_SURVEY
+  MEMO_TYPE_LOCAL, MEMO_TYPE_SURVEY
 ];
 // お客様入力（Googleフォーム）である目印。手入力のメモと見分けるために使う
 const MEMO_AUTHOR_CUSTOMER = 'お客様（Googleフォーム）';
@@ -1875,10 +1871,9 @@ function buildShopReservationDetail_(session, kanriNo, headers, rowData) {
   // ★要件：店舗が追加できる「共有メモ（日本支店）」は自分でも見えるようにする（メモ（現地用）・
   // アンケート回答は支店・手配課側の運用情報のため店舗には見せない。共有メモ（現地支店）・
   // 共有メモ（手配課）も他ロール専用のため見せない）
-  // ★要件（項目101）：自分たちの共有メモに加え、拠点メモ（現地用・店舗用・手配課用）も読める
-  // （どの拠点が何を書いたかを1か所で追えるようにするため。共有メモは引き続き自分の拠点のものだけ）
-  detail.memoLog = getMemoLog_(kanriNo).filter(m =>
-    m.type === MEMO_TYPE_SHARED_SHOP || CROSS_SITE_MEMO_TYPES.indexOf(m.type) !== -1);
+  // ★要件（項目102）：店舗の画面には、現地支店・手配課の記録を出さない
+  // （現地の記録は現地、店舗の記録は店舗だけが見る。両方を見られるのは手配課だけ）。
+  detail.memoLog = getMemoLog_(kanriNo).filter(m => m.type === MEMO_TYPE_SHARED_SHOP);
 
   const hSheet = getSpreadsheet_().getSheetByName(HISTORY_SHEET_NAME);
   let hRows = getRowsAsObjects_(hSheet).filter(r => String(r[H_COL_KANRI]) === String(kanriNo));
@@ -2638,13 +2633,14 @@ function apiGetReservationDetail(token, kanriNo) {
   // ★機能追加：共有メモ／メモ（現地用）／アンケート回答（積み上げ式）。
   // ★機能追加：共有メモは現地支店・日本支店（店舗）・手配課で分離しているため、閲覧できる範囲も
   // ロールごとに絞り込む（手配課は「手配課」＋「日本支店」の2つ、現地支店は「現地支店」のみ）。
+  // ★要件（項目102）：手配課はすべての拠点の記録を見られるようにする（書き込むのは自分の欄だけ）。
+  // 現地支店は現地の記録だけ（店舗・手配課の記録は見せない）。
   const visibleSharedMemoTypes = session.role === JP_ROLE
-    ? [MEMO_TYPE_SHARED_JP, MEMO_TYPE_SHARED_SHOP]
+    ? [MEMO_TYPE_SHARED_JP, MEMO_TYPE_SHARED_SHOP, MEMO_TYPE_SHARED_BRANCH]
     : [MEMO_TYPE_SHARED_BRANCH];
-  // ★要件（項目101）：拠点メモ（現地用・店舗用・手配課用）は3拠点すべてが読める
   detail.memoLog = getMemoLog_(kanriNo).filter(m =>
     visibleSharedMemoTypes.indexOf(m.type) !== -1 ||
-    CROSS_SITE_MEMO_TYPES.indexOf(m.type) !== -1 || m.type === MEMO_TYPE_SURVEY);
+    m.type === MEMO_TYPE_LOCAL || m.type === MEMO_TYPE_SURVEY);
 
   // ★機能追加：現地スタッフ手配メール。宛先メールアドレス自体はここでは返さない
   // （送信時に改ざんできないよう、下書き作成・送信の両方でサーバー側が都度解決するため）。
@@ -3811,28 +3807,22 @@ const SHARED_MEMO_OWNER_ROLE_ = {
   [MEMO_TYPE_SHARED_SHOP]: SHOP_ROLE,
   [MEMO_TYPE_SHARED_JP]: JP_ROLE
 };
-// ★要件（項目101）：拠点メモ（3拠点すべてが読める記録）も、書けるのは自分の拠点のものだけ
-const CROSS_SITE_MEMO_OWNER_ROLE_ = {
-  [MEMO_TYPE_LOCAL]: BRANCH_ROLE,
-  [MEMO_TYPE_SHOP_LOCAL]: SHOP_ROLE,
-  [MEMO_TYPE_JP_LOCAL]: JP_ROLE
-};
 
 function apiAddMemo(token, kanriNo, memoType, body) {
   const session = requireSession_(token);
   const isSharedType = Object.prototype.hasOwnProperty.call(SHARED_MEMO_OWNER_ROLE_, memoType);
-  const isCrossSiteType = Object.prototype.hasOwnProperty.call(CROSS_SITE_MEMO_OWNER_ROLE_, memoType);
-  if (!isSharedType && !isCrossSiteType) {
+  if (!isSharedType && memoType !== MEMO_TYPE_LOCAL) {
     throw new Error('種別が正しくありません。');
-  }
-  // ★要件（項目101）：拠点メモは3拠点すべてが読めるが、書けるのは自分の拠点のものだけ
-  if (isCrossSiteType && session.role !== CROSS_SITE_MEMO_OWNER_ROLE_[memoType]) {
-    throw new Error('このメモは追加できません（担当ロール専用です）。');
   }
   // ★機能追加：共有メモを現地支店・日本支店（店舗）・手配課で分離。各ロールは自分専用の
   // 共有メモ欄にしか書き込めない
   if (isSharedType && session.role !== SHARED_MEMO_OWNER_ROLE_[memoType]) {
     throw new Error('この共有メモは追加できません（担当ロール専用です）。');
+  }
+  // ★機能追加（店舗拡張）：店舗が使えるのは共有メモ（日本支店）だけ
+  // （メモ（現地用）は支店の内部運用メモのため）
+  if (session.role === SHOP_ROLE && memoType === MEMO_TYPE_LOCAL) {
+    throw new Error('店舗が追加できるのは共有メモ（日本支店）だけです。');
   }
   const text = String(body || '').trim();
   if (!text) throw new Error('内容を入力してください。');

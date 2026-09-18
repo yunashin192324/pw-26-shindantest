@@ -102,10 +102,6 @@
   const MEMO_TYPE_SHARED_SHOP = '共有メモ（日本支店）';
   const MEMO_TYPE_SHARED_JP = '共有メモ（手配課）';
   const MEMO_TYPE_LOCAL = 'メモ（現地用）';
-  // ★要件（項目101）：拠点ごとの書き込める履歴欄。3拠点すべてが読めて、書けるのは自分の拠点のものだけ
-  // （Code.gs の CROSS_SITE_MEMO_TYPES と一致させること）
-  const MEMO_TYPE_SHOP_LOCAL = 'メモ（店舗用）';
-  const MEMO_TYPE_JP_LOCAL = 'メモ（手配課用）';
   const MEMO_TYPE_SURVEY = 'アンケート回答';
 
   let session = null;
@@ -1424,9 +1420,10 @@
         <p id="shop-upload-error" class="error-text hidden"></p>
         <div id="shop-upload-list" style="margin-top:10px;"><p class="hint-text">読み込み中...</p></div>
       </div>
+      <!-- ★要件（項目102）：店舗の画面には店舗自身の記録だけを出す
+           （現地支店・手配課の記録は出さない。両方を見られるのは手配課だけ）。 -->
       <div id="shop-sec-memo" style="scroll-margin-top:110px;">
-        ${memoLogSectionHtml(d, MEMO_TYPE_SHARED_SHOP, '共有メモ（日本支店）', '店舗内向けの自由メモを入力')}
-        ${crossSiteMemoSectionsHtml_(d)}
+        ${memoLogSectionHtml(d, MEMO_TYPE_SHARED_SHOP, '共有メモ（日本支店）', '店舗の記入欄。お客様とのやり取りや申し送りを書いてください')}
       </div>
       <div class="section-card" id="shop-sec-message">
         <h3>メッセージ・変更の送信</h3>
@@ -1804,18 +1801,23 @@
       </div>`;
   }
 
-  // ★要件（項目101）：これまで「メモ（現地用）」は現地支店だけが書ける欄だったが、
-  // 日本の店舗・手配課にも同じ「日付と記入者が自動で残る書き込める履歴欄」を作る。
-  // 3つの欄は全拠点から見えるが、書けるのは自分の拠点の欄だけ（他拠点の欄は閲覧のみ）。
-  const CROSS_SITE_MEMO_DEFS = [
-    { type: MEMO_TYPE_JP_LOCAL, role: 'JP', title: 'メモ（手配課用）', placeholder: '手配課の記入欄。経緯や申し送りを書いてください' },
-    { type: MEMO_TYPE_LOCAL, role: 'BRANCH', title: 'メモ（現地用）', placeholder: '現地スタッフ向けのメモを入力' },
-    { type: MEMO_TYPE_SHOP_LOCAL, role: 'SHOP', title: 'メモ（店舗用）', placeholder: '店舗の記入欄。お客様とのやり取りや申し送りを書いてください' }
-  ];
-  function crossSiteMemoSectionsHtml_(d) {
-    return CROSS_SITE_MEMO_DEFS.map(def => session.role === def.role
-      ? memoLogSectionHtml(d, def.type, def.title, def.placeholder, def.type === MEMO_TYPE_LOCAL ? d['メモ（現地用）'] : '')
-      : memoLogReadOnlySectionHtml_(d, def.type, def.title, def.type === MEMO_TYPE_LOCAL ? d['メモ（現地用）'] : '')).join('');
+  // ★要件（項目102）：拠点ごとの記録は「現地は現地、店舗は店舗」で分ける。
+  // 現地支店の画面には現地の欄だけ、店舗の画面には店舗の欄だけを出す。
+  // 手配課だけは全拠点の記録を見られる（自分の欄以外は閲覧のみで、書き込みはしない）。
+  // 項目101でいったん「メモ（店舗用）」「メモ（手配課用）」を新設したが、拠点ごとに同じ役割の
+  // 欄（共有メモ）が既にあり、画面に同じ欄が2つ並んでしまったため取りやめた。
+  function siteMemoSectionsHtml_(d) {
+    if (session.role === 'BRANCH') {
+      return `
+        ${memoLogSectionHtml(d, MEMO_TYPE_SHARED_BRANCH, '共有メモ（現地支店）', '現地支店内向けの自由メモを入力')}
+        ${memoLogSectionHtml(d, MEMO_TYPE_LOCAL, 'メモ（現地用）', '現地スタッフ向けのメモを入力', d['メモ（現地用）'])}`;
+    }
+    // 手配課：自分の欄は書ける。現地支店・店舗の欄は閲覧のみ。
+    return `
+      ${memoLogSectionHtml(d, MEMO_TYPE_SHARED_JP, '共有メモ（手配課）', '手配課内向けの自由メモを入力')}
+      ${memoLogSectionHtml(d, MEMO_TYPE_LOCAL, 'メモ（現地用）', '現地スタッフ向けのメモを入力', d['メモ（現地用）'])}
+      ${memoLogReadOnlySectionHtml_(d, MEMO_TYPE_SHARED_BRANCH, '共有メモ（現地支店）')}
+      ${memoLogReadOnlySectionHtml_(d, MEMO_TYPE_SHARED_SHOP, '共有メモ（日本支店）')}`;
   }
 
   // ★機能：他ロール専用の共有メモを「閲覧のみ」で表示する（追記ボタンは出さない）。
@@ -2553,10 +2555,8 @@
           </div>
         </div>
 
-        ${session.role === 'JP'
-          ? `${memoLogSectionHtml(d, MEMO_TYPE_SHARED_JP, '共有メモ（手配課）', '手配課内向けの自由メモを入力')}
-             ${memoLogReadOnlySectionHtml_(d, MEMO_TYPE_SHARED_SHOP, '共有メモ（日本支店）')}`
-          : memoLogSectionHtml(d, MEMO_TYPE_SHARED_BRANCH, '共有メモ（現地支店）', '現地支店内向けの自由メモを入力')}
+        <!-- ★要件（項目102）：メモ類はここではなく「拠点メモ」の区画に集約した
+             （同じ欄が画面の複数箇所に出て分かりにくかったため）。 -->
 
         ${quickActionsHtml}
       </div>`;
@@ -2602,7 +2602,7 @@
     // 記入欄の切替タブ（日本記入欄／現地記入欄）に隠れず、どのロールからも必ず見えるようにする。
     const siteMemoGroupHtml = `
       <div class="tab-pane" data-tab-pane="memo" id="sec-memo">
-        ${crossSiteMemoSectionsHtml_(d)}
+        ${siteMemoSectionsHtml_(d)}
       </div>`;
 
     // ★要件：現地支店・手配課の画面フォーマットを日本の支店（店舗）画面と統一するクイックナビ化に伴い、

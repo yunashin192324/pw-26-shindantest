@@ -4,7 +4,7 @@
 最終更新：2026-09-07（セッション `session_01Gg7njnTaKt8s1j9dR4GGQk`）
 
 - 「このリポジトリでどう作業するか」→ `CLAUDE.md`（作業手順・ハマりどころ）
-- 「各機能がどういう仕様か・なぜそうなったか」→ `SETUP.md`（項目1〜101の全変更履歴。**これが一次情報**）
+- 「各機能がどういう仕様か・なぜそうなったか」→ `SETUP.md`（項目1〜102の全変更履歴。**これが一次情報**）
 - 「いま何が終わっていて、次に何をすべきか」→ **このファイル**
 
 **★リポジトリの引っ越しについて**：このプロジェクトは今回のセッションで、別スレッド
@@ -39,7 +39,7 @@
 ### 現在の状態
 
 - リポジトリ：`yunashin192324/pw-26-shindantest`、ブランチ：`claude/thread-migration-y2nh9p`（**pushまで完了済み**）
-- テスト：`node test/run_all.js` で **1761件 全て成功 / 0件失敗**（サーバー987・監査187・画面587）
+- テスト：`node test/run_all.js` で **1766件 全て成功 / 0件失敗**（サーバー988・監査187・画面591）
 - デプロイ済みWebアプリURL（`Code.gs` の `WEBAPP_URL` に設定済み。**旧スレッドの記載を引き継いだだけで今回未確認**）：
   `https://script.google.com/a/macros/his-world.com/s/AKfycbz143-qasWEQoJB87kpPH_2Pjmv_6499TKKGKW3ddQ06JFM9H5gkPiTtOJl7RcWm9A/exec`
 - スマホ用プレビューArtifact（**このリポジトリ・このセッションで新規公開したもの。
@@ -261,12 +261,19 @@ Googleカレンダー取込を使う支店は、そのカレンダーをスク�
 
 詳細は`SETUP.md`項目101。実装上、次に触るときに引っかかりやすい点だけ書いておく。
 
-- **拠点メモは3つで1組**。`CROSS_SITE_MEMO_TYPES`（メモ（現地用）／メモ（店舗用）／メモ（手配課用））
-  が全拠点から読めて、書けるのは`CROSS_SITE_MEMO_OWNER_ROLE_`で決めた自分の拠点の欄だけ。
-  画面側は`crossSiteMemoSectionsHtml_`が3つまとめて出す。**新しい拠点メモを足すときは、
-  この2つの定数と`CROSS_SITE_MEMO_DEFS`（JavaScript.html）の3箇所を必ず揃えること。**
+- **拠点メモは「自分の拠点だけ」が原則**（項目102で項目101①を作り直した）。現地の記録は現地、
+  店舗の記録は店舗だけが見る。**全部を見られるのは手配課だけ**で、自分の欄以外は閲覧のみ。
+  サーバー側は`apiGetReservationDetail`／`buildShopReservationDetail_`の`detail.memoLog`の
+  絞り込みが、画面側は`siteMemoSectionsHtml_`（JavaScript.html）が担当する。**両方を必ず
+  揃えること**（画面だけ直してもデータは届いてしまう／サーバーだけ直すと空欄が出る）。
+- **メモの種別は増やさないこと**。項目101でいったん「メモ（店舗用）」「メモ（手配課用）」を
+  新設したが、拠点ごとに同じ役割の欄（共有メモ）が既にあり、画面に同じ欄が2つ並んだため
+  項目102で取りやめた。拠点ごとの記録は「共有メモ（手配課）／（現地支店）／（日本支店）」と
+  「メモ（現地用）」の4種類だけ。
 - **手配課・現地支店のクイックナビは8項目になった**（「拠点メモ」を追加）。
   `DETAIL_QUICK_NAV`を変えたら`ui_test.js`の並び順チェック（U38・U48付近）も直すこと。
+  **メモ類はすべてこの「拠点メモ」の区画にある**（項目102で集約した。以前は共有メモが
+  「予約内容」の中、メモ（現地用）が「記入欄」の中に分かれていた）。
 - **一覧のSTSは`listStatusHtml_`を通す**。`chip hq`／`chip branch`は使わない（詳細画面の
   `inlineStatusBadge`は従来どおり札のままで、こちらは要望の対象外）。赤字の対象は
   `LIST_STATUS_RED`（CR・RQ・PU・UC）。**PUは現在のSTATUS_CODESに無い**が、指定どおり入れてある。
@@ -395,7 +402,7 @@ onShopNewHopePlanNChange_(n)   ← 希望日nのプラン変更でも呼ばれ�
 
 ```bash
 cd wedlink-portal-gas
-cd test && node run_all.js        # まず全部グリーンか確認（1761件想定）
+cd test && node run_all.js        # まず全部グリーンか確認（1766件想定）
 ```
 
 そのうえで、
