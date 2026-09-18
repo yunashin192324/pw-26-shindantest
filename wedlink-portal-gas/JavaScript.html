@@ -1779,13 +1779,25 @@
 
   // ★機能：共有メモ／メモ（現地用）を「積み上げ式」で表示する。日付・記入者は自動、内容だけ手入力。
   // 追加すると即座に保存される（社内進行管理欄のチェックボックスと同じ考え方で、3択保留の対象外）。
-  function memoLogSectionHtml(d, memoType, title, placeholder, legacyValue) {
+  // ★要件（項目103）：mergedTypes を渡すと、別の種別で書かれた過去の記録も同じ一覧に混ぜて出す。
+  // 欄を1つにまとめたとき、それまでその欄に書かれていた記録が画面から消えないようにするために使う
+  // （d.memoLog はサーバー側で新しい順に並んでいるので、混ぜても時系列は崩れない）。
+  function memoLogEntries_(d, memoType, mergedTypes) {
+    const merged = mergedTypes || [];
+    return (d.memoLog || []).filter(m => m.type === memoType || merged.indexOf(m.type) !== -1)
+      .map(m => ({
+        who: m.type === memoType ? m.who : `${m.who}（以前の「${m.type}」に書かれた記録）`,
+        datetime: m.datetime,
+        body: m.body
+      }));
+  }
+  function memoLogSectionHtml(d, memoType, title, placeholder, legacyValue, mergedTypes) {
     const tlItem = (who, when, body) => `
       <div class="tl-item">
         <div class="tl-meta"><span>${escapeHtml(who)}</span><span>${escapeHtml(when)}</span></div>
         <div class="tl-body">${escapeHtml(body)}</div>
       </div>`;
-    const entries = (d.memoLog || []).filter(m => m.type === memoType);
+    const entries = memoLogEntries_(d, memoType, mergedTypes);
     const listHtml = entries.length
       ? entries.map(m => tlItem(m.who, m.datetime, m.body)).join('')
       : (legacyValue ? tlItem('（この機能を追加する前の記録）', '', legacyValue) : '<p class="hint-text">まだ記録はありません。</p>');
@@ -1806,29 +1818,33 @@
   // 手配課だけは全拠点の記録を見られる（自分の欄以外は閲覧のみで、書き込みはしない）。
   // 項目101でいったん「メモ（店舗用）」「メモ（手配課用）」を新設したが、拠点ごとに同じ役割の
   // 欄（共有メモ）が既にあり、画面に同じ欄が2つ並んでしまったため取りやめた。
+  // ★要件（項目103）：現地支店も店舗と同じく、メモ欄は1つに一本化する。
+  // 「共有メモ（現地支店）」の欄は無くし、「メモ（現地用）」に集約する。ただし、それまで
+  // 「共有メモ（現地支店）」に書かれていた記録が消えると困るので、同じ一覧に混ぜて表示する
+  // （mergedTypes。新しく書くぶんはすべて「メモ（現地用）」として保存される）。
+  const BRANCH_MEMO_MERGED_TYPES = [MEMO_TYPE_SHARED_BRANCH];
+  function branchMemoSectionHtml_(d) {
+    return memoLogSectionHtml(d, MEMO_TYPE_LOCAL, 'メモ（現地用）', '現地スタッフ向けのメモを入力',
+      d['メモ（現地用）'], BRANCH_MEMO_MERGED_TYPES);
+  }
   function siteMemoSectionsHtml_(d) {
-    if (session.role === 'BRANCH') {
-      return `
-        ${memoLogSectionHtml(d, MEMO_TYPE_SHARED_BRANCH, '共有メモ（現地支店）', '現地支店内向けの自由メモを入力')}
-        ${memoLogSectionHtml(d, MEMO_TYPE_LOCAL, 'メモ（現地用）', '現地スタッフ向けのメモを入力', d['メモ（現地用）'])}`;
-    }
-    // 手配課：自分の欄は書ける。現地支店・店舗の欄は閲覧のみ。
+    if (session.role === 'BRANCH') return branchMemoSectionHtml_(d);
+    // 手配課：自分の欄と現地の欄は書ける。店舗の欄は閲覧のみ。
     return `
       ${memoLogSectionHtml(d, MEMO_TYPE_SHARED_JP, '共有メモ（手配課）', '手配課内向けの自由メモを入力')}
-      ${memoLogSectionHtml(d, MEMO_TYPE_LOCAL, 'メモ（現地用）', '現地スタッフ向けのメモを入力', d['メモ（現地用）'])}
-      ${memoLogReadOnlySectionHtml_(d, MEMO_TYPE_SHARED_BRANCH, '共有メモ（現地支店）')}
+      ${branchMemoSectionHtml_(d)}
       ${memoLogReadOnlySectionHtml_(d, MEMO_TYPE_SHARED_SHOP, '共有メモ（日本支店）')}`;
   }
 
   // ★機能：他ロール専用の共有メモを「閲覧のみ」で表示する（追記ボタンは出さない）。
   // 手配課が共有メモ（日本支店）を見られるようにする、という要件のためだけに使う。
-  function memoLogReadOnlySectionHtml_(d, memoType, title, legacyValue) {
+  function memoLogReadOnlySectionHtml_(d, memoType, title, legacyValue, mergedTypes) {
     const tlItem = (who, when, body) => `
       <div class="tl-item">
         <div class="tl-meta"><span>${escapeHtml(who)}</span><span>${escapeHtml(when)}</span></div>
         <div class="tl-body">${escapeHtml(body)}</div>
       </div>`;
-    const entries = (d.memoLog || []).filter(m => m.type === memoType);
+    const entries = memoLogEntries_(d, memoType, mergedTypes);
     const listHtml = entries.length
       ? entries.map(m => tlItem(m.who, m.datetime, m.body)).join('')
       : (legacyValue ? tlItem('（この機能を追加する前の記録）', '', legacyValue) : '<p class="hint-text">まだ記録はありません。</p>');

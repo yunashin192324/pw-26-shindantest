@@ -2635,6 +2635,8 @@ function apiGetReservationDetail(token, kanriNo) {
   // ロールごとに絞り込む（手配課は「手配課」＋「日本支店」の2つ、現地支店は「現地支店」のみ）。
   // ★要件（項目102）：手配課はすべての拠点の記録を見られるようにする（書き込むのは自分の欄だけ）。
   // 現地支店は現地の記録だけ（店舗・手配課の記録は見せない）。
+  // ★要件（項目103）：共有メモ（現地支店）は欄そのものを無くしたが、過去に書かれた記録を
+  // 読めなくしては困るので、引き続き届ける（画面では「メモ（現地用）」の一覧に混ざって出る）。
   const visibleSharedMemoTypes = session.role === JP_ROLE
     ? [MEMO_TYPE_SHARED_JP, MEMO_TYPE_SHARED_SHOP, MEMO_TYPE_SHARED_BRANCH]
     : [MEMO_TYPE_SHARED_BRANCH];
@@ -3801,16 +3803,24 @@ function latestLocalMemo_(kanriNo, legacyValue) {
   return found ? found.body : (legacyValue || '');
 }
 
-// ★機能追加：共有メモ（現地支店／日本支店／手配課）は、それぞれ担当ロールしか追加できない
+// ★機能追加：共有メモ（日本支店／手配課）は、それぞれ担当ロールしか追加できない
+// ★要件（項目103）：現地支店のメモ欄は「メモ（現地用）」1つに一本化したため、
+// 「共有メモ（現地支店）」への新規の書き込みは受け付けない（過去に書かれた記録は
+// これまでどおり読める。画面では「メモ（現地用）」の一覧に混ぜて表示する）。
 const SHARED_MEMO_OWNER_ROLE_ = {
-  [MEMO_TYPE_SHARED_BRANCH]: BRANCH_ROLE,
   [MEMO_TYPE_SHARED_SHOP]: SHOP_ROLE,
   [MEMO_TYPE_SHARED_JP]: JP_ROLE
 };
+// 欄は無くしたが、過去の記録を読むためだけに種別として残しているもの
+const RETIRED_MEMO_TYPES_ = [MEMO_TYPE_SHARED_BRANCH];
 
 function apiAddMemo(token, kanriNo, memoType, body) {
   const session = requireSession_(token);
   const isSharedType = Object.prototype.hasOwnProperty.call(SHARED_MEMO_OWNER_ROLE_, memoType);
+  // ★要件（項目103）：欄を一本化して書き込みを止めた種別は、間違いだと分かる案内を出す
+  if (RETIRED_MEMO_TYPES_.indexOf(memoType) !== -1) {
+    throw new Error(`「${memoType}」は「${MEMO_TYPE_LOCAL}」にまとめました。そちらへ書いてください。`);
+  }
   if (!isSharedType && memoType !== MEMO_TYPE_LOCAL) {
     throw new Error('種別が正しくありません。');
   }

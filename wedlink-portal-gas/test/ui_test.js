@@ -434,31 +434,37 @@ function paneHidden(document, key) {
   await settle();
 
   // ---------------------------------------------------------------
-  section('U11. メモ履歴（共有メモ（現地支店）・メモ（現地用）を画面から追記できる）');
-  // 直前のセクションで支店（ローマ）としてログイン済み・案件詳細の「予約内容」タブを開いている
+  section('U11. メモ履歴（現地支店の欄は「メモ（現地用）」1つ。画面から追記できる）');
+  // 直前のセクションで支店（ローマ）としてログイン済み・案件詳細を開いている
   {
-    // ★要件：共有メモを現地支店・日本支店（店舗）・手配課で分離。現地支店ロールには
-    // 自分専用の「共有メモ（現地支店）」だけが出る
-    const memoInput = document.querySelector('[data-memo-input="共有メモ（現地支店）"]');
-    check('共有メモ（現地支店）の入力欄がある', !!memoInput);
-    memoInput.value = '請求書を発送しました';
-    document.querySelector('[data-memo-add="共有メモ（現地支店）"]').click();
-    await settle();
-    // ★項目102：メモ類は予約内容タブではなく「拠点メモ」の区画に集約した
-    const pane = document.querySelector('[data-tab-pane="memo"]');
-    check('追加した内容がすぐ画面に反映される', pane.textContent.includes('請求書を発送しました'));
-    check('保存後も予約内容セクションが表示されたまま', paneHidden(document, 'reservation') === false);
-
-    // 現地記入欄タブでも同様に追記できる（種別が別れて保存される。支店ロールでは切替タブ自体が無く
-    // 最初から現地記入欄が表示されているため、クリックは不要）
+    // ★要件（項目103）：現地支店のメモ欄は「メモ（現地用）」1つに一本化した
+    // （「共有メモ（現地支店）」の欄はもう出さない）
+    const memoPaneU11 = document.querySelector('[data-tab-pane="memo"]');
+    check('拠点メモのセクションがある', !!memoPaneU11);
+    check('現地支店が書ける欄は1つだけ',
+          memoPaneU11.querySelectorAll('[data-memo-input]').length === 1,
+          String(memoPaneU11.querySelectorAll('[data-memo-input]').length));
+    check('共有メモ（現地支店）の欄はもう出ない',
+          !document.querySelector('[data-memo-input="共有メモ（現地支店）"]') &&
+          !memoPaneU11.textContent.includes('共有メモ（現地支店）'));
     const localInput = document.querySelector('[data-memo-input="メモ（現地用）"]');
-    localInput.value = '雨天時は屋内スタジオへ変更';
+    check('メモ（現地用）の入力欄がある', !!localInput);
+    localInput.value = '請求書を発送しました';
     document.querySelector('[data-memo-add="メモ（現地用）"]').click();
     await settle();
-    // ★項目101：メモ（現地用）は現地記入欄の中ではなく、独立した「拠点メモ」セクションへ移動した
+    check('追加した内容がすぐ画面に反映される',
+          document.querySelector('[data-tab-pane="memo"]').textContent.includes('請求書を発送しました'));
+    check('保存後も予約内容セクションが表示されたまま', paneHidden(document, 'reservation') === false);
+
+    // 続けて追記すると積み上がる
+    const localInput2 = document.querySelector('[data-memo-input="メモ（現地用）"]');
+    localInput2.value = '雨天時は屋内スタジオへ変更';
+    document.querySelector('[data-memo-add="メモ（現地用）"]').click();
+    await settle();
     const localPane = document.querySelector('[data-tab-pane="memo"]');
     check('拠点メモのセクションに追記した内容が出る', localPane.textContent.includes('雨天時は屋内スタジオへ変更'));
-    check('種別が分かれるので共有メモ欄には現地用メモが出ない',
+    check('先に書いた内容も消えずに残っている', localPane.textContent.includes('請求書を発送しました'));
+    check('メモは予約内容セクションには出ない（拠点メモに集約した）',
           !document.querySelector('[data-tab-pane="reservation"]').textContent.includes('雨天時は屋内スタジオへ変更'));
   }
 
@@ -2326,10 +2332,12 @@ function paneHidden(document, key) {
     check('手配課の画面には「共有メモ（日本支店）」が閲覧のみで表示される（入力欄は無い）',
           dcJp.textContent.includes('共有メモ（日本支店）') &&
           !document.querySelector('[data-memo-input="共有メモ（日本支店）"]'));
-    // ★要件変更（項目102）：手配課だけは全拠点の記録を見られる（書き込みは現地支店だけ）
-    check('手配課の画面には「共有メモ（現地支店）」も閲覧のみで表示される',
-          dcJp.textContent.includes('共有メモ（現地支店）') &&
-          !document.querySelector('[data-memo-input="共有メモ（現地支店）"]'));
+    // ★要件変更（項目102・103）：手配課だけは全拠点の記録を見られる。
+    // 現地の欄は「メモ（現地用）」1つに一本化した（共有メモ（現地支店）の欄はもう出さない）。
+    check('手配課の画面には現地の欄「メモ（現地用）」がある',
+          !!document.querySelector('[data-memo-input="メモ（現地用）"]'));
+    check('手配課の画面に「共有メモ（現地支店）」の欄はもう出ない',
+          !dcJp.textContent.includes('共有メモ（現地支店）'));
 
     // ★U37の案件はウィーン支店（VIE）宛のため、現地支店側の確認はVIEでログインする
     document.getElementById('nav-logout').click();
@@ -2339,8 +2347,11 @@ function paneHidden(document, key) {
       .find(c => c.textContent.includes(kanriU37)).click();
     await settle();
     const dcBranch = document.getElementById('detail-content');
-    check('現地支店の画面には「共有メモ（現地支店）」の入力欄がある',
-          !!document.querySelector('[data-memo-input="共有メモ（現地支店）"]'));
+    check('現地支店の画面には現地の欄「メモ（現地用）」の入力欄がある',
+          !!document.querySelector('[data-memo-input="メモ（現地用）"]'));
+    check('現地支店が書ける欄は1つだけ（項目103で一本化した）',
+          dcBranch.querySelectorAll('[data-memo-input]').length === 1,
+          String(dcBranch.querySelectorAll('[data-memo-input]').length));
     check('現地支店の画面には「共有メモ（手配課）」も「共有メモ（日本支店）」も出ない',
           !dcBranch.textContent.includes('共有メモ（手配課）') &&
           !dcBranch.textContent.includes('共有メモ（日本支店）'));
@@ -3626,13 +3637,16 @@ function paneHidden(document, key) {
     // ① 拠点ごとの記録（手配課は全部見られる／書けるのは自分の欄だけ）
     const memoPane = doc61.querySelector('[data-tab-pane="memo"]');
     check('拠点メモのセクションがある', !!memoPane);
-    ['共有メモ（手配課）', 'メモ（現地用）', '共有メモ（現地支店）', '共有メモ（日本支店）'].forEach(t => {
+    ['共有メモ（手配課）', 'メモ（現地用）', '共有メモ（日本支店）'].forEach(t => {
       check(`手配課の画面に「${t}」が出る（全拠点を見られる）`, memoPane.textContent.includes(t));
     });
+    check('手配課の画面は拠点ごとに1欄ずつの3つになっている（項目103で一本化した）',
+          memoPane.querySelectorAll('.section-card').length === 3,
+          String(memoPane.querySelectorAll('.section-card').length));
     check('手配課は自分の欄（共有メモ（手配課））に書き込める',
           !!memoPane.querySelector('[data-memo-input="共有メモ（手配課）"]'));
-    check('手配課は現地支店の共有メモには書き込めない（閲覧のみ）',
-          !memoPane.querySelector('[data-memo-input="共有メモ（現地支店）"]'));
+    check('手配課の画面に「共有メモ（現地支店）」の欄はもう出ない',
+          !memoPane.textContent.includes('共有メモ（現地支店）'));
     check('手配課は店舗の欄には書き込めない（閲覧のみ）',
           !memoPane.querySelector('[data-memo-input="共有メモ（日本支店）"]'));
     const jpMemoInput = memoPane.querySelector('[data-memo-input="共有メモ（手配課）"]');
@@ -3672,6 +3686,17 @@ function paneHidden(document, key) {
           doc61.querySelector('details.hope-collapse').open === true);
 
     // --- 現地支店の画面（⑩のチェック） ---
+    // ★項目103：一本化する前に「共有メモ（現地支店）」へ書かれていた記録が、
+    // 欄を1つにまとめたあとも画面から消えないことを確かめる（メモ履歴シートへ直接足して再現する）
+    {
+      const memoSheet61 = ctx61.__ss.getSheetByName('メモ履歴');
+      const memoHead61 = memoSheet61.getRange(1, 1, 1, memoSheet61.getLastColumn()).getValues()[0];
+      const row61 = new Array(memoHead61.length).fill('');
+      const set61 = (n, v) => { const i = memoHead61.indexOf(n); if (i !== -1) row61[i] = v; };
+      set61('管理番号', k61); set61('種別', '共有メモ（現地支店）');
+      set61('内容', '一本化する前に書いた現地の記録'); set61('記入者', 'むかしの担当'); set61('日時', new Date());
+      memoSheet61.appendRow(row61);
+    }
     doc61.getElementById('nav-logout').click();
     await settle();
     await login(dom61, 'VIE', 'CHANGE-ME-VIE');
@@ -3685,11 +3710,25 @@ function paneHidden(document, key) {
     const branchMemoPane = doc61.querySelector('[data-tab-pane="memo"]');
     check('現地支店は自分の欄（メモ（現地用））に書き込める',
           !!branchMemoPane.querySelector('[data-memo-input="メモ（現地用）"]'));
+    check('現地支店の画面に同じ役割の欄が2つ並ばない（項目103で一本化した）',
+          branchMemoPane.querySelectorAll('[data-memo-input]').length === 1,
+          String(branchMemoPane.querySelectorAll('[data-memo-input]').length));
+    // ★注意：過去の記録の添え書き（「以前の『共有メモ（現地支店）』に書かれた記録」）にも
+    // この名前が入るため、欄そのものの有無は見出し（h3）で判定する
+    check('現地支店の画面に「共有メモ（現地支店）」の欄はもう出ない',
+          ![...branchMemoPane.querySelectorAll('h3')].some(h => h.textContent.includes('共有メモ（現地支店）')),
+          [...branchMemoPane.querySelectorAll('h3')].map(h => h.textContent).join(','));
     check('現地支店の画面に手配課の記録は出ない（現地は現地だけ）',
           !branchMemoPane.textContent.includes('現地へ日程を再確認中'),
           branchMemoPane.textContent.replace(/\s+/g, ' ').slice(0, 200));
     check('現地支店の画面に店舗の欄は出ない',
           !branchMemoPane.textContent.includes('共有メモ（日本支店）'));
+    check('一本化する前に書かれた記録も、同じ一覧に混ざって残っている',
+          branchMemoPane.textContent.includes('一本化する前に書いた現地の記録'),
+          branchMemoPane.textContent.replace(/\s+/g, ' ').slice(0, 300));
+    check('どちらの欄に書かれた記録かが分かるように添え書きが出る',
+          branchMemoPane.textContent.includes('以前の「共有メモ（現地支店）」に書かれた記録'),
+          branchMemoPane.textContent.replace(/\s+/g, ' ').slice(0, 300));
     uploadCb.checked = true;
     uploadCb.dispatchEvent(new dom61.window.Event('change'));
     await settle();
