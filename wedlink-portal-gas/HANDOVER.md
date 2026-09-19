@@ -4,7 +4,7 @@
 最終更新：2026-09-07（セッション `session_01Gg7njnTaKt8s1j9dR4GGQk`）
 
 - 「このリポジトリでどう作業するか」→ `CLAUDE.md`（作業手順・ハマりどころ）
-- 「各機能がどういう仕様か・なぜそうなったか」→ `SETUP.md`（項目1〜103の全変更履歴。**これが一次情報**）
+- 「各機能がどういう仕様か・なぜそうなったか」→ `SETUP.md`（項目1〜104の全変更履歴。**これが一次情報**）
 - 「いま何が終わっていて、次に何をすべきか」→ **このファイル**
 
 **★リポジトリの引っ越しについて**：このプロジェクトは今回のセッションで、別スレッド
@@ -39,7 +39,7 @@
 ### 現在の状態
 
 - リポジトリ：`yunashin192324/pw-26-shindantest`、ブランチ：`claude/thread-migration-y2nh9p`（**pushまで完了済み**）
-- テスト：`node test/run_all.js` で **1777件 全て成功 / 0件失敗**（サーバー989・監査187・画面601）
+- テスト：`node test/run_all.js` で **1815件 全て成功 / 0件失敗**（サーバー1012・監査187・画面616）
 - デプロイ済みWebアプリURL（`Code.gs` の `WEBAPP_URL` に設定済み。**旧スレッドの記載を引き継いだだけで今回未確認**）：
   `https://script.google.com/a/macros/his-world.com/s/AKfycbz143-qasWEQoJB87kpPH_2Pjmv_6499TKKGKW3ddQ06JFM9H5gkPiTtOJl7RcWm9A/exec`
 - スマホ用プレビューArtifact（**このリポジトリ・このセッションで新規公開したもの。
@@ -257,6 +257,25 @@ Googleカレンダー取込を使う支店は、そのカレンダーをスク�
 ⑤の画面の動きを通しで検証している。
 `node test/run_all.js`で1661件全て成功（サーバー934・監査187・画面540）。
 
+### ラウンド13（項目102〜104）：メモの整理と、キャンセル・変更の流れの修正
+
+詳細は`SETUP.md`項目102〜104。落とし穴になりやすい点だけ。
+
+- **ステータスの流れは「画面のゲート」と「サーバーのゲート」が必ず対になっている**。
+  `BRANCH_EDIT_GATE`／`BRANCH_MAIN_EDIT_GATE`／`CASE_CLOSING_STATUSES`（Code.gs）と
+  `branchGateFor`／`branchMainGateFor`／`CASE_CLOSING_STATUSES_CLIENT`（JavaScript.html）。
+  **片方だけ直すと、画面では操作できるのに送信ではじかれる（またはその逆）になる。**
+- **キャンセル中（CR／CW／CF）は希望日に回答させない**（項目104）。ここを開けると撮影日FIXが
+  入ってキャンセル済みの案件が生き返る。日付変更（DC）・プラン変更（PC）は逆に回答が必要なので
+  この制限の対象外。
+- **DC／PCにすると希望日のSTSが自動で回答待ちに戻る**（`applyHopeResetOnChangeRequest_`）。
+  これが無いと現地支店が回答できず、変更の流れが完結しない。**保存の経路は
+  `apiSaveFieldsQuiet`と`apiCommitChanges`の2つあるので、両方で呼ぶこと**
+  （`applyDataUploadedStamp_`と同じ並びに置いてある）。
+- **ステータスの流れを変えたら、必ず通しで試すこと。** 項目101⑤のボタンは、単体では動いていたが
+  相手側（現地支店）が答えられず流れが完結していなかった。テストを足すときも、
+  片方のロールだけでなく「依頼→回答→確定」まで通すこと。
+
 ### ラウンド12（項目101）：現場からの11点の改善要望
 
 詳細は`SETUP.md`項目101。実装上、次に触るときに引っかかりやすい点だけ書いておく。
@@ -406,7 +425,7 @@ onShopNewHopePlanNChange_(n)   ← 希望日nのプラン変更でも呼ばれ�
 
 ```bash
 cd wedlink-portal-gas
-cd test && node run_all.js        # まず全部グリーンか確認（1777件想定）
+cd test && node run_all.js        # まず全部グリーンか確認（1815件想定）
 ```
 
 そのうえで、

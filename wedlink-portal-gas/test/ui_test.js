@@ -3801,6 +3801,107 @@ function paneHidden(document, key) {
     check('もう一方（RQ）のチェックは外れる（両方は選べない）', stsRadios[0].checked === false);
   }
 
+  section('U62. 【項目104】予約リクエスト中でもキャンセルできる（現地の回答を待たない）');
+  {
+    const ctx62 = makeServer();
+    const jp62 = ctx62.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    // 現地からの回答がまだ無い（RQ・撮影日FIX未定）案件を用意する
+    const k62 = ctx62.apiCreateReservation(jp62, 'VIE', '01 Cancel Ui\n02 Bride\nRQ 2027/10/05\nRQ 2027/10/06').kanriNo;
+
+    const dom62 = await openApp(ctx62);
+    const doc62 = dom62.window.document;
+    await login(dom62, 'KANTO', 'CHANGE-ME-KANTO');
+    await settle();
+    const open62 = async () => {
+      doc62.getElementById('nav-dashboard').click();
+      await settle();
+      [...doc62.querySelectorAll('#reservation-table-body tr')].find(r => r.textContent.includes(k62)).click();
+      await settle(); await settle();
+    };
+    await open62();
+
+    check('予約リクエスト中（現地の回答待ち）でも「キャンセルする」ボタンが出る',
+          !!doc62.querySelector('[data-change-after-fix="CR"]'));
+    check('確定前なので「日付を変更する」「プランを変更する」は出さない',
+          !doc62.querySelector('[data-change-after-fix="DC"]') &&
+          !doc62.querySelector('[data-change-after-fix="PC"]'));
+    check('押す前はキャンセル理由の欄が隠れている',
+          doc62.getElementById('shop-cancel-reason-block').classList.contains('hidden'));
+
+    doc62.querySelector('[data-change-after-fix="CR"]').click();
+    await settle();
+    check('押すとSTS(JP側)の欄がCR（キャンセル依頼）になる',
+          doc62.querySelector('[data-pending="STS JP"]').value === 'CR',
+          doc62.querySelector('[data-pending="STS JP"]').value);
+    check('押すとキャンセル理由の欄が開く',
+          !doc62.getElementById('shop-cancel-reason-block').classList.contains('hidden'));
+    check('押しただけではまだ保存されない',
+          ctx62.apiGetReservationDetail(jp62, k62).detail['STS JP'] === 'RQ');
+
+    const reasonTa = doc62.querySelector('[data-pending="キャンセル理由"]');
+    reasonTa.value = 'お客様のご都合';
+    reasonTa.dispatchEvent(new dom62.window.Event('change'));
+    await settle();
+    doc62.querySelector('.quick-commit-btn').click();
+    await settle(); await settle(); await settle();
+    const after62 = ctx62.apiGetReservationDetail(jp62, k62).detail;
+    check('送信するとキャンセル依頼（CR）になる', after62['STS JP'] === 'CR', String(after62['STS JP']));
+    check('キャンセル理由も一緒に保存される', after62['キャンセル理由'] === 'お客様のご都合',
+          String(after62['キャンセル理由']));
+
+    await open62();
+    check('キャンセル依頼中はボタンではなく、現地の回答待ちである案内が出る',
+          !doc62.querySelector('[data-change-after-fix="CR"]') &&
+          doc62.getElementById('detail-content').textContent.includes('現地支店からの回答'));
+    check('キャンセル依頼中は希望日一覧を自動では開かない（現地は回答できないため）',
+          doc62.querySelector('details.hope-collapse').open === false);
+
+    // --- 現地支店：キャンセル依頼中は希望日に回答できず、CW／CFで答える ---
+    doc62.getElementById('nav-logout').click();
+    await settle();
+    await login(dom62, 'VIE', 'CHANGE-ME-VIE');
+    await settle();
+    [...doc62.querySelectorAll('#reservation-table-body tr')].find(r => r.textContent.includes(k62)).click();
+    await settle(); await settle();
+    check('現地支店の画面でも、キャンセル依頼中は希望日のSTSを動かせない',
+          !doc62.querySelector('[data-pending="希望日① STS 支店"]'));
+    const branchMain = doc62.querySelector('tr.plan-row [data-pending="STS 支店"]');
+    check('現地支店はプラン行からCW（キャンセル成立）／CF（キャンセル料あり）で答えられる',
+          !!branchMain && [...branchMain.options].map(o => o.value).filter(Boolean).join(',') === 'CW,CF',
+          branchMain ? [...branchMain.options].map(o => o.value).join(',') : '(欄が無い)');
+
+    // --- 確定後は「日付を変更する」「プランを変更する」とキャンセルが並ぶ ---
+    const k62b = ctx62.apiCreateReservation(jp62, 'VIE', '01 Fixed Case\n02 Bride\nRQ 2027/11/05\nRQ 2027/11/06').kanriNo;
+    ctx62.apiSaveFieldsQuiet(ctx62.apiLogin('VIE', 'CHANGE-ME-VIE').session.token, k62b, { '希望日① STS 支店': 'OK' });
+    doc62.getElementById('nav-logout').click();
+    await settle();
+    await login(dom62, 'KANTO', 'CHANGE-ME-KANTO');
+    await settle();
+    [...doc62.querySelectorAll('#reservation-table-body tr')].find(r => r.textContent.includes(k62b)).click();
+    await settle(); await settle();
+    check('確定後は3つのボタン（日付変更・プラン変更・キャンセル）が並ぶ',
+          ['DC', 'PC', 'CR'].every(v => !!doc62.querySelector(`[data-change-after-fix="${v}"]`)),
+          [...doc62.querySelectorAll('[data-change-after-fix]')].map(b => b.dataset.changeAfterFix).join(','));
+
+    // --- 「日付を変更する」を押して送信すると、現地がまた希望日に回答できる（項目101⑤の流れ） ---
+    doc62.querySelector('[data-change-after-fix="DC"]').click();
+    await settle();
+    doc62.querySelector('.quick-commit-btn').click();
+    await settle(); await settle(); await settle();
+    const dc62 = ctx62.apiGetReservationDetail(jp62, k62b).detail;
+    check('日付変更にすると希望日のSTSが回答待ちに戻る（現地がまた答えられる）',
+          dc62['希望日② STS JP'] === 'RQ' && dc62['希望日② STS 支店'] === 'ST',
+          `${dc62['希望日② STS JP']}/${dc62['希望日② STS 支店']}`);
+    doc62.getElementById('nav-logout').click();
+    await settle();
+    await login(dom62, 'VIE', 'CHANGE-ME-VIE');
+    await settle();
+    [...doc62.querySelectorAll('#reservation-table-body tr')].find(r => r.textContent.includes(k62b)).click();
+    await settle(); await settle();
+    check('日付変更中は、現地支店の画面で希望日のSTSを選べる',
+          !!doc62.querySelector('[data-pending="希望日② STS 支店"]'));
+  }
+
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error('テストが異常終了しました:', e); process.exit(1); });

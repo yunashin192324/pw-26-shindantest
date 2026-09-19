@@ -143,6 +143,12 @@ const BRANCH_MAIN_EDIT_GATE = {
   'PC': ['OK', 'UC'],
   'FN': ['FN']
 };
+// ★不具合修正（項目104）：案件全体がキャンセルの流れに入っている間は、希望日ごとの
+// STS(支店側)を動かせないようにする。ここを開けたままだと、キャンセル依頼中（CR）や
+// キャンセル成立後（CW/CF）でも現地が希望日一覧から「OK」を入れられてしまい、
+// 撮影日FIXが入って案件が生き返ったように見える状態になっていた（実際に再現を確認済み）。
+// 案件全体のSTS(支店側)は BRANCH_MAIN_EDIT_GATE でCR→CW/CFに限られているので影響しない。
+const CASE_CLOSING_STATUSES = ['CR', 'CW', 'CF'];
 // 請求先（日本の地域区分）
 const BILLING_REGIONS = ['北海道', '東北', '関東', '中部', '関西', '中四国', '九州'];
 // ★要件：準備場所の選択式表示・同意書欄の表示は「イタリアの支店」だけに絞る（他支店は非表示）。
@@ -2740,6 +2746,7 @@ function apiSaveFieldsQuiet(token, kanriNo, changes) {
     logFieldChanges_(kanriNo, writes, who);
     applyStatusCascade_(sheet, headers, rowIndex, kanriNo, writes);
     applyDataUploadedStamp_(sheet, headers, rowIndex, writes, session);
+    applyHopeResetOnChangeRequest_(sheet, headers, rowIndex, kanriNo, writes, senderLabel_(session));
     const hopeDateChanged = applyHopeStatusCascade_(sheet, headers, rowIndex, kanriNo, writes, who);
     appendCwAutoNoticeIfApplicable_(sheet, headers, rowIndex, writes, session);
 
@@ -2797,6 +2804,7 @@ function apiCommitChanges(token, kanriNo, changes, message, recipient) {
       logFieldChanges_(kanriNo, writes, who);
       applyStatusCascade_(sheet, headers, rowIndex, kanriNo, writes);
       applyDataUploadedStamp_(sheet, headers, rowIndex, writes, session);
+      applyHopeResetOnChangeRequest_(sheet, headers, rowIndex, kanriNo, writes, senderLabel_(session));
       if (applyHopeStatusCascade_(sheet, headers, rowIndex, kanriNo, writes, who)) dateChanged = true;
     }
     // ★不具合修正（重大）：以前はここで先に sortReservationSheet_() を呼んでいた。
@@ -3050,6 +3058,35 @@ function applyDataUploadedStamp_(sheet, headers, rowIndex, writes, session) {
   if (atIdx !== -1) sheet.getRange(rowIndex, atIdx + 1).setValue(done ? new Date() : '');
 }
 
+// ★不具合修正（項目104）：STS(JP側)をDC（日付変更依頼）／PC（プラン・式場変更依頼）にしたら、
+// 希望日ごとのSTSを「回答待ち」の状態（JP側=RQ／支店側=ST。新規作成直後と同じ形）へ戻す。
+// これが無いと、いちど確定した希望日のSTS(JP側)がOK／UCのまま残り、現地支店は
+// BRANCH_EDIT_GATE（OK・UCはキーに無い＝編集不可）に阻まれて希望日一覧で回答できない。
+// 項目101で「日付を変更する」「プランを変更する」ボタンを付けたが、押したあと現地が答えられず
+// 変更の流れが完結しない状態だった（実際に再現して確認済み）。
+// 撮影日FIXはここでは消さない（新しい日付が決まるまで現地の手配は元の日付のまま生きているため）。
+const HOPE_RESET_TRIGGER_STATUSES = ['DC', 'PC'];
+function applyHopeResetOnChangeRequest_(sheet, headers, rowIndex, kanriNo, writes, who) {
+  const write = writes.find(w => w.field === COL_STATUS_JP && w.changed &&
+    HOPE_RESET_TRIGGER_STATUSES.includes(String(w.valueToStore || '')));
+  if (!write) return;
+  const logSheet = getSpreadsheet_().getSheetByName(STATUS_LOG_SHEET_NAME);
+  const label = who || '自動反映（変更依頼で希望日を回答待ちに戻す）';
+  const rowValues = sheet.getRange(rowIndex, 1, 1, headers.length).getValues()[0];
+  const resetCell = (field, newValue) => {
+    const idx = headers.indexOf(field);
+    if (idx === -1) return;
+    const oldValue = String(rowValues[idx] || '');
+    if (oldValue === newValue) return;
+    sheet.getRange(rowIndex, idx + 1).setValue(newValue);
+    if (logSheet) logSheet.appendRow([kanriNo, field, oldValue, newValue, label, new Date()]);
+  };
+  for (let n = 1; n <= HOPE_COLS.length; n++) {
+    resetCell(hopeStsJpCol_(n), 'RQ');
+    resetCell(hopeStsBranchCol_(n), 'ST');
+  }
+}
+
 // ★機能追加：希望日ごとの空き確認ステータス（hopeStsBranchCol_/hopeStsJpCol_）専用の自動連動。
 //   1. 現地側がある希望日のSTS(支店側)をOK／UCに変えたら、対になる希望日のSTS(JP側)にも同じ値を
 //      反映する（DC/PCの回答と同じ「支店側の回答がJP側にも映る」例外パターン）
@@ -3191,6 +3228,15 @@ function validateFieldPermission_(session, headers, rowData, field, value) {
     // ★機能追加（項目99）：案件全体のSTS(支店側)だけは、未確定（RQ/CHK）の間は「希望日一覧」から
     // だけ回答する運用に統一するため専用のゲートを使う（希望日ごと・オプションのSTS(支店側)は
     // 従来どおりBRANCH_EDIT_GATEのまま。BRANCH_MAIN_EDIT_GATEのコメント参照）。
+    // ★不具合修正（項目104）：案件全体がキャンセルの流れ（CR／CW／CF）に入っている間は、
+    // 希望日ごとのSTS(支店側)を動かせないようにする（動かせると撮影日FIXが入り、
+    // キャンセルしたはずの案件が生き返る）。
+    if (/^希望日[①-⑤] STS 支店$/.test(field)) {
+      const caseJp = String(rowData[headers.indexOf(COL_STATUS_JP)] || '');
+      if (CASE_CLOSING_STATUSES.includes(caseJp)) {
+        throw new Error(`この案件はキャンセルの手続き中（STS JP: ${caseJp}）のため、希望日には回答できません。`);
+      }
+    }
     const gate = (field === COL_STATUS_BRANCH) ? BRANCH_MAIN_EDIT_GATE : BRANCH_EDIT_GATE;
     if (!(pairedValue in gate)) {
       throw new Error(`現在の${pairedField}（${pairedValue || '未設定'}）の状態では「${field}」は変更できません。`);

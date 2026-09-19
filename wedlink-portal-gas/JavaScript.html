@@ -1197,7 +1197,9 @@
     }).join('');
     // ★要件：希望日の一覧は「最初の予約時（回答待ち）」「日付変更依頼（DC）の対応中」以外は
     // ほとんど参照しないため、ふだんは折りたたんでおき、必要なときだけ自動で開いた状態にする。
-    const hopeShouldExpandShop = !d['撮影日FIX'] || d['STS JP'] === 'DC' || d['STS JP'] === 'PC';
+    // ★要件（項目104）：キャンセルの手続き中は希望日一覧を自動では開かない
+    const hopeShouldExpandShop = CASE_CLOSING_STATUSES_CLIENT.indexOf(d['STS JP'] || '') === -1 &&
+      (!d['撮影日FIX'] || d['STS JP'] === 'DC' || d['STS JP'] === 'PC');
 
     // ★要件：オプション名のすぐ隣にSTS（JP・支店）を、希望日と同じ表形式で表示する。
     // STS JPは店舗自身がその場でRQ→CR等へ直接変更できる（専用の「ステータス変更」欄は廃止）。
@@ -1560,6 +1562,18 @@
         const sel = c.querySelector('[data-pending="STS JP"]') || c.querySelector('[data-shop-status-field="STS JP"]');
         if (sel) sel.value = target;
         updatePendingIndicator();
+        // ★要件（項目104）：キャンセルのときは希望日一覧ではなく、キャンセル理由の欄を開く
+        if (target === 'CR') {
+          const reasonBlock = c.querySelector('#shop-cancel-reason-block');
+          if (reasonBlock) {
+            reasonBlock.classList.remove('hidden');
+            if (typeof reasonBlock.scrollIntoView === 'function') reasonBlock.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const ta = reasonBlock.querySelector('[data-pending="キャンセル理由"]');
+            if (ta && typeof ta.focus === 'function') ta.focus();
+          }
+          showToast('STS(JP側)を CR（キャンセル依頼）にしました。キャンセル理由を入れて、「変更（＋メッセージ）を決定して送信」を押すと現地支店へ伝わります。');
+          return;
+        }
         const box = c.querySelector('#hope-collapse');
         if (box) {
           box.open = true;
@@ -1949,25 +1963,60 @@
   // 希望日一覧のすぐ上にボタンを置く。押すと STS(JP側) が DC（日付変更）／PC（プラン変更）に
   // セットされ、折りたたまれていた希望日一覧が開いて、そこで新しい希望を書き直せる。
   // 実際に相手へ伝わるのは、いつもどおり下の「変更（＋メッセージ）を決定して送信」を押したとき。
+  // ★要件（項目104）：キャンセルの入口を画面に用意する。これまでキャンセルは
+  // プラン行のSTS(JP側)のプルダウンからCRを選ぶしか方法が無く、「予約リクエスト中で現地から
+  // まだ回答が来ていないが、キャンセルしたい」ときにどう操作すればよいか分からなかった。
+  // 確定前（RQ／CHK）でも確定後（OK等）でも、同じ場所から始められるようにする。
+  const CASE_CLOSING_STATUSES_CLIENT = ['CR', 'CW', 'CF'];
   function changeAfterFixButtonsHtml_(d) {
-    // 確定前（撮影日FIXが空）は、そもそも希望日一覧が開いているので出さない
-    if (!d['撮影日FIX']) return '';
     // STS(JP側)を動かせるのは手配課と店舗だけ（現地支店は動かせない）
     if (session.role !== 'JP' && session.role !== 'SHOP') return '';
     const jp = d['STS JP'] || '';
-    // 店舗がDC／PCを選べるのは、案件全体がOK（確定済み）になってからだけ
-    // （Code.gsのSHOP_STATUS_TARGETS_FROM_OK_CASEと同じ条件。ここを緩めると送信時にはじかれる）
-    if (session.role === 'SHOP' && jp !== 'OK' && jp !== 'DC' && jp !== 'PC') return '';
-    const inProgress = jp === 'DC' || jp === 'PC';
-    if (inProgress) {
+    const fixed = !!d['撮影日FIX'];
+
+    // すでにキャンセルの手続きに入っている間は、ボタンではなく今の状況を案内する
+    if (CASE_CLOSING_STATUSES_CLIENT.indexOf(jp) !== -1) {
+      const note = jp === 'CR'
+        ? 'キャンセル依頼を出しました。現地支店からの回答（CW＝キャンセル成立／CF＝キャンセル料あり）をお待ちください。'
+        : jp === 'CW'
+          ? 'この案件はキャンセル成立（CW）です。'
+          : 'この案件はキャンセル料あり（CF）で成立しています。';
+      return `<p class="hint-text" style="margin:0 0 8px;">${note}</p>`;
+    }
+    if (jp === 'DC' || jp === 'PC') {
       return `<p class="hint-text" style="margin:0 0 8px;">いま${jp === 'DC' ? '日付' : 'プラン'}の変更を進めています。下の希望日一覧に新しい希望を入れてから、「変更（＋メッセージ）を決定して送信」を押してください。</p>`;
     }
+
+    // 日付・プランの変更は「確定後」だけ。キャンセルは確定前でもできる。
+    // 店舗がDC／PCを選べるのは案件全体がOK（確定済み）になってからだけ
+    // （Code.gsのSHOP_STATUS_TARGETS_FROM_OK_CASEと同じ条件。ここを緩めると送信時にはじかれる）。
+    const canChange = fixed && (session.role === 'JP' || jp === 'OK');
+    const changeBtns = !canChange ? '' : `
+      <button type="button" class="send-btn-sm" data-change-after-fix="DC">日付を変更する</button>
+      <button type="button" class="send-btn-sm" data-change-after-fix="PC">プランを変更する</button>`;
+    const cancelNote = fixed
+      ? '確定後に日付やプランを変えたいときは、ここから始めてください（押すと希望日一覧が開きます）。キャンセルもここからできます。'
+      : '現地支店からの回答を待たずにキャンセルできます。押したあと、いつもどおり「変更（＋メッセージ）を決定して送信」で現地支店へ伝わります。';
     return `
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin:0 0 8px;">
-        <button type="button" class="send-btn-sm" data-change-after-fix="DC">日付を変更する</button>
-        <button type="button" class="send-btn-sm" data-change-after-fix="PC">プランを変更する</button>
+        ${changeBtns}
+        <button type="button" class="send-btn-sm" data-change-after-fix="CR" style="background:var(--color-danger);">この依頼をキャンセルする</button>
       </div>
-      <p class="hint-text" style="margin:0 0 8px;">確定後に日付やプランを変えたいときはここから始めてください。押すと希望日一覧が開きます。</p>`;
+      <p class="hint-text" style="margin:0 0 8px;">${cancelNote}</p>`;
+  }
+
+  // ★要件（項目104）：CR（キャンセル依頼）にするときのキャンセル理由の入力欄。
+  // これまで店舗の画面にしか無かったが、手配課・現地支店の画面からもキャンセルを始められる
+  // ようにしたため、同じ欄をこちらにも出す（idは1画面に1つしか出ないので店舗と共通にする）。
+  function cancelReasonBlockHtml_(d) {
+    // 店舗の画面には以前からある欄（renderShopDetail内）を使うので、ここでは出さない
+    if (session.role !== 'JP') return '';
+    const hasCr = (d['STS JP'] || '') === 'CR';
+    return `
+      <div id="shop-cancel-reason-block" class="${hasCr ? '' : 'hidden'}" style="margin-top:8px;">
+        <label>キャンセル理由</label>
+        <textarea data-pending="キャンセル理由" placeholder="キャンセルの理由を入力してください">${escapeHtml(d['キャンセル理由'])}</textarea>
+      </div>`;
   }
 
   // ★要件（項目101）：詳細画面のいちばん上に「確定した日付」を出す。
@@ -2158,15 +2207,21 @@
     // ★要件：希望日の一覧は「最初の予約時（回答待ち）」「日付変更依頼（DC）の対応中」以外は
     // ほとんど参照しないため、ふだんは折りたたんでおき、必要なときだけ自動で開いた状態にする
     // （撮影日FIXが未確定＝まだ回答待ちの間、またはSTS JPがDC＝日付変更依頼の対応中の間は開く）。
-    const hopeShouldExpand = !d['撮影日FIX'] || d['STS JP'] === 'DC' || d['STS JP'] === 'PC';
+    // ★要件（項目104）：キャンセルの手続き中（CR／CW／CF）は現地が希望日に回答できないので、
+    // 未確定でも希望日一覧を自動では開かない（開いても操作できず紛らわしいため）。
+    const caseClosing = CASE_CLOSING_STATUSES_CLIENT.indexOf(d['STS JP'] || '') !== -1;
+    const hopeShouldExpand = !caseClosing &&
+      (!d['撮影日FIX'] || d['STS JP'] === 'DC' || d['STS JP'] === 'PC');
     // ★要件：現地・日本共に一括でステータスをセットできるように。チェックした希望日のSTS(支店側)を
     // まとめて選んだ値にする（OK/UCならJP側にも自動反映される＝applyHopeStatusCascade_が担当）。
-    const canBulkSetHope = session.role === 'BRANCH';
+    const canBulkSetHope = session.role === 'BRANCH' && !caseClosing;
     const showHopeTime = !!d.showHopeTime;
     const hopeTableRows = HOPE_FIELDS.map((f, i) => {
       const jpField = `${f} STS JP`, branchField = `${f} STS 支店`;
       const gate = branchGateFor(d[jpField]);
-      const branchEditable = session.role === 'BRANCH' && gate.editable;
+      // ★不具合修正（項目104）：案件全体がキャンセルの流れに入っている間は希望日に回答できない
+      // （Code.gsのCASE_CLOSING_STATUSESと同じ条件。片方だけ直すと画面とサーバーでずれる）
+      const branchEditable = session.role === 'BRANCH' && gate.editable && !caseClosing;
       const jpCell = d[jpField] ? statusCell(jpField, d[jpField], false, null) : '';
       const branchCell = branchEditable
         ? statusCell(branchField, d[branchField], true, gate.allowed, `${f} STS JP: ${d[jpField] || '未設定'}`)
@@ -2208,7 +2263,7 @@
       if (!iso) return '';
       const jpField = `${f} STS JP`, branchField = `${f} STS 支店`;
       const gate = branchGateFor(d[jpField]);
-      const canAnswer = session.role === 'BRANCH' && gate.editable &&
+      const canAnswer = session.role === 'BRANCH' && gate.editable && !caseClosing &&
         (gate.allowed === null || gate.allowed.indexOf('OK') !== -1);
       if (!canAnswer) return '';
       return `<button type="button" class="hope-btn" data-hope-field="${escapeAttr(branchField)}" data-hope-iso="${iso}" data-hope-label="${escapeAttr(f)}">${escapeHtml(f)}（${escapeHtml(d[f])}）で確定</button>`;
@@ -2518,6 +2573,7 @@
         <div class="section-card plan-option-card">
           <div class="plan-option-head"><span class="icon">📋</span><h3 style="margin:0;">希望日・プラン・オプション明細</h3></div>
           ${changeAfterFixButtonsHtml_(d)}
+          ${cancelReasonBlockHtml_(d)}
           <details class="hope-collapse" id="hope-collapse" ${hopeShouldExpand ? 'open' : ''}>
             <summary>${hopeShouldExpand ? '希望日一覧を表示中' : '希望日一覧－ふだんは折りたたみ表示です。開くと確認・変更できます'}</summary>
             <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none;">

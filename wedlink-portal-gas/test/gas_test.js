@@ -5142,6 +5142,117 @@ section('85. 【機能追加】半年より前の過去案件を別のスプレ�
         ctx.ScriptApp.__createdTriggers.join(','));
 }
 
+
+section('86. 【不具合修正】予約リクエスト中のキャンセル（現地の回答を待たずに出せる／出した後は希望日に回答できない）');
+{
+  const ctx = shopFixture();
+  const jpToken = ctx.apiLogin('KANTO', 'pw').session.token;
+  const vieToken = ctx.apiLogin('VIE', 'vp').session.token;
+  const shopToken = ctx.apiLogin('SHOP1', 'sp').session.token;
+
+  // --- 手配課：現地からの回答がまだ無い（RQ）状態でもキャンセル依頼を出せる ---
+  const k = ctx.apiCreateReservation(jpToken, 'VIE', '01 Cancel Jp\n02 Bride\nRQ 2027/10/05').kanriNo;
+  const before = ctx.apiGetReservationDetail(jpToken, k).detail;
+  check('作った直後はRQ（予約依頼中）で、現地の回答はまだ無い',
+        before['STS JP'] === 'RQ' && !before['STS 支店'], `${before['STS JP']} / ${before['STS 支店']}`);
+  ctx.apiCommitChanges(jpToken, k, { 'STS JP': 'CR', 'キャンセル理由': 'お客様都合' }, 'キャンセルをお願いします', 'BRANCH');
+  check('手配課はRQのままキャンセル依頼（CR）を出せる',
+        ctx.apiGetReservationDetail(jpToken, k).detail['STS JP'] === 'CR');
+  check('キャンセル理由も一緒に残る',
+        ctx.apiGetReservationDetail(jpToken, k).detail['キャンセル理由'] === 'お客様都合');
+
+  // --- キャンセル依頼中は、現地が希望日一覧から回答できない（案件が生き返らない） ---
+  let err = null;
+  try { ctx.apiCommitChanges(vieToken, k, { '希望日① STS 支店': 'OK' }, '空いてます', 'JP'); } catch (e) { err = e.message; }
+  check('キャンセル依頼中は現地が希望日にOKを入れられない', err !== null, String(err));
+  check('断る理由に、キャンセルの手続き中であることが書いてある',
+        String(err).includes('キャンセル'), String(err));
+  check('希望日にOKが入らないので撮影日FIXも空のまま',
+        !ctx.apiGetReservationDetail(jpToken, k).detail['撮影日FIX'],
+        String(ctx.apiGetReservationDetail(jpToken, k).detail['撮影日FIX']));
+
+  // --- 現地はCW（キャンセル成立）／CF（キャンセル料あり）で答えられる ---
+  ctx.apiCommitChanges(vieToken, k, { 'STS 支店': 'CW' }, '承知しました', 'JP');
+  const afterCw = ctx.apiGetReservationDetail(jpToken, k).detail;
+  check('現地がCW（キャンセル成立）で答えられる', afterCw['STS 支店'] === 'CW');
+  check('CWで答えると案件全体のSTS(JP側)も自動でCWになる', afterCw['STS JP'] === 'CW');
+
+  // --- キャンセル成立後も、希望日に回答して案件を生き返らせることはできない ---
+  err = null;
+  try { ctx.apiCommitChanges(vieToken, k, { '希望日② STS 支店': 'OK' }, '空いてます', 'JP'); } catch (e) { err = e.message; }
+  check('キャンセル成立後も現地が希望日にOKを入れられない', err !== null, String(err));
+  check('キャンセル成立後も撮影日FIXは空のまま',
+        !ctx.apiGetReservationDetail(jpToken, k).detail['撮影日FIX']);
+
+  // --- キャンセル料あり（CF）の場合も同じ ---
+  const kCf = ctx.apiCreateReservation(jpToken, 'VIE', '01 Cancel Fee\n02 Bride\nRQ 2027/10/09').kanriNo;
+  ctx.apiCommitChanges(jpToken, kCf, { 'STS JP': 'CR' }, 'キャンセルをお願いします', 'BRANCH');
+  ctx.apiCommitChanges(vieToken, kCf, { 'STS 支店': 'CF' }, 'キャンセル料が発生します', 'JP');
+  err = null;
+  try { ctx.apiCommitChanges(vieToken, kCf, { '希望日① STS 支店': 'OK' }, '空いてます', 'JP'); } catch (e) { err = e.message; }
+  check('キャンセル料あり（CF）でも現地が希望日にOKを入れられない', err !== null, String(err));
+
+  // --- 日付変更（DC）のときは希望日に回答できる（キャンセルと混同しない）。
+  // あわせて、項目101で付けた「日付を変更する」ボタンの流れが最後まで通ることを確かめる ---
+  const kDc = ctx.apiCreateReservation(jpToken, 'VIE', '01 Change Date\n02 Bride\nRQ 2027/10/20\nRQ 2027/10/21').kanriNo;
+  ctx.apiCommitChanges(vieToken, kDc, { '希望日① STS 支店': 'OK' }, '空いてます', 'JP');
+  const dcFixed = ctx.apiGetReservationDetail(jpToken, kDc).detail;
+  check('いったん第一希望で確定する', dcFixed['撮影日FIX'] === '2027-10-20', String(dcFixed['撮影日FIX']));
+  check('確定すると第二希望は自動でUCになる（回答済みの状態）',
+        dcFixed['希望日② STS JP'] === 'UC', String(dcFixed['希望日② STS JP']));
+  ctx.apiCommitChanges(jpToken, kDc, { 'STS JP': 'DC' }, '日付を変えたいです', 'BRANCH');
+  const dcAfter = ctx.apiGetReservationDetail(jpToken, kDc).detail;
+  check('日付変更にすると、希望日のSTSが回答待ち（JP側=RQ／支店側=ST）に戻る',
+        dcAfter['希望日① STS JP'] === 'RQ' && dcAfter['希望日② STS JP'] === 'RQ' &&
+        dcAfter['希望日① STS 支店'] === 'ST' && dcAfter['希望日② STS 支店'] === 'ST',
+        `${dcAfter['希望日① STS JP']}/${dcAfter['希望日② STS JP']}/${dcAfter['希望日① STS 支店']}/${dcAfter['希望日② STS 支店']}`);
+  check('日付変更の間も、元の撮影日FIXは消さない（新しい日付が決まるまで現地の手配は生きている）',
+        dcAfter['撮影日FIX'] === '2027-10-20', String(dcAfter['撮影日FIX']));
+  err = null;
+  try { ctx.apiCommitChanges(vieToken, kDc, { '希望日② STS 支店': 'OK' }, '別日も空いてます', 'JP'); } catch (e) { err = e.message; }
+  check('日付変更（DC）のときは現地が希望日に回答できる（キャンセルと混同しない）',
+        err === null, String(err));
+  check('現地が新しい希望日でOKと答えると、撮影日FIXがその日付へ入れ替わる',
+        ctx.apiGetReservationDetail(jpToken, kDc).detail['撮影日FIX'] === '2027-10-21',
+        String(ctx.apiGetReservationDetail(jpToken, kDc).detail['撮影日FIX']));
+
+  // --- プラン変更（PC）でも同じように希望日が回答待ちに戻る ---
+  const kPc = ctx.apiCreateReservation(jpToken, 'VIE', '01 Change Plan\n02 Bride\nRQ 2027/10/25\nRQ 2027/10/26').kanriNo;
+  ctx.apiCommitChanges(vieToken, kPc, { '希望日① STS 支店': 'OK' }, '空いてます', 'JP');
+  ctx.apiCommitChanges(jpToken, kPc, { 'STS JP': 'PC' }, 'プランを変えたいです', 'BRANCH');
+  const pcAfter = ctx.apiGetReservationDetail(jpToken, kPc).detail;
+  check('プラン変更でも希望日のSTSが回答待ちに戻る',
+        pcAfter['希望日① STS JP'] === 'RQ' && pcAfter['希望日② STS JP'] === 'RQ',
+        `${pcAfter['希望日① STS JP']}/${pcAfter['希望日② STS JP']}`);
+
+  // --- キャンセル依頼（CR）では希望日を戻さない（戻すと回答できるように見えてしまう） ---
+  const kCrNoReset = ctx.apiCreateReservation(jpToken, 'VIE', '01 No Reset\n02 Bride\nRQ 2027/10/28').kanriNo;
+  ctx.apiCommitChanges(vieToken, kCrNoReset, { '希望日① STS 支店': 'OK' }, '空いてます', 'JP');
+  ctx.apiCommitChanges(jpToken, kCrNoReset, { 'STS JP': 'CR' }, 'キャンセル', 'BRANCH');
+  check('キャンセル依頼では希望日のSTSを戻さない（OKのまま残す）',
+        ctx.apiGetReservationDetail(jpToken, kCrNoReset).detail['希望日① STS JP'] === 'OK',
+        String(ctx.apiGetReservationDetail(jpToken, kCrNoReset).detail['希望日① STS JP']));
+
+  // --- 店舗：予約リクエスト中でもキャンセル依頼を出せる（理由は必須） ---
+  const shopCase = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'VIE', team: '関東', challengeNo: 'CANCELRQ001',
+    groomLastName: 'YAMADA', groomName: 'TARO', brideLastName: 'YAMADA', brideName: 'HANAKO',
+    hope1: '2027-10-15'
+  });
+  const kShop = shopCase.kanriNo;
+  check('店舗が作った直後もRQ（予約依頼中）',
+        ctx.apiGetReservationDetail(shopToken, kShop).detail['STS JP'] === 'RQ');
+  err = null;
+  try { ctx.apiCommitChanges(shopToken, kShop, { 'STS JP': 'CR' }, 'キャンセルします', 'BRANCH'); } catch (e) { err = e.message; }
+  check('店舗はキャンセル理由なしではキャンセルできない', err !== null, String(err));
+  ctx.apiCommitChanges(shopToken, kShop, { 'STS JP': 'CR', 'キャンセル理由': 'お客様のご都合' }, 'キャンセルします', 'BRANCH');
+  check('店舗も現地の回答を待たずにキャンセル依頼を出せる',
+        ctx.apiGetReservationDetail(shopToken, kShop).detail['STS JP'] === 'CR');
+  err = null;
+  try { ctx.apiCommitChanges(vieToken, kShop, { '希望日① STS 支店': 'OK' }, '空いてます', 'JP'); } catch (e) { err = e.message; }
+  check('店舗発の案件でも、キャンセル依頼中は現地が希望日にOKを入れられない', err !== null, String(err));
+}
+
 // ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
 process.exit(fail === 0 ? 0 : 1);
