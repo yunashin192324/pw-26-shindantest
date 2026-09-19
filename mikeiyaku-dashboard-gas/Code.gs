@@ -967,7 +967,7 @@ function importUncontractedCsv(csvText) {
  * 「is not a function」という分かりにくいエラーになるため、
  * 画面側から版数を確認できるようにしている。
  */
-const SERVER_VERSION = '2026-08-24';
+const SERVER_VERSION = '2026-08-25';
 
 /**
  * サーバー側の版数を返す。画面側は、自分が期待する版数と一致するかを起動時に確認する。
@@ -2408,8 +2408,13 @@ function getStaffMasterList() {
     const shopNameByCode = {};
     shopList.forEach(function (s) { shopNameByCode[s.code] = s.name; });
 
-    const masterKeys = {};
-    master.forEach(function (s) { masterKeys[employeeKey_(s.employeeNo, s.employeeName)] = true; });
+    const masterKeys = {};       // 社員番号が無い人向けのフォールバック（社員番号＋社員名の組）
+    const masterKeysByNo = {};   // 社員番号がある場合はこちらを優先して使う（社員番号だけで本人とみなす）
+    master.forEach(function (s) {
+      masterKeys[employeeKey_(s.employeeNo, s.employeeName)] = true;
+      const no = canonicalKeyPart_(s.employeeNo);
+      if (no) masterKeysByNo[no] = true;
+    });
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const unregisteredMap = {};
@@ -2422,12 +2427,20 @@ function getStaffMasterList() {
       const values = sheet.getRange(2, 7, lastRow - 1, 2).getValues(); // G列(社員番号)・H列(社員名)
       values.forEach(function (row) {
         const empNo = row[0];
-        const empName = row[1];
-        if ((empNo === '' || empNo === null) && (empName === '' || empName === null)) return;
+        const empName = String(row[1] === null || row[1] === undefined ? '' : row[1]).trim();
+        if ((empNo === '' || empNo === null) && !empName) return;
 
-        const key = employeeKey_(empNo, empName);
+        // 社員番号があれば、それだけを手がかりに1人としてまとめる。
+        // 社員名の欄（H列）はCSVの取り込み状況によって空欄・表記ゆれのある行が
+        // 混じることがあり、社員番号＋社員名の組をそのままキーにすると、
+        // 同じ社員番号なのに「名前が空欄の行」「名前入りの行」が別人として
+        // 二重に登録候補へ出てしまう。社員番号を優先することでこれを防ぐ。
+        const canonicalNo = canonicalKeyPart_(empNo);
+        if (canonicalNo && masterKeysByNo[canonicalNo]) return; // 社員番号で既に登録済み
+        const key = canonicalNo || employeeKey_(empNo, empName);
         if (masterKeys[key]) return;
-        if (!unregisteredMap[key]) {
+
+        if (!unregisteredMap[key] || (!unregisteredMap[key].employeeName && empName)) {
           unregisteredMap[key] = { officeCode: shop.code, officeName: shop.name, employeeNo: normalizeEmployeeNo_(empNo), employeeName: empName };
         }
       });
