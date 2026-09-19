@@ -39,10 +39,13 @@ button{font-family:inherit; cursor:pointer;}
 header{position:sticky; top:0; z-index:40; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.06); border-bottom:1px solid var(--slate-200);}
 header .inner{padding:12px 0;}
 .header-top{display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; gap:12px; flex-wrap:wrap;}
-h1{font-size:20px; font-weight:700; color:var(--blue-800); margin:0; display:flex; align-items:center; gap:8px;}
+h1{font-size:20px; font-weight:700; color:var(--blue-800); margin:0; display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
 .btn-refresh{font-size:13px; color:var(--blue-700); border:1px solid var(--blue-200); border-radius:8px; padding:6px 12px; background:#fff;}
 .btn-refresh:hover{background:var(--blue-50);}
 .last-imported{font-size:11px; color:var(--slate-400);}
+.role-switcher{display:flex; align-items:center; gap:6px; font-size:12px; color:var(--slate-500);}
+.role-switcher select{font-size:12px; padding:5px 6px;}
+.role-badge{font-size:11px; font-weight:700; color:var(--blue-700); background:var(--blue-50); border:1px solid var(--blue-200); border-radius:8px; padding:5px 10px; white-space:nowrap;}
 
 .kpi-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:12px;}
 @media(min-width:768px){ .kpi-grid{grid-template-columns:repeat(5,1fr);} }
@@ -70,13 +73,21 @@ main{padding:20px 0;}
 
 .grid-2{display:grid; grid-template-columns:1fr; gap:20px;}
 .grid-3{display:grid; grid-template-columns:1fr; gap:20px;}
+.grid-4{display:grid; grid-template-columns:1fr; gap:20px;}
 @media(min-width:1024px){ .grid-2{grid-template-columns:1fr 1fr;} .grid-3{grid-template-columns:1fr 1fr 1fr;} }
+@media(min-width:768px) and (max-width:1279px){ .grid-4{grid-template-columns:1fr 1fr;} }
+@media(min-width:1280px){ .grid-4{grid-template-columns:1fr 1fr 1fr 1fr;} }
 
 /* ---- 案内バー ---- */
 .banner{border-radius:12px; padding:16px; margin-bottom:20px; display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap;}
 .banner-amber{background:var(--amber-50); border:1px solid var(--amber-300);}
-.banner p.title{font-weight:700; color:var(--amber-800); margin:0 0 4px;}
-.banner p.desc{font-size:13px; color:var(--amber-700); margin:0;}
+.banner-red{background:var(--red-50); border:1px solid var(--red-200);}
+.banner p.title{font-weight:700; margin:0 0 4px;}
+.banner-amber p.title{color:var(--amber-800);}
+.banner-red p.title{color:var(--red-700);}
+.banner p.desc{font-size:13px; margin:0;}
+.banner-amber p.desc{color:var(--amber-700);}
+.banner-red p.desc{color:var(--red-700);}
 .btn-primary{background:var(--blue-700); color:#fff; border:none; border-radius:8px; padding:9px 18px; font-size:13px; font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,.1);}
 .btn-primary:hover{background:var(--blue-800);}
 .btn-amber{background:var(--amber-600); color:#fff; border:none; border-radius:8px; padding:9px 18px; font-size:13px; font-weight:600;}
@@ -87,14 +98,15 @@ main{padding:20px 0;}
 .btn-red:hover{background:var(--red-700);}
 .btn-ghost{background:#fff; border:1px solid var(--slate-300); border-radius:8px; padding:7px 12px; font-size:12px; font-weight:600; color:var(--slate-600);}
 .btn-ghost:hover{background:var(--slate-50);}
+.btn-ghost:disabled{opacity:.35; cursor:default;}
 
 /* ---- フィルタバー ---- */
 .filter-bar{display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end;}
 .filter-field label{display:block; font-size:11px; font-weight:600; color:var(--slate-500); margin-bottom:4px;}
-select, input[type=date], input[type=text]{
+select, input[type=date], input[type=text], input[type=email], input[type=number]{
   border:1px solid var(--slate-300); border-radius:8px; font-size:13px; padding:7px 8px; background:#fff; color:var(--slate-800);
 }
-select[multiple]{min-width:150px; height:80px;}
+select[multiple]{min-width:140px; height:80px;}
 .filter-kw{flex:1 1 220px;}
 .filter-kw input{width:100%;}
 
@@ -112,30 +124,50 @@ select[multiple]{min-width:150px; height:80px;}
 .hbar-fill{height:100%; background:var(--blue-700); border-radius:4px;}
 .hbar-value{width:52px; flex:none; text-align:right; color:var(--slate-500); font-variant-numeric:tabular-nums;}
 
-.vbar-chart{display:flex; align-items:flex-end; gap:6px; height:200px; padding-top:20px;}
-.vbar-col{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; gap:2px;}
+.vbar-chart{display:flex; align-items:flex-end; gap:6px; height:200px; padding-top:20px; overflow-x:auto;}
+.vbar-col{flex:none; min-width:22px; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; gap:2px;}
 .vbar-pair{display:flex; align-items:flex-end; gap:2px; height:100%; width:100%; justify-content:center;}
 .vbar{width:9px; border-radius:2px 2px 0 0; position:relative;}
 .vbar.count{background:var(--blue-300);}
 .vbar.sales{background:var(--blue-700);}
+.vbar.count-alt{background:#c7d2fe;}
+.vbar.qty{background:var(--emerald-600);}
 .vbar-month{font-size:10px; color:var(--slate-400); margin-top:6px; white-space:nowrap;}
 
 /* ---- テーブル ---- */
 table{width:100%; border-collapse:collapse; font-size:13px;}
 thead th{background:var(--slate-100); color:var(--slate-600); text-align:left; padding:8px 10px; font-weight:600; white-space:nowrap;}
+thead th.editable-col{background:var(--blue-50);}
 tbody td{padding:8px 10px; border-top:1px solid var(--slate-100); white-space:nowrap;}
 tbody tr:hover{background:var(--slate-50);}
 th.sortable{cursor:pointer; user-select:none;}
 th.sortable:hover{background:var(--blue-100);}
 .sort-mark{color:var(--blue-700); font-size:9px; margin-left:3px;}
 .text-right{text-align:right;}
+.text-center{text-align:center;}
 .table-scroll{overflow:auto; max-height:65vh;}
 .table-scroll thead th{position:sticky; top:0; z-index:5;}
 .rank-rate{background:#eef2ff; color:var(--indigo-600); font-weight:700;}
+.editable-cell select, .editable-cell input{background:var(--blue-50); font-size:12px; padding:4px 5px;}
+.editable-cell input[type=date]{width:126px;}
+.editable-cell input[type=text]{width:150px;}
+.editable-cell input[type=number]{width:56px;}
+.editable-cell input:disabled{background:var(--slate-100); color:var(--slate-300);}
+.ancillary-pair{display:flex; align-items:center; justify-content:center; gap:4px;}
 
 .pagination{display:flex; align-items:center; justify-content:space-between; margin-top:12px; font-size:13px;}
 .pagination .buttons{display:flex; gap:8px;}
 .pagination button:disabled{opacity:.4; cursor:default;}
+
+/* ---- 列の並び順エディタ ---- */
+.col-order-list{border:1px solid var(--slate-200); border-radius:8px; max-width:420px;}
+.col-order-row{display:flex; align-items:center; justify-content:space-between; padding:7px 12px; font-size:13px; border-top:1px solid var(--slate-100);}
+.col-order-row:first-child{border-top:none;}
+.col-order-row:hover{background:var(--slate-50);}
+.col-order-row .buttons{display:flex; gap:2px;}
+.col-order-row button{background:none; border:none; color:var(--slate-400); padding:2px 6px; font-size:13px;}
+.col-order-row button:hover:not(:disabled){color:var(--blue-700);}
+.col-order-row button:disabled{opacity:.3; cursor:default;}
 
 /* ---- モーダル ---- */
 .modal-overlay{position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:50; display:none; align-items:center; justify-content:center; padding:16px;}
@@ -143,8 +175,11 @@ th.sortable:hover{background:var(--blue-100);}
 .modal-box{background:#fff; border-radius:16px; box-shadow:0 20px 40px rgba(0,0,0,.25); width:100%; max-width:520px; max-height:90vh; overflow-y:auto;}
 .modal-head{display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--slate-200);}
 .modal-head h3{font-size:16px; font-weight:700; margin:0; color:var(--emerald-700); display:flex; gap:8px; align-items:center;}
+.modal-head h3.blue{color:var(--blue-800);}
 .modal-close{background:none; border:none; font-size:20px; color:var(--slate-400);}
 .modal-body{padding:20px; display:flex; flex-direction:column; gap:14px;}
+.form-field label{display:block; font-size:11px; font-weight:600; color:var(--slate-500); margin-bottom:4px;}
+.form-field input, .form-field select{width:100%;}
 .progress-track{width:100%; height:8px; background:var(--slate-200); border-radius:4px; overflow:hidden;}
 .progress-fill{height:100%; background:var(--emerald-500); width:0%; transition:width .4s ease;}
 .result-box{background:var(--slate-50); border:1px solid var(--slate-200); border-radius:8px; padding:12px; font-size:13px; display:none;}
@@ -180,7 +215,16 @@ th.sortable:hover{background:var(--blue-100);}
   <div class="wrap inner">
     <div class="header-top">
       <h1>📈 予約データ分析ダッシュボード <span style="font-size:11px; font-weight:600; color:var(--slate-400); background:var(--slate-100); border-radius:6px; padding:2px 8px;">UI/UXモックアップ（オフライン・サンプルデータ）</span></h1>
-      <div style="display:flex; align-items:center; gap:12px;">
+      <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+        <div class="role-switcher">
+          <span>表示権限を切替：</span>
+          <select id="role-switcher">
+            <option value="マスタ権限">マスタ権限（全エリア）</option>
+            <option value="所長・チーフ">所長・チーフ（自エリアのみ）</option>
+            <option value="社員">社員（自店舗のみ）</option>
+          </select>
+        </div>
+        <span class="role-badge" id="role-badge"></span>
         <span class="last-imported" id="last-imported-label"></span>
         <button class="btn-refresh" id="btn-refresh">⟳ データ再読込</button>
       </div>
@@ -197,6 +241,7 @@ th.sortable:hover{background:var(--blue-100);}
     <div class="tabs">
       <button class="tab-btn active" data-tab="dashboard">📊 分析ダッシュボード</button>
       <button class="tab-btn" data-tab="data">📋 予約データ一覧</button>
+      <button class="tab-btn" data-tab="personal">👥 個人別サマリー</button>
       <button class="tab-btn" data-tab="admin">⚙️ データ管理</button>
     </div>
   </div>
@@ -204,27 +249,34 @@ th.sortable:hover{background:var(--blue-100);}
 
 <main class="wrap">
 
-  <div class="card filter-bar">
-    <div class="filter-field"><label>エリア</label><select id="filter-area" multiple></select></div>
-    <div class="filter-field"><label>営業所</label><select id="filter-office" multiple></select></div>
-    <div class="filter-field"><label>STS</label><select id="filter-sts" multiple></select></div>
-    <div class="filter-field"><label>商品分類</label><select id="filter-category" multiple></select></div>
-    <div class="filter-field">
-      <label>基準日</label>
-      <select id="filter-date-field">
-        <option value="bookingDate">予約日</option>
-        <option value="departureDate">出発予定日</option>
-      </select>
+  <div class="banner banner-red hidden" id="access-denied-banner">
+    <div>
+      <p class="title">🔒 アクセス権がありません</p>
+      <p class="desc">このアカウントは「スタッフ権限」シートに登録されていません（このモックアップでは権限切替で再現しています）。</p>
     </div>
-    <div class="filter-field"><label>From</label><input type="date" id="filter-date-from"></div>
-    <div class="filter-field"><label>To</label><input type="date" id="filter-date-to"></div>
-    <div class="filter-field filter-kw"><label>キーワード検索</label><input type="text" id="filter-keyword" placeholder="顧客ID・予約番号・商品タイトル・担当者"></div>
-    <button class="btn-ghost" id="btn-clear-filter">✕ フィルタ解除</button>
-    <p class="muted" id="filter-summary" style="width:100%; margin:0;"></p>
   </div>
+
+  <div id="app-content">
 
   <!-- ============ タブ1: 分析ダッシュボード ============ -->
   <section id="panel-dashboard" class="panel">
+    <div class="card filter-bar">
+      <div class="filter-field"><label>エリア</label><select id="dash-filter-area" multiple></select></div>
+      <div class="filter-field"><label>営業所</label><select id="dash-filter-office" multiple></select></div>
+      <div class="filter-field"><label>商品分類</label><select id="dash-filter-category" multiple></select></div>
+      <div class="filter-field">
+        <label>基準日</label>
+        <select id="dash-filter-date-field">
+          <option value="bookingDate">予約日</option>
+          <option value="departureDate">出発予定日</option>
+        </select>
+      </div>
+      <div class="filter-field"><label>From</label><input type="date" id="dash-filter-date-from"></div>
+      <div class="filter-field"><label>To</label><input type="date" id="dash-filter-date-to"></div>
+      <button class="btn-ghost" id="btn-clear-dash-filter">✕ フィルタ解除</button>
+      <p class="muted" id="dash-filter-summary" style="width:100%; margin:0;"></p>
+    </div>
+
     <div class="grid-2">
       <div class="card">
         <h2>📊 月次推移（予約件数 / 売上合計）</h2>
@@ -262,6 +314,29 @@ th.sortable:hover{background:var(--blue-100);}
       </div>
     </div>
 
+    <div class="grid-4">
+      <div class="card">
+        <h2 class="sm">🛡️ 保険</h2>
+        <div id="chart-insurance" class="vbar-chart"></div>
+      </div>
+      <div class="card">
+        <h2 class="sm">📶 Wifi</h2>
+        <div id="chart-wifi" class="vbar-chart"></div>
+      </div>
+      <div class="card">
+        <h2 class="sm">🛂 TAViCA</h2>
+        <div id="chart-tavica" class="vbar-chart"></div>
+      </div>
+      <div class="card">
+        <h2 class="sm">🩹 キャンサポ</h2>
+        <div id="chart-cansapo" class="vbar-chart"></div>
+      </div>
+    </div>
+    <p class="muted" style="margin-top:-10px;">
+      <span class="dot" style="background:#c7d2fe; display:inline-block; width:9px; height:9px; border-radius:2px; vertical-align:middle; margin-right:4px;"></span>リスト数（予約件数）
+      <span class="dot" style="background:var(--emerald-600); display:inline-block; width:9px; height:9px; border-radius:2px; vertical-align:middle; margin:0 4px 0 12px;"></span>加入・販売数
+    </p>
+
     <div class="card" style="overflow-x:auto;">
       <h2>🏆 営業所別ランキング</h2>
       <table>
@@ -282,12 +357,27 @@ th.sortable:hover{background:var(--blue-100);}
 
   <!-- ============ タブ2: 予約データ一覧 ============ -->
   <section id="panel-data" class="panel hidden">
+    <div class="card filter-bar">
+      <div class="filter-field"><label>エリア</label><select id="data-filter-area" multiple></select></div>
+      <div class="filter-field"><label>店舗</label><select id="data-filter-office" multiple></select></div>
+      <div class="filter-field"><label>担当者</label><select id="data-filter-staff" multiple></select></div>
+      <div class="filter-field"><label>出発予定日（From）</label><input type="date" id="data-filter-date-from"></div>
+      <div class="filter-field"><label>出発予定日（To）</label><input type="date" id="data-filter-date-to"></div>
+      <div class="filter-field filter-kw"><label>キーワード検索</label><input type="text" id="data-filter-keyword" placeholder="予約番号・商品タイトル・担当者・メモ"></div>
+      <button class="btn-ghost" id="btn-clear-data-filter">✕ フィルタ解除</button>
+      <p class="muted" id="data-filter-summary" style="width:100%; margin:0;"></p>
+    </div>
+
     <div class="card" style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px;">
       <div>
         <h2 style="margin:0;">📋 予約データ一覧</h2>
-        <p class="muted" style="margin-top:4px;">営業日報CSVから抽出した19項目のみを表示する一覧です。上部のフィルタが反映されます。</p>
+        <p class="muted" style="margin-top:4px;">
+          CSV由来の項目は読み取り専用です。
+          <span style="display:inline-block; width:9px; height:9px; background:var(--blue-100); border:1px solid var(--blue-300); vertical-align:middle; margin:0 4px;"></span>
+          の列（CHK日・保険・Wifi・TAViCA・キャンサポ・メモ）は入力・編集できます。
+        </p>
       </div>
-      <button class="btn-emerald" id="btn-open-csv-modal">📄 CSVインポート</button>
+      <button class="btn-emerald hidden" id="btn-open-csv-modal">📄 CSVインポート</button>
     </div>
 
     <div class="card">
@@ -308,30 +398,93 @@ th.sortable:hover{background:var(--blue-100);}
     </div>
   </section>
 
-  <!-- ============ タブ3: データ管理 ============ -->
+  <!-- ============ タブ3: 個人別サマリー ============ -->
+  <section id="panel-personal" class="panel hidden">
+    <div class="card" style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px;">
+      <div>
+        <h2 style="margin:0;">👥 個人別サマリー</h2>
+        <p class="muted" style="margin-top:4px;">担当者ごとの記録件数と付帯商品の実績です（現在の権限で閲覧できる範囲のデータが対象）。</p>
+      </div>
+      <input type="text" id="personal-search" placeholder="営業所名・担当者で検索" style="width:220px;">
+    </div>
+    <div class="card" style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th class="sortable" data-sort="office">営業所名</th>
+            <th class="sortable" data-sort="staff">担当者</th>
+            <th class="sortable text-right" data-sort="count">記録件数</th>
+            <th class="sortable text-right" data-sort="insuranceQty">保険（加入PAX数）</th>
+            <th class="sortable text-right" data-sort="wifiQty">Wifi（販売台数）</th>
+            <th class="sortable text-right" data-sort="tavicaQty">TAViCA（加入数）</th>
+            <th class="sortable text-right" data-sort="cansapoQty">キャンサポ（加入PAX数）</th>
+          </tr>
+        </thead>
+        <tbody id="personal-tbody"></tbody>
+      </table>
+      <p id="personal-empty" class="empty-msg hidden">データがありません</p>
+    </div>
+  </section>
+
+  <!-- ============ タブ4: データ管理 ============ -->
   <section id="panel-admin" class="panel hidden">
     <div class="card">
       <h2>ℹ️ データの状態</h2>
       <div id="admin-status" style="font-size:13px; color:var(--slate-600); line-height:1.8;"></div>
     </div>
-    <div class="grid-2">
-      <div class="card">
-        <p style="font-weight:600; margin:0 0 4px;">重複した行を削除する</p>
-        <p class="muted" style="margin:0 0 12px;">19項目すべてが完全一致する行を1件にまとめます（このモックアップではダミー動作です）。</p>
-        <button class="btn-primary" id="btn-remove-duplicates">🧹 重複を削除する</button>
-        <p id="duplicate-result" class="muted hidden" style="margin-top:8px;"></p>
+
+    <div class="card">
+      <h2>↕️ 予約データ一覧の列の並び順</h2>
+      <p class="muted" style="margin-bottom:10px;">▲▼で並び替えて保存すると、「予約データ一覧」タブの表示順が変わります（このモックアップでは表示中のみ反映されます）。</p>
+      <div class="col-order-list" id="column-order-list"></div>
+      <div style="display:flex; gap:8px; margin-top:12px;">
+        <button class="btn-primary" id="btn-save-column-order">💾 この並び順を保存する</button>
+        <button class="btn-ghost" id="btn-reset-column-order">既定の並び順に戻す</button>
       </div>
-      <div class="card" style="border:1px solid var(--red-200); background:var(--red-50);">
-        <p style="font-weight:600; margin:0 0 4px; color:var(--red-700);">取り込んだデータをすべて削除する</p>
-        <p class="muted" style="margin:0 0 12px;">元に戻せません（このモックアップではサンプルデータを消すだけのダミー動作です）。</p>
-        <div style="display:flex; gap:8px; align-items:center;">
-          <input type="text" id="clear-confirm-input" placeholder="削除 と入力" style="width:110px;">
-          <button class="btn-red" id="btn-clear-all-data">🗑️ すべて削除する</button>
+      <p id="column-order-result" class="muted hidden" style="margin-top:8px;"></p>
+    </div>
+
+    <div id="master-only-admin">
+      <div class="grid-2">
+        <div class="card">
+          <p style="font-weight:600; margin:0 0 4px;">重複した行を削除する</p>
+          <p class="muted" style="margin:0 0 12px;">CSV由来19項目すべてが完全一致する行を1件にまとめます（このモックアップではダミー動作です）。</p>
+          <button class="btn-primary" id="btn-remove-duplicates">🧹 重複を削除する</button>
+          <p id="duplicate-result" class="muted hidden" style="margin-top:8px;"></p>
         </div>
-        <p id="clear-result" class="muted hidden" style="margin-top:8px;"></p>
+        <div class="card" style="border:1px solid var(--red-200); background:var(--red-50);">
+          <p style="font-weight:600; margin:0 0 4px; color:var(--red-700);">取り込んだデータをすべて削除する</p>
+          <p class="muted" style="margin:0 0 12px;">元に戻せません（このモックアップではサンプルデータを消すだけのダミー動作です）。</p>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input type="text" id="clear-confirm-input" placeholder="削除 と入力" style="width:110px;">
+            <button class="btn-red" id="btn-clear-all-data">🗑️ すべて削除する</button>
+          </div>
+          <p id="clear-result" class="muted hidden" style="margin-top:8px;"></p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+          <h2 style="margin:0;">🛡️ 権限管理（スタッフ権限）</h2>
+          <button class="btn-primary" id="btn-open-staff-modal">＋ アカウントを追加</button>
+        </div>
+        <p class="muted" style="margin-bottom:10px;">社員＝自店舗のみ閲覧／所長・チーフ＝自エリアのみ閲覧／マスタ権限＝全エリア閲覧＋CSVインポート・データ削除が可能です。</p>
+        <div class="table-scroll" style="max-height:40vh;">
+          <table>
+            <thead>
+              <tr>
+                <th>Googleアカウント</th><th>氏名</th><th>所属店舗</th><th>所属エリア</th><th>権限</th><th class="text-right">操作</th>
+              </tr>
+            </thead>
+            <tbody id="staff-tbody"></tbody>
+          </table>
+          <p id="staff-empty" class="empty-msg hidden">登録がありません</p>
+        </div>
       </div>
     </div>
   </section>
+
+  </div>
 </main>
 
 <!-- ============ CSVインポートモーダル ============ -->
@@ -344,7 +497,8 @@ th.sortable:hover{background:var(--blue-100);}
     <div class="modal-body">
       <p style="font-size:13px; color:var(--slate-600); line-height:1.6;">
         営業日報から出力したCSVファイルを選択してください。「006:エリア」のような見出し行を自動検出し、
-        対象の19項目だけを抽出して取り込みます（実際のアプリの動作です）。
+        対象の19項目だけを抽出して取り込みます（実際のアプリの動作です）。CHK日・保険・Wifi・TAViCA・
+        キャンサポ・メモは取り込み後に一覧から入力します。
       </p>
       <p class="muted">このモックアップではファイルの中身をサーバーへ送信せず、取り込み画面の流れだけを再現しています。</p>
       <div>
@@ -367,11 +521,40 @@ th.sortable:hover{background:var(--blue-100);}
   </div>
 </div>
 
+<!-- ============ スタッフ権限 追加・編集モーダル ============ -->
+<div id="staff-modal" class="modal-overlay">
+  <div class="modal-box" style="max-width:420px;">
+    <div class="modal-head">
+      <h3 class="blue" id="staff-modal-title">🛡️ アカウントを追加</h3>
+      <button class="modal-close" id="btn-close-staff-modal">&times;</button>
+    </div>
+    <form id="staff-form" class="modal-body">
+      <input type="hidden" id="staff-form-rowindex" value="">
+      <div class="form-field"><label>Googleアカウント *</label><input type="email" id="staff-form-email" required placeholder="example@gmail.com"></div>
+      <div class="form-field"><label>氏名</label><input type="text" id="staff-form-name"></div>
+      <div class="form-field"><label>所属店舗（営業所）</label><input type="text" id="staff-form-office" list="staff-office-options" placeholder="例：717:イーアスつくば"><datalist id="staff-office-options"></datalist></div>
+      <div class="form-field"><label>所属エリア</label><input type="text" id="staff-form-area" list="staff-area-options" placeholder="例：10:郊外エリア"><datalist id="staff-area-options"></datalist></div>
+      <div class="form-field">
+        <label>権限</label>
+        <select id="staff-form-role">
+          <option value="社員">社員（自店舗のみ閲覧）</option>
+          <option value="所長・チーフ">所長・チーフ（自エリアのみ閲覧）</option>
+          <option value="マスタ権限">マスタ権限（全エリア閲覧＋CSVインポート）</option>
+        </select>
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:10px; border-top:1px solid var(--slate-100); padding-top:14px;">
+        <button type="button" class="btn-ghost" id="btn-cancel-staff-modal">キャンセル</button>
+        <button type="submit" class="btn-primary">💾 保存する</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
 /* ============================================================================
    サンプルデータ生成（すべて架空の値。実データは一切含みません）
-   実運用のCode.gsと同じ19項目・同じキー名で、シード付き乱数により
-   毎回同じ見た目になるダミーデータを生成しています。
+   実運用のCode.gsと同じ29項目（CSV由来19＋現場入力10）・同じキー名で、
+   シード付き乱数により毎回同じ見た目になるダミーデータを生成しています。
    ============================================================================ */
 function mulberry32(seed){
   return function(){
@@ -381,7 +564,7 @@ function mulberry32(seed){
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-var rand = mulberry32(20260902);
+var rand = mulberry32(20260919);
 function pick(arr){ return arr[Math.floor(rand() * arr.length)]; }
 function pickWeighted(pairs){
   var total = pairs.reduce(function(s,p){return s+p[1];}, 0);
@@ -397,6 +580,9 @@ var OFFICE_LIST = [
   '717:イーアスつくば','053:イオンモール甲府昭和','596:けやきウォーク前橋','046:水戸コムボックス310',
   '054:宇都宮','763:長野','081:ららぽーと沼津','051:高崎オーパ','B66:イオンモール太田','038:さいたま新都心'
 ];
+// 郊外エリア=先頭7店舗、アバンティ=残り3店舗（デモの権限切替用に固定で対応付ける）
+var OFFICE_AREA_MAP = {};
+OFFICE_LIST.forEach(function(o, i){ OFFICE_AREA_MAP[o] = i < 7 ? AREA_LIST[0] : AREA_LIST[1]; });
 var DEST_LIST = ['SEL','HNL','TPE','GUM','BKK','SIN','PAR','HKG','LAX','CTS'];
 var NATIONALITY_LIST = [['JPN',0.92],['PHL',0.02],['IDN',0.02],['KOR',0.015],['CHN',0.01],['THA',0.01],['USA',0.005],['-',0.02]];
 var CATEGORY_LIST = [['2S:ツアー',0.6],['1A:エアー',0.38],['4J:代売',0.02]];
@@ -409,7 +595,14 @@ var PRODUCT_TITLES = [
   'ASIANA AIRLINES（アシアナ航空） ご利用往復航空券（大人）','SINGAPORE AIRLINES（シンガポール航空） ご利用往復航空券（大人）',
   'CATHAY PACIFIC AIRWAYS（キャセイパシフィック航空） ご利用往復航空券（大人）','ホテル宿泊プラン（大人1名）','海外ツアーパッケージ（添乗員なし）'
 ];
+var ANCILLARY_STATUS_WEIGHTED = [['', 0.55], ['〇', 0.30], ['✖', 0.15]];
 
+function genAncillary(){
+  var status = pickWeighted(ANCILLARY_STATUS_WEIGHTED);
+  return { status: status, qty: status === '〇' ? randInt(1, 4) : null };
+}
+
+var nextRowIndex = 2;
 function genSampleRows(n){
   var rows = [];
   for (var i=0;i<n;i++){
@@ -420,9 +613,12 @@ function genSampleRows(n){
     var sales = randInt(5,400) * 1000;
     var paidRatio = rand() < 0.15 ? 0 : (rand() < 0.6 ? 1 : rand());
     var payment = Math.round(sales * paidRatio / 100) * 100;
+    var office = pick(OFFICE_LIST);
+    var ins = genAncillary(), wifi = genAncillary(), tavica = genAncillary(), cansapo = genAncillary();
     rows.push({
-      area: pick(AREA_LIST),
-      office: pick(OFFICE_LIST),
+      rowIndex: nextRowIndex++,
+      area: OFFICE_AREA_MAP[office],
+      office: office,
       destination: pick(DEST_LIST),
       bookingDate: bookingDate,
       departureDate: departureDate,
@@ -439,7 +635,13 @@ function genSampleRows(n){
       sts: pickWeighted(STS_LIST),
       staff: pick(STAFF_LIST),
       productTitle: pick(PRODUCT_TITLES),
-      travelDays: randInt(2,10)
+      travelDays: randInt(2,10),
+      chkDate: rand() < 0.4 ? bookingDate : null,
+      insuranceStatus: ins.status, insuranceQty: ins.qty,
+      wifiStatus: wifi.status, wifiQty: wifi.qty,
+      tavicaStatus: tavica.status, tavicaQty: tavica.qty,
+      cansapoStatus: cansapo.status, cansapoQty: cansapo.qty,
+      memo: rand() < 0.15 ? pick(['要フォロー', 'オプション確認済み', 'キャンセル待ち相談中', '再連絡予定']) : ''
     });
   }
   return rows;
@@ -469,35 +671,130 @@ var COLUMNS = [
 var COLUMN_BY_KEY = {};
 COLUMNS.forEach(function(c){ COLUMN_BY_KEY[c.key] = c; });
 
+var ANCILLARY_ITEMS = [
+  { key:'insurance', label:'保険', statusKey:'insuranceStatus', qtyKey:'insuranceQty' },
+  { key:'wifi', label:'Wifi', statusKey:'wifiStatus', qtyKey:'wifiQty' },
+  { key:'tavica', label:'TAViCA', statusKey:'tavicaStatus', qtyKey:'tavicaQty' },
+  { key:'cansapo', label:'キャンサポ', statusKey:'cansapoStatus', qtyKey:'cansapoQty' }
+];
+var ANCILLARY_BY_KEY = {};
+ANCILLARY_ITEMS.forEach(function(a){ ANCILLARY_BY_KEY[a.key] = a; });
+
+// 予約データ一覧タブの列定義（ご指定の並び順を初期値にしている）。
+// 「営業所」「メモ」の2項目はご指定リストに無かったため、こちらの判断で位置を補っている。
+var DISPLAY_COLUMN_DEFS = [
+  { key:'chkDate', label:'CHK日', kind:'date', field:'chkDate' },
+  { key:'reservationNo', label:'予約番号', kind:'csv', field:'reservationNo' },
+  { key:'staff', label:'担当者', kind:'csv', field:'staff' },
+  { key:'departureDate', label:'出発予定日', kind:'csv', field:'departureDate' },
+  { key:'insurance', label:'保険', kind:'ancillary', item:'insurance' },
+  { key:'wifi', label:'Wifi', kind:'ancillary', item:'wifi' },
+  { key:'tavica', label:'TAViCA', kind:'ancillary', item:'tavica' },
+  { key:'cansapo', label:'キャンサポ', kind:'ancillary', item:'cansapo' },
+  { key:'office', label:'営業所', kind:'csv', field:'office' },
+  { key:'destination', label:'最終目的地', kind:'csv', field:'destination' },
+  { key:'productCategory', label:'商品分類', kind:'csv', field:'productCategory' },
+  { key:'tourBrand', label:'ツアーブランド区分', kind:'csv', field:'tourBrand' },
+  { key:'tourCode', label:'ツアーコード', kind:'csv', field:'tourCode' },
+  { key:'carrier', label:'キャリア', kind:'csv', field:'carrier' },
+  { key:'salesAmount', label:'売上(商品請求金額)', kind:'csv', field:'salesAmount' },
+  { key:'paymentAmount', label:'入金額', kind:'csv', field:'paymentAmount' },
+  { key:'sts', label:'STS', kind:'csv', field:'sts' },
+  { key:'productTitle', label:'商品タイトル', kind:'csv', field:'productTitle' },
+  { key:'travelDays', label:'旅行日数', kind:'csv', field:'travelDays' },
+  { key:'bookingDate', label:'予約日', kind:'csv', field:'bookingDate' },
+  { key:'memo', label:'メモ', kind:'memo', field:'memo' }
+];
+var DISPLAY_COLUMN_DEFS_BY_KEY = {};
+DISPLAY_COLUMN_DEFS.forEach(function(d){ DISPLAY_COLUMN_DEFS_BY_KEY[d.key] = d; });
+var DEFAULT_COLUMN_ORDER = DISPLAY_COLUMN_DEFS.map(function(d){ return d.key; });
+
+// ---- 権限切替デモ用のアカウント定義 ----
+var ROLE_ACCOUNTS = {
+  'マスタ権限': { office: '', area: '' },
+  '所長・チーフ': { office: '', area: AREA_LIST[0] },
+  '社員': { office: OFFICE_LIST[0], area: OFFICE_AREA_MAP[OFFICE_LIST[0]] }
+};
+
 var STATE = {
-  rows: genSampleRows(320),
-  filtered: [],
-  sortKey: 'bookingDate', sortDir: -1,
+  allRows: genSampleRows(320),
+  rows: [], // 現在の権限で見える行
+  role: 'マスタ権限',
+
+  dashFiltered: [], dataFiltered: [],
   rankingSortKey: 'count', rankingSortDir: -1,
-  page: 1, pageSize: 50
+  dataSortKey: 'departureDate', dataSortDir: -1,
+  dataPage: 1, dataPageSize: 50,
+  personalSortKey: 'count', personalSortDir: -1,
+
+  columnOrder: DEFAULT_COLUMN_ORDER.slice(),
+  staffList: [
+    { rowIndex: 2, email: 'master@example.com', name: 'マスタ太郎', office: '', area: '', role: 'マスタ権限' },
+    { rowIndex: 3, email: 'chief@example.com', name: '所長次郎', office: '', area: AREA_LIST[0], role: '所長・チーフ' },
+    { rowIndex: 4, email: 'staff@example.com', name: '社員花子', office: OFFICE_LIST[0], area: OFFICE_AREA_MAP[OFFICE_LIST[0]], role: '社員' }
+  ]
 };
 
 var CHART_COLORS = ['#1d4ed8','#f59e0b','#10b981','#ef4444','#8b5cf6','#0ea5e9','#f97316','#84cc16','#ec4899','#64748b','#14b8a6','#a855f7'];
 
 document.addEventListener('DOMContentLoaded', function(){
   bindEvents();
-  document.getElementById('last-imported-label').textContent = '最終取込：2026/09/01 18:24（サンプルデータ）';
+  document.getElementById('last-imported-label').textContent = '最終取込：2026/09/18 18:24（サンプルデータ）';
   boot();
 });
 
 function boot(){
   showLoading(true);
   setTimeout(function(){
+    applyRoleScope();
     populateFilterOptions();
+    applyRoleUi();
+    renderColumnOrderEditor();
     renderDataThead();
-    applyFilters();
+    applyDashFilters();
+    applyDataFilters();
+    renderPersonalTab();
+    renderStaffList();
+    renderAdminStatus();
     showLoading(false);
-  }, 350); // ローディング演出（実アプリのサーバー通信を模したウェイト）
+  }, 300); // ローディング演出（実アプリのサーバー通信を模したウェイト）
 }
 
 function showLoading(v){ document.getElementById('loading-overlay').classList.toggle('hidden', !v); }
 
-/* ---- フィルタ ---- */
+/* ---- 権限（表示切替デモ） ---- */
+function applyRoleScope(){
+  var role = STATE.role;
+  var account = ROLE_ACCOUNTS[role];
+  if (role === 'マスタ権限') {
+    STATE.rows = STATE.allRows;
+  } else if (role === '所長・チーフ') {
+    STATE.rows = STATE.allRows.filter(function(r){ return r.area === account.area; });
+  } else {
+    STATE.rows = STATE.allRows.filter(function(r){ return r.office === account.office; });
+  }
+  var accessDenied = false; // このデモでは3ロールとも常に登録済みという想定
+  document.getElementById('access-denied-banner').classList.toggle('hidden', !accessDenied);
+  document.getElementById('app-content').classList.toggle('hidden', accessDenied);
+
+  var badge = document.getElementById('role-badge');
+  var scope = role === 'マスタ権限' ? '全エリア' : (role === '所長・チーフ' ? 'エリア：' + account.area : '店舗：' + account.office);
+  badge.textContent = '🛡️ ' + role + '（' + scope + '）';
+}
+
+function applyRoleUi(){
+  var isMaster = STATE.role === 'マスタ権限';
+  document.getElementById('btn-open-csv-modal').classList.toggle('hidden', !isMaster);
+  document.getElementById('master-only-admin').classList.toggle('hidden', !isMaster);
+}
+
+function onRoleChanged(){
+  STATE.role = document.getElementById('role-switcher').value;
+  boot();
+  showToast(STATE.role + ' の見え方に切り替えました', 'info');
+}
+
+/* ---- フィルタ共通 ---- */
 function distinctValues(key){
   var set = {};
   STATE.rows.forEach(function(r){ if (r[key]) set[r[key]] = true; });
@@ -508,66 +805,63 @@ function fillMultiSelect(id, values){
     return '<option value="'+escapeHtml(v)+'">'+escapeHtml(v)+'</option>';
   }).join('');
 }
+function fillDatalist(id, values){
+  document.getElementById(id).innerHTML = values.map(function(v){ return '<option value="'+escapeHtml(v)+'">'; }).join('');
+}
 function populateFilterOptions(){
-  fillMultiSelect('filter-area', distinctValues('area'));
-  fillMultiSelect('filter-office', distinctValues('office'));
-  fillMultiSelect('filter-sts', distinctValues('sts'));
-  fillMultiSelect('filter-category', distinctValues('productCategory'));
+  fillMultiSelect('dash-filter-area', distinctValues('area'));
+  fillMultiSelect('dash-filter-office', distinctValues('office'));
+  fillMultiSelect('dash-filter-category', distinctValues('productCategory'));
+  fillMultiSelect('data-filter-area', distinctValues('area'));
+  fillMultiSelect('data-filter-office', distinctValues('office'));
+  fillMultiSelect('data-filter-staff', distinctValues('staff'));
+  fillDatalist('staff-office-options', OFFICE_LIST);
+  fillDatalist('staff-area-options', AREA_LIST);
 }
 function getSelected(id){ return Array.from(document.getElementById(id).selectedOptions).map(function(o){return o.value;}); }
 function toSet(arr){ if(!arr||arr.length===0) return null; var s={}; arr.forEach(function(v){s[v]=true;}); return s; }
 
-function applyFilters(){
-  var area = toSet(getSelected('filter-area'));
-  var office = toSet(getSelected('filter-office'));
-  var sts = toSet(getSelected('filter-sts'));
-  var category = toSet(getSelected('filter-category'));
-  var dateField = document.getElementById('filter-date-field').value;
-  var dateFrom = document.getElementById('filter-date-from').value;
-  var dateTo = document.getElementById('filter-date-to').value;
-  var keyword = document.getElementById('filter-keyword').value.trim().toLowerCase();
+/* ---- 分析ダッシュボードタブ ---- */
+function applyDashFilters(){
+  var area = toSet(getSelected('dash-filter-area'));
+  var office = toSet(getSelected('dash-filter-office'));
+  var category = toSet(getSelected('dash-filter-category'));
+  var dateField = document.getElementById('dash-filter-date-field').value;
+  var dateFrom = document.getElementById('dash-filter-date-from').value;
+  var dateTo = document.getElementById('dash-filter-date-to').value;
 
-  STATE.filtered = STATE.rows.filter(function(r){
+  STATE.dashFiltered = STATE.rows.filter(function(r){
     if (area && !area[r.area]) return false;
     if (office && !office[r.office]) return false;
-    if (sts && !sts[r.sts]) return false;
     if (category && !category[r.productCategory]) return false;
     var dv = r[dateField];
     if (dateFrom && (!dv || dv < dateFrom)) return false;
     if (dateTo && (!dv || dv > dateTo)) return false;
-    if (keyword){
-      var hay = [r.customerId, r.reservationNo, r.productTitle, r.staff].join(' ').toLowerCase();
-      if (hay.indexOf(keyword) === -1) return false;
-    }
     return true;
   });
-  STATE.page = 1;
-  document.getElementById('filter-summary').textContent = STATE.filtered.length + ' 件を表示中（全 ' + STATE.rows.length + ' 件中）';
-  renderAll();
-}
-function clearFilters(){
-  ['filter-area','filter-office','filter-sts','filter-category'].forEach(function(id){
-    Array.from(document.getElementById(id).options).forEach(function(o){ o.selected = false; });
-  });
-  document.getElementById('filter-date-from').value = '';
-  document.getElementById('filter-date-to').value = '';
-  document.getElementById('filter-keyword').value = '';
-  applyFilters();
-}
+  document.getElementById('dash-filter-summary').textContent = STATE.dashFiltered.length + ' 件を表示中（閲覧できる ' + STATE.rows.length + ' 件中）';
 
-function renderAll(){
   renderKpis();
   renderMonthlyChart();
-  renderDonut('chart-sts', 'chart-sts-legend', countBy(STATE.filtered,'sts'));
-  renderDonut('chart-category', 'chart-category-legend', countBy(STATE.filtered,'productCategory'));
-  renderHBar('chart-nationality', topEntries(countBy(STATE.filtered,'nationality'), 10));
-  renderHBar('chart-carrier', topEntries(countBy(STATE.filtered,'carrier'), 10));
+  renderDonut('chart-sts', 'chart-sts-legend', countBy(STATE.dashFiltered,'sts'));
+  renderDonut('chart-category', 'chart-category-legend', countBy(STATE.dashFiltered,'productCategory'));
+  renderHBar('chart-nationality', topEntries(countBy(STATE.dashFiltered,'nationality'), 10));
+  renderHBar('chart-carrier', topEntries(countBy(STATE.dashFiltered,'carrier'), 10));
+  renderAncillaryChart('chart-insurance', STATE.dashFiltered, 'insuranceQty');
+  renderAncillaryChart('chart-wifi', STATE.dashFiltered, 'wifiQty');
+  renderAncillaryChart('chart-tavica', STATE.dashFiltered, 'tavicaQty');
+  renderAncillaryChart('chart-cansapo', STATE.dashFiltered, 'cansapoQty');
   renderRanking();
-  renderDataTable();
-  renderAdminStatus();
+}
+function clearDashFilters(){
+  ['dash-filter-area','dash-filter-office','dash-filter-category'].forEach(function(id){
+    Array.from(document.getElementById(id).options).forEach(function(o){ o.selected = false; });
+  });
+  document.getElementById('dash-filter-date-from').value = '';
+  document.getElementById('dash-filter-date-to').value = '';
+  applyDashFilters();
 }
 
-/* ---- KPI ---- */
 function sumBy(rows,key){ var s=0; rows.forEach(function(r){ if (typeof r[key]==='number') s+=r[key]; }); return s; }
 function avgBy(rows,key){ var s=0,n=0; rows.forEach(function(r){ if (typeof r[key]==='number'){s+=r[key];n++;} }); return n>0?s/n:0; }
 function countBy(rows,key){
@@ -579,7 +873,7 @@ function topEntries(map,n){
   return Object.keys(map).map(function(k){return [k,map[k]];}).sort(function(a,b){return b[1]-a[1];}).slice(0,n);
 }
 function renderKpis(){
-  var rows = STATE.filtered;
+  var rows = STATE.dashFiltered;
   var total = rows.length;
   var sales = sumBy(rows,'salesAmount');
   var payment = sumBy(rows,'paymentAmount');
@@ -592,11 +886,12 @@ function renderKpis(){
   document.getElementById('kpi-avg-days').textContent = avgDays.toFixed(1)+'日';
 }
 
-/* ---- グラフ（CSS/HTMLのみで描画） ---- */
+function getDashDateField(){ return document.getElementById('dash-filter-date-field').value || 'bookingDate'; }
+
 function renderMonthlyChart(){
-  var field = document.getElementById('filter-date-field').value;
+  var field = getDashDateField();
   var byMonth = {};
-  STATE.filtered.forEach(function(r){
+  STATE.dashFiltered.forEach(function(r){
     var v = r[field]; if (!v) return;
     var month = v.slice(0,7);
     if (!byMonth[month]) byMonth[month] = {count:0, sales:0};
@@ -617,6 +912,36 @@ function renderMonthlyChart(){
       '<div class="vbar-pair">' +
         '<div class="vbar count" style="height:'+hCount+'px" title="'+m+' 予約件数: '+formatNumber(b.count)+'"></div>' +
         '<div class="vbar sales" style="height:'+hSales+'px" title="'+m+' 売上合計: '+formatCurrency(b.sales)+'"></div>' +
+      '</div>' +
+      '<div class="vbar-month">'+m.slice(2)+'</div>' +
+    '</div>';
+  }).join('');
+}
+
+/** 保険・Wifi・TAViCA・キャンサポ共通：棒＝リスト数（月別件数）、折れ線相当＝加入・販売数（数量合計）。 */
+function renderAncillaryChart(id, rows, qtyKey){
+  var field = getDashDateField();
+  var byMonth = {};
+  rows.forEach(function(r){
+    var v = r[field]; if (!v) return;
+    var month = v.slice(0,7);
+    if (!byMonth[month]) byMonth[month] = {count:0, qty:0};
+    byMonth[month].count++;
+    if (typeof r[qtyKey] === 'number') byMonth[month].qty += r[qtyKey];
+  });
+  var months = Object.keys(byMonth).sort();
+  var el = document.getElementById(id);
+  if (months.length === 0){ el.innerHTML = '<p class="empty-msg">データがありません</p>'; return; }
+  var maxCount = Math.max.apply(null, months.map(function(m){return byMonth[m].count;}).concat([1]));
+  var maxQty = Math.max.apply(null, months.map(function(m){return byMonth[m].qty;}).concat([1]));
+  el.innerHTML = months.map(function(m){
+    var b = byMonth[m];
+    var hCount = Math.max(2, Math.round(b.count / maxCount * 140));
+    var hQty = Math.max(2, Math.round(b.qty / maxQty * 140));
+    return '<div class="vbar-col">' +
+      '<div class="vbar-pair">' +
+        '<div class="vbar count-alt" style="height:'+hCount+'px" title="'+m+' リスト数: '+formatNumber(b.count)+'"></div>' +
+        '<div class="vbar qty" style="height:'+hQty+'px" title="'+m+' 加入・販売数: '+formatNumber(b.qty)+'"></div>' +
       '</div>' +
       '<div class="vbar-month">'+m.slice(2)+'</div>' +
     '</div>';
@@ -660,7 +985,6 @@ function renderHBar(id, entries){
   }).join('');
 }
 
-/* ---- 営業所別ランキング ---- */
 function buildOfficeRanking(rows){
   var map = {};
   rows.forEach(function(r){
@@ -682,7 +1006,7 @@ function buildOfficeRanking(rows){
   });
 }
 function renderRanking(){
-  var list = buildOfficeRanking(STATE.filtered);
+  var list = buildOfficeRanking(STATE.dashFiltered);
   var key = STATE.rankingSortKey, dir = STATE.rankingSortDir;
   list.sort(function(a,b){
     if (key === 'office') return a.office.localeCompare(b.office,'ja') * dir;
@@ -702,50 +1026,91 @@ function renderRanking(){
   }).join('');
 }
 
-/* ---- データ一覧タブ ---- */
+/* ---- 予約データ一覧タブ ---- */
+function applyDataFilters(){
+  var area = toSet(getSelected('data-filter-area'));
+  var office = toSet(getSelected('data-filter-office'));
+  var staff = toSet(getSelected('data-filter-staff'));
+  var dateFrom = document.getElementById('data-filter-date-from').value;
+  var dateTo = document.getElementById('data-filter-date-to').value;
+  var keyword = document.getElementById('data-filter-keyword').value.trim().toLowerCase();
+
+  STATE.dataFiltered = STATE.rows.filter(function(r){
+    if (area && !area[r.area]) return false;
+    if (office && !office[r.office]) return false;
+    if (staff && !staff[r.staff]) return false;
+    var dep = r.departureDate;
+    if (dateFrom && (!dep || dep < dateFrom)) return false;
+    if (dateTo && (!dep || dep > dateTo)) return false;
+    if (keyword){
+      var hay = [r.reservationNo, r.productTitle, r.staff, r.memo].join(' ').toLowerCase();
+      if (hay.indexOf(keyword) === -1) return false;
+    }
+    return true;
+  });
+  document.getElementById('data-filter-summary').textContent = STATE.dataFiltered.length + ' 件を表示中（閲覧できる ' + STATE.rows.length + ' 件中）';
+  STATE.dataPage = 1;
+  renderDataTable();
+}
+function clearDataFilters(){
+  ['data-filter-area','data-filter-office','data-filter-staff'].forEach(function(id){
+    Array.from(document.getElementById(id).options).forEach(function(o){ o.selected = false; });
+  });
+  document.getElementById('data-filter-date-from').value = '';
+  document.getElementById('data-filter-date-to').value = '';
+  document.getElementById('data-filter-keyword').value = '';
+  applyDataFilters();
+}
+
 function renderDataThead(){
   var thead = document.getElementById('data-thead');
-  thead.innerHTML = '<tr>' + COLUMNS.map(function(c){
-    var mark = (STATE.sortKey === c.key) ? ('<span class="sort-mark">'+(STATE.sortDir>0?'▲':'▼')+'</span>') : '';
-    var align = c.type === 'number' ? 'text-right' : '';
-    return '<th class="sortable '+align+'" data-sort="'+c.key+'">'+escapeHtml(c.label)+mark+'</th>';
+  thead.innerHTML = '<tr>' + STATE.columnOrder.map(function(key){
+    var def = DISPLAY_COLUMN_DEFS_BY_KEY[key];
+    if (!def) return '';
+    var sortable = def.kind !== 'ancillary';
+    var col = def.kind === 'csv' ? COLUMN_BY_KEY[def.field] : null;
+    var align = (col && col.type==='number') ? 'text-right' : (def.kind==='ancillary' ? 'text-center' : '');
+    var editableCls = (def.kind==='ancillary'||def.kind==='date'||def.kind==='memo') ? ' editable-col' : '';
+    var mark = (sortable && STATE.dataSortKey===key) ? ('<span class="sort-mark">'+(STATE.dataSortDir>0?'▲':'▼')+'</span>') : '';
+    var cls = (sortable?'sortable ':'') + align + editableCls;
+    var dataSort = sortable ? ' data-sort="'+key+'"' : '';
+    return '<th class="'+cls+'"'+dataSort+'>'+escapeHtml(def.label)+mark+'</th>';
   }).join('') + '</tr>';
   thead.querySelectorAll('.sortable').forEach(function(th){
     th.addEventListener('click', function(){
       var key = th.getAttribute('data-sort');
-      if (STATE.sortKey === key) STATE.sortDir *= -1; else { STATE.sortKey = key; STATE.sortDir = 1; }
+      if (STATE.dataSortKey === key) STATE.dataSortDir *= -1; else { STATE.dataSortKey = key; STATE.dataSortDir = 1; }
       renderDataThead(); renderDataTable();
     });
   });
 }
-function compareCell(a,b,key){
-  var col = COLUMN_BY_KEY[key];
-  var va=a[key], vb=b[key];
+function compareRows(a, b, def){
+  if (!def) return 0;
+  var va=a[def.field], vb=b[def.field];
+  var type = def.kind === 'csv' ? COLUMN_BY_KEY[def.field].type : (def.kind === 'date' ? 'date' : 'text');
   var ae = (va===null||va===undefined||va===''), be=(vb===null||vb===undefined||vb==='');
   if (ae&&be) return 0; if (ae) return 1; if (be) return -1;
-  if (col.type === 'number') return va-vb;
+  if (type === 'number') return va-vb;
   return String(va).localeCompare(String(vb),'ja');
 }
 function renderDataTable(){
-  var rows = STATE.filtered.slice();
-  rows.sort(function(a,b){ return compareCell(a,b,STATE.sortKey) * STATE.sortDir; });
+  var def = DISPLAY_COLUMN_DEFS_BY_KEY[STATE.dataSortKey];
+  var rows = STATE.dataFiltered.slice();
+  rows.sort(function(a,b){ return compareRows(a,b,def) * STATE.dataSortDir; });
   var total = rows.length;
-  var totalPages = Math.max(1, Math.ceil(total / STATE.pageSize));
-  if (STATE.page > totalPages) STATE.page = totalPages;
-  var start = (STATE.page-1) * STATE.pageSize;
-  var pageRows = rows.slice(start, start+STATE.pageSize);
+  var totalPages = Math.max(1, Math.ceil(total / STATE.dataPageSize));
+  if (STATE.dataPage > totalPages) STATE.dataPage = totalPages;
+  var start = (STATE.dataPage-1) * STATE.dataPageSize;
+  var pageRows = rows.slice(start, start+STATE.dataPageSize);
 
   document.getElementById('data-empty').classList.toggle('hidden', total>0);
   document.getElementById('data-tbody').innerHTML = pageRows.map(function(r){
-    return '<tr>' + COLUMNS.map(function(c){
-      var align = c.type==='number' ? 'text-right' : '';
-      return '<td class="'+align+'">'+formatCell(r[c.key], c)+'</td>';
-    }).join('') + '</tr>';
+    return '<tr>' + STATE.columnOrder.map(function(key){ return buildCellHtml(r, DISPLAY_COLUMN_DEFS_BY_KEY[key]); }).join('') + '</tr>';
   }).join('');
 
-  document.getElementById('pagination-info').textContent = total===0 ? '0件' : (start+1)+'〜'+Math.min(start+STATE.pageSize,total)+' / '+total+'件';
-  document.getElementById('btn-prev-page').disabled = STATE.page<=1;
-  document.getElementById('btn-next-page').disabled = STATE.page>=totalPages;
+  document.getElementById('pagination-info').textContent = total===0 ? '0件' : (start+1)+'〜'+Math.min(start+STATE.dataPageSize,total)+' / '+total+'件';
+  document.getElementById('btn-prev-page').disabled = STATE.dataPage<=1;
+  document.getElementById('btn-next-page').disabled = STATE.dataPage>=totalPages;
 }
 function formatCell(v, col){
   if (v===null||v===undefined||v==='') return '<span style="color:var(--slate-300)">－</span>';
@@ -753,13 +1118,235 @@ function formatCell(v, col){
   if (col.type==='date') return escapeHtml(String(v).replace(/-/g,'/'));
   return escapeHtml(String(v));
 }
+function buildCellHtml(row, def){
+  if (!def) return '<td></td>';
+  if (def.kind === 'csv'){
+    var col = COLUMN_BY_KEY[def.field];
+    var align = col.type === 'number' ? 'text-right' : '';
+    return '<td class="'+align+'">'+formatCell(row[def.field], col)+'</td>';
+  }
+  if (def.kind === 'date'){
+    var dv = row[def.field] || '';
+    return '<td class="editable-cell"><input type="date" data-row="'+row.rowIndex+'" data-col="'+def.field+'" value="'+escapeHtml(dv)+'"></td>';
+  }
+  if (def.kind === 'memo'){
+    var mv = row[def.field] || '';
+    return '<td class="editable-cell"><input type="text" data-row="'+row.rowIndex+'" data-col="'+def.field+'" value="'+escapeHtml(mv)+'" placeholder="メモ"></td>';
+  }
+  if (def.kind === 'ancillary'){
+    var item = ANCILLARY_BY_KEY[def.item];
+    var status = row[item.statusKey] || '';
+    var qty = row[item.qtyKey];
+    var opts = ['', '〇', '✖'].map(function(v){
+      var label = v === '' ? '－' : v;
+      return '<option value="'+v+'"'+(status===v?' selected':'')+'>'+label+'</option>';
+    }).join('');
+    var qtyDisabled = status === '〇' ? '' : 'disabled';
+    var qtyVal = (qty===null||qty===undefined) ? '' : qty;
+    return '<td class="editable-cell text-center"><div class="ancillary-pair">' +
+      '<select data-row="'+row.rowIndex+'" data-col="'+item.statusKey+'" data-qtycol="'+item.qtyKey+'">'+opts+'</select>' +
+      '<input type="number" min="0" data-row="'+row.rowIndex+'" data-col="'+item.qtyKey+'" value="'+escapeHtml(String(qtyVal))+'" '+qtyDisabled+' placeholder="数">' +
+      '</div></td>';
+  }
+  return '<td></td>';
+}
+
+function saveCell(rowIndex, columnKey, value){
+  var row = STATE.rows.find(function(r){ return r.rowIndex === rowIndex; });
+  if (!row) return;
+  var normalized = value === '' ? null : value;
+  row[columnKey] = (columnKey.slice(-3) === 'Qty' && normalized !== null) ? Number(normalized) : normalized;
+
+  var ancillary = ANCILLARY_ITEMS.filter(function(a){ return a.statusKey === columnKey; })[0];
+  if (ancillary && normalized !== '〇') row[ancillary.qtyKey] = null;
+
+  renderDataTable();
+  applyDashFilters(); // 保険/Wifi等の入力はダッシュボードの数量にも影響するため再集計する
+  renderPersonalTab();
+}
+function bindDataTableEditEvents(){
+  var tbody = document.getElementById('data-tbody');
+  tbody.addEventListener('change', function(e){
+    var t = e.target;
+    if (t.matches('input[type="date"][data-col]') || t.matches('select[data-col]') || t.matches('input[type="number"][data-col]')){
+      saveCell(Number(t.dataset.row), t.dataset.col, t.value);
+    }
+  });
+  tbody.addEventListener('blur', function(e){
+    var t = e.target;
+    if (t.matches('input[type="text"][data-col]')) saveCell(Number(t.dataset.row), t.dataset.col, t.value);
+  }, true);
+}
+
+/* ---- 列の並び順エディタ ---- */
+function renderColumnOrderEditor(){
+  var container = document.getElementById('column-order-list');
+  container.innerHTML = STATE.columnOrder.map(function(key, i){
+    var def = DISPLAY_COLUMN_DEFS_BY_KEY[key];
+    if (!def) return '';
+    return '<div class="col-order-row">' +
+      '<span>'+escapeHtml(def.label)+'</span>' +
+      '<span class="buttons">' +
+        '<button type="button" class="col-order-up" data-index="'+i+'"'+(i===0?' disabled':'')+'>▲</button>' +
+        '<button type="button" class="col-order-down" data-index="'+i+'"'+(i===STATE.columnOrder.length-1?' disabled':'')+'>▼</button>' +
+      '</span></div>';
+  }).join('');
+}
+function bindColumnOrderEvents(){
+  document.getElementById('column-order-list').addEventListener('click', function(e){
+    var up = e.target.closest('.col-order-up'), down = e.target.closest('.col-order-down');
+    if (!up && !down) return;
+    var idx = Number((up||down).dataset.index);
+    var swapWith = up ? idx-1 : idx+1;
+    if (swapWith<0 || swapWith>=STATE.columnOrder.length) return;
+    var tmp = STATE.columnOrder[idx]; STATE.columnOrder[idx]=STATE.columnOrder[swapWith]; STATE.columnOrder[swapWith]=tmp;
+    renderColumnOrderEditor(); renderDataThead(); renderDataTable();
+  });
+  document.getElementById('btn-save-column-order').addEventListener('click', function(){
+    var el = document.getElementById('column-order-result');
+    el.textContent = '並び順を保存しました（このモックアップでは表示中のみ反映されます）。';
+    el.classList.remove('hidden');
+    showToast('列の並び順を保存しました（デモ）', 'success');
+  });
+  document.getElementById('btn-reset-column-order').addEventListener('click', function(){
+    STATE.columnOrder = DEFAULT_COLUMN_ORDER.slice();
+    renderColumnOrderEditor(); renderDataThead(); renderDataTable();
+  });
+}
+
+/* ---- 個人別サマリータブ ---- */
+function buildPersonalSummary(rows){
+  var map = {};
+  rows.forEach(function(r){
+    var key = (r.office||'(未設定)') + '\u0001' + (r.staff||'(未設定)');
+    if (!map[key]) map[key] = { office:r.office||'(未設定)', staff:r.staff||'(未設定)', count:0, insuranceQty:0, wifiQty:0, tavicaQty:0, cansapoQty:0 };
+    var b = map[key];
+    b.count++;
+    if (typeof r.insuranceQty === 'number') b.insuranceQty += r.insuranceQty;
+    if (typeof r.wifiQty === 'number') b.wifiQty += r.wifiQty;
+    if (typeof r.tavicaQty === 'number') b.tavicaQty += r.tavicaQty;
+    if (typeof r.cansapoQty === 'number') b.cansapoQty += r.cansapoQty;
+  });
+  return Object.keys(map).map(function(k){ return map[k]; });
+}
+function renderPersonalTab(){
+  var keyword = (document.getElementById('personal-search').value||'').trim().toLowerCase();
+  var list = buildPersonalSummary(STATE.rows).filter(function(b){
+    if (!keyword) return true;
+    return (b.office+' '+b.staff).toLowerCase().indexOf(keyword) !== -1;
+  });
+  var key=STATE.personalSortKey, dir=STATE.personalSortDir;
+  list.sort(function(a,b){
+    if (key==='office') return a.office.localeCompare(b.office,'ja')*dir;
+    if (key==='staff') return a.staff.localeCompare(b.staff,'ja')*dir;
+    return (a[key]-b[key])*dir;
+  });
+  var tbody = document.getElementById('personal-tbody');
+  document.getElementById('personal-empty').classList.toggle('hidden', list.length>0);
+  tbody.innerHTML = list.map(function(b){
+    return '<tr>' +
+      '<td>'+escapeHtml(b.office)+'</td>' +
+      '<td>'+escapeHtml(b.staff)+'</td>' +
+      '<td class="text-right">'+formatNumber(b.count)+'</td>' +
+      '<td class="text-right">'+formatNumber(b.insuranceQty)+'</td>' +
+      '<td class="text-right">'+formatNumber(b.wifiQty)+'</td>' +
+      '<td class="text-right">'+formatNumber(b.tavicaQty)+'</td>' +
+      '<td class="text-right">'+formatNumber(b.cansapoQty)+'</td>' +
+    '</tr>';
+  }).join('');
+}
 
 /* ---- データ管理タブ ---- */
 function renderAdminStatus(){
   document.getElementById('admin-status').innerHTML =
-    '<p>保存件数（サンプル）：<b>'+formatNumber(STATE.rows.length)+'</b> 件</p>' +
-    '<p>現在の絞り込み結果：<b>'+formatNumber(STATE.filtered.length)+'</b> 件</p>';
+    '<p>あなたが閲覧できる件数（サンプル）：<b>'+formatNumber(STATE.rows.length)+'</b> 件</p>' +
+    '<p>分析ダッシュボードの現在の絞り込み結果：<b>'+formatNumber(STATE.dashFiltered.length)+'</b> 件</p>';
 }
+function removeDuplicatesDemo(){
+  if (!window.confirm('CSV由来19項目すべてが完全一致する重複行を削除します。よろしいですか？（デモ動作）')) return;
+  var el = document.getElementById('duplicate-result');
+  el.textContent = '重複している行はありませんでした。（サンプルデータのためデモ動作です）';
+  el.classList.remove('hidden');
+  showToast('重複削除を実行しました（デモ）', 'success');
+}
+function clearAllDataDemo(){
+  var input = document.getElementById('clear-confirm-input');
+  if (input.value !== '削除'){ showToast('確認欄に「削除」と入力してください。', 'error'); return; }
+  if (!window.confirm('サンプルデータをすべて削除します（デモ動作。ページ再読込で元に戻ります）。よろしいですか？')) return;
+  STATE.allRows = [];
+  input.value = '';
+  var el = document.getElementById('clear-result');
+  el.textContent = '削除しました（デモ）。';
+  el.classList.remove('hidden');
+  showToast('データを削除しました（デモ）', 'success');
+  boot();
+}
+
+/* ---- 権限管理（スタッフ権限）デモ ---- */
+function renderStaffList(){
+  var tbody = document.getElementById('staff-tbody');
+  document.getElementById('staff-empty').classList.toggle('hidden', STATE.staffList.length>0);
+  tbody.innerHTML = STATE.staffList.map(function(s){
+    return '<tr>' +
+      '<td style="font-family:monospace; font-size:12px;">'+escapeHtml(s.email)+'</td>' +
+      '<td>'+escapeHtml(s.name)+'</td>' +
+      '<td>'+escapeHtml(s.office)+'</td>' +
+      '<td>'+escapeHtml(s.area)+'</td>' +
+      '<td>'+escapeHtml(s.role)+'</td>' +
+      '<td class="text-right">' +
+        '<button type="button" class="staff-edit" data-row="'+s.rowIndex+'" style="background:none;border:none;color:var(--blue-600);font-size:12px;margin-right:8px;">編集</button>' +
+        '<button type="button" class="staff-delete" data-row="'+s.rowIndex+'" style="background:none;border:none;color:var(--red-600);font-size:12px;">削除</button>' +
+      '</td></tr>';
+  }).join('');
+}
+function bindStaffEvents(){
+  document.getElementById('btn-open-staff-modal').addEventListener('click', function(){ openStaffModal(null); });
+  document.getElementById('btn-close-staff-modal').addEventListener('click', closeStaffModal);
+  document.getElementById('btn-cancel-staff-modal').addEventListener('click', closeStaffModal);
+  document.getElementById('staff-tbody').addEventListener('click', function(e){
+    var editBtn = e.target.closest('.staff-edit'), delBtn = e.target.closest('.staff-delete');
+    if (editBtn) openStaffModal(Number(editBtn.dataset.row));
+    if (delBtn){
+      if (!window.confirm('このアカウントを削除しますか？（デモ動作）')) return;
+      STATE.staffList = STATE.staffList.filter(function(s){ return s.rowIndex !== Number(delBtn.dataset.row); });
+      renderStaffList();
+    }
+  });
+  document.getElementById('staff-form').addEventListener('submit', function(ev){
+    ev.preventDefault();
+    var rowIndex = document.getElementById('staff-form-rowindex').value;
+    var payload = {
+      email: document.getElementById('staff-form-email').value.trim(),
+      name: document.getElementById('staff-form-name').value.trim(),
+      office: document.getElementById('staff-form-office').value.trim(),
+      area: document.getElementById('staff-form-area').value.trim(),
+      role: document.getElementById('staff-form-role').value
+    };
+    if (rowIndex){
+      var target = STATE.staffList.find(function(s){ return s.rowIndex === Number(rowIndex); });
+      if (target) Object.assign(target, payload);
+    } else {
+      payload.rowIndex = Math.max.apply(null, STATE.staffList.map(function(s){return s.rowIndex;}).concat([1])) + 1;
+      STATE.staffList.push(payload);
+    }
+    renderStaffList();
+    closeStaffModal();
+    showToast('保存しました（デモ）', 'success');
+  });
+}
+function openStaffModal(rowIndex){
+  var isEdit = rowIndex !== null;
+  document.getElementById('staff-modal-title').textContent = isEdit ? '🛡️ アカウントを編集' : '🛡️ アカウントを追加';
+  var target = isEdit ? STATE.staffList.find(function(s){ return s.rowIndex === rowIndex; }) : null;
+  document.getElementById('staff-form-rowindex').value = isEdit ? rowIndex : '';
+  document.getElementById('staff-form-email').value = target ? target.email : '';
+  document.getElementById('staff-form-name').value = target ? target.name : '';
+  document.getElementById('staff-form-office').value = target ? target.office : '';
+  document.getElementById('staff-form-area').value = target ? target.area : '';
+  document.getElementById('staff-form-role').value = target ? target.role : '社員';
+  document.getElementById('staff-modal').classList.add('open');
+}
+function closeStaffModal(){ document.getElementById('staff-modal').classList.remove('open'); }
 
 /* ---- CSVインポート（見た目のみのダミー動作） ---- */
 var csvTimer = null;
@@ -805,40 +1392,17 @@ function submitCsvImportDemo(){
 function finishCsvImportDemo(){
   var addN = randInt(15, 40);
   var added = genSampleRows(addN);
-  STATE.rows = STATE.rows.concat(added);
+  STATE.allRows = STATE.allRows.concat(added);
   document.getElementById('last-imported-label').textContent = '最終取込：' + new Date().toLocaleString('ja-JP') + '（サンプル・デモ取込）';
 
   var box = document.getElementById('csv-import-result');
   box.style.display = 'block';
   box.innerHTML =
     '<p style="color:var(--emerald-700); font-weight:600;">✅ 取り込みが完了しました（デモ）</p>' +
-    '<p>新規登録：<b>'+formatNumber(addN)+'</b> 件</p>' +
-    '<p>取込後の合計件数：'+formatNumber(STATE.rows.length)+' 件</p>';
+    '<p>新規登録：<b>'+formatNumber(addN)+'</b> 件（CHK日・保険等は空欄で追加されます）</p>' +
+    '<p>取込後の合計件数：'+formatNumber(STATE.allRows.length)+' 件</p>';
   showToast('CSVを取り込みました（デモ・新規 '+addN+' 件）', 'success');
-  populateFilterOptions();
-  applyFilters();
-}
-
-/* ---- データ管理操作（ダミー） ---- */
-function removeDuplicatesDemo(){
-  if (!window.confirm('19項目すべてが完全一致する重複行を削除します。よろしいですか？（デモ動作）')) return;
-  var el = document.getElementById('duplicate-result');
-  el.textContent = '重複している行はありませんでした。（サンプルデータのためデモ動作です）';
-  el.classList.remove('hidden');
-  showToast('重複削除を実行しました（デモ）', 'success');
-}
-function clearAllDataDemo(){
-  var input = document.getElementById('clear-confirm-input');
-  if (input.value !== '削除'){ showToast('確認欄に「削除」と入力してください。', 'error'); return; }
-  if (!window.confirm('サンプルデータをすべて削除します（デモ動作。ページ再読込で元に戻ります）。よろしいですか？')) return;
-  STATE.rows = [];
-  input.value = '';
-  var el = document.getElementById('clear-result');
-  el.textContent = '削除しました（デモ）。';
-  el.classList.remove('hidden');
-  showToast('データを削除しました（デモ）', 'success');
-  populateFilterOptions();
-  applyFilters();
+  boot();
 }
 
 /* ---- イベント結線・タブ切り替え ---- */
@@ -847,14 +1411,14 @@ function bindEvents(){
     btn.addEventListener('click', function(){ switchTab(btn.getAttribute('data-tab')); });
   });
   document.getElementById('btn-refresh').addEventListener('click', boot);
+  document.getElementById('role-switcher').addEventListener('change', onRoleChanged);
 
-  ['filter-area','filter-office','filter-sts','filter-category','filter-date-field'].forEach(function(id){
-    document.getElementById(id).addEventListener('change', applyFilters);
+  ['dash-filter-area','dash-filter-office','dash-filter-category','dash-filter-date-field'].forEach(function(id){
+    document.getElementById(id).addEventListener('change', applyDashFilters);
   });
-  document.getElementById('filter-date-from').addEventListener('change', applyFilters);
-  document.getElementById('filter-date-to').addEventListener('change', applyFilters);
-  document.getElementById('filter-keyword').addEventListener('input', debounce(applyFilters, 250));
-  document.getElementById('btn-clear-filter').addEventListener('click', clearFilters);
+  document.getElementById('dash-filter-date-from').addEventListener('change', applyDashFilters);
+  document.getElementById('dash-filter-date-to').addEventListener('change', applyDashFilters);
+  document.getElementById('btn-clear-dash-filter').addEventListener('click', clearDashFilters);
 
   document.querySelectorAll('#panel-dashboard [data-sort]').forEach(function(th){
     th.addEventListener('click', function(){
@@ -864,8 +1428,17 @@ function bindEvents(){
     });
   });
 
-  document.getElementById('btn-prev-page').addEventListener('click', function(){ STATE.page--; renderDataTable(); });
-  document.getElementById('btn-next-page').addEventListener('click', function(){ STATE.page++; renderDataTable(); });
+  ['data-filter-area','data-filter-office','data-filter-staff'].forEach(function(id){
+    document.getElementById(id).addEventListener('change', applyDataFilters);
+  });
+  document.getElementById('data-filter-date-from').addEventListener('change', applyDataFilters);
+  document.getElementById('data-filter-date-to').addEventListener('change', applyDataFilters);
+  document.getElementById('data-filter-keyword').addEventListener('input', debounce(applyDataFilters, 250));
+  document.getElementById('btn-clear-data-filter').addEventListener('click', clearDataFilters);
+
+  document.getElementById('btn-prev-page').addEventListener('click', function(){ STATE.dataPage--; renderDataTable(); });
+  document.getElementById('btn-next-page').addEventListener('click', function(){ STATE.dataPage++; renderDataTable(); });
+  bindDataTableEditEvents();
 
   document.getElementById('btn-open-csv-modal').addEventListener('click', openCsvModal);
   document.getElementById('btn-close-csv-modal').addEventListener('click', closeCsvModal);
@@ -873,8 +1446,19 @@ function bindEvents(){
   document.getElementById('csv-file-input').addEventListener('change', onCsvFileSelected);
   document.getElementById('btn-submit-csv').addEventListener('click', submitCsvImportDemo);
 
+  document.getElementById('personal-search').addEventListener('input', debounce(renderPersonalTab, 200));
+  document.querySelectorAll('#panel-personal [data-sort]').forEach(function(th){
+    th.addEventListener('click', function(){
+      var key = th.getAttribute('data-sort');
+      if (STATE.personalSortKey === key) STATE.personalSortDir *= -1; else { STATE.personalSortKey = key; STATE.personalSortDir = -1; }
+      renderPersonalTab();
+    });
+  });
+
+  bindColumnOrderEvents();
   document.getElementById('btn-remove-duplicates').addEventListener('click', removeDuplicatesDemo);
   document.getElementById('btn-clear-all-data').addEventListener('click', clearAllDataDemo);
+  bindStaffEvents();
 }
 function switchTab(tab){
   document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-tab')===tab); });
