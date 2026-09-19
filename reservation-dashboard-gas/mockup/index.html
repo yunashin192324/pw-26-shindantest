@@ -231,11 +231,11 @@ th.sortable:hover{background:var(--blue-100);}
     </div>
 
     <div class="kpi-grid">
-      <div class="kpi-card kpi-blue"><p class="label">総予約件数</p><p class="value" id="kpi-total">0</p></div>
-      <div class="kpi-card kpi-emerald"><p class="label">売上(商品請求金額)合計</p><p class="value" id="kpi-sales">¥0</p></div>
-      <div class="kpi-card kpi-amber"><p class="label">入金額合計</p><p class="value" id="kpi-payment">¥0</p></div>
-      <div class="kpi-card kpi-main"><span class="badge">MAIN KPI</span><p class="label">⭐ 入金消化率</p><p class="value" id="kpi-payment-rate">0.0%</p></div>
-      <div class="kpi-card kpi-slate"><p class="label">平均旅行日数</p><p class="value" id="kpi-avg-days">0.0日</p></div>
+      <div class="kpi-card kpi-blue"><p class="label">予約件数</p><p class="value" id="kpi-total">0</p></div>
+      <div class="kpi-card kpi-emerald" title="保険加入PAX数の合計"><p class="label">🛡️ 保険契約数</p><p class="value" id="kpi-insurance">0</p></div>
+      <div class="kpi-card kpi-amber" title="Wifi販売台数の合計"><p class="label">📶 Wifi販売台数</p><p class="value" id="kpi-wifi">0</p></div>
+      <div class="kpi-card kpi-main" title="TAViCA加入数の合計"><p class="label">🛂 TAViCA契約件数</p><p class="value" id="kpi-tavica">0</p></div>
+      <div class="kpi-card kpi-slate" title="キャンサポ加入PAX数の合計"><p class="label">🩹 キャンサポ契約数</p><p class="value" id="kpi-cansapo">0</p></div>
     </div>
 
     <div class="tabs">
@@ -368,16 +368,14 @@ th.sortable:hover{background:var(--blue-100);}
       <p class="muted" id="data-filter-summary" style="width:100%; margin:0;"></p>
     </div>
 
-    <div class="card" style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px;">
-      <div>
-        <h2 style="margin:0;">📋 予約データ一覧</h2>
-        <p class="muted" style="margin-top:4px;">
-          CSV由来の項目は読み取り専用です。
-          <span style="display:inline-block; width:9px; height:9px; background:var(--blue-100); border:1px solid var(--blue-300); vertical-align:middle; margin:0 4px;"></span>
-          の列（CHK日・保険・Wifi・TAViCA・キャンサポ・メモ）は入力・編集できます。
-        </p>
-      </div>
-      <button class="btn-emerald hidden" id="btn-open-csv-modal">📄 CSVインポート</button>
+    <div class="card">
+      <h2 style="margin:0;">📋 予約データ一覧</h2>
+      <p class="muted" style="margin-top:4px;">
+        CSV由来の項目は読み取り専用です。
+        <span style="display:inline-block; width:9px; height:9px; background:var(--blue-100); border:1px solid var(--blue-300); vertical-align:middle; margin:0 4px;"></span>
+        の列（CHK日・保険・Wifi・TAViCA・キャンサポ・メモ）は入力・編集できます。
+        CSVインポートは「データ管理」タブから行えます。
+      </p>
     </div>
 
     <div class="card">
@@ -445,6 +443,14 @@ th.sortable:hover{background:var(--blue-100);}
     </div>
 
     <div id="master-only-admin">
+      <div class="card" style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px;">
+        <div>
+          <h2 style="margin:0;">📄 CSVインポート</h2>
+          <p class="muted" style="margin-top:4px;">営業日報CSVから対象19項目を取り込みます。取り込んだデータは「予約データ一覧」タブに反映されます。</p>
+        </div>
+        <button class="btn-emerald" id="btn-open-csv-modal">📄 CSVインポート</button>
+      </div>
+
       <div class="grid-2">
         <div class="card">
           <p style="font-weight:600; margin:0 0 4px;">重複した行を削除する</p>
@@ -874,16 +880,11 @@ function topEntries(map,n){
 }
 function renderKpis(){
   var rows = STATE.dashFiltered;
-  var total = rows.length;
-  var sales = sumBy(rows,'salesAmount');
-  var payment = sumBy(rows,'paymentAmount');
-  var rate = sales>0 ? payment/sales*100 : 0;
-  var avgDays = avgBy(rows,'travelDays');
-  document.getElementById('kpi-total').textContent = formatNumber(total);
-  document.getElementById('kpi-sales').textContent = formatCurrency(sales);
-  document.getElementById('kpi-payment').textContent = formatCurrency(payment);
-  document.getElementById('kpi-payment-rate').textContent = rate.toFixed(1)+'%';
-  document.getElementById('kpi-avg-days').textContent = avgDays.toFixed(1)+'日';
+  document.getElementById('kpi-total').textContent = formatNumber(rows.length);
+  document.getElementById('kpi-insurance').textContent = formatNumber(sumBy(rows,'insuranceQty'));
+  document.getElementById('kpi-wifi').textContent = formatNumber(sumBy(rows,'wifiQty'));
+  document.getElementById('kpi-tavica').textContent = formatNumber(sumBy(rows,'tavicaQty'));
+  document.getElementById('kpi-cansapo').textContent = formatNumber(sumBy(rows,'cansapoQty'));
 }
 
 function getDashDateField(){ return document.getElementById('dash-filter-date-field').value || 'bookingDate'; }

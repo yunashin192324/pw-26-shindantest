@@ -213,11 +213,11 @@ select[multiple]{height:88px; font-size:13px;}
     <p class="last-imported" id="last-imported-label"></p>
   </div>
   <div class="kpi-scroll">
-    <div class="kpi-card kpi-blue"><p class="label">総予約件数</p><p class="value" id="kpi-total">0</p></div>
-    <div class="kpi-card kpi-emerald"><p class="label">売上合計</p><p class="value" id="kpi-sales">¥0</p></div>
-    <div class="kpi-card kpi-amber"><p class="label">入金額合計</p><p class="value" id="kpi-payment">¥0</p></div>
-    <div class="kpi-card kpi-main"><span class="badge">MAIN</span><p class="label">⭐入金消化率</p><p class="value" id="kpi-payment-rate">0.0%</p></div>
-    <div class="kpi-card kpi-slate"><p class="label">平均旅行日数</p><p class="value" id="kpi-avg-days">0.0日</p></div>
+    <div class="kpi-card kpi-blue"><p class="label">予約件数</p><p class="value" id="kpi-total">0</p></div>
+    <div class="kpi-card kpi-emerald"><p class="label">🛡️保険契約数</p><p class="value" id="kpi-insurance">0</p></div>
+    <div class="kpi-card kpi-amber"><p class="label">📶Wifi販売台数</p><p class="value" id="kpi-wifi">0</p></div>
+    <div class="kpi-card kpi-main"><p class="label">🛂TAViCA契約件数</p><p class="value" id="kpi-tavica">0</p></div>
+    <div class="kpi-card kpi-slate"><p class="label">🩹キャンサポ契約数</p><p class="value" id="kpi-cansapo">0</p></div>
   </div>
 </header>
 
@@ -330,8 +330,7 @@ select[multiple]{height:88px; font-size:13px;}
         <p class="filter-summary" id="data-filter-summary"></p>
       </div>
 
-      <button class="btn-emerald btn-block hidden" id="btn-open-csv-modal" style="margin-bottom:10px;">📄 CSVインポート</button>
-      <p class="muted" style="margin:-4px 0 10px;">CSV由来の項目は読み取り専用です。CHK日・保険・Wifi・TAViCA・キャンサポ・メモは編集できます。カードの「詳細」でCSV項目を表示します。</p>
+      <p class="muted" style="margin:0 0 10px;">CSV由来の項目は読み取り専用です。CHK日・保険・Wifi・TAViCA・キャンサポ・メモは編集できます。カードの「詳細」でCSV項目を表示します。CSVインポートは「管理」タブから行えます。</p>
 
       <div id="data-list"></div>
       <p id="data-empty" class="list-empty hidden">データがありません</p>
@@ -370,6 +369,11 @@ select[multiple]{height:88px; font-size:13px;}
       </div>
 
       <div id="master-only-admin">
+        <div class="card">
+          <h2>📄 CSVインポート</h2>
+          <p class="muted" style="margin:0 0 10px;">営業日報CSVから対象19項目を取り込みます。取り込んだデータは「データ一覧」タブに反映されます。</p>
+          <button class="btn-emerald btn-block" id="btn-open-csv-modal">📄 CSVインポート</button>
+        </div>
         <div class="card">
           <p style="font-weight:600; margin:0 0 4px; font-size:13px;">重複した行を削除する</p>
           <p class="muted" style="margin:0 0 10px;">CSV由来19項目すべてが完全一致する行を1件にまとめます（デモ動作）。</p>
@@ -759,13 +763,11 @@ function topEntries(map,n){ return Object.keys(map).map(function(k){return [k,ma
 
 function renderKpis(){
   var rows = STATE.dashFiltered;
-  var total = rows.length, sales = sumBy(rows,'salesAmount'), payment = sumBy(rows,'paymentAmount');
-  var rate = sales>0 ? payment/sales*100 : 0;
-  document.getElementById('kpi-total').textContent = formatNumber(total);
-  document.getElementById('kpi-sales').textContent = formatCurrency(sales);
-  document.getElementById('kpi-payment').textContent = formatCurrency(payment);
-  document.getElementById('kpi-payment-rate').textContent = rate.toFixed(1)+'%';
-  document.getElementById('kpi-avg-days').textContent = avgBy(rows,'travelDays').toFixed(1)+'日';
+  document.getElementById('kpi-total').textContent = formatNumber(rows.length);
+  document.getElementById('kpi-insurance').textContent = formatNumber(sumBy(rows,'insuranceQty'));
+  document.getElementById('kpi-wifi').textContent = formatNumber(sumBy(rows,'wifiQty'));
+  document.getElementById('kpi-tavica').textContent = formatNumber(sumBy(rows,'tavicaQty'));
+  document.getElementById('kpi-cansapo').textContent = formatNumber(sumBy(rows,'cansapoQty'));
 }
 function getDashDateField(){ return document.getElementById('dash-filter-date-field').value || 'bookingDate'; }
 

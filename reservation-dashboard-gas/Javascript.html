@@ -289,19 +289,17 @@ function topEntries_(map, n) {
     .slice(0, n);
 }
 
+/**
+ * ヘッダーKPI：予約件数と、保険/Wifi/TAViCA/キャンサポの合計数量（数量欄の合計）。
+ * 数量は個人別サマリーと同じ集計（保険=加入PAX数、Wifi=販売台数、TAViCA=加入数、キャンサポ=加入PAX数）。
+ */
 function renderKpis() {
   var rows = STATE.dashFiltered;
-  var total = rows.length;
-  var salesSum = sumBy_(rows, 'salesAmount');
-  var paymentSum = sumBy_(rows, 'paymentAmount');
-  var rate = salesSum > 0 ? (paymentSum / salesSum * 100) : 0;
-  var avgDays = avgBy_(rows, 'travelDays');
-
-  document.getElementById('kpi-total').textContent = formatNumber(total);
-  document.getElementById('kpi-sales').textContent = formatCurrency(salesSum);
-  document.getElementById('kpi-payment').textContent = formatCurrency(paymentSum);
-  document.getElementById('kpi-payment-rate').textContent = rate.toFixed(1) + '%';
-  document.getElementById('kpi-avg-days').innerHTML = avgDays.toFixed(1) + '<span class="text-base font-normal">日</span>';
+  document.getElementById('kpi-total').textContent = formatNumber(rows.length);
+  document.getElementById('kpi-insurance').textContent = formatNumber(sumBy_(rows, 'insuranceQty'));
+  document.getElementById('kpi-wifi').textContent = formatNumber(sumBy_(rows, 'wifiQty'));
+  document.getElementById('kpi-tavica').textContent = formatNumber(sumBy_(rows, 'tavicaQty'));
+  document.getElementById('kpi-cansapo').textContent = formatNumber(sumBy_(rows, 'cansapoQty'));
 }
 
 var CHART_COLORS = ['#1d4ed8', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#0ea5e9', '#f97316', '#84cc16', '#ec4899', '#64748b'];

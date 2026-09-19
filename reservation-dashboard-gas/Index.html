@@ -59,25 +59,24 @@
       <!-- KPIサマリーカード（分析ダッシュボードタブのフィルタが反映されます） -->
       <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
         <div class="kpi-card bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-xl p-3 shadow">
-          <p class="text-xs opacity-80">総予約件数</p>
+          <p class="text-xs opacity-80">予約件数</p>
           <p id="kpi-total" class="text-2xl font-bold">0</p>
         </div>
-        <div class="kpi-card bg-gradient-to-br from-emerald-500 to-emerald-600 text-white rounded-xl p-3 shadow">
-          <p class="text-xs opacity-80">売上(商品請求金額)合計</p>
-          <p id="kpi-sales" class="text-2xl font-bold">¥0</p>
+        <div class="kpi-card bg-gradient-to-br from-emerald-500 to-emerald-600 text-white rounded-xl p-3 shadow" title="保険加入PAX数の合計">
+          <p class="text-xs opacity-80">🛡️ 保険契約数</p>
+          <p id="kpi-insurance" class="text-2xl font-bold">0</p>
         </div>
-        <div class="kpi-card bg-gradient-to-br from-amber-500 to-amber-600 text-white rounded-xl p-3 shadow">
-          <p class="text-xs opacity-80">入金額合計</p>
-          <p id="kpi-payment" class="text-2xl font-bold">¥0</p>
+        <div class="kpi-card bg-gradient-to-br from-amber-500 to-amber-600 text-white rounded-xl p-3 shadow" title="Wifi販売台数の合計">
+          <p class="text-xs opacity-80">📶 Wifi販売台数</p>
+          <p id="kpi-wifi" class="text-2xl font-bold">0</p>
         </div>
-        <div class="kpi-card kpi-card-main relative bg-gradient-to-br from-indigo-600 via-indigo-600 to-purple-700 text-white rounded-xl p-3 shadow-lg ring-2 ring-indigo-300" title="入金消化率 = 入金額合計 ÷ 売上(商品請求金額)合計">
-          <p class="absolute top-1.5 right-2 text-[10px] font-bold bg-white/20 rounded px-1.5 py-0.5">MAIN KPI</p>
-          <p class="text-xs opacity-90">⭐ 入金消化率</p>
-          <p id="kpi-payment-rate" class="text-3xl font-extrabold">0.0%</p>
+        <div class="kpi-card bg-gradient-to-br from-indigo-600 via-indigo-600 to-purple-700 text-white rounded-xl p-3 shadow" title="TAViCA加入数の合計">
+          <p class="text-xs opacity-80">🛂 TAViCA契約件数</p>
+          <p id="kpi-tavica" class="text-2xl font-bold">0</p>
         </div>
-        <div class="kpi-card bg-gradient-to-br from-slate-600 to-slate-700 text-white rounded-xl p-3 shadow">
-          <p class="text-xs opacity-80">平均旅行日数</p>
-          <p id="kpi-avg-days" class="text-2xl font-bold">0.0<span class="text-base font-normal">日</span></p>
+        <div class="kpi-card bg-gradient-to-br from-slate-600 to-slate-700 text-white rounded-xl p-3 shadow" title="キャンサポ加入PAX数の合計">
+          <p class="text-xs opacity-80">🩹 キャンサポ契約数</p>
+          <p id="kpi-cansapo" class="text-2xl font-bold">0</p>
         </div>
       </div>
 
@@ -269,18 +268,14 @@
           <p id="data-filter-summary" class="text-xs text-slate-400 w-full"></p>
         </div>
 
-        <div class="bg-white rounded-xl shadow p-4 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 class="text-base font-bold text-slate-800"><i class="fa-solid fa-table-list text-blue-600"></i> 予約データ一覧</h2>
-            <p class="text-xs text-slate-500 mt-0.5">
-              CSV由来の項目は読み取り専用です。
-              <span class="inline-block w-2.5 h-2.5 rounded-sm bg-blue-100 border border-blue-300 align-middle ml-2 mr-1"></span>
-              の列（CHK日・保険・Wifi・TAViCA・キャンサポ・メモ）は入力・編集できます。
-            </p>
-          </div>
-          <button id="btn-open-csv-modal" class="hidden bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-semibold shadow" title="CSVインポートはマスタ権限のみ利用できます">
-            <i class="fa-solid fa-file-csv"></i> CSVインポート
-          </button>
+        <div class="bg-white rounded-xl shadow p-4">
+          <h2 class="text-base font-bold text-slate-800"><i class="fa-solid fa-table-list text-blue-600"></i> 予約データ一覧</h2>
+          <p class="text-xs text-slate-500 mt-0.5">
+            CSV由来の項目は読み取り専用です。
+            <span class="inline-block w-2.5 h-2.5 rounded-sm bg-blue-100 border border-blue-300 align-middle ml-2 mr-1"></span>
+            の列（CHK日・保険・Wifi・TAViCA・キャンサポ・メモ）は入力・編集できます。
+            CSVインポートは「データ管理」タブから行えます。
+          </p>
         </div>
 
         <div class="bg-white rounded-xl shadow p-4">
@@ -357,6 +352,16 @@
         </div>
 
         <div id="master-only-admin" class="hidden space-y-5">
+          <div class="bg-white rounded-xl shadow p-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 class="text-base font-bold text-slate-800"><i class="fa-solid fa-file-csv text-emerald-600"></i> CSVインポート</h2>
+              <p class="text-xs text-slate-500 mt-0.5">営業日報CSVから対象19項目を取り込みます。取り込んだデータは「予約データ一覧」タブに反映されます。</p>
+            </div>
+            <button id="btn-open-csv-modal" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-semibold shadow">
+              <i class="fa-solid fa-file-csv"></i> CSVインポート
+            </button>
+          </div>
+
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div class="bg-white rounded-xl shadow p-4">
               <p class="text-sm font-semibold text-slate-700">重複した行を削除する</p>
