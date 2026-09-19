@@ -5423,6 +5423,98 @@ section('88. 【不具合修正】数字だけの支店コード（018）で先�
         ctxE.apiGetDashboard(shopE).reservations.some(r => r.kanriNo === madeE.kanriNo));
 }
 
+
+section('89. 【要件】店舗・支店のコードは3桁（008・018・A68 など。0始まり・アルファベット始まり）（項目107）');
+{
+  const ctx = featureFixture();
+  const n = ctx.normalizeBranchCode_;
+  const same = ctx.sameBranchCode_;
+
+  // --- 同じ店舗として扱ってほしい組み合わせ ---
+  check('018 と 18（数値として保存されたもの）は同じ店舗', same('018', 18));
+  check('008 と 8（数値として保存されたもの）は同じ店舗', same('008', 8));
+  check('008 と 008 は同じ店舗', same('008', '008'));
+  check('A68 と a68（大文字小文字違い）は同じ店舗', same('A68', 'a68'));
+  check('前後に空白が入っていても同じ店舗として扱う', same(' A68 ', 'A68'));
+
+  // --- 別の店舗として区別してほしい組み合わせ（そろえすぎて取り違えない） ---
+  check('008 と 018 は別の店舗', !same('008', '018'));
+  check('A68 と 68 は別の店舗（アルファベットは無視しない）', !same('A68', '68'));
+  check('100 と 010 は別の店舗', !same('100', '010'));
+  check('A68 と A86 は別の店舗', !same('A68', 'A86'));
+  check('空欄どうしは一致とみなさない（全件が一致してしまわないように）', !same('', ''));
+
+  // --- 保存するときは3桁へそろえる ---
+  check('8 は 008 として保存する', ctx.padBranchCode_('8') === '008', ctx.padBranchCode_('8'));
+  check('18 は 018 として保存する', ctx.padBranchCode_(18) === '018', ctx.padBranchCode_(18));
+  check('008 はそのまま', ctx.padBranchCode_('008') === '008');
+  check('A68 はアルファベット入りなのでそのまま', ctx.padBranchCode_('A68') === 'A68');
+  check('VIE のような支店コードもそのまま', ctx.padBranchCode_('VIE') === 'VIE');
+  check('4桁以上の数字はゼロ埋めしない', ctx.padBranchCode_('1234') === '1234');
+
+  const jpToken = ctx.apiLogin('KANTO', 'pw').session.token;
+
+  // --- 0で始まる3桁の店舗（008）が、数値8として保存された案件でも一覧に出る ---
+  addBranchRow(ctx, { '支店コード': '008', '支店名': '零八店', 'ロール': 'SHOP',
+                      'ログインパスコード': 'p8', '通知先メール': 's008@example.com', '有効': true });
+  const shop008 = ctx.apiLogin('008', 'p8');
+  check('008 でログインできる', shop008.ok === true, JSON.stringify(shop008));
+  check('ログイン中の店舗コードは 008 のまま表示される',
+        shop008.session.branchCode === '008', String(shop008.session.branchCode));
+  addCase(ctx, '予約一覧', {
+    '支店コード': 'VIE', '管理番号': 'VIE-801', '管轄': '関東', 'STS JP': 'RQ',
+    '起票元店舗': 8, '新郎名（ローマ字）': 'Zero', '新婦名（ローマ字）': 'Eight'
+  });
+  check('数値8として保存されていても 008 の一覧に出る',
+        ctx.apiGetDashboard(shop008.session.token).reservations.some(r => r.kanriNo === 'VIE-801'));
+
+  // --- アルファベット始まりの店舗（A68）は、もともと数値化されないので影響を受けない ---
+  addBranchRow(ctx, { '支店コード': 'A68', '支店名': 'エーろくはち店', 'ロール': 'SHOP',
+                      'ログインパスコード': 'pa', '通知先メール': 'a68@example.com', '有効': true });
+  const shopA68 = ctx.apiLogin('A68', 'pa');
+  check('A68 でログインできる', shopA68.ok === true, JSON.stringify(shopA68));
+  check('小文字で入力してもログインできる', ctx.apiLogin('a68', 'pa').ok === true);
+  addCase(ctx, '予約一覧', {
+    '支店コード': 'VIE', '管理番号': 'VIE-802', '管轄': '関東', 'STS JP': 'RQ',
+    '起票元店舗': 'A68', '新郎名（ローマ字）': 'Alpha', '新婦名（ローマ字）': 'Code'
+  });
+  check('A68 の案件は A68 の一覧に出る',
+        ctx.apiGetDashboard(shopA68.session.token).reservations.some(r => r.kanriNo === 'VIE-802'));
+  check('A68 の一覧に 008 の案件は出ない（取り違えない）',
+        !ctx.apiGetDashboard(shopA68.session.token).reservations.some(r => r.kanriNo === 'VIE-801'));
+  check('008 の一覧に A68 の案件は出ない（取り違えない）',
+        !ctx.apiGetDashboard(shop008.session.token).reservations.some(r => r.kanriNo === 'VIE-802'));
+
+  // --- マスタ管理画面から 8 で登録しても、008 として保存される ---
+  ctx.apiSaveBranch(jpToken, {
+    code: '9', name: '零九店', role: 'SHOP', country: '', city: '', team: '',
+    email: 's009@example.com', prefix: '', passcode: 'p9', active: true
+  });
+  check('マスタ管理から 9 で登録すると 009 として保存される',
+        ctx.listBranchesRaw_().some(b => b.code === '009'),
+        ctx.listBranchesRaw_().map(b => b.code).join(','));
+  check('009 でログインできる', ctx.apiLogin('009', 'p9').ok === true);
+  check('9 と入力してもログインできる（同じ店舗として扱う）', ctx.apiLogin('9', 'p9').ok === true);
+
+  // --- 支店マスタ側の0が落ちている行は、点検で知らせる ---
+  const ctx2 = featureFixture();
+  addBranchRow(ctx2, { '支店コード': 8, '支店名': '零八店', 'ロール': 'SHOP',
+                       'ログインパスコード': 'p8', '通知先メール': 's008@example.com', '有効': true });
+  const issues = ctx2.checkBranchMasterIssues_();
+  check('支店マスタのコードが3桁未満だと点検で知らせる',
+        issues.some(m => m.includes('3桁になっていません')), JSON.stringify(issues));
+  check('本来の形（008）を示して案内する',
+        issues.some(m => m.includes('008')), JSON.stringify(issues));
+  const ctx3 = featureFixture();
+  addBranchRow(ctx3, { '支店コード': 'A68', '支店名': 'エーろくはち店', 'ロール': 'SHOP',
+                       'ログインパスコード': 'pa', '通知先メール': 'a68@example.com', '有効': true });
+  check('アルファベット入りのコードは桁数の指摘をしない',
+        !ctx3.checkBranchMasterIssues_().some(m => m.includes('3桁になっていません')),
+        JSON.stringify(ctx3.checkBranchMasterIssues_()));
+  check('KANTO のような手配課のコードも指摘しない',
+        !ctx3.checkBranchMasterIssues_().some(m => m.includes('KANTO') && m.includes('3桁')));
+}
+
 // ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
 process.exit(fail === 0 ? 0 : 1);

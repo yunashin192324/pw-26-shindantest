@@ -4,7 +4,7 @@
 最終更新：2026-09-07（セッション `session_01Gg7njnTaKt8s1j9dR4GGQk`）
 
 - 「このリポジトリでどう作業するか」→ `CLAUDE.md`（作業手順・ハマりどころ）
-- 「各機能がどういう仕様か・なぜそうなったか」→ `SETUP.md`（項目1〜106の全変更履歴。**これが一次情報**）
+- 「各機能がどういう仕様か・なぜそうなったか」→ `SETUP.md`（項目1〜107の全変更履歴。**これが一次情報**）
 - 「いま何が終わっていて、次に何をすべきか」→ **このファイル**
 
 **★リポジトリの引っ越しについて**：このプロジェクトは今回のセッションで、別スレッド
@@ -39,7 +39,7 @@
 ### 現在の状態
 
 - リポジトリ：`yunashin192324/pw-26-shindantest`、ブランチ：`claude/thread-migration-y2nh9p`（**pushまで完了済み**）
-- テスト：`node test/run_all.js` で **1846件 全て成功 / 0件失敗**（サーバー1038・監査187・画面621）
+- テスト：`node test/run_all.js` で **1877件 全て成功 / 0件失敗**（サーバー1069・監査187・画面621）
 - デプロイ済みWebアプリURL（`Code.gs` の `WEBAPP_URL` に設定済み。**旧スレッドの記載を引き継いだだけで今回未確認**）：
   `https://script.google.com/a/macros/his-world.com/s/AKfycbz143-qasWEQoJB87kpPH_2Pjmv_6499TKKGKW3ddQ06JFM9H5gkPiTtOJl7RcWm9A/exec`
 - スマホ用プレビューArtifact（**このリポジトリ・このセッションで新規公開したもの。
@@ -273,6 +273,10 @@ Googleカレンダー取込を使う支店は、そのカレンダーをスク�
   迷ったら`normalizeBranchCode_`を通す。
 - **コードを入れる列は「書式なしテキスト」に固定してある**（`forceTextFormatOnCodeColumns_`。
   `setupPortal`で実行）。コードを書き込む列を新しく追加したら、`CODE_TEXT_COLUMNS_`にも足すこと。
+- **店舗・支店のコードは3桁**（018・008・A68 など。0始まりもアルファベット始まりもある）。
+  支店マスタへ保存する値は`padBranchCode_`で3桁へゼロ埋めする（項目107）。
+  アルファベットを含むコード（A68・VIE・KANTO）は桁数を問わずそのまま。
+  **比較は`sameBranchCode_`、保存は`padBranchCode_`**と使い分けること。
 - **「店舗の一覧に出ない」の切り分けは画面がやってくれる**（項目105）。一覧が0件のとき
   `shopEmptyHint_`が理由を出す。**同じ報告を受けたら、まずその赤字を読んでもらうこと。**
 
@@ -444,7 +448,7 @@ onShopNewHopePlanNChange_(n)   ← 希望日nのプラン変更でも呼ばれ�
 
 ```bash
 cd wedlink-portal-gas
-cd test && node run_all.js        # まず全部グリーンか確認（1846件想定）
+cd test && node run_all.js        # まず全部グリーンか確認（1877件想定）
 ```
 
 そのうえで、

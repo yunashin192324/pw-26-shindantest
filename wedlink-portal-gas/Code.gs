@@ -1167,8 +1167,9 @@ function apiSaveBranch(token, branch) {
     throw new Error('支店コード・支店名は必須です。');
   }
   const role = branch.role === JP_ROLE ? JP_ROLE : BRANCH_ROLE;
-  const code = String(branch.code).trim().toUpperCase();
-  const prefix = role === BRANCH_ROLE ? (String(branch.prefix || code).trim().toUpperCase()) : '';
+  // ★要件（項目107）：数字だけのコードは3桁へそろえてから保存する（8 → 008）
+  const code = padBranchCode_(branch.code);
+  const prefix = role === BRANCH_ROLE ? String(branch.prefix || code).trim().toUpperCase() : '';
 
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
@@ -2239,6 +2240,17 @@ function normalizeBranchCode_(v) {
 function sameBranchCode_(a, b) {
   const x = normalizeBranchCode_(a);
   return !!x && x === normalizeBranchCode_(b);
+}
+// ★要件（項目107）：店舗・支店のコードは3桁で運用している（018・008・A68 など。
+// 先頭が0のものもアルファベットのものもある）。数字だけのコードは、保存する前に
+// 3桁へゼロ埋めしてそろえる。これをしないと、スプレッドシートに数値として取り込まれた
+// コード（8・18）がそのまま支店マスタに残り、画面にも「8」と表示されてしまう。
+// アルファベットを含むコード（A68・VIE・KANTO など）は桁数を問わずそのまま扱う。
+const BRANCH_CODE_DIGITS = 3;
+function padBranchCode_(v) {
+  const s = String(v === null || v === undefined ? '' : v).trim().toUpperCase();
+  if (!/^\d+$/.test(s)) return s;
+  return s.length >= BRANCH_CODE_DIGITS ? s : ('0'.repeat(BRANCH_CODE_DIGITS - s.length) + s);
 }
 
 function branchMetaMap_() {
@@ -5709,6 +5721,16 @@ function checkBranchMasterIssues_() {
     const prefix = String(r[BM_COL_PREFIX] || '').trim().toUpperCase();
 
     if (!code) { issues.push(`${line}行目：支店コードが空欄です。`); return; }
+    // ★要件（項目107）：コードは3桁で運用している。数字だけなのに3桁に満たない行は、
+    // スプレッドシートが数値として取り込んで先頭の0を落とした疑いが強い（008 → 8）。
+    // この状態でも一致の判定は通るように直してあるが、画面の表示が本来と変わるため知らせる。
+    if (/^\d+$/.test(code) && code.length < BRANCH_CODE_DIGITS) {
+      issues.push(`${line}行目：支店コード「${code}」が${BRANCH_CODE_DIGITS}桁になっていません。` +
+                  `本来は「${padBranchCode_(code)}」ではありませんか。` +
+                  `数字だけのコードは、セルに入力した時点で先頭の0が落ちることがあります。` +
+                  `セルの表示形式を「書式なしテキスト」にしてから入力し直してください` +
+                  `（setupPortal を一度実行すると、この列の表示形式は自動で設定されます）。`);
+    }
     if (!name) issues.push(`${line}行目（${code}）：支店名が空欄です。`);
     if (role !== JP_ROLE && role !== BRANCH_ROLE && role !== SHOP_ROLE) {
       issues.push(`${line}行目（${code}）：ロールが「${role || '空欄'}」になっています。JP／BRANCH／SHOP のいずれかにしてください。`);
