@@ -1224,6 +1224,9 @@
     // ★要件（項目104）：キャンセルの手続き中は希望日一覧を自動では開かない
     const hopeShouldExpandShop = CASE_CLOSING_STATUSES_CLIENT.indexOf(d['STS JP'] || '') === -1 &&
       (!d['撮影日FIX'] || d['STS JP'] === 'DC' || d['STS JP'] === 'PC');
+    // ★要件（項目109）：下で2回参照する（明細見出しの直下と、送信ボタンを出すかどうかの判定）ため、
+    // changeAfterFixButtonsHtml_(d)は1回だけ呼んで結果を使い回す。
+    const changeButtonsHtmlShop = changeAfterFixButtonsHtml_(d);
 
     // ★要件：オプション名のすぐ隣にSTS（JP・支店）を、希望日と同じ表形式で表示する。
     // STS JPは店舗自身がその場でRQ→CR等へ直接変更できる（専用の「ステータス変更」欄は廃止）。
@@ -1366,7 +1369,16 @@
              プラン行だけは一番上の代表行として一目でわかるよう.plan-rowで強調する（背景色・太字）。 -->
         <div class="section-card plan-option-card">
           <div class="plan-option-head"><span class="icon">📋</span><h3 style="margin:0;">希望日・プラン・オプション明細</h3></div>
-          ${changeAfterFixButtonsHtml_(d)}
+          ${changeButtonsHtmlShop}
+          <!-- ★要件（項目109）：「この依頼をキャンセルする」「日付を変更する」「プランを変更する」
+               を押したあと、キャンセル理由の入力欄と送信ボタンをすぐ下に表示する
+               （以前はここより下の希望日一覧・明細表を挟んだ先にあり、探しにくかった）。 -->
+          <p id="shop-status-warning" class="error-text hidden" style="margin:0 14px;">⚠️ チャージ規定は各自ご確認ください。内容を確認のうえ送信してください。</p>
+          <div id="shop-cancel-reason-block" class="hidden" style="margin:8px 14px 0;">
+            <label>キャンセル理由（必須）</label>
+            <textarea data-pending="キャンセル理由" placeholder="キャンセルの理由を入力してください">${escapeHtml(d['キャンセル理由'])}</textarea>
+          </div>
+          ${changeButtonsHtmlShop ? quickActionsHtml_() : ''}
           <details class="hope-collapse" id="hope-collapse" ${hopeShouldExpandShop ? 'open' : ''}>
             <summary>${hopeShouldExpandShop ? '希望日一覧を表示中' : '希望日一覧－ふだんは折りたたみ表示です。開くと確認できます'}</summary>
             <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none;">
@@ -1397,12 +1409,7 @@
           </details>`}
           ${shopOptionDatalistHtml}
           <div style="padding:0 14px 14px;">
-            <p class="hint-text" style="margin-top:8px;">STS JPはプラン・各オプションの隣から直接変更できます（最終確定・キャンセル依頼・日付変更依頼・プラン/式場変更依頼）。選択すると、下の「変更＋メッセージを決定して送信」または「保存のみ」で確定します。</p>
-            <p id="shop-status-warning" class="error-text hidden">⚠️ チャージ規定は各自ご確認ください。内容を確認のうえ送信してください。</p>
-            <div id="shop-cancel-reason-block" class="hidden" style="margin-top:8px;">
-              <label>キャンセル理由（必須）</label>
-              <textarea data-pending="キャンセル理由" placeholder="キャンセルの理由を入力してください">${escapeHtml(d['キャンセル理由'])}</textarea>
-            </div>
+            <p class="hint-text" style="margin-top:8px;">STS JPはプラン・各オプションの隣から直接変更できます（最終確定・キャンセル依頼・日付変更依頼・プラン/式場変更依頼）。選択すると「変更＋メッセージを決定して送信」または「保存のみ」で確定します。</p>
             <div style="margin-top:10px;">
               <button type="button" class="send-btn-sm" id="shop-push-btn">📣 現地支店へ急ぎの回答を依頼（PUSH）</button>
               <p class="hint-text" style="margin-top:4px;">土日は現地支店は動いておりません。PUする際は土日祝のぞく５日以上みてください。</p>
@@ -1489,6 +1496,11 @@
     on_('print-arrangement-btn', 'click', () => {
       if (typeof window.print === 'function') window.print();
     });
+    // ★要件（項目109）：キャンセル・日付変更・プラン変更ボタンのすぐ下に複製した送信ボタン
+    // （quickActionsHtml_）の配線。手配課・現地支店の画面（renderDetail）と同じクラス名で
+    // 配線しているので、対応する関数もそちらと共通（commitChangesWithMessage/saveQuiet）。
+    c.querySelectorAll('.quick-commit-btn').forEach(btn => btn.addEventListener('click', commitChangesWithMessage));
+    c.querySelectorAll('.quick-save-btn').forEach(btn => btn.addEventListener('click', saveQuiet));
 
     // ★要件：専用の「ステータス変更」欄は廃止し、プラン・各オプションの隣のSTS JPバッジ
     // （shopStatusCellで生成した<select>）から直接変更できるようにする。DC/PCがどれか1つでも
@@ -1987,6 +1999,22 @@
   // 希望日一覧のすぐ上にボタンを置く。押すと STS(JP側) が DC（日付変更）／PC（プラン変更）に
   // セットされ、折りたたまれていた希望日一覧が開いて、そこで新しい希望を書き直せる。
   // 実際に相手へ伝わるのは、いつもどおり下の「変更（＋メッセージ）を決定して送信」を押したとき。
+  // ★機能：メッセージタブに戻らなくても、その場でそのまま確定できるようにする「送信」ボタンの
+  // 複製。「メッセージのみ送信」はメッセージ本文が必須なのでここには置かず、他の2択のみ複製する
+  // （メッセージタブのmsg-inputは非表示でもDOM上には存在するため、入力済みならそのまま一緒に送信される）。
+  // ★要件（項目109）：手配課・現地支店・店舗いずれの画面でも共通で使うため、共有関数にした
+  // （以前はrenderDetail内だけのローカル変数だったため、店舗側からは使えなかった）。
+  function quickActionsHtml_() {
+    return `
+      <div class="section-card">
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <button type="button" class="send-btn quick-commit-btn" style="width:100%;">変更（＋メッセージ）を決定して送信</button>
+          <button type="button" class="send-btn quick-save-btn" style="width:100%;background:var(--color-muted);">保存のみ（通知しない）</button>
+        </div>
+        <p class="hint-text" style="margin-top:8px;">ここから直接確定できます（メッセージ欄に入力済みの内容があれば一緒に送られます）。</p>
+      </div>`;
+  }
+
   // ★要件（項目104）：キャンセルの入口を画面に用意する。これまでキャンセルは
   // プラン行のSTS(JP側)のプルダウンからCRを選ぶしか方法が無く、「予約リクエスト中で現地から
   // まだ回答が来ていないが、キャンセルしたい」ときにどう操作すればよいか分からなかった。
@@ -2311,6 +2339,9 @@
     // （下のplanOptionTableHtml参照。同じフィールドを2箇所で編集できる状態を避けるため、
     // ここでの表示・編集は廃止した）。
     const mainGate = branchMainGateFor(d['STS JP']);
+    // ★要件（項目109）：下で2回参照する（明細見出しの直下と、送信ボタンを出すかどうかの判定）ため、
+    // changeAfterFixButtonsHtml_(d)は1回だけ呼んで結果を使い回す。
+    const changeButtonsHtml = changeAfterFixButtonsHtml_(d);
 
     // ★要件：準備場所はイタリアの支店のみ表示し、ホテル／サロンの選択式にする（他支店は非表示）
     const prepFieldHtml = !d.isItaly ? '' : `
@@ -2387,17 +2418,7 @@
     const invoiceLabel = d.invoiceLabel || '請求番号';
 
     // ★機能：メッセージタブに戻らなくても、予約内容・現地記入欄の下からそのまま確定できるようにする。
-    // 「メッセージのみ送信」はメッセージ本文が必須なのでここには置かず、他の2択のみ複製する。
-    // メッセージタブのボタン（btn-commit/btn-save-quiet）と挙動は同じ（メッセージタブのmsg-inputは
-    // 非表示でもDOM上には存在するため、入力済みならそのまま一緒に送信される）
-    const quickActionsHtml = `
-      <div class="section-card">
-        <div style="display:flex;flex-direction:column;gap:8px;">
-          <button type="button" class="send-btn quick-commit-btn" style="width:100%;">変更（＋メッセージ）を決定して送信</button>
-          <button type="button" class="send-btn quick-save-btn" style="width:100%;background:var(--color-muted);">保存のみ（通知しない）</button>
-        </div>
-        <p class="hint-text" style="margin-top:8px;">「メッセージ」タブに戻らずここから直接確定できます（メッセージ欄に入力済みの内容があれば一緒に送られます）。</p>
-      </div>`;
+    const quickActionsHtml = quickActionsHtml_();
 
     // ★機能：日本の手配課側のみが見る「日本記入欄」タブ。支店には一切表示しない（値もサーバーから届かない）。
     // 通常の3択（保存のみ／メッセージ／変更＋メッセージ）とは別に、変更した瞬間に単独で保存する
@@ -2596,8 +2617,11 @@
              プラン行だけは一番上の代表行として一目でわかるよう.plan-rowで強調する（背景色・太字）。 -->
         <div class="section-card plan-option-card">
           <div class="plan-option-head"><span class="icon">📋</span><h3 style="margin:0;">希望日・プラン・オプション明細</h3></div>
-          ${changeAfterFixButtonsHtml_(d)}
+          ${changeButtonsHtml}
           ${cancelReasonBlockHtml_(d)}
+          <!-- ★要件（項目109）：「キャンセルする」「日付を変更する」「プランを変更する」を押した
+               あと、送信ボタンを探して画面を下までスクロールしなくて済むよう、すぐ下にも置く。 -->
+          ${changeButtonsHtml ? quickActionsHtml_() : ''}
           <details class="hope-collapse" id="hope-collapse" ${hopeShouldExpand ? 'open' : ''}>
             <summary>${hopeShouldExpand ? '希望日一覧を表示中' : '希望日一覧－ふだんは折りたたみ表示です。開くと確認・変更できます'}</summary>
             <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none;">

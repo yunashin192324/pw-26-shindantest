@@ -4010,6 +4010,107 @@ function paneHidden(document, key) {
           !!doc64.getElementById('btn-save-quiet'));
   }
 
+  section('U65. 【要件】キャンセル・日付変更・プラン変更ボタンのすぐ下に送信ボタンを表示する（項目109）');
+  {
+    const ctx65 = makeServer();
+    const jp65 = ctx65.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    const shop65 = ctx65.apiLogin('SHOP1', 'CHANGE-ME-SHOP1').session.token;
+
+    // --- 手配課の画面：確定前（未確定）でも「キャンセルする」の下に送信ボタンが出る ---
+    const k65 = ctx65.apiCreateReservation(jp65, 'VIE', '01 Quick Send\n02 Bride\nRQ 2027/10/05\nRQ 2027/10/06').kanriNo;
+    const dom65 = await openApp(ctx65);
+    const doc65 = dom65.window.document;
+    await login(dom65, 'KANTO', 'CHANGE-ME-KANTO');
+    await settle();
+    const open65 = async (kanri) => {
+      doc65.getElementById('nav-dashboard').click();
+      await settle();
+      [...doc65.querySelectorAll('#reservation-table-body tr')].find(r => r.textContent.includes(kanri)).click();
+      await settle(); await settle();
+    };
+    await open65(k65);
+
+    const planCard = doc65.querySelector('.plan-option-card');
+    check('プラン明細のカードの中に「キャンセルする」ボタンがある',
+          !!planCard.querySelector('[data-change-after-fix="CR"]'));
+    check('「キャンセルする」ボタンのすぐ下（同じカードの中）に送信ボタンがある',
+          !!planCard.querySelector('.quick-commit-btn'));
+    check('保存のみボタンも一緒に出る', !!planCard.querySelector('.quick-save-btn'));
+
+    // 実際にキャンセルボタンを押して、その場にある送信ボタンで送信できることを確認する
+    planCard.querySelector('[data-change-after-fix="CR"]').click();
+    await settle();
+    const reasonTa = doc65.querySelector('[data-pending="キャンセル理由"]');
+    reasonTa.value = 'お客様都合';
+    reasonTa.dispatchEvent(new dom65.window.Event('change'));
+    await settle();
+    planCard.querySelector('.quick-commit-btn').click();
+    await settle(); await settle(); await settle();
+    check('プラン明細内の送信ボタンからでもキャンセル依頼を送信できる',
+          ctx65.apiGetReservationDetail(jp65, k65).detail['STS JP'] === 'CR');
+
+    // --- 確定済みの案件：「日付を変更する」「プランを変更する」の下にも送信ボタンが出る ---
+    const k65b = ctx65.apiCreateReservation(jp65, 'VIE', '01 Fixed\n02 Bride\nRQ 2027/11/05\nRQ 2027/11/06').kanriNo;
+    ctx65.apiSaveFieldsQuiet(ctx65.apiLogin('VIE', 'CHANGE-ME-VIE').session.token, k65b, { '希望日① STS 支店': 'OK' });
+    await open65(k65b);
+    const planCard2 = doc65.querySelector('.plan-option-card');
+    check('確定済みの案件にも「日付を変更する」ボタンがある',
+          !!planCard2.querySelector('[data-change-after-fix="DC"]'));
+    check('そのすぐ下（同じカードの中）に送信ボタンがある',
+          !!planCard2.querySelector('.quick-commit-btn'));
+    planCard2.querySelector('[data-change-after-fix="DC"]').click();
+    await settle();
+    planCard2.querySelector('.quick-commit-btn').click();
+    await settle(); await settle(); await settle();
+    check('プラン明細内の送信ボタンから日付変更も送信できる',
+          ctx65.apiGetReservationDetail(jp65, k65b).detail['STS JP'] === 'DC');
+
+    // --- 現地支店の画面：キャンセル・変更ボタン自体を出さないので、複製の送信ボタンも増えない ---
+    doc65.getElementById('nav-logout').click();
+    await settle();
+    await login(dom65, 'VIE', 'CHANGE-ME-VIE');
+    await settle();
+    [...doc65.querySelectorAll('#reservation-table-body tr')].find(r => r.textContent.includes(k65)).click();
+    await settle(); await settle();
+    const branchPlanCard = doc65.querySelector('.plan-option-card');
+    check('現地支店の画面ではキャンセル等のボタンは出ない', !branchPlanCard.querySelector('[data-change-after-fix]'));
+    check('現地支店の画面ではプラン明細内に複製の送信ボタンも出ない（不要なため）',
+          !branchPlanCard.querySelector('.quick-commit-btn'));
+
+    // --- 店舗の画面：同じ場所に理由欄・送信ボタンが出て、送信できる ---
+    doc65.getElementById('nav-logout').click();
+    await settle();
+    await login(dom65, 'SHOP1', 'CHANGE-ME-SHOP1');
+    await settle();
+    const shopCase = ctx65.apiShopCreateRequest(shop65, {
+      branchCode: 'VIE', team: '関東', challengeNo: 'QUICKSEND01',
+      groomLastName: 'QUICK', groomName: 'TARO', brideLastName: 'QUICK', brideName: 'HANAKO',
+      hope1: '2027-12-24'
+    });
+    doc65.getElementById('nav-dashboard').click();
+    await settle();
+    [...doc65.querySelectorAll('#reservation-list .res-card, #reservation-table-body tr')]
+      .find(el => el.textContent.includes(shopCase.kanriNo)).click();
+    await settle(); await settle();
+    const shopPlanCard = doc65.querySelector('.plan-option-card');
+    check('店舗の画面にも「キャンセルする」ボタンがある',
+          !!shopPlanCard.querySelector('[data-change-after-fix="CR"]'));
+    check('店舗の画面でもそのすぐ下（同じカードの中）に送信ボタンがある',
+          !!shopPlanCard.querySelector('.quick-commit-btn'));
+    shopPlanCard.querySelector('[data-change-after-fix="CR"]').click();
+    await settle();
+    check('店舗の画面でも押すとキャンセル理由の欄がすぐ下に開く（希望日一覧より前）',
+          !doc65.getElementById('shop-cancel-reason-block').classList.contains('hidden'));
+    const shopReasonTa = doc65.querySelector('[data-pending="キャンセル理由"]');
+    shopReasonTa.value = '店舗側の都合';
+    shopReasonTa.dispatchEvent(new dom65.window.Event('change'));
+    await settle();
+    shopPlanCard.querySelector('.quick-commit-btn').click();
+    await settle(); await settle(); await settle();
+    check('店舗の画面のプラン明細内の送信ボタンからもキャンセル依頼を送信できる',
+          ctx65.apiGetReservationDetail(shop65, shopCase.kanriNo).detail['STS JP'] === 'CR');
+  }
+
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error('テストが異常終了しました:', e); process.exit(1); });
