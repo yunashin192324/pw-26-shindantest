@@ -300,8 +300,8 @@ p { color: var(--ink-soft); }
 .plan-pick-list { display: grid; gap: 12px; }
 .plan-pick { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--white); text-align: left; }
 .plan-pick.is-selected { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold); }
-.plan-pick .pp-name { font-family: var(--font-serif); font-size: 1.15rem; }
-.plan-pick .pp-includes { font-size: .78rem; color: var(--ink-faint); margin-top: 4px; }
+.plan-pick .pp-name { font-family: var(--font-serif); font-size: 1.15rem; display: block; }
+.plan-pick .pp-includes { font-size: .78rem; color: var(--ink-faint); margin-top: 4px; display: block; }
 .plan-pick .pp-price { font-family: var(--font-serif); font-size: 1.15rem; white-space: nowrap; }
 
 /* calendar */
@@ -339,8 +339,8 @@ p { color: var(--ink-soft); }
 .option-card { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--white); }
 .option-card.is-included { opacity: .6; }
 .option-card.is-selected { border-color: var(--gold); }
-.option-card .oc-name { font-weight: 500; font-size: .96rem; }
-.option-card .oc-desc { font-size: .8rem; color: var(--ink-faint); margin-top: 4px; }
+.option-card .oc-name { font-weight: 500; font-size: .96rem; display: block; }
+.option-card .oc-desc { font-size: .8rem; color: var(--ink-faint); margin-top: 4px; display: block; }
 .option-card .oc-price { font-family: var(--font-serif); font-size: 1.02rem; white-space: nowrap; }
 .oc-toggle { width: 26px; height: 26px; border: 1px solid var(--line); border-radius: 50%; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; }
 .option-card.is-selected .oc-toggle { background: var(--ink); border-color: var(--ink); color: var(--white); }
@@ -1007,7 +1007,7 @@ body { padding-top: 40px; }
         "<h3>" + l.name + '</h3><div class="dest-ja">' + l.nameJa + "</div>" +
         '<p class="dest-copy">' + l.tagline + "</p>" +
         '<div class="dest-price">' + D.formatYen(l.fromPrice) + "<span> 〜</span></div>" +
-        "</a>"
+        "</div></a>"
       );
     }).join("");
 

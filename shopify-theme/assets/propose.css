@@ -230,8 +230,8 @@ body:has(.pp-mobile-cta) { padding-bottom: 68px; }
 .pp-plan-pick-list { display: grid; gap: 12px; }
 .pp-plan-pick { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 18px 20px; border: 1px solid var(--pp-line); border-radius: var(--pp-radius); background: var(--pp-white); text-align: left; width: 100%; }
 .pp-plan-pick.is-selected { border-color: var(--pp-gold); box-shadow: 0 0 0 1px var(--pp-gold); }
-.pp-plan-pick .pp-pp-name { font-family: var(--pp-font-serif); font-size: 1.15rem; }
-.pp-plan-pick .pp-pp-includes { font-size: .78rem; color: var(--pp-ink-faint); margin-top: 4px; }
+.pp-plan-pick .pp-pp-name { font-family: var(--pp-font-serif); font-size: 1.15rem; display: block; }
+.pp-plan-pick .pp-pp-includes { font-size: .78rem; color: var(--pp-ink-faint); margin-top: 4px; display: block; }
 .pp-plan-pick .pp-pp-price { font-family: var(--pp-font-serif); font-size: 1.15rem; white-space: nowrap; }
 
 .pp-cal-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
@@ -265,8 +265,8 @@ body:has(.pp-mobile-cta) { padding-bottom: 68px; }
 .pp-option-card { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 18px 20px; border: 1px solid var(--pp-line); border-radius: var(--pp-radius); background: var(--pp-white); width: 100%; text-align: left; }
 .pp-option-card.is-included { opacity: .6; }
 .pp-option-card.is-selected { border-color: var(--pp-gold); }
-.pp-option-card .pp-oc-name { font-weight: 500; font-size: .96rem; }
-.pp-option-card .pp-oc-desc { font-size: .8rem; color: var(--pp-ink-faint); margin-top: 4px; }
+.pp-option-card .pp-oc-name { font-weight: 500; font-size: .96rem; display: block; }
+.pp-option-card .pp-oc-desc { font-size: .8rem; color: var(--pp-ink-faint); margin-top: 4px; display: block; }
 .pp-option-card .pp-oc-price { font-family: var(--pp-font-serif); font-size: 1.02rem; white-space: nowrap; }
 .pp-oc-toggle { width: 26px; height: 26px; border: 1px solid var(--pp-line); border-radius: 50%; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; }
 .pp-option-card.is-selected .pp-oc-toggle { background: var(--pp-ink); border-color: var(--pp-ink); color: var(--pp-white); }
