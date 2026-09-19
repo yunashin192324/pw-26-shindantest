@@ -56,20 +56,25 @@ function notifyNewSurveyResponse(e) {
     const namedValues = e.namedValues;
     const printed = new Set();
 
+    // 未記入（空欄）の質問はメールに書かない
+    const appendIfAnswered = function (question, answer) {
+      const trimmed = (answer === undefined || answer === null) ? "" : String(answer).trim();
+      if (!trimmed) return;
+      body += "■ " + question + "\n" + trimmed + "\n\n";
+    };
+
     // 1. QUESTION_ORDER で決めた順番どおりに出力
     QUESTION_ORDER.forEach(function (question) {
       if (Object.prototype.hasOwnProperty.call(namedValues, question)) {
-        const answer = namedValues[question][0];
-        body += "■ " + question + "\n" + answer + "\n\n";
         printed.add(question);
+        appendIfAnswered(question, namedValues[question][0]);
       }
     });
 
     // 2. QUESTION_ORDER に書き漏れている質問があれば、末尾にまとめて追加（表示漏れ防止）
     for (let question in namedValues) {
       if (!printed.has(question)) {
-        const answer = namedValues[question][0];
-        body += "■ " + question + "\n" + answer + "\n\n";
+        appendIfAnswered(question, namedValues[question][0]);
       }
     }
   } else {
