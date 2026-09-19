@@ -50,6 +50,10 @@ class Range {
     return this;
   }
   setBackground() { return this; } setFontColor() { return this; } setFontWeight() { return this; }
+  // ★項目106：コードの列を「書式なしテキスト」に固定する処理で使う（書式自体はテストでは再現しない）
+  setNumberFormat(fmt) { this.sheet.__numberFormats = this.sheet.__numberFormats || {};
+    for (let c = 0; c < this.numCols; c++) this.sheet.__numberFormats[this.col + c] = fmt;
+    return this; }
 }
 
 class Sheet {
@@ -88,6 +92,8 @@ class Sheet {
   // ★項目101：古い過去案件の退避で、残す行を書き直したあと余った末尾の行をまとめて消すのに使う
   deleteRows(r, howMany) { this.data.splice(r - 1, Math.max(0, howMany || 0)); }
   setFrozenRows() {}
+  // ★項目106：シートの行数（実データが無い行も含む）。書式の設定範囲を決めるのに使う
+  getMaxRows() { return Math.max(this.getLastRow(), this.data.length, 1); }
   getName() { return this.name; }
 }
 

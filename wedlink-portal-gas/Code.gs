@@ -852,8 +852,17 @@ function setupPortal() {
     ss.getSheetByName(ARRANGEMENT_LOG_SHEET_NAME)
   ].forEach(formatHeaderRow_);
 
+  // ★不具合修正（項目106）：支店コード・店舗コードが数字だけ（018など）だと、セルが値を
+  // 数値として受け取って先頭のゼロが落ちる。コードを入れる列は「書式なしテキスト」に固定して、
+  // これから書き込むぶんが数値に変わらないようにする。
+  forceTextFormatOnCodeColumns_();
+
   // 未読フラグ列を追加した直後は全て空欄になるため、履歴から実態を計算して反映する
   rebuildUnreadFlags();
+  // ★不具合修正（項目106）：既に数値として保存されてしまったコード（18）を、
+  // 支店マスタの表記（018）へ書き戻す。これをしないと、直したあとも既存の案件は
+  // 店舗・支店の一覧に出てこないままになる。
+  const codeRepair = repairBranchCodeDigits_();
   // ★不具合修正（項目100）：「起票元店舗」列を後から追加した場合、それより前に店舗が作った案件は
   // 店舗コードが空欄のままで、手配課・現地支店からは見えるのに店舗の一覧にだけ出てこない。
   // 列を足したこの場で、やり取り履歴から店舗を特定して埋め直す（既に値がある行は触らない）。
@@ -872,6 +881,7 @@ function setupPortal() {
     'デプロイ（ウェブアプリとして導入）してください。\n' +
     '支店を追加したいときは「支店マスタ」シートに1行追加するだけでOKです（コード変更不要）。\n' +
     '案件番号プレフィックスは支店ごとに一意である必要があります（ローマ支店は既存運用のため "R" のまま変更しないでください）。\n\n' +
+    codeRepairMessage_(codeRepair) +
     branchMasterIssuesMessage_() +
     (originRepair.repaired
       ? `★店舗の一覧に出てこなくなっていた案件 ${originRepair.repaired} 件の「起票元店舗」を復元しました。\n` +
@@ -984,7 +994,7 @@ function apiLogin(branchCode, passcode) {
   // 「支店コードまたはパスコードが違います」という汎用エラーになり、原因が分かりにくかった。
   // 支店コード・パスコードの一致は先に判定し、「有効」だけがオフの場合は専用のメッセージを返す。
   const credentialMatch = rows.find(r =>
-    String(r[BM_COL_CODE]).trim().toUpperCase() === code &&
+    sameBranchCode_(r[BM_COL_CODE], code) &&
     String(r[BM_COL_PASSCODE]) === String(passcode === null || passcode === undefined ? '' : passcode)
   );
 
@@ -1044,7 +1054,7 @@ function assertBranchAccess_(session, branchCode) {
   // （支店マスタ・プラン等の管理APIを店舗ロールが呼べてしまう）。許可する条件を明示し、
   // それ以外は必ず拒否する形に直す。
   if (session.role === JP_ROLE) return;
-  if (session.role === BRANCH_ROLE && session.branchCode === String(branchCode).trim().toUpperCase()) return;
+  if (session.role === BRANCH_ROLE && sameBranchCode_(session.branchCode, branchCode)) return;
   throw new Error('自分の支店以外のデータは操作できません。');
 }
 
@@ -1176,8 +1186,7 @@ function apiSaveBranch(token, branch) {
     if (lastRow > 1) {
       const existing = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
       for (let i = 0; i < existing.length; i++) {
-        const rowCode = String(existing[i][codeColIdx]).trim().toUpperCase();
-        if (rowCode === code) {
+        if (sameBranchCode_(existing[i][codeColIdx], code)) {
           targetRow = i + 2;
           existingPasscode = existing[i][passcodeColIdx];
           existingRowValues = existing[i];
@@ -1255,7 +1264,7 @@ function apiSetBranchActive(token, code, active) {
     if (lastRow > 1) {
       const codes = sheet.getRange(2, codeColIdx + 1, lastRow - 1, 1).getValues();
       for (let i = 0; i < codes.length; i++) {
-        if (String(codes[i][0]).trim().toUpperCase() === String(code).trim().toUpperCase()) {
+        if (sameBranchCode_(codes[i][0], code)) {
           sheet.getRange(i + 2, activeColIdx + 1).setValue(!!active);
           return { ok: true };
         }
@@ -1275,10 +1284,10 @@ function apiSetBranchActive(token, code, active) {
 // 既存の呼び出し側はname/activeしか見ないため、この拡張だけでは何も壊れない。
 function apiListPlans(token, branchCode) {
   const session = requireSession_(token);
-  const target = session.role === BRANCH_ROLE ? session.branchCode : String(branchCode || '').trim().toUpperCase();
+  const target = normalizeBranchCode_(session.role === BRANCH_ROLE ? session.branchCode : branchCode);
   const sheet = getSpreadsheet_().getSheetByName(PLAN_MASTER_SHEET_NAME);
   return getRowsAsObjects_(sheet)
-    .filter(r => String(r[MM_COL_BRANCH]).trim().toUpperCase() === String(target).trim().toUpperCase())
+    .filter(r => normalizeBranchCode_(r[MM_COL_BRANCH]) === target)
     .map(r => ({
       name: r[MM_COL_NAME],
       active: isActiveFlag_(r[MM_COL_ACTIVE]),
@@ -1305,11 +1314,11 @@ function apiListAllActivePlans(token) {
   return getRowsAsObjects_(sheet)
     .filter(r => isActiveFlag_(r[MM_COL_ACTIVE]))
     .filter(r => {
-      const meta = branchMeta[String(r[MM_COL_BRANCH]).trim().toUpperCase()];
+      const meta = branchMeta[normalizeBranchCode_(r[MM_COL_BRANCH])];
       return !!meta && meta.active;
     })
     .map(r => {
-      const code = String(r[MM_COL_BRANCH]).trim().toUpperCase();
+      const code = normalizeBranchCode_(r[MM_COL_BRANCH]);
       const meta = branchMeta[code] || {};
       return {
         branchCode: code, branchName: meta.name || code, city: meta.city || '', name: r[MM_COL_NAME],
@@ -1330,7 +1339,7 @@ function planOwnerBranchMap_() {
   const map = {};
   getRowsAsObjects_(sheet).forEach(r => {
     if (!isActiveFlag_(r[MM_COL_ACTIVE])) return;
-    const code = String(r[MM_COL_BRANCH]).trim().toUpperCase();
+    const code = normalizeBranchCode_(r[MM_COL_BRANCH]);
     const meta = branchMeta[code];
     if (!meta || !meta.active) return;
     const name = r[MM_COL_NAME];
@@ -1340,13 +1349,13 @@ function planOwnerBranchMap_() {
 }
 function apiListOptionItems(token, branchCode) {
   const session = requireSession_(token);
-  const target = session.role === BRANCH_ROLE ? session.branchCode : String(branchCode || '').trim().toUpperCase();
+  const target = normalizeBranchCode_(session.role === BRANCH_ROLE ? session.branchCode : branchCode);
   return listMasterItems_(OPTION_MASTER_SHEET_NAME, target);
 }
 // 撮影希望場所：支店ごとのマスター候補一覧（任意入力の補助用。強制の選択式にはしない）
 function apiListLocations(token, branchCode) {
   const session = requireSession_(token);
-  const target = session.role === BRANCH_ROLE ? session.branchCode : String(branchCode || '').trim().toUpperCase();
+  const target = normalizeBranchCode_(session.role === BRANCH_ROLE ? session.branchCode : branchCode);
   return listMasterItems_(LOCATION_MASTER_SHEET_NAME, target);
 }
 // ★機能追加：現地スタッフ（カメラマン・ヘアメイク等）の入力候補。
@@ -1354,7 +1363,7 @@ function apiListLocations(token, branchCode) {
 // 候補から選べるようにして表記を揃える狙い。
 function apiListStaff(token, branchCode) {
   const session = requireSession_(token);
-  const target = session.role === BRANCH_ROLE ? session.branchCode : String(branchCode || '').trim().toUpperCase();
+  const target = normalizeBranchCode_(session.role === BRANCH_ROLE ? session.branchCode : branchCode);
   return listMasterItems_(STAFF_MASTER_SHEET_NAME, target);
 }
 function apiSaveStaffItem(token, branchCode, name, originalName, active) {
@@ -1386,12 +1395,12 @@ function apiSaveCostumeCompanyItem(token, name, originalName, active) {
 // （渡さない場合は従来どおり支店単位の全件を返す＝新規依頼フォームで支店だけ選んだ直後などに使う）。
 function apiListSales(token, branchCode, planName) {
   const session = requireSession_(token);
-  const target = String(session.role === BRANCH_ROLE ? session.branchCode : (branchCode || '')).trim().toUpperCase();
+  const target = normalizeBranchCode_(session.role === BRANCH_ROLE ? session.branchCode : branchCode);
   const plan = String(planName || '').trim();
   const sheet = getSpreadsheet_().getSheetByName(SALE_MASTER_SHEET_NAME);
   return getRowsAsObjects_(sheet)
     .filter(r => {
-      const code = String(r[MM_COL_BRANCH]).trim().toUpperCase();
+      const code = normalizeBranchCode_(r[MM_COL_BRANCH]);
       if (code !== SALE_SHARED_CODE && code !== target) return false;
       const targetPlan = String(r[SALE_COL_TARGET_PLAN] || '').trim();
       if (!plan || !targetPlan) return true; // 対象プラン未指定の絞り込み、またはこの行が全プラン共通
@@ -1402,7 +1411,7 @@ function apiListSales(token, branchCode, planName) {
 // targetPlanは省略可（省略・空欄＝全プラン共通）。branchCodeにALLを渡すと全支店共通のセールになる。
 function apiSaveSaleItem(token, branchCode, name, originalName, active, targetPlan) {
   const session = requireSession_(token);
-  if (String(branchCode || '').trim().toUpperCase() !== SALE_SHARED_CODE) assertBranchAccess_(session, branchCode);
+  if (normalizeBranchCode_(branchCode) !== SALE_SHARED_CODE) assertBranchAccess_(session, branchCode);
   else if (session.role !== JP_ROLE) throw new Error('全支店共通（ALL）のセール登録はJPロールのみ実行できます。');
   return saveMasterItem_(SALE_MASTER_SHEET_NAME, branchCode, name, originalName, active, [String(targetPlan || '')]);
 }
@@ -1410,18 +1419,18 @@ function apiSaveSaleItem(token, branchCode, name, originalName, active, targetPl
 // ★機能追加：メッセージの定型文。支店コードに ALL を入れた行は全員が使える共通テンプレート。
 function apiListPhrases(token, branchCode) {
   const session = requireSession_(token);
-  const target = session.role === BRANCH_ROLE ? session.branchCode : String(branchCode || '').trim().toUpperCase();
+  const target = normalizeBranchCode_(session.role === BRANCH_ROLE ? session.branchCode : branchCode);
   const sheet = getSpreadsheet_().getSheetByName(PHRASE_MASTER_SHEET_NAME);
   return getRowsAsObjects_(sheet)
     .filter(r => {
       if (!isActiveFlag_(r[PH_COL_ACTIVE])) return false;
-      const code = String(r[PH_COL_BRANCH]).trim().toUpperCase();
-      return code === PHRASE_SHARED_CODE || code === String(target).trim().toUpperCase();
+      const code = normalizeBranchCode_(r[PH_COL_BRANCH]);
+      return code === PHRASE_SHARED_CODE || code === target;
     })
     .map(r => ({
       name: r[PH_COL_NAME] || r[PH_COL_BODY],
       body: r[PH_COL_BODY] || r[PH_COL_NAME],
-      shared: String(r[PH_COL_BRANCH]).trim().toUpperCase() === PHRASE_SHARED_CODE
+      shared: normalizeBranchCode_(r[PH_COL_BRANCH]) === PHRASE_SHARED_CODE
     }));
 }
 
@@ -1431,20 +1440,20 @@ function apiListPhrases(token, branchCode) {
 // 支店コードに ALL を入れた行は全員が使える共通テンプレート（登録できるのはJPのみ）。
 function apiListPhrasesAdmin(token, branchCode) {
   const session = requireSession_(token);
-  const target = String(session.role === BRANCH_ROLE ? session.branchCode : (branchCode || '')).trim().toUpperCase();
+  const target = normalizeBranchCode_(session.role === BRANCH_ROLE ? session.branchCode : branchCode);
   if (session.role === SHOP_ROLE) throw new Error('この操作は店舗ロールでは実行できません。');
   const sheet = getSpreadsheet_().getSheetByName(PHRASE_MASTER_SHEET_NAME);
   return getRowsAsObjects_(sheet)
     .filter(r => {
-      const code = String(r[PH_COL_BRANCH]).trim().toUpperCase();
+      const code = normalizeBranchCode_(r[PH_COL_BRANCH]);
       return code === PHRASE_SHARED_CODE || code === target;
     })
     .map(r => ({
-      branchCode: String(r[PH_COL_BRANCH]).trim().toUpperCase(),
+      branchCode: normalizeBranchCode_(r[PH_COL_BRANCH]),
       name: r[PH_COL_NAME] || '',
       body: r[PH_COL_BODY] || '',
       active: isActiveFlag_(r[PH_COL_ACTIVE]),
-      shared: String(r[PH_COL_BRANCH]).trim().toUpperCase() === PHRASE_SHARED_CODE
+      shared: normalizeBranchCode_(r[PH_COL_BRANCH]) === PHRASE_SHARED_CODE
     }));
 }
 
@@ -1497,7 +1506,7 @@ function apiSaveGlossaryItem(token, name, originalName, active, en) {
 
 function apiSavePhraseItem(token, branchCode, name, originalName, active, body) {
   const session = requireSession_(token);
-  const code = String(branchCode || '').trim().toUpperCase();
+  const code = normalizeBranchCode_(branchCode);
   if (code === PHRASE_SHARED_CODE) {
     if (session.role !== JP_ROLE) throw new Error('全支店共通（ALL）の定型文はJPロールのみ登録できます。');
   } else {
@@ -1520,7 +1529,7 @@ function apiSavePhraseItem(token, branchCode, name, originalName, active, body) 
     if (lastRow > 1) {
       const values = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
       for (let i = 0; i < values.length; i++) {
-        if (String(values[i][idx(PH_COL_BRANCH)]).trim().toUpperCase() !== code) continue;
+        if (normalizeBranchCode_(values[i][idx(PH_COL_BRANCH)]) !== code) continue;
         if (String(values[i][idx(PH_COL_NAME)]).trim() !== matchName) continue;
         targetRow = i + 2;
         break;
@@ -1567,7 +1576,7 @@ function apiSaveOptionItem(token, branchCode, name, originalName, active) {
 function listMasterItems_(sheetName, branchCode) {
   const sheet = getSpreadsheet_().getSheetByName(sheetName);
   return getRowsAsObjects_(sheet)
-    .filter(r => String(r[MM_COL_BRANCH]).trim().toUpperCase() === String(branchCode).trim().toUpperCase())
+    .filter(r => sameBranchCode_(r[MM_COL_BRANCH], branchCode))
     .map(r => ({ name: r[MM_COL_NAME], active: isActiveFlag_(r[MM_COL_ACTIVE]) }));
 }
 
@@ -1588,7 +1597,7 @@ function saveMasterItem_(sheetName, branchCode, name, originalName, active, extr
       const values = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
       const matchName = (originalName || name);
       for (let i = 0; i < values.length; i++) {
-        if (String(values[i][0]).trim().toUpperCase() === code &&
+        if (normalizeBranchCode_(values[i][0]) === code &&
             String(values[i][1]) === String(matchName)) {
           targetRow = i + 2;
           break;
@@ -2032,6 +2041,85 @@ function rebuildUnreadFlags() {
 //   ・既に値が入っている行には絶対に触らない（上書きしない）
 //   ・店舗が一つに特定できない行も触らない（候補が複数／支店名が重複している場合など）
 //   ・何度実行しても結果は変わらない（直せるものだけ直し、直せないものは報告する）
+// ★不具合修正（項目106）：支店コード・店舗コードを入れる列を「書式なしテキスト」に固定する。
+// スプレッドシートのセルは既定で「自動」書式のため、'018' のような文字列を書き込むと
+// 数値18として保存され、先頭のゼロが落ちる。その結果、ログイン中のコード（018）と
+// 案件側に入った値（18）が食い違い、自分の案件が一覧に出てこない状態になっていた。
+const CODE_TEXT_COLUMNS_ = [
+  { sheet: BRANCH_MASTER_SHEET_NAME, columns: [BM_COL_CODE, BM_COL_PREFIX] },
+  { sheet: RESERVATION_SHEET_NAME, columns: [COL_BRANCH_CODE, COL_ORIGIN_SHOP] },
+  { sheet: ARCHIVE_SHEET_NAME, columns: [COL_BRANCH_CODE, COL_ORIGIN_SHOP] },
+  { sheet: HISTORY_SHEET_NAME, columns: [H_COL_BRANCH_CODE, H_COL_ORIGIN_SHOP] }
+];
+function forceTextFormatOnCodeColumns_() {
+  const ss = getSpreadsheet_();
+  CODE_TEXT_COLUMNS_.forEach(spec => {
+    const sheet = ss.getSheetByName(spec.sheet);
+    if (!sheet || sheet.getLastColumn() < 1) return;
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+    spec.columns.forEach(name => {
+      const idx = headers.indexOf(name);
+      if (idx === -1) return;
+      // 見出し行の下からシートの最終行まで（行が無ければ何もしない）
+      const rows = Math.max(sheet.getMaxRows() - 1, 0);
+      if (rows > 0) sheet.getRange(2, idx + 1, rows, 1).setNumberFormat('@');
+    });
+  });
+}
+
+// ★不具合修正（項目106）：既に数値として保存されてしまったコードを、支店マスタの表記へ書き戻す。
+// 例：支店マスタに「018」とある店舗の案件に「18」と入っている場合、「018」へ直す。
+// 支店マスタに無いコード・見分けが付かないコードは触らない（勝手に別の支店へ付け替えないため）。
+function repairBranchCodeDigits_() {
+  const ss = getSpreadsheet_();
+  // 「そろえた形 → 支店マスタでの表記」の対応表を作る。
+  // 同じそろえた形になる支店が複数ある場合（018 と 18 が別々に登録されている等）は、
+  // どちらに直すべきか決められないので対象から外す。
+  const canonical = {};
+  const ambiguous = {};
+  listBranchesRaw_().forEach(b => {
+    const raw = String(b.code === null || b.code === undefined ? '' : b.code).trim();
+    const norm = normalizeBranchCode_(b.code);
+    if (!raw || !norm) return;
+    if (canonical[norm] !== undefined && canonical[norm] !== raw) ambiguous[norm] = true;
+    else canonical[norm] = raw;
+  });
+
+  let repaired = 0;
+  CODE_TEXT_COLUMNS_.forEach(spec => {
+    if (spec.sheet === BRANCH_MASTER_SHEET_NAME) return; // 支店マスタ自身は書き換えない
+    const sheet = ss.getSheetByName(spec.sheet);
+    if (!sheet || sheet.getLastRow() < 2) return;
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+    spec.columns.forEach(name => {
+      const idx = headers.indexOf(name);
+      if (idx === -1) return;
+      const range = sheet.getRange(2, idx + 1, sheet.getLastRow() - 1, 1);
+      const values = range.getValues();
+      let changed = false;
+      for (let i = 0; i < values.length; i++) {
+        const cur = values[i][0];
+        const curText = String(cur === null || cur === undefined ? '' : cur).trim();
+        if (!curText) continue;
+        const norm = normalizeBranchCode_(curText);
+        const want = canonical[norm];
+        if (!want || ambiguous[norm] || want === curText) continue;
+        values[i][0] = want;
+        changed = true;
+        repaired++;
+      }
+      if (changed) range.setValues(values);
+    });
+  });
+  return { repaired: repaired };
+}
+
+function codeRepairMessage_(result) {
+  if (!result || !result.repaired) return '';
+  return `支店コード・店舗コードが数字として保存され先頭の0が落ちていた${result.repaired}件を、` +
+         '支店マスタの表記へ直しました。\n\n';
+}
+
 function repairOriginShop() {
   const ss = getSpreadsheet_();
 
@@ -2137,9 +2225,33 @@ function shopCodeFromLabel_(label, nameToCode) {
   return Object.prototype.hasOwnProperty.call(nameToCode, name) ? nameToCode[name] : '';
 }
 
+// ★不具合修正（項目106）：支店コード・店舗コードが数字だけ（例：018）の場合、
+// スプレッドシートのセルは値を数値として受け取るため、先頭のゼロが落ちて 18 になる。
+// その結果「ログイン中のコードは018／案件側に入っているのは18」となって一致せず、
+// 作った店舗自身の一覧にだけ案件が出てこない、という状態になっていた（実際の報告で判明）。
+// コードを見比べるときは、必ずこの関数を通して同じ形にそろえてから比べること。
+// （数字だけのコードは先頭のゼロを外した形にそろえる。018 も 18 も同じ支店として扱う。
+//   数字以外を含むコード（VIE・18A など）はこれまでどおり、そのままの文字として比べる）
+function normalizeBranchCode_(v) {
+  const s = String(v === null || v === undefined ? '' : v).trim().toUpperCase();
+  return /^\d+$/.test(s) ? String(Number(s)) : s;
+}
+function sameBranchCode_(a, b) {
+  const x = normalizeBranchCode_(a);
+  return !!x && x === normalizeBranchCode_(b);
+}
+
 function branchMetaMap_() {
+  // ★不具合修正（項目106）：元の表記（018）と、そろえた形（18）の両方をキーにして持つ。
+  // 引く側が「支店マスタの表記」で引くことも「シートに数値として保存された値」で引くことも
+  // あるため、どちらでも同じ支店に行き着くようにしておく。
   const map = {};
-  listBranchesRaw_().forEach(b => { map[b.code] = b; });
+  listBranchesRaw_().forEach(b => {
+    const raw = String(b.code === null || b.code === undefined ? '' : b.code).trim().toUpperCase();
+    const norm = normalizeBranchCode_(b.code);
+    if (raw) map[raw] = b;
+    if (norm) map[norm] = b;
+  });
   return map;
 }
 
@@ -2151,10 +2263,10 @@ function rowInScope_(session, scope, row) {
   // という気づきにくい不具合になる。
   if (session.role === SHOP_ROLE) {
     // ★機能追加：店舗ロールは自分が起票した案件だけが対象（一覧・検索・納品待ち等、共通で使う）
-    return String(row[COL_ORIGIN_SHOP] || '').trim().toUpperCase() === session.branchCode;
+    return sameBranchCode_(row[COL_ORIGIN_SHOP], session.branchCode);
   }
   if (session.role === BRANCH_ROLE) {
-    return String(row[COL_BRANCH_CODE] || '').trim().toUpperCase() === session.branchCode;
+    return sameBranchCode_(row[COL_BRANCH_CODE], session.branchCode);
   }
   // JPロール
   if (!scope || scope.showAll) return true;
@@ -2162,7 +2274,7 @@ function rowInScope_(session, scope, row) {
   const branches = scope.branches || [];
   if (teams.length === 0 && branches.length === 0) return true; // 何も選択されていない場合は全件表示
   const matchesTeam = teams.includes(row[COL_AREA]);
-  const matchesBranch = branches.map(b => String(b).trim().toUpperCase()).includes(String(row[COL_BRANCH_CODE] || '').trim().toUpperCase());
+  const matchesBranch = branches.some(b => sameBranchCode_(b, row[COL_BRANCH_CODE]));
   return matchesTeam || matchesBranch;
 }
 
@@ -2397,7 +2509,7 @@ function apiCheckStaffConflict(token, kanriNo, dateStr, staffNames) {
   [RESERVATION_SHEET_NAME, ARCHIVE_SHEET_NAME].forEach(sheetName => {
     getRowsAsObjects_(ss.getSheetByName(sheetName)).forEach(r => {
       if (String(r[COL_KANRI_NO]) === String(kanriNo)) return;              // 自分自身は除く
-      if (String(r[COL_BRANCH_CODE] || '').trim().toUpperCase() !== branchCode) return;  // 同一支店のみ
+      if (!sameBranchCode_(r[COL_BRANCH_CODE], branchCode)) return;  // 同一支店のみ
       if (r[COL_STATUS_JP] === 'CW' || r[COL_STATUS_BRANCH] === 'CW') return;
       if (toComparableDate_(r[COL_CONFIRMED_DATE]) !== target) return;
       staffCols.forEach(col => {
@@ -2718,8 +2830,7 @@ function assertRowVisible_(session, headers, rowData) {
   if (session.role === SHOP_ROLE) {
     throw new Error('この案件を閲覧・操作する権限がありません。');
   }
-  const branchOfRow = String(rowData[headers.indexOf(COL_BRANCH_CODE)] || '').trim().toUpperCase();
-  if (branchOfRow !== session.branchCode) {
+  if (!sameBranchCode_(rowData[headers.indexOf(COL_BRANCH_CODE)], session.branchCode)) {
     throw new Error('この案件を閲覧・操作する権限がありません。');
   }
 }
@@ -2728,8 +2839,7 @@ function assertRowVisible_(session, headers, rowData) {
 // 可視性チェック。「自分（自店舗）が起票した案件か」だけを見る。
 // ★不具合修正（重大）：上のassertRowVisible_と同じ理由で.trim()を追加。
 function assertShopOwnRow_(session, headers, rowData) {
-  const origin = String(rowData[headers.indexOf(COL_ORIGIN_SHOP)] || '').trim().toUpperCase();
-  if (session.role !== SHOP_ROLE || !origin || origin !== session.branchCode) {
+  if (session.role !== SHOP_ROLE || !sameBranchCode_(rowData[headers.indexOf(COL_ORIGIN_SHOP)], session.branchCode)) {
     throw new Error('この案件を閲覧・操作する権限がありません。');
   }
 }
@@ -3720,7 +3830,7 @@ function apiListShopUploadedDocuments(token, kanriNo) {
   else assertRowVisible_(session, headers, rowData);
 
   if (session.role === BRANCH_ROLE) {
-    const targetMeta = branchMetaMap_()[String(rowData[headers.indexOf(COL_BRANCH_CODE)] || '').trim().toUpperCase()] || {};
+    const targetMeta = branchMetaMap_()[normalizeBranchCode_(rowData[headers.indexOf(COL_BRANCH_CODE)])] || {};
     const originShop = String(rowData[headers.indexOf(COL_ORIGIN_SHOP)] || '').trim();
     if (!originShop || !targetMeta.shopUploadVisibleToBranch) {
       return { ok: true, visible: false, folders: [] };
@@ -3955,9 +4065,9 @@ function apiAddMemo(token, kanriNo, memoType, body) {
 // 同じ宛先を複数カテゴリに設定すれば「1件の委託先にまとめて依頼」にも対応できる。
 // 支店ごとに使う／使わないを選べる（支店マスタの「手配メール機能」列。既定は無効）。
 function getArrangementMeta_(branchCode) {
-  const code = String(branchCode || '').trim().toUpperCase();
+  const code = normalizeBranchCode_(branchCode);
   const sheet = getSpreadsheet_().getSheetByName(BRANCH_MASTER_SHEET_NAME);
-  const row = getRowsAsObjects_(sheet).find(r => String(r[BM_COL_CODE] || '').trim().toUpperCase() === code);
+  const row = getRowsAsObjects_(sheet).find(r => normalizeBranchCode_(r[BM_COL_CODE]) === code);
   const categoriesOf = (r) => ARRANGEMENT_CATEGORIES.map(c => ({
     key: c.key, label: c.label,
     name: r ? (r[arrNameCol_(c.label)] || '') : '',
@@ -3990,7 +4100,7 @@ function getArrangementLog_(kanriNo) {
 // 現地側でウェブアプリ上から編集できるのが基本だが、難しければ日本側からも設定できる。
 function apiGetArrangementSettings(token, branchCode) {
   const session = requireSession_(token);
-  const target = session.role === BRANCH_ROLE ? session.branchCode : String(branchCode || '').trim().toUpperCase();
+  const target = normalizeBranchCode_(session.role === BRANCH_ROLE ? session.branchCode : branchCode);
   assertBranchAccess_(session, target);
   const meta = getArrangementMeta_(target);
   return { ok: true, branchCode: target, enabled: meta.enabled, categories: meta.categories };
@@ -4003,7 +4113,7 @@ function apiSaveArrangementSettings(token, branchCode, settings) {
   // 明確に拒否する（apiSaveStaffItem等の他の書き込みAPIと同じ方針。誤って他支店を指定した操作を
   // こちらの支店へ静かにすり替えて保存してしまうのを防ぐため）。
   assertBranchAccess_(session, branchCode);
-  const target = String(branchCode || '').trim().toUpperCase();
+  const target = normalizeBranchCode_(branchCode);
   if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
     throw new Error('設定内容が正しく送信されませんでした。');
   }
@@ -4019,7 +4129,7 @@ function apiSaveArrangementSettings(token, branchCode, settings) {
     if (lastRow > 1) {
       const codes = sheet.getRange(2, codeColIdx + 1, lastRow - 1, 1).getValues();
       for (let i = 0; i < codes.length; i++) {
-        if (String(codes[i][0]).trim().toUpperCase() === target) { targetRow = i + 2; break; }
+        if (normalizeBranchCode_(codes[i][0]) === target) { targetRow = i + 2; break; }
       }
     }
     if (targetRow === -1) throw new Error('対象の支店が見つかりません。');
@@ -4152,7 +4262,7 @@ function seedHopeStatuses_(headers, newRowData) {
 // 万一の代替経路のためサーバー側にはそのまま残しているが、通常のUI操作からは呼ばれない。
 function apiCreateReservation(token, branchCode, rawText) {
   const session = requireSession_(token);
-  const targetBranch = session.role === JP_ROLE ? String(branchCode || '').trim().toUpperCase() : session.branchCode;
+  const targetBranch = normalizeBranchCode_(session.role === JP_ROLE ? branchCode : session.branchCode);
   if (!targetBranch) throw new Error('支店コードを指定してください。');
   // ★不具合修正：以前は支店コードの実在チェックが無かったため、存在しないコードでも案件を作れてしまい、
   // その案件は「どの支店からもログインして見られない・通知先メールも無い」迷子データになっていた。
@@ -4301,7 +4411,7 @@ function apiShopCreateRequest(token, payload) {
   // この依頼の基準支店として自動的に特定する（他の希望日が別支店のプランなら、下のgroups構築
   // ロジックで案件を自動分割する）。payload.branchCodeが明示的に渡された場合はそれを優先する
   // （外部からの呼び出し・テスト等との後方互換のため）。
-  let branchCode = String(payload.branchCode || '').trim().toUpperCase();
+  let branchCode = normalizeBranchCode_(payload.branchCode);
   if (!branchCode) {
     if (!hopePlans[0]) throw new Error('希望日（第一希望）のプランを選択してください。');
     branchCode = planOwnerMap[hopePlans[0]];
@@ -4583,7 +4693,7 @@ function nextKanriNo_(branchCode) {
     const kanriColIdx = headers.indexOf(COL_KANRI_NO);
     const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
     values.forEach(row => {
-      if (String(row[branchColIdx] || '').trim().toUpperCase() !== branchCode) return;
+      if (!sameBranchCode_(row[branchColIdx], branchCode)) return;
       const m = String(row[kanriColIdx]).match(/-(\d+)$/);
       if (m) max = Math.max(max, parseInt(m[1], 10));
     });
@@ -4603,9 +4713,9 @@ function readKanriLedger_(branchCode) {
   const sheet = ensureSheetWithHeaders_(getSpreadsheet_(), KANRI_LEDGER_SHEET_NAME, KANRI_LEDGER_HEADERS);
   if (sheet.getLastRow() < 2) return 0;
   const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues();
-  const code = String(branchCode || '').trim().toUpperCase();
+  const code = normalizeBranchCode_(branchCode);
   for (let i = 0; i < values.length; i++) {
-    if (String(values[i][0] || '').trim().toUpperCase() !== code) continue;
+    if (normalizeBranchCode_(values[i][0]) !== code) continue;
     const n = parseInt(String(values[i][1] || '0').replace(/[^0-9]/g, ''), 10);
     return isNaN(n) ? 0 : n;
   }
@@ -4615,12 +4725,12 @@ function readKanriLedger_(branchCode) {
 // 採番台帳へ、その支店で発行した番号を記録する（既存の記録より小さい値では上書きしない）
 function writeKanriLedger_(branchCode, issuedNumber) {
   const sheet = ensureSheetWithHeaders_(getSpreadsheet_(), KANRI_LEDGER_SHEET_NAME, KANRI_LEDGER_HEADERS);
-  const code = String(branchCode || '').trim().toUpperCase();
+  const code = normalizeBranchCode_(branchCode);
   const lastRow = sheet.getLastRow();
   if (lastRow >= 2) {
     const values = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
     for (let i = 0; i < values.length; i++) {
-      if (String(values[i][0] || '').trim().toUpperCase() !== code) continue;
+      if (normalizeBranchCode_(values[i][0]) !== code) continue;
       const current = parseInt(String(values[i][1] || '0').replace(/[^0-9]/g, ''), 10) || 0;
       if (issuedNumber > current) {
         sheet.getRange(i + 2, 2).setValue(issuedNumber);
@@ -4710,9 +4820,7 @@ function apiToggleHistoryCheck(token, historyId, checked) {
     // 支店ロールの場合は、その履歴が自支店の案件のものかを必ず確認する。
     if (session.role === BRANCH_ROLE) {
       const branchColIdx = headers.indexOf(H_COL_BRANCH_CODE);
-      const rowBranch = branchColIdx === -1
-        ? '' : String(values[targetIdx][branchColIdx]).trim().toUpperCase();
-      if (rowBranch !== session.branchCode) {
+      if (branchColIdx !== -1 && !sameBranchCode_(values[targetIdx][branchColIdx], session.branchCode)) {
         throw new Error('この履歴を操作する権限がありません。');
       }
     }
@@ -4797,9 +4905,7 @@ function apiDeleteHistoryMessage(token, historyId) {
     }
     if (session.role === BRANCH_ROLE) {
       const branchColIdx = headers.indexOf(H_COL_BRANCH_CODE);
-      const rowBranch = branchColIdx === -1
-        ? '' : String(values[targetIdx][branchColIdx]).trim().toUpperCase();
-      if (rowBranch !== session.branchCode) {
+      if (branchColIdx !== -1 && !sameBranchCode_(values[targetIdx][branchColIdx], session.branchCode)) {
         throw new Error('この履歴を操作する権限がありません。');
       }
     }
@@ -5316,7 +5422,7 @@ function apiTranslateBatch(token, texts) {
 // ★機能追加：起票元店舗コードから通知先メールを引く（支店マスタの ロール=SHOP の行）
 function getShopEmail_(shopCode) {
   if (!shopCode) return '';
-  const meta = branchMetaMap_()[String(shopCode || '').trim().toUpperCase()];
+  const meta = branchMetaMap_()[normalizeBranchCode_(shopCode)];
   return meta ? meta.email : '';
 }
 
@@ -5413,7 +5519,7 @@ function blackoutDateKey_(value) {
 
 // その支店の撮影不可日を返す（期間は開始日〜終了日。終了日が空欄なら1日だけ）
 function listBlackoutRanges_(branchCode) {
-  const code = String(branchCode || '').trim().toUpperCase();
+  const code = normalizeBranchCode_(branchCode);
   const sheet = ensureSheetWithHeaders_(getSpreadsheet_(), BLACKOUT_SHEET_NAME, BLACKOUT_HEADERS);
   if (sheet.getLastRow() < 2) return [];
   return sheet.getRange(2, 1, sheet.getLastRow() - 1, BLACKOUT_HEADERS.length).getValues()
@@ -5441,7 +5547,7 @@ function findBlackoutForDate_(branchCode, dateValue) {
 // 撮影不可日の一覧。店舗も見られる（依頼を出す前に気づくためのものなので、隠す意味が無い）。
 function apiListBlackoutDates(token, branchCode) {
   const session = requireSession_(token);
-  const target = String(session.role === BRANCH_ROLE ? session.branchCode : (branchCode || '')).trim().toUpperCase();
+  const target = normalizeBranchCode_(session.role === BRANCH_ROLE ? session.branchCode : branchCode);
   if (!target) throw new Error('支店を指定してください。');
   return {
     ok: true,
@@ -5458,7 +5564,7 @@ function apiSaveBlackoutDate(token, branchCode, startDate, endDate, reason, orig
   const session = requireSession_(token);
   if (session.role === SHOP_ROLE) throw new Error('撮影不可日を登録できるのは現地支店と手配課だけです。');
   assertBranchAccess_(session, branchCode);
-  const code = String(branchCode || '').trim().toUpperCase();
+  const code = normalizeBranchCode_(branchCode);
   const start = blackoutDateKey_(startDate);
   if (!start) throw new Error('開始日を入力してください。');
   const end = blackoutDateKey_(endDate) || start;
@@ -5485,7 +5591,7 @@ function apiDeleteBlackoutDate(token, branchCode, startDate) {
   const session = requireSession_(token);
   if (session.role === SHOP_ROLE) throw new Error('撮影不可日を削除できるのは現地支店と手配課だけです。');
   assertBranchAccess_(session, branchCode);
-  const code = String(branchCode || '').trim().toUpperCase();
+  const code = normalizeBranchCode_(branchCode);
   const key = blackoutDateKey_(startDate);
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
@@ -5923,7 +6029,7 @@ function planDeliveryDaysMap_() {
   getRowsAsObjects_(sheet).forEach(r => {
     const days = parseIntOrNull_(r[MM_COL_PLAN_DELIVERY_DAYS]);
     if (days === null) return;
-    const code = String(r[MM_COL_BRANCH]).trim().toUpperCase();
+    const code = normalizeBranchCode_(r[MM_COL_BRANCH]);
     const name = r[MM_COL_NAME];
     if (!name) return;
     map[`${code}\t${name}`] = days;

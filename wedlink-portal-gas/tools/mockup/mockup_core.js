@@ -96,6 +96,8 @@ function buildScripts({ codeGs, javascriptHtml, apiNames }) {
       return this;
     }
     setBackground() { return this; } setFontColor() { return this; } setFontWeight() { return this; }
+    // ★項目106：コードの列を「書式なしテキスト」に固定する処理で使う（見た目の書式は再現しない）
+    setNumberFormat() { return this; }
   }
 
   class Sheet {
@@ -124,7 +126,11 @@ function buildScripts({ codeGs, javascriptHtml, apiNames }) {
     getRange(r, c, nr, nc) { return new Range(this, r, c, nr, nc); }
     appendRow(arr) { const r = this.getLastRow() + 1; arr.forEach((v, i) => this._set(r, i + 1, v)); }
     deleteRow(r) { this.data.splice(r - 1, 1); }
+    // ★項目101：古い過去案件の退避で、余った末尾の行をまとめて消すのに使う
+    deleteRows(r, howMany) { this.data.splice(r - 1, Math.max(0, howMany || 0)); }
     setFrozenRows() {}
+    // ★項目106：シートの行数（書式の設定範囲を決めるのに使う）
+    getMaxRows() { return Math.max(this.getLastRow(), this.data.length, 1); }
     getName() { return this.name; }
   }
 

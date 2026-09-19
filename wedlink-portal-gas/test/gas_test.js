@@ -5325,6 +5325,104 @@ section('87. 【機能追加】店舗の一覧が0件のとき理由の手がか
         err !== null && err.includes('起票元店舗'), String(err));
 }
 
+
+section('88. 【不具合修正】数字だけの支店コード（018）で先頭の0が落ちて一致しなくなる（項目106）');
+{
+  // 実際の報告：ログイン中の店舗コードは「018」なのに、予約一覧には「18」が入っていて
+  // 自分の案件が一覧に出てこない。スプレッドシートのセルが '018' を数値18として
+  // 受け取るために起きる。
+  const ctx = featureFixture();
+  addBranchRow(ctx, { '支店コード': '018', '支店名': '新宿店', 'ロール': 'SHOP',
+                      'ログインパスコード': 'sp', '通知先メール': 'shop018@example.com', '有効': true });
+  const jpToken = ctx.apiLogin('KANTO', 'pw').session.token;
+  const shopLogin = ctx.apiLogin('018', 'sp');
+  check('先頭に0が付いた店舗コードでログインできる', shopLogin.ok === true, JSON.stringify(shopLogin));
+  const shopToken = shopLogin.session.token;
+  check('ログイン中の店舗コードは支店マスタの表記のまま（018）',
+        shopLogin.session.branchCode === '018', String(shopLogin.session.branchCode));
+
+  // 数値18として保存されてしまった案件（＝報告された状態）を用意する
+  addCase(ctx, '予約一覧', {
+    '支店コード': 'VIE', '管理番号': 'VIE-901', '管轄': '関東', 'STS JP': 'RQ',
+    '起票元店舗': 18, '新郎名（ローマ字）': 'Zero', '新婦名（ローマ字）': 'Lost'
+  });
+  const dash = ctx.apiGetDashboard(shopToken);
+  check('数値18として保存されていても、018でログインした店舗の一覧に出る',
+        dash.reservations.some(r => r.kanriNo === 'VIE-901'),
+        dash.reservations.map(r => r.kanriNo).join(','));
+  check('詳細も開ける（権限チェックも同じ見方で通る）', (() => {
+    try { ctx.apiGetReservationDetail(shopToken, 'VIE-901'); return true; } catch (e) { return false; }
+  })());
+
+  // 逆向き（マスタが18・案件が018）でも一致する
+  const ctxB = featureFixture();
+  addBranchRow(ctxB, { '支店コード': 18, '支店名': '新宿店', 'ロール': 'SHOP',
+                       'ログインパスコード': 'sp', '通知先メール': 'shop18@example.com', '有効': true });
+  const shopB = ctxB.apiLogin('018', 'sp');
+  check('支店マスタ側が数値18でも、018と入力してログインできる', shopB.ok === true, JSON.stringify(shopB));
+  addCase(ctxB, '予約一覧', {
+    '支店コード': 'VIE', '管理番号': 'VIE-902', '管轄': '関東', 'STS JP': 'RQ',
+    '起票元店舗': '018', '新郎名（ローマ字）': 'Rev', '新婦名（ローマ字）': 'Case'
+  });
+  check('逆向き（マスタが18・案件が018）でも一覧に出る',
+        ctxB.apiGetDashboard(shopB.session.token).reservations.some(r => r.kanriNo === 'VIE-902'));
+
+  // 現地支店側（支店コードが数字だけの支店）でも同じように直っている
+  const ctxC = featureFixture();
+  addBranchRow(ctxC, { '支店コード': '007', '支店名': '数字支店', 'ロール': 'BRANCH',
+                       'ログインパスコード': 'bp', '通知先メール': 'b007@example.com',
+                       '案件番号プレフィックス': 'B7', '有効': true });
+  const branchC = ctxC.apiLogin('007', 'bp');
+  addCase(ctxC, '予約一覧', {
+    '支店コード': 7, '管理番号': 'B7-001', '管轄': '関東', 'STS JP': 'RQ',
+    '新郎名（ローマ字）': 'Num', '新婦名（ローマ字）': 'Branch'
+  });
+  check('現地支店も、数値7として保存された案件が自分の一覧に出る',
+        ctxC.apiGetDashboard(branchC.session.token).reservations.some(r => r.kanriNo === 'B7-001'));
+
+  // 数字を含まないコードは、これまでどおり別物として扱う（取り違えない）
+  check('別の支店の案件は出ない（そろえすぎて他店の案件を拾わない）',
+        !ctx.apiGetDashboard(shopToken).reservations.some(r => r.kanriNo === 'VIE-001'));
+  const ctxD = featureFixture();
+  addBranchRow(ctxD, { '支店コード': '18A', '支店名': '別店', 'ロール': 'SHOP',
+                       'ログインパスコード': 'dp', '通知先メール': 'd@example.com', '有効': true });
+  const shopD = ctxD.apiLogin('18A', 'dp');
+  addCase(ctxD, '予約一覧', {
+    '支店コード': 'VIE', '管理番号': 'VIE-903', '管轄': '関東', 'STS JP': 'RQ',
+    '起票元店舗': '18', '新郎名（ローマ字）': 'Other', '新婦名（ローマ字）': 'Shop'
+  });
+  check('数字以外を含むコード（18A）は、18とは別の店舗として扱う',
+        ctxD.apiGetDashboard(shopD.session.token).reservations.length === 0,
+        JSON.stringify(ctxD.apiGetDashboard(shopD.session.token).reservations.map(r => r.kanriNo)));
+
+  // --- 既存データの直し（支店マスタの表記へ書き戻す） ---
+  const repaired = ctx.repairBranchCodeDigits_();
+  check('数値として入っていたコードを支店マスタの表記へ直す', repaired.repaired >= 1, JSON.stringify(repaired));
+  const sheet = ctx.__ss.getSheetByName('予約一覧');
+  const head = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const rowVals = sheet.getRange(2, 1, sheet.getLastRow() - 1, head.length).getValues()
+    .find(r => String(r[head.indexOf('管理番号')]) === 'VIE-901');
+  check('直したあとはシート上も「018」になっている',
+        String(rowVals[head.indexOf('起票元店舗')]) === '018',
+        String(rowVals[head.indexOf('起票元店舗')]));
+  const again = ctx.repairBranchCodeDigits_();
+  check('もう一度実行しても何も動かない（何度でも安全に実行できる）', again.repaired === 0, JSON.stringify(again));
+
+  // --- これから作る案件は、先頭の0が落ちない形で保存される ---
+  const ctxE = featureFixture();
+  addBranchRow(ctxE, { '支店コード': '018', '支店名': '新宿店', 'ロール': 'SHOP',
+                       'ログインパスコード': 'sp', '通知先メール': 'shop018@example.com', '有効': true });
+  const shopE = ctxE.apiLogin('018', 'sp').session.token;
+  const madeE = ctxE.apiShopCreateRequest(shopE, {
+    branchCode: 'VIE', team: '関東', challengeNo: 'ZEROPAD0001',
+    groomLastName: 'NEW', groomName: 'TARO', brideLastName: 'NEW', brideName: 'HANAKO',
+    hope1: '2027-12-24'
+  });
+  check('新しく作った依頼に「一覧に出ない」という注意は付かない', !madeE.originWarning, String(madeE.originWarning));
+  check('新しく作った依頼はその場で店舗の一覧に出る',
+        ctxE.apiGetDashboard(shopE).reservations.some(r => r.kanriNo === madeE.kanriNo));
+}
+
 // ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
 process.exit(fail === 0 ? 0 : 1);
