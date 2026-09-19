@@ -191,6 +191,21 @@
   }
 
   function $(id) { return document.getElementById(id); }
+  // ★不具合修正（項目108）：案件詳細の画面は、テンプレート文字列（巨大なHTML）を組み立てて
+  // 一度にinnerHTMLへ差し込んだあと、id指定でボタン等を取り出してイベントを配線する作りになっている。
+  // これまでは`$('btn-commit').addEventListener(...)`のように直接呼び出す箇所が複数あり、
+  // 何らかの理由（不完全な再デプロイ・ブラウザの一時的な不整合など）でその要素が
+  // 見つからない状態になると、その1行で例外が発生して以降の配線が一切行われないまま
+  // 「読み込みに失敗しました（Cannot read properties of null (reading 'addEventListener')）」
+  // という分かりにくいエラーで画面全体が止まってしまっていた。
+  // 以後はこのヘルパーを通す：要素が無ければコンソールに警告を出すだけに留め、
+  // その1つのボタンが反応しなくなるだけで、それ以外の項目（メッセージの送信・保存等）は
+  // 引き続き使えるようにする。
+  function on_(id, event, handler) {
+    const el = $(id);
+    if (!el) { console.warn(`[on_] 要素が見つかりません: #${id}（${event}のイベント登録をスキップしました）`); return; }
+    el.addEventListener(event, handler);
+  }
 
   // ★機能追加：画面全体を覆うロード表示（新規予約の送信中など）
   function showLoadingOverlay_(text) {
@@ -1449,9 +1464,9 @@
 
     wirePendingInputs(c);
     wireCompanionToggle_(c);
-    $('btn-msg-only').addEventListener('click', sendMessageOnly);
-    $('btn-commit').addEventListener('click', commitChangesWithMessage);
-    $('btn-save-quiet').addEventListener('click', saveQuiet);
+    on_('btn-msg-only', 'click', sendMessageOnly);
+    on_('btn-commit', 'click', commitChangesWithMessage);
+    on_('btn-save-quiet', 'click', saveQuiet);
 
     // ★要件変更：案件全体のプラン単独欄を廃止したため、ここでプランを選び直すことはできない
     // （希望日の欄から選ぶ）。撮影希望場所・セール名は画面を開いた時点のプラン名（d['プラン名']）
@@ -1471,7 +1486,7 @@
 
     // ★要件：手配内容をPDFにできるように
     renderPrintArrangement(d);
-    $('print-arrangement-btn').addEventListener('click', () => {
+    on_('print-arrangement-btn', 'click', () => {
       if (typeof window.print === 'function') window.print();
     });
 
@@ -1512,7 +1527,7 @@
     // ★要件：プラン・オプションのSTSのすぐ近くに、現地支店へ急ぎの回答を依頼するボタンを置く
     // （急ぎで回答が欲しいことを伝えるためのボタン。固定文面のメッセージを、通常のメッセージ機能
     // と同じ経路でその場で送信する）
-    $('shop-push-btn').addEventListener('click', async () => {
+    on_('shop-push-btn', 'click', async () => {
       try {
         const pushRes = await gsRun('apiCommitChanges', session.token, currentKanri, {}, SHOP_PUSH_MESSAGE_TEXT, currentMsgRecipient());
         showToast('現地支店へ急ぎの回答を依頼しました');
@@ -1521,7 +1536,7 @@
       } catch (e) { handleAuthError(e); }
     });
 
-    $('shop-upload-submit').addEventListener('click', submitShopUpload);
+    on_('shop-upload-submit', 'click', submitShopUpload);
     // ★要件：個別モード／ZIPモードの切替。チェックした種別だけファイル選択欄を表示する（個別モード）
     c.querySelectorAll('input[name="shop-upload-mode"]').forEach(r => {
       r.addEventListener('change', () => {
@@ -2843,12 +2858,12 @@
 
     wirePendingInputs(c);
     wireCompanionToggle_(c);
-    $('btn-msg-only').addEventListener('click', sendMessageOnly);
-    $('btn-commit').addEventListener('click', commitChangesWithMessage);
-    $('btn-save-quiet').addEventListener('click', saveQuiet);
+    on_('btn-msg-only', 'click', sendMessageOnly);
+    on_('btn-commit', 'click', commitChangesWithMessage);
+    on_('btn-save-quiet', 'click', saveQuiet);
     // ★要件：手配内容をPDFにできるように
     renderPrintArrangement(d);
-    $('print-arrangement-btn').addEventListener('click', () => {
+    on_('print-arrangement-btn', 'click', () => {
       if (typeof window.print === 'function') window.print();
     });
     // ★機能：予約内容・現地記入欄タブ下部の複製ボタン（メッセージタブへ戻らず確定できるように）
@@ -2863,12 +2878,12 @@
     c.querySelectorAll('[data-internal-value]').forEach(el => {
       el.addEventListener('change', () => setInternalValue(el.dataset.internalValue, el.value));
     });
-    $('drive-url-submit').addEventListener('click', submitDriveUrl);
+    on_('drive-url-submit', 'click', submitDriveUrl);
     // ★要件：現地支店に「撮影データ納品」という項目を作り、URLまたはファイルアップロードで
     // 登録・取消できるようにする（現地支店ロールのみ操作可。日本側は閲覧のみ）
-    if ($('delivery-data-url-submit')) $('delivery-data-url-submit').addEventListener('click', submitDeliveryDataUrl);
-    if ($('delivery-data-url-clear')) $('delivery-data-url-clear').addEventListener('click', clearDeliveryDataUrl);
-    if ($('delivery-data-upload-submit')) $('delivery-data-upload-submit').addEventListener('click', submitDeliveryDataUpload);
+    on_('delivery-data-url-submit', 'click', submitDeliveryDataUrl);
+    on_('delivery-data-url-clear', 'click', clearDeliveryDataUrl);
+    on_('delivery-data-upload-submit', 'click', submitDeliveryDataUpload);
     c.querySelectorAll('input[data-hid]').forEach(el => {
       el.addEventListener('change', () => toggleHistoryCheck(el.dataset.hid, el.checked));
     });

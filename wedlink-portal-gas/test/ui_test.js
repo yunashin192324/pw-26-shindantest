@@ -3940,6 +3940,76 @@ function paneHidden(document, key) {
             .some(el => el.textContent.includes(made63.kanriNo)));
   }
 
+  section('U64. 【不具合修正】案件詳細の配線で要素が1つ見つからなくても画面全体が壊れない（項目108）');
+  {
+    // 実際の報告：新宿店から新規予約→ローマ支店側で一覧から開いたら
+    // 「読み込みに失敗しました。詳細: Cannot read properties of null (reading 'addEventListener')」
+    // というエラーで画面全体が止まった。原因は特定できなかったが、案件詳細の配線
+    // （$('...').addEventListener(...)を直接呼ぶ箇所）のどれか1つが対象を見つけられないと、
+    // その1行の例外で残り全部の配線が止まり、画面全体がエラー表示に変わる作りだった。
+    // on_ ヘルパーに統一し、1つ見つからなくても他は生きたまま・警告だけ出す形に直した。
+    const ctx64 = makeServer();
+    const jp64 = ctx64.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    const shop64 = ctx64.apiLogin('SHOP1', 'CHANGE-ME-SHOP1').session.token;
+    // 報告と同じ状況を再現する：日本の店舗が、同意書必須のローマ支店へ新規依頼する
+    const made64 = ctx64.apiShopCreateRequest(shop64, {
+      branchCode: 'ROW', team: '関東', challengeNo: 'ONHELPER001',
+      groomLastName: 'ONHELPER', groomName: 'TARO', brideLastName: 'ONHELPER', brideName: 'HANAKO',
+      hope1: '2027-12-24'
+    });
+
+    const dom64 = await openApp(ctx64);
+    const doc64 = dom64.window.document;
+
+    check('on_ ヘルパーがグローバルに公開されている（テストから直接呼べる）',
+          typeof dom64.window.on_ === 'function');
+
+    // --- ① on_ 単体：対象が存在しなくても例外を投げず、コンソールに警告するだけ ---
+    const warnCalls = [];
+    const originalWarn = dom64.window.console.warn;
+    dom64.window.console.warn = (...args) => { warnCalls.push(args.join(' ')); };
+    let threw64 = null;
+    try { dom64.window.on_('this-id-does-not-exist-anywhere', 'click', () => {}); }
+    catch (e) { threw64 = e; }
+    check('存在しないidを渡しても例外を投げない', threw64 === null, String(threw64));
+    check('その代わりコンソールに警告を出す（どのidか分かるように）',
+          warnCalls.some(w => w.includes('this-id-does-not-exist-anywhere')), JSON.stringify(warnCalls));
+    dom64.window.console.warn = originalWarn;
+
+    // --- ② 実際の案件詳細を、現地支店（ROW）でログインして開く（報告と同じ流れ） ---
+    await login(dom64, 'ROW', 'CHANGE-ME-ROW');
+    await settle(); await settle();
+    const row = [...doc64.querySelectorAll('#reservation-table-body tr, #reservation-list .res-card')]
+      .find(el => el.textContent.includes(made64.kanriNo));
+    check('新宿店から作った依頼がローマ支店の一覧に出る', !!row, made64.kanriNo);
+    row.click();
+    await settle(); await settle();
+    check('通常どおり開けば読み込みエラーは出ない（ふだんの動作の確認）',
+          !doc64.getElementById('detail-content').textContent.includes('読み込みに失敗しました'));
+    check('確定・保存のボタンが配線されている', !!doc64.getElementById('btn-commit'));
+
+    // --- ③ 本番相当の再現：配線対象の要素が1つ欠けた状態で開いても、画面全体は壊れない ---
+    // document.getElementById を横取りして、特定のidだけ「見つからない」状態を作り出す
+    // （デプロイの不整合やブラウザの一時的な不具合で、本来あるはずの要素が見つからない状況の再現）。
+    const originalGetById = doc64.getElementById.bind(doc64);
+    doc64.getElementById = (id) => (id === 'print-arrangement-btn' ? null : originalGetById(id));
+    doc64.getElementById('nav-dashboard').click();
+    await settle();
+    const row2 = [...doc64.querySelectorAll('#reservation-table-body tr, #reservation-list .res-card')]
+      .find(el => el.textContent.includes(made64.kanriNo));
+    row2.click();
+    await settle(); await settle();
+    doc64.getElementById = originalGetById; // 以降の検証は元に戻してから行う
+
+    check('配線対象が1つ見つからなくても、画面全体はエラー表示にならない',
+          !doc64.getElementById('detail-content').textContent.includes('読み込みに失敗しました'),
+          doc64.getElementById('detail-content').textContent.replace(/\s+/g, ' ').slice(0, 200));
+    check('見つからなかったボタン以外（変更（＋メッセージ）を決定して送信）は生きている',
+          !!doc64.getElementById('btn-commit'));
+    check('見つからなかったボタン以外（保存のみ）も生きている',
+          !!doc64.getElementById('btn-save-quiet'));
+  }
+
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error('テストが異常終了しました:', e); process.exit(1); });
