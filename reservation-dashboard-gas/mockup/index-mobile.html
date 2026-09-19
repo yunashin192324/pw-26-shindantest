@@ -1,0 +1,1316 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>予約データ分析ダッシュボード（スマホ版モックアップ）</title>
+<style>
+/* ============================================================================
+   スマホでの閲覧・操作を想定したUI/UXモックアップ（単体HTML・外部CDN不使用）。
+   PC版（index.html）と業務ロジック・サンプルデータは同一で、画面構成のみ
+   スマホ向け（1カラム・カード表示・下部タブバー・折りたたみフィルタ）にしています。
+   ============================================================================ */
+:root{
+  --blue-50:#eff6ff; --blue-100:#dbeafe; --blue-200:#bfdbfe; --blue-300:#93c5fd;
+  --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af;
+  --amber-50:#fffbeb; --amber-300:#fcd34d; --amber-500:#f59e0b; --amber-600:#d97706; --amber-700:#b45309;
+  --emerald-500:#10b981; --emerald-600:#059669; --emerald-700:#047857;
+  --indigo-300:#a5b4fc; --indigo-600:#4f46e5; --purple-700:#6d28d9;
+  --red-50:#fef2f2; --red-200:#fecaca; --red-600:#dc2626; --red-700:#b91c1c;
+  --slate-50:#f8fafc; --slate-100:#f1f5f9; --slate-200:#e2e8f0; --slate-300:#cbd5e1;
+  --slate-400:#94a3b8; --slate-500:#64748b; --slate-600:#475569; --slate-700:#334155; --slate-800:#1e293b;
+  color-scheme: light;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html{-webkit-text-size-adjust:100%;}
+body{
+  margin:0; background:var(--slate-100); color:var(--slate-800);
+  font-family:"Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo",sans-serif;
+  font-size:14px; padding-bottom:76px; /* 下部タブバー分の余白 */
+}
+button{font-family:inherit; cursor:pointer;}
+a{color:inherit;}
+::-webkit-scrollbar{height:6px; width:6px;}
+::-webkit-scrollbar-thumb{background:var(--blue-300); border-radius:4px;}
+
+/* ---- ヘッダー ---- */
+header{position:sticky; top:0; z-index:40; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.06); border-bottom:1px solid var(--slate-200);}
+.header-inner{padding:10px 14px;}
+.header-top{display:flex; align-items:center; justify-content:space-between; gap:8px;}
+h1{font-size:15px; font-weight:700; color:var(--blue-800); margin:0; display:flex; align-items:center; gap:6px; line-height:1.3;}
+h1 .tag{display:block; font-size:9px; font-weight:600; color:var(--slate-400); background:var(--slate-100); border-radius:5px; padding:1px 6px; margin-top:3px; width:fit-content;}
+.icon-btn{background:#fff; border:1px solid var(--blue-200); color:var(--blue-700); border-radius:8px; width:36px; height:36px; font-size:15px; display:flex; align-items:center; justify-content:center; flex:none;}
+.icon-btn:active{background:var(--blue-50);}
+.role-row{display:flex; align-items:center; gap:8px; margin-top:8px;}
+.role-row select{flex:1; font-size:12px; padding:8px; border-radius:8px; border:1px solid var(--slate-300); background:#fff;}
+.role-badge{font-size:10px; font-weight:700; color:var(--blue-700); background:var(--blue-50); border:1px solid var(--blue-200); border-radius:7px; padding:6px 8px; white-space:nowrap;}
+.last-imported{font-size:10px; color:var(--slate-400); margin-top:6px;}
+
+/* ---- KPI（横スクロールカルーセル） ---- */
+.kpi-scroll{display:flex; gap:8px; overflow-x:auto; padding:10px 14px 2px; scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch;}
+.kpi-card{flex:0 0 128px; scroll-snap-align:start; border-radius:12px; padding:10px; color:#fff; box-shadow:0 1px 3px rgba(0,0,0,.12); position:relative;}
+.kpi-card p.label{font-size:9.5px; opacity:.9; margin:0 0 3px; line-height:1.2;}
+.kpi-card p.value{font-size:17px; font-weight:700; margin:0;}
+.kpi-blue{background:linear-gradient(135deg,var(--blue-600),var(--blue-700));}
+.kpi-emerald{background:linear-gradient(135deg,var(--emerald-500),var(--emerald-700));}
+.kpi-amber{background:linear-gradient(135deg,var(--amber-500),var(--amber-600));}
+.kpi-slate{background:linear-gradient(135deg,var(--slate-600),var(--slate-700));}
+.kpi-main{background:linear-gradient(135deg,var(--indigo-600),var(--purple-700)); box-shadow:0 0 0 2px var(--indigo-300);}
+.kpi-main .badge{position:absolute; top:5px; right:6px; font-size:7.5px; font-weight:700; background:rgba(255,255,255,.25); border-radius:4px; padding:1px 4px;}
+.kpi-main p.value{font-size:19px;}
+
+main{padding:10px 14px 8px;}
+.card{background:#fff; border-radius:12px; box-shadow:0 1px 3px rgba(0,0,0,.08); padding:14px; margin-bottom:12px;}
+.card h2{font-size:13.5px; font-weight:700; color:var(--slate-700); margin:0 0 10px; display:flex; align-items:center; gap:6px;}
+.card h2.sm{font-size:12.5px;}
+.muted{color:var(--slate-400); font-size:11px; line-height:1.5;}
+
+/* ---- 案内バー ---- */
+.banner{border-radius:12px; padding:14px; margin-bottom:12px;}
+.banner-red{background:var(--red-50); border:1px solid var(--red-200);}
+.banner p.title{font-weight:700; margin:0 0 4px; font-size:13px;}
+.banner-red p.title{color:var(--red-700);}
+.banner p.desc{font-size:12px; margin:0; line-height:1.5;}
+.banner-red p.desc{color:var(--red-700);}
+
+/* ---- ボタン ---- */
+.btn-primary, .btn-emerald, .btn-red, .btn-ghost, .btn-amber{
+  border:none; border-radius:9px; padding:11px 14px; font-size:13px; font-weight:600; min-height:42px;
+}
+.btn-primary{background:var(--blue-700); color:#fff; width:100%;}
+.btn-emerald{background:var(--emerald-600); color:#fff;}
+.btn-red{background:var(--red-600); color:#fff;}
+.btn-ghost{background:#fff; border:1px solid var(--slate-300); color:var(--slate-600);}
+.btn-block{width:100%; display:block; text-align:center;}
+.btn-row{display:flex; gap:8px;}
+.btn-row > *{flex:1;}
+button:disabled{opacity:.4;}
+
+/* ---- フィルタ（折りたたみ） ---- */
+.filter-toggle{width:100%; display:flex; align-items:center; justify-content:space-between; background:#fff; border:1px solid var(--slate-200); border-radius:10px; padding:11px 14px; font-size:13px; font-weight:600; color:var(--slate-700); margin-bottom:8px;}
+.filter-toggle .chev{transition:transform .15s ease; color:var(--slate-400);}
+.filter-toggle.open .chev{transform:rotate(180deg);}
+.filter-panel{display:none; background:#fff; border:1px solid var(--slate-200); border-top:none; border-radius:0 0 10px 10px; margin:-12px 0 12px; padding:12px 14px 14px;}
+.filter-panel.open{display:block;}
+.filter-field{margin-bottom:10px;}
+.filter-field label{display:block; font-size:11px; font-weight:600; color:var(--slate-500); margin-bottom:4px;}
+select, input[type=date], input[type=text], input[type=email], input[type=number]{
+  border:1px solid var(--slate-300); border-radius:8px; font-size:14px; padding:9px 10px; background:#fff; color:var(--slate-800); width:100%;
+}
+select[multiple]{height:88px; font-size:13px;}
+.filter-summary{font-size:11px; color:var(--slate-400); margin-top:2px;}
+
+/* ---- グラフ ---- */
+.legend{display:flex; flex-wrap:wrap; gap:6px 12px; margin-top:8px; font-size:10.5px; color:var(--slate-600);}
+.legend .dot{display:inline-block; width:8px; height:8px; border-radius:2px; margin-right:4px; vertical-align:middle;}
+.donut-wrap{display:flex; flex-direction:column; align-items:center; gap:12px;}
+.donut{width:130px; height:130px; border-radius:50%; flex:none; position:relative;}
+.donut::after{content:""; position:absolute; inset:22%; background:#fff; border-radius:50%;}
+.hbar-row{display:flex; align-items:center; gap:6px; margin-bottom:7px; font-size:11px;}
+.hbar-label{width:70px; flex:none; color:var(--slate-600); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.hbar-track{flex:1; background:var(--slate-100); border-radius:4px; height:12px; overflow:hidden;}
+.hbar-fill{height:100%; background:var(--blue-700); border-radius:4px;}
+.hbar-value{width:38px; flex:none; text-align:right; color:var(--slate-500); font-variant-numeric:tabular-nums; font-size:10.5px;}
+.vbar-chart{display:flex; align-items:flex-end; gap:4px; height:150px; padding-top:16px; overflow-x:auto; -webkit-overflow-scrolling:touch;}
+.vbar-col{flex:none; min-width:18px; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; gap:2px;}
+.vbar-pair{display:flex; align-items:flex-end; gap:2px; height:100%; width:100%; justify-content:center;}
+.vbar{width:7px; border-radius:2px 2px 0 0;}
+.vbar.count{background:var(--blue-300);}
+.vbar.sales{background:var(--blue-700);}
+.vbar.count-alt{background:#c7d2fe;}
+.vbar.qty{background:var(--emerald-600);}
+.vbar-month{font-size:8.5px; color:var(--slate-400); margin-top:5px; white-space:nowrap;}
+
+/* ---- カードリスト（ランキング／個人別サマリー／予約データ） ---- */
+.list-empty{text-align:center; color:var(--slate-400); padding:20px 0; font-size:12px;}
+.record-card{background:#fff; border-radius:12px; box-shadow:0 1px 3px rgba(0,0,0,.08); padding:12px 14px; margin-bottom:10px;}
+.record-card .rc-head{display:flex; align-items:flex-start; justify-content:space-between; gap:8px; margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid var(--slate-100);}
+.record-card .rc-title{font-weight:700; font-size:13.5px; color:var(--slate-800);}
+.record-card .rc-sub{font-size:11px; color:var(--slate-400); margin-top:2px;}
+.record-card .rc-badge{font-size:10.5px; font-weight:700; background:#eef2ff; color:var(--indigo-600); border-radius:6px; padding:3px 7px; white-space:nowrap;}
+.rc-grid{display:grid; grid-template-columns:1fr 1fr; gap:6px 10px; font-size:12px;}
+.rc-grid .rc-item .k{color:var(--slate-400); font-size:10.5px; margin-bottom:1px;}
+.rc-grid .rc-item .v{color:var(--slate-700); font-weight:600; word-break:break-all;}
+.rc-more-toggle{width:100%; text-align:center; background:none; border:none; color:var(--blue-600); font-size:11.5px; font-weight:600; padding:8px 0 2px;}
+.rc-more{display:none; margin-top:8px; padding-top:8px; border-top:1px dashed var(--slate-200);}
+.rc-more.open{display:block;}
+.rc-edit-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px 10px; margin-top:8px; padding-top:8px; border-top:1px dashed var(--slate-200);}
+.rc-edit-item label{display:block; font-size:10px; font-weight:600; color:var(--blue-700); margin-bottom:3px;}
+.rc-edit-item.full{grid-column:1 / -1;}
+.ancillary-pair{display:flex; gap:4px;}
+.ancillary-pair select{flex:1;}
+.ancillary-pair input[type=number]{width:52px; flex:none;}
+.editable-cell-inline input, .editable-cell-inline select{background:var(--blue-50);}
+
+/* ---- 列の並び順エディタ ---- */
+.col-order-list{border:1px solid var(--slate-200); border-radius:8px;}
+.col-order-row{display:flex; align-items:center; justify-content:space-between; padding:9px 12px; font-size:13px; border-top:1px solid var(--slate-100);}
+.col-order-row:first-child{border-top:none;}
+.col-order-row .buttons{display:flex; gap:2px;}
+.col-order-row button{background:none; border:none; color:var(--slate-400); padding:6px 9px; font-size:14px;}
+.col-order-row button:disabled{opacity:.3;}
+
+/* ---- 下部タブバー ---- */
+.bottom-nav{position:fixed; left:0; right:0; bottom:0; z-index:50; background:#fff; border-top:1px solid var(--slate-200); display:flex; padding-bottom:env(safe-area-inset-bottom);}
+.bottom-nav button{flex:1; background:none; border:none; padding:8px 2px 6px; display:flex; flex-direction:column; align-items:center; gap:2px; color:var(--slate-400); font-size:10px; font-weight:600;}
+.bottom-nav button.active{color:var(--blue-700);}
+.bottom-nav .ic{font-size:19px;}
+
+/* ---- モーダル（下からせり上がるシート） ---- */
+.sheet-overlay{position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:60; display:none; align-items:flex-end;}
+.sheet-overlay.open{display:flex;}
+.sheet-box{background:#fff; border-radius:16px 16px 0 0; width:100%; max-height:88vh; overflow-y:auto; box-shadow:0 -10px 30px rgba(0,0,0,.2);}
+.sheet-head{display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid var(--slate-200); position:sticky; top:0; background:#fff;}
+.sheet-head h3{font-size:14.5px; font-weight:700; margin:0; color:var(--emerald-700); display:flex; gap:6px; align-items:center;}
+.sheet-head h3.blue{color:var(--blue-800);}
+.sheet-close{background:none; border:none; font-size:20px; color:var(--slate-400); padding:4px 8px;}
+.sheet-body{padding:16px; display:flex; flex-direction:column; gap:12px;}
+.form-field label{display:block; font-size:11px; font-weight:600; color:var(--slate-500); margin-bottom:4px;}
+.progress-track{width:100%; height:8px; background:var(--slate-200); border-radius:4px; overflow:hidden;}
+.progress-fill{height:100%; background:var(--emerald-500); width:0%; transition:width .4s ease;}
+.result-box{background:var(--slate-50); border:1px solid var(--slate-200); border-radius:8px; padding:12px; font-size:12.5px; display:none;}
+.result-box p{margin:2px 0;}
+
+/* ---- トースト ---- */
+.toast-container{position:fixed; top:10px; left:10px; right:10px; z-index:70; display:flex; flex-direction:column; gap:8px;}
+.toast{color:#fff; font-size:12.5px; border-radius:8px; box-shadow:0 6px 16px rgba(0,0,0,.18); padding:10px 12px; display:flex; gap:8px; align-items:flex-start; animation:slideIn .25s ease-out; transition:opacity .3s ease;}
+@keyframes slideIn{from{opacity:0; transform:translateY(-10px);} to{opacity:1; transform:translateY(0);}}
+.toast.success{background:var(--emerald-600);}
+.toast.error{background:var(--red-600);}
+.toast.info{background:var(--slate-700);}
+
+/* ---- ローディング ---- */
+.loading-overlay{position:fixed; inset:0; background:rgba(255,255,255,.9); z-index:80; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;}
+.loading-overlay.hidden{display:none;}
+.spinner{width:44px; height:44px; border-radius:50%; border:4px solid var(--blue-100); border-top-color:var(--blue-700); animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.hidden{display:none !important;}
+</style>
+</head>
+<body>
+
+<div id="loading-overlay" class="loading-overlay hidden">
+  <div class="spinner"></div>
+  <p style="color:var(--blue-700); font-weight:600; font-size:13px;">データを読み込んでいます...</p>
+</div>
+
+<div id="toast-container" class="toast-container"></div>
+
+<header>
+  <div class="header-inner">
+    <div class="header-top">
+      <h1>📈 予約データダッシュボード<span class="tag">スマホ版モックアップ</span></h1>
+      <button class="icon-btn" id="btn-refresh" title="データ再読込">⟳</button>
+    </div>
+    <div class="role-row">
+      <select id="role-switcher">
+        <option value="マスタ権限">マスタ権限（全エリア）</option>
+        <option value="所長・チーフ">所長・チーフ（自エリアのみ）</option>
+        <option value="社員">社員（自店舗のみ）</option>
+      </select>
+      <span class="role-badge" id="role-badge"></span>
+    </div>
+    <p class="last-imported" id="last-imported-label"></p>
+  </div>
+  <div class="kpi-scroll">
+    <div class="kpi-card kpi-blue"><p class="label">総予約件数</p><p class="value" id="kpi-total">0</p></div>
+    <div class="kpi-card kpi-emerald"><p class="label">売上合計</p><p class="value" id="kpi-sales">¥0</p></div>
+    <div class="kpi-card kpi-amber"><p class="label">入金額合計</p><p class="value" id="kpi-payment">¥0</p></div>
+    <div class="kpi-card kpi-main"><span class="badge">MAIN</span><p class="label">⭐入金消化率</p><p class="value" id="kpi-payment-rate">0.0%</p></div>
+    <div class="kpi-card kpi-slate"><p class="label">平均旅行日数</p><p class="value" id="kpi-avg-days">0.0日</p></div>
+  </div>
+</header>
+
+<main>
+
+  <div class="banner banner-red hidden" id="access-denied-banner">
+    <p class="title">🔒 アクセス権がありません</p>
+    <p class="desc">このアカウントは「スタッフ権限」シートに登録されていません（このモックアップでは権限切替で再現しています）。</p>
+  </div>
+
+  <div id="app-content">
+
+    <!-- ============ 分析ダッシュボード ============ -->
+    <section id="panel-dashboard" class="panel">
+      <button class="filter-toggle" data-target="dash-filter-panel">🔍 絞り込み <span id="dash-filter-badge"></span><span class="chev">▾</span></button>
+      <div class="filter-panel" id="dash-filter-panel">
+        <div class="filter-field"><label>エリア</label><select id="dash-filter-area" multiple></select></div>
+        <div class="filter-field"><label>営業所</label><select id="dash-filter-office" multiple></select></div>
+        <div class="filter-field"><label>商品分類</label><select id="dash-filter-category" multiple></select></div>
+        <div class="filter-field"><label>基準日</label>
+          <select id="dash-filter-date-field">
+            <option value="bookingDate">予約日</option>
+            <option value="departureDate">出発予定日</option>
+          </select>
+        </div>
+        <div class="filter-field"><label>From</label><input type="date" id="dash-filter-date-from"></div>
+        <div class="filter-field"><label>To</label><input type="date" id="dash-filter-date-to"></div>
+        <button class="btn-ghost btn-block" id="btn-clear-dash-filter">✕ フィルタ解除</button>
+        <p class="filter-summary" id="dash-filter-summary"></p>
+      </div>
+
+      <div class="card">
+        <h2>📊 月次推移（件数/売上）</h2>
+        <div id="chart-monthly" class="vbar-chart"></div>
+        <div class="legend">
+          <span><span class="dot" style="background:var(--blue-300)"></span>予約件数</span>
+          <span><span class="dot" style="background:var(--blue-700)"></span>売上合計</span>
+        </div>
+      </div>
+      <div class="card">
+        <h2>🟢 STS別 件数</h2>
+        <div class="donut-wrap">
+          <div id="chart-sts" class="donut"></div>
+          <div id="chart-sts-legend" class="legend"></div>
+        </div>
+        <p class="muted" style="margin-top:8px;">STSはCSV上の処理ステータスコードをそのまま表示しています。</p>
+      </div>
+      <div class="card">
+        <h2 class="sm">🏷️ 商品分類別</h2>
+        <div class="donut-wrap">
+          <div id="chart-category" class="donut"></div>
+          <div id="chart-category-legend" class="legend"></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2 class="sm">🌏 国籍別（上位10）</h2>
+        <div id="chart-nationality"></div>
+      </div>
+      <div class="card">
+        <h2 class="sm">✈️ キャリア別（上位10）</h2>
+        <div id="chart-carrier"></div>
+      </div>
+      <div class="card">
+        <h2 class="sm">🛡️ 保険</h2>
+        <div id="chart-insurance" class="vbar-chart"></div>
+      </div>
+      <div class="card">
+        <h2 class="sm">📶 Wifi</h2>
+        <div id="chart-wifi" class="vbar-chart"></div>
+      </div>
+      <div class="card">
+        <h2 class="sm">🛂 TAViCA</h2>
+        <div id="chart-tavica" class="vbar-chart"></div>
+      </div>
+      <div class="card">
+        <h2 class="sm">🩹 キャンサポ</h2>
+        <div id="chart-cansapo" class="vbar-chart"></div>
+        <p class="muted" style="margin-top:8px;">
+          <span class="dot" style="background:#c7d2fe; display:inline-block; width:8px; height:8px; border-radius:2px; vertical-align:middle; margin-right:4px;"></span>リスト数
+          <span class="dot" style="background:var(--emerald-600); display:inline-block; width:8px; height:8px; border-radius:2px; vertical-align:middle; margin:0 4px 0 10px;"></span>加入・販売数
+        </p>
+      </div>
+
+      <div class="card">
+        <h2>🏆 営業所別ランキング <button class="rc-more-toggle" id="ranking-sort-toggle" style="width:auto; margin-left:auto; padding:2px 8px;">並び替え▾</button></h2>
+        <div id="ranking-sort-panel" class="hidden" style="margin-bottom:10px;">
+          <select id="ranking-sort-key" style="margin-bottom:6px;">
+            <option value="count">件数</option>
+            <option value="salesAmount">売上合計</option>
+            <option value="paymentAmount">入金額合計</option>
+            <option value="paymentRate">⭐入金消化率</option>
+            <option value="avgDays">平均旅行日数</option>
+          </select>
+        </div>
+        <div id="ranking-list"></div>
+      </div>
+    </section>
+
+    <!-- ============ 予約データ一覧 ============ -->
+    <section id="panel-data" class="panel hidden">
+      <button class="filter-toggle" data-target="data-filter-panel">🔍 絞り込み <span id="data-filter-badge"></span><span class="chev">▾</span></button>
+      <div class="filter-panel" id="data-filter-panel">
+        <div class="filter-field"><label>エリア</label><select id="data-filter-area" multiple></select></div>
+        <div class="filter-field"><label>店舗</label><select id="data-filter-office" multiple></select></div>
+        <div class="filter-field"><label>担当者</label><select id="data-filter-staff" multiple></select></div>
+        <div class="filter-field"><label>出発予定日（From）</label><input type="date" id="data-filter-date-from"></div>
+        <div class="filter-field"><label>出発予定日（To）</label><input type="date" id="data-filter-date-to"></div>
+        <div class="filter-field"><label>キーワード検索</label><input type="text" id="data-filter-keyword" placeholder="予約番号・商品タイトル・担当者・メモ"></div>
+        <button class="btn-ghost btn-block" id="btn-clear-data-filter">✕ フィルタ解除</button>
+        <p class="filter-summary" id="data-filter-summary"></p>
+      </div>
+
+      <button class="btn-emerald btn-block hidden" id="btn-open-csv-modal" style="margin-bottom:10px;">📄 CSVインポート</button>
+      <p class="muted" style="margin:-4px 0 10px;">CSV由来の項目は読み取り専用です。CHK日・保険・Wifi・TAViCA・キャンサポ・メモは編集できます。カードの「詳細」でCSV項目を表示します。</p>
+
+      <div id="data-list"></div>
+      <p id="data-empty" class="list-empty hidden">データがありません</p>
+      <div class="btn-row" style="margin-top:6px;">
+        <button class="btn-ghost" id="btn-prev-page">‹ 前へ</button>
+        <button class="btn-ghost" id="btn-next-page">次へ ›</button>
+      </div>
+      <p class="muted" id="pagination-info" style="text-align:center; margin-top:6px;"></p>
+    </section>
+
+    <!-- ============ 個人別サマリー ============ -->
+    <section id="panel-personal" class="panel hidden">
+      <div class="filter-field" style="margin-bottom:10px;">
+        <input type="text" id="personal-search" placeholder="🔍 営業所名・担当者で検索">
+      </div>
+      <div id="personal-list"></div>
+      <p id="personal-empty" class="list-empty hidden">データがありません</p>
+    </section>
+
+    <!-- ============ データ管理 ============ -->
+    <section id="panel-admin" class="panel hidden">
+      <div class="card">
+        <h2>ℹ️ データの状態</h2>
+        <div id="admin-status" style="font-size:12.5px; color:var(--slate-600); line-height:1.7;"></div>
+      </div>
+
+      <div class="card">
+        <h2>↕️ 列の並び順</h2>
+        <p class="muted" style="margin-bottom:8px;">▲▼で並び替えると「予約データ一覧」のカード内の表示順が変わります。</p>
+        <div class="col-order-list" id="column-order-list"></div>
+        <div class="btn-row" style="margin-top:10px;">
+          <button class="btn-primary" id="btn-save-column-order">💾 保存する</button>
+          <button class="btn-ghost" id="btn-reset-column-order">既定に戻す</button>
+        </div>
+        <p id="column-order-result" class="muted hidden" style="margin-top:8px;"></p>
+      </div>
+
+      <div id="master-only-admin">
+        <div class="card">
+          <p style="font-weight:600; margin:0 0 4px; font-size:13px;">重複した行を削除する</p>
+          <p class="muted" style="margin:0 0 10px;">CSV由来19項目すべてが完全一致する行を1件にまとめます（デモ動作）。</p>
+          <button class="btn-primary btn-block" id="btn-remove-duplicates">🧹 重複を削除する</button>
+          <p id="duplicate-result" class="muted hidden" style="margin-top:8px;"></p>
+        </div>
+        <div class="card" style="border:1px solid var(--red-200); background:var(--red-50);">
+          <p style="font-weight:600; margin:0 0 4px; color:var(--red-700); font-size:13px;">データをすべて削除する</p>
+          <p class="muted" style="margin:0 0 10px;">元に戻せません（デモ動作）。</p>
+          <input type="text" id="clear-confirm-input" placeholder="削除 と入力" style="margin-bottom:8px;">
+          <button class="btn-red btn-block" id="btn-clear-all-data">🗑️ すべて削除する</button>
+          <p id="clear-result" class="muted hidden" style="margin-top:8px;"></p>
+        </div>
+        <div class="card">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+            <h2 style="margin:0;">🛡️ 権限管理</h2>
+            <button class="btn-primary" id="btn-open-staff-modal" style="width:auto; padding:8px 12px; font-size:12px;">＋ 追加</button>
+          </div>
+          <div id="staff-list"></div>
+          <p id="staff-empty" class="list-empty hidden">登録がありません</p>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<nav class="bottom-nav">
+  <button class="tab-btn active" data-tab="dashboard"><span class="ic">📊</span>ダッシュボード</button>
+  <button class="tab-btn" data-tab="data"><span class="ic">📋</span>データ一覧</button>
+  <button class="tab-btn" data-tab="personal"><span class="ic">👥</span>個人別</button>
+  <button class="tab-btn" data-tab="admin"><span class="ic">⚙️</span>管理</button>
+</nav>
+
+<!-- ============ CSVインポート（ボトムシート） ============ -->
+<div id="csv-import-modal" class="sheet-overlay">
+  <div class="sheet-box">
+    <div class="sheet-head">
+      <h3>📄 CSV一括インポート</h3>
+      <button class="sheet-close" id="btn-close-csv-modal">&times;</button>
+    </div>
+    <div class="sheet-body">
+      <p style="font-size:12.5px; color:var(--slate-600); line-height:1.6;">
+        営業日報CSVを選択してください。「006:エリア」のような見出しを自動検出し、対象19項目だけを取り込みます（実際のアプリの動作です）。
+      </p>
+      <p class="muted">このモックアップではファイルの中身を送信せず、画面の流れだけを再現しています。</p>
+      <div>
+        <label style="display:block; font-size:11px; font-weight:600; color:var(--slate-500); margin-bottom:4px;">CSVファイル</label>
+        <input type="file" id="csv-file-input" accept=".csv,text/csv,text/plain" style="width:100%;">
+        <p id="csv-file-summary" class="muted hidden" style="margin-top:8px; background:var(--slate-50); border:1px solid var(--slate-200); border-radius:8px; padding:8px 10px;"></p>
+      </div>
+      <div id="csv-progress" class="hidden">
+        <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--slate-600); margin-bottom:4px;">
+          <span>取り込んでいます…</span><span id="csv-progress-time">0秒</span>
+        </div>
+        <div class="progress-track"><div id="csv-progress-bar" class="progress-fill"></div></div>
+      </div>
+      <div id="csv-import-result" class="result-box"></div>
+      <div class="btn-row">
+        <button class="btn-ghost" id="btn-cancel-csv-modal">閉じる</button>
+        <button class="btn-emerald" id="btn-submit-csv" disabled>⬆ 取り込む</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ スタッフ権限（ボトムシート） ============ -->
+<div id="staff-modal" class="sheet-overlay">
+  <div class="sheet-box">
+    <div class="sheet-head">
+      <h3 class="blue" id="staff-modal-title">🛡️ アカウントを追加</h3>
+      <button class="sheet-close" id="btn-close-staff-modal">&times;</button>
+    </div>
+    <form id="staff-form" class="sheet-body">
+      <input type="hidden" id="staff-form-rowindex" value="">
+      <div class="form-field"><label>Googleアカウント *</label><input type="email" id="staff-form-email" required placeholder="example@gmail.com"></div>
+      <div class="form-field"><label>氏名</label><input type="text" id="staff-form-name"></div>
+      <div class="form-field"><label>所属店舗（営業所）</label><input type="text" id="staff-form-office" list="staff-office-options"><datalist id="staff-office-options"></datalist></div>
+      <div class="form-field"><label>所属エリア</label><input type="text" id="staff-form-area" list="staff-area-options"><datalist id="staff-area-options"></datalist></div>
+      <div class="form-field">
+        <label>権限</label>
+        <select id="staff-form-role">
+          <option value="社員">社員（自店舗のみ）</option>
+          <option value="所長・チーフ">所長・チーフ（自エリアのみ）</option>
+          <option value="マスタ権限">マスタ権限（全エリア）</option>
+        </select>
+      </div>
+      <div class="btn-row">
+        <button type="button" class="btn-ghost" id="btn-cancel-staff-modal">キャンセル</button>
+        <button type="submit" class="btn-primary">💾 保存</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+/* ============================================================================
+   サンプルデータ生成（すべて架空の値）。PC版と同じ29項目・同じロジックです。
+   ============================================================================ */
+function mulberry32(seed){
+  return function(){
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    var t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+var rand = mulberry32(20260919);
+function pick(arr){ return arr[Math.floor(rand() * arr.length)]; }
+function pickWeighted(pairs){
+  var total = pairs.reduce(function(s,p){return s+p[1];}, 0);
+  var r = rand() * total;
+  for (var i=0;i<pairs.length;i++){ r -= pairs[i][1]; if (r <= 0) return pairs[i][0]; }
+  return pairs[pairs.length-1][0];
+}
+function randInt(min, max){ return Math.floor(rand()*(max-min+1))+min; }
+function pad2(n){ return (n<10?'0':'')+n; }
+
+var AREA_LIST = ['10:郊外エリア', '13:アバンティ'];
+var OFFICE_LIST = [
+  '717:イーアスつくば','053:イオンモール甲府昭和','596:けやきウォーク前橋','046:水戸コムボックス310',
+  '054:宇都宮','763:長野','081:ららぽーと沼津','051:高崎オーパ','B66:イオンモール太田','038:さいたま新都心'
+];
+var OFFICE_AREA_MAP = {};
+OFFICE_LIST.forEach(function(o, i){ OFFICE_AREA_MAP[o] = i < 7 ? AREA_LIST[0] : AREA_LIST[1]; });
+var DEST_LIST = ['SEL','HNL','TPE','GUM','BKK','SIN','PAR','HKG','LAX','CTS'];
+var NATIONALITY_LIST = [['JPN',0.92],['PHL',0.02],['IDN',0.02],['KOR',0.015],['CHN',0.01],['THA',0.01],['USA',0.005],['-',0.02]];
+var CATEGORY_LIST = [['2S:ツアー',0.6],['1A:エアー',0.38],['4J:代売',0.02]];
+var CARRIER_LIST = [['NH',0.22],['JL',0.10],['SQ',0.06],['KE',0.06],['TK',0.05],['OZ',0.05],['BX',0.04],['@@',0.06],['CX',0.04],['BR',0.04],['TG',0.04],['CI',0.04],['OTHER',0.20]];
+var TOUR_BRAND_LIST = [['AB:【使用不可】A＋H判別用（募集）',0.27],['CI:チャオ',0.25],['RA:WEB限定',0.14],['IP:インプレッソ',0.12],['WO:ワールド',0.03],['VL:クルーズ',0.02],['GR:法人・団体企画手配',0.01],['',0.16]];
+var STAFF_LIST = ['BGK078','BGK074','BGK073','BGK077','00L625','BGKG96','BGKG53','00J867','BGK040','BGK052'];
+var STS_LIST = [['FN',0.505],['OK',0.49],['WT',0.0025],['RQ',0.0025]];
+var PRODUCT_TITLES = [
+  'ANA ご利用往復航空券（大人）','JAL ご利用往復航空券（大人）','KOREAN AIR（大韓航空） ご利用往復航空券（大人）',
+  'ASIANA AIRLINES（アシアナ航空） ご利用往復航空券（大人）','SINGAPORE AIRLINES（シンガポール航空） ご利用往復航空券（大人）',
+  'CATHAY PACIFIC AIRWAYS（キャセイパシフィック航空） ご利用往復航空券（大人）','ホテル宿泊プラン（大人1名）','海外ツアーパッケージ（添乗員なし）'
+];
+var ANCILLARY_STATUS_WEIGHTED = [['', 0.55], ['〇', 0.30], ['✖', 0.15]];
+function genAncillary(){
+  var status = pickWeighted(ANCILLARY_STATUS_WEIGHTED);
+  return { status: status, qty: status === '〇' ? randInt(1, 4) : null };
+}
+
+var nextRowIndex = 2;
+function genSampleRows(n){
+  var rows = [];
+  for (var i=0;i<n;i++){
+    var y = 2026, m = randInt(1,9), d = randInt(1,28);
+    var bookingDate = y+'-'+pad2(m)+'-'+pad2(d);
+    var dm = m + randInt(0,3); var dy = y; if (dm > 12) { dm -= 12; dy += 1; }
+    var departureDate = dy+'-'+pad2(dm)+'-'+pad2(randInt(1,28));
+    var sales = randInt(5,400) * 1000;
+    var paidRatio = rand() < 0.15 ? 0 : (rand() < 0.6 ? 1 : rand());
+    var payment = Math.round(sales * paidRatio / 100) * 100;
+    var office = pick(OFFICE_LIST);
+    var ins = genAncillary(), wifi = genAncillary(), tavica = genAncillary(), cansapo = genAncillary();
+    rows.push({
+      rowIndex: nextRowIndex++,
+      area: OFFICE_AREA_MAP[office], office: office, destination: pick(DEST_LIST),
+      bookingDate: bookingDate, departureDate: departureDate,
+      customerId: String(randInt(1000000000000, 9999999999999)),
+      reservationNo: pad2(randInt(1,99)) + String(randInt(100000000,999999999)),
+      gender: rand() < 0.58 ? '2:女性' : '1:男性',
+      nationality: pickWeighted(NATIONALITY_LIST),
+      productCategory: pickWeighted(CATEGORY_LIST),
+      carrier: pickWeighted(CARRIER_LIST),
+      tourBrand: pickWeighted(TOUR_BRAND_LIST),
+      tourCode: rand() < 0.4 ? '-' : ('T' + pick(['J','G','I','N']) + '-' + pick(['FZA','ZZA','KMI','FSS']) + randInt(1000,9999)),
+      salesAmount: sales, paymentAmount: payment,
+      sts: pickWeighted(STS_LIST), staff: pick(STAFF_LIST), productTitle: pick(PRODUCT_TITLES), travelDays: randInt(2,10),
+      chkDate: rand() < 0.4 ? bookingDate : null,
+      insuranceStatus: ins.status, insuranceQty: ins.qty,
+      wifiStatus: wifi.status, wifiQty: wifi.qty,
+      tavicaStatus: tavica.status, tavicaQty: tavica.qty,
+      cansapoStatus: cansapo.status, cansapoQty: cansapo.qty,
+      memo: rand() < 0.15 ? pick(['要フォロー', 'オプション確認済み', 'キャンセル待ち相談中', '再連絡予定']) : ''
+    });
+  }
+  return rows;
+}
+
+var COLUMNS = [
+  { key:'area', label:'エリア', type:'text' },{ key:'office', label:'営業所', type:'text' },
+  { key:'destination', label:'最終目的地', type:'text' },{ key:'bookingDate', label:'予約日', type:'date' },
+  { key:'departureDate', label:'出発予定日', type:'date' },{ key:'customerId', label:'顧客ID', type:'text' },
+  { key:'reservationNo', label:'予約番号', type:'text' },{ key:'gender', label:'性別', type:'text' },
+  { key:'nationality', label:'国籍', type:'text' },{ key:'productCategory', label:'商品分類', type:'text' },
+  { key:'carrier', label:'キャリア', type:'text' },{ key:'tourBrand', label:'ツアーブランド区分', type:'text' },
+  { key:'tourCode', label:'ツアーコード', type:'text' },{ key:'salesAmount', label:'売上(商品請求金額)', type:'number' },
+  { key:'paymentAmount', label:'入金額', type:'number' },{ key:'sts', label:'STS', type:'text' },
+  { key:'staff', label:'担当者', type:'text' },{ key:'productTitle', label:'商品タイトル', type:'text' },
+  { key:'travelDays', label:'旅行日数', type:'number' }
+];
+var COLUMN_BY_KEY = {};
+COLUMNS.forEach(function(c){ COLUMN_BY_KEY[c.key] = c; });
+
+var ANCILLARY_ITEMS = [
+  { key:'insurance', label:'保険', statusKey:'insuranceStatus', qtyKey:'insuranceQty' },
+  { key:'wifi', label:'Wifi', statusKey:'wifiStatus', qtyKey:'wifiQty' },
+  { key:'tavica', label:'TAViCA', statusKey:'tavicaStatus', qtyKey:'tavicaQty' },
+  { key:'cansapo', label:'キャンサポ', statusKey:'cansapoStatus', qtyKey:'cansapoQty' }
+];
+var ANCILLARY_BY_KEY = {};
+ANCILLARY_ITEMS.forEach(function(a){ ANCILLARY_BY_KEY[a.key] = a; });
+
+// カードの「主要項目」（常に見える）と「詳細」（タップで開く）に分けている。
+// 順序はPC版と同じ既定順を初期値にし、データ管理タブで並び替えられる。
+var DISPLAY_COLUMN_DEFS = [
+  { key:'chkDate', label:'CHK日', kind:'date', field:'chkDate', primary:true },
+  { key:'reservationNo', label:'予約番号', kind:'csv', field:'reservationNo', primary:true },
+  { key:'staff', label:'担当者', kind:'csv', field:'staff', primary:true },
+  { key:'departureDate', label:'出発予定日', kind:'csv', field:'departureDate', primary:true },
+  { key:'insurance', label:'保険', kind:'ancillary', item:'insurance', primary:false },
+  { key:'wifi', label:'Wifi', kind:'ancillary', item:'wifi', primary:false },
+  { key:'tavica', label:'TAViCA', kind:'ancillary', item:'tavica', primary:false },
+  { key:'cansapo', label:'キャンサポ', kind:'ancillary', item:'cansapo', primary:false },
+  { key:'office', label:'営業所', kind:'csv', field:'office', primary:true },
+  { key:'destination', label:'最終目的地', kind:'csv', field:'destination', primary:false },
+  { key:'productCategory', label:'商品分類', kind:'csv', field:'productCategory', primary:false },
+  { key:'tourBrand', label:'ツアーブランド区分', kind:'csv', field:'tourBrand', primary:false },
+  { key:'tourCode', label:'ツアーコード', kind:'csv', field:'tourCode', primary:false },
+  { key:'carrier', label:'キャリア', kind:'csv', field:'carrier', primary:false },
+  { key:'salesAmount', label:'売上(商品請求金額)', kind:'csv', field:'salesAmount', primary:true },
+  { key:'paymentAmount', label:'入金額', kind:'csv', field:'paymentAmount', primary:false },
+  { key:'sts', label:'STS', kind:'csv', field:'sts', primary:true },
+  { key:'productTitle', label:'商品タイトル', kind:'csv', field:'productTitle', primary:false },
+  { key:'travelDays', label:'旅行日数', kind:'csv', field:'travelDays', primary:false },
+  { key:'bookingDate', label:'予約日', kind:'csv', field:'bookingDate', primary:false },
+  { key:'memo', label:'メモ', kind:'memo', field:'memo', primary:false }
+];
+var DISPLAY_COLUMN_DEFS_BY_KEY = {};
+DISPLAY_COLUMN_DEFS.forEach(function(d){ DISPLAY_COLUMN_DEFS_BY_KEY[d.key] = d; });
+var DEFAULT_COLUMN_ORDER = DISPLAY_COLUMN_DEFS.map(function(d){ return d.key; });
+
+var ROLE_ACCOUNTS = {
+  'マスタ権限': { office: '', area: '' },
+  '所長・チーフ': { office: '', area: AREA_LIST[0] },
+  '社員': { office: OFFICE_LIST[0], area: OFFICE_AREA_MAP[OFFICE_LIST[0]] }
+};
+
+var STATE = {
+  allRows: genSampleRows(320),
+  rows: [],
+  role: 'マスタ権限',
+  dashFiltered: [], dataFiltered: [],
+  rankingSortKey: 'count', rankingSortDir: -1,
+  dataPage: 1, dataPageSize: 20,
+  personalSortKey: 'count', personalSortDir: -1,
+  columnOrder: DEFAULT_COLUMN_ORDER.slice(),
+  expandedCards: {},
+  staffList: [
+    { rowIndex: 2, email: 'master@example.com', name: 'マスタ太郎', office: '', area: '', role: 'マスタ権限' },
+    { rowIndex: 3, email: 'chief@example.com', name: '所長次郎', office: '', area: AREA_LIST[0], role: '所長・チーフ' },
+    { rowIndex: 4, email: 'staff@example.com', name: '社員花子', office: OFFICE_LIST[0], area: OFFICE_AREA_MAP[OFFICE_LIST[0]], role: '社員' }
+  ]
+};
+
+var CHART_COLORS = ['#1d4ed8','#f59e0b','#10b981','#ef4444','#8b5cf6','#0ea5e9','#f97316','#84cc16','#ec4899','#64748b','#14b8a6','#a855f7'];
+
+document.addEventListener('DOMContentLoaded', function(){
+  bindEvents();
+  document.getElementById('last-imported-label').textContent = '最終取込：2026/09/18 18:24（サンプルデータ）';
+  boot();
+});
+
+function boot(){
+  showLoading(true);
+  setTimeout(function(){
+    applyRoleScope();
+    populateFilterOptions();
+    applyRoleUi();
+    renderColumnOrderEditor();
+    applyDashFilters();
+    applyDataFilters();
+    renderPersonalTab();
+    renderStaffList();
+    renderAdminStatus();
+    showLoading(false);
+  }, 300);
+}
+function showLoading(v){ document.getElementById('loading-overlay').classList.toggle('hidden', !v); }
+
+/* ---- 権限 ---- */
+function applyRoleScope(){
+  var role = STATE.role;
+  var account = ROLE_ACCOUNTS[role];
+  if (role === 'マスタ権限') STATE.rows = STATE.allRows;
+  else if (role === '所長・チーフ') STATE.rows = STATE.allRows.filter(function(r){ return r.area === account.area; });
+  else STATE.rows = STATE.allRows.filter(function(r){ return r.office === account.office; });
+
+  document.getElementById('access-denied-banner').classList.add('hidden');
+  document.getElementById('app-content').classList.remove('hidden');
+
+  var badge = document.getElementById('role-badge');
+  var scope = role === 'マスタ権限' ? '全エリア' : (role === '所長・チーフ' ? account.area : account.office);
+  badge.textContent = '🛡️ ' + scope;
+}
+function applyRoleUi(){
+  var isMaster = STATE.role === 'マスタ権限';
+  document.getElementById('btn-open-csv-modal').classList.toggle('hidden', !isMaster);
+  document.getElementById('master-only-admin').classList.toggle('hidden', !isMaster);
+}
+function onRoleChanged(){
+  STATE.role = document.getElementById('role-switcher').value;
+  boot();
+  showToast(STATE.role + ' の見え方に切り替えました', 'info');
+}
+
+/* ---- フィルタ共通 ---- */
+function distinctValues(key){
+  var set = {};
+  STATE.rows.forEach(function(r){ if (r[key]) set[r[key]] = true; });
+  return Object.keys(set).sort(function(a,b){ return a.localeCompare(b,'ja'); });
+}
+function fillMultiSelect(id, values){
+  document.getElementById(id).innerHTML = values.map(function(v){ return '<option value="'+escapeHtml(v)+'">'+escapeHtml(v)+'</option>'; }).join('');
+}
+function fillDatalist(id, values){
+  document.getElementById(id).innerHTML = values.map(function(v){ return '<option value="'+escapeHtml(v)+'">'; }).join('');
+}
+function populateFilterOptions(){
+  fillMultiSelect('dash-filter-area', distinctValues('area'));
+  fillMultiSelect('dash-filter-office', distinctValues('office'));
+  fillMultiSelect('dash-filter-category', distinctValues('productCategory'));
+  fillMultiSelect('data-filter-area', distinctValues('area'));
+  fillMultiSelect('data-filter-office', distinctValues('office'));
+  fillMultiSelect('data-filter-staff', distinctValues('staff'));
+  fillDatalist('staff-office-options', OFFICE_LIST);
+  fillDatalist('staff-area-options', AREA_LIST);
+}
+function getSelected(id){ return Array.from(document.getElementById(id).selectedOptions).map(function(o){return o.value;}); }
+function toSet(arr){ if(!arr||arr.length===0) return null; var s={}; arr.forEach(function(v){s[v]=true;}); return s; }
+
+function toggleFilterPanel(btn){
+  var panel = document.getElementById(btn.dataset.target);
+  var open = panel.classList.toggle('open');
+  btn.classList.toggle('open', open);
+}
+
+/* ---- 分析ダッシュボード ---- */
+function applyDashFilters(){
+  var area = toSet(getSelected('dash-filter-area'));
+  var office = toSet(getSelected('dash-filter-office'));
+  var category = toSet(getSelected('dash-filter-category'));
+  var dateField = document.getElementById('dash-filter-date-field').value;
+  var dateFrom = document.getElementById('dash-filter-date-from').value;
+  var dateTo = document.getElementById('dash-filter-date-to').value;
+
+  STATE.dashFiltered = STATE.rows.filter(function(r){
+    if (area && !area[r.area]) return false;
+    if (office && !office[r.office]) return false;
+    if (category && !category[r.productCategory]) return false;
+    var dv = r[dateField];
+    if (dateFrom && (!dv || dv < dateFrom)) return false;
+    if (dateTo && (!dv || dv > dateTo)) return false;
+    return true;
+  });
+  document.getElementById('dash-filter-summary').textContent = STATE.dashFiltered.length + ' 件 / 閲覧可能 ' + STATE.rows.length + ' 件';
+  var activeN = (area?1:0)+(office?1:0)+(category?1:0)+(dateFrom?1:0)+(dateTo?1:0);
+  document.getElementById('dash-filter-badge').textContent = activeN>0 ? '('+activeN+')' : '';
+
+  renderKpis();
+  renderMonthlyChart();
+  renderDonut('chart-sts', 'chart-sts-legend', countBy(STATE.dashFiltered,'sts'));
+  renderDonut('chart-category', 'chart-category-legend', countBy(STATE.dashFiltered,'productCategory'));
+  renderHBar('chart-nationality', topEntries(countBy(STATE.dashFiltered,'nationality'), 8));
+  renderHBar('chart-carrier', topEntries(countBy(STATE.dashFiltered,'carrier'), 8));
+  renderAncillaryChart('chart-insurance', STATE.dashFiltered, 'insuranceQty');
+  renderAncillaryChart('chart-wifi', STATE.dashFiltered, 'wifiQty');
+  renderAncillaryChart('chart-tavica', STATE.dashFiltered, 'tavicaQty');
+  renderAncillaryChart('chart-cansapo', STATE.dashFiltered, 'cansapoQty');
+  renderRanking();
+}
+function clearDashFilters(){
+  ['dash-filter-area','dash-filter-office','dash-filter-category'].forEach(function(id){
+    Array.from(document.getElementById(id).options).forEach(function(o){ o.selected = false; });
+  });
+  document.getElementById('dash-filter-date-from').value = '';
+  document.getElementById('dash-filter-date-to').value = '';
+  applyDashFilters();
+}
+
+function sumBy(rows,key){ var s=0; rows.forEach(function(r){ if (typeof r[key]==='number') s+=r[key]; }); return s; }
+function avgBy(rows,key){ var s=0,n=0; rows.forEach(function(r){ if (typeof r[key]==='number'){s+=r[key];n++;} }); return n>0?s/n:0; }
+function countBy(rows,key){ var map={}; rows.forEach(function(r){ var v = r[key] || '(空欄)'; map[v] = (map[v]||0)+1; }); return map; }
+function topEntries(map,n){ return Object.keys(map).map(function(k){return [k,map[k]];}).sort(function(a,b){return b[1]-a[1];}).slice(0,n); }
+
+function renderKpis(){
+  var rows = STATE.dashFiltered;
+  var total = rows.length, sales = sumBy(rows,'salesAmount'), payment = sumBy(rows,'paymentAmount');
+  var rate = sales>0 ? payment/sales*100 : 0;
+  document.getElementById('kpi-total').textContent = formatNumber(total);
+  document.getElementById('kpi-sales').textContent = formatCurrency(sales);
+  document.getElementById('kpi-payment').textContent = formatCurrency(payment);
+  document.getElementById('kpi-payment-rate').textContent = rate.toFixed(1)+'%';
+  document.getElementById('kpi-avg-days').textContent = avgBy(rows,'travelDays').toFixed(1)+'日';
+}
+function getDashDateField(){ return document.getElementById('dash-filter-date-field').value || 'bookingDate'; }
+
+function renderMonthlyChart(){
+  var field = getDashDateField();
+  var byMonth = {};
+  STATE.dashFiltered.forEach(function(r){
+    var v = r[field]; if (!v) return;
+    var month = v.slice(0,7);
+    if (!byMonth[month]) byMonth[month] = {count:0, sales:0};
+    byMonth[month].count++; byMonth[month].sales += r.salesAmount || 0;
+  });
+  renderComboVBar('chart-monthly', byMonth, 'count', 'sales', 'count', 'sales', function(b){return '予約件数: '+formatNumber(b.count);}, function(b){return '売上合計: '+formatCurrency(b.sales);});
+}
+function renderAncillaryChart(id, rows, qtyKey){
+  var field = getDashDateField();
+  var byMonth = {};
+  rows.forEach(function(r){
+    var v = r[field]; if (!v) return;
+    var month = v.slice(0,7);
+    if (!byMonth[month]) byMonth[month] = {count:0, qty:0};
+    byMonth[month].count++;
+    if (typeof r[qtyKey] === 'number') byMonth[month].qty += r[qtyKey];
+  });
+  renderComboVBar(id, byMonth, 'count', 'qty', 'count-alt', 'qty', function(b){return 'リスト数: '+formatNumber(b.count);}, function(b){return '加入・販売数: '+formatNumber(b.qty);});
+}
+function renderComboVBar(id, byMonth, keyA, keyB, clsA, clsB, titleA, titleB){
+  var months = Object.keys(byMonth).sort();
+  var el = document.getElementById(id);
+  if (months.length === 0){ el.innerHTML = '<p class="list-empty">データがありません</p>'; return; }
+  var maxA = Math.max.apply(null, months.map(function(m){return byMonth[m][keyA];}).concat([1]));
+  var maxB = Math.max.apply(null, months.map(function(m){return byMonth[m][keyB];}).concat([1]));
+  el.innerHTML = months.map(function(m){
+    var b = byMonth[m];
+    var hA = Math.max(2, Math.round(b[keyA] / maxA * 118));
+    var hB = Math.max(2, Math.round(b[keyB] / maxB * 118));
+    return '<div class="vbar-col"><div class="vbar-pair">' +
+      '<div class="vbar '+clsA+'" style="height:'+hA+'px" title="'+m+' '+titleA(b)+'"></div>' +
+      '<div class="vbar '+clsB+'" style="height:'+hB+'px" title="'+m+' '+titleB(b)+'"></div>' +
+      '</div><div class="vbar-month">'+m.slice(2)+'</div></div>';
+  }).join('');
+}
+function renderDonut(chartId, legendId, map){
+  var entries = topEntries(map, 8);
+  var total = entries.reduce(function(s,e){return s+e[1];}, 0);
+  var el = document.getElementById(chartId), legend = document.getElementById(legendId);
+  if (total === 0){ el.style.background = '#e2e8f0'; legend.innerHTML = '<span class="muted">データがありません</span>'; return; }
+  var stops = [], acc = 0;
+  entries.forEach(function(e, i){
+    var pct = e[1] / total * 100, color = CHART_COLORS[i % CHART_COLORS.length];
+    stops.push(color + ' ' + acc.toFixed(2) + '% ' + (acc+pct).toFixed(2) + '%'); acc += pct;
+  });
+  el.style.background = 'conic-gradient(' + stops.join(',') + ')';
+  legend.innerHTML = entries.map(function(e, i){
+    var color = CHART_COLORS[i % CHART_COLORS.length], pct = (e[1] / total * 100).toFixed(1);
+    return '<span><span class="dot" style="background:'+color+'"></span>' + escapeHtml(e[0]) + '（' + formatNumber(e[1]) + '件・' + pct + '%）</span>';
+  }).join('');
+}
+function renderHBar(id, entries){
+  var el = document.getElementById(id);
+  if (entries.length === 0){ el.innerHTML = '<p class="list-empty">データがありません</p>'; return; }
+  var max = entries[0][1];
+  el.innerHTML = entries.map(function(e){
+    var pct = Math.max(3, Math.round(e[1] / max * 100));
+    return '<div class="hbar-row"><div class="hbar-label" title="'+escapeHtml(e[0])+'">'+escapeHtml(e[0])+'</div>' +
+      '<div class="hbar-track"><div class="hbar-fill" style="width:'+pct+'%"></div></div>' +
+      '<div class="hbar-value">'+formatNumber(e[1])+'</div></div>';
+  }).join('');
+}
+
+function buildOfficeRanking(rows){
+  var map = {};
+  rows.forEach(function(r){
+    var office = r.office || '(未設定)';
+    if (!map[office]) map[office] = {office:office, count:0, salesAmount:0, paymentAmount:0, daysSum:0, daysN:0};
+    var b = map[office];
+    b.count++; b.salesAmount += r.salesAmount || 0; b.paymentAmount += r.paymentAmount || 0;
+    if (typeof r.travelDays === 'number'){ b.daysSum += r.travelDays; b.daysN++; }
+  });
+  return Object.keys(map).map(function(k){
+    var b = map[k];
+    return { office:b.office, count:b.count, salesAmount:b.salesAmount, paymentAmount:b.paymentAmount,
+      paymentRate: b.salesAmount>0 ? b.paymentAmount/b.salesAmount*100 : 0, avgDays: b.daysN>0 ? b.daysSum/b.daysN : 0 };
+  });
+}
+function renderRanking(){
+  var list = buildOfficeRanking(STATE.dashFiltered);
+  var key = STATE.rankingSortKey, dir = STATE.rankingSortDir;
+  list.sort(function(a,b){ return (a[key]-b[key]) * dir; });
+  var el = document.getElementById('ranking-list');
+  if (list.length === 0){ el.innerHTML = '<p class="list-empty">データがありません</p>'; return; }
+  el.innerHTML = list.map(function(b, i){
+    return '<div class="record-card">' +
+      '<div class="rc-head"><span class="rc-title">'+(i+1)+'. '+escapeHtml(b.office)+'</span><span class="rc-badge">⭐'+b.paymentRate.toFixed(1)+'%</span></div>' +
+      '<div class="rc-grid">' +
+        '<div class="rc-item"><div class="k">件数</div><div class="v">'+formatNumber(b.count)+'件</div></div>' +
+        '<div class="rc-item"><div class="k">平均旅行日数</div><div class="v">'+b.avgDays.toFixed(1)+'日</div></div>' +
+        '<div class="rc-item"><div class="k">売上合計</div><div class="v">'+formatCurrency(b.salesAmount)+'</div></div>' +
+        '<div class="rc-item"><div class="k">入金額合計</div><div class="v">'+formatCurrency(b.paymentAmount)+'</div></div>' +
+      '</div></div>';
+  }).join('');
+}
+
+/* ---- 予約データ一覧（カード表示） ---- */
+function applyDataFilters(){
+  var area = toSet(getSelected('data-filter-area'));
+  var office = toSet(getSelected('data-filter-office'));
+  var staff = toSet(getSelected('data-filter-staff'));
+  var dateFrom = document.getElementById('data-filter-date-from').value;
+  var dateTo = document.getElementById('data-filter-date-to').value;
+  var keyword = document.getElementById('data-filter-keyword').value.trim().toLowerCase();
+
+  STATE.dataFiltered = STATE.rows.filter(function(r){
+    if (area && !area[r.area]) return false;
+    if (office && !office[r.office]) return false;
+    if (staff && !staff[r.staff]) return false;
+    var dep = r.departureDate;
+    if (dateFrom && (!dep || dep < dateFrom)) return false;
+    if (dateTo && (!dep || dep > dateTo)) return false;
+    if (keyword){
+      var hay = [r.reservationNo, r.productTitle, r.staff, r.memo].join(' ').toLowerCase();
+      if (hay.indexOf(keyword) === -1) return false;
+    }
+    return true;
+  });
+  document.getElementById('data-filter-summary').textContent = STATE.dataFiltered.length + ' 件 / 閲覧可能 ' + STATE.rows.length + ' 件';
+  var activeN = (area?1:0)+(office?1:0)+(staff?1:0)+(dateFrom?1:0)+(dateTo?1:0)+(keyword?1:0);
+  document.getElementById('data-filter-badge').textContent = activeN>0 ? '('+activeN+')' : '';
+  STATE.dataPage = 1;
+  renderDataList();
+}
+function clearDataFilters(){
+  ['data-filter-area','data-filter-office','data-filter-staff'].forEach(function(id){
+    Array.from(document.getElementById(id).options).forEach(function(o){ o.selected = false; });
+  });
+  document.getElementById('data-filter-date-from').value = '';
+  document.getElementById('data-filter-date-to').value = '';
+  document.getElementById('data-filter-keyword').value = '';
+  applyDataFilters();
+}
+
+function formatFieldValue(v, col){
+  if (v===null||v===undefined||v==='') return '－';
+  if (col.type==='number') return formatNumber(v);
+  if (col.type==='date') return escapeHtml(String(v).replace(/-/g,'/'));
+  return escapeHtml(String(v));
+}
+
+function renderDataList(){
+  var rows = STATE.dataFiltered.slice();
+  rows.sort(function(a,b){ return (b.departureDate||'').localeCompare(a.departureDate||''); });
+  var total = rows.length;
+  var totalPages = Math.max(1, Math.ceil(total / STATE.dataPageSize));
+  if (STATE.dataPage > totalPages) STATE.dataPage = totalPages;
+  var start = (STATE.dataPage-1) * STATE.dataPageSize;
+  var pageRows = rows.slice(start, start+STATE.dataPageSize);
+
+  document.getElementById('data-empty').classList.toggle('hidden', total>0);
+  document.getElementById('data-list').innerHTML = pageRows.map(buildRecordCard).join('');
+  document.getElementById('pagination-info').textContent = total===0 ? '0件' : (start+1)+'〜'+Math.min(start+STATE.dataPageSize,total)+' / '+total+'件';
+  document.getElementById('btn-prev-page').disabled = STATE.dataPage<=1;
+  document.getElementById('btn-next-page').disabled = STATE.dataPage>=totalPages;
+}
+
+function buildRecordCard(row){
+  var order = STATE.columnOrder.map(function(k){ return DISPLAY_COLUMN_DEFS_BY_KEY[k]; }).filter(Boolean);
+  var primaryDefs = order.filter(function(d){ return d.primary && d.kind === 'csv'; });
+  var moreDefs = order.filter(function(d){ return d.kind === 'csv' && !d.primary; });
+  var editDefs = order.filter(function(d){ return d.kind !== 'csv'; });
+  var expanded = !!STATE.expandedCards[row.rowIndex];
+
+  var head = '<div class="rc-head"><div>' +
+    '<div class="rc-title">'+escapeHtml(row.reservationNo||'－')+'</div>' +
+    '<div class="rc-sub">'+escapeHtml(row.staff||'－')+' ・ '+escapeHtml(row.office||'－')+'</div>' +
+    '</div><span class="rc-badge">'+escapeHtml(row.sts||'－')+'</span></div>';
+
+  var primaryGrid = '<div class="rc-grid">' + primaryDefs.filter(function(d){ return d.key !== 'reservationNo' && d.key !== 'staff' && d.key !== 'office' && d.key !== 'sts'; }).map(function(d){
+    var col = COLUMN_BY_KEY[d.field];
+    return '<div class="rc-item"><div class="k">'+escapeHtml(d.label)+'</div><div class="v">'+formatFieldValue(row[d.field], col)+'</div></div>';
+  }).join('') + '</div>';
+
+  var moreGrid = moreDefs.length ? ('<div class="rc-more' + (expanded?' open':'') + '" id="more-'+row.rowIndex+'"><div class="rc-grid">' + moreDefs.map(function(d){
+    var col = COLUMN_BY_KEY[d.field];
+    return '<div class="rc-item"><div class="k">'+escapeHtml(d.label)+'</div><div class="v">'+formatFieldValue(row[d.field], col)+'</div></div>';
+  }).join('') + '</div></div>') : '';
+
+  var moreToggle = moreDefs.length ? ('<button type="button" class="rc-more-toggle" data-row="'+row.rowIndex+'">' + (expanded ? '詳細を閉じる ▴' : '詳細を見る（CSV項目）▾') + '</button>') : '';
+
+  var editGrid = '<div class="rc-edit-grid editable-cell-inline">' + editDefs.map(function(d){
+    if (d.kind === 'date'){
+      var dv = row[d.field] || '';
+      return '<div class="rc-edit-item"><label>'+escapeHtml(d.label)+'</label><input type="date" data-row="'+row.rowIndex+'" data-col="'+d.field+'" value="'+escapeHtml(dv)+'"></div>';
+    }
+    if (d.kind === 'memo'){
+      var mv = row[d.field] || '';
+      return '<div class="rc-edit-item full"><label>'+escapeHtml(d.label)+'</label><input type="text" data-row="'+row.rowIndex+'" data-col="'+d.field+'" value="'+escapeHtml(mv)+'" placeholder="メモ"></div>';
+    }
+    // ancillary
+    var item = ANCILLARY_BY_KEY[d.item];
+    var status = row[item.statusKey] || '';
+    var qty = row[item.qtyKey];
+    var opts = ['', '〇', '✖'].map(function(v){
+      var label = v === '' ? '－' : v;
+      return '<option value="'+v+'"'+(status===v?' selected':'')+'>'+label+'</option>';
+    }).join('');
+    var qtyDisabled = status === '〇' ? '' : 'disabled';
+    var qtyVal = (qty===null||qty===undefined) ? '' : qty;
+    return '<div class="rc-edit-item"><label>'+escapeHtml(d.label)+'</label><div class="ancillary-pair">' +
+      '<select data-row="'+row.rowIndex+'" data-col="'+item.statusKey+'">'+opts+'</select>' +
+      '<input type="number" min="0" data-row="'+row.rowIndex+'" data-col="'+item.qtyKey+'" value="'+escapeHtml(String(qtyVal))+'" '+qtyDisabled+' placeholder="数">' +
+      '</div></div>';
+  }).join('') + '</div>';
+
+  return '<div class="record-card">' + head + primaryGrid + moreToggle + moreGrid + editGrid + '</div>';
+}
+
+function saveCell(rowIndex, columnKey, value){
+  var row = STATE.rows.find(function(r){ return r.rowIndex === rowIndex; });
+  if (!row) return;
+  var normalized = value === '' ? null : value;
+  row[columnKey] = (columnKey.slice(-3) === 'Qty' && normalized !== null) ? Number(normalized) : normalized;
+  var ancillary = ANCILLARY_ITEMS.filter(function(a){ return a.statusKey === columnKey; })[0];
+  if (ancillary && normalized !== '〇') row[ancillary.qtyKey] = null;
+  renderDataList();
+  applyDashFilters();
+  renderPersonalTab();
+}
+function bindDataListEditEvents(){
+  var list = document.getElementById('data-list');
+  list.addEventListener('change', function(e){
+    var t = e.target;
+    if (t.matches('input[type="date"][data-col]') || t.matches('select[data-col]') || t.matches('input[type="number"][data-col]')){
+      saveCell(Number(t.dataset.row), t.dataset.col, t.value);
+    }
+  });
+  list.addEventListener('blur', function(e){
+    var t = e.target;
+    if (t.matches('input[type="text"][data-col]')) saveCell(Number(t.dataset.row), t.dataset.col, t.value);
+  }, true);
+  list.addEventListener('click', function(e){
+    var btn = e.target.closest('.rc-more-toggle');
+    if (!btn) return;
+    var rowIndex = Number(btn.dataset.row);
+    STATE.expandedCards[rowIndex] = !STATE.expandedCards[rowIndex];
+    renderDataList();
+  });
+}
+
+/* ---- 列の並び順エディタ ---- */
+function renderColumnOrderEditor(){
+  var container = document.getElementById('column-order-list');
+  container.innerHTML = STATE.columnOrder.map(function(key, i){
+    var def = DISPLAY_COLUMN_DEFS_BY_KEY[key];
+    if (!def) return '';
+    return '<div class="col-order-row"><span>'+escapeHtml(def.label)+'</span><span class="buttons">' +
+      '<button type="button" class="col-order-up" data-index="'+i+'"'+(i===0?' disabled':'')+'>▲</button>' +
+      '<button type="button" class="col-order-down" data-index="'+i+'"'+(i===STATE.columnOrder.length-1?' disabled':'')+'>▼</button>' +
+      '</span></div>';
+  }).join('');
+}
+function bindColumnOrderEvents(){
+  document.getElementById('column-order-list').addEventListener('click', function(e){
+    var up = e.target.closest('.col-order-up'), down = e.target.closest('.col-order-down');
+    if (!up && !down) return;
+    var idx = Number((up||down).dataset.index);
+    var swapWith = up ? idx-1 : idx+1;
+    if (swapWith<0 || swapWith>=STATE.columnOrder.length) return;
+    var tmp = STATE.columnOrder[idx]; STATE.columnOrder[idx]=STATE.columnOrder[swapWith]; STATE.columnOrder[swapWith]=tmp;
+    renderColumnOrderEditor(); renderDataList();
+  });
+  document.getElementById('btn-save-column-order').addEventListener('click', function(){
+    var el = document.getElementById('column-order-result');
+    el.textContent = '並び順を保存しました（このモックアップでは表示中のみ反映されます）。';
+    el.classList.remove('hidden');
+    showToast('列の並び順を保存しました（デモ）', 'success');
+  });
+  document.getElementById('btn-reset-column-order').addEventListener('click', function(){
+    STATE.columnOrder = DEFAULT_COLUMN_ORDER.slice();
+    renderColumnOrderEditor(); renderDataList();
+  });
+}
+
+/* ---- 個人別サマリー ---- */
+function buildPersonalSummary(rows){
+  var map = {};
+  rows.forEach(function(r){
+    var key = (r.office||'(未設定)') + '\u0001' + (r.staff||'(未設定)');
+    if (!map[key]) map[key] = { office:r.office||'(未設定)', staff:r.staff||'(未設定)', count:0, insuranceQty:0, wifiQty:0, tavicaQty:0, cansapoQty:0 };
+    var b = map[key];
+    b.count++;
+    if (typeof r.insuranceQty === 'number') b.insuranceQty += r.insuranceQty;
+    if (typeof r.wifiQty === 'number') b.wifiQty += r.wifiQty;
+    if (typeof r.tavicaQty === 'number') b.tavicaQty += r.tavicaQty;
+    if (typeof r.cansapoQty === 'number') b.cansapoQty += r.cansapoQty;
+  });
+  return Object.keys(map).map(function(k){ return map[k]; });
+}
+function renderPersonalTab(){
+  var keyword = (document.getElementById('personal-search').value||'').trim().toLowerCase();
+  var list = buildPersonalSummary(STATE.rows).filter(function(b){
+    if (!keyword) return true;
+    return (b.office+' '+b.staff).toLowerCase().indexOf(keyword) !== -1;
+  });
+  list.sort(function(a,b){ return b.count - a.count; });
+  var el = document.getElementById('personal-list');
+  document.getElementById('personal-empty').classList.toggle('hidden', list.length>0);
+  el.innerHTML = list.map(function(b){
+    return '<div class="record-card">' +
+      '<div class="rc-head"><span class="rc-title">'+escapeHtml(b.staff)+'</span><span class="rc-badge">'+formatNumber(b.count)+'件</span></div>' +
+      '<div class="rc-sub" style="margin:-4px 0 8px;">'+escapeHtml(b.office)+'</div>' +
+      '<div class="rc-grid">' +
+        '<div class="rc-item"><div class="k">保険（加入PAX数）</div><div class="v">'+formatNumber(b.insuranceQty)+'</div></div>' +
+        '<div class="rc-item"><div class="k">Wifi（販売台数）</div><div class="v">'+formatNumber(b.wifiQty)+'</div></div>' +
+        '<div class="rc-item"><div class="k">TAViCA（加入数）</div><div class="v">'+formatNumber(b.tavicaQty)+'</div></div>' +
+        '<div class="rc-item"><div class="k">キャンサポ（加入PAX数）</div><div class="v">'+formatNumber(b.cansapoQty)+'</div></div>' +
+      '</div></div>';
+  }).join('');
+}
+
+/* ---- データ管理 ---- */
+function renderAdminStatus(){
+  document.getElementById('admin-status').innerHTML =
+    '<p>閲覧できる件数：<b>'+formatNumber(STATE.rows.length)+'</b> 件</p>' +
+    '<p>分析ダッシュボードの絞り込み結果：<b>'+formatNumber(STATE.dashFiltered.length)+'</b> 件</p>';
+}
+function removeDuplicatesDemo(){
+  if (!window.confirm('CSV由来19項目すべてが完全一致する重複行を削除します。よろしいですか？（デモ動作）')) return;
+  var el = document.getElementById('duplicate-result');
+  el.textContent = '重複している行はありませんでした。（デモ動作）';
+  el.classList.remove('hidden');
+  showToast('重複削除を実行しました（デモ）', 'success');
+}
+function clearAllDataDemo(){
+  var input = document.getElementById('clear-confirm-input');
+  if (input.value !== '削除'){ showToast('確認欄に「削除」と入力してください。', 'error'); return; }
+  if (!window.confirm('サンプルデータをすべて削除します（デモ動作。再読込で元に戻ります）。よろしいですか？')) return;
+  STATE.allRows = [];
+  input.value = '';
+  var el = document.getElementById('clear-result');
+  el.textContent = '削除しました（デモ）。';
+  el.classList.remove('hidden');
+  showToast('データを削除しました（デモ）', 'success');
+  boot();
+}
+
+/* ---- 権限管理 ---- */
+function renderStaffList(){
+  var el = document.getElementById('staff-list');
+  document.getElementById('staff-empty').classList.toggle('hidden', STATE.staffList.length>0);
+  el.innerHTML = STATE.staffList.map(function(s){
+    return '<div class="record-card">' +
+      '<div class="rc-head"><div><div class="rc-title" style="font-size:12px;">'+escapeHtml(s.email)+'</div><div class="rc-sub">'+escapeHtml(s.name||'－')+'</div></div><span class="rc-badge">'+escapeHtml(s.role)+'</span></div>' +
+      '<div class="rc-grid">' +
+        '<div class="rc-item"><div class="k">所属店舗</div><div class="v">'+escapeHtml(s.office||'－')+'</div></div>' +
+        '<div class="rc-item"><div class="k">所属エリア</div><div class="v">'+escapeHtml(s.area||'－')+'</div></div>' +
+      '</div>' +
+      '<div class="btn-row" style="margin-top:10px;">' +
+        '<button type="button" class="btn-ghost staff-edit" data-row="'+s.rowIndex+'" style="min-height:36px; font-size:12px;">編集</button>' +
+        '<button type="button" class="btn-ghost staff-delete" data-row="'+s.rowIndex+'" style="min-height:36px; font-size:12px; color:var(--red-600);">削除</button>' +
+      '</div></div>';
+  }).join('');
+}
+function bindStaffEvents(){
+  document.getElementById('btn-open-staff-modal').addEventListener('click', function(){ openStaffModal(null); });
+  document.getElementById('btn-close-staff-modal').addEventListener('click', closeStaffModal);
+  document.getElementById('btn-cancel-staff-modal').addEventListener('click', closeStaffModal);
+  document.getElementById('staff-list').addEventListener('click', function(e){
+    var editBtn = e.target.closest('.staff-edit'), delBtn = e.target.closest('.staff-delete');
+    if (editBtn) openStaffModal(Number(editBtn.dataset.row));
+    if (delBtn){
+      if (!window.confirm('このアカウントを削除しますか？（デモ動作）')) return;
+      STATE.staffList = STATE.staffList.filter(function(s){ return s.rowIndex !== Number(delBtn.dataset.row); });
+      renderStaffList();
+    }
+  });
+  document.getElementById('staff-form').addEventListener('submit', function(ev){
+    ev.preventDefault();
+    var rowIndex = document.getElementById('staff-form-rowindex').value;
+    var payload = {
+      email: document.getElementById('staff-form-email').value.trim(),
+      name: document.getElementById('staff-form-name').value.trim(),
+      office: document.getElementById('staff-form-office').value.trim(),
+      area: document.getElementById('staff-form-area').value.trim(),
+      role: document.getElementById('staff-form-role').value
+    };
+    if (rowIndex){
+      var target = STATE.staffList.find(function(s){ return s.rowIndex === Number(rowIndex); });
+      if (target) Object.assign(target, payload);
+    } else {
+      payload.rowIndex = Math.max.apply(null, STATE.staffList.map(function(s){return s.rowIndex;}).concat([1])) + 1;
+      STATE.staffList.push(payload);
+    }
+    renderStaffList();
+    closeStaffModal();
+    showToast('保存しました（デモ）', 'success');
+  });
+}
+function openStaffModal(rowIndex){
+  var isEdit = rowIndex !== null;
+  document.getElementById('staff-modal-title').textContent = isEdit ? '🛡️ アカウントを編集' : '🛡️ アカウントを追加';
+  var target = isEdit ? STATE.staffList.find(function(s){ return s.rowIndex === rowIndex; }) : null;
+  document.getElementById('staff-form-rowindex').value = isEdit ? rowIndex : '';
+  document.getElementById('staff-form-email').value = target ? target.email : '';
+  document.getElementById('staff-form-name').value = target ? target.name : '';
+  document.getElementById('staff-form-office').value = target ? target.office : '';
+  document.getElementById('staff-form-area').value = target ? target.area : '';
+  document.getElementById('staff-form-role').value = target ? target.role : '社員';
+  document.getElementById('staff-modal').classList.add('open');
+}
+function closeStaffModal(){ document.getElementById('staff-modal').classList.remove('open'); }
+
+/* ---- CSVインポート（デモ） ---- */
+var csvTimer = null;
+function openCsvModal(){
+  document.getElementById('csv-import-modal').classList.add('open');
+  document.getElementById('csv-file-input').value = '';
+  document.getElementById('csv-file-summary').classList.add('hidden');
+  document.getElementById('csv-import-result').style.display = 'none';
+  document.getElementById('csv-progress').classList.add('hidden');
+  document.getElementById('btn-submit-csv').disabled = true;
+}
+function closeCsvModal(){
+  document.getElementById('csv-import-modal').classList.remove('open');
+  if (csvTimer) { clearInterval(csvTimer); csvTimer = null; }
+}
+function onCsvFileSelected(e){
+  var file = e.target.files[0];
+  if (!file) { document.getElementById('btn-submit-csv').disabled = true; return; }
+  var summary = document.getElementById('csv-file-summary');
+  summary.textContent = 'ファイル：' + file.name + '（' + Math.ceil(file.size/1024) + ' KB）';
+  summary.classList.remove('hidden');
+  document.getElementById('btn-submit-csv').disabled = false;
+}
+function submitCsvImportDemo(){
+  document.getElementById('btn-submit-csv').disabled = true;
+  var box = document.getElementById('csv-progress');
+  var bar = document.getElementById('csv-progress-bar');
+  var timeLabel = document.getElementById('csv-progress-time');
+  box.classList.remove('hidden');
+  var elapsed = 0;
+  bar.style.width = '5%';
+  csvTimer = setInterval(function(){
+    elapsed++;
+    timeLabel.textContent = elapsed + '秒';
+    bar.style.width = Math.min(95, 5+elapsed*20) + '%';
+    if (elapsed >= 2){
+      clearInterval(csvTimer); csvTimer = null;
+      bar.style.width = '100%';
+      finishCsvImportDemo();
+    }
+  }, 300);
+}
+function finishCsvImportDemo(){
+  var addN = randInt(15, 40);
+  var added = genSampleRows(addN);
+  STATE.allRows = STATE.allRows.concat(added);
+  document.getElementById('last-imported-label').textContent = '最終取込：' + new Date().toLocaleString('ja-JP') + '（サンプル・デモ取込）';
+  var box = document.getElementById('csv-import-result');
+  box.style.display = 'block';
+  box.innerHTML = '<p style="color:var(--emerald-700); font-weight:600;">✅ 取り込みが完了しました（デモ）</p>' +
+    '<p>新規登録：<b>'+formatNumber(addN)+'</b> 件（CHK日・保険等は空欄で追加）</p>' +
+    '<p>取込後の合計件数：'+formatNumber(STATE.allRows.length)+' 件</p>';
+  showToast('CSVを取り込みました（デモ・新規 '+addN+' 件）', 'success');
+  boot();
+}
+
+/* ---- イベント結線・タブ切り替え ---- */
+function bindEvents(){
+  document.querySelectorAll('.bottom-nav .tab-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){ switchTab(btn.getAttribute('data-tab')); });
+  });
+  document.getElementById('btn-refresh').addEventListener('click', boot);
+  document.getElementById('role-switcher').addEventListener('change', onRoleChanged);
+
+  document.querySelectorAll('.filter-toggle').forEach(function(btn){
+    btn.addEventListener('click', function(){ toggleFilterPanel(btn); });
+  });
+
+  ['dash-filter-area','dash-filter-office','dash-filter-category','dash-filter-date-field'].forEach(function(id){
+    document.getElementById(id).addEventListener('change', applyDashFilters);
+  });
+  document.getElementById('dash-filter-date-from').addEventListener('change', applyDashFilters);
+  document.getElementById('dash-filter-date-to').addEventListener('change', applyDashFilters);
+  document.getElementById('btn-clear-dash-filter').addEventListener('click', clearDashFilters);
+
+  document.getElementById('ranking-sort-toggle').addEventListener('click', function(){
+    document.getElementById('ranking-sort-panel').classList.toggle('hidden');
+  });
+  document.getElementById('ranking-sort-key').addEventListener('change', function(){
+    STATE.rankingSortKey = this.value; renderRanking();
+  });
+
+  ['data-filter-area','data-filter-office','data-filter-staff'].forEach(function(id){
+    document.getElementById(id).addEventListener('change', applyDataFilters);
+  });
+  document.getElementById('data-filter-date-from').addEventListener('change', applyDataFilters);
+  document.getElementById('data-filter-date-to').addEventListener('change', applyDataFilters);
+  document.getElementById('data-filter-keyword').addEventListener('input', debounce(applyDataFilters, 250));
+  document.getElementById('btn-clear-data-filter').addEventListener('click', clearDataFilters);
+
+  document.getElementById('btn-prev-page').addEventListener('click', function(){ STATE.dataPage--; renderDataList(); window.scrollTo(0,0); });
+  document.getElementById('btn-next-page').addEventListener('click', function(){ STATE.dataPage++; renderDataList(); window.scrollTo(0,0); });
+  bindDataListEditEvents();
+
+  document.getElementById('btn-open-csv-modal').addEventListener('click', openCsvModal);
+  document.getElementById('btn-close-csv-modal').addEventListener('click', closeCsvModal);
+  document.getElementById('btn-cancel-csv-modal').addEventListener('click', closeCsvModal);
+  document.getElementById('csv-file-input').addEventListener('change', onCsvFileSelected);
+  document.getElementById('btn-submit-csv').addEventListener('click', submitCsvImportDemo);
+
+  document.getElementById('personal-search').addEventListener('input', debounce(renderPersonalTab, 200));
+
+  bindColumnOrderEvents();
+  document.getElementById('btn-remove-duplicates').addEventListener('click', removeDuplicatesDemo);
+  document.getElementById('btn-clear-all-data').addEventListener('click', clearAllDataDemo);
+  bindStaffEvents();
+}
+function switchTab(tab){
+  document.querySelectorAll('.bottom-nav .tab-btn').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-tab')===tab); });
+  document.querySelectorAll('.panel').forEach(function(p){ p.classList.toggle('hidden', p.id !== 'panel-'+tab); });
+  window.scrollTo(0,0);
+}
+
+/* ---- 共通ユーティリティ ---- */
+function formatNumber(n){ return Number(n||0).toLocaleString('ja-JP'); }
+function formatCurrency(n){ return '¥'+Number(n||0).toLocaleString('ja-JP'); }
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; });
+}
+function debounce(fn, wait){
+  var t=null;
+  return function(){ var args=arguments; clearTimeout(t); t=setTimeout(function(){ fn.apply(null,args); }, wait); };
+}
+function showToast(message, type){
+  var container = document.getElementById('toast-container');
+  var toast = document.createElement('div');
+  toast.className = 'toast ' + (type||'info');
+  var icon = type==='error' ? '❗' : (type==='success' ? '✅' : 'ℹ️');
+  toast.innerHTML = '<span>'+icon+'</span><span>'+escapeHtml(message)+'</span>';
+  container.appendChild(toast);
+  setTimeout(function(){
+    toast.style.opacity = '0';
+    setTimeout(function(){ toast.remove(); }, 300);
+  }, 4000);
+}
+</script>
+</body>
+</html>
