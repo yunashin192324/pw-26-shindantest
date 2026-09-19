@@ -5515,6 +5515,101 @@ section('89. 【要件】店舗・支店のコードは3桁（008・018・A68 �
         !ctx3.checkBranchMasterIssues_().some(m => m.includes('KANTO') && m.includes('3桁')));
 }
 
+
+section('90. 【機能追加】ログインパスコードの自己変更（項目110）');
+{
+  const ctx = shopFixture();
+  const jpLogin = ctx.apiLogin('KANTO', 'pw');
+  const jpToken = jpLogin.session.token;
+  const vieLogin = ctx.apiLogin('VIE', 'vp');
+  const vieToken = vieLogin.session.token;
+  const shopLogin = ctx.apiLogin('SHOP1', 'sp');
+  const shopToken = shopLogin.session.token;
+
+  // --- 現地支店：現在のパスコードが正しければ変更できる ---
+  ctx.apiChangeOwnPasscode(vieToken, 'vp', '新しいパスコード123');
+  check('変更後、旧パスコードではログインできない', ctx.apiLogin('VIE', 'vp').ok === false);
+  const afterVie = ctx.apiLogin('VIE', '新しいパスコード123');
+  check('変更後、新しいパスコードでログインできる', afterVie.ok === true, JSON.stringify(afterVie));
+
+  // --- 裏のスプレッドシート（支店マスタ）を見れば、何に変わったか分かる ---
+  const bm = ctx.__ss.getSheetByName('支店マスタ');
+  const bmHead = bm.getRange(1, 1, 1, bm.getLastColumn()).getValues()[0];
+  const codeCol = bmHead.indexOf('支店コード');
+  const passCol = bmHead.indexOf('ログインパスコード');
+  const bmRows = bm.getRange(2, 1, bm.getLastRow() - 1, bmHead.length).getValues();
+  const vieRow = bmRows.find(r => String(r[codeCol]) === 'VIE');
+  check('スプレッドシート上でも新しいパスコードがそのまま見える',
+        String(vieRow[passCol]) === '新しいパスコード123', String(vieRow[passCol]));
+
+  // --- 現在のパスコードが違うと変更できない（トークンを盗んだだけでは変更できない） ---
+  let err = null;
+  try { ctx.apiChangeOwnPasscode(shopToken, '違うパスコード', '横取り123'); } catch (e) { err = e.message; }
+  check('現在のパスコードが違うと変更できない', err !== null, String(err));
+  check('店舗のパスコードは変わっていない', ctx.apiLogin('SHOP1', 'sp').ok === true);
+
+  // --- 新しいパスコードが空欄だと変更できない ---
+  err = null;
+  try { ctx.apiChangeOwnPasscode(jpToken, 'pw', '   '); } catch (e) { err = e.message; }
+  check('新しいパスコードが空欄だと変更できない', err !== null, String(err));
+
+  // --- 他の支店・手配課には影響しない（自分の行だけが変わる） ---
+  ctx.apiChangeOwnPasscode(shopToken, 'sp', '店舗の新パスコード');
+  check('店舗が自分のパスコードを変えても、手配課のログインには影響しない',
+        ctx.apiLogin('KANTO', 'pw').ok === true);
+  check('店舗が自分のパスコードを変えても、現地支店のログインには影響しない',
+        ctx.apiLogin('VIE', '新しいパスコード123').ok === true);
+
+  // --- 手配課（JPロール）も自分のパスコードを変更できる ---
+  ctx.apiChangeOwnPasscode(jpToken, 'pw', '手配課の新パスコード');
+  check('手配課も自分のパスコードを変更できる',
+        ctx.apiLogin('KANTO', '手配課の新パスコード').ok === true);
+}
+
+section('91. 【機能追加】店舗の請求先（営業本部）をマスタ管理画面から事前登録できる（項目110）');
+{
+  const ctx = shopFixture();
+  const jpToken = ctx.apiLogin('KANTO', 'pw').session.token;
+
+  check('登録前は請求先が空欄',
+        !ctx.listBranchesRaw_().find(b => b.code === 'SHOP1').shopBilling);
+
+  ctx.apiSaveBranch(jpToken, {
+    code: 'SHOP1', name: '新宿店', role: 'SHOP', country: '', city: '', team: '',
+    email: 'shop1@example.com', prefix: '', passcode: '', active: true,
+    shopBilling: '関東営業本部'
+  });
+  check('マスタ管理画面から請求先を登録できる',
+        ctx.listBranchesRaw_().find(b => b.code === 'SHOP1').shopBilling === '関東営業本部');
+  // ★不具合修正（項目110・実装中に発見）：apiSaveBranchで既存の店舗の行を保存すると、
+  // ロールが黙ってBRANCH（現地支店）へ書き換わってしまっていた（画面はロールを読み取り専用で
+  // 表示し、保存時にその値をそのまま送り返す作りだったが、サーバー側がSHOPを認識していなかった）。
+  check('請求先を保存しても、店舗のロールはSHOPのまま変わらない',
+        ctx.listBranchesRaw_().find(b => b.code === 'SHOP1').role === 'SHOP',
+        ctx.listBranchesRaw_().find(b => b.code === 'SHOP1').role);
+  check('ロールが壊れていないので、店舗としてログインできる（現地支店扱いになっていない）',
+        ctx.apiLogin('SHOP1', 'sp').session.role === 'SHOP');
+
+  // 案件が来る前に登録しておいた請求先が、新規依頼にそのまま使われる
+  const shopToken = ctx.apiLogin('SHOP1', 'sp').session.token;
+  const made = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'VIE', team: '関東', challengeNo: 'BILLINGPR01',
+    groomLastName: 'PRE', groomName: 'TARO', brideLastName: 'PRE', brideName: 'HANAKO',
+    hope1: '2027-12-24'
+  });
+  check('事前登録した請求先が新規依頼にそのまま反映される',
+        ctx.apiGetReservationDetail(shopToken, made.kanriNo).detail.shopBilling === '関東営業本部',
+        String(ctx.apiGetReservationDetail(shopToken, made.kanriNo).detail.shopBilling));
+
+  // 指定しない（undefined）ときは既存の値を消さない（タイムゾーン・方面と同じ考え方）
+  ctx.apiSaveBranch(jpToken, {
+    code: 'SHOP1', name: '新宿店', role: 'SHOP', country: '', city: '', team: '',
+    email: 'shop1@example.com', prefix: '', passcode: '', active: true
+  });
+  check('請求先を指定せずに保存しても、既に登録した値は消えない',
+        ctx.listBranchesRaw_().find(b => b.code === 'SHOP1').shopBilling === '関東営業本部');
+}
+
 // ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
 process.exit(fail === 0 ? 0 : 1);

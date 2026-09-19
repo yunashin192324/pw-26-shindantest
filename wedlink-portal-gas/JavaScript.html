@@ -353,6 +353,9 @@
     $('masters-type').addEventListener('change', () => { mastersType = $('masters-type').value; openMastersView(); });
     $('masters-branch').addEventListener('change', () => { mastersBranchCode = $('masters-branch').value; loadMasters(); });
     $('nav-settings').addEventListener('click', openSettingsView);
+    // ★機能追加（項目110）：ログインパスコードの自己変更
+    $('nav-password').addEventListener('click', openPasswordView);
+    $('password-submit').addEventListener('click', submitPasswordChange);
     $('nav-logout').addEventListener('click', doLogout);
     // ★不具合修正：通知メール送信失敗の帯を閉じられるようにする
     if ($('notice-bar-close')) $('notice-bar-close').addEventListener('click', hideNotice_);
@@ -3796,7 +3799,11 @@
         <td><input data-m-field="email" data-m-row="${i}" value="${escapeAttr(row.email || '')}" style="width:100%;" placeholder="通知先メール"></td>
         <td><input data-m-field="timezone" data-m-row="${i}" value="${escapeAttr(row.timezone || '')}" style="width:100%;" placeholder="例）Europe/Rome"></td>
         <!-- ★要件（項目101）：案件一覧を方面でまとめて絞り込むための欄。空欄なら方面なし。 -->
-        <td><input data-m-field="region" data-m-row="${i}" value="${escapeAttr(row.region || '')}" style="width:100%;" placeholder="例）ヨーロッパ"></td>`;
+        <td><input data-m-field="region" data-m-row="${i}" value="${escapeAttr(row.region || '')}" style="width:100%;" placeholder="例）ヨーロッパ"></td>
+        <!-- ★要件（項目110）：日本の店舗（SHOPロール）の請求先（営業本部）。案件が来る前に
+             あらかじめここへ登録しておける（店舗発の新規依頼が来たときに使われる）。
+             店舗以外の行でも欄自体は出すが、実際に参照されるのはSHOPロールの行だけ。 -->
+        <td><input data-m-field="shopBilling" data-m-row="${i}" value="${escapeAttr(row.shopBilling || '')}" style="width:100%;" placeholder="例）関東営業本部"></td>`;
     }
     let cells = `<td><input data-m-field="name" data-m-row="${i}" value="${escapeAttr(row.name || '')}" style="width:100%;"></td>`;
     if (def.extra === 'plan') {
@@ -3829,7 +3836,7 @@
   }
 
   function masterHeadCells_(def) {
-    if (def.key === 'branch') return ['支店コード', '名称', 'ロール', '通知先メール', '現地のタイムゾーン', '方面'];
+    if (def.key === 'branch') return ['支店コード', '名称', 'ロール', '通知先メール', '現地のタイムゾーン', '方面', '請求先（店舗のみ）'];
     const head = [def.extra === 'glossary' ? '日本語' : '名称'];
     if (def.extra === 'plan') head.push('撮影場所の入力方式', '撮影場所の候補', '納品期限日数');
     if (def.extra === 'sale') head.push('対象プラン');
@@ -3864,7 +3871,7 @@
           </table>
         </div>
       </div>
-      ${def.key === 'branch' ? `<p class="hint-text">支店の新規追加・パスコードの変更はスプレッドシートの「支店マスタ」で行ってください（ここでは名称・通知先メール・有効の変更だけができます）。</p>` : `
+      ${def.key === 'branch' ? `<p class="hint-text">支店の新規追加は、初期パスコードとあわせてスプレッドシートの「支店マスタ」で行ってください（ここでは名称・通知先メール・有効・タイムゾーン・方面・請求先の変更だけができます）。パスコードは各拠点が「パスワード変更」からいつでも自分で変更できます（変更後の値はスプレッドシートにそのまま残ります）。</p>` : `
       <div class="section-card">
         <h3>新しく追加する</h3>
         <div class="detail-grid">
@@ -3910,7 +3917,7 @@
             code: row.code, name: name, role: row.role, country: row.country || '', city: row.city || '',
             team: row.team || '', email: masterInputValue_(i, 'email'), prefix: row.prefix || '',
             passcode: '', active: active, timezone: masterInputValue_(i, 'timezone'),
-            region: masterInputValue_(i, 'region')
+            region: masterInputValue_(i, 'region'), shopBilling: masterInputValue_(i, 'shopBilling')
           });
         } else if (def.extra === 'plan') {
           await gsRun('apiSavePlanItem', session.token, mastersBranchCode, name, row.name, active,
@@ -3988,7 +3995,43 @@
     });
   }
 
-  async function openSettingsView() {
+  // ★機能追加（項目110）：ログインパスコードの自己変更。初期のパスコードはこれまでどおり
+  // 手配課が支店マスタへ用意しておき、そこから先は各拠点が自分で好きなパスコードへ変更できる。
+  // 変更後の値はスプレッドシート「支店マスタ」にそのまま残る（暗号化・別欄への記録はしない）ため、
+  // 手配課はいつでもシートを見れば「今どのパスコードに変わっているか」を確認できる。
+  function openPasswordView() {
+    showView('password');
+    $('password-account-label').textContent = session.role === 'JP'
+      ? `${session.branchName}（${session.team}）` : `${session.branchName}（${session.branchCode}）`;
+    $('password-current').value = '';
+    $('password-new').value = '';
+    $('password-confirm').value = '';
+    $('password-error').classList.add('hidden');
+    $('password-success').classList.add('hidden');
+  }
+
+  async function submitPasswordChange(evt) {
+    $('password-error').classList.add('hidden');
+    $('password-success').classList.add('hidden');
+    const current = $('password-current').value;
+    const next = $('password-new').value;
+    const confirm = $('password-confirm').value;
+    if (!next.trim()) { showFieldError('password-error', '新しいパスコードを入力してください。'); return; }
+    if (next !== confirm) { showFieldError('password-error', '新しいパスコード（確認）が一致しません。'); return; }
+    if (next === current) { showFieldError('password-error', '現在のパスコードと同じです。別のパスコードにしてください。'); return; }
+    await withButtonBusy_(evt && evt.currentTarget, '変更中...', async () => {
+      try {
+        await gsRun('apiChangeOwnPasscode', session.token, current, next);
+        $('password-current').value = '';
+        $('password-new').value = '';
+        $('password-confirm').value = '';
+        $('password-success').textContent = 'パスコードを変更しました。次回のログインから新しいパスコードを使ってください。';
+        $('password-success').classList.remove('hidden');
+      } catch (e) { showFieldError('password-error', e.message); }
+    });
+  }
+
+    async function openSettingsView() {
     showView('settings');
     if (session.role === 'JP') {
       if (!branchesCache.length) branchesCache = await gsRun('apiListBranches', session.token);

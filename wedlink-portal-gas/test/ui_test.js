@@ -4111,6 +4111,102 @@ function paneHidden(document, key) {
           ctx65.apiGetReservationDetail(shop65, shopCase.kanriNo).detail['STS JP'] === 'CR');
   }
 
+  section('U66. 【機能追加】マスタ管理の支店一覧から店舗の請求先を事前登録できる（項目110）');
+  {
+    const ctx66 = makeServer();
+    const dom66 = await openApp(ctx66);
+    const doc66 = dom66.window.document;
+    await login(dom66, 'KANTO', 'CHANGE-ME-KANTO');
+    await settle();
+    doc66.getElementById('nav-masters').click();
+    await settle(); await settle();
+    doc66.getElementById('masters-type').value = 'branch';
+    doc66.getElementById('masters-type').dispatchEvent(new dom66.window.Event('change'));
+    await settle(); await settle();
+
+    check('支店一覧に「請求先」の列見出しがある',
+          [...doc66.querySelectorAll('#masters-content th')].some(th => th.textContent.includes('請求先')));
+    const billingInputs = [...doc66.querySelectorAll('[data-m-field="shopBilling"]')];
+    check('各行に請求先の入力欄がある', billingInputs.length > 0);
+
+    // 新宿店（SHOP1）の行を探して請求先を入力・保存する
+    const rows66 = [...doc66.querySelectorAll('#masters-content tbody tr')];
+    const shopRowIdx = rows66.findIndex(tr => tr.textContent.includes('SHOP1'));
+    check('店舗（SHOP1）の行が一覧にある', shopRowIdx !== -1);
+    const billingInput = doc66.querySelector(`[data-m-row="${shopRowIdx}"][data-m-field="shopBilling"]`);
+    billingInput.value = '関東営業本部';
+    doc66.querySelector(`[data-m-save="${shopRowIdx}"]`).click();
+    await settle(); await settle(); await settle();
+
+    const jp66 = ctx66.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    check('画面から登録した請求先がスプレッドシートに保存される',
+          ctx66.listBranchesRaw_().find(b => b.code === 'SHOP1').shopBilling === '関東営業本部');
+    check('保存してもロールはSHOPのまま（不具合修正の確認）',
+          ctx66.listBranchesRaw_().find(b => b.code === 'SHOP1').role === 'SHOP');
+    check('店舗として引き続きログインできる',
+          ctx66.apiLogin('SHOP1', 'CHANGE-ME-SHOP1').session.role === 'SHOP');
+  }
+
+  section('U67. 【機能追加】ログインパスコードの自己変更画面（項目110）');
+  {
+    const ctx67 = makeServer();
+    const dom67 = await openApp(ctx67);
+    const doc67 = dom67.window.document;
+    await login(dom67, 'VIE', 'CHANGE-ME-VIE');
+    await settle();
+
+    check('現地支店の画面にも「パスワード変更」ボタンがある',
+          !doc67.getElementById('nav-password').classList.contains('hidden'));
+    doc67.getElementById('nav-password').click();
+    await settle();
+    check('パスワード変更の画面が開く', !doc67.getElementById('view-password').classList.contains('hidden'));
+    check('自分の支店名が表示される',
+          doc67.getElementById('password-account-label').textContent.includes('ローマ') === false &&
+          doc67.getElementById('password-account-label').textContent.length > 0);
+
+    // 現在のパスコードを間違えると変更できない
+    doc67.getElementById('password-current').value = '間違ったパスコード';
+    doc67.getElementById('password-new').value = '新しいパスコード123';
+    doc67.getElementById('password-confirm').value = '新しいパスコード123';
+    doc67.getElementById('password-submit').click();
+    await settle(); await settle();
+    check('現在のパスコードが違うとエラーが出る',
+          !doc67.getElementById('password-error').classList.contains('hidden'));
+    check('現在のパスコードが違うとログインパスコードは変わらない',
+          ctx67.apiLogin('VIE', 'CHANGE-ME-VIE').ok === true);
+
+    // 確認欄が一致しないと送信されない
+    doc67.getElementById('password-current').value = 'CHANGE-ME-VIE';
+    doc67.getElementById('password-new').value = '新しいパスコード123';
+    doc67.getElementById('password-confirm').value = '確認が違う';
+    doc67.getElementById('password-submit').click();
+    await settle();
+    check('確認欄が一致しないとエラーが出る（サーバーへ送らない）',
+          !doc67.getElementById('password-error').classList.contains('hidden'));
+
+    // 正しく入力すると変更できる
+    doc67.getElementById('password-current').value = 'CHANGE-ME-VIE';
+    doc67.getElementById('password-new').value = '新しいパスコード123';
+    doc67.getElementById('password-confirm').value = '新しいパスコード123';
+    doc67.getElementById('password-submit').click();
+    await settle(); await settle(); await settle();
+    check('変更に成功すると成功メッセージが出る',
+          !doc67.getElementById('password-success').classList.contains('hidden'));
+    check('入力欄がクリアされる', doc67.getElementById('password-current').value === '');
+    check('新しいパスコードでログインできる（サーバー側で実際に変わっている）',
+          ctx67.apiLogin('VIE', '新しいパスコード123').ok === true);
+    check('旧パスコードではもうログインできない',
+          ctx67.apiLogin('VIE', 'CHANGE-ME-VIE').ok === false);
+
+    // 店舗の画面にも同じボタン・画面が出る
+    doc67.getElementById('nav-logout').click();
+    await settle();
+    await login(dom67, 'SHOP1', 'CHANGE-ME-SHOP1');
+    await settle();
+    check('店舗の画面にも「パスワード変更」ボタンがある',
+          !doc67.getElementById('nav-password').classList.contains('hidden'));
+  }
+
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error('テストが異常終了しました:', e); process.exit(1); });

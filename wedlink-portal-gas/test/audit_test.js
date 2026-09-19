@@ -82,6 +82,10 @@ const API_SPECS = [
   // ★機能追加（マーレ支店など英語専用支店対応）：セッションさえあれば誰でも呼べる（支店固有の
   // データには触れず、英語支店以外は入力をそのまま返すだけ）
   { fn: 'apiTranslateBatch',     scope: 'any', args: (t) => [t, ['テスト']] },
+  // ★機能追加（項目110）：ログインパスコードの自己変更。branchCode等の支店を指定する引数を
+  // 持たず、常に呼び出したセッション自身の行だけを書き換えるため、他支店を狙うtargetは無い
+  // （A2の支店データ分離テストの対象外＝targetを指定していない）。
+  { fn: 'apiChangeOwnPasscode',  scope: 'any', args: (t) => [t, 'CHANGE-ME-KANTO', 'あたらしいパスコード123'], writes: true },
   { fn: 'apiListBranches',       scope: 'jp',  args: (t) => [t] },
   { fn: 'apiSaveBranch',         scope: 'jp',  args: (t) => [t, { code: 'TST', name: 'テスト支店', passcode: 'p' }], writes: true },
   { fn: 'apiSetBranchActive',    scope: 'jp',  args: (t) => [t, 'VIE', true], writes: true },
@@ -224,7 +228,7 @@ section('A1. 認可マトリクス：保護の書き忘れを機械的に検出'
         noVisible.length === 0, '可視性チェックなし: ' + noVisible.join(', '));
 
   // 書き込みAPIは排他ロックが必要（読み取り専用は不要）
-  const mustLock = ['apiSaveBranch','apiSetBranchActive','apiSaveFieldsQuiet','apiCommitChanges',
+  const mustLock = ['apiSaveBranch','apiSetBranchActive','apiChangeOwnPasscode','apiSaveFieldsQuiet','apiCommitChanges',
                     'apiSetDriveUrl','apiCreateReservation','apiShopCreateRequest','apiToggleHistoryCheck',
                     'apiDeleteHistoryMessage',
                     'apiSaveStaffItem','apiSaveSaleItem','apiSavePlanItem','apiSaveOptionItem','apiSaveLocationItem',

@@ -22,6 +22,9 @@
         <button id="nav-audit" class="nav-btn jp-only">操作履歴</button>
         <button id="nav-masters" class="nav-btn non-shop">マスタ管理</button>
         <button id="nav-settings" class="nav-btn non-shop">設定</button>
+        <!-- ★機能追加（項目110）：ログインパスコードの自己変更。手配課・現地支店・店舗の
+             いずれからも使えるよう、他のnav-*ボタンのようなロール限定クラスは付けない。 -->
+        <button id="nav-password" class="nav-btn">パスワード変更</button>
         <button id="nav-logout" class="nav-btn nav-logout">ログアウト</button>
       </nav>
     </header>
@@ -445,6 +448,23 @@
         <select id="settings-branch-select" class="jp-only hidden"></select>
         <div id="settings-content"></div>
         <button id="settings-save" class="primary-btn">この内容で保存</button>
+      </section>
+
+      <!-- ★機能追加（項目110）：ログインパスコードの自己変更。初期のパスコードはこれまでどおり
+           手配課が支店マスタへ用意しておき、そこから先は各拠点が自分で好きなパスコードへ変更できる。
+           変更後の値はスプレッドシート「支店マスタ」にそのまま残る（暗号化・別欄への記録はしない）。 -->
+      <section id="view-password" class="view hidden">
+        <h2>パスワード変更</h2>
+        <p class="hint-text">ご自分（<span id="password-account-label"></span>）のログインパスコードを変更します。変更後は次回のログインから新しいパスコードが必要です。</p>
+        <label>現在のパスコード</label>
+        <input id="password-current" type="password" autocomplete="current-password">
+        <label>新しいパスコード</label>
+        <input id="password-new" type="password" autocomplete="new-password">
+        <label>新しいパスコード（確認）</label>
+        <input id="password-confirm" type="password" autocomplete="new-password">
+        <button id="password-submit" class="primary-btn">この内容で変更する</button>
+        <p id="password-error" class="error-text hidden"></p>
+        <p id="password-success" class="success-text hidden"></p>
       </section>
     </main>
 

@@ -1166,7 +1166,12 @@ function apiSaveBranch(token, branch) {
   if (!branch.code || !branch.name) {
     throw new Error('支店コード・支店名は必須です。');
   }
-  const role = branch.role === JP_ROLE ? JP_ROLE : BRANCH_ROLE;
+  // ★不具合修正（項目110）：以前はJP以外のロールをすべてBRANCHとして扱っていたため、
+  // 既存の店舗（SHOPロール）の行をマスタ管理画面から編集・保存すると、ロールが黙って
+  // BRANCHへ書き換わってしまう不具合があった（画面はロールを読み取り専用で表示するだけだが、
+  // 保存時にはこの行の元のロールをそのまま送り返す作りのため、保存するたびに壊れる）。
+  // listBranchesRaw_・apiLogin等と同じnormalizeRole_を必ず通し、SHOPロールも正しく扱う。
+  const role = normalizeRole_(branch.role);
   // ★要件（項目107）：数字だけのコードは3桁へそろえてから保存する（8 → 008）
   const code = padBranchCode_(branch.code);
   const prefix = role === BRANCH_ROLE ? String(branch.prefix || code).trim().toUpperCase() : '';
@@ -1232,6 +1237,12 @@ function apiSaveBranch(token, branch) {
           return branch.region === undefined
             ? (existingRowValues ? existingRowValues[idx] : '')
             : String(branch.region || '').trim();
+        // ★要件（項目110）：店舗の請求先（営業本部）を、案件が来る前にあらかじめマスタ登録
+        // しておけるようにする。タイムゾーン・方面と同じく、指定が無い場合は既存の値を維持する。
+        case BM_COL_SHOP_BILLING:
+          return branch.shopBilling === undefined
+            ? (existingRowValues ? existingRowValues[idx] : '')
+            : String(branch.shopBilling || '').trim();
         // ★不具合修正：このAPIが直接扱わない列（請求番号欄名称・納品期限日数など、今後追加される
         // 列も含む）は、新規行なら空欄、既存行の編集なら元の値をそのまま維持する。
         // 以前は無条件に空文字で上書きしていたため、このAPI経由で支店情報を保存すると
@@ -1275,6 +1286,55 @@ function apiSetBranchActive(token, code, active) {
   } finally {
     lock.releaseLock();
   }
+}
+
+// ★機能追加（項目110）：ログインパスコードの自己変更。
+// これまでパスコードは手配課が「マスタ管理」画面（支店マスタ）を開いて書き換えるしか方法が無く、
+// 各拠点（現地支店・日本の店舗）が自分でパスコードを変えることができなかった。初期のパスコードは
+// これまでどおり支店マスタに手配課が用意しておき、そこから先は各拠点が自分で好きなパスコードへ
+// 変更できるようにする。パスコードは元々「支店マスタ」シートに平文で保存する設計のため、
+// 変更後の値もそのままそのシートに残る＝手配課がシートを見れば何に変えたか分かる
+// （暗号化・別欄への記録などは行わない。この設計を変えると「シートで確認できる」という
+// 要件そのものと矛盾するため）。
+// 対象は自分の行だけ（他支店・他店舗のパスコードは変更できない）。現在のパスコードの入力を
+// 必須にし、なりすまし（ログイン画面を開いたままにしていた等）による変更を防ぐ。
+function apiChangeOwnPasscode(token, currentPasscode, newPasscode) {
+  const session = requireSession_(token);
+  const current = String(currentPasscode === null || currentPasscode === undefined ? '' : currentPasscode);
+  const next = String(newPasscode === null || newPasscode === undefined ? '' : newPasscode).trim();
+  if (!next) throw new Error('新しいパスコードを入力してください。');
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
+  try {
+    const sheet = getSpreadsheet_().getSheetByName(BRANCH_MASTER_SHEET_NAME);
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const codeColIdx = headers.indexOf(BM_COL_CODE);
+    const passcodeColIdx = headers.indexOf(BM_COL_PASSCODE);
+    if (passcodeColIdx === -1) {
+      throw new Error(`スプレッドシートに「${BM_COL_PASSCODE}」列がありません。スプレッドシートのメニューから setupPortal を一度実行してください。`);
+    }
+    const lastRow = sheet.getLastRow();
+    let targetRow = -1;
+    if (lastRow > 1) {
+      const values = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
+      for (let i = 0; i < values.length; i++) {
+        if (sameBranchCode_(values[i][codeColIdx], session.branchCode)) { targetRow = i + 2; break; }
+      }
+      if (targetRow !== -1) {
+        // ★不具合防止：ログインの一致判定（apiLogin）と同じ「trimも大文字化もしない完全一致」で比べる。
+        // ここで正規化してしまうと、大文字小文字だけが違う別のパスコードでも通ってしまう。
+        const existingPasscode = String(values[targetRow - 2][passcodeColIdx] === undefined ? '' : values[targetRow - 2][passcodeColIdx]);
+        if (existingPasscode !== current) {
+          throw new Error('現在のパスコードが正しくありません。');
+        }
+      }
+    }
+    if (targetRow === -1) throw new Error('支店マスタに自分の行が見つかりません。手配課にご連絡ください。');
+    sheet.getRange(targetRow, passcodeColIdx + 1).setValue(next);
+  } finally {
+    lock.releaseLock();
+  }
+  return { ok: true };
 }
 
 // =====================================================
