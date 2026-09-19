@@ -640,7 +640,16 @@
     list = sortReservations(list, dashboardSortKey);
 
     // ★読み込み失敗時の案内文言（loadDashboardのcatch側）を、正常に描画できたときは元に戻す
-    $('dashboard-empty').textContent = '案件がありません。';
+    // ★要件（項目105）：店舗の一覧が0件のとき、「案件がありません」だけでは原因が分からず
+    // 「作ったのに出てこない」という問い合わせが繰り返し起きていた。サーバー側が調べた
+    // 手がかり（起票元店舗の列が無い／空欄の案件がある／別の店舗コードが入っている）を添える。
+    const emptyHints = (data.emptyHint || []).filter(Boolean);
+    if (emptyHints.length && list.length === 0) {
+      $('dashboard-empty').innerHTML = '案件がありません。<br>' +
+        emptyHints.map(h => `<span style="color:var(--color-danger);">${escapeHtml(h)}</span>`).join('<br>');
+    } else {
+      $('dashboard-empty').textContent = '案件がありません。';
+    }
     $('dashboard-empty').classList.toggle('hidden', list.length > 0);
 
     if (dashboardViewMode === 'table') {
@@ -3596,6 +3605,9 @@
       $('shop-new-success-text').innerHTML = `${escapeHtml(kindLabel)}をしました。<br>回答までしばらくお待ちください。<br>${kanriLine}`;
       $('shop-new-success').classList.remove('hidden');
       noticeIfMailFailed_(res);
+      // ★要件（項目105）：作った直後にサーバー側で「自分の一覧に出る状態か」を確かめている。
+      // 出ない状態だったら、完了の案内だけで済ませずその場で知らせる（消えない帯で出す）。
+      if (res && res.originWarning) showNotice_(res.originWarning);
       if (typeof $('shop-new-success').scrollIntoView === 'function') {
         $('shop-new-success').scrollIntoView({ behavior: 'smooth', block: 'center' });
       }

@@ -5253,6 +5253,78 @@ section('86. 【不具合修正】予約リクエスト中のキャンセル（�
   check('店舗発の案件でも、キャンセル依頼中は現地が希望日にOKを入れられない', err !== null, String(err));
 }
 
+
+section('87. 【機能追加】店舗の一覧が0件のとき理由の手がかりを出す／作った直後に一覧へ出る状態か確かめる（項目105）');
+{
+  // --- まずは正常なケース：作った案件はその場で店舗の一覧に出る ---
+  const ctx = shopFixture();
+  const shopToken = ctx.apiLogin('SHOP1', 'sp').session.token;
+  const created = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'VIE', team: '関東', challengeNo: 'ORIGINOK001',
+    groomLastName: 'YAMADA', groomName: 'TARO', brideLastName: 'YAMADA', brideName: 'HANAKO',
+    hope1: '2027-12-24'
+  });
+  check('作成に成功する', created.ok === true);
+  check('正常なら「一覧に出ない」という注意は付かない', !created.originWarning, String(created.originWarning));
+  const dash = ctx.apiGetDashboard(shopToken);
+  check('作った案件がその場で店舗の一覧に出る',
+        dash.reservations.some(r => r.kanriNo === created.kanriNo),
+        dash.reservations.map(r => r.kanriNo).join(','));
+  check('一覧に出ているときは手がかりを返さない', !dash.emptyHint, JSON.stringify(dash.emptyHint));
+
+  // --- 起票元店舗が空欄の案件しか無い場合：0件の理由を具体的に伝える ---
+  const ctx2 = shopFixture();
+  const shop2 = ctx2.apiLogin('SHOP1', 'sp').session.token;
+  addCase(ctx2, '予約一覧', {
+    '支店コード': 'VIE', '管理番号': 'VIE-701', '管轄': '関東', 'STS JP': 'RQ',
+    '新郎名（ローマ字）': 'Lost', '新婦名（ローマ字）': 'Case'
+  });
+  const empty2 = ctx2.apiGetDashboard(shop2);
+  check('店舗の一覧は0件になる', empty2.reservations.length === 0);
+  check('0件の理由の手がかりが返る', (empty2.emptyHint || []).length > 0, JSON.stringify(empty2.emptyHint));
+  check('「起票元店舗が空欄の案件がある」と件数つきで伝える',
+        (empty2.emptyHint || []).some(h => h.includes('起票元店舗') && h.includes('1件')),
+        JSON.stringify(empty2.emptyHint));
+  check('直し方（setupPortalの実行）まで案内している',
+        (empty2.emptyHint || []).some(h => h.includes('setupPortal')), JSON.stringify(empty2.emptyHint));
+
+  // --- 別の店舗コードの案件しか無い場合：ログイン中の店舗コードを示して知らせる ---
+  const ctx3 = shopFixture();
+  const shop3 = ctx3.apiLogin('SHOP1', 'sp').session.token;
+  addCase(ctx3, '予約一覧', {
+    '支店コード': 'VIE', '管理番号': 'VIE-702', '管轄': '関東', 'STS JP': 'RQ',
+    '起票元店舗': 'SHOP2', '新郎名（ローマ字）': 'Other', '新婦名（ローマ字）': 'Shop'
+  });
+  const empty3 = ctx3.apiGetDashboard(shop3);
+  check('別の店舗の案件しか無いときも0件になる', empty3.reservations.length === 0);
+  check('ログイン中の店舗コードと、入っている別の店舗コードを示す',
+        (empty3.emptyHint || []).some(h => h.includes('SHOP1') && h.includes('SHOP2')),
+        JSON.stringify(empty3.emptyHint));
+
+  // --- 「起票元店舗」列そのものが無い場合 ---
+  const ctx4 = shopFixture();
+  const shop4 = ctx4.apiLogin('SHOP1', 'sp').session.token;
+  const ss4 = ctx4.__ss;
+  const res4 = ss4.getSheetByName('予約一覧');
+  const cols4 = res4.getRange(1, 1, 1, res4.getLastColumn()).getValues()[0].filter(h => h !== '起票元店舗');
+  delete ss4.sheets['予約一覧'];
+  ss4.insertSheet('予約一覧').getRange(1, 1, 1, cols4.length).setValues([cols4]);
+  const empty4 = ctx4.apiGetDashboard(shop4);
+  check('列そのものが無い場合は、列が無いことを伝える',
+        (empty4.emptyHint || []).some(h => h.includes('起票元店舗') && h.includes('列がありません')),
+        JSON.stringify(empty4.emptyHint));
+  // 列が無い状態で新規作成すると、これまでどおりその場でエラーになる（作らせない）
+  let err = null;
+  try {
+    ctx4.apiShopCreateRequest(shop4, {
+      branchCode: 'VIE', team: '関東', challengeNo: 'ORIGINNG001',
+      groomLastName: 'A', groomName: 'B', brideLastName: 'C', brideName: 'D', hope1: '2027-12-25'
+    });
+  } catch (e) { err = e.message; }
+  check('列が無いときは新規作成そのものがエラーになる（作ったのに出ない状態を作らない）',
+        err !== null && err.includes('起票元店舗'), String(err));
+}
+
 // ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
 process.exit(fail === 0 ? 0 : 1);

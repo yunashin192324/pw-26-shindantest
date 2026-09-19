@@ -1668,8 +1668,51 @@ function apiGetDashboard(token, scope) {
     // ★機能追加：新規依頼フォーム用に、選択できる支店（＝都市）と手配課の一覧を返す
     result.branches = listBranchesRaw_().filter(b => b.role === BRANCH_ROLE && b.active);
     result.teams = JP_TEAMS;
+    // ★要件（項目105）：店舗の一覧が1件も出ないとき、その理由の手がかりを一緒に返す。
+    // 「作ったのに自分の一覧にだけ出てこない」という報告が繰り返し起きており、原因は毎回
+    // 「起票元店舗」列まわりだった。画面に「案件がありません」としか出ないと、利用者は
+    // どこを見ればよいか分からないため、調べた結果を具体的に伝える。
+    if (list.length === 0) result.emptyHint = shopEmptyHint_(session);
   }
   return result;
+}
+
+// ★要件（項目105）：店舗の一覧が0件のときに、その原因を切り分けるための手がかりを作る。
+// 返すのは画面に出す短い文の配列（該当が無ければ空配列＝ほんとうに0件なだけ）。
+function shopEmptyHint_(session) {
+  const hints = [];
+  const sheet = getSpreadsheet_().getSheetByName(RESERVATION_SHEET_NAME);
+  if (!sheet || sheet.getLastRow() < 1) return hints;
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+  const originIdx = headers.indexOf(COL_ORIGIN_SHOP);
+  if (originIdx === -1) {
+    hints.push(`予約一覧シートに「${COL_ORIGIN_SHOP}」列がありません。これが無いと、店舗が作った案件が` +
+               'どの店舗のものか記録できず、店舗の一覧には何も出ません。' +
+               'スプレッドシートのメニューから setupPortal を一度実行して、不足している列を追加してください。');
+    return hints;
+  }
+  if (sheet.getLastRow() < 2) return hints;
+  const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
+  let blank = 0;
+  const otherCodes = {};
+  rows.forEach(r => {
+    const v = String(r[originIdx] || '').trim();
+    if (!v) { blank++; return; }
+    if (v.toUpperCase() !== session.branchCode) otherCodes[v] = (otherCodes[v] || 0) + 1;
+  });
+  if (blank > 0) {
+    hints.push(`予約一覧に「${COL_ORIGIN_SHOP}」が空欄の案件が${blank}件あります。` +
+               'この欄が空欄だと、手配課・現地支店からは見えても店舗の一覧には出ません。' +
+               'スプレッドシートのメニューから setupPortal を一度実行すると、' +
+               'やり取り履歴からたどれるぶんは自動で埋まります。');
+  }
+  const others = Object.keys(otherCodes);
+  if (others.length > 0) {
+    hints.push(`ログイン中の店舗コードは「${session.branchCode}」です。` +
+               `予約一覧には別の店舗コード（${others.slice(0, 5).join('・')}）の案件が入っています。` +
+               '別の店舗コードでログインしていないか、支店マスタの店舗コードが案件側と合っているかをご確認ください。');
+  }
+  return hints;
 }
 
 // --- 「要対応（未読）」フラグの読み書き -------------------------------------
@@ -4492,10 +4535,38 @@ function apiShopCreateRequest(token, payload) {
     }
 
     sortReservationSheet_(sheet);
-    return { ok: true, kanriNo: created[0].kanriNo, kanriNos: created.map(c => c.kanriNo), mailWarning: mailWarning };
+    // ★要件（項目105）：作った直後に「この案件が自分の一覧に出る状態になっているか」を
+    // シートから読み直して確かめる。「完了したのに自分の一覧に出てこない」という報告が
+    // 繰り返し起きているため、出ない状態のまま完了と伝えてしまわないようにする。
+    // （書き込み自体は済んでいるので、ここでは例外にせず注意書きとして返す）
+    const originWarning = verifyOriginShopSaved_(sheet, headers, created, session);
+    return {
+      ok: true, kanriNo: created[0].kanriNo, kanriNos: created.map(c => c.kanriNo),
+      mailWarning: mailWarning, originWarning: originWarning
+    };
   } finally {
     lock.releaseLock();
   }
+}
+
+// ★要件（項目105）：作った案件の「起票元店舗」が、ログイン中の店舗コードとして
+// 本当に保存されたかを読み直して確かめる。ここが合っていないと、手配課・現地支店からは
+// 見えるのに、作った店舗自身の一覧にだけ出てこない状態になる（rowInScope_ がこの列で絞るため）。
+// 問題があれば、その場で直せるように具体的な案内文を返す（無ければ空文字）。
+function verifyOriginShopSaved_(sheet, headers, created, session) {
+  const originIdx = headers.indexOf(COL_ORIGIN_SHOP);
+  if (originIdx === -1) {
+    return `予約一覧シートに「${COL_ORIGIN_SHOP}」列がないため、この依頼は店舗の一覧には出ません。` +
+           'スプレッドシートのメニューから setupPortal を一度実行してください。';
+  }
+  const bad = created.filter(c => {
+    const saved = String(sheet.getRange(c.rowIndex, originIdx + 1).getValue() || '').trim().toUpperCase();
+    return saved !== session.branchCode;
+  });
+  if (!bad.length) return '';
+  return `${bad.map(c => c.kanriNo).join('・')} の「${COL_ORIGIN_SHOP}」が` +
+         `「${session.branchCode}」として保存されませんでした。この依頼は店舗の一覧には出ません。` +
+         'スプレッドシートのメニューから setupPortal を一度実行してください。';
 }
 
 // 支店ごとに独立して連番採番（プレフィックスが将来変わっても、支店コードで数えるので破綻しない）。

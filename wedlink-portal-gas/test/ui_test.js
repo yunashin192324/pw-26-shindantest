@@ -3902,6 +3902,44 @@ function paneHidden(document, key) {
           !!doc62.querySelector('[data-pending="希望日② STS 支店"]'));
   }
 
+  section('U63. 【項目105】店舗の一覧が0件のとき、画面に理由の手がかりが出る');
+  {
+    const ctx63 = makeServer();
+    // 起票元店舗が空欄の案件だけがある状態を作る（＝店舗の一覧には出ない）
+    const jp63 = ctx63.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    ctx63.apiCreateReservation(jp63, 'VIE', '01 Lost Case\n02 Bride\nRQ 2027/10/05');
+
+    const dom63 = await openApp(ctx63);
+    const doc63 = dom63.window.document;
+    await login(dom63, 'SHOP1', 'CHANGE-ME-SHOP1');
+    await settle(); await settle();
+
+    const emptyEl = doc63.getElementById('dashboard-empty');
+    check('店舗の一覧は0件で、案内が表示される', !emptyEl.classList.contains('hidden'));
+    check('「案件がありません」だけで終わらせず、理由の手がかりを出す',
+          emptyEl.textContent.includes('起票元店舗'),
+          emptyEl.textContent.replace(/\s+/g, ' ').slice(0, 200));
+    check('直し方（setupPortalの実行）まで画面に出る',
+          emptyEl.textContent.includes('setupPortal'),
+          emptyEl.textContent.replace(/\s+/g, ' ').slice(0, 200));
+
+    // 自分の案件を作ると、手がかりは消えてふつうの一覧になる
+    const shop63 = ctx63.apiLogin('SHOP1', 'CHANGE-ME-SHOP1').session.token;
+    const made63 = ctx63.apiShopCreateRequest(shop63, {
+      branchCode: 'VIE', team: '関東', challengeNo: 'UIEMPTY0001',
+      groomLastName: 'MINE', groomName: 'TARO', brideLastName: 'MINE', brideName: 'HANAKO',
+      hope1: '2027-12-24'
+    });
+    doc63.getElementById('nav-dashboard').click();
+    await settle(); await settle();
+    check('自分の案件ができたら一覧に出る',
+          doc63.getElementById('dashboard-empty').classList.contains('hidden'));
+    check('作った案件が一覧に並ぶ',
+          doc63.getElementById('detail-content') !== null &&
+          [...doc63.querySelectorAll('#reservation-table-body tr, #reservation-list .res-card')]
+            .some(el => el.textContent.includes(made63.kanriNo)));
+  }
+
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error('テストが異常終了しました:', e); process.exit(1); });
