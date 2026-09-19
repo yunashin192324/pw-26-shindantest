@@ -748,51 +748,6 @@ function assertShopInScope_(sheetName) {
   }
 }
 
-/**
- * ⑤ 新規相談登録フォームから送信されたデータを、対象店舗シートへ1行追記する。
- * @param {Object} rowObject 27列ヘッダー名をキーとするオブジェクト + sheetName（登録先店舗）
- */
-function addUncontractedData(rowObject) {
-  try {
-    if (!rowObject || !rowObject.sheetName) {
-      throw new Error('店舗名（sheetName）が指定されていません。');
-    }
-    assertShopInScope_(rowObject.sheetName);
-
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(rowObject.sheetName);
-    if (!sheet) {
-      throw new Error('シートが見つかりません: ' + rowObject.sheetName);
-    }
-
-    // 27列の共通カラム順に、送信オブジェクトの値をマッピングして1次元配列を作成
-    const newRow = HEADERS_MAIN.map(function (header) {
-      const v = rowObject[header];
-      return (v === undefined || v === null) ? '' : v;
-    });
-
-    // 「対象年月日」（YYYYMMDD）から月（2桁文字列）を自動抽出し、「月」列（4列目）へ反映
-    const targetDate = String(rowObject['対象年月日'] || '');
-    if (targetDate.length >= 6) {
-      newRow[3] = targetDate.substring(4, 6);
-    }
-
-    const lastRow = sheet.getLastRow();
-    const targetRowIndex = lastRow + 1;
-    ensureRowCapacity_(sheet, targetRowIndex);
-    sheet.getRange(targetRowIndex, 1, 1, HEADERS_MAIN.length).setValues([newRow]);
-
-    return {
-      success: true,
-      sheetName: rowObject.sheetName,
-      rowIndex: targetRowIndex,
-      row: newRow
-    };
-  } catch (err) {
-    return { success: false, error: err.message + '\n' + err.stack };
-  }
-}
-
 // ---- 取り込みファイルの形式判定・解析 ---------------------------------------
 
 /**
@@ -967,7 +922,7 @@ function importUncontractedCsv(csvText) {
  * 「is not a function」という分かりにくいエラーになるため、
  * 画面側から版数を確認できるようにしている。
  */
-const SERVER_VERSION = '2026-08-25';
+const SERVER_VERSION = '2026-08-26';
 
 /**
  * サーバー側の版数を返す。画面側は、自分が期待する版数と一致するかを起動時に確認する。
@@ -2596,16 +2551,21 @@ function updateStaffMaster(rowIndex, officeCode, employeeNo, employeeName, googl
  *   「所属店舗＋社員名」が完全一致する行だけを対象にする（別人を巻き込まないため）。
  * 対象行は社員名を新しい名前に書き換え、所属店舗が変わっていれば、その行を
  * リセール・STS・ACT日・メモなど入力済みの内容ごと新しい店舗のシートへ転記する。
+ * @param {string} [afterEmployeeNo] 指定した場合、対象行の社員番号もこの値に書き換える
+ *   （表記ゆれ等で別の社員番号として登録されてしまった候補を、既存のスタッフへ
+ *   統合するmergeUnregisteredStaff用）。省略時は社員番号には触れない（従来どおり）。
  * @return {number} 修正した過去データの件数
  */
-function applyStaffRenameOrTransfer_(beforeOfficeCode, beforeEmployeeNo, beforeEmployeeName, afterOfficeCode, afterEmployeeName) {
+function applyStaffRenameOrTransfer_(beforeOfficeCode, beforeEmployeeNo, beforeEmployeeName, afterOfficeCode, afterEmployeeName, afterEmployeeNo) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const shopList = getShopList_();
   const lastCol = HEADERS_MAIN.length;
   const IDX_EMPNO = HEADERS_MAIN.indexOf('社員番号');
   const IDX_EMPNAME = HEADERS_MAIN.indexOf('社員名');
   const IDX_OFFICE = HEADERS_MAIN.indexOf('営業所コード');
+  const COL_EMPNO = IDX_EMPNO + 1;
   const COL_EMPNAME = IDX_EMPNAME + 1;
+  const changeEmployeeNo = afterEmployeeNo !== undefined && afterEmployeeNo !== null;
 
   const afterShop = shopList.find(function (s) { return s.code === afterOfficeCode; });
   // 本部（店舗を持たない）へ異動した場合、実績データの転記先が無いため名前だけ直す
@@ -2634,18 +2594,21 @@ function applyStaffRenameOrTransfer_(beforeOfficeCode, beforeEmployeeNo, beforeE
       if (!isMatch) return;
 
       const rIdx = i + 2;
+      const empNoNeedsUpdate = changeEmployeeNo && canonicalKeyPart_(row[IDX_EMPNO]) !== canonicalKeyPart_(afterEmployeeNo);
 
       if (canMoveSheet && shop.code !== afterOfficeCode) {
         // 転記（異動）：店舗をまたぐので必ず「変更あり」
         const moved = row.slice();
         moved[IDX_EMPNAME] = afterEmployeeName;
         moved[IDX_OFFICE] = afterOfficeCode;
+        if (changeEmployeeNo) moved[IDX_EMPNO] = afterEmployeeNo;
         rowsToAppend.push(moved);
         rowsToDelete.push(rIdx);
         updatedCount++;
-      } else if (empName !== afterEmployeeName) {
-        // 同じ店舗のまま社員名だけ修正
+      } else if (empName !== afterEmployeeName || empNoNeedsUpdate) {
+        // 同じ店舗のまま社員名（・社員番号の統合時はそれも）を修正
         setTextCell_(sheet, rIdx, COL_EMPNAME, afterEmployeeName);
+        if (empNoNeedsUpdate) setTextCell_(sheet, rIdx, COL_EMPNO, afterEmployeeNo);
         updatedCount++;
       }
       // どちらでもない場合（本部異動で名前も変わっていない等）は、実際には何も
@@ -2674,6 +2637,56 @@ function applyStaffRenameOrTransfer_(beforeOfficeCode, beforeEmployeeNo, beforeE
   }
 
   return updatedCount;
+}
+
+/**
+ * 「実績はあるがマスタ未登録のスタッフ」一覧に出てくる候補（手入力の表記ゆれ等で
+ * 社員番号・社員名が微妙に違う別人扱いになっているだけの、実際は同一人物）を、
+ * 既にマスタ登録済みの特定のスタッフへ統合する。マスタ管理者のみ利用可能。
+ *
+ * 統合元（source）の候補に一致する過去データ（各店舗シート）を、統合先（target）の
+ * 社員番号・社員名・所属店舗に書き換える。所属店舗が違えば、リセール・STS・ACT日・
+ * メモなど入力済みの内容ごと統合先の店舗のシートへ転記する（applyStaffRenameOrTransfer_
+ * を再利用）。
+ *
+ * @param {string} sourceOfficeCode 統合元候補の所属店舗コード（getStaffMasterList()の
+ *   unregistered[].officeCode。社員番号があれば実際にはどの店舗の行も対象になり得る）
+ * @param {string} sourceEmployeeNo 統合元候補の社員番号（無い場合は空文字）
+ * @param {string} sourceEmployeeName 統合元候補の社員名
+ * @param {number} targetRowIndex 統合先スタッフの、スタッフマスタ上の行番号
+ */
+function mergeUnregisteredStaff(sourceOfficeCode, sourceEmployeeNo, sourceEmployeeName, targetRowIndex) {
+  try {
+    assertCanManageMaster_();
+    sourceOfficeCode = normalizeOfficeCode_(sourceOfficeCode);
+    sourceEmployeeNo = normalizeEmployeeNo_(sourceEmployeeNo);
+    sourceEmployeeName = String(sourceEmployeeName || '').trim();
+    if (!sourceEmployeeNo && !sourceEmployeeName) {
+      throw new Error('統合元の情報が指定されていません。');
+    }
+
+    const rIdx = parseInt(targetRowIndex, 10);
+    if (isNaN(rIdx) || rIdx < 2) {
+      throw new Error('統合先のスタッフが指定されていません。');
+    }
+    const target = getStaffMasterRows_().filter(function (s) { return s.rowIndex === rIdx; })[0];
+    if (!target) {
+      throw new Error('統合先のスタッフが見つかりません。');
+    }
+    if (canonicalKeyPart_(target.employeeNo) === canonicalKeyPart_(sourceEmployeeNo) &&
+        target.employeeName === sourceEmployeeName && target.officeCode === sourceOfficeCode) {
+      throw new Error('統合元と統合先が同じです。');
+    }
+
+    const updatedRecordCount = applyStaffRenameOrTransfer_(
+      sourceOfficeCode, sourceEmployeeNo, sourceEmployeeName,
+      target.officeCode, target.employeeName, target.employeeNo
+    );
+
+    return { success: true, updatedRecordCount: updatedRecordCount, target: target };
+  } catch (err) {
+    return { success: false, error: err.message + '\n' + err.stack };
+  }
 }
 
 /**

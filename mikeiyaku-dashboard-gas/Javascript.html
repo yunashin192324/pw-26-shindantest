@@ -187,7 +187,6 @@ document.addEventListener('DOMContentLoaded', function () {
   initEmployeeEvents();
   initDataManagerEvents();
   initDataManagerSort();
-  initModalEvents();
   initCsvImportEvents();
   initAdminEvents();
   initStaffMasterControls();
@@ -198,7 +197,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // 画面側が前提としているサーバー（Code.gs）の版数。Code.gs の SERVER_VERSION と対で更新する。
-const REQUIRED_SERVER_VERSION = '2026-08-25';
+const REQUIRED_SERVER_VERSION = '2026-08-26';
 
 /**
  * Code.gs が画面と同じ版数まで更新されているか確認する。
@@ -581,15 +580,6 @@ function populateAllMasterSelects() {
 
   // 社員の選択肢は、選ばれている店舗に合わせて絞り込む
   populateDmEmployeeSelect();
-
-  const modalShopSelect = document.querySelector('#register-form select[name="sheetName"]');
-  modalShopSelect.innerHTML = '<option value="">選択してください</option>' +
-    shopList.map(function (s) { return '<option value="' + escapeHtml(s) + '">' + escapeHtml(s) + '</option>'; }).join('');
-
-  fillSelectSimple('#register-form select[name="未成約理由(大)"]', metaMasters.reasonMaster || []);
-  fillSelectSimple('#register-form select[name="種別"]', metaMasters.typeMaster || []);
-  fillSelectSimple('#register-form select[name="旅行目的(小)"]', metaMasters.purposeMaster || []);
-  fillSelectSimple('#register-form select[name="接客方法"]', metaMasters.contactMaster || []);
 }
 
 function fillOptions(elId, items, multi) {
@@ -605,15 +595,6 @@ function fillSelectWithBlank(elId, labels, values) {
   labels.forEach(function (label, i) {
     const v = values ? values[i] : label;
     opts.push('<option value="' + escapeHtml(v) + '">' + escapeHtml(label) + '</option>');
-  });
-  el.innerHTML = opts.join('');
-}
-
-function fillSelectSimple(selector, labels) {
-  const el = document.querySelector(selector);
-  const opts = ['<option value="">－</option>'];
-  labels.forEach(function (label) {
-    opts.push('<option value="' + escapeHtml(label) + '">' + escapeHtml(label) + '</option>');
   });
   el.innerHTML = opts.join('');
 }
@@ -2201,73 +2182,6 @@ function applyUpdatedRowToCache(updatedRow) {
 }
 
 // ============================================================================
-// 新規相談登録モーダル
-// ============================================================================
-function initModalEvents() {
-  document.getElementById('btn-open-modal').addEventListener('click', openModal);
-  document.getElementById('btn-close-modal').addEventListener('click', closeModal);
-  document.getElementById('btn-cancel-modal').addEventListener('click', closeModal);
-  document.getElementById('register-form').addEventListener('submit', onSubmitRegisterForm);
-}
-
-function openModal() {
-  document.getElementById('register-modal').classList.remove('hidden');
-  document.getElementById('register-modal').classList.add('flex');
-}
-
-function closeModal() {
-  document.getElementById('register-modal').classList.add('hidden');
-  document.getElementById('register-modal').classList.remove('flex');
-  document.getElementById('register-form').reset();
-}
-
-function onSubmitRegisterForm(ev) {
-  ev.preventDefault();
-  const form = ev.target;
-  const formData = new FormData(form);
-
-  const rowObject = { sheetName: formData.get('sheetName') };
-  ['リセール', 'STS', '成約PAX', '営業所コード', '社員番号', '社員名', '未成約理由(大)', '都市コード', '種別',
-    '旅行目的(小)', '接客方法', 'HIS利用歴', '詳細', 'ACT日', 'ACT内容', '備考', '予約番号'].forEach(function (key) {
-    rowObject[key] = formData.get(key) || '';
-  });
-
-  const dateVal = formData.get('対象年月日');
-  rowObject['対象年月日'] = dateVal ? dateVal.replace(/-/g, '') : '';
-
-  const monthVal = formData.get('出発年月_month');
-  rowObject['出発年月'] = monthVal ? monthVal.replace('-', '') : '';
-
-  if (!rowObject.sheetName || !rowObject['対象年月日']) {
-    showToast('店舗名と対象年月日は必須です。', 'error');
-    return;
-  }
-
-  const submitBtn = document.getElementById('btn-submit-modal');
-  submitBtn.disabled = true;
-  showLoading(true);
-
-  google.script.run
-    .withSuccessHandler(function (res) {
-      showLoading(false);
-      submitBtn.disabled = false;
-      if (res && res.success) {
-        showToast('新規相談を登録しました。', 'success');
-        closeModal();
-        loadAllData();
-      } else {
-        showToast('登録に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
-      }
-    })
-    .withFailureHandler(function (err) {
-      showLoading(false);
-      submitBtn.disabled = false;
-      showToast('通信エラー（addUncontractedData）: ' + err.message, 'error');
-    })
-    .addUncontractedData(rowObject);
-}
-
-// ============================================================================
 // CSV一括インポート（営業日報からの抽出データ投入）
 // ============================================================================
 let selectedCsvFile = null;
@@ -3090,16 +3004,47 @@ function renderStaffMasterTable(unregistered) {
     return;
   }
   box.classList.remove('hidden');
-  list.innerHTML = unregistered.map(function (u) {
-    return '<div class="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 text-xs">' +
+  // 統合先の候補は登録済みスタッフ一覧（所属店舗・社員名の五十音順）
+  const mergeTargetOptions = '<option value="">同じ人に統合...</option>' +
+    staffMasterCache.slice().sort(function (a, b) {
+      return (a.officeName + a.employeeName).localeCompare(b.officeName + b.employeeName, 'ja');
+    }).map(function (s) {
+      return '<option value="' + s.rowIndex + '">' + escapeHtml(s.officeName) + '・' + escapeHtml(s.employeeName) +
+        (s.employeeNo ? '（' + escapeHtml(s.employeeNo) + '）' : '') + '</option>';
+    }).join('');
+
+  list.innerHTML = unregistered.map(function (u, idx) {
+    return '<div class="flex items-center justify-between gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 text-xs">' +
       '<span>' + escapeHtml(u.officeName) + ' ・ ' + escapeHtml(u.employeeName) + (u.employeeNo ? '（' + escapeHtml(u.employeeNo) + '）' : '') + '</span>' +
-      '<button class="text-blue-600 hover:underline font-semibold" data-quick-add="' + escapeHtml(JSON.stringify(u)) + '">マスタに登録</button>' +
+      '<span class="flex items-center gap-2 shrink-0">' +
+        '<button class="text-blue-600 hover:underline font-semibold" data-quick-add="' + escapeHtml(JSON.stringify(u)) + '">マスタに登録</button>' +
+        '<span class="text-amber-300">|</span>' +
+        '<select class="border border-slate-300 rounded px-1 py-0.5 text-xs bg-white" data-merge-source="' + idx + '" title="表記ゆれ等で別人扱いになっている同一人物の実績データを、選んだスタッフへまとめる">' +
+          mergeTargetOptions +
+        '</select>' +
+      '</span>' +
       '</div>';
   }).join('');
   list.querySelectorAll('[data-quick-add]').forEach(function (btn) {
     btn.addEventListener('click', function () {
       const u = JSON.parse(btn.dataset.quickAdd);
       quickAddStaff(u.officeCode, u.employeeNo, u.employeeName);
+    });
+  });
+  list.querySelectorAll('[data-merge-source]').forEach(function (sel) {
+    sel.addEventListener('change', function () {
+      const u = unregistered[Number(sel.dataset.mergeSource)];
+      const targetRowIndex = Number(sel.value);
+      if (!targetRowIndex) return;
+      const target = staffMasterCache.find(function (s) { return s.rowIndex === targetRowIndex; });
+      const sourceLabel = u.employeeName + (u.employeeNo ? '（' + u.employeeNo + '）' : '');
+      const targetLabel = target ? (target.employeeName + (target.employeeNo ? '（' + target.employeeNo + '）' : '')) : '';
+      if (!window.confirm('「' + sourceLabel + '」の過去の実績データを、すべて「' + targetLabel + '」のものとして統合します。\n' +
+          '（社員番号・社員名・所属店舗の表記が統合先にそろいます。入力済みのリセール等の内容は消えません）\n\nこの操作は取り消せません。よろしいですか？')) {
+        sel.value = '';
+        return;
+      }
+      mergeUnregisteredStaff(u.officeCode, u.employeeNo, u.employeeName, targetRowIndex);
     });
   });
 }
@@ -3220,5 +3165,27 @@ function quickAddStaff(officeCode, employeeNo, employeeName) {
       showToast('通信エラー: ' + err.message, 'error');
     })
     .addStaffMaster(officeCode, employeeNo, employeeName);
+}
+
+/** 表記ゆれ等で別人扱いになっている「未登録候補」を、既存の登録済みスタッフへ統合する */
+function mergeUnregisteredStaff(officeCode, employeeNo, employeeName, targetRowIndex) {
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false);
+      if (res && res.success) {
+        const n = res.updatedRecordCount || 0;
+        showToast('過去の実績データ' + n + '件を「' + (res.target ? res.target.employeeName : '') + '」へ統合しました。', 'success');
+        loadAdminData();
+        loadAllData(); // リセールリストの社員名・店舗の表示を最新化
+      } else {
+        showToast('統合に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false);
+      showToast('通信エラー: ' + err.message, 'error');
+    })
+    .mergeUnregisteredStaff(officeCode, employeeNo, employeeName, targetRowIndex);
 }
 </script>
