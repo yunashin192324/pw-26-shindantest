@@ -4,27 +4,64 @@
  * Javascript.html
  * 予約データ分析ダッシュボード - フロントエンド
  * ----------------------------------------------------------------------------
- * サーバー（Code.gs）からは起動時に一度だけ全データを取得し、絞り込み・並べ替え・
- * 集計・グラフ描画はすべてこの中（ブラウザ側）で行う。
+ * サーバー（Code.gs）からは起動時に一度だけ（権限で絞り込み済みの）全データを取得し、
+ * 絞り込み・並べ替え・集計・グラフ描画はすべてこの中（ブラウザ側）で行う。
+ * 分析ダッシュボードタブと予約データ一覧タブは、それぞれ別のフィルタを持つ。
  * ============================================================================
  */
 
+// ---- 予約データ一覧タブの列定義（表示順の初期値・編集の種類をここで決める） ----
+// kind: 'csv'（CSV由来・読み取り専用） / 'date'（CHK日など編集可の日付）
+//       'ancillary'（保険/Wifi/TAViCA/キャンサポ：〇×＋数量の組） / 'memo'（自由記述の編集可テキスト）
+var DISPLAY_COLUMN_DEFS = [
+  { key: 'chkDate',        label: 'CHK日',              kind: 'date',      field: 'chkDate' },
+  { key: 'reservationNo',  label: '予約番号',           kind: 'csv',       field: 'reservationNo' },
+  { key: 'staff',          label: '担当者',             kind: 'csv',       field: 'staff' },
+  { key: 'departureDate',  label: '出発予定日',         kind: 'csv',       field: 'departureDate' },
+  { key: 'insurance',      label: '保険',               kind: 'ancillary', item: 'insurance' },
+  { key: 'wifi',           label: 'Wifi',               kind: 'ancillary', item: 'wifi' },
+  { key: 'tavica',         label: 'TAViCA',             kind: 'ancillary', item: 'tavica' },
+  { key: 'cansapo',        label: 'キャンサポ',         kind: 'ancillary', item: 'cansapo' },
+  // ▼ 「営業所」は指定いただいた並び順リストに無かったため、担当者に関連する項目として
+  //    ここ（付帯商品の直後・最終目的地の直前）に補って表示している（要確認）。
+  { key: 'office',         label: '営業所',             kind: 'csv',       field: 'office' },
+  { key: 'destination',    label: '最終目的地',         kind: 'csv',       field: 'destination' },
+  { key: 'productCategory',label: '商品分類',           kind: 'csv',       field: 'productCategory' },
+  { key: 'tourBrand',      label: 'ツアーブランド区分', kind: 'csv',       field: 'tourBrand' },
+  { key: 'tourCode',       label: 'ツアーコード',       kind: 'csv',       field: 'tourCode' },
+  { key: 'carrier',        label: 'キャリア',           kind: 'csv',       field: 'carrier' },
+  { key: 'salesAmount',    label: '売上(商品請求金額)', kind: 'csv',       field: 'salesAmount' },
+  { key: 'paymentAmount',  label: '入金額',             kind: 'csv',       field: 'paymentAmount' },
+  { key: 'sts',            label: 'STS',                kind: 'csv',       field: 'sts' },
+  { key: 'productTitle',   label: '商品タイトル',       kind: 'csv',       field: 'productTitle' },
+  { key: 'travelDays',     label: '旅行日数',           kind: 'csv',       field: 'travelDays' },
+  { key: 'bookingDate',    label: '予約日',             kind: 'csv',       field: 'bookingDate' },
+  // ▼ 「メモ」も並び順リストに含まれていなかったため、末尾に追加している（要確認）。
+  { key: 'memo',           label: 'メモ',               kind: 'memo',      field: 'memo' }
+];
+var DISPLAY_COLUMN_DEFS_BY_KEY = {};
+DISPLAY_COLUMN_DEFS.forEach(function (d) { DISPLAY_COLUMN_DEFS_BY_KEY[d.key] = d; });
+var DEFAULT_COLUMN_ORDER = DISPLAY_COLUMN_DEFS.map(function (d) { return d.key; });
+
 var STATE = {
   ready: false,
-  columns: [],
-  columnByKey: {},
+  accessDenied: false,
+  columns: [], columnByKey: {},
+  editableColumns: [], editableColumnByKey: {},
+  ancillaryItems: [], ancillaryItemByKey: {},
+  userContext: null,
   rows: [],
-  filtered: [],
-  filters: {
-    area: [], office: [], sts: [], category: [],
-    dateField: 'bookingDate', dateFrom: '', dateTo: '', keyword: ''
-  },
-  sortKey: 'bookingDate',
-  sortDir: -1,
-  rankingSortKey: 'count',
-  rankingSortDir: -1,
-  page: 1,
-  pageSize: 50,
+  staffList: [],
+
+  dashFiltered: [],
+  dataFiltered: [],
+
+  rankingSortKey: 'count', rankingSortDir: -1,
+  dataSortKey: 'departureDate', dataSortDir: -1,
+  dataPage: 1, dataPageSize: 50,
+  personalSortKey: 'count', personalSortDir: -1,
+
+  columnOrder: DEFAULT_COLUMN_ORDER.slice(),
   charts: {}
 };
 
@@ -50,15 +87,34 @@ function onBootstrapSuccess(data) {
   STATE.columns = data.columns;
   STATE.columnByKey = {};
   data.columns.forEach(function (c) { STATE.columnByKey[c.key] = c; });
+
+  STATE.editableColumns = data.editableColumns || [];
+  STATE.editableColumnByKey = {};
+  STATE.editableColumns.forEach(function (c) { STATE.editableColumnByKey[c.key] = c; });
+
+  STATE.ancillaryItems = data.ancillaryItems || [];
+  STATE.ancillaryItemByKey = {};
+  STATE.ancillaryItems.forEach(function (a) { STATE.ancillaryItemByKey[a.key] = a; });
+
+  STATE.userContext = data.userContext || null;
   STATE.rows = data.rows || [];
   STATE.ready = data.ready;
+  STATE.accessDenied = !!data.accessDenied;
 
   document.getElementById('setup-banner').classList.toggle('hidden', data.ready);
   if (!data.ready) {
     document.getElementById('setup-banner-detail').textContent = (data.status && data.status.detail) || '';
-    renderDataThead();
-    STATE.filtered = [];
-    renderAll();
+    document.getElementById('access-denied-banner').classList.add('hidden');
+    document.getElementById('app-content').classList.add('hidden');
+    renderRoleBadge();
+    return;
+  }
+
+  document.getElementById('access-denied-banner').classList.toggle('hidden', !STATE.accessDenied);
+  document.getElementById('app-content').classList.toggle('hidden', STATE.accessDenied);
+  renderRoleBadge();
+  if (STATE.accessDenied) {
+    document.getElementById('access-denied-email').textContent = (STATE.userContext && STATE.userContext.email) || '';
     return;
   }
 
@@ -71,9 +127,16 @@ function onBootstrapSuccess(data) {
     lastLabel.classList.add('hidden');
   }
 
+  STATE.columnOrder = sanitizeColumnOrder_(data.columnOrder);
+
   populateFilterOptions();
+  applyRoleUi_();
+  renderColumnOrderEditor();
   renderDataThead();
-  applyFilters();
+  applyDashFilters();
+  applyDataFilters();
+  renderPersonalTab();
+  renderAdminStatus();
 }
 
 function onServerError(err) {
@@ -85,8 +148,36 @@ function showLoading(visible) {
   document.getElementById('loading-overlay').classList.toggle('hidden', !visible);
 }
 
+/** 保存済みの列順に、定義に無いキーが混ざっていても安全に使えるよう整える。 */
+function sanitizeColumnOrder_(saved) {
+  if (!saved || !saved.length) return DEFAULT_COLUMN_ORDER.slice();
+  var valid = saved.filter(function (k) { return !!DISPLAY_COLUMN_DEFS_BY_KEY[k]; });
+  DEFAULT_COLUMN_ORDER.forEach(function (k) { if (valid.indexOf(k) === -1) valid.push(k); });
+  return valid;
+}
+
+function renderRoleBadge() {
+  var el = document.getElementById('role-badge');
+  var ctx = STATE.userContext;
+  if (!ctx || !ctx.role) { el.classList.add('hidden'); return; }
+  var scope = ctx.role === 'マスタ権限'
+    ? '全エリア'
+    : (ctx.role === '所長・チーフ' ? ('エリア：' + (ctx.area || '未設定')) : ('店舗：' + (ctx.office || '未設定')));
+  el.innerHTML = '<i class="fa-solid fa-shield-halved"></i> ' + escapeHtml(ctx.role) + '（' + escapeHtml(scope) + '）' +
+    (ctx.bootstrapMode ? '<span class="text-amber-600">・初回セットアップ中</span>' : '');
+  el.classList.remove('hidden');
+}
+
+/** マスタ権限のみ操作できるUI（CSVインポート・重複削除・全削除・権限管理）の表示切り替え。 */
+function applyRoleUi_() {
+  var isMaster = STATE.userContext && STATE.userContext.role === 'マスタ権限';
+  document.getElementById('btn-open-csv-modal').classList.toggle('hidden', !isMaster);
+  document.getElementById('master-only-admin').classList.toggle('hidden', !isMaster);
+  if (isMaster) loadStaffList();
+}
+
 // ============================================================================
-// フィルタ
+// フィルタ共通ユーティリティ
 // ============================================================================
 
 function distinctValues_(key) {
@@ -98,13 +189,6 @@ function distinctValues_(key) {
   return Object.keys(set).sort(function (a, b) { return a.localeCompare(b, 'ja'); });
 }
 
-function populateFilterOptions() {
-  fillMultiSelect_('filter-area', distinctValues_('area'));
-  fillMultiSelect_('filter-office', distinctValues_('office'));
-  fillMultiSelect_('filter-sts', distinctValues_('sts'));
-  fillMultiSelect_('filter-category', distinctValues_('productCategory'));
-}
-
 function fillMultiSelect_(id, values) {
   var el = document.getElementById(id);
   el.innerHTML = values.map(function (v) {
@@ -112,46 +196,26 @@ function fillMultiSelect_(id, values) {
   }).join('');
 }
 
-function readFiltersFromUi_() {
-  STATE.filters.area = getSelectedValues_('filter-area');
-  STATE.filters.office = getSelectedValues_('filter-office');
-  STATE.filters.sts = getSelectedValues_('filter-sts');
-  STATE.filters.category = getSelectedValues_('filter-category');
-  STATE.filters.dateField = document.getElementById('filter-date-field').value || 'bookingDate';
-  STATE.filters.dateFrom = document.getElementById('filter-date-from').value || '';
-  STATE.filters.dateTo = document.getElementById('filter-date-to').value || '';
-  STATE.filters.keyword = document.getElementById('filter-keyword').value.trim().toLowerCase();
+function fillDatalist_(id, values) {
+  var el = document.getElementById(id);
+  el.innerHTML = values.map(function (v) { return '<option value="' + escapeHtml(v) + '">'; }).join('');
+}
+
+function populateFilterOptions() {
+  fillMultiSelect_('dash-filter-area', distinctValues_('area'));
+  fillMultiSelect_('dash-filter-office', distinctValues_('office'));
+  fillMultiSelect_('dash-filter-category', distinctValues_('productCategory'));
+
+  fillMultiSelect_('data-filter-area', distinctValues_('area'));
+  fillMultiSelect_('data-filter-office', distinctValues_('office'));
+  fillMultiSelect_('data-filter-staff', distinctValues_('staff'));
+
+  fillDatalist_('staff-office-options', distinctValues_('office'));
+  fillDatalist_('staff-area-options', distinctValues_('area'));
 }
 
 function getSelectedValues_(id) {
   return Array.from(document.getElementById(id).selectedOptions).map(function (o) { return o.value; });
-}
-
-function applyFilters() {
-  readFiltersFromUi_();
-  var f = STATE.filters;
-  var areaSet = toSet_(f.area), officeSet = toSet_(f.office), stsSet = toSet_(f.sts), catSet = toSet_(f.category);
-
-  STATE.filtered = STATE.rows.filter(function (r) {
-    if (areaSet && !areaSet[r.area]) return false;
-    if (officeSet && !officeSet[r.office]) return false;
-    if (stsSet && !stsSet[r.sts]) return false;
-    if (catSet && !catSet[r.productCategory]) return false;
-
-    var dateVal = r[f.dateField];
-    if (f.dateFrom && (!dateVal || dateVal < f.dateFrom)) return false;
-    if (f.dateTo && (!dateVal || dateVal > f.dateTo)) return false;
-
-    if (f.keyword) {
-      var hay = [r.customerId, r.reservationNo, r.productTitle, r.staff].join(' ').toLowerCase();
-      if (hay.indexOf(f.keyword) === -1) return false;
-    }
-    return true;
-  });
-
-  STATE.page = 1;
-  renderFilterSummary();
-  renderAll();
 }
 
 function toSet_(arr) {
@@ -161,47 +225,43 @@ function toSet_(arr) {
   return s;
 }
 
-function renderFilterSummary() {
-  document.getElementById('filter-summary').textContent =
-    STATE.filtered.length + ' 件を表示中（全 ' + STATE.rows.length + ' 件中）';
-}
+// ============================================================================
+// 分析ダッシュボードタブ：フィルタ・KPI・グラフ・ランキング
+// ============================================================================
 
-function clearFilters() {
-  ['filter-area', 'filter-office', 'filter-sts', 'filter-category'].forEach(function (id) {
-    Array.from(document.getElementById(id).options).forEach(function (o) { o.selected = false; });
+function applyDashFilters() {
+  var areaSet = toSet_(getSelectedValues_('dash-filter-area'));
+  var officeSet = toSet_(getSelectedValues_('dash-filter-office'));
+  var catSet = toSet_(getSelectedValues_('dash-filter-category'));
+  var dateField = document.getElementById('dash-filter-date-field').value || 'bookingDate';
+  var dateFrom = document.getElementById('dash-filter-date-from').value || '';
+  var dateTo = document.getElementById('dash-filter-date-to').value || '';
+
+  STATE.dashFiltered = STATE.rows.filter(function (r) {
+    if (areaSet && !areaSet[r.area]) return false;
+    if (officeSet && !officeSet[r.office]) return false;
+    if (catSet && !catSet[r.productCategory]) return false;
+    var dateVal = r[dateField];
+    if (dateFrom && (!dateVal || dateVal < dateFrom)) return false;
+    if (dateTo && (!dateVal || dateVal > dateTo)) return false;
+    return true;
   });
-  document.getElementById('filter-date-from').value = '';
-  document.getElementById('filter-date-to').value = '';
-  document.getElementById('filter-keyword').value = '';
-  applyFilters();
-}
 
-// ============================================================================
-// 全体再描画
-// ============================================================================
+  document.getElementById('dash-filter-summary').textContent =
+    STATE.dashFiltered.length + ' 件を表示中（あなたが閲覧できる ' + STATE.rows.length + ' 件中）';
 
-function renderAll() {
   renderKpis();
   renderCharts();
   renderRanking();
-  renderDataTable();
-  renderAdminStatus();
 }
 
-// ---- KPIカード ----
-function renderKpis() {
-  var rows = STATE.filtered;
-  var total = rows.length;
-  var salesSum = sumBy_(rows, 'salesAmount');
-  var paymentSum = sumBy_(rows, 'paymentAmount');
-  var rate = salesSum > 0 ? (paymentSum / salesSum * 100) : 0;
-  var avgDays = avgBy_(rows, 'travelDays');
-
-  document.getElementById('kpi-total').textContent = formatNumber(total);
-  document.getElementById('kpi-sales').textContent = formatCurrency(salesSum);
-  document.getElementById('kpi-payment').textContent = formatCurrency(paymentSum);
-  document.getElementById('kpi-payment-rate').textContent = rate.toFixed(1) + '%';
-  document.getElementById('kpi-avg-days').innerHTML = avgDays.toFixed(1) + '<span class="text-base font-normal">日</span>';
+function clearDashFilters() {
+  ['dash-filter-area', 'dash-filter-office', 'dash-filter-category'].forEach(function (id) {
+    Array.from(document.getElementById(id).options).forEach(function (o) { o.selected = false; });
+  });
+  document.getElementById('dash-filter-date-from').value = '';
+  document.getElementById('dash-filter-date-to').value = '';
+  applyDashFilters();
 }
 
 function sumBy_(rows, key) {
@@ -229,7 +289,21 @@ function topEntries_(map, n) {
     .slice(0, n);
 }
 
-// ---- グラフ ----
+function renderKpis() {
+  var rows = STATE.dashFiltered;
+  var total = rows.length;
+  var salesSum = sumBy_(rows, 'salesAmount');
+  var paymentSum = sumBy_(rows, 'paymentAmount');
+  var rate = salesSum > 0 ? (paymentSum / salesSum * 100) : 0;
+  var avgDays = avgBy_(rows, 'travelDays');
+
+  document.getElementById('kpi-total').textContent = formatNumber(total);
+  document.getElementById('kpi-sales').textContent = formatCurrency(salesSum);
+  document.getElementById('kpi-payment').textContent = formatCurrency(paymentSum);
+  document.getElementById('kpi-payment-rate').textContent = rate.toFixed(1) + '%';
+  document.getElementById('kpi-avg-days').innerHTML = avgDays.toFixed(1) + '<span class="text-base font-normal">日</span>';
+}
+
 var CHART_COLORS = ['#1d4ed8', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#0ea5e9', '#f97316', '#84cc16', '#ec4899', '#64748b'];
 
 function upsertChart_(canvasId, config) {
@@ -239,16 +313,24 @@ function upsertChart_(canvasId, config) {
 }
 
 function renderCharts() {
-  var rows = STATE.filtered;
+  var rows = STATE.dashFiltered;
   renderMonthlyChart_(rows);
   renderStsChart_(rows);
   renderCategoryChart_(rows);
   renderTopChart_('chart-nationality', rows, 'nationality');
   renderTopChart_('chart-carrier', rows, 'carrier');
+  renderAncillaryChart_('chart-insurance', rows, 'insuranceQty', '保険加入数');
+  renderAncillaryChart_('chart-wifi', rows, 'wifiQty', 'Wifi販売数');
+  renderAncillaryChart_('chart-tavica', rows, 'tavicaQty', 'TVC加入数');
+  renderAncillaryChart_('chart-cansapo', rows, 'cansapoQty', 'キャンサポ加入数');
+}
+
+function getDashDateField_() {
+  return document.getElementById('dash-filter-date-field').value || 'bookingDate';
 }
 
 function renderMonthlyChart_(rows) {
-  var field = STATE.filters.dateField;
+  var field = getDashDateField_();
   var byMonth = {};
   rows.forEach(function (r) {
     var v = r[field];
@@ -273,6 +355,40 @@ function renderMonthlyChart_(rows) {
       scales: {
         y: { beginAtZero: true, title: { display: true, text: '件数' } },
         y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: '売上(円)' } }
+      }
+    }
+  });
+}
+
+/** 保険・Wifi・TAViCA・キャンサポ共通：棒＝リスト数（月別件数）、折れ線＝加入・販売数（数量合計）。 */
+function renderAncillaryChart_(canvasId, rows, qtyKey, lineLabel) {
+  var field = getDashDateField_();
+  var byMonth = {};
+  rows.forEach(function (r) {
+    var v = r[field];
+    if (!v) return;
+    var month = v.slice(0, 7);
+    if (!byMonth[month]) byMonth[month] = { count: 0, qty: 0 };
+    byMonth[month].count++;
+    if (typeof r[qtyKey] === 'number') byMonth[month].qty += r[qtyKey];
+  });
+  var months = Object.keys(byMonth).sort();
+  upsertChart_(canvasId, {
+    data: {
+      labels: months,
+      datasets: [
+        { type: 'bar', label: 'リスト数', data: months.map(function (m) { return byMonth[m].count; }), backgroundColor: '#c7d2fe', yAxisID: 'y' },
+        { type: 'line', label: lineLabel, data: months.map(function (m) { return byMonth[m].qty; }), borderColor: '#059669', backgroundColor: '#059669', yAxisID: 'y1', tension: 0.25 }
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } },
+      scales: {
+        y: { beginAtZero: true, ticks: { precision: 0, font: { size: 9 } } },
+        y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { precision: 0, font: { size: 9 } } },
+        x: { ticks: { font: { size: 9 } } }
       }
     }
   });
@@ -322,7 +438,6 @@ function renderTopChart_(canvasId, rows, key) {
   });
 }
 
-// ---- 営業所別ランキング ----
 function buildOfficeRanking_(rows) {
   var map = {};
   rows.forEach(function (r) {
@@ -348,7 +463,7 @@ function buildOfficeRanking_(rows) {
 }
 
 function renderRanking() {
-  var list = buildOfficeRanking_(STATE.filtered);
+  var list = buildOfficeRanking_(STATE.dashFiltered);
   var key = STATE.rankingSortKey, dir = STATE.rankingSortDir;
   list.sort(function (a, b) {
     if (key === 'office') return a.office.localeCompare(b.office, 'ja') * dir;
@@ -372,61 +487,111 @@ function renderRanking() {
   }).join('');
 }
 
-// ---- データ一覧タブ ----
+// ============================================================================
+// 予約データ一覧タブ：フィルタ・列の並び替え・編集・並べ替え・ページング
+// ============================================================================
+
+function applyDataFilters() {
+  var areaSet = toSet_(getSelectedValues_('data-filter-area'));
+  var officeSet = toSet_(getSelectedValues_('data-filter-office'));
+  var staffSet = toSet_(getSelectedValues_('data-filter-staff'));
+  var dateFrom = document.getElementById('data-filter-date-from').value || '';
+  var dateTo = document.getElementById('data-filter-date-to').value || '';
+  var keyword = document.getElementById('data-filter-keyword').value.trim().toLowerCase();
+
+  STATE.dataFiltered = STATE.rows.filter(function (r) {
+    if (areaSet && !areaSet[r.area]) return false;
+    if (officeSet && !officeSet[r.office]) return false;
+    if (staffSet && !staffSet[r.staff]) return false;
+    var dep = r.departureDate;
+    if (dateFrom && (!dep || dep < dateFrom)) return false;
+    if (dateTo && (!dep || dep > dateTo)) return false;
+    if (keyword) {
+      var hay = [r.reservationNo, r.productTitle, r.staff, r.memo].join(' ').toLowerCase();
+      if (hay.indexOf(keyword) === -1) return false;
+    }
+    return true;
+  });
+
+  document.getElementById('data-filter-summary').textContent =
+    STATE.dataFiltered.length + ' 件を表示中（あなたが閲覧できる ' + STATE.rows.length + ' 件中）';
+
+  STATE.dataPage = 1;
+  renderDataTable();
+}
+
+function clearDataFilters() {
+  ['data-filter-area', 'data-filter-office', 'data-filter-staff'].forEach(function (id) {
+    Array.from(document.getElementById(id).options).forEach(function (o) { o.selected = false; });
+  });
+  document.getElementById('data-filter-date-from').value = '';
+  document.getElementById('data-filter-date-to').value = '';
+  document.getElementById('data-filter-keyword').value = '';
+  applyDataFilters();
+}
+
 function renderDataThead() {
   var thead = document.getElementById('data-thead');
-  var row = '<tr>' + STATE.columns.map(function (c) {
-    var mark = (STATE.sortKey === c.key) ? ('<span class="sort-mark">' + (STATE.sortDir > 0 ? '▲' : '▼') + '</span>') : '';
-    var align = c.type === 'number' ? 'text-right' : 'text-left';
-    return '<th class="sortable px-3 py-2 ' + align + '" data-sort="' + c.key + '">' + escapeHtml(c.label) + mark + '</th>';
+  thead.innerHTML = '<tr>' + STATE.columnOrder.map(function (key) {
+    var def = DISPLAY_COLUMN_DEFS_BY_KEY[key];
+    if (!def) return '';
+    var sortable = def.kind !== 'ancillary';
+    var col = def.kind === 'csv' ? STATE.columnByKey[def.field] : null;
+    var align = (col && col.type === 'number') ? 'text-right' : (def.kind === 'ancillary' ? 'text-center' : 'text-left');
+    var editableBg = def.kind === 'ancillary' || def.kind === 'date' || def.kind === 'memo' ? ' bg-blue-50' : '';
+    var mark = (sortable && STATE.dataSortKey === key) ? ('<span class="sort-mark">' + (STATE.dataSortDir > 0 ? '▲' : '▼') + '</span>') : '';
+    var cls = (sortable ? 'sortable ' : '') + 'px-3 py-2 ' + align + editableBg;
+    var dataSort = sortable ? ' data-sort="' + key + '"' : '';
+    return '<th class="' + cls + '"' + dataSort + '>' + escapeHtml(def.label) + mark + '</th>';
   }).join('') + '</tr>';
-  thead.innerHTML = row;
+
   thead.querySelectorAll('.sortable').forEach(function (th) {
     th.addEventListener('click', function () {
       var key = th.getAttribute('data-sort');
-      if (STATE.sortKey === key) STATE.sortDir *= -1; else { STATE.sortKey = key; STATE.sortDir = 1; }
+      if (STATE.dataSortKey === key) STATE.dataSortDir *= -1; else { STATE.dataSortKey = key; STATE.dataSortDir = 1; }
       renderDataThead();
       renderDataTable();
     });
   });
 }
 
-function compareCell_(a, b, key) {
-  var col = STATE.columnByKey[key];
-  var va = a[key], vb = b[key];
+function compareRows_(a, b, def) {
+  if (!def) return 0;
+  var va = a[def.field], vb = b[def.field];
+  var type = def.kind === 'csv' ? STATE.columnByKey[def.field].type : (def.kind === 'date' ? 'date' : 'text');
   var aEmpty = (va === null || va === undefined || va === '');
   var bEmpty = (vb === null || vb === undefined || vb === '');
   if (aEmpty && bEmpty) return 0;
   if (aEmpty) return 1;
   if (bEmpty) return -1;
-  if (col.type === 'number') return va - vb;
+  if (type === 'number') return va - vb;
   return String(va).localeCompare(String(vb), 'ja');
 }
 
 function renderDataTable() {
-  var rows = STATE.filtered.slice();
-  rows.sort(function (a, b) { return compareCell_(a, b, STATE.sortKey) * STATE.sortDir; });
+  var def = DISPLAY_COLUMN_DEFS_BY_KEY[STATE.dataSortKey];
+  var rows = STATE.dataFiltered.slice();
+  rows.sort(function (a, b) { return compareRows_(a, b, def) * STATE.dataSortDir; });
 
   var total = rows.length;
-  var totalPages = Math.max(1, Math.ceil(total / STATE.pageSize));
-  if (STATE.page > totalPages) STATE.page = totalPages;
-  var start = (STATE.page - 1) * STATE.pageSize;
-  var pageRows = rows.slice(start, start + STATE.pageSize);
+  var totalPages = Math.max(1, Math.ceil(total / STATE.dataPageSize));
+  if (STATE.dataPage > totalPages) STATE.dataPage = totalPages;
+  var start = (STATE.dataPage - 1) * STATE.dataPageSize;
+  var pageRows = rows.slice(start, start + STATE.dataPageSize);
 
   var tbody = document.getElementById('data-tbody');
   document.getElementById('data-empty').classList.toggle('hidden', total > 0);
 
   tbody.innerHTML = pageRows.map(function (r) {
-    return '<tr class="hover:bg-slate-50">' + STATE.columns.map(function (c) {
-      var align = c.type === 'number' ? 'text-right' : 'text-left';
-      return '<td class="px-3 py-2 ' + align + '">' + formatCell_(r[c.key], c) + '</td>';
+    return '<tr class="hover:bg-slate-50">' + STATE.columnOrder.map(function (key) {
+      return buildCellHtml_(r, DISPLAY_COLUMN_DEFS_BY_KEY[key]);
     }).join('') + '</tr>';
   }).join('');
 
   document.getElementById('pagination-info').textContent =
-    total === 0 ? '0件' : (start + 1) + '〜' + Math.min(start + STATE.pageSize, total) + ' / ' + total + '件';
-  document.getElementById('btn-prev-page').disabled = STATE.page <= 1;
-  document.getElementById('btn-next-page').disabled = STATE.page >= totalPages;
+    total === 0 ? '0件' : (start + 1) + '〜' + Math.min(start + STATE.dataPageSize, total) + ' / ' + total + '件';
+  document.getElementById('btn-prev-page').disabled = STATE.dataPage <= 1;
+  document.getElementById('btn-next-page').disabled = STATE.dataPage >= totalPages;
 }
 
 function formatCell_(v, col) {
@@ -436,7 +601,208 @@ function formatCell_(v, col) {
   return escapeHtml(String(v));
 }
 
-// ---- データ管理タブ ----
+function buildCellHtml_(row, def) {
+  if (!def) return '<td></td>';
+
+  if (def.kind === 'csv') {
+    var col = STATE.columnByKey[def.field];
+    var align = col.type === 'number' ? 'text-right' : 'text-left';
+    return '<td class="px-3 py-2 ' + align + '">' + formatCell_(row[def.field], col) + '</td>';
+  }
+
+  if (def.kind === 'date') {
+    var dv = row[def.field] || '';
+    return '<td class="editable-cell px-2 py-1"><input type="date" data-row="' + row.rowIndex + '" data-col="' + def.field + '" value="' + escapeHtml(dv) + '" class="border border-slate-300 rounded px-1 py-1 text-xs w-32"></td>';
+  }
+
+  if (def.kind === 'memo') {
+    var mv = row[def.field] || '';
+    return '<td class="editable-cell px-2 py-1"><input type="text" data-row="' + row.rowIndex + '" data-col="' + def.field + '" value="' + escapeHtml(mv) + '" placeholder="メモ" class="border border-slate-300 rounded px-1 py-1 text-xs w-44"></td>';
+  }
+
+  if (def.kind === 'ancillary') {
+    var item = STATE.ancillaryItemByKey[def.item];
+    var status = row[item.statusKey] || '';
+    var qty = row[item.qtyKey];
+    var opts = ['', '〇', '✖'].map(function (v) {
+      var label = v === '' ? '－' : v;
+      return '<option value="' + v + '"' + (status === v ? ' selected' : '') + '>' + label + '</option>';
+    }).join('');
+    var qtyDisabled = status === '〇' ? '' : 'disabled';
+    var qtyVal = (qty === null || qty === undefined) ? '' : qty;
+    return '<td class="editable-cell px-2 py-1 text-center">' +
+      '<div class="flex items-center justify-center gap-1">' +
+      '<select data-row="' + row.rowIndex + '" data-col="' + item.statusKey + '" data-qtycol="' + item.qtyKey + '" class="ancillary-status border border-slate-300 rounded px-1 py-1 text-xs">' + opts + '</select>' +
+      '<input type="number" min="0" data-row="' + row.rowIndex + '" data-col="' + item.qtyKey + '" value="' + escapeHtml(String(qtyVal)) + '" ' + qtyDisabled + ' class="ancillary-qty border border-slate-300 rounded px-1 py-1 text-xs w-14" placeholder="数">' +
+      '</div></td>';
+  }
+
+  return '<td class="px-3 py-2"></td>';
+}
+
+/**
+ * 一覧の編集セル1つ分を保存する。
+ * ・失敗したら値を元に戻して再描画し、エラー内容をトーストで知らせる。
+ * ・保険等のステータスが「〇」以外になったら、数量欄は即座に空にする
+ *   （サーバー側 updateCellValue() の自動クリアと同じ挙動をUI側でも先取りする）。
+ */
+function saveCell(rowIndex, columnKey, value) {
+  var row = STATE.rows.filter(function (r) { return r.rowIndex === rowIndex; })[0];
+  var previous = row ? row[columnKey] : undefined;
+  var normalized = (value === '' || value === undefined) ? null : value;
+  if (row) row[columnKey] = (STATE.editableColumnByKey[columnKey] && STATE.editableColumnByKey[columnKey].type === 'number' && normalized !== null)
+    ? Number(normalized) : normalized;
+
+  var ancillary = STATE.ancillaryItems.filter(function (a) { return a.statusKey === columnKey; })[0];
+  var previousQty;
+  if (ancillary && row) {
+    previousQty = row[ancillary.qtyKey];
+    if (normalized !== '〇') row[ancillary.qtyKey] = null;
+  }
+
+  google.script.run
+    .withSuccessHandler(function () { /* サーバーとUIが一致している */ })
+    .withFailureHandler(function (err) {
+      if (row) {
+        row[columnKey] = previous;
+        if (ancillary) row[ancillary.qtyKey] = previousQty;
+      }
+      renderDataTable();
+      onServerError(err);
+    })
+    .updateCellValue(rowIndex, columnKey, value);
+
+  renderDataTable();
+  applyDashFilters(); // 保険/Wifi等の入力はダッシュボードの数量にも影響するため再集計する
+  renderPersonalTab();
+}
+
+function bindDataTableEditEvents_() {
+  var tbody = document.getElementById('data-tbody');
+  tbody.addEventListener('change', function (e) {
+    var t = e.target;
+    if (t.matches('input[type="date"][data-col]') || t.matches('select.ancillary-status') || t.matches('input.ancillary-qty')) {
+      saveCell(Number(t.dataset.row), t.dataset.col, t.value);
+    }
+  });
+  // blurはバブリングしないため、capture:trueでイベント委譲する
+  tbody.addEventListener('blur', function (e) {
+    var t = e.target;
+    if (t.matches('input[type="text"][data-col]')) {
+      saveCell(Number(t.dataset.row), t.dataset.col, t.value);
+    }
+  }, true);
+}
+
+// ============================================================================
+// 予約データ一覧タブ：列の並び順の編集（データ管理タブから操作する）
+// ============================================================================
+
+function renderColumnOrderEditor() {
+  var container = document.getElementById('column-order-list');
+  container.innerHTML = STATE.columnOrder.map(function (key, i) {
+    var def = DISPLAY_COLUMN_DEFS_BY_KEY[key];
+    if (!def) return '';
+    return '<div class="col-order-row flex items-center justify-between px-3 py-2 text-sm">' +
+      '<span>' + escapeHtml(def.label) + '</span>' +
+      '<span class="flex gap-1">' +
+      '<button type="button" class="col-order-up text-slate-400 hover:text-blue-700 px-1" data-index="' + i + '"' + (i === 0 ? ' disabled' : '') + '>▲</button>' +
+      '<button type="button" class="col-order-down text-slate-400 hover:text-blue-700 px-1" data-index="' + i + '"' + (i === STATE.columnOrder.length - 1 ? ' disabled' : '') + '>▼</button>' +
+      '</span></div>';
+  }).join('');
+}
+
+function bindColumnOrderEvents_() {
+  document.getElementById('column-order-list').addEventListener('click', function (e) {
+    var upBtn = e.target.closest('.col-order-up');
+    var downBtn = e.target.closest('.col-order-down');
+    if (!upBtn && !downBtn) return;
+    var idx = Number((upBtn || downBtn).dataset.index);
+    var swapWith = upBtn ? idx - 1 : idx + 1;
+    if (swapWith < 0 || swapWith >= STATE.columnOrder.length) return;
+    var tmp = STATE.columnOrder[idx];
+    STATE.columnOrder[idx] = STATE.columnOrder[swapWith];
+    STATE.columnOrder[swapWith] = tmp;
+    renderColumnOrderEditor();
+    renderDataThead();
+    renderDataTable();
+  });
+
+  document.getElementById('btn-save-column-order').addEventListener('click', function () {
+    google.script.run
+      .withSuccessHandler(function () {
+        var el = document.getElementById('column-order-result');
+        el.textContent = '並び順を保存しました。全員のこの画面に反映されます。';
+        el.className = 'text-xs mt-2 text-emerald-600';
+        el.classList.remove('hidden');
+        showToast('列の並び順を保存しました', 'success');
+      })
+      .withFailureHandler(onServerError)
+      .saveColumnOrderPreference(STATE.columnOrder);
+  });
+
+  document.getElementById('btn-reset-column-order').addEventListener('click', function () {
+    STATE.columnOrder = DEFAULT_COLUMN_ORDER.slice();
+    renderColumnOrderEditor();
+    renderDataThead();
+    renderDataTable();
+  });
+}
+
+// ============================================================================
+// 個人別サマリータブ
+// ============================================================================
+
+function buildPersonalSummary_(rows) {
+  var map = {};
+  rows.forEach(function (r) {
+    var key = (r.office || '(未設定)') + '\u0001' + (r.staff || '(未設定)');
+    if (!map[key]) {
+      map[key] = { office: r.office || '(未設定)', staff: r.staff || '(未設定)', count: 0, insuranceQty: 0, wifiQty: 0, tavicaQty: 0, cansapoQty: 0 };
+    }
+    var b = map[key];
+    b.count++;
+    if (typeof r.insuranceQty === 'number') b.insuranceQty += r.insuranceQty;
+    if (typeof r.wifiQty === 'number') b.wifiQty += r.wifiQty;
+    if (typeof r.tavicaQty === 'number') b.tavicaQty += r.tavicaQty;
+    if (typeof r.cansapoQty === 'number') b.cansapoQty += r.cansapoQty;
+  });
+  return Object.keys(map).map(function (k) { return map[k]; });
+}
+
+function renderPersonalTab() {
+  var keyword = (document.getElementById('personal-search').value || '').trim().toLowerCase();
+  var list = buildPersonalSummary_(STATE.rows).filter(function (b) {
+    if (!keyword) return true;
+    return (b.office + ' ' + b.staff).toLowerCase().indexOf(keyword) !== -1;
+  });
+
+  var key = STATE.personalSortKey, dir = STATE.personalSortDir;
+  list.sort(function (a, b) {
+    if (key === 'office') return a.office.localeCompare(b.office, 'ja') * dir;
+    if (key === 'staff') return a.staff.localeCompare(b.staff, 'ja') * dir;
+    return (a[key] - b[key]) * dir;
+  });
+
+  var tbody = document.getElementById('personal-tbody');
+  document.getElementById('personal-empty').classList.toggle('hidden', list.length > 0);
+  tbody.innerHTML = list.map(function (b) {
+    return '<tr class="hover:bg-slate-50">' +
+      '<td class="px-3 py-2">' + escapeHtml(b.office) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(b.staff) + '</td>' +
+      '<td class="px-3 py-2 text-right">' + formatNumber(b.count) + '</td>' +
+      '<td class="px-3 py-2 text-right">' + formatNumber(b.insuranceQty) + '</td>' +
+      '<td class="px-3 py-2 text-right">' + formatNumber(b.wifiQty) + '</td>' +
+      '<td class="px-3 py-2 text-right">' + formatNumber(b.tavicaQty) + '</td>' +
+      '<td class="px-3 py-2 text-right">' + formatNumber(b.cansapoQty) + '</td>' +
+      '</tr>';
+  }).join('');
+}
+
+// ============================================================================
+// データ管理タブ：状態表示・重複削除・全削除
+// ============================================================================
+
 function renderAdminStatus() {
   var box = document.getElementById('admin-status');
   if (!STATE.ready) {
@@ -444,8 +810,140 @@ function renderAdminStatus() {
     return;
   }
   box.innerHTML =
-    '<p>保存件数：<b>' + formatNumber(STATE.rows.length) + '</b> 件</p>' +
-    '<p>現在の絞り込み結果：<b>' + formatNumber(STATE.filtered.length) + '</b> 件</p>';
+    '<p>あなたが閲覧できる件数：<b>' + formatNumber(STATE.rows.length) + '</b> 件</p>' +
+    '<p>分析ダッシュボードの現在の絞り込み結果：<b>' + formatNumber(STATE.dashFiltered.length) + '</b> 件</p>';
+}
+
+function removeDuplicates() {
+  if (!window.confirm('CSV由来19項目すべてが完全一致する重複行を削除します。よろしいですか？')) return;
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (result) {
+      showLoading(false);
+      var el = document.getElementById('duplicate-result');
+      el.textContent = result.removed > 0
+        ? result.removed + ' 件の重複行を削除しました（残り ' + result.totalRows + ' 件）。'
+        : '重複している行はありませんでした。';
+      el.className = 'text-xs mt-2 ' + (result.removed > 0 ? 'text-emerald-600' : 'text-slate-500');
+      el.classList.remove('hidden');
+      showToast('重複削除が完了しました', 'success');
+      boot();
+    })
+    .withFailureHandler(function (err) { showLoading(false); onServerError(err); })
+    .removeDuplicateRows();
+}
+
+function clearAllData() {
+  var input = document.getElementById('clear-confirm-input');
+  if (input.value !== '削除') { showToast('確認欄に「削除」と入力してください。', 'error'); return; }
+  if (!window.confirm('取り込んだデータをすべて削除します。元に戻せません。よろしいですか？')) return;
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function () {
+      showLoading(false);
+      input.value = '';
+      var el = document.getElementById('clear-result');
+      el.textContent = '削除しました。';
+      el.classList.remove('hidden');
+      showToast('データを削除しました', 'success');
+      boot();
+    })
+    .withFailureHandler(function (err) { showLoading(false); onServerError(err); })
+    .clearAllData(input.value);
+}
+
+function runSetup() {
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function () { showLoading(false); showToast('初期セットアップが完了しました', 'success'); boot(); })
+    .withFailureHandler(function (err) { showLoading(false); onServerError(err); })
+    .runInitialSetup();
+}
+
+// ============================================================================
+// 権限管理（スタッフ権限）※マスタ権限のみ
+// ============================================================================
+
+function loadStaffList() {
+  google.script.run
+    .withSuccessHandler(renderStaffList)
+    .withFailureHandler(onServerError)
+    .getStaffAccessList();
+}
+
+function renderStaffList(list) {
+  STATE.staffList = list || [];
+  var tbody = document.getElementById('staff-tbody');
+  document.getElementById('staff-empty').classList.toggle('hidden', STATE.staffList.length > 0);
+  tbody.innerHTML = STATE.staffList.map(function (s) {
+    return '<tr>' +
+      '<td class="px-3 py-2 font-mono text-xs">' + escapeHtml(s.email) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(s.name) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(s.office) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(s.area) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(s.role) + '</td>' +
+      '<td class="px-3 py-2 text-right">' +
+      '<button type="button" class="staff-edit text-blue-600 hover:underline text-xs mr-2" data-row="' + s.rowIndex + '">編集</button>' +
+      '<button type="button" class="staff-delete text-red-600 hover:underline text-xs" data-row="' + s.rowIndex + '">削除</button>' +
+      '</td></tr>';
+  }).join('');
+}
+
+function bindStaffEvents_() {
+  document.getElementById('btn-open-staff-modal').addEventListener('click', function () { openStaffModal(null); });
+  document.getElementById('btn-close-staff-modal').addEventListener('click', closeStaffModal);
+  document.getElementById('btn-cancel-staff-modal').addEventListener('click', closeStaffModal);
+
+  document.getElementById('staff-tbody').addEventListener('click', function (e) {
+    var editBtn = e.target.closest('.staff-edit');
+    var delBtn = e.target.closest('.staff-delete');
+    if (editBtn) openStaffModal(Number(editBtn.dataset.row));
+    if (delBtn) {
+      if (!window.confirm('このアカウントを削除しますか？')) return;
+      google.script.run.withSuccessHandler(renderStaffList).withFailureHandler(onServerError).deleteStaffAccess(Number(delBtn.dataset.row));
+    }
+  });
+
+  document.getElementById('staff-form').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var rowIndex = document.getElementById('staff-form-rowindex').value;
+    var email = document.getElementById('staff-form-email').value.trim();
+    var name = document.getElementById('staff-form-name').value.trim();
+    var office = document.getElementById('staff-form-office').value.trim();
+    var area = document.getElementById('staff-form-area').value.trim();
+    var role = document.getElementById('staff-form-role').value;
+
+    var call = rowIndex
+      ? google.script.run.withSuccessHandler(onStaffSaved).withFailureHandler(onServerError).updateStaffAccess(Number(rowIndex), email, name, office, area, role)
+      : google.script.run.withSuccessHandler(onStaffSaved).withFailureHandler(onServerError).addStaffAccess(email, name, office, area, role);
+  });
+}
+
+function openStaffModal(rowIndex) {
+  var isEdit = rowIndex !== null && rowIndex !== undefined;
+  document.getElementById('staff-modal-title').innerHTML = isEdit
+    ? '<i class="fa-solid fa-user-shield"></i> アカウントを編集'
+    : '<i class="fa-solid fa-user-shield"></i> アカウントを追加';
+  var target = isEdit ? STATE.staffList.filter(function (s) { return s.rowIndex === rowIndex; })[0] : null;
+  document.getElementById('staff-form-rowindex').value = isEdit ? rowIndex : '';
+  document.getElementById('staff-form-email').value = target ? target.email : '';
+  document.getElementById('staff-form-name').value = target ? target.name : '';
+  document.getElementById('staff-form-office').value = target ? target.office : '';
+  document.getElementById('staff-form-area').value = target ? target.area : '';
+  document.getElementById('staff-form-role').value = target ? target.role : '社員';
+  document.getElementById('staff-modal').classList.remove('hidden');
+  document.getElementById('staff-modal').classList.add('flex');
+}
+
+function closeStaffModal() {
+  document.getElementById('staff-modal').classList.add('hidden');
+  document.getElementById('staff-modal').classList.remove('flex');
+}
+
+function onStaffSaved(list) {
+  renderStaffList(list);
+  closeStaffModal();
+  showToast('保存しました', 'success');
 }
 
 // ============================================================================
@@ -547,56 +1045,6 @@ function onCsvImportSuccess(result) {
 }
 
 // ============================================================================
-// データ管理操作
-// ============================================================================
-
-function removeDuplicates() {
-  if (!window.confirm('19項目すべてが完全一致する重複行を削除します。よろしいですか？')) return;
-  showLoading(true);
-  google.script.run
-    .withSuccessHandler(function (result) {
-      showLoading(false);
-      var el = document.getElementById('duplicate-result');
-      el.textContent = result.removed > 0
-        ? result.removed + ' 件の重複行を削除しました（残り ' + result.totalRows + ' 件）。'
-        : '重複している行はありませんでした。';
-      el.className = 'text-xs mt-2 ' + (result.removed > 0 ? 'text-emerald-600' : 'text-slate-500');
-      el.classList.remove('hidden');
-      showToast('重複削除が完了しました', 'success');
-      boot();
-    })
-    .withFailureHandler(function (err) { showLoading(false); onServerError(err); })
-    .removeDuplicateRows();
-}
-
-function clearAllData() {
-  var input = document.getElementById('clear-confirm-input');
-  if (input.value !== '削除') { showToast('確認欄に「削除」と入力してください。', 'error'); return; }
-  if (!window.confirm('取り込んだデータをすべて削除します。元に戻せません。よろしいですか？')) return;
-  showLoading(true);
-  google.script.run
-    .withSuccessHandler(function () {
-      showLoading(false);
-      input.value = '';
-      var el = document.getElementById('clear-result');
-      el.textContent = '削除しました。';
-      el.classList.remove('hidden');
-      showToast('データを削除しました', 'success');
-      boot();
-    })
-    .withFailureHandler(function (err) { showLoading(false); onServerError(err); })
-    .clearAllData(input.value);
-}
-
-function runSetup() {
-  showLoading(true);
-  google.script.run
-    .withSuccessHandler(function () { showLoading(false); showToast('初期セットアップが完了しました', 'success'); boot(); })
-    .withFailureHandler(function (err) { showLoading(false); onServerError(err); })
-    .runInitialSetup();
-}
-
-// ============================================================================
 // イベント結線・タブ切り替え
 // ============================================================================
 
@@ -608,27 +1056,34 @@ function bindStaticEvents() {
   document.getElementById('btn-refresh').addEventListener('click', boot);
   document.getElementById('btn-run-setup').addEventListener('click', runSetup);
 
-  ['filter-area', 'filter-office', 'filter-sts', 'filter-category', 'filter-date-field'].forEach(function (id) {
-    document.getElementById(id).addEventListener('change', applyFilters);
+  // 分析ダッシュボードタブのフィルタ
+  ['dash-filter-area', 'dash-filter-office', 'dash-filter-category', 'dash-filter-date-field'].forEach(function (id) {
+    document.getElementById(id).addEventListener('change', applyDashFilters);
   });
-  document.getElementById('filter-date-from').addEventListener('change', applyFilters);
-  document.getElementById('filter-date-to').addEventListener('change', applyFilters);
-  document.getElementById('filter-keyword').addEventListener('input', debounce_(applyFilters, 250));
-  document.getElementById('btn-clear-filter').addEventListener('click', clearFilters);
+  document.getElementById('dash-filter-date-from').addEventListener('change', applyDashFilters);
+  document.getElementById('dash-filter-date-to').addEventListener('change', applyDashFilters);
+  document.getElementById('btn-clear-dash-filter').addEventListener('click', clearDashFilters);
 
-  document.querySelectorAll('#ranking-tbody').forEach(function () {}); // no-op, header binds below
-  document.querySelectorAll('[data-sort]').forEach(function (th) {
-    if (th.closest('#tab-panel-dashboard')) {
-      th.addEventListener('click', function () {
-        var key = th.getAttribute('data-sort');
-        if (STATE.rankingSortKey === key) STATE.rankingSortDir *= -1; else { STATE.rankingSortKey = key; STATE.rankingSortDir = -1; }
-        renderRanking();
-      });
-    }
+  document.querySelectorAll('#tab-panel-dashboard [data-sort]').forEach(function (th) {
+    th.addEventListener('click', function () {
+      var key = th.getAttribute('data-sort');
+      if (STATE.rankingSortKey === key) STATE.rankingSortDir *= -1; else { STATE.rankingSortKey = key; STATE.rankingSortDir = -1; }
+      renderRanking();
+    });
   });
 
-  document.getElementById('btn-prev-page').addEventListener('click', function () { STATE.page--; renderDataTable(); });
-  document.getElementById('btn-next-page').addEventListener('click', function () { STATE.page++; renderDataTable(); });
+  // 予約データ一覧タブのフィルタ
+  ['data-filter-area', 'data-filter-office', 'data-filter-staff'].forEach(function (id) {
+    document.getElementById(id).addEventListener('change', applyDataFilters);
+  });
+  document.getElementById('data-filter-date-from').addEventListener('change', applyDataFilters);
+  document.getElementById('data-filter-date-to').addEventListener('change', applyDataFilters);
+  document.getElementById('data-filter-keyword').addEventListener('input', debounce_(applyDataFilters, 250));
+  document.getElementById('btn-clear-data-filter').addEventListener('click', clearDataFilters);
+
+  document.getElementById('btn-prev-page').addEventListener('click', function () { STATE.dataPage--; renderDataTable(); });
+  document.getElementById('btn-next-page').addEventListener('click', function () { STATE.dataPage++; renderDataTable(); });
+  bindDataTableEditEvents_();
 
   document.getElementById('btn-open-csv-modal').addEventListener('click', openCsvModal);
   document.getElementById('btn-close-csv-modal').addEventListener('click', closeCsvModal);
@@ -636,8 +1091,21 @@ function bindStaticEvents() {
   document.getElementById('csv-file-input').addEventListener('change', onCsvFileSelected);
   document.getElementById('btn-submit-csv').addEventListener('click', submitCsvImport);
 
+  // 個人別サマリータブ
+  document.getElementById('personal-search').addEventListener('input', debounce_(renderPersonalTab, 200));
+  document.querySelectorAll('#tab-panel-personal [data-sort]').forEach(function (th) {
+    th.addEventListener('click', function () {
+      var key = th.getAttribute('data-sort');
+      if (STATE.personalSortKey === key) STATE.personalSortDir *= -1; else { STATE.personalSortKey = key; STATE.personalSortDir = -1; }
+      renderPersonalTab();
+    });
+  });
+
+  // データ管理タブ
+  bindColumnOrderEvents_();
   document.getElementById('btn-remove-duplicates').addEventListener('click', removeDuplicates);
   document.getElementById('btn-clear-all-data').addEventListener('click', clearAllData);
+  bindStaffEvents_();
 }
 
 function switchTab(tab) {

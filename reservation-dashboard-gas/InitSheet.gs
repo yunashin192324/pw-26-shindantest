@@ -3,9 +3,11 @@
  * InitSheet.gs
  * 予約データ分析ダッシュボード - シート初期化スクリプト
  * ----------------------------------------------------------------------------
- * このファイルをGoogle Apps Scriptエディタに貼り付け、setupAllSheets() を実行するか、
- * スプレッドシートのメニュー「予約データダッシュボード」→「① 初期セットアップ」を
- * 実行すると、データ保存用シート「予約データ」（19列・見出し付き）を作成する。
+ * このファイルをGoogle Apps Scriptエディタに貼り付け、setupAllSheetsFromMenu() を
+ * 実行するか、スプレッドシートのメニュー「予約データダッシュボード」→「① 初期セットアップ」を
+ * 実行すると、以下の2枚のシートを作成する。
+ *   ・「予約データ」    ：CSV由来19項目＋現場入力10項目（合計29列・見出し付き）
+ *   ・「スタッフ権限」  ：Googleアカウントごとの閲覧権限（社員／所長・チーフ／マスタ権限）
  * 既にシートがある場合は中身を残したまま、見出しと表示形式だけを整える（安全に再実行できる）。
  * ============================================================================
  */
@@ -25,7 +27,11 @@ function onOpen() {
 function setupAllSheetsFromMenu() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   buildDataSheet_(ss);
-  SpreadsheetApp.getUi().alert('シート「' + SHEET_NAME + '」の初期セットアップが完了しました。');
+  buildStaffSheet_(ss);
+  SpreadsheetApp.getUi().alert(
+    'シート「' + SHEET_NAME + '」「' + STAFF_SHEET_NAME + '」の初期セットアップが完了しました。\n' +
+    '「' + STAFF_SHEET_NAME + '」シートに、あなた自身のGoogleアカウントを「マスタ権限」で1行登録してください。'
+  );
 }
 
 /** メニューから実行する用の重複削除。 */
@@ -40,7 +46,9 @@ function removeDuplicateRowsFromMenu() {
 
 /**
  * データ保存用シート「予約データ」を作成・整備する（何度実行しても安全）。
- * 見出しは Code.gs の COLUMNS 定義（19項目）と完全に一致させる。
+ * 見出しは Code.gs の ALL_COLUMNS 定義（CSV由来19項目＋現場入力10項目＝29列）と完全に一致させる。
+ * 以前のバージョン（19列のみ）で運用していたシートに対して再実行した場合も、
+ * 既存データ行を残したまま20〜29列目（現場入力項目）の見出しだけを追加する。
  */
 function buildDataSheet_(ss) {
   var sheet = ss.getSheetByName(SHEET_NAME);
@@ -48,7 +56,7 @@ function buildDataSheet_(ss) {
     sheet = ss.insertSheet(SHEET_NAME);
   }
 
-  var headerLabels = COLUMNS.map(function (col) { return col.label; });
+  var headerLabels = ALL_COLUMNS.map(function (col) { return col.label; });
   var headerRange = sheet.getRange(1, 1, 1, headerLabels.length);
   headerRange.setValues([headerLabels]);
   headerRange.setFontWeight('bold').setBackground('#1d4ed8').setFontColor('#ffffff');
@@ -61,11 +69,53 @@ function buildDataSheet_(ss) {
   applyColumnFormats_(sheet, 2, maxRows - 1);
 
   // 列幅をおおまかに整える（見た目の初期状態を整えるだけで、必須ではない）。
-  var widths = [110, 150, 90, 90, 90, 130, 150, 70, 70, 90, 80, 150, 110, 110, 100, 70, 90, 220, 80];
+  var widths = [
+    110, 150, 90, 90, 90, 130, 150, 70, 70, 90, 80, 150, 110, 110, 100, 70, 90, 220, 80, // CSV由来19項目
+    90, 60, 80, 60, 80, 70, 90, 90, 100, 200                                              // 現場入力10項目
+  ];
   widths.forEach(function (w, i) { sheet.setColumnWidth(i + 1, w); });
 
-  if (sheet.getMaxColumns() > COLUMNS.length) {
-    sheet.hideColumns(COLUMNS.length + 1, sheet.getMaxColumns() - COLUMNS.length);
+  if (sheet.getMaxColumns() > ALL_COLUMNS.length) {
+    sheet.hideColumns(ALL_COLUMNS.length + 1, sheet.getMaxColumns() - ALL_COLUMNS.length);
+  }
+
+  return sheet;
+}
+
+/**
+ * スタッフ権限シートを作成・整備する（何度実行しても安全）。
+ * 列：Googleアカウント／氏名／所属店舗／所属エリア／権限（社員・所長・チーフ・マスタ権限）
+ * このシートに1件も登録が無い間は、Code.gsのgetCurrentUserContext_()が
+ * 誰でもマスタ権限として扱う（＝最初のセットアップができる状態）。
+ * 運用を始める前に、必ず自分自身をマスタ権限で1行登録すること。
+ */
+function buildStaffSheet_(ss) {
+  var sheet = ss.getSheetByName(STAFF_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(STAFF_SHEET_NAME);
+  }
+
+  var headerLabels = ['Googleアカウント', '氏名', '所属店舗', '所属エリア', '権限'];
+  var headerRange = sheet.getRange(1, 1, 1, headerLabels.length);
+  headerRange.setValues([headerLabels]);
+  headerRange.setFontWeight('bold').setBackground('#1d4ed8').setFontColor('#ffffff');
+  sheet.setFrozenRows(1);
+  sheet.setTabColor('#7c3aed');
+
+  var maxRows = Math.max(sheet.getMaxRows(), 2);
+  sheet.getRange(2, 1, maxRows - 1, 2).setNumberFormat('@');
+  sheet.getRange(2, 3, maxRows - 1, 2).setNumberFormat('@');
+  sheet.getRange(2, 5, maxRows - 1, 1).setNumberFormat('@');
+
+  var widths = [220, 120, 160, 120, 130];
+  widths.forEach(function (w, i) { sheet.setColumnWidth(i + 1, w); });
+
+  // 権限列にプルダウン（社員／所長・チーフ／マスタ権限）を設定しておく
+  var rule = SpreadsheetApp.newDataValidation().requireValueInList(ROLES, true).setAllowInvalid(false).build();
+  sheet.getRange(2, 5, Math.max(maxRows - 1, 1), 1).setDataValidation(rule);
+
+  if (sheet.getMaxColumns() > headerLabels.length) {
+    sheet.hideColumns(headerLabels.length + 1, sheet.getMaxColumns() - headerLabels.length);
   }
 
   return sheet;
