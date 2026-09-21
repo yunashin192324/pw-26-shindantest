@@ -5608,6 +5608,203 @@ section('91. 【機能追加】店舗の請求先（営業本部）をマスタ�
   });
   check('請求先を指定せずに保存しても、既に登録した値は消えない',
         ctx.listBranchesRaw_().find(b => b.code === 'SHOP1').shopBilling === '関東営業本部');
+
+  // ★不具合（項目111で発覚）：セクション91は店舗自身のトークンでしか確認しておらず、
+  // 手配課・現地支店の画面は別の組み立て経路（apiGetReservationDetail本体）を通る。
+  // 利用者が実際に見るのはこちらなので、3ロールすべてで確認する。
+  const jpDetail = ctx.apiGetReservationDetail(jpToken, made.kanriNo).detail;
+  check('手配課の画面にも事前登録した請求先が出る', jpDetail.shopBilling === '関東営業本部',
+        String(jpDetail.shopBilling));
+  const vieToken = ctx.apiLogin('VIE', 'vp').session.token;
+  const vieDetail = ctx.apiGetReservationDetail(vieToken, made.kanriNo).detail;
+  check('現地支店の画面にも事前登録した請求先が出る', vieDetail.shopBilling === '関東営業本部',
+        String(vieDetail.shopBilling));
+}
+
+// ---------------------------------------------------------------
+section('92. 【不具合修正】見出しセルの余分な空白で列が静かに読めなくなる（項目111）');
+{
+  // 見出しのセルに余分な空白を1つ混ぜる（人がスプレッドシートを直接さわると起こりうる）
+  function dirtyHeader(ctx, sheetName, headerName, suffix) {
+    const sh = ctx.__ss.getSheetByName(sheetName);
+    const head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    const i = head.indexOf(headerName);
+    if (i === -1) throw new Error(`見出しが無い: ${headerName}`);
+    sh.getRange(1, i + 1).setValue(headerName + suffix);
+    return i + 1;
+  }
+  function setCell(ctx, sheetName, rowIdx, headerName, value) {
+    const sh = ctx.__ss.getSheetByName(sheetName);
+    const head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    const i = head.indexOf(headerName);
+    sh.getRange(rowIdx, i + 1).setValue(value);
+  }
+
+  // --- 支店マスタの「請求先」見出しが汚れていても値が読める（今回の発端） ---
+  {
+    const ctx = shopFixture();
+    const bm = ctx.__ss.getSheetByName('支店マスタ');
+    const shopRow = bm.getRange(2, 1, bm.getLastRow() - 1, 1).getValues()
+      .findIndex(r => String(r[0]) === 'SHOP1') + 2;
+    dirtyHeader(ctx, '支店マスタ', '請求先', ' ');
+    setCell(ctx, '支店マスタ', shopRow, '請求先 ', '関東営業本部');
+    check('見出しの末尾に半角スペースがあっても請求先が読める',
+          ctx.listBranchesRaw_().find(b => b.code === 'SHOP1').shopBilling === '関東営業本部',
+          String(ctx.listBranchesRaw_().find(b => b.code === 'SHOP1').shopBilling));
+  }
+  {
+    const ctx = shopFixture();
+    const bm = ctx.__ss.getSheetByName('支店マスタ');
+    const shopRow = bm.getRange(2, 1, bm.getLastRow() - 1, 1).getValues()
+      .findIndex(r => String(r[0]) === 'SHOP1') + 2;
+    dirtyHeader(ctx, '支店マスタ', '請求先', '　'); // 全角スペース
+    setCell(ctx, '支店マスタ', shopRow, '請求先　', '関東営業本部');
+    check('見出しの末尾に全角スペースがあっても請求先が読める',
+          ctx.listBranchesRaw_().find(b => b.code === 'SHOP1').shopBilling === '関東営業本部');
+  }
+
+  // --- 見出しが汚れていても、ログイン・一覧といった根幹が止まらない ---
+  {
+    const ctx = shopFixture();
+    dirtyHeader(ctx, '支店マスタ', 'ログインパスコード', ' ');
+    check('「ログインパスコード」見出しが汚れていてもログインできる',
+          ctx.apiLogin('SHOP1', 'sp').ok === true);
+  }
+  {
+    const ctx = shopFixture();
+    dirtyHeader(ctx, '支店マスタ', '支店コード', ' ');
+    check('「支店コード」見出しが汚れていてもログインできる',
+          ctx.apiLogin('KANTO', 'pw').ok === true);
+  }
+  {
+    const ctx = shopFixture();
+    dirtyHeader(ctx, '支店マスタ', '有効', ' ');
+    check('「有効」見出しが汚れていても拠点が無効扱いにならない',
+          ctx.listBranchesRaw_().filter(b => b.active).length >= 4,
+          String(ctx.listBranchesRaw_().filter(b => b.active).length));
+  }
+  {
+    const ctx = shopFixture();
+    dirtyHeader(ctx, '予約一覧', '起票元店舗', ' ');
+    const shopToken = ctx.apiLogin('SHOP1', 'sp').session.token;
+    const made = ctx.apiShopCreateRequest(shopToken, {
+      branchCode: 'VIE', team: '関東', challengeNo: 'HEADSPACE01',
+      groomLastName: 'YAMADA', groomName: 'TARO', brideLastName: 'SATO', brideName: 'HANAKO',
+      hope1: '2027-12-24'
+    });
+    check('「起票元店舗」見出しが汚れていても店舗の一覧に案件が出る',
+          ctx.apiGetDashboard(shopToken, {}).reservations.some(r => r.kanriNo === made.kanriNo));
+  }
+
+  // --- setupPortal（列を揃える処理）が見出しの汚れを実際に直す ---
+  {
+    const ctx = shopFixture();
+    dirtyHeader(ctx, '予約一覧', '起票元店舗', ' ');
+    const before = ctx.__ss.getSheetByName('予約一覧').getLastColumn();
+    ctx.ensureSheetWithHeaders_(ctx.__ss, '予約一覧', ctx.RESERVATION_HEADERS);
+    const sh = ctx.__ss.getSheetByName('予約一覧');
+    const head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    check('setupPortalを実行すると見出しの余分な空白が直る', head.indexOf('起票元店舗') !== -1);
+    check('直すときに列が増えたりしない', sh.getLastColumn() === before,
+          `${before} → ${sh.getLastColumn()}`);
+    check('汚れた見出しは残っていない', head.indexOf('起票元店舗 ') === -1);
+  }
+  {
+    // 正しい見出しが既にある状態で汚れた見出しも混在している場合は、直すと重複するので触らない
+    const ctx = shopFixture();
+    const sh = ctx.__ss.getSheetByName('予約一覧');
+    const extra = sh.getLastColumn() + 1;
+    sh.getRange(1, extra).setValue('起票元店舗 ');
+    ctx.ensureSheetWithHeaders_(ctx.__ss, '予約一覧', ctx.RESERVATION_HEADERS);
+    const head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    check('正しい見出しが既にある場合は書き戻して重複させない',
+          head.filter(h => String(h) === '起票元店舗').length === 1,
+          String(head.filter(h => String(h) === '起票元店舗').length));
+  }
+
+  // --- 点検が「見出しの汚れ」を見逃さない（以前は異常なしと報告していた） ---
+  {
+    const ctx = shopFixture();
+    dirtyHeader(ctx, '支店マスタ', '請求先', ' ');
+    const issues = ctx.checkSheetColumnIssues_();
+    check('見出しの余分な空白を列の点検が報告する',
+          issues.some(m => m.includes('余分な空白') && m.includes('請求先')),
+          JSON.stringify(issues));
+    check('直し方（setupPortalの実行）まで案内する',
+          issues.some(m => m.includes('余分な空白') && m.includes('setupPortal')));
+  }
+
+  // --- 列そのものが無いときに、黙って捨てず理由を伝える ---
+  {
+    const ctx = shopFixture();
+    const sh = ctx.__ss.getSheetByName('支店マスタ');
+    const head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    sh.getRange(1, head.indexOf('請求先') + 1).setValue('請求先（旧）'); // 列が無い状態を作る
+    const jpToken = ctx.apiLogin('KANTO', 'pw').session.token;
+    let err = null;
+    try {
+      ctx.apiSaveBranch(jpToken, {
+        code: 'SHOP1', name: '新宿店', role: 'SHOP', country: '', city: '', team: '',
+        email: 'shop1@example.com', prefix: '', passcode: '', active: true,
+        shopBilling: '関東営業本部'
+      });
+    } catch (e) { err = e.message; }
+    check('請求先の列が無い状態で保存すると、黙って捨てずにエラーで知らせる', err !== null, String(err));
+    check('エラー文にどの列が足りないかが入っている', String(err).includes('請求先'), String(err));
+    check('エラー文に直し方（setupPortal）が入っている', String(err).includes('setupPortal'), String(err));
+
+    // 入力していない項目まで巻き添えでエラーにはしない（列が無くても保存は通る）
+    let err2 = null;
+    try {
+      ctx.apiSaveBranch(jpToken, {
+        code: 'SHOP1', name: '新宿店（改称）', role: 'SHOP', country: '', city: '', team: '',
+        email: 'shop1@example.com', prefix: '', passcode: '', active: true
+      });
+    } catch (e) { err2 = e.message; }
+    check('請求先を入力していなければ、列が無くても保存できる', err2 === null, String(err2));
+    check('名称の変更は保存されている',
+          ctx.listBranchesRaw_().find(b => b.code === 'SHOP1').name === '新宿店（改称）');
+  }
+
+  // --- 「有効」欄の書き方の誤りを知らせる（全員ログイン不能になるのに原因が見えないため） ---
+  {
+    function activeCell(ctx, code, value) {
+      const bm = ctx.__ss.getSheetByName('支店マスタ');
+      const head = bm.getRange(1, 1, 1, bm.getLastColumn()).getValues()[0];
+      const rows = bm.getRange(2, 1, bm.getLastRow() - 1, head.length).getValues();
+      const idx = rows.findIndex(r => String(r[head.indexOf('支店コード')]) === code) + 2;
+      bm.getRange(idx, head.indexOf('有効') + 1).setValue(value);
+    }
+    ['○', '有効', 'はい', 1].forEach(v => {
+      const ctx = shopFixture();
+      activeCell(ctx, 'SHOP1', v);
+      check(`「有効」欄が${JSON.stringify(v)}だと、ログインできないことを点検が知らせる`,
+            ctx.checkBranchMasterIssues_().some(m => m.includes('有効') && m.includes('ログインできません')),
+            JSON.stringify(ctx.checkBranchMasterIssues_()));
+    });
+    // 正しい書き方・意図的な無効化は指摘しない（誤検知で点検結果が埋もれないように）
+    ['TRUE', true, 'FALSE', false, ''].forEach(v => {
+      const ctx = shopFixture();
+      activeCell(ctx, 'SHOP1', v);
+      check(`「有効」欄が${JSON.stringify(v)}なら余計な指摘をしない`,
+            !ctx.checkBranchMasterIssues_().some(m => m.includes('この拠点は誰もログインできません')),
+            JSON.stringify(ctx.checkBranchMasterIssues_()));
+    });
+  }
+
+  // --- 請求先に数字だけを入れても文字列として扱う ---
+  {
+    const ctx = shopFixture();
+    const bm = ctx.__ss.getSheetByName('支店マスタ');
+    const head = bm.getRange(1, 1, 1, bm.getLastColumn()).getValues()[0];
+    const rows = bm.getRange(2, 1, bm.getLastRow() - 1, head.length).getValues();
+    const idx = rows.findIndex(r => String(r[head.indexOf('支店コード')]) === 'SHOP1') + 2;
+    bm.getRange(idx, head.indexOf('請求先') + 1).setValue(123);
+    const meta = ctx.listBranchesRaw_().find(b => b.code === 'SHOP1');
+    check('請求先に数字だけを入れても文字列として返る',
+          meta.shopBilling === '123' && typeof meta.shopBilling === 'string',
+          `${JSON.stringify(meta.shopBilling)} / ${typeof meta.shopBilling}`);
+  }
 }
 
 // ---------------------------------------------------------------

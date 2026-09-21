@@ -910,9 +910,20 @@ function ensureSheetWithHeaders_(ss, name, headers) {
   // といった問題が起きる。既存シートに不足している列を末尾へ追加して追従させる。
   // （列の削除・並べ替えは行わないので、既存データは一切失われない）
   const lastCol = sheet.getLastColumn();
-  const existing = lastCol > 0
-    ? sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim())
-    : [];
+  const raw = lastCol > 0 ? sheet.getRange(1, 1, 1, lastCol).getValues()[0] : [];
+  const existing = raw.map(h => String(h).trim());
+  // ★不具合修正（項目111）：見出しのセルに余分な空白が入っていたら、ここで書き戻して直す。
+  // 以前はこの関数が空白を落として比較するだけで、セルの中身はそのままだった。その結果
+  // 「列はある」と判断して何もせず、一方で実際にデータを読む側は空白付きの名前を知らないため
+  // 「列がありません。setupPortal を一度実行してください」と案内し続ける＝実行しても直らない
+  // 堂々巡りになっていた。同じ名前の列が既に他にある場合は重複を作らないよう触らない。
+  raw.forEach((h, i) => {
+    const trimmed = String(h).trim();
+    if (String(h) === trimmed) return;                 // 汚れていない
+    if (!headers.includes(trimmed)) return;            // このシートが持つべき列ではない
+    if (existing.filter(x => x === trimmed).length > 1) return; // 直すと重複してしまう
+    sheet.getRange(1, i + 1).setValue(trimmed);
+  });
   const missing = headers.filter(h => existing.indexOf(h) === -1);
   if (missing.length > 0) {
     sheet.getRange(1, existing.length + 1, 1, missing.length).setValues([missing]);
@@ -1130,7 +1141,10 @@ function listBranchesRaw_() {
     // ★機能追加（店舗拡張）：店舗発の新規依頼で日本の手配課へメール通知するか（既定ON）
     shopNotifyHq: isActiveFlagDefaultTrue_(r[BM_COL_SHOP_NOTIFY_HQ]),
     // ★機能追加（店舗拡張）：SHOPロールの行のみ意味を持つ、店舗の営業本部（請求先表示用）
-    shopBilling: r[BM_COL_SHOP_BILLING] || '',
+    // ★不具合防止（項目111）：方面・タイムゾーンと同じく必ず文字列にそろえる。数字だけを
+    // 入れた場合（営業本部を番号で管理している場合）に数値として扱われるのを防ぐ。
+    shopBilling: String(r[BM_COL_SHOP_BILLING] === null || r[BM_COL_SHOP_BILLING] === undefined
+      ? '' : r[BM_COL_SHOP_BILLING]).trim(),
     // ★機能追加（店舗拡張）：店舗がアップロードした書類を現地支店にも公開するか（既定OFF）
     shopUploadVisibleToBranch: isActiveFlag_(r[BM_COL_SHOP_UPLOAD_VISIBLE_TO_BRANCH]),
     deliveryDays: parseIntOrNull_(r[BM_COL_DELIVERY_DAYS]),
@@ -1180,7 +1194,7 @@ function apiSaveBranch(token, branch) {
   if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
   try {
     const sheet = getSpreadsheet_().getSheetByName(BRANCH_MASTER_SHEET_NAME);
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const headers = sheetHeaders_(sheet);
     const lastRow = sheet.getLastRow();
     const codeColIdx = headers.indexOf(BM_COL_CODE);
     const prefixColIdx = headers.indexOf(BM_COL_PREFIX);
@@ -1212,6 +1226,21 @@ function apiSaveBranch(token, branch) {
       throw new Error('新規追加の場合はログインパスコードが必須です。');
     }
     const finalPasscode = passcode || existingPasscode;
+
+    // ★不具合修正（項目111）：下の rowData は「シートに実在する見出し」だけを見て値を決めるため、
+    // 該当の列がシートに無いと、入力された値はどこにも行き場が無く黙って捨てられていた。
+    // それでも画面には「保存しました」と出るので、利用者は何度入力し直しても反映されない。
+    // 入力があった項目については、書き込む先の列があることをここで確かめて、無ければ理由を伝える。
+    [
+      { value: branch.shopBilling, column: BM_COL_SHOP_BILLING },
+      { value: branch.timezone, column: BM_COL_TIMEZONE },
+      { value: branch.region, column: BM_COL_REGION }
+    ].forEach(t => {
+      if (t.value === undefined || !String(t.value || '').trim()) return;
+      if (headers.indexOf(t.column) !== -1) return;
+      throw new Error(`「${BRANCH_MASTER_SHEET_NAME}」シートに「${t.column}」列がないため、この内容は保存できません。` +
+                      `スプレッドシートのメニューから setupPortal を一度実行して、不足している列を追加してください。`);
+    });
 
     const rowData = headers.map((h, idx) => {
       switch (h) {
@@ -1269,7 +1298,7 @@ function apiSetBranchActive(token, code, active) {
   if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
   try {
     const sheet = getSpreadsheet_().getSheetByName(BRANCH_MASTER_SHEET_NAME);
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const headers = sheetHeaders_(sheet);
     const lastRow = sheet.getLastRow();
     const codeColIdx = headers.indexOf(BM_COL_CODE);
     const activeColIdx = headers.indexOf(BM_COL_ACTIVE);
@@ -1307,7 +1336,7 @@ function apiChangeOwnPasscode(token, currentPasscode, newPasscode) {
   if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
   try {
     const sheet = getSpreadsheet_().getSheetByName(BRANCH_MASTER_SHEET_NAME);
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const headers = sheetHeaders_(sheet);
     const codeColIdx = headers.indexOf(BM_COL_CODE);
     const passcodeColIdx = headers.indexOf(BM_COL_PASSCODE);
     if (passcodeColIdx === -1) {
@@ -1582,7 +1611,7 @@ function apiSavePhraseItem(token, branchCode, name, originalName, active, body) 
   if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
   try {
     const sheet = ensureSheetWithHeaders_(getSpreadsheet_(), PHRASE_MASTER_SHEET_NAME, PHRASE_MASTER_HEADERS);
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+    const headers = sheetHeaders_(sheet);
     const idx = (n) => headers.indexOf(n);
     const matchName = String(originalName || name).trim();
     const lastRow = sheet.getLastRow();
@@ -1753,7 +1782,7 @@ function shopEmptyHint_(session) {
   const hints = [];
   const sheet = getSpreadsheet_().getSheetByName(RESERVATION_SHEET_NAME);
   if (!sheet || sheet.getLastRow() < 1) return hints;
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+  const headers = sheetHeaders_(sheet);
   const originIdx = headers.indexOf(COL_ORIGIN_SHOP);
   if (originIdx === -1) {
     hints.push(`予約一覧シートに「${COL_ORIGIN_SHOP}」列がありません。これが無いと、店舗が作った案件が` +
@@ -2050,7 +2079,7 @@ function rebuildUnreadFlags() {
 
   const hSheet = ss.getSheetByName(HISTORY_SHEET_NAME);
   if (hSheet && hSheet.getLastRow() >= 2) {
-    const hHeaders = hSheet.getRange(1, 1, 1, hSheet.getLastColumn()).getValues()[0];
+    const hHeaders = sheetHeaders_(hSheet);
     const hValues = hSheet.getRange(2, 1, hSheet.getLastRow() - 1, hHeaders.length).getValues();
     const kanriIdx = hHeaders.indexOf(H_COL_KANRI);
     const roleIdx = hHeaders.indexOf(H_COL_SENDER_ROLE);
@@ -2073,7 +2102,7 @@ function rebuildUnreadFlags() {
   [RESERVATION_SHEET_NAME, ARCHIVE_SHEET_NAME].forEach(name => {
     const sheet = ss.getSheetByName(name);
     if (!sheet || sheet.getLastRow() < 2) return;
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const headers = sheetHeaders_(sheet);
     const jpIdx = headers.indexOf(COL_UNREAD_JP);
     const brIdx = headers.indexOf(COL_UNREAD_BRANCH);
     const kanriIdx = headers.indexOf(COL_KANRI_NO);
@@ -2117,7 +2146,7 @@ function forceTextFormatOnCodeColumns_() {
   CODE_TEXT_COLUMNS_.forEach(spec => {
     const sheet = ss.getSheetByName(spec.sheet);
     if (!sheet || sheet.getLastColumn() < 1) return;
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+    const headers = sheetHeaders_(sheet);
     spec.columns.forEach(name => {
       const idx = headers.indexOf(name);
       if (idx === -1) return;
@@ -2151,7 +2180,7 @@ function repairBranchCodeDigits_() {
     if (spec.sheet === BRANCH_MASTER_SHEET_NAME) return; // 支店マスタ自身は書き換えない
     const sheet = ss.getSheetByName(spec.sheet);
     if (!sheet || sheet.getLastRow() < 2) return;
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+    const headers = sheetHeaders_(sheet);
     spec.columns.forEach(name => {
       const idx = headers.indexOf(name);
       if (idx === -1) return;
@@ -2201,7 +2230,7 @@ function repairOriginShop() {
   const shopSourced = {};    // 管理番号 -> true（履歴を見るかぎり店舗発の案件だと分かるもの）
   const hSheet = ss.getSheetByName(HISTORY_SHEET_NAME);
   if (hSheet && hSheet.getLastRow() >= 2) {
-    const hHeaders = hSheet.getRange(1, 1, 1, hSheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+    const hHeaders = sheetHeaders_(hSheet);
     const hValues = hSheet.getRange(2, 1, hSheet.getLastRow() - 1, hHeaders.length).getValues();
     const kanriIdx = hHeaders.indexOf(H_COL_KANRI);
     const roleIdx = hHeaders.indexOf(H_COL_SENDER_ROLE);
@@ -2250,7 +2279,7 @@ function repairOriginShop() {
   [RESERVATION_SHEET_NAME, ARCHIVE_SHEET_NAME].forEach(sheetName => {
     const sheet = ss.getSheetByName(sheetName);
     if (!sheet || sheet.getLastRow() < 2) return;
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+    const headers = sheetHeaders_(sheet);
     const originIdx = headers.indexOf(COL_ORIGIN_SHOP);
     const kanriIdx = headers.indexOf(COL_KANRI_NO);
     if (originIdx === -1 || kanriIdx === -1) return;   // 列がまだ無いシートは対象外（先にsetupPortalを実行する）
@@ -2925,7 +2954,7 @@ function findReservationRow_(kanriNo) {
     if (!sheet) continue;
     const lastRow = sheet.getLastRow();
     if (lastRow < 2) continue;
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const headers = sheetHeaders_(sheet);
     const kanriColIdx = headers.indexOf(COL_KANRI_NO);
     const values = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
     for (let i = 0; i < values.length; i++) {
@@ -4194,7 +4223,7 @@ function apiSaveArrangementSettings(token, branchCode, settings) {
   if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
   try {
     const sheet = getSpreadsheet_().getSheetByName(BRANCH_MASTER_SHEET_NAME);
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const headers = sheetHeaders_(sheet);
     const lastRow = sheet.getLastRow();
     const codeColIdx = headers.indexOf(BM_COL_CODE);
     let targetRow = -1;
@@ -4347,7 +4376,7 @@ function apiCreateReservation(token, branchCode, rawText) {
   if (!lock.tryLock(15000)) throw new Error('他の処理が実行中です。少し待って再試行してください。');
   try {
     const sheet = getSpreadsheet_().getSheetByName(RESERVATION_SHEET_NAME);
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const headers = sheetHeaders_(sheet);
     const newNo = nextKanriNo_(targetBranch);
     const newRowIndex = sheet.getLastRow() + 1;
 
@@ -4520,7 +4549,7 @@ function apiShopCreateRequest(token, payload) {
   let mailWarning = '';
   try {
     const sheet = getSpreadsheet_().getSheetByName(RESERVATION_SHEET_NAME);
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const headers = sheetHeaders_(sheet);
 
     // ★機能追加（複数支店にまたがる依頼への対応）：希望日ごとに選んだプランの提供元支店で
     // グループ分けし、支店ごとに案件（管理番号）を自動分割して作成する。例：希望日①＝ローマ支店の
@@ -4760,7 +4789,7 @@ function nextKanriNo_(branchCode) {
   [RESERVATION_SHEET_NAME, ARCHIVE_SHEET_NAME].forEach(sheetName => {
     const sheet = ss.getSheetByName(sheetName);
     if (!sheet || sheet.getLastRow() < 2) return;
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const headers = sheetHeaders_(sheet);
     const branchColIdx = headers.indexOf(COL_BRANCH_CODE);
     const kanriColIdx = headers.indexOf(COL_KANRI_NO);
     const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
@@ -4870,7 +4899,7 @@ function apiToggleHistoryCheck(token, historyId, checked) {
     // getRange(2, ..., 0, 1) がApps Script側の「範囲の行数は1以上」エラーで落ちていた。
     // 存在しない履歴IDへの操作として、分かりやすいエラーメッセージを返すようにする。
     if (lastRow < 2) throw new Error('対象の履歴が見つかりません。');
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const headers = sheetHeaders_(sheet);
     // 履歴の読み取りはこの1回だけ。対象行の特定と、更新後に「その案件に自分側の未読が
     // まだ残っているか」の判定を、同じ読み取り結果から行う。
     const values = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
@@ -4955,7 +4984,7 @@ function apiDeleteHistoryMessage(token, historyId) {
     const sheet = getSpreadsheet_().getSheetByName(HISTORY_SHEET_NAME);
     const lastRow = sheet.getLastRow();
     if (lastRow < 2) throw new Error('対象の履歴が見つかりません。');
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const headers = sheetHeaders_(sheet);
     const values = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
     const idColIdx = headers.indexOf(H_COL_ID);
     const kanriColIdx = headers.indexOf(H_COL_KANRI);
@@ -5798,6 +5827,17 @@ function checkBranchMasterIssues_() {
     if (!String(r[BM_COL_PASSCODE] || '').trim()) {
       issues.push(`${line}行目（${code}）：ログインパスコードが空欄のためログインできません。`);
     }
+    // ★不具合防止（項目111）：「有効」欄はチェックボックス（または TRUE の文字）だけを有効と見なす。
+    // 「○」「有効」「はい」「1」のように、人が自然に書きたくなる書き方は全て無効扱いになり、
+    // その拠点は誰もログインできなくなる。しかもログイン画面には
+    // 「支店コードまたはパスコードが違います」としか出ないため、原因がこの欄だと気づけない。
+    // 書き方の誤りとして具体的に知らせる（空欄は「意図して無効にした」場合があるので対象外）。
+    const activeRaw = String(r[BM_COL_ACTIVE] === null || r[BM_COL_ACTIVE] === undefined ? '' : r[BM_COL_ACTIVE]).trim();
+    if (activeRaw && !isActiveFlag_(r[BM_COL_ACTIVE]) && activeRaw.toUpperCase() !== 'FALSE') {
+      issues.push(`${line}行目（${code}）：「${BM_COL_ACTIVE}」欄が「${activeRaw}」になっています。` +
+                  `この書き方は無効（チェックなし）として扱われ、この拠点は誰もログインできません。` +
+                  `チェックボックスを入れるか、TRUE と入力してください。`);
+    }
     if (codeSeen[code]) {
       issues.push(`${line}行目：支店コード「${code}」が${codeSeen[code]}行目と重複しています。どちらか一方に統一してください。`);
     } else {
@@ -5836,14 +5876,25 @@ function checkSheetColumnIssues_() {
       return;
     }
     const lastCol = sheet.getLastColumn();
-    const existing = lastCol > 0
-      ? sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim())
-      : [];
+    const raw = lastCol > 0 ? sheet.getRange(1, 1, 1, lastCol).getValues()[0] : [];
+    const existing = raw.map(h => String(h).trim());
     const missing = t.headers.filter(h => existing.indexOf(h) === -1);
     if (missing.length) {
       issues.push(`「${t.name}」シートに列が足りません（${missing.join('・')}）。` +
                   `このままだとその項目の値が保存されず、案件が一覧に出ないなどの不具合につながります。` +
                   `スプレッドシートのメニューから setupPortal を一度実行してください。`);
+    }
+    // ★不具合修正（項目111）：見出しのセルに余分な空白が入っている状態は、以前この点検を
+    // そのまま通り抜けていた（この関数は空白を落として比べていたため「列はある」と判断していた）。
+    // 実際にはその列は読めなくなっており、「点検では異常なしと出るのに動かない」という
+    // いちばん原因を掴みにくい状態になる。空白が入っていること自体を指摘する。
+    const dirty = raw
+      .map(h => String(h))
+      .filter(h => h !== h.trim() && t.headers.includes(h.trim()));
+    if (dirty.length) {
+      issues.push(`「${t.name}」シートの見出しに余分な空白が入っています（${dirty.map(h => `「${h}」`).join('・')}）。` +
+                  `この列は読み取れなくなり、入力しても画面に出ない・案件が一覧に出ないといった不具合につながります。` +
+                  `スプレッドシートのメニューから setupPortal を一度実行すると自動で直ります。`);
     }
   });
   return issues;
@@ -5902,7 +5953,7 @@ function checkMailHealth() { return runTrigger_('checkMailHealth', checkMailHeal
 function checkMailHealthCore_(errors) {
   const ss = getSpreadsheet_();
   const sheet = ensureSheetWithHeaders_(ss, MAIL_FAILURE_SHEET_NAME, MAIL_FAILURE_HEADERS);
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+  const headers = sheetHeaders_(sheet);
   const notifiedIdx = headers.indexOf('管理者へ通知済み');
   const pending = [];
   if (sheet.getLastRow() >= 2) {
@@ -5988,7 +6039,7 @@ function checkAlerts() { return runTrigger_('checkAlerts', checkAlertsCore_); }
 function checkAlertsCore_(errors) {
   const sheet = getSpreadsheet_().getSheetByName(RESERVATION_SHEET_NAME);
   if (!sheet || sheet.getLastRow() < 2) return;
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const headers = sheetHeaders_(sheet);
   const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
   const targetDateStr = Utilities.formatDate(new Date(Date.now() + ALERT_DAYS_BEFORE * 86400000), 'Asia/Tokyo', 'yyyy/MM/dd');
 
@@ -6047,7 +6098,7 @@ function checkShopAlertsCore_(errors) {
   [RESERVATION_SHEET_NAME, ARCHIVE_SHEET_NAME].forEach(sheetName => {
     const sheet = ss.getSheetByName(sheetName);
     if (!sheet || sheet.getLastRow() < 2) return;
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const headers = sheetHeaders_(sheet);
     const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
 
     data.forEach((row, i) => {
@@ -6159,7 +6210,7 @@ function checkDeliveryAlertsCore_(errors) {
   [RESERVATION_SHEET_NAME, ARCHIVE_SHEET_NAME].forEach(sheetName => {
     const sheet = ss.getSheetByName(sheetName);
     if (!sheet || sheet.getLastRow() < 2) return;
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const headers = sheetHeaders_(sheet);
     const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
 
     data.forEach((row, i) => {
@@ -6240,7 +6291,7 @@ function checkUnansweredAlertsCore_(errors) {
   const oldestUnread = {};   // `${kanriNo}\t${受け手ロール}` -> Date
   const hSheet = ss.getSheetByName(HISTORY_SHEET_NAME);
   if (hSheet && hSheet.getLastRow() >= 2) {
-    const hHeaders = hSheet.getRange(1, 1, 1, hSheet.getLastColumn()).getValues()[0];
+    const hHeaders = sheetHeaders_(hSheet);
     const hValues = hSheet.getRange(2, 1, hSheet.getLastRow() - 1, hHeaders.length).getValues();
     const kanriIdx = hHeaders.indexOf(H_COL_KANRI);
     const roleIdx = hHeaders.indexOf(H_COL_SENDER_ROLE);
@@ -6277,7 +6328,7 @@ function checkUnansweredAlertsCore_(errors) {
 
   const sheet = ss.getSheetByName(RESERVATION_SHEET_NAME);
   if (!sheet || sheet.getLastRow() < 2) return;
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const headers = sheetHeaders_(sheet);
   const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
 
   data.forEach((row, i) => {
@@ -6371,15 +6422,14 @@ function archivePastReservationsCore_(errors) {
   // 過去一覧が無い／ヘッダーが未作成の場合もここで必ず整える（列ずれ防止のため）
   const archive = ensureSheetWithHeaders_(ss, ARCHIVE_SHEET_NAME, RESERVATION_HEADERS);
 
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const headers = sheetHeaders_(sheet);
   const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
   const todayStr = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd');
 
   // ★不具合修正：以前は予約一覧の行をそのまま archive.appendRow(row) していたため、
   // 予約一覧と過去一覧で列の並び・数が少しでも違うと、値が別の列に入って静かにデータが壊れていた。
   // 過去一覧側のヘッダーを読み、「列名で」対応付けてから書き込む。
-  const archiveHeaders = archive.getRange(1, 1, 1, archive.getLastColumn()).getValues()[0]
-    .map(h => String(h).trim());
+  const archiveHeaders = sheetHeaders_(archive);
 
   const asDateStr = (v) => v instanceof Date ? Utilities.formatDate(v, 'Asia/Tokyo', 'yyyy/MM/dd') : '';
 
@@ -6494,7 +6544,7 @@ function purgeOldArchivedCasesCore_(errors) {
   const archive = ss.getSheetByName(ARCHIVE_SHEET_NAME);
   if (!archive || archive.getLastRow() < 2) return;
 
-  const headers = archive.getRange(1, 1, 1, archive.getLastColumn()).getValues()[0].map(h => String(h).trim());
+  const headers = sheetHeaders_(archive);
   const values = archive.getRange(2, 1, archive.getLastRow() - 1, headers.length).getValues();
   const cutoff = purgeCutoffDate_(new Date());
   const kanriIdx = headers.indexOf(COL_KANRI_NO);
@@ -6518,7 +6568,7 @@ function purgeOldArchivedCasesCore_(errors) {
 
   // 1) 案件の行を保管用スプレッドシートへ移す（列名で対応付けるので、列順が違っても崩れない）
   const destSheet = ensureArchiveFileSheet_(file, ARCHIVE_SHEET_NAME, RESERVATION_HEADERS);
-  const destHeaders = destSheet.getRange(1, 1, 1, destSheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+  const destHeaders = sheetHeaders_(destSheet);
   movingRows.forEach(row => {
     destSheet.appendRow(destHeaders.map(h => {
       const i = headers.indexOf(h);
@@ -6531,7 +6581,7 @@ function purgeOldArchivedCasesCore_(errors) {
   PURGE_LINKED_SHEETS.forEach(spec => {
     const sheet = ss.getSheetByName(spec.name);
     if (!sheet || sheet.getLastRow() < 2) return;
-    const h = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(x => String(x).trim());
+    const h = sheetHeaders_(sheet);
     const keyIdx = h.indexOf(spec.keyColumn);
     if (keyIdx === -1) return;
     const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, h.length).getValues();
@@ -6542,7 +6592,7 @@ function purgeOldArchivedCasesCore_(errors) {
     });
     if (!moving.length) return;
     const dest = ensureArchiveFileSheet_(file, spec.name, spec.headers);
-    const dh = dest.getRange(1, 1, 1, dest.getLastColumn()).getValues()[0].map(x => String(x).trim());
+    const dh = sheetHeaders_(dest);
     moving.forEach(r => dest.appendRow(dh.map(name => {
       const i = h.indexOf(name);
       return i === -1 ? '' : r[i];
@@ -6571,7 +6621,7 @@ function rewriteSheetRows_(sheet, columnCount, keptRows) {
 
 function sortReservationSheet_(sheet) {
   if (!sheet || sheet.getLastRow() < 2) return;
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const headers = sheetHeaders_(sheet);
   const idx = headers.indexOf(COL_CONFIRMED_DATE) + 1;
   sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).sort({ column: idx, ascending: true });
 }
@@ -6579,11 +6629,27 @@ function sortReservationSheet_(sheet) {
 // =====================================================
 // ⑮ ユーティリティ
 // =====================================================
+// ★不具合修正（項目111）：見出し行を読むときは必ずこの関数を通す。
+// このシステムは列の位置ではなく「見出しの文字列」で列を探すため、見出しのセルに
+// 余分な空白（半角・全角）や改行が1文字でも紛れ込むと、その列は「無い」ものとして扱われる。
+// 実際に起きる症状は、その列が何かによって次のように変わる（いずれも原因が見えない）。
+//   ・支店マスタの「支店コード」「ログインパスコード」「有効」→ 全員ログインできなくなる
+//   ・予約一覧の「起票元店舗」→ 店舗の案件一覧が空になる
+//   ・支店マスタの「請求先」→ 入力しても画面に出ない（黙って捨てられる）
+// 以前は32箇所ある見出し読み取りのうち11箇所だけが空白を落としており、残り21箇所は
+// そのまま使っていた。ここに集約して、どの経路から読んでも同じ結果になるようにする。
+function sheetHeaders_(sheet) {
+  if (!sheet) return [];
+  const lastCol = sheet.getLastColumn();
+  if (lastCol < 1) return [];
+  return sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim());
+}
+
 function getRowsAsObjects_(sheet) {
   if (!sheet) return [];
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const headers = sheetHeaders_(sheet);
   const values = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
   return values.map(row => {
     const obj = {};

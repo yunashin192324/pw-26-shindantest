@@ -8,6 +8,10 @@ DBとして使い、`HtmlService`で1画面SPAを配信する。
 
 - `Code.gs` — サーバー側ロジック（GASのdoGet/API関数一式）。ヘッダー名ベースでスプレッドシートに
   アクセスする（列の位置ではなく`RESERVATION_HEADERS`内の名前で引く）。
+  **見出し行を読むときは必ず`sheetHeaders_(sheet)`を使うこと**（`sheet.getRange(1, 1, 1, ...)`
+  `.getValues()[0]`を直接書かない）。見出しのセルに余分な空白が1文字でも入ると、その列は
+  「無い」ものとして扱われ、ログイン不能・案件が一覧から消える・入力しても反映されない、
+  といった原因の見えない症状になる（SETUP.md 項目111）。
 - `Index.html` / `Stylesheet.html` / `JavaScript.html` — クライアント側。`Index.html`が
   `<?!= include('Stylesheet'); ?>` 等でテンプレート合成される。実質1枚のSPA。
 - `test/` — `node run_all.js`でサーバー側・監査・画面(jsdom)の3種類をまとめて実行する
