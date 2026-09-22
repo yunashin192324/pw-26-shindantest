@@ -7,14 +7,12 @@
 <style>
   /* =========================================================
      設計基準は参考動画の画面サイズ 540 x 720（縦型）。
-     横方向の寸法・文字サイズは --u（= 実際の幅 / 540）で
-     等倍スケールし、縦方向はflexで伸縮させる。
+     寸法・文字サイズは --u（= 実際の幅 / 540）で等倍スケールする。
      ========================================================= */
   :root{
     --u:1px;
     --white:#ffffff;
     --gold:#c89752;
-    --gold-line:#c79a55;
     --yellow:#f9e15c;
     --text:#3a3a3a;
     --text-sub:#8c8c8c;
@@ -25,74 +23,54 @@
   }
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%;overflow:hidden;-webkit-text-size-adjust:100%}
-  body{
-    background:#ececec;
-    font-family:var(--sans);
-    color:var(--text);
-    -webkit-font-smoothing:antialiased;
-  }
+  body{background:#ececec;font-family:var(--sans);color:var(--text);-webkit-font-smoothing:antialiased}
   button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;-webkit-tap-highlight-color:transparent}
   [hidden]{display:none!important}
 
-  /* PCでは横長に広げず、縦型のアプリ本体を中央に置く */
   #app{position:fixed;inset:0;display:flex;justify-content:center;align-items:stretch}
-  /* 幅はJSで「画面の高さ×0.75（設計比率）」と実際の画面幅の小さい方に決める。
-     縦型タブレットでは画面いっぱい、PCでは中央に縦型のまま置かれる。 */
+  /* 幅はJSで「画面の高さ×0.75（設計比率）」と実際の画面幅の小さい方に決める */
   #frame{position:relative;width:100%;max-width:540px;height:100%;background:var(--white);overflow:hidden}
 
-  .screen{position:absolute;inset:0;opacity:0;pointer-events:none;
-    transform:translateY(calc(10 * var(--u)));
-    transition:opacity 320ms ease,transform 320ms ease}
-  .screen.active{opacity:1;pointer-events:auto;transform:none}
-  .screen.scrollable{overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+  .screen{position:absolute;inset:0;opacity:0;pointer-events:none;background:var(--white);
+    transition:opacity 620ms ease}
+  .screen.active{opacity:1;pointer-events:auto}
 
-  /* ---------- 共通：下部ナビゲーション ---------- */
-  .navbar{display:flex;gap:calc(17 * var(--u));
-    padding:0 calc(52 * var(--u)) 0}
-  .nav-btn{flex:1;height:calc(55 * var(--u));border-radius:calc(28 * var(--u));
-    font-size:calc(15 * var(--u));letter-spacing:.12em;
-    display:flex;align-items:center;justify-content:center;
-    transition:opacity 200ms ease}
-  .nav-btn:active{opacity:.7}
-  .nav-btn.ghost{border:1px solid var(--line-soft);color:var(--text-sub);background:var(--white)}
-  .nav-btn.solid{background:var(--gold);color:var(--white)}
-  .nav-btn[disabled]{opacity:.4;pointer-events:none}
+  /* --- 遷移1：上から滑り込む（ようこそ → 入口メニュー） --- */
+  .screen.anim-slide{opacity:1;z-index:20;animation:slideDown 380ms cubic-bezier(.22,.61,.36,1) both}
+  @keyframes slideDown{from{transform:translateY(-100%)}to{transform:translateY(0)}}
+
+  /* --- 遷移2：白へ抜けたあと、要素が上から順に現れる --- */
+  .stag{opacity:0}
+  .anim-stagger .stag{animation:stagIn 380ms ease both;animation-delay:var(--d,0ms)}
+  @keyframes stagIn{from{opacity:0}to{opacity:1}}
+  .screen.settled .stag{opacity:1}
 
   /* =========================================================
-     1. スプラッシュ（WEDFUNロゴ）
+     1. スプラッシュ
      ========================================================= */
-  /* ロゴは動画の実測位置に合わせる。円は画面中心より左、文字は円より右へ
-     はみ出して組まれているため、両者を別々に置いて重ねる。 */
-  #s-splash{background:var(--white);cursor:pointer}
-  .logo-lockup{position:absolute;left:0;right:0;top:calc(203 * var(--u));
-    height:calc(238 * var(--u))}
+  #s-splash{cursor:pointer}
+  .logo-lockup{position:absolute;left:0;right:0;top:calc(203 * var(--u));height:calc(238 * var(--u))}
   .logo-circle{position:absolute;left:calc(113 * var(--u));top:0;
-    width:calc(238 * var(--u));height:calc(238 * var(--u));border-radius:50%;
-    background:var(--yellow);
-    opacity:0;transform:scale(.96);
-    animation:circleIn 700ms cubic-bezier(.16,1,.3,1) 120ms forwards}
-  @keyframes circleIn{to{opacity:1;transform:scale(1)}}
+    width:calc(238 * var(--u));height:calc(238 * var(--u));border-radius:50%;background:var(--yellow)}
   .logo-type{position:absolute;left:0;right:0;top:calc(93 * var(--u));text-align:center;
-    opacity:0;transform:translate(calc(20 * var(--u)),calc(6 * var(--u)));
-    animation:typeIn 700ms cubic-bezier(.16,1,.3,1) 300ms forwards}
-  @keyframes typeIn{to{opacity:1;transform:translate(calc(20 * var(--u)),0)}}
+    transform:translateX(calc(20 * var(--u)))}
   .logo-type .main{display:block;font-size:calc(55 * var(--u));font-weight:700;
     letter-spacing:.07em;line-height:1;color:#111}
   .logo-type .sub{display:block;margin-top:calc(7 * var(--u));
     font-size:calc(18 * var(--u));font-weight:700;letter-spacing:.3em;color:#111}
   .splash-credit{position:absolute;left:0;right:0;
-    bottom:calc(36 * var(--u) + env(safe-area-inset-bottom,0px));
-    text-align:center;font-size:calc(9 * var(--u));font-weight:700;letter-spacing:.16em;color:#333;
-    opacity:0;animation:fadeIn 600ms ease 700ms forwards}
-  @keyframes fadeIn{to{opacity:1}}
+    bottom:calc(36 * var(--u) + env(safe-area-inset-bottom,0px));text-align:center;
+    font-size:calc(9 * var(--u));font-weight:700;letter-spacing:.16em;color:#333}
 
   /* =========================================================
-     2. ようこそ（新郎・新婦 / ゲスト）
+     2. ようこそ
      ========================================================= */
   #s-welcome{display:flex;flex-direction:column;
     padding:calc(144 * var(--u)) 0 calc(63 * var(--u) + env(safe-area-inset-bottom,0px))}
   .welcome-head{padding:0 calc(52 * var(--u));font-size:calc(15 * var(--u));
-    line-height:calc(31 * var(--u));letter-spacing:.1em;color:var(--text)}
+    line-height:calc(31 * var(--u));letter-spacing:.1em;color:var(--text);min-height:calc(62 * var(--u))}
+  .welcome-head .ch{opacity:0;animation:chIn 260ms ease forwards}
+  @keyframes chIn{from{opacity:0}to{opacity:1}}
   .choice-list{margin-top:calc(61 * var(--u));padding:0 calc(52 * var(--u));
     display:flex;flex-direction:column;gap:calc(28 * var(--u))}
   .choice{display:flex;align-items:center;height:calc(44 * var(--u));
@@ -103,29 +81,32 @@
     display:flex;align-items:center;justify-content:center}
   .choice .ico svg{width:100%;height:100%;stroke:currentColor;fill:none;stroke-width:1.4}
   .choice .txt{margin-left:calc(18 * var(--u));font-size:calc(14 * var(--u));letter-spacing:.14em}
-  .choice.on{border-color:var(--gold-line);border-width:2px;color:var(--gold)}
+  .choice.on{border-color:var(--gold);border-width:2px;color:var(--gold)}
   .welcome-spacer{flex:1}
+  .navbar{display:flex;gap:calc(17 * var(--u));padding:0 calc(52 * var(--u))}
+  .nav-btn{flex:1;height:calc(55 * var(--u));border-radius:calc(28 * var(--u));
+    font-size:calc(15 * var(--u));letter-spacing:.12em;
+    display:flex;align-items:center;justify-content:center;transition:opacity 200ms ease}
+  .nav-btn:active{opacity:.7}
+  .nav-btn.ghost{border:1px solid var(--line-soft);color:var(--text-sub);background:var(--white)}
+  .nav-btn.solid{background:var(--gold);color:var(--white)}
+  .nav-btn[disabled]{opacity:.4;pointer-events:none}
 
   /* =========================================================
-     3. 入口メニュー（想いから選ぶ / 好みから選ぶ）
+     3. 入口メニュー
      ========================================================= */
-  #s-menu{display:flex;flex-direction:column;justify-content:flex-end;
-    background-size:cover;background-position:center;background-repeat:no-repeat}
-  /* 会場写真の明るさに関わらず上部の本文が読めるよう、白のベールを重ねる */
-  .menu-veil{position:absolute;inset:0;
-    background:linear-gradient(180deg,rgba(255,255,255,.82) 0%,rgba(255,255,255,.62) 34%,rgba(255,255,255,.34) 62%,rgba(255,255,255,.3) 100%)}
+  #s-menu{background-size:cover;background-position:center top;background-repeat:no-repeat}
   .menu-message{position:absolute;left:0;right:0;top:calc(112 * var(--u));
     padding:0 calc(34 * var(--u));text-align:center;
     font-family:var(--serif);font-size:calc(13 * var(--u));line-height:calc(24 * var(--u));
     letter-spacing:.1em;color:#2e2a26;white-space:pre-line}
-  .path-row{position:relative;display:flex;justify-content:center;gap:calc(36 * var(--u));
-    padding:0 calc(60 * var(--u)) calc(70 * var(--u) + env(safe-area-inset-bottom,0px))}
-  .path-card{position:relative;flex:1;max-width:calc(189 * var(--u));
-    height:calc(159 * var(--u));border-radius:calc(9 * var(--u));overflow:hidden;
-    background-size:cover;background-position:center;
+  .path-row{position:absolute;left:0;right:0;top:calc(491 * var(--u));
+    display:flex;justify-content:center;gap:calc(35 * var(--u))}
+  .path-card{position:relative;width:calc(190 * var(--u));height:calc(160 * var(--u));
+    border-radius:calc(9 * var(--u));overflow:hidden;background-size:cover;background-position:center;
     transition:transform 220ms cubic-bezier(.16,1,.3,1),opacity 220ms ease}
   .path-card:active{transform:scale(.97)}
-  .path-card.dim{opacity:.45}
+  .path-card.dim{opacity:.4}
   .path-card.pick{transform:scale(1.04)}
   .path-label{position:absolute;left:calc(5 * var(--u));right:calc(5 * var(--u));
     top:calc(11 * var(--u));height:calc(22 * var(--u));border-radius:calc(11 * var(--u));
@@ -136,86 +117,89 @@
      4. 質問（全幅の写真バンド3枚）
      ========================================================= */
   #s-question{display:flex;flex-direction:column;gap:calc(4 * var(--u));
-    padding:calc(4 * var(--u)) 0 calc(4 * var(--u) + env(safe-area-inset-bottom,0px));
-    background:var(--white)}
+    padding:calc(5 * var(--u)) 0 calc(5 * var(--u) + env(safe-area-inset-bottom,0px))}
   .band{position:relative;flex:1;min-height:0;overflow:hidden;
     background-size:cover;background-position:center;
     transition:transform 220ms cubic-bezier(.16,1,.3,1),opacity 220ms ease,filter 220ms ease}
   .band:active{transform:scale(.995)}
-  .band.dim{opacity:.4;filter:saturate(.7)}
+  .band.dim{opacity:.35;filter:saturate(.7)}
   .band.pick{transform:scale(1.02)}
   .band-inner{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
     padding:0 calc(28 * var(--u))}
-  .band-text{position:relative;text-align:center;color:#fff;
+  .band-text{text-align:center;color:#fff;
     font-size:calc(17 * var(--u));line-height:calc(34 * var(--u));letter-spacing:.11em;
     white-space:pre-line;padding:calc(14 * var(--u)) calc(26 * var(--u));
-    background:rgba(255,255,255,.14);
-    text-shadow:0 1px calc(10 * var(--u)) rgba(0,0,0,.45)}
+    background:rgba(255,255,255,.14);text-shadow:0 1px calc(10 * var(--u)) rgba(0,0,0,.45)}
 
   /* =========================================================
-     5. Favorite（2×2グリッド）
+     5. Favorite
      ========================================================= */
-  #s-favorite{display:flex;flex-direction:column}
-  .fav-title{padding:calc(26 * var(--u)) 0 calc(18 * var(--u));text-align:center;
-    font-size:calc(19 * var(--u));letter-spacing:.18em;color:var(--text);font-weight:300}
-  .fav-grid{flex:1;display:grid;grid-template-columns:1fr 1fr;
-    column-gap:calc(13 * var(--u));row-gap:calc(20 * var(--u));
-    padding:0 calc(42 * var(--u));align-content:start}
-  .fav-item{display:flex;flex-direction:column;transition:opacity 200ms ease,transform 200ms ease}
+  .fav-title{position:absolute;left:0;right:0;top:calc(28 * var(--u));text-align:center;
+    font-size:calc(19 * var(--u));font-weight:300;letter-spacing:.18em;color:var(--text)}
+  .fav-grid{position:absolute;left:calc(42 * var(--u));right:calc(43 * var(--u));top:calc(67 * var(--u));
+    display:grid;grid-template-columns:1fr 1fr;column-gap:calc(13 * var(--u));row-gap:calc(24 * var(--u))}
+  .fav-item{display:block;transition:transform 200ms ease,opacity 200ms ease}
   .fav-item:active{transform:scale(.98)}
-  .fav-photo{width:100%;aspect-ratio:221/265;background-size:cover;background-position:center;
-    background-color:#eee}
-  .fav-cap{margin-top:calc(14 * var(--u));text-align:center;
-    font-size:calc(11 * var(--u));letter-spacing:.12em;color:var(--text)}
+  .fav-photo{display:block;width:100%;aspect-ratio:222/274;
+    background-size:cover;background-position:center;background-color:#eee}
+  .fav-cap{display:block;margin-top:calc(11 * var(--u));text-align:center;
+    font-size:calc(11 * var(--u));line-height:calc(13 * var(--u));letter-spacing:.12em;color:var(--text)}
   /* 動画に戻る導線は無いが、店頭端末で行き止まりにならないよう控えめに置く */
-  .fav-foot{padding:calc(22 * var(--u)) 0 calc(26 * var(--u) + env(safe-area-inset-bottom,0px));
-    justify-content:center}
-  .fav-foot .nav-btn,.pd-foot .nav-btn{flex:0 0 auto;
-    min-width:calc(180 * var(--u));height:calc(46 * var(--u));border-radius:calc(23 * var(--u))}
+  .back-link{position:absolute;font-size:calc(11 * var(--u));letter-spacing:.14em;color:var(--text-sub)}
+  .back-link:active{opacity:.6}
+  #favBack{left:0;right:0;bottom:calc(8 * var(--u) + env(safe-area-inset-bottom,0px));text-align:center}
 
   /* =========================================================
-     6. 商品詳細
+     6. 商品詳細（1画面固定・スクロールなし）
      ========================================================= */
-  #s-product{background:var(--white)}
-  .pd-inner{min-height:100%;display:flex;flex-direction:column;
-    padding-bottom:calc(28 * var(--u) + env(safe-area-inset-bottom,0px))}
-  .pd-hero{display:grid;grid-template-columns:1fr 1fr;gap:calc(12 * var(--u));
-    padding:calc(11 * var(--u)) calc(11 * var(--u)) 0}
-  .pd-hero div{aspect-ratio:251/313;background-size:cover;background-position:center;background-color:#eee}
-  .pd-name{padding:calc(30 * var(--u)) calc(24 * var(--u)) calc(28 * var(--u));text-align:center;
+  .pd-top{position:absolute;left:calc(10 * var(--u));top:calc(10 * var(--u));
+    display:flex;gap:calc(10 * var(--u));height:calc(312 * var(--u))}
+  .pd-top div{background-size:cover;background-position:center;background-color:#eee}
+  .pd-top div:first-child{width:calc(254 * var(--u))}
+  .pd-top div:last-child{width:calc(257 * var(--u))}
+  .pd-name{position:absolute;left:0;right:0;top:calc(345 * var(--u));text-align:center;
     font-size:calc(18 * var(--u));font-weight:300;letter-spacing:.34em;color:#4a4a4a}
-  .pd-body{padding:0 calc(42 * var(--u));font-size:calc(13 * var(--u));
-    line-height:calc(26 * var(--u));letter-spacing:.06em;color:#5a5a5a}
-  .pd-feats{margin-top:calc(22 * var(--u));padding:0 calc(42 * var(--u));
-    display:flex;flex-direction:column;gap:calc(10 * var(--u))}
-  .pd-feat{display:flex;align-items:flex-start;gap:calc(10 * var(--u));
-    font-size:calc(12 * var(--u));line-height:calc(22 * var(--u));letter-spacing:.06em;color:#5a5a5a}
-  .pd-feat::before{content:"";flex-shrink:0;width:calc(5 * var(--u));height:calc(5 * var(--u));
-    border-radius:50%;background:var(--gold);margin-top:calc(9 * var(--u))}
-  .pd-shot{margin-top:calc(30 * var(--u));width:100%;aspect-ratio:503/560;
+  .pd-shot{position:absolute;left:calc(10 * var(--u));top:calc(387 * var(--u));
+    width:calc(254 * var(--u));height:calc(333 * var(--u));
     background-size:cover;background-position:center;background-color:#eee}
-  .pd-actions{margin-top:calc(30 * var(--u));padding:0 calc(52 * var(--u));
-    display:flex;flex-direction:column;gap:calc(14 * var(--u))}
-  .pd-foot{margin-top:calc(26 * var(--u));justify-content:center}
+  .pd-desc{position:absolute;left:calc(304 * var(--u));top:calc(400 * var(--u));
+    width:calc(190 * var(--u));font-size:calc(13 * var(--u));line-height:calc(24 * var(--u));
+    letter-spacing:.04em;color:#4a4a4a}
+  #pdBack{left:calc(304 * var(--u));top:calc(520 * var(--u))}
+  /* 動画ボタン：参考動画と同じく右下のスマホ型。画面下端で切れる位置まで含めて合わせる */
+  .pd-phone{position:absolute;left:calc(418 * var(--u));top:calc(561 * var(--u));
+    width:calc(103 * var(--u));height:calc(200 * var(--u));
+    border:calc(4 * var(--u)) solid #1b1b1b;border-radius:calc(15 * var(--u));
+    background:#000;overflow:hidden;box-shadow:0 calc(3 * var(--u)) calc(12 * var(--u)) rgba(0,0,0,.22);
+    transition:transform 200ms ease}
+  .pd-phone:active{transform:scale(.97)}
+  .pd-phone .notch{position:absolute;left:50%;top:0;transform:translateX(-50%);
+    width:calc(44 * var(--u));height:calc(9 * var(--u));background:#1b1b1b;
+    border-radius:0 0 calc(6 * var(--u)) calc(6 * var(--u));z-index:2}
+  .pd-phone .shot{position:absolute;inset:0;background-size:cover;background-position:center}
+  .pd-phone .play{position:absolute;left:50%;top:calc(46 * var(--u));transform:translate(-50%,-50%);
+    width:calc(30 * var(--u));height:calc(30 * var(--u));border-radius:50%;
+    background:rgba(255,255,255,.88);display:flex;align-items:center;justify-content:center;z-index:2}
+  .pd-phone .play::after{content:"";width:0;height:0;margin-left:calc(3 * var(--u));
+    border-style:solid;border-width:calc(6 * var(--u)) 0 calc(6 * var(--u)) calc(10 * var(--u));
+    border-color:transparent transparent transparent #222}
 
   /* =========================================================
      7. 動画（全画面・レターボックス）
      ========================================================= */
-  #s-video{background:#000;display:flex;align-items:center;justify-content:center}
+  #s-video{background:#000;display:flex;align-items:center;justify-content:center;transition:opacity 260ms ease}
   .video-stage{width:100%;aspect-ratio:16/9;background:#0a0a0a;position:relative;overflow:hidden}
   .video-stage video{width:100%;height:100%;object-fit:cover;display:block}
   .video-fallback{position:absolute;inset:0;background-size:cover;background-position:center}
-  .video-fallback::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,.35)}
-  .video-note{position:absolute;left:0;right:0;bottom:calc(16 * var(--u));z-index:2;text-align:center;
+  .video-fallback::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,.3)}
+  .video-note{position:absolute;left:0;right:0;bottom:calc(14 * var(--u));z-index:2;text-align:center;
     font-size:calc(10 * var(--u));letter-spacing:.14em;color:rgba(255,255,255,.75)}
-  .video-close{position:absolute;z-index:3;
-    top:calc(20 * var(--u) + env(safe-area-inset-top,0px));right:calc(22 * var(--u));
-    font-size:calc(11 * var(--u));letter-spacing:.16em;color:rgba(255,255,255,.85)}
+  .video-close{position:absolute;z-index:3;top:calc(20 * var(--u) + env(safe-area-inset-top,0px));
+    right:calc(22 * var(--u));font-size:calc(11 * var(--u));letter-spacing:.16em;color:rgba(255,255,255,.85)}
 
   @media (prefers-reduced-motion:reduce){
-    .screen{transition:none}
-    .logo-circle,.logo-type,.splash-credit{animation:none;opacity:1}
-    .band,.path-card,.fav-item{transition:none}
+    .screen,.band,.path-card,.fav-item,.pd-phone{transition:none!important}
+    .screen.anim-slide,.anim-stagger .stag,.welcome-head .ch{animation:none!important;opacity:1!important}
   }
 </style>
 </head>
@@ -234,7 +218,6 @@
 <div id="app">
   <div id="frame">
 
-    <!-- 1. スプラッシュ -->
     <section class="screen" id="s-splash">
       <div class="logo-lockup">
         <span class="logo-circle"></span>
@@ -246,7 +229,6 @@
       <div class="splash-credit" id="splashCredit"></div>
     </section>
 
-    <!-- 2. ようこそ -->
     <section class="screen" id="s-welcome">
       <div class="welcome-head" id="welcomeHead"></div>
       <div class="choice-list" id="choiceList"></div>
@@ -257,44 +239,32 @@
       </div>
     </section>
 
-    <!-- 3. 入口メニュー -->
     <section class="screen" id="s-menu">
-      <div class="menu-veil"></div>
       <div class="menu-message" id="menuMessage"></div>
       <div class="path-row" id="pathRow"></div>
     </section>
 
-    <!-- 4. 質問 -->
     <section class="screen" id="s-question"></section>
 
-    <!-- 5. Favorite -->
-    <section class="screen scrollable" id="s-favorite">
-      <div class="fav-title">Favorite</div>
+    <section class="screen" id="s-favorite">
+      <div class="fav-title stag" style="--d:0ms">Favorite</div>
       <div class="fav-grid" id="favGrid"></div>
-      <div class="fav-foot navbar">
-        <button class="nav-btn ghost" id="favBack">戻る</button>
-      </div>
+      <button class="back-link" id="favBack">← 戻る</button>
     </section>
 
-    <!-- 6. 商品詳細 -->
-    <section class="screen scrollable" id="s-product">
-      <div class="pd-inner">
-        <div class="pd-hero" id="pdHero"></div>
-        <div class="pd-name" id="pdName"></div>
-        <div class="pd-body" id="pdBody"></div>
-        <div class="pd-feats" id="pdFeats"></div>
-        <div class="pd-shot" id="pdShot"></div>
-        <div class="pd-actions">
-          <button class="nav-btn solid" id="pdVideo">動画を見る</button>
-          <button class="nav-btn solid" id="pdContact">この演出を相談する</button>
-        </div>
-        <div class="pd-foot navbar">
-          <button class="nav-btn ghost" id="pdBack">戻る</button>
-        </div>
-      </div>
+    <section class="screen" id="s-product">
+      <div class="pd-top stag" style="--d:0ms" id="pdTop"></div>
+      <div class="pd-name stag" style="--d:120ms" id="pdName"></div>
+      <div class="pd-shot stag" style="--d:200ms" id="pdShot"></div>
+      <div class="pd-desc stag" style="--d:280ms" id="pdDesc"></div>
+      <button class="back-link stag" id="pdBack" style="--d:360ms">← 戻る</button>
+      <button class="pd-phone stag" style="--d:360ms" id="pdVideo">
+        <span class="notch"></span>
+        <span class="shot" id="pdPhoneShot"></span>
+        <span class="play"></span>
+      </button>
     </section>
 
-    <!-- 7. 動画 -->
     <section class="screen" id="s-video">
       <button class="video-close" id="videoClose">閉じる</button>
       <div class="video-stage" id="videoStage"></div>
@@ -308,164 +278,108 @@
   "use strict";
 
   // =================================================================
-  // 会場別設定（データ）。UIはこのデータだけを読む。
-  // 会場を増やすときは VENUES に venueId を追加する。
+  // データ（UIはこのデータだけを読む。会場ごとに差し替え可能）
+  // 写真は参考動画から切り出したもの。band-*.jpg と card-*.jpg は
+  // 動画側で文字が焼き込まれているため bakedText / bakedLabel を立て、
+  // アプリ側では文字を重ねない。
   // =================================================================
 
   var MASTER_PRODUCTS = [
     {
-      id:"champagne", name:"シャンパンタワー", photo:"images/champagne-tower.jpg",
-      sub:["images/champagne-tower.jpg","images/table-candles.webp"],
-      desc:"積み上げたグラスの頂点から注ぐ、披露宴の定番演出です。会場の照明を落とし、ライトアップと合わせて行うと写真映えします。",
-      feats:["所要時間の目安　約5分","グラス数は人数に合わせて調整できます","乾杯の演出としてそのまま繋げられます"],
-      tags:["華やか","写真映え","定番","ゲスト参加"],
-      video:null
-    },
-    {
-      id:"lantern", name:"スカイランタン", photo:"images/sky-lanterns.jpg",
-      sub:["images/sky-lanterns.jpg","images/table-candles.webp"],
-      desc:"灯りを入れたランタンを一斉に空へ放つ演出です。日が落ちてからの屋外で行うと、光がゆっくり広がっていく景色をつくれます。",
-      feats:["屋外での実施が前提です","ゲスト全員でお持ちいただけます","メッセージを書き込めます"],
-      tags:["幻想的","二人らしい","写真映え","ゲスト参加"],
-      video:null
-    },
-    {
-      id:"fire", name:"スパークルファイヤー", photo:"images/fireworks.jpg",
-      sub:["images/fireworks.jpg","images/champagne-tower.jpg"],
-      desc:"会場の照明を落として行う、光と炎の演出です。入場やケーキ入刀に合わせると、その瞬間を強く印象づけられます。",
-      feats:["所要時間の目安　約3分","屋内・屋外どちらでも実施できます","音楽との組み合わせをご提案します"],
-      tags:["華やか","写真映え","盛り上がる"],
-      video:null
-    },
-    {
-      id:"table", name:"テーブルコーディネート", photo:"images/table-candles.webp",
-      sub:["images/table-candles.webp","images/garden-couple.webp"],
-      desc:"花材とキャンドルでテーブルを整える装飾です。ゲストが最も長く過ごす場所なので、会場全体の印象を決めます。",
-      feats:["花材と色味をお選びいただけます","卓ごとに変化をつけられます","写真に残りやすい装飾です"],
-      tags:["結婚式らしい","おもてなし","上質"],
-      video:null
-    },
-    {
-      id:"balloon", name:"バルーンリリース", photo:"images/balloons.webp",
-      sub:["images/balloons.webp","images/garden-couple.webp"],
-      desc:"ゲストと一緒に風船を空へ放つ演出です。全員が同じ動作をするため、会場がひとつになる瞬間をつくれます。",
-      feats:["ゲスト全員が参加できます","屋外での実施が前提です","集合写真と相性がよい演出です"],
+      id:"lovelove", name:"ラブラブ危機一髪",
+      photo:"images/video/fav-loveloveqiki.jpg",
+      detail:["images/video/prod-barrel-knife.jpg","images/video/prod-guests.jpg"],
+      shot:"images/video/prod-couple-barrel.jpg",
+      desc:"樽に剣を差し込み、当たりを引いた人が飛び出す仕掛けです。ゲストを巻き込んで会場が一体になります。",
       tags:["ゲスト参加","盛り上がる","おもてなし"],
       video:null
     },
     {
-      id:"garden", name:"ガーデンセレモニー", photo:"images/garden-couple.webp",
-      sub:["images/garden-couple.webp","images/balloons.webp"],
-      desc:"緑に囲まれた屋外で行うセレモニーです。かしこまりすぎず、ゲストとの距離が近い時間をつくれます。",
-      feats:["天候により室内へ変更できます","ゲストとの距離が近い構成です","自然光で写真がきれいに残ります"],
-      tags:["二人らしい","おもてなし","ゲスト参加"],
+      id:"champagne", name:"シャンパンタワー",
+      photo:"images/video/fav-champagne.jpg",
+      detail:["images/video/fav-champagne.jpg","images/video/fav-champagne.jpg"],
+      shot:"images/video/fav-champagne.jpg",
+      desc:"積み上げたグラスの頂点から注ぐ、披露宴の定番演出です。照明を落とすと写真に残りやすくなります。",
+      tags:["華やか","定番","結婚式らしい","写真映え"],
+      video:null
+    },
+    {
+      id:"lantern", name:"スカイランタン",
+      photo:"images/video/fav-skylantern.jpg",
+      detail:["images/video/fav-skylantern.jpg","images/video/fav-skylantern.jpg"],
+      shot:"images/video/fav-skylantern.jpg",
+      desc:"灯りを入れたランタンを空へ放つ演出です。メッセージを書き込めるので、ふたりらしさを出せます。",
+      tags:["幻想的","二人らしい","写真映え"],
+      video:null
+    },
+    {
+      id:"flair", name:"フレアカクテルショー",
+      photo:"images/video/fav-flaircocktail.jpg",
+      detail:["images/video/fav-flaircocktail.jpg","images/video/fav-flaircocktail.jpg"],
+      shot:"images/video/fav-flaircocktail.jpg",
+      desc:"バーテンダーがボトルを操りながらカクテルを作る演出です。目の前で行うため、歓談の時間が盛り上がります。",
+      tags:["盛り上がる","ゲスト参加","華やか"],
       video:null
     }
   ];
 
   var VENUES = {
     "default":{
-      venueId:"default",
-      brand:{
-        logoMain:"WEDFUN", logoSub:"WEDDING=FUN",
-        credit:"Produced by  AKI ENTERPRISE CO.,LTD.",
-        primary:"#c89752", circle:"#f9e15c"
-      },
-      welcome:{
-        title:"ようこそ\nどちらに当てはまりますか？",
-        options:[
-          { id:"couple", label:"新郎・新婦", icon:"couple" },
-          { id:"guest",  label:"ゲスト",     icon:"guest"  }
-        ]
-      },
+      brand:{ logoMain:"WEDFUN", logoSub:"WEDDING=FUN",
+        credit:"Produced by  AKI ENTERPRISE CO.,LTD.", primary:"#c89752", circle:"#f9e15c" },
+      welcome:{ title:"ようこそ\nどちらに当てはまりますか？",
+        options:[ {id:"couple",label:"新郎・新婦",icon:"couple"}, {id:"guest",label:"ゲスト",icon:"guest"} ] },
       menu:{
-        image:"images/balloons.webp",
+        image:"images/video/menu-poster.jpg",
+        bakedMessage:true,
         message:"私達は常にニーズに応え、時には一歩進んだ提案を掲げ\n「笑顔・感動・記憶に残る」をキーワードに\n「もっと特別なウエディング」を創り上げていきます。",
         paths:[
-          { id:"feeling", label:"想いから選ぶ", image:"images/garden-couple.webp" },
-          { id:"taste",   label:"好みから選ぶ", image:"images/table-candles.webp" }
+          { id:"feeling", label:"想いから選ぶ", image:"images/video/card-feeling.jpg", bakedLabel:true },
+          { id:"taste",   label:"好みから選ぶ", image:"images/video/card-taste.jpg",    bakedLabel:true }
         ]
       },
       questions:{
         feeling:[
           { id:"hospitality", text:"ゲストに楽しんでほしい。\nおもてなしを大切にしたい。",
-            image:"images/garden-couple.webp", tags:["おもてなし","ゲスト参加"] },
-          { id:"classic",     text:"折角の特別な結婚式なので\n「結婚式らしい」は押さえたい。",
-            image:"images/table-candles.webp", tags:["結婚式らしい","上質","定番"] },
-          { id:"original",    text:"ありきたりな演出じゃなく\n二人らしいにこだわりたい。",
-            image:"images/sky-lanterns.jpg",   tags:["二人らしい","幻想的"] }
+            image:"images/video/band-guest.jpg", bakedText:true, tags:["おもてなし","ゲスト参加"] },
+          { id:"classic", text:"折角の特別な結婚式なので\n「結婚式らしい」は押さえたい。",
+            image:"images/video/band-classic.jpg", bakedText:true, tags:["結婚式らしい","定番"] },
+          { id:"original", text:"ありきたりな演出じゃなく\n二人らしいにこだわりたい。",
+            image:"images/video/band-original.jpg", bakedText:true, tags:["二人らしい","幻想的"] }
         ],
         taste:[
-          { id:"bright",   text:"華やかで写真に残る演出がいい。",
-            image:"images/champagne-tower.jpg", tags:["華やか","写真映え"] },
-          { id:"light",    text:"光や灯りで\n幻想的に見せたい。",
-            image:"images/sky-lanterns.jpg",    tags:["幻想的","写真映え"] },
-          { id:"lively",   text:"ゲストと一緒に\n盛り上がりたい。",
-            image:"images/balloons.webp",       tags:["盛り上がる","ゲスト参加"] }
+          { id:"bright", text:"華やかで写真に残る演出がいい。",
+            image:"images/video/fav-champagne.jpg", tags:["華やか","写真映え"] },
+          { id:"light", text:"光や灯りで\n幻想的に見せたい。",
+            image:"images/video/fav-skylantern.jpg", tags:["幻想的","写真映え"] },
+          { id:"lively", text:"ゲストと一緒に\n盛り上がりたい。",
+            image:"images/video/fav-flaircocktail.jpg", tags:["盛り上がる","ゲスト参加"] }
         ]
       },
-      hideProducts:[],
-      productOverrides:{}
+      hideProducts:[], productOverrides:{}
     },
 
     "venue-a":{
-      venueId:"venue-a",
-      brand:{
-        logoMain:"WEDFUN", logoSub:"GRAND HILLS",
-        credit:"Produced by  GRAND HILLS WEDDING",
-        primary:"#a8506b", circle:"#f4d8df"
-      },
-      welcome:{
-        title:"ようこそ\nどちらに当てはまりますか？",
-        options:[
-          { id:"couple", label:"新郎・新婦", icon:"couple" },
-          { id:"guest",  label:"ゲスト",     icon:"guest"  }
-        ]
-      },
-      menu:{
-        image:"images/table-candles.webp",
-        message:"おふたりの想いを伺いながら、\n「この会場でしかできない一日」を\nご一緒に組み立てていきます。",
-        paths:[
-          { id:"feeling", label:"想いから選ぶ", image:"images/garden-couple.webp" },
-          { id:"taste",   label:"好みから選ぶ", image:"images/champagne-tower.jpg" }
-        ]
-      },
-      questions:null,
-      hideProducts:[],
-      productOverrides:{ "table":{ name:"グランヒルズ テーブルコーディネート" } }
+      brand:{ logoMain:"WEDFUN", logoSub:"GRAND HILLS",
+        credit:"Produced by  GRAND HILLS WEDDING", primary:"#a8506b", circle:"#f4d8df" },
+      welcome:null, menu:null, questions:null,
+      hideProducts:[], productOverrides:{ "champagne":{ name:"グランヒルズ シャンパンタワー" } }
     },
 
     "venue-b":{
-      venueId:"venue-b",
-      brand:{
-        logoMain:"WEDFUN", logoSub:"AQUA TERRACE",
-        credit:"Produced by  AQUA TERRACE WEDDING",
-        primary:"#2f7d78", circle:"#cfe9e6"
-      },
-      welcome:{
-        title:"ようこそ\nどちらに当てはまりますか？",
-        options:[
-          { id:"couple", label:"新郎・新婦", icon:"couple" },
-          { id:"guest",  label:"ゲスト",     icon:"guest"  }
-        ]
-      },
-      menu:{
-        image:"images/garden-couple.webp",
-        message:"水と光に包まれたテラスで、\nおふたりらしい時間を\nかたちにしていきます。",
-        paths:[
-          { id:"feeling", label:"想いから選ぶ", image:"images/sky-lanterns.jpg" },
-          { id:"taste",   label:"好みから選ぶ", image:"images/balloons.webp" }
-        ]
-      },
-      questions:null,
-      hideProducts:["fire"],
-      productOverrides:{}
+      brand:{ logoMain:"WEDFUN", logoSub:"AQUA TERRACE",
+        credit:"Produced by  AQUA TERRACE WEDDING", primary:"#2f7d78", circle:"#cfe9e6" },
+      welcome:null, menu:null, questions:null,
+      hideProducts:["flair"], productOverrides:{}
     }
   };
 
-  // 会場固有の質問が未設定なら default の質問を使う（マスター継承）
+  // 会場固有の指定が無い項目は default から引き継ぐ（マスター継承）
   Object.keys(VENUES).forEach(function(id){
-    if (!VENUES[id].questions) VENUES[id].questions = VENUES["default"].questions;
+    if (id === "default") return;
+    ["welcome","menu","questions"].forEach(function(k){
+      if (!VENUES[id][k]) VENUES[id][k] = VENUES["default"][k];
+    });
   });
 
   var ICONS = {
@@ -482,30 +396,17 @@
   // 状態
   // =================================================================
 
-  var state = {
-    venueId:"default",
-    userType:null,
-    pathId:null,
-    answer:null,
-    candidates:[],
-    productId:null,
-    history:[]
-  };
-
+  var state = { venueId:"default", userType:null, pathId:null, answer:null,
+                candidates:[], productId:null, history:[] };
   var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   function el(id){ return document.getElementById(id); }
   function venue(){ return VENUES[state.venueId]; }
 
-  // =================================================================
-  // 基準幅540pxに対する等倍スケール（--u）を実寸から算出
-  // =================================================================
-
   function applyScale(){
     var app = el("app");
     var availW = app.clientWidth || window.innerWidth || 540;
     var availH = app.clientHeight || window.innerHeight || 720;
-    // 設計比率 540:720 を超えて横に広げない。上限は大画面で巨大化しないため。
     var w = Math.min(availW, Math.round(availH * 0.75), 820);
     var frame = el("frame");
     frame.style.maxWidth = "none";
@@ -518,7 +419,6 @@
   function applyBrand(){
     var b = venue().brand;
     document.documentElement.style.setProperty("--gold", b.primary);
-    document.documentElement.style.setProperty("--gold-line", b.primary);
     document.documentElement.style.setProperty("--yellow", b.circle);
     var lock = document.querySelector(".logo-type");
     lock.querySelector(".main").textContent = b.logoMain;
@@ -527,60 +427,115 @@
   }
 
   // =================================================================
-  // 画面遷移（白基調の静かなフェード）
+  // 画面遷移（参考動画で使い分けられている3種類を再現する）
+  //   fade   : ゆっくりしたクロスフェード（ロゴ → ようこそ）
+  //   slide  : 新しい画面が上から滑り込んで覆う（ようこそ → メニュー）
+  //   white  : 一度白に抜けてから、要素が上から順に現れる（質問・Favorite）
+  //   quick  : 短いクロスフェード（Favorite → 商品詳細）
   // =================================================================
 
   var current = null;
+  var timers = [];
+  function clearTimers(){ timers.forEach(clearTimeout); timers = []; }
+  function later(fn, ms){ timers.push(setTimeout(fn, ms)); }
 
-  function show(id, opts){
-    opts = opts || {};
+  function show(id, mode, noHistory){
     if (current === id) return;
-    if (current && !opts.noHistory) state.history.push(current);
+    clearTimers();
+    mode = reduceMotion ? "quick" : (mode || "fade");
     var prev = current ? el(current) : null;
-    if (prev) prev.classList.remove("active");
-    current = id;
     var next = el(id);
-    next.scrollTop = 0;
-    // 旧画面のフェードアウトと重ねて自然に切り替える
-    requestAnimationFrame(function(){ next.classList.add("active"); });
+    if (current && !noHistory) state.history.push(current);
+    current = id;
+
+    next.classList.remove("anim-slide","anim-stagger","settled");
+    next.style.transitionDuration = "";
+    if (prev) prev.style.transitionDuration = "";
+
+    if (mode === "slide") {
+      next.classList.add("active","anim-slide");
+      later(function(){
+        if (prev) prev.classList.remove("active");
+        next.classList.remove("anim-slide");
+      }, 400);
+
+    } else if (mode === "white") {
+      // 旧画面を白へ抜く → 新画面の要素を順に出す
+      if (prev) { prev.style.transitionDuration = "170ms"; prev.classList.remove("active"); }
+      later(function(){
+        next.classList.add("active","anim-stagger");
+        next.style.transitionDuration = "0ms";
+        later(function(){
+          next.classList.remove("anim-stagger");
+          next.classList.add("settled");
+        }, 1500);
+      }, 180);
+
+    } else {
+      var dur = (mode === "quick") ? 200 : 620;
+      next.style.transitionDuration = dur + "ms";
+      if (prev) prev.style.transitionDuration = dur + "ms";
+      next.classList.add("settled","active");
+      if (prev) prev.classList.remove("active");
+    }
+
+    if (id === "s-welcome") typeWelcome();
   }
 
   function goBack(){
     var prev = state.history.pop();
     if (!prev) return;
     var cur = current ? el(current) : null;
-    if (cur) cur.classList.remove("active");
     current = prev;
-    el(prev).classList.add("active");
+    var next = el(prev);
+    next.style.transitionDuration = "200ms";
+    next.classList.add("settled","active");
+    if (cur) { cur.style.transitionDuration = "200ms"; cur.classList.remove("active"); }
   }
 
   // =================================================================
-  // 2. ようこそ
+  // 2. ようこそ（見出しは1文字ずつ表示される）
   // =================================================================
+
+  var typeTimer = null;
+
+  function typeWelcome(){
+    var head = el("welcomeHead");
+    var text = venue().welcome.title;
+    if (typeTimer) clearInterval(typeTimer);
+    head.innerHTML = "";
+    if (reduceMotion) { head.textContent = text; head.style.whiteSpace = "pre-line"; return; }
+    head.style.whiteSpace = "pre-line";
+    var i = 0;
+    typeTimer = setInterval(function(){
+      if (i >= text.length) { clearInterval(typeTimer); typeTimer = null; return; }
+      var c = text.charAt(i);
+      if (c === "\n") { head.appendChild(document.createTextNode("\n")); }
+      else {
+        var s = document.createElement("span");
+        s.className = "ch";
+        s.textContent = c;
+        head.appendChild(s);
+      }
+      i++;
+    }, 60);
+  }
 
   function buildWelcome(){
     var w = venue().welcome;
-    el("welcomeHead").textContent = w.title;
-    el("welcomeHead").style.whiteSpace = "pre-line";
     var list = el("choiceList");
     list.innerHTML = "";
     w.options.forEach(function(opt){
       var b = document.createElement("button");
-      b.type = "button";
-      b.className = "choice";
-      b.dataset.id = opt.id;
+      b.type = "button"; b.className = "choice"; b.dataset.id = opt.id;
       var ico = document.createElement("span");
-      ico.className = "ico";
-      ico.innerHTML = ICONS[opt.icon] || "";
+      ico.className = "ico"; ico.innerHTML = ICONS[opt.icon] || "";
       var txt = document.createElement("span");
-      txt.className = "txt";
-      txt.textContent = opt.label;
+      txt.className = "txt"; txt.textContent = opt.label;
       b.appendChild(ico); b.appendChild(txt);
       b.addEventListener("click", function(){
         state.userType = opt.id;
-        list.querySelectorAll(".choice").forEach(function(c){
-          c.classList.toggle("on", c === b);
-        });
+        list.querySelectorAll(".choice").forEach(function(c){ c.classList.toggle("on", c === b); });
         el("welcomeNext").disabled = false;
       });
       list.appendChild(b);
@@ -594,18 +549,23 @@
   function buildMenu(){
     var m = venue().menu;
     el("s-menu").style.backgroundImage = 'url("' + m.image + '")';
-    el("menuMessage").textContent = m.message;
+    var msg = el("menuMessage");
+    // 背景写真に文言が入っている場合は重ねない
+    if (m.bakedMessage) { msg.textContent = ""; msg.hidden = true; }
+    else { msg.hidden = false; msg.textContent = m.message; }
+
     var row = el("pathRow");
     row.innerHTML = "";
     m.paths.forEach(function(p){
       var card = document.createElement("button");
-      card.type = "button";
-      card.className = "path-card";
+      card.type = "button"; card.className = "path-card";
       card.style.backgroundImage = 'url("' + p.image + '")';
-      var label = document.createElement("span");
-      label.className = "path-label";
-      label.textContent = p.label;
-      card.appendChild(label);
+      card.setAttribute("aria-label", p.label);
+      if (!p.bakedLabel) {
+        var label = document.createElement("span");
+        label.className = "path-label"; label.textContent = p.label;
+        card.appendChild(label);
+      }
       card.addEventListener("click", function(){
         if (card.classList.contains("pick")) return;
         row.querySelectorAll(".path-card").forEach(function(c){
@@ -613,38 +573,39 @@
           c.classList.toggle("dim", c !== card);
         });
         state.pathId = p.id;
-        setTimeout(function(){
+        later(function(){
           buildQuestion();
-          show("s-question");
-          row.querySelectorAll(".path-card").forEach(function(c){
-            c.classList.remove("pick","dim");
-          });
-        }, reduceMotion ? 0 : 260);
+          show("s-question", "white");
+          row.querySelectorAll(".path-card").forEach(function(c){ c.classList.remove("pick","dim"); });
+        }, 260);
       });
       row.appendChild(card);
     });
   }
 
   // =================================================================
-  // 4. 質問（写真バンド3枚）
+  // 4. 質問
   // =================================================================
 
   function buildQuestion(){
     var qs = venue().questions[state.pathId] || venue().questions.feeling;
     var wrap = el("s-question");
     wrap.innerHTML = "";
-    qs.forEach(function(q){
+    qs.forEach(function(q, idx){
       var band = document.createElement("button");
       band.type = "button";
-      band.className = "band";
+      band.className = "band stag";
+      band.style.setProperty("--d", (idx * 160) + "ms");
       band.style.backgroundImage = 'url("' + q.image + '")';
-      var inner = document.createElement("span");
-      inner.className = "band-inner";
-      var t = document.createElement("span");
-      t.className = "band-text";
-      t.textContent = q.text;
-      inner.appendChild(t);
-      band.appendChild(inner);
+      band.setAttribute("aria-label", q.text.replace(/\n/g, ""));
+      // 写真に文言が焼き込まれている場合は重ねない
+      if (!q.bakedText) {
+        var inner = document.createElement("span");
+        inner.className = "band-inner";
+        var t = document.createElement("span");
+        t.className = "band-text"; t.textContent = q.text;
+        inner.appendChild(t); band.appendChild(inner);
+      }
       band.addEventListener("click", function(){
         if (band.classList.contains("pick")) return;
         wrap.querySelectorAll(".band").forEach(function(b){
@@ -652,37 +613,33 @@
           b.classList.toggle("dim", b !== band);
         });
         state.answer = q;
-        setTimeout(function(){
+        later(function(){
           buildFavorite();
-          show("s-favorite");
-          wrap.querySelectorAll(".band").forEach(function(b){
-            b.classList.remove("pick","dim");
-          });
-        }, reduceMotion ? 0 : 280);
+          show("s-favorite", "white");
+          wrap.querySelectorAll(".band").forEach(function(b){ b.classList.remove("pick","dim"); });
+        }, 280);
       });
       wrap.appendChild(band);
     });
   }
 
   // =================================================================
-  // 診断ロジック（UIから独立。タグ一致数で候補を並べる）
+  // 診断ロジック（UIから独立。タグ一致数で並べ替える）
   // =================================================================
 
   function rankProducts(){
-    var v = venue();
-    var hidden = v.hideProducts || [];
+    var hidden = venue().hideProducts || [];
     var tags = (state.answer && state.answer.tags) || [];
     return MASTER_PRODUCTS
       .filter(function(p){ return hidden.indexOf(p.id) === -1; })
       .map(function(p){
-        var score = p.tags.filter(function(t){ return tags.indexOf(t) !== -1; }).length;
-        return { product:p, score:score };
+        return { p:p, s:p.tags.filter(function(t){ return tags.indexOf(t) !== -1; }).length };
       })
-      .sort(function(a, b){
-        if (b.score !== a.score) return b.score - a.score;
-        return MASTER_PRODUCTS.indexOf(a.product) - MASTER_PRODUCTS.indexOf(b.product);
+      .sort(function(a,b){
+        if (b.s !== a.s) return b.s - a.s;
+        return MASTER_PRODUCTS.indexOf(a.p) - MASTER_PRODUCTS.indexOf(b.p);
       })
-      .map(function(x){ return x.product; });
+      .map(function(x){ return x.p; });
   }
 
   function productName(p){
@@ -698,21 +655,21 @@
     state.candidates = rankProducts().slice(0, 4);
     var grid = el("favGrid");
     grid.innerHTML = "";
-    state.candidates.forEach(function(p){
+    state.candidates.forEach(function(p, idx){
       var item = document.createElement("button");
       item.type = "button";
-      item.className = "fav-item";
+      item.className = "fav-item stag";
+      item.style.setProperty("--d", (160 + idx * 150) + "ms");
       var ph = document.createElement("span");
       ph.className = "fav-photo";
       ph.style.backgroundImage = 'url("' + p.photo + '")';
       var cap = document.createElement("span");
-      cap.className = "fav-cap";
-      cap.textContent = productName(p);
+      cap.className = "fav-cap"; cap.textContent = productName(p);
       item.appendChild(ph); item.appendChild(cap);
       item.addEventListener("click", function(){
         state.productId = p.id;
         buildProduct(p);
-        show("s-product");
+        show("s-product", "quick");
       });
       grid.appendChild(item);
     });
@@ -723,24 +680,17 @@
   // =================================================================
 
   function buildProduct(p){
-    var hero = el("pdHero");
-    hero.innerHTML = "";
-    p.sub.slice(0, 2).forEach(function(src){
+    var top = el("pdTop");
+    top.innerHTML = "";
+    p.detail.slice(0,2).forEach(function(src){
       var d = document.createElement("div");
       d.style.backgroundImage = 'url("' + src + '")';
-      hero.appendChild(d);
+      top.appendChild(d);
     });
     el("pdName").textContent = productName(p);
-    el("pdBody").textContent = p.desc;
-    var feats = el("pdFeats");
-    feats.innerHTML = "";
-    p.feats.forEach(function(f){
-      var d = document.createElement("div");
-      d.className = "pd-feat";
-      d.textContent = f;
-      feats.appendChild(d);
-    });
-    el("pdShot").style.backgroundImage = 'url("' + p.photo + '")';
+    el("pdShot").style.backgroundImage = 'url("' + p.shot + '")';
+    el("pdDesc").textContent = p.desc;
+    el("pdPhoneShot").style.backgroundImage = 'url("' + p.photo + '")';
   }
 
   // =================================================================
@@ -754,13 +704,11 @@
     if (p && p.video) {
       var v = document.createElement("video");
       v.src = p.video;
-      v.autoplay = true; v.muted = true; v.loop = true;
-      v.playsInline = true; v.setAttribute("playsinline", "");
-      v.controls = true;
+      v.autoplay = true; v.muted = true; v.loop = true; v.controls = true;
+      v.playsInline = true; v.setAttribute("playsinline","");
       stage.appendChild(v);
-      // 自動再生がブラウザに止められた場合に備える
-      var play = v.play();
-      if (play && play.catch) play.catch(function(){ v.controls = true; });
+      var pl = v.play();
+      if (pl && pl.catch) pl.catch(function(){ v.controls = true; });
     } else {
       var fb = document.createElement("div");
       fb.className = "video-fallback";
@@ -768,15 +716,14 @@
       var note = document.createElement("div");
       note.className = "video-note";
       note.textContent = "紹介動画（モックアップのため準備中）";
-      stage.appendChild(fb);
-      stage.appendChild(note);
+      stage.appendChild(fb); stage.appendChild(note);
     }
-    show("s-video");
+    show("s-video", "quick");
   }
 
   function closeVideo(){
     var v = el("videoStage").querySelector("video");
-    if (v) { v.pause(); }
+    if (v) v.pause();
     goBack();
   }
 
@@ -793,41 +740,36 @@
     buildWelcome();
     buildMenu();
 
-    show("s-splash", { noHistory:true });
+    el("s-splash").classList.add("settled","active");
+    current = "s-splash";
 
-    var advanced = false;
+    var left = false;
     function leaveSplash(){
-      if (advanced) return;
-      advanced = true;
-      show("s-welcome");
+      if (left) return;
+      left = true;
+      show("s-welcome", "fade");
     }
     el("s-splash").addEventListener("click", leaveSplash);
-    setTimeout(leaveSplash, reduceMotion ? 600 : 3200);
+    setTimeout(leaveSplash, reduceMotion ? 600 : 4400);
 
     el("welcomeNext").addEventListener("click", function(){
       if (!state.userType) return;
-      show("s-menu");
+      show("s-menu", "slide");
     });
     el("welcomeBack").addEventListener("click", function(){
       state.userType = null;
       el("welcomeNext").disabled = true;
       el("choiceList").querySelectorAll(".choice").forEach(function(c){ c.classList.remove("on"); });
-      advanced = false;
       state.history = [];
-      current = "s-welcome";
-      el("s-welcome").classList.remove("active");
-      el("s-splash").classList.add("active");
-      current = "s-splash";
-      setTimeout(leaveSplash, reduceMotion ? 600 : 3200);
+      show("s-splash", "fade", true);
+      left = false;
+      setTimeout(leaveSplash, reduceMotion ? 600 : 4400);
     });
 
     el("favBack").addEventListener("click", goBack);
     el("pdBack").addEventListener("click", goBack);
     el("pdVideo").addEventListener("click", openVideo);
     el("videoClose").addEventListener("click", closeVideo);
-    el("pdContact").addEventListener("click", function(){
-      window.alert("お申し込み・ご相談フォームへの導線です。\n本番環境では会場ごとに設定したURLへ遷移します。（モックアップ）");
-    });
   }
 
   document.addEventListener("DOMContentLoaded", init);
