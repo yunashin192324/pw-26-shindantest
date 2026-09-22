@@ -89,70 +89,70 @@
       tagline: "海に沈む夕日と、ふたりだけの時間。",
       lede: "定番のロマンティックな海。夕暮れのビーチで、想いを伝える王道の舞台。",
       meetingPoint: "ワイキキ ハレクラニ前ビーチ", duration: "約2時間（撮影30分＋前後準備）",
-      hue: ["#2c5f74", "#e08a4f"], base: 128000
+      hue: ["#2c5f74", "#e08a4f"], base: 128000, motif: "palm"
     },
     {
       id: "miyakojima", name: "MIYAKOJIMA", nameJa: "宮古島", popular: true,
       tagline: "どこまでも続く青の中で。",
       lede: "国内最高峰の透明度を誇る海。パスポートなしで行ける特別な舞台。",
       meetingPoint: "与那覇前浜ビーチ", duration: "約2時間（撮影30分＋前後準備）",
-      hue: ["#1c7f9c", "#7fd8d0"], base: 108000
+      hue: ["#1c7f9c", "#7fd8d0"], base: 108000, motif: "wave"
     },
     {
       id: "santorini", name: "SANTORINI", nameJa: "サントリーニ島", popular: true,
       tagline: "白と青の街で。",
       lede: "断崖に広がる白亜の街並みとエーゲ海。世界一有名な夕日の舞台。",
       meetingPoint: "イア地区 展望テラス", duration: "約2時間（撮影30分＋前後準備）",
-      hue: ["#1e4d8c", "#f4f1ea"], base: 168000
+      hue: ["#1e4d8c", "#f4f1ea"], base: 168000, motif: "dome"
     },
     {
       id: "italy", name: "ITALY", nameJa: "イタリア", popular: false,
       tagline: "憧れの街並みを、ふたりの記念日に。",
       lede: "石畳とクラシックな街並み。歴史ある街角がふたりの物語の舞台になる。",
       meetingPoint: "ヴェネツィア／フィレンツェ 市内（要相談）", duration: "約2時間（撮影30分＋前後準備）",
-      hue: ["#7a5230", "#d9b979"], base: 178000
+      hue: ["#7a5230", "#d9b979"], base: 178000, motif: "arch"
     },
     {
       id: "paris", name: "PARIS", nameJa: "パリ", popular: true,
       tagline: "憧れの街を、ふたりの記念日に。",
       lede: "エッフェル塔とセーヌ川。誰もが憧れる「愛の街」で伝える言葉。",
       meetingPoint: "トロカデロ広場", duration: "約2時間（撮影30分＋前後準備）",
-      hue: ["#4a4e69", "#c9ada7"], base: 158000
+      hue: ["#4a4e69", "#c9ada7"], base: 158000, motif: "tower"
     },
     {
       id: "cappadocia", name: "CAPPADOCIA", nameJa: "カッパドキア", popular: false,
       tagline: "地平線を染める朝焼けの中で。",
       lede: "奇岩と気球が浮かぶ非日常の絶景。忘れられない朝を演出する舞台。",
       meetingPoint: "ローズバレー展望ポイント", duration: "約2時間（早朝撮影30分＋前後準備）",
-      hue: ["#b5651d", "#f2c078"], base: 188000
+      hue: ["#b5651d", "#f2c078"], base: 188000, motif: "balloon"
     },
     {
       id: "maldives", name: "MALDIVES", nameJa: "モルディブ", popular: false,
       tagline: "水平線の上に浮かぶ楽園で。",
       lede: "コバルトブルーの海に浮かぶ水上ヴィラ。ふたりだけの楽園が舞台になる。",
       meetingPoint: "宿泊リゾート内（要事前確認）", duration: "約2時間（撮影30分＋前後準備）",
-      hue: ["#0f6e8c", "#bfe6dd"], base: 198000
+      hue: ["#0f6e8c", "#bfe6dd"], base: 198000, motif: "villa"
     },
     {
       id: "bali", name: "BALI", nameJa: "バリ島", popular: false,
       tagline: "南国の風と緑に包まれて。",
       lede: "棚田と海、寺院が織りなす南国の景色。開放的な自然の中で伝える。",
       meetingPoint: "ウルワツ／タナロット周辺（要相談）", duration: "約2時間（撮影30分＋前後準備）",
-      hue: ["#2f6e4f", "#f4d35e"], base: 118000
+      hue: ["#2f6e4f", "#f4d35e"], base: 118000, motif: "gate"
     },
     {
       id: "cancun", name: "CANCUN", nameJa: "カンクン", popular: false,
       tagline: "カリブ海の白い砂浜で。",
       lede: "エメラルドグリーンの海と白砂のビーチ。リゾート感あふれる舞台。",
       meetingPoint: "ホテルゾーン ビーチフロント", duration: "約2時間（撮影30分＋前後準備）",
-      hue: ["#0a9396", "#e9d8a6"], base: 148000
+      hue: ["#0a9396", "#e9d8a6"], base: 148000, motif: "palm"
     },
     {
       id: "ayersrock", name: "AYERS ROCK", nameJa: "エアーズロック", popular: false,
       tagline: "大地が赤く染まる瞬間に。",
       lede: "世界遺産ウルルが夕陽で赤く染まる、地球規模のスケール感が舞台になる。",
       meetingPoint: "サンセットビューイングエリア", duration: "約2時間（撮影30分＋前後準備）",
-      hue: ["#a4462f", "#e8c07d"], base: 168000
+      hue: ["#a4462f", "#e8c07d"], base: 168000, motif: "rock"
     }
   ];
 
@@ -192,6 +192,87 @@
     "記念日や誕生日のディナー前の散歩として誘う"
   ];
 
+  /* ---- Illustrated placeholder scenes (inline SVG, fully offline) ----
+     No real photography exists yet, so every ".ph" slot gets a small
+     hand-built travel-poster illustration instead of a flat colour
+     swatch: a sky/sea gradient, a sun glow, a horizon line, and a
+     silhouette matching the destination's motif. Swap for real photos
+     later — the aspect ratios and cropping already match. Shared by
+     propose.js / propose-location.js / propose-booking.js via
+     ProposeData.paintPH(root). */
+  function silhouettePath(motif) {
+    switch (motif) {
+      case "palm":
+        return '<path d="M52 100 L54 58 Q42 52 36 42 Q47 46 54 52 Q51 36 40 27 Q53 31 56 45 Q60 29 73 23 Q63 34 58 47 Q69 40 80 42 Q68 46 57 54 Q60 58 58 68 L57 100 Z" fill="rgba(20,15,10,.5)"/>';
+      case "wave":
+        return (
+          '<path d="M0 82 Q12 74 24 82 T48 82 T72 82 T96 82 T120 82 V100 H0 Z" fill="rgba(20,15,10,.32)"/>' +
+          '<path d="M0 90 Q14 84 28 90 T56 90 T84 90 T112 90 V100 H0 Z" fill="rgba(20,15,10,.22)"/>'
+        );
+      case "dome":
+        return (
+          '<rect x="30" y="72" width="12" height="16" fill="rgba(20,15,10,.5)"/>' +
+          '<rect x="46" y="66" width="14" height="22" fill="rgba(20,15,10,.5)"/>' +
+          '<circle cx="53" cy="62" r="8" fill="rgba(20,15,10,.5)"/>' +
+          '<rect x="64" y="76" width="10" height="12" fill="rgba(20,15,10,.5)"/>'
+        );
+      case "arch":
+        return (
+          '<path d="M28 88 V64 Q28 52 40 52 Q52 52 52 64 V88 Z M32 88 V66 Q32 58 40 58 Q48 58 48 66 V88 Z" fill="rgba(20,15,10,.5)" fill-rule="evenodd"/>' +
+          '<path d="M56 88 V70 Q56 60 66 60 Q76 60 76 70 V88 Z M60 88 V71 Q60 65 66 65 Q72 65 72 71 V88 Z" fill="rgba(20,15,10,.4)" fill-rule="evenodd"/>'
+        );
+      case "tower":
+        return '<path d="M50 22 L56 40 L52 40 L60 62 L54 62 L64 90 L36 90 L46 62 L40 62 L48 40 L44 40 Z" fill="rgba(20,15,10,.5)"/>';
+      case "balloon":
+        return (
+          '<ellipse cx="38" cy="34" rx="11" ry="14" fill="rgba(20,15,10,.42)"/><rect x="35" y="47" width="6" height="5" fill="rgba(20,15,10,.42)"/>' +
+          '<ellipse cx="66" cy="24" rx="14" ry="18" fill="rgba(20,15,10,.5)"/><rect x="62" y="40" width="8" height="6" fill="rgba(20,15,10,.5)"/>' +
+          '<ellipse cx="82" cy="42" rx="8" ry="10" fill="rgba(20,15,10,.34)"/><rect x="79" y="51" width="5" height="4" fill="rgba(20,15,10,.34)"/>'
+        );
+      case "villa":
+        return (
+          '<path d="M18 92 L18 80 L30 74 L42 80 L42 92 Z" fill="rgba(20,15,10,.4)"/>' +
+          '<path d="M46 90 L46 76 L60 68 L74 76 L74 90 Z" fill="rgba(20,15,10,.5)"/>' +
+          '<rect x="0" y="92" width="100" height="3" fill="rgba(20,15,10,.3)"/>'
+        );
+      case "gate":
+        return (
+          '<path d="M22 90 V52 L34 40 V90 Z M40 90 V52 L28 40" fill="rgba(20,15,10,.5)"/>' +
+          '<path d="M60 90 V56 L72 46 V90 Z M76 90 V56 L64 46" fill="rgba(20,15,10,.5)"/>'
+        );
+      case "rock":
+        return '<path d="M6 92 Q22 54 44 60 Q58 48 74 58 Q90 52 96 92 Z" fill="rgba(20,15,10,.5)"/>';
+      default:
+        return "";
+    }
+  }
+
+  function sceneSVG(c1, c2, motif) {
+    var gid = "phg" + Math.random().toString(36).slice(2, 9);
+    return (
+      '<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block;" aria-hidden="true">' +
+      '<defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0%" stop-color="' + c1 + '"/><stop offset="58%" stop-color="' + c1 + '"/><stop offset="100%" stop-color="' + c2 + '"/>' +
+      "</linearGradient></defs>" +
+      '<rect width="100" height="100" fill="url(#' + gid + ')"/>' +
+      '<circle cx="70" cy="28" r="16" fill="#fff" opacity=".16"/>' +
+      '<circle cx="70" cy="28" r="8" fill="#fff" opacity=".5"/>' +
+      '<line x1="0" y1="58" x2="100" y2="58" stroke="#fff" stroke-opacity=".3" stroke-width="0.6"/>' +
+      silhouettePath(motif) +
+      "</svg>"
+    );
+  }
+
+  function paintPH(root) {
+    root.querySelectorAll(".ph[data-hue]").forEach(function (el) {
+      var parts = el.getAttribute("data-hue").split(",");
+      var c1 = (parts[0] || "#333").trim();
+      var c2 = (parts[1] || "#999").trim();
+      var motif = el.getAttribute("data-motif") || "none";
+      el.innerHTML = sceneSVG(c1, c2, motif);
+    });
+  }
+
   global.ProposeData = {
     locations: LOCATIONS,
     optionCatalog: OPTION_CATALOG,
@@ -205,6 +286,7 @@
     availabilityFor: availabilityFor,
     formatYen: function (n) {
       return "¥" + Number(n).toLocaleString("ja-JP");
-    }
+    },
+    paintPH: paintPH
   };
 })(window);

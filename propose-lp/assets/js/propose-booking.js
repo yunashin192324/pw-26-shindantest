@@ -96,7 +96,7 @@
         var sel = state.locationId === l.id ? " is-selected" : "";
         return (
           '<button class="loc-pick-card' + sel + '" data-loc="' + l.id + '">' +
-          '<span class="ph" data-hue="' + l.hue[0] + "," + l.hue[1] + '" data-label="' + l.name + '"></span>' +
+          '<span class="ph" data-hue="' + l.hue[0] + "," + l.hue[1] + '" data-motif="' + l.motif + '" data-label="' + l.name + '"></span>' +
           '<span class="lp-scrim"></span>' +
           '<span class="lp-label"><strong>' + l.name + "</strong>" + D.formatYen(l.fromPrice) + "〜</span>" +
           "</button>"
@@ -395,6 +395,7 @@
     var key = STEPS[state.stepIndex];
     mainEl.innerHTML = RENDERERS[key]();
     BINDERS[key]();
+    D.paintPH(mainEl);
     updateBottomBar();
   }
 

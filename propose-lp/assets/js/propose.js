@@ -26,13 +26,6 @@
     });
   }
 
-  // ---- Paint gradient placeholder photos from data-hue="#c1,#c2" ----
-  document.querySelectorAll(".ph[data-hue]").forEach(function (el) {
-    var parts = el.getAttribute("data-hue").split(",");
-    if (parts[0]) el.style.setProperty("--c1", parts[0].trim());
-    if (parts[1]) el.style.setProperty("--c2", parts[1].trim());
-  });
-
   // ---- FAQ accordion ----
   document.querySelectorAll(".faq-q").forEach(function (btn) {
     btn.addEventListener("click", function () {
@@ -75,7 +68,7 @@
       destGrid.innerHTML = D.locations.map(function (l) {
         return (
           '<a class="dest-card" href="location.html?loc=' + l.id + '" data-reveal>' +
-          '<span class="ph" data-hue="' + l.hue[0] + "," + l.hue[1] + '" data-label="' + l.name + '"></span>' +
+          '<span class="ph" data-hue="' + l.hue[0] + "," + l.hue[1] + '" data-motif="' + l.motif + '" data-label="' + l.name + '"></span>' +
           '<span class="dest-card-body">' +
           (l.popular ? '<span class="dest-tag">POPULAR</span>' : "") +
           "<h3>" + l.name + '</h3><div class="dest-ja">' + l.nameJa + "</div>" +
@@ -120,11 +113,11 @@
           item.setAttribute("aria-expanded", expanded ? "false" : "true");
         });
       });
-      faqList.querySelectorAll(".ph[data-hue]").forEach(paintHue);
     }
 
-    // Re-run hue paint + reveal registration for nodes injected above.
-    document.querySelectorAll(".ph[data-hue]").forEach(paintHue);
+    // Hydrate every ".ph" placeholder (static hero/step icons + nodes injected above)
+    // with an illustrated scene — see ProposeData.paintPH in propose-data.js.
+    D.paintPH(document);
     if (!prefersReduced && "IntersectionObserver" in window) {
       var io2 = new IntersectionObserver(function (entries) {
         entries.forEach(function (entry) {
@@ -141,12 +134,6 @@
         io2.observe(el);
       });
     }
-  }
-
-  function paintHue(el) {
-    var parts = el.getAttribute("data-hue").split(",");
-    if (parts[0]) el.style.setProperty("--c1", parts[0].trim());
-    if (parts[1]) el.style.setProperty("--c2", parts[1].trim());
   }
 
   // ---- Smooth-scroll CTA targets within the same page ----

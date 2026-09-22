@@ -18,7 +18,7 @@
   var metaDesc = document.querySelector('meta[name="description"]');
   if (metaDesc) metaDesc.setAttribute("content", l.nameJa + "でプロポーズするための撮影付きプラン。" + l.lede + " " + D.formatYen(l.fromPrice) + "〜、その場でオンライン予約できます。");
 
-  function paint(hue) { return 'data-hue="' + hue[0] + "," + hue[1] + '"'; }
+  function paint(hue) { return 'data-hue="' + hue[0] + "," + hue[1] + '" data-motif="' + l.motif + '"'; }
 
   document.getElementById("breadcrumb").innerHTML =
     '<a href="index.html">TOP</a> ／ <a href="index.html#destinations">DESTINATIONS</a> ／ ' + l.name;
