@@ -13,14 +13,19 @@
 
   // ---- Add-on options (Shopify: one small Product each) ----
   var OPTIONS = [
-    { id: "flower", name: "FLOWER", nameJa: "花束", price: 15000, desc: "プロポーズの瞬間に渡す花束をご用意します。" },
     { id: "transfer", name: "PRIVATE TRANSFER", nameJa: "専用送迎", price: 30000, desc: "ホテルと撮影場所のあいだを専用車で送迎します。" },
     { id: "extra-photo", name: "EXTRA PHOTO", nameJa: "追加撮影30分", price: 20000, desc: "撮影を30分延長し、記念撮影の時間を増やします。" },
     { id: "sunset", name: "SUNSET TIME", nameJa: "ベストタイム確保", price: 10000, desc: "夕日・朝日など一番きれいな光の時間に合わせて開始時刻を調整します。" }
   ];
 
   // ---- Plans (Shopify: one Product per location, two Variants) ----
-  var PLAN_INCLUDES = ["プロフォトグラファー", "撮影30分", "写真データ30枚以上", "オンライン納品", "日本語サポート"];
+  // The bouquet is part of every proposal, so it lives in the base plan
+  // rather than as an add-on.
+  var PLAN_INCLUDES = ["プロフォトグラファー", "撮影30分", "プロポーズ用の花束", "写真データ30枚以上", "オンライン納品", "日本語サポート"];
+
+  // ---- Booking is request-based: the team checks photographer
+  // availability by hand and replies within this window (DEMO value). ----
+  var REPLY_HOURS = 24;
   function plansFor(base) {
     var allOptions = OPTIONS.reduce(function (s, o) { return s + o.price; }, 0);
     return [
@@ -157,13 +162,14 @@
   ];
 
   var FAQ = [
-    { q: "出発の数日前でも予約できますか？", a: "はい。行き先ごとに「最短○日前まで」の受付締切があり、各ページと空き状況カレンダーで確認できます。" },
+    { q: "出発の数日前でも予約できますか？", a: "はい。行き先ごとに「最短○日前まで」の受付締切があり、各ページと受付状況カレンダーで確認できます。" },
+    { q: "予約はすぐに確定しますか？", a: "予約はリクエスト制です。フォトグラファーの手配を確認し、" + REPLY_HOURS + "時間以内に確定可否をメールでご連絡します。お支払いは確定のご連絡のあとです。" },
     { q: "相手にプロポーズだと気づかれませんか？", a: "「旅の記念撮影」として自然に始めます。予約確認の連絡も、控えめな件名を選べます。" },
     { q: "雨が降ったらどうなりますか？", a: "行き先ごとの雨天対応があります。多くの場所で、翌日以降の空き枠へ無料で振替できます。" },
     { q: "現地で日本語は通じますか？", a: "日本語サポートが付いています。当日の連絡も日本語で行えます。" },
     { q: "キャンセルはできますか？", a: "予約日の一定期間前まではキャンセル・返金が可能です。規定は予約確認画面とメールでご案内します。" },
     { q: "写真はいつ届きますか？", a: "撮影後、オンラインで順次お届けします。目安の日数は予約確認メールでご案内します。" },
-    { q: "指輪や花束は用意してもらえますか？", a: "指輪はご自身でご用意ください。花束はオプションで追加できます。" },
+    { q: "指輪や花束は用意してもらえますか？", a: "花束はプランに含まれています。指輪はご自身でご用意ください。" },
     { q: "撮影場所は変えられますか？", a: "行き先ごとの推奨スポットをもとに、当日の天候や混雑に合わせてフォトグラファーが調整します。" }
   ];
 
@@ -219,6 +225,7 @@
     locations: LOCATIONS,
     options: OPTIONS,
     planIncludes: PLAN_INCLUDES,
+    replyHours: REPLY_HOURS,
     proposalSteps: PROPOSAL_STEPS,
     themes: THEMES,
     faq: FAQ,

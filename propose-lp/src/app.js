@@ -29,9 +29,9 @@
     return (d.getMonth() + 1) + "/" + d.getDate() + "（" + DOW[d.getDay()] + "）";
   }
   var STATUS = {
-    available: { mark: "◎", ja: "空きあり", en: "AVAILABLE" },
+    available: { mark: "◎", ja: "受付中", en: "OPEN" },
     few: { mark: "△", ja: "残りわずか", en: "FEW LEFT" },
-    soldout: { mark: "×", ja: "満席", en: "SOLD OUT" },
+    soldout: { mark: "×", ja: "受付終了", en: "FULL" },
     closed: { mark: "―", ja: "締切", en: "CLOSED" }
   };
 
@@ -100,7 +100,7 @@
             D.options.map(function (o) {
               return '<div class="opt-row"><div class="en">＋ ' + esc(o.name) + "<span>" + esc(o.nameJa) + '</span></div><div class="price">' + yen(o.price) + "</div><p>" + esc(o.desc) + "</p></div>";
             }).join("") +
-            '<div class="opt-row is-allin"><div class="en">ALL INCLUSIVE<span>全部入り</span></div><div class="price">' + yen(allin) + (locId ? "" : "〜") + "</div><p>プロポーズプランに、4つのオプションをすべて含めたプランです。</p></div>" +
+            '<div class="opt-row is-allin"><div class="en">ALL INCLUSIVE<span>全部入り</span></div><div class="price">' + yen(allin) + (locId ? "" : "〜") + "</div><p>プロポーズプランに、" + D.options.length + "つのオプションをすべて含めたプランです。</p></div>" +
           "</div>" +
         "</div>" +
       "</div>"
@@ -132,7 +132,8 @@
 
     $("#assure-list").innerHTML = [
       { key: D.minLeadDays + "<small>日前</small>", h: "まで予約できます", p: "受付締切は行き先ごとに異なります。各ページでご確認ください。" },
-      { key: "14<small>日分</small>", h: "の空き状況をすぐ確認", p: "旅行日を選ぶだけで、その日の時間と空きが分かります。" },
+      { key: "14<small>日分</small>", h: "の受付状況をすぐ確認", p: "旅行日を選ぶだけで、その日に申し込める時間が分かります。" },
+      { key: D.replyHours + "<small>時間</small>", h: "以内に確定のご連絡", p: "リクエスト後、フォトグラファーの手配を確認してメールでお知らせします。お支払いは確定のあとです。" },
       { key: "JP", h: "日本語でサポート", p: "予約から当日の連絡まで、日本語で対応します。" }
     ].map(function (a) {
       return '<li class="assure-item reveal"><span class="assure-key">' + a.key + '</span><div><h3 class="h3">' + a.h + "</h3><p>" + a.p + "</p></div></li>";
@@ -220,7 +221,7 @@
           '<h1 class="h1" id="l-title">' + nl2br(l.catch) + "</h1>" +
           '<p class="lhero-price">From<span class="price">' + yen(l.fromPrice) + "</span></p>" +
           '<div class="lhero-cta">' +
-            '<button class="btn btn-light" data-scroll="loc-avail">空き状況を見る</button>' +
+            '<button class="btn btn-light" data-scroll="loc-avail">受付状況を見る</button>' +
             '<a class="btn btn-line" href="#/book?loc=' + l.id + '">予約する</a>' +
           "</div>" +
         "</div>" +
@@ -236,11 +237,11 @@
             '<div class="fact"><dt>Price</dt><dd><span class="price">' + yen(l.fromPrice) + "</span><small>プロポーズプラン</small></dd></div>" +
             '<div class="fact"><dt>Time</dt><dd>' + esc(l.duration) + "<small>うち撮影30分</small></dd></div>" +
             '<div class="fact"><dt>Best Time</dt><dd>' + esc(l.bestTime) + "<small>" + esc(l.bestTimeNote) + "</small></dd></div>" +
-            '<div class="fact"><dt>Book By</dt><dd>最短' + l.leadDays + "日前まで<small>空きがあれば予約可</small></dd></div>" +
+            '<div class="fact"><dt>Book By</dt><dd>最短' + l.leadDays + "日前まで<small>" + D.replyHours + "時間以内に確定のご連絡</small></dd></div>" +
             '<div class="fact"><dt>Rain</dt><dd>無料で振替<small>翌日以降の空き枠へ</small></dd></div>' +
             '<div class="fact"><dt>Support</dt><dd>日本語対応<small>当日の連絡も日本語で</small></dd></div>' +
           "</dl>" +
-          '<p class="note facts-note">※ 所要時間・受付締切・雨天対応・空き状況はデモ用の仮データです。</p>' +
+          '<p class="note facts-note">※ 所要時間・受付締切・確定連絡までの時間・雨天対応・受付状況はデモ用の仮データです。</p>' +
         "</div>" +
       "</section>" +
 
@@ -257,8 +258,8 @@
 
       '<section class="sec" id="loc-avail" aria-labelledby="l-avail">' +
         '<div class="wrap-narrow">' +
-          '<div class="sec-head reveal"><span class="label">Availability</span><h2 class="h2" id="l-avail">あなたの旅行日は、<br>空いていますか？</h2>' +
-          '<p class="lede">日付を選ぶと、その日の時間と空き状況が分かります。</p></div>' +
+          '<div class="sec-head reveal"><span class="label">Availability</span><h2 class="h2" id="l-avail">あなたの旅行日に、<br>間に合いますか？</h2>' +
+          '<p class="lede">日付を選ぶと、その日に申し込める時間が分かります。予約はリクエスト制で、' + D.replyHours + '時間以内に確定をご連絡します。</p></div>' +
           '<div class="avail reveal" id="avail"></div>' +
         "</div>" +
       "</section>" +
@@ -276,7 +277,7 @@
           '<div class="sec-head reveal"><span class="label">If It Rains &amp; FAQ</span><h2 class="h2" id="l-faq">雨の日も、<br class="br-sp">直前の予約も。</h2></div>' +
           '<div class="rain reveal"><span class="en">IF IT RAINS</span><p>' + esc(l.rainPlan) + "</p></div>" +
           '<div class="faq" style="margin-top:32px">' + faqHTML([
-            { q: "何日前まで予約できますか？", a: esc(l.nameJa) + "は、撮影日の" + l.leadDays + "日前まで予約できます（空きがある場合）。" },
+            { q: "何日前まで予約できますか？", a: esc(l.nameJa) + "は、撮影日の" + l.leadDays + "日前までリクエストできます。確定のご連絡は" + D.replyHours + "時間以内です。" },
             { q: "集合場所はどこですか？", a: l.meetingPoint + "です。詳細は予約確認メールでご案内します。" },
             D.faq[1], D.faq[3], D.faq[4]
           ]) + "</div>" +
@@ -330,18 +331,18 @@
             '<span class="st">' + STATUS[st].en + "</span>" +
           "</button>"
         );
-      }).join("") : '<p class="slots-empty">この先2週間は空きがありません。先の日付をご確認ください。</p>';
+      }).join("") : '<p class="slots-empty">この先2週間は受付を終了しています。先の日付をご確認ください。</p>';
 
       var go = sel.date && sel.time
-        ? '<p class="avail-pick"><b>' + fmtDate(sel.date) + " " + sel.time + "</b> ・空きあり</p>" +
-          '<a class="btn btn-block" href="#/book?loc=' + l.id + "&date=" + sel.date + "&time=" + sel.time + '">この日時で予約する <span class="arrow" aria-hidden="true">→</span></a>'
-        : '<p class="avail-pick" style="color:var(--ink-faint)">時間を選ぶと、そのまま予約に進めます。</p>';
+        ? '<p class="avail-pick"><b>' + fmtDate(sel.date) + " " + sel.time + "</b> ・受付中</p>" +
+          '<a class="btn btn-block" href="#/book?loc=' + l.id + "&date=" + sel.date + "&time=" + sel.time + '">この日時で申し込む <span class="arrow" aria-hidden="true">→</span></a>'
+        : '<p class="avail-pick" style="color:var(--ink-faint)">時間を選ぶと、そのまま予約リクエストに進めます。</p>';
 
       box.innerHTML =
         '<div class="avail-head"><span class="en">NEXT 14 DAYS</span>' +
-        '<span class="legend"><span><i>◎</i>空きあり</span><span><i>△</i>残りわずか</span><span><i>×</i>満席</span><span><i>―</i>締切</span></span></div>' +
+        '<span class="legend"><span><i>◎</i>受付中</span><span><i>△</i>残りわずか</span><span><i>×</i>受付終了</span><span><i>―</i>締切</span></span></div>' +
         '<div class="days" role="group" aria-label="日付を選ぶ">' + dayBtns + "</div>" +
-        (sel.date ? '<p class="note" style="margin-top:16px">' + fmtDate(sel.date) + " の空き状況</p>" : "") +
+        (sel.date ? '<p class="note" style="margin-top:16px">' + fmtDate(sel.date) + " の受付状況</p>" : "") +
         '<div class="slots" role="group" aria-label="時間を選ぶ">' + slots + "</div>" +
         '<div class="avail-go">' + go + "</div>" +
         '<div class="avail-more"><a class="link" href="#/book?loc=' + l.id + '">もっと先の日付を見る <span class="arrow" aria-hidden="true">→</span></a></div>';
@@ -364,7 +365,7 @@
     time: { ja: "時間", en: "TIME" },
     plan: { ja: "プラン・オプション", en: "PLAN" },
     customer: { ja: "お客様情報", en: "YOUR DETAILS" },
-    confirm: { ja: "確認", en: "CONFIRM" }
+    confirm: { ja: "リクエスト内容の確認", en: "REVIEW" }
   };
   var bk = null;
   var calOffset = 0;
@@ -485,12 +486,12 @@
         '<div class="cal-nav"><button type="button" data-cal="-1"' + (calOffset <= 0 ? " disabled" : "") + ' aria-label="前の月">←</button><span class="cal-month">' + y + "." + String(m + 1).padStart(2, "0") +
         '</span><button type="button" data-cal="1"' + (calOffset >= 5 ? " disabled" : "") + ' aria-label="次の月">→</button></div>' +
         '<div class="cal">' + DOW.map(function (w) { return '<span class="cal-dow">' + w + "</span>"; }).join("") + cells.join("") + "</div>" +
-        '<div class="cal-foot"><span class="legend"><span><i>◎</i>空きあり</span><span><i>△</i>残りわずか</span><span><i>×</i>満席</span><span><i>―</i>締切</span></span></div>' +
-        '<p class="note" style="margin-top:10px">※ 空き状況はデモ表示です。</p>';
+        '<div class="cal-foot"><span class="legend"><span><i>◎</i>受付中</span><span><i>△</i>残りわずか</span><span><i>×</i>受付終了</span><span><i>―</i>締切</span></span></div>' +
+        '<p class="note" style="margin-top:10px">※ 受付状況はデモ表示です。日時はリクエスト後に確定します。</p>';
     },
     time: function () {
       var l = bLoc();
-      return '<h2 class="h2">時間を選ぶ</h2><p class="lede">' + fmtDate(bk.date) + " の空き状況です。</p>" +
+      return '<h2 class="h2">時間を選ぶ</h2><p class="lede">' + fmtDate(bk.date) + " に申し込める時間です。</p>" +
         '<div class="slots" style="margin-top:0">' + l.timeSlots.map(function (t) {
           var st = D.slotStatus(l, bk.date, t), dis = st === "soldout" || st === "closed";
           return '<button type="button" class="slot is-' + st + (bk.time === t ? " is-selected" : "") + '" data-time="' + t + '"' + (dis ? " disabled" : "") + '><span class="t">' + t + '</span><span class="best">' +
@@ -501,7 +502,7 @@
       var l = bLoc();
       return '<h2 class="h2">プランとオプション</h2><p class="lede">基本のプロポーズプランは選択済みです。必要なものだけ追加してください。</p>' +
         '<div class="plan-toggle" role="radiogroup" aria-label="プラン">' + l.plans.map(function (p) {
-          var desc = p.id === "standard" ? "撮影30分・写真30枚以上・日本語サポート" : "プロポーズプラン＋4つのオプションすべて";
+          var desc = p.id === "standard" ? "撮影30分・花束・写真30枚以上・日本語サポート" : "プロポーズプラン＋" + D.options.length + "つのオプションすべて";
           return '<button type="button" role="radio" aria-checked="' + (bk.plan === p.id) + '" class="plan-opt' + (bk.plan === p.id ? " is-selected" : "") + '" data-plan="' + p.id + '"><span class="radio"></span><span><span class="en">' +
             esc(p.name) + "</span><p>" + esc(desc) + '</p></span><span class="price">' + yen(p.price) + "</span></button>";
         }).join("") + "</div>" +
@@ -518,18 +519,19 @@
         return '<div class="field"><label for="c-' + id + '">' + label + (req ? '<span class="req">必須</span>' : '<span class="req" style="color:var(--ink-faint)">任意</span>') + "</label>" +
           '<input id="c-' + id + '" type="' + type + '" autocomplete="' + ac + '" value="' + esc(c[id] || "") + '" placeholder="' + ph + '"' + (req ? " required" : "") + "></div>";
       }
-      return '<h2 class="h2">ご予約者さまの情報</h2><p class="lede">当日の連絡に使います。お支払い情報は次の画面で入力します。</p>' +
+      return '<h2 class="h2">ご予約者さまの情報</h2><p class="lede">確定のご連絡と当日の連絡に使います。この時点でのお支払いはありません。</p>' +
         f("name", "お名前", "text", true, "name", "山田 太郎") +
         f("email", "メールアドレス", "email", true, "email", "you@example.com") +
         f("phone", "電話番号（当日の連絡用）", "tel", false, "tel", "090-0000-0000") +
         (needsHotel() ? f("hotel", "ご滞在ホテル（送迎用）", "text", true, "off", "例：ハレクラニ") : "") +
-        '<label class="check"><input type="checkbox" id="c-surprise"' + (c.surprise ? " checked" : "") + "><span>サプライズなので、確認メールは控えめな件名にしてほしい</span></label>" +
+        '<label class="check"><input type="checkbox" id="c-surprise"' + (c.surprise ? " checked" : "") + "><span>サプライズなので、メールは控えめな件名にしてほしい</span></label>" +
+        '<label class="check"><input type="checkbox" id="c-flex"' + (c.flex ? " checked" : "") + "><span>希望の時間が難しい場合、同じ日の別の時間でもよい</span></label>" +
         '<label class="check"><input type="checkbox" id="c-agree"' + (c.agree ? " checked" : "") + "><span>利用規約・キャンセルポリシーに同意する</span></label>";
     },
     confirm: function () {
-      return '<h2 class="h2">予約内容の確認</h2><p class="lede">この内容でよければ、お支払いへ進んでください。</p>' + summaryHTML() +
-        '<button type="button" class="btn btn-block" id="bk-pay">お支払いへ進む（デモ）<span class="arrow" aria-hidden="true">→</span></button>' +
-        '<p class="note" style="margin-top:12px;text-align:center">実際のサイトでは Shopify の安全な決済画面に移動します。</p>';
+      return '<h2 class="h2">リクエスト内容の確認</h2><p class="lede">この内容でリクエストを送ります。フォトグラファーの手配を確認し、' + D.replyHours + '時間以内に確定可否をご連絡します。</p>' + summaryHTML() +
+        '<button type="button" class="btn btn-block" id="bk-pay">予約をリクエストする（デモ）<span class="arrow" aria-hidden="true">→</span></button>' +
+        '<p class="note" style="margin-top:12px;text-align:center">この時点ではお支払いは発生しません。予約の確定後に、お支払いのご案内をお送りします。</p>';
     }
   };
 
@@ -542,10 +544,11 @@
       ["Time", bk.time + (bk.time === l.bestTime ? "<small>BEST TIME・" + esc(l.bestTimeNote) + "</small>" : "")],
       ["Meeting", esc(l.meetingPoint)],
       ["Plan", esc(p.name) + "<small>" + yen(p.price) + "</small>"],
+      ["Flexible", bk.customer.flex ? "同じ日の別の時間でも可" : "希望の時間のみ"],
       ["Option", extra.length ? extra.map(function (o) { return esc(o.nameJa) + " +" + yen(o.price); }).join("<br>") : (p.id === "allin" ? "すべて含まれています" : "なし")]
     ];
     return '<dl class="summary">' + rows.map(function (r) { return '<div class="sum-row"><dt>' + r[0] + "</dt><dd>" + r[1] + "</dd></div>"; }).join("") +
-      '<div class="sum-total"><dt>TOTAL</dt><dd class="price">' + yen(bTotal()) + "</dd></div></dl>";
+      '<div class="sum-total"><dt>TOTAL<small>確定後のお支払い</small></dt><dd class="price">' + yen(bTotal()) + "</dd></div></dl>";
   }
 
   var BIND = {
@@ -594,7 +597,7 @@
         var el = $("#c-" + k, b);
         if (el) el.addEventListener("input", function () { bk.customer[k] = el.value; updateBar(); });
       });
-      ["surprise", "agree"].forEach(function (k) {
+      ["surprise", "flex", "agree"].forEach(function (k) {
         var el = $("#c-" + k, b);
         el.addEventListener("change", function () { bk.customer[k] = el.checked; updateBar(); });
       });
@@ -612,14 +615,15 @@
     $("#bk-context").innerHTML = "";
     $("#bk-body").innerHTML =
       '<div class="done bk-step">' +
-        '<span class="label">Your moment is reserved.</span>' +
-        '<h2 class="h2">プロポーズの日が、<br>決まりました。</h2>' +
-        '<p class="lede">予約番号 <b class="en" style="font-weight:600">' + code + "</b><br>確認メールを " + esc(bk.customer.email || "") + " にお送りしました。</p>" +
+        '<span class="label">Request received.</span>' +
+        '<h2 class="h2">リクエストを、<br>受け付けました。</h2>' +
+        '<p class="lede">リクエスト番号 <b class="en" style="font-weight:600">' + code + "</b><br>まだ予約は確定していません。" + D.replyHours + "時間以内に、" + esc(bk.customer.email || "") + " へ確定可否をご連絡します。</p>" +
         summaryHTML() +
         '<ol class="next-steps">' +
-          "<li><b>01</b><span>予約確認メールが届きます（" + (bk.customer.surprise ? "控えめな件名で送信" : "件名：ご予約確認") + "）。</span></li>" +
-          "<li><b>02</b><span>撮影日の2日前までに、フォトグラファーから集合場所の詳細をお送りします。</span></li>" +
-          "<li><b>03</b><span>当日は " + esc(l.meetingPoint) + " へ。あとは、いつも通りに。</span></li>" +
+          "<li><b>01</b><span>フォトグラファーの手配を確認し、" + D.replyHours + "時間以内にメールでご連絡します（" + (bk.customer.surprise ? "控えめな件名で送信" : "件名：ご予約リクエストについて") + "）。" +
+            (bk.customer.flex ? "希望の時間が難しい場合は、同じ日の別の時間をご案内します。" : "ご希望の日時が難しい場合は、近い日時をご提案します。") + "</span></li>" +
+          "<li><b>02</b><span>確定のメールにあるリンクからお支払いください。お支払いの完了で、予約が確定します。</span></li>" +
+          "<li><b>03</b><span>撮影日の2日前までに、フォトグラファーから集合場所の詳細をお送りします。当日は " + esc(l.meetingPoint) + " へ。</span></li>" +
         "</ol>" +
         '<a class="btn btn-ghost" href="#/">TOPへ戻る</a>' +
       "</div>";
