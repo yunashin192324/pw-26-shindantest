@@ -1,222 +1,211 @@
-# 世界のプロポーズプラン — Shopifyテーマ実装ガイド
+# 世界のプロポーズプラン — Shopify実装ガイド（v2 再設計）
 
-`/propose-lp/` の動作モックアップを、Shopifyの無料テーマ機能（Sections / Blocks / Metaobjects /
-Cart AJAX API）だけで実装した本番相当のコードです。有料アプリ・有料テーマは使用していません。
-既存の HIS World Wedding テーマ（journal / article 系）のファイルには一切手を加えていません。
+対象ユーザーを「旅行先・日程がすでに決まっていて、出発の5〜7日前にプロポーズを思い立った人」と
+定義し直した再設計（v2）の、Shopify実装のための設計書です。
 
-- 動くモックアップ（オフラインで見られるもの）: `/propose-lp/`
-- 設計の理由・データモデル・セットアップ手順: このファイル
+- **動くモックアップ（v2・完成）**: `/propose-lp/all-in-one.html`（1ファイル・オフライン可）
+  ソースは `/propose-lp/src/`、ビルドは `python3 propose-lp/build.py`
+- **このディレクトリのLiquid（v1のまま・移植が必要）**: §7 を参照
+
+モックアップの `src/data.js` は、下記メタオブジェクトのフィールドと1対1で対応するように作ってあります。
+Liquidへの移植は「名前の置き換え」で済み、構造の再設計は不要です（対応表は §6）。
 
 ---
 
-## 1. サイトマップ
+## 1. 導線の考え方
 
 ```
-/pages/propose-home  … トップ（LP）                     … templates/page.propose-home.json
-/pages/propose-<slug> … ロケーション詳細（×10、可変）      … templates/page.propose-location.json
-/pages/propose-booking … 予約フロー（SPA・ヘッダー/フッターなし） … templates/page.propose-booking.json
+Google / Instagram
+  └→ /pages/propose/hawaii（ロケーション詳細・最重要ページ）  ← 直接着地する想定
+       Hero（写真・料金 ¥128,000〜・「空き状況を見る」）
+       └→ 同じページ内の「空き状況」で 9/28 17:30 AVAILABLE を選ぶ
+            └→ 予約フロー STEP 3/5（プラン・オプション）から開始 ← 日付・時間は入力済み
+                 └→ お客様情報 → 確認 → Shopify Checkout → 予約完了
 ```
 
-ロケーションは「1メタオブジェクト（データ）＋1ページ（ルーティング）」の組で増減します。
-コード変更・新規テンプレート作成は不要です（詳細は §3）。
+- ロケーション詳細から来た場合、予約フローは **旅行先の選択をスキップ**（5ステップ）。
+  空き状況で日時を選んで来た場合は **日付・時間もスキップ**し、STEP 3 から始まります。
+- TOP は「旅行先から探す」が主役。旅行先未定の人向けの景色から探す導線は TOP 下部の補助扱い。
+- 計測するKPI（離脱を見る段階）: ロケーションページ到達 → 空き状況の操作 → 予約フロー開始 → 予約完了。
 
-## 2. ユーザーフロー
+## 2. URL構造
 
-```
-広告/SNS
-  └→ propose-home（LP）
-       └→ 目的地グリッドをタップ
-            └→ propose-<location>（詳細）
-                 └→ 「このプランで予約する」 (?loc=&plan=&variant= 付き)
-                      └→ propose-booking（SPA）
-                           LOCATION → PLAN → DATE → TIME → OPTIONS → CUSTOMER → PAYMENT
-                                                                              └→ /cart/add.js
-                                                                                   └→ Shopify Checkout（決済）
-                                                                                        └→ 注文完了（Shopifyの標準Thank youページ）
-```
-
-「お問い合わせ」「ご相談」を主要動線にしない、という要件どおり、LPから予約完了までページ遷移は
-最大3回（LP → 詳細 → 予約SPA → チェックアウト）。予約SPA内はページ遷移なし（JSでステップ切替）。
-
-## 3. Shopifyデータモデル
-
-### 3.1 Metaobject: `propose_location`
-
-Settings → Custom data → Metaobjects で定義を作成します（無料機能）。
-
-| フィールド名 | キー | 型 | 用途 |
-|---|---|---|---|
-| 英語名 | `title` | 単一行テキスト | "HAWAII" |
-| 日本語名 | `name_ja` | 単一行テキスト | "ハワイ" |
-| 一言コピー | `tagline` | 単一行テキスト | カードの一言 |
-| 紹介文 | `lede` | 複数行テキスト | 「この場所でプロポーズする理由」 |
-| メイン写真 | `hero_image` | ファイル（画像） | 未設定時は `hue_start`/`hue_end` のグラデーションで代替表示 |
-| ギャラリー | `gallery` | ファイルのリスト（画像） | 詳細ページのギャラリー |
-| プレースホルダー色1/2 | `hue_start` / `hue_end` | 色 | 写真未登録時のフォールバック |
-| 集合場所 | `meeting_point` | 単一行テキスト | |
-| 所要時間 | `duration` | 単一行テキスト | |
-| 人気表示 | `popular` | 真偽値 | POPULARバッジ |
-| おすすめ時間 | `best_time` | 単一行テキスト | 例 "17:30"。BEST TIME表示に使用 |
-| 時間帯候補 | `time_slots` | 単一行テキストのリスト | 例 ["15:00","16:00","17:00","17:30","18:00"] |
-| 予約不可日 | `blocked_dates` | 日付のリスト | カレンダーで「×満席/休」表示 |
-| 残りわずかな日 | `few_left_dates` | 日付のリスト | カレンダーで「△残りわずか」表示 |
-| プラン商品 | `plan_product` | 商品参照 | §3.2 参照。BASIC/FLOWER/PREMIUMの3バリアントを持つ商品 |
-| 紐づくページ | `page` | ページ参照 | カードのリンク先（`/pages/propose-<slug>`） |
-
-**空き状況について**：この実装は実在の在庫・予約枠を捏造しません。`blocked_dates` /
-`few_left_dates` は運営が管理画面から入力する実データです（本当に埋まっている日だけを入れる）。
-将来、予約管理システムと連携する場合はこの2フィールドをAPI経由で自動更新する形に差し替え可能です。
-
-### 3.2 商品・バリアント（プラン）
-
-ロケーションごとに1商品、3バリアント（Basic / Flower / Premium）を作成します。
-
-```
-商品名: 「HAWAII プロポーズプラン」  ハンドル: hawaii-propose
-  バリアント: Basic   ¥128,000
-  バリアント: Flower  ¥143,000
-  バリアント: Premium ¥173,000
-```
-
-- バリアントのタイトルは **Basic / Flower / Premium**（大文字小文字は問わない）固定です。
-  `assets/propose-booking.js` はこのタイトルを handleize（小文字化・記号除去）した文字列を
-  プランIDとして扱い、オプションの自動包含判定（FLOWER以上は花束を含む、等）にも使います。
-- 各バリアントに商品メタフィールド `propose.includes`（単一行テキスト、`|` 区切り）を設定すると、
-  ロケーション詳細ページのプランカードに内容リストとして表示されます。
-  例: `プロカメラマンによる撮影（約30分）|写真データ30カット〜|現地日本語サポート`
-- 実際の価格・在庫・税・通貨換算はすべて Shopify 標準機能に委ねられます（独自の価格計算をしない）。
-
-### 3.3 オプション商品（花束・送迎・追加撮影・サンセット）
-
-それぞれ1バリアントのシンプルな商品として作成し、`sections/propose-booking.liquid` の
-セクションブロック「オプション商品」から紐付けます（商品ピッカー＋説明文＋「FLOWERに含む」
-「PREMIUMに含む」チェックボックス）。全ロケーション共通です。ロケーションごとに価格を変えたい
-場合は、ロケーションごとに専用のオプション商品を用意し、`propose_location` 側にオプション参照
-フィールドを追加する形に拡張できます（現状は10ロケーションで共通の4オプション運用を想定）。
-
-### 3.4 ページ
-
-| ページ | テンプレート | 必須メタフィールド |
+| URL | 内容 | Shopifyでの実現方法 |
 |---|---|---|
-| `propose-home` | `page.propose-home` | なし |
-| `propose-<slug>`（×10〜） | `page.propose-location` | `propose.location` = 対応する `propose_location` メタオブジェクト |
-| `propose-booking` | `page.propose-booking`（独自レイアウト `layout/propose.liquid` を使用） | なし |
+| `/pages/propose` | TOP | 通常のページ（ハンドル `propose`）＋テンプレート `page.propose-home` |
+| `/pages/propose/hawaii` など | ロケーション詳細 | **メタオブジェクトのWebページ機能**。定義 `propose` で「Webページとして公開」を有効にすると、エントリごとに `/pages/propose/<ハンドル>` のURLが付き、テンプレート `templates/metaobject/propose.json` で描画される |
+| `/pages/propose-booking?loc=&date=&time=` | 予約フロー | 通常のページ＋テンプレート `page.propose-booking`（`layout/propose.liquid`・noindex） |
 
-ページのメタフィールド `propose.location`（型: メタオブジェクト参照 → `propose_location`）を
-Settings → Custom data → Pages で1つ定義しておけば、あとは10ページぶん「ページを作成して
-メタフィールドで紐付ける」だけで詳細ページが揃います。コードの複製は発生しません。
+> 要確認：ハンドル `propose` の通常ページと、タイプ `propose` のメタオブジェクトWebページが
+> 同じ `/pages/propose` 配下で競合しないかを開発ストアで確認してください。競合する場合は
+> TOPのハンドルを `propose-top` にします（ロケーションURLは変わりません）。
 
-### 3.5 カート連携（オンライン予約の実体）
+メタオブジェクトのWebページにすることで、v1の「ページ＋メタフィールドで紐付け」が不要になり、
+**ロケーション追加はメタオブジェクトを1件作るだけ**になります。
 
-「予約を確定する」ボタンを押すと、`assets/propose-booking.js` が Cart AJAX API を叩きます。
+## 3. データモデル
 
-1. `POST /cart/add.js` — プランのバリアント（数量1）＋選択された追加オプションのバリアント
-   （数量1ずつ）を、以下の line item properties を付けて追加します。
+### 3.1 メタオブジェクト `propose`（1エントリ＝1ロケーション）
 
-   | プロパティキー | 内容 |
-   |---|---|
-   | `LOCATION` | 例 "HAWAII（ハワイ）" |
-   | `PLAN` | 例 "FLOWER" |
-   | `DATE` | `YYYY-MM-DD` |
-   | `TIME` | 例 "17:30" |
-   | `Meeting Point` | 集合場所 |
-   | `Reservation Group` | 同一予約の行を束ねるための生成ID（例 `PRP-LX9F2A`） |
+| 指示書の項目 | キー | 型 | 備考 / モックアップの対応キー |
+|---|---|---|---|
+| location_name | `location_name` | 単一行テキスト | 「ハワイ」 / `nameJa` |
+| location_name_en | `location_name_en` | 単一行テキスト | 「HAWAII」 / `name` |
+| hero_image | `hero_image` | ファイル（画像） | 未設定ならイラストの代替表示 / `photo` |
+| — | `hero_image_position` | 単一行テキスト | 例 `50% 60%`（トリミング位置） / `photoPos` |
+| gallery_images | `gallery_images` | ファイルのリスト（画像） | 2枚以上あればギャラリーを表示 |
+| catch_copy | `catch_copy` | 複数行テキスト | 「ハワイで、\n一生忘れない瞬間を。」 / `catch` |
+| — | `tagline` | 単一行テキスト | 詳細ページの見出し・探索の一覧 / `tagline` |
+| description | `description` | 複数行テキスト | 1〜2行 / `lede` |
+| base_price | （持たない） | — | **価格の正は商品バリアント**（§3.2）。表示は `plan_product` の最安バリアントから算出し、二重管理を避ける |
+| — | `plan_product` | 商品参照 | §3.2 |
+| duration | `duration` | 単一行テキスト | 「約2時間」 |
+| meeting_point | `meeting_point` | 単一行テキスト | 当日の流れ STEP 01・予約確認にも使用 |
+| proposal_story | `proposal_story` | 複数行テキスト | 任意。場所ごとの特別な演出の説明 |
+| proposal_steps | `proposal_steps` | メタオブジェクト参照のリスト → `propose_step` | 未設定なら共通の5ステップを使用 |
+| best_time | `best_time` | 単一行テキスト | 「17:30」 |
+| — | `best_time_note` | 単一行テキスト | 「夕日の時間」。**空なら BEST TIME を表示しない**（根拠のない「おすすめ」を出さない） |
+| — | `time_slots` | 単一行テキストのリスト | 「16:00」「17:30」… 場所ごとに異なる（カッパドキアは早朝のみ等） |
+| rain_plan | `rain_plan` | 複数行テキスト | 雨天時の対応 |
+| lead_time | `lead_time` | 整数 | 何日前まで予約可。「最短○日前まで」の表示とカレンダーの締切に使用 |
+| available_days | `blocked_slots` | 単一行テキストのリスト | `2026-09-28 17:30`（その枠のみ満席）/ `2026-09-28`（終日不可） |
+| — | `few_left_slots` | 単一行テキストのリスト | 同じ書式で「残りわずか」 |
+| faq | `faq` | メタオブジェクト参照のリスト → `propose_faq` | 場所固有の質問。共通FAQの前に表示 |
+| — | `tags` | 単一行テキストのリスト | `sea` `town` `sunset` `nature` `resort` `special`（旅行先未定の人向け探索） |
+| — | `popular` | 真偽値 | 並び順の調整に使用 |
 
-2. `POST /cart/update.js` — カート全体の `note`（サプライズ配慮の指示や要望メモ）と
-   `attributes.pp_reservation_group` を設定します。
-3. `routes.cart_url`（`/cart`）へ遷移 → 通常のShopifyカート/チェックボタンから決済へ。
-   決済・注文確認メール・配送設定・税・通貨表示はすべて Shopify 標準機能がそのまま使えます。
+補助メタオブジェクト:
+- `propose_step`: `no` / `title` / `text` / `image`（プロポーズの実写が揃ったら各ステップに設定）
+- `propose_faq`: `question` / `answer`
 
-こうすることで、「価格・税・通貨計算は本物のShopify Product/Variantに任せつつ、予約特有の
-付随情報（場所・日時・オプション）だけをline item propertiesで運ぶ」という、無料機能だけで
-成立する構成になっています。
+SEO: メタオブジェクトのWebページはエントリごとにSEOタイトル・説明を設定できます。
+「ハワイ プロポーズ」「ハワイ プロポーズプラン」などの検索語は、`title` とH1（`catch_copy`）、
+`description` に自然に含まれる構成です。
 
-## 4. コンポーネント構成
+### 3.2 商品（プラン）
+
+v1の「BASIC / FLOWER / PREMIUM の3つから選ぶ」比較型をやめ、**基本商品＋必要な演出** の構造にしました。
 
 ```
-sections/
-  propose-hero.liquid              LPファーストビュー（画像・コピー・CTAを編集可）
-  propose-destination-grid.liquid  目的地一覧（propose_locationメタオブジェクトを自動列挙）
-  propose-what-is.liquid           3ステップ説明 ＋ プラン概要（ブロックで編集可）
-  propose-moment.liquid            大写真セクション
-  propose-flow.liquid              当日の流れ・6ステップ（ブロックで編集可、LP用）
-  propose-invite.liquid            誘い方のヒント（ブロックで編集可）
-  propose-trust.liquid             信頼性セクション（捏造実績なし・テキストのみ）
-  propose-faq.liquid               FAQ（ブロックで編集可）＋ FAQPage構造化データ
-  propose-location-detail.liquid   ロケーション詳細ページ本体（メタオブジェクト駆動、1テンプレートで全ロケーション）
-  propose-booking.liquid           予約フロー本体（メタオブジェクト＋商品バリアントをJSに渡す）
+商品「HAWAII プロポーズプラン」（ロケーションごとに1商品）
+  バリアント: Standard        ¥128,000   ← PROPOSE PLAN（予約フローで初期選択）
+  バリアント: All inclusive   ¥203,000   ← 全部入り（4オプション込み。割引するならここで調整）
 
-snippets/
-  propose-location-card.liquid     目的地カード1枚
-  propose-flow-steps.liquid        6ステップの当日の流れ（ロケーション詳細ページ用の共通版）
-  propose-faq-list.liquid          FAQ（ロケーション詳細ページ用の共通版）
-  propose-schema.liquid            Product / BreadcrumbList 構造化データ
-
-assets/
-  propose.css                      デザインシステム一式。`.pp-root` 配下にスコープし、
-                                    既存テーマ（`.btn` `.eyebrow` `.container` 等）と衝突しないよう
-                                    すべてのクラス名に `pp-` を付与、CSSカスタムプロパティも
-                                    `--pp-*` に統一しています。
-  propose.js                       スクロールリビール演出のみ（ヘッダー挙動・FAQ開閉は各所で個別処理）
-  propose-booking.js               予約フローのステートマシン＋Cart AJAX連携
-
-templates/
-  page.propose-home.json
-  page.propose-location.json
-  page.propose-booking.json        独自レイアウト `layout/propose.liquid` を指定（ヘッダー/フッターなし）
-
-layout/
-  propose.liquid                   予約フロー専用の最小レイアウト（サプライズを意識し、
-                                    サイト全体のナビゲーションを出さない“予約に集中できる画面”）
+追加商品（全ロケーション共通、各1バリアント）
+  FLOWER 花束              ¥15,000
+  PRIVATE TRANSFER 専用送迎 ¥30,000   ← 選ぶと予約者情報に「滞在ホテル」欄が出る
+  EXTRA PHOTO 追加撮影30分  ¥20,000
+  SUNSET TIME ベストタイム確保 ¥10,000
 ```
 
-既存の `layout/theme.liquid` / `sections/header.liquid` / `sections/footer.liquid` は無変更です。
-`propose-home` / `propose-location` は通常どおり `layout/theme.liquid` を使うため、既存のヘッダー・
-フッター（ナビゲーションの `main_menu` にDESTINATIONS/PLANS/HOW IT WORKS/FAQ、`cta_label` に
-「予約する」、`cta_url` に `/pages/propose-booking` を設定）がそのまま使えます。
+- 含まれるもの（プロフォトグラファー／撮影30分／写真30枚以上／オンライン納品／日本語サポート）は
+  商品メタフィールド `propose.includes`（リスト）で管理。**画面では「当日の流れ」より下に置く**
+  （「撮影30分」を売り物の先頭にしない）。
+- All inclusive を選ぶと4オプションは「含まれています」表示になり、個別追加はできません。
 
-## 5. 管理画面から変更できるもの（コード変更不要）
+### 3.3 空き状況の扱い（正直な制約）
 
-| 項目 | 変更方法 |
+Shopify標準機能だけでは「時間枠ごとの在庫」を自動では持てません。v2は次の段階で運用します。
+
+1. **当面**: `blocked_slots` / `few_left_slots` を運営が管理画面で更新（本当に埋まっている枠だけを入れる。
+   ダミーの空き状況は作らない）。`lead_time` 以内の日は自動で「締切」。
+2. **拡張**: 予約管理システムやスタッフのシフト表とつなぎ、Flow／Webhookで上記2フィールドを自動更新。
+
+画面側の締切判定は使い勝手のためのもので、最終的な受付可否は注文後に運営が確認します
+（重複予約時の連絡手順を予約確認メールに記載）。
+
+### 3.4 カート連携
+
+v1から変更なし（`POST /cart/add.js` に line item properties を付与 → `/cart` → Shopify Checkout）。
+プロパティ: `LOCATION` / `PLAN` / `DATE` / `TIME` / `Meeting Point` / `Hotel`（送迎時）/ `Reservation Group`。
+サプライズ配慮の希望は `cart.note` と `attributes` に入れ、注文確認メールのテンプレートで件名を切り替えます。
+
+## 4. 画面設計（v2）
+
+### TOP `/pages/propose`
+1. **Hero** — 全画面写真／PROPOSE IN THE WORLD／「世界で、忘れられないプロポーズを。」／
+   CTA「旅行先から探す」＋テキストリンク「まだ旅行先が決まっていない方」
+2. **Destinations**（主役）— 「旅行先から、プロポーズを探す。」写真カード（名前・From 価格・プランを見る →）。
+   スマホ2列・PC5列（10件がちょうど2行）。横スクロールなし。下に「まだ旅行先が決まっていない方へ」
+3. **Last Minute** — 「出発の直前でも、間に合います。」最短○日前／14日分の空き状況／日本語サポート
+4. **Your Proposal** — 当日の5ステップ（待ち合わせ → 自然に撮影スタート → 二人の時間 → プロポーズ → 記念撮影）
+5. **Plan** — PROPOSE PLAN ¥108,000〜＋オプション＋全部入り
+6. **FAQ** — 5問表示、残りは「すべての質問を見る」
+7. **Not Decided Yet**（補助）— 海／街／夕日／大自然／リゾート／特別な景色 から1タップで候補表示
+8. 締めのCTA／フッター。スマホは下部固定「旅行先から探す」（Destinations表示中は非表示）
+
+### ロケーション詳細 `/pages/propose/<handle>`（最重要）
+指示書の「ユーザーが知りたい8項目」を上から順に解決する構成:
+1. **Hero** — 写真／PROPOSE IN HAWAII／HAWAII／「ハワイで、一生忘れない瞬間を。」／From ¥128,000／
+   CTA「空き状況を見る」「予約する」 … *どんな場所・いくら・予約できるか*
+2. **About＋Facts** — 1〜2行の紹介と、料金／所要時間／ベストタイム／受付締切／雨天時／日本語対応 … *何分・いつ・雨*
+3. **Your Proposal** — 大きな写真＋5ステップのタイムライン … *どんなプロポーズになるか*
+4. **Availability** — 「あなたの旅行日は、空いていますか？」今日から14日分→日付→時間枠（AVAILABLE / FEW LEFT / SOLD OUT）→
+   「この日時で予約する」で予約フローSTEP 3へ … *空いているか*
+5. **Plan** — その場所の料金・含まれるもの・オプション・全部入り
+6. **Rain & FAQ** — 雨天対応を最上段に、場所固有の質問を先に
+7. **締めのCTA** — 「あとは、日付を選ぶだけ。」＋ほかの旅行先
+8. スマホは下部固定「FROM ¥128,000｜この場所で予約する」
+
+### 予約フロー `/pages/propose-booking`
+- ステップは状況に応じて短縮: `[旅行先] → 日付 → 時間 → プラン・オプション → お客様情報 → 確認`
+- 上部に「STEP 3 / 5 プラン・オプション」と進捗バー、選択済み内容をチップ表示（「変更」で戻れる）
+- 旅行先・日付・時間は選んだ瞬間に次へ自動で進む（戻るボタンで修正可）
+- プランは PROPOSE PLAN が初期選択。オプションはチェックで追加
+- お客様情報は最小限（お名前・メール・任意の電話・送迎時のみホテル）＋サプライズ配慮＋規約同意
+- 画面下部に TOTAL と「次へ」を常時表示
+
+## 5. デザインルール
+
+- 色: paper `#faf9f6` / paper-deep `#f2efe8` / ink `#161512` / gold `#a3803f`。
+  ゴールドは英字ラベルと細い区切りのみ。ボタンは黒（写真の上は白）。黒背景＋金文字で高級感を出さない。
+- 書体: 英字 Cormorant Garamond（ラベル・地名・価格）、日本語 Noto Sans JP（見出し500／本文300）。
+- 見出しは必ず「英字ラベル → 日本語見出し（1〜2行）→ 短い説明（2〜3行まで）」の3階層。
+- カードUIは Destinations のみ。ほかは写真と余白、罫線で区切る。
+- アニメーションはフェード＋わずかな移動と写真のゆっくりしたズームのみ。スマホでは移動なし、
+  `prefers-reduced-motion` で全停止。
+
+## 6. モックアップ ↔ Shopify 対応表
+
+| `propose-lp/src/data.js` | Shopify |
 |---|---|
-| ロケーション名・コピー・写真・集合場所・所要時間・人気表示・空き状況 | Metaobjects → propose_location の該当エントリ |
-| プラン料金・プラン名 | 該当ロケーションの `plan_product` の商品バリアント価格 |
-| プラン内容（含まれるもの） | バリアントのメタフィールド `propose.includes` |
-| オプション名・価格・説明・どのプランに含むか | propose-booking セクションのブロック設定（テーマカスタマイザ） |
-| ヒーローの見出し・写真・CTA文言 | propose-hero セクション設定 |
-| 3ステップ／当日の流れ／誘い方のヒント／FAQ（LP側） | 各セクションのブロック（テーマカスタマイザで追加・削除・並び替え可） |
-| 信頼性セクションの本文 | propose-trust セクション設定 |
-| ナビゲーションメニュー・ヘッダーCTA | 既存の header セクション設定（`main_menu` / `cta_label` / `cta_url`） |
-| 新しいロケーションの追加 | Metaobjectを1件追加 → ページを1件作成しテンプレート `page.propose-location` を割当 → メタフィールド `propose.location` で紐付け → 目的地グリッドに自動反映 |
+| `name` / `nameJa` | `location_name_en` / `location_name` |
+| `catch` / `tagline` / `lede` | `catch_copy` / `tagline` / `description` |
+| `photo` / `photoPos` / `photoAlt` | `hero_image`（alt は画像の代替テキスト）/ `hero_image_position` |
+| `base` / `plans[]` | `plan_product` のバリアント（Standard / All inclusive） |
+| `OPTIONS[]` | 追加商品4点 |
+| `duration` / `meetingPoint` / `rainPlan` | `duration` / `meeting_point` / `rain_plan` |
+| `timeSlots` / `bestTime` / `bestTimeNote` | `time_slots` / `best_time` / `best_time_note` |
+| `leadDays` | `lead_time` |
+| `slotStatus()`（デモ用の擬似乱数） | `blocked_slots` / `few_left_slots`（実データ） |
+| `tags` | `tags` |
+| `PROPOSAL_STEPS` | `proposal_steps`（未設定時はセクション設定の共通5ステップ） |
+| `FAQ` | 共通FAQ（セクションのブロック）＋ `faq`（場所固有） |
 
-## 6. SEO / 構造化データ
+## 7. 実装状況と次の作業
 
-- 各ページで individual `<title>` / meta description（Shopifyページ設定の「検索エンジン向けの
-  ページタイトル」「メタディスクリプション」を使用）。
-- ロケーション詳細ページ: `Product`（AggregateOffer＝プラン価格帯）＋ `BreadcrumbList` を出力
-  （`snippets/propose-schema.liquid`）。
-- LP: `FAQPage` 構造化データ（`sections/propose-faq.liquid`）。
-- OGP / canonical は `layout/theme.liquid` の既存実装をそのまま利用（変更なし）。
-- 予約フローページ（`propose-booking`）は `<meta name="robots" content="noindex">` を指定し、
-  検索結果には出さずLP・詳細ページからの導線のみでアクセスさせます（決済に近い画面のため）。
+| 対象 | 状態 |
+|---|---|
+| モックアップ（TOP・ロケーション詳細・予約フロー） | **v2 完了**（375/390/430/1280/1440pxで確認済み） |
+| この設計書 | **v2 完了** |
+| `sections/*.liquid` ほか既存のLiquid | **v1のまま**。以下の移植が必要 |
 
-## 7. パフォーマンス / アクセシビリティ
+移植タスク:
+1. メタオブジェクト定義 `propose`（§3.1）と `propose_step` / `propose_faq` を作成し、Webページとして公開
+2. `templates/metaobject/propose.json` ＋ `sections/propose-location.liquid`（§4の構成、`metaobject.*` を参照）
+3. TOP用セクションを v2 構成に差し替え（`propose-what-is` / `propose-moment` / `propose-invite` /
+   `propose-trust` は廃止し、Last Minute・Plan・Not Decided Yet を追加）
+4. `sections/propose-booking.liquid` と `assets/propose-booking.js` を v2 のステップ短縮・プラン構造に更新
+5. 商品を Standard / All inclusive の2バリアント構成に変更、追加商品4点を作成
+6. v2 の `propose-lp/src/styles.css` を `.pp-root` スコープ・`pp-` 接頭辞で `assets/propose.css` に反映
 
-- 外部JSライブラリ・CSSフレームワーク不使用。バニラJS + バニラCSSのみ。
-- 画像は `image_url` フィルタでリサイズ済みURLを生成し、装飾用以外は `loading="lazy"`。
-- アニメーションはフェード＋わずかな移動のみ、`prefers-reduced-motion: reduce` で無効化。
-- フォーカス可視化（`:focus-visible`）、十分なタップ領域（最小48px）、コントラスト比を確保した
-  配色（濃いインク色 `#161512` on オフホワイト `#faf9f6`）。
-- カレンダー・オプションなどのインタラクティブ要素はすべて `<button>` で実装（キーボード操作可）。
+## 8. 写真について
 
-## 8. 既知の制約・今後の拡張ポイント
-
-- オプション価格は現状「全ロケーション共通」です。ロケーション別に価格を変えたい場合は、
-  `propose_location` にオプション商品参照フィールドを追加し、`propose-booking.liquid` の
-  データ組み立てをロケーション単位に変更してください。
-- 予約カレンダーの空き状況はメタオブジェクトの日付リストで手動管理する設計です。外部の
-  予約管理システム／スタッフシフトと連携する場合は、このフィールドをWebhookやFlowで
-  自動更新する仕組みに置き換えられます。
-- 「予約者情報」ステップで集めるのは花束・送迎に関わる要望と連絡用メモのみで、正式な氏名・
-  住所・支払い情報は Shopify Checkout 側で収集します（PCI DSS等の対応をShopify標準に委ねるため、
-  独自フォームでカード情報等は一切扱いません）。
+- 使用中: 宮古島・イタリア・パリ・カッパドキア・モルディブ・バリ・カンクン・エアーズロック（ご提供の8枚）。
+- **ハワイ**: ご提供の写真は Unsplash+ の透かし入りプレビュー（未購入の状態）だったため使用していません。
+  ライセンス購入後の透かしなし画像に差し替えてください。
+- **サントリーニ**: 写真未提供。イラストの代替表示（「PHOTO COMING SOON」）です。
+- **TOPのHero**: 指示書の「プロポーズ直前・プロポーズ中の一瞬」（人物が写った写真）が未提供のため、
+  現在はカッパドキアの風景写真を使用しています。
+- 差し替え方法（モックアップ）: `propose-lp/images/<ロケーションID>.jpg` を置いて `python3 propose-lp/build.py`。
+  写真がない場所は自動でイラスト表示になります。
