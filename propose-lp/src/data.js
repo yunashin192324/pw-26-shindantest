@@ -43,8 +43,8 @@
       id: "hawaii", name: "HAWAII", nameJa: "ハワイ", popular: true,
       catch: "ハワイで、\n一生忘れない瞬間を。",
       tagline: "夕日のビーチで、ふたりきりに。",
-      lede: "夕暮れのワイキキ。オレンジ色に染まる海を前に、ふたりだけの時間をつくります。",
-      photo: null, photoAlt: "夕暮れのハワイのビーチ", hue: ["#2c5f74", "#e08a4f"], motif: "palm",
+      lede: "ヤシの並木と緑の山々、そして夕暮れの海。オアフ島で、ふたりだけの時間をつくります。",
+      photo: "hawaii", photoAlt: "ヤシの並木の先にそびえるオアフ島の緑の山々", photoPos: "50% 45%", hue: ["#2c5f74", "#e08a4f"], motif: "palm",
       base: 128000, duration: "約2時間", meetingPoint: "ワイキキ・ホテル周辺（ご滞在先に合わせてご案内）",
       timeSlots: ["16:00", "16:30", "17:00", "17:30", "18:00"], bestTime: "17:30", bestTimeNote: "夕日の時間",
       leadDays: 3, rainPlan: "雨の場合は、翌日以降の空き枠へ無料で振替できます。", tags: ["sea", "sunset", "resort"]
@@ -64,7 +64,7 @@
       catch: "サントリーニで、\n一生忘れない瞬間を。",
       tagline: "白と青の街で。",
       lede: "断崖に広がる白い街と、エーゲ海に沈む夕日。世界でいちばん有名な夕景の中で。",
-      photo: null, photoAlt: "サントリーニ島の白い街並みとエーゲ海", hue: ["#1e4d8c", "#f4f1ea"], motif: "dome",
+      photo: "santorini", photoAlt: "イアの青いドームの教会とエーゲ海", photoPos: "60% 58%", hue: ["#1e4d8c", "#f4f1ea"], motif: "dome",
       base: 168000, duration: "約2時間", meetingPoint: "イア地区 展望テラス付近",
       timeSlots: ["17:00", "18:00", "19:00", "19:30"], bestTime: "19:30", bestTimeNote: "イアの夕日",
       leadDays: 5, rainPlan: "天候不良の場合は、翌日以降の空き枠へ無料で振替できます。", tags: ["town", "sunset", "special"]

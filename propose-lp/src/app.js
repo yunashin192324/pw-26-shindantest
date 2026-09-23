@@ -124,7 +124,7 @@
             '<div class="dest-name">' + esc(l.name) + "</div>" +
             '<div class="dest-ja">' + esc(l.nameJa) + "</div>" +
             '<div class="dest-price">From<span class="price">' + yen(l.fromPrice) + "</span></div>" +
-            '<span class="dest-more"><span class="sm-hide">プロポーズ</span>プランを見る <span aria-hidden="true">→</span></span>' +
+            '<span class="dest-more"><span><span class="sm-hide">プロポーズ</span>プランを見る</span><span aria-hidden="true">→</span></span>' +
           "</div>" +
         "</a>"
       );
