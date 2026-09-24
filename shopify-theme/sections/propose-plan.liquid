@@ -1,0 +1,43 @@
+{%- comment -%} TOP: one plan + options. Prices are the lowest across destinations. {%- endcomment -%}
+{%- liquid
+  assign min_std = 0
+  assign min_allin = 0
+  for loc in metaobjects.propose.values
+    assign plan = loc.plan_product.value
+    if plan
+      assign std = plan.variants.first.price
+      if min_std == 0 or std < min_std
+        assign min_std = std
+      endif
+      if plan.variants.size > 1
+        assign allin = plan.variants.last.price
+        if min_allin == 0 or allin < min_allin
+          assign min_allin = allin
+        endif
+      endif
+    endif
+  endfor
+-%}
+<section class="sec sec-deep" id="plan" aria-labelledby="plan-title">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="label">{{ section.settings.label | escape }}</span>
+      <h2 class="h2" id="plan-title">{{ section.settings.heading | escape | newline_to_br }}</h2>
+      {%- if section.settings.lede != blank %}<p class="lede">{{ section.settings.lede | escape }}</p>{% endif %}
+    </div>
+    {%- if min_allin == 0 -%}{%- assign min_allin = nil -%}{%- endif -%}
+    {% render 'propose-plan-box', standard_price: min_std, allin_price: min_allin, from: true %}
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "プロポーズ 料金",
+  "settings": [
+    { "type": "text", "id": "label", "label": "英語ラベル", "default": "Plan" },
+    { "type": "textarea", "id": "heading", "label": "見出し", "default": "料金は、\nひとつのプランから。" },
+    { "type": "text", "id": "lede", "label": "説明文", "default": "花束まで含めた、プロポーズプランが基本です。必要なものだけを足してください。" }
+  ],
+  "presets": [{ "name": "プロポーズ 料金" }]
+}
+{% endschema %}

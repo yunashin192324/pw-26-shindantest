@@ -1,0 +1,17 @@
+{%- comment -%} Footer for the propose layout. Policy links only appear once the policy exists in 設定 > ポリシー. {%- endcomment -%}
+<footer class="ft" id="ft">
+  <div class="wrap">
+    <div class="ft-top">
+      <a href="/pages/propose" class="hd-logo">PROPOSE<small>世界のプロポーズプラン</small></a>
+      <nav class="ft-links" aria-label="フッターメニュー">
+        <a href="/pages/propose#destinations">DESTINATIONS</a>
+        <a href="/pages/propose#faq">FAQ</a>
+        {%- if shop.terms_of_service %}<a href="{{ shop.terms_of_service.url }}">TERMS</a>{% endif %}
+        {%- if shop.privacy_policy %}<a href="{{ shop.privacy_policy.url }}">PRIVACY</a>{% endif %}
+        {%- if shop.refund_policy %}<a href="{{ shop.refund_policy.url }}">CANCEL POLICY</a>{% endif %}
+        <a href="{{ routes.root_url }}">{{ shop.name | upcase }}</a>
+      </nav>
+    </div>
+    <p class="ft-meta">&copy; {{ 'now' | date: '%Y' }} {{ shop.name }}</p>
+  </div>
+</footer>

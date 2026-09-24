@@ -1,0 +1,109 @@
+{
+  "layout": "propose",
+  "sections": {
+    "main": {
+      "type": "propose-location",
+      "settings": {},
+      "blocks": {
+        "b_1": {
+          "type": "step",
+          "settings": {
+            "title": "待ち合わせ",
+            "text": "{meeting_point}で、フォトグラファーがお二人をお迎えします。",
+            "highlight": false
+          }
+        },
+        "b_2": {
+          "type": "step",
+          "settings": {
+            "title": "自然に撮影スタート",
+            "text": "旅の記念撮影として始めるので、プロポーズだとは気づかれません。",
+            "highlight": false
+          }
+        },
+        "b_3": {
+          "type": "step",
+          "settings": {
+            "title": "二人の時間",
+            "text": "景色の中を歩く姿や、自然な会話を撮影します。",
+            "highlight": false
+          }
+        },
+        "b_4": {
+          "type": "step",
+          "settings": {
+            "title": "プロポーズ",
+            "text": "フォトグラファーは少し距離を取り、その瞬間だけを撮影します。",
+            "highlight": true
+          }
+        },
+        "b_5": {
+          "type": "step",
+          "settings": {
+            "title": "記念撮影",
+            "text": "指輪をつけたお二人を、ゆっくり撮影します。",
+            "highlight": false
+          }
+        },
+        "b_6": {
+          "type": "faq",
+          "settings": {
+            "question": "何日前まで予約できますか？",
+            "answer": "{location}は、撮影日の{lead_time}日前までリクエストできます。確定のご連絡は{reply_hours}時間以内です。"
+          }
+        },
+        "b_7": {
+          "type": "faq",
+          "settings": {
+            "question": "集合場所はどこですか？",
+            "answer": "{meeting_point}です。詳細は確定のご連絡でご案内します。"
+          }
+        },
+        "b_8": {
+          "type": "faq",
+          "settings": {
+            "question": "予約はすぐに確定しますか？",
+            "answer": "予約はリクエスト制です。フォトグラファーの手配を確認し、{reply_hours}時間以内に確定可否をメールでご連絡します。お支払いは確定のご連絡のあとです。"
+          }
+        },
+        "b_9": {
+          "type": "faq",
+          "settings": {
+            "question": "相手にプロポーズだと気づかれませんか？",
+            "answer": "「旅の記念撮影」として自然に始めます。予約確認の連絡も、控えめな件名を選べます。"
+          }
+        },
+        "b_10": {
+          "type": "faq",
+          "settings": {
+            "question": "現地で日本語は通じますか？",
+            "answer": "日本語サポートが付いています。当日の連絡も日本語で行えます。"
+          }
+        },
+        "b_11": {
+          "type": "faq",
+          "settings": {
+            "question": "キャンセルはできますか？",
+            "answer": "予約日の一定期間前まではキャンセル・返金が可能です。規定は予約確認画面とメールでご案内します。"
+          }
+        }
+      },
+      "block_order": [
+        "b_1",
+        "b_2",
+        "b_3",
+        "b_4",
+        "b_5",
+        "b_6",
+        "b_7",
+        "b_8",
+        "b_9",
+        "b_10",
+        "b_11"
+      ]
+    }
+  },
+  "order": [
+    "main"
+  ]
+}

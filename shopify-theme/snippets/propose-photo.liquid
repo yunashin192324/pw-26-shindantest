@@ -1,0 +1,33 @@
+{%- comment -%}
+  One photo block (.photo wrapper + responsive <img>).
+  Accepts:
+    image    — an image object (metaobject file field .value, or image_picker setting)
+    alt      — alt text (defaults to the image's own alt)
+    decorative — true when the photo repeats nearby text (alt="")
+    pos      — CSS object-position, e.g. "50% 60%"
+    sizes    — sizes attribute
+    eager    — true for the first screen (hero), everything else lazy-loads
+    class    — extra classes on the wrapper (e.g. "reveal-img")
+{%- endcomment -%}
+{%- liquid
+  assign pos = pos | default: '50% 50%'
+  assign sizes = sizes | default: '100vw'
+  assign alt_text = image.alt | default: alt | default: ''
+  if decorative
+    assign alt_text = ''
+  endif
+  assign img_style = 'object-position:' | append: pos
+  if eager
+    assign loading = 'eager'
+  else
+    assign loading = 'lazy'
+  endif
+-%}
+<div class="photo{% if class != blank %} {{ class }}{% endif %}">
+  {%- if image != blank -%}
+    {{ image | image_url: width: 2000 | image_tag: widths: '400, 600, 800, 1200, 1600, 2000', sizes: sizes, alt: alt_text, loading: loading, decoding: 'async', style: img_style }}
+  {%- else -%}
+    {{ 'image' | placeholder_svg_tag: 'pp-placeholder' }}
+    <span class="soon">Photo coming soon</span>
+  {%- endif -%}
+</div>

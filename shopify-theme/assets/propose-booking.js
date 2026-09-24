@@ -1,401 +1,417 @@
 /* =====================================================================
-   propose-booking.js (Shopify build)
-   -----------------------------------------------------------------
-   Same LOCATION → PLAN → DATE → TIME → OPTIONS → CUSTOMER → PAYMENT
-   state machine as /propose-lp/assets/js/propose-booking.js (the
-   mockup), adapted to:
-     - read real data from window.ProposeBookingConfig (rendered by
-       sections/propose-booking.liquid from propose_location
-       metaobjects + Product variants)
-     - add the plan variant + selected add-on variants to the real
-       cart via /cart/add.js, with the booking details attached as
-       line item properties (visible to both customer and merchant,
-       in checkout, the order, and packing slips)
-     - write the "surprise" note + a shared reservation-group id to
-       cart.attributes via /cart/update.js
-     - hand off to Shopify's own secure checkout at the PAYMENT step
+   propose-booking.js — booking REQUEST flow (/pages/propose-booking)
+   Ported from propose-lp/src/app.js (BOOKING).
+
+   Steps adapt to what is already known:
+     [location] → date → time → plan & options → your details → review
+   ?loc=&date=&time= (from a location page) skip the steps already answered.
+
+   Nothing is charged here. "予約をリクエストする" fills the hidden Shopify
+   contact form (#pp-request-form) and submits it; the store receives the
+   request by email, confirms within replyHours, then sends a draft-order
+   invoice. After Shopify redirects back (?contact_posted=true) the
+   completion screen is rebuilt from sessionStorage.
+   Depends on window.ProposeAvail from propose.js (loaded by the layout).
    ===================================================================== */
 (function () {
   "use strict";
-  var C = window.ProposeBookingConfig;
-  var root = document.getElementById("pp-booking-app");
-  if (!C || !root) return;
 
-  var STEPS = ["location", "plan", "date", "time", "options", "customer", "payment"];
-  var STEP_LABELS = { location: "LOCATION", plan: "PLAN", date: "DATE", time: "TIME", options: "OPTIONS", customer: "CUSTOMER", payment: "PAYMENT" };
-  var STORE_KEY = "ppBookingState";
+  function init() {
+    var A = window.ProposeAvail;
+    var dataEl = document.getElementById("pp-booking-data");
+    if (!A || !dataEl) return;
+    var C;
+    try { C = JSON.parse(dataEl.textContent); } catch (e) { return; }
 
-  function formatMoney(amount) {
-    var fmt = C.moneyFormat || "¥{{amount_no_decimals_with_comma_separator}}";
-    var noDecimals = Math.round(amount).toLocaleString("ja-JP");
-    return fmt
-      .replace("{{amount_no_decimals_with_comma_separator}}", noDecimals)
-      .replace("{{amount_with_comma_separator}}", noDecimals)
-      .replace("{{amount_no_decimals}}", Math.round(amount))
-      .replace("{{amount}}", Math.round(amount));
-  }
+    var $ = function (sel, root) { return (root || document).querySelector(sel); };
+    var $$ = function (sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); };
+    var esc = A.esc, STATUS = A.STATUS, DOW = A.DOW;
+    var STORE_KEY = "pp-request";
+    function money(c) { return A.formatMoney(c, C.moneyFormat); }
 
-  function readQuery() {
-    var p = new URLSearchParams(window.location.search);
-    return { loc: p.get("loc"), plan: p.get("plan") };
-  }
-  function getLocation(id) { return C.locations.filter(function (l) { return l.id === id; })[0] || null; }
+    C.locations = (C.locations || []).filter(function (l) { return l.plans && l.plans.length; });
+    C.locations.forEach(A.prepare);
+    C.options = C.options || [];
+    function getLocation(id) { return C.locations.filter(function (l) { return l.id === id; })[0] || null; }
+    function fromPrice(l) { return l.plans[0].price; }
 
-  function loadState() {
-    var s = null;
-    try { s = JSON.parse(sessionStorage.getItem(STORE_KEY) || "null"); } catch (e) { s = null; }
-    if (!s) s = { stepIndex: 0, locationId: null, planId: null, date: null, time: null, options: [], customer: {}, reservationGroup: null };
-    var q = readQuery();
-    if (q.loc && getLocation(q.loc)) { s.locationId = q.loc; if (s.stepIndex === 0) s.stepIndex = 1; }
-    if (q.plan) { s.planId = q.plan; if (s.stepIndex <= 1) s.stepIndex = 2; }
-    return s;
-  }
-  var state = loadState();
-  function save() { sessionStorage.setItem(STORE_KEY, JSON.stringify(state)); }
-  var calMonthOffset = 0;
+    var STEP_META = {
+      location: { ja: "旅行先", en: "DESTINATION" },
+      date: { ja: "日付", en: "DATE" },
+      time: { ja: "時間", en: "TIME" },
+      plan: { ja: "プラン・オプション", en: "PLAN" },
+      customer: { ja: "お客様情報", en: "YOUR DETAILS" },
+      confirm: { ja: "リクエスト内容の確認", en: "REVIEW" }
+    };
+    var bk = null;
+    var calOffset = 0;
 
-  function loc() { return state.locationId ? getLocation(state.locationId) : null; }
-  function plan() {
-    var l = loc();
-    if (!l || !state.planId) return null;
-    return l.plans.filter(function (p) { return p.id === state.planId; })[0] || null;
-  }
-  function planTier() {
-    var p = plan();
-    return p ? p.id : null; // "basic" | "flower" | "premium" (from handleized variant title)
-  }
-  function optionIsIncluded(opt) {
-    var tier = planTier();
-    if (tier === "flower") return !!opt.includedInFlower;
-    if (tier === "premium") return !!opt.includedInFlower || !!opt.includedInPremium;
-    return false;
-  }
-  function selectedOptions() {
-    return (C.options || []).filter(function (o) { return optionIsIncluded(o) || state.options.indexOf(o.id) > -1; });
-  }
-  function total() {
-    var p = plan();
-    if (!p) return 0;
-    var sum = p.price;
-    selectedOptions().forEach(function (o) { if (!optionIsIncluded(o)) sum += o.price; });
-    return sum;
-  }
-  function fmtDate(d) {
-    if (!d) return "";
-    var dt = new Date(d + "T00:00:00");
-    return dt.getFullYear() + "." + String(dt.getMonth() + 1).padStart(2, "0") + "." + String(dt.getDate()).padStart(2, "0") + "（" + "日月火水木金土"[dt.getDay()] + "）";
-  }
-  function availabilityFor(l, dateStr) {
-    if (l.blockedDates && l.blockedDates.indexOf(dateStr) > -1) return "soldout";
-    if (l.fewLeftDates && l.fewLeftDates.indexOf(dateStr) > -1) return "few";
-    return "available";
-  }
+    function bLoc() { return bk.loc ? getLocation(bk.loc) : null; }
+    function bPlan() { var l = bLoc(); return l ? l.plans.filter(function (p) { return p.id === bk.plan; })[0] || l.plans[0] : null; }
+    function isIncluded() { var p = bPlan(); return !!p && p.id === "allin"; }
+    function bOptions() { return C.options.filter(function (o) { return isIncluded() || bk.options.indexOf(o.id) > -1; }); }
+    function bTotal() {
+      var p = bPlan(); if (!p) return 0;
+      return bOptions().reduce(function (s, o) { return isIncluded() ? s : s + o.price; }, p.price);
+    }
+    function needsHotel() { return bOptions().some(function (o) { return o.requiresHotel; }); }
+    function hasSlots() { var l = bLoc(); return !!l && l.timeSlots.length > 0; }
+    function curStep() { return bk.steps[bk.i]; }
 
-  var stepperEl = document.getElementById("pp-stepper");
-  var mainEl = document.getElementById("pp-booking-main");
-  var bottomBar = document.getElementById("pp-booking-bottombar");
-  var bbAmount = document.getElementById("pp-bb-amount");
-  var bbNext = document.getElementById("pp-bb-next");
-  var bbBack = document.getElementById("pp-bb-back");
+    function stepsFor(withLocation) {
+      var s = withLocation ? ["location", "date"] : ["date"];
+      if (!bk.loc || hasSlots()) s.push("time");
+      return s.concat(["plan", "customer", "confirm"]);
+    }
 
-  function renderStepper() {
-    stepperEl.innerHTML = STEPS.map(function (key, i) {
-      var cls = "pp-stepper-item" + (i === state.stepIndex ? " is-active" : i < state.stepIndex ? " is-done" : "");
-      return '<div class="' + cls + '">' + STEP_LABELS[key] + "</div>";
-    }).join("");
-  }
+    function startBooking(params, saved) {
+      var l = params.loc && getLocation(params.loc);
+      bk = { loc: l ? l.id : null, date: null, time: null, plan: params.plan === "allin" ? "allin" : "standard", options: [], customer: {}, steps: [], i: 0 };
+      if (saved) {
+        bk.loc = saved.loc; bk.date = saved.date; bk.time = saved.time; bk.plan = saved.plan; bk.options = saved.options || []; bk.customer = saved.customer || {};
+        l = getLocation(bk.loc);
+      }
+      bk.steps = stepsFor(!l);
+      if (l && !saved && params.date && A.isOpen(A.dateStatus(l, params.date))) bk.date = params.date;
+      if (l && !saved && bk.date && params.time && l.timeSlots.indexOf(params.time) > -1 && A.isOpen(A.slotStatus(l, bk.date, params.time))) bk.time = params.time;
+      if (saved) bk.i = bk.steps.indexOf("confirm");
+      else bk.i = bk.steps.indexOf(!bk.loc ? "location" : !bk.date ? "date" : (hasSlots() && !bk.time) ? "time" : "plan");
+      calOffset = 0;
+      if (bk.date) {
+        var dd = new Date(bk.date + "T00:00:00"), t = A.today();
+        calOffset = (dd.getFullYear() - t.getFullYear()) * 12 + dd.getMonth() - t.getMonth();
+      }
+      var back = $("#bk-back-link");
+      back.href = l ? l.url : C.topUrl;
+      back.textContent = l ? "← " + l.name : "← TOP";
+      bRender();
+    }
 
-  function renderLocation() {
-    return (
-      '<h2>どこで、伝えますか？</h2><p class="pp-step-lede">目的地から、プロポーズの舞台を選んでください。</p>' +
-      '<div class="pp-loc-pick-grid">' +
-      C.locations.map(function (l) {
-        var sel = state.locationId === l.id ? " is-selected" : "";
-        var from = l.plans.length ? l.plans[0].price : 0;
-        return (
-          '<button type="button" class="pp-loc-pick-card' + sel + '" data-pp-loc="' + l.id + '">' +
-          '<span class="pp-ph" style="--c1:' + l.hue[0] + ";--c2:" + l.hue[1] + '"></span>' +
-          '<span class="pp-lp-scrim"></span>' +
-          '<span class="pp-lp-label"><strong>' + l.name + "</strong>" + formatMoney(from) + "〜</span>" +
-          "</button>"
-        );
-      }).join("") +
-      "</div>"
-    );
-  }
-  function bindLocation() {
-    mainEl.querySelectorAll("[data-pp-loc]").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var id = btn.getAttribute("data-pp-loc");
-        if (state.locationId !== id) { state.planId = null; state.date = null; state.time = null; state.options = []; }
-        state.locationId = id; save(); render();
-      });
-    });
-  }
+    function go(delta) {
+      var ni = bk.i + delta;
+      if (ni < 0 || ni >= bk.steps.length) return;
+      if (delta > 0 && !canNext()) return;
+      bk.i = ni;
+      bRender();
+    }
+    function validEmail(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v || ""); }
+    function canNext() {
+      switch (curStep()) {
+        case "location": return !!bk.loc;
+        case "date": return !!bk.date;
+        case "time": return !!bk.time;
+        case "plan": return true;
+        case "customer":
+          var c = bk.customer;
+          return !!(c.name && c.name.trim() && validEmail(c.email) && c.agree && (!needsHotel() || (c.hotel && c.hotel.trim())));
+        default: return false;
+      }
+    }
+    function autoNext() { setTimeout(function () { if (canNext()) go(1); }, 260); }
 
-  function renderPlan() {
-    var l = loc();
-    if (!l) return "<p>先にロケーションを選んでください。</p>";
-    return (
-      "<h2>プランを選ぶ</h2><p class=\"pp-step-lede\">" + l.name + "（" + l.nameJa + "）でのプランです。</p>" +
-      '<div class="pp-plan-pick-list">' +
-      l.plans.map(function (p) {
-        var sel = state.planId === p.id ? " is-selected" : "";
-        var lastInclude = p.includes.length ? p.includes[p.includes.length - 1] : "";
-        return (
-          '<button type="button" class="pp-plan-pick' + sel + '" data-pp-plan="' + p.id + '">' +
-          '<span><span class="pp-pp-name">' + p.name + '</span><span class="pp-pp-includes">' + lastInclude + "</span></span>" +
-          '<span class="pp-pp-price">' + formatMoney(p.price) + "</span>" +
-          "</button>"
-        );
-      }).join("") +
-      "</div>"
-    );
-  }
-  function bindPlan() {
-    mainEl.querySelectorAll("[data-pp-plan]").forEach(function (btn) {
-      btn.addEventListener("click", function () { state.planId = btn.getAttribute("data-pp-plan"); save(); render(); });
-    });
-  }
+    function bRender(errorMsg) {
+      var step = curStep(), total = bk.steps.length;
+      $("#bk-step-count").textContent = "STEP " + (bk.i + 1) + " / " + total + "　" + STEP_META[step].ja;
+      $("#bk-step-en").textContent = STEP_META[step].en;
+      $("#bk-bar-fill").style.width = ((bk.i + 1) / total * 100) + "%";
+      $("#bk-progress").classList.remove("hidden");
+      $("#bk-bar").classList.remove("hidden");
 
-  function buildMonthGrid(year, month) {
-    var first = new Date(year, month, 1), startDow = first.getDay();
-    var daysInMonth = new Date(year, month + 1, 0).getDate();
-    var cells = [];
-    for (var i = 0; i < startDow; i++) cells.push(null);
-    for (var d = 1; d <= daysInMonth; d++) cells.push(d);
-    return cells;
-  }
-  function renderDate() {
-    var l = loc();
-    if (!l) return "<p>先にロケーションを選んでください。</p>";
-    var today = new Date();
-    var base = new Date(today.getFullYear(), today.getMonth() + calMonthOffset, 1);
-    var y = base.getFullYear(), m = base.getMonth();
-    var cells = buildMonthGrid(y, m);
-    var dows = ["日", "月", "火", "水", "木", "金", "土"];
-    var todayStr = today.toISOString().slice(0, 10);
-    var grid = cells.map(function (d) {
-      if (!d) return '<span class="pp-cal-day is-empty"></span>';
-      var dateStr = y + "-" + String(m + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0");
-      var isPast = dateStr < todayStr;
-      var status = isPast ? "closed" : availabilityFor(l, dateStr);
-      var sel = state.date === dateStr ? " is-selected" : "";
-      var disabled = status === "soldout" || status === "closed";
-      var mark = status === "available" ? "○" : status === "few" ? "△" : status === "closed" ? "休" : "×";
-      return (
-        '<button type="button" class="pp-cal-day is-' + status + sel + '" data-pp-date="' + dateStr + '"' + (disabled ? " disabled" : "") + ">" +
-        "<span>" + d + "</span><span class=\"pp-cal-mark\">" + mark + "</span></button>"
-      );
-    }).join("");
-    return (
-      "<h2>日付を選ぶ</h2><p class=\"pp-step-lede\">" + l.name + "で予約可能な日付です。</p>" +
-      '<div class="pp-cal-nav"><button type="button" id="pp-cal-prev"' + (calMonthOffset <= 0 ? " disabled" : "") + ">← 前の月</button>" +
-      '<span class="pp-cal-month">' + y + "年" + (m + 1) + "月</span>" +
-      '<button type="button" id="pp-cal-next"' + (calMonthOffset >= 5 ? " disabled" : "") + ">次の月 →</button></div>" +
-      '<div class="pp-cal-grid">' + dows.map(function (dw) { return '<div class="pp-cal-dow">' + dw + "</div>"; }).join("") + grid + "</div>" +
-      '<div class="pp-cal-legend"><span><i class="pp-legend-dot available"></i>○ 空きあり</span><span><i class="pp-legend-dot few"></i>△ 残りわずか</span><span><i class="pp-legend-dot soldout"></i>× 満席 / 休</span></div>'
-    );
-  }
-  function bindDate() {
-    var prev = document.getElementById("pp-cal-prev"), next = document.getElementById("pp-cal-next");
-    if (prev) prev.addEventListener("click", function () { if (calMonthOffset > 0) { calMonthOffset--; renderCurrentStepOnly(); } });
-    if (next) next.addEventListener("click", function () { if (calMonthOffset < 5) { calMonthOffset++; renderCurrentStepOnly(); } });
-    mainEl.querySelectorAll(".pp-cal-day[data-pp-date]:not(:disabled)").forEach(function (btn) {
-      btn.addEventListener("click", function () { state.date = btn.getAttribute("data-pp-date"); state.time = null; save(); render(); });
-    });
-  }
+      var l = bLoc(), chips = [];
+      if (l && step !== "location") chips.push('<span class="chip"><span class="en">' + esc(l.name) + "</span>" + esc(l.nameJa) + '<button type="button" data-change="location">変更</button></span>');
+      if (bk.date && ["time", "plan", "customer", "confirm"].indexOf(step) > -1) chips.push('<span class="chip">' + A.fmtShort(bk.date) + (bk.time && step !== "time" ? " " + esc(bk.time) : "") + '<button type="button" data-change="date">変更</button></span>');
+      $("#bk-context").innerHTML = chips.join("");
 
-  function renderTime() {
-    var l = loc();
-    if (!l || !state.date) return "<p>先に日付を選んでください。</p>";
-    return (
-      "<h2>時間を選ぶ</h2><p class=\"pp-step-lede\">" + fmtDate(state.date) + " にご案内できる時間帯です。</p>" +
-      '<div class="pp-time-grid">' +
-      l.timeSlots.map(function (t) {
-        var sel = state.time === t ? " is-selected" : "";
-        var best = t === l.bestTime;
-        return '<button type="button" class="pp-time-pick' + sel + '" data-pp-time="' + t + '">' + t + (best ? '<span class="pp-best-tag">BEST TIME</span>' : "") + "</button>";
-      }).join("") +
-      "</div>"
-    );
-  }
-  function bindTime() {
-    mainEl.querySelectorAll("[data-pp-time]").forEach(function (btn) {
-      btn.addEventListener("click", function () { state.time = btn.getAttribute("data-pp-time"); save(); render(); });
-    });
-  }
+      var body = $("#bk-body");
+      body.innerHTML = '<div class="bk-step">' + (errorMsg ? '<p class="bk-error" role="alert">' + esc(errorMsg) + "</p>" : "") + RENDER[step]() + "</div>";
+      // Bind to the freshly rendered step, never to #bk-body itself (it persists; listeners would stack).
+      if (BIND[step]) BIND[step](body.firstChild);
+      updateBar();
+      window.scrollTo(0, 0);
+    }
+    function updateBar() {
+      var step = curStep();
+      $("#bk-total").textContent = bLoc() ? money(bTotal()) : "—";
+      $("#bk-prev").classList.toggle("hidden", bk.i === 0);
+      var next = $("#bk-next");
+      next.classList.toggle("hidden", step === "confirm");
+      next.textContent = step === "customer" ? "確認へ" : "次へ";
+      next.disabled = !canNext();
+    }
 
-  function renderOptions() {
-    if (!loc()) return "";
-    var opts = C.options || [];
-    return (
-      "<h2>オプションを選ぶ</h2><p class=\"pp-step-lede\">必要なものだけ追加してください。プランに含まれるものは自動で選択済みです。</p>" +
-      '<div class="pp-option-list">' +
-      opts.map(function (o) {
-        var included = optionIsIncluded(o);
-        var isSel = included || state.options.indexOf(o.id) > -1;
-        var cls = "pp-option-card" + (included ? " is-included" : "") + (isSel && !included ? " is-selected" : "");
-        return (
-          '<button type="button" class="' + cls + '" data-pp-opt="' + o.id + '"' + (included ? " disabled" : "") + ">" +
-          '<span><span class="pp-oc-name">' + o.name + (included ? '<span class="pp-included-tag">含む</span>' : "") + '</span><span class="pp-oc-desc">' + (o.desc || "") + "</span></span>" +
-          '<span style="display:flex;align-items:center;gap:12px;"><span class="pp-oc-price">' + (included ? "—" : "+" + formatMoney(o.price)) + '</span><span class="pp-oc-toggle">' + (isSel ? "✓" : "") + "</span></span>" +
-          "</button>"
-        );
-      }).join("") +
-      "</div>"
-    );
-  }
-  function bindOptions() {
-    mainEl.querySelectorAll(".pp-option-card:not(:disabled)").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var id = btn.getAttribute("data-pp-opt");
-        var idx = state.options.indexOf(id);
-        if (idx > -1) state.options.splice(idx, 1); else state.options.push(id);
-        save(); render();
-      });
-    });
-  }
+    function photoHTML(l) {
+      if (!l.photo) return '<div class="photo"></div>';
+      return '<div class="photo"><img src="' + esc(l.photo) + '" alt="" loading="lazy" decoding="async" style="object-position:' + esc(l.photoPos) + '"></div>';
+    }
 
-  function renderCustomer() {
-    var c = state.customer || {};
-    return (
-      "<h2>予約者情報</h2><p class=\"pp-step-lede\">ご本人（予約者）の情報をご入力ください。お支払い情報は次の画面（Shopifyの安全なチェックアウト）でご入力いただきます。</p>" +
-      '<div class="pp-field"><label for="pp-c-name">お名前</label><input id="pp-c-name" type="text" autocomplete="name" value="' + (c.name || "").replace(/"/g, "&quot;") + '" placeholder="山田 太郎"></div>' +
-      '<div class="pp-field"><label for="pp-c-email">メールアドレス</label><input id="pp-c-email" type="email" autocomplete="email" value="' + (c.email || "").replace(/"/g, "&quot;") + '" placeholder="you@example.com"></div>' +
-      '<div class="pp-field"><label for="pp-c-note">ご要望・共有事項（任意）</label><textarea id="pp-c-note" rows="3" placeholder="例：滞在ホテル名、記念日など">' + (c.note || "") + "</textarea></div>" +
-      '<div class="pp-checkbox-row" style="margin-bottom:14px;"><input type="checkbox" id="pp-c-surprise"' + (c.surprise ? " checked" : "") + '><label for="pp-c-surprise">相手にサプライズにしたいので、確認連絡は控えめな件名にしてほしい</label></div>' +
-      '<div class="pp-checkbox-row"><input type="checkbox" id="pp-c-agree"' + (c.agree ? " checked" : "") + '><label for="pp-c-agree">利用規約・キャンセルポリシーに同意する</label></div>'
-    );
-  }
-  function bindCustomer() {
-    ["name", "email", "note"].forEach(function (key) {
-      var el = document.getElementById("pp-c-" + key);
-      if (el) el.addEventListener("input", function () { state.customer[key] = el.value; save(); updateBottomBar(); });
-    });
-    ["surprise", "agree"].forEach(function (key) {
-      var el = document.getElementById("pp-c-" + key);
-      if (el) el.addEventListener("change", function () { state.customer[key] = el.checked; save(); updateBottomBar(); });
-    });
-  }
+    var RENDER = {
+      location: function () {
+        return '<h2 class="h2">どこへ行きますか？</h2><p class="lede">旅行先を選んでください。</p><div class="pick-grid">' +
+          C.locations.map(function (l) {
+            return '<button type="button" class="pick' + (bk.loc === l.id ? " is-selected" : "") + '" data-loc="' + esc(l.id) + '">' + photoHTML(l) +
+              '<span class="pick-name"><span class="en">' + esc(l.name) + '</span><span class="price">' + money(fromPrice(l)) + "〜</span></span></button>";
+          }).join("") + "</div>";
+      },
+      date: function () {
+        var l = bLoc(), t = A.today();
+        var base = new Date(t.getFullYear(), t.getMonth() + calOffset, 1);
+        var y = base.getFullYear(), m = base.getMonth();
+        var first = new Date(y, m, 1).getDay(), dim = new Date(y, m + 1, 0).getDate();
+        var cells = [];
+        for (var i = 0; i < first; i++) cells.push('<span class="empty"></span>');
+        for (var d = 1; d <= dim; d++) {
+          var iso = y + "-" + String(m + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+          var past = A.daysFromToday(iso) < 0;
+          var st = past ? "closed" : A.dateStatus(l, iso);
+          cells.push('<button type="button" class="day-btn is-' + st + (past ? " is-past" : "") + (bk.date === iso ? " is-selected" : "") + '" data-date="' + iso + '"' + (A.isOpen(st) ? "" : " disabled") +
+            ' aria-label="' + A.fmtDate(iso) + " " + STATUS[st].ja + '"><span class="dn">' + d + '</span><span class="ds">' + (past ? "" : STATUS[st].mark) + "</span></button>");
+        }
+        return '<h2 class="h2">撮影する日を選ぶ</h2><p class="lede">' + esc(l.nameJa) + "は" + l.leadDays + "日前までリクエストできます。旅行中の日付を選んでください。</p>" +
+          '<div class="cal-nav"><button type="button" data-cal="-1"' + (calOffset <= 0 ? " disabled" : "") + ' aria-label="前の月">←</button><span class="cal-month">' + y + "." + String(m + 1).padStart(2, "0") +
+          '</span><button type="button" data-cal="1"' + (calOffset >= 11 ? " disabled" : "") + ' aria-label="次の月">→</button></div>' +
+          '<div class="cal">' + DOW.map(function (w) { return '<span class="cal-dow">' + w + "</span>"; }).join("") + cells.join("") + "</div>" +
+          '<div class="cal-foot">' + A.LEGEND + "</div>" +
+          '<p class="note" style="margin-top:10px">※ 日時はリクエスト後、手配を確認してから確定します。</p>';
+      },
+      time: function () {
+        var l = bLoc();
+        return '<h2 class="h2">時間を選ぶ</h2><p class="lede">' + A.fmtDate(bk.date) + " に申し込める時間です。</p>" +
+          '<div class="slots" style="margin-top:0">' + l.timeSlots.map(function (t) {
+            var st = A.slotStatus(l, bk.date, t);
+            return '<button type="button" class="slot is-' + st + (bk.time === t ? " is-selected" : "") + '" data-time="' + esc(t) + '"' + (A.isOpen(st) ? "" : " disabled") + '><span class="t">' + esc(t) + '</span><span class="best">' +
+              (l.bestTime && t === l.bestTime ? "<b>BEST TIME</b>" + esc(l.bestTimeNote) : "") + '</span><span class="st">' + STATUS[st].en + "</span></button>";
+          }).join("") + "</div>";
+      },
+      plan: function () {
+        var l = bLoc();
+        var stdDesc = (C.includes || []).filter(function (x) { return /撮影|花束|写真|日本語/.test(x); }).join("・");
+        return '<h2 class="h2">プランとオプション</h2><p class="lede">基本のプロポーズプランは選択済みです。必要なものだけ追加してください。</p>' +
+          (l.plans.length > 1 ? '<div class="plan-toggle" role="radiogroup" aria-label="プラン">' + l.plans.map(function (p) {
+            var desc = p.id === "standard" ? stdDesc : "プロポーズプラン＋" + C.options.length + "つのオプションすべて";
+            var on = bPlan().id === p.id;
+            return '<button type="button" role="radio" aria-checked="' + on + '" class="plan-opt' + (on ? " is-selected" : "") + '" data-plan="' + p.id + '"><span class="radio"></span><span><span class="en">' +
+              esc(p.name) + "</span><p>" + esc(desc) + '</p></span><span class="price">' + money(p.price) + "</span></button>";
+          }).join("") + "</div>" : '<div class="plan-toggle"><div class="plan-opt is-selected"><span class="radio"></span><span><span class="en">PROPOSE PLAN</span><p>' + esc(stdDesc) + '</p></span><span class="price">' + money(l.plans[0].price) + "</span></div></div>") +
+          (C.options.length ? '<p class="sub-h">Option</p>' + C.options.map(function (o) {
+            var inc = isIncluded(), on = inc || bk.options.indexOf(o.id) > -1;
+            return '<button type="button" role="checkbox" aria-checked="' + on + '" class="opt-pick' + (on ? " is-on" : "") + '" data-opt="' + esc(o.id) + '"' + (inc ? " disabled" : "") + '><span class="box">' + (on ? "✓" : "") +
+              '</span><span><span class="en">' + esc(o.name) + (o.nameJa ? "<span>" + esc(o.nameJa) + "</span>" : "") + "</span><p>" + esc(o.desc) + '</p></span><span class="price">' + (inc ? "含まれています" : "+" + money(o.price)) + "</span></button>";
+          }).join("") : "");
+      },
+      customer: function () {
+        var c = bk.customer;
+        function f(id, label, type, req, ac, ph) {
+          return '<div class="field"><label for="c-' + id + '">' + label + (req ? '<span class="req">必須</span>' : '<span class="req" style="color:var(--ink-faint)">任意</span>') + "</label>" +
+            '<input id="c-' + id + '" type="' + type + '" autocomplete="' + ac + '" value="' + esc(c[id] || "") + '" placeholder="' + ph + '"' + (req ? " required" : "") + "></div>";
+        }
+        var terms = C.termsUrl ? '<a href="' + esc(C.termsUrl) + '" target="_blank" rel="noopener" style="text-decoration:underline">利用規約・キャンセルポリシー</a>' : "利用規約・キャンセルポリシー";
+        return '<h2 class="h2">ご予約者さまの情報</h2><p class="lede">確定のご連絡と当日の連絡に使います。この時点でのお支払いはありません。</p>' +
+          f("name", "お名前", "text", true, "name", "山田 太郎") +
+          f("email", "メールアドレス", "email", true, "email", "you@example.com") +
+          f("phone", "電話番号（当日の連絡用）", "tel", false, "tel", "090-0000-0000") +
+          (needsHotel() ? f("hotel", "ご滞在ホテル（送迎用）", "text", true, "off", "例：ハレクラニ") : "") +
+          '<label class="check"><input type="checkbox" id="c-surprise"' + (c.surprise ? " checked" : "") + "><span>サプライズなので、メールは控えめな件名にしてほしい</span></label>" +
+          '<label class="check"><input type="checkbox" id="c-flex"' + (c.flex ? " checked" : "") + "><span>希望の時間が難しい場合、同じ日の別の時間でもよい</span></label>" +
+          '<label class="check"><input type="checkbox" id="c-agree"' + (c.agree ? " checked" : "") + "><span>" + terms + "に同意する</span></label>";
+      },
+      confirm: function () {
+        return '<h2 class="h2">リクエスト内容の確認</h2><p class="lede">この内容でリクエストを送ります。フォトグラファーの手配を確認し、' + C.replyHours + "時間以内に確定可否をご連絡します。</p>" + summaryHTML(bk) +
+          '<button type="button" class="btn btn-block" id="bk-send">予約をリクエストする <span class="arrow" aria-hidden="true">→</span></button>' +
+          '<p class="note" style="margin-top:12px;text-align:center">この時点ではお支払いは発生しません。予約の確定後に、お支払いのご案内をお送りします。</p>';
+      }
+    };
 
-  function summaryRows() {
-    var l = loc(), p = plan();
-    var rows = [
-      ["LOCATION", l ? l.name + "（" + l.nameJa + "）" : "—"],
-      ["PLAN", p ? p.name : "—"],
-      ["DATE", state.date ? fmtDate(state.date) : "—"],
-      ["TIME", state.time || "—"],
-      ["MEETING POINT", l ? l.meetingPoint : "—"]
-    ];
-    var opts = selectedOptions().filter(function (o) { return !optionIsIncluded(o); });
-    rows.push(["OPTIONS", opts.length ? opts.map(function (o) { return o.name; }).join("、") : "なし"]);
-    return rows;
-  }
-  function renderPayment() {
-    return (
-      "<h2>内容の確認</h2><p class=\"pp-step-lede\">この内容でよろしければ、Shopifyの安全なチェックアウトへ進みます。</p>" +
-      '<div class="pp-summary-card">' +
-      summaryRows().map(function (r) { return '<div class="pp-summary-row"><span class="pp-sr-label">' + r[0] + '</span><span class="pp-sr-value">' + r[1] + "</span></div>"; }).join("") +
-      '<div class="pp-summary-row pp-total"><span class="pp-sr-label">TOTAL</span><span class="pp-sr-value">' + formatMoney(total()) + "</span></div>" +
-      "</div>" +
-      '<div id="pp-confirm-error" role="alert" style="display:none;color:#a3402f;font-size:.85rem;margin-bottom:14px;"></div>' +
-      '<button type="button" class="pp-btn pp-btn-primary pp-btn-block" id="pp-confirm-btn">予約内容をカートに入れて、お支払いへ進む</button>'
-    );
-  }
-  function bindPayment() {
-    var btn = document.getElementById("pp-confirm-btn");
-    if (btn) btn.addEventListener("click", submitBooking);
-  }
+    // Works on the live state or on a saved copy (completion screen after the redirect).
+    function describe(s) {
+      var l = getLocation(s.loc);
+      var p = l && (l.plans.filter(function (x) { return x.id === s.plan; })[0] || l.plans[0]);
+      var inc = !!p && p.id === "allin";
+      var chosen = C.options.filter(function (o) { return inc || (s.options || []).indexOf(o.id) > -1; });
+      var extra = inc ? [] : chosen;
+      var total = p ? extra.reduce(function (sum, o) { return sum + o.price; }, p.price) : 0;
+      return { l: l, p: p, inc: inc, extra: extra, total: total };
+    }
+    function summaryHTML(s) {
+      var x = describe(s), l = x.l, p = x.p;
+      if (!l || !p) return "";
+      var rows = [
+        ["Destination", esc(l.name) + "（" + esc(l.nameJa) + "）"],
+        ["Date", A.fmtDate(s.date, true)]
+      ];
+      if (s.time) rows.push(["Time", esc(s.time) + (l.bestTime && s.time === l.bestTime ? "<small>BEST TIME・" + esc(l.bestTimeNote) + "</small>" : "")]);
+      rows.push(["Meeting", esc(l.meetingPoint || "確定のご連絡でご案内します")]);
+      rows.push(["Plan", esc(p.name) + "<small>" + money(p.price) + "</small>"]);
+      if (s.time) rows.push(["Flexible", s.customer && s.customer.flex ? "同じ日の別の時間でも可" : "希望の時間のみ"]);
+      rows.push(["Option", x.extra.length ? x.extra.map(function (o) { return esc(o.nameJa || o.name) + " +" + money(o.price); }).join("<br>") : (x.inc ? "すべて含まれています" : "なし")]);
+      return '<dl class="summary">' + rows.map(function (r) { return '<div class="sum-row"><dt>' + r[0] + "</dt><dd>" + r[1] + "</dd></div>"; }).join("") +
+        '<div class="sum-total"><dt>TOTAL<small>確定後のお支払い</small></dt><dd class="price">' + money(x.total) + "</dd></div></dl>";
+    }
 
-  async function submitBooking() {
-    var btn = document.getElementById("pp-confirm-btn");
-    var errEl = document.getElementById("pp-confirm-error");
-    var l = loc(), p = plan();
-    if (!l || !p || !state.date || !state.time) { showError("内容が不足しています。前のステップを確認してください。"); return; }
-    btn.disabled = true;
-    btn.textContent = "処理しています…";
-    errEl.style.display = "none";
-    try {
-      state.reservationGroup = "PRP-" + Date.now().toString(36).toUpperCase();
-      var baseProps = {
-        LOCATION: l.name + "（" + l.nameJa + "）",
-        PLAN: p.name,
-        DATE: state.date,
-        TIME: state.time,
-        "Meeting Point": l.meetingPoint,
-        "Reservation Group": state.reservationGroup
+    var BIND = {
+      location: function (b) {
+        b.addEventListener("click", function (e) {
+          var btn = e.target.closest("[data-loc]"); if (!btn) return;
+          if (bk.loc !== btn.getAttribute("data-loc")) { bk.date = null; bk.time = null; }
+          bk.loc = btn.getAttribute("data-loc");
+          // The time step only exists for destinations with fixed time slots.
+          var rest = stepsFor(true);
+          bk.steps = rest;
+          $$("[data-loc]", b).forEach(function (x) { x.classList.toggle("is-selected", x === btn); });
+          updateBar(); autoNext();
+        });
+      },
+      date: function (b) {
+        b.addEventListener("click", function (e) {
+          var c = e.target.closest("[data-cal]:not(:disabled)");
+          if (c) { calOffset += Number(c.getAttribute("data-cal")); bRender(); return; }
+          var d = e.target.closest(".day-btn:not(:disabled)"); if (!d) return;
+          if (bk.date !== d.getAttribute("data-date")) bk.time = null;
+          bk.date = d.getAttribute("data-date");
+          $$(".day-btn", b).forEach(function (x) { x.classList.toggle("is-selected", x === d); });
+          updateBar(); autoNext();
+        });
+      },
+      time: function (b) {
+        b.addEventListener("click", function (e) {
+          var t = e.target.closest(".slot:not(:disabled)"); if (!t) return;
+          bk.time = t.getAttribute("data-time");
+          $$(".slot", b).forEach(function (x) { x.classList.toggle("is-selected", x === t); });
+          updateBar(); autoNext();
+        });
+      },
+      plan: function (b) {
+        b.addEventListener("click", function (e) {
+          var p = e.target.closest("[data-plan]"), o = e.target.closest("[data-opt]:not(:disabled)");
+          if (p) { bk.plan = p.getAttribute("data-plan"); if (bk.plan === "allin") bk.options = []; bRender(); }
+          if (o) {
+            var id = o.getAttribute("data-opt"), i = bk.options.indexOf(id);
+            if (i > -1) bk.options.splice(i, 1); else bk.options.push(id);
+            bRender();
+          }
+        });
+      },
+      customer: function (b) {
+        ["name", "email", "phone", "hotel"].forEach(function (k) {
+          var el = $("#c-" + k, b);
+          if (el) el.addEventListener("input", function () { bk.customer[k] = el.value; updateBar(); });
+        });
+        ["surprise", "flex", "agree"].forEach(function (k) {
+          var el = $("#c-" + k, b);
+          el.addEventListener("change", function () { bk.customer[k] = el.checked; updateBar(); });
+        });
+      },
+      confirm: function (b) {
+        $("#bk-send", b).addEventListener("click", function () { send(this); });
+      }
+    };
+
+    /* ---------------- submit via Shopify contact form ---------------- */
+    function requestText(s, code) {
+      var x = describe(s), l = x.l, p = x.p, c = s.customer || {};
+      var lines = [
+        "【プロポーズ予約リクエスト】" + code,
+        "旅行先: " + l.name + "（" + l.nameJa + "）",
+        "撮影日: " + A.fmtDate(s.date, true),
+        "時間: " + (s.time ? s.time + (l.bestTime && s.time === l.bestTime ? "（BEST TIME・" + l.bestTimeNote + "）" : "") : "未指定（確定時に相談）"),
+        "時間の調整: " + (c.flex ? "同じ日の別の時間でも可" : "希望の時間のみ"),
+        "集合場所: " + (l.meetingPoint || "-"),
+        "プラン: " + p.name + " " + money(p.price),
+        "オプション: " + (x.extra.length ? x.extra.map(function (o) { return (o.nameJa || o.name) + " +" + money(o.price); }).join(" / ") : (x.inc ? "すべて含む" : "なし")),
+        "合計: " + money(x.total),
+        "",
+        "お名前: " + (c.name || ""),
+        "メール: " + (c.email || ""),
+        "電話: " + (c.phone || "-"),
+        "滞在ホテル: " + (c.hotel || "-"),
+        "サプライズ配慮: " + (c.surprise ? "控えめな件名で連絡" : "なし"),
+        "",
+        C.replyHours + "時間以内に確定可否を返信してください。"
+      ];
+      return lines.join("\n");
+    }
+    function send(btn) {
+      var form = document.getElementById("pp-request-form");
+      if (!form) return;
+      var code = "PRP-" + String(new Date().getFullYear()).slice(2) + Math.random().toString(36).slice(2, 7).toUpperCase();
+      var x = describe(bk), l = x.l, c = bk.customer;
+      var values = {
+        name: c.name, email: c.email, phone: c.phone || "", code: code,
+        location: l.name + "（" + l.nameJa + "）",
+        date: A.fmtDate(bk.date, true),
+        time: bk.time || "未指定",
+        flexible: c.flex ? "同じ日の別の時間でも可" : "希望の時間のみ",
+        plan: x.p.name + " " + money(x.p.price),
+        options: x.extra.length ? x.extra.map(function (o) { return (o.nameJa || o.name) + " +" + money(o.price); }).join(" / ") : (x.inc ? "すべて含む" : "なし"),
+        total: money(x.total),
+        hotel: c.hotel || "",
+        surprise: c.surprise ? "控えめな件名で連絡" : "なし",
+        body: requestText(bk, code)
       };
-      var items = [{ id: p.variantId, quantity: 1, properties: baseProps }];
-      selectedOptions().forEach(function (o) {
-        if (optionIsIncluded(o)) return;
-        var props = Object.assign({}, baseProps, { "For Reservation": l.name + " / " + state.date + " " + state.time });
-        items.push({ id: o.variantId, quantity: 1, properties: props });
-      });
-
-      var addRes = await fetch(C.cartAddUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ items: items })
-      });
-      if (!addRes.ok) throw new Error("cart-add-failed");
-
-      var note = (state.customer.note || "");
-      if (state.customer.surprise) note = "【サプライズ配慮：件名を控えめに】\n" + note;
-      await fetch(C.cartUpdateUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ note: note, attributes: { pp_reservation_group: state.reservationGroup } })
-      });
-
-      sessionStorage.removeItem(STORE_KEY);
-      window.location.href = C.cartUrl || "/cart";
-    } catch (err) {
-      showError("カートへの追加に失敗しました。通信環境をご確認のうえ、もう一度お試しください。");
-      btn.disabled = false;
-      btn.textContent = "予約内容をカートに入れて、お支払いへ進む";
+      $$("[data-f]", form).forEach(function (el) { el.value = values[el.getAttribute("data-f")] || ""; });
+      try {
+        sessionStorage.setItem(STORE_KEY, JSON.stringify({ code: code, state: { loc: bk.loc, date: bk.date, time: bk.time, plan: bk.plan, options: bk.options, customer: bk.customer } }));
+      } catch (e) { /* completion screen falls back to a generic message */ }
+      btn.disabled = true;
+      btn.textContent = "送信しています…";
+      form.submit();
     }
-    function showError(msg) { errEl.textContent = msg; errEl.style.display = "block"; }
-  }
 
-  function canAdvance() {
-    switch (STEPS[state.stepIndex]) {
-      case "location": return !!state.locationId;
-      case "plan": return !!state.planId;
-      case "date": return !!state.date;
-      case "time": return !!state.time;
-      case "options": return true;
-      case "customer": return !!(state.customer.name && state.customer.email && state.customer.agree);
-      default: return false;
+    function renderDone(saved) {
+      var s = saved && saved.state, c = (s && s.customer) || {};
+      $("#bk-progress").classList.add("hidden");
+      $("#bk-bar").classList.add("hidden");
+      $("#bk-context").innerHTML = "";
+      var l = s && getLocation(s.loc);
+      $("#bk-body").innerHTML =
+        '<div class="done bk-step">' +
+          '<span class="label">Request received.</span>' +
+          '<h2 class="h2">リクエストを、<br>受け付けました。</h2>' +
+          '<p class="lede">' + (saved ? "リクエスト番号 <b class=\"en\" style=\"font-weight:600\">" + esc(saved.code) + "</b><br>" : "") +
+            "まだ予約は確定していません。" + C.replyHours + "時間以内に、" + (c.email ? esc(c.email) + " へ" : "ご入力のメールアドレスへ") + "確定可否をご連絡します。</p>" +
+          (s && l ? summaryHTML(s) : "") +
+          '<ol class="next-steps">' +
+            "<li><b>01</b><span>フォトグラファーの手配を確認し、" + C.replyHours + "時間以内にメールでご連絡します" + (c.surprise ? "（控えめな件名で送信）" : "") + "。" +
+              (c.flex ? "希望の時間が難しい場合は、同じ日の別の時間をご案内します。" : "ご希望の日時が難しい場合は、近い日時をご提案します。") + "</span></li>" +
+            "<li><b>02</b><span>確定のメールにあるリンクからお支払いください。お支払いの完了で、予約が確定します。</span></li>" +
+            "<li><b>03</b><span>撮影日の2日前までに、フォトグラファーから集合場所の詳細をお送りします。" + (l && l.meetingPoint ? "当日は " + esc(l.meetingPoint) + " へ。" : "") + "</span></li>" +
+          "</ol>" +
+          '<a class="btn btn-ghost" href="' + esc(C.topUrl) + '">TOPへ戻る</a>' +
+        "</div>";
+      window.scrollTo(0, 0);
+    }
+
+    $("#bk-next").addEventListener("click", function () { go(1); });
+    $("#bk-prev").addEventListener("click", function () { go(-1); });
+    $("#bk-context").addEventListener("click", function (e) {
+      var c = e.target.closest("[data-change]"); if (!c) return;
+      if (c.getAttribute("data-change") === "location") {
+        if (bk.steps[0] !== "location") bk.steps = stepsFor(true);
+        bk.i = 0;
+      } else {
+        bk.i = bk.steps.indexOf("date");
+      }
+      bRender();
+    });
+
+    /* ---------------- start ---------------- */
+    var saved = null;
+    try { saved = JSON.parse(sessionStorage.getItem(STORE_KEY) || "null"); } catch (e) { saved = null; }
+    var params = {};
+    new URLSearchParams(location.search).forEach(function (v, k) { params[k] = v; });
+
+    if (document.getElementById("pp-request-ok")) {
+      renderDone(saved);
+      try { sessionStorage.removeItem(STORE_KEY); } catch (e) { /* ignore */ }
+    } else if (document.getElementById("pp-request-error") && saved && getLocation(saved.state.loc)) {
+      startBooking({}, saved.state);
+      bRender("送信できませんでした。" + (document.getElementById("pp-request-error").getAttribute("data-message") || "") + " 内容をご確認のうえ、もう一度お試しください。");
+    } else {
+      startBooking(params, null);
     }
   }
-  function updateBottomBar() {
-    bbAmount.textContent = plan() ? formatMoney(total()) : "—";
-    var last = state.stepIndex === STEPS.length - 1;
-    bbNext.classList.toggle("pp-hidden", last);
-    bbBack.disabled = state.stepIndex === 0;
-    if (!last) bbNext.disabled = !canAdvance();
-  }
-  function goNext() { if (canAdvance() && state.stepIndex < STEPS.length - 1) { state.stepIndex++; save(); render(); } }
-  function goBack() { if (state.stepIndex > 0) { state.stepIndex--; save(); render(); } }
 
-  var RENDERERS = { location: renderLocation, plan: renderPlan, date: renderDate, time: renderTime, options: renderOptions, customer: renderCustomer, payment: renderPayment };
-  var BINDERS = { location: bindLocation, plan: bindPlan, date: bindDate, time: bindTime, options: bindOptions, customer: bindCustomer, payment: bindPayment };
-
-  function renderCurrentStepOnly() {
-    var key = STEPS[state.stepIndex];
-    mainEl.innerHTML = RENDERERS[key]();
-    BINDERS[key]();
-    updateBottomBar();
-  }
-  function render() {
-    renderStepper();
-    calMonthOffset = 0;
-    renderCurrentStepOnly();
-    window.scrollTo({ top: 0, behavior: "auto" });
-  }
-
-  bbNext.addEventListener("click", goNext);
-  bbBack.addEventListener("click", goBack);
-  render();
+  // This file is deferred and sits before propose.js in the document, so it can run
+  // first; DOMContentLoaded fires only after every deferred script has executed.
+  if (window.ProposeAvail || document.readyState === "complete") init();
+  else document.addEventListener("DOMContentLoaded", init);
 })();

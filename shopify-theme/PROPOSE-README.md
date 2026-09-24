@@ -5,7 +5,8 @@
 
 - **動くモックアップ（v2・完成）**: `/propose-lp/all-in-one.html`（1ファイル・オフライン可）
   ソースは `/propose-lp/src/`、ビルドは `python3 propose-lp/build.py`
-- **このディレクトリのLiquid（v1のまま・移植が必要）**: §7 を参照
+- **Shopify用のLiquid（v2・実装済み）**: `layout/propose.liquid`・`sections/propose-*`・`snippets/propose-*`・`templates/`・`assets/propose*`
+- **本番の設定手順**: `PROPOSE-SETUP.md`（管理画面での作業を順番に説明）
 
 モックアップの `src/data.js` は、下記メタオブジェクトのフィールドと1対1で対応するように作ってあります。
 Liquidへの移植は「名前の置き換え」で済み、構造の再設計は不要です（対応表は §6）。
@@ -52,6 +53,10 @@ Google / Instagram
 ## 3. データモデル
 
 ### 3.1 メタオブジェクト `propose`（1エントリ＝1ロケーション）
+
+> 実装で使っているフィールドの確定版は `PROPOSE-SETUP.md` §4.2 です。下の表のうち `gallery_images` / `proposal_story` /
+> `proposal_steps` / `faq` / `popular` は将来の拡張用で、v2 のテーマでは使っていません（当日の流れと FAQ は
+> テーマエディタのブロックで共通管理し、`{meeting_point}` などの置き換えで場所ごとの内容にしています）。
 
 | 指示書の項目 | キー | 型 | 備考 / モックアップの対応キー |
 |---|---|---|---|
@@ -128,7 +133,7 @@ v1の「BASIC / FLOWER / PREMIUM の3つから選ぶ」比較型をやめ、**�
 2. **拡張**: 予約管理システムやスタッフのシフト表とつなぎ、Flow／Webhookで上記2フィールドを自動更新。
 
 「受付中」でも確定ではありません。確定は運営がリクエストを確認してから行います。
-返信までの時間（モックアップでは24時間・仮の値）はショップのメタフィールド `propose.reply_hours` に置き、
+返信までの時間（モックアップでは24時間・仮の値）はメタオブジェクト `propose_settings`（1件）の `reply_hours` に置き、
 画面の各所（Last Minute・受付締切・予約フロー・完了画面・FAQ）で同じ値を表示します。
 予約者は「希望の時間が難しい場合、同じ日の別の時間でもよい」にチェックできます（代替案の提示を早くするため）。
 
@@ -208,9 +213,9 @@ v1の「BASIC / FLOWER / PREMIUM の3つから選ぶ」比較型をやめ、**�
 | `catch` / `tagline` / `lede` | `catch_copy` / `tagline` / `description` |
 | `photo` / `photoPos` / `photoAlt` | `hero_image`（alt は画像の代替テキスト）/ `hero_image_position` |
 | `base` / `plans[]` | `plan_product` のバリアント（Standard / All inclusive） |
-| `OPTIONS[]` | 追加商品3点 |
-| `PLAN_INCLUDES` | 商品メタフィールド `propose.includes` |
-| `REPLY_HOURS` | ショップメタフィールド `propose.reply_hours` |
+| `OPTIONS[]` | 追加商品3点（自動コレクション `propose-options`、商品メタフィールド `propose.name_ja` / `short_description` / `requires_hotel`） |
+| `PLAN_INCLUDES` | メタオブジェクト `propose_settings` の `plan_includes` |
+| `REPLY_HOURS` | メタオブジェクト `propose_settings` の `reply_hours` |
 | `duration` / `meetingPoint` / `rainPlan` | `duration` / `meeting_point` / `rain_plan` |
 | `timeSlots` / `bestTime` / `bestTimeNote` | `time_slots` / `best_time` / `best_time_note` |
 | `leadDays` | `lead_time` |
@@ -219,24 +224,17 @@ v1の「BASIC / FLOWER / PREMIUM の3つから選ぶ」比較型をやめ、**�
 | `PROPOSAL_STEPS` | `proposal_steps`（未設定時はセクション設定の共通5ステップ） |
 | `FAQ` | 共通FAQ（セクションのブロック）＋ `faq`（場所固有） |
 
-## 7. 実装状況と次の作業
+## 7. 実装状況
 
 | 対象 | 状態 |
 |---|---|
 | モックアップ（TOP・ロケーション詳細・予約フロー） | **v2 完了**（375/390/430/1280/1440pxで確認済み） |
-| この設計書 | **v2 完了** |
-| `sections/*.liquid` ほか既存のLiquid | **v1のまま**。以下の移植が必要 |
+| Liquid（TOP・旅行先ページ・予約リクエスト） | **v2 実装済み**。Shopify公式の theme-check でエラーなし。模擬データで描画し、予約リクエストの送信までブラウザで確認済み |
+| 本番設定手順 | `PROPOSE-SETUP.md` |
+| 実ストアでの確認 | 未実施。`PROPOSE-SETUP.md` §9 のチェックリストで確認してください |
 
-移植タスク:
-1. メタオブジェクト定義 `propose`（§3.1）と `propose_step` / `propose_faq` を作成し、Webページとして公開
-2. `templates/metaobject/propose.json` ＋ `sections/propose-location.liquid`（§4の構成、`metaobject.*` を参照）
-3. TOP用セクションを v2 構成に差し替え（`propose-what-is` / `propose-moment` / `propose-invite` /
-   `propose-trust` は廃止し、Last Minute・Plan・Not Decided Yet を追加）
-4. `sections/propose-booking.liquid` と `assets/propose-booking.js` を v2 のステップ短縮・プラン構造・
-   リクエスト送信（§3.4、カート追加ではなくお問い合わせフォーム）に更新
-5. 商品を Standard（花束込み）/ All inclusive の2バリアント構成に変更、追加商品3点を作成。FLOWER 商品は廃止
-6. 下書き注文の請求書メール・お問い合わせ自動返信の文面（サプライズ時の控えめな件名を含む）を用意
-7. v2 の `propose-lp/src/styles.css` を `.pp-root` スコープ・`pp-` 接頭辞で `assets/propose.css` に反映
+v1 のファイル（`propose-what-is` / `propose-moment` / `propose-invite` / `propose-trust` / `propose-flow` /
+`propose-destination-grid` / `propose-location-detail`、`page.propose-home` / `page.propose-location`）は削除しました。
 
 ## 8. 写真について
 

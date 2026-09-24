@@ -1,0 +1,62 @@
+{%- comment -%}
+  PROPOSE PLAN box + options + ALL INCLUSIVE row (TOP and location pages).
+  Accepts:
+    standard_price — Standard variant price (cents)
+    allin_price    — All inclusive variant price (cents), optional
+    from           — true on TOP: prices are "from", with a note
+    booking_url    — optional CTA under the plan box (location page)
+  Reads:
+    metaobject propose_settings.plan_includes  (list of single line text)
+    collections['propose-options']         (add-on products, manual sort)
+{%- endcomment -%}
+{%- liquid
+  assign pp_settings = metaobjects.propose_settings.values.first
+  assign includes = pp_settings.plan_includes.value
+  if includes == blank
+    assign includes = 'プロフォトグラファー,撮影30分,プロポーズ用の花束,写真データ30枚以上,オンライン納品,日本語サポート' | split: ','
+  endif
+  assign options = collections['propose-options'].products
+-%}
+<div class="plan-box">
+  <div class="plan-main reveal">
+    <div class="plan-name">PROPOSE PLAN</div>
+    <div class="plan-price"><span class="price">{{ standard_price | money }}</span>{% if from %}<small>〜</small>{% endif %}</div>
+    {%- if from %}<p class="note plan-price-note">料金は行き先により異なります。</p>{% endif %}
+    <div class="includes">
+      <p class="includes-h">含まれるもの</p>
+      <ul>
+        {%- for item in includes %}<li>{{ item | escape }}</li>{% endfor -%}
+      </ul>
+    </div>
+    {%- if booking_url != blank %}
+    <a class="btn btn-block" href="{{ booking_url }}" style="margin-top:28px">この場所で予約する <span class="arrow" aria-hidden="true">→</span></a>
+    {%- endif %}
+  </div>
+  {%- if options.size > 0 or allin_price %}
+  <div class="reveal">
+    <p class="sub-h">Option</p>
+    <div class="opt-list">
+      {%- for o in options -%}
+        {%- liquid
+          assign o_desc = o.metafields.propose.short_description.value
+          if o_desc == blank
+            assign o_desc = o.description | strip_html | truncate: 80
+          endif
+        -%}
+        <div class="opt-row">
+          <div class="en">＋ {{ o.title | escape }}<span>{{ o.metafields.propose.name_ja.value | escape }}</span></div>
+          <div class="price">{{ o.price | money }}</div>
+          <p>{{ o_desc | escape }}</p>
+        </div>
+      {%- endfor -%}
+      {%- if allin_price %}
+      <div class="opt-row is-allin">
+        <div class="en">ALL INCLUSIVE<span>全部入り</span></div>
+        <div class="price">{{ allin_price | money }}{% if from %}〜{% endif %}</div>
+        <p>プロポーズプランに、{{ options.size }}つのオプションをすべて含めたプランです。</p>
+      </div>
+      {%- endif %}
+    </div>
+  </div>
+  {%- endif %}
+</div>

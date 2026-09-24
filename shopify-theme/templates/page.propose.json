@@ -1,0 +1,299 @@
+{
+  "layout": "propose",
+  "sections": {
+    "hero": {
+      "type": "propose-hero",
+      "settings": {
+        "image": "shopify://shop_images/propose-cappadocia.jpg",
+        "image_position": "50% 45%"
+      }
+    },
+    "destinations": {
+      "type": "propose-destinations",
+      "settings": {}
+    },
+    "lastminute": {
+      "type": "propose-lastminute",
+      "settings": {},
+      "blocks": {
+        "item_1": {
+          "type": "item",
+          "settings": {
+            "number": "{min_lead}",
+            "unit": "日前",
+            "title": "まで予約できます",
+            "text": "受付締切は行き先ごとに異なります。各ページでご確認ください。"
+          }
+        },
+        "item_2": {
+          "type": "item",
+          "settings": {
+            "number": "14",
+            "unit": "日分",
+            "title": "の受付状況をすぐ確認",
+            "text": "旅行日を選ぶだけで、その日に申し込める時間が分かります。"
+          }
+        },
+        "item_3": {
+          "type": "item",
+          "settings": {
+            "number": "{reply_hours}",
+            "unit": "時間",
+            "title": "以内に確定のご連絡",
+            "text": "リクエスト後、フォトグラファーの手配を確認してメールでお知らせします。お支払いは確定のあとです。"
+          }
+        },
+        "item_4": {
+          "type": "item",
+          "settings": {
+            "number": "JP",
+            "unit": "",
+            "title": "日本語でサポート",
+            "text": "予約から当日の連絡まで、日本語で対応します。"
+          }
+        }
+      },
+      "block_order": [
+        "item_1",
+        "item_2",
+        "item_3",
+        "item_4"
+      ]
+    },
+    "steps": {
+      "type": "propose-steps",
+      "settings": {},
+      "blocks": {
+        "step_1": {
+          "type": "step",
+          "settings": {
+            "image": "shopify://shop_images/propose-paris.jpg",
+            "image_position": "50% 40%",
+            "title": "待ち合わせ",
+            "text": "フォトグラファーがお二人をお迎えします。"
+          }
+        },
+        "step_2": {
+          "type": "step",
+          "settings": {
+            "image": "shopify://shop_images/propose-miyakojima.jpg",
+            "image_position": "30% 50%",
+            "title": "自然に撮影スタート",
+            "text": "旅の記念撮影として始めるので、プロポーズだとは気づかれません。"
+          }
+        },
+        "step_3": {
+          "type": "step",
+          "settings": {
+            "image": "shopify://shop_images/propose-bali.jpg",
+            "image_position": "50% 70%",
+            "title": "二人の時間",
+            "text": "景色の中を歩く姿や、自然な会話を撮影します。"
+          }
+        },
+        "step_4": {
+          "type": "step",
+          "settings": {
+            "image": "shopify://shop_images/propose-ayersrock.jpg",
+            "image_position": "50% 55%",
+            "title": "プロポーズ",
+            "text": "フォトグラファーは少し距離を取り、その瞬間だけを撮影します。"
+          }
+        },
+        "step_5": {
+          "type": "step",
+          "settings": {
+            "image": "shopify://shop_images/propose-cappadocia.jpg",
+            "image_position": "50% 45%",
+            "title": "記念撮影",
+            "text": "指輪をつけたお二人を、ゆっくり撮影します。"
+          }
+        }
+      },
+      "block_order": [
+        "step_1",
+        "step_2",
+        "step_3",
+        "step_4",
+        "step_5"
+      ]
+    },
+    "plan": {
+      "type": "propose-plan",
+      "settings": {}
+    },
+    "faq": {
+      "type": "propose-faq",
+      "settings": {
+        "visible": 5
+      },
+      "blocks": {
+        "q_1": {
+          "type": "question",
+          "settings": {
+            "question": "出発の数日前でも予約できますか？",
+            "answer": "はい。行き先ごとに「最短○日前まで」の受付締切があり、各ページと受付状況カレンダーで確認できます。"
+          }
+        },
+        "q_2": {
+          "type": "question",
+          "settings": {
+            "question": "予約はすぐに確定しますか？",
+            "answer": "予約はリクエスト制です。フォトグラファーの手配を確認し、{reply_hours}時間以内に確定可否をメールでご連絡します。お支払いは確定のご連絡のあとです。"
+          }
+        },
+        "q_3": {
+          "type": "question",
+          "settings": {
+            "question": "相手にプロポーズだと気づかれませんか？",
+            "answer": "「旅の記念撮影」として自然に始めます。予約確認の連絡も、控えめな件名を選べます。"
+          }
+        },
+        "q_4": {
+          "type": "question",
+          "settings": {
+            "question": "雨が降ったらどうなりますか？",
+            "answer": "行き先ごとの雨天対応があります。多くの場所で、翌日以降の空き枠へ無料で振替できます。"
+          }
+        },
+        "q_5": {
+          "type": "question",
+          "settings": {
+            "question": "現地で日本語は通じますか？",
+            "answer": "日本語サポートが付いています。当日の連絡も日本語で行えます。"
+          }
+        },
+        "q_6": {
+          "type": "question",
+          "settings": {
+            "question": "キャンセルはできますか？",
+            "answer": "予約日の一定期間前まではキャンセル・返金が可能です。規定は予約確認画面とメールでご案内します。"
+          }
+        },
+        "q_7": {
+          "type": "question",
+          "settings": {
+            "question": "写真はいつ届きますか？",
+            "answer": "撮影後、オンラインで順次お届けします。目安の日数は予約確認メールでご案内します。"
+          }
+        },
+        "q_8": {
+          "type": "question",
+          "settings": {
+            "question": "指輪や花束は用意してもらえますか？",
+            "answer": "花束はプランに含まれています。指輪はご自身でご用意ください。"
+          }
+        },
+        "q_9": {
+          "type": "question",
+          "settings": {
+            "question": "撮影場所は変えられますか？",
+            "answer": "行き先ごとの推奨スポットをもとに、当日の天候や混雑に合わせてフォトグラファーが調整します。"
+          }
+        }
+      },
+      "block_order": [
+        "q_1",
+        "q_2",
+        "q_3",
+        "q_4",
+        "q_5",
+        "q_6",
+        "q_7",
+        "q_8",
+        "q_9"
+      ]
+    },
+    "find": {
+      "type": "propose-find",
+      "settings": {},
+      "blocks": {
+        "scene_1": {
+          "type": "scene",
+          "settings": {
+            "tag": "sea",
+            "title": "海",
+            "en": "SEA",
+            "image": "shopify://shop_images/propose-maldives.jpg",
+            "image_position": "50% 50%"
+          }
+        },
+        "scene_2": {
+          "type": "scene",
+          "settings": {
+            "tag": "town",
+            "title": "街",
+            "en": "TOWN",
+            "image": "shopify://shop_images/propose-paris.jpg",
+            "image_position": "50% 40%"
+          }
+        },
+        "scene_3": {
+          "type": "scene",
+          "settings": {
+            "tag": "sunset",
+            "title": "夕日",
+            "en": "SUNSET",
+            "image": "shopify://shop_images/propose-ayersrock.jpg",
+            "image_position": "50% 55%"
+          }
+        },
+        "scene_4": {
+          "type": "scene",
+          "settings": {
+            "tag": "nature",
+            "title": "大自然",
+            "en": "NATURE",
+            "image": "shopify://shop_images/propose-bali.jpg",
+            "image_position": "50% 70%"
+          }
+        },
+        "scene_5": {
+          "type": "scene",
+          "settings": {
+            "tag": "resort",
+            "title": "リゾート",
+            "en": "RESORT",
+            "image": "shopify://shop_images/propose-cancun.jpg",
+            "image_position": "50% 60%"
+          }
+        },
+        "scene_6": {
+          "type": "scene",
+          "settings": {
+            "tag": "special",
+            "title": "特別な景色",
+            "en": "SPECIAL",
+            "image": "shopify://shop_images/propose-cappadocia.jpg",
+            "image_position": "50% 45%"
+          }
+        }
+      },
+      "block_order": [
+        "scene_1",
+        "scene_2",
+        "scene_3",
+        "scene_4",
+        "scene_5",
+        "scene_6"
+      ]
+    },
+    "final": {
+      "type": "propose-final",
+      "settings": {
+        "image": "shopify://shop_images/propose-maldives.jpg",
+        "image_position": "50% 30%"
+      }
+    }
+  },
+  "order": [
+    "hero",
+    "destinations",
+    "lastminute",
+    "steps",
+    "plan",
+    "faq",
+    "find",
+    "final"
+  ]
+}

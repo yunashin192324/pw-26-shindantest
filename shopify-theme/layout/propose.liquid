@@ -1,22 +1,84 @@
 <!doctype html>
+{%- comment -%}
+  Dedicated layout for 世界のプロポーズプラン (/pages/propose, /pages/propose/<handle>,
+  /pages/propose-booking). The store's normal theme.liquid is never loaded here,
+  so propose.css cannot collide with the main theme and vice versa.
+  See shopify-theme/PROPOSE-SETUP.md.
+{%- endcomment -%}
+{%- liquid
+  assign pp_title = page_title
+  assign pp_desc = page_description
+  assign pp_image = page_image
+  assign pp_is_booking = false
+  if template.suffix == 'propose-booking'
+    assign pp_is_booking = true
+  endif
+
+  assign pp_cta_url = '/pages/propose#destinations'
+  if metaobject
+    if metaobject.seo_title.value != blank
+      assign pp_title = metaobject.seo_title.value
+    elsif metaobject.location_name.value != blank
+      assign pp_title = metaobject.location_name.value | append: 'でプロポーズ'
+    endif
+    if metaobject.seo_description.value != blank
+      assign pp_desc = metaobject.seo_description.value
+    elsif metaobject.description.value != blank
+      assign pp_desc = metaobject.description.value
+    endif
+    if metaobject.hero_image.value != blank
+      assign pp_image = metaobject.hero_image.value
+    endif
+    assign pp_cta_url = '/pages/propose-booking?loc=' | append: metaobject.system.handle
+  endif
+-%}
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ page_title | default: 'プロポーズを予約する' }} | {{ shop.name }}</title>
-  {% if page_description %}<meta name="description" content="{{ page_description | escape }}">{% endif %}
-  <meta name="robots" content="noindex">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <script>document.documentElement.className += " js";</script>
+  <title>{{ pp_title }}{% unless pp_title contains shop.name %}｜{{ shop.name }}{% endunless %}</title>
+  {%- if pp_desc != blank %}
+  <meta name="description" content="{{ pp_desc | strip_newlines | escape }}">
+  {%- endif %}
   <link rel="canonical" href="{{ canonical_url }}">
+  {%- if pp_is_booking %}
+  <meta name="robots" content="noindex">
+  {%- endif %}
+
+  <meta property="og:site_name" content="{{ shop.name | escape }}">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="{{ canonical_url }}">
+  <meta property="og:title" content="{{ pp_title | escape }}">
+  {%- if pp_desc != blank %}
+  <meta property="og:description" content="{{ pp_desc | strip_newlines | escape }}">
+  {%- endif %}
+  {%- if pp_image != blank %}
+  <meta property="og:image" content="https:{{ pp_image | image_url: width: 1200 }}">
+  {%- endif %}
+  <meta name="twitter:card" content="summary_large_image">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
-
-  {% if settings.favicon %}<link rel="icon" href="{{ settings.favicon | image_url: width: 32 }}" type="image/png">{% endif %}
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Noto+Sans+JP:wght@300;400;500&display=swap" rel="stylesheet">
+  {%- if settings.favicon %}
+  <link rel="icon" href="{{ settings.favicon | image_url: width: 32 }}" type="image/png">
+  {%- endif %}
+  {{ 'propose.css' | asset_url | stylesheet_tag }}
 
   {{ content_for_header }}
 </head>
-<body class="pp-body">
+<body class="pp{% if pp_is_booking %} pp-booking{% endif %}">
+  {%- unless pp_is_booking -%}
+    {% render 'propose-header', cta_url: pp_cta_url %}
+  {%- endunless -%}
+
   {{ content_for_layout }}
+
+  {%- unless pp_is_booking -%}
+    {% render 'propose-footer' %}
+  {%- endunless -%}
+
+  <script src="{{ 'propose.js' | asset_url }}" defer></script>
 </body>
 </html>

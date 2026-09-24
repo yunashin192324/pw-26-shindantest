@@ -1,39 +1,34 @@
-{%- comment -%}
-  Full-bleed hero for the propose-home page. All copy + the hero photo
-  are editable from the theme customizer — no code changes needed to
-  swap the campaign image or headline.
-{%- endcomment -%}
-{{ 'propose.css' | asset_url | stylesheet_tag }}
-<script src="{{ 'propose.js' | asset_url }}" defer></script>
-
-<section class="pp-root pp-hero">
-  <div class="pp-hero-media">
-    {%- if section.settings.image != blank -%}
-      <div class="pp-ph pp-ph-hero"><img src="{{ section.settings.image | image_url: width: 1800 }}" alt="{{ section.settings.image.alt | default: section.settings.heading | escape }}" loading="eager" width="1800" height="{{ 1800 | divided_by: section.settings.image.aspect_ratio | round }}"></div>
-    {%- else -%}
-      <div class="pp-ph pp-ph-hero" style="--c1:#1c3a4a;--c2:#e2955c;" role="img" aria-label="{{ section.settings.heading | escape }}"></div>
-    {%- endif -%}
-    <div class="pp-hero-scrim"></div>
-    <div class="pp-hero-copy">
-      <h1>{{ section.settings.heading | newline_to_br }}</h1>
-      {%- if section.settings.subheading != blank -%}<p>{{ section.settings.subheading }}</p>{%- endif -%}
-      {%- if section.settings.cta_label != blank -%}
-        <a href="{{ section.settings.cta_url | default: '#pp-destinations' }}" class="pp-btn pp-btn-gold">{{ section.settings.cta_label }}</a>
-      {%- endif -%}
+{%- comment -%} TOP: full-screen hero. The main action is 「旅行先から探す」; undecided visitors get a quiet text link. {%- endcomment -%}
+<section class="hero" aria-labelledby="hero-title">
+  {% render 'propose-photo', image: section.settings.image, pos: section.settings.image_position, alt: section.settings.image_alt, eager: true %}
+  <div class="hero-scrim"></div>
+  <div class="hero-body">
+    <span class="label">{{ section.settings.label | escape }}</span>
+    <h1 class="h1" id="hero-title">{{ section.settings.heading_1 | escape }}<br><span class="nw">{{ section.settings.heading_2 | escape }}</span></h1>
+    <p class="hero-text">{{ section.settings.text | escape | newline_to_br }}</p>
+    <div class="hero-cta">
+      <button type="button" class="btn btn-light" data-scroll="destinations">旅行先から探す <span class="arrow" aria-hidden="true">→</span></button>
+      <button type="button" class="link" data-scroll="find">まだ旅行先が決まっていない方</button>
     </div>
   </div>
 </section>
 
+<div class="sticky-cta" id="sticky-cta" data-hide-over="destinations" aria-hidden="true">
+  <button type="button" class="btn" data-scroll="destinations">旅行先から探す <span class="arrow" aria-hidden="true">→</span></button>
+</div>
+
 {% schema %}
 {
-  "name": "プロポーズ Hero",
+  "name": "プロポーズ TOP ヒーロー",
   "settings": [
-    { "type": "image_picker", "id": "image", "label": "背景写真", "info": "未設定の場合はプレースホルダーのグラデーションを表示します。" },
-    { "type": "textarea", "id": "heading", "label": "見出し", "default": "世界で、\n忘れられないプロポーズを。" },
-    { "type": "textarea", "id": "subheading", "label": "サブコピー", "default": "世界10か所から選べる、プロポーズのための特別な旅。場所・プラン・日程をその場で選んで、そのまま予約できます。" },
-    { "type": "text", "id": "cta_label", "label": "CTA文言", "default": "プロポーズする場所を選ぶ" },
-    { "type": "url", "id": "cta_url", "label": "CTAリンク先", "info": "未設定の場合は #pp-destinations（このページの一覧セクション）へスクロールします。" }
+    { "type": "image_picker", "id": "image", "label": "写真", "info": "プロポーズの瞬間の写真（人物入り）が理想です。横長・2000px以上。" },
+    { "type": "text", "id": "image_position", "label": "写真の表示位置", "default": "50% 50%", "info": "例: 50% 30%（横 縦）。スマホで大事な部分が切れる場合に調整します。" },
+    { "type": "text", "id": "image_alt", "label": "写真の代替テキスト", "default": "朝焼けのカッパドキアに浮かぶ気球" },
+    { "type": "text", "id": "label", "label": "英語ラベル", "default": "Propose in the World" },
+    { "type": "text", "id": "heading_1", "label": "見出し 1行目", "default": "世界で、" },
+    { "type": "text", "id": "heading_2", "label": "見出し 2行目", "default": "忘れられないプロポーズを。" },
+    { "type": "textarea", "id": "text", "label": "本文（改行がそのまま反映されます）", "default": "旅行先は、もう決まっている。\nあとは、その旅を一生忘れない一日に。" }
   ],
-  "presets": [{ "name": "プロポーズ Hero" }]
+  "presets": [{ "name": "プロポーズ TOP ヒーロー" }]
 }
 {% endschema %}

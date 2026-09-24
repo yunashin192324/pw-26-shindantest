@@ -1,0 +1,24 @@
+{%- comment -%} TOP: closing call to action over a photo. {%- endcomment -%}
+<section class="final" aria-labelledby="final-title">
+  {% render 'propose-photo', image: section.settings.image, pos: section.settings.image_position, decorative: true %}
+  <div class="wrap">
+    <span class="label">{{ section.settings.label | escape }}</span>
+    <h2 class="h2" id="final-title">{{ section.settings.heading | escape | newline_to_br }}</h2>
+    {%- if section.settings.lede != blank %}<p class="lede">{{ section.settings.lede | escape }}</p>{% endif %}
+    <button type="button" class="btn btn-light" data-scroll="destinations">旅行先から探す <span class="arrow" aria-hidden="true">→</span></button>
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "プロポーズ 締めのCTA",
+  "settings": [
+    { "type": "image_picker", "id": "image", "label": "写真" },
+    { "type": "text", "id": "image_position", "label": "写真の表示位置", "default": "50% 30%" },
+    { "type": "text", "id": "label", "label": "英語ラベル", "default": "Ready?" },
+    { "type": "textarea", "id": "heading", "label": "見出し", "default": "行き先を選ぶだけで、\n準備は始まります。" },
+    { "type": "text", "id": "lede", "label": "説明文", "default": "料金も、受付状況も、この先ですぐに分かります。" }
+  ],
+  "presets": [{ "name": "プロポーズ 締めのCTA" }]
+}
+{% endschema %}

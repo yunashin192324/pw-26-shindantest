@@ -1,0 +1,64 @@
+{%- comment -%}
+  TOP: reassurance for people who decide 5–7 days before departure.
+  In a block's number, {min_lead} = the shortest lead_time among destinations,
+  {reply_hours} = the propose_settings metaobject (default 24).
+{%- endcomment -%}
+{%- liquid
+  assign pp_settings = metaobjects.propose_settings.values.first
+  assign reply_hours = pp_settings.reply_hours.value | default: 24
+  assign min_lead = 99
+  for loc in metaobjects.propose.values
+    assign lt = loc.lead_time.value | plus: 0
+    if lt < min_lead
+      assign min_lead = lt
+    endif
+  endfor
+  if min_lead == 99
+    assign min_lead = '—'
+  endif
+-%}
+<section class="sec sec-deep" id="lastminute" aria-labelledby="lm-title">
+  <div class="wrap assure-wrap">
+    <div class="sec-head reveal">
+      <span class="label">{{ section.settings.label | escape }}</span>
+      <h2 class="h2" id="lm-title">{{ section.settings.heading | escape | newline_to_br }}</h2>
+      {%- if section.settings.lede != blank %}<p class="lede">{{ section.settings.lede | escape }}</p>{% endif %}
+    </div>
+    <ul class="assure-list">
+      {%- for block in section.blocks -%}
+        {%- liquid
+          assign key = block.settings.number | replace: '{min_lead}', min_lead | replace: '{reply_hours}', reply_hours
+          assign body = block.settings.text | replace: '{min_lead}', min_lead | replace: '{reply_hours}', reply_hours
+        -%}
+        <li class="assure-item reveal" {{ block.shopify_attributes }}>
+          <span class="assure-key">{{ key | escape }}<small>{{ block.settings.unit | escape }}</small></span>
+          <div><h3 class="h3">{{ block.settings.title | escape }}</h3><p>{{ body | escape }}</p></div>
+        </li>
+      {%- endfor -%}
+    </ul>
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "プロポーズ 直前でも",
+  "settings": [
+    { "type": "text", "id": "label", "label": "英語ラベル", "default": "Last Minute" },
+    { "type": "textarea", "id": "heading", "label": "見出し", "default": "出発の直前でも、\n間に合います。" },
+    { "type": "text", "id": "lede", "label": "説明文", "default": "日付と時間を選んで、オンラインでリクエスト。手配を確認して、確定をご連絡します。" }
+  ],
+  "blocks": [
+    {
+      "type": "item",
+      "name": "項目",
+      "settings": [
+        { "type": "text", "id": "number", "label": "大きな数字・文字", "info": "{min_lead}＝最短の受付締切日数、{reply_hours}＝返信までの時間 に置き換わります。" },
+        { "type": "text", "id": "unit", "label": "数字の後ろの小さな文字", "info": "例: 日前 / 時間" },
+        { "type": "text", "id": "title", "label": "見出し" },
+        { "type": "textarea", "id": "text", "label": "説明" }
+      ]
+    }
+  ],
+  "presets": [{ "name": "プロポーズ 直前でも" }]
+}
+{% endschema %}

@@ -1,0 +1,59 @@
+{%- comment -%}
+  TOP: the main UI — every destination as a photo card linking to its page.
+  Locations come from the section setting (to control order); empty = all entries.
+{%- endcomment -%}
+{%- liquid
+  assign locations = section.settings.locations
+  if locations == blank
+    assign locations = metaobjects.propose.values
+  endif
+-%}
+<section class="sec" id="destinations" aria-labelledby="dest-title">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="label">{{ section.settings.label | escape }}</span>
+      <h2 class="h2" id="dest-title">{{ section.settings.heading | escape | newline_to_br }}</h2>
+      {%- if section.settings.lede != blank %}<p class="lede">{{ section.settings.lede | escape }}</p>{% endif %}
+    </div>
+    <div class="dest-grid">
+      {%- for loc in locations -%}
+        {%- liquid
+          assign plan = loc.plan_product.value
+          assign loc_url = loc.system.url
+          if loc_url == blank
+            assign loc_url = '/pages/propose/' | append: loc.system.handle
+          endif
+          assign loc_alt = loc.location_name.value | append: 'の景色'
+        -%}
+        <a class="dest-card reveal" href="{{ loc_url }}">
+          {% render 'propose-photo', image: loc.hero_image.value, pos: loc.hero_image_position.value, alt: loc_alt, sizes: '(min-width: 1100px) 20vw, (min-width: 760px) 33vw, 50vw' %}
+          <div class="dest-body">
+            <div class="dest-name">{{ loc.location_name_en.value | escape }}</div>
+            <div class="dest-ja">{{ loc.location_name.value | escape }}</div>
+            {%- if plan %}
+            <div class="dest-price">From<span class="price">{{ plan.variants.first.price | money }}</span></div>
+            {%- endif %}
+            <span class="dest-more"><span><span class="sm-hide">プロポーズ</span>プランを見る</span><span aria-hidden="true">→</span></span>
+          </div>
+        </a>
+      {%- endfor -%}
+    </div>
+    <div class="undecided-link reveal">
+      <p>まだ旅行先が決まっていない方へ</p>
+      <button type="button" class="link" data-scroll="find">景色から探す <span class="arrow" aria-hidden="true">→</span></button>
+    </div>
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "プロポーズ 旅行先一覧",
+  "settings": [
+    { "type": "metaobject_list", "id": "locations", "metaobject_type": "propose", "label": "表示する旅行先と並び順", "info": "空欄の場合はすべての旅行先を表示します。" },
+    { "type": "text", "id": "label", "label": "英語ラベル", "default": "Destinations" },
+    { "type": "textarea", "id": "heading", "label": "見出し", "default": "旅行先から、\nプロポーズを探す。" },
+    { "type": "text", "id": "lede", "label": "説明文", "default": "行き先を選ぶと、料金・当日の流れ・受付状況がすぐに分かります。" }
+  ],
+  "presets": [{ "name": "プロポーズ 旅行先一覧" }]
+}
+{% endschema %}

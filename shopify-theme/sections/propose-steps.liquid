@@ -1,0 +1,49 @@
+{%- comment -%} TOP: the day in five steps, each with a photo. {%- endcomment -%}
+<section class="sec" id="proposal" aria-labelledby="pr-title">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="label">{{ section.settings.label | escape }}</span>
+      <h2 class="h2" id="pr-title">{{ section.settings.heading | escape | newline_to_br }}</h2>
+      {%- if section.settings.lede != blank %}<p class="lede">{{ section.settings.lede | escape }}</p>{% endif %}
+    </div>
+    <ol class="steps">
+      {%- for block in section.blocks -%}
+        <li class="step reveal" {{ block.shopify_attributes }}>
+          {% render 'propose-photo', image: block.settings.image, pos: block.settings.image_position, decorative: true, sizes: '(min-width: 900px) 20vw, 38vw' %}
+          <div>
+            <span class="step-no">{{ forloop.index | prepend: '0' | slice: -2, 2 }}</span>
+            <h3 class="h3">{{ block.settings.title | escape }}</h3>
+            <p>{{ block.settings.text | escape }}</p>
+          </div>
+        </li>
+      {%- endfor -%}
+    </ol>
+    {%- if section.settings.note != blank %}<p class="note photo-note">{{ section.settings.note | escape }}</p>{% endif %}
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "プロポーズ 当日の流れ",
+  "settings": [
+    { "type": "text", "id": "label", "label": "英語ラベル", "default": "Your Proposal" },
+    { "type": "textarea", "id": "heading", "label": "見出し", "default": "当日は、\nこんな時間になります。" },
+    { "type": "text", "id": "lede", "label": "説明文", "default": "撮影だと気づかれないまま、その瞬間へ。すべて約2時間です。" },
+    { "type": "text", "id": "note", "label": "写真の注記", "default": "※ 写真はイメージです。" }
+  ],
+  "blocks": [
+    {
+      "type": "step",
+      "name": "ステップ",
+      "limit": 5,
+      "settings": [
+        { "type": "image_picker", "id": "image", "label": "写真" },
+        { "type": "text", "id": "image_position", "label": "写真の表示位置", "default": "50% 50%" },
+        { "type": "text", "id": "title", "label": "見出し" },
+        { "type": "textarea", "id": "text", "label": "説明" }
+      ]
+    }
+  ],
+  "presets": [{ "name": "プロポーズ 当日の流れ" }]
+}
+{% endschema %}

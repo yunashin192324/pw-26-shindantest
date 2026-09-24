@@ -1,0 +1,25 @@
+{%- comment -%}
+  Fixed header + mobile drawer. Rendered by layout/propose.liquid on the TOP and
+  location pages (the booking page has its own compact header).
+  Accepts: cta_url — where 「予約する」 goes (TOP: the destination list,
+  location page: booking with that location preselected).
+{%- endcomment -%}
+<header class="hd is-over" id="hd">
+  <a href="/pages/propose" class="hd-logo" aria-label="世界のプロポーズプラン TOP">PROPOSE<small>世界のプロポーズプラン</small></a>
+  <nav class="hd-nav" aria-label="メインメニュー">
+    <a href="/pages/propose#destinations">DESTINATIONS</a>
+    <a href="/pages/propose#proposal">YOUR PROPOSAL</a>
+    <a href="/pages/propose#plan">PLAN</a>
+    <a href="/pages/propose#faq">FAQ</a>
+    <a href="{{ cta_url }}" class="btn">予約する</a>
+  </nav>
+  <button class="hd-menu" id="hd-menu" type="button" aria-label="メニューを開く" aria-expanded="false" aria-controls="hd-drawer"><span></span><span></span><span></span></button>
+</header>
+<nav class="hd-drawer" id="hd-drawer" aria-label="メニュー">
+  <a href="/pages/propose#destinations">DESTINATIONS <small>旅行先から探す</small></a>
+  <a href="/pages/propose#proposal">YOUR PROPOSAL <small>当日の流れ</small></a>
+  <a href="/pages/propose#plan">PLAN <small>料金</small></a>
+  <a href="/pages/propose#faq">FAQ <small>よくある質問</small></a>
+  <a href="/pages/propose#find">NOT DECIDED <small>旅行先が未定の方</small></a>
+  <a href="/pages/propose#destinations" class="btn">旅行先から探す</a>
+</nav>

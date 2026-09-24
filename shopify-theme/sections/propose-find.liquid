@@ -1,0 +1,70 @@
+{%- comment -%}
+  TOP (secondary): for visitors without a destination yet. Pick a scene →
+  matching destinations (metaobject field "tags" contains the block's tag).
+  All rows are rendered server-side; propose.js only shows/hides them.
+{%- endcomment -%}
+{%- liquid
+  assign locations = section.settings.locations
+  if locations == blank
+    assign locations = metaobjects.propose.values
+  endif
+-%}
+<section class="sec sec-deep" id="find" aria-labelledby="find-title">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="label">{{ section.settings.label | escape }}</span>
+      <h2 class="h2" id="find-title">{{ section.settings.heading | escape | newline_to_br }}</h2>
+      {%- if section.settings.lede != blank %}<p class="lede">{{ section.settings.lede | escape }}</p>{% endif %}
+    </div>
+    <div class="themes" role="group" aria-label="景色から探す" data-themes>
+      {%- for block in section.blocks -%}
+        <button type="button" class="theme" data-theme="{{ block.settings.tag | strip | escape }}" aria-pressed="false" {{ block.shopify_attributes }}>
+          {% render 'propose-photo', image: block.settings.image, pos: block.settings.image_position, decorative: true, sizes: '(min-width: 900px) 16vw, 33vw' %}
+          <span class="theme-label"><span class="en">{{ block.settings.en | escape }}</span><b>{{ block.settings.title | escape }}</b></span>
+        </button>
+      {%- endfor -%}
+    </div>
+    <div class="theme-results" aria-live="polite" data-theme-results>
+      {%- for loc in locations -%}
+        {%- liquid
+          assign plan = loc.plan_product.value
+          assign loc_url = loc.system.url
+          if loc_url == blank
+            assign loc_url = '/pages/propose/' | append: loc.system.handle
+          endif
+        -%}
+        <a class="result-row hidden" href="{{ loc_url }}" data-tags=" {{ loc.tags.value | join: ' ' | escape }} ">
+          {% render 'propose-photo', image: loc.hero_image.value, pos: loc.hero_image_position.value, decorative: true, sizes: '76px' %}
+          <div><div class="dest-name">{{ loc.location_name_en.value | escape }}</div><div class="dest-ja">{{ loc.location_name.value | escape }}・{{ loc.tagline.value | escape }}</div></div>
+          {%- if plan %}<div class="price">{{ plan.variants.first.price | money }}〜</div>{% endif %}
+        </a>
+      {%- endfor -%}
+    </div>
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "プロポーズ 景色から探す",
+  "settings": [
+    { "type": "metaobject_list", "id": "locations", "metaobject_type": "propose", "label": "対象の旅行先と並び順", "info": "空欄の場合はすべての旅行先が対象です。" },
+    { "type": "text", "id": "label", "label": "英語ラベル", "default": "Not Decided Yet" },
+    { "type": "textarea", "id": "heading", "label": "見出し", "default": "まだ旅行先が\n決まっていない方へ" },
+    { "type": "text", "id": "lede", "label": "説明文", "default": "惹かれる景色をひとつ選んでください。合う旅行先を表示します。" }
+  ],
+  "blocks": [
+    {
+      "type": "scene",
+      "name": "景色",
+      "settings": [
+        { "type": "text", "id": "tag", "label": "タグ", "info": "旅行先の「tags」に入れた値（例: sea）と同じものを入れます。" },
+        { "type": "text", "id": "title", "label": "表示名", "info": "例: 海" },
+        { "type": "text", "id": "en", "label": "英語表記", "info": "例: SEA" },
+        { "type": "image_picker", "id": "image", "label": "写真" },
+        { "type": "text", "id": "image_position", "label": "写真の表示位置", "default": "50% 50%" }
+      ]
+    }
+  ],
+  "presets": [{ "name": "プロポーズ 景色から探す" }]
+}
+{% endschema %}

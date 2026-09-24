@@ -1034,6 +1034,7 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
       return '<details><summary><span class="q">Q</span><span>' + esc(f.q) + '</span><span class="pm" aria-hidden="true"></span></summary><div class="a">' + esc(f.a) + "</div></details>";
     }).join("");
   }
+  function faqAbout(word) { return D.faq.filter(function (f) { return f.q.indexOf(word) > -1; })[0]; }
   function planHTML(base, locId) {
     var allin = D.options.reduce(function (s, o) { return s + o.price; }, base);
     var cta = locId
@@ -1232,8 +1233,8 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
           '<div class="rain reveal"><span class="en">IF IT RAINS</span><p>' + esc(l.rainPlan) + "</p></div>" +
           '<div class="faq" style="margin-top:32px">' + faqHTML([
             { q: "何日前まで予約できますか？", a: esc(l.nameJa) + "は、撮影日の" + l.leadDays + "日前までリクエストできます。確定のご連絡は" + D.replyHours + "時間以内です。" },
-            { q: "集合場所はどこですか？", a: l.meetingPoint + "です。詳細は予約確認メールでご案内します。" },
-            D.faq[1], D.faq[3], D.faq[4]
+            { q: "集合場所はどこですか？", a: l.meetingPoint + "です。詳細は確定のご連絡でご案内します。" },
+            faqAbout("すぐに確定"), faqAbout("気づかれ"), faqAbout("日本語"), faqAbout("キャンセル")
           ]) + "</div>" +
         "</div>" +
       "</section>" +
