@@ -4316,6 +4316,58 @@ function paneHidden(document, key) {
     }
   }
 
+  // ---------------------------------------------------------------
+  section('U70. 【改善】スマホでも見られるようにする（項目114）');
+  {
+    const ctx70 = makeServer();
+    const dom70 = await openApp(ctx70);
+    const doc70 = dom70.window.document;
+    await login(dom70, 'VIE', 'CHANGE-ME-VIE');
+    await settle();
+
+    // --- 絞り込みの開閉（画面の幅に関わらず仕組みとして動くこと） ---
+    const toggle70 = doc70.getElementById('dashboard-filter-toggle');
+    check('一覧に絞り込みの開閉ボタンがある', !!toggle70);
+    check('絞り込み欄が開閉の対象になっている',
+          !!doc70.getElementById('nonshop-dashboard-filter').classList.contains('filter-collapsible'));
+    check('店舗用の絞り込み欄も開閉の対象になっている',
+          !!doc70.getElementById('shop-dashboard-filter').classList.contains('filter-collapsible'));
+    check('「キャンセル済みも表示」「過去を表示」も一緒に開閉する',
+          doc70.getElementById('show-cancelled').closest('label').classList.contains('filter-collapsible') &&
+          doc70.getElementById('show-past').closest('label').classList.contains('filter-collapsible'));
+    check('最初は閉じている', !doc70.getElementById('view-dashboard').classList.contains('filters-open'));
+    toggle70.click();
+    await settle();
+    check('押すと開く', doc70.getElementById('view-dashboard').classList.contains('filters-open'));
+    check('開いたらボタンの文言が変わる', toggle70.textContent.includes('閉じる'), toggle70.textContent);
+    toggle70.click();
+    await settle();
+    check('もう一度押すと閉じる', !doc70.getElementById('view-dashboard').classList.contains('filters-open'));
+    check('閉じたらボタンの文言も戻る', toggle70.textContent.includes('開く'), toggle70.textContent);
+
+    // --- 狭い画面向けの指定が入っているか（jsdomは幅1024pxなので指定そのものを確認する） ---
+    const css70 = [...doc70.querySelectorAll('style')].map(s => s.textContent).join('\n');
+    const mobileBlocks = css70.match(/@media \(max-width: 719px\)[^@]*/g) || [];
+    const mobileCss = mobileBlocks.join('\n');
+    check('狭い画面向けの指定がある', mobileBlocks.length > 0);
+    check('ヘッダーのボタンを1行に収めて横へ流す指定がある',
+          /\.header-nav\s*\{[^}]*overflow-x:\s*auto/.test(mobileCss));
+    check('クイックナビを横へ流す指定がある（縦書きにならないようにする）',
+          /\.tab-bar\s*\{[^}]*flex-wrap:\s*nowrap/.test(mobileCss) &&
+          /\.tab-btn\s*\{[^}]*white-space:\s*nowrap/.test(mobileCss));
+    check('狭い画面でだけ絞り込み欄を閉じる指定がある',
+          /#view-dashboard:not\(\.filters-open\) \.filter-collapsible\s*\{[^}]*display:\s*none/.test(mobileCss));
+    check('PCでは開閉ボタンを出さない', /#dashboard-filter-toggle\s*\{\s*display:\s*none/.test(css70));
+
+    // --- 一覧の表示形式：画面の幅で初期値が決まる ---
+    check('PC幅（jsdom=1024px）では従来どおり表が選ばれている',
+          doc70.getElementById('view-mode-table').classList.contains('active'));
+    check('カードへ切り替えられる', (() => {
+      doc70.getElementById('view-mode-card').click();
+      return doc70.getElementById('view-mode-card').classList.contains('active');
+    })());
+  }
+
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error('テストが異常終了しました:', e); process.exit(1); });

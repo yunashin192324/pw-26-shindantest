@@ -121,7 +121,11 @@
   let detailActiveTab = 'local';
   let dashboardScope = { showAll: true, teams: [], branches: [] };
   let dashboardSortKey = 'default';  // 案件一覧の並び替え
-  let dashboardViewMode = 'table';   // 案件一覧の表示形式：既定は表（'table'）／サブでカード（'card'）
+  // 案件一覧の表示形式：既定は表（'table'）／サブでカード（'card'）
+  // ★要件（項目114）：ただし狭い画面（スマホ）では、表は10列・幅1,000px超になり、
+  // 幅360pxの窓からは3分の2が見えない。最初からカードで出す（切替は従来どおりできる）。
+  let dashboardViewMode = (typeof window !== 'undefined' && window.innerWidth && window.innerWidth < 720)
+    ? 'card' : 'table';
   let searchScope = { showAll: true, teams: [], branches: [] };
   let statsScope = { showAll: true, teams: [], branches: [] };
   let dayScope = { showAll: true, teams: [], branches: [] };
@@ -400,8 +404,16 @@
       dashboardSortKey = $('dashboard-sort').value;
       if (lastDashboardData) renderDashboard(lastDashboardData);
     });
+    // ★要件（項目114）：スマホで絞り込み欄を開閉する。PCではこのボタン自体が出ない。
+    on_('dashboard-filter-toggle', 'click', () => {
+      const open = $('view-dashboard').classList.toggle('filters-open');
+      $('dashboard-filter-toggle').textContent = open ? '絞り込み・検索を閉じる' : '絞り込み・検索を開く';
+    });
     $('view-mode-card').addEventListener('click', () => setDashboardViewMode('card'));
     $('view-mode-table').addEventListener('click', () => setDashboardViewMode('table'));
+    // 画面の幅で決まる初期の表示形式（スマホはカード）を、切替ボタンの見た目にも反映する
+    $('view-mode-card').classList.toggle('active', dashboardViewMode === 'card');
+    $('view-mode-table').classList.toggle('active', dashboardViewMode === 'table');
     $('arrangement-modal-cancel').addEventListener('click', closeArrangementModal);
     $('arrangement-modal-send').addEventListener('click', sendArrangementRequest);
     $('settings-branch-select').addEventListener('change', () => loadSettings($('settings-branch-select').value));

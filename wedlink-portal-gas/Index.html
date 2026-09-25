@@ -63,11 +63,15 @@
             </div>
           </div>
         </div>
-        <div id="scope-selector" class="scope-box jp-only hidden"></div>
+        <!-- ★要件（項目114）：スマホでは絞り込み欄が常に開いていて画面の半分近く（444px）を占め、
+             案件が1件も見えないまま下までスクロールする必要があった。狭い画面では既定で閉じ、
+             このボタンで開けるようにする。PCでは従来どおり常に開いた状態のまま（ボタンも出さない）。 -->
+        <button type="button" id="dashboard-filter-toggle">絞り込み・検索を開く</button>
+        <div id="scope-selector" class="scope-box jp-only hidden filter-collapsible"></div>
         <!-- ★要件：現地支店・手配課も、店舗と同じく別画面（検索）に行かなくても一覧画面の中で
              絞り込めるようにする（チャレンジ番号／お名前／管理番号・撮影日の範囲・STS(JP側)・
              STS(支店側)・プラン名で検索、複数条件の組み合わせも可能） -->
-        <div id="nonshop-dashboard-filter" class="scope-box non-shop" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
+        <div id="nonshop-dashboard-filter" class="scope-box non-shop filter-collapsible" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
           <div style="flex:2;min-width:180px;">
             <label style="font-size:0.72rem;color:var(--color-muted);display:block;margin-bottom:4px;">検索（チャレンジ番号・お名前・管理番号）</label>
             <input id="nonshop-dashboard-search" type="text" placeholder="例）CH-2201 / Yamada / VIE-003">
@@ -101,7 +105,7 @@
         </div>
         <!-- ★機能追加：店舗ロール向けの一覧の絞り込み（チャレンジ番号／お名前／管理番号・撮影日の範囲・
              STS(JP側)・プラン名で検索。担当（手配課）の絞り込みは廃止した） -->
-        <div id="shop-dashboard-filter" class="scope-box shop-only hidden" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
+        <div id="shop-dashboard-filter" class="scope-box shop-only hidden filter-collapsible" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
           <div style="flex:2;min-width:180px;">
             <label style="font-size:0.72rem;color:var(--color-muted);display:block;margin-bottom:4px;">検索（チャレンジ番号・お名前・管理番号）</label>
             <input id="shop-dashboard-search" type="text" placeholder="例）CH-2201 / Yamada / VIE-003">
@@ -128,12 +132,12 @@
             <input id="shop-dashboard-plan" type="text" placeholder="例）プレミアムプラン">
           </div>
         </div>
-        <label class="checkbox-label" style="margin:4px 0 10px;">
+        <label class="checkbox-label filter-collapsible" style="margin:4px 0 10px;">
           <input id="show-cancelled" type="checkbox"> キャンセル（CW）済みも表示する
         </label>
         <!-- ★要件：出発済み（撮影日が現在の日付より過去）の案件は既定では一覧に出さない。
              チェックすると表示する（現地支店・日本の支店・手配課いずれも共通の挙動） -->
-        <label class="checkbox-label" style="margin:0 0 10px;">
+        <label class="checkbox-label filter-collapsible" style="margin:0 0 10px;">
           <input id="show-past" type="checkbox"> 過去を表示（撮影日が過去の案件も表示する）
         </label>
         <!-- ★機能追加：複数の案件のステータスをまとめて更新する。表表示のときだけ使える。

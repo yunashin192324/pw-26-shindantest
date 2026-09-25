@@ -269,6 +269,49 @@
   .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: #111827; color: #fff;
     padding: 10px 18px; border-radius: 999px; font-size: 0.85rem; box-shadow: 0 4px 14px rgba(0,0,0,0.2); z-index: 50; }
 
+  /* =========================================================================
+     ★要件（項目114）：スマホで見られるようにする
+     もともとこの画面はPCでの利用が中心だったが、外出先から見たい場面が出てきたため、
+     狭い画面で実際に困っていた4点を直す。PC（720px以上）の見た目は一切変えない。
+     ========================================================================= */
+
+  /* ① ヘッダーの操作ボタンが9個・3行に折り返して165px（画面の2割）を常時占めていた。
+        1行に収めて横になぞって送れるようにする。 */
+  @media (max-width: 719px) {
+    .header-nav { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch;
+      scrollbar-width: none; }
+    .header-nav::-webkit-scrollbar { display: none; }
+    .nav-btn { flex: 0 0 auto; white-space: nowrap; }
+  }
+
+  /* ② 案件詳細のクイックナビは、8〜9個を390pxに詰めた結果1文字ずつ縦に並び
+        （「お客様情報」が縦書きになる）、約180pxを使っていた。横に流す。 */
+  @media (max-width: 719px) {
+    .tab-bar { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch;
+      scrollbar-width: none; }
+    .tab-bar::-webkit-scrollbar { display: none; }
+    .tab-btn { flex: 0 0 auto; white-space: nowrap; padding: 10px 14px; }
+  }
+
+  /* ③ 絞り込み欄が常に開いていて444pxを占め、案件が最初の画面に1件も出なかった。
+        狭い画面では既定で閉じ、ボタンで開く。PCではボタンを出さず常に開いたまま。 */
+  #dashboard-filter-toggle { display: none; }
+  @media (max-width: 719px) {
+    #dashboard-filter-toggle { display: block; width: 100%; margin-bottom: 8px;
+      background: #fff; border: 1px solid var(--color-border); border-radius: 8px;
+      padding: 12px 14px; font-size: 0.9rem; font-weight: 700; min-height: 48px;
+      color: var(--color-primary-dark); cursor: pointer; text-align: left; }
+    #view-dashboard:not(.filters-open) .filter-collapsible { display: none !important; }
+  }
+
+  /* ④ 表の表示は10列・幅1,000px超で、幅360pxの窓からは3分の2が見えない。
+        横に隠れていることが分かるよう、表示形式の切替を目立たせる。
+        （最初の表示はカードにする＝JavaScript.htmlのdashboardViewMode） */
+  @media (max-width: 719px) {
+    .table-wrap { position: relative; }
+    .view-toggle-btn { min-height: 44px; padding: 10px 14px; }
+  }
+
   /* ★要件（項目112）：入力欄の並び。以前は「見出し→欄」が1列で延々と続き、欄の幅は内容に
      関わらず全て画面幅いっぱいだった。11桁の番号も氏名も備考も同じ幅では「何を入れる欄か」の
      手がかりにならず、フォームも必要以上に長くなる。2列に並べ、幅を内容に合わせる。
