@@ -53,6 +53,10 @@
   // 掲載順を揃える。店舗に無い「記入欄・手配・ドライブ」は、店舗の「書類」に相当する位置
   // （お客様情報・予約内容の直後、メッセージ・履歴の手前）にまとめて置く。
   const DETAIL_QUICK_NAV = [
+    // ★要件（項目113）：案件を開いた人が最初に知りたいのは「いまどういう状態か」。
+    // 以前はその情報（STS）が画面のかなり下（1,600px前後）にしか無く、クイックナビにも
+    // 入口が無かったため、開いた瞬間には状態が分からなかった。先頭に置く。
+    { key: 'status', label: 'いまの状況' },
     { key: 'customer', label: 'お客様情報' },
     { key: 'reservation', label: '予約内容' },
     { key: 'entry', label: '記入欄' },
@@ -2454,6 +2458,26 @@
     // 従来の仕組みではなく、押すと該当セクションへスムーズスクロールするクイックナビにする
     // （店舗画面のshopQuickNavHtmlと同じ考え方）。data-tab属性は既存のテスト・記入欄の
     // 切替ボタンと衝突しない範囲で、後方互換のためそのまま残す（実際の表示切替はしない）。
+    // ★要件（項目113）：案件を開いた直後に「いまどういう状態か」が分かるようにする。
+    // 以前はSTS(JP側)・STS(支店側)が画面の1,600px前後（全体6,000pxの4分の1より下）にしか
+    // 無く、開いた瞬間に最初に見えるのは任意入力の年齢欄だった。店舗の画面は以前から
+    // 「依頼状況」が一番上にあり、同じ考え方を手配課・現地支店の画面にも揃える。
+    // ここは読むための場所なので編集はさせない（変更は従来どおり明細表・希望日一覧から行う）。
+    function statusSummaryHtml_(d) {
+      return `
+      <div class="section-card" id="sec-status">
+        <h3>いまの状況</h3>
+        <div class="detail-grid">
+          <div class="field-block"><label>STS JP（日本側）</label><div>${inlineStatusBadge('STS JP', d['STS JP'], 'hq')}</div></div>
+          <div class="field-block"><label>STS 支店（現地側）</label><div>${inlineStatusBadge('STS 支店', d['STS 支店'], 'branch')}</div></div>
+          <div class="field-block"><label>撮影日(挙式日)FIX</label><div class="status-strong">${escapeHtml(d['撮影日FIX'] || '未確定')}</div></div>
+          <div class="field-block"><label>撮影データのアップ</label><div class="status-strong">${d['撮影データアップ済み'] === '済' ? '済' : '未'}</div></div>
+          ${!d.originShop ? '' : `<div class="field-block"><label>起票元店舗</label><div class="status-strong">${escapeHtml(d.originShopName || d.originShop)}</div></div>`}
+          ${!d.shopBilling ? '' : `<div class="field-block"><label>請求先（店舗の営業本部）</label><div class="status-strong">${escapeHtml(d.shopBilling)}</div></div>`}
+        </div>
+      </div>`;
+    }
+
     const tabBarHtml = `
       <div class="tab-bar" id="detail-quick-nav">
         ${DETAIL_QUICK_NAV.map(t =>
@@ -2527,6 +2551,7 @@
     const customerTabHtml = `
       <div class="tab-pane" data-tab-pane="customer" id="sec-customer">
         <div class="section-card">
+          <h3>お客様情報</h3>
           <div class="detail-grid">
             <div class="field-group-hint">下記はFN確定までに要入力</div>
             <div class="field-block"><label>新郎年齢（※ISWのみ必要）</label><input type="number" min="0" data-pending="新郎年齢" value="${escapeAttr(d['新郎年齢'])}"></div>
@@ -2564,6 +2589,7 @@
     const reservationTabHtml = `
       <div class="tab-pane" data-tab-pane="reservation" id="sec-reservation">
         <div class="section-card">
+          <h3>新郎新婦のお名前</h3>
           <div class="detail-grid">
             <div class="field-block"><label>新郎姓（ローマ字）</label><input data-pending="新郎姓（ローマ字）" value="${escapeAttr(d['新郎姓（ローマ字）'])}"></div>
             <div class="field-block"><label>新郎名（ローマ字）</label><input data-pending="新郎名（ローマ字）" value="${escapeAttr(d['新郎名（ローマ字）'])}"></div>
@@ -2573,6 +2599,7 @@
         </div>
 
         <div class="section-card">
+          <h3>案件番号・確定日</h3>
           <!-- ★要件：撮影日FIXと挙式日FIXは同じ欄「撮影日(挙式日)FIX」にまとめる（希望日のいずれかで
                現地・日本双方がOKになると、applyHopeStatusCascade_により自動で日付が入る）。
                挙式日FIX列は残してあり、保存時にwithCeremonyDateMirror_が同じ値を自動で反映する。 -->
@@ -2583,10 +2610,12 @@
         </div>
 
         <div class="section-card">
+          <h3>空き確認</h3>
           ${inquiryBlock}
         </div>
 
         <div class="section-card">
+          <h3>撮影の希望内容</h3>
           <div class="detail-grid">
             <div class="field-block"><label>セール名（候補から選択・自由入力も可）</label>
               <input data-pending="セール名" value="${escapeAttr(d['セール名'])}" list="sale-datalist" placeholder="任意入力">
@@ -2791,6 +2820,7 @@
         <button type="button" class="print-btn" id="print-arrangement-btn">🖨 手配内容をPDFで保存</button>
       </div>
       ${tabBarHtml}
+      ${statusSummaryHtml_(d)}
       ${customerTabHtml}
       ${reservationTabHtml}
       ${entryGroupHtml}

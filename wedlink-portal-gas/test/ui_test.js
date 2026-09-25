@@ -1413,8 +1413,9 @@ function paneHidden(document, key) {
     const nav = document.getElementById('detail-quick-nav');
     check('日本側の詳細画面にもクイックナビが表示される（店舗画面と同じ仕組み）', !!nav);
     const navBtns = [...nav.querySelectorAll('[data-scroll-to]')];
-    check('クイックナビにお客様情報・予約内容・記入欄・拠点メモ・手配・ドライブ・メッセージ・履歴の8つがある',
-          navBtns.length === 8, navBtns.map(b => b.dataset.scrollTo).join(','));
+    check('クイックナビに「いまの状況」を先頭とする9つがある',
+          navBtns.length === 9 && navBtns[0].dataset.scrollTo === 'sec-status',
+          navBtns.map(b => b.dataset.scrollTo).join(','));
     const missingTargets = navBtns.map(b => b.dataset.scrollTo).filter(id => !document.getElementById(id));
     check('クイックナビの全ボタンに対応するセクションが実在する', missingTargets.length === 0, missingTargets.join(','));
     // ★不具合防止：jsdomにはscrollIntoViewが無いが、押しても例外にならず安全に無視されること
@@ -1444,8 +1445,8 @@ function paneHidden(document, key) {
     const navBranch = document.getElementById('detail-quick-nav');
     check('現地支店の詳細画面にも同じクイックナビが表示される', !!navBranch);
     const navBranchBtns = [...navBranch.querySelectorAll('[data-scroll-to]')];
-    check('現地支店のクイックナビも8項目（日本記入欄が無いだけで項目数は変わらない）',
-          navBranchBtns.length === 8, navBranchBtns.map(b => b.dataset.scrollTo).join(','));
+    check('現地支店のクイックナビも9項目（日本記入欄が無いだけで項目数は変わらない）',
+          navBranchBtns.length === 9, navBranchBtns.map(b => b.dataset.scrollTo).join(','));
     ['message', 'customer', 'reservation', 'arrangement', 'drive', 'timeline', 'local'].forEach(key => {
       check(`現地支店でも「${key}」セクションが最初から表示されている`,
             paneHidden(document, key) === false, String(paneHidden(document, key)));
@@ -1819,8 +1820,9 @@ function paneHidden(document, key) {
 
   section('U32. 現地支店・手配課の案件詳細のセクション掲載順を日本の店舗と揃える');
   {
-    const expectedLabels = ['お客様情報', '予約内容', '記入欄', '拠点メモ', '手配', 'ドライブ', 'メッセージ', '履歴'];
-    const expectedIds = ['sec-customer', 'sec-reservation', 'sec-entry', 'sec-memo', 'sec-arrangement', 'sec-drive', 'sec-message', 'sec-timeline'];
+    // ★仕様変更（項目113）：先頭に「いまの状況」を追加した（案件を開いた瞬間に状態が分かるようにするため）
+    const expectedLabels = ['いまの状況', 'お客様情報', '予約内容', '記入欄', '拠点メモ', '手配', 'ドライブ', 'メッセージ', '履歴'];
+    const expectedIds = ['sec-status', 'sec-customer', 'sec-reservation', 'sec-entry', 'sec-memo', 'sec-arrangement', 'sec-drive', 'sec-message', 'sec-timeline'];
 
     // --- JP（手配課） ---
     document.getElementById('nav-logout').click();
@@ -1829,7 +1831,7 @@ function paneHidden(document, key) {
     document.querySelector('#reservation-list .res-card').click();
     await settle();
     const jpNavBtns = [...document.getElementById('detail-quick-nav').querySelectorAll('button')].map(b => b.textContent);
-    check('JPのクイックナビが店舗と同じ並び順（お客様情報→予約内容→記入欄→拠点メモ→手配→ドライブ→メッセージ→履歴）になっている',
+    check('JPのクイックナビが店舗と同じ並び順（いまの状況→お客様情報→予約内容→記入欄→拠点メモ→手配→ドライブ→メッセージ→履歴）になっている',
           jpNavBtns.join(',') === expectedLabels.join(','), jpNavBtns.join(','));
     const jpHtml = document.getElementById('detail-content').innerHTML;
     const jpPositions = expectedIds.map(id => jpHtml.indexOf(`id="${id}"`));
@@ -1843,7 +1845,7 @@ function paneHidden(document, key) {
     [...document.querySelectorAll('#reservation-list .res-card')][0].click();
     await settle();
     const branchNavBtns = [...document.getElementById('detail-quick-nav').querySelectorAll('button')].map(b => b.textContent);
-    check('現地支店のクイックナビも店舗と同じ並び順になっている（項目数はJPと同じ8つ）',
+    check('現地支店のクイックナビも店舗と同じ並び順になっている（項目数はJPと同じ9つ）',
           branchNavBtns.join(',') === expectedLabels.join(','), branchNavBtns.join(','));
     const branchHtml = document.getElementById('detail-content').innerHTML;
     const branchPositions = expectedIds.map(id => branchHtml.indexOf(`id="${id}"`));
@@ -4269,6 +4271,49 @@ function paneHidden(document, key) {
     invalid68.value = 'ABCDE123456';
     invalid68.dispatchEvent(new dom68.window.Event('input'));
     check('入力し直すとしるしが消える', !invalid68.classList.contains('field-invalid'));
+  }
+
+  // ---------------------------------------------------------------
+  section('U69. 【改善】案件詳細の一番上に「いまの状況」を置く・見出しの無いまとまりを無くす（項目113）');
+  {
+    const ctx69 = makeServer();
+    // 現地支店の一覧に必ず1件出るよう、先の日付の案件を用意する
+    // （既定では撮影日が過去の案件は一覧に出ないため）
+    const jp69 = ctx69.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    ctx69.apiCreateReservation(jp69, 'VIE', '01 Status\n02 Check\nRQ 2027/10/05\nRQ 2027/10/06');
+    const dom69 = await openApp(ctx69);
+    const doc69 = dom69.window.document;
+
+    for (const [who, code, pass69] of [['手配課', 'KANTO', 'CHANGE-ME-KANTO'], ['現地支店', 'VIE', 'CHANGE-ME-VIE']]) {
+      if (doc69.getElementById('nav-logout') && !doc69.getElementById('app-header').classList.contains('hidden')) {
+        doc69.getElementById('nav-logout').click();
+        await settle();
+      }
+      await login(dom69, code, pass69);
+      await settle(); await settle();
+      const row69 = [...doc69.querySelectorAll('#reservation-table-body tr, #reservation-list .res-card')][0];
+      check(`${who}：案件一覧に案件が出ている`, !!row69);
+      if (!row69) continue;
+      row69.click();
+      await settle(); await settle();
+
+      const content = doc69.getElementById('detail-content');
+      const status = doc69.getElementById('sec-status');
+      check(`${who}：案件詳細に「いまの状況」のまとまりがある`, !!status);
+      check(`${who}：そこにSTS(JP側)とSTS(支店側)の両方が出ている`,
+            !!status && status.textContent.includes('STS JP') && status.textContent.includes('STS 支店'));
+      check(`${who}：撮影日FIXも出ている`, !!status && status.textContent.includes('撮影日'));
+      // 画面を開いた人が最初に見るまとまりであること（他のどのまとまりより前にある）
+      const html69 = content.innerHTML;
+      check(`${who}：他のどのまとまりより先に置かれている`,
+            html69.indexOf('id="sec-status"') >= 0 &&
+            html69.indexOf('id="sec-status"') < html69.indexOf('id="sec-customer"'));
+      // ★要件（項目113）：見出しの無いまとまりは、何が書いてあるのか分からず探せないので作らない
+      const noTitle = [...content.querySelectorAll('.section-card')]
+        .filter(el => !el.querySelector('h3') && !el.closest('.plan-option-card'));
+      check(`${who}：見出しの無いまとまりが無い`, noTitle.length === 0,
+            noTitle.map(el => el.textContent.trim().slice(0, 20)).join(' / '));
+    }
   }
 
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);

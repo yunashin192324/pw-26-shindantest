@@ -103,7 +103,7 @@
       content: ""; position: fixed; inset: 0; background: rgba(28,31,46,0.16); z-index: -1;
     }
   }
-  .hint-text { color: var(--color-muted); font-size: 0.82rem; }
+  .hint-text { color: var(--color-muted); font-size: 0.84rem; }
   /* ★不具合修正：新郎新婦年齢欄の入力期限（FN確定まで）をラベルの文言に埋め込んでいたが、
      欄ごとに繰り返されて冗長・見づらいとの指摘を受け、対象の欄（新郎年齢・新婦年齢）の
      まとまりの上に小さな帯として1つだけ出す形に変更した。detail-grid（案件詳細のお客様情報
@@ -147,7 +147,7 @@
   .case-status-date { display: block; font-size: 1.12rem; font-weight: 700; color: var(--color-text); }
   .res-card-names { font-size: 1rem; font-weight: 600; margin: 4px 0; }
   .res-card-bottom { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
-  .chip { font-size: 0.72rem; padding: 3px 8px; border-radius: 999px; background: #eef2f7; color: var(--color-text); }
+  .chip { font-size: 0.78rem; padding: 3px 9px; border-radius: 999px; background: #eef2f7; color: var(--color-text); }
   .chip.hq { background: #fce7f3; color: var(--color-hq); }
   .chip.branch { background: #ccfbf1; color: var(--color-branch); }
   .empty-text { color: var(--color-muted); text-align: center; margin-top: 30px; }
@@ -212,7 +212,11 @@
   .detail-header .names { font-size: 1.2rem; font-weight: 700; margin: 4px 0; }
   .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
   .field-block { background: #f9fafb; border-radius: 6px; padding: 8px 10px; }
-  .field-block label { font-size: 0.72rem; color: var(--color-muted); display: block; margin-bottom: 3px; }
+  /* ★要件（項目113）：案件詳細は毎日長時間見る画面。以前は欄の見出しが0.72rem（約11.5px）と
+     この画面でいちばん小さい文字で、しかも薄い灰色だった。「何の欄か」は最も読む必要がある
+     ところなので、大きさと濃さを上げる（値そのものの文字はもともと大きいので変えない）。 */
+  .field-block label { font-size: 0.8rem; color: #4a4f66; display: block; margin-bottom: 3px; }
+  .status-strong { font-size: 0.95rem; font-weight: 700; color: var(--color-text); }
   .field-block input, .field-block select { border: 1px solid var(--color-border); border-radius: 6px; padding: 6px 8px;
     font-size: 0.9rem; width: 100%; background: #fff; }
   .section-card { background: var(--color-card); border-radius: 8px; padding: 14px; margin-bottom: 14px;
@@ -239,8 +243,10 @@
 
   .val { font-size: 0.9rem; }
   .val.locked-val { font-weight: 700; color: var(--color-muted); display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
-  .history-link { display: block; background: none; border: none; color: var(--color-primary-dark); font-size: 0.72rem;
-    padding: 4px 0 0; cursor: pointer; text-decoration: underline; }
+  /* ★要件（項目113）：「履歴」は誰がいつ変えたかを辿る入口で、1画面に20〜30個ある。
+     以前は高さ19pxしかなく、狙って押しにくかった。文字を大きくし、押せる範囲を広げる。 */
+  .history-link { display: inline-block; background: none; border: none; color: var(--color-primary-dark);
+    font-size: 0.78rem; padding: 5px 6px; margin-top: 2px; cursor: pointer; text-decoration: underline; }
   .history-panel { margin-top: 4px; background: #f3f4f6; border-radius: 8px; padding: 8px 10px; font-size: 0.78rem; }
   .history-log-item { padding: 3px 0; border-bottom: 1px solid #e5e7eb; color: var(--color-text); }
   .history-log-item:last-child { border-bottom: none; }
