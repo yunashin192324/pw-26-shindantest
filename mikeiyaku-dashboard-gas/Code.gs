@@ -748,6 +748,120 @@ function assertShopInScope_(sheetName) {
   }
 }
 
+/**
+ * 「新規相談登録」で担当スタッフを検索・選択するための一覧を返す。
+ * 表記ゆれ（社員番号・社員名の手入力ミス）を防ぐため、新規登録の担当者は
+ * 自由入力ではなくこの一覧から選ばせる。閲覧できる範囲は権限に準じ、
+ * 一般スタッフは自店舗のみ・管理者以上は全店舗が対象。
+ * 本部（店舗を持たない）スタッフは実績データを持てないため対象外。
+ */
+function getActiveStaffForSelection() {
+  try {
+    const ctx = getCurrentUserContext_();
+    const shopList = getShopList_();
+    const shopNameByCode = {};
+    shopList.forEach(function (s) { shopNameByCode[s.code] = s.name; });
+
+    const staff = getStaffMasterRows_().filter(function (s) {
+      if (!s.active) return false;
+      if (isHqOfficeCode_(s.officeCode)) return false;
+      if (!shopNameByCode[s.officeCode]) return false;
+      if (!ctx.canViewAllStores && ctx.officeCode && s.officeCode !== ctx.officeCode) return false;
+      return true;
+    });
+
+    return {
+      success: true,
+      staff: staff.map(function (s) {
+        return {
+          rowIndex: s.rowIndex,
+          officeCode: s.officeCode,
+          officeName: shopNameByCode[s.officeCode],
+          employeeNo: s.employeeNo,
+          employeeName: s.employeeName
+        };
+      })
+    };
+  } catch (err) {
+    return { success: false, error: err.message + '\n' + err.stack };
+  }
+}
+
+/**
+ * ⑤ 新規相談登録フォームから送信されたデータを、対象店舗シートへ1行追記する。
+ * 営業日報CSVに出てこない相談（飛び込み等）を手入力で登録するための窓口。
+ * 表記ゆれを防ぐため、担当スタッフは自由入力ではなくスタッフマスタ上の行番号
+ * （staffRowIndex、getActiveStaffForSelection()で取得した一覧から選ぶ）で指定する。
+ * 営業所コード・社員番号・社員名はクライアントから受け取った文字列を一切使わず、
+ * 必ずスタッフマスタの現在値をサーバー側で読み直して書き込む。
+ * @param {Object} rowObject 27列ヘッダー名をキーとするオブジェクト（sheetName・
+ *   営業所コード・社員番号・社員名は不要。staffRowIndexから解決するため無視される）
+ * @param {number} staffRowIndex 担当スタッフの、スタッフマスタ上の行番号
+ */
+function addUncontractedData(rowObject, staffRowIndex) {
+  try {
+    const rIdx = parseInt(staffRowIndex, 10);
+    if (isNaN(rIdx) || rIdx < 2) {
+      throw new Error('担当スタッフが指定されていません。');
+    }
+    const staff = getStaffMasterRows_().filter(function (s) { return s.rowIndex === rIdx; })[0];
+    if (!staff || !staff.active) {
+      throw new Error('指定された担当スタッフが見つかりません（マスタから削除・無効化された可能性があります）。');
+    }
+    if (isHqOfficeCode_(staff.officeCode)) {
+      throw new Error('本部所属のスタッフは実績データを持てないため、担当者に指定できません。');
+    }
+    const shop = getShopList_().filter(function (s) { return s.code === staff.officeCode; })[0];
+    if (!shop) {
+      throw new Error('担当スタッフの所属店舗が見つかりません: ' + staff.officeCode);
+    }
+    const sheetName = shop.name;
+    assertShopInScope_(sheetName);
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(sheetName);
+    if (!sheet) {
+      throw new Error('シートが見つかりません: ' + sheetName);
+    }
+
+    // 27列の共通カラム順に、送信オブジェクトの値をマッピングして1次元配列を作成
+    const newRow = HEADERS_MAIN.map(function (header) {
+      const v = rowObject ? rowObject[header] : undefined;
+      return (v === undefined || v === null) ? '' : v;
+    });
+    // 営業所コード・社員番号・社員名は自由入力を使わず、スタッフマスタの現在値で確定する
+    // （表記ゆれ・入力ミスの再発を防ぐため、ここだけはrowObjectの値を無視して上書きする）
+    newRow[HEADERS_MAIN.indexOf('営業所コード')] = staff.officeCode;
+    newRow[HEADERS_MAIN.indexOf('社員番号')] = staff.employeeNo;
+    newRow[HEADERS_MAIN.indexOf('社員名')] = staff.employeeName;
+
+    // 「対象年月日」（YYYYMMDD）から月（2桁文字列）を自動抽出し、「月」列（4列目）へ反映
+    const targetDate = String((rowObject && rowObject['対象年月日']) || '');
+    if (targetDate.length >= 6) {
+      newRow[3] = targetDate.substring(4, 6);
+    }
+
+    const lastRow = sheet.getLastRow();
+    const targetRowIndex = lastRow + 1;
+    ensureRowCapacity_(sheet, targetRowIndex);
+    sheet.getRange(targetRowIndex, 1, 1, HEADERS_MAIN.length).setValues([newRow]);
+    // 営業所コード・社員番号は桁落ちしてはいけない列のため、念のためテキスト書式にしておく
+    ['営業所コード', '社員番号'].forEach(function (col) {
+      const c = HEADERS_MAIN.indexOf(col) + 1;
+      sheet.getRange(targetRowIndex, c).setNumberFormat('@');
+    });
+
+    return {
+      success: true,
+      sheetName: sheetName,
+      rowIndex: targetRowIndex,
+      row: newRow
+    };
+  } catch (err) {
+    return { success: false, error: err.message + '\n' + err.stack };
+  }
+}
+
 // ---- 取り込みファイルの形式判定・解析 ---------------------------------------
 
 /**
@@ -922,7 +1036,7 @@ function importUncontractedCsv(csvText) {
  * 「is not a function」という分かりにくいエラーになるため、
  * 画面側から版数を確認できるようにしている。
  */
-const SERVER_VERSION = '2026-08-26';
+const SERVER_VERSION = '2026-08-27';
 
 /**
  * サーバー側の版数を返す。画面側は、自分が期待する版数と一致するかを起動時に確認する。

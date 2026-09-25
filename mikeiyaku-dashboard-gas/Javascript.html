@@ -187,6 +187,7 @@ document.addEventListener('DOMContentLoaded', function () {
   initEmployeeEvents();
   initDataManagerEvents();
   initDataManagerSort();
+  initModalEvents();
   initCsvImportEvents();
   initAdminEvents();
   initStaffMasterControls();
@@ -197,7 +198,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // 画面側が前提としているサーバー（Code.gs）の版数。Code.gs の SERVER_VERSION と対で更新する。
-const REQUIRED_SERVER_VERSION = '2026-08-26';
+const REQUIRED_SERVER_VERSION = '2026-08-27';
 
 /**
  * Code.gs が画面と同じ版数まで更新されているか確認する。
@@ -580,6 +581,21 @@ function populateAllMasterSelects() {
 
   // 社員の選択肢は、選ばれている店舗に合わせて絞り込む
   populateDmEmployeeSelect();
+
+  // 新規相談登録フォームの選択肢（担当スタッフは自由入力ではなく別途検索して選ぶため対象外）
+  fillSelectSimple('#register-form select[name="未成約理由(大)"]', metaMasters.reasonMaster || []);
+  fillSelectSimple('#register-form select[name="種別"]', metaMasters.typeMaster || []);
+  fillSelectSimple('#register-form select[name="旅行目的(小)"]', metaMasters.purposeMaster || []);
+  fillSelectSimple('#register-form select[name="接客方法"]', metaMasters.contactMaster || []);
+}
+
+function fillSelectSimple(selector, labels) {
+  const el = document.querySelector(selector);
+  const opts = ['<option value="">－</option>'];
+  labels.forEach(function (label) {
+    opts.push('<option value="' + escapeHtml(label) + '">' + escapeHtml(label) + '</option>');
+  });
+  el.innerHTML = opts.join('');
 }
 
 function fillOptions(elId, items, multi) {
@@ -2179,6 +2195,156 @@ function applyUpdatedRowToCache(updatedRow) {
   if (dmIdx !== -1) {
     dmFilteredCache[dmIdx] = updatedRow;
   }
+}
+
+// ============================================================================
+// 新規相談登録モーダル
+// ----------------------------------------------------------------------------
+// 日報CSVに載らない相談（飛び込み等）を手入力で登録するための画面。
+// 担当スタッフは自由入力ではなく、登録済みのスタッフマスタから検索して選ぶ
+// （店舗名・社員番号・社員名の表記ゆれで同一人物が別人扱いになる不具合を防ぐため）。
+// ============================================================================
+let registerStaffCache = [];
+
+function initModalEvents() {
+  document.getElementById('btn-open-modal').addEventListener('click', openModal);
+  document.getElementById('btn-close-modal').addEventListener('click', closeModal);
+  document.getElementById('btn-cancel-modal').addEventListener('click', closeModal);
+  document.getElementById('register-form').addEventListener('submit', onSubmitRegisterForm);
+
+  const searchInput = document.getElementById('register-staff-search');
+  searchInput.addEventListener('input', function () {
+    document.getElementById('register-staff-rowindex').value = '';
+    renderRegisterStaffResults(searchInput.value);
+  });
+  searchInput.addEventListener('focus', function () {
+    renderRegisterStaffResults(searchInput.value);
+  });
+  document.addEventListener('click', function (ev) {
+    const box = document.getElementById('register-staff-results');
+    if (ev.target !== searchInput && !box.contains(ev.target)) box.classList.add('hidden');
+  });
+}
+
+function openModal() {
+  document.getElementById('register-modal').classList.remove('hidden');
+  document.getElementById('register-modal').classList.add('flex');
+  loadRegisterStaffOptions();
+}
+
+function closeModal() {
+  document.getElementById('register-modal').classList.add('hidden');
+  document.getElementById('register-modal').classList.remove('flex');
+  document.getElementById('register-form').reset();
+  document.getElementById('register-staff-rowindex').value = '';
+  document.getElementById('register-staff-results').classList.add('hidden');
+}
+
+/** 担当スタッフの検索候補を取得する（モーダルを開くたびに最新化する） */
+function loadRegisterStaffOptions() {
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (res && res.success) {
+        registerStaffCache = res.staff || [];
+      } else {
+        showToast('担当スタッフの一覧を取得できませんでした: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+    })
+    .withFailureHandler(function (err) {
+      showToast('通信エラー（getActiveStaffForSelection）: ' + err.message, 'error');
+    })
+    .getActiveStaffForSelection();
+}
+
+/** 入力された文字列（社員名・社員番号・店舗名）で担当スタッフの候補を絞り込んで表示する */
+function renderRegisterStaffResults(query) {
+  const box = document.getElementById('register-staff-results');
+  const q = String(query || '').trim().toLowerCase();
+  const matches = registerStaffCache.filter(function (s) {
+    if (!q) return true;
+    return (s.employeeName || '').toLowerCase().indexOf(q) !== -1 ||
+      (s.employeeNo || '').toLowerCase().indexOf(q) !== -1 ||
+      (s.officeName || '').toLowerCase().indexOf(q) !== -1;
+  }).slice(0, 30);
+
+  if (matches.length === 0) {
+    box.innerHTML = '<div class="px-3 py-2 text-slate-400">' +
+      (registerStaffCache.length === 0 ? '読み込み中、または該当するスタッフがいません' : '該当するスタッフがいません') + '</div>';
+  } else {
+    box.innerHTML = matches.map(function (s) {
+      return '<div class="px-3 py-2 hover:bg-blue-50 cursor-pointer" data-staff-rowindex="' + s.rowIndex + '">' +
+        escapeHtml(s.officeName) + ' ・ ' + escapeHtml(s.employeeName) +
+        (s.employeeNo ? '（' + escapeHtml(s.employeeNo) + '）' : '') + '</div>';
+    }).join('');
+    box.querySelectorAll('[data-staff-rowindex]').forEach(function (el) {
+      el.addEventListener('click', function () {
+        selectRegisterStaff(Number(el.dataset.staffRowindex));
+      });
+    });
+  }
+  box.classList.remove('hidden');
+}
+
+/** 検索結果から担当スタッフを確定する */
+function selectRegisterStaff(rowIndex) {
+  const staff = registerStaffCache.find(function (s) { return s.rowIndex === rowIndex; });
+  if (!staff) return;
+  document.getElementById('register-staff-rowindex').value = rowIndex;
+  document.getElementById('register-staff-search').value =
+    staff.officeName + ' ・ ' + staff.employeeName + (staff.employeeNo ? '（' + staff.employeeNo + '）' : '');
+  document.getElementById('register-staff-results').classList.add('hidden');
+}
+
+function onSubmitRegisterForm(ev) {
+  ev.preventDefault();
+  const form = ev.target;
+  const formData = new FormData(form);
+
+  const staffRowIndex = document.getElementById('register-staff-rowindex').value;
+  if (!staffRowIndex) {
+    showToast('担当スタッフを検索して選んでください。', 'error');
+    return;
+  }
+
+  const rowObject = {};
+  ['リセール', 'STS', '成約PAX', '未成約理由(大)', '都市コード', '種別',
+    '旅行目的(小)', '接客方法', 'HIS利用歴', '詳細', 'ACT日', 'ACT内容', '備考', '予約番号'].forEach(function (key) {
+    rowObject[key] = formData.get(key) || '';
+  });
+
+  const dateVal = formData.get('対象年月日');
+  rowObject['対象年月日'] = dateVal ? dateVal.replace(/-/g, '') : '';
+
+  const monthVal = formData.get('出発年月_month');
+  rowObject['出発年月'] = monthVal ? monthVal.replace('-', '') : '';
+
+  if (!rowObject['対象年月日']) {
+    showToast('対象年月日は必須です。', 'error');
+    return;
+  }
+
+  const submitBtn = document.getElementById('btn-submit-modal');
+  submitBtn.disabled = true;
+  showLoading(true);
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false);
+      submitBtn.disabled = false;
+      if (res && res.success) {
+        showToast('新規相談を登録しました。', 'success');
+        closeModal();
+        loadAllData();
+      } else {
+        showToast('登録に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
+      }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false);
+      submitBtn.disabled = false;
+      showToast('通信エラー（addUncontractedData）: ' + err.message, 'error');
+    })
+    .addUncontractedData(rowObject, Number(staffRowIndex));
 }
 
 // ============================================================================
