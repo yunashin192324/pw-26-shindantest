@@ -22,11 +22,16 @@
     assign has_best = true
   endif
   if plan
-    assign std_price = plan.variants.first.price
+    assign light_price = plan.variants[0].price
     if plan.variants.size > 1
-      assign allin_price = plan.variants.last.price
+      assign std_price = plan.variants[1].price
+    endif
+    if plan.variants.size > 2
+      assign lux_price = plan.variants[2].price
     endif
   endif
+  assign hotels = loc.hotels.value
+  assign chapels = loc.chapels.value
   assign hero_alt = loc.location_name.value | append: 'の景色'
 -%}
 
@@ -39,7 +44,7 @@
     <p class="lhero-name" aria-hidden="true">{{ name_en | escape }}</p>
     <h1 class="h1" id="l-title">{{ loc.catch_copy.value | escape | newline_to_br }}</h1>
     {%- if plan %}
-    <p class="lhero-price">From<span class="price">{{ std_price | money }}</span></p>
+    <p class="lhero-price">From<span class="price">{{ light_price | money }}</span></p>
     {%- endif %}
     <div class="lhero-cta">
       <button type="button" class="btn btn-light" data-scroll="loc-avail">受付状況を見る</button>
@@ -56,7 +61,7 @@
     </div>
     <dl class="facts reveal" style="margin-top:56px">
       {%- if plan %}
-      <div class="fact"><dt>Price</dt><dd><span class="price">{{ std_price | money }}</span><small>プロポーズプラン</small></dd></div>
+      <div class="fact"><dt>Price</dt><dd><span class="price">{{ light_price | money }}</span><small>ライトプラン（花束のみ）</small></dd></div>
       {%- endif %}
       <div class="fact"><dt>Time</dt><dd>{{ loc.duration.value | escape }}<small>{{ section.settings.time_sub | escape }}</small></dd></div>
       {%- if has_best %}
@@ -66,6 +71,38 @@
       <div class="fact"><dt>Rain</dt><dd>{{ section.settings.rain_value | escape }}<small>{{ section.settings.rain_sub | escape }}</small></dd></div>
       <div class="fact"><dt>Support</dt><dd>{{ section.settings.support_value | escape }}<small>{{ section.settings.support_sub | escape }}</small></dd></div>
     </dl>
+    {%- if hotels != blank or chapels != blank -%}
+      {%- liquid
+        assign venue_parts = ''
+        if hotels != blank
+          assign venue_parts = hotels | slice: 0, 2 | join: '、' | append: 'などのホテル'
+        endif
+        if chapels != blank
+          assign chapel_part = chapels | slice: 0, 2 | join: '、' | append: 'などのチャペル'
+          if venue_parts != blank
+            assign venue_parts = venue_parts | append: 'や、' | append: chapel_part
+          else
+            assign venue_parts = chapel_part
+          endif
+        endif
+      -%}
+    <div class="venues reveal">
+      <div class="venues-head">
+        <span class="label">Venue</span>
+        <h3 class="h3">{{ section.settings.venue_heading | escape }}</h3>
+        <p>ビーチや街だけでなく、{{ venue_parts | escape }}でもプロポーズできます。</p>
+      </div>
+      <div class="venue-cols">
+        {%- if hotels != blank %}
+        <div class="venue-col"><p class="venue-type">HOTEL<small>ホテル</small></p><ul>{% for v in hotels %}<li>{{ v | escape }}</li>{% endfor %}</ul></div>
+        {%- endif %}
+        {%- if chapels != blank %}
+        <div class="venue-col"><p class="venue-type">CHAPEL<small>チャペル</small></p><ul>{% for v in chapels %}<li>{{ v | escape }}</li>{% endfor %}</ul></div>
+        {%- endif %}
+      </div>
+      <p class="note venues-note">{{ section.settings.venue_note | escape }}</p>
+    </div>
+    {%- endif -%}
   </div>
 </section>
 
@@ -92,6 +129,7 @@
           {%- endif -%}
         {%- endfor -%}
       </ol>
+      {%- if section.settings.day_note != blank %}<p class="note" style="margin-top:24px">{{ section.settings.day_note | escape }}</p>{% endif %}
     </div>
   </div>
 </section>
@@ -117,7 +155,7 @@
       <p class="lede">{{ section.settings.plan_lede | escape }}</p>
     </div>
     {%- if plan -%}
-      {% render 'propose-plan-box', standard_price: std_price, allin_price: allin_price, booking_url: booking_url %}
+      {% render 'propose-plan-box', light_price: light_price, standard_price: std_price, luxury_price: lux_price, booking_url: booking_url %}
     {%- endif -%}
   </div>
 </section>
@@ -150,7 +188,7 @@
   <div class="wrap">
     <span class="label">Propose in {{ name_title | escape }}</span>
     <h2 class="h2">{{ section.settings.final_heading | escape }}</h2>
-    {%- if plan %}<p class="lede">{{ name_ja | escape }}のプロポーズプラン {{ std_price | money }}〜</p>{% endif %}
+    {%- if plan %}<p class="lede">{{ name_ja | escape }}のプロポーズ {{ light_price | money }}〜</p>{% endif %}
     <a class="btn btn-light" href="{{ booking_url }}">この場所で予約する <span class="arrow" aria-hidden="true">→</span></a>
     <nav class="ft-links" style="justify-content:center;margin-top:48px;color:rgba(255,255,255,.85)" aria-label="ほかの旅行先">
       {%- for other in metaobjects.propose.values -%}
@@ -169,7 +207,7 @@
 </section>
 
 <div class="sticky-cta" id="sticky-cta" aria-hidden="true">
-  {%- if plan %}<div class="sticky-price"><small>FROM</small><span class="price">{{ std_price | money }}</span></div>{% endif %}
+  {%- if plan %}<div class="sticky-price"><small>FROM</small><span class="price">{{ light_price | money }}</span></div>{% endif %}
   <a class="btn" href="{{ booking_url }}">この場所で予約する</a>
 </div>
 
@@ -208,10 +246,11 @@
       {%- endif %}
       "brand": { "@type": "Brand", "name": {{ shop.name | json }} },
       "offers": {
-        "@type": "Offer",
-        "price": {{ std_price | money_without_currency | remove: ',' | json }},
+        "@type": "AggregateOffer",
+        "lowPrice": {{ light_price | money_without_currency | remove: ',' | json }},
+        "highPrice": {{ lux_price | default: std_price | default: light_price | money_without_currency | remove: ',' | json }},
+        "offerCount": {{ plan.variants.size }},
         "priceCurrency": {{ shop.currency | json }},
-        "availability": "https://schema.org/InStock",
         "url": {{ canonical_url | json }}
       }
     }
@@ -225,7 +264,7 @@
   "name": "プロポーズ 旅行先ページ",
   "settings": [
     { "type": "header", "content": "概要の表" },
-    { "type": "text", "id": "time_sub", "label": "所要時間の補足", "default": "うち撮影30分" },
+    { "type": "text", "id": "time_sub", "label": "所要時間の補足", "default": "写真撮影は30分" },
     { "type": "text", "id": "rain_value", "label": "雨天時", "default": "無料で振替" },
     { "type": "text", "id": "rain_sub", "label": "雨天時の補足", "default": "翌日以降の空き枠へ" },
     { "type": "text", "id": "support_value", "label": "サポート", "default": "日本語対応" },
@@ -233,8 +272,11 @@
     { "type": "header", "content": "見出し" },
     { "type": "textarea", "id": "day_heading", "label": "当日の流れ 見出し", "default": "当日は、\nこんな時間になります。" },
     { "type": "text", "id": "day_lede", "label": "当日の流れ 説明", "default": "最初は旅の記念撮影として。気づかれないまま、その瞬間へ。" },
+    { "type": "textarea", "id": "day_note", "label": "当日の流れ 注記", "default": "※ 写真撮影付きのプラン（スタンダード・ラグジュアリー）の流れです。ライトプランは撮影がありません。" },
+    { "type": "text", "id": "venue_heading", "label": "ホテル・チャペル 見出し", "default": "ホテルやチャペルでも。" },
+    { "type": "text", "id": "venue_note", "label": "ホテル・チャペル 注記", "default": "※ 会場の使用料や条件は会場ごとに異なるため、確定のご連絡でご案内します。" },
     { "type": "textarea", "id": "avail_heading", "label": "受付状況 見出し", "default": "あなたの旅行日に、\n間に合いますか？" },
-    { "type": "text", "id": "plan_lede", "label": "料金 説明", "default": "花束まで含めた、プロポーズプランが基本です。必要なものだけを足してください。" },
+    { "type": "text", "id": "plan_lede", "label": "料金 説明", "default": "花束だけのライトから、写真と動画を残すラグジュアリーまで。必要なものはオプションで足せます。" },
     { "type": "textarea", "id": "faq_heading", "label": "FAQ 見出し", "default": "雨の日も、\n直前の予約も。" },
     { "type": "text", "id": "final_heading", "label": "締めの見出し", "default": "あとは、日付を選ぶだけ。" }
   ],

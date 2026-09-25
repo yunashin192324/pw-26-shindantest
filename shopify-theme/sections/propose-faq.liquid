@@ -5,7 +5,7 @@
 {%- endcomment -%}
 {%- assign pp_settings = metaobjects.propose_settings.values.first -%}
 {%- assign reply_hours = pp_settings.reply_hours.value | default: 24 -%}
-<section class="sec" id="faq" aria-labelledby="faq-title">
+<section class="sec sec-deep" id="faq" aria-labelledby="faq-title">
   <div class="wrap-narrow">
     <div class="sec-head center reveal">
       <span class="label">{{ section.settings.label | escape }}</span>

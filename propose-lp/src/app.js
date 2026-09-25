@@ -81,32 +81,48 @@
     }).join("");
   }
   function faqAbout(word) { return D.faq.filter(function (f) { return f.q.indexOf(word) > -1; })[0]; }
-  function planHTML(base, locId) {
-    var allin = D.options.reduce(function (s, o) { return s + o.price; }, base);
-    var cta = locId
-      ? '<a class="btn btn-block" href="#/book?loc=' + locId + '" style="margin-top:28px">この場所で予約する <span class="arrow" aria-hidden="true">→</span></a>'
-      : "";
+  // Three tiers side by side (stacked on phones) + add-on options.
+  // loc = a location (its own prices) or null on TOP (lowest price per tier, "〜").
+  function planHTML(loc) {
+    var from = !loc;
+    var tiers = D.planTiers.map(function (t) {
+      var price = loc ? loc.plans.filter(function (p) { return p.id === t.id; })[0].price : D.minPrice(t.id);
+      return (
+        '<div class="tier reveal">' +
+          '<div class="tier-name">' + esc(t.name) + '</div><div class="tier-ja">' + esc(t.nameJa) + "</div>" +
+          '<p class="tier-sum">' + esc(t.summary) + "</p>" +
+          '<div class="tier-price"><span class="price">' + yen(price) + "</span>" + (from ? "<small>〜</small>" : "") + "</div>" +
+          '<ul class="tier-inc">' + t.includes.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + "</ul>" +
+        "</div>"
+      );
+    }).join("");
     return (
-      '<div class="plan-box">' +
-        '<div class="plan-main reveal">' +
-          '<div class="plan-name">PROPOSE PLAN</div>' +
-          '<div class="plan-price"><span class="price">' + yen(base) + "</span>" + (locId ? "" : "<small>〜</small>") + "</div>" +
-          (locId ? "" : '<p class="note plan-price-note">料金は行き先により異なります。</p>') +
-          '<div class="includes"><p class="includes-h">含まれるもの</p><ul>' + D.planIncludes.map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + "</ul></div>" +
-          cta +
+      '<div class="tiers">' + tiers + "</div>" +
+      (from ? '<p class="note plan-price-note">料金は行き先により異なります。</p>' : "") +
+      '<div class="plan-options reveal">' +
+        '<p class="sub-h">Option</p>' +
+        '<div class="opt-list">' +
+          D.options.map(function (o) {
+            return '<div class="opt-row"><div class="en">＋ ' + esc(o.name) + "<span>" + esc(o.nameJa) + '</span></div><div class="price">' + yen(o.price) + "</div><p>" + esc(o.desc) + (o.requiresPhoto ? "（写真撮影付きのプランで選べます）" : "") + "</p></div>";
+          }).join("") +
         "</div>" +
-        '<div class="reveal">' +
-          '<p class="sub-h">Option</p>' +
-          '<div class="opt-list">' +
-            D.options.map(function (o) {
-              return '<div class="opt-row"><div class="en">＋ ' + esc(o.name) + "<span>" + esc(o.nameJa) + '</span></div><div class="price">' + yen(o.price) + "</div><p>" + esc(o.desc) + "</p></div>";
-            }).join("") +
-            '<div class="opt-row is-allin"><div class="en">ALL INCLUSIVE<span>全部入り</span></div><div class="price">' + yen(allin) + (locId ? "" : "〜") + "</div><p>プロポーズプランに、" + D.options.length + "つのオプションをすべて含めたプランです。</p></div>" +
-          "</div>" +
-        "</div>" +
-      "</div>"
+      "</div>" +
+      (loc ? '<a class="btn btn-block plan-cta" href="#/book?loc=' + loc.id + '">この場所で予約する <span class="arrow" aria-hidden="true">→</span></a>' : "")
     );
   }
+  function venueSentence(l) {
+    var parts = [];
+    if (l.hotels.length) parts.push(l.hotels.slice(0, 2).join("、") + "などのホテル");
+    if (l.chapels.length) parts.push(l.chapels.slice(0, 2).join("、") + "などのチャペル");
+    return "ビーチや街だけでなく、" + parts.join("や、") + "でもプロポーズできます。";
+  }
+  function venueCols(l) {
+    function col(en, ja, list) {
+      return list.length ? '<div class="venue-col"><p class="venue-type">' + en + "<small>" + ja + "</small></p><ul>" + list.map(function (v) { return "<li>" + esc(v) + "</li>"; }).join("") + "</ul></div>" : "";
+    }
+    return '<div class="venue-cols">' + col("HOTEL", "ホテル", l.hotels) + col("CHAPEL", "チャペル", l.chapels) + "</div>";
+  }
+  var VENUE_NOTE = "※ 会場の使用料や条件は会場ごとに異なるため、確定のご連絡でご案内します。";
 
   /* =============================================================
      TOP
@@ -134,7 +150,7 @@
     $("#assure-list").innerHTML = [
       { key: D.minLeadDays + "<small>日前</small>", h: "まで予約できます", p: "受付締切は行き先ごとに異なります。各ページでご確認ください。" },
       { key: "14<small>日分</small>", h: "の受付状況をすぐ確認", p: "旅行日を選ぶだけで、その日に申し込める時間が分かります。" },
-      { key: D.replyHours + "<small>時間</small>", h: "以内に確定のご連絡", p: "リクエスト後、フォトグラファーの手配を確認してメールでお知らせします。お支払いは確定のあとです。" },
+      { key: D.replyHours + "<small>時間</small>", h: "以内に確定のご連絡", p: "リクエスト後、担当スタッフとフォトグラファーの手配を確認して、メールでお知らせします。お支払いは確定のあとです。" },
       { key: "JP", h: "日本語でサポート", p: "予約から当日の連絡まで、日本語で対応します。" }
     ].map(function (a) {
       return '<li class="assure-item reveal"><span class="assure-key">' + a.key + '</span><div><h3 class="h3">' + a.h + "</h3><p>" + a.p + "</p></div></li>";
@@ -150,7 +166,20 @@
       );
     }).join("");
 
-    $("#top-plan").innerHTML = planHTML(D.minPrice, null);
+    $("#top-plan").innerHTML = planHTML(null);
+
+    $("#venue-list").innerHTML = D.locations.filter(function (l) { return l.hotels.length || l.chapels.length; }).map(function (l) {
+      return (
+        '<a class="venue-row reveal" href="#/propose/' + l.id + '">' +
+          '<div class="venue-loc"><span class="en">' + esc(l.name) + "</span><small>" + esc(l.nameJa) + "</small></div>" +
+          '<div class="venue-names">' +
+            (l.hotels.length ? "<p><b>HOTEL</b>" + l.hotels.map(esc).join("／") + "</p>" : "") +
+            (l.chapels.length ? "<p><b>CHAPEL</b>" + l.chapels.map(esc).join("／") + "</p>" : "") +
+          "</div>" +
+          '<span class="arrow" aria-hidden="true">→</span>' +
+        "</a>"
+      );
+    }).join("");
 
     var faq = $("#top-faq");
     faq.innerHTML = faqHTML(D.faq.slice(0, 5));
@@ -235,14 +264,20 @@
             '<p class="lede" style="margin-top:0">' + esc(l.lede) + "</p>" +
           "</div>" +
           '<dl class="facts reveal" style="margin-top:56px">' +
-            '<div class="fact"><dt>Price</dt><dd><span class="price">' + yen(l.fromPrice) + "</span><small>プロポーズプラン</small></dd></div>" +
-            '<div class="fact"><dt>Time</dt><dd>' + esc(l.duration) + "<small>うち撮影30分</small></dd></div>" +
+            '<div class="fact"><dt>Price</dt><dd><span class="price">' + yen(l.fromPrice) + "</span><small>ライトプラン（花束のみ）</small></dd></div>" +
+            '<div class="fact"><dt>Time</dt><dd>' + esc(l.duration) + "<small>写真撮影は30分</small></dd></div>" +
             '<div class="fact"><dt>Best Time</dt><dd>' + esc(l.bestTime) + "<small>" + esc(l.bestTimeNote) + "</small></dd></div>" +
             '<div class="fact"><dt>Book By</dt><dd>最短' + l.leadDays + "日前まで<small>" + D.replyHours + "時間以内に確定のご連絡</small></dd></div>" +
             '<div class="fact"><dt>Rain</dt><dd>無料で振替<small>翌日以降の空き枠へ</small></dd></div>' +
             '<div class="fact"><dt>Support</dt><dd>日本語対応<small>当日の連絡も日本語で</small></dd></div>' +
           "</dl>" +
-          '<p class="note facts-note">※ 所要時間・受付締切・確定連絡までの時間・雨天対応・受付状況はデモ用の仮データです。</p>' +
+          '<p class="note facts-note">※ 料金・所要時間・受付締切・確定連絡までの時間・雨天対応・受付状況はデモ用の仮データです。</p>' +
+          ((l.hotels.length || l.chapels.length) ?
+            '<div class="venues reveal">' +
+              '<div class="venues-head"><span class="label">Venue</span><h3 class="h3">ホテルやチャペルでも。</h3><p>' + esc(venueSentence(l)) + "</p></div>" +
+              venueCols(l) +
+              '<p class="note venues-note">' + VENUE_NOTE + "</p>" +
+            "</div>" : "") +
         "</div>" +
       "</section>" +
 
@@ -253,6 +288,7 @@
             '<div class="sec-head reveal"><span class="label">Your Proposal</span><h2 class="h2" id="l-day">当日は、<br>こんな時間になります。</h2>' +
             '<p class="lede">最初は旅の記念撮影として。気づかれないまま、その瞬間へ。</p></div>' +
             '<ol class="timeline reveal">' + steps + "</ol>" +
+            '<p class="note" style="margin-top:24px">※ 写真撮影付きのプラン（スタンダード・ラグジュアリー）の流れです。ライトプランは撮影がありません。</p>' +
           "</div>" +
         "</div>" +
       "</section>" +
@@ -268,8 +304,8 @@
       '<section class="sec sec-deep" aria-labelledby="l-plan">' +
         '<div class="wrap">' +
           '<div class="sec-head reveal"><span class="label">Plan</span><h2 class="h2" id="l-plan">' + esc(l.nameJa) + "の料金</h2>" +
-          '<p class="lede">基本はプロポーズプランだけ。必要な演出だけを足してください。</p></div>' +
-          planHTML(l.base, l.id) +
+          '<p class="lede">花束だけのライトから、写真と動画を残すラグジュアリーまで。必要なものはオプションで足せます。</p></div>' +
+          planHTML(l) +
         "</div>" +
       "</section>" +
 
@@ -278,7 +314,7 @@
           '<div class="sec-head reveal"><span class="label">If It Rains &amp; FAQ</span><h2 class="h2" id="l-faq">雨の日も、<br class="br-sp">直前の予約も。</h2></div>' +
           '<div class="rain reveal"><span class="en">IF IT RAINS</span><p>' + esc(l.rainPlan) + "</p></div>" +
           '<div class="faq" style="margin-top:32px">' + faqHTML([
-            { q: "何日前まで予約できますか？", a: esc(l.nameJa) + "は、撮影日の" + l.leadDays + "日前までリクエストできます。確定のご連絡は" + D.replyHours + "時間以内です。" },
+            { q: "何日前まで予約できますか？", a: esc(l.nameJa) + "は、プロポーズの日の" + l.leadDays + "日前までリクエストできます。確定のご連絡は" + D.replyHours + "時間以内です。" },
             { q: "集合場所はどこですか？", a: l.meetingPoint + "です。詳細は確定のご連絡でご案内します。" },
             faqAbout("すぐに確定"), faqAbout("気づかれ"), faqAbout("日本語"), faqAbout("キャンセル")
           ]) + "</div>" +
@@ -287,7 +323,7 @@
 
       '<section class="final">' + photo(l, { pos: "50% 40%" }) +
         '<div class="wrap"><span class="label">Propose in ' + esc(l.name.charAt(0) + l.name.slice(1).toLowerCase()) + '</span><h2 class="h2">あとは、日付を選ぶだけ。</h2>' +
-        '<p class="lede">' + esc(l.nameJa) + "のプロポーズプラン " + yen(l.fromPrice) + "〜</p>" +
+        '<p class="lede">' + esc(l.nameJa) + "のプロポーズ " + yen(l.fromPrice) + "〜</p>" +
         '<a class="btn btn-light" href="#/book?loc=' + l.id + '">この場所で予約する <span class="arrow" aria-hidden="true">→</span></a>' +
         '<nav class="ft-links" style="justify-content:center;margin-top:48px;color:rgba(255,255,255,.85)" aria-label="ほかの旅行先">' + others + "</nav></div>" +
       "</section>";
@@ -372,19 +408,29 @@
   var calOffset = 0;
 
   function bLoc() { return bk.loc ? D.getLocation(bk.loc) : null; }
+  function firstOpenOffset(l) {
+    var t = D.today();
+    for (var i = 0; i < 180; i++) {
+      var d = new Date(t); d.setDate(d.getDate() + i);
+      var st = D.dateStatus(l, D.isoDate(d));
+      if (st === "available" || st === "few") return (d.getFullYear() - t.getFullYear()) * 12 + d.getMonth() - t.getMonth();
+    }
+    return 0;
+  }
   function bPlan() { var l = bLoc(); return l ? l.plans.filter(function (p) { return p.id === bk.plan; })[0] : null; }
-  function isIncluded(optId) { var p = bPlan(); return !!p && p.includedOptionIds.indexOf(optId) > -1; }
-  function bOptions() { return D.options.filter(function (o) { return isIncluded(o.id) || bk.options.indexOf(o.id) > -1; }); }
+  function optionAvailable(o) { var p = bPlan(); return !o.requiresPhoto || (!!p && p.hasPhoto); }
+  function bOptions() { return D.options.filter(function (o) { return bk.options.indexOf(o.id) > -1 && optionAvailable(o); }); }
+  function hasVenues() { var l = bLoc(); return !!l && (l.hotels.length + l.chapels.length) > 0; }
   function bTotal() {
     var p = bPlan(); if (!p) return 0;
-    return bOptions().reduce(function (s, o) { return isIncluded(o.id) ? s : s + o.price; }, p.price);
+    return bOptions().reduce(function (s, o) { return s + o.price; }, p.price);
   }
   function needsHotel() { return bOptions().some(function (o) { return o.id === "transfer"; }); }
   function curStep() { return bk.steps[bk.i]; }
 
   function startBooking(params) {
     var l = params.loc && D.getLocation(params.loc);
-    bk = { loc: l ? l.id : null, date: null, time: null, plan: params.plan === "allin" ? "allin" : "standard", options: [], customer: {}, steps: [], i: 0, done: false };
+    bk = { loc: l ? l.id : null, date: null, time: null, plan: ["light", "standard", "luxury"].indexOf(params.plan) > -1 ? params.plan : "standard", venue: "", options: [], customer: {}, steps: [], i: 0, done: false };
     bk.steps = (l ? [] : ["location"]).concat(["date", "time", "plan", "customer", "confirm"]);
     if (l && params.date) {
       var st = D.dateStatus(l, params.date);
@@ -470,6 +516,8 @@
     date: function () {
       var l = bLoc();
       var t = D.today();
+      // Open on the first month that still has a bookable day (e.g. a 7-day lead late in the month).
+      if (!bk.date && !bk.calSet) { calOffset = firstOpenOffset(l); bk.calSet = true; }
       var base = new Date(t.getFullYear(), t.getMonth() + calOffset, 1);
       var y = base.getFullYear(), m = base.getMonth();
       var first = new Date(y, m, 1).getDay(), dim = new Date(y, m + 1, 0).getDate();
@@ -483,7 +531,7 @@
         cells.push('<button type="button" class="day-btn is-' + st + (past ? " is-past" : "") + (bk.date === iso ? " is-selected" : "") + '" data-date="' + iso + '"' + (dis ? " disabled" : "") +
           ' aria-label="' + fmtDate(iso) + " " + STATUS[st].ja + '"><span class="dn">' + d + '</span><span class="ds">' + (past ? "" : STATUS[st].mark) + "</span></button>");
       }
-      return '<h2 class="h2">撮影する日を選ぶ</h2><p class="lede">' + esc(l.nameJa) + "は" + l.leadDays + "日前まで予約できます。旅行中の日付を選んでください。</p>" +
+      return '<h2 class="h2">プロポーズの日を選ぶ</h2><p class="lede">' + esc(l.nameJa) + "は" + l.leadDays + "日前まで予約できます。旅行中の日付を選んでください。</p>" +
         '<div class="cal-nav"><button type="button" data-cal="-1"' + (calOffset <= 0 ? " disabled" : "") + ' aria-label="前の月">←</button><span class="cal-month">' + y + "." + String(m + 1).padStart(2, "0") +
         '</span><button type="button" data-cal="1"' + (calOffset >= 5 ? " disabled" : "") + ' aria-label="次の月">→</button></div>' +
         '<div class="cal">' + DOW.map(function (w) { return '<span class="cal-dow">' + w + "</span>"; }).join("") + cells.join("") + "</div>" +
@@ -501,17 +549,26 @@
     },
     plan: function () {
       var l = bLoc();
-      return '<h2 class="h2">プランとオプション</h2><p class="lede">基本のプロポーズプランは選択済みです。必要なものだけ追加してください。</p>' +
+      var venues = [{ id: "", type: "", name: "おまかせ（おすすめの場所）" }]
+        .concat(l.hotels.map(function (v) { return { id: v, type: "HOTEL", name: v }; }))
+        .concat(l.chapels.map(function (v) { return { id: v, type: "CHAPEL", name: v }; }));
+      return '<h2 class="h2">プランとオプション</h2><p class="lede">プランを選び、必要なものだけ追加してください。</p>' +
         '<div class="plan-toggle" role="radiogroup" aria-label="プラン">' + l.plans.map(function (p) {
-          var desc = p.id === "standard" ? "撮影30分・花束・写真30枚以上・日本語サポート" : "プロポーズプラン＋" + D.options.length + "つのオプションすべて";
           return '<button type="button" role="radio" aria-checked="' + (bk.plan === p.id) + '" class="plan-opt' + (bk.plan === p.id ? " is-selected" : "") + '" data-plan="' + p.id + '"><span class="radio"></span><span><span class="en">' +
-            esc(p.name) + "</span><p>" + esc(desc) + '</p></span><span class="price">' + yen(p.price) + "</span></button>";
+            esc(p.name) + "</span><p>" + esc(p.nameJa) + "｜" + esc(p.summary) + '</p></span><span class="price">' + yen(p.price) + "</span></button>";
         }).join("") + "</div>" +
+        (hasVenues() ?
+          '<p class="sub-h">Venue</p><p class="note" style="margin-bottom:12px">ホテルやチャペルでのプロポーズも手配できます。' + VENUE_NOTE.replace("※ ", "") + "</p>" +
+          '<div class="plan-toggle venue-toggle" role="radiogroup" aria-label="会場">' + venues.map(function (v) {
+            var on = bk.venue === v.id;
+            return '<button type="button" role="radio" aria-checked="' + on + '" class="plan-opt is-compact' + (on ? " is-selected" : "") + '" data-venue="' + esc(v.id) + '"><span class="radio"></span><span>' +
+              (v.type ? '<span class="en venue-kind">' + v.type + "</span>" : "") + esc(v.name) + "</span></button>";
+          }).join("") + "</div>" : "") +
         '<p class="sub-h">Option</p>' +
         D.options.map(function (o) {
-          var inc = isIncluded(o.id), on = inc || bk.options.indexOf(o.id) > -1;
-          return '<button type="button" role="checkbox" aria-checked="' + on + '" class="opt-pick' + (on ? " is-on" : "") + '" data-opt="' + o.id + '"' + (inc ? " disabled" : "") + '><span class="box">' + (on ? "✓" : "") +
-            '</span><span><span class="en">' + esc(o.name) + "<span>" + esc(o.nameJa) + "</span></span><p>" + esc(o.desc) + '</p></span><span class="price">' + (inc ? "含まれています" : "+" + yen(o.price)) + "</span></button>";
+          var ok = optionAvailable(o), on = ok && bk.options.indexOf(o.id) > -1;
+          return '<button type="button" role="checkbox" aria-checked="' + on + '" class="opt-pick' + (on ? " is-on" : "") + '" data-opt="' + o.id + '"' + (ok ? "" : " disabled") + '><span class="box">' + (on ? "✓" : "") +
+            '</span><span><span class="en">' + esc(o.name) + "<span>" + esc(o.nameJa) + "</span></span><p>" + esc(o.desc) + '</p></span><span class="price">' + (ok ? "+" + yen(o.price) : "撮影付きプランのみ") + "</span></button>";
         }).join("");
     },
     customer: function () {
@@ -530,7 +587,7 @@
         '<label class="check"><input type="checkbox" id="c-agree"' + (c.agree ? " checked" : "") + "><span>利用規約・キャンセルポリシーに同意する</span></label>";
     },
     confirm: function () {
-      return '<h2 class="h2">リクエスト内容の確認</h2><p class="lede">この内容でリクエストを送ります。フォトグラファーの手配を確認し、' + D.replyHours + '時間以内に確定可否をご連絡します。</p>' + summaryHTML() +
+      return '<h2 class="h2">リクエスト内容の確認</h2><p class="lede">この内容でリクエストを送ります。' + (bPlan().hasPhoto ? "フォトグラファーの" : "") + '手配を確認し、' + D.replyHours + '時間以内に確定可否をご連絡します。</p>' + summaryHTML() +
         '<button type="button" class="btn btn-block" id="bk-pay">予約をリクエストする（デモ）<span class="arrow" aria-hidden="true">→</span></button>' +
         '<p class="note" style="margin-top:12px;text-align:center">この時点ではお支払いは発生しません。予約の確定後に、お支払いのご案内をお送りします。</p>';
     }
@@ -538,16 +595,17 @@
 
   function summaryHTML() {
     var l = bLoc(), p = bPlan();
-    var extra = bOptions().filter(function (o) { return !isIncluded(o.id); });
+    var extra = bOptions();
     var rows = [
       ["Destination", l.name + "（" + l.nameJa + "）"],
       ["Date", fmtDate(bk.date, true)],
       ["Time", bk.time + (bk.time === l.bestTime ? "<small>BEST TIME・" + esc(l.bestTimeNote) + "</small>" : "")],
       ["Meeting", esc(l.meetingPoint)],
-      ["Plan", esc(p.name) + "<small>" + yen(p.price) + "</small>"],
-      ["Flexible", bk.customer.flex ? "同じ日の別の時間でも可" : "希望の時間のみ"],
-      ["Option", extra.length ? extra.map(function (o) { return esc(o.nameJa) + " +" + yen(o.price); }).join("<br>") : (p.id === "allin" ? "すべて含まれています" : "なし")]
+      ["Plan", esc(p.name) + "<small>" + esc(p.summary) + "・" + yen(p.price) + "</small>"]
     ];
+    if (hasVenues()) rows.push(["Venue", bk.venue ? esc(bk.venue) : "おまかせ"]);
+    rows.push(["Flexible", bk.customer.flex ? "同じ日の別の時間でも可" : "希望の時間のみ"]);
+    rows.push(["Option", extra.length ? extra.map(function (o) { return esc(o.nameJa) + " +" + yen(o.price); }).join("<br>") : "なし"]);
     return '<dl class="summary">' + rows.map(function (r) { return '<div class="sum-row"><dt>' + r[0] + "</dt><dd>" + r[1] + "</dd></div>"; }).join("") +
       '<div class="sum-total"><dt>TOTAL<small>確定後のお支払い</small></dt><dd class="price">' + yen(bTotal()) + "</dd></div></dl>";
   }
@@ -556,7 +614,7 @@
     location: function (b) {
       b.addEventListener("click", function (e) {
         var btn = e.target.closest("[data-loc]"); if (!btn) return;
-        if (bk.loc !== btn.dataset.loc) { bk.date = null; bk.time = null; }
+        if (bk.loc !== btn.dataset.loc) { bk.date = null; bk.time = null; bk.venue = ""; bk.calSet = false; }
         bk.loc = btn.dataset.loc;
         $$("[data-loc]", b).forEach(function (x) { x.classList.toggle("is-selected", x === btn); });
         updateBar(); autoNext();
@@ -584,8 +642,10 @@
     plan: function (b) {
       b.addEventListener("click", function (e) {
         var p = e.target.closest("[data-plan]");
+        var v = e.target.closest("[data-venue]");
         var o = e.target.closest("[data-opt]:not(:disabled)");
-        if (p) { bk.plan = p.dataset.plan; if (bk.plan === "allin") bk.options = []; bRender(); }
+        if (p) { bk.plan = p.dataset.plan; bk.options = bk.options.filter(function (id) { return optionAvailable(D.options.filter(function (x) { return x.id === id; })[0]); }); bRender(); }
+        if (v) { bk.venue = v.dataset.venue; bRender(); }
         if (o) {
           var i = bk.options.indexOf(o.dataset.opt);
           if (i > -1) bk.options.splice(i, 1); else bk.options.push(o.dataset.opt);
@@ -621,10 +681,10 @@
         '<p class="lede">リクエスト番号 <b class="en" style="font-weight:600">' + code + "</b><br>まだ予約は確定していません。" + D.replyHours + "時間以内に、" + esc(bk.customer.email || "") + " へ確定可否をご連絡します。</p>" +
         summaryHTML() +
         '<ol class="next-steps">' +
-          "<li><b>01</b><span>フォトグラファーの手配を確認し、" + D.replyHours + "時間以内にメールでご連絡します（" + (bk.customer.surprise ? "控えめな件名で送信" : "件名：ご予約リクエストについて") + "）。" +
+          "<li><b>01</b><span>" + (bPlan().hasPhoto ? "フォトグラファーの" : "") + "手配を確認し、" + D.replyHours + "時間以内にメールでご連絡します（" + (bk.customer.surprise ? "控えめな件名で送信" : "件名：ご予約リクエストについて") + "）。" +
             (bk.customer.flex ? "希望の時間が難しい場合は、同じ日の別の時間をご案内します。" : "ご希望の日時が難しい場合は、近い日時をご提案します。") + "</span></li>" +
           "<li><b>02</b><span>確定のメールにあるリンクからお支払いください。お支払いの完了で、予約が確定します。</span></li>" +
-          "<li><b>03</b><span>撮影日の2日前までに、フォトグラファーから集合場所の詳細をお送りします。当日は " + esc(l.meetingPoint) + " へ。</span></li>" +
+          "<li><b>03</b><span>当日の2日前までに、" + (bPlan().hasPhoto ? "フォトグラファー" : "担当スタッフ") + "から集合場所の詳細をお送りします。当日は " + esc(l.meetingPoint) + " へ。</span></li>" +
         "</ol>" +
         '<a class="btn btn-ghost" href="#/">TOPへ戻る</a>' +
       "</div>";

@@ -14,25 +14,31 @@
   // ---- Add-on options (Shopify: one small Product each) ----
   var OPTIONS = [
     { id: "transfer", name: "PRIVATE TRANSFER", nameJa: "専用送迎", price: 30000, desc: "ホテルと撮影場所のあいだを専用車で送迎します。" },
-    { id: "extra-photo", name: "EXTRA PHOTO", nameJa: "追加撮影30分", price: 20000, desc: "撮影を30分延長し、記念撮影の時間を増やします。" },
+    { id: "extra-photo", name: "EXTRA PHOTO", nameJa: "追加撮影30分", price: 20000, desc: "撮影を30分延長し、記念撮影の時間を増やします。", requiresPhoto: true },
     { id: "sunset", name: "SUNSET TIME", nameJa: "ベストタイム確保", price: 10000, desc: "夕日・朝日など一番きれいな光の時間に合わせて開始時刻を調整します。" }
   ];
 
-  // ---- Plans (Shopify: one Product per location, two Variants) ----
-  // The bouquet is part of every proposal, so it lives in the base plan
-  // rather than as an add-on.
-  var PLAN_INCLUDES = ["プロフォトグラファー", "撮影30分", "プロポーズ用の花束", "写真データ30枚以上", "オンライン納品", "日本語サポート"];
+  // ---- Plans (Shopify: one Product per location, three Variants in this order) ----
+  // Every plan includes the bouquet; the tiers differ in what is recorded
+  // and how the place is dressed. Prices are DEMO values.
+  var PLAN_TIERS = [
+    { id: "light", name: "LIGHT PLAN", nameJa: "ライトプラン", summary: "花束のみ", hasPhoto: false,
+      includes: ["プロポーズ用の花束", "日本語サポート"] },
+    { id: "standard", name: "STANDARD PLAN", nameJa: "スタンダードプラン", summary: "花束＋写真撮影", hasPhoto: true,
+      includes: ["プロポーズ用の花束", "プロフォトグラファーによる写真撮影（30分）", "写真データ30枚以上（オンライン納品）", "日本語サポート"] },
+    { id: "luxury", name: "LUXURY PLAN", nameJa: "ラグジュアリープラン", summary: "花束＋写真撮影＋動画撮影＋デコレーション", hasPhoto: true,
+      includes: ["プロポーズ用の花束", "プロフォトグラファーによる写真撮影（30分）", "写真データ30枚以上（オンライン納品）", "動画撮影", "プロポーズの場所のデコレーション", "日本語サポート"] }
+  ];
+  function plansFor(base) {
+    var prices = { light: Math.round(base * 0.4 / 1000) * 1000, standard: base, luxury: base + 100000 };
+    return PLAN_TIERS.map(function (t) {
+      return { id: t.id, name: t.name, nameJa: t.nameJa, summary: t.summary, hasPhoto: t.hasPhoto, includes: t.includes, price: prices[t.id] };
+    });
+  }
 
   // ---- Booking is request-based: the team checks photographer
   // availability by hand and replies within this window (DEMO value). ----
   var REPLY_HOURS = 24;
-  function plansFor(base) {
-    var allOptions = OPTIONS.reduce(function (s, o) { return s + o.price; }, 0);
-    return [
-      { id: "standard", name: "PROPOSE PLAN", nameJa: "プロポーズプラン", price: base, includedOptionIds: [] },
-      { id: "allin", name: "ALL INCLUSIVE", nameJa: "全部入り", price: base + allOptions, includedOptionIds: OPTIONS.map(function (o) { return o.id; }) }
-    ];
-  }
 
   // ---- The day, as the couple experiences it (proposal_steps) ----
   var PROPOSAL_STEPS = [
@@ -52,7 +58,8 @@
       photo: "hawaii", photoAlt: "ヤシの並木の先にそびえるオアフ島の緑の山々", photoPos: "50% 45%", hue: ["#2c5f74", "#e08a4f"], motif: "palm",
       base: 128000, duration: "約2時間", meetingPoint: "ワイキキ・ホテル周辺（ご滞在先に合わせてご案内）",
       timeSlots: ["16:00", "16:30", "17:00", "17:30", "18:00"], bestTime: "17:30", bestTimeNote: "夕日の時間",
-      leadDays: 3, rainPlan: "雨の場合は、翌日以降の空き枠へ無料で振替できます。", tags: ["sea", "sunset", "resort"]
+      leadDays: 3, rainPlan: "雨の場合は、翌日以降の空き枠へ無料で振替できます。", tags: ["sea", "sunset", "resort"],
+      hotels: ["ハレクラニ", "ザ・カハラ・ホテル＆リゾート"], chapels: ["キャルバリー・バイ・ザ・シー教会"]
     },
     {
       id: "miyakojima", name: "MIYAKOJIMA", nameJa: "宮古島", popular: true,
@@ -63,6 +70,17 @@
       base: 108000, duration: "約2時間", meetingPoint: "与那覇前浜ビーチ 駐車場",
       timeSlots: ["16:30", "17:00", "17:30", "18:00", "18:30"], bestTime: "18:30", bestTimeNote: "夕日の時間",
       leadDays: 2, rainPlan: "雨の場合は、翌日以降の空き枠へ無料で振替できます。", tags: ["sea", "resort", "sunset"]
+    },
+    {
+      id: "okinawa", name: "OKINAWA", nameJa: "沖縄本島", popular: true,
+      catch: "沖縄で、\n一生忘れない瞬間を。",
+      tagline: "ビーチでも、チャペルでも。",
+      lede: "青い海と白い砂浜の島で。ビーチはもちろん、チャペルを貸し切ってのプロポーズもできます。",
+      photo: null, photoAlt: "", hue: ["#1d6f8f", "#9fdcd3"], motif: "wave",
+      base: 108000, duration: "約2時間", meetingPoint: "ご滞在ホテル、またはご希望の会場",
+      timeSlots: ["10:00", "16:30", "17:30", "18:30"], bestTime: "18:30", bestTimeNote: "夕日の時間",
+      leadDays: 3, rainPlan: "雨の場合は、翌日以降の空き枠へ無料で振替できます。", tags: ["sea", "resort", "sunset"],
+      hotels: [], chapels: ["ラソール ガーデン・アリビラ", "ラソール シーリゾート", "ザ・サーフ ビーチサイドテラス", "アートグレイス沖縄", "サザンチャペル"]
     },
     {
       id: "santorini", name: "SANTORINI", nameJa: "サントリーニ島", popular: true,
@@ -112,7 +130,8 @@
       photo: "maldives", photoAlt: "上空から見たモルディブの水上ヴィラと海", photoPos: "50% 50%", hue: ["#0f6e8c", "#bfe6dd"], motif: "villa",
       base: 198000, duration: "約2時間", meetingPoint: "ご滞在リゾート内",
       timeSlots: ["16:00", "17:00", "17:30", "18:00"], bestTime: "17:30", bestTimeNote: "夕日の時間",
-      leadDays: 7, rainPlan: "雨の場合は、滞在中の別日へ無料で振替できます。", tags: ["sea", "resort"]
+      leadDays: 7, rainPlan: "雨の場合は、滞在中の別日へ無料で振替できます。", tags: ["sea", "resort"],
+      hotels: ["フォーシーズンズ ランダーギラーヴァル", "ギリ ランカンフシ"], chapels: ["フォーシーズンズ ランダーギラーヴァルのチャペル"]
     },
     {
       id: "bali", name: "BALI", nameJa: "バリ島", popular: false,
@@ -147,8 +166,10 @@
   ];
 
   LOCATIONS.forEach(function (loc) {
+    loc.hotels = loc.hotels || [];
+    loc.chapels = loc.chapels || [];
     loc.plans = plansFor(loc.base);
-    loc.fromPrice = loc.base;
+    loc.fromPrice = loc.plans[0].price;
   });
 
   // ---- Explorer themes for undecided visitors (photo-first, one tap) ----
@@ -163,13 +184,15 @@
 
   var FAQ = [
     { q: "出発の数日前でも予約できますか？", a: "はい。行き先ごとに「最短○日前まで」の受付締切があり、各ページと受付状況カレンダーで確認できます。" },
-    { q: "予約はすぐに確定しますか？", a: "予約はリクエスト制です。フォトグラファーの手配を確認し、" + REPLY_HOURS + "時間以内に確定可否をメールでご連絡します。お支払いは確定のご連絡のあとです。" },
+    { q: "予約はすぐに確定しますか？", a: "予約はリクエスト制です。担当スタッフが手配を確認し、" + REPLY_HOURS + "時間以内に確定可否をメールでご連絡します。お支払いは確定のご連絡のあとです。" },
     { q: "相手にプロポーズだと気づかれませんか？", a: "「旅の記念撮影」として自然に始めます。予約確認の連絡も、控えめな件名を選べます。" },
     { q: "雨が降ったらどうなりますか？", a: "行き先ごとの雨天対応があります。多くの場所で、翌日以降の空き枠へ無料で振替できます。" },
     { q: "現地で日本語は通じますか？", a: "日本語サポートが付いています。当日の連絡も日本語で行えます。" },
     { q: "キャンセルはできますか？", a: "予約日の一定期間前まではキャンセル・返金が可能です。規定は予約確認画面とメールでご案内します。" },
     { q: "写真はいつ届きますか？", a: "撮影後、オンラインで順次お届けします。目安の日数は予約確認メールでご案内します。" },
-    { q: "指輪や花束は用意してもらえますか？", a: "花束はプランに含まれています。指輪はご自身でご用意ください。" },
+    { q: "指輪や花束は用意してもらえますか？", a: "花束はすべてのプランに含まれています。指輪はご自身でご用意ください。" },
+    { q: "写真撮影なしでも頼めますか？", a: "はい。ライトプランは、花束のご用意のみのプランです。写真や動画を残したい場合は、スタンダードプランかラグジュアリープランをお選びください。" },
+    { q: "ホテルやチャペルでもプロポーズできますか？", a: "はい。ハワイのハレクラニやザ・カハラ、モルディブのフォーシーズンズ ランダーギラーヴァル、沖縄のチャペルなど、旅行先ごとに対応できる会場を各ページでご案内しています。会場の使用料や条件は会場ごとに異なるため、確定のご連絡でご案内します。" },
     { q: "撮影場所は変えられますか？", a: "行き先ごとの推奨スポットをもとに、当日の天候や混雑に合わせてフォトグラファーが調整します。" }
   ];
 
@@ -224,14 +247,16 @@
   global.ProposeData = {
     locations: LOCATIONS,
     options: OPTIONS,
-    planIncludes: PLAN_INCLUDES,
+    planTiers: PLAN_TIERS,
     replyHours: REPLY_HOURS,
     proposalSteps: PROPOSAL_STEPS,
     themes: THEMES,
     faq: FAQ,
     getLocation: function (id) { return LOCATIONS.filter(function (l) { return l.id === id; })[0] || null; },
     minLeadDays: Math.min.apply(null, LOCATIONS.map(function (l) { return l.leadDays; })),
-    minPrice: Math.min.apply(null, LOCATIONS.map(function (l) { return l.base; })),
+    minPrice: function (tierId) {
+      return Math.min.apply(null, LOCATIONS.map(function (l) { return l.plans.filter(function (p) { return p.id === tierId; })[0].price; }));
+    },
     slotStatus: slotStatus,
     dateStatus: dateStatus,
     daysFromToday: daysFromToday,

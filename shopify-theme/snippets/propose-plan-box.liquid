@@ -1,62 +1,87 @@
 {%- comment -%}
-  PROPOSE PLAN box + options + ALL INCLUSIVE row (TOP and location pages).
+  Three plan tiers + add-on options (TOP and location pages).
   Accepts:
-    standard_price — Standard variant price (cents)
-    allin_price    — All inclusive variant price (cents), optional
-    from           — true on TOP: prices are "from", with a note
-    booking_url    — optional CTA under the plan box (location page)
+    light_price / standard_price / luxury_price — variant prices (cents)
+    from        — true on TOP: prices are "from" (lowest across destinations), with a note
+    booking_url — optional CTA under the plans (location page)
   Reads:
-    metaobject propose_settings.plan_includes  (list of single line text)
-    collections['propose-options']         (add-on products, manual sort)
+    metaobject propose_settings: light_includes / standard_includes / luxury_includes (lists)
+    collections['propose-options'] (add-on products)
 {%- endcomment -%}
 {%- liquid
   assign pp_settings = metaobjects.propose_settings.values.first
-  assign includes = pp_settings.plan_includes.value
-  if includes == blank
-    assign includes = 'プロフォトグラファー,撮影30分,プロポーズ用の花束,写真データ30枚以上,オンライン納品,日本語サポート' | split: ','
+  assign light_inc = pp_settings.light_includes.value
+  if light_inc == blank
+    assign light_inc = 'プロポーズ用の花束,日本語サポート' | split: ','
+  endif
+  assign standard_inc = pp_settings.standard_includes.value
+  if standard_inc == blank
+    assign standard_inc = 'プロポーズ用の花束,プロフォトグラファーによる写真撮影（30分）,写真データ30枚以上（オンライン納品）,日本語サポート' | split: ','
+  endif
+  assign luxury_inc = pp_settings.luxury_includes.value
+  if luxury_inc == blank
+    assign luxury_inc = 'プロポーズ用の花束,プロフォトグラファーによる写真撮影（30分）,写真データ30枚以上（オンライン納品）,動画撮影,プロポーズの場所のデコレーション,日本語サポート' | split: ','
   endif
   assign options = collections['propose-options'].products
 -%}
-<div class="plan-box">
-  <div class="plan-main reveal">
-    <div class="plan-name">PROPOSE PLAN</div>
-    <div class="plan-price"><span class="price">{{ standard_price | money }}</span>{% if from %}<small>〜</small>{% endif %}</div>
-    {%- if from %}<p class="note plan-price-note">料金は行き先により異なります。</p>{% endif %}
-    <div class="includes">
-      <p class="includes-h">含まれるもの</p>
-      <ul>
-        {%- for item in includes %}<li>{{ item | escape }}</li>{% endfor -%}
+<div class="tiers">
+  {%- for tier in (1..3) -%}
+    {%- liquid
+      case tier
+        when 1
+          assign t_name = 'LIGHT PLAN'
+          assign t_ja = 'ライトプラン'
+          assign t_sum = '花束のみ'
+          assign t_price = light_price
+          assign t_inc = light_inc
+        when 2
+          assign t_name = 'STANDARD PLAN'
+          assign t_ja = 'スタンダードプラン'
+          assign t_sum = '花束＋写真撮影'
+          assign t_price = standard_price
+          assign t_inc = standard_inc
+        else
+          assign t_name = 'LUXURY PLAN'
+          assign t_ja = 'ラグジュアリープラン'
+          assign t_sum = '花束＋写真撮影＋動画撮影＋デコレーション'
+          assign t_price = luxury_price
+          assign t_inc = luxury_inc
+      endcase
+    -%}
+    {%- if t_price -%}
+    <div class="tier reveal">
+      <div class="tier-name">{{ t_name }}</div>
+      <div class="tier-ja">{{ t_ja }}</div>
+      <p class="tier-sum">{{ t_sum }}</p>
+      <div class="tier-price"><span class="price">{{ t_price | money }}</span>{% if from %}<small>〜</small>{% endif %}</div>
+      <ul class="tier-inc">
+        {%- for item in t_inc %}<li>{{ item | escape }}</li>{% endfor -%}
       </ul>
     </div>
-    {%- if booking_url != blank %}
-    <a class="btn btn-block" href="{{ booking_url }}" style="margin-top:28px">この場所で予約する <span class="arrow" aria-hidden="true">→</span></a>
-    {%- endif %}
-  </div>
-  {%- if options.size > 0 or allin_price %}
-  <div class="reveal">
-    <p class="sub-h">Option</p>
-    <div class="opt-list">
-      {%- for o in options -%}
-        {%- liquid
-          assign o_desc = o.metafields.propose.short_description.value
-          if o_desc == blank
-            assign o_desc = o.description | strip_html | truncate: 80
-          endif
-        -%}
-        <div class="opt-row">
-          <div class="en">＋ {{ o.title | escape }}<span>{{ o.metafields.propose.name_ja.value | escape }}</span></div>
-          <div class="price">{{ o.price | money }}</div>
-          <p>{{ o_desc | escape }}</p>
-        </div>
-      {%- endfor -%}
-      {%- if allin_price %}
-      <div class="opt-row is-allin">
-        <div class="en">ALL INCLUSIVE<span>全部入り</span></div>
-        <div class="price">{{ allin_price | money }}{% if from %}〜{% endif %}</div>
-        <p>プロポーズプランに、{{ options.size }}つのオプションをすべて含めたプランです。</p>
-      </div>
-      {%- endif %}
-    </div>
-  </div>
-  {%- endif %}
+    {%- endif -%}
+  {%- endfor -%}
 </div>
+{%- if from %}<p class="note plan-price-note">料金は行き先により異なります。</p>{% endif %}
+{%- if options.size > 0 %}
+<div class="plan-options reveal">
+  <p class="sub-h">Option</p>
+  <div class="opt-list">
+    {%- for o in options -%}
+      {%- liquid
+        assign o_desc = o.metafields.propose.short_description.value
+        if o_desc == blank
+          assign o_desc = o.description | strip_html | truncate: 80
+        endif
+      -%}
+      <div class="opt-row">
+        <div class="en">＋ {{ o.title | escape }}<span>{{ o.metafields.propose.name_ja.value | escape }}</span></div>
+        <div class="price">{{ o.price | money }}</div>
+        <p>{{ o_desc | escape }}{% if o.metafields.propose.requires_photo.value %}（写真撮影付きのプランで選べます）{% endif %}</p>
+      </div>
+    {%- endfor -%}
+  </div>
+</div>
+{%- endif %}
+{%- if booking_url != blank %}
+<a class="btn btn-block plan-cta" href="{{ booking_url }}">この場所で予約する <span class="arrow" aria-hidden="true">→</span></a>
+{%- endif %}

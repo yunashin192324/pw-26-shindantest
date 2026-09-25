@@ -13,10 +13,6 @@
   assign options = collections['propose-options'].products
   assign pp_settings = metaobjects.propose_settings.values.first
   assign reply_hours = pp_settings.reply_hours.value | default: 24
-  assign includes = pp_settings.plan_includes.value
-  if includes == blank
-    assign includes = 'プロフォトグラファー,撮影30分,プロポーズ用の花束,写真データ30枚以上,オンライン納品,日本語サポート' | split: ','
-  endif
   assign terms_url = section.settings.terms_url
   if terms_url == blank and shop.terms_of_service
     assign terms_url = shop.terms_of_service.url
@@ -62,10 +58,11 @@
   <input type="hidden" name="contact[phone]" data-f="phone">
   <input type="hidden" name="contact[リクエスト番号]" data-f="code">
   <input type="hidden" name="contact[旅行先]" data-f="location">
-  <input type="hidden" name="contact[撮影日]" data-f="date">
+  <input type="hidden" name="contact[希望日]" data-f="date">
   <input type="hidden" name="contact[時間]" data-f="time">
   <input type="hidden" name="contact[時間の調整]" data-f="flexible">
   <input type="hidden" name="contact[プラン]" data-f="plan">
+  <input type="hidden" name="contact[会場]" data-f="venue">
   <input type="hidden" name="contact[オプション]" data-f="options">
   <input type="hidden" name="contact[合計]" data-f="total">
   <input type="hidden" name="contact[滞在ホテル]" data-f="hotel">
@@ -79,7 +76,6 @@
     "replyHours": {{ reply_hours | json }},
     "topUrl": "/pages/propose",
     "termsUrl": {{ terms_url | default: '' | json }},
-    "includes": {{ includes | json }},
     "locations": [
       {%- for loc in locations -%}
         {%- liquid
@@ -107,12 +103,35 @@
         "bestTimeNote": {{ loc.best_time_note.value | default: '' | json }},
         "blocked": {% if loc.blocked_slots.value != blank %}{{ loc.blocked_slots.value | json }}{% else %}[]{% endif %},
         "few": {% if loc.few_left_slots.value != blank %}{{ loc.few_left_slots.value | json }}{% else %}[]{% endif %},
+        "hotels": {% if loc.hotels.value != blank %}{{ loc.hotels.value | json }}{% else %}[]{% endif %},
+        "chapels": {% if loc.chapels.value != blank %}{{ loc.chapels.value | json }}{% else %}[]{% endif %},
         "plans": [
           {%- if plan -%}
-          { "id": "standard", "name": "PROPOSE PLAN", "variantId": {{ plan.variants.first.id | json }}, "price": {{ plan.variants.first.price | json }} }
-          {%- if plan.variants.size > 1 -%},
-          { "id": "allin", "name": "ALL INCLUSIVE", "variantId": {{ plan.variants.last.id | json }}, "price": {{ plan.variants.last.price | json }} }
-          {%- endif -%}
+            {%- for v in plan.variants limit: 3 -%}
+              {%- liquid
+                case forloop.index
+                  when 1
+                    assign p_id = 'light'
+                    assign p_name = 'LIGHT PLAN'
+                    assign p_ja = 'ライトプラン'
+                    assign p_sum = '花束のみ'
+                    assign p_photo = false
+                  when 2
+                    assign p_id = 'standard'
+                    assign p_name = 'STANDARD PLAN'
+                    assign p_ja = 'スタンダードプラン'
+                    assign p_sum = '花束＋写真撮影'
+                    assign p_photo = true
+                  else
+                    assign p_id = 'luxury'
+                    assign p_name = 'LUXURY PLAN'
+                    assign p_ja = 'ラグジュアリープラン'
+                    assign p_sum = '花束＋写真撮影＋動画撮影＋デコレーション'
+                    assign p_photo = true
+                endcase
+              -%}
+          { "id": {{ p_id | json }}, "name": {{ p_name | json }}, "nameJa": {{ p_ja | json }}, "summary": {{ p_sum | json }}, "hasPhoto": {{ p_photo }}, "variantId": {{ v.id | json }}, "price": {{ v.price | json }} }{% unless forloop.last %},{% endunless %}
+            {%- endfor -%}
           {%- endif -%}
         ]
       }{% unless forloop.last %},{% endunless %}
@@ -133,7 +152,8 @@
         "desc": {{ o_desc | json }},
         "price": {{ o.price | json }},
         "variantId": {{ o.variants.first.id | json }},
-        "requiresHotel": {% if o.metafields.propose.requires_hotel.value %}true{% else %}false{% endif %}
+        "requiresHotel": {% if o.metafields.propose.requires_hotel.value %}true{% else %}false{% endif %},
+        "requiresPhoto": {% if o.metafields.propose.requires_photo.value %}true{% else %}false{% endif %}
       }{% unless forloop.last %},{% endunless %}
       {%- endfor -%}
     ]

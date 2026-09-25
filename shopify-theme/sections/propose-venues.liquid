@@ -1,0 +1,54 @@
+{%- comment -%}
+  TOP: destinations where the proposal can also take place at a hotel or chapel
+  (metaobject fields `hotels` / `chapels`). Destinations without venues are skipped.
+{%- endcomment -%}
+{%- liquid
+  assign locations = section.settings.locations
+  if locations == blank
+    assign locations = metaobjects.propose.values
+  endif
+-%}
+<section class="sec sec-deep" id="venue" aria-labelledby="venue-title">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="label">{{ section.settings.label | escape }}</span>
+      <h2 class="h2" id="venue-title">{{ section.settings.heading | escape | newline_to_br }}</h2>
+      {%- if section.settings.lede != blank %}<p class="lede">{{ section.settings.lede | escape }}</p>{% endif %}
+    </div>
+    <div class="venue-list">
+      {%- for loc in locations -%}
+        {%- if loc.hotels.value != blank or loc.chapels.value != blank -%}
+          {%- liquid
+            assign loc_url = loc.system.url
+            if loc_url == blank
+              assign loc_url = '/pages/propose/' | append: loc.system.handle
+            endif
+          -%}
+          <a class="venue-row reveal" href="{{ loc_url }}">
+            <div class="venue-loc"><span class="en">{{ loc.location_name_en.value | escape }}</span><small>{{ loc.location_name.value | escape }}</small></div>
+            <div class="venue-names">
+              {%- if loc.hotels.value != blank %}<p><b>HOTEL</b>{{ loc.hotels.value | join: '／' | escape }}</p>{% endif -%}
+              {%- if loc.chapels.value != blank %}<p><b>CHAPEL</b>{{ loc.chapels.value | join: '／' | escape }}</p>{% endif -%}
+            </div>
+            <span class="arrow" aria-hidden="true">→</span>
+          </a>
+        {%- endif -%}
+      {%- endfor -%}
+    </div>
+    {%- if section.settings.note != blank %}<p class="note" style="margin-top:20px">{{ section.settings.note | escape }}</p>{% endif %}
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "プロポーズ ホテル・チャペル",
+  "settings": [
+    { "type": "metaobject_list", "id": "locations", "metaobject_type": "propose", "label": "対象の旅行先と並び順", "info": "空欄の場合は、ホテル・チャペルを入力したすべての旅行先を表示します。" },
+    { "type": "text", "id": "label", "label": "英語ラベル", "default": "Venue" },
+    { "type": "textarea", "id": "heading", "label": "見出し", "default": "ホテルでも、\nチャペルでも。" },
+    { "type": "text", "id": "lede", "label": "説明文", "default": "ビーチや街角だけでなく、旅行先によっては憧れのホテルやチャペルでもプロポーズできます。" },
+    { "type": "text", "id": "note", "label": "注記", "default": "※ 会場の使用料や条件は会場ごとに異なるため、確定のご連絡でご案内します。" }
+  ],
+  "presets": [{ "name": "プロポーズ ホテル・チャペル" }]
+}
+{% endschema %}

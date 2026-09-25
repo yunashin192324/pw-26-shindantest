@@ -47,14 +47,20 @@
     var calOffset = 0;
 
     function bLoc() { return bk.loc ? getLocation(bk.loc) : null; }
-    function bPlan() { var l = bLoc(); return l ? l.plans.filter(function (p) { return p.id === bk.plan; })[0] || l.plans[0] : null; }
-    function isIncluded() { var p = bPlan(); return !!p && p.id === "allin"; }
-    function bOptions() { return C.options.filter(function (o) { return isIncluded() || bk.options.indexOf(o.id) > -1; }); }
-    function bTotal() {
-      var p = bPlan(); if (!p) return 0;
-      return bOptions().reduce(function (s, o) { return isIncluded() ? s : s + o.price; }, p.price);
+    function firstOpenOffset(l) {
+      var t = A.today();
+      for (var i = 0; i < 180; i++) {
+        var d = new Date(t); d.setDate(d.getDate() + i);
+        if (A.isOpen(A.dateStatus(l, A.isoDate(d)))) return (d.getFullYear() - t.getFullYear()) * 12 + d.getMonth() - t.getMonth();
+      }
+      return 0;
     }
-    function needsHotel() { return bOptions().some(function (o) { return o.requiresHotel; }); }
+    function bPlan() { var l = bLoc(); return l ? l.plans.filter(function (p) { return p.id === bk.plan; })[0] || l.plans[0] : null; }
+    function bTotal() { return describe(bk).total; }
+    function needsHotel() { return describe(bk).extra.some(function (o) { return o.requiresHotel; }); }
+    function venuesOf(l) { return l ? (l.hotels || []).map(function (v) { return { type: "HOTEL", name: v }; }).concat((l.chapels || []).map(function (v) { return { type: "CHAPEL", name: v }; })) : []; }
+    function optionAvailable(o, p) { return !o.requiresPhoto || (!!p && p.hasPhoto); }
+    function staff(p) { return p && p.hasPhoto ? "フォトグラファー" : "担当スタッフ"; }
     function hasSlots() { var l = bLoc(); return !!l && l.timeSlots.length > 0; }
     function curStep() { return bk.steps[bk.i]; }
 
@@ -66,9 +72,9 @@
 
     function startBooking(params, saved) {
       var l = params.loc && getLocation(params.loc);
-      bk = { loc: l ? l.id : null, date: null, time: null, plan: params.plan === "allin" ? "allin" : "standard", options: [], customer: {}, steps: [], i: 0 };
+      bk = { loc: l ? l.id : null, date: null, time: null, plan: ["light", "standard", "luxury"].indexOf(params.plan) > -1 ? params.plan : "standard", venue: "", options: [], customer: {}, steps: [], i: 0 };
       if (saved) {
-        bk.loc = saved.loc; bk.date = saved.date; bk.time = saved.time; bk.plan = saved.plan; bk.options = saved.options || []; bk.customer = saved.customer || {};
+        bk.loc = saved.loc; bk.date = saved.date; bk.time = saved.time; bk.plan = saved.plan; bk.venue = saved.venue || ""; bk.options = saved.options || []; bk.customer = saved.customer || {};
         l = getLocation(bk.loc);
       }
       bk.steps = stepsFor(!l);
@@ -154,6 +160,8 @@
       },
       date: function () {
         var l = bLoc(), t = A.today();
+        // Open on the first month that still has a bookable day (e.g. a 7-day lead late in the month).
+        if (!bk.date && !bk.calSet) { calOffset = firstOpenOffset(l); bk.calSet = true; }
         var base = new Date(t.getFullYear(), t.getMonth() + calOffset, 1);
         var y = base.getFullYear(), m = base.getMonth();
         var first = new Date(y, m, 1).getDay(), dim = new Date(y, m + 1, 0).getDate();
@@ -166,7 +174,7 @@
           cells.push('<button type="button" class="day-btn is-' + st + (past ? " is-past" : "") + (bk.date === iso ? " is-selected" : "") + '" data-date="' + iso + '"' + (A.isOpen(st) ? "" : " disabled") +
             ' aria-label="' + A.fmtDate(iso) + " " + STATUS[st].ja + '"><span class="dn">' + d + '</span><span class="ds">' + (past ? "" : STATUS[st].mark) + "</span></button>");
         }
-        return '<h2 class="h2">撮影する日を選ぶ</h2><p class="lede">' + esc(l.nameJa) + "は" + l.leadDays + "日前までリクエストできます。旅行中の日付を選んでください。</p>" +
+        return '<h2 class="h2">プロポーズの日を選ぶ</h2><p class="lede">' + esc(l.nameJa) + "は" + l.leadDays + "日前までリクエストできます。旅行中の日付を選んでください。</p>" +
           '<div class="cal-nav"><button type="button" data-cal="-1"' + (calOffset <= 0 ? " disabled" : "") + ' aria-label="前の月">←</button><span class="cal-month">' + y + "." + String(m + 1).padStart(2, "0") +
           '</span><button type="button" data-cal="1"' + (calOffset >= 11 ? " disabled" : "") + ' aria-label="次の月">→</button></div>' +
           '<div class="cal">' + DOW.map(function (w) { return '<span class="cal-dow">' + w + "</span>"; }).join("") + cells.join("") + "</div>" +
@@ -183,19 +191,24 @@
           }).join("") + "</div>";
       },
       plan: function () {
-        var l = bLoc();
-        var stdDesc = (C.includes || []).filter(function (x) { return /撮影|花束|写真|日本語/.test(x); }).join("・");
-        return '<h2 class="h2">プランとオプション</h2><p class="lede">基本のプロポーズプランは選択済みです。必要なものだけ追加してください。</p>' +
-          (l.plans.length > 1 ? '<div class="plan-toggle" role="radiogroup" aria-label="プラン">' + l.plans.map(function (p) {
-            var desc = p.id === "standard" ? stdDesc : "プロポーズプラン＋" + C.options.length + "つのオプションすべて";
-            var on = bPlan().id === p.id;
+        var l = bLoc(), cur = bPlan(), venues = venuesOf(l);
+        return '<h2 class="h2">プランとオプション</h2><p class="lede">プランを選び、必要なものだけ追加してください。</p>' +
+          '<div class="plan-toggle" role="radiogroup" aria-label="プラン">' + l.plans.map(function (p) {
+            var on = cur.id === p.id;
             return '<button type="button" role="radio" aria-checked="' + on + '" class="plan-opt' + (on ? " is-selected" : "") + '" data-plan="' + p.id + '"><span class="radio"></span><span><span class="en">' +
-              esc(p.name) + "</span><p>" + esc(desc) + '</p></span><span class="price">' + money(p.price) + "</span></button>";
-          }).join("") + "</div>" : '<div class="plan-toggle"><div class="plan-opt is-selected"><span class="radio"></span><span><span class="en">PROPOSE PLAN</span><p>' + esc(stdDesc) + '</p></span><span class="price">' + money(l.plans[0].price) + "</span></div></div>") +
+              esc(p.name) + "</span><p>" + esc(p.nameJa) + "｜" + esc(p.summary) + '</p></span><span class="price">' + money(p.price) + "</span></button>";
+          }).join("") + "</div>" +
+          (venues.length ?
+            '<p class="sub-h">Venue</p><p class="note" style="margin-bottom:12px">ホテルやチャペルでのプロポーズも手配できます。会場の使用料や条件は会場ごとに異なるため、確定のご連絡でご案内します。</p>' +
+            '<div class="plan-toggle venue-toggle" role="radiogroup" aria-label="会場">' + [{ type: "", name: "" }].concat(venues).map(function (v) {
+              var on = bk.venue === v.name;
+              return '<button type="button" role="radio" aria-checked="' + on + '" class="plan-opt is-compact' + (on ? " is-selected" : "") + '" data-venue="' + esc(v.name) + '"><span class="radio"></span><span>' +
+                (v.type ? '<span class="en venue-kind">' + v.type + "</span>" + esc(v.name) : "おまかせ（おすすめの場所）") + "</span></button>";
+            }).join("") + "</div>" : "") +
           (C.options.length ? '<p class="sub-h">Option</p>' + C.options.map(function (o) {
-            var inc = isIncluded(), on = inc || bk.options.indexOf(o.id) > -1;
-            return '<button type="button" role="checkbox" aria-checked="' + on + '" class="opt-pick' + (on ? " is-on" : "") + '" data-opt="' + esc(o.id) + '"' + (inc ? " disabled" : "") + '><span class="box">' + (on ? "✓" : "") +
-              '</span><span><span class="en">' + esc(o.name) + (o.nameJa ? "<span>" + esc(o.nameJa) + "</span>" : "") + "</span><p>" + esc(o.desc) + '</p></span><span class="price">' + (inc ? "含まれています" : "+" + money(o.price)) + "</span></button>";
+            var ok = optionAvailable(o, cur), on = ok && bk.options.indexOf(o.id) > -1;
+            return '<button type="button" role="checkbox" aria-checked="' + on + '" class="opt-pick' + (on ? " is-on" : "") + '" data-opt="' + esc(o.id) + '"' + (ok ? "" : " disabled") + '><span class="box">' + (on ? "✓" : "") +
+              '</span><span><span class="en">' + esc(o.name) + (o.nameJa ? "<span>" + esc(o.nameJa) + "</span>" : "") + "</span><p>" + esc(o.desc) + '</p></span><span class="price">' + (ok ? "+" + money(o.price) : "撮影付きプランのみ") + "</span></button>";
           }).join("") : "");
       },
       customer: function () {
@@ -215,7 +228,7 @@
           '<label class="check"><input type="checkbox" id="c-agree"' + (c.agree ? " checked" : "") + "><span>" + terms + "に同意する</span></label>";
       },
       confirm: function () {
-        return '<h2 class="h2">リクエスト内容の確認</h2><p class="lede">この内容でリクエストを送ります。フォトグラファーの手配を確認し、' + C.replyHours + "時間以内に確定可否をご連絡します。</p>" + summaryHTML(bk) +
+        return '<h2 class="h2">リクエスト内容の確認</h2><p class="lede">この内容でリクエストを送ります。' + (bPlan().hasPhoto ? "フォトグラファーの" : "") + '手配を確認し、' + C.replyHours + "時間以内に確定可否をご連絡します。</p>" + summaryHTML(bk) +
           '<button type="button" class="btn btn-block" id="bk-send">予約をリクエストする <span class="arrow" aria-hidden="true">→</span></button>' +
           '<p class="note" style="margin-top:12px;text-align:center">この時点ではお支払いは発生しません。予約の確定後に、お支払いのご案内をお送りします。</p>';
       }
@@ -225,11 +238,9 @@
     function describe(s) {
       var l = getLocation(s.loc);
       var p = l && (l.plans.filter(function (x) { return x.id === s.plan; })[0] || l.plans[0]);
-      var inc = !!p && p.id === "allin";
-      var chosen = C.options.filter(function (o) { return inc || (s.options || []).indexOf(o.id) > -1; });
-      var extra = inc ? [] : chosen;
+      var extra = C.options.filter(function (o) { return (s.options || []).indexOf(o.id) > -1 && optionAvailable(o, p); });
       var total = p ? extra.reduce(function (sum, o) { return sum + o.price; }, p.price) : 0;
-      return { l: l, p: p, inc: inc, extra: extra, total: total };
+      return { l: l, p: p, extra: extra, total: total, hasVenues: venuesOf(l).length > 0 };
     }
     function summaryHTML(s) {
       var x = describe(s), l = x.l, p = x.p;
@@ -240,9 +251,10 @@
       ];
       if (s.time) rows.push(["Time", esc(s.time) + (l.bestTime && s.time === l.bestTime ? "<small>BEST TIME・" + esc(l.bestTimeNote) + "</small>" : "")]);
       rows.push(["Meeting", esc(l.meetingPoint || "確定のご連絡でご案内します")]);
-      rows.push(["Plan", esc(p.name) + "<small>" + money(p.price) + "</small>"]);
+      rows.push(["Plan", esc(p.name) + "<small>" + esc(p.summary) + "・" + money(p.price) + "</small>"]);
+      if (x.hasVenues) rows.push(["Venue", s.venue ? esc(s.venue) : "おまかせ"]);
       if (s.time) rows.push(["Flexible", s.customer && s.customer.flex ? "同じ日の別の時間でも可" : "希望の時間のみ"]);
-      rows.push(["Option", x.extra.length ? x.extra.map(function (o) { return esc(o.nameJa || o.name) + " +" + money(o.price); }).join("<br>") : (x.inc ? "すべて含まれています" : "なし")]);
+      rows.push(["Option", x.extra.length ? x.extra.map(function (o) { return esc(o.nameJa || o.name) + " +" + money(o.price); }).join("<br>") : "なし"]);
       return '<dl class="summary">' + rows.map(function (r) { return '<div class="sum-row"><dt>' + r[0] + "</dt><dd>" + r[1] + "</dd></div>"; }).join("") +
         '<div class="sum-total"><dt>TOTAL<small>確定後のお支払い</small></dt><dd class="price">' + money(x.total) + "</dd></div></dl>";
     }
@@ -251,7 +263,7 @@
       location: function (b) {
         b.addEventListener("click", function (e) {
           var btn = e.target.closest("[data-loc]"); if (!btn) return;
-          if (bk.loc !== btn.getAttribute("data-loc")) { bk.date = null; bk.time = null; }
+          if (bk.loc !== btn.getAttribute("data-loc")) { bk.date = null; bk.time = null; bk.venue = ""; bk.calSet = false; }
           bk.loc = btn.getAttribute("data-loc");
           // The time step only exists for destinations with fixed time slots.
           var rest = stepsFor(true);
@@ -282,7 +294,9 @@
       plan: function (b) {
         b.addEventListener("click", function (e) {
           var p = e.target.closest("[data-plan]"), o = e.target.closest("[data-opt]:not(:disabled)");
-          if (p) { bk.plan = p.getAttribute("data-plan"); if (bk.plan === "allin") bk.options = []; bRender(); }
+          var v = e.target.closest("[data-venue]");
+          if (p) { bk.plan = p.getAttribute("data-plan"); bRender(); }
+          if (v) { bk.venue = v.getAttribute("data-venue"); bRender(); }
           if (o) {
             var id = o.getAttribute("data-opt"), i = bk.options.indexOf(id);
             if (i > -1) bk.options.splice(i, 1); else bk.options.push(id);
@@ -311,12 +325,13 @@
       var lines = [
         "【プロポーズ予約リクエスト】" + code,
         "旅行先: " + l.name + "（" + l.nameJa + "）",
-        "撮影日: " + A.fmtDate(s.date, true),
+        "希望日: " + A.fmtDate(s.date, true),
         "時間: " + (s.time ? s.time + (l.bestTime && s.time === l.bestTime ? "（BEST TIME・" + l.bestTimeNote + "）" : "") : "未指定（確定時に相談）"),
         "時間の調整: " + (c.flex ? "同じ日の別の時間でも可" : "希望の時間のみ"),
         "集合場所: " + (l.meetingPoint || "-"),
-        "プラン: " + p.name + " " + money(p.price),
-        "オプション: " + (x.extra.length ? x.extra.map(function (o) { return (o.nameJa || o.name) + " +" + money(o.price); }).join(" / ") : (x.inc ? "すべて含む" : "なし")),
+        "プラン: " + p.name + "（" + p.summary + "） " + money(p.price),
+        "会場: " + (x.hasVenues ? (s.venue || "おまかせ") : "-"),
+        "オプション: " + (x.extra.length ? x.extra.map(function (o) { return (o.nameJa || o.name) + " +" + money(o.price); }).join(" / ") : "なし"),
         "合計: " + money(x.total),
         "",
         "お名前: " + (c.name || ""),
@@ -340,8 +355,9 @@
         date: A.fmtDate(bk.date, true),
         time: bk.time || "未指定",
         flexible: c.flex ? "同じ日の別の時間でも可" : "希望の時間のみ",
-        plan: x.p.name + " " + money(x.p.price),
-        options: x.extra.length ? x.extra.map(function (o) { return (o.nameJa || o.name) + " +" + money(o.price); }).join(" / ") : (x.inc ? "すべて含む" : "なし"),
+        plan: x.p.name + "（" + x.p.summary + "） " + money(x.p.price),
+        venue: x.hasVenues ? (bk.venue || "おまかせ") : "",
+        options: x.extra.length ? x.extra.map(function (o) { return (o.nameJa || o.name) + " +" + money(o.price); }).join(" / ") : "なし",
         total: money(x.total),
         hotel: c.hotel || "",
         surprise: c.surprise ? "控えめな件名で連絡" : "なし",
@@ -349,7 +365,7 @@
       };
       $$("[data-f]", form).forEach(function (el) { el.value = values[el.getAttribute("data-f")] || ""; });
       try {
-        sessionStorage.setItem(STORE_KEY, JSON.stringify({ code: code, state: { loc: bk.loc, date: bk.date, time: bk.time, plan: bk.plan, options: bk.options, customer: bk.customer } }));
+        sessionStorage.setItem(STORE_KEY, JSON.stringify({ code: code, state: { loc: bk.loc, date: bk.date, time: bk.time, plan: bk.plan, venue: bk.venue, options: bk.options, customer: bk.customer } }));
       } catch (e) { /* completion screen falls back to a generic message */ }
       btn.disabled = true;
       btn.textContent = "送信しています…";
@@ -361,7 +377,7 @@
       $("#bk-progress").classList.add("hidden");
       $("#bk-bar").classList.add("hidden");
       $("#bk-context").innerHTML = "";
-      var l = s && getLocation(s.loc);
+      var l = s && getLocation(s.loc), x = s && l ? describe(s) : null;
       $("#bk-body").innerHTML =
         '<div class="done bk-step">' +
           '<span class="label">Request received.</span>' +
@@ -370,10 +386,10 @@
             "まだ予約は確定していません。" + C.replyHours + "時間以内に、" + (c.email ? esc(c.email) + " へ" : "ご入力のメールアドレスへ") + "確定可否をご連絡します。</p>" +
           (s && l ? summaryHTML(s) : "") +
           '<ol class="next-steps">' +
-            "<li><b>01</b><span>フォトグラファーの手配を確認し、" + C.replyHours + "時間以内にメールでご連絡します" + (c.surprise ? "（控えめな件名で送信）" : "") + "。" +
+            "<li><b>01</b><span>" + (x && x.p && x.p.hasPhoto ? "フォトグラファーの" : "") + "手配を確認し、" + C.replyHours + "時間以内にメールでご連絡します" + (c.surprise ? "（控えめな件名で送信）" : "") + "。" +
               (c.flex ? "希望の時間が難しい場合は、同じ日の別の時間をご案内します。" : "ご希望の日時が難しい場合は、近い日時をご提案します。") + "</span></li>" +
             "<li><b>02</b><span>確定のメールにあるリンクからお支払いください。お支払いの完了で、予約が確定します。</span></li>" +
-            "<li><b>03</b><span>撮影日の2日前までに、フォトグラファーから集合場所の詳細をお送りします。" + (l && l.meetingPoint ? "当日は " + esc(l.meetingPoint) + " へ。" : "") + "</span></li>" +
+            "<li><b>03</b><span>当日の2日前までに、" + staff(x && x.p) + "から集合場所の詳細をお送りします。" + (l && l.meetingPoint ? "当日は " + esc(l.meetingPoint) + " へ。" : "") + "</span></li>" +
           "</ol>" +
           '<a class="btn btn-ghost" href="' + esc(C.topUrl) + '">TOPへ戻る</a>' +
         "</div>";
