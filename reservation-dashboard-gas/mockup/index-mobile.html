@@ -654,6 +654,13 @@ var DISPLAY_COLUMN_DEFS_BY_KEY = {};
 DISPLAY_COLUMN_DEFS.forEach(function(d){ DISPLAY_COLUMN_DEFS_BY_KEY[d.key] = d; });
 var DEFAULT_COLUMN_ORDER = DISPLAY_COLUMN_DEFS.map(function(d){ return d.key; });
 
+// ---- 予約番号（記録番号／チャレンジ番号）→「チャレンジ記録」へのリンク ----
+var CHALLENGE_RECORD_BASE_URL = 'http://applweb.center.his/cgi-bin/b/btcq1_0_3ui?scid=_new&rsv=01102';
+function buildChallengeRecordUrl(value){
+  if (typeof value !== 'string' || !/^[0-9A-Za-z]{11}$/.test(value)) return null;
+  return CHALLENGE_RECORD_BASE_URL + value;
+}
+
 var ROLE_ACCOUNTS = {
   'マスタ権限': { office: '', area: '' },
   '所長・チーフ': { office: '', area: AREA_LIST[0] },
@@ -1012,8 +1019,12 @@ function buildRecordCard(row){
   var editDefs = order.filter(function(d){ return d.kind !== 'csv'; });
   var expanded = !!STATE.expandedCards[row.rowIndex];
 
+  var challengeUrl = row.reservationNo ? buildChallengeRecordUrl(row.reservationNo) : null;
+  var reservationNoHtml = challengeUrl
+    ? '<a href="'+escapeHtml(challengeUrl)+'" target="_blank" rel="noopener noreferrer" style="color:var(--blue-700);">'+escapeHtml(row.reservationNo)+'</a>'
+    : escapeHtml(row.reservationNo||'－');
   var head = '<div class="rc-head"><div>' +
-    '<div class="rc-title">'+escapeHtml(row.reservationNo||'－')+'</div>' +
+    '<div class="rc-title">'+reservationNoHtml+'</div>' +
     '<div class="rc-sub">'+escapeHtml(formatStaffName(row.staff)||'－')+' ・ '+escapeHtml(row.office||'－')+'</div>' +
     '</div><span class="rc-badge">'+escapeHtml(row.sts||'－')+'</span></div>';
 

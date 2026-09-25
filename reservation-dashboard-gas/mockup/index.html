@@ -772,6 +772,13 @@ var DISPLAY_COLUMN_DEFS_BY_KEY = {};
 DISPLAY_COLUMN_DEFS.forEach(function(d){ DISPLAY_COLUMN_DEFS_BY_KEY[d.key] = d; });
 var DEFAULT_COLUMN_ORDER = DISPLAY_COLUMN_DEFS.map(function(d){ return d.key; });
 
+// ---- 予約番号（記録番号／チャレンジ番号）→「チャレンジ記録」へのリンク ----
+var CHALLENGE_RECORD_BASE_URL = 'http://applweb.center.his/cgi-bin/b/btcq1_0_3ui?scid=_new&rsv=01102';
+function buildChallengeRecordUrl(value){
+  if (typeof value !== 'string' || !/^[0-9A-Za-z]{11}$/.test(value)) return null;
+  return CHALLENGE_RECORD_BASE_URL + value;
+}
+
 // ---- 権限切替デモ用のアカウント定義 ----
 var ROLE_ACCOUNTS = {
   'マスタ権限': { office: '', area: '' },
@@ -1210,6 +1217,12 @@ function buildCellHtml(row, def){
     var align = col.type === 'number' ? 'text-right' : '';
     var displayValue = row[def.field];
     if (def.field === 'staff' && displayValue) displayValue = formatStaffName(displayValue);
+    if (def.field === 'reservationNo' && displayValue){
+      var challengeUrl = buildChallengeRecordUrl(displayValue);
+      if (challengeUrl){
+        return '<td class="'+align+'"><a href="'+escapeHtml(challengeUrl)+'" target="_blank" rel="noopener noreferrer" style="color:var(--blue-700);">'+escapeHtml(displayValue)+'</a></td>';
+      }
+    }
     return '<td class="'+align+'">'+formatCell(displayValue, col)+'</td>';
   }
   if (def.kind === 'date'){
