@@ -33,11 +33,11 @@ let rankingSortState = { key: 'total', dir: 'desc' };
 // リセールリストの並べ替え（既定は対象年月日の新しい順）
 let dmSortState = { key: '対象年月日', dir: 'desc' };
 // まだ保存していない変更。{ "店舗名::行番号": { sheetName, rowIndex, values: {列名: 値} } }
-// 対象は「リセール」「STS」「成約PAX」の3列。1件ずつ通信すると次の入力まで
-// 待たされるため、ためてから「まとめて保存する」で一括送信する。
+// 対象はオレンジ色の編集可能列（リセール・STS・成約PAX・ACT日・ACT内容・メモ・詳細）全7列。
+// 1件ずつ通信すると次の入力まで待たされるため、ためてから「まとめて保存する」で一括送信する。
 let pendingChanges = {};
-// まとめて保存の対象列（この3列は選んだ時点では保存されない）
-const PENDING_COLUMNS = ['リセール', 'STS', '成約PAX'];
+// まとめて保存の対象列（選んだ／入力した時点では保存されない）
+const PENDING_COLUMNS = ['リセール', 'STS', '成約PAX', 'ACT日', 'ACT内容', '次回ACT・進捗★手入力', '詳細'];
 
 // ============================================================================
 // 元に戻す／やり直す（誤って更新したときの復元用）
@@ -198,7 +198,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // 画面側が前提としているサーバー（Code.gs）の版数。Code.gs の SERVER_VERSION と対で更新する。
-const REQUIRED_SERVER_VERSION = '2026-08-27';
+const REQUIRED_SERVER_VERSION = '2026-08-28';
 
 /**
  * Code.gs が画面と同じ版数まで更新されているか確認する。
@@ -1480,7 +1480,7 @@ function renderEmployeeDetailBreakdown(containerId, rows, columnName) {
 // タブ3: リセールリスト（CRUD）
 // ============================================================================
 function initDataManagerEvents() {
-  ['dm-filter-shop', 'dm-filter-month', 'dm-filter-sts', 'dm-filter-contact', 'dm-filter-purpose',
+  ['dm-filter-shop', 'dm-filter-month', 'dm-filter-resale', 'dm-filter-sts', 'dm-filter-contact', 'dm-filter-purpose',
     'dm-filter-employee', 'dm-filter-date-from', 'dm-filter-date-to',
     'dm-filter-act-date-from', 'dm-filter-act-date-to', 'dm-filter-alert-only'].forEach(function (id) {
     document.getElementById(id).addEventListener('change', function () {
@@ -1546,6 +1546,7 @@ function populateDmEmployeeSelect() {
 function renderDataManagerTab() {
   const shop = document.getElementById('dm-filter-shop').value;
   const month = document.getElementById('dm-filter-month').value;
+  const resale = document.getElementById('dm-filter-resale').value;
   const sts = document.getElementById('dm-filter-sts').value;
   const contact = document.getElementById('dm-filter-contact').value;
   const purpose = document.getElementById('dm-filter-purpose').value;
@@ -1559,6 +1560,11 @@ function renderDataManagerTab() {
   dmFilteredCache = allDataCache.filter(function (row) {
     if (shop && row.__sheetName !== shop) return false;
     if (month && String(row['月']) !== month) return false;
+    if (resale === '__blank__') {
+      if (row['リセール']) return false;
+    } else if (resale && row['リセール'] !== resale) {
+      return false;
+    }
     if (sts === '__blank__') {
       if (row['STS']) return false;
     } else if (sts && row['STS'] !== sts) {
@@ -1760,8 +1766,10 @@ function paxCellTd(row, stsValue) {
 }
 
 function editableCellTd(row, columnName, type, extraClass) {
-  const val = row[columnName] !== undefined && row[columnName] !== null ? row[columnName] : '';
-  return '<td class="editable-cell px-3 py-2 ' + (extraClass || '') + '" data-column="' + escapeHtml(columnName) + '" data-type="' + type + '" data-sheet="' + escapeHtml(row.__sheetName) + '" data-row="' + row.__rowIndex + '">' +
+  // 保存待ちの値があればそちらを表示する（まとめて保存の対象列のため）
+  const val = pendingValueOf(row, columnName);
+  const pendingClass = isPendingCell(row, columnName) ? ' dm-resale-pending' : '';
+  return '<td class="editable-cell px-3 py-2' + pendingClass + ' ' + (extraClass || '') + '" data-column="' + escapeHtml(columnName) + '" data-type="' + type + '" data-sheet="' + escapeHtml(row.__sheetName) + '" data-row="' + row.__rowIndex + '">' +
     '<span class="cell-display">' + escapeHtml(val) + '</span></td>';
 }
 
@@ -1812,14 +1820,16 @@ function linkifyHtml(text) {
  */
 function longTextCellTd(row, columnName) {
   const previewLength = (columnName === 'ACT内容') ? LONG_TEXT_PREVIEW_LENGTH : LONG_TEXT_PREVIEW_LENGTH_WIDE;
-  const raw = row[columnName] !== undefined && row[columnName] !== null ? String(row[columnName]) : '';
+  // 保存待ちの値があればそちらを表示する（まとめて保存の対象列のため）
+  const raw = String(pendingValueOf(row, columnName));
   const oneLine = raw.replace(/\s+/g, ' ');
   const truncated = oneLine.length > previewLength;
   const preview = truncated ? oneLine.substring(0, previewLength) + '…' : oneLine;
   // 途中で切れている場合、URLも途中で切れてリンク先が壊れてしまうため一覧ではリンク化しない。
   // 全文はホバーのポップアップ（showDetailTooltip）でリンクとして確認・クリックできる。
   const previewHtml = truncated ? escapeHtml(preview) : linkifyHtml(preview);
-  return '<td class="editable-cell detail-cell px-3 py-2" data-detail="1"' +
+  const pendingClass = isPendingCell(row, columnName) ? ' dm-resale-pending' : '';
+  return '<td class="editable-cell detail-cell px-3 py-2' + pendingClass + '" data-detail="1"' +
     ' data-column="' + escapeHtml(columnName) + '" data-type="text"' +
     ' data-sheet="' + escapeHtml(row.__sheetName) + '" data-row="' + row.__rowIndex + '">' +
     // 全文は data-full に持たせ、ポップアップと編集開始時にこちらを使う
@@ -1827,11 +1837,10 @@ function longTextCellTd(row, columnName) {
 }
 
 // ============================================================================
-// まとめて保存（リセール・STS・成約PAX）
+// まとめて保存（オレンジ色の編集可能列：リセール・STS・成約PAX・ACT日・ACT内容・メモ・詳細）
 // ----------------------------------------------------------------------------
-// この3列は、選ぶたびに通信すると1行ごとに数秒待たされて次の入力ができない。
+// 1件ずつ通信すると1行ごとに数秒待たされて次の入力ができないため、
 // 変更を画面側にためておき、「まとめて保存する」で一括送信する。
-// ACT日・ACT内容・メモ・詳細はこれまでどおり、その場で保存する。
 // ============================================================================
 
 /** 保存待ちの中の値を返す（無ければ保存済みの値） */
@@ -2091,7 +2100,7 @@ function bindGridEditEvents() {
         const columnName = td.dataset.column;
 
         if (columnName === '成約PAX') {
-          // 成約PAXもまとめて保存の対象。STSは保存待ちの値も含めて判定する
+          // 成約PAXはSTSが「成約」の行のみ入力できる（保存待ちの値も含めて判定する）
           const row = dmFilteredCache.find(function (r) { return r.__sheetName === sheetName && String(r.__rowIndex) === String(rowIndex); });
           const sts = row ? pendingValueOf(row, 'STS') : '';
           if (sts !== '成約') {
@@ -2099,7 +2108,12 @@ function bindGridEditEvents() {
             renderDataManagerGrid();
             return;
           }
-          stageChange(sheetName, rowIndex, '成約PAX', newVal);
+        }
+
+        if (PENDING_COLUMNS.indexOf(columnName) !== -1) {
+          // オレンジ表示の編集可能列はすべてまとめて保存の対象。ここではまだ通信せず、
+          // 画面上にためておく（1件ずつ通信すると次の入力まで待たされるため）。
+          stageChange(sheetName, rowIndex, columnName, newVal);
           renderDataManagerGrid();
         } else {
           callUpdateCellValue(sheetName, rowIndex, columnName, newVal, currentVal);

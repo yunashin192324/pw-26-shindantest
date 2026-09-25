@@ -1036,7 +1036,7 @@ function importUncontractedCsv(csvText) {
  * 「is not a function」という分かりにくいエラーになるため、
  * 画面側から版数を確認できるようにしている。
  */
-const SERVER_VERSION = '2026-08-27';
+const SERVER_VERSION = '2026-08-28';
 
 /**
  * サーバー側の版数を返す。画面側は、自分が期待する版数と一致するかを起動時に確認する。
@@ -1597,17 +1597,20 @@ function updateCellValue(sheetName, rowIndex, columnName, value) {
 }
 
 /**
- * 「リセール」「STS」「成約PAX」の変更をまとめて保存する。
- * 1件ずつ通信すると1行あたり数秒の待ちが発生し、続けて入力できないため、
- * 画面側で変更をためておき、この関数で一度に書き込む。
+ * 編集できる7列（リセール・STS・成約PAX・ACT日・ACT内容・次回ACT・進捗★手入力・詳細）の
+ * 変更をまとめて保存する。1件ずつ通信すると1行あたり数秒の待ちが発生し、続けて
+ * 入力できないため、画面側で変更をためておき、この関数で一度に書き込む。
  *
  * changes の各要素は次の形。変更した項目だけを持たせる（持っていない項目は触らない）。
- *   { sheetName, rowIndex, 'リセール'?: string, 'STS'?: string, '成約PAX'?: number|string }
+ *   { sheetName, rowIndex, 'リセール'?, 'STS'?, '成約PAX'?, 'ACT日'?, 'ACT内容'?,
+ *     '次回ACT・進捗★手入力'?, '詳細'? }
  *
- * 1件ずつ更新する updateStatus と同じ業務ルールを適用する。
+ * リセール・STS・成約PAXは、1件ずつ更新する updateStatus と同じ業務ルールを適用する。
  *   ・STSを「成約」にした行は成約PAXを保存し、リセールが空欄なら「✖」を補う
  *   ・STSを「成約」以外（失注／リセール中／未対応）にした行は成約PAXを消す
  *   ・成約PAXだけを変えられるのは、STSが「成約」の行のみ
+ *   ・リセールを「✖」にした行はACT日が空欄なら保存日を自動で入れ、「－」に戻すとACT日も空欄に戻す
+ * ACT日・ACT内容・次回ACT・進捗★手入力・詳細は、他の列との業務ルールを持たない単純な書き込み。
  *
  * @param {Array} changes 変更の配列
  * @return {Object} 成功件数・失敗した行の内訳・更新後の行データ
@@ -1629,6 +1632,10 @@ function saveRowChanges(changes) {
     const COL_LAST_ACTION = HEADERS_MAIN.indexOf('最終アクション日') + 1;
     const todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
     const VALID_STATUSES = ['', '失注', '成約', 'リセール中'];
+    // ACT日・ACT内容・次回ACT・進捗★手入力・詳細は、他列との業務ルールを持たない
+    // 単純な書き込みのみの列。まとめてループで処理する（ACT日は自動登録／自動クリアの
+    // 対象でもあるため、明示的な指定があればそちらを優先させたい＝先に書き込む）。
+    const SIMPLE_TEXT_COLUMNS = ['ACT日', 'ACT内容', '次回ACT・進捗★手入力', '詳細'];
 
     const updatedRows = [];
     const failures = [];
@@ -1648,7 +1655,10 @@ function saveRowChanges(changes) {
         const hasResale = Object.prototype.hasOwnProperty.call(change, 'リセール');
         const hasSts = Object.prototype.hasOwnProperty.call(change, 'STS');
         const hasPax = Object.prototype.hasOwnProperty.call(change, '成約PAX');
-        if (!hasResale && !hasSts && !hasPax) {
+        const simpleColumnsPresent = SIMPLE_TEXT_COLUMNS.filter(function (c) {
+          return Object.prototype.hasOwnProperty.call(change, c);
+        });
+        if (!hasResale && !hasSts && !hasPax && simpleColumnsPresent.length === 0) {
           throw new Error('変更内容がありません。');
         }
 
@@ -1707,6 +1717,15 @@ function saveRowChanges(changes) {
           // 成約以外へ変えた行は成約PAXを消す（未対応に戻した場合も含む）
           sheet.getRange(rIdx, COL_PAX).clearContent();
         }
+
+        // ACT日・ACT内容・メモ・詳細：単純な書き込み。このあとのリセール自動処理より
+        // 先に反映しておくことで、同じ保存でACT日を明示的に指定した場合はそちらが
+        // 優先される（自動登録・自動クリアが手入力の内容を上書きしない）。
+        simpleColumnsPresent.forEach(function (colName) {
+          const colIdx = HEADERS_MAIN.indexOf(colName) + 1;
+          const v = change[colName];
+          setTextCell_(sheet, rIdx, colIdx, v === undefined || v === null ? '' : v);
+        });
 
         // リセールを「✖」（対象外）にした行は、以後アクションが発生しないため
         // ACT日が未入力ならこの保存日を自動で入れる（長期未対応アラートを止めるため）。

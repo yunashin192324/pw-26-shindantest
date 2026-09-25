@@ -37,6 +37,14 @@
     .dm-sticky-4 { left:274px; min-width:118px; max-width:118px; }
     /* 固定列の右端に境目を出して、どこまでが固定かを分かりやすくする */
     .dm-sticky-4 { box-shadow: 2px 0 4px -2px rgba(0,0,0,.25); }
+    /* スマホ幅では固定列4つの合計(392px)が画面のほとんどを占めてしまうため、
+       表示サイズを縮めて他の列も見えるようにする。 */
+    @media (max-width: 767px) {
+      .dm-sticky-1 { left:0;    min-width:60px; max-width:60px; }
+      .dm-sticky-2 { left:60px; min-width:72px; max-width:72px; }
+      .dm-sticky-3 { left:132px; min-width:56px; max-width:56px; }
+      .dm-sticky-4 { left:188px; min-width:84px; max-width:84px; }
+    }
     /* アラート行でも固定列の背景が透けないようにする */
     tr.dm-alert-row .dm-sticky { background:#fff1f2; }
     /* まだ保存していない変更（リセール・STS・成約PAX）を目立たせる */
@@ -314,6 +322,15 @@
             <select id="dm-filter-month" class="border border-slate-300 rounded-lg text-sm p-2 min-w-[110px]"><option value="">すべて</option></select>
           </div>
           <div>
+            <label class="text-xs font-semibold text-slate-500 block mb-1">リセール</label>
+            <select id="dm-filter-resale" class="border border-slate-300 rounded-lg text-sm p-2 min-w-[110px]">
+              <option value="">すべて</option>
+              <option value="__blank__">未定（－）</option>
+              <option value="〇">〇</option>
+              <option value="✖">✖</option>
+            </select>
+          </div>
+          <div>
             <label class="text-xs font-semibold text-slate-500 block mb-1">STS</label>
             <select id="dm-filter-sts" class="border border-slate-300 rounded-lg text-sm p-2 min-w-[130px]">
               <option value="">すべて</option>
@@ -373,7 +390,7 @@
             取り消す
           </button>
           <span class="text-xs text-amber-700">
-            リセール・STS・成約PAXはこのボタンで保存します。ACT日・ACT内容・メモ・詳細はその場で保存されます。
+            リセール・STS・成約PAX・ACT日・ACT内容・メモ・詳細は、このボタンを押すまで保存されません。
           </span>
         </div>
         <div class="overflow-auto max-h-[65vh]">
