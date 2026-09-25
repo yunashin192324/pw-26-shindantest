@@ -22,8 +22,9 @@
 var APP_TITLE = '予約データ分析ダッシュボード';
 var SHEET_NAME = '予約データ';
 var STAFF_SHEET_NAME = 'スタッフ権限';
+var STAFF_NAME_SHEET_NAME = '担当者マスタ';
 var TIMEZONE = 'Asia/Tokyo';
-var SERVER_VERSION = '2.0.0';
+var SERVER_VERSION = '2.1.0';
 
 // ---- 権限レベル ----
 var ROLE_STAFF = '社員';
@@ -57,18 +58,22 @@ var COLUMNS = [
   { key: 'travelDays',     label: '旅行日数',            type: 'number' }
 ];
 
-// ---- 現場で入力する項目（シート列20〜29）。CSVには含まれず、画面から直接編集する ----
+// ---- 現場で入力する項目（シート列20〜33）。CSVには含まれず、画面から直接編集する ----
 var EDITABLE_COLUMNS = [
-  { key: 'chkDate',         label: 'CHK日',        type: 'date'   },
-  { key: 'insuranceStatus', label: '保険',          type: 'text'   },
-  { key: 'insuranceQty',    label: '保険数量',      type: 'number' },
-  { key: 'wifiStatus',      label: 'Wifi',          type: 'text'   },
-  { key: 'wifiQty',         label: 'Wifi数量',      type: 'number' },
-  { key: 'tavicaStatus',    label: 'TAViCA',        type: 'text'   },
-  { key: 'tavicaQty',       label: 'TAViCA数量',    type: 'number' },
-  { key: 'cansapoStatus',   label: 'キャンサポ',    type: 'text'   },
-  { key: 'cansapoQty',      label: 'キャンサポ数量', type: 'number' },
-  { key: 'memo',            label: 'メモ',          type: 'text'   }
+  { key: 'chkDate',         label: 'CHK日',          type: 'date'   },
+  { key: 'insuranceStatus', label: '保険',            type: 'text'   },
+  { key: 'insuranceQty',    label: '保険数量',        type: 'number' },
+  { key: 'insuranceReason', label: '保険理由',        type: 'text'   },
+  { key: 'wifiStatus',      label: 'Wifi',            type: 'text'   },
+  { key: 'wifiQty',         label: 'Wifi数量',        type: 'number' },
+  { key: 'wifiReason',      label: 'Wifi理由',        type: 'text'   },
+  { key: 'tavicaStatus',    label: 'TAViCA',          type: 'text'   },
+  { key: 'tavicaQty',       label: 'TAViCA数量',      type: 'number' },
+  { key: 'tavicaReason',    label: 'TAViCA理由',      type: 'text'   },
+  { key: 'cansapoStatus',   label: 'キャンサポ',      type: 'text'   },
+  { key: 'cansapoQty',      label: 'キャンサポ数量',  type: 'number' },
+  { key: 'cansapoReason',   label: 'キャンサポ理由',  type: 'text'   },
+  { key: 'memo',            label: 'メモ',            type: 'text'   }
 ];
 
 var ALL_COLUMNS = COLUMNS.concat(EDITABLE_COLUMNS);
@@ -77,13 +82,28 @@ EDITABLE_COLUMNS.forEach(function (c) { EDITABLE_KEY_SET[c.key] = true; });
 var ALL_COLUMN_INDEX_BY_KEY = {};
 ALL_COLUMNS.forEach(function (c, i) { ALL_COLUMN_INDEX_BY_KEY[c.key] = i; });
 
-// 保険・Wifi・TAViCA・キャンサポ：〇×のステータス列と、セットになる数量列の対応表。
+// 保険・Wifi・TAViCA・キャンサポ：ステータス列・数量列・理由列（失注時のみ使う）の対応表。
 // 分析ダッシュボードの内訳グラフ・個人別サマリー・一覧表の編集セルはすべてこの定義を使う。
 var ANCILLARY_ITEMS = [
-  { key: 'insurance', label: '保険',      statusKey: 'insuranceStatus', qtyKey: 'insuranceQty' },
-  { key: 'wifi',       label: 'Wifi',      statusKey: 'wifiStatus',      qtyKey: 'wifiQty' },
-  { key: 'tavica',     label: 'TAViCA',    statusKey: 'tavicaStatus',    qtyKey: 'tavicaQty' },
-  { key: 'cansapo',    label: 'キャンサポ', statusKey: 'cansapoStatus',  qtyKey: 'cansapoQty' }
+  { key: 'insurance', label: '保険',      statusKey: 'insuranceStatus', qtyKey: 'insuranceQty', reasonKey: 'insuranceReason' },
+  { key: 'wifi',       label: 'Wifi',      statusKey: 'wifiStatus',      qtyKey: 'wifiQty',       reasonKey: 'wifiReason' },
+  { key: 'tavica',     label: 'TAViCA',    statusKey: 'tavicaStatus',    qtyKey: 'tavicaQty',     reasonKey: 'tavicaReason' },
+  { key: 'cansapo',    label: 'キャンサポ', statusKey: 'cansapoStatus',  qtyKey: 'cansapoQty',    reasonKey: 'cansapoReason' }
+];
+var ANCILLARY_ITEM_BY_KEY = {};
+ANCILLARY_ITEMS.forEach(function (a) { ANCILLARY_ITEM_BY_KEY[a.key] = a; });
+var ANCILLARY_ITEM_BY_STATUS_KEY = {};
+ANCILLARY_ITEMS.forEach(function (a) { ANCILLARY_ITEM_BY_STATUS_KEY[a.statusKey] = a; });
+
+// 保険/Wifi/TAViCA/キャンサポ 共通のステータス選択肢。
+// '-'（NO ACT）が未入力時の既定値。'×'（失注）を選ぶと理由入力・数量0固定になり、
+// '〇'（NB付帯）'☆'（PUSH成約）は数量の入力が必須になる（Javascript.html側で制御）。
+var ANCILLARY_STATUS_OPTIONS = [
+  { value: '-', label: 'NO ACT' },
+  { value: '〇', label: 'NB付帯' },
+  { value: '×', label: '失注' },
+  { value: '△', label: 'セールス中' },
+  { value: '☆', label: 'PUSH成約' }
 ];
 
 /**
@@ -109,7 +129,7 @@ function include(filename) {
 // ============================================================================
 
 /**
- * 「予約データ」シートが存在し、見出し行が想定どおり（29列）かを確認する。
+ * 「予約データ」シートが存在し、見出し行が想定どおり（33列）かを確認する。
  * ウェブアプリ起動時に呼び、未セットアップならセットアップ案内バーを出す。
  */
 function getSetupStatus() {
@@ -136,12 +156,13 @@ function getSetupStatus() {
 
 /**
  * 初期セットアップを実行する（ウェブアプリの案内バーから呼ばれる）。
- * データシートとスタッフ権限シートの両方を作る。実体は InitSheet.gs 。
+ * データシート・スタッフ権限シート・担当者マスタシートをまとめて作る。実体は InitSheet.gs 。
  */
 function runInitialSetup() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   buildDataSheet_(ss);
   buildStaffSheet_(ss);
+  buildStaffNameSheet_(ss);
   return getSetupStatus();
 }
 
@@ -231,7 +252,8 @@ function getBootstrapData() {
     return {
       ready: false, accessDenied: false, status: status,
       columns: COLUMNS, editableColumns: EDITABLE_COLUMNS, ancillaryItems: ANCILLARY_ITEMS,
-      columnOrder: null, rows: [], meta: null, userContext: ctx
+      ancillaryStatusOptions: ANCILLARY_STATUS_OPTIONS,
+      columnOrder: null, rows: [], staffNameMap: {}, meta: null, userContext: ctx
     };
   }
 
@@ -239,7 +261,8 @@ function getBootstrapData() {
     return {
       ready: true, accessDenied: true, status: status,
       columns: COLUMNS, editableColumns: EDITABLE_COLUMNS, ancillaryItems: ANCILLARY_ITEMS,
-      columnOrder: null, rows: [], meta: null, userContext: ctx
+      ancillaryStatusOptions: ANCILLARY_STATUS_OPTIONS,
+      columnOrder: null, rows: [], staffNameMap: {}, meta: null, userContext: ctx
     };
   }
 
@@ -260,8 +283,10 @@ function getBootstrapData() {
     columns: COLUMNS,
     editableColumns: EDITABLE_COLUMNS,
     ancillaryItems: ANCILLARY_ITEMS,
+    ancillaryStatusOptions: ANCILLARY_STATUS_OPTIONS,
     columnOrder: columnOrder,
     rows: rows,
+    staffNameMap: getStaffNameMap_(),
     userContext: ctx,
     meta: {
       totalRows: rows.length,
@@ -525,28 +550,18 @@ function importCsv(csvText, fileName) {
 // ============================================================================
 
 /**
- * 一覧表の現場入力項目を1セルだけ更新する。
- * ・CSV由来の19項目は編集不可（EDITABLE_KEY_SET に無いキーは拒否する）。
- * ・自分の閲覧範囲外の行（社員=他店舗／所長・チーフ=他エリア）は編集不可。
- * ・保険/Wifi/TAViCA/キャンサポのステータスを「〇」以外にしたときは、
- *   対応する数量欄を自動で空にする（〇でないのに数量だけ残る状態を防ぐ）。
+ * 実行者が指定行を編集してよいかを確認し、CSV由来19項目を正規形で返す。
+ * 社員=自店舗、所長・チーフ=自エリア以外の行は編集させない。
  */
-function updateCellValue(rowIndex, columnKey, value) {
-  if (!EDITABLE_KEY_SET[columnKey]) {
-    throw new Error('この項目は編集できません。');
-  }
-  var ctx = getCurrentUserContext_();
+function assertRowEditable_(ctx, sheet, rowIndex) {
   if (!ctx.bootstrapMode && !ctx.registered) {
     throw new Error('アクセス権がありません。管理者にお問い合わせください。');
   }
-
-  var sheet = getDataSheet_();
   var lastRow = sheet.getLastRow();
   rowIndex = Number(rowIndex);
   if (!rowIndex || rowIndex < 2 || rowIndex > lastRow) {
     throw new Error('対象の行が見つかりません。画面を再読込してください。');
   }
-
   var rowValues = sheet.getRange(rowIndex, 1, 1, COLUMNS.length).getValues()[0];
   var rowRecord = {};
   COLUMNS.forEach(function (col, i) { rowRecord[col.key] = normalizeCellValue_(col, rowValues[i]); });
@@ -560,20 +575,73 @@ function updateCellValue(rowIndex, columnKey, value) {
   if ([ROLE_STAFF, ROLE_MANAGER, ROLE_MASTER].indexOf(ctx.role) === -1) {
     throw new Error('アクセス権がありません。');
   }
+  return rowRecord;
+}
 
+/** 指定セルへ、項目の型に応じた表示形式と値を書き込む。 */
+function writeCell_(sheet, rowIndex, columnKey, normalizedValue) {
   var col = ALL_COLUMNS[ALL_COLUMN_INDEX_BY_KEY[columnKey]];
   var colIndex = ALL_COLUMN_INDEX_BY_KEY[columnKey] + 1;
-  var normalized = normalizeEditableInput_(col, value);
-
   var cell = sheet.getRange(rowIndex, colIndex);
   cell.setNumberFormat(col.type === 'date' ? 'yyyy/mm/dd' : (col.type === 'number' ? '#,##0' : '@'));
-  cell.setValue(cellValueFor_(col, normalized));
+  cell.setValue(cellValueFor_(col, normalizedValue));
+}
 
-  var ancillary = ANCILLARY_ITEMS.filter(function (a) { return a.statusKey === columnKey; })[0];
-  if (ancillary && normalized !== '〇') {
-    var qtyColIndex = ALL_COLUMN_INDEX_BY_KEY[ancillary.qtyKey] + 1;
-    sheet.getRange(rowIndex, qtyColIndex).setValue('');
+/**
+ * 一覧表の現場入力項目を1セルだけ更新する。
+ * ・CSV由来の19項目は編集不可（EDITABLE_KEY_SET に無いキーは拒否する）。
+ * ・自分の閲覧範囲外の行（社員=他店舗／所長・チーフ=他エリア）は編集不可。
+ * ・保険/Wifi/TAViCA/キャンサポのステータスを変更したときは、数量・理由を
+ *   ステータスに応じて自動調整する（〇・☆は数量を維持、×は数量0、それ以外は数量を空に。
+ *   ×以外に変えたら理由は消す）。「×」への変更自体は setAncillaryLost() を使うこと
+ *   （理由の入力とセットで1回のサーバー呼び出しにするため）。
+ */
+function updateCellValue(rowIndex, columnKey, value) {
+  if (!EDITABLE_KEY_SET[columnKey]) {
+    throw new Error('この項目は編集できません。');
   }
+  var ctx = getCurrentUserContext_();
+  var sheet = getDataSheet_();
+  assertRowEditable_(ctx, sheet, rowIndex);
+  rowIndex = Number(rowIndex);
+
+  var col = ALL_COLUMNS[ALL_COLUMN_INDEX_BY_KEY[columnKey]];
+  var normalized = normalizeEditableInput_(col, value);
+  writeCell_(sheet, rowIndex, columnKey, normalized);
+
+  var ancillary = ANCILLARY_ITEM_BY_STATUS_KEY[columnKey];
+  if (ancillary) {
+    if (normalized === '〇' || normalized === '☆') {
+      // 数量は現在の値を維持する（クライアント側で入力必須のアラートを出す）。
+    } else if (normalized === '×') {
+      writeCell_(sheet, rowIndex, ancillary.qtyKey, 0);
+    } else {
+      writeCell_(sheet, rowIndex, ancillary.qtyKey, null);
+    }
+    if (normalized !== '×') {
+      writeCell_(sheet, rowIndex, ancillary.reasonKey, null);
+    }
+  }
+
+  return { ok: true };
+}
+
+/**
+ * 保険/Wifi/TAViCA/キャンサポを「×（失注）」にする専用API。
+ * ステータス・数量(0)・理由を1回のサーバー呼び出しでまとめて保存する
+ * （updateCellValueを複数回呼ぶと、通信の順序によって理由が消えてしまう恐れがあるため）。
+ */
+function setAncillaryLost(rowIndex, itemKey, reason) {
+  var item = ANCILLARY_ITEM_BY_KEY[itemKey];
+  if (!item) throw new Error('付帯商品の指定が不正です。');
+  var ctx = getCurrentUserContext_();
+  var sheet = getDataSheet_();
+  assertRowEditable_(ctx, sheet, rowIndex);
+  rowIndex = Number(rowIndex);
+
+  writeCell_(sheet, rowIndex, item.statusKey, '×');
+  writeCell_(sheet, rowIndex, item.qtyKey, 0);
+  writeCell_(sheet, rowIndex, item.reasonKey, String(reason || '').trim());
 
   return { ok: true };
 }
@@ -746,4 +814,84 @@ function deleteStaffAccess(rowIndex) {
   }
   sheet.deleteRow(rowIndex);
   return getStaffAccessList();
+}
+
+// ============================================================================
+// 担当者マスタ（CSVの「担当者」コードを氏名表示に変換するための対応表）※マスタ権限のみ編集可
+// ============================================================================
+
+function getOrCreateStaffNameSheet_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(STAFF_NAME_SHEET_NAME);
+  if (!sheet) sheet = buildStaffNameSheet_(ss);
+  return sheet;
+}
+
+/** 担当者コード→氏名の対応表を返す（一覧表示・個人別サマリーで担当者名に変換するのに使う）。 */
+function getStaffNameMap_() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(STAFF_NAME_SHEET_NAME);
+  var map = {};
+  if (!sheet || sheet.getLastRow() < 2) return map;
+  var values = sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues();
+  for (var i = 0; i < values.length; i++) {
+    var code = String(values[i][0] || '').trim();
+    var name = String(values[i][1] || '').trim();
+    if (code && name) map[code] = name;
+  }
+  return map;
+}
+
+/** 担当者マスタの一覧を返す（マスタ権限のみ）。 */
+function getStaffNameList() {
+  assertMaster_();
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(STAFF_NAME_SHEET_NAME);
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  var values = sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues();
+  var list = [];
+  for (var i = 0; i < values.length; i++) {
+    var row = values[i];
+    if (row.every(function (v) { return v === '' || v === null; })) continue;
+    list.push({ rowIndex: i + 2, code: String(row[0] || ''), name: String(row[1] || '') });
+  }
+  return list;
+}
+
+function validateStaffNameInput_(code, name) {
+  if (!String(code || '').trim()) throw new Error('担当者コードを入力してください。');
+  if (!String(name || '').trim()) throw new Error('氏名を入力してください。');
+}
+
+/** 担当者マスタを1件追加する（マスタ権限のみ）。 */
+function addStaffName(code, name) {
+  assertMaster_();
+  validateStaffNameInput_(code, name);
+  var sheet = getOrCreateStaffNameSheet_();
+  var rowIndex = sheet.getLastRow() + 1;
+  sheet.getRange(rowIndex, 1, 1, 2).setValues([[String(code).trim(), String(name).trim()]]);
+  return getStaffNameList();
+}
+
+/** 担当者マスタを1件更新する（マスタ権限のみ）。 */
+function updateStaffName(rowIndex, code, name) {
+  assertMaster_();
+  validateStaffNameInput_(code, name);
+  var sheet = getOrCreateStaffNameSheet_();
+  rowIndex = Number(rowIndex);
+  if (!rowIndex || rowIndex < 2 || rowIndex > sheet.getLastRow()) {
+    throw new Error('対象の行が見つかりません。画面を再読込してください。');
+  }
+  sheet.getRange(rowIndex, 1, 1, 2).setValues([[String(code).trim(), String(name).trim()]]);
+  return getStaffNameList();
+}
+
+/** 担当者マスタを1件削除する（マスタ権限のみ）。 */
+function deleteStaffName(rowIndex) {
+  assertMaster_();
+  var sheet = getOrCreateStaffNameSheet_();
+  rowIndex = Number(rowIndex);
+  if (!rowIndex || rowIndex < 2 || rowIndex > sheet.getLastRow()) {
+    throw new Error('対象の行が見つかりません。画面を再読込してください。');
+  }
+  sheet.deleteRow(rowIndex);
+  return getStaffNameList();
 }

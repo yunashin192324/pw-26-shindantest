@@ -49,9 +49,12 @@ var STATE = {
   columns: [], columnByKey: {},
   editableColumns: [], editableColumnByKey: {},
   ancillaryItems: [], ancillaryItemByKey: {},
+  ancillaryStatusOptions: [], ancillaryStatusLabelByValue: {},
   userContext: null,
   rows: [],
   staffList: [],
+  staffNameMap: {},
+  staffNameList: [],
 
   dashFiltered: [],
   dataFiltered: [],
@@ -95,6 +98,12 @@ function onBootstrapSuccess(data) {
   STATE.ancillaryItems = data.ancillaryItems || [];
   STATE.ancillaryItemByKey = {};
   STATE.ancillaryItems.forEach(function (a) { STATE.ancillaryItemByKey[a.key] = a; });
+
+  STATE.ancillaryStatusOptions = data.ancillaryStatusOptions || [];
+  STATE.ancillaryStatusLabelByValue = {};
+  STATE.ancillaryStatusOptions.forEach(function (o) { STATE.ancillaryStatusLabelByValue[o.value] = o.label; });
+
+  STATE.staffNameMap = data.staffNameMap || {};
 
   STATE.userContext = data.userContext || null;
   STATE.rows = data.rows || [];
@@ -173,7 +182,18 @@ function applyRoleUi_() {
   var isMaster = STATE.userContext && STATE.userContext.role === 'マスタ権限';
   document.getElementById('btn-open-csv-modal').classList.toggle('hidden', !isMaster);
   document.getElementById('master-only-admin').classList.toggle('hidden', !isMaster);
-  if (isMaster) loadStaffList();
+  if (isMaster) { loadStaffList(); loadStaffNameList(); }
+}
+
+/** 担当者コードを、担当者マスタに登録があれば氏名に変換する（未登録ならコードのまま）。 */
+function formatStaffName_(code) {
+  if (!code) return code;
+  return STATE.staffNameMap[code] || code;
+}
+
+/** 保険/Wifi/TAViCA/キャンサポのステータス値を、既定値'-'（NO ACT）にそろえて返す（空欄='-'扱い）。 */
+function normalizeAncillaryStatus_(v) {
+  return (v === null || v === undefined || v === '') ? '-' : v;
 }
 
 // ============================================================================
@@ -196,6 +216,14 @@ function fillMultiSelect_(id, values) {
   }).join('');
 }
 
+/** 値とラベルが異なる選択肢（保険STS等の '〇'→'NB付帯' のような表示）用。 */
+function fillMultiSelectWithLabels_(id, options) {
+  var el = document.getElementById(id);
+  el.innerHTML = options.map(function (o) {
+    return '<option value="' + escapeHtml(o.value) + '">' + escapeHtml(o.value) + ' ' + escapeHtml(o.label) + '</option>';
+  }).join('');
+}
+
 function fillDatalist_(id, values) {
   var el = document.getElementById(id);
   el.innerHTML = values.map(function (v) { return '<option value="' + escapeHtml(v) + '">'; }).join('');
@@ -209,6 +237,10 @@ function populateFilterOptions() {
   fillMultiSelect_('data-filter-area', distinctValues_('area'));
   fillMultiSelect_('data-filter-office', distinctValues_('office'));
   fillMultiSelect_('data-filter-staff', distinctValues_('staff'));
+  fillMultiSelectWithLabels_('data-filter-insurance-status', STATE.ancillaryStatusOptions);
+  fillMultiSelectWithLabels_('data-filter-wifi-status', STATE.ancillaryStatusOptions);
+  fillMultiSelectWithLabels_('data-filter-tavica-status', STATE.ancillaryStatusOptions);
+  fillMultiSelectWithLabels_('data-filter-cansapo-status', STATE.ancillaryStatusOptions);
 
   fillDatalist_('staff-office-options', distinctValues_('office'));
   fillDatalist_('staff-area-options', distinctValues_('area'));
@@ -495,7 +527,10 @@ function applyDataFilters() {
   var staffSet = toSet_(getSelectedValues_('data-filter-staff'));
   var dateFrom = document.getElementById('data-filter-date-from').value || '';
   var dateTo = document.getElementById('data-filter-date-to').value || '';
-  var keyword = document.getElementById('data-filter-keyword').value.trim().toLowerCase();
+  var insuranceStsSet = toSet_(getSelectedValues_('data-filter-insurance-status'));
+  var wifiStsSet = toSet_(getSelectedValues_('data-filter-wifi-status'));
+  var tavicaStsSet = toSet_(getSelectedValues_('data-filter-tavica-status'));
+  var cansapoStsSet = toSet_(getSelectedValues_('data-filter-cansapo-status'));
 
   STATE.dataFiltered = STATE.rows.filter(function (r) {
     if (areaSet && !areaSet[r.area]) return false;
@@ -504,10 +539,10 @@ function applyDataFilters() {
     var dep = r.departureDate;
     if (dateFrom && (!dep || dep < dateFrom)) return false;
     if (dateTo && (!dep || dep > dateTo)) return false;
-    if (keyword) {
-      var hay = [r.reservationNo, r.productTitle, r.staff, r.memo].join(' ').toLowerCase();
-      if (hay.indexOf(keyword) === -1) return false;
-    }
+    if (insuranceStsSet && !insuranceStsSet[normalizeAncillaryStatus_(r.insuranceStatus)]) return false;
+    if (wifiStsSet && !wifiStsSet[normalizeAncillaryStatus_(r.wifiStatus)]) return false;
+    if (tavicaStsSet && !tavicaStsSet[normalizeAncillaryStatus_(r.tavicaStatus)]) return false;
+    if (cansapoStsSet && !cansapoStsSet[normalizeAncillaryStatus_(r.cansapoStatus)]) return false;
     return true;
   });
 
@@ -519,12 +554,12 @@ function applyDataFilters() {
 }
 
 function clearDataFilters() {
-  ['data-filter-area', 'data-filter-office', 'data-filter-staff'].forEach(function (id) {
+  ['data-filter-area', 'data-filter-office', 'data-filter-staff',
+    'data-filter-insurance-status', 'data-filter-wifi-status', 'data-filter-tavica-status', 'data-filter-cansapo-status'].forEach(function (id) {
     Array.from(document.getElementById(id).options).forEach(function (o) { o.selected = false; });
   });
   document.getElementById('data-filter-date-from').value = '';
   document.getElementById('data-filter-date-to').value = '';
-  document.getElementById('data-filter-keyword').value = '';
   applyDataFilters();
 }
 
@@ -599,13 +634,20 @@ function formatCell_(v, col) {
   return escapeHtml(String(v));
 }
 
+/** 保険/Wifi/TAViCA/キャンサポ：ステータスに応じて数量欄を編集できるかどうか（〇・☆のみ入力必須で編集可）。 */
+function isAncillaryQtyEditable_(status) {
+  return status === '〇' || status === '☆';
+}
+
 function buildCellHtml_(row, def) {
   if (!def) return '<td></td>';
 
   if (def.kind === 'csv') {
     var col = STATE.columnByKey[def.field];
     var align = col.type === 'number' ? 'text-right' : 'text-left';
-    return '<td class="px-3 py-2 ' + align + '">' + formatCell_(row[def.field], col) + '</td>';
+    var displayValue = row[def.field];
+    if (def.field === 'staff' && displayValue) displayValue = formatStaffName_(displayValue);
+    return '<td class="px-3 py-2 ' + align + '">' + formatCell_(displayValue, col) + '</td>';
   }
 
   if (def.kind === 'date') {
@@ -615,81 +657,214 @@ function buildCellHtml_(row, def) {
 
   if (def.kind === 'memo') {
     var mv = row[def.field] || '';
-    return '<td class="editable-cell px-2 py-1"><input type="text" data-row="' + row.rowIndex + '" data-col="' + def.field + '" value="' + escapeHtml(mv) + '" placeholder="メモ" class="border border-slate-300 rounded px-1 py-1 text-xs w-44"></td>';
+    var truncated = mv.length > 10 ? mv.slice(0, 10) + '…' : mv;
+    var display = mv
+      ? '<span class="memo-display" data-row="' + row.rowIndex + '" data-col="' + def.field + '" data-tooltip="' + escapeHtml(mv) + '">' + escapeHtml(truncated) + '</span>'
+      : '<span class="memo-display text-slate-300" data-row="' + row.rowIndex + '" data-col="' + def.field + '">（ダブルクリックで入力）</span>';
+    return '<td class="editable-cell px-2 py-1">' + display + '</td>';
   }
 
   if (def.kind === 'ancillary') {
     var item = STATE.ancillaryItemByKey[def.item];
-    var status = row[item.statusKey] || '';
+    var status = normalizeAncillaryStatus_(row[item.statusKey]);
     var qty = row[item.qtyKey];
-    var opts = ['', '〇', '✖'].map(function (v) {
-      var label = v === '' ? '－' : v;
-      return '<option value="' + v + '"' + (status === v ? ' selected' : '') + '>' + label + '</option>';
+    var reason = row[item.reasonKey];
+    var opts = STATE.ancillaryStatusOptions.map(function (o) {
+      return '<option value="' + o.value + '"' + (status === o.value ? ' selected' : '') + '>' + o.value + ' ' + escapeHtml(o.label) + '</option>';
     }).join('');
-    var qtyDisabled = status === '〇' ? '' : 'disabled';
+    var qtyEditable = isAncillaryQtyEditable_(status);
     var qtyVal = (qty === null || qty === undefined) ? '' : qty;
+    var qtyTooltip = (status === '×' && reason) ? ' data-tooltip="失注理由：' + escapeHtml(reason) + '"' : '';
+    var flagged = (status === '〇' || status === '☆') && (qty === null || qty === undefined || qty === '') ? ' ancillary-flagged' : '';
     return '<td class="editable-cell px-2 py-1 text-center">' +
-      '<div class="flex items-center justify-center gap-1">' +
-      '<select data-row="' + row.rowIndex + '" data-col="' + item.statusKey + '" data-qtycol="' + item.qtyKey + '" class="ancillary-status border border-slate-300 rounded px-1 py-1 text-xs">' + opts + '</select>' +
-      '<input type="number" min="0" data-row="' + row.rowIndex + '" data-col="' + item.qtyKey + '" value="' + escapeHtml(String(qtyVal)) + '" ' + qtyDisabled + ' class="ancillary-qty border border-slate-300 rounded px-1 py-1 text-xs w-14" placeholder="数">' +
+      '<div class="flex items-center justify-center gap-1"' + qtyTooltip + '>' +
+      '<select data-row="' + row.rowIndex + '" data-col="' + item.statusKey + '" data-item="' + item.key + '" class="ancillary-status border border-slate-300 rounded px-1 py-1 text-xs">' + opts + '</select>' +
+      '<input type="number" min="0" data-row="' + row.rowIndex + '" data-col="' + item.qtyKey + '" data-item="' + item.key + '" value="' + escapeHtml(String(qtyVal)) + '" ' + (qtyEditable ? '' : 'disabled') + ' class="ancillary-qty' + flagged + ' border border-slate-300 rounded px-1 py-1 text-xs w-14" placeholder="数">' +
       '</div></td>';
   }
 
   return '<td class="px-3 py-2"></td>';
 }
 
+/** 保存後に再集計・再描画が必要な共通処理（保険/Wifi等の入力はダッシュボードにも影響する）。 */
+function afterCellSaved_() {
+  renderDataTable();
+  applyDashFilters();
+  renderPersonalTab();
+}
+
 /**
- * 一覧の編集セル1つ分を保存する。
- * ・失敗したら値を元に戻して再描画し、エラー内容をトーストで知らせる。
- * ・保険等のステータスが「〇」以外になったら、数量欄は即座に空にする
- *   （サーバー側 updateCellValue() の自動クリアと同じ挙動をUI側でも先取りする）。
+ * 一覧の編集セル1つ分を保存する（CHK日・メモに使う。保険等のステータス/数量は専用の
+ * ハンドラーを使う）。失敗したら値を元に戻して再描画し、エラー内容をトーストで知らせる。
  */
 function saveCell(rowIndex, columnKey, value) {
   var row = STATE.rows.filter(function (r) { return r.rowIndex === rowIndex; })[0];
   var previous = row ? row[columnKey] : undefined;
   var normalized = (value === '' || value === undefined) ? null : value;
-  if (row) row[columnKey] = (STATE.editableColumnByKey[columnKey] && STATE.editableColumnByKey[columnKey].type === 'number' && normalized !== null)
-    ? Number(normalized) : normalized;
-
-  var ancillary = STATE.ancillaryItems.filter(function (a) { return a.statusKey === columnKey; })[0];
-  var previousQty;
-  if (ancillary && row) {
-    previousQty = row[ancillary.qtyKey];
-    if (normalized !== '〇') row[ancillary.qtyKey] = null;
-  }
+  if (row) row[columnKey] = normalized;
 
   google.script.run
     .withSuccessHandler(function () { /* サーバーとUIが一致している */ })
     .withFailureHandler(function (err) {
-      if (row) {
-        row[columnKey] = previous;
-        if (ancillary) row[ancillary.qtyKey] = previousQty;
-      }
+      if (row) row[columnKey] = previous;
       renderDataTable();
       onServerError(err);
     })
     .updateCellValue(rowIndex, columnKey, value);
 
-  renderDataTable();
-  applyDashFilters(); // 保険/Wifi等の入力はダッシュボードの数量にも影響するため再集計する
-  renderPersonalTab();
+  afterCellSaved_();
+}
+
+/**
+ * 保険/Wifi/TAViCA/キャンサポのステータスが変更されたときの処理。
+ * ・「×（失注）」を選ぶと理由の入力を求め、ステータス・数量(0)・理由をまとめて保存する。
+ *   キャンセルした場合は選択を元に戻す（保存しない）。
+ * ・「〇（NB付帯）」「☆（PUSH成約）」を選んだときに数量が未入力なら、保存後にアラートで入力を促す。
+ * ・それ以外（NO ACT／セールス中）に変えたときは数量・理由をクリアする。
+ */
+function handleAncillaryStatusChange(selectEl) {
+  var rowIndex = Number(selectEl.dataset.row);
+  var itemKey = selectEl.dataset.item;
+  var item = STATE.ancillaryItemByKey[itemKey];
+  var row = STATE.rows.filter(function (r) { return r.rowIndex === rowIndex; })[0];
+  if (!row || !item) return;
+  var previousStatus = normalizeAncillaryStatus_(row[item.statusKey]);
+  var newStatus = selectEl.value;
+
+  if (newStatus === '×') {
+    var reason = window.prompt('失注理由を入力してください（キャンセルすると変更されません）', row[item.reasonKey] || '');
+    if (reason === null) {
+      selectEl.value = previousStatus;
+      return;
+    }
+    var prevQty = row[item.qtyKey], prevReason = row[item.reasonKey];
+    row[item.statusKey] = '×';
+    row[item.qtyKey] = 0;
+    row[item.reasonKey] = reason;
+    renderDataTable();
+    google.script.run
+      .withSuccessHandler(function () { /* 保存済み */ })
+      .withFailureHandler(function (err) {
+        row[item.statusKey] = previousStatus; row[item.qtyKey] = prevQty; row[item.reasonKey] = prevReason;
+        renderDataTable();
+        onServerError(err);
+      })
+      .setAncillaryLost(rowIndex, item.key, reason);
+    afterCellSaved_();
+    return;
+  }
+
+  var prevQty2 = row[item.qtyKey], prevReason2 = row[item.reasonKey];
+  row[item.statusKey] = newStatus;
+  if (newStatus !== '〇' && newStatus !== '☆') row[item.qtyKey] = null;
+  row[item.reasonKey] = '';
+
+  google.script.run
+    .withSuccessHandler(function () { /* 保存済み */ })
+    .withFailureHandler(function (err) {
+      row[item.statusKey] = previousStatus; row[item.qtyKey] = prevQty2; row[item.reasonKey] = prevReason2;
+      renderDataTable();
+      onServerError(err);
+    })
+    .updateCellValue(rowIndex, item.statusKey, newStatus);
+
+  afterCellSaved_();
+
+  if ((newStatus === '〇' || newStatus === '☆') && (row[item.qtyKey] === null || row[item.qtyKey] === undefined || row[item.qtyKey] === '')) {
+    window.alert(item.label + 'の数量を入力してください。');
+    setTimeout(function () {
+      var qtyInput = document.querySelector('input.ancillary-qty[data-row="' + rowIndex + '"][data-item="' + itemKey + '"]');
+      if (qtyInput) qtyInput.focus();
+    }, 0);
+  }
+}
+
+/**
+ * 保険/Wifi/TAViCA/キャンサポの数量欄からフォーカスが外れたときの処理。
+ * ステータスが「〇」「☆」なのに数量が未入力ならアラートを出して保存しない（フォーカスを戻す）。
+ */
+function handleAncillaryQtyBlur(inputEl) {
+  var rowIndex = Number(inputEl.dataset.row);
+  var itemKey = inputEl.dataset.item;
+  var item = STATE.ancillaryItemByKey[itemKey];
+  var row = STATE.rows.filter(function (r) { return r.rowIndex === rowIndex; })[0];
+  if (!row || !item) return;
+  var status = normalizeAncillaryStatus_(row[item.statusKey]);
+
+  if (isAncillaryQtyEditable_(status) && inputEl.value.trim() === '') {
+    window.alert(item.label + 'の数量を入力してください。');
+    setTimeout(function () { inputEl.focus(); }, 0);
+    return;
+  }
+  saveCell(rowIndex, item.qtyKey, inputEl.value);
+}
+
+/** メモ欄をダブルクリックしたセルだけを、その場でテキスト入力に切り替える。 */
+function beginMemoEdit_(span) {
+  var rowIndex = Number(span.dataset.row);
+  var columnKey = span.dataset.col;
+  var current = span.getAttribute('data-tooltip') || '';
+  var td = span.closest('td');
+  td.innerHTML = '<input type="text" class="memo-edit-input border border-slate-300 rounded px-1 py-1 text-xs w-48" data-row="' + rowIndex + '" data-col="' + columnKey + '" value="' + escapeHtml(current) + '">';
+  var input = td.querySelector('input');
+  input.focus();
+  input.select();
 }
 
 function bindDataTableEditEvents_() {
   var tbody = document.getElementById('data-tbody');
+
   tbody.addEventListener('change', function (e) {
     var t = e.target;
-    if (t.matches('input[type="date"][data-col]') || t.matches('select.ancillary-status') || t.matches('input.ancillary-qty')) {
+    if (t.matches('input[type="date"][data-col]')) {
       saveCell(Number(t.dataset.row), t.dataset.col, t.value);
+    } else if (t.matches('select.ancillary-status')) {
+      handleAncillaryStatusChange(t);
+    } else if (t.matches('input.ancillary-qty')) {
+      handleAncillaryQtyBlur(t);
     }
   });
+
   // blurはバブリングしないため、capture:trueでイベント委譲する
   tbody.addEventListener('blur', function (e) {
     var t = e.target;
-    if (t.matches('input[type="text"][data-col]')) {
+    if (t.matches('input.memo-edit-input')) {
       saveCell(Number(t.dataset.row), t.dataset.col, t.value);
+    } else if (t.matches('input.ancillary-qty')) {
+      handleAncillaryQtyBlur(t);
     }
   }, true);
+
+  tbody.addEventListener('dblclick', function (e) {
+    var span = e.target.closest('.memo-display');
+    if (span) beginMemoEdit_(span);
+  });
+
+  // メモ全文・失注理由のホバー表示（要素は再描画のたびに入れ替わるためイベント委譲する）
+  tbody.addEventListener('mouseover', function (e) {
+    var target = e.target.closest('[data-tooltip]');
+    if (target) showHoverTooltip_(e.clientX, e.clientY, target.getAttribute('data-tooltip'));
+  });
+  tbody.addEventListener('mousemove', function (e) {
+    var target = e.target.closest('[data-tooltip]');
+    if (target) showHoverTooltip_(e.clientX, e.clientY, target.getAttribute('data-tooltip'));
+  });
+  tbody.addEventListener('mouseout', function (e) {
+    if (e.target.closest('[data-tooltip]')) hideHoverTooltip_();
+  });
+}
+
+/** メモ全文・失注理由を表示する共通のホバーポップアップ。 */
+function showHoverTooltip_(x, y, text) {
+  if (!text) return;
+  var el = document.getElementById('hover-tooltip');
+  el.textContent = text;
+  el.style.left = Math.min(x + 12, window.innerWidth - 380) + 'px';
+  el.style.top = (y + 16) + 'px';
+  el.classList.remove('hidden');
+}
+function hideHoverTooltip_() {
+  document.getElementById('hover-tooltip').classList.add('hidden');
 }
 
 // ============================================================================
@@ -787,7 +962,7 @@ function renderPersonalTab() {
   tbody.innerHTML = list.map(function (b) {
     return '<tr class="hover:bg-slate-50">' +
       '<td class="px-3 py-2">' + escapeHtml(b.office) + '</td>' +
-      '<td class="px-3 py-2">' + escapeHtml(b.staff) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(formatStaffName_(b.staff)) + '</td>' +
       '<td class="px-3 py-2 text-right">' + formatNumber(b.count) + '</td>' +
       '<td class="px-3 py-2 text-right">' + formatNumber(b.insuranceQty) + '</td>' +
       '<td class="px-3 py-2 text-right">' + formatNumber(b.wifiQty) + '</td>' +
@@ -945,6 +1120,92 @@ function onStaffSaved(list) {
 }
 
 // ============================================================================
+// 担当者マスタ（CSVの担当者コード→氏名の対応表）※マスタ権限のみ
+// ============================================================================
+
+function loadStaffNameList() {
+  google.script.run
+    .withSuccessHandler(renderStaffNameList)
+    .withFailureHandler(onServerError)
+    .getStaffNameList();
+}
+
+function renderStaffNameList(list) {
+  STATE.staffNameList = list || [];
+  STATE.staffNameMap = {};
+  STATE.staffNameList.forEach(function (s) { if (s.code && s.name) STATE.staffNameMap[s.code] = s.name; });
+
+  var tbody = document.getElementById('staff-name-tbody');
+  document.getElementById('staff-name-empty').classList.toggle('hidden', STATE.staffNameList.length > 0);
+  tbody.innerHTML = STATE.staffNameList.map(function (s) {
+    return '<tr>' +
+      '<td class="px-3 py-2 font-mono text-xs">' + escapeHtml(s.code) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(s.name) + '</td>' +
+      '<td class="px-3 py-2 text-right">' +
+      '<button type="button" class="staff-name-edit text-blue-600 hover:underline text-xs mr-2" data-row="' + s.rowIndex + '">編集</button>' +
+      '<button type="button" class="staff-name-delete text-red-600 hover:underline text-xs" data-row="' + s.rowIndex + '">削除</button>' +
+      '</td></tr>';
+  }).join('');
+
+  // 氏名表示に反映されるよう、一覧・個人別サマリーを再描画する
+  renderDataTable();
+  renderPersonalTab();
+}
+
+function bindStaffNameEvents_() {
+  document.getElementById('btn-open-staff-name-modal').addEventListener('click', function () { openStaffNameModal(null); });
+  document.getElementById('btn-close-staff-name-modal').addEventListener('click', closeStaffNameModal);
+  document.getElementById('btn-cancel-staff-name-modal').addEventListener('click', closeStaffNameModal);
+
+  document.getElementById('staff-name-tbody').addEventListener('click', function (e) {
+    var editBtn = e.target.closest('.staff-name-edit');
+    var delBtn = e.target.closest('.staff-name-delete');
+    if (editBtn) openStaffNameModal(Number(editBtn.dataset.row));
+    if (delBtn) {
+      if (!window.confirm('この担当者を削除しますか？')) return;
+      google.script.run.withSuccessHandler(renderStaffNameList).withFailureHandler(onServerError).deleteStaffName(Number(delBtn.dataset.row));
+    }
+  });
+
+  document.getElementById('staff-name-form').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var rowIndex = document.getElementById('staff-name-form-rowindex').value;
+    var code = document.getElementById('staff-name-form-code').value.trim();
+    var name = document.getElementById('staff-name-form-name').value.trim();
+
+    if (rowIndex) {
+      google.script.run.withSuccessHandler(onStaffNameSaved).withFailureHandler(onServerError).updateStaffName(Number(rowIndex), code, name);
+    } else {
+      google.script.run.withSuccessHandler(onStaffNameSaved).withFailureHandler(onServerError).addStaffName(code, name);
+    }
+  });
+}
+
+function openStaffNameModal(rowIndex) {
+  var isEdit = rowIndex !== null && rowIndex !== undefined;
+  document.getElementById('staff-name-modal-title').innerHTML = isEdit
+    ? '<i class="fa-solid fa-id-card"></i> 担当者を編集'
+    : '<i class="fa-solid fa-id-card"></i> 担当者を追加';
+  var target = isEdit ? STATE.staffNameList.filter(function (s) { return s.rowIndex === rowIndex; })[0] : null;
+  document.getElementById('staff-name-form-rowindex').value = isEdit ? rowIndex : '';
+  document.getElementById('staff-name-form-code').value = target ? target.code : '';
+  document.getElementById('staff-name-form-name').value = target ? target.name : '';
+  document.getElementById('staff-name-modal').classList.remove('hidden');
+  document.getElementById('staff-name-modal').classList.add('flex');
+}
+
+function closeStaffNameModal() {
+  document.getElementById('staff-name-modal').classList.add('hidden');
+  document.getElementById('staff-name-modal').classList.remove('flex');
+}
+
+function onStaffNameSaved(list) {
+  renderStaffNameList(list);
+  closeStaffNameModal();
+  showToast('保存しました', 'success');
+}
+
+// ============================================================================
 // CSVインポート
 // ============================================================================
 
@@ -1071,12 +1332,12 @@ function bindStaticEvents() {
   });
 
   // 予約データ一覧タブのフィルタ
-  ['data-filter-area', 'data-filter-office', 'data-filter-staff'].forEach(function (id) {
+  ['data-filter-area', 'data-filter-office', 'data-filter-staff',
+    'data-filter-insurance-status', 'data-filter-wifi-status', 'data-filter-tavica-status', 'data-filter-cansapo-status'].forEach(function (id) {
     document.getElementById(id).addEventListener('change', applyDataFilters);
   });
   document.getElementById('data-filter-date-from').addEventListener('change', applyDataFilters);
   document.getElementById('data-filter-date-to').addEventListener('change', applyDataFilters);
-  document.getElementById('data-filter-keyword').addEventListener('input', debounce_(applyDataFilters, 250));
   document.getElementById('btn-clear-data-filter').addEventListener('click', clearDataFilters);
 
   document.getElementById('btn-prev-page').addEventListener('click', function () { STATE.dataPage--; renderDataTable(); });
@@ -1104,6 +1365,7 @@ function bindStaticEvents() {
   document.getElementById('btn-remove-duplicates').addEventListener('click', removeDuplicates);
   document.getElementById('btn-clear-all-data').addEventListener('click', clearAllData);
   bindStaffEvents_();
+  bindStaffNameEvents_();
 }
 
 function switchTab(tab) {

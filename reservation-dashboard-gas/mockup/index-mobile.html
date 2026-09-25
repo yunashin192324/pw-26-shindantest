@@ -141,6 +141,9 @@ select[multiple]{height:88px; font-size:13px;}
 .ancillary-pair select{flex:1;}
 .ancillary-pair input[type=number]{width:52px; flex:none;}
 .editable-cell-inline input, .editable-cell-inline select{background:var(--blue-50);}
+.ancillary-flagged{outline:2px solid var(--amber-500); outline-offset:-2px; border-radius:6px;}
+.ancillary-reason{font-size:10.5px; color:var(--red-700); background:var(--red-50); border:1px solid var(--red-200); border-radius:6px; padding:5px 7px; margin-top:5px; line-height:1.4;}
+.memo-display{display:block; padding:6px 0; word-break:break-word;}
 
 /* ---- 列の並び順エディタ ---- */
 .col-order-list{border:1px solid var(--slate-200); border-radius:8px;}
@@ -325,7 +328,10 @@ select[multiple]{height:88px; font-size:13px;}
         <div class="filter-field"><label>担当者</label><select id="data-filter-staff" multiple></select></div>
         <div class="filter-field"><label>出発予定日（From）</label><input type="date" id="data-filter-date-from"></div>
         <div class="filter-field"><label>出発予定日（To）</label><input type="date" id="data-filter-date-to"></div>
-        <div class="filter-field"><label>キーワード検索</label><input type="text" id="data-filter-keyword" placeholder="予約番号・商品タイトル・担当者・メモ"></div>
+        <div class="filter-field"><label>保険 STS</label><select id="data-filter-insurance-status" multiple></select></div>
+        <div class="filter-field"><label>Wifi STS</label><select id="data-filter-wifi-status" multiple></select></div>
+        <div class="filter-field"><label>TAViCA STS</label><select id="data-filter-tavica-status" multiple></select></div>
+        <div class="filter-field"><label>キャンサポ STS</label><select id="data-filter-cansapo-status" multiple></select></div>
         <button class="btn-ghost btn-block" id="btn-clear-data-filter">✕ フィルタ解除</button>
         <p class="filter-summary" id="data-filter-summary"></p>
       </div>
@@ -394,6 +400,15 @@ select[multiple]{height:88px; font-size:13px;}
           </div>
           <div id="staff-list"></div>
           <p id="staff-empty" class="list-empty hidden">登録がありません</p>
+        </div>
+        <div class="card">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+            <h2 style="margin:0;">🪪 担当者マスタ</h2>
+            <button class="btn-primary" id="btn-open-staff-name-modal" style="width:auto; padding:8px 12px; font-size:12px;">＋ 追加</button>
+          </div>
+          <p class="muted" style="margin-bottom:8px;">CSVの「担当者」コードに対応する氏名を登録すると、一覧・個人別サマリーの担当者がコードの代わりに氏名で表示されます。</p>
+          <div id="staff-name-list"></div>
+          <p id="staff-name-empty" class="list-empty hidden">登録がありません</p>
         </div>
       </div>
     </section>
@@ -469,9 +484,28 @@ select[multiple]{height:88px; font-size:13px;}
   </div>
 </div>
 
+<!-- ============ 担当者マスタ（ボトムシート） ============ -->
+<div id="staff-name-modal" class="sheet-overlay">
+  <div class="sheet-box">
+    <div class="sheet-head">
+      <h3 class="blue" id="staff-name-modal-title">🪪 担当者を追加</h3>
+      <button class="sheet-close" id="btn-close-staff-name-modal">&times;</button>
+    </div>
+    <form id="staff-name-form" class="sheet-body">
+      <input type="hidden" id="staff-name-form-rowindex" value="">
+      <div class="form-field"><label>担当者コード *</label><input type="text" id="staff-name-form-code" required placeholder="例：BGK078"></div>
+      <div class="form-field"><label>氏名 *</label><input type="text" id="staff-name-form-name" required placeholder="例：山田 太郎"></div>
+      <div class="btn-row">
+        <button type="button" class="btn-ghost" id="btn-cancel-staff-name-modal">キャンセル</button>
+        <button type="submit" class="btn-primary">💾 保存</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
 /* ============================================================================
-   サンプルデータ生成（すべて架空の値）。PC版と同じ29項目・同じロジックです。
+   サンプルデータ生成（すべて架空の値）。PC版と同じ33項目・同じロジックです。
    ============================================================================ */
 function mulberry32(seed){
   return function(){
@@ -511,11 +545,23 @@ var PRODUCT_TITLES = [
   'ASIANA AIRLINES（アシアナ航空） ご利用往復航空券（大人）','SINGAPORE AIRLINES（シンガポール航空） ご利用往復航空券（大人）',
   'CATHAY PACIFIC AIRWAYS（キャセイパシフィック航空） ご利用往復航空券（大人）','ホテル宿泊プラン（大人1名）','海外ツアーパッケージ（添乗員なし）'
 ];
-var ANCILLARY_STATUS_WEIGHTED = [['', 0.55], ['〇', 0.30], ['✖', 0.15]];
+var ANCILLARY_STATUS_OPTIONS = [
+  { value: '-', label: 'NO ACT' },
+  { value: '〇', label: 'NB付帯' },
+  { value: '×', label: '失注' },
+  { value: '△', label: 'セールス中' },
+  { value: '☆', label: 'PUSH成約' }
+];
+var ANCILLARY_STATUS_WEIGHTED = [['-', 0.45], ['〇', 0.28], ['×', 0.15], ['△', 0.08], ['☆', 0.04]];
+var LOST_REASON_SAMPLES = ['価格面で他社に決定', '不要と回答', '検討の上見送り', '出発直前のため加入不可', '既に他社で加入済み'];
 function genAncillary(){
   var status = pickWeighted(ANCILLARY_STATUS_WEIGHTED);
-  return { status: status, qty: status === '〇' ? randInt(1, 4) : null };
+  var qty = (status === '〇' || status === '☆') ? randInt(1, 4) : (status === '×' ? 0 : null);
+  var reason = status === '×' ? pick(LOST_REASON_SAMPLES) : '';
+  return { status: status, qty: qty, reason: reason };
 }
+function isAncillaryQtyEditable(status){ return status === '〇' || status === '☆'; }
+function normalizeAncillaryStatus(v){ return (v===null||v===undefined||v==='') ? '-' : v; }
 
 var nextRowIndex = 2;
 function genSampleRows(n){
@@ -545,11 +591,11 @@ function genSampleRows(n){
       salesAmount: sales, paymentAmount: payment,
       sts: pickWeighted(STS_LIST), staff: pick(STAFF_LIST), productTitle: pick(PRODUCT_TITLES), travelDays: randInt(2,10),
       chkDate: rand() < 0.4 ? bookingDate : null,
-      insuranceStatus: ins.status, insuranceQty: ins.qty,
-      wifiStatus: wifi.status, wifiQty: wifi.qty,
-      tavicaStatus: tavica.status, tavicaQty: tavica.qty,
-      cansapoStatus: cansapo.status, cansapoQty: cansapo.qty,
-      memo: rand() < 0.15 ? pick(['要フォロー', 'オプション確認済み', 'キャンセル待ち相談中', '再連絡予定']) : ''
+      insuranceStatus: ins.status, insuranceQty: ins.qty, insuranceReason: ins.reason,
+      wifiStatus: wifi.status, wifiQty: wifi.qty, wifiReason: wifi.reason,
+      tavicaStatus: tavica.status, tavicaQty: tavica.qty, tavicaReason: tavica.reason,
+      cansapoStatus: cansapo.status, cansapoQty: cansapo.qty, cansapoReason: cansapo.reason,
+      memo: rand() < 0.15 ? pick(['要フォロー：出発前に再度連絡して保険加入の意思を確認する予定', 'オプション確認済み', 'キャンセル待ち相談中', '再連絡予定']) : ''
     });
   }
   return rows;
@@ -571,13 +617,13 @@ var COLUMN_BY_KEY = {};
 COLUMNS.forEach(function(c){ COLUMN_BY_KEY[c.key] = c; });
 
 var ANCILLARY_ITEMS = [
-  { key:'insurance', label:'保険', statusKey:'insuranceStatus', qtyKey:'insuranceQty' },
-  { key:'wifi', label:'Wifi', statusKey:'wifiStatus', qtyKey:'wifiQty' },
-  { key:'tavica', label:'TAViCA', statusKey:'tavicaStatus', qtyKey:'tavicaQty' },
-  { key:'cansapo', label:'キャンサポ', statusKey:'cansapoStatus', qtyKey:'cansapoQty' }
+  { key:'insurance', label:'保険', statusKey:'insuranceStatus', qtyKey:'insuranceQty', reasonKey:'insuranceReason' },
+  { key:'wifi', label:'Wifi', statusKey:'wifiStatus', qtyKey:'wifiQty', reasonKey:'wifiReason' },
+  { key:'tavica', label:'TAViCA', statusKey:'tavicaStatus', qtyKey:'tavicaQty', reasonKey:'tavicaReason' },
+  { key:'cansapo', label:'キャンサポ', statusKey:'cansapoStatus', qtyKey:'cansapoQty', reasonKey:'cansapoReason' }
 ];
-var ANCILLARY_BY_KEY = {};
-ANCILLARY_ITEMS.forEach(function(a){ ANCILLARY_BY_KEY[a.key] = a; });
+var ANCILLARY_BY_KEY = {}, ANCILLARY_BY_QTY_KEY = {};
+ANCILLARY_ITEMS.forEach(function(a){ ANCILLARY_BY_KEY[a.key] = a; ANCILLARY_BY_QTY_KEY[a.qtyKey] = a; });
 
 // カードの「主要項目」（常に見える）と「詳細」（タップで開く）に分けている。
 // 順序はPC版と同じ既定順を初期値にし、データ管理タブで並び替えられる。
@@ -628,8 +674,23 @@ var STATE = {
     { rowIndex: 2, email: 'master@example.com', name: 'マスタ太郎', office: '', area: '', role: 'マスタ権限' },
     { rowIndex: 3, email: 'chief@example.com', name: '所長次郎', office: '', area: AREA_LIST[0], role: '所長・チーフ' },
     { rowIndex: 4, email: 'staff@example.com', name: '社員花子', office: OFFICE_LIST[0], area: OFFICE_AREA_MAP[OFFICE_LIST[0]], role: '社員' }
-  ]
+  ],
+  staffNameList: [
+    { rowIndex: 2, code: 'BGK078', name: '佐藤 一郎' },
+    { rowIndex: 3, code: '00L625', name: '鈴木 花子' },
+    { rowIndex: 4, code: 'BGK074', name: '田中 次郎' }
+  ],
+  staffNameMap: {}
 };
+function rebuildStaffNameMap(){
+  STATE.staffNameMap = {};
+  STATE.staffNameList.forEach(function(s){ if (s.code) STATE.staffNameMap[s.code] = s.name; });
+}
+rebuildStaffNameMap();
+function formatStaffName(code){
+  if (!code) return code;
+  return STATE.staffNameMap[code] || code;
+}
 
 var CHART_COLORS = ['#1d4ed8','#f59e0b','#10b981','#ef4444','#8b5cf6','#0ea5e9','#f97316','#84cc16','#ec4899','#64748b','#14b8a6','#a855f7'];
 
@@ -650,6 +711,7 @@ function boot(){
     applyDataFilters();
     renderPersonalTab();
     renderStaffList();
+    renderStaffNameList();
     renderAdminStatus();
     showLoading(false);
   }, 300);
@@ -694,6 +756,11 @@ function fillMultiSelect(id, values){
 function fillDatalist(id, values){
   document.getElementById(id).innerHTML = values.map(function(v){ return '<option value="'+escapeHtml(v)+'">'; }).join('');
 }
+function fillMultiSelectWithLabels(id, options){
+  document.getElementById(id).innerHTML = options.map(function(o){
+    return '<option value="'+escapeHtml(o.value)+'">'+escapeHtml(o.value)+' '+escapeHtml(o.label)+'</option>';
+  }).join('');
+}
 function populateFilterOptions(){
   fillMultiSelect('dash-filter-area', distinctValues('area'));
   fillMultiSelect('dash-filter-office', distinctValues('office'));
@@ -701,6 +768,10 @@ function populateFilterOptions(){
   fillMultiSelect('data-filter-area', distinctValues('area'));
   fillMultiSelect('data-filter-office', distinctValues('office'));
   fillMultiSelect('data-filter-staff', distinctValues('staff'));
+  fillMultiSelectWithLabels('data-filter-insurance-status', ANCILLARY_STATUS_OPTIONS);
+  fillMultiSelectWithLabels('data-filter-wifi-status', ANCILLARY_STATUS_OPTIONS);
+  fillMultiSelectWithLabels('data-filter-tavica-status', ANCILLARY_STATUS_OPTIONS);
+  fillMultiSelectWithLabels('data-filter-cansapo-status', ANCILLARY_STATUS_OPTIONS);
   fillDatalist('staff-office-options', OFFICE_LIST);
   fillDatalist('staff-area-options', AREA_LIST);
 }
@@ -878,7 +949,10 @@ function applyDataFilters(){
   var staff = toSet(getSelected('data-filter-staff'));
   var dateFrom = document.getElementById('data-filter-date-from').value;
   var dateTo = document.getElementById('data-filter-date-to').value;
-  var keyword = document.getElementById('data-filter-keyword').value.trim().toLowerCase();
+  var insuranceSts = toSet(getSelected('data-filter-insurance-status'));
+  var wifiSts = toSet(getSelected('data-filter-wifi-status'));
+  var tavicaSts = toSet(getSelected('data-filter-tavica-status'));
+  var cansapoSts = toSet(getSelected('data-filter-cansapo-status'));
 
   STATE.dataFiltered = STATE.rows.filter(function(r){
     if (area && !area[r.area]) return false;
@@ -887,25 +961,24 @@ function applyDataFilters(){
     var dep = r.departureDate;
     if (dateFrom && (!dep || dep < dateFrom)) return false;
     if (dateTo && (!dep || dep > dateTo)) return false;
-    if (keyword){
-      var hay = [r.reservationNo, r.productTitle, r.staff, r.memo].join(' ').toLowerCase();
-      if (hay.indexOf(keyword) === -1) return false;
-    }
+    if (insuranceSts && !insuranceSts[normalizeAncillaryStatus(r.insuranceStatus)]) return false;
+    if (wifiSts && !wifiSts[normalizeAncillaryStatus(r.wifiStatus)]) return false;
+    if (tavicaSts && !tavicaSts[normalizeAncillaryStatus(r.tavicaStatus)]) return false;
+    if (cansapoSts && !cansapoSts[normalizeAncillaryStatus(r.cansapoStatus)]) return false;
     return true;
   });
   document.getElementById('data-filter-summary').textContent = STATE.dataFiltered.length + ' 件 / 閲覧可能 ' + STATE.rows.length + ' 件';
-  var activeN = (area?1:0)+(office?1:0)+(staff?1:0)+(dateFrom?1:0)+(dateTo?1:0)+(keyword?1:0);
+  var activeN = (area?1:0)+(office?1:0)+(staff?1:0)+(dateFrom?1:0)+(dateTo?1:0)+(insuranceSts?1:0)+(wifiSts?1:0)+(tavicaSts?1:0)+(cansapoSts?1:0);
   document.getElementById('data-filter-badge').textContent = activeN>0 ? '('+activeN+')' : '';
   STATE.dataPage = 1;
   renderDataList();
 }
 function clearDataFilters(){
-  ['data-filter-area','data-filter-office','data-filter-staff'].forEach(function(id){
+  ['data-filter-area','data-filter-office','data-filter-staff','data-filter-insurance-status','data-filter-wifi-status','data-filter-tavica-status','data-filter-cansapo-status'].forEach(function(id){
     Array.from(document.getElementById(id).options).forEach(function(o){ o.selected = false; });
   });
   document.getElementById('data-filter-date-from').value = '';
   document.getElementById('data-filter-date-to').value = '';
-  document.getElementById('data-filter-keyword').value = '';
   applyDataFilters();
 }
 
@@ -941,7 +1014,7 @@ function buildRecordCard(row){
 
   var head = '<div class="rc-head"><div>' +
     '<div class="rc-title">'+escapeHtml(row.reservationNo||'－')+'</div>' +
-    '<div class="rc-sub">'+escapeHtml(row.staff||'－')+' ・ '+escapeHtml(row.office||'－')+'</div>' +
+    '<div class="rc-sub">'+escapeHtml(formatStaffName(row.staff)||'－')+' ・ '+escapeHtml(row.office||'－')+'</div>' +
     '</div><span class="rc-badge">'+escapeHtml(row.sts||'－')+'</span></div>';
 
   var primaryGrid = '<div class="rc-grid">' + primaryDefs.filter(function(d){ return d.key !== 'reservationNo' && d.key !== 'staff' && d.key !== 'office' && d.key !== 'sts'; }).map(function(d){
@@ -967,45 +1040,94 @@ function buildRecordCard(row){
     }
     // ancillary
     var item = ANCILLARY_BY_KEY[d.item];
-    var status = row[item.statusKey] || '';
+    var status = normalizeAncillaryStatus(row[item.statusKey]);
     var qty = row[item.qtyKey];
-    var opts = ['', '〇', '✖'].map(function(v){
-      var label = v === '' ? '－' : v;
-      return '<option value="'+v+'"'+(status===v?' selected':'')+'>'+label+'</option>';
+    var reason = row[item.reasonKey] || '';
+    var opts = ANCILLARY_STATUS_OPTIONS.map(function(o){
+      return '<option value="'+o.value+'"'+(status===o.value?' selected':'')+'>'+o.value+' '+o.label+'</option>';
     }).join('');
-    var qtyDisabled = status === '〇' ? '' : 'disabled';
+    var qtyEditable = isAncillaryQtyEditable(status);
     var qtyVal = (qty===null||qty===undefined) ? '' : qty;
+    var flagged = qtyEditable && (qtyVal==='') ? ' ancillary-flagged' : '';
+    var reasonHtml = (status === '×' && reason) ? '<div class="ancillary-reason">失注理由：'+escapeHtml(reason)+'</div>' : '';
     return '<div class="rc-edit-item"><label>'+escapeHtml(d.label)+'</label><div class="ancillary-pair">' +
-      '<select data-row="'+row.rowIndex+'" data-col="'+item.statusKey+'">'+opts+'</select>' +
-      '<input type="number" min="0" data-row="'+row.rowIndex+'" data-col="'+item.qtyKey+'" value="'+escapeHtml(String(qtyVal))+'" '+qtyDisabled+' placeholder="数">' +
-      '</div></div>';
+      '<select class="ancillary-status" data-row="'+row.rowIndex+'" data-item="'+item.key+'" data-col="'+item.statusKey+'">'+opts+'</select>' +
+      '<input type="number" min="0" class="ancillary-qty'+flagged+'" data-row="'+row.rowIndex+'" data-col="'+item.qtyKey+'" value="'+escapeHtml(String(qtyVal))+'" '+(qtyEditable?'':'disabled')+' placeholder="数">' +
+      '</div>'+reasonHtml+'</div>';
   }).join('') + '</div>';
 
   return '<div class="record-card">' + head + primaryGrid + moreToggle + moreGrid + editGrid + '</div>';
 }
 
+function afterCellSaved(){
+  renderDataList();
+  applyDashFilters();
+  renderPersonalTab();
+}
 function saveCell(rowIndex, columnKey, value){
   var row = STATE.rows.find(function(r){ return r.rowIndex === rowIndex; });
   if (!row) return;
   var normalized = value === '' ? null : value;
-  row[columnKey] = (columnKey.slice(-3) === 'Qty' && normalized !== null) ? Number(normalized) : normalized;
-  var ancillary = ANCILLARY_ITEMS.filter(function(a){ return a.statusKey === columnKey; })[0];
-  if (ancillary && normalized !== '〇') row[ancillary.qtyKey] = null;
-  renderDataList();
-  applyDashFilters();
-  renderPersonalTab();
+  row[columnKey] = normalized;
+  afterCellSaved();
+}
+function handleAncillaryStatusChange(selectEl){
+  var rowIndex = Number(selectEl.dataset.row);
+  var row = STATE.rows.find(function(r){ return r.rowIndex === rowIndex; });
+  if (!row) return;
+  var item = ANCILLARY_BY_KEY[selectEl.dataset.item];
+  var newStatus = selectEl.value;
+  var prevStatus = normalizeAncillaryStatus(row[item.statusKey]);
+
+  if (newStatus === '×'){
+    var reason = window.prompt('失注理由を入力してください（キャンセルすると変更されません）', '');
+    if (reason === null){ selectEl.value = prevStatus; return; }
+    row[item.statusKey] = '×';
+    row[item.qtyKey] = 0;
+    row[item.reasonKey] = reason.trim();
+    afterCellSaved();
+    return;
+  }
+
+  row[item.statusKey] = newStatus;
+  if (!isAncillaryQtyEditable(newStatus)) row[item.qtyKey] = null;
+  row[item.reasonKey] = '';
+  afterCellSaved();
+
+  if (isAncillaryQtyEditable(newStatus)){
+    var qty = row[item.qtyKey];
+    if (qty === null || qty === undefined || qty === ''){
+      window.alert('数量が入力されていません。数量を入力してください。');
+      var qtyInput = document.querySelector('input.ancillary-qty[data-row="'+rowIndex+'"][data-col="'+item.qtyKey+'"]');
+      if (qtyInput) qtyInput.focus();
+    }
+  }
+}
+function handleAncillaryQtyBlur(inputEl){
+  var rowIndex = Number(inputEl.dataset.row);
+  var row = STATE.rows.find(function(r){ return r.rowIndex === rowIndex; });
+  if (!row) return;
+  var item = ANCILLARY_BY_QTY_KEY[inputEl.dataset.col];
+  var status = normalizeAncillaryStatus(row[item.statusKey]);
+  if (isAncillaryQtyEditable(status) && inputEl.value === ''){
+    window.alert('数量が入力されていません。数量を入力してください。');
+    inputEl.focus();
+    return;
+  }
+  saveCell(rowIndex, inputEl.dataset.col, inputEl.value);
 }
 function bindDataListEditEvents(){
   var list = document.getElementById('data-list');
   list.addEventListener('change', function(e){
     var t = e.target;
-    if (t.matches('input[type="date"][data-col]') || t.matches('select[data-col]') || t.matches('input[type="number"][data-col]')){
-      saveCell(Number(t.dataset.row), t.dataset.col, t.value);
-    }
+    if (t.matches('input[type="date"][data-col]')) saveCell(Number(t.dataset.row), t.dataset.col, t.value);
+    else if (t.matches('select.ancillary-status')) handleAncillaryStatusChange(t);
+    else if (t.matches('input.ancillary-qty')) handleAncillaryQtyBlur(t);
   });
   list.addEventListener('blur', function(e){
     var t = e.target;
-    if (t.matches('input[type="text"][data-col]')) saveCell(Number(t.dataset.row), t.dataset.col, t.value);
+    if (t.matches('input[type="text"][data-col]') && !t.matches('input.ancillary-qty')) saveCell(Number(t.dataset.row), t.dataset.col, t.value);
+    else if (t.matches('input.ancillary-qty')) handleAncillaryQtyBlur(t);
   }, true);
   list.addEventListener('click', function(e){
     var btn = e.target.closest('.rc-more-toggle');
@@ -1076,7 +1198,7 @@ function renderPersonalTab(){
   document.getElementById('personal-empty').classList.toggle('hidden', list.length>0);
   el.innerHTML = list.map(function(b){
     return '<div class="record-card">' +
-      '<div class="rc-head"><span class="rc-title">'+escapeHtml(b.staff)+'</span><span class="rc-badge">'+formatNumber(b.count)+'件</span></div>' +
+      '<div class="rc-head"><span class="rc-title">'+escapeHtml(formatStaffName(b.staff))+'</span><span class="rc-badge">'+formatNumber(b.count)+'件</span></div>' +
       '<div class="rc-sub" style="margin:-4px 0 8px;">'+escapeHtml(b.office)+'</div>' +
       '<div class="rc-grid">' +
         '<div class="rc-item"><div class="k">保険（加入PAX数）</div><div class="v">'+formatNumber(b.insuranceQty)+'</div></div>' +
@@ -1179,6 +1301,66 @@ function openStaffModal(rowIndex){
 }
 function closeStaffModal(){ document.getElementById('staff-modal').classList.remove('open'); }
 
+/* ---- 担当者マスタ デモ ---- */
+function renderStaffNameList(){
+  rebuildStaffNameMap();
+  var el = document.getElementById('staff-name-list');
+  document.getElementById('staff-name-empty').classList.toggle('hidden', STATE.staffNameList.length>0);
+  el.innerHTML = STATE.staffNameList.map(function(s){
+    return '<div class="record-card">' +
+      '<div class="rc-head"><div><div class="rc-title" style="font-size:12px;">'+escapeHtml(s.code)+'</div><div class="rc-sub">'+escapeHtml(s.name)+'</div></div></div>' +
+      '<div class="btn-row" style="margin-top:6px;">' +
+        '<button type="button" class="btn-ghost staff-name-edit" data-row="'+s.rowIndex+'" style="min-height:36px; font-size:12px;">編集</button>' +
+        '<button type="button" class="btn-ghost staff-name-delete" data-row="'+s.rowIndex+'" style="min-height:36px; font-size:12px; color:var(--red-600);">削除</button>' +
+      '</div></div>';
+  }).join('');
+  renderDataList();
+  renderPersonalTab();
+}
+function bindStaffNameEvents(){
+  document.getElementById('btn-open-staff-name-modal').addEventListener('click', function(){ openStaffNameModal(null); });
+  document.getElementById('btn-close-staff-name-modal').addEventListener('click', closeStaffNameModal);
+  document.getElementById('btn-cancel-staff-name-modal').addEventListener('click', closeStaffNameModal);
+  document.getElementById('staff-name-list').addEventListener('click', function(e){
+    var editBtn = e.target.closest('.staff-name-edit'), delBtn = e.target.closest('.staff-name-delete');
+    if (editBtn) openStaffNameModal(Number(editBtn.dataset.row));
+    if (delBtn){
+      if (!window.confirm('この担当者を削除しますか？（デモ動作）')) return;
+      STATE.staffNameList = STATE.staffNameList.filter(function(s){ return s.rowIndex !== Number(delBtn.dataset.row); });
+      renderStaffNameList();
+    }
+  });
+  document.getElementById('staff-name-form').addEventListener('submit', function(ev){
+    ev.preventDefault();
+    var rowIndex = document.getElementById('staff-name-form-rowindex').value;
+    var payload = {
+      code: document.getElementById('staff-name-form-code').value.trim(),
+      name: document.getElementById('staff-name-form-name').value.trim()
+    };
+    if (!payload.code || !payload.name){ showToast('担当者コードと氏名を入力してください。', 'error'); return; }
+    if (rowIndex){
+      var target = STATE.staffNameList.find(function(s){ return s.rowIndex === Number(rowIndex); });
+      if (target) Object.assign(target, payload);
+    } else {
+      payload.rowIndex = Math.max.apply(null, STATE.staffNameList.map(function(s){return s.rowIndex;}).concat([1])) + 1;
+      STATE.staffNameList.push(payload);
+    }
+    renderStaffNameList();
+    closeStaffNameModal();
+    showToast('保存しました（デモ）', 'success');
+  });
+}
+function openStaffNameModal(rowIndex){
+  var isEdit = rowIndex !== null;
+  document.getElementById('staff-name-modal-title').textContent = isEdit ? '🪪 担当者を編集' : '🪪 担当者を追加';
+  var target = isEdit ? STATE.staffNameList.find(function(s){ return s.rowIndex === rowIndex; }) : null;
+  document.getElementById('staff-name-form-rowindex').value = isEdit ? rowIndex : '';
+  document.getElementById('staff-name-form-code').value = target ? target.code : '';
+  document.getElementById('staff-name-form-name').value = target ? target.name : '';
+  document.getElementById('staff-name-modal').classList.add('open');
+}
+function closeStaffNameModal(){ document.getElementById('staff-name-modal').classList.remove('open'); }
+
 /* ---- CSVインポート（デモ） ---- */
 var csvTimer = null;
 function openCsvModal(){
@@ -1260,12 +1442,11 @@ function bindEvents(){
     STATE.rankingSortKey = this.value; renderRanking();
   });
 
-  ['data-filter-area','data-filter-office','data-filter-staff'].forEach(function(id){
+  ['data-filter-area','data-filter-office','data-filter-staff','data-filter-insurance-status','data-filter-wifi-status','data-filter-tavica-status','data-filter-cansapo-status'].forEach(function(id){
     document.getElementById(id).addEventListener('change', applyDataFilters);
   });
   document.getElementById('data-filter-date-from').addEventListener('change', applyDataFilters);
   document.getElementById('data-filter-date-to').addEventListener('change', applyDataFilters);
-  document.getElementById('data-filter-keyword').addEventListener('input', debounce(applyDataFilters, 250));
   document.getElementById('btn-clear-data-filter').addEventListener('click', clearDataFilters);
 
   document.getElementById('btn-prev-page').addEventListener('click', function(){ STATE.dataPage--; renderDataList(); window.scrollTo(0,0); });
@@ -1284,6 +1465,7 @@ function bindEvents(){
   document.getElementById('btn-remove-duplicates').addEventListener('click', removeDuplicatesDemo);
   document.getElementById('btn-clear-all-data').addEventListener('click', clearAllDataDemo);
   bindStaffEvents();
+  bindStaffNameEvents();
 }
 function switchTab(tab){
   document.querySelectorAll('.bottom-nav .tab-btn').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-tab')===tab); });

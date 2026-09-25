@@ -5,9 +5,10 @@
  * ----------------------------------------------------------------------------
  * このファイルをGoogle Apps Scriptエディタに貼り付け、setupAllSheetsFromMenu() を
  * 実行するか、スプレッドシートのメニュー「予約データダッシュボード」→「① 初期セットアップ」を
- * 実行すると、以下の2枚のシートを作成する。
- *   ・「予約データ」    ：CSV由来19項目＋現場入力10項目（合計29列・見出し付き）
- *   ・「スタッフ権限」  ：Googleアカウントごとの閲覧権限（社員／所長・チーフ／マスタ権限）
+ * 実行すると、以下の3枚のシートを作成する。
+ *   ・「予約データ」      ：CSV由来19項目＋現場入力14項目（合計33列・見出し付き）
+ *   ・「スタッフ権限」    ：Googleアカウントごとの閲覧権限（社員／所長・チーフ／マスタ権限）
+ *   ・「担当者マスタ」    ：CSVの「担当者」コード（例：BGK078）→ 氏名の対応表
  * 既にシートがある場合は中身を残したまま、見出しと表示形式だけを整える（安全に再実行できる）。
  * ============================================================================
  */
@@ -28,8 +29,9 @@ function setupAllSheetsFromMenu() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   buildDataSheet_(ss);
   buildStaffSheet_(ss);
+  buildStaffNameSheet_(ss);
   SpreadsheetApp.getUi().alert(
-    'シート「' + SHEET_NAME + '」「' + STAFF_SHEET_NAME + '」の初期セットアップが完了しました。\n' +
+    'シート「' + SHEET_NAME + '」「' + STAFF_SHEET_NAME + '」「' + STAFF_NAME_SHEET_NAME + '」の初期セットアップが完了しました。\n' +
     '「' + STAFF_SHEET_NAME + '」シートに、あなた自身のGoogleアカウントを「マスタ権限」で1行登録してください。'
   );
 }
@@ -46,9 +48,9 @@ function removeDuplicateRowsFromMenu() {
 
 /**
  * データ保存用シート「予約データ」を作成・整備する（何度実行しても安全）。
- * 見出しは Code.gs の ALL_COLUMNS 定義（CSV由来19項目＋現場入力10項目＝29列）と完全に一致させる。
- * 以前のバージョン（19列のみ）で運用していたシートに対して再実行した場合も、
- * 既存データ行を残したまま20〜29列目（現場入力項目）の見出しだけを追加する。
+ * 見出しは Code.gs の ALL_COLUMNS 定義（CSV由来19項目＋現場入力14項目＝33列）と完全に一致させる。
+ * 以前のバージョン（列数が少ない）で運用していたシートに対して再実行した場合も、
+ * 既存データ行を残したまま足りない列の見出しだけを追加する。
  */
 function buildDataSheet_(ss) {
   var sheet = ss.getSheetByName(SHEET_NAME);
@@ -71,7 +73,12 @@ function buildDataSheet_(ss) {
   // 列幅をおおまかに整える（見た目の初期状態を整えるだけで、必須ではない）。
   var widths = [
     110, 150, 90, 90, 90, 130, 150, 70, 70, 90, 80, 150, 110, 110, 100, 70, 90, 220, 80, // CSV由来19項目
-    90, 60, 80, 60, 80, 70, 90, 90, 100, 200                                              // 現場入力10項目
+    90,                                    // CHK日
+    60, 60, 140,                           // 保険：ステータス／数量／理由
+    60, 60, 140,                           // Wifi：ステータス／数量／理由
+    70, 60, 140,                           // TAViCA：ステータス／数量／理由
+    80, 60, 140,                           // キャンサポ：ステータス／数量／理由
+    200                                    // メモ
   ];
   widths.forEach(function (w, i) { sheet.setColumnWidth(i + 1, w); });
 
@@ -113,6 +120,38 @@ function buildStaffSheet_(ss) {
   // 権限列にプルダウン（社員／所長・チーフ／マスタ権限）を設定しておく
   var rule = SpreadsheetApp.newDataValidation().requireValueInList(ROLES, true).setAllowInvalid(false).build();
   sheet.getRange(2, 5, Math.max(maxRows - 1, 1), 1).setDataValidation(rule);
+
+  if (sheet.getMaxColumns() > headerLabels.length) {
+    sheet.hideColumns(headerLabels.length + 1, sheet.getMaxColumns() - headerLabels.length);
+  }
+
+  return sheet;
+}
+
+/**
+ * 担当者マスタシートを作成・整備する（何度実行しても安全）。
+ * 列：担当者コード（CSVの「担当者」列の値。例：BGK078）／氏名
+ * 「予約データ一覧」「個人別サマリー」の担当者列は、ここに登録された氏名があれば
+ * コードの代わりに氏名を表示する（未登録のコードはそのままコード表示）。
+ */
+function buildStaffNameSheet_(ss) {
+  var sheet = ss.getSheetByName(STAFF_NAME_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(STAFF_NAME_SHEET_NAME);
+  }
+
+  var headerLabels = ['担当者コード', '氏名'];
+  var headerRange = sheet.getRange(1, 1, 1, headerLabels.length);
+  headerRange.setValues([headerLabels]);
+  headerRange.setFontWeight('bold').setBackground('#1d4ed8').setFontColor('#ffffff');
+  sheet.setFrozenRows(1);
+  sheet.setTabColor('#0891b2');
+
+  var maxRows = Math.max(sheet.getMaxRows(), 2);
+  sheet.getRange(2, 1, maxRows - 1, 2).setNumberFormat('@');
+
+  var widths = [140, 160];
+  widths.forEach(function (w, i) { sheet.setColumnWidth(i + 1, w); });
 
   if (sheet.getMaxColumns() > headerLabels.length) {
     sheet.hideColumns(headerLabels.length + 1, sheet.getMaxColumns() - headerLabels.length);
