@@ -14,7 +14,10 @@
     --color-text: #1c1f2e;
     --color-muted: #686c82;
     --color-hq: #be185d;
-    --color-branch: #0d9488;
+    /* ★要件（項目112）：STS(支店側)のしるしは一覧・詳細でいちばん目で追う部分だが、
+       以前の #0d9488 は背景 #ccfbf1 との明暗差が 3.32:1 しかなく、12pxの文字に必要な
+       4.5:1 に届いていなかった。色味は変えずに濃さだけ上げて 4.86:1 にしている。 */
+    --color-branch: #0f766e;
     --color-danger: #dc2626;
     --color-success: #16a34a;
     --color-unread: #fff3b0;
@@ -259,6 +262,65 @@
     padding: 4px 10px; font-size: 12px; cursor: pointer; }
   .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: #111827; color: #fff;
     padding: 10px 18px; border-radius: 999px; font-size: 0.85rem; box-shadow: 0 4px 14px rgba(0,0,0,0.2); z-index: 50; }
+
+  /* ★要件（項目112）：入力欄の並び。以前は「見出し→欄」が1列で延々と続き、欄の幅は内容に
+     関わらず全て画面幅いっぱいだった。11桁の番号も氏名も備考も同じ幅では「何を入れる欄か」の
+     手がかりにならず、フォームも必要以上に長くなる。2列に並べ、幅を内容に合わせる。
+     見出しは、欄の中の例文（16px）より目立つよう、大きさと太さを上げている
+     （以前は見出しが12pxの薄い灰色で、例文のほうが目立っていた）。 */
+  .form-grid { display: grid; grid-template-columns: 1fr; gap: 12px 16px; }
+  @media (min-width: 720px) { .form-grid { grid-template-columns: 1fr 1fr; } }
+  .form-field { display: flex; flex-direction: column; min-width: 0; }
+  .form-field.wide { grid-column: 1 / -1; }
+  .form-field > label { font-size: 0.85rem; font-weight: 600; color: var(--color-text);
+    margin: 0 0 4px; text-align: left; }
+  /* ★不具合修正：ラジオ・チェックは丸／四角の印そのものなので、幅を広げてはいけない
+     （広げると印だけで1行を占め、すぐ隣に並ぶはずの文字が下の行へ押し出される）。 */
+  .form-field input:not([type="radio"]):not([type="checkbox"]),
+  .form-field select, .form-field textarea { width: 100%; }
+  .form-field .checkbox-label { font-size: 0.9rem; color: var(--color-text); margin: 0; }
+  .form-field input.w-short { max-width: 220px; }
+  .field-note { font-size: 0.78rem; color: var(--color-muted); margin-top: 4px; }
+  /* 必須はラベルの文言に混ぜず、独立したしるしにする（斜め読みでも拾えるようにするため） */
+  .req { display: inline-block; background: var(--color-danger); color: #fff; font-size: 0.7rem;
+    font-weight: 700; border-radius: 4px; padding: 1px 6px; margin-left: 6px; vertical-align: middle; }
+  /* 希望日は「日付・プラン・セール名・場所」が1組。組ごとに枠で囲って区切る */
+  .hope-block { border: 1px solid var(--color-border); border-radius: 8px; padding: 10px;
+    margin-bottom: 8px; background: #fcfcfe; }
+  .hope-block:last-child { margin-bottom: 0; }
+  .hope-block-title { font-weight: 700; color: var(--color-primary); margin-bottom: 6px; }
+  /* 入力欄の多い画面では、まとまりの余白が積み上がって画面が無駄に長くなる。
+     新規依頼フォームだけ、まとまりの間隔を詰める。 */
+  #view-shop-new .section-card { padding: 12px; margin-bottom: 10px; }
+  #view-shop-new .form-grid { gap: 10px 16px; }
+  /* 送信時に足りなかった欄をその場で示す（以前は文章で知らせるだけで、どの欄かは分からなかった） */
+  .field-invalid { border-color: var(--color-danger) !important; background: #fff5f5; }
+
+  /* ★要件（項目112）：案件詳細の保存操作を画面下端に固定する帯（Index.htmlの#sticky-actions）。
+     未保存の変更があるときだけ出る。押し間違いを防ぐため、送信（青）と保存のみ（白）の見た目を
+     はっきり分け、指で押せるよう高さを48px以上にしている。
+     帯は本文の一番下に重なるので、出ている間だけ本文の下に余白を足す（has-sticky-actions）。 */
+  .sticky-actions { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+    background: #fff; border-top: 2px solid var(--color-primary);
+    box-shadow: 0 -4px 16px rgba(10, 4, 112, 0.14);
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 10px 16px; flex-wrap: wrap; }
+  .sticky-actions-count { font-weight: 700; color: var(--color-primary-dark); font-size: 0.95rem; }
+  .sticky-actions-btns { display: flex; gap: 8px; flex: 1; justify-content: flex-end; }
+  .sticky-btn { border: none; border-radius: 8px; padding: 12px 18px; font-size: 0.95rem;
+    font-weight: 700; cursor: pointer; min-height: 48px; }
+  .sticky-btn-main { background: var(--color-primary); color: #fff; }
+  .sticky-btn-main:active { background: var(--color-primary-dark); }
+  .sticky-btn-sub { background: #fff; color: var(--color-primary-dark); border: 1px solid var(--color-border); }
+  body.has-sticky-actions .app-main { padding-bottom: 96px; }
+  /* 狭い画面では件数を上の行に送り、2つのボタンを横いっぱいに並べる（親指で押しやすい位置） */
+  @media (max-width: 560px) {
+    .sticky-actions { padding: 8px 12px; gap: 6px; }
+    .sticky-actions-count { width: 100%; font-size: 0.85rem; }
+    .sticky-actions-btns { width: 100%; }
+    .sticky-btn { flex: 1; padding: 12px 6px; font-size: 0.85rem; }
+    body.has-sticky-actions .app-main { padding-bottom: 156px; }
+  }
 
   /* ★機能追加：新規予約の送信中など、通信に時間がかかる操作の間は画面全体を覆うロード表示を出す。
      トーストやボタン文言の変化だけでは気づかれず「できたか分からず何度も押してしまう」との

@@ -221,21 +221,30 @@ function paneHidden(document, key) {
   check('「（納品）」の文字が残っていない', !drivePane.innerHTML.includes('（納品）'));
 
   // ---------------------------------------------------------------
-  section('U3. ②予約内容・現地記入欄タブの下部ボタンで確定できる');
+  section('U3. ②どこまでスクロールしても、下端の操作バーから確定できる');
   [...document.querySelectorAll('.tab-btn')].find(b => b.dataset.tab === 'reservation').click();
   await settle();
   const resPane = document.querySelector('[data-tab-pane="reservation"]');
-  check('予約内容タブに「変更を決定して送信」ボタンがある', !!resPane.querySelector('.quick-commit-btn'));
-  check('予約内容タブに「保存のみ」ボタンがある', !!resPane.querySelector('.quick-save-btn'));
-  const localPane = document.querySelector('[data-tab-pane="local"]');
-  check('現地記入欄タブにも両ボタンがある',
-        !!localPane.querySelector('.quick-commit-btn') && !!localPane.querySelector('.quick-save-btn'));
+  // ★仕様変更（項目112）：以前は同じ送信ボタンの複製を画面内に5組ちりばめていたが、
+  // 直前のまとまりだけを保存するように見えて分かりにくかった（実際はどれも画面全体を保存する）。
+  // 複製はすべて廃止し、画面下端に固定した操作バー1つにまとめている。
+  check('画面内に複製された送信ボタンが残っていない',
+        document.querySelectorAll('.quick-commit-btn, .quick-save-btn').length === 0);
+  check('下端の操作バーがある', !!document.getElementById('sticky-actions'));
+  check('未保存が0件のときは操作バーを出さない',
+        document.getElementById('sticky-actions').classList.contains('hidden'));
 
-  // 予約内容タブで備考を書き換え、そのタブの「保存のみ」で確定する
+  // 予約内容タブで備考を書き換えると、下端の操作バーが出る
   const remarks = resPane.querySelector('[data-pending="備考"]');
   remarks.value = '会場までの送迎希望';
   remarks.dispatchEvent(new dom.window.Event('change'));
-  resPane.querySelector('.quick-save-btn').click();
+  await settle();
+  check('未保存の変更があると操作バーが出る',
+        !document.getElementById('sticky-actions').classList.contains('hidden'));
+  check('操作バーに未保存の件数が出る',
+        /未保存の変更\s*\d+件/.test(document.getElementById('sticky-actions-count').textContent),
+        document.getElementById('sticky-actions-count').textContent);
+  document.getElementById('sticky-save-quiet').click();
   await settle();
 
   check('保存のみでサーバーに反映される',
@@ -251,7 +260,8 @@ function paneHidden(document, key) {
   const pickup = pane2.querySelector('[data-pending="配車時間"]');
   pickup.value = '08:30';
   pickup.dispatchEvent(new dom.window.Event('change'));
-  pane2.querySelector('.quick-commit-btn').click();
+  await settle();
+  document.getElementById('sticky-commit').click();
   await settle();
   const tok = ctx.apiLogin('ROW','CHANGE-ME-ROW').session.token;
   check('現地記入欄の「変更＋メッセージ」で保存される',
@@ -277,7 +287,7 @@ function paneHidden(document, key) {
 
   consent.checked = true;
   consent.dispatchEvent(new dom.window.Event('change'));
-  document.querySelector('[data-tab-pane="reservation"] .quick-save-btn').click();
+  document.getElementById('sticky-save-quiet').click();
   await settle();
   check('チェックすると同意書が「済」で保存される',
         ctx.apiGetReservationDetail(tok, 'R-001').detail['同意書'] === '済',
@@ -291,7 +301,7 @@ function paneHidden(document, key) {
   // 外す操作も効く（誤チェックの取り消し）
   consent2.checked = false;
   consent2.dispatchEvent(new dom.window.Event('change'));
-  document.querySelector('[data-tab-pane="reservation"] .quick-save-btn').click();
+  document.getElementById('sticky-save-quiet').click();
   await settle();
   check('チェックを外すと未回収に戻せる',
         !ctx.apiGetReservationDetail(tok, 'R-001').detail['同意書'],
@@ -307,7 +317,7 @@ function paneHidden(document, key) {
         dl ? [...dl.options].map(o => o.value).join(',') : 'datalistなし');
   sale.value = '直前割引20%（自由入力）';
   sale.dispatchEvent(new dom.window.Event('change'));
-  document.querySelector('[data-tab-pane="reservation"] .quick-save-btn').click();
+  document.getElementById('sticky-save-quiet').click();
   await settle();
   check('マスタに無いセール名も自由に保存できる',
         ctx.apiGetReservationDetail(tok, 'R-001').detail['セール名'] === '直前割引20%（自由入力）',
@@ -576,7 +586,7 @@ function paneHidden(document, key) {
     const photoTime = localPane.querySelector('[data-pending="撮影開始時間"]');
     photoTime.value = '10:30';
     photoTime.dispatchEvent(new dom.window.Event('change'));
-    localPane.querySelector('.quick-save-btn').click();
+    document.getElementById('sticky-save-quiet').click();
     await settle();
     const vieTok = ctx.apiLogin('VIE', 'CHANGE-ME-VIE').session.token;
     const savedDetail = ctx.apiGetReservationDetail(vieTok, 'VIE-901').detail;
@@ -1090,7 +1100,7 @@ function paneHidden(document, key) {
     check('一括設定：チェックした2件のプルダウンがUCに変わる（画面上）', sel1.value === 'UC' && sel2.value === 'UC');
     check('一括設定：チェックしなかった希望日③は変わらない（画面上）', sel3.value !== 'UC');
 
-    document.querySelector('[data-tab-pane="reservation"] .quick-commit-btn').click();
+    document.getElementById('sticky-commit').click();
     await settle();
 
     const jp4 = ctx.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
@@ -2683,11 +2693,10 @@ function paneHidden(document, key) {
     check('通信が終わるとメッセージ送信ボタンの文言が元に戻る', msgBtn.textContent === msgBtnLabel);
     check('通信が終わるとメッセージ送信ボタンが再度押せる状態に戻る', msgBtn.disabled === false);
 
-    // 予約内容タブ下部の「保存のみ」クイックボタンでも同様（quick-save-btn。複数箇所に同じハンドラが
-    // querySelectorAllで登録されているため、押した実際のボタンだけが busy 表示になることも確認する）
+    // 下端の操作バーの「保存のみ」でも同様（項目112でここに一本化した）
     const remarksField = document.querySelector('[data-tab-pane="reservation"] [data-pending="備考"]');
     if (remarksField) { remarksField.value = 'U48保存中表示確認'; remarksField.dispatchEvent(new dom.window.Event('change')); }
-    const quickSaveBtn = document.querySelector('[data-tab-pane="reservation"] .quick-save-btn');
+    const quickSaveBtn = document.getElementById('sticky-save-quiet');
     const quickSaveLabel = quickSaveBtn.textContent;
     quickSaveBtn.click();
     check('クイック保存ボタンを押すと文言が「保存中...」に変わる', quickSaveBtn.textContent === '保存中...');
@@ -3508,7 +3517,7 @@ function paneHidden(document, key) {
     hopeSel.value = 'OK';
     hopeSel.dispatchEvent(new dom60.window.Event('change'));
     await settle();
-    doc60.querySelector('.quick-commit-btn').click();
+    doc60.getElementById('sticky-commit').click();
     await settle(); await settle(); await settle();
 
     const afterDetail = ctx60.apiGetReservationDetail(jp60, kRq).detail;
@@ -3543,7 +3552,7 @@ function paneHidden(document, key) {
     chkHopeSel.value = 'UC';
     chkHopeSel.dispatchEvent(new dom60.window.Event('change'));
     await settle();
-    doc60.querySelector('.quick-commit-btn').click();
+    doc60.getElementById('sticky-commit').click();
     await settle(); await settle(); await settle();
 
     const chkAfter = ctx60.apiGetReservationDetail(jp60, kChk).detail;
@@ -3677,7 +3686,7 @@ function paneHidden(document, key) {
           doc61.querySelector('[data-pending="STS JP"]').value);
     check('押しただけではまだ保存されない（未保存の変更として持つ）',
           ctx61.apiGetReservationDetail(jp61, k61).detail['STS JP'] === 'OK');
-    doc61.querySelector('.quick-commit-btn').click();
+    doc61.getElementById('sticky-commit').click();
     await settle(); await settle(); await settle();
     check('送信するとSTS(JP側)がDCになる',
           ctx61.apiGetReservationDetail(jp61, k61).detail['STS JP'] === 'DC');
@@ -3732,7 +3741,7 @@ function paneHidden(document, key) {
     uploadCb.checked = true;
     uploadCb.dispatchEvent(new dom61.window.Event('change'));
     await settle();
-    doc61.querySelector('.quick-commit-btn').click();
+    doc61.getElementById('sticky-commit').click();
     await settle(); await settle(); await settle();
     const afterUp61 = ctx61.apiGetReservationDetail(jp61, k61).detail;
     check('現地支店がチェックして送信すると「済」になる', afterUp61['撮影データアップ済み'] === '済',
@@ -3842,7 +3851,7 @@ function paneHidden(document, key) {
     reasonTa.value = 'お客様のご都合';
     reasonTa.dispatchEvent(new dom62.window.Event('change'));
     await settle();
-    doc62.querySelector('.quick-commit-btn').click();
+    doc62.getElementById('sticky-commit').click();
     await settle(); await settle(); await settle();
     const after62 = ctx62.apiGetReservationDetail(jp62, k62).detail;
     check('送信するとキャンセル依頼（CR）になる', after62['STS JP'] === 'CR', String(after62['STS JP']));
@@ -3886,7 +3895,7 @@ function paneHidden(document, key) {
     // --- 「日付を変更する」を押して送信すると、現地がまた希望日に回答できる（項目101⑤の流れ） ---
     doc62.querySelector('[data-change-after-fix="DC"]').click();
     await settle();
-    doc62.querySelector('.quick-commit-btn').click();
+    doc62.getElementById('sticky-commit').click();
     await settle(); await settle(); await settle();
     const dc62 = ctx62.apiGetReservationDetail(jp62, k62b).detail;
     check('日付変更にすると希望日のSTSが回答待ちに戻る（現地がまた答えられる）',
@@ -4033,9 +4042,9 @@ function paneHidden(document, key) {
     const planCard = doc65.querySelector('.plan-option-card');
     check('プラン明細のカードの中に「キャンセルする」ボタンがある',
           !!planCard.querySelector('[data-change-after-fix="CR"]'));
-    check('「キャンセルする」ボタンのすぐ下（同じカードの中）に送信ボタンがある',
-          !!planCard.querySelector('.quick-commit-btn'));
-    check('保存のみボタンも一緒に出る', !!planCard.querySelector('.quick-save-btn'));
+    // ★仕様変更（項目112）：複製していた送信ボタンは廃止し、画面下端に固定した操作バーへ一本化した。
+    check('画面内に複製された送信ボタンは残っていない',
+          doc65.querySelectorAll('.quick-commit-btn, .quick-save-btn').length === 0);
 
     // 実際にキャンセルボタンを押して、その場にある送信ボタンで送信できることを確認する
     planCard.querySelector('[data-change-after-fix="CR"]').click();
@@ -4044,7 +4053,7 @@ function paneHidden(document, key) {
     reasonTa.value = 'お客様都合';
     reasonTa.dispatchEvent(new dom65.window.Event('change'));
     await settle();
-    planCard.querySelector('.quick-commit-btn').click();
+    doc65.getElementById('sticky-commit').click();
     await settle(); await settle(); await settle();
     check('プラン明細内の送信ボタンからでもキャンセル依頼を送信できる',
           ctx65.apiGetReservationDetail(jp65, k65).detail['STS JP'] === 'CR');
@@ -4056,11 +4065,10 @@ function paneHidden(document, key) {
     const planCard2 = doc65.querySelector('.plan-option-card');
     check('確定済みの案件にも「日付を変更する」ボタンがある',
           !!planCard2.querySelector('[data-change-after-fix="DC"]'));
-    check('そのすぐ下（同じカードの中）に送信ボタンがある',
-          !!planCard2.querySelector('.quick-commit-btn'));
+    check('下端の操作バーから送信できる', !!doc65.getElementById('sticky-commit'));
     planCard2.querySelector('[data-change-after-fix="DC"]').click();
     await settle();
-    planCard2.querySelector('.quick-commit-btn').click();
+    doc65.getElementById('sticky-commit').click();
     await settle(); await settle(); await settle();
     check('プラン明細内の送信ボタンから日付変更も送信できる',
           ctx65.apiGetReservationDetail(jp65, k65b).detail['STS JP'] === 'DC');
@@ -4074,8 +4082,7 @@ function paneHidden(document, key) {
     await settle(); await settle();
     const branchPlanCard = doc65.querySelector('.plan-option-card');
     check('現地支店の画面ではキャンセル等のボタンは出ない', !branchPlanCard.querySelector('[data-change-after-fix]'));
-    check('現地支店の画面ではプラン明細内に複製の送信ボタンも出ない（不要なため）',
-          !branchPlanCard.querySelector('.quick-commit-btn'));
+    check('現地支店の画面でも複製の送信ボタンは無い', !branchPlanCard.querySelector('.quick-commit-btn'));
 
     // --- 店舗の画面：同じ場所に理由欄・送信ボタンが出て、送信できる ---
     doc65.getElementById('nav-logout').click();
@@ -4095,8 +4102,7 @@ function paneHidden(document, key) {
     const shopPlanCard = doc65.querySelector('.plan-option-card');
     check('店舗の画面にも「キャンセルする」ボタンがある',
           !!shopPlanCard.querySelector('[data-change-after-fix="CR"]'));
-    check('店舗の画面でもそのすぐ下（同じカードの中）に送信ボタンがある',
-          !!shopPlanCard.querySelector('.quick-commit-btn'));
+    check('店舗の画面でも下端の操作バーから送信できる', !!doc65.getElementById('sticky-commit'));
     shopPlanCard.querySelector('[data-change-after-fix="CR"]').click();
     await settle();
     check('店舗の画面でも押すとキャンセル理由の欄がすぐ下に開く（希望日一覧より前）',
@@ -4105,7 +4111,7 @@ function paneHidden(document, key) {
     shopReasonTa.value = '店舗側の都合';
     shopReasonTa.dispatchEvent(new dom65.window.Event('change'));
     await settle();
-    shopPlanCard.querySelector('.quick-commit-btn').click();
+    doc65.getElementById('sticky-commit').click();
     await settle(); await settle(); await settle();
     check('店舗の画面のプラン明細内の送信ボタンからもキャンセル依頼を送信できる',
           ctx65.apiGetReservationDetail(shop65, shopCase.kanriNo).detail['STS JP'] === 'CR');
@@ -4205,6 +4211,64 @@ function paneHidden(document, key) {
     await settle();
     check('店舗の画面にも「パスワード変更」ボタンがある',
           !doc67.getElementById('nav-password').classList.contains('hidden'));
+  }
+
+  // ---------------------------------------------------------------
+  section('U68. 【改善】用語の説明・店舗の新規依頼フォームの作り直し（項目112）');
+  {
+    const ctx68 = makeServer();
+    const dom68 = await openApp(ctx68);
+    const doc68 = dom68.window.document;
+
+    // --- 伝わりにくい3つのコードにだけ説明が付く（他は現場で通じているのでそのまま） ---
+    await login(dom68, 'KANTO', 'CHANGE-ME-KANTO');
+    await settle();
+    [...doc68.querySelectorAll('#reservation-table-body tr')][0].click();
+    await settle(); await settle();
+    const opts68 = [...doc68.querySelectorAll('select option')].map(o => o.textContent.trim());
+    check('手配課の選択肢に「CHK（空き確認）」が出る', opts68.includes('CHK（空き確認）'));
+    check('手配課の選択肢に「DC（日付変更）」が出る', opts68.includes('DC（日付変更）'));
+    check('手配課の選択肢に「PC（プラン・式場変更）」が出る', opts68.includes('PC（プラン・式場変更）'));
+    // 現場で通じているコードには説明を足さない（画面が文字で埋まらないようにするため）
+    check('RQ・OK・FNには余計な説明を足していない',
+          opts68.includes('RQ') && opts68.includes('OK') && opts68.includes('FN'));
+
+    // --- 店舗の新規依頼フォーム ---
+    doc68.getElementById('nav-logout').click();
+    await settle();
+    await login(dom68, 'SHOP1', 'CHANGE-ME-SHOP1');
+    await settle();
+    doc68.getElementById('nav-shop-new').click();
+    await settle();
+
+    const formEl = doc68.getElementById('view-shop-new');
+    const inputs68 = [...formEl.querySelectorAll('input,select,textarea')].filter(el => el.type !== 'hidden');
+    // 見出しとの結びつき方は3通りある（for属性／labelで囲む／aria-labelを付ける）。
+    // どれか1つでも成立していれば、見出しをクリックしてその欄へ移動でき、読み上げも対応が取れる。
+    const tied68 = inputs68.filter(el =>
+      (el.id && formEl.querySelector(`label[for="${el.id}"]`)) || el.closest('label') || el.getAttribute('aria-label'));
+    check('すべての入力欄が見出しと結びついている（見出しをクリックしてその欄へ移動できる）',
+          inputs68.length > 0 && tied68.length === inputs68.length,
+          `${tied68.length} / ${inputs68.length}`);
+    check('まとまりごとの見出しがある', formEl.querySelectorAll('h3').length >= 5,
+          String(formEl.querySelectorAll('h3').length));
+    check('必須の欄にしるしが付いている', formEl.querySelectorAll('.req').length >= 5,
+          String(formEl.querySelectorAll('.req').length));
+    check('第三〜第五希望は既定で折りたたまれている',
+          [...formEl.querySelectorAll('details summary')].some(s => s.textContent.includes('第三〜第五希望')));
+
+    // --- 足りない欄をその場で示す ---
+    doc68.getElementById('shop-new-submit').click();
+    await settle();
+    const invalid68 = formEl.querySelector('.field-invalid');
+    check('必須を空のまま送信すると、足りない欄が示される', !!invalid68);
+    check('示されるのはチャレンジ番号の欄', invalid68 && invalid68.id === 'shop-new-challengeno',
+          invalid68 ? invalid68.id : 'なし');
+    check('その欄がすぐ入力できる状態になる', doc68.activeElement === invalid68);
+    // 直すとしるしは消える
+    invalid68.value = 'ABCDE123456';
+    invalid68.dispatchEvent(new dom68.window.Event('input'));
+    check('入力し直すとしるしが消える', !invalid68.classList.contains('field-invalid'));
   }
 
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);

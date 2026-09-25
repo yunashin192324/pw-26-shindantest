@@ -247,149 +247,268 @@
           下の「希望日ごとのプラン」欄（希望日①・②…それぞれの右側）で、希望日ごとに違う支店のプランを
           選ぶだけでOKです。送信すると支店ごとに自動で分けて登録されます。
         </div>
-        <label>該当の手配課</label>
-        <select id="shop-new-team"></select>
-        <label>新規作成時のSTS(JP側)</label>
-        <!-- ★要件（項目101）：ここは「選ぶ」形のプルダウンではなく、チェックして選ぶ形にする。
-             RQとCHKは同時には成り立たない（どちらか一方）ので、両方にチェックが入らない
-             ラジオ形式のチェック欄にしている。 -->
-        <div id="shop-new-initial-status-group" class="status-check-group">
-          <label class="checkbox-label"><input type="radio" name="shop-new-initial-status-radio" value="RQ" checked> RQ（予約依頼）</label>
-          <label class="checkbox-label"><input type="radio" name="shop-new-initial-status-radio" value="CHK"> CHK（空き確認のみ）</label>
+        <!-- ★要件（項目112）：以前はラベルと入力欄が上から順に1列で並ぶだけで、
+             41個の欄が2,700pxにわたって続いていた。欄の幅も内容に関わらず全て画面幅いっぱいで、
+             11桁の番号も氏名も同じ幅だったため「何を入れる欄か」の手がかりが無かった。
+             ①依頼の種類 ②お客様情報 ③希望日 ④オプション ⑤備考 のまとまりに分け、
+             2列に並べ、欄の幅を内容に合わせている。見出しは for でそれぞれの欄と結びつけ、
+             見出しの文字をクリックしてもその欄に移動できるようにした。 -->
+        <div class="section-card">
+          <h3>① 依頼の種類</h3>
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="shop-new-team">該当の手配課</label>
+              <select id="shop-new-team"></select>
+            </div>
+            <div class="form-field">
+              <label id="shop-new-initial-status-label">新規作成時のSTS(JP側)</label>
+              <!-- ★要件（項目101）：ここは「選ぶ」形のプルダウンではなく、チェックして選ぶ形にする。
+                   RQとCHKは同時には成り立たない（どちらか一方）ので、両方にチェックが入らない
+                   ラジオ形式のチェック欄にしている。 -->
+              <div id="shop-new-initial-status-group" class="status-check-group" role="radiogroup" aria-labelledby="shop-new-initial-status-label">
+                <label class="checkbox-label"><input type="radio" name="shop-new-initial-status-radio" value="RQ" checked> RQ（予約依頼）</label>
+                <label class="checkbox-label"><input type="radio" name="shop-new-initial-status-radio" value="CHK"> CHK（空き確認のみ）</label>
+              </div>
+            </div>
+          </div>
+          <input type="hidden" id="shop-new-initial-status" value="RQ">
         </div>
-        <input type="hidden" id="shop-new-initial-status" value="RQ">
-        <label>チャレンジ番号（必須・英数字11桁）</label>
-        <input id="shop-new-challengeno" type="text" placeholder="例）14126000123" maxlength="11">
-        <label>新郎姓（ローマ字・必須・大文字で入力）</label>
-        <input id="shop-new-groom-last" type="text" placeholder="例）YAMADA" style="text-transform:uppercase;">
-        <label>新郎名（ローマ字・必須・大文字で入力）</label>
-        <input id="shop-new-groom" type="text" placeholder="例）TARO" style="text-transform:uppercase;">
-        <label>新婦姓（ローマ字・必須・大文字で入力）</label>
-        <input id="shop-new-bride-last" type="text" placeholder="例）YAMADA" style="text-transform:uppercase;">
-        <label>新婦名（ローマ字・必須・大文字で入力）</label>
-        <input id="shop-new-bride" type="text" placeholder="例）HANAKO" style="text-transform:uppercase;">
-        <div class="field-group-hint">下記はFN確定までに要入力</div>
-        <label>新郎年齢（※ISWのみ必要）</label>
-        <input id="shop-new-groom-age" type="number" min="0" placeholder="任意入力">
-        <label>新婦年齢（※ISWのみ必要）</label>
-        <input id="shop-new-bride-age" type="number" min="0" placeholder="任意入力">
-        <!-- ★要件変更：案件全体の「プラン」単独欄は廃止した（下の希望日ごとのプラン欄と
-             二重管理になっていたため。案件全体のプラン名は、確定した希望日のプランが
-             自動で反映される＝Code.gsのapplyHopeStatusCascade_・apiShopCreateRequest参照）。
-             ★要件：希望日ごとに時間帯（AM/PM。支店マスタの「希望日時間帯表示」がONの支店のみ）と
-             プラン（複数プラン希望）も入力できるようにする。既存案件の詳細画面と同じ考え方。
-             ★要件変更：希望日ごとのプランは、この案件の依頼先支店（都市）だけでなく全支店を
-             横断して選べる（例：第一希望はロンドン支店のロンドンフォト、第二希望はローマ支店の
-             ローマフォト、のように支店をまたいだ複数プラン希望に対応するため）。
-             ★仕様変更：フォーム上部の「支店（都市）」単独選択欄を廃止し、希望日（第一希望）の
-             プランで基準支店を自動的に決めるようにした（onShopNewHopePlan1Change参照）。
-             ★要件変更：セール名・準備場所は、これまで案件全体で1つずつの単独欄だったが、
-             希望日ごとに違う支店のプランを選べるようになったため、希望日ごとのプラン欄の
-             直下（撮影希望場所のすぐ上）にそれぞれ独立して置くようにした。準備場所は、
-             その希望日のプランの提供元支店がイタリア（ローマ）の場合だけ表示する。 -->
-        <label>希望日（第一希望）</label>
-        <div class="shop-new-hope-row">
-          <input id="shop-new-hope1" type="date">
-          <select id="shop-new-hopetime1" class="shop-new-hopetime hidden"><option value="">-</option><option value="AM">AM</option><option value="PM">PM</option></select>
-          <select id="shop-new-hopeplan1"><option value="">プラン未設定</option></select>
+
+        <div class="section-card">
+          <h3>② お客様情報</h3>
+          <div class="form-grid">
+            <div class="form-field wide">
+              <label for="shop-new-challengeno">チャレンジ番号 <span class="req">必須</span></label>
+              <input id="shop-new-challengeno" class="w-short" type="text" placeholder="例）14126000123" maxlength="11">
+              <span class="field-note">英数字11桁</span>
+            </div>
+            <div class="form-field">
+              <label for="shop-new-groom-last">新郎姓（ローマ字） <span class="req">必須</span></label>
+              <input id="shop-new-groom-last" type="text" placeholder="例）YAMADA" style="text-transform:uppercase;">
+            </div>
+            <div class="form-field">
+              <label for="shop-new-groom">新郎名（ローマ字） <span class="req">必須</span></label>
+              <input id="shop-new-groom" type="text" placeholder="例）TARO" style="text-transform:uppercase;">
+            </div>
+            <div class="form-field">
+              <label for="shop-new-bride-last">新婦姓（ローマ字） <span class="req">必須</span></label>
+              <input id="shop-new-bride-last" type="text" placeholder="例）YAMADA" style="text-transform:uppercase;">
+            </div>
+            <div class="form-field">
+              <label for="shop-new-bride">新婦名（ローマ字） <span class="req">必須</span></label>
+              <input id="shop-new-bride" type="text" placeholder="例）HANAKO" style="text-transform:uppercase;">
+            </div>
+            <div class="field-group-hint">下記はFN確定までに要入力</div>
+            <div class="form-field">
+              <label for="shop-new-groom-age">新郎年齢（※ISWのみ必要）</label>
+              <input id="shop-new-groom-age" class="w-short" type="number" min="0" placeholder="任意入力">
+            </div>
+            <div class="form-field">
+              <label for="shop-new-bride-age">新婦年齢（※ISWのみ必要）</label>
+              <input id="shop-new-bride-age" class="w-short" type="number" min="0" placeholder="任意入力">
+            </div>
+          </div>
         </div>
-        <label>セール名</label>
-        <select id="shop-new-sale"><option value="">未設定</option></select>
-        <div id="shop-new-prep-block" class="hidden">
-          <label>準備場所（ローマの場合は選択）</label>
-          <select id="shop-new-prep"><option value="">-</option></select>
+
+        <div class="section-card">
+          <h3>③ 希望日</h3>
+          <!-- ★要件変更：案件全体の「プラン」単独欄は廃止した（希望日ごとのプラン欄と
+               二重管理になっていたため。案件全体のプラン名は、確定した希望日のプランが
+               自動で反映される＝Code.gsのapplyHopeStatusCascade_・apiShopCreateRequest参照）。
+               希望日ごとのプランは全支店を横断して選べる（支店をまたいだ複数プラン希望に対応）。
+               セール名・準備場所も希望日ごとに持つ。準備場所はその希望日のプランの提供元支店が
+               イタリア（ローマ）の場合だけ表示する。 -->
+          <div class="hope-block">
+            <div class="hope-block-title">第一希望 <span class="req">必須</span></div>
+            <div class="form-grid">
+              <div class="form-field">
+                <label for="shop-new-hope1">希望日</label>
+                <div class="shop-new-hope-row">
+                  <input id="shop-new-hope1" type="date">
+                  <select id="shop-new-hopetime1" class="shop-new-hopetime hidden" aria-label="時間帯（第一希望）"><option value="">-</option><option value="AM">AM</option><option value="PM">PM</option></select>
+                </div>
+              </div>
+              <div class="form-field">
+                <label for="shop-new-hopeplan1">プラン</label>
+                <select id="shop-new-hopeplan1"><option value="">プラン未設定</option></select>
+              </div>
+              <div class="form-field">
+                <label for="shop-new-sale">セール名</label>
+                <select id="shop-new-sale"><option value="">未設定</option></select>
+              </div>
+              <div class="form-field hidden" id="shop-new-prep-block">
+                <label for="shop-new-prep">準備場所（ローマの場合は選択）</label>
+                <select id="shop-new-prep"><option value="">-</option></select>
+              </div>
+              <div class="form-field wide">
+                <label for="shop-new-location">撮影希望場所</label>
+                <div id="shop-new-location-wrap">
+                  <input id="shop-new-location" type="text" list="shop-new-location-datalist" placeholder="希望日①のプランを選ぶと候補が出ます">
+                  <datalist id="shop-new-location-datalist"></datalist>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="hope-block">
+            <div class="hope-block-title">第二希望<span class="field-note">（任意）</span></div>
+            <div class="form-grid">
+              <div class="form-field">
+                <label for="shop-new-hope2">希望日</label>
+                <div class="shop-new-hope-row">
+                  <input id="shop-new-hope2" type="date">
+                  <select id="shop-new-hopetime2" class="shop-new-hopetime hidden" aria-label="時間帯（第二希望）"><option value="">-</option><option value="AM">AM</option><option value="PM">PM</option></select>
+                </div>
+              </div>
+              <div class="form-field">
+                <label for="shop-new-hopeplan2">プラン</label>
+                <select id="shop-new-hopeplan2"><option value="">プラン未設定</option></select>
+              </div>
+              <div class="form-field">
+                <label for="shop-new-hopesale2">セール名</label>
+                <select id="shop-new-hopesale2"><option value="">未設定</option></select>
+              </div>
+              <div class="form-field hidden" id="shop-new-hopeprep-block2">
+                <label for="shop-new-hopeprep2">準備場所（第二希望・ローマの場合は選択）</label>
+                <select id="shop-new-hopeprep2"><option value="">-</option></select>
+              </div>
+              <div class="form-field wide">
+                <label for="shop-new-hopelocation2">撮影希望場所</label>
+                <div id="shop-new-hopelocation-wrap2">
+                  <input id="shop-new-hopelocation2" type="text" list="shop-new-hopelocation-datalist2" placeholder="希望日②のプランを選ぶと候補が出ます">
+                  <datalist id="shop-new-hopelocation-datalist2"></datalist>
+                </div>
+              </div>
+            </div>
+          </div>
+          <details class="hope-collapse">
+            <summary>第三〜第五希望も入力する（任意）</summary>
+          <div class="hope-block">
+              <div class="hope-block-title">第三希望<span class="field-note">（任意）</span></div>
+              <div class="form-grid">
+                <div class="form-field">
+                  <label for="shop-new-hope3">希望日</label>
+                  <div class="shop-new-hope-row">
+                    <input id="shop-new-hope3" type="date">
+                    <select id="shop-new-hopetime3" class="shop-new-hopetime hidden" aria-label="時間帯（第三希望）"><option value="">-</option><option value="AM">AM</option><option value="PM">PM</option></select>
+                  </div>
+                </div>
+                <div class="form-field">
+                  <label for="shop-new-hopeplan3">プラン</label>
+                  <select id="shop-new-hopeplan3"><option value="">プラン未設定</option></select>
+                </div>
+                <div class="form-field">
+                  <label for="shop-new-hopesale3">セール名</label>
+                  <select id="shop-new-hopesale3"><option value="">未設定</option></select>
+                </div>
+                <div class="form-field hidden" id="shop-new-hopeprep-block3">
+                  <label for="shop-new-hopeprep3">準備場所（第三希望・ローマの場合は選択）</label>
+                  <select id="shop-new-hopeprep3"><option value="">-</option></select>
+                </div>
+                <div class="form-field wide">
+                  <label for="shop-new-hopelocation3">撮影希望場所</label>
+                  <div id="shop-new-hopelocation-wrap3">
+                    <input id="shop-new-hopelocation3" type="text" list="shop-new-hopelocation-datalist3" placeholder="希望日③のプランを選ぶと候補が出ます">
+                    <datalist id="shop-new-hopelocation-datalist3"></datalist>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="hope-block">
+              <div class="hope-block-title">第四希望<span class="field-note">（任意）</span></div>
+              <div class="form-grid">
+                <div class="form-field">
+                  <label for="shop-new-hope4">希望日</label>
+                  <div class="shop-new-hope-row">
+                    <input id="shop-new-hope4" type="date">
+                    <select id="shop-new-hopetime4" class="shop-new-hopetime hidden" aria-label="時間帯（第四希望）"><option value="">-</option><option value="AM">AM</option><option value="PM">PM</option></select>
+                  </div>
+                </div>
+                <div class="form-field">
+                  <label for="shop-new-hopeplan4">プラン</label>
+                  <select id="shop-new-hopeplan4"><option value="">プラン未設定</option></select>
+                </div>
+                <div class="form-field">
+                  <label for="shop-new-hopesale4">セール名</label>
+                  <select id="shop-new-hopesale4"><option value="">未設定</option></select>
+                </div>
+                <div class="form-field hidden" id="shop-new-hopeprep-block4">
+                  <label for="shop-new-hopeprep4">準備場所（第四希望・ローマの場合は選択）</label>
+                  <select id="shop-new-hopeprep4"><option value="">-</option></select>
+                </div>
+                <div class="form-field wide">
+                  <label for="shop-new-hopelocation4">撮影希望場所</label>
+                  <div id="shop-new-hopelocation-wrap4">
+                    <input id="shop-new-hopelocation4" type="text" list="shop-new-hopelocation-datalist4" placeholder="希望日④のプランを選ぶと候補が出ます">
+                    <datalist id="shop-new-hopelocation-datalist4"></datalist>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="hope-block">
+              <div class="hope-block-title">第五希望<span class="field-note">（任意）</span></div>
+              <div class="form-grid">
+                <div class="form-field">
+                  <label for="shop-new-hope5">希望日</label>
+                  <div class="shop-new-hope-row">
+                    <input id="shop-new-hope5" type="date">
+                    <select id="shop-new-hopetime5" class="shop-new-hopetime hidden" aria-label="時間帯（第五希望）"><option value="">-</option><option value="AM">AM</option><option value="PM">PM</option></select>
+                  </div>
+                </div>
+                <div class="form-field">
+                  <label for="shop-new-hopeplan5">プラン</label>
+                  <select id="shop-new-hopeplan5"><option value="">プラン未設定</option></select>
+                </div>
+                <div class="form-field">
+                  <label for="shop-new-hopesale5">セール名</label>
+                  <select id="shop-new-hopesale5"><option value="">未設定</option></select>
+                </div>
+                <div class="form-field hidden" id="shop-new-hopeprep-block5">
+                  <label for="shop-new-hopeprep5">準備場所（第五希望・ローマの場合は選択）</label>
+                  <select id="shop-new-hopeprep5"><option value="">-</option></select>
+                </div>
+                <div class="form-field wide">
+                  <label for="shop-new-hopelocation5">撮影希望場所</label>
+                  <div id="shop-new-hopelocation-wrap5">
+                    <input id="shop-new-hopelocation5" type="text" list="shop-new-hopelocation-datalist5" placeholder="希望日⑤のプランを選ぶと候補が出ます">
+                    <datalist id="shop-new-hopelocation-datalist5"></datalist>
+                  </div>
+                </div>
+              </div>
+            </div>
+  
+          </details>
         </div>
-        <label>撮影希望場所</label>
-        <div id="shop-new-location-wrap">
-          <input id="shop-new-location" type="text" list="shop-new-location-datalist" placeholder="希望日①のプランを選ぶと候補が出ます">
-          <datalist id="shop-new-location-datalist"></datalist>
+
+        <div class="section-card">
+          <h3>④ オプション</h3>
+          <p class="hint-text">任意・最大10件。候補から選ぶことも、自由に入力することもできます。</p>
+          <div class="form-grid">
+            <div class="form-field"><label for="shop-new-option1">オプション1</label><input id="shop-new-option1" list="shop-new-option-datalist" placeholder="（未使用）"></div>
+            <div class="form-field"><label for="shop-new-option2">オプション2</label><input id="shop-new-option2" list="shop-new-option-datalist" placeholder="（未使用）"></div>
+            <div class="form-field"><label for="shop-new-option3">オプション3</label><input id="shop-new-option3" list="shop-new-option-datalist" placeholder="（未使用）"></div>
+            <div class="form-field"><label for="shop-new-option4">オプション4</label><input id="shop-new-option4" list="shop-new-option-datalist" placeholder="（未使用）"></div>
+            <div class="form-field"><label for="shop-new-option5">オプション5</label><input id="shop-new-option5" list="shop-new-option-datalist" placeholder="（未使用）"></div>
+          </div>
+          <details class="hope-collapse">
+            <summary>オプション6〜10（ふだんは折りたたみ）</summary>
+            <div class="form-grid">
+              <div class="form-field"><label for="shop-new-option6">オプション6</label><input id="shop-new-option6" list="shop-new-option-datalist" placeholder="（未使用）"></div>
+              <div class="form-field"><label for="shop-new-option7">オプション7</label><input id="shop-new-option7" list="shop-new-option-datalist" placeholder="（未使用）"></div>
+              <div class="form-field"><label for="shop-new-option8">オプション8</label><input id="shop-new-option8" list="shop-new-option-datalist" placeholder="（未使用）"></div>
+              <div class="form-field"><label for="shop-new-option9">オプション9</label><input id="shop-new-option9" list="shop-new-option-datalist" placeholder="（未使用）"></div>
+              <div class="form-field"><label for="shop-new-option10">オプション10</label><input id="shop-new-option10" list="shop-new-option-datalist" placeholder="（未使用）"></div>
+            </div>
+          </details>
+          <datalist id="shop-new-option-datalist"></datalist>
         </div>
-        <label>希望日（第二希望）</label>
-        <div class="shop-new-hope-row">
-          <input id="shop-new-hope2" type="date">
-          <select id="shop-new-hopetime2" class="shop-new-hopetime hidden"><option value="">-</option><option value="AM">AM</option><option value="PM">PM</option></select>
-          <select id="shop-new-hopeplan2"><option value="">プラン未設定</option></select>
+
+        <div class="section-card">
+          <h3>⑤ 備考</h3>
+          <div class="form-field">
+            <label for="shop-new-remarks">備考</label>
+            <textarea id="shop-new-remarks" placeholder="任意入力"></textarea>
+          </div>
         </div>
-        <label>セール名（第二希望）</label>
-        <select id="shop-new-hopesale2"><option value="">未設定</option></select>
-        <div id="shop-new-hopeprep-block2" class="hidden">
-          <label>準備場所（第二希望・ローマの場合は選択）</label>
-          <select id="shop-new-hopeprep2"><option value="">-</option></select>
-        </div>
-        <label>撮影希望場所（第二希望）</label>
-        <div id="shop-new-hopelocation-wrap2">
-          <input id="shop-new-hopelocation2" type="text" list="shop-new-hopelocation-datalist2" placeholder="希望日②のプランを選ぶと候補が出ます">
-          <datalist id="shop-new-hopelocation-datalist2"></datalist>
-        </div>
-        <label>希望日（第三希望）</label>
-        <div class="shop-new-hope-row">
-          <input id="shop-new-hope3" type="date">
-          <select id="shop-new-hopetime3" class="shop-new-hopetime hidden"><option value="">-</option><option value="AM">AM</option><option value="PM">PM</option></select>
-          <select id="shop-new-hopeplan3"><option value="">プラン未設定</option></select>
-        </div>
-        <label>セール名（第三希望）</label>
-        <select id="shop-new-hopesale3"><option value="">未設定</option></select>
-        <div id="shop-new-hopeprep-block3" class="hidden">
-          <label>準備場所（第三希望・ローマの場合は選択）</label>
-          <select id="shop-new-hopeprep3"><option value="">-</option></select>
-        </div>
-        <label>撮影希望場所（第三希望）</label>
-        <div id="shop-new-hopelocation-wrap3">
-          <input id="shop-new-hopelocation3" type="text" list="shop-new-hopelocation-datalist3" placeholder="希望日③のプランを選ぶと候補が出ます">
-          <datalist id="shop-new-hopelocation-datalist3"></datalist>
-        </div>
-        <label>希望日（第四希望）</label>
-        <div class="shop-new-hope-row">
-          <input id="shop-new-hope4" type="date">
-          <select id="shop-new-hopetime4" class="shop-new-hopetime hidden"><option value="">-</option><option value="AM">AM</option><option value="PM">PM</option></select>
-          <select id="shop-new-hopeplan4"><option value="">プラン未設定</option></select>
-        </div>
-        <label>セール名（第四希望）</label>
-        <select id="shop-new-hopesale4"><option value="">未設定</option></select>
-        <div id="shop-new-hopeprep-block4" class="hidden">
-          <label>準備場所（第四希望・ローマの場合は選択）</label>
-          <select id="shop-new-hopeprep4"><option value="">-</option></select>
-        </div>
-        <label>撮影希望場所（第四希望）</label>
-        <div id="shop-new-hopelocation-wrap4">
-          <input id="shop-new-hopelocation4" type="text" list="shop-new-hopelocation-datalist4" placeholder="希望日④のプランを選ぶと候補が出ます">
-          <datalist id="shop-new-hopelocation-datalist4"></datalist>
-        </div>
-        <label>希望日（第五希望）</label>
-        <div class="shop-new-hope-row">
-          <input id="shop-new-hope5" type="date">
-          <select id="shop-new-hopetime5" class="shop-new-hopetime hidden"><option value="">-</option><option value="AM">AM</option><option value="PM">PM</option></select>
-          <select id="shop-new-hopeplan5"><option value="">プラン未設定</option></select>
-        </div>
-        <label>セール名（第五希望）</label>
-        <select id="shop-new-hopesale5"><option value="">未設定</option></select>
-        <div id="shop-new-hopeprep-block5" class="hidden">
-          <label>準備場所（第五希望・ローマの場合は選択）</label>
-          <select id="shop-new-hopeprep5"><option value="">-</option></select>
-        </div>
-        <label>撮影希望場所（第五希望）</label>
-        <div id="shop-new-hopelocation-wrap5">
-          <input id="shop-new-hopelocation5" type="text" list="shop-new-hopelocation-datalist5" placeholder="希望日⑤のプランを選ぶと候補が出ます">
-          <datalist id="shop-new-hopelocation-datalist5"></datalist>
-        </div>
-        <h3 style="margin-top:14px;">オプション（任意・最大10件・マスタ候補から選ぶか自由に入力できます）</h3>
-        <input id="shop-new-option1" list="shop-new-option-datalist" placeholder="（未使用）">
-        <input id="shop-new-option2" list="shop-new-option-datalist" placeholder="（未使用）">
-        <input id="shop-new-option3" list="shop-new-option-datalist" placeholder="（未使用）">
-        <input id="shop-new-option4" list="shop-new-option-datalist" placeholder="（未使用）">
-        <input id="shop-new-option5" list="shop-new-option-datalist" placeholder="（未使用）">
-        <details class="hope-collapse">
-          <summary>オプション6〜10（ふだんは折りたたみ）</summary>
-          <input id="shop-new-option6" list="shop-new-option-datalist" placeholder="（未使用）">
-          <input id="shop-new-option7" list="shop-new-option-datalist" placeholder="（未使用）">
-          <input id="shop-new-option8" list="shop-new-option-datalist" placeholder="（未使用）">
-          <input id="shop-new-option9" list="shop-new-option-datalist" placeholder="（未使用）">
-          <input id="shop-new-option10" list="shop-new-option-datalist" placeholder="（未使用）">
-        </details>
-        <datalist id="shop-new-option-datalist"></datalist>
-        <!-- ★要件：新規依頼フォームの一番下に備考欄を追加 -->
-        <label style="margin-top:14px;">備考</label>
-        <textarea id="shop-new-remarks" placeholder="任意入力"></textarea>
         <button id="shop-new-submit" class="primary-btn" style="margin-top:14px;">この内容で送信</button>
         <p id="shop-new-error" class="error-text hidden"></p>
         <!-- ★要件：送信後の案内はPC幅では画面中央に目立つモーダル状で表示する（success-banner-prominent。
@@ -469,6 +588,21 @@
     </main>
 
     <div id="toast" class="toast hidden"></div>
+
+    <!-- ★要件（項目112）：案件詳細は入力欄が多く縦に長いため、保存の操作をどこまでスクロールしても
+         押せるように画面下端へ固定する。以前は同じボタンの複製を画面内に5組ちりばめていたが、
+         それぞれが直前のまとまりだけを保存するように見え、かえって分かりにくかった（実際は
+         どれも画面全体を保存する）。複製はすべて廃止してこの1箇所にまとめている。
+         あわせて「未保存が何件あるか」をここに出す。以前この表示は画面のかなり下方に1箇所だけ
+         あり、上のほうを編集している人からは見えず、保存し忘れに気づけなかった。
+         未保存が0件のときは場所を取らないよう帯ごと隠す。 -->
+    <div id="sticky-actions" class="sticky-actions hidden">
+      <span id="sticky-actions-count" class="sticky-actions-count"></span>
+      <div class="sticky-actions-btns">
+        <button type="button" id="sticky-save-quiet" class="sticky-btn sticky-btn-sub">保存のみ（通知しない）</button>
+        <button type="button" id="sticky-commit" class="sticky-btn sticky-btn-main">変更を決定して送信</button>
+      </div>
+    </div>
 
     <!-- ★不具合修正：通知メールの送信に失敗したときの注意書き。トースト（2.6秒で消える）では
          見逃されるため、利用者が自分で閉じるまで消えない帯として画面上部に出す。 -->

@@ -25,8 +25,13 @@
   // ここでは値の範囲を絞らずSTATUS_CODESすべてから選べるようにする）
   // ★機能追加（拡張要望3章）：店舗が案件作成後に設定できるSTS(JP側)（Code.gsのSHOP_STATUS_TARGETSと一致）
   const SHOP_STATUS_TARGETS = ['RQ', 'FN', 'CR', 'DC', 'PC'];
+  // ★要件（項目112）：STSのコードのうち、現場で意味が伝わりにくいのは CHK・DC・PC の3つだけ
+  // （RQ・OK・FN・CR・CW・UC・CF・ST は現場でそのまま通じている）。この3つにだけ説明を添える。
+  // すべてのコードに説明を付けると画面が文字で埋まり、かえって読みにくくなるため対象を絞っている。
+  const STATUS_LABELS_ = { CHK: 'CHK（空き確認）', DC: 'DC（日付変更）', PC: 'PC（プラン・式場変更）' };
+  function statusLabel_(code) { return STATUS_LABELS_[code] || code; }
   const SHOP_STATUS_LABELS = { RQ: 'RQ（予約依頼）', FN: 'FN（最終確定）', CR: 'CR（キャンセル依頼）',
-    DC: 'DC（日付変更依頼）', PC: 'PC（プラン・式場変更依頼）' };
+    DC: STATUS_LABELS_.DC, PC: STATUS_LABELS_.PC, CHK: STATUS_LABELS_.CHK };
   // ★要件：店舗がプラン・オプションのSTSのすぐ近くから、現地支店へ急ぎの回答を求められるように
   // する「PUSH」ボタンの固定文面（急ぎで回答が欲しいことを伝えるためのボタン）
   const SHOP_PUSH_MESSAGE_TEXT = '【至急】ご回答をお願いいたします。恐れ入りますが、お早めのご確認・ご返信をお願いします。';
@@ -267,6 +272,8 @@
   function showView(name) {
     document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
     $('view-' + name).classList.remove('hidden');
+    // 案件詳細から離れたら下端の操作バーを消す（別の画面に残ると誤操作のもとになる）
+    updateStickyActions_();
   }
 
   function applyRoleUI() {
@@ -355,6 +362,10 @@
     $('nav-settings').addEventListener('click', openSettingsView);
     // ★機能追加（項目110）：ログインパスコードの自己変更
     $('nav-password').addEventListener('click', openPasswordView);
+    // ★要件（項目112）：下端に固定した保存バー。案件詳細を描き直しても消えないよう、
+    // 画面の外側にある要素として一度だけ配線する。
+    on_('sticky-commit', 'click', commitChangesWithMessage);
+    on_('sticky-save-quiet', 'click', saveQuiet);
     $('password-submit').addEventListener('click', submitPasswordChange);
     $('nav-logout').addEventListener('click', doLogout);
     // ★不具合修正：通知メール送信失敗の帯を閉じられるようにする
@@ -1381,7 +1392,6 @@
             <label>キャンセル理由（必須）</label>
             <textarea data-pending="キャンセル理由" placeholder="キャンセルの理由を入力してください">${escapeHtml(d['キャンセル理由'])}</textarea>
           </div>
-          ${changeButtonsHtmlShop ? quickActionsHtml_() : ''}
           <details class="hope-collapse" id="hope-collapse" ${hopeShouldExpandShop ? 'open' : ''}>
             <summary>${hopeShouldExpandShop ? '希望日一覧を表示中' : '希望日一覧－ふだんは折りたたみ表示です。開くと確認できます'}</summary>
             <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none;">
@@ -1499,12 +1509,6 @@
     on_('print-arrangement-btn', 'click', () => {
       if (typeof window.print === 'function') window.print();
     });
-    // ★要件（項目109）：キャンセル・日付変更・プラン変更ボタンのすぐ下に複製した送信ボタン
-    // （quickActionsHtml_）の配線。手配課・現地支店の画面（renderDetail）と同じクラス名で
-    // 配線しているので、対応する関数もそちらと共通（commitChangesWithMessage/saveQuiet）。
-    c.querySelectorAll('.quick-commit-btn').forEach(btn => btn.addEventListener('click', commitChangesWithMessage));
-    c.querySelectorAll('.quick-save-btn').forEach(btn => btn.addEventListener('click', saveQuiet));
-
     // ★要件：専用の「ステータス変更」欄は廃止し、プラン・各オプションの隣のSTS JPバッジ
     // （shopStatusCellで生成した<select>）から直接変更できるようにする。DC/PCがどれか1つでも
     // 選ばれていれば、共通の警告（チャージ規定の確認）を表示する。
@@ -1734,7 +1738,7 @@
       ? (() => {
           const codes = allowedValues || STATUS_CODES;
           const opts = ['<option value="">-</option>'].concat(
-            codes.map(c => `<option value="${c}" ${c === current ? 'selected' : ''}>${c}</option>`)
+            codes.map(c => `<option value="${c}" ${c === current ? 'selected' : ''}>${escapeHtml(statusLabel_(c))}</option>`)
           ).join('');
           return `<select data-pending="${fieldName}">${opts}</select>`;
         })()
@@ -1755,7 +1759,7 @@
     // STS(JP側)は依頼直後から必ずRQ等の値が入るため、この対象には含めない。
     const emptyLabel = chipClass === 'branch' ? '未確認' : '未設定';
     return `<span class="chip ${chipClass}" data-history-field="${escapeAttr(fieldName)}" data-history-target="${hid}"
-        style="cursor:pointer;font-weight:700;">${escapeHtml(current || emptyLabel)}</span>
+        style="cursor:pointer;font-weight:700;">${escapeHtml(statusLabel_(current) || emptyLabel)}</span>
       <div class="history-panel hidden" id="${hid}" style="width:100%;margin-top:4px;"></div>`;
   }
 
@@ -2005,19 +2009,6 @@
   // ★機能：メッセージタブに戻らなくても、その場でそのまま確定できるようにする「送信」ボタンの
   // 複製。「メッセージのみ送信」はメッセージ本文が必須なのでここには置かず、他の2択のみ複製する
   // （メッセージタブのmsg-inputは非表示でもDOM上には存在するため、入力済みならそのまま一緒に送信される）。
-  // ★要件（項目109）：手配課・現地支店・店舗いずれの画面でも共通で使うため、共有関数にした
-  // （以前はrenderDetail内だけのローカル変数だったため、店舗側からは使えなかった）。
-  function quickActionsHtml_() {
-    return `
-      <div class="section-card">
-        <div style="display:flex;flex-direction:column;gap:8px;">
-          <button type="button" class="send-btn quick-commit-btn" style="width:100%;">変更（＋メッセージ）を決定して送信</button>
-          <button type="button" class="send-btn quick-save-btn" style="width:100%;background:var(--color-muted);">保存のみ（通知しない）</button>
-        </div>
-        <p class="hint-text" style="margin-top:8px;">ここから直接確定できます（メッセージ欄に入力済みの内容があれば一緒に送られます）。</p>
-      </div>`;
-  }
-
   // ★要件（項目104）：キャンセルの入口を画面に用意する。これまでキャンセルは
   // プラン行のSTS(JP側)のプルダウンからCRを選ぶしか方法が無く、「予約リクエスト中で現地から
   // まだ回答が来ていないが、キャンセルしたい」ときにどう操作すればよいか分からなかった。
@@ -2420,9 +2411,6 @@
     const pendingCount = Object.keys(pendingChanges).length;
     const invoiceLabel = d.invoiceLabel || '請求番号';
 
-    // ★機能：メッセージタブに戻らなくても、予約内容・現地記入欄の下からそのまま確定できるようにする。
-    const quickActionsHtml = quickActionsHtml_();
-
     // ★機能：日本の手配課側のみが見る「日本記入欄」タブ。支店には一切表示しない（値もサーバーから届かない）。
     // 通常の3択（保存のみ／メッセージ／変更＋メッセージ）とは別に、変更した瞬間に単独で保存する
     // （支店に見える履歴・通知メールへ絶対に混ざらないようにするため）。
@@ -2460,7 +2448,6 @@
           </label>
           <p class="hint-text" style="margin-top:8px;">チェックする・選ぶ・入力すると即座に保存されます（フォトブリッジ登録・データアップロードは担当者名と日時が自動で記録されます）。</p>
         </div>
-        ${quickActionsHtml}
       </div>`;
 
     // ★要件：日本の支店（店舗）画面と同じフォーマットにする。押すと隠れていたタブが表示される
@@ -2572,7 +2559,6 @@
           </div>
         </div>
 
-        ${quickActionsHtml}
       </div>`;
 
     const reservationTabHtml = `
@@ -2624,7 +2610,6 @@
           ${cancelReasonBlockHtml_(d)}
           <!-- ★要件（項目109）：「キャンセルする」「日付を変更する」「プランを変更する」を押した
                あと、送信ボタンを探して画面を下までスクロールしなくて済むよう、すぐ下にも置く。 -->
-          ${changeButtonsHtml ? quickActionsHtml_() : ''}
           <details class="hope-collapse" id="hope-collapse" ${hopeShouldExpand ? 'open' : ''}>
             <summary>${hopeShouldExpand ? '希望日一覧を表示中' : '希望日一覧－ふだんは折りたたみ表示です。開くと確認・変更できます'}</summary>
             <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none;">
@@ -2681,7 +2666,6 @@
         <!-- ★要件（項目102）：メモ類はここではなく「拠点メモ」の区画に集約した
              （同じ欄が画面の複数箇所に出て分かりにくかったため）。 -->
 
-        ${quickActionsHtml}
       </div>`;
 
     // ★要件：現地記入欄は現地支店ならではの項目のため、「記入欄」セクション内の切替タブとして残す
@@ -2718,7 +2702,6 @@
           <div id="staff-conflict" class="conflict-box hidden"></div>
         </div>
 
-        ${quickActionsHtml}
       </div>`;
 
     // ★要件（項目101）：拠点ごとの書き込める履歴欄。クイックナビの1セクションとして独立させ、
@@ -2894,8 +2877,6 @@
       if (typeof window.print === 'function') window.print();
     });
     // ★機能：予約内容・現地記入欄タブ下部の複製ボタン（メッセージタブへ戻らず確定できるように）
-    c.querySelectorAll('.quick-commit-btn').forEach(btn => btn.addEventListener('click', commitChangesWithMessage));
-    c.querySelectorAll('.quick-save-btn').forEach(btn => btn.addEventListener('click', saveQuiet));
     // ★機能：日本記入欄（日本側のみ）。チェックした瞬間に単独で保存する（3択の対象外）
     c.querySelectorAll('[data-internal-flag]').forEach(el => {
       el.addEventListener('change', () => setInternalFlag(el.dataset.internalFlag, el.checked));
@@ -3112,11 +3093,28 @@
   }
 
   function updatePendingIndicator() {
+    // ★要件（項目112）：下端の操作バーは、画面内の表示（#pending-indicator）が
+    // 無い画面でも更新する必要があるため、早期returnより先に呼ぶ。
+    updateStickyActions_();
     const el = $('pending-indicator');
     if (!el) return;
     const n = Object.keys(pendingChanges).length;
     el.textContent = `未保存の変更: ${n}件（「予約内容」「現地記入欄」セクションでの入力を含みます）`;
     el.classList.toggle('hidden', n === 0);
+  }
+
+  // ★要件（項目112）：未保存の変更があるときだけ、画面下端に保存の操作バーを出す。
+  // 案件詳細以外の画面では、そこでの保存操作が無いので必ず隠す。
+  function updateStickyActions_() {
+    const bar = $('sticky-actions');
+    if (!bar) return;
+    const n = Object.keys(pendingChanges).length;
+    const detailView = $('view-detail');
+    const onDetail = !!detailView && !detailView.classList.contains('hidden');
+    const show = onDetail && n > 0;
+    bar.classList.toggle('hidden', !show);
+    document.body.classList.toggle('has-sticky-actions', show);
+    if (show) $('sticky-actions-count').textContent = `未保存の変更 ${n}件`;
   }
 
   function escapeHtml(s) {
@@ -3342,6 +3340,21 @@
   function showFieldError(id, msg) {
     $(id).textContent = msg;
     $(id).classList.remove('hidden');
+  }
+
+  // ★要件（項目112）：足りない欄を、その場で示す。以前は画面の一番下に文章が出るだけで、
+  // 利用者は「どの欄が足りないのか」を2,700pxのフォームの中から自分で探すことになっていた。
+  // 該当の欄まで移動し、枠を赤くし、入力できる状態にする。直したら赤は自動で消える。
+  function shopNewInvalid_(inputId, msg) {
+    document.querySelectorAll('#view-shop-new .field-invalid').forEach(el => el.classList.remove('field-invalid'));
+    showFieldError('shop-new-error', msg);
+    const el = $(inputId);
+    if (!el) return;
+    el.classList.add('field-invalid');
+    el.addEventListener('input', () => el.classList.remove('field-invalid'), { once: true });
+    el.addEventListener('change', () => el.classList.remove('field-invalid'), { once: true });
+    if (typeof el.scrollIntoView === 'function') el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (typeof el.focus === 'function') el.focus({ preventScroll: true });
   }
 
   // ---------- 新規依頼（店舗ロール専用。拡張要望2章） ----------
@@ -3585,21 +3598,21 @@
     // ★要件：オプションは最大10件（フリー入力）
     for (let i = 1; i <= 10; i++) payload['option' + i] = $('shop-new-option' + i).value.trim();
     // ★要件：チャレンジ番号は任意ではなく必須。英数字11桁固定（0やアルファベットから始まる場合もある）
-    if (!payload.challengeNo) { showFieldError('shop-new-error', 'チャレンジ番号を入力してください。'); return; }
+    if (!payload.challengeNo) { shopNewInvalid_('shop-new-challengeno', 'チャレンジ番号を入力してください。'); return; }
     if (!/^[A-Za-z0-9]{11}$/.test(payload.challengeNo)) {
-      showFieldError('shop-new-error', 'チャレンジ番号は英数字11桁で入力してください（例：14126000123）。'); return;
+      shopNewInvalid_('shop-new-challengeno', 'チャレンジ番号は英数字11桁で入力してください（例：14126000123）。'); return;
     }
     // ★要件変更：新郎新婦の姓・名は4項目とも必須（以前は新郎の名だけ必須だった）。
     // 大文字で保存する仕様のため、送信前にクライアント側でも大文字化しておく（表示との食い違い防止）。
     ['groomLastName', 'groomName', 'brideLastName', 'brideName'].forEach(k => { payload[k] = String(payload[k] || '').toUpperCase(); });
-    if (!payload.groomLastName) { showFieldError('shop-new-error', '新郎姓（ローマ字）を入力してください。'); return; }
-    if (!payload.groomName) { showFieldError('shop-new-error', '新郎名（ローマ字）を入力してください。'); return; }
-    if (!payload.brideLastName) { showFieldError('shop-new-error', '新婦姓（ローマ字）を入力してください。'); return; }
-    if (!payload.brideName) { showFieldError('shop-new-error', '新婦名（ローマ字）を入力してください。'); return; }
-    if (!payload.hope1) { showFieldError('shop-new-error', '希望日（第一希望）を入力してください。'); return; }
+    if (!payload.groomLastName) { shopNewInvalid_('shop-new-groom-last', '新郎姓（ローマ字）を入力してください。'); return; }
+    if (!payload.groomName) { shopNewInvalid_('shop-new-groom', '新郎名（ローマ字）を入力してください。'); return; }
+    if (!payload.brideLastName) { shopNewInvalid_('shop-new-bride-last', '新婦姓（ローマ字）を入力してください。'); return; }
+    if (!payload.brideName) { shopNewInvalid_('shop-new-bride', '新婦名（ローマ字）を入力してください。'); return; }
+    if (!payload.hope1) { shopNewInvalid_('shop-new-hope1', '希望日（第一希望）を入力してください。'); return; }
     // ★仕様変更：フォーム上部の「支店（都市）」単独選択欄を廃止したため、希望日（第一希望）の
     // プランで基準支店を決める。プラン未選択のままだと基準支店が定まらないため必須にする。
-    if (!payload.hopePlan1) { showFieldError('shop-new-error', '希望日（第一希望）のプランを選択してください。'); return; }
+    if (!payload.hopePlan1) { shopNewInvalid_('shop-new-hopeplan1', '希望日（第一希望）のプランを選択してください。'); return; }
     // ★不具合修正：送信ボタンに二重送信防止が無く、通信が終わる前に連打すると同じ内容の案件が
     // 複数作成されてしまっていた（「予約が複数できてしまう」「送信できたか分かりづらくて
     // 何度も押してしまう」）。送信中はボタンを無効化し、「送信中...」に文言を変えるだけでなく、
