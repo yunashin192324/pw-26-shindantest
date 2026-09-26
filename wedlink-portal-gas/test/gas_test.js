@@ -5256,14 +5256,42 @@ section('86. 【不具合修正】予約リクエスト中のキャンセル（�
         ctx.apiGetReservationDetail(jpToken, kDc).detail['撮影日FIX'] === '2027-10-21',
         String(ctx.apiGetReservationDetail(jpToken, kDc).detail['撮影日FIX']));
 
-  // --- プラン変更（PC）でも同じように希望日が回答待ちに戻る ---
+  // --- プラン変更（PC）は、確定している希望日だけを回答待ちに戻す（項目116） ---
+  // ★仕様変更：以前はDCと同じく希望日①〜⑤すべてを回答待ちに戻していたが、既に回答済み
+  // （UC）だった希望日まで開いてしまい「どれが本物の確定日か分からない」という指摘があった。
+  // 確定している1件だけを戻し、「変更後のプランをその希望日のプラン欄に指定して送る」という
+  // 1本の操作にした。
   const kPc = ctx.apiCreateReservation(jpToken, 'VIE', '01 Change Plan\n02 Bride\nRQ 2027/10/25\nRQ 2027/10/26').kanriNo;
   ctx.apiCommitChanges(vieToken, kPc, { '希望日① STS 支店': 'OK' }, '空いてます', 'JP');
+  const pcBefore = ctx.apiGetReservationDetail(jpToken, kPc).detail;
+  check('確定前：希望日②は自動でUC（回答済み）になっている', pcBefore['希望日② STS 支店'] === 'UC',
+        String(pcBefore['希望日② STS 支店']));
   ctx.apiCommitChanges(jpToken, kPc, { 'STS JP': 'PC' }, 'プランを変えたいです', 'BRANCH');
   const pcAfter = ctx.apiGetReservationDetail(jpToken, kPc).detail;
-  check('プラン変更でも希望日のSTSが回答待ちに戻る',
-        pcAfter['希望日① STS JP'] === 'RQ' && pcAfter['希望日② STS JP'] === 'RQ',
-        `${pcAfter['希望日① STS JP']}/${pcAfter['希望日② STS JP']}`);
+  check('プラン変更では、確定していた希望日①だけが回答待ちに戻る',
+        pcAfter['希望日① STS JP'] === 'RQ' && pcAfter['希望日① STS 支店'] === 'ST',
+        `${pcAfter['希望日① STS JP']}/${pcAfter['希望日① STS 支店']}`);
+  check('関係の無い希望日②は、UC（回答済み）のまま変わらない（開き直さない）',
+        pcAfter['希望日② STS JP'] === 'UC' && pcAfter['希望日② STS 支店'] === 'UC',
+        `${pcAfter['希望日② STS JP']}/${pcAfter['希望日② STS 支店']}`);
+  check('プラン変更の間も、元の撮影日FIXは消さない', pcAfter['撮影日FIX'] === '2027-10-25',
+        String(pcAfter['撮影日FIX']));
+
+  // 現地が、その希望日のプラン欄に入っている新しいプランのままOKを返せば、確定し直せる
+  ctx.apiCommitChanges(jpToken, kPc, { '希望日①プラン': 'プランB' }, '', 'BRANCH');
+  ctx.apiCommitChanges(vieToken, kPc, { '希望日① STS 支店': 'OK' }, '新プランで空いてます', 'JP');
+  const pcConfirmed = ctx.apiGetReservationDetail(jpToken, kPc).detail;
+  check('新しいプランのまま希望日①を確定し直せる', pcConfirmed['希望日① STS 支店'] === 'OK');
+  check('確定した新しいプランが案件全体のプラン名へ反映される', pcConfirmed['プラン名'] === 'プランB',
+        String(pcConfirmed['プラン名']));
+
+  // 確定している希望日が無い（異例）場合は、従来どおり全件を回答待ちに戻す
+  const kPcNoFixed = ctx.apiCreateReservation(jpToken, 'VIE', '01 No Fixed\n02 Bride\nRQ 2027/10/29\nRQ 2027/10/30').kanriNo;
+  ctx.apiSaveFieldsQuiet(jpToken, kPcNoFixed, { 'STS JP': 'PC' });
+  const pcNoFixedAfter = ctx.apiGetReservationDetail(jpToken, kPcNoFixed).detail;
+  check('確定している希望日が無いときは、念のため全件を回答待ちに戻す（フォールバック）',
+        pcNoFixedAfter['希望日① STS JP'] === 'RQ' && pcNoFixedAfter['希望日② STS JP'] === 'RQ',
+        `${pcNoFixedAfter['希望日① STS JP']}/${pcNoFixedAfter['希望日② STS JP']}`);
 
   // --- キャンセル依頼（CR）では希望日を戻さない（戻すと回答できるように見えてしまう） ---
   const kCrNoReset = ctx.apiCreateReservation(jpToken, 'VIE', '01 No Reset\n02 Bride\nRQ 2027/10/28').kanriNo;

@@ -1611,7 +1611,7 @@
     c.querySelectorAll('[data-memo-add]').forEach(btn => {
       btn.addEventListener('click', () => addMemo(btn.dataset.memoAdd));
     });
-    wireChangeAfterFixButtons_(c);
+    wireChangeAfterFixButtons_(c, d);
 
     // ★開いた時点で、自分宛の未読メッセージをまとめて既読にする（店舗向けには個別チェックUIを設けていない）
     (d.history || []).forEach(h => {
@@ -1623,7 +1623,7 @@
 
   // ★要件（項目101）：「日付を変更する」「プランを変更する」を押したときの動き。
   // STS(JP側)を DC／PC にして（まだ保存はしない＝未保存の変更として持つ）、希望日一覧を開く。
-  function wireChangeAfterFixButtons_(c) {
+  function wireChangeAfterFixButtons_(c, d) {
     c.querySelectorAll('[data-change-after-fix]').forEach(btn => {
       btn.addEventListener('click', () => {
         const target = btn.dataset.changeAfterFix;
@@ -1645,13 +1645,33 @@
           return;
         }
         const box = c.querySelector('#hope-collapse');
-        if (box) {
-          box.open = true;
-          if (typeof box.scrollIntoView === 'function') box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (box) box.open = true;
+
+        // ★要件（項目116）：PC（プラン変更）は、確定している希望日1件だけが変更対象になった
+        // （サーバー側のapplyHopeResetOnChangeRequest_参照）。以前は5つの希望日すべてが開いて
+        // 「どこに新しいプランを入れればいいか分からない」状態だったため、対象の行へ直接
+        // 案内する。まだ確定していない案件（確定日が無い）の場合は、これまでどおり一覧全体を
+        // 案内するだけにする（この場合はサーバー側も全件を回答待ちにするフォールバックになる）。
+        if (target === 'PC') {
+          const idx = confirmedHopeIndex_(d);
+          const hopeField = idx ? HOPE_FIELD_NAMES_[idx - 1] : '';
+          const planSelect = idx ? c.querySelector(`[data-pending="${hopeField}プラン"]`) : null;
+          const row = planSelect ? planSelect.closest('tr') : null;
+          if (row) {
+            c.querySelectorAll('.hope-target-row').forEach(el => el.classList.remove('hope-target-row'));
+            row.classList.add('hope-target-row');
+            if (typeof row.scrollIntoView === 'function') row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            if (typeof planSelect.focus === 'function') planSelect.focus();
+            showToast(`STS(JP側)を PC（プラン変更）にしました。「第${idx}希望（${d[hopeField] || ''}）」の行でプランを新しいものに変更してから、「変更（＋メッセージ）を決定して送信」を押してください。`);
+          } else {
+            if (box && typeof box.scrollIntoView === 'function') box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            showToast('STS(JP側)を PC（プラン変更）にしました。希望日一覧で新しいプランを選んでから、「変更（＋メッセージ）を決定して送信」を押してください。');
+          }
+          return;
         }
-        showToast(target === 'DC'
-          ? 'STS(JP側)を DC（日付変更）にしました。希望日一覧に新しい希望日を入れて、「変更（＋メッセージ）を決定して送信」を押してください。'
-          : 'STS(JP側)を PC（プラン変更）にしました。希望日一覧で新しいプランを選んでから、「変更（＋メッセージ）を決定して送信」を押してください。');
+
+        if (box && typeof box.scrollIntoView === 'function') box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        showToast('STS(JP側)を DC（日付変更）にしました。希望日一覧に新しい希望日を入れて、「変更（＋メッセージ）を決定して送信」を押してください。');
       });
     });
   }
@@ -2030,6 +2050,17 @@
   // ★要件（項目101）：予約依頼（RQ）の時点で挙式への列席者の有無を確認する。
   // 「有り予定」は人数が固まっていない段階の回答で、人数欄は空欄のままでよい。
   // ★要件（項目101）：日付が確定したあとでも「日付を変える」「プランを変える」ができるように、
+  // ★要件（項目116）：「プランを変更する」を押したときに、変更対象がどの希望日かを
+  // 一目でわかるようにする。確定している希望日（STS支店=OK）は同時に1件しか無い前提
+  // （applyHopeStatusCascade_参照）なので、見つかった最初の1件を返す。無ければ0。
+  const HOPE_FIELD_NAMES_ = ['希望日①', '希望日②', '希望日③', '希望日④', '希望日⑤'];
+  function confirmedHopeIndex_(d) {
+    for (let i = 0; i < HOPE_FIELD_NAMES_.length; i++) {
+      if (d[`${HOPE_FIELD_NAMES_[i]} STS 支店`] === 'OK') return i + 1;
+    }
+    return 0;
+  }
+
   // 希望日一覧のすぐ上にボタンを置く。押すと STS(JP側) が DC（日付変更）／PC（プラン変更）に
   // セットされ、折りたたまれていた希望日一覧が開いて、そこで新しい希望を書き直せる。
   // 実際に相手へ伝わるのは、いつもどおり下の「変更（＋メッセージ）を決定して送信」を押したとき。
@@ -2964,7 +2995,7 @@
     c.querySelectorAll('[data-memo-add]').forEach(btn => {
       btn.addEventListener('click', () => addMemo(btn.dataset.memoAdd));
     });
-    wireChangeAfterFixButtons_(c);
+    wireChangeAfterFixButtons_(c, d);
     // ★機能：現地スタッフ手配メール。カテゴリのボタンを押すと下書きモーダルを開く
     c.querySelectorAll('[data-arrangement-category]').forEach(btn => {
       btn.addEventListener('click', () => openArrangementDraft(btn.dataset.arrangementCategory));

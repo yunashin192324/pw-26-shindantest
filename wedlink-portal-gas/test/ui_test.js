@@ -4478,6 +4478,49 @@ function paneHidden(document, key) {
           `${plan1.value} / 期待 ${narrowed[0]}`);
   }
 
+  // ---------------------------------------------------------------
+  section('U72. 【改善】「プランを変更する」を押すと、変更対象の希望日が分かるようにする（項目116）');
+  {
+    const ctx72 = makeServer();
+    const dom72 = await openApp(ctx72);
+    const doc72 = dom72.window.document;
+
+    // 希望日①で確定し、希望日②は自動でUC（回答済み）になっている状態を作る
+    const jp72 = ctx72.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    const vie72 = ctx72.apiLogin('VIE', 'CHANGE-ME-VIE').session.token;
+    const made72 = ctx72.apiCreateReservation(jp72, 'VIE', '01 PCTest\n02 Bride\nRQ 2027/09/09\nRQ 2027/09/10');
+    ctx72.apiCommitChanges(vie72, made72.kanriNo, { '希望日① STS 支店': 'OK' }, '空いてます', 'JP');
+
+    await login(dom72, 'KANTO', 'CHANGE-ME-KANTO');
+    await settle();
+    [...doc72.querySelectorAll('#reservation-table-body tr, #reservation-list .res-card')]
+      .find(el => el.textContent.includes(made72.kanriNo)).click();
+    await settle(); await settle();
+
+    const pcBtn72 = doc72.querySelector('[data-change-after-fix="PC"]');
+    check('「プランを変更する」ボタンがある', !!pcBtn72);
+    pcBtn72.click();
+    await settle();
+
+    const highlighted72 = doc72.querySelector('.hope-target-row');
+    check('変更対象の希望日の行が目立つようになる', !!highlighted72);
+    check('目立たせた行は、確定していた希望日①の行（希望日②ではない）',
+          highlighted72 && highlighted72.textContent.includes('第1希望'),
+          highlighted72 ? highlighted72.textContent.slice(0, 40) : 'なし');
+    const focusedPlanSelect72 = doc72.activeElement;
+    check('その行のプラン欄にフォーカスが移る',
+          focusedPlanSelect72 && focusedPlanSelect72.dataset.pending === '希望日①プラン',
+          focusedPlanSelect72 ? focusedPlanSelect72.dataset.pending : 'なし');
+
+    // サーバー側の挙動と合わせて確認：送信すると希望日①だけが回答待ちに戻り、希望日②は変わらない
+    doc72.getElementById('sticky-commit').click();
+    await settle();
+    const afterDetail72 = ctx72.apiGetReservationDetail(jp72, made72.kanriNo).detail;
+    check('送信すると希望日①だけが回答待ちに戻る（画面の案内どおり）',
+          afterDetail72['希望日① STS JP'] === 'RQ' && afterDetail72['希望日① STS 支店'] === 'ST');
+    check('希望日②はUCのまま変わらない', afterDetail72['希望日② STS JP'] === 'UC');
+  }
+
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error('テストが異常終了しました:', e); process.exit(1); });

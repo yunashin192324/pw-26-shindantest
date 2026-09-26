@@ -457,6 +457,10 @@
     background: #e2e5e9; color: var(--color-text); }
   .nav-badge.unread { background: var(--color-danger); color: #fff; }
   .tab-btn.has-unread { border-color: var(--color-danger); background: #fff5f5; }
+  /* ★要件（項目116）：「プランを変更する」を押したとき、変更対象の希望日の行を目立たせる
+     （以前は希望日一覧全体が開くだけで、5行のうちどれが変更対象か分からなかった）。 */
+  .hope-target-row { outline: 2px solid var(--color-primary); outline-offset: -2px; }
+  .hope-target-row td:first-child { position: relative; }
   /* ★要件：現地支店・手配課の画面も店舗画面と同じクイックナビ形式にしたため、.tab-paneが
      スクロールジャンプ先になる。.section-cardと同じ理由でsticky2段分の見出しに隠れないよう
      余白を確保する（.section-card自身にも同じ値が付くが、入れ子でも問題ない）。 */

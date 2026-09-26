@@ -3320,10 +3320,21 @@ function applyDataUploadedStamp_(sheet, headers, rowIndex, writes, session) {
 // 変更の流れが完結しない状態だった（実際に再現して確認済み）。
 // 撮影日FIXはここでは消さない（新しい日付が決まるまで現地の手配は元の日付のまま生きているため）。
 const HOPE_RESET_TRIGGER_STATUSES = ['DC', 'PC'];
+// ★要件（項目116）：確定している希望日の中から、現地が「OK」で回答した1件（＝いま撮影日FIXに
+// なっている希望日）の番号を返す。同時に複数がOKになることは無い前提（applyHopeStatusCascade_
+// 参照）なので、見つかった最初の1件を返す。見つからなければ0（該当なし）。
+function findConfirmedHopeIndex_(headers, rowValues) {
+  for (let n = 1; n <= HOPE_COLS.length; n++) {
+    const idx = headers.indexOf(hopeStsBranchCol_(n));
+    if (idx !== -1 && rowValues[idx] === 'OK') return n;
+  }
+  return 0;
+}
 function applyHopeResetOnChangeRequest_(sheet, headers, rowIndex, kanriNo, writes, who) {
   const write = writes.find(w => w.field === COL_STATUS_JP && w.changed &&
     HOPE_RESET_TRIGGER_STATUSES.includes(String(w.valueToStore || '')));
   if (!write) return;
+  const targetStatus = String(write.valueToStore || '');
   const logSheet = getSpreadsheet_().getSheetByName(STATUS_LOG_SHEET_NAME);
   const label = who || '自動反映（変更依頼で希望日を回答待ちに戻す）';
   const rowValues = sheet.getRange(rowIndex, 1, 1, headers.length).getValues()[0];
@@ -3335,6 +3346,26 @@ function applyHopeResetOnChangeRequest_(sheet, headers, rowIndex, kanriNo, write
     sheet.getRange(rowIndex, idx + 1).setValue(newValue);
     if (logSheet) logSheet.appendRow([kanriNo, field, oldValue, newValue, label, new Date()]);
   };
+  // ★要件変更（項目116）：PC（プラン変更）は、確定している日付そのものは変わらない。
+  // 以前はDCと同じく希望日①〜⑤すべてを回答待ちに戻していたため、既に回答済み（UC）だった
+  // 希望日まで開いてしまい、「複数の希望日が予約確定のように見える」「新しいプランをどの
+  // 希望日に入れればいいか分からない」という報告があった（現場からの指摘）。
+  // 確定している希望日（STS支店=OKの1件）だけを回答待ちに戻し、「変更後のプランをこの希望日の
+  // プラン欄に指定して送る」という1本の操作に絞る。確定している希望日が見つからない
+  // 場合（通常は起きないが、手動でのデータ変更等）は、従来どおり全件を戻す。
+  if (targetStatus === 'PC') {
+    const confirmedIdx = findConfirmedHopeIndex_(headers, rowValues);
+    const targets = confirmedIdx
+      ? [confirmedIdx]
+      : Array.from({ length: HOPE_COLS.length }, (_, i) => i + 1);
+    targets.forEach(n => {
+      resetCell(hopeStsJpCol_(n), 'RQ');
+      resetCell(hopeStsBranchCol_(n), 'ST');
+    });
+    return;
+  }
+  // DC（日付変更）は従来どおり、希望日①〜⑤すべてを回答待ちに戻す
+  // （新しい日付を、まだ埋まっていないどの希望日欄に入れてもよいようにするため）。
   for (let n = 1; n <= HOPE_COLS.length; n++) {
     resetCell(hopeStsJpCol_(n), 'RQ');
     resetCell(hopeStsBranchCol_(n), 'ST');
