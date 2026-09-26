@@ -4521,6 +4521,76 @@ function paneHidden(document, key) {
     check('希望日②はUCのまま変わらない', afterDetail72['希望日② STS JP'] === 'UC');
   }
 
+  // ---------------------------------------------------------------
+  section('U73. 【改善】現地支店の「お客様情報」を読み取り専用にする・請求先の自動反映（項目117）');
+  {
+    const ctx73 = makeServer();
+    const jp73 = ctx73.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    const shop73 = ctx73.apiLogin('SHOP1', 'CHANGE-ME-SHOP1').session.token;
+    const made73 = ctx73.apiShopCreateRequest(shop73, {
+      branchCode: 'VIE', team: '関東', challengeNo: 'UI117TEST01',
+      groomLastName: 'YAMADA', groomName: 'TARO', brideLastName: 'YAMADA', brideName: 'HANAKO',
+      hope1: '2027-12-24'
+    });
+
+    // --- 現地支店（BRANCH）：お客様情報タブが読み取り専用になっている ---
+    const dom73 = await openApp(ctx73);
+    const doc73 = dom73.window.document;
+    await login(dom73, 'VIE', 'CHANGE-ME-VIE');
+    await settle();
+    [...doc73.querySelectorAll('#reservation-table-body tr, #reservation-list .res-card')]
+      .find(el => el.textContent.includes(made73.kanriNo)).click();
+    await settle(); await settle();
+
+    const pane73 = doc73.getElementById('sec-customer');
+    check('現地支店の画面にも「お客様情報」タブがある（閲覧はできる）', !!pane73);
+    const inputs73 = [...pane73.querySelectorAll('input, textarea')];
+    const selects73 = [...pane73.querySelectorAll('select')];
+    check('現地支店では入力欄が読み取り専用になっている',
+          inputs73.length > 0 && inputs73.every(el => el.readOnly === true));
+    check('現地支店では選択欄が操作できない状態になっている',
+          selects73.length > 0 && selects73.every(el => el.disabled === true));
+    check('編集できない旨の案内が表示される', pane73.textContent.includes('現地支店では変更できません'));
+
+    // --- 手配課（JP）：同じタブは従来どおり編集できる ---
+    doc73.getElementById('nav-logout').click();
+    await settle();
+    await login(dom73, 'KANTO', 'CHANGE-ME-KANTO');
+    await settle();
+    [...doc73.querySelectorAll('#reservation-table-body tr, #reservation-list .res-card')]
+      .find(el => el.textContent.includes(made73.kanriNo)).click();
+    await settle(); await settle();
+    const jpPane73 = doc73.getElementById('sec-customer');
+    const jpInputs73 = [...jpPane73.querySelectorAll('input, textarea')];
+    const jpSelects73 = [...jpPane73.querySelectorAll('select')];
+    check('手配課では入力欄が引き続き編集できる（読み取り専用にならない）',
+          jpInputs73.length > 0 && jpInputs73.every(el => el.readOnly === false));
+    check('手配課では選択欄も引き続き操作できる',
+          jpSelects73.length > 0 && jpSelects73.every(el => el.disabled === false));
+    check('手配課の画面には「変更できません」の案内が出ない',
+          !jpPane73.textContent.includes('現地支店では変更できません'));
+
+    // --- 請求先（地域）が、店舗発の案件では作成時点で自動的に選ばれている ---
+    const billingSelect73 = jpPane73.querySelector('[data-pending="請求先"]');
+    check('請求先の選択欄がある', !!billingSelect73);
+    check('店舗発の案件では、選んだ手配課（関東）が請求先として最初から選ばれている',
+          billingSelect73 && billingSelect73.value === '関東', billingSelect73 ? billingSelect73.value : 'なし');
+    check('「未設定」のまま（選択してください、の状態）にはなっていない',
+          billingSelect73 && billingSelect73.value !== '');
+
+    // 支店マスタに登録した店舗自身の請求先（営業本部）も、参考情報として同じタブに表示される
+    ctx73.apiSaveBranch(jp73, {
+      code: 'SHOP1', name: '新宿店', role: 'SHOP', country: '', city: '', team: '',
+      email: 'shop1@example.com', prefix: '', passcode: '', active: true, shopBilling: '関東営業本部'
+    });
+    [...doc73.querySelectorAll('#reservation-table-body tr, #reservation-list .res-card')]
+      .find(el => el.textContent.includes(made73.kanriNo)).click();
+    await settle(); await settle();
+    const jpPaneReload73 = doc73.getElementById('sec-customer');
+    check('支店マスタに登録済みの請求先（営業本部）が参考情報として表示される',
+          jpPaneReload73.textContent.includes('関東営業本部'));
+  }
+
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error('テストが異常終了しました:', e); process.exit(1); });

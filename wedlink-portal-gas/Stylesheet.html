@@ -461,6 +461,11 @@
      （以前は希望日一覧全体が開くだけで、5行のうちどれが変更対象か分からなかった）。 */
   .hope-target-row { outline: 2px solid var(--color-primary); outline-offset: -2px; }
   .hope-target-row td:first-child { position: relative; }
+  /* ★要件（項目117）：お客様情報タブを現地支店では読み取り専用にする際の見た目。
+     編集できないことが一目でわかるよう、背景を薄いグレーにしてカーソルを禁止マークにする。 */
+  #sec-customer input[readonly], #sec-customer select:disabled, #sec-customer textarea[readonly] {
+    background: #f3f4f6; color: var(--color-text); cursor: not-allowed; opacity: 1;
+  }
   /* ★要件：現地支店・手配課の画面も店舗画面と同じクイックナビ形式にしたため、.tab-paneが
      スクロールジャンプ先になる。.section-cardと同じ理由でsticky2段分の見出しに隠れないよう
      余白を確保する（.section-card自身にも同じ値が付くが、入れ子でも問題ない）。 */

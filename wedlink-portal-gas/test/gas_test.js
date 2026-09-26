@@ -1830,12 +1830,19 @@ section('31. お客様情報タブの新項目（パスポート番号欄・準�
   check('ローマ支店はパスポート番号欄フラグは別物なので非表示のまま', rowDetail.passportRequired === false);
   check('ローマ支店は国がイタリアなのでisItaly=true', rowDetail.isItaly === true);
 
-  // パスポート番号は表示フラグに関わらず、日本側・現地（支店）側どちらからも保存できる通常項目
+  // パスポート番号は表示フラグに関わらず日本側から保存できる通常項目。
+  // ★仕様変更（項目117）：以前は現地（支店）側からも保存できたが、「お客様情報」タブは
+  // 店舗が入力し手配課が管理する情報のため、現地支店からは編集できないようにした
+  // （閲覧はできる）。
   ctx.apiSaveFieldsQuiet(t, 'IST-601', { 'パスポート番号': 'AB1234567' });
   check('日本側からパスポート番号を保存できる', ctx.apiGetReservationDetail(t, 'IST-601').detail['パスポート番号'] === 'AB1234567');
   const ist = ctx.apiLogin('IST', 'ip');
-  ctx.apiSaveFieldsQuiet(ist.session.token, 'IST-601', { 'パスポート番号': 'CD7654321' });
-  check('現地（支店）側からもパスポート番号を保存できる', ctx.apiGetReservationDetail(t, 'IST-601').detail['パスポート番号'] === 'CD7654321');
+  let errPassport = null;
+  try { ctx.apiSaveFieldsQuiet(ist.session.token, 'IST-601', { 'パスポート番号': 'CD7654321' }); }
+  catch (e) { errPassport = e.message; }
+  check('現地（支店）側からはパスポート番号を保存できない', errPassport !== null, String(errPassport));
+  check('現地側の変更が拒否されても、日本側が保存した値はそのまま残る',
+        ctx.apiGetReservationDetail(t, 'IST-601').detail['パスポート番号'] === 'AB1234567');
 
   // 準備場所（イタリアのみ画面に出す想定だが、データはどの支店でも保存できる＝表示制御は画面側の責務）
   ctx.apiSaveFieldsQuiet(t, 'R-601', { '準備場所': ctx.PREP_CHOICES[1] });
@@ -3477,13 +3484,18 @@ section('57. 撮影データ納品先メールアドレス欄の追加・apiList
   // --- ①撮影データ納品先メールアドレス：現地連絡先メールとは別の自由入力欄として追加された ---
   addCase(ctx, '予約一覧', { '支店コード': 'VIE', '管理番号': 'VIE-970', '管轄': '関東' });
   ctx.apiSaveFieldsQuiet(jpToken, 'VIE-970', { '撮影データ納品先メールアドレス': 'delivery@example.com' });
-  check('撮影データ納品先メールアドレスが保存できる（日本側・現地支店側どちらの画面でも扱う項目）',
+  check('撮影データ納品先メールアドレスが保存できる（日本側の画面で扱う項目）',
         ctx.apiGetReservationDetail(jpToken, 'VIE-970').detail['撮影データ納品先メールアドレス'] === 'delivery@example.com');
 
+  // ★仕様変更（項目117）：以前は現地支店からも更新できたが、「お客様情報」タブは
+  // 店舗が入力し手配課が管理する情報のため、現地支店からは編集できないようにした。
   const vieToken2 = ctx.apiLogin('VIE', 'vp').session.token;
-  ctx.apiSaveFieldsQuiet(vieToken2, 'VIE-970', { '撮影データ納品先メールアドレス': 'branch-delivery@example.com' });
-  check('現地支店からも撮影データ納品先メールアドレスを更新できる',
-        ctx.apiGetReservationDetail(jpToken, 'VIE-970').detail['撮影データ納品先メールアドレス'] === 'branch-delivery@example.com');
+  let errDelivery = null;
+  try { ctx.apiSaveFieldsQuiet(vieToken2, 'VIE-970', { '撮影データ納品先メールアドレス': 'branch-delivery@example.com' }); }
+  catch (e) { errDelivery = e.message; }
+  check('現地支店からは撮影データ納品先メールアドレスを更新できない', errDelivery !== null, String(errDelivery));
+  check('拒否されても日本側が保存した値のまま',
+        ctx.apiGetReservationDetail(jpToken, 'VIE-970').detail['撮影データ納品先メールアドレス'] === 'delivery@example.com');
 
   // 店舗が起票した案件でも同じ欄を扱える（SHOP_EDITABLE_FIELDSに追加した）
   const shopCase57 = ctx.apiShopCreateRequest(shopToken, {
@@ -5873,6 +5885,64 @@ section('92. 【不具合修正】見出しセルの余分な空白で列が静�
           meta.shopBilling === '123' && typeof meta.shopBilling === 'string',
           `${JSON.stringify(meta.shopBilling)} / ${typeof meta.shopBilling}`);
   }
+}
+
+// ---------------------------------------------------------------
+section('93. 【改善】現地支店は「お客様情報」を編集できない・案件の請求先は作成時に自動で埋まる（項目117）');
+{
+  const ctx = shopFixture();
+  const jpToken = ctx.apiLogin('KANTO', 'pw').session.token;
+  const vieToken = ctx.apiLogin('VIE', 'vp').session.token;
+
+  // --- 案件の請求先（日本の地域区分）・日本支店名は、店舗発の案件なら作成時点で自動的に埋まる ---
+  const shopToken = ctx.apiLogin('SHOP1', 'sp').session.token;
+  const made = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'VIE', team: '関東', challengeNo: 'AUTOBILL001',
+    groomLastName: 'A', groomName: 'B', brideLastName: 'C', brideName: 'D',
+    hope1: '2027-12-24'
+  });
+  const detail = ctx.apiGetReservationDetail(jpToken, made.kanriNo).detail;
+  check('請求先（地域）が選んだ手配課（関東）と同じ値で自動的に埋まる',
+        detail['請求先'] === '関東', String(detail['請求先']));
+  check('日本支店名が起票した店舗自身の名前で自動的に埋まる',
+        detail['日本支店名'] === '新宿店', String(detail['日本支店名']));
+
+  // 関西の手配課を選んだ場合も、その手配課名がそのまま入る
+  const madeKansai = ctx.apiShopCreateRequest(shopToken, {
+    branchCode: 'VIE', team: '関西', challengeNo: 'AUTOBILL002',
+    groomLastName: 'A', groomName: 'B', brideLastName: 'C', brideName: 'D',
+    hope1: '2027-12-25'
+  });
+  check('関西を選んだ場合は請求先も関西になる',
+        ctx.apiGetReservationDetail(jpToken, madeKansai.kanriNo).detail['請求先'] === '関西');
+
+  // 自動で入った値も、あとから日本側が選び直せる（読み取り専用ではない）
+  ctx.apiSaveFieldsQuiet(jpToken, made.kanriNo, { '請求先': '中部' });
+  check('自動で入った請求先も、日本側があとから選び直せる',
+        ctx.apiGetReservationDetail(jpToken, made.kanriNo).detail['請求先'] === '中部');
+
+  // --- 「お客様情報」タブの項目は、現地支店からは編集できない（閲覧はできる） ---
+  const branchLockedFields = {
+    '新郎年齢': '30', '新婦年齢': '28', 'パスポート番号': 'AB1234567', '衣装会社': 'サンプル衣装店',
+    '同行者の有無': '有', '現地連絡先メール': 'x@example.com', '撮影データ納品先メールアドレス': 'y@example.com',
+    '現地連絡先電話': '090-1111-2222', 'ホテル': 'サンプルホテル', 'ホテル住所': '現地の住所',
+    'チェックイン日': '2027-12-23', 'チェックアウト日': '2027-12-26', '請求先': '関東', '日本支店名': '新宿西口店',
+    'フライト情報': 'JL123', 'フライト情報（OUT）': 'JL124'
+  };
+  Object.keys(branchLockedFields).forEach(field => {
+    let err = null;
+    try { ctx.apiSaveFieldsQuiet(vieToken, made.kanriNo, { [field]: branchLockedFields[field] }); }
+    catch (e) { err = e.message; }
+    check(`現地支店は「${field}」を編集できない`, err !== null, String(err));
+  });
+  // 日本側は引き続き編集できる（現地への制限が日本側にまで広がっていないことの確認）
+  ctx.apiSaveFieldsQuiet(jpToken, made.kanriNo, { '新郎年齢': '31' });
+  check('日本側は引き続き「新郎年齢」を編集できる',
+        ctx.apiGetReservationDetail(jpToken, made.kanriNo).detail['新郎年齢'] === '31');
+  // 店舗も引き続き編集できる（SHOP_EDITABLE_FIELDSの対象。現地への制限とは別枠）
+  ctx.apiSaveFieldsQuiet(shopToken, made.kanriNo, { 'ホテル': '店舗が入れた宿泊先' });
+  check('店舗は引き続き「ホテル」を編集できる',
+        ctx.apiGetReservationDetail(jpToken, made.kanriNo).detail['ホテル'] === '店舗が入れた宿泊先');
 }
 
 // ---------------------------------------------------------------

@@ -2149,6 +2149,27 @@
         <div class="field-block"><label>幼児（2歳未満）　名</label><input type="number" min="0" data-pending="同行者（幼児）" value="${escapeAttr(d['同行者（幼児）'])}"></div>
       </div>`;
   }
+  // ★要件（項目117）：「お客様情報」タブ（年齢・パスポート番号・衣装会社・同行者・滞在先・
+  // フライト情報・請求先・日本支店名）は、店舗が入力し手配課が管理する情報のため、現地支店
+  // （BRANCH）では編集できない状態で表示する（閲覧はできる。撮影の手配自体には必要な情報
+  // のため隠さない）。Code.gs側のCUSTOMER_INFO_FIELDS_BRANCH_LOCKEDでのサーバー側の
+  // 拒否と対になっている（画面側だけ塞いでも、直接APIを呼ばれると保存できてしまうため）。
+  function lockCustomerInfoForBranch_(c) {
+    if (session.role !== 'BRANCH') return;
+    const pane = c.querySelector('#sec-customer');
+    if (!pane) return;
+    pane.querySelectorAll('input, textarea').forEach(el => { el.readOnly = true; });
+    pane.querySelectorAll('select').forEach(el => { el.disabled = true; });
+    const h3 = pane.querySelector('h3');
+    if (h3) {
+      const note = document.createElement('p');
+      note.className = 'hint-text';
+      note.style.marginTop = '2px';
+      note.textContent = '🔒 お客様情報は手配課・店舗が入力します（現地支店では変更できません）。';
+      h3.insertAdjacentElement('afterend', note);
+    }
+  }
+
   // ★要件：同行者の有無の選択が変わったら、人数欄の表示・非表示を切り替える
   function wireCompanionToggle_(c) {
     const sel = c.querySelector('[data-pending="同行者の有無"]');
@@ -2632,6 +2653,11 @@
               <p class="hint-text" style="margin-top:3px;">撮影地のチェックアウト日を入れてください</p></div>
             <div class="field-block"><label>請求先</label>
               <select data-pending="請求先"><option value="">未設定</option>${BILLING_REGIONS.map(r => `<option value="${r}" ${d['請求先'] === r ? 'selected' : ''}>${r}</option>`).join('')}</select>
+              <!-- ★要件（項目117）：この欄（案件ごとの請求先＝日本の地域区分）は、店舗発の
+                   案件は作成時点で自動的に埋まる（Code.gsのapiShopCreateRequest参照）。
+                   支店マスタに登録した店舗自身の請求先（営業本部の名称。BM_COL_SHOP_BILLING）は
+                   これとは別の情報のため、混同しないよう並べて表示しておく。 -->
+              ${!d.shopBilling ? '' : `<p class="hint-text" style="margin-top:3px;">参考：この店舗の請求先（営業本部）は「${escapeHtml(d.shopBilling)}」として支店マスタに登録されています。</p>`}
             </div>
             <div class="field-block"><label>日本支店名</label><input data-pending="日本支店名" value="${escapeAttr(d['日本支店名'])}" placeholder="例）新宿西口店"></div>
             <!-- ★要件（項目101）：確定ボタンをフライト情報のすぐ下に置くため、フライト情報を
@@ -2960,6 +2986,7 @@
     on_('btn-msg-only', 'click', sendMessageOnly);
     on_('btn-commit', 'click', commitChangesWithMessage);
     on_('btn-save-quiet', 'click', saveQuiet);
+    lockCustomerInfoForBranch_(c);
     // ★要件：手配内容をPDFにできるように
     renderPrintArrangement(d);
     on_('print-arrangement-btn', 'click', () => {

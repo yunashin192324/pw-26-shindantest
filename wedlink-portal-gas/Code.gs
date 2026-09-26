@@ -244,6 +244,16 @@ const COL_ATTENDANCE_COUNT = '列席人数';
 const COL_AREA = '管轄';
 const COL_BILLING_REGION = '請求先';
 const COL_JP_SHOP = '日本支店名';
+// ★要件（項目117）：「お客様情報」タブ（JP/BRANCH画面のcustomerTabHtml）に出る項目一覧。
+// 店舗が入力し手配課が管理する情報のため、現地支店（BRANCH）からは編集できないようにする
+// （validateFieldPermission_参照。閲覧はできる＝画面への表示自体は変えない）。
+const CUSTOMER_INFO_FIELDS_BRANCH_LOCKED = [
+  COL_GROOM_AGE, COL_BRIDE_AGE, COL_PASSPORT_NO, COL_COSTUME_COMPANY,
+  COL_COMPANION, COL_COMPANION_ADULT, COL_COMPANION_CHILD, COL_COMPANION_INFANT,
+  COL_LOCAL_EMAIL, COL_DATA_DELIVERY_EMAIL, COL_LOCAL_PHONE,
+  COL_HOTEL, COL_HOTEL_ADDRESS, COL_CHECKIN_DATE, COL_CHECKOUT_DATE,
+  COL_BILLING_REGION, COL_JP_SHOP, COL_FLIGHT_INFO, COL_FLIGHT_INFO_OUT
+];
 const COL_INVOICE_NO = '請求番号';   // ラベル名は支店マスタの「請求番号欄名称」で支店ごとに変更可能
 const COL_SHOP = '店舗／担当（現地）';
 // ★要件：当日の現地運用向け項目（現地記入欄）
@@ -3543,6 +3553,14 @@ function validateFieldPermission_(session, headers, rowData, field, value) {
   if (field === COL_BILLING_REGION && value && !BILLING_REGIONS.includes(value)) {
     throw new Error(`請求先は ${BILLING_REGIONS.join('/')} のいずれかにしてください。`);
   }
+  // ★要件（項目117）：「お客様情報」タブの項目（年齢・パスポート番号・衣装会社・同行者・
+  // 滞在先・フライト情報・請求先・日本支店名）は、店舗が入力し手配課が管理する情報のため、
+  // 現地支店（BRANCH）は編集できないようにする（画面には従来どおり表示し、閲覧はできる。
+  // 撮影の手配自体には必要な情報のため）。以前はこの制限が無く、現地支店の画面からも
+  // 編集できてしまっていた。
+  if (CUSTOMER_INFO_FIELDS_BRANCH_LOCKED.includes(field) && session.role === BRANCH_ROLE) {
+    throw new Error(`「${field}」は現地支店では変更できません（お客様情報は手配課・店舗が管理します）。`);
+  }
   // ★要件（項目101）：列席の有無は決められた3つの答え方からだけ選ぶ
   if (field === COL_ATTENDANCE && value && !ATTENDANCE_CHOICES.includes(value)) {
     throw new Error(`列席は ${ATTENDANCE_CHOICES.join('/')} のいずれかにしてください。`);
@@ -4705,6 +4723,18 @@ function apiShopCreateRequest(token, payload) {
       setV(COL_ATTENDANCE, attendance);
       setV(COL_ATTENDANCE_COUNT, attendanceCount);
       setV(COL_AREA, team);
+      // ★要件（項目117）：「請求先」（案件の請求先＝日本の地域区分。支店マスタの
+      // 「請求先」＝店舗の営業本部＝BM_COL_SHOP_BILLINGとは別物）は、店舗発の案件では
+      // 選んだ手配課（team）と常に同じ値になる（JP_TEAMS＝関東／関西はどちらも
+      // BILLING_REGIONSに含まれる名称のため、そのまま使える）。以前はここを何も
+      // 埋めておらず、案件ごとに「未設定」のまま作られ、お客様情報タブを開くたびに
+      // 手配課が毎回選び直す必要があった（「支店マスタには入っているのに画面に
+      // 反映されない」という報告があったが、実際には別の項目＝店舗の請求先と
+      // 混同されていたもの。案件の請求先はこちらの地域区分で決まる）。
+      // 「日本支店名」も同じ考え方で、店舗発の案件は起票した店舗自身の名前で確定しているため、
+      // 空欄のまま毎回手入力させず、作成時点で自動的に埋めておく。
+      setV(COL_BILLING_REGION, team);
+      setV(COL_JP_SHOP, session.branchName);
       setV(COL_ORIGIN_SHOP, session.branchCode);
       seedHopeStatuses_(headers, newRowData);
 
