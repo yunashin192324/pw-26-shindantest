@@ -2910,7 +2910,47 @@ section('48. オプション枠を5件から10件に拡張（自由入力・OP6�
   check('10件目（OP10）のオプションも保存される（従来は5件までだった）', detail['OP10'] === 'オプション10番');
 
   // --- 既存案件でもOP6〜OP10のSTS(JP側)を通常どおり操作できる ---
-  check('OP6のSTS(JP側)は未設定から始まる', !detail['OP6 STS JP']);
+  // ★仕様変更（項目115）：以前はオプションのSTS(JP側)が空欄のまま作られ、その結果
+  // 現地支店がそのオプションに回答できなかった（BRANCH_EDIT_GATEが空欄を許さないため）。
+  // 名前を入れたオプションには、案件全体と同じ初期ステータス（RQ／CHK）が入る。
+  check('OP6のSTS(JP側)も案件全体と同じRQから始まる', detail['OP6 STS JP'] === 'RQ',
+        String(detail['OP6 STS JP']));
+  // ★不具合修正（項目115）：ここが空欄だと、現地支店はそのオプションにOKもUCも返せなかった
+  // （BRANCH_EDIT_GATEは対になるSTS(JP側)の値で編集可否を決めるため）。実際に
+  // 「店舗からオプション付きで依頼したのに現地が回答できない」という報告があった。
+  {
+    const vieTok115 = ctx.apiLogin('VIE', 'vp').session.token;
+    let opErr = null;
+    try { ctx.apiSaveFieldsQuiet(vieTok115, created.kanriNo, { 'OP1 STS 支店': 'OK' }); }
+    catch (e) { opErr = e.message; }
+    check('現地支店が店舗発のオプションにOKを返せる', opErr === null, String(opErr));
+    check('返した回答が保存されている',
+          ctx.apiGetReservationDetail(jpTok, created.kanriNo).detail['OP1 STS 支店'] === 'OK');
+  }
+  // 名前を入れていないオプションには余計なステータスを付けない（使っていない欄のため）
+  {
+    const shopTok115 = ctx.apiLogin('SHOP1', 'sp').session.token;
+    const only1 = ctx.apiShopCreateRequest(shopTok115, {
+      branchCode: 'VIE', team: '関東', challengeNo: 'OPTONLY0001',
+      groomLastName: 'A', groomName: 'B', brideLastName: 'C', brideName: 'D',
+      hope1: '2027-11-11', option1: 'アルバムのみ'
+    });
+    const d115 = ctx.apiGetReservationDetail(jpTok, only1.kanriNo).detail;
+    check('名前を入れたオプションにはRQが入る', d115['OP1 STS JP'] === 'RQ');
+    check('使っていないオプションは空欄のまま', !d115['OP2 STS JP'] && !d115['OP3 STS JP']);
+  }
+  // 空き確認（CHK）で作った場合は、オプションにもCHKが入る
+  {
+    const shopTok115b = ctx.apiLogin('SHOP1', 'sp').session.token;
+    const chk = ctx.apiShopCreateRequest(shopTok115b, {
+      branchCode: 'VIE', team: '関東', challengeNo: 'OPTCHK00001', initialStatus: 'CHK',
+      groomLastName: 'A', groomName: 'B', brideLastName: 'C', brideName: 'D',
+      hope1: '2027-11-12', option1: '追加撮影'
+    });
+    const dchk = ctx.apiGetReservationDetail(jpTok, chk.kanriNo).detail;
+    check('空き確認で作ったときはオプションもCHKになる', dchk['OP1 STS JP'] === 'CHK',
+          String(dchk['OP1 STS JP']));
+  }
   ctx.apiSaveFieldsQuiet(jpTok, created.kanriNo, { 'OP6 STS JP': 'OK' });
   const afterOp6 = ctx.apiGetReservationDetail(jpTok, created.kanriNo).detail;
   check('日本側はOP6のSTS(JP側)を通常どおり設定できる', afterOp6['OP6 STS JP'] === 'OK');

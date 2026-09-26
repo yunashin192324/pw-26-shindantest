@@ -4656,7 +4656,18 @@ function apiShopCreateRequest(token, payload) {
       setV(COL_LOCATION, groupLocation);
       setV(COL_PREP, groupPrep);
       setV(COL_REMARKS, remarks);
-      options.forEach((name, i) => setV(opNameCol_(i + 1), name));
+      // ★不具合修正（項目115）：以前はオプションの「名前」だけを書き込み、そのオプションの
+      // STS(JP側)（OPn STS JP）を空欄のまま残していた。現地支店が自分のSTS(支店側)を
+      // 編集できるかどうかは、対になるSTS(JP側)の値で決まる（BRANCH_EDIT_GATE）ため、
+      // 空欄のオプションは**現地支店がOKもUCも返せない**状態になっていた。
+      // 実際に「店舗からオプション付きで依頼したのに、現地の画面ではRQにもなっておらず
+      // 回答もできない」という報告があり、再現も確認した。
+      // 案件全体のSTS(JP側)と同じ値（RQ＝予約依頼／CHK＝空き確認）を、名前を入れた
+      // オプションにも入れる。名前が空のオプションは対象外（使っていない欄のため）。
+      options.forEach((name, i) => {
+        setV(opNameCol_(i + 1), name);
+        if (name) setV(opStsJpCol_(i + 1), initialStatus);
+      });
       // ★要件変更：パスポート番号は支店の必須設定に関わらず、入力があれば常に保存する
       // （日本の店舗画面では常に入力欄を表示し、「※ISWのみ必要」という注記で運用する方針に変更したため）
       setV(COL_PASSPORT_NO, passportNumber);

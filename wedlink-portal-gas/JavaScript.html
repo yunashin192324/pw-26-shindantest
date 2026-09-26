@@ -30,6 +30,13 @@
   // すべてのコードに説明を付けると画面が文字で埋まり、かえって読みにくくなるため対象を絞っている。
   const STATUS_LABELS_ = { CHK: 'CHK（空き確認）', DC: 'DC（日付変更）', PC: 'PC（プラン・式場変更）' };
   function statusLabel_(code) { return STATUS_LABELS_[code] || code; }
+  // ★要件（項目115）：クイックナビの「メッセージ」に件数のしるしを付ける。
+  // 未読があれば赤で未読の件数、無ければやり取りの総数を控えめに出す（0件なら何も出さない）。
+  function navBadge_(unread, total) {
+    if (unread > 0) return `<span class="nav-badge unread">${unread}</span>`;
+    if (total > 0) return `<span class="nav-badge">${total}</span>`;
+    return '';
+  }
   const SHOP_STATUS_LABELS = { RQ: 'RQ（予約依頼）', FN: 'FN（最終確定）', CR: 'CR（キャンセル依頼）',
     DC: STATUS_LABELS_.DC, PC: STATUS_LABELS_.PC, CHK: STATUS_LABELS_.CHK };
   // ★要件：店舗がプラン・オプションのSTSのすぐ近くから、現地支店へ急ぎの回答を求められるように
@@ -39,8 +46,6 @@
   const CHECKLIST_ITEMS = ['ヘアメイク画像', '衣裳画像', '撮影指示書', '着付け指示書', '婚姻受理証明書コピー（必要な場合）', 'ヘアメイクアンケート'];
   // 同行者の有無の選択肢（Code.gsのCOMPANION_CHOICESと一致させる）
   const COMPANION_CHOICES_CLIENT = ['有', '無'];
-  // 列席の選択肢（Code.gsのATTENDANCE_CHOICESと一致させる）
-  const ATTENDANCE_CHOICES_CLIENT = ['有り', '無し', '有り予定'];
   // 希望日の時間帯の選択肢（Code.gsのHOPE_TIME_CHOICESと一致させる）
   const HOPE_TIME_CHOICES_CLIENT = ['AM', 'PM'];
   // ドライブアップロードの書類種別（Code.gsのSHOP_UPLOAD_DOC_TYPESと一致させる）
@@ -347,6 +352,14 @@
     // オプション候補は希望日①のみの役目のまま）。
     [2, 3, 4, 5].forEach(n => {
       $('shop-new-hopeplan' + n).addEventListener('change', () => onShopNewHopePlanNChange_(n));
+    });
+    // ★要件（項目115）：都市（支店）を選ぶと、その都市のプランだけに絞り込む。
+    // 絞り込んだあとは、プランを選び直したときと同じ更新（セール名・撮影希望場所など）を行う。
+    [1, 2, 3, 4, 5].forEach(n => {
+      on_(shopNewHopeCityId_(n), 'change', () => {
+        renderShopNewHopePlanOptions_(n);
+        onShopNewHopePlanNChange_(n);
+      });
     });
     $('shop-new-submit').addEventListener('click', submitShopNewRequest);
     $('shop-new-success-top-btn').addEventListener('click', () => loadDashboard());
@@ -1315,7 +1328,7 @@
         <button type="button" class="tab-btn" data-scroll-to="shop-sec-reservation">予約内容</button>
         <button type="button" class="tab-btn" data-scroll-to="shop-sec-docs">書類</button>
         <button type="button" class="tab-btn" data-scroll-to="shop-sec-memo">共有メモ</button>
-        <button type="button" class="tab-btn" data-scroll-to="shop-sec-message">メッセージ</button>
+        <button type="button" class="tab-btn" data-scroll-to="shop-sec-message">メッセージ${navBadge_(0, (d.history || []).length)}</button>
         <button type="button" class="tab-btn" data-scroll-to="shop-sec-history">履歴</button>
       </div>`;
 
@@ -1356,8 +1369,6 @@
           <div class="field-block">${costumeCompanySelectHtml_(costumeList, d['衣装会社'])}</div>
           <div class="field-block"><label>同行者の有無</label>${companionSelectHtml_(d['同行者の有無'])}</div>
           ${companionCountFieldsHtml_(d)}
-          <div class="field-block"><label>列席</label>${attendanceSelectHtml_(d['列席'])}</div>
-          <div class="field-block"><label>列席人数（名）</label><input type="number" min="0" data-pending="列席人数" value="${escapeAttr(d['列席人数'])}" placeholder="有り／有り予定の場合に入力"></div>
           <div class="field-block"><label>現地で連絡可能なメールアドレス</label><input type="email" data-pending="現地連絡先メール" value="${escapeAttr(d['現地連絡先メール'])}"></div>
           <div class="field-block"><label>撮影データ納品先メールアドレス</label><input type="email" data-pending="撮影データ納品先メールアドレス" value="${escapeAttr(d['撮影データ納品先メールアドレス'])}"></div>
           <div class="field-block"><label>現地で連絡可能な電話番号</label><input data-pending="現地連絡先電話" value="${escapeAttr(d['現地連絡先電話'])}"></div>
@@ -2095,19 +2106,16 @@
     return parts.join(' ｜ ');
   }
 
-  function attendanceSelectHtml_(current) {
-    return `<select data-pending="列席">
-        <option value="">未設定</option>
-        ${ATTENDANCE_CHOICES_CLIENT.map(c => `<option value="${escapeAttr(c)}" ${c === current ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
-      </select>`;
-  }
+  // ★要件変更（項目115）：「列席」「列席人数」は同行者（有無＋大人・子供・幼児の人数）と
+  // 内容が重なるため、画面から外した。予約一覧の列そのものは残してあるので、
+  // これまでに入っているデータは消えない。
   // ★要件：同行者の有無で「有」を選んだら、大人・子供・幼児の人数入力欄も出す
   function companionCountFieldsHtml_(d) {
     const show = d['同行者の有無'] === '有';
     return `<div id="companion-count-block" class="detail-grid" style="grid-column:1/-1;${show ? '' : 'display:none;'}">
-        <div class="field-block"><label>大人　名</label><input type="number" min="0" data-pending="同行者（大人）" value="${escapeAttr(d['同行者（大人）'])}"></div>
-        <div class="field-block"><label>子供　名</label><input type="number" min="0" data-pending="同行者（子供）" value="${escapeAttr(d['同行者（子供）'])}"></div>
-        <div class="field-block"><label>幼児　名</label><input type="number" min="0" data-pending="同行者（幼児）" value="${escapeAttr(d['同行者（幼児）'])}"></div>
+        <div class="field-block"><label>大人（12歳以上）　名</label><input type="number" min="0" data-pending="同行者（大人）" value="${escapeAttr(d['同行者（大人）'])}"></div>
+        <div class="field-block"><label>子供（2〜12歳未満）　名</label><input type="number" min="0" data-pending="同行者（子供）" value="${escapeAttr(d['同行者（子供）'])}"></div>
+        <div class="field-block"><label>幼児（2歳未満）　名</label><input type="number" min="0" data-pending="同行者（幼児）" value="${escapeAttr(d['同行者（幼児）'])}"></div>
       </div>`;
   }
   // ★要件：同行者の有無の選択が変わったら、人数欄の表示・非表示を切り替える
@@ -2490,10 +2498,20 @@
       </div>`;
     }
 
+    // ★要件（項目115）：メッセージが来ていることが、案件を開いた時点で分かるようにする。
+    // 以前はクイックナビの「メッセージ」が他と同じ見た目で、下まで開くまで気づけなかった。
+    // 未読（相手から来ていて、自分がまだ確認のチェックを入れていないもの）があれば赤で件数を、
+    // 未読が無ければやり取りの総数を控えめに出す。
+    const unreadMsgCount = d.history.filter(h =>
+      h.senderRole && h.senderRole !== session.role &&
+      !(session.role === 'JP' ? h.checkJp : h.checkBranch)).length;
     const tabBarHtml = `
       <div class="tab-bar" id="detail-quick-nav">
-        ${DETAIL_QUICK_NAV.map(t =>
-          `<button type="button" class="tab-btn" data-tab="${t.key}" data-scroll-to="sec-${t.key}">${t.label}</button>`).join('')}
+        ${DETAIL_QUICK_NAV.map(t => {
+          const badge = t.key === 'message' ? navBadge_(unreadMsgCount, d.history.length) : '';
+          const cls = (t.key === 'message' && unreadMsgCount > 0) ? 'tab-btn has-unread' : 'tab-btn';
+          return `<button type="button" class="${cls}" data-tab="${t.key}" data-scroll-to="sec-${t.key}">${t.label}${badge}</button>`;
+        }).join('')}
       </div>`;
 
     // ★機能追加：店舗が起票した案件は、宛先が固定の2択（JP⇔支店）ではなくなる。
@@ -2572,8 +2590,6 @@
             <div class="field-block">${costumeCompanySelectHtml_(costumeList, d['衣装会社'])}</div>
             <div class="field-block"><label>同行者の有無</label>${companionSelectHtml_(d['同行者の有無'])}</div>
           ${companionCountFieldsHtml_(d)}
-            <div class="field-block"><label>列席</label>${attendanceSelectHtml_(d['列席'])}</div>
-            <div class="field-block"><label>列席人数（名）</label><input type="number" min="0" data-pending="列席人数" value="${escapeAttr(d['列席人数'])}" placeholder="有り／有り予定の場合に入力"></div>
             <div class="field-block"><label>現地で連絡可能なメールアドレス</label><input type="email" data-pending="現地連絡先メール" value="${escapeAttr(d['現地連絡先メール'])}"></div>
             <div class="field-block"><label>撮影データ納品先メールアドレス</label><input type="email" data-pending="撮影データ納品先メールアドレス" value="${escapeAttr(d['撮影データ納品先メールアドレス'])}"></div>
             <div class="field-block"><label>現地で連絡可能な電話番号</label><input data-pending="現地連絡先電話" value="${escapeAttr(d['現地連絡先電話'])}"></div>
@@ -3411,6 +3427,34 @@
   // ★要件：希望日ごとの時間帯（AM/PM）・プラン欄
   const SHOP_NEW_HOPE_TIME_FIELDS = ['hopetime1', 'hopetime2', 'hopetime3', 'hopetime4', 'hopetime5'];
   const SHOP_NEW_HOPE_PLAN_FIELDS = ['hopeplan1', 'hopeplan2', 'hopeplan3', 'hopeplan4', 'hopeplan5'];
+  // ★要件（項目115）：プランの選択肢は全支店分をまとめて出しており、国とプランが増えるほど
+  // 一覧が縦に長くなって選びにくくなる、という指摘があった。先に都市（支店）を選んで
+  // プランを絞り込めるようにする。
+  // 「すべての都市」のままなら従来どおり全プランが出るので、都市を選ばない使い方も変わらない。
+  function shopNewHopeCityId_(n) { return `shop-new-hopecity${n}`; }
+  function planCityLabel_(p) { return p.city || p.branchName || p.branchCode; }
+  // 都市の選択欄に、実際にプランがある都市だけを並べる
+  function fillShopNewCitySelects_() {
+    const labels = [];
+    shopNewAllPlansCache.forEach(p => {
+      const l = planCityLabel_(p);
+      if (l && labels.indexOf(l) === -1) labels.push(l);
+    });
+    const html = '<option value="">すべての都市</option>' +
+      labels.map(l => `<option value="${escapeAttr(l)}">${escapeHtml(l)}</option>`).join('');
+    [1, 2, 3, 4, 5].forEach(n => { const el = $(shopNewHopeCityId_(n)); if (el) el.innerHTML = html; });
+  }
+  // 選んだ都市に合わせて、その希望日のプランの選択肢を絞り込む
+  function renderShopNewHopePlanOptions_(n) {
+    const sel = $('shop-new-hopeplan' + n);
+    if (!sel) return;
+    const cityEl = $(shopNewHopeCityId_(n));
+    const city = cityEl ? cityEl.value : '';
+    const current = sel.value;
+    const list = city ? shopNewAllPlansCache.filter(p => planCityLabel_(p) === city) : shopNewAllPlansCache;
+    // 選び直しても、すでに選んでいたプランは残す（allPlanOptionsHtml_が一覧に無い値も残す）
+    sel.innerHTML = allPlanOptionsHtml_(list, current, 'プラン未設定');
+  }
   async function openShopNewView() {
     showView('shop-new');
     $('shop-new-error').classList.add('hidden');
@@ -3446,6 +3490,7 @@
       shopNewAllPlansCache = await gsRun('apiListAllActivePlans', session.token);
       const hopePlanOptsHtml = allPlanOptionsHtml_(shopNewAllPlansCache, '', 'プラン未設定');
       SHOP_NEW_HOPE_PLAN_FIELDS.forEach(k => { $('shop-new-' + k).innerHTML = hopePlanOptsHtml; });
+      fillShopNewCitySelects_();
     } catch (e) { shopNewAllPlansCache = []; /* 候補が取れなくても入力自体は続けられる（プランは未設定のまま） */ }
     // ★要件追加：希望日①〜⑤すべて、開いた時点の（未選択の）状態で初期化しておく
     await Promise.all([1, 2, 3, 4, 5].map(n => onShopNewHopePlanNChange_(n)));
@@ -3572,6 +3617,14 @@
       // （依頼全体の基準支店＝希望日①だけで決める。オプション候補も同様）
       document.querySelectorAll('.shop-new-hopetime').forEach(el => el.classList.toggle('hidden', !meta.showHopeTime));
     }
+    // ★不具合修正（項目115）：セールの一覧はサーバーから取りに行くため、プランを選んだ直後は
+    // まだ届いていない。以前はその間も「未設定」だけの選択欄に見えていたため、「選択肢が出ない」
+    // 「後からわさわさ出てくる」と受け取られていた（実際は取得待ち）。取得中だと分かるようにし、
+    // 途中で選べないようにしておく。
+    if (saleSelect) {
+      saleSelect.innerHTML = '<option value="">読み込み中...</option>';
+      saleSelect.disabled = true;
+    }
     try {
       const [branchData, options] = await Promise.all([
         shopNewFetchBranchData_(branchCode),
@@ -3595,7 +3648,14 @@
         // 入力欄にする（フリー入力）。マスタに無い名称も入力できる
         $('shop-new-option-datalist').innerHTML = activeNames(options).map(nm => `<option value="${escapeAttr(nm)}">`).join('');
       }
-    } catch (e) { /* 候補が取れなくても入力自体は続けられる（セール等は未設定のまま） */ }
+    } catch (e) {
+      // 候補が取れなくても入力自体は続けられる（セール等は未設定のまま）
+      if (saleSelect && token === shopNewHopeChangeTokens[n]) saleSelect.innerHTML = '<option value="">未設定</option>';
+    } finally {
+      // 取得に成功しても失敗しても、選べる状態に必ず戻す。
+      // ただし、その間にさらにプランが変わっている場合は新しい方の「読み込み中」を邪魔しない。
+      if (saleSelect && token === shopNewHopeChangeTokens[n]) saleSelect.disabled = false;
+    }
   }
   // ★後方互換：以前は希望日①専用の関数名で呼ばれていた（bindEvents・submitShopNewRequest等）。
   async function onShopNewHopePlan1Change() { return onShopNewHopePlanNChange_(1); }
@@ -3712,6 +3772,12 @@
       SHOP_NEW_DATE_FIELDS.forEach(k => { $('shop-new-' + k).value = ''; });
       SHOP_NEW_HOPE_TIME_FIELDS.forEach(k => { $('shop-new-' + k).value = ''; });
       SHOP_NEW_HOPE_PLAN_FIELDS.forEach(k => { $('shop-new-' + k).value = ''; });
+      // 都市での絞り込みも「すべての都市」に戻し、プランの選択肢を元の全件に描き直す
+      [1, 2, 3, 4, 5].forEach(n => {
+        const cityEl = $(shopNewHopeCityId_(n));
+        if (cityEl) cityEl.value = '';
+        renderShopNewHopePlanOptions_(n);
+      });
       setShopNewInitialStatus_('RQ');
       // ★不具合修正：プラン欄の値だけ空に戻しても、その下の撮影希望場所・セール名・準備場所欄
       // （select/checkboxに差し替わっている場合がある）が古いプランのまま残ってしまっていたため、

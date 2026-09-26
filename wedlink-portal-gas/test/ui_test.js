@@ -1830,7 +1830,8 @@ function paneHidden(document, key) {
     await login(dom, 'KANTO', 'CHANGE-ME-KANTO');
     document.querySelector('#reservation-list .res-card').click();
     await settle();
-    const jpNavBtns = [...document.getElementById('detail-quick-nav').querySelectorAll('button')].map(b => b.textContent);
+    const navLabel_ = (b) => { const c = b.cloneNode(true); c.querySelectorAll('.nav-badge').forEach(x => x.remove()); return c.textContent.trim(); };
+    const jpNavBtns = [...document.getElementById('detail-quick-nav').querySelectorAll('button')].map(navLabel_);
     check('JPのクイックナビが店舗と同じ並び順（いまの状況→お客様情報→予約内容→記入欄→拠点メモ→手配→ドライブ→メッセージ→履歴）になっている',
           jpNavBtns.join(',') === expectedLabels.join(','), jpNavBtns.join(','));
     const jpHtml = document.getElementById('detail-content').innerHTML;
@@ -1844,7 +1845,7 @@ function paneHidden(document, key) {
     await login(dom, 'VIE', 'CHANGE-ME-VIE');
     [...document.querySelectorAll('#reservation-list .res-card')][0].click();
     await settle();
-    const branchNavBtns = [...document.getElementById('detail-quick-nav').querySelectorAll('button')].map(b => b.textContent);
+    const branchNavBtns = [...document.getElementById('detail-quick-nav').querySelectorAll('button')].map(navLabel_);
     check('現地支店のクイックナビも店舗と同じ並び順になっている（項目数はJPと同じ9つ）',
           branchNavBtns.join(',') === expectedLabels.join(','), branchNavBtns.join(','));
     const branchHtml = document.getElementById('detail-content').innerHTML;
@@ -3770,13 +3771,11 @@ function paneHidden(document, key) {
     check('店舗の画面にも確定した日付がいちばん上に出る',
           doc61.querySelector('.detail-header').textContent.includes('2027-12-01'),
           doc61.querySelector('.detail-header').textContent.replace(/\s+/g, ' ').slice(0, 200));
-    const attendSel61 = doc61.querySelector('[data-pending="列席"]');
-    check('店舗の画面に列席の欄がある', !!attendSel61);
-    check('列席の選択肢が有り・無し・有り予定の3つ',
-          [...attendSel61.options].map(o => o.value).filter(Boolean).join(',') === '有り,無し,有り予定',
-          [...attendSel61.options].map(o => o.value).join(','));
-    check('新規依頼のときに入れた列席が画面にも出ている', attendSel61.value === '有り予定', attendSel61.value);
-    check('店舗の画面にも列席人数の欄がある', !!doc61.querySelector('[data-pending="列席人数"]'));
+    // ★仕様変更（項目115）：「列席」「列席人数」は同行者（有無＋大人・子供・幼児の人数）と
+    // 内容が重なるため画面から外した。予約一覧の列は残してあるので過去のデータは消えない。
+    check('店舗の画面から列席の欄が無くなっている', !doc61.querySelector('[data-pending="列席"]'));
+    check('店舗の画面から列席人数の欄も無くなっている', !doc61.querySelector('[data-pending="列席人数"]'));
+    check('代わりに同行者の欄が残っている', !!doc61.querySelector('[data-pending="同行者の有無"]'));
     const shopMemoPane61 = doc61.getElementById('shop-sec-memo');
     check('店舗は自分の欄（共有メモ（日本支店））に書き込める',
           !!shopMemoPane61.querySelector('[data-memo-input="共有メモ（日本支店）"]'));
@@ -4366,6 +4365,117 @@ function paneHidden(document, key) {
       doc70.getElementById('view-mode-card').click();
       return doc70.getElementById('view-mode-card').classList.contains('active');
     })());
+  }
+
+  // ---------------------------------------------------------------
+  section('U71. 【改善】現場からの指摘（メッセージの件数・同行者の年齢区分・依頼内容）（項目115）');
+  {
+    const ctx71 = makeServer();
+    const dom71 = await openApp(ctx71);
+    const doc71 = dom71.window.document;
+
+    // --- 依頼内容（旧「新規作成時のSTS(JP側)」） ---
+    await login(dom71, 'SHOP1', 'CHANGE-ME-SHOP1');
+    await settle();
+    doc71.getElementById('nav-shop-new').click();
+    await settle();
+    const statusLabel71 = doc71.getElementById('shop-new-initial-status-label');
+    check('「新規作成時のSTS(JP側)」という内部用語をやめている',
+          !statusLabel71.textContent.includes('STS'), statusLabel71.textContent);
+    check('「依頼内容」という名前になっている', statusLabel71.textContent.includes('依頼内容'),
+          statusLabel71.textContent);
+    check('必須であることが示されている', !!statusLabel71.querySelector('.req'));
+    const cards71 = [...doc71.querySelectorAll('#shop-new-initial-status-group .choice-card')];
+    check('押して選ぶ札の形になっている（他の入力欄に埋もれない）', cards71.length === 2,
+          String(cards71.length));
+    check('それぞれが何を意味するか添えてある',
+          cards71.every(c => !!c.querySelector('.field-note')));
+    check('選択肢の値は従来どおりRQとCHK',
+          cards71.map(c => c.querySelector('input').value).join(',') === 'RQ,CHK');
+
+    // --- メッセージの件数のしるし ---
+    // 現地支店から1通送っておく（手配課から見ると「相手から来た未読」になる）
+    const jp71 = ctx71.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    const made71 = ctx71.apiCreateReservation(jp71, 'VIE', '01 Msg\n02 Badge\nRQ 2027/09/09');
+    ctx71.apiCommitChanges(ctx71.apiLogin('VIE', 'CHANGE-ME-VIE').session.token,
+      made71.kanriNo, {}, '現地からの連絡です');
+
+    doc71.getElementById('nav-logout').click();
+    await settle();
+    await login(dom71, 'KANTO', 'CHANGE-ME-KANTO');
+    await settle();
+    [...doc71.querySelectorAll('#reservation-table-body tr, #reservation-list .res-card')]
+      .find(el => el.textContent.includes(made71.kanriNo)).click();
+    await settle(); await settle();
+    const msgBtn71 = [...doc71.querySelectorAll('#detail-quick-nav .tab-btn')]
+      .find(b => b.textContent.includes('メッセージ'));
+    check('クイックナビの「メッセージ」に件数のしるしが付く', !!msgBtn71.querySelector('.nav-badge'),
+          msgBtn71.textContent);
+    check('件数は数字で出る', /\d/.test(msgBtn71.querySelector('.nav-badge').textContent),
+          msgBtn71.querySelector('.nav-badge').textContent);
+    // 未読（相手から来て自分がまだ確認していないもの）があれば赤くする
+    const unreadItems71 = doc71.querySelectorAll('.history-item.unread').length;
+    check('未読があるときは赤いしるしになる',
+          unreadItems71 === 0 || msgBtn71.querySelector('.nav-badge').classList.contains('unread'),
+          `未読${unreadItems71}件 / ${msgBtn71.querySelector('.nav-badge').className}`);
+
+    // --- 同行者の年齢区分 ---
+    const detailHtml71 = doc71.getElementById('detail-content').innerHTML;
+    check('同行者の「大人」に年齢の範囲が書いてある', detailHtml71.includes('大人（12歳以上）'));
+    check('同行者の「子供」に年齢の範囲が書いてある', detailHtml71.includes('子供（2〜12歳未満）'));
+    check('同行者の「幼児」に年齢の範囲が書いてある', detailHtml71.includes('幼児（2歳未満）'));
+
+    // --- 列席は同行者と重複するので画面から外した ---
+    check('手配課の画面からも列席の欄が無くなっている',
+          !doc71.querySelector('[data-pending="列席"]'));
+    check('手配課の画面からも列席人数の欄が無くなっている',
+          !doc71.querySelector('[data-pending="列席人数"]'));
+
+    // --- 都市（支店）でプランを絞り込む ---
+    doc71.getElementById('nav-logout').click();
+    await settle();
+    await login(dom71, 'SHOP1', 'CHANGE-ME-SHOP1');
+    await settle();
+    doc71.getElementById('nav-shop-new').click();
+    await settle(); await settle();
+
+    const city1 = doc71.getElementById('shop-new-hopecity1');
+    const plan1 = doc71.getElementById('shop-new-hopeplan1');
+    check('希望日ごとに都市（支店）の選択欄がある', !!city1);
+    check('都市の選択欄は5つの希望日すべてにある',
+          [1, 2, 3, 4, 5].every(n => !!doc71.getElementById('shop-new-hopecity' + n)));
+    check('最初は「すべての都市」', city1.value === '' && city1.options[0].textContent.includes('すべて'),
+          city1.options[0] && city1.options[0].textContent);
+    const allPlanCount = plan1.querySelectorAll('option[value]:not([value=""])').length;
+    check('絞り込む前は全部のプランが出る（従来どおり）', allPlanCount > 0, String(allPlanCount));
+
+    // 都市を1つ選ぶと、その都市のプランだけになる
+    const someCity = [...city1.options].map(o => o.value).filter(Boolean)[0];
+    city1.value = someCity;
+    city1.dispatchEvent(new dom71.window.Event('change'));
+    await settle();
+    const narrowed = [...plan1.querySelectorAll('option[value]:not([value=""])')].map(o => o.value);
+    check('都市を選ぶとプランが絞り込まれる', narrowed.length > 0 && narrowed.length <= allPlanCount,
+          `${allPlanCount}件 → ${narrowed.length}件`);
+    check('絞り込んだあとに出るのは、その都市のプランだけ',
+          [...plan1.querySelectorAll('optgroup')].every(g => g.label === someCity),
+          [...plan1.querySelectorAll('optgroup')].map(g => g.label).join(','));
+
+    // 「すべての都市」に戻すと元に戻る
+    city1.value = '';
+    city1.dispatchEvent(new dom71.window.Event('change'));
+    await settle();
+    check('「すべての都市」に戻すと全部のプランに戻る',
+          plan1.querySelectorAll('option[value]:not([value=""])').length === allPlanCount,
+          String(plan1.querySelectorAll('option[value]:not([value=""])').length));
+
+    // 都市を絞り込んでも、すでに選んだプランは消えない
+    plan1.value = narrowed[0];
+    city1.value = '';
+    city1.dispatchEvent(new dom71.window.Event('change'));
+    await settle();
+    check('都市を切り替えても、選んでいたプランは選ばれたまま', plan1.value === narrowed[0],
+          `${plan1.value} / 期待 ${narrowed[0]}`);
   }
 
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);

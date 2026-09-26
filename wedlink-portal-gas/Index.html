@@ -264,14 +264,15 @@
               <label for="shop-new-team">該当の手配課</label>
               <select id="shop-new-team"></select>
             </div>
-            <div class="form-field">
-              <label id="shop-new-initial-status-label">新規作成時のSTS(JP側)</label>
-              <!-- ★要件（項目101）：ここは「選ぶ」形のプルダウンではなく、チェックして選ぶ形にする。
-                   RQとCHKは同時には成り立たない（どちらか一方）ので、両方にチェックが入らない
-                   ラジオ形式のチェック欄にしている。 -->
-              <div id="shop-new-initial-status-group" class="status-check-group" role="radiogroup" aria-labelledby="shop-new-initial-status-label">
-                <label class="checkbox-label"><input type="radio" name="shop-new-initial-status-radio" value="RQ" checked> RQ（予約依頼）</label>
-                <label class="checkbox-label"><input type="radio" name="shop-new-initial-status-radio" value="CHK"> CHK（空き確認のみ）</label>
+            <!-- ★要件変更（項目115）：ここは「予約を依頼するのか、空きを確認するだけなのか」という
+                 この依頼のいちばん根本の選択なのに、名前が「新規作成時のSTS(JP側)」という内部用語で、
+                 見た目も他の欄と同じだったため見落として進んでしまう、という指摘があった。
+                 名前を「依頼内容」に変え、押して選ぶ大きな札にして、それぞれが何を意味するかも添える。 -->
+            <div class="form-field wide">
+              <label id="shop-new-initial-status-label">依頼内容 <span class="req">必須</span></label>
+              <div id="shop-new-initial-status-group" class="status-check-group choice-cards" role="radiogroup" aria-labelledby="shop-new-initial-status-label">
+                <label class="checkbox-label choice-card"><input type="radio" name="shop-new-initial-status-radio" value="RQ" checked><span class="choice-card-body"><span class="choice-card-title">RQ（予約依頼）</span><span class="field-note">この日で予約をお願いする</span></span></label>
+                <label class="checkbox-label choice-card"><input type="radio" name="shop-new-initial-status-radio" value="CHK"><span class="choice-card-body"><span class="choice-card-title">CHK（空き確認のみ）</span><span class="field-note">予約はせず、空いているかだけ確認する</span></span></label>
               </div>
             </div>
           </div>
@@ -333,6 +334,10 @@
                 </div>
               </div>
               <div class="form-field">
+                <label for="shop-new-hopecity1">都市（支店）</label>
+                <select id="shop-new-hopecity1"><option value="">すべての都市</option></select>
+              </div>
+              <div class="form-field">
                 <label for="shop-new-hopeplan1">プラン</label>
                 <select id="shop-new-hopeplan1"><option value="">プラン未設定</option></select>
               </div>
@@ -362,6 +367,10 @@
                   <input id="shop-new-hope2" type="date">
                   <select id="shop-new-hopetime2" class="shop-new-hopetime hidden" aria-label="時間帯（第二希望）"><option value="">-</option><option value="AM">AM</option><option value="PM">PM</option></select>
                 </div>
+              </div>
+              <div class="form-field">
+                <label for="shop-new-hopecity2">都市（支店）</label>
+                <select id="shop-new-hopecity2"><option value="">すべての都市</option></select>
               </div>
               <div class="form-field">
                 <label for="shop-new-hopeplan2">プラン</label>
@@ -397,6 +406,10 @@
                   </div>
                 </div>
                 <div class="form-field">
+                  <label for="shop-new-hopecity3">都市（支店）</label>
+                  <select id="shop-new-hopecity3"><option value="">すべての都市</option></select>
+                </div>
+                <div class="form-field">
                   <label for="shop-new-hopeplan3">プラン</label>
                   <select id="shop-new-hopeplan3"><option value="">プラン未設定</option></select>
                 </div>
@@ -428,6 +441,10 @@
                   </div>
                 </div>
                 <div class="form-field">
+                  <label for="shop-new-hopecity4">都市（支店）</label>
+                  <select id="shop-new-hopecity4"><option value="">すべての都市</option></select>
+                </div>
+                <div class="form-field">
                   <label for="shop-new-hopeplan4">プラン</label>
                   <select id="shop-new-hopeplan4"><option value="">プラン未設定</option></select>
                 </div>
@@ -457,6 +474,10 @@
                     <input id="shop-new-hope5" type="date">
                     <select id="shop-new-hopetime5" class="shop-new-hopetime hidden" aria-label="時間帯（第五希望）"><option value="">-</option><option value="AM">AM</option><option value="PM">PM</option></select>
                   </div>
+                </div>
+                <div class="form-field">
+                  <label for="shop-new-hopecity5">都市（支店）</label>
+                  <select id="shop-new-hopecity5"><option value="">すべての都市</option></select>
                 </div>
                 <div class="form-field">
                   <label for="shop-new-hopeplan5">プラン</label>
