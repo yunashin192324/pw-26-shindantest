@@ -193,6 +193,37 @@
     });
   }
 
+  /* ---------------- place picker (location page) ----------------
+     The chosen place travels with every booking link on the page as &place=<type>. */
+  var currentPlace = "";
+  var picker = $("[data-place-picker]");
+  function applyPlace() {
+    $$('a[href*="/pages/propose-booking?loc="]').forEach(function (a) {
+      var u = new URL(a.getAttribute("href"), location.href);
+      if (currentPlace) u.searchParams.set("place", currentPlace); else u.searchParams.delete("place");
+      a.setAttribute("href", u.pathname + u.search);
+    });
+  }
+  function selectPlace(type) {
+    if (!picker) return;
+    currentPlace = type;
+    $$(".place-chip", picker).forEach(function (c) {
+      var on = c.getAttribute("data-place") === type;
+      c.classList.toggle("is-selected", on);
+      c.setAttribute("aria-checked", String(on));
+    });
+    $$("[data-place-panel]", picker).forEach(function (p) { p.hidden = p.getAttribute("data-place-panel") !== type; });
+    applyPlace();
+  }
+  if (picker) {
+    picker.addEventListener("click", function (e) {
+      var c = e.target.closest("[data-place]");
+      if (c) selectPlace(c.getAttribute("data-place"));
+    });
+    var fromUrl = new URLSearchParams(location.search).get("place");
+    if (fromUrl && picker.querySelector('[data-place="' + fromUrl.replace(/[^a-z]/g, "") + '"]')) selectPlace(fromUrl);
+  }
+
   /* ---------------- 14-day quick check (location page) ---------------- */
   var box = $("[data-avail]");
   if (box) {
@@ -237,6 +268,7 @@
         '<div class="slots" role="group" aria-label="時間を選ぶ">' + slots + "</div>" +
         '<div class="avail-go">' + go + "</div>" +
         '<div class="avail-more"><a class="link" href="' + bookBase + '">もっと先の日付を見る <span class="arrow" aria-hidden="true">→</span></a></div>';
+      applyPlace();
     }
     box.addEventListener("click", function (e) {
       var d = e.target.closest(".day-btn:not(:disabled)"), t = e.target.closest(".slot:not(:disabled)");

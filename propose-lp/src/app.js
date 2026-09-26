@@ -110,17 +110,40 @@
       (loc ? '<a class="btn btn-block plan-cta" href="#/book?loc=' + loc.id + '">この場所で予約する <span class="arrow" aria-hidden="true">→</span></a>' : "")
     );
   }
-  function venueSentence(l) {
-    var parts = [];
-    if (l.hotels.length) parts.push(l.hotels.slice(0, 2).join("、") + "などのホテル");
-    if (l.chapels.length) parts.push(l.chapels.slice(0, 2).join("、") + "などのチャペル");
-    return "ビーチや街だけでなく、" + parts.join("や、") + "でもプロポーズできます。";
+  // ---- proposal places (beach / chapel / church / monument / restaurant / hotel) ----
+  function placeNames(l) { return l.placeList.map(function (p) { return D.getPlaceType(p.type).ja; }); }
+  var FEE_TYPES = ["chapel", "church", "restaurant", "hotel"];
+  // The place chosen on a location page travels with every booking link on it.
+  var locPlace = "";
+  function withPlace(href) {
+    href = href.replace(/&place=[^&]*/, "");
+    return locPlace ? href + "&place=" + encodeURIComponent(locPlace) : href;
   }
-  function venueCols(l) {
-    function col(en, ja, list) {
-      return list.length ? '<div class="venue-col"><p class="venue-type">' + en + "<small>" + ja + "</small></p><ul>" + list.map(function (v) { return "<li>" + esc(v) + "</li>"; }).join("") + "</ul></div>" : "";
-    }
-    return '<div class="venue-cols">' + col("HOTEL", "ホテル", l.hotels) + col("CHAPEL", "チャペル", l.chapels) + "</div>";
+  function applyPlaceToLinks() {
+    $$('a[href^="#/book?loc="]').forEach(function (a) { a.setAttribute("href", withPlace(a.getAttribute("href"))); });
+  }
+  function placePicker(l) {
+    var opts = [{ type: "", venues: [] }].concat(l.placeList);
+    return (
+      '<div class="place reveal" id="loc-place">' +
+        '<div class="place-head"><span class="label">Place</span><h3 class="h3">どこで伝えますか？</h3>' +
+        "<p>" + esc(l.nameJa) + "では、次の場所から選べます。予約のときにも選び直せます。</p></div>" +
+        '<div class="place-chips" role="radiogroup" aria-label="プロポーズの場所">' + opts.map(function (o) {
+          var t = o.type ? D.getPlaceType(o.type) : null;
+          var on = locPlace === o.type;
+          return '<button type="button" role="radio" aria-checked="' + on + '" class="place-chip' + (on ? " is-selected" : "") + '" data-place="' + o.type + '">' +
+            '<span class="en">' + (t ? t.en : "ANY") + "</span>" + (t ? t.ja : "おまかせ") + "</button>";
+        }).join("") + "</div>" +
+        '<div class="place-detail" aria-live="polite">' + placeDetail(l) + "</div>" +
+      "</div>"
+    );
+  }
+  function placeDetail(l) {
+    if (!locPlace) return "<p><b>おまかせ</b>" + esc(l.meetingPoint) + "など、その日にいちばん合う場所をご案内します。</p>";
+    var t = D.getPlaceType(locPlace), p = l.placeList.filter(function (x) { return x.type === locPlace; })[0];
+    return "<p><b>" + t.ja + "</b>" + t.desc + "</p>" +
+      (p && p.venues.length ? '<p class="place-venues">選べる会場：' + p.venues.map(esc).join("／") + "</p>" : '<p class="place-venues">会場は、ご希望に合わせてご案内します。</p>') +
+      (FEE_TYPES.indexOf(locPlace) > -1 ? '<p class="note">' + VENUE_NOTE + "</p>" : "");
   }
   var VENUE_NOTE = "※ 会場の使用料や条件は会場ごとに異なるため、確定のご連絡でご案内します。";
 
@@ -140,6 +163,7 @@
           '<div class="dest-body">' +
             '<div class="dest-name">' + esc(l.name) + "</div>" +
             '<div class="dest-ja">' + esc(l.nameJa) + "</div>" +
+            '<div class="dest-places">' + placeNames(l).join("・") + "</div>" +
             '<div class="dest-price">From<span class="price">' + yen(l.fromPrice) + "</span></div>" +
             '<span class="dest-more"><span><span class="sm-hide">プロポーズ</span>プランを見る</span><span aria-hidden="true">→</span></span>' +
           "</div>" +
@@ -168,16 +192,17 @@
 
     $("#top-plan").innerHTML = planHTML(null);
 
-    $("#venue-list").innerHTML = D.locations.filter(function (l) { return l.hotels.length || l.chapels.length; }).map(function (l) {
+    $("#place-list").innerHTML = D.placeTypes.map(function (t) {
+      var locs = D.locations.filter(function (l) { return l.placeList.some(function (p) { return p.type === t.id; }); });
+      if (!locs.length) return "";
       return (
-        '<a class="venue-row reveal" href="#/propose/' + l.id + '">' +
-          '<div class="venue-loc"><span class="en">' + esc(l.name) + "</span><small>" + esc(l.nameJa) + "</small></div>" +
-          '<div class="venue-names">' +
-            (l.hotels.length ? "<p><b>HOTEL</b>" + l.hotels.map(esc).join("／") + "</p>" : "") +
-            (l.chapels.length ? "<p><b>CHAPEL</b>" + l.chapels.map(esc).join("／") + "</p>" : "") +
-          "</div>" +
-          '<span class="arrow" aria-hidden="true">→</span>' +
-        "</a>"
+        '<div class="place-row reveal">' +
+          '<div class="place-type"><span class="en">' + t.en + "</span><b>" + t.ja + "</b></div>" +
+          '<p class="place-desc">' + esc(t.desc) + "</p>" +
+          '<div class="place-cities">' + locs.map(function (l) {
+            return '<a href="#/propose/' + l.id + "?place=" + t.id + '">' + esc(l.nameJa) + "</a>";
+          }).join("") + "</div>" +
+        "</div>"
       );
     }).join("");
 
@@ -224,12 +249,14 @@
   /* =============================================================
      LOCATION
      ============================================================= */
-  function renderLocation(id) {
+  function renderLocation(id, q) {
     var l = D.getLocation(id);
     var view = $("#view-location");
     if (!l) { view.innerHTML = '<section class="sec"><div class="wrap"><p>旅行先が見つかりませんでした。</p><a class="link" href="#destinations">旅行先一覧へ</a></div></section>'; return; }
 
     document.title = l.nameJa + "でプロポーズ｜世界のプロポーズプラン";
+    var qPlace = q && q.place;
+    locPlace = l.placeList.some(function (p) { return p.type === qPlace; }) ? qPlace : "";
 
     var steps = D.proposalSteps.map(function (s, i) {
       var text = i === 0 ? l.meetingPoint + "で、フォトグラファーがお二人をお迎えします。" : s.text;
@@ -272,12 +299,7 @@
             '<div class="fact"><dt>Support</dt><dd>日本語対応<small>当日の連絡も日本語で</small></dd></div>' +
           "</dl>" +
           '<p class="note facts-note">※ 料金・所要時間・受付締切・確定連絡までの時間・雨天対応・受付状況はデモ用の仮データです。</p>' +
-          ((l.hotels.length || l.chapels.length) ?
-            '<div class="venues reveal">' +
-              '<div class="venues-head"><span class="label">Venue</span><h3 class="h3">ホテルやチャペルでも。</h3><p>' + esc(venueSentence(l)) + "</p></div>" +
-              venueCols(l) +
-              '<p class="note venues-note">' + VENUE_NOTE + "</p>" +
-            "</div>" : "") +
+          placePicker(l) +
         "</div>" +
       "</section>" +
 
@@ -329,6 +351,14 @@
       "</section>";
 
     renderAvail(l);
+    var picker = $("#loc-place", view);
+    picker.addEventListener("click", function (e) {
+      var c = e.target.closest("[data-place]"); if (!c) return;
+      locPlace = c.dataset.place;
+      $$(".place-chip", picker).forEach(function (x) { var on = x === c; x.classList.toggle("is-selected", on); x.setAttribute("aria-checked", String(on)); });
+      $(".place-detail", picker).innerHTML = placeDetail(l);
+      applyPlaceToLinks();
+    });
     observeReveals(view);
   }
 
@@ -383,6 +413,7 @@
         '<div class="slots" role="group" aria-label="時間を選ぶ">' + slots + "</div>" +
         '<div class="avail-go">' + go + "</div>" +
         '<div class="avail-more"><a class="link" href="#/book?loc=' + l.id + '">もっと先の日付を見る <span class="arrow" aria-hidden="true">→</span></a></div>';
+      applyPlaceToLinks();
     }
     box.addEventListener("click", function (e) {
       var d = e.target.closest(".day-btn:not(:disabled)");
@@ -400,6 +431,7 @@
     location: { ja: "旅行先", en: "DESTINATION" },
     date: { ja: "日付", en: "DATE" },
     time: { ja: "時間", en: "TIME" },
+    place: { ja: "場所", en: "PLACE" },
     plan: { ja: "プラン・オプション", en: "PLAN" },
     customer: { ja: "お客様情報", en: "YOUR DETAILS" },
     confirm: { ja: "リクエスト内容の確認", en: "REVIEW" }
@@ -420,7 +452,11 @@
   function bPlan() { var l = bLoc(); return l ? l.plans.filter(function (p) { return p.id === bk.plan; })[0] : null; }
   function optionAvailable(o) { var p = bPlan(); return !o.requiresPhoto || (!!p && p.hasPhoto); }
   function bOptions() { return D.options.filter(function (o) { return bk.options.indexOf(o.id) > -1 && optionAvailable(o); }); }
-  function hasVenues() { var l = bLoc(); return !!l && (l.hotels.length + l.chapels.length) > 0; }
+  function bPlaceEntry() { var l = bLoc(); return l ? l.placeList.filter(function (p) { return p.type === bk.place; })[0] || null : null; }
+  function placeLabel() {
+    if (!bk.place) return "おまかせ";
+    return D.getPlaceType(bk.place).ja + (bk.venue ? "・" + bk.venue : "");
+  }
   function bTotal() {
     var p = bPlan(); if (!p) return 0;
     return bOptions().reduce(function (s, o) { return s + o.price; }, p.price);
@@ -430,8 +466,9 @@
 
   function startBooking(params) {
     var l = params.loc && D.getLocation(params.loc);
-    bk = { loc: l ? l.id : null, date: null, time: null, plan: ["light", "standard", "luxury"].indexOf(params.plan) > -1 ? params.plan : "standard", venue: "", options: [], customer: {}, steps: [], i: 0, done: false };
-    bk.steps = (l ? [] : ["location"]).concat(["date", "time", "plan", "customer", "confirm"]);
+    bk = { loc: l ? l.id : null, date: null, time: null, plan: ["light", "standard", "luxury"].indexOf(params.plan) > -1 ? params.plan : "standard", place: "", venue: "", placeNote: "", placeSet: false, options: [], customer: {}, steps: [], i: 0, done: false };
+    bk.steps = (l ? [] : ["location"]).concat(["date", "time", "place", "plan", "customer", "confirm"]);
+    if (l && params.place && l.placeList.some(function (p) { return p.type === params.place; })) { bk.place = params.place; bk.placeSet = true; }
     if (l && params.date) {
       var st = D.dateStatus(l, params.date);
       if (st === "available" || st === "few") bk.date = params.date;
@@ -440,7 +477,7 @@
       var ss = D.slotStatus(l, bk.date, params.time);
       if (ss === "available" || ss === "few") bk.time = params.time;
     }
-    bk.i = bk.steps.indexOf(!bk.loc ? "location" : !bk.date ? "date" : !bk.time ? "time" : "plan");
+    bk.i = bk.steps.indexOf(!bk.loc ? "location" : !bk.date ? "date" : !bk.time ? "time" : !bk.placeSet ? "place" : "plan");
     calOffset = 0;
     if (bk.date) {
       var dd = new Date(bk.date + "T00:00:00"), t = D.today();
@@ -463,6 +500,7 @@
       case "location": return !!bk.loc;
       case "date": return !!bk.date;
       case "time": return !!bk.time;
+      case "place": return true;
       case "plan": return true;
       case "customer":
         var c = bk.customer;
@@ -484,7 +522,8 @@
     var l = bLoc();
     var chips = [];
     if (l && step !== "location") chips.push('<span class="chip"><span class="en">' + esc(l.name) + "</span>" + esc(l.nameJa) + '<button type="button" data-change="location">変更</button></span>');
-    if (bk.date && ["time", "plan", "customer", "confirm"].indexOf(step) > -1) chips.push('<span class="chip">' + fmtShort(bk.date) + (bk.time && step !== "time" ? " " + bk.time : "") + '<button type="button" data-change="date">変更</button></span>');
+    if (bk.date && ["time", "place", "plan", "customer", "confirm"].indexOf(step) > -1) chips.push('<span class="chip">' + fmtShort(bk.date) + (bk.time && step !== "time" ? " " + bk.time : "") + '<button type="button" data-change="date">変更</button></span>');
+    if (bk.placeSet && ["plan", "customer", "confirm"].indexOf(step) > -1) chips.push('<span class="chip">' + esc(placeLabel()) + '<button type="button" data-change="place">変更</button></span>');
     $("#bk-context").innerHTML = chips.join("");
 
     var body = $("#bk-body");
@@ -547,23 +586,32 @@
             (t === l.bestTime ? "<b>BEST TIME</b>" + esc(l.bestTimeNote) : "") + '</span><span class="st">' + STATUS[st].en + "</span></button>";
         }).join("") + "</div>";
     },
+    place: function () {
+      var l = bLoc(), entry = bPlaceEntry();
+      var opts = [{ type: "", venues: [] }].concat(l.placeList);
+      return '<h2 class="h2">プロポーズの場所を選ぶ</h2><p class="lede">' + esc(l.nameJa) + "で選べる場所です。会場を指定することもできます。</p>" +
+        '<div class="plan-toggle" role="radiogroup" aria-label="場所">' + opts.map(function (o) {
+          var t = o.type ? D.getPlaceType(o.type) : null, on = bk.place === o.type;
+          var sub = t ? t.desc + (o.venues.length ? "（会場の指定もできます）" : "") : esc(l.meetingPoint) + "など、その日にいちばん合う場所をご案内します。";
+          return '<button type="button" role="radio" aria-checked="' + on + '" class="plan-opt is-place' + (on ? " is-selected" : "") + '" data-place="' + o.type + '"><span class="radio"></span><span><span class="en">' +
+            (t ? t.en : "ANY") + '</span><b class="place-ja">' + (t ? t.ja : "おまかせ") + "</b><p>" + sub + "</p></span></button>";
+        }).join("") + "</div>" +
+        (entry && entry.venues.length ?
+          '<p class="sub-h">Venue</p>' +
+          '<div class="plan-toggle venue-toggle" role="radiogroup" aria-label="会場">' + [""].concat(entry.venues).map(function (v) {
+            var on = bk.venue === v;
+            return '<button type="button" role="radio" aria-checked="' + on + '" class="plan-opt is-compact' + (on ? " is-selected" : "") + '" data-pvenue="' + esc(v) + '"><span class="radio"></span><span>' + (v ? esc(v) : "指定なし（おすすめをご案内）") + "</span></button>";
+          }).join("") + "</div>" : "") +
+        (bk.place ? '<div class="field"><label for="c-placenote">ご希望があればご記入ください<span class="req" style="color:var(--ink-faint)">任意</span></label><input id="c-placenote" type="text" value="' + esc(bk.placeNote) + '" placeholder="例：滞在中のホテル名、行きたいお店など"></div>' : "") +
+        (FEE_TYPES.indexOf(bk.place) > -1 ? '<p class="note">' + VENUE_NOTE + "</p>" : "");
+    },
     plan: function () {
       var l = bLoc();
-      var venues = [{ id: "", type: "", name: "おまかせ（おすすめの場所）" }]
-        .concat(l.hotels.map(function (v) { return { id: v, type: "HOTEL", name: v }; }))
-        .concat(l.chapels.map(function (v) { return { id: v, type: "CHAPEL", name: v }; }));
       return '<h2 class="h2">プランとオプション</h2><p class="lede">プランを選び、必要なものだけ追加してください。</p>' +
         '<div class="plan-toggle" role="radiogroup" aria-label="プラン">' + l.plans.map(function (p) {
           return '<button type="button" role="radio" aria-checked="' + (bk.plan === p.id) + '" class="plan-opt' + (bk.plan === p.id ? " is-selected" : "") + '" data-plan="' + p.id + '"><span class="radio"></span><span><span class="en">' +
             esc(p.name) + "</span><p>" + esc(p.nameJa) + "｜" + esc(p.summary) + '</p></span><span class="price">' + yen(p.price) + "</span></button>";
         }).join("") + "</div>" +
-        (hasVenues() ?
-          '<p class="sub-h">Venue</p><p class="note" style="margin-bottom:12px">ホテルやチャペルでのプロポーズも手配できます。' + VENUE_NOTE.replace("※ ", "") + "</p>" +
-          '<div class="plan-toggle venue-toggle" role="radiogroup" aria-label="会場">' + venues.map(function (v) {
-            var on = bk.venue === v.id;
-            return '<button type="button" role="radio" aria-checked="' + on + '" class="plan-opt is-compact' + (on ? " is-selected" : "") + '" data-venue="' + esc(v.id) + '"><span class="radio"></span><span>' +
-              (v.type ? '<span class="en venue-kind">' + v.type + "</span>" : "") + esc(v.name) + "</span></button>";
-          }).join("") + "</div>" : "") +
         '<p class="sub-h">Option</p>' +
         D.options.map(function (o) {
           var ok = optionAvailable(o), on = ok && bk.options.indexOf(o.id) > -1;
@@ -603,7 +651,7 @@
       ["Meeting", esc(l.meetingPoint)],
       ["Plan", esc(p.name) + "<small>" + esc(p.summary) + "・" + yen(p.price) + "</small>"]
     ];
-    if (hasVenues()) rows.push(["Venue", bk.venue ? esc(bk.venue) : "おまかせ"]);
+    rows.push(["Place", esc(placeLabel()) + (bk.placeNote ? "<small>" + esc(bk.placeNote) + "</small>" : "")]);
     rows.push(["Flexible", bk.customer.flex ? "同じ日の別の時間でも可" : "希望の時間のみ"]);
     rows.push(["Option", extra.length ? extra.map(function (o) { return esc(o.nameJa) + " +" + yen(o.price); }).join("<br>") : "なし"]);
     return '<dl class="summary">' + rows.map(function (r) { return '<div class="sum-row"><dt>' + r[0] + "</dt><dd>" + r[1] + "</dd></div>"; }).join("") +
@@ -614,7 +662,7 @@
     location: function (b) {
       b.addEventListener("click", function (e) {
         var btn = e.target.closest("[data-loc]"); if (!btn) return;
-        if (bk.loc !== btn.dataset.loc) { bk.date = null; bk.time = null; bk.venue = ""; bk.calSet = false; }
+        if (bk.loc !== btn.dataset.loc) { bk.date = null; bk.time = null; bk.place = ""; bk.venue = ""; bk.placeNote = ""; bk.placeSet = false; bk.calSet = false; }
         bk.loc = btn.dataset.loc;
         $$("[data-loc]", b).forEach(function (x) { x.classList.toggle("is-selected", x === btn); });
         updateBar(); autoNext();
@@ -639,13 +687,27 @@
         updateBar(); autoNext();
       });
     },
+    place: function (b) {
+      b.addEventListener("click", function (e) {
+        var c = e.target.closest("[data-place]"), v = e.target.closest("[data-pvenue]");
+        if (c) {
+          if (bk.place !== c.dataset.place) { bk.venue = ""; }
+          bk.place = c.dataset.place; bk.placeSet = true;
+          bRender();
+          // Types without named venues need no second choice: move on like the date/time steps.
+          var entry = bPlaceEntry();
+          if (!entry || !entry.venues.length) { if (!bk.place) autoNext(); }
+        }
+        if (v) { bk.venue = v.dataset.pvenue; bRender(); }
+      });
+      var note = $("#c-placenote", b);
+      if (note) note.addEventListener("input", function () { bk.placeNote = note.value; });
+    },
     plan: function (b) {
       b.addEventListener("click", function (e) {
         var p = e.target.closest("[data-plan]");
-        var v = e.target.closest("[data-venue]");
         var o = e.target.closest("[data-opt]:not(:disabled)");
         if (p) { bk.plan = p.dataset.plan; bk.options = bk.options.filter(function (id) { return optionAvailable(D.options.filter(function (x) { return x.id === id; })[0]); }); bRender(); }
-        if (v) { bk.venue = v.dataset.venue; bRender(); }
         if (o) {
           var i = bk.options.indexOf(o.dataset.opt);
           if (i > -1) bk.options.splice(i, 1); else bk.options.push(o.dataset.opt);
@@ -699,7 +761,7 @@
       if (bk.steps[0] !== "location") bk.steps.unshift("location");
       bk.i = 0;
     } else {
-      bk.i = bk.steps.indexOf("date");
+      bk.i = bk.steps.indexOf(c.dataset.change === "place" ? "place" : "date");
     }
     bRender();
   });
@@ -715,7 +777,7 @@
     if (h.charAt(0) !== "/") return { view: "top", anchor: h };
     var parts = h.split("?"), path = parts[0].split("/").filter(Boolean), q = {};
     (parts[1] || "").split("&").forEach(function (kv) { var p = kv.split("="); if (p[0]) q[p[0]] = decodeURIComponent(p[1] || ""); });
-    if (path[0] === "propose" && path[1]) return { view: "location", id: path[1] };
+    if (path[0] === "propose" && path[1]) return { view: "location", id: path[1], q: q };
     if (path[0] === "book") return { view: "booking", q: q };
     return { view: "top" };
   }
@@ -743,12 +805,13 @@
         window.scrollTo(0, 0);
       }
     } else if (r.view === "location") {
-      renderLocation(r.id);
+      renderLocation(r.id, r.q);
       show("location");
       var l = D.getLocation(r.id);
       if (l) {
         setHeaderCta("#/book?loc=" + l.id, "予約する");
         setSticky('<div class="sticky-price"><small>FROM</small><span class="price">' + yen(l.fromPrice) + '</span></div><a class="btn" href="#/book?loc=' + l.id + '">この場所で予約する</a>');
+        applyPlaceToLinks();
       }
       window.scrollTo(0, 0);
     } else {

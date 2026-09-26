@@ -39,6 +39,7 @@
       location: { ja: "旅行先", en: "DESTINATION" },
       date: { ja: "日付", en: "DATE" },
       time: { ja: "時間", en: "TIME" },
+      place: { ja: "場所", en: "PLACE" },
       plan: { ja: "プラン・オプション", en: "PLAN" },
       customer: { ja: "お客様情報", en: "YOUR DETAILS" },
       confirm: { ja: "リクエスト内容の確認", en: "REVIEW" }
@@ -58,7 +59,15 @@
     function bPlan() { var l = bLoc(); return l ? l.plans.filter(function (p) { return p.id === bk.plan; })[0] || l.plans[0] : null; }
     function bTotal() { return describe(bk).total; }
     function needsHotel() { return describe(bk).extra.some(function (o) { return o.requiresHotel; }); }
-    function venuesOf(l) { return l ? (l.hotels || []).map(function (v) { return { type: "HOTEL", name: v }; }).concat((l.chapels || []).map(function (v) { return { type: "CHAPEL", name: v }; })) : []; }
+    var FEE_TYPES = ["chapel", "church", "restaurant", "hotel"];
+    var VENUE_NOTE = "※ 会場の使用料や条件は会場ごとに異なるため、確定のご連絡でご案内します。";
+    function placeType(id) { return (C.placeTypes || []).filter(function (t) { return t.id === id; })[0] || null; }
+    function placesOf(l) { return (l && l.places) || []; }
+    function placeEntry(l, type) { return placesOf(l).filter(function (p) { return p.type === type; })[0] || null; }
+    function placeLabel(s) {
+      var t = s.place && placeType(s.place);
+      return t ? t.ja + (s.venue ? "・" + s.venue : "") : "おまかせ";
+    }
     function optionAvailable(o, p) { return !o.requiresPhoto || (!!p && p.hasPhoto); }
     function staff(p) { return p && p.hasPhoto ? "フォトグラファー" : "担当スタッフ"; }
     function hasSlots() { var l = bLoc(); return !!l && l.timeSlots.length > 0; }
@@ -67,21 +76,23 @@
     function stepsFor(withLocation) {
       var s = withLocation ? ["location", "date"] : ["date"];
       if (!bk.loc || hasSlots()) s.push("time");
+      if (!bk.loc || placesOf(bLoc()).length) s.push("place");
       return s.concat(["plan", "customer", "confirm"]);
     }
 
     function startBooking(params, saved) {
       var l = params.loc && getLocation(params.loc);
-      bk = { loc: l ? l.id : null, date: null, time: null, plan: ["light", "standard", "luxury"].indexOf(params.plan) > -1 ? params.plan : "standard", venue: "", options: [], customer: {}, steps: [], i: 0 };
+      bk = { loc: l ? l.id : null, date: null, time: null, plan: ["light", "standard", "luxury"].indexOf(params.plan) > -1 ? params.plan : "standard", place: "", venue: "", placeNote: "", placeSet: false, options: [], customer: {}, steps: [], i: 0 };
       if (saved) {
-        bk.loc = saved.loc; bk.date = saved.date; bk.time = saved.time; bk.plan = saved.plan; bk.venue = saved.venue || ""; bk.options = saved.options || []; bk.customer = saved.customer || {};
+        bk.loc = saved.loc; bk.date = saved.date; bk.time = saved.time; bk.plan = saved.plan; bk.place = saved.place || ""; bk.venue = saved.venue || ""; bk.placeNote = saved.placeNote || ""; bk.placeSet = true; bk.options = saved.options || []; bk.customer = saved.customer || {};
         l = getLocation(bk.loc);
       }
+      if (l && !saved && params.place && placeEntry(l, params.place)) { bk.place = params.place; bk.placeSet = true; }
       bk.steps = stepsFor(!l);
       if (l && !saved && params.date && A.isOpen(A.dateStatus(l, params.date))) bk.date = params.date;
       if (l && !saved && bk.date && params.time && l.timeSlots.indexOf(params.time) > -1 && A.isOpen(A.slotStatus(l, bk.date, params.time))) bk.time = params.time;
       if (saved) bk.i = bk.steps.indexOf("confirm");
-      else bk.i = bk.steps.indexOf(!bk.loc ? "location" : !bk.date ? "date" : (hasSlots() && !bk.time) ? "time" : "plan");
+      else bk.i = bk.steps.indexOf(!bk.loc ? "location" : !bk.date ? "date" : (hasSlots() && !bk.time) ? "time" : (!bk.placeSet && bk.steps.indexOf("place") > -1) ? "place" : "plan");
       calOffset = 0;
       if (bk.date) {
         var dd = new Date(bk.date + "T00:00:00"), t = A.today();
@@ -106,6 +117,7 @@
         case "location": return !!bk.loc;
         case "date": return !!bk.date;
         case "time": return !!bk.time;
+        case "place": return true;
         case "plan": return true;
         case "customer":
           var c = bk.customer;
@@ -125,7 +137,8 @@
 
       var l = bLoc(), chips = [];
       if (l && step !== "location") chips.push('<span class="chip"><span class="en">' + esc(l.name) + "</span>" + esc(l.nameJa) + '<button type="button" data-change="location">変更</button></span>');
-      if (bk.date && ["time", "plan", "customer", "confirm"].indexOf(step) > -1) chips.push('<span class="chip">' + A.fmtShort(bk.date) + (bk.time && step !== "time" ? " " + esc(bk.time) : "") + '<button type="button" data-change="date">変更</button></span>');
+      if (bk.date && ["time", "place", "plan", "customer", "confirm"].indexOf(step) > -1) chips.push('<span class="chip">' + A.fmtShort(bk.date) + (bk.time && step !== "time" ? " " + esc(bk.time) : "") + '<button type="button" data-change="date">変更</button></span>');
+      if (bk.placeSet && ["plan", "customer", "confirm"].indexOf(step) > -1) chips.push('<span class="chip">' + esc(placeLabel(bk)) + '<button type="button" data-change="place">変更</button></span>');
       $("#bk-context").innerHTML = chips.join("");
 
       var body = $("#bk-body");
@@ -190,21 +203,33 @@
               (l.bestTime && t === l.bestTime ? "<b>BEST TIME</b>" + esc(l.bestTimeNote) : "") + '</span><span class="st">' + STATUS[st].en + "</span></button>";
           }).join("") + "</div>";
       },
+      place: function () {
+        var l = bLoc(), entry = placeEntry(l, bk.place);
+        var opts = [{ type: "", venues: [] }].concat(placesOf(l));
+        return '<h2 class="h2">プロポーズの場所を選ぶ</h2><p class="lede">' + esc(l.nameJa) + "で選べる場所です。会場を指定することもできます。</p>" +
+          '<div class="plan-toggle" role="radiogroup" aria-label="場所">' + opts.map(function (o) {
+            var t = o.type ? placeType(o.type) : null, on = bk.place === o.type;
+            var sub = t ? esc(t.desc) + (o.venues.length ? "（会場の指定もできます）" : "") : esc(l.meetingPoint || "おすすめの場所") + "など、その日にいちばん合う場所をご案内します。";
+            return '<button type="button" role="radio" aria-checked="' + on + '" class="plan-opt is-place' + (on ? " is-selected" : "") + '" data-place="' + esc(o.type) + '"><span class="radio"></span><span><span class="en">' +
+              (t ? t.en : "ANY") + '</span><b class="place-ja">' + (t ? esc(t.ja) : "おまかせ") + "</b><p>" + sub + "</p></span></button>";
+          }).join("") + "</div>" +
+          (entry && entry.venues.length ?
+            '<p class="sub-h">Venue</p>' +
+            '<div class="plan-toggle venue-toggle" role="radiogroup" aria-label="会場">' + [""].concat(entry.venues).map(function (v) {
+              var on = bk.venue === v;
+              return '<button type="button" role="radio" aria-checked="' + on + '" class="plan-opt is-compact' + (on ? " is-selected" : "") + '" data-pvenue="' + esc(v) + '"><span class="radio"></span><span>' + (v ? esc(v) : "指定なし（おすすめをご案内）") + "</span></button>";
+            }).join("") + "</div>" : "") +
+          (bk.place ? '<div class="field"><label for="c-placenote">ご希望があればご記入ください<span class="req" style="color:var(--ink-faint)">任意</span></label><input id="c-placenote" type="text" maxlength="200" value="' + esc(bk.placeNote) + '" placeholder="例：滞在中のホテル名、行きたいお店など"></div>' : "") +
+          (FEE_TYPES.indexOf(bk.place) > -1 ? '<p class="note">' + VENUE_NOTE + "</p>" : "");
+      },
       plan: function () {
-        var l = bLoc(), cur = bPlan(), venues = venuesOf(l);
+        var l = bLoc(), cur = bPlan();
         return '<h2 class="h2">プランとオプション</h2><p class="lede">プランを選び、必要なものだけ追加してください。</p>' +
           '<div class="plan-toggle" role="radiogroup" aria-label="プラン">' + l.plans.map(function (p) {
             var on = cur.id === p.id;
             return '<button type="button" role="radio" aria-checked="' + on + '" class="plan-opt' + (on ? " is-selected" : "") + '" data-plan="' + p.id + '"><span class="radio"></span><span><span class="en">' +
               esc(p.name) + "</span><p>" + esc(p.nameJa) + "｜" + esc(p.summary) + '</p></span><span class="price">' + money(p.price) + "</span></button>";
           }).join("") + "</div>" +
-          (venues.length ?
-            '<p class="sub-h">Venue</p><p class="note" style="margin-bottom:12px">ホテルやチャペルでのプロポーズも手配できます。会場の使用料や条件は会場ごとに異なるため、確定のご連絡でご案内します。</p>' +
-            '<div class="plan-toggle venue-toggle" role="radiogroup" aria-label="会場">' + [{ type: "", name: "" }].concat(venues).map(function (v) {
-              var on = bk.venue === v.name;
-              return '<button type="button" role="radio" aria-checked="' + on + '" class="plan-opt is-compact' + (on ? " is-selected" : "") + '" data-venue="' + esc(v.name) + '"><span class="radio"></span><span>' +
-                (v.type ? '<span class="en venue-kind">' + v.type + "</span>" + esc(v.name) : "おまかせ（おすすめの場所）") + "</span></button>";
-            }).join("") + "</div>" : "") +
           (C.options.length ? '<p class="sub-h">Option</p>' + C.options.map(function (o) {
             var ok = optionAvailable(o, cur), on = ok && bk.options.indexOf(o.id) > -1;
             return '<button type="button" role="checkbox" aria-checked="' + on + '" class="opt-pick' + (on ? " is-on" : "") + '" data-opt="' + esc(o.id) + '"' + (ok ? "" : " disabled") + '><span class="box">' + (on ? "✓" : "") +
@@ -240,7 +265,7 @@
       var p = l && (l.plans.filter(function (x) { return x.id === s.plan; })[0] || l.plans[0]);
       var extra = C.options.filter(function (o) { return (s.options || []).indexOf(o.id) > -1 && optionAvailable(o, p); });
       var total = p ? extra.reduce(function (sum, o) { return sum + o.price; }, p.price) : 0;
-      return { l: l, p: p, extra: extra, total: total, hasVenues: venuesOf(l).length > 0 };
+      return { l: l, p: p, extra: extra, total: total, hasPlaces: placesOf(l).length > 0 };
     }
     function summaryHTML(s) {
       var x = describe(s), l = x.l, p = x.p;
@@ -252,7 +277,7 @@
       if (s.time) rows.push(["Time", esc(s.time) + (l.bestTime && s.time === l.bestTime ? "<small>BEST TIME・" + esc(l.bestTimeNote) + "</small>" : "")]);
       rows.push(["Meeting", esc(l.meetingPoint || "確定のご連絡でご案内します")]);
       rows.push(["Plan", esc(p.name) + "<small>" + esc(p.summary) + "・" + money(p.price) + "</small>"]);
-      if (x.hasVenues) rows.push(["Venue", s.venue ? esc(s.venue) : "おまかせ"]);
+      if (x.hasPlaces) rows.push(["Place", esc(placeLabel(s)) + (s.placeNote ? "<small>" + esc(s.placeNote) + "</small>" : "")]);
       if (s.time) rows.push(["Flexible", s.customer && s.customer.flex ? "同じ日の別の時間でも可" : "希望の時間のみ"]);
       rows.push(["Option", x.extra.length ? x.extra.map(function (o) { return esc(o.nameJa || o.name) + " +" + money(o.price); }).join("<br>") : "なし"]);
       return '<dl class="summary">' + rows.map(function (r) { return '<div class="sum-row"><dt>' + r[0] + "</dt><dd>" + r[1] + "</dd></div>"; }).join("") +
@@ -263,7 +288,7 @@
       location: function (b) {
         b.addEventListener("click", function (e) {
           var btn = e.target.closest("[data-loc]"); if (!btn) return;
-          if (bk.loc !== btn.getAttribute("data-loc")) { bk.date = null; bk.time = null; bk.venue = ""; bk.calSet = false; }
+          if (bk.loc !== btn.getAttribute("data-loc")) { bk.date = null; bk.time = null; bk.place = ""; bk.venue = ""; bk.placeNote = ""; bk.placeSet = false; bk.calSet = false; }
           bk.loc = btn.getAttribute("data-loc");
           // The time step only exists for destinations with fixed time slots.
           var rest = stepsFor(true);
@@ -291,12 +316,24 @@
           updateBar(); autoNext();
         });
       },
+      place: function (b) {
+        b.addEventListener("click", function (e) {
+          var c = e.target.closest("[data-place]"), v = e.target.closest("[data-pvenue]");
+          if (c) {
+            if (bk.place !== c.getAttribute("data-place")) bk.venue = "";
+            bk.place = c.getAttribute("data-place"); bk.placeSet = true;
+            bRender();
+            if (!bk.place) autoNext(); // "おまかせ" needs nothing else
+          }
+          if (v) { bk.venue = v.getAttribute("data-pvenue"); bRender(); }
+        });
+        var note = $("#c-placenote", b);
+        if (note) note.addEventListener("input", function () { bk.placeNote = note.value; });
+      },
       plan: function (b) {
         b.addEventListener("click", function (e) {
           var p = e.target.closest("[data-plan]"), o = e.target.closest("[data-opt]:not(:disabled)");
-          var v = e.target.closest("[data-venue]");
           if (p) { bk.plan = p.getAttribute("data-plan"); bRender(); }
-          if (v) { bk.venue = v.getAttribute("data-venue"); bRender(); }
           if (o) {
             var id = o.getAttribute("data-opt"), i = bk.options.indexOf(id);
             if (i > -1) bk.options.splice(i, 1); else bk.options.push(id);
@@ -330,7 +367,7 @@
         "時間の調整: " + (c.flex ? "同じ日の別の時間でも可" : "希望の時間のみ"),
         "集合場所: " + (l.meetingPoint || "-"),
         "プラン: " + p.name + "（" + p.summary + "） " + money(p.price),
-        "会場: " + (x.hasVenues ? (s.venue || "おまかせ") : "-"),
+        "場所: " + (x.hasPlaces ? placeLabel(s) + (s.placeNote ? "（ご希望：" + s.placeNote + "）" : "") : "-"),
         "オプション: " + (x.extra.length ? x.extra.map(function (o) { return (o.nameJa || o.name) + " +" + money(o.price); }).join(" / ") : "なし"),
         "合計: " + money(x.total),
         "",
@@ -356,7 +393,7 @@
         time: bk.time || "未指定",
         flexible: c.flex ? "同じ日の別の時間でも可" : "希望の時間のみ",
         plan: x.p.name + "（" + x.p.summary + "） " + money(x.p.price),
-        venue: x.hasVenues ? (bk.venue || "おまかせ") : "",
+        place: x.hasPlaces ? placeLabel(bk) + (bk.placeNote ? "（ご希望：" + bk.placeNote + "）" : "") : "",
         options: x.extra.length ? x.extra.map(function (o) { return (o.nameJa || o.name) + " +" + money(o.price); }).join(" / ") : "なし",
         total: money(x.total),
         hotel: c.hotel || "",
@@ -365,7 +402,7 @@
       };
       $$("[data-f]", form).forEach(function (el) { el.value = values[el.getAttribute("data-f")] || ""; });
       try {
-        sessionStorage.setItem(STORE_KEY, JSON.stringify({ code: code, state: { loc: bk.loc, date: bk.date, time: bk.time, plan: bk.plan, venue: bk.venue, options: bk.options, customer: bk.customer } }));
+        sessionStorage.setItem(STORE_KEY, JSON.stringify({ code: code, state: { loc: bk.loc, date: bk.date, time: bk.time, plan: bk.plan, place: bk.place, venue: bk.venue, placeNote: bk.placeNote, options: bk.options, customer: bk.customer } }));
       } catch (e) { /* completion screen falls back to a generic message */ }
       btn.disabled = true;
       btn.textContent = "送信しています…";
@@ -404,7 +441,7 @@
         if (bk.steps[0] !== "location") bk.steps = stepsFor(true);
         bk.i = 0;
       } else {
-        bk.i = bk.steps.indexOf("date");
+        bk.i = bk.steps.indexOf(c.getAttribute("data-change") === "place" ? "place" : "date");
       }
       bRender();
     });

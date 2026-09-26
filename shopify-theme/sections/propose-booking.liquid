@@ -11,6 +11,7 @@
     assign locations = metaobjects.propose.values
   endif
   assign options = collections['propose-options'].products
+  assign pp_types = 'beach,chapel,church,monument,restaurant,hotel' | split: ',' 
   assign pp_settings = metaobjects.propose_settings.values.first
   assign reply_hours = pp_settings.reply_hours.value | default: 24
   assign terms_url = section.settings.terms_url
@@ -62,7 +63,7 @@
   <input type="hidden" name="contact[時間]" data-f="time">
   <input type="hidden" name="contact[時間の調整]" data-f="flexible">
   <input type="hidden" name="contact[プラン]" data-f="plan">
-  <input type="hidden" name="contact[会場]" data-f="venue">
+  <input type="hidden" name="contact[場所]" data-f="place">
   <input type="hidden" name="contact[オプション]" data-f="options">
   <input type="hidden" name="contact[合計]" data-f="total">
   <input type="hidden" name="contact[滞在ホテル]" data-f="hotel">
@@ -75,6 +76,14 @@
     "moneyFormat": {{ shop.money_format | json }},
     "replyHours": {{ reply_hours | json }},
     "topUrl": "/pages/propose",
+    "placeTypes": [
+      {%- for t in pp_types -%}
+        {%- capture t_en %}{% render 'propose-place-type', type: t, part: 'en' %}{% endcapture -%}
+        {%- capture t_ja %}{% render 'propose-place-type', type: t, part: 'ja' %}{% endcapture -%}
+        {%- capture t_desc %}{% render 'propose-place-type', type: t, part: 'desc' %}{% endcapture -%}
+      { "id": {{ t | json }}, "en": {{ t_en | strip | json }}, "ja": {{ t_ja | strip | json }}, "desc": {{ t_desc | strip | json }} }{% unless forloop.last %},{% endunless %}
+      {%- endfor -%}
+    ],
     "termsUrl": {{ terms_url | default: '' | json }},
     "locations": [
       {%- for loc in locations -%}
@@ -103,8 +112,17 @@
         "bestTimeNote": {{ loc.best_time_note.value | default: '' | json }},
         "blocked": {% if loc.blocked_slots.value != blank %}{{ loc.blocked_slots.value | json }}{% else %}[]{% endif %},
         "few": {% if loc.few_left_slots.value != blank %}{{ loc.few_left_slots.value | json }}{% else %}[]{% endif %},
-        "hotels": {% if loc.hotels.value != blank %}{{ loc.hotels.value | json }}{% else %}[]{% endif %},
-        "chapels": {% if loc.chapels.value != blank %}{{ loc.chapels.value | json }}{% else %}[]{% endif %},
+        "places": [
+          {%- assign first_place = true -%}
+          {%- for t in pp_types -%}
+            {%- assign venue_key = t | append: '_venues' -%}
+            {%- if loc.place_types.value contains t or loc[venue_key].value != blank -%}
+              {%- unless first_place %},{% endunless -%}
+              { "type": {{ t | json }}, "venues": {% if loc[venue_key].value != blank %}{{ loc[venue_key].value | json }}{% else %}[]{% endif %} }
+              {%- assign first_place = false -%}
+            {%- endif -%}
+          {%- endfor -%}
+        ],
         "plans": [
           {%- if plan -%}
             {%- for v in plan.variants limit: 3 -%}

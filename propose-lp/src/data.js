@@ -36,6 +36,17 @@
     });
   }
 
+  // ---- Where the proposal happens (Shopify: metaobject lists <type>_venues + place_types) ----
+  // A destination offers some of these types; each type may list named venues.
+  var PLACE_TYPES = [
+    { id: "beach", en: "BEACH", ja: "ビーチ", desc: "波の音が聞こえる砂浜で。" },
+    { id: "chapel", en: "CHAPEL", ja: "チャペル", desc: "チャペルの静けさの中で。" },
+    { id: "church", en: "CHURCH", ja: "教会", desc: "歴史ある教会で、厳かに。" },
+    { id: "monument", en: "MONUMENT", ja: "モニュメント", desc: "誰もが知る景色を背に。" },
+    { id: "restaurant", en: "RESTAURANT", ja: "レストラン", desc: "食事の席で、さりげなく。" },
+    { id: "hotel", en: "HOTEL", ja: "ホテル", desc: "ご滞在のホテルや、憧れのホテルで。" }
+  ];
+
   // ---- Booking is request-based: the team checks photographer
   // availability by hand and replies within this window (DEMO value). ----
   var REPLY_HOURS = 24;
@@ -59,7 +70,7 @@
       base: 128000, duration: "約2時間", meetingPoint: "ワイキキ・ホテル周辺（ご滞在先に合わせてご案内）",
       timeSlots: ["16:00", "16:30", "17:00", "17:30", "18:00"], bestTime: "17:30", bestTimeNote: "夕日の時間",
       leadDays: 3, rainPlan: "雨の場合は、翌日以降の空き枠へ無料で振替できます。", tags: ["sea", "sunset", "resort"],
-      hotels: ["ハレクラニ", "ザ・カハラ・ホテル＆リゾート"], chapels: ["キャルバリー・バイ・ザ・シー教会"]
+      places: { beach: [], chapel: [], church: ["キャルバリー・バイ・ザ・シー教会"], restaurant: [], hotel: ["ハレクラニ", "ザ・カハラ・ホテル＆リゾート"] }
     },
     {
       id: "miyakojima", name: "MIYAKOJIMA", nameJa: "宮古島", popular: true,
@@ -69,7 +80,8 @@
       photo: "miyakojima", photoAlt: "宮古島のエメラルドグリーンの海と白い砂浜", photoPos: "30% 50%", hue: ["#1c7f9c", "#7fd8d0"], motif: "wave",
       base: 108000, duration: "約2時間", meetingPoint: "与那覇前浜ビーチ 駐車場",
       timeSlots: ["16:30", "17:00", "17:30", "18:00", "18:30"], bestTime: "18:30", bestTimeNote: "夕日の時間",
-      leadDays: 2, rainPlan: "雨の場合は、翌日以降の空き枠へ無料で振替できます。", tags: ["sea", "resort", "sunset"]
+      leadDays: 2, rainPlan: "雨の場合は、翌日以降の空き枠へ無料で振替できます。", tags: ["sea", "resort", "sunset"],
+      places: { beach: [], chapel: [], hotel: [] }
     },
     {
       id: "okinawa", name: "OKINAWA", nameJa: "沖縄本島", popular: true,
@@ -80,7 +92,18 @@
       base: 108000, duration: "約2時間", meetingPoint: "ご滞在ホテル、またはご希望の会場",
       timeSlots: ["10:00", "16:30", "17:30", "18:30"], bestTime: "18:30", bestTimeNote: "夕日の時間",
       leadDays: 3, rainPlan: "雨の場合は、翌日以降の空き枠へ無料で振替できます。", tags: ["sea", "resort", "sunset"],
-      hotels: [], chapels: ["ラソール ガーデン・アリビラ", "ラソール シーリゾート", "ザ・サーフ ビーチサイドテラス", "アートグレイス沖縄", "サザンチャペル"]
+      places: { beach: [], chapel: ["ラソール ガーデン・アリビラ", "ラソール シーリゾート", "ザ・サーフ ビーチサイドテラス", "アートグレイス沖縄", "サザンチャペル"], hotel: [] }
+    },
+    {
+      id: "guam", name: "GUAM", nameJa: "グアム", popular: true,
+      catch: "グアムで、\n一生忘れない瞬間を。",
+      tagline: "ビーチでも、チャペルでも。",
+      lede: "日本から近い南の島。青い海と白い砂浜の前で、想いを伝えます。",
+      photo: null, photoAlt: "", hue: ["#127a9e", "#a8e0e0"], motif: "palm",
+      base: 98000, duration: "約2時間", meetingPoint: "タモン地区（ご滞在ホテル周辺）",
+      timeSlots: ["10:00", "16:30", "17:30", "18:30"], bestTime: "18:30", bestTimeNote: "夕日の時間",
+      leadDays: 3, rainPlan: "雨の場合は、翌日以降の空き枠へ無料で振替できます。", tags: ["sea", "resort", "sunset"],
+      places: { beach: [], chapel: [], hotel: [] }
     },
     {
       id: "santorini", name: "SANTORINI", nameJa: "サントリーニ島", popular: true,
@@ -90,7 +113,8 @@
       photo: "santorini", photoAlt: "イアの青いドームの教会とエーゲ海", photoPos: "60% 58%", hue: ["#1e4d8c", "#f4f1ea"], motif: "dome",
       base: 168000, duration: "約2時間", meetingPoint: "イア地区 展望テラス付近",
       timeSlots: ["17:00", "18:00", "19:00", "19:30"], bestTime: "19:30", bestTimeNote: "イアの夕日",
-      leadDays: 5, rainPlan: "天候不良の場合は、翌日以降の空き枠へ無料で振替できます。", tags: ["town", "sunset", "special"]
+      leadDays: 5, rainPlan: "天候不良の場合は、翌日以降の空き枠へ無料で振替できます。", tags: ["town", "sunset", "special"],
+      places: { monument: ["サントリーニ島（イアの街並み）"], hotel: [] }
     },
     {
       id: "italy", name: "ITALY", nameJa: "イタリア", popular: false,
@@ -100,7 +124,8 @@
       photo: "italy", photoAlt: "上空から見たローマのコロッセオと街並み", photoPos: "50% 55%", hue: ["#7a5230", "#d9b979"], motif: "arch",
       base: 178000, duration: "約2時間", meetingPoint: "ローマ市内（ご滞在先に合わせてご案内）",
       timeSlots: ["08:00", "09:00", "16:00", "17:00"], bestTime: "08:00", bestTimeNote: "人の少ない朝",
-      leadDays: 5, rainPlan: "雨の場合は、屋根のある回廊での撮影、または翌日以降へ無料で振替できます。", tags: ["town"]
+      leadDays: 5, rainPlan: "雨の場合は、屋根のある回廊での撮影、または翌日以降へ無料で振替できます。", tags: ["town"],
+      places: { church: [], monument: ["コロッセオ"], hotel: [] }
     },
     {
       id: "paris", name: "PARIS", nameJa: "パリ", popular: true,
@@ -110,7 +135,8 @@
       photo: "paris", photoAlt: "エッフェル塔が見えるパリの街並み", photoPos: "50% 40%", hue: ["#4a4e69", "#c9ada7"], motif: "tower",
       base: 158000, duration: "約2時間", meetingPoint: "トロカデロ広場",
       timeSlots: ["08:00", "10:00", "16:00", "18:00"], bestTime: "08:00", bestTimeNote: "人の少ない朝",
-      leadDays: 5, rainPlan: "雨の場合は、アーケードやカフェでの撮影、または翌日以降へ無料で振替できます。", tags: ["town"]
+      leadDays: 5, rainPlan: "雨の場合は、アーケードやカフェでの撮影、または翌日以降へ無料で振替できます。", tags: ["town"],
+      places: { monument: ["エッフェル塔"], hotel: [] }
     },
     {
       id: "cappadocia", name: "CAPPADOCIA", nameJa: "カッパドキア", popular: false,
@@ -131,7 +157,7 @@
       base: 198000, duration: "約2時間", meetingPoint: "ご滞在リゾート内",
       timeSlots: ["16:00", "17:00", "17:30", "18:00"], bestTime: "17:30", bestTimeNote: "夕日の時間",
       leadDays: 7, rainPlan: "雨の場合は、滞在中の別日へ無料で振替できます。", tags: ["sea", "resort"],
-      hotels: ["フォーシーズンズ ランダーギラーヴァル", "ギリ ランカンフシ"], chapels: ["フォーシーズンズ ランダーギラーヴァルのチャペル"]
+      places: { chapel: ["フォーシーズンズ ランダーギラーヴァルのチャペル"], restaurant: [], hotel: ["フォーシーズンズ ランダーギラーヴァル", "ギリ ランカンフシ"] }
     },
     {
       id: "bali", name: "BALI", nameJa: "バリ島", popular: false,
@@ -141,7 +167,8 @@
       photo: "bali", photoAlt: "ヤシの木に囲まれたバリ島の棚田を歩くふたり", photoPos: "50% 70%", hue: ["#2f6e4f", "#f4d35e"], motif: "gate",
       base: 118000, duration: "約2時間", meetingPoint: "テガラランの棚田（ウブド）",
       timeSlots: ["07:00", "08:00", "16:00", "17:00"], bestTime: "07:00", bestTimeNote: "朝の静かな棚田",
-      leadDays: 4, rainPlan: "雨の場合は、翌日以降の空き枠へ無料で振替できます。", tags: ["nature", "resort"]
+      leadDays: 4, rainPlan: "雨の場合は、翌日以降の空き枠へ無料で振替できます。", tags: ["nature", "resort"],
+      places: { beach: [], chapel: [], hotel: [] }
     },
     {
       id: "cancun", name: "CANCUN", nameJa: "カンクン", popular: false,
@@ -166,8 +193,9 @@
   ];
 
   LOCATIONS.forEach(function (loc) {
-    loc.hotels = loc.hotels || [];
-    loc.chapels = loc.chapels || [];
+    // Every destination can at least do its hotel; keep PLACE_TYPES order.
+    var pl = loc.places || { hotel: [] };
+    loc.placeList = PLACE_TYPES.filter(function (t) { return pl[t.id]; }).map(function (t) { return { type: t.id, venues: pl[t.id] }; });
     loc.plans = plansFor(loc.base);
     loc.fromPrice = loc.plans[0].price;
   });
@@ -192,7 +220,7 @@
     { q: "写真はいつ届きますか？", a: "撮影後、オンラインで順次お届けします。目安の日数は予約確認メールでご案内します。" },
     { q: "指輪や花束は用意してもらえますか？", a: "花束はすべてのプランに含まれています。指輪はご自身でご用意ください。" },
     { q: "写真撮影なしでも頼めますか？", a: "はい。ライトプランは、花束のご用意のみのプランです。写真や動画を残したい場合は、スタンダードプランかラグジュアリープランをお選びください。" },
-    { q: "ホテルやチャペルでもプロポーズできますか？", a: "はい。ハワイのハレクラニやザ・カハラ、モルディブのフォーシーズンズ ランダーギラーヴァル、沖縄のチャペルなど、旅行先ごとに対応できる会場を各ページでご案内しています。会場の使用料や条件は会場ごとに異なるため、確定のご連絡でご案内します。" },
+    { q: "プロポーズの場所は選べますか？", a: "はい。旅行先ごとに、ビーチ・チャペル・教会・モニュメント・レストラン・ホテルの中から選べる場所をご案内しています（選べる場所は旅行先によって異なります）。ハワイのハレクラニやザ・カハラ、沖縄のチャペルなど、会場を指定することもできます。会場の使用料や条件は会場ごとに異なるため、確定のご連絡でご案内します。" },
     { q: "撮影場所は変えられますか？", a: "行き先ごとの推奨スポットをもとに、当日の天候や混雑に合わせてフォトグラファーが調整します。" }
   ];
 
@@ -248,6 +276,8 @@
     locations: LOCATIONS,
     options: OPTIONS,
     planTiers: PLAN_TIERS,
+    placeTypes: PLACE_TYPES,
+    getPlaceType: function (id) { return PLACE_TYPES.filter(function (t) { return t.id === id; })[0] || null; },
     replyHours: REPLY_HOURS,
     proposalSteps: PROPOSAL_STEPS,
     themes: THEMES,

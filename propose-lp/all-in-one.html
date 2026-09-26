@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>世界のプロポーズプラン</title>
-<meta name="description" content="旅行先はもう決まっている。あとは、その旅を一生忘れない一日に。ハワイ・パリ・沖縄など11の旅行先で。ホテルやチャペルでのプロポーズにも対応し、料金・当日の流れ・受付状況を確認して、そのまま予約をリクエストできます。">
+<meta name="description" content="旅行先はもう決まっている。あとは、その旅を一生忘れない一日に。ハワイ・パリ・沖縄・グアムなど12の旅行先で。ビーチ・チャペル・教会・レストラン・ホテルなど場所も選べ、料金・当日の流れ・受付状況を確認して、そのまま予約をリクエストできます。">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Noto+Sans+JP:wght@300;400;500&display=swap" rel="stylesheet">
@@ -549,31 +549,45 @@ body {
 .plan-options { margin-top: clamp(40px, 6vw, 64px); max-width: 760px; }
 .plan-cta { margin-top: 36px; max-width: 480px; }
 
-/* ---------- Venues ---------- */
-.venue-list { border-top: 1px solid var(--ink); }
-.venue-row { display: grid; grid-template-columns: 1fr auto; gap: 8px 24px; align-items: center; padding: 22px 0; border-bottom: 1px solid var(--line); }
-.venue-loc .en { display: block; font-size: 1.15rem; font-weight: 500; letter-spacing: .14em; line-height: 1.3; }
-.venue-loc small { font-size: .74rem; color: var(--ink-faint); letter-spacing: .1em; }
-.venue-names { grid-column: 1 / 2; font-size: .86rem; line-height: 1.9; color: var(--ink-soft); }
-.venue-names b { font-family: var(--en); font-weight: 600; font-size: .7rem; letter-spacing: .18em; color: var(--gold); margin-right: 10px; }
-.venue-row .arrow { grid-column: 2; grid-row: 1 / 3; transition: transform .35s var(--ease); }
-.venue-row:hover .arrow { transform: translateX(4px); }
-@media (min-width: 900px) { .venue-row { grid-template-columns: 220px 1fr auto; } .venue-names { grid-column: 2; } .venue-row .arrow { grid-column: 3; grid-row: 1; } }
+/* ---------- Places (beach / chapel / church / monument / restaurant / hotel) ---------- */
+.dest-places { margin-top: 4px; font-size: .7rem; letter-spacing: .06em; color: var(--ink-soft); line-height: 1.6; }
+.place-list { border-top: 1px solid var(--ink); }
+.place-row { display: grid; gap: 6px 24px; padding: 22px 0; border-bottom: 1px solid var(--line); }
+.place-type .en { display: block; font-family: var(--en); font-size: .76rem; font-weight: 600; letter-spacing: .22em; color: var(--gold); line-height: 1.4; }
+.place-type b { font-weight: 500; font-size: 1.05rem; letter-spacing: .1em; }
+.place-desc { font-size: .84rem; color: var(--ink-soft); line-height: 1.8; }
+.place-cities { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.place-cities a { display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border: 1px solid var(--line); background: var(--white); font-size: .84rem; letter-spacing: .06em; transition: border-color .25s; }
+.place-cities a:hover { border-color: var(--ink); }
+@media (min-width: 900px) {
+  .place-row { grid-template-columns: 180px 1fr; align-items: start; }
+  .place-desc { grid-column: 2; grid-row: 1; padding-top: 2px; }
+  .place-cities { grid-column: 2; margin-top: 0; }
+}
 
-.venues { margin-top: clamp(48px, 7vw, 80px); padding: clamp(24px, 4vw, 40px); background: var(--paper-deep); display: grid; gap: 24px; }
-@media (min-width: 900px) { .venues { grid-template-columns: 5fr 7fr; gap: 24px 56px; } .venues-note { grid-column: 1 / -1; } }
-.venues .label { margin-bottom: 10px; }
-.venues-head p { margin-top: 8px; font-size: .88rem; color: var(--ink-soft); line-height: 1.9; }
-.venue-cols { display: grid; gap: 20px; }
-@media (min-width: 600px) { .venue-cols { grid-template-columns: 1fr 1fr; } }
-.venue-type { font-family: var(--en); font-size: .8rem; font-weight: 600; letter-spacing: .2em; color: var(--gold); border-bottom: 1px solid var(--line); padding-bottom: 6px; margin-bottom: 6px; }
-.venue-type small { font-family: var(--ja); font-weight: 400; letter-spacing: .06em; color: var(--ink-faint); margin-left: 8px; }
-.venue-col li { font-size: .9rem; line-height: 2; }
+.place { margin-top: clamp(48px, 7vw, 80px); padding: clamp(24px, 4vw, 40px); background: var(--paper-deep); }
+.place .label { margin-bottom: 10px; }
+.place-head p { margin-top: 6px; font-size: .88rem; color: var(--ink-soft); line-height: 1.9; }
+.place-chips { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 22px; }
+@media (min-width: 600px) { .place-chips { grid-template-columns: repeat(4, 1fr); } }
+@media (min-width: 900px) { .place-chips { grid-template-columns: repeat(7, 1fr); } }
+.place-chip { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 60px; padding: 10px 14px; border: 1px solid var(--line); background: var(--white); text-align: left; font-size: .92rem; font-weight: 500; letter-spacing: .06em; transition: border-color .2s, background .2s; }
+.place-chip .en { font-size: .66rem; font-weight: 600; letter-spacing: .2em; color: var(--gold); }
+.place-chip:hover { border-color: var(--ink); }
+.place-chip.is-selected { background: var(--ink); border-color: var(--ink); color: var(--white); }
+.place-chip.is-selected .en { color: rgba(255,255,255,.75); }
+.place-detail { margin-top: 18px; font-size: .88rem; line-height: 1.9; }
+.place-detail b { font-weight: 500; margin-right: 12px; }
+.place-venues { color: var(--ink-soft); }
+.place-detail .note { margin-top: 6px; }
+
+.plan-opt.is-place .en { font-size: .7rem; font-weight: 600; letter-spacing: .2em; color: var(--gold); display: block; line-height: 1.4; }
+.plan-opt .place-ja { display: block; font-weight: 500; font-size: 1rem; letter-spacing: .08em; }
+.plan-opt.is-place { grid-template-columns: 22px 1fr; }
 
 .plan-opt.is-compact { padding: 14px 16px; grid-template-columns: 22px 1fr; align-items: center; font-size: .9rem; }
 .plan-opt.is-compact .radio { margin-top: 0; }
 .venue-toggle { margin-bottom: 36px; }
-.venue-kind { display: block; font-size: .68rem; font-weight: 600; letter-spacing: .2em; color: var(--gold); line-height: 1.4; }
 .plan-opt .en { white-space: nowrap; }
 @media (max-width: 419px) { .plan-opt { gap: 12px; padding: 18px 16px; } .plan-opt .en { font-size: .95rem; letter-spacing: .1em; } .plan-opt .price { font-size: 1.05rem; } }
 
@@ -595,7 +609,7 @@ body {
 <nav class="hd-drawer" id="hd-drawer" aria-label="メニュー">
   <a href="#destinations">DESTINATIONS <small>旅行先から探す</small></a>
   <a href="#proposal">YOUR PROPOSAL <small>当日の流れ</small></a>
-  <a href="#venue">VENUE <small>ホテル・チャペル</small></a>
+  <a href="#place">PLACE <small>場所から選ぶ</small></a>
   <a href="#plan">PLAN <small>料金</small></a>
   <a href="#faq">FAQ <small>よくある質問</small></a>
   <a href="#find">NOT DECIDED <small>旅行先が未定の方</small></a>
@@ -657,15 +671,15 @@ body {
     </div>
   </section>
 
-  <section class="sec sec-deep" id="venue" aria-labelledby="venue-title">
+  <section class="sec sec-deep" id="place" aria-labelledby="place-title">
     <div class="wrap">
       <div class="sec-head reveal">
-        <span class="label">Venue</span>
-        <h2 class="h2" id="venue-title">ホテルでも、<br class="br-sp">チャペルでも。</h2>
-        <p class="lede">ビーチや街角だけでなく、旅行先によっては憧れのホテルやチャペルでもプロポーズできます。</p>
+        <span class="label">Place</span>
+        <h2 class="h2" id="place-title">ビーチでも、<br class="br-sp">チャペルでも。</h2>
+        <p class="lede">旅行先ごとに、プロポーズする場所を選べます。気になる場所から、旅行先を探すこともできます。</p>
       </div>
-      <div class="venue-list" id="venue-list"></div>
-      <p class="note" style="margin-top:20px">※ 会場の使用料や条件は会場ごとに異なるため、確定のご連絡でご案内します。</p>
+      <div class="place-list" id="place-list"></div>
+      <p class="note" style="margin-top:20px">※ 選べる場所は旅行先によって異なります。会場の使用料や条件は会場ごとに異なるため、確定のご連絡でご案内します。</p>
     </div>
   </section>
 
@@ -803,6 +817,17 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
     });
   }
 
+  // ---- Where the proposal happens (Shopify: metaobject lists <type>_venues + place_types) ----
+  // A destination offers some of these types; each type may list named venues.
+  var PLACE_TYPES = [
+    { id: "beach", en: "BEACH", ja: "ビーチ", desc: "波の音が聞こえる砂浜で。" },
+    { id: "chapel", en: "CHAPEL", ja: "チャペル", desc: "チャペルの静けさの中で。" },
+    { id: "church", en: "CHURCH", ja: "教会", desc: "歴史ある教会で、厳かに。" },
+    { id: "monument", en: "MONUMENT", ja: "モニュメント", desc: "誰もが知る景色を背に。" },
+    { id: "restaurant", en: "RESTAURANT", ja: "レストラン", desc: "食事の席で、さりげなく。" },
+    { id: "hotel", en: "HOTEL", ja: "ホテル", desc: "ご滞在のホテルや、憧れのホテルで。" }
+  ];
+
   // ---- Booking is request-based: the team checks photographer
   // availability by hand and replies within this window (DEMO value). ----
   var REPLY_HOURS = 24;
@@ -826,7 +851,7 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
       base: 128000, duration: "約2時間", meetingPoint: "ワイキキ・ホテル周辺（ご滞在先に合わせてご案内）",
       timeSlots: ["16:00", "16:30", "17:00", "17:30", "18:00"], bestTime: "17:30", bestTimeNote: "夕日の時間",
       leadDays: 3, rainPlan: "雨の場合は、翌日以降の空き枠へ無料で振替できます。", tags: ["sea", "sunset", "resort"],
-      hotels: ["ハレクラニ", "ザ・カハラ・ホテル＆リゾート"], chapels: ["キャルバリー・バイ・ザ・シー教会"]
+      places: { beach: [], chapel: [], church: ["キャルバリー・バイ・ザ・シー教会"], restaurant: [], hotel: ["ハレクラニ", "ザ・カハラ・ホテル＆リゾート"] }
     },
     {
       id: "miyakojima", name: "MIYAKOJIMA", nameJa: "宮古島", popular: true,
@@ -836,7 +861,8 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
       photo: "miyakojima", photoAlt: "宮古島のエメラルドグリーンの海と白い砂浜", photoPos: "30% 50%", hue: ["#1c7f9c", "#7fd8d0"], motif: "wave",
       base: 108000, duration: "約2時間", meetingPoint: "与那覇前浜ビーチ 駐車場",
       timeSlots: ["16:30", "17:00", "17:30", "18:00", "18:30"], bestTime: "18:30", bestTimeNote: "夕日の時間",
-      leadDays: 2, rainPlan: "雨の場合は、翌日以降の空き枠へ無料で振替できます。", tags: ["sea", "resort", "sunset"]
+      leadDays: 2, rainPlan: "雨の場合は、翌日以降の空き枠へ無料で振替できます。", tags: ["sea", "resort", "sunset"],
+      places: { beach: [], chapel: [], hotel: [] }
     },
     {
       id: "okinawa", name: "OKINAWA", nameJa: "沖縄本島", popular: true,
@@ -847,7 +873,18 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
       base: 108000, duration: "約2時間", meetingPoint: "ご滞在ホテル、またはご希望の会場",
       timeSlots: ["10:00", "16:30", "17:30", "18:30"], bestTime: "18:30", bestTimeNote: "夕日の時間",
       leadDays: 3, rainPlan: "雨の場合は、翌日以降の空き枠へ無料で振替できます。", tags: ["sea", "resort", "sunset"],
-      hotels: [], chapels: ["ラソール ガーデン・アリビラ", "ラソール シーリゾート", "ザ・サーフ ビーチサイドテラス", "アートグレイス沖縄", "サザンチャペル"]
+      places: { beach: [], chapel: ["ラソール ガーデン・アリビラ", "ラソール シーリゾート", "ザ・サーフ ビーチサイドテラス", "アートグレイス沖縄", "サザンチャペル"], hotel: [] }
+    },
+    {
+      id: "guam", name: "GUAM", nameJa: "グアム", popular: true,
+      catch: "グアムで、\n一生忘れない瞬間を。",
+      tagline: "ビーチでも、チャペルでも。",
+      lede: "日本から近い南の島。青い海と白い砂浜の前で、想いを伝えます。",
+      photo: null, photoAlt: "", hue: ["#127a9e", "#a8e0e0"], motif: "palm",
+      base: 98000, duration: "約2時間", meetingPoint: "タモン地区（ご滞在ホテル周辺）",
+      timeSlots: ["10:00", "16:30", "17:30", "18:30"], bestTime: "18:30", bestTimeNote: "夕日の時間",
+      leadDays: 3, rainPlan: "雨の場合は、翌日以降の空き枠へ無料で振替できます。", tags: ["sea", "resort", "sunset"],
+      places: { beach: [], chapel: [], hotel: [] }
     },
     {
       id: "santorini", name: "SANTORINI", nameJa: "サントリーニ島", popular: true,
@@ -857,7 +894,8 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
       photo: "santorini", photoAlt: "イアの青いドームの教会とエーゲ海", photoPos: "60% 58%", hue: ["#1e4d8c", "#f4f1ea"], motif: "dome",
       base: 168000, duration: "約2時間", meetingPoint: "イア地区 展望テラス付近",
       timeSlots: ["17:00", "18:00", "19:00", "19:30"], bestTime: "19:30", bestTimeNote: "イアの夕日",
-      leadDays: 5, rainPlan: "天候不良の場合は、翌日以降の空き枠へ無料で振替できます。", tags: ["town", "sunset", "special"]
+      leadDays: 5, rainPlan: "天候不良の場合は、翌日以降の空き枠へ無料で振替できます。", tags: ["town", "sunset", "special"],
+      places: { monument: ["サントリーニ島（イアの街並み）"], hotel: [] }
     },
     {
       id: "italy", name: "ITALY", nameJa: "イタリア", popular: false,
@@ -867,7 +905,8 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
       photo: "italy", photoAlt: "上空から見たローマのコロッセオと街並み", photoPos: "50% 55%", hue: ["#7a5230", "#d9b979"], motif: "arch",
       base: 178000, duration: "約2時間", meetingPoint: "ローマ市内（ご滞在先に合わせてご案内）",
       timeSlots: ["08:00", "09:00", "16:00", "17:00"], bestTime: "08:00", bestTimeNote: "人の少ない朝",
-      leadDays: 5, rainPlan: "雨の場合は、屋根のある回廊での撮影、または翌日以降へ無料で振替できます。", tags: ["town"]
+      leadDays: 5, rainPlan: "雨の場合は、屋根のある回廊での撮影、または翌日以降へ無料で振替できます。", tags: ["town"],
+      places: { church: [], monument: ["コロッセオ"], hotel: [] }
     },
     {
       id: "paris", name: "PARIS", nameJa: "パリ", popular: true,
@@ -877,7 +916,8 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
       photo: "paris", photoAlt: "エッフェル塔が見えるパリの街並み", photoPos: "50% 40%", hue: ["#4a4e69", "#c9ada7"], motif: "tower",
       base: 158000, duration: "約2時間", meetingPoint: "トロカデロ広場",
       timeSlots: ["08:00", "10:00", "16:00", "18:00"], bestTime: "08:00", bestTimeNote: "人の少ない朝",
-      leadDays: 5, rainPlan: "雨の場合は、アーケードやカフェでの撮影、または翌日以降へ無料で振替できます。", tags: ["town"]
+      leadDays: 5, rainPlan: "雨の場合は、アーケードやカフェでの撮影、または翌日以降へ無料で振替できます。", tags: ["town"],
+      places: { monument: ["エッフェル塔"], hotel: [] }
     },
     {
       id: "cappadocia", name: "CAPPADOCIA", nameJa: "カッパドキア", popular: false,
@@ -898,7 +938,7 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
       base: 198000, duration: "約2時間", meetingPoint: "ご滞在リゾート内",
       timeSlots: ["16:00", "17:00", "17:30", "18:00"], bestTime: "17:30", bestTimeNote: "夕日の時間",
       leadDays: 7, rainPlan: "雨の場合は、滞在中の別日へ無料で振替できます。", tags: ["sea", "resort"],
-      hotels: ["フォーシーズンズ ランダーギラーヴァル", "ギリ ランカンフシ"], chapels: ["フォーシーズンズ ランダーギラーヴァルのチャペル"]
+      places: { chapel: ["フォーシーズンズ ランダーギラーヴァルのチャペル"], restaurant: [], hotel: ["フォーシーズンズ ランダーギラーヴァル", "ギリ ランカンフシ"] }
     },
     {
       id: "bali", name: "BALI", nameJa: "バリ島", popular: false,
@@ -908,7 +948,8 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
       photo: "bali", photoAlt: "ヤシの木に囲まれたバリ島の棚田を歩くふたり", photoPos: "50% 70%", hue: ["#2f6e4f", "#f4d35e"], motif: "gate",
       base: 118000, duration: "約2時間", meetingPoint: "テガラランの棚田（ウブド）",
       timeSlots: ["07:00", "08:00", "16:00", "17:00"], bestTime: "07:00", bestTimeNote: "朝の静かな棚田",
-      leadDays: 4, rainPlan: "雨の場合は、翌日以降の空き枠へ無料で振替できます。", tags: ["nature", "resort"]
+      leadDays: 4, rainPlan: "雨の場合は、翌日以降の空き枠へ無料で振替できます。", tags: ["nature", "resort"],
+      places: { beach: [], chapel: [], hotel: [] }
     },
     {
       id: "cancun", name: "CANCUN", nameJa: "カンクン", popular: false,
@@ -933,8 +974,9 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
   ];
 
   LOCATIONS.forEach(function (loc) {
-    loc.hotels = loc.hotels || [];
-    loc.chapels = loc.chapels || [];
+    // Every destination can at least do its hotel; keep PLACE_TYPES order.
+    var pl = loc.places || { hotel: [] };
+    loc.placeList = PLACE_TYPES.filter(function (t) { return pl[t.id]; }).map(function (t) { return { type: t.id, venues: pl[t.id] }; });
     loc.plans = plansFor(loc.base);
     loc.fromPrice = loc.plans[0].price;
   });
@@ -959,7 +1001,7 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
     { q: "写真はいつ届きますか？", a: "撮影後、オンラインで順次お届けします。目安の日数は予約確認メールでご案内します。" },
     { q: "指輪や花束は用意してもらえますか？", a: "花束はすべてのプランに含まれています。指輪はご自身でご用意ください。" },
     { q: "写真撮影なしでも頼めますか？", a: "はい。ライトプランは、花束のご用意のみのプランです。写真や動画を残したい場合は、スタンダードプランかラグジュアリープランをお選びください。" },
-    { q: "ホテルやチャペルでもプロポーズできますか？", a: "はい。ハワイのハレクラニやザ・カハラ、モルディブのフォーシーズンズ ランダーギラーヴァル、沖縄のチャペルなど、旅行先ごとに対応できる会場を各ページでご案内しています。会場の使用料や条件は会場ごとに異なるため、確定のご連絡でご案内します。" },
+    { q: "プロポーズの場所は選べますか？", a: "はい。旅行先ごとに、ビーチ・チャペル・教会・モニュメント・レストラン・ホテルの中から選べる場所をご案内しています（選べる場所は旅行先によって異なります）。ハワイのハレクラニやザ・カハラ、沖縄のチャペルなど、会場を指定することもできます。会場の使用料や条件は会場ごとに異なるため、確定のご連絡でご案内します。" },
     { q: "撮影場所は変えられますか？", a: "行き先ごとの推奨スポットをもとに、当日の天候や混雑に合わせてフォトグラファーが調整します。" }
   ];
 
@@ -1015,6 +1057,8 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
     locations: LOCATIONS,
     options: OPTIONS,
     planTiers: PLAN_TIERS,
+    placeTypes: PLACE_TYPES,
+    getPlaceType: function (id) { return PLACE_TYPES.filter(function (t) { return t.id === id; })[0] || null; },
     replyHours: REPLY_HOURS,
     proposalSteps: PROPOSAL_STEPS,
     themes: THEMES,
@@ -1148,17 +1192,40 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
       (loc ? '<a class="btn btn-block plan-cta" href="#/book?loc=' + loc.id + '">この場所で予約する <span class="arrow" aria-hidden="true">→</span></a>' : "")
     );
   }
-  function venueSentence(l) {
-    var parts = [];
-    if (l.hotels.length) parts.push(l.hotels.slice(0, 2).join("、") + "などのホテル");
-    if (l.chapels.length) parts.push(l.chapels.slice(0, 2).join("、") + "などのチャペル");
-    return "ビーチや街だけでなく、" + parts.join("や、") + "でもプロポーズできます。";
+  // ---- proposal places (beach / chapel / church / monument / restaurant / hotel) ----
+  function placeNames(l) { return l.placeList.map(function (p) { return D.getPlaceType(p.type).ja; }); }
+  var FEE_TYPES = ["chapel", "church", "restaurant", "hotel"];
+  // The place chosen on a location page travels with every booking link on it.
+  var locPlace = "";
+  function withPlace(href) {
+    href = href.replace(/&place=[^&]*/, "");
+    return locPlace ? href + "&place=" + encodeURIComponent(locPlace) : href;
   }
-  function venueCols(l) {
-    function col(en, ja, list) {
-      return list.length ? '<div class="venue-col"><p class="venue-type">' + en + "<small>" + ja + "</small></p><ul>" + list.map(function (v) { return "<li>" + esc(v) + "</li>"; }).join("") + "</ul></div>" : "";
-    }
-    return '<div class="venue-cols">' + col("HOTEL", "ホテル", l.hotels) + col("CHAPEL", "チャペル", l.chapels) + "</div>";
+  function applyPlaceToLinks() {
+    $$('a[href^="#/book?loc="]').forEach(function (a) { a.setAttribute("href", withPlace(a.getAttribute("href"))); });
+  }
+  function placePicker(l) {
+    var opts = [{ type: "", venues: [] }].concat(l.placeList);
+    return (
+      '<div class="place reveal" id="loc-place">' +
+        '<div class="place-head"><span class="label">Place</span><h3 class="h3">どこで伝えますか？</h3>' +
+        "<p>" + esc(l.nameJa) + "では、次の場所から選べます。予約のときにも選び直せます。</p></div>" +
+        '<div class="place-chips" role="radiogroup" aria-label="プロポーズの場所">' + opts.map(function (o) {
+          var t = o.type ? D.getPlaceType(o.type) : null;
+          var on = locPlace === o.type;
+          return '<button type="button" role="radio" aria-checked="' + on + '" class="place-chip' + (on ? " is-selected" : "") + '" data-place="' + o.type + '">' +
+            '<span class="en">' + (t ? t.en : "ANY") + "</span>" + (t ? t.ja : "おまかせ") + "</button>";
+        }).join("") + "</div>" +
+        '<div class="place-detail" aria-live="polite">' + placeDetail(l) + "</div>" +
+      "</div>"
+    );
+  }
+  function placeDetail(l) {
+    if (!locPlace) return "<p><b>おまかせ</b>" + esc(l.meetingPoint) + "など、その日にいちばん合う場所をご案内します。</p>";
+    var t = D.getPlaceType(locPlace), p = l.placeList.filter(function (x) { return x.type === locPlace; })[0];
+    return "<p><b>" + t.ja + "</b>" + t.desc + "</p>" +
+      (p && p.venues.length ? '<p class="place-venues">選べる会場：' + p.venues.map(esc).join("／") + "</p>" : '<p class="place-venues">会場は、ご希望に合わせてご案内します。</p>') +
+      (FEE_TYPES.indexOf(locPlace) > -1 ? '<p class="note">' + VENUE_NOTE + "</p>" : "");
   }
   var VENUE_NOTE = "※ 会場の使用料や条件は会場ごとに異なるため、確定のご連絡でご案内します。";
 
@@ -1178,6 +1245,7 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
           '<div class="dest-body">' +
             '<div class="dest-name">' + esc(l.name) + "</div>" +
             '<div class="dest-ja">' + esc(l.nameJa) + "</div>" +
+            '<div class="dest-places">' + placeNames(l).join("・") + "</div>" +
             '<div class="dest-price">From<span class="price">' + yen(l.fromPrice) + "</span></div>" +
             '<span class="dest-more"><span><span class="sm-hide">プロポーズ</span>プランを見る</span><span aria-hidden="true">→</span></span>' +
           "</div>" +
@@ -1206,16 +1274,17 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
 
     $("#top-plan").innerHTML = planHTML(null);
 
-    $("#venue-list").innerHTML = D.locations.filter(function (l) { return l.hotels.length || l.chapels.length; }).map(function (l) {
+    $("#place-list").innerHTML = D.placeTypes.map(function (t) {
+      var locs = D.locations.filter(function (l) { return l.placeList.some(function (p) { return p.type === t.id; }); });
+      if (!locs.length) return "";
       return (
-        '<a class="venue-row reveal" href="#/propose/' + l.id + '">' +
-          '<div class="venue-loc"><span class="en">' + esc(l.name) + "</span><small>" + esc(l.nameJa) + "</small></div>" +
-          '<div class="venue-names">' +
-            (l.hotels.length ? "<p><b>HOTEL</b>" + l.hotels.map(esc).join("／") + "</p>" : "") +
-            (l.chapels.length ? "<p><b>CHAPEL</b>" + l.chapels.map(esc).join("／") + "</p>" : "") +
-          "</div>" +
-          '<span class="arrow" aria-hidden="true">→</span>' +
-        "</a>"
+        '<div class="place-row reveal">' +
+          '<div class="place-type"><span class="en">' + t.en + "</span><b>" + t.ja + "</b></div>" +
+          '<p class="place-desc">' + esc(t.desc) + "</p>" +
+          '<div class="place-cities">' + locs.map(function (l) {
+            return '<a href="#/propose/' + l.id + "?place=" + t.id + '">' + esc(l.nameJa) + "</a>";
+          }).join("") + "</div>" +
+        "</div>"
       );
     }).join("");
 
@@ -1262,12 +1331,14 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
   /* =============================================================
      LOCATION
      ============================================================= */
-  function renderLocation(id) {
+  function renderLocation(id, q) {
     var l = D.getLocation(id);
     var view = $("#view-location");
     if (!l) { view.innerHTML = '<section class="sec"><div class="wrap"><p>旅行先が見つかりませんでした。</p><a class="link" href="#destinations">旅行先一覧へ</a></div></section>'; return; }
 
     document.title = l.nameJa + "でプロポーズ｜世界のプロポーズプラン";
+    var qPlace = q && q.place;
+    locPlace = l.placeList.some(function (p) { return p.type === qPlace; }) ? qPlace : "";
 
     var steps = D.proposalSteps.map(function (s, i) {
       var text = i === 0 ? l.meetingPoint + "で、フォトグラファーがお二人をお迎えします。" : s.text;
@@ -1310,12 +1381,7 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
             '<div class="fact"><dt>Support</dt><dd>日本語対応<small>当日の連絡も日本語で</small></dd></div>' +
           "</dl>" +
           '<p class="note facts-note">※ 料金・所要時間・受付締切・確定連絡までの時間・雨天対応・受付状況はデモ用の仮データです。</p>' +
-          ((l.hotels.length || l.chapels.length) ?
-            '<div class="venues reveal">' +
-              '<div class="venues-head"><span class="label">Venue</span><h3 class="h3">ホテルやチャペルでも。</h3><p>' + esc(venueSentence(l)) + "</p></div>" +
-              venueCols(l) +
-              '<p class="note venues-note">' + VENUE_NOTE + "</p>" +
-            "</div>" : "") +
+          placePicker(l) +
         "</div>" +
       "</section>" +
 
@@ -1367,6 +1433,14 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
       "</section>";
 
     renderAvail(l);
+    var picker = $("#loc-place", view);
+    picker.addEventListener("click", function (e) {
+      var c = e.target.closest("[data-place]"); if (!c) return;
+      locPlace = c.dataset.place;
+      $$(".place-chip", picker).forEach(function (x) { var on = x === c; x.classList.toggle("is-selected", on); x.setAttribute("aria-checked", String(on)); });
+      $(".place-detail", picker).innerHTML = placeDetail(l);
+      applyPlaceToLinks();
+    });
     observeReveals(view);
   }
 
@@ -1421,6 +1495,7 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
         '<div class="slots" role="group" aria-label="時間を選ぶ">' + slots + "</div>" +
         '<div class="avail-go">' + go + "</div>" +
         '<div class="avail-more"><a class="link" href="#/book?loc=' + l.id + '">もっと先の日付を見る <span class="arrow" aria-hidden="true">→</span></a></div>';
+      applyPlaceToLinks();
     }
     box.addEventListener("click", function (e) {
       var d = e.target.closest(".day-btn:not(:disabled)");
@@ -1438,6 +1513,7 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
     location: { ja: "旅行先", en: "DESTINATION" },
     date: { ja: "日付", en: "DATE" },
     time: { ja: "時間", en: "TIME" },
+    place: { ja: "場所", en: "PLACE" },
     plan: { ja: "プラン・オプション", en: "PLAN" },
     customer: { ja: "お客様情報", en: "YOUR DETAILS" },
     confirm: { ja: "リクエスト内容の確認", en: "REVIEW" }
@@ -1458,7 +1534,11 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
   function bPlan() { var l = bLoc(); return l ? l.plans.filter(function (p) { return p.id === bk.plan; })[0] : null; }
   function optionAvailable(o) { var p = bPlan(); return !o.requiresPhoto || (!!p && p.hasPhoto); }
   function bOptions() { return D.options.filter(function (o) { return bk.options.indexOf(o.id) > -1 && optionAvailable(o); }); }
-  function hasVenues() { var l = bLoc(); return !!l && (l.hotels.length + l.chapels.length) > 0; }
+  function bPlaceEntry() { var l = bLoc(); return l ? l.placeList.filter(function (p) { return p.type === bk.place; })[0] || null : null; }
+  function placeLabel() {
+    if (!bk.place) return "おまかせ";
+    return D.getPlaceType(bk.place).ja + (bk.venue ? "・" + bk.venue : "");
+  }
   function bTotal() {
     var p = bPlan(); if (!p) return 0;
     return bOptions().reduce(function (s, o) { return s + o.price; }, p.price);
@@ -1468,8 +1548,9 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
 
   function startBooking(params) {
     var l = params.loc && D.getLocation(params.loc);
-    bk = { loc: l ? l.id : null, date: null, time: null, plan: ["light", "standard", "luxury"].indexOf(params.plan) > -1 ? params.plan : "standard", venue: "", options: [], customer: {}, steps: [], i: 0, done: false };
-    bk.steps = (l ? [] : ["location"]).concat(["date", "time", "plan", "customer", "confirm"]);
+    bk = { loc: l ? l.id : null, date: null, time: null, plan: ["light", "standard", "luxury"].indexOf(params.plan) > -1 ? params.plan : "standard", place: "", venue: "", placeNote: "", placeSet: false, options: [], customer: {}, steps: [], i: 0, done: false };
+    bk.steps = (l ? [] : ["location"]).concat(["date", "time", "place", "plan", "customer", "confirm"]);
+    if (l && params.place && l.placeList.some(function (p) { return p.type === params.place; })) { bk.place = params.place; bk.placeSet = true; }
     if (l && params.date) {
       var st = D.dateStatus(l, params.date);
       if (st === "available" || st === "few") bk.date = params.date;
@@ -1478,7 +1559,7 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
       var ss = D.slotStatus(l, bk.date, params.time);
       if (ss === "available" || ss === "few") bk.time = params.time;
     }
-    bk.i = bk.steps.indexOf(!bk.loc ? "location" : !bk.date ? "date" : !bk.time ? "time" : "plan");
+    bk.i = bk.steps.indexOf(!bk.loc ? "location" : !bk.date ? "date" : !bk.time ? "time" : !bk.placeSet ? "place" : "plan");
     calOffset = 0;
     if (bk.date) {
       var dd = new Date(bk.date + "T00:00:00"), t = D.today();
@@ -1501,6 +1582,7 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
       case "location": return !!bk.loc;
       case "date": return !!bk.date;
       case "time": return !!bk.time;
+      case "place": return true;
       case "plan": return true;
       case "customer":
         var c = bk.customer;
@@ -1522,7 +1604,8 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
     var l = bLoc();
     var chips = [];
     if (l && step !== "location") chips.push('<span class="chip"><span class="en">' + esc(l.name) + "</span>" + esc(l.nameJa) + '<button type="button" data-change="location">変更</button></span>');
-    if (bk.date && ["time", "plan", "customer", "confirm"].indexOf(step) > -1) chips.push('<span class="chip">' + fmtShort(bk.date) + (bk.time && step !== "time" ? " " + bk.time : "") + '<button type="button" data-change="date">変更</button></span>');
+    if (bk.date && ["time", "place", "plan", "customer", "confirm"].indexOf(step) > -1) chips.push('<span class="chip">' + fmtShort(bk.date) + (bk.time && step !== "time" ? " " + bk.time : "") + '<button type="button" data-change="date">変更</button></span>');
+    if (bk.placeSet && ["plan", "customer", "confirm"].indexOf(step) > -1) chips.push('<span class="chip">' + esc(placeLabel()) + '<button type="button" data-change="place">変更</button></span>');
     $("#bk-context").innerHTML = chips.join("");
 
     var body = $("#bk-body");
@@ -1585,23 +1668,32 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
             (t === l.bestTime ? "<b>BEST TIME</b>" + esc(l.bestTimeNote) : "") + '</span><span class="st">' + STATUS[st].en + "</span></button>";
         }).join("") + "</div>";
     },
+    place: function () {
+      var l = bLoc(), entry = bPlaceEntry();
+      var opts = [{ type: "", venues: [] }].concat(l.placeList);
+      return '<h2 class="h2">プロポーズの場所を選ぶ</h2><p class="lede">' + esc(l.nameJa) + "で選べる場所です。会場を指定することもできます。</p>" +
+        '<div class="plan-toggle" role="radiogroup" aria-label="場所">' + opts.map(function (o) {
+          var t = o.type ? D.getPlaceType(o.type) : null, on = bk.place === o.type;
+          var sub = t ? t.desc + (o.venues.length ? "（会場の指定もできます）" : "") : esc(l.meetingPoint) + "など、その日にいちばん合う場所をご案内します。";
+          return '<button type="button" role="radio" aria-checked="' + on + '" class="plan-opt is-place' + (on ? " is-selected" : "") + '" data-place="' + o.type + '"><span class="radio"></span><span><span class="en">' +
+            (t ? t.en : "ANY") + '</span><b class="place-ja">' + (t ? t.ja : "おまかせ") + "</b><p>" + sub + "</p></span></button>";
+        }).join("") + "</div>" +
+        (entry && entry.venues.length ?
+          '<p class="sub-h">Venue</p>' +
+          '<div class="plan-toggle venue-toggle" role="radiogroup" aria-label="会場">' + [""].concat(entry.venues).map(function (v) {
+            var on = bk.venue === v;
+            return '<button type="button" role="radio" aria-checked="' + on + '" class="plan-opt is-compact' + (on ? " is-selected" : "") + '" data-pvenue="' + esc(v) + '"><span class="radio"></span><span>' + (v ? esc(v) : "指定なし（おすすめをご案内）") + "</span></button>";
+          }).join("") + "</div>" : "") +
+        (bk.place ? '<div class="field"><label for="c-placenote">ご希望があればご記入ください<span class="req" style="color:var(--ink-faint)">任意</span></label><input id="c-placenote" type="text" value="' + esc(bk.placeNote) + '" placeholder="例：滞在中のホテル名、行きたいお店など"></div>' : "") +
+        (FEE_TYPES.indexOf(bk.place) > -1 ? '<p class="note">' + VENUE_NOTE + "</p>" : "");
+    },
     plan: function () {
       var l = bLoc();
-      var venues = [{ id: "", type: "", name: "おまかせ（おすすめの場所）" }]
-        .concat(l.hotels.map(function (v) { return { id: v, type: "HOTEL", name: v }; }))
-        .concat(l.chapels.map(function (v) { return { id: v, type: "CHAPEL", name: v }; }));
       return '<h2 class="h2">プランとオプション</h2><p class="lede">プランを選び、必要なものだけ追加してください。</p>' +
         '<div class="plan-toggle" role="radiogroup" aria-label="プラン">' + l.plans.map(function (p) {
           return '<button type="button" role="radio" aria-checked="' + (bk.plan === p.id) + '" class="plan-opt' + (bk.plan === p.id ? " is-selected" : "") + '" data-plan="' + p.id + '"><span class="radio"></span><span><span class="en">' +
             esc(p.name) + "</span><p>" + esc(p.nameJa) + "｜" + esc(p.summary) + '</p></span><span class="price">' + yen(p.price) + "</span></button>";
         }).join("") + "</div>" +
-        (hasVenues() ?
-          '<p class="sub-h">Venue</p><p class="note" style="margin-bottom:12px">ホテルやチャペルでのプロポーズも手配できます。' + VENUE_NOTE.replace("※ ", "") + "</p>" +
-          '<div class="plan-toggle venue-toggle" role="radiogroup" aria-label="会場">' + venues.map(function (v) {
-            var on = bk.venue === v.id;
-            return '<button type="button" role="radio" aria-checked="' + on + '" class="plan-opt is-compact' + (on ? " is-selected" : "") + '" data-venue="' + esc(v.id) + '"><span class="radio"></span><span>' +
-              (v.type ? '<span class="en venue-kind">' + v.type + "</span>" : "") + esc(v.name) + "</span></button>";
-          }).join("") + "</div>" : "") +
         '<p class="sub-h">Option</p>' +
         D.options.map(function (o) {
           var ok = optionAvailable(o), on = ok && bk.options.indexOf(o.id) > -1;
@@ -1641,7 +1733,7 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
       ["Meeting", esc(l.meetingPoint)],
       ["Plan", esc(p.name) + "<small>" + esc(p.summary) + "・" + yen(p.price) + "</small>"]
     ];
-    if (hasVenues()) rows.push(["Venue", bk.venue ? esc(bk.venue) : "おまかせ"]);
+    rows.push(["Place", esc(placeLabel()) + (bk.placeNote ? "<small>" + esc(bk.placeNote) + "</small>" : "")]);
     rows.push(["Flexible", bk.customer.flex ? "同じ日の別の時間でも可" : "希望の時間のみ"]);
     rows.push(["Option", extra.length ? extra.map(function (o) { return esc(o.nameJa) + " +" + yen(o.price); }).join("<br>") : "なし"]);
     return '<dl class="summary">' + rows.map(function (r) { return '<div class="sum-row"><dt>' + r[0] + "</dt><dd>" + r[1] + "</dd></div>"; }).join("") +
@@ -1652,7 +1744,7 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
     location: function (b) {
       b.addEventListener("click", function (e) {
         var btn = e.target.closest("[data-loc]"); if (!btn) return;
-        if (bk.loc !== btn.dataset.loc) { bk.date = null; bk.time = null; bk.venue = ""; bk.calSet = false; }
+        if (bk.loc !== btn.dataset.loc) { bk.date = null; bk.time = null; bk.place = ""; bk.venue = ""; bk.placeNote = ""; bk.placeSet = false; bk.calSet = false; }
         bk.loc = btn.dataset.loc;
         $$("[data-loc]", b).forEach(function (x) { x.classList.toggle("is-selected", x === btn); });
         updateBar(); autoNext();
@@ -1677,13 +1769,27 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
         updateBar(); autoNext();
       });
     },
+    place: function (b) {
+      b.addEventListener("click", function (e) {
+        var c = e.target.closest("[data-place]"), v = e.target.closest("[data-pvenue]");
+        if (c) {
+          if (bk.place !== c.dataset.place) { bk.venue = ""; }
+          bk.place = c.dataset.place; bk.placeSet = true;
+          bRender();
+          // Types without named venues need no second choice: move on like the date/time steps.
+          var entry = bPlaceEntry();
+          if (!entry || !entry.venues.length) { if (!bk.place) autoNext(); }
+        }
+        if (v) { bk.venue = v.dataset.pvenue; bRender(); }
+      });
+      var note = $("#c-placenote", b);
+      if (note) note.addEventListener("input", function () { bk.placeNote = note.value; });
+    },
     plan: function (b) {
       b.addEventListener("click", function (e) {
         var p = e.target.closest("[data-plan]");
-        var v = e.target.closest("[data-venue]");
         var o = e.target.closest("[data-opt]:not(:disabled)");
         if (p) { bk.plan = p.dataset.plan; bk.options = bk.options.filter(function (id) { return optionAvailable(D.options.filter(function (x) { return x.id === id; })[0]); }); bRender(); }
-        if (v) { bk.venue = v.dataset.venue; bRender(); }
         if (o) {
           var i = bk.options.indexOf(o.dataset.opt);
           if (i > -1) bk.options.splice(i, 1); else bk.options.push(o.dataset.opt);
@@ -1737,7 +1843,7 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
       if (bk.steps[0] !== "location") bk.steps.unshift("location");
       bk.i = 0;
     } else {
-      bk.i = bk.steps.indexOf("date");
+      bk.i = bk.steps.indexOf(c.dataset.change === "place" ? "place" : "date");
     }
     bRender();
   });
@@ -1753,7 +1859,7 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
     if (h.charAt(0) !== "/") return { view: "top", anchor: h };
     var parts = h.split("?"), path = parts[0].split("/").filter(Boolean), q = {};
     (parts[1] || "").split("&").forEach(function (kv) { var p = kv.split("="); if (p[0]) q[p[0]] = decodeURIComponent(p[1] || ""); });
-    if (path[0] === "propose" && path[1]) return { view: "location", id: path[1] };
+    if (path[0] === "propose" && path[1]) return { view: "location", id: path[1], q: q };
     if (path[0] === "book") return { view: "booking", q: q };
     return { view: "top" };
   }
@@ -1781,12 +1887,13 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
         window.scrollTo(0, 0);
       }
     } else if (r.view === "location") {
-      renderLocation(r.id);
+      renderLocation(r.id, r.q);
       show("location");
       var l = D.getLocation(r.id);
       if (l) {
         setHeaderCta("#/book?loc=" + l.id, "予約する");
         setSticky('<div class="sticky-price"><small>FROM</small><span class="price">' + yen(l.fromPrice) + '</span></div><a class="btn" href="#/book?loc=' + l.id + '">この場所で予約する</a>');
+        applyPlaceToLinks();
       }
       window.scrollTo(0, 0);
     } else {

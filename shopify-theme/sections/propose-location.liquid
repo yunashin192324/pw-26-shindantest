@@ -30,8 +30,8 @@
       assign lux_price = plan.variants[2].price
     endif
   endif
-  assign hotels = loc.hotels.value
-  assign chapels = loc.chapels.value
+  assign pp_types = 'beach,chapel,church,monument,restaurant,hotel' | split: ','
+  assign fee_types = 'chapel,church,restaurant,hotel' 
   assign hero_alt = loc.location_name.value | append: 'の景色'
 -%}
 
@@ -71,38 +71,44 @@
       <div class="fact"><dt>Rain</dt><dd>{{ section.settings.rain_value | escape }}<small>{{ section.settings.rain_sub | escape }}</small></dd></div>
       <div class="fact"><dt>Support</dt><dd>{{ section.settings.support_value | escape }}<small>{{ section.settings.support_sub | escape }}</small></dd></div>
     </dl>
-    {%- if hotels != blank or chapels != blank -%}
-      {%- liquid
-        assign venue_parts = ''
-        if hotels != blank
-          assign venue_parts = hotels | slice: 0, 2 | join: '、' | append: 'などのホテル'
-        endif
-        if chapels != blank
-          assign chapel_part = chapels | slice: 0, 2 | join: '、' | append: 'などのチャペル'
-          if venue_parts != blank
-            assign venue_parts = venue_parts | append: 'や、' | append: chapel_part
-          else
-            assign venue_parts = chapel_part
-          endif
-        endif
-      -%}
-    <div class="venues reveal">
-      <div class="venues-head">
-        <span class="label">Venue</span>
-        <h3 class="h3">{{ section.settings.venue_heading | escape }}</h3>
-        <p>ビーチや街だけでなく、{{ venue_parts | escape }}でもプロポーズできます。</p>
+    {%- comment -%}
+      Place picker: server-rendered options + one detail panel each. propose.js switches the
+      panel and adds &place=<type> to every booking link on the page (also from ?place=).
+    {%- endcomment -%}
+    <div class="place reveal" id="loc-place" data-place-picker>
+      <div class="place-head">
+        <span class="label">Place</span>
+        <h3 class="h3">{{ section.settings.place_heading | escape }}</h3>
+        <p>{{ name_ja | escape }}では、次の場所から選べます。予約のときにも選び直せます。</p>
       </div>
-      <div class="venue-cols">
-        {%- if hotels != blank %}
-        <div class="venue-col"><p class="venue-type">HOTEL<small>ホテル</small></p><ul>{% for v in hotels %}<li>{{ v | escape }}</li>{% endfor %}</ul></div>
-        {%- endif %}
-        {%- if chapels != blank %}
-        <div class="venue-col"><p class="venue-type">CHAPEL<small>チャペル</small></p><ul>{% for v in chapels %}<li>{{ v | escape }}</li>{% endfor %}</ul></div>
-        {%- endif %}
+      <div class="place-chips" role="radiogroup" aria-label="プロポーズの場所">
+        <button type="button" role="radio" aria-checked="true" class="place-chip is-selected" data-place=""><span class="en">ANY</span>おまかせ</button>
+        {%- for t in pp_types -%}
+          {%- assign venue_key = t | append: '_venues' -%}
+          {%- if loc.place_types.value contains t or loc[venue_key].value != blank -%}
+          <button type="button" role="radio" aria-checked="false" class="place-chip" data-place="{{ t }}"><span class="en">{% render 'propose-place-type', type: t, part: 'en' %}</span>{% render 'propose-place-type', type: t, part: 'ja' %}</button>
+          {%- endif -%}
+        {%- endfor -%}
       </div>
-      <p class="note venues-note">{{ section.settings.venue_note | escape }}</p>
+      <div class="place-detail" aria-live="polite">
+        <div data-place-panel=""><p><b>おまかせ</b>{{ meeting_point | escape }}など、その日にいちばん合う場所をご案内します。</p></div>
+        {%- for t in pp_types -%}
+          {%- assign venue_key = t | append: '_venues' -%}
+          {%- assign venues = loc[venue_key].value -%}
+          {%- if loc.place_types.value contains t or venues != blank -%}
+          <div data-place-panel="{{ t }}" hidden>
+            <p><b>{% render 'propose-place-type', type: t, part: 'ja' %}</b>{% render 'propose-place-type', type: t, part: 'desc' %}</p>
+            {%- if venues != blank %}
+            <p class="place-venues">選べる会場：{{ venues | join: '／' | escape }}</p>
+            {%- else %}
+            <p class="place-venues">会場は、ご希望に合わせてご案内します。</p>
+            {%- endif %}
+            {%- if fee_types contains t %}<p class="note">{{ section.settings.venue_note | escape }}</p>{% endif %}
+          </div>
+          {%- endif -%}
+        {%- endfor -%}
+      </div>
     </div>
-    {%- endif -%}
   </div>
 </section>
 
@@ -273,8 +279,8 @@
     { "type": "textarea", "id": "day_heading", "label": "当日の流れ 見出し", "default": "当日は、\nこんな時間になります。" },
     { "type": "text", "id": "day_lede", "label": "当日の流れ 説明", "default": "最初は旅の記念撮影として。気づかれないまま、その瞬間へ。" },
     { "type": "textarea", "id": "day_note", "label": "当日の流れ 注記", "default": "※ 写真撮影付きのプラン（スタンダード・ラグジュアリー）の流れです。ライトプランは撮影がありません。" },
-    { "type": "text", "id": "venue_heading", "label": "ホテル・チャペル 見出し", "default": "ホテルやチャペルでも。" },
-    { "type": "text", "id": "venue_note", "label": "ホテル・チャペル 注記", "default": "※ 会場の使用料や条件は会場ごとに異なるため、確定のご連絡でご案内します。" },
+    { "type": "text", "id": "place_heading", "label": "場所 見出し", "default": "どこで伝えますか？" },
+    { "type": "text", "id": "venue_note", "label": "場所 注記（チャペル・教会・レストラン・ホテル）", "default": "※ 会場の使用料や条件は会場ごとに異なるため、確定のご連絡でご案内します。" },
     { "type": "textarea", "id": "avail_heading", "label": "受付状況 見出し", "default": "あなたの旅行日に、\n間に合いますか？" },
     { "type": "text", "id": "plan_lede", "label": "料金 説明", "default": "花束だけのライトから、写真と動画を残すラグジュアリーまで。必要なものはオプションで足せます。" },
     { "type": "textarea", "id": "faq_heading", "label": "FAQ 見出し", "default": "雨の日も、\n直前の予約も。" },

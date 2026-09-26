@@ -7,6 +7,7 @@
   if locations == blank
     assign locations = metaobjects.propose.values
   endif
+  assign pp_types = 'beach,chapel,church,monument,restaurant,hotel' | split: ','
 -%}
 <section class="sec" id="destinations" aria-labelledby="dest-title">
   <div class="wrap">
@@ -30,6 +31,17 @@
           <div class="dest-body">
             <div class="dest-name">{{ loc.location_name_en.value | escape }}</div>
             <div class="dest-ja">{{ loc.location_name.value | escape }}</div>
+            {%- assign shown = 0 -%}
+            {%- capture place_names -%}
+              {%- for t in pp_types -%}
+                {%- assign venue_key = t | append: '_venues' -%}
+                {%- if loc.place_types.value contains t or loc[venue_key].value != blank -%}
+                  {%- if shown > 0 %}・{% endif -%}{% render 'propose-place-type', type: t, part: 'ja' %}
+                  {%- assign shown = shown | plus: 1 -%}
+                {%- endif -%}
+              {%- endfor -%}
+            {%- endcapture -%}
+            {%- if place_names != blank %}<div class="dest-places">{{ place_names }}</div>{% endif %}
             {%- if plan %}
             <div class="dest-price">From<span class="price">{{ plan.variants.first.price | money }}</span></div>
             {%- endif %}

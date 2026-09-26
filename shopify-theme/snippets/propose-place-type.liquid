@@ -1,0 +1,43 @@
+{%- comment -%}
+  Labels for the six proposal place types. Outputs one string.
+  Accepts: type — beach | chapel | church | monument | restaurant | hotel
+           part — 'en' | 'ja' | 'desc'
+  A destination offers a type when its metaobject lists it in `place_types`
+  or has names in `<type>_venues` (see PROPOSE-SETUP.md §4.2).
+{%- endcomment -%}
+{%- liquid
+  case type
+    when 'beach'
+      assign en = 'BEACH'
+      assign ja = 'ビーチ'
+      assign desc = '波の音が聞こえる砂浜で。'
+    when 'chapel'
+      assign en = 'CHAPEL'
+      assign ja = 'チャペル'
+      assign desc = 'チャペルの静けさの中で。'
+    when 'church'
+      assign en = 'CHURCH'
+      assign ja = '教会'
+      assign desc = '歴史ある教会で、厳かに。'
+    when 'monument'
+      assign en = 'MONUMENT'
+      assign ja = 'モニュメント'
+      assign desc = '誰もが知る景色を背に。'
+    when 'restaurant'
+      assign en = 'RESTAURANT'
+      assign ja = 'レストラン'
+      assign desc = '食事の席で、さりげなく。'
+    when 'hotel'
+      assign en = 'HOTEL'
+      assign ja = 'ホテル'
+      assign desc = 'ご滞在のホテルや、憧れのホテルで。'
+  endcase
+  case part
+    when 'en'
+      echo en
+    when 'desc'
+      echo desc
+    else
+      echo ja
+  endcase
+-%}

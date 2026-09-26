@@ -1,0 +1,60 @@
+{%- comment -%}
+  TOP: "choose by place" — one row per place type, listing the destinations that offer it.
+  Each city links to its page with ?place=<type>, which preselects the place there.
+{%- endcomment -%}
+{%- liquid
+  assign locations = section.settings.locations
+  if locations == blank
+    assign locations = metaobjects.propose.values
+  endif
+  assign pp_types = 'beach,chapel,church,monument,restaurant,hotel' | split: ','
+-%}
+<section class="sec sec-deep" id="place" aria-labelledby="place-title">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="label">{{ section.settings.label | escape }}</span>
+      <h2 class="h2" id="place-title">{{ section.settings.heading | escape | newline_to_br }}</h2>
+      {%- if section.settings.lede != blank %}<p class="lede">{{ section.settings.lede | escape }}</p>{% endif %}
+    </div>
+    <div class="place-list">
+      {%- for t in pp_types -%}
+        {%- capture cities -%}
+          {%- for loc in locations -%}
+            {%- assign venue_key = t | append: '_venues' -%}
+            {%- if loc.place_types.value contains t or loc[venue_key].value != blank -%}
+              {%- liquid
+                assign loc_url = loc.system.url
+                if loc_url == blank
+                  assign loc_url = '/pages/propose/' | append: loc.system.handle
+                endif
+              -%}
+              <a href="{{ loc_url }}?place={{ t }}">{{ loc.location_name.value | escape }}</a>
+            {%- endif -%}
+          {%- endfor -%}
+        {%- endcapture -%}
+        {%- if cities != blank -%}
+        <div class="place-row reveal">
+          <div class="place-type"><span class="en">{% render 'propose-place-type', type: t, part: 'en' %}</span><b>{% render 'propose-place-type', type: t, part: 'ja' %}</b></div>
+          <p class="place-desc">{% render 'propose-place-type', type: t, part: 'desc' %}</p>
+          <div class="place-cities">{{ cities }}</div>
+        </div>
+        {%- endif -%}
+      {%- endfor -%}
+    </div>
+    {%- if section.settings.note != blank %}<p class="note" style="margin-top:20px">{{ section.settings.note | escape }}</p>{% endif %}
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "プロポーズ 場所から選ぶ",
+  "settings": [
+    { "type": "metaobject_list", "id": "locations", "metaobject_type": "propose", "label": "対象の旅行先と並び順", "info": "空欄の場合はすべての旅行先が対象です。" },
+    { "type": "text", "id": "label", "label": "英語ラベル", "default": "Place" },
+    { "type": "textarea", "id": "heading", "label": "見出し", "default": "ビーチでも、\nチャペルでも。" },
+    { "type": "text", "id": "lede", "label": "説明文", "default": "旅行先ごとに、プロポーズする場所を選べます。気になる場所から、旅行先を探すこともできます。" },
+    { "type": "text", "id": "note", "label": "注記", "default": "※ 選べる場所は旅行先によって異なります。会場の使用料や条件は会場ごとに異なるため、確定のご連絡でご案内します。" }
+  ],
+  "presets": [{ "name": "プロポーズ 場所から選ぶ" }]
+}
+{% endschema %}

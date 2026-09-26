@@ -538,30 +538,44 @@ body {
 .plan-options { margin-top: clamp(40px, 6vw, 64px); max-width: 760px; }
 .plan-cta { margin-top: 36px; max-width: 480px; }
 
-/* ---------- Venues ---------- */
-.venue-list { border-top: 1px solid var(--ink); }
-.venue-row { display: grid; grid-template-columns: 1fr auto; gap: 8px 24px; align-items: center; padding: 22px 0; border-bottom: 1px solid var(--line); }
-.venue-loc .en { display: block; font-size: 1.15rem; font-weight: 500; letter-spacing: .14em; line-height: 1.3; }
-.venue-loc small { font-size: .74rem; color: var(--ink-faint); letter-spacing: .1em; }
-.venue-names { grid-column: 1 / 2; font-size: .86rem; line-height: 1.9; color: var(--ink-soft); }
-.venue-names b { font-family: var(--en); font-weight: 600; font-size: .7rem; letter-spacing: .18em; color: var(--gold); margin-right: 10px; }
-.venue-row .arrow { grid-column: 2; grid-row: 1 / 3; transition: transform .35s var(--ease); }
-.venue-row:hover .arrow { transform: translateX(4px); }
-@media (min-width: 900px) { .venue-row { grid-template-columns: 220px 1fr auto; } .venue-names { grid-column: 2; } .venue-row .arrow { grid-column: 3; grid-row: 1; } }
+/* ---------- Places (beach / chapel / church / monument / restaurant / hotel) ---------- */
+.dest-places { margin-top: 4px; font-size: .7rem; letter-spacing: .06em; color: var(--ink-soft); line-height: 1.6; }
+.place-list { border-top: 1px solid var(--ink); }
+.place-row { display: grid; gap: 6px 24px; padding: 22px 0; border-bottom: 1px solid var(--line); }
+.place-type .en { display: block; font-family: var(--en); font-size: .76rem; font-weight: 600; letter-spacing: .22em; color: var(--gold); line-height: 1.4; }
+.place-type b { font-weight: 500; font-size: 1.05rem; letter-spacing: .1em; }
+.place-desc { font-size: .84rem; color: var(--ink-soft); line-height: 1.8; }
+.place-cities { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.place-cities a { display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border: 1px solid var(--line); background: var(--white); font-size: .84rem; letter-spacing: .06em; transition: border-color .25s; }
+.place-cities a:hover { border-color: var(--ink); }
+@media (min-width: 900px) {
+  .place-row { grid-template-columns: 180px 1fr; align-items: start; }
+  .place-desc { grid-column: 2; grid-row: 1; padding-top: 2px; }
+  .place-cities { grid-column: 2; margin-top: 0; }
+}
 
-.venues { margin-top: clamp(48px, 7vw, 80px); padding: clamp(24px, 4vw, 40px); background: var(--paper-deep); display: grid; gap: 24px; }
-@media (min-width: 900px) { .venues { grid-template-columns: 5fr 7fr; gap: 24px 56px; } .venues-note { grid-column: 1 / -1; } }
-.venues .label { margin-bottom: 10px; }
-.venues-head p { margin-top: 8px; font-size: .88rem; color: var(--ink-soft); line-height: 1.9; }
-.venue-cols { display: grid; gap: 20px; }
-@media (min-width: 600px) { .venue-cols { grid-template-columns: 1fr 1fr; } }
-.venue-type { font-family: var(--en); font-size: .8rem; font-weight: 600; letter-spacing: .2em; color: var(--gold); border-bottom: 1px solid var(--line); padding-bottom: 6px; margin-bottom: 6px; }
-.venue-type small { font-family: var(--ja); font-weight: 400; letter-spacing: .06em; color: var(--ink-faint); margin-left: 8px; }
-.venue-col li { font-size: .9rem; line-height: 2; }
+.place { margin-top: clamp(48px, 7vw, 80px); padding: clamp(24px, 4vw, 40px); background: var(--paper-deep); }
+.place .label { margin-bottom: 10px; }
+.place-head p { margin-top: 6px; font-size: .88rem; color: var(--ink-soft); line-height: 1.9; }
+.place-chips { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 22px; }
+@media (min-width: 600px) { .place-chips { grid-template-columns: repeat(4, 1fr); } }
+@media (min-width: 900px) { .place-chips { grid-template-columns: repeat(7, 1fr); } }
+.place-chip { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 60px; padding: 10px 14px; border: 1px solid var(--line); background: var(--white); text-align: left; font-size: .92rem; font-weight: 500; letter-spacing: .06em; transition: border-color .2s, background .2s; }
+.place-chip .en { font-size: .66rem; font-weight: 600; letter-spacing: .2em; color: var(--gold); }
+.place-chip:hover { border-color: var(--ink); }
+.place-chip.is-selected { background: var(--ink); border-color: var(--ink); color: var(--white); }
+.place-chip.is-selected .en { color: rgba(255,255,255,.75); }
+.place-detail { margin-top: 18px; font-size: .88rem; line-height: 1.9; }
+.place-detail b { font-weight: 500; margin-right: 12px; }
+.place-venues { color: var(--ink-soft); }
+.place-detail .note { margin-top: 6px; }
+
+.plan-opt.is-place .en { font-size: .7rem; font-weight: 600; letter-spacing: .2em; color: var(--gold); display: block; line-height: 1.4; }
+.plan-opt .place-ja { display: block; font-weight: 500; font-size: 1rem; letter-spacing: .08em; }
+.plan-opt.is-place { grid-template-columns: 22px 1fr; }
 
 .plan-opt.is-compact { padding: 14px 16px; grid-template-columns: 22px 1fr; align-items: center; font-size: .9rem; }
 .plan-opt.is-compact .radio { margin-top: 0; }
 .venue-toggle { margin-bottom: 36px; }
-.venue-kind { display: block; font-size: .68rem; font-weight: 600; letter-spacing: .2em; color: var(--gold); line-height: 1.4; }
 .plan-opt .en { white-space: nowrap; }
 @media (max-width: 419px) { .plan-opt { gap: 12px; padding: 18px 16px; } .plan-opt .en { font-size: .95rem; letter-spacing: .1em; } .plan-opt .price { font-size: 1.05rem; } }
