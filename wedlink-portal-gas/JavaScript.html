@@ -335,7 +335,47 @@
     sel.innerHTML = '<option value="">指定なし</option>' + STATUS_CODES.map(c => `<option value="${c}">${c}</option>`).join('');
   }
 
+  // ★不具合修正（項目118）：案件詳細で入力したのに保存していない変更があるまま、
+  // 「← 一覧へ戻る」や上部のメニュー（ログアウトを含む）を押すと、何の確認もなく画面が
+  // 切り替わっていた。一覧へ戻っただけなら同じ案件を開き直せば入力は復元されるが、
+  // そのまま別の案件を開く・ログアウトすると変更は黙って捨てられていた（全社で毎日使う
+  // 画面で、保存し忘れに気づけないのは実害が大きい）。移動の前に件数を示して確認する。
+  // 各ボタンの処理より先に判定できるよう、文書全体で「捕捉段階」（ボタン自身の処理より
+  // 前に呼ばれる段階）の受け口を1つだけ置く（ボタンごとに条件を書き足すと漏れが出るため）。
+  let leaveGuardBypass_ = false;
+  function unsavedDetailChangeCount_() {
+    const view = $('view-detail');
+    if (!session || !view || view.classList.contains('hidden')) return 0;
+    return Object.keys(pendingChanges).length;
+  }
+  function installLeaveGuard_() {
+    document.addEventListener('click', async (ev) => {
+      if (leaveGuardBypass_) return;
+      const btn = ev.target && ev.target.closest ? ev.target.closest('#detail-back, .nav-btn') : null;
+      if (!btn) return;
+      const n = unsavedDetailChangeCount_();
+      if (!n) return;
+      ev.stopImmediatePropagation();
+      ev.preventDefault();
+      const ok = await confirmI18n_(`保存していない変更が${n}件あります。\n` +
+        'このまま移動すると、この変更は保存されずに失われます。\n\n保存せずに移動しますか？\n' +
+        '（保存する場合は「キャンセル」を押し、画面下の保存ボタンを押してください）');
+      if (!ok) return;
+      pendingChanges = {};
+      leaveGuardBypass_ = true;
+      try { btn.click(); } finally { leaveGuardBypass_ = false; }
+    }, true);
+    // ブラウザのタブを閉じる・再読み込みする場合も、同じく確認を出す
+    // （ブラウザ標準の確認画面になり、文言はブラウザが決める）。
+    window.addEventListener('beforeunload', (ev) => {
+      if (!unsavedDetailChangeCount_()) return;
+      ev.preventDefault();
+      ev.returnValue = '';
+    });
+  }
+
   function bindEvents() {
+    installLeaveGuard_();
     $('login-submit').addEventListener('click', doLogin);
     $('nav-dashboard').addEventListener('click', () => loadDashboard());
     $('nav-search').addEventListener('click', openSearchView);
@@ -1779,6 +1819,19 @@
     return `STS JP: ${jp}`;
   }
 
+  // ★不具合修正（項目118）：「履歴」ボタンが開く表示枠のIDは、以前は項目名の英数字以外を
+  // すべて「_」に置き換えて作っていた。そのため「希望日① STS JP」〜「希望日⑤ STS JP」が
+  // 全部同じID（fh-____STS_JP）になり、第2希望の「履歴」を押すと第1希望の行の下に
+  // 第2希望の履歴が出て、以後は第1希望の「履歴」を押しても第2希望の履歴が出ていた
+  // （別の希望日の変更記録を取り違えて読む危険）。同じ項目が画面の2か所に出る場合
+  // （店舗画面の「STS 支店」など）も同じIDになっていた。画面を描くたびに通し番号を
+  // 付けて、表示枠のIDが必ず1つずつ異なるようにする。
+  let historyPanelSeq_ = 0;
+  function historyPanelId_(prefix, fieldName) {
+    historyPanelSeq_ += 1;
+    return prefix + fieldName.replace(/[^A-Za-z0-9]/g, '_') + '-' + historyPanelSeq_;
+  }
+
   // STSセレクト（編集可なら<select data-pending>、不可なら読み取り専用表示）＋変更履歴リンク付き
   function statusCell(fieldName, current, editableByMe, allowedValues, lockedReason) {
     const control = editableByMe
@@ -1792,7 +1845,7 @@
       // ★不具合修正：STSの値は本来アプリ経由ならSTATUS_CODESの範囲内だが、スプレッドシートを
       // 直接編集された場合は任意の文字列になり得るため、読み取り専用表示でもエスケープする
       : `<div class="val locked-val">🔒 ${escapeHtml(current || '-')}${lockedReason ? `<span class="hint-text"> (${escapeHtml(lockedReason)})</span>` : ''}</div>`;
-    const hid = 'fh-' + fieldName.replace(/[^A-Za-z0-9]/g, '_');
+    const hid = historyPanelId_('fh-', fieldName);
     return `${control}<button type="button" class="history-link" data-history-field="${escapeAttr(fieldName)}" data-history-target="${hid}">履歴</button>
       <div class="history-panel hidden" id="${hid}"></div>`;
   }
@@ -1800,7 +1853,7 @@
   // ★要件：プラン名など、項目の名前のすぐ隣に現在のSTSを小さなバッジで表示する（クリックで履歴）。
   // 編集はしない（編集は各タブの通常のSTS欄・3択フローで行う）ための、読み取り専用の簡易表示。
   function inlineStatusBadge(fieldName, current, chipClass) {
-    const hid = 'fh-inline-' + fieldName.replace(/[^A-Za-z0-9]/g, '_');
+    const hid = historyPanelId_('fh-inline-', fieldName);
     // ★要件：STS(支店側)が空欄（＝現地がまだ確認していないだけで、案件自体は依頼済み）の間は
     // 他の「未設定」（値そのものが決まっていない項目）と紛らわしいため「未確認」と表示する。
     // STS(JP側)は依頼直後から必ずRQ等の値が入るため、この対象には含めない。
@@ -1830,7 +1883,7 @@
     const opts = ['<option value="">-（変更しない）</option>'].concat(
       codes.map(c => `<option value="${c}" ${c === current ? 'selected' : ''}>${escapeHtml(SHOP_STATUS_LABELS[c] || c)}</option>`)
     ).join('');
-    const hid = 'fh-shopsts-' + fieldName.replace(/[^A-Za-z0-9]/g, '_');
+    const hid = historyPanelId_('fh-shopsts-', fieldName);
     return `<select data-shop-status-field="${escapeAttr(fieldName)}">${opts}</select>
       <button type="button" class="history-link" data-history-field="${escapeAttr(fieldName)}" data-history-target="${hid}">履歴</button>
       <div class="history-panel hidden" id="${hid}"></div>`;
@@ -3659,7 +3712,10 @@
 
     if (!branchCode) {
       // プラン未選択の間は、支店に紐づく項目をいったんリセットしておく
-      if (saleSelect) saleSelect.innerHTML = '<option value="">未設定</option>';
+      // ★不具合修正（項目118）：取得中（読み込み中＝選べない状態）にプランを「未選択」へ戻すと、
+      // 取得中だった前の呼び出しは「もう古い」と判断して選べる状態へ戻さないため、セール名欄が
+      // 選べないまま残っていた。ここで必ず選べる状態へ戻す。
+      if (saleSelect) { saleSelect.innerHTML = '<option value="">未設定</option>'; saleSelect.disabled = false; }
       if (prepBlock) prepBlock.classList.add('hidden');
       if (n === 1) {
         document.querySelectorAll('.shop-new-hopetime').forEach(el => el.classList.add('hidden'));

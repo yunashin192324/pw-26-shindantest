@@ -5946,5 +5946,75 @@ section('93. 【改善】現地支店は「お客様情報」を編集できな�
 }
 
 // ---------------------------------------------------------------
+section('94. 【総当たり】3つの役割がランダムに操作を大量に行っても、内部エラー・不正な値・案件の重複が出ない（項目118）');
+{
+  // 乱数は毎回同じ順序になるよう固定（失敗したときに同じ手順を再現できる）
+  let seed = 20260928;
+  const rnd = () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };
+  const pick = (arr) => arr[Math.floor(rnd() * arr.length)];
+
+  const ctx = shopFixture();
+  const tokens = {
+    JP: ctx.apiLogin('KANTO', 'pw').session.token,
+    BRANCH: ctx.apiLogin('VIE', 'vp').session.token,
+    SHOP: ctx.apiLogin('SHOP1', 'sp').session.token
+  };
+  const shopTok = tokens.SHOP;
+  const kanriList = [];
+  for (let i = 0; i < 4; i++) {
+    const m = ctx.apiShopCreateRequest(shopTok, {
+      branchCode: 'VIE', team: '関東', challengeNo: 'WALK' + String(1000000 + i),
+      groomLastName: 'A', groomName: 'B', brideLastName: 'C', brideName: 'D',
+      hope1: '2027-12-0' + (i + 1), hope2: '2027-12-1' + i, option1: 'ドローン', option2: '花束'
+    });
+    kanriList.push(m.kanriNo);
+  }
+  const fieldPool = [
+    'STS JP', 'STS 支店', 'OP1 STS JP', 'OP1 STS 支店', 'OP2 STS JP', 'OP2 STS 支店',
+    '希望日① STS 支店', '希望日② STS 支店', '希望日①', '希望日②', '希望日①プラン', '希望日②プラン',
+    'プラン名', 'OP1', 'OP2', '撮影日FIX', 'ホテル', '新郎年齢', '請求先', '管轄', 'CHG NO', 'キャンセル理由'
+  ];
+  const valuePool = ctx.STATUS_CODES.concat(['', 'ZZ', '2027-12-24', 'テスト', '関西', '11', ' ']);
+  const internalErr = (msg) => /TypeError|ReferenceError|RangeError|is not a function|Cannot read|undefined|NaN|\[object/.test(msg) || !/[぀-ヿ一-鿿]/.test(msg);
+
+  const problems = [];
+  let ok94 = 0, rejected94 = 0;
+  const STEPS = 600;
+  for (let step = 0; step < STEPS; step++) {
+    const role = pick(['JP', 'BRANCH', 'SHOP']);
+    const kanri = pick(kanriList);
+    const changes = {};
+    const n = 1 + Math.floor(rnd() * 3);
+    for (let k = 0; k < n; k++) changes[pick(fieldPool)] = pick(valuePool);
+    const useCommit = rnd() < 0.5;
+    try {
+      if (useCommit) ctx.apiCommitChanges(tokens[role], kanri, changes, rnd() < 0.3 ? 'メモ' : '', role === 'JP' && rnd() < 0.5 ? 'SHOP' : undefined);
+      else ctx.apiSaveFieldsQuiet(tokens[role], kanri, changes);
+      ok94++;
+    } catch (e) {
+      rejected94++;
+      if (internalErr(String(e.message))) problems.push(`step${step} ${role} ${JSON.stringify(changes)} → ${String(e.message).slice(0, 80)}`);
+    }
+    // 毎回の後で、案件のSTSが決められた値の範囲内かを確かめる
+    const d = ctx.apiGetReservationDetail(tokens.JP, kanri).detail;
+    ['STS JP', 'STS 支店', 'OP1 STS JP', 'OP1 STS 支店', 'OP2 STS JP', 'OP2 STS 支店'].forEach(f => {
+      const v = String(d[f] || '');
+      if (v && !ctx.STATUS_CODES.includes(v)) problems.push(`step${step} 「${f}」に範囲外の値「${v}」`);
+    });
+  }
+  check(`ランダム操作${STEPS}回のうち、受け付けられた操作（${ok94}回）と断られた操作（${rejected94}回）の両方がある（検査の前提）`,
+        ok94 >= 30 && rejected94 >= 30);
+  check('どの操作でも内部エラー（プログラムの不具合を示すエラー）が出ない', problems.filter(x => !x.includes('範囲外')).length === 0,
+        problems.filter(x => !x.includes('範囲外')).slice(0, 3).join(' | '));
+  check('どの時点でも、STSに決められた範囲外の値が入らない', problems.filter(x => x.includes('範囲外')).length === 0,
+        problems.filter(x => x.includes('範囲外')).slice(0, 3).join(' | '));
+  const rows94 = ctx.apiGetDashboard(tokens.JP).rows || ctx.apiGetDashboard(tokens.JP).reservations || [];
+  const nos94 = rows94.map(r => r.kanriNo);
+  check('ランダム操作のあとも、案件の管理番号が重複していない', nos94.length === new Set(nos94).size, `${nos94.length}件`);
+  check('ランダム操作のあとも、案件が消えていない', kanriList.every(k => nos94.includes(k)),
+        kanriList.filter(k => !nos94.includes(k)).join(','));
+}
+
+// ---------------------------------------------------------------
 console.log(`\n${'='.repeat(50)}\n結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
 process.exit(fail === 0 ? 0 : 1);

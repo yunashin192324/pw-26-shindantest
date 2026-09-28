@@ -4591,6 +4591,219 @@ function paneHidden(document, key) {
           jpPaneReload73.textContent.includes('関東営業本部'));
   }
 
+  // ---------------------------------------------------------------
+  section('U74. 【不具合修正】履歴枠のID重複・セール名欄が選べないまま残る・未保存の変更の消失（項目118）');
+  {
+    const ctx74 = makeServer();
+    const jp74 = ctx74.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    const made74 = ctx74.apiCreateReservation(jp74, 'VIE', '01 Guard\n02 Bride\nRQ 2027/10/09\nRQ 2027/10/10');
+    const dom74 = await openApp(ctx74);
+    const doc74 = dom74.window.document;
+    await login(dom74, 'KANTO', 'CHANGE-ME-KANTO');
+    await settle();
+    [...doc74.querySelectorAll('#reservation-table-body tr, #reservation-list .res-card')]
+      .find(el => el.textContent.includes(made74.kanriNo)).click();
+    await settle(); await settle();
+
+    // --- 履歴枠のIDは画面内で1つずつ異なる ---
+    const ids74 = [...doc74.querySelectorAll('.history-panel')].map(el => el.id);
+    const dupIds74 = ids74.filter((id, i) => ids74.indexOf(id) !== i);
+    check('履歴を表示する枠のIDが画面内で重複していない', ids74.length > 0 && dupIds74.length === 0,
+          `重複: ${[...new Set(dupIds74)].join(',')}`);
+    const hopeHist74 = [...doc74.querySelectorAll('[data-history-field^="希望日"]')]
+      .filter(el => /^希望日[①②] STS/.test(el.dataset.historyField));
+    const t1 = hopeHist74.find(el => el.dataset.historyField.startsWith('希望日①'));
+    const t2 = hopeHist74.find(el => el.dataset.historyField.startsWith('希望日②'));
+    check('希望日①と希望日②の「履歴」は別の枠を開く',
+          !!t1 && !!t2 && t1.dataset.historyTarget !== t2.dataset.historyTarget,
+          `${t1 && t1.dataset.historyTarget} / ${t2 && t2.dataset.historyTarget}`);
+    check('全ての「履歴」ボタンの行き先の枠が実在する',
+          [...doc74.querySelectorAll('[data-history-target]')].every(el => !!doc74.getElementById(el.dataset.historyTarget)));
+
+    // --- 未保存の変更があるまま移動しようとすると確認が出る ---
+    const hotel74 = doc74.querySelector('[data-pending="ホテル"]');
+    hotel74.value = 'GUARD HOTEL';
+    hotel74.dispatchEvent(new dom74.window.Event('change'));
+    let asked74 = [];
+    dom74.window.confirm = (msg) => { asked74.push(msg); return false; };
+    doc74.getElementById('detail-back').click();
+    await settle();
+    check('未保存の変更があると、一覧へ戻る前に確認が出る', asked74.length === 1, String(asked74.length));
+    check('確認の文言に未保存の件数が入っている', asked74[0] && asked74[0].includes('1件'), asked74[0]);
+    check('「キャンセル」を選ぶと案件詳細に留まる',
+          !doc74.getElementById('view-detail').classList.contains('hidden'));
+    check('「キャンセル」を選んでも入力内容は残っている', hotel74.value === 'GUARD HOTEL');
+    doc74.getElementById('nav-logout').click();
+    await settle();
+    check('ログアウトを押した場合も確認が出て、キャンセルなら留まる',
+          asked74.length === 2 && !doc74.getElementById('view-detail').classList.contains('hidden'),
+          String(asked74.length));
+
+    dom74.window.confirm = (msg) => { asked74.push(msg); return true; };
+    doc74.getElementById('detail-back').click();
+    await settle(); await settle();
+    check('「移動する」を選ぶと一覧へ戻る', doc74.getElementById('view-detail').classList.contains('hidden'));
+
+    // 変更が無いときは確認を出さない
+    const before74 = asked74.length;
+    [...doc74.querySelectorAll('#reservation-table-body tr, #reservation-list .res-card')]
+      .find(el => el.textContent.includes(made74.kanriNo)).click();
+    await settle(); await settle();
+    check('再び開いたとき、前回捨てた変更は残っていない',
+          doc74.querySelector('[data-pending="ホテル"]').value !== 'GUARD HOTEL');
+    doc74.getElementById('detail-back').click();
+    await settle();
+    check('変更が無いときは確認が出ない', asked74.length === before74, String(asked74.length - before74));
+
+    // --- 新規依頼：プランを選んだ直後に「未選択」へ戻しても、セール名欄が選べないまま残らない ---
+    doc74.getElementById('nav-logout').click();
+    await settle();
+    await login(dom74, 'SHOP1', 'CHANGE-ME-SHOP1');
+    await settle();
+    doc74.getElementById('nav-shop-new').click();
+    await settle(); await settle();
+    const plan74 = doc74.getElementById('shop-new-hopeplan2');
+    const firstPlan74 = plan74.querySelector('option[value]:not([value=""])').value;
+    plan74.value = firstPlan74;
+    plan74.dispatchEvent(new dom74.window.Event('change'));
+    plan74.value = '';
+    plan74.dispatchEvent(new dom74.window.Event('change'));
+    await settle(); await settle();
+    const sale74 = doc74.getElementById('shop-new-hopesale2');
+    check('プランを選んですぐ未選択へ戻しても、セール名欄が選べる状態に戻る',
+          sale74.disabled === false, `disabled=${sale74.disabled}`);
+    check('セール名欄が「読み込み中...」のまま残らない',
+          !sale74.innerHTML.includes('読み込み中'), sale74.innerHTML);
+  }
+
+  // ---------------------------------------------------------------
+  section('U75. 【総当たり】画面で編集できる全項目を、サーバーも受け付ける（画面とサーバーの許可のずれ検出・項目118）');
+  {
+    // 画面で「編集できる」状態の入力欄（読み取り専用・操作不可でないもの）を全部集め、
+    // 同じ役割でサーバーへ1項目ずつ保存を試す。画面では入力できるのにサーバーが断る項目が
+    // あれば、利用者は「入力したのに保存できない」状態になる（項目117で実際に起きた型の不具合）。
+    const sampleValue75 = (el, field) => {
+      if (field === 'CHG NO') return 'ABC12345678';
+      if (el.tagName === 'SELECT') {
+        const o = [...el.options].map(x => x.value).filter(Boolean);
+        return o.length ? o[o.length - 1] : '';
+      }
+      if (el.type === 'date') return '2027-11-11';
+      if (el.type === 'number') return '2';
+      if (el.type === 'email') return 'a@example.com';
+      if (el.type === 'checkbox') return null;
+      return 'x';
+    };
+    const roles75 = [
+      { code: 'KANTO', pass: 'CHANGE-ME-KANTO', label: '手配課' },
+      { code: 'VIE', pass: 'CHANGE-ME-VIE', label: '現地支店' },
+      { code: 'SHOP1', pass: 'CHANGE-ME-SHOP1', label: '店舗' }
+    ];
+    for (const r75 of roles75) {
+      const ctx75 = makeServer();
+      const jp75 = ctx75.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+      const shop75 = ctx75.apiLogin('SHOP1', 'CHANGE-ME-SHOP1').session.token;
+      const made75 = ctx75.apiShopCreateRequest(shop75, {
+        branchCode: 'VIE', team: '関東', challengeNo: 'DIFF7500001',
+        groomLastName: 'A', groomName: 'B', brideLastName: 'C', brideName: 'D',
+        hope1: '2027-12-24', hope2: '2027-12-25', option1: 'ドローン'
+      });
+      const dom75 = await openApp(ctx75);
+      const doc75 = dom75.window.document;
+      await login(dom75, r75.code, r75.pass);
+      await settle();
+      [...doc75.querySelectorAll('#reservation-table-body tr, #reservation-list .res-card')]
+        .find(el => el.textContent.includes(made75.kanriNo)).click();
+      await settle(); await settle();
+      const token75 = ctx75.apiLogin(r75.code, r75.pass).session.token;
+      const fields75 = new Map();
+      doc75.querySelectorAll('#detail-content [data-pending]').forEach(el => {
+        if (el.readOnly || el.disabled) return;
+        if (el.type === 'hidden') return;
+        const f = el.dataset.pending;
+        if (!fields75.has(f)) fields75.set(f, el);
+      });
+      const rejected75 = [];
+      for (const [f, el] of fields75) {
+        const v = sampleValue75(el, f);
+        if (v === null) continue;
+        try {
+          ctx75.apiSaveFieldsQuiet(token75, made75.kanriNo, { [f]: v });
+        } catch (e) {
+          rejected75.push(`${f}: ${String(e.message).slice(0, 60)}`);
+        }
+      }
+      check(`${r75.label}：画面で編集できる${fields75.size}項目を、サーバーが全て受け付ける`,
+            fields75.size > 0 && rejected75.length === 0, rejected75.join(' | '));
+    }
+  }
+
+  // ---------------------------------------------------------------
+  section('U76. 【総当たり】スクリプトを混入させる文字列を全項目に入れても、どの画面でも実行される形にならない（項目118）');
+  {
+    const EVIL76 = `"><img src=x onerror="window.__xss=1"><svg onload="window.__xss=1"> ' onmouseover='window.__xss=1' x='`;
+    const ctx76 = makeServer();
+    const jp76 = ctx76.apiLogin('KANTO', 'CHANGE-ME-KANTO').session.token;
+    const shop76 = ctx76.apiLogin('SHOP1', 'CHANGE-ME-SHOP1').session.token;
+    const vie76 = ctx76.apiLogin('VIE', 'CHANGE-ME-VIE').session.token;
+    const made76 = ctx76.apiShopCreateRequest(shop76, {
+      branchCode: 'VIE', team: '関東', challengeNo: 'XSS76000001',
+      groomLastName: EVIL76, groomName: EVIL76, brideLastName: EVIL76, brideName: EVIL76,
+      hope1: '2027-12-24', hope2: '2027-12-25', option1: EVIL76, remarks: EVIL76,
+      hopeLocation2: EVIL76, saleName: EVIL76
+    });
+    // 文字列で保存できる全項目に混入文字列を入れる（日付・選択肢など形式が決まっている項目は断られるので無視）
+    const list76 = ctx76.apiGetReservationDetail(jp76, made76.kanriNo).detail;
+    let accepted76 = 0;
+    Object.keys(list76).forEach(f => {
+      try { ctx76.apiSaveFieldsQuiet(jp76, made76.kanriNo, { [f]: EVIL76 }); accepted76++; } catch (e) { /* 形式が決まっている項目 */ }
+    });
+    try { ctx76.apiSaveBranch(jp76, { code: 'XSSB', name: EVIL76, role: 'BRANCH', country: EVIL76, city: EVIL76, team: '関東', email: 'x@example.com', prefix: 'XZ', passcode: 'CHANGE-ME-XSS', active: true }); } catch (e) { /* 登録できなくても検査は続ける */ }
+    ctx76.apiCommitChanges(vie76, made76.kanriNo, {}, EVIL76, 'JP');
+    ctx76.apiCommitChanges(jp76, made76.kanriNo, {}, EVIL76);
+    check('混入文字列を入れられた項目が十分にある（検査の前提）', accepted76 >= 20, `${accepted76}項目`);
+
+    const domHostile = (doc) => {
+      const bad = [];
+      doc.querySelectorAll('body *').forEach(el => {
+        [...el.attributes].forEach(a => { if (/^on/i.test(a.name)) bad.push(`${el.tagName}[${a.name}]`); });
+      });
+      return bad;
+    };
+    for (const r76 of [
+      { code: 'KANTO', pass: 'CHANGE-ME-KANTO', label: '手配課' },
+      { code: 'VIE', pass: 'CHANGE-ME-VIE', label: '現地支店' },
+      { code: 'SHOP1', pass: 'CHANGE-ME-SHOP1', label: '店舗' }
+    ]) {
+      const dom76 = await openApp(ctx76);
+      const doc76 = dom76.window.document;
+      await login(dom76, r76.code, r76.pass);
+      await settle();
+      const badList76 = domHostile(doc76);
+      [...doc76.querySelectorAll('#reservation-table-body tr, #reservation-list .res-card')]
+        .find(el => el.textContent.includes(made76.kanriNo)).click();
+      await settle(); await settle();
+      const badDetail76 = domHostile(doc76);
+      check(`${r76.label}：一覧・案件詳細に、実行される属性（on...）が紛れ込まない`,
+            badList76.length === 0 && badDetail76.length === 0, [...badList76, ...badDetail76].slice(0, 5).join(','));
+      check(`${r76.label}：混入した文字列が要素として解釈されていない（img/svgが増えない）`,
+            !doc76.querySelector('#detail-content img[src="x"], #detail-content svg[onload]'));
+      check(`${r76.label}：混入した文字列は文字としてそのまま表示される`,
+            doc76.getElementById('detail-content').textContent.includes('onerror'));
+      // 詳細以外の画面（メニューから開ける画面すべて）も同じ検査を通す
+      const navBad76 = [];
+      for (const id of ['nav-dashboard', 'nav-day', 'nav-delivery', 'nav-search', 'nav-stats', 'nav-audit', 'nav-masters', 'nav-settings', 'nav-shop-new']) {
+        const btn = doc76.getElementById(id);
+        if (!btn || btn.classList.contains('hidden') || btn.offsetParent === null && btn.closest('.hidden')) continue;
+        btn.click();
+        await settle(); await settle();
+        domHostile(doc76).forEach(b => navBad76.push(`${id}:${b}`));
+      }
+      check(`${r76.label}：メニューから開ける他の画面にも、実行される属性が紛れ込まない`,
+            navBad76.length === 0, navBad76.slice(0, 5).join(','));
+    }
+  }
+
   console.log(`\n${'='.repeat(50)}\n画面テスト結果: ${pass} 件成功 / ${fail} 件失敗\n${'='.repeat(50)}`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error('テストが異常終了しました:', e); process.exit(1); });
