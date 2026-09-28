@@ -213,21 +213,41 @@ function employeeKey_(empNo, empName) {
   return canonicalKeyPart_(empNo) + '_' + String(empName === null || empName === undefined ? '' : empName).trim();
 }
 
+/**
+ * 「店舗マスタ」シートに4列目「エリア名」が無い旧環境向けに、列を補う。
+ * 多店舗展開（60店舗規模）に伴い、店舗を束ねる「エリア」区分をCSVから取り込んで
+ * 絞り込みに使えるようにするため、店舗単位の属性として店舗マスタに持たせている。
+ * 既存の店番・店舗名・有効列はそのまま、4列目が空欄のときだけ見出しを補う。
+ */
+function ensureShopMasterAreaColumn_(sheet) {
+  if (sheet.getMaxColumns() < 4) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), 4 - sheet.getMaxColumns());
+  }
+  const headerCell = sheet.getRange(1, 4);
+  if (String(headerCell.getValue() || '').trim() === '') {
+    headerCell.setValue('エリア名')
+      .setFontWeight('bold').setBackground('#1c4587').setFontColor('#ffffff').setHorizontalAlignment('center');
+    sheet.setColumnWidth(4, 140);
+  }
+}
+
 function getAllShopMasterRows_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHOP_MASTER_SHEET_NAME);
   if (!sheet) return null;
 
+  ensureShopMasterAreaColumn_(sheet);
+
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
 
-  const values = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
+  const values = sheet.getRange(2, 1, lastRow - 1, 4).getValues();
   const list = [];
   values.forEach(function (row, i) {
     const code = normalizeOfficeCode_(row[0]);
     const name = String(row[1] || '').trim();
     if (!code && !name) return;
-    list.push({ rowIndex: i + 2, code: code, name: name, active: row[2] !== false });
+    list.push({ rowIndex: i + 2, code: code, name: name, active: row[2] !== false, area: String(row[3] || '').trim() });
   });
   return list;
 }
@@ -279,7 +299,7 @@ function getShopList_() {
     }
   });
   return order.map(function (code) {
-    return { code: byCode[code].code, name: byCode[code].name };
+    return { code: byCode[code].code, name: byCode[code].name, area: byCode[code].area || '' };
   });
 }
 
@@ -472,9 +492,15 @@ function getMetaMasters() {
       });
     });
 
+    const areaList = shopList
+      .map(function (s) { return s.area; })
+      .filter(function (a, i, arr) { return a && arr.indexOf(a) === i; })
+      .sort(function (a, b) { return String(a).localeCompare(String(b), 'ja'); });
+
     return {
       success: true,
       shopList: shopList.map(function (s) { return s.name; }),
+      areaList: areaList,
       reasonMaster: REASON_MASTER.slice(),
       typeMaster: TYPE_MASTER.slice(),
       purposeMaster: PURPOSE_MASTER.slice(),
@@ -622,6 +648,7 @@ function getDashboardData() {
         }
         obj.__sheetName = shop.name;
         obj.__rowIndex = i + 2; // スプレッドシート上の物理行番号（2行目スタート）
+        obj['エリア名'] = shop.area || ''; // 店舗マスタのエリア区分（店舗単位の属性のため行データ自体には持たない）
 
         result.push(obj);
       }
@@ -996,11 +1023,13 @@ function htmlCellToText_(cell) {
  * ・実際の営業日報CSVは以下の33列を含むが、ヘッダー名で参照するため列の並び順やCSV側の
  *   追加列（未成約理由(小)・方面・国名・都市名・エージェント・出発日・キャリア・ホテル・
  *   媒体カテゴリ名・媒体名・旅行目的(大)・大学名・企業名・本部コード・本部名・エリアコード・
- *   エリア名・営業所名・班コード・班名など）があっても影響を受けない。
+ *   営業所名・班コード・班名など）があっても影響を受けない。
  *   このシステムが実際に取り込むのは次の12列のみ：
  *     対象年月日・営業所コード・営業所名・社員番号・社員名・未成約理由(大)・都市コード・
  *     種別・出発年月・旅行目的(小)・接客方法・HIS利用歴・詳細
  *   （営業所名は店舗マスタの店舗名として使う。行データには保存しない）
+ *   （「エリア名」も店舗単位の属性として店舗マスタ側に取り込む。多店舗展開時に店舗をエリアで
+ *     束ねて絞り込めるようにするためで、こちらも1行ごとのデータには保存しない）
  *   （「予約番号」はCSVからは取り込まず、成約時に「新規相談登録」画面等から手入力する運用）
  * ・「営業所コード」列の値から投入先の店舗シートを判定する。未登録の営業所コードは
  *   仮の店舗名で店舗マスタへ自動登録される（店舗・スタッフの登録は基本CSVインポートから行う運用のため）。
@@ -1036,7 +1065,7 @@ function importUncontractedCsv(csvText) {
  * 「is not a function」という分かりにくいエラーになるため、
  * 画面側から版数を確認できるようにしている。
  */
-const SERVER_VERSION = '2026-08-28';
+const SERVER_VERSION = '2026-09-28';
 
 /**
  * サーバー側の版数を返す。画面側は、自分が期待する版数と一致するかを起動時に確認する。
@@ -1197,6 +1226,7 @@ function importParsedRows_(rows) {
 
     const autoRegisteredShopCodes = [];
     const renamedShopNames = []; // CSVの営業所名で「未設定(店番)」から直した店舗
+    const areaSyncedOfficeCodes = {}; // このバッチ内でエリア名を同期済みの営業所コード
 
     const getVal = function (row, header) {
       const idx = colIndex[header];
@@ -1218,6 +1248,8 @@ function importParsedRows_(rows) {
       const officeCode = normalizeOfficeCode_(getVal(row, '営業所コード'));
       // CSVに営業所名があれば、それをそのまま店舗名として使う
       const csvShopName = shopNameFromCsv_(getVal(row, '営業所名'));
+      // CSVのエリア名（多店舗展開時の店舗グルーピング用。店舗単位の属性として店舗マスタ側に持たせる）
+      const csvAreaName = getVal(row, 'エリア名');
 
       if (!targetDate || !officeCode) {
         skippedBlankCount++;
@@ -1228,7 +1260,7 @@ function importParsedRows_(rows) {
       // （店舗・スタッフの登録は基本CSVインポートから読み取る運用のため）
       let sheetName = officeCodeToSheetName[officeCode];
       if (!sheetName) {
-        sheetName = autoRegisterShop_(ss, officeCode, csvShopName);
+        sheetName = autoRegisterShop_(ss, officeCode, csvShopName, csvAreaName);
         officeCodeToSheetName[officeCode] = sheetName;
         // CSVから名前が分からず仮登録になった場合だけ「仮登録した」と報告する
         if (isPlaceholderShopName_(sheetName)) {
@@ -1242,6 +1274,12 @@ function importParsedRows_(rows) {
           sheetName = renamed;
           renamedShopNames.push(sheetName);
         }
+      }
+
+      // 同じ営業所コードについては取り込みバッチ内で1回だけ店舗マスタのエリア名を同期する
+      if (csvAreaName && !areaSyncedOfficeCodes[officeCode]) {
+        areaSyncedOfficeCodes[officeCode] = true;
+        updateShopAreaFromCsv_(ss, officeCode, csvAreaName);
       }
 
       const empNo = normalizeEmployeeNo_(getVal(row, '社員番号'));
@@ -1365,7 +1403,7 @@ function importParsedRows_(rows) {
  * 「店舗・スタッフ管理」画面で正式名称にリネームできるよう、識別しやすい仮名称を付与する。
  * @return {string} 作成された店舗のシート名（＝仮の店舗名）
  */
-function autoRegisterShop_(ss, officeCode, csvShopName) {
+function autoRegisterShop_(ss, officeCode, csvShopName, csvAreaName) {
   const masterSheet = ss.getSheetByName(SHOP_MASTER_SHEET_NAME);
 
   // 既に同じ店番の行がある場合は、行を増やさずにその店舗を使う。
@@ -1380,6 +1418,9 @@ function autoRegisterShop_(ss, officeCode, csvShopName) {
     if (masterSheet && !preferred.active) {
       masterSheet.getRange(preferred.rowIndex, 3).setValue(true); // 取り込み対象にするため有効へ戻す
     }
+    if (masterSheet && csvAreaName && !preferred.area) {
+      masterSheet.getRange(preferred.rowIndex, 4).setValue(csvAreaName); // エリア名が未設定ならCSVの値で補う
+    }
     const shop = { code: preferred.code, name: preferred.name };
     createShopSheets_(ss, [shop], HEADERS_MAIN); // シートが無ければ作る（既にあれば見出しの補修のみ）
     repairOfficeCodeFormatting_(ss, [shop]);
@@ -1393,7 +1434,7 @@ function autoRegisterShop_(ss, officeCode, csvShopName) {
     ? csvShopName
     : '未設定(' + officeCode + ')';
   if (masterSheet) {
-    masterSheet.appendRow([officeCode, placeholderName, true]);
+    masterSheet.appendRow([officeCode, placeholderName, true, csvAreaName || '']);
   }
   const newShop = { code: officeCode, name: placeholderName };
   createShopSheets_(ss, [newShop], HEADERS_MAIN);
@@ -1402,6 +1443,20 @@ function autoRegisterShop_(ss, officeCode, csvShopName) {
   repairOfficeCodeFormatting_(ss, [newShop]);
   appendShopRowToSummary_(ss, newShop);
   return placeholderName;
+}
+
+/**
+ * CSVの「エリア名」で店舗マスタのエリア区分を同期する。
+ * エリア名は店舗単位の属性（多店舗展開時のグルーピング用）のため、行データではなく
+ * 店舗マスタ側に持たせ、値が空欄／CSVと異なる場合だけ更新する（無駄な書き込みを避ける）。
+ */
+function updateShopAreaFromCsv_(ss, officeCode, csvAreaName) {
+  if (!csvAreaName) return;
+  const target = (getAllShopMasterRows_() || []).find(function (s) { return s.code === officeCode; });
+  if (!target || target.area === csvAreaName) return;
+  const masterSheet = ss.getSheetByName(SHOP_MASTER_SHEET_NAME);
+  if (!masterSheet) return;
+  masterSheet.getRange(target.rowIndex, 4).setValue(csvAreaName);
 }
 
 /**
@@ -2220,11 +2275,12 @@ function getShopMasterList() {
  * 新しい店舗を追加する：①店舗マスタへ1行追加 ②27列ヘッダー付きのデータシートを新規作成
  * ③店舗別サマリの各集計ブロックへこの店舗の行（COUNTIFS/SUMIFS数式つき）を追加する。
  */
-function addShopMaster(code, name) {
+function addShopMaster(code, name, area) {
   try {
     assertCanManageMaster_();
     code = String(code || '').trim();
     name = String(name || '').trim();
+    area = String(area || '').trim();
     if (!code || !name) {
       throw new Error('店番と店舗名は必須です。');
     }
@@ -2246,11 +2302,11 @@ function addShopMaster(code, name) {
       throw new Error('同名のシート「' + name + '」が既に存在します。');
     }
 
-    masterSheet.appendRow([code, name, true]);
+    masterSheet.appendRow([code, name, true, area]);
     createShopSheets_(ss, [{ code: code, name: name }], HEADERS_MAIN);
     appendShopRowToSummary_(ss, { code: code, name: name });
 
-    return { success: true, code: code, name: name };
+    return { success: true, code: code, name: name, area: area };
   } catch (err) {
     return { success: false, error: err.message + '\n' + err.stack };
   }
@@ -2260,11 +2316,13 @@ function addShopMaster(code, name) {
  * 店舗名を変更する：データシート名を変更（店舗別サマリの数式は名前変更に自動追従する）し、
  * 店舗マスタと、店舗別サマリ上の店舗名テキストセル（数式ではない箇所）を更新する。
  */
-function renameShopMaster(code, newName) {
+function renameShopMaster(code, newName, area) {
   try {
     assertCanManageMaster_();
     code = String(code || '').trim();
     newName = String(newName || '').trim();
+    const hasAreaArg = area !== undefined;
+    area = String(area || '').trim();
     if (!code || !newName) {
       throw new Error('店番と新しい店舗名は必須です。');
     }
@@ -2281,23 +2339,24 @@ function renameShopMaster(code, newName) {
       throw new Error('店舗名「' + newName + '」は既に使われています。');
     }
 
-    const oldName = target.name;
-    if (oldName === newName) {
-      return { success: true, code: code, name: newName };
-    }
-
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const dataSheet = ss.getSheetByName(oldName);
-    if (dataSheet) {
-      dataSheet.setName(newName); // 店舗別サマリの数式（'旧店舗名'!...）はGoogleシートが自動で追従する
+    const masterSheet = ss.getSheetByName(SHOP_MASTER_SHEET_NAME);
+
+    const oldName = target.name;
+    if (oldName !== newName) {
+      const dataSheet = ss.getSheetByName(oldName);
+      if (dataSheet) {
+        dataSheet.setName(newName); // 店舗別サマリの数式（'旧店舗名'!...）はGoogleシートが自動で追従する
+      }
+      masterSheet.getRange(target.rowIndex, 2).setValue(newName);
+      updateShopNameInSummary_(ss, code, newName);
     }
 
-    const masterSheet = ss.getSheetByName(SHOP_MASTER_SHEET_NAME);
-    masterSheet.getRange(target.rowIndex, 2).setValue(newName);
+    if (hasAreaArg && area !== target.area) {
+      masterSheet.getRange(target.rowIndex, 4).setValue(area);
+    }
 
-    updateShopNameInSummary_(ss, code, newName);
-
-    return { success: true, code: code, name: newName };
+    return { success: true, code: code, name: newName, area: hasAreaArg ? area : target.area };
   } catch (err) {
     return { success: false, error: err.message + '\n' + err.stack };
   }

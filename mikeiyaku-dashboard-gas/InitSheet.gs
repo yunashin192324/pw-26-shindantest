@@ -449,16 +449,16 @@ function createShopMasterSheet_(ss, shopList) {
   }
 
   const sheet = ss.insertSheet(sheetName);
-  const headers = ['店番', '店舗名', '有効'];
+  const headers = ['店番', '店舗名', '有効', 'エリア名'];
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
   sheet.getRange(1, 1, 1, headers.length)
     .setFontWeight('bold').setBackground('#1c4587').setFontColor('#ffffff').setHorizontalAlignment('center');
 
-  const rows = shopList.map(function (shop) { return [shop.code, shop.name, true]; });
-  sheet.getRange(2, 1, rows.length, 3).setValues(rows);
+  const rows = shopList.map(function (shop) { return [shop.code, shop.name, true, shop.area || '']; });
+  sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
 
   sheet.setFrozenRows(1);
-  sheet.setColumnWidths(1, 3, 140);
+  sheet.setColumnWidths(1, headers.length, 140);
 }
 
 /**

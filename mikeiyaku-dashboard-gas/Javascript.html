@@ -198,7 +198,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // 画面側が前提としているサーバー（Code.gs）の版数。Code.gs の SERVER_VERSION と対で更新する。
-const REQUIRED_SERVER_VERSION = '2026-08-28';
+const REQUIRED_SERVER_VERSION = '2026-09-28';
 
 /**
  * Code.gs が画面と同じ版数まで更新されているか確認する。
@@ -575,6 +575,7 @@ function populateAllMasterSelects() {
   fillOptions('filter-month', MONTH_CODES.map(function (c, i) { return { value: c, label: MONTH_LABELS[i] }; }), true);
 
   fillSelectWithBlank('dm-filter-shop', shopList);
+  fillSelectWithBlank('dm-filter-area', metaMasters.areaList || []);
   fillSelectWithBlank('dm-filter-month', MONTH_CODES.map(function (c, i) { return MONTH_LABELS[i]; }), MONTH_CODES);
   fillSelectWithBlank('dm-filter-contact', metaMasters.contactMaster || []);
   fillSelectWithBlank('dm-filter-purpose', metaMasters.purposeMaster || []);
@@ -1480,7 +1481,7 @@ function renderEmployeeDetailBreakdown(containerId, rows, columnName) {
 // タブ3: リセールリスト（CRUD）
 // ============================================================================
 function initDataManagerEvents() {
-  ['dm-filter-shop', 'dm-filter-month', 'dm-filter-resale', 'dm-filter-sts', 'dm-filter-contact', 'dm-filter-purpose',
+  ['dm-filter-area', 'dm-filter-shop', 'dm-filter-month', 'dm-filter-resale', 'dm-filter-sts', 'dm-filter-contact', 'dm-filter-purpose',
     'dm-filter-employee', 'dm-filter-date-from', 'dm-filter-date-to',
     'dm-filter-act-date-from', 'dm-filter-act-date-to', 'dm-filter-alert-only'].forEach(function (id) {
     document.getElementById(id).addEventListener('change', function () {
@@ -1544,6 +1545,7 @@ function populateDmEmployeeSelect() {
 }
 
 function renderDataManagerTab() {
+  const area = document.getElementById('dm-filter-area').value;
   const shop = document.getElementById('dm-filter-shop').value;
   const month = document.getElementById('dm-filter-month').value;
   const resale = document.getElementById('dm-filter-resale').value;
@@ -1558,6 +1560,7 @@ function renderDataManagerTab() {
   const alertOnly = document.getElementById('dm-filter-alert-only').checked;
 
   dmFilteredCache = allDataCache.filter(function (row) {
+    if (area && row['エリア名'] !== area) return false;
     if (shop && row.__sheetName !== shop) return false;
     if (month && String(row['月']) !== month) return false;
     if (resale === '__blank__') {
@@ -2858,6 +2861,7 @@ function renderShopMasterTable() {
     return '<tr class="hover:bg-blue-50' + (shop.active ? '' : ' opacity-60') + '">' +
       '<td class="px-3 py-2">' + escapeHtml(shop.code) + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(shop.name) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(shop.area || '') + '</td>' +
       '<td class="px-3 py-2 text-center">' + statusBadge + '</td>' +
       '<td class="px-3 py-2 text-right whitespace-nowrap">' +
         '<button class="text-blue-600 hover:underline text-xs mr-2" data-shop-edit="' + escapeHtml(shop.code) + '">編集</button>' +
@@ -2881,6 +2885,7 @@ function openShopModal(mode, code) {
   document.getElementById('shop-form-mode').value = mode;
   const codeInput = document.getElementById('shop-form-code');
   const nameInput = document.getElementById('shop-form-name');
+  const areaInput = document.getElementById('shop-form-area');
 
   if (mode === 'edit') {
     const shop = shopMasterCache.find(function (s) { return s.code === code; });
@@ -2888,11 +2893,13 @@ function openShopModal(mode, code) {
     codeInput.value = shop ? shop.code : '';
     codeInput.disabled = true;
     nameInput.value = shop ? shop.name : '';
+    areaInput.value = shop ? (shop.area || '') : '';
   } else {
     document.getElementById('shop-modal-title').textContent = '店舗を追加';
     codeInput.value = '';
     codeInput.disabled = false;
     nameInput.value = '';
+    areaInput.value = '';
   }
   openAdminModal('shop-modal');
 }
@@ -2902,6 +2909,7 @@ function onSubmitShopForm(ev) {
   const mode = document.getElementById('shop-form-mode').value;
   const code = document.getElementById('shop-form-code').value.trim();
   const name = document.getElementById('shop-form-name').value.trim();
+  const area = document.getElementById('shop-form-area').value.trim();
   if (!code || !name) { showToast('店番と店舗名は必須です。', 'error'); return; }
 
   showLoading(true);
@@ -2923,9 +2931,9 @@ function onSubmitShopForm(ev) {
     });
 
   if (mode === 'edit') {
-    runner.renameShopMaster(code, name);
+    runner.renameShopMaster(code, name, area);
   } else {
-    runner.addShopMaster(code, name);
+    runner.addShopMaster(code, name, area);
   }
 }
 

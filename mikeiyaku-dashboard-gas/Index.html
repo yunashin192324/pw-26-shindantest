@@ -314,6 +314,10 @@
       <div class="bg-white rounded-xl shadow p-4">
         <div class="flex flex-wrap gap-3 items-end">
           <div>
+            <label class="text-xs font-semibold text-slate-500 block mb-1">エリア</label>
+            <select id="dm-filter-area" class="border border-slate-300 rounded-lg text-sm p-2 min-w-[140px]"><option value="">すべて</option></select>
+          </div>
+          <div>
             <label class="text-xs font-semibold text-slate-500 block mb-1">店舗</label>
             <select id="dm-filter-shop" class="border border-slate-300 rounded-lg text-sm p-2 min-w-[160px]"><option value="">すべて</option></select>
           </div>
@@ -454,6 +458,7 @@
                 <tr>
                   <th class="px-3 py-2 text-left">店番</th>
                   <th class="px-3 py-2 text-left">店舗名</th>
+                  <th class="px-3 py-2 text-left">エリア</th>
                   <th class="px-3 py-2 text-center">状態</th>
                   <th class="px-3 py-2 text-right">操作</th>
                 </tr>
@@ -736,6 +741,10 @@
         <div>
           <label class="text-xs font-semibold text-slate-500 block mb-1">店舗名 <span class="text-red-500">*</span></label>
           <input type="text" id="shop-form-name" required class="w-full border border-slate-300 rounded-lg text-sm p-2">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">エリア（任意）</label>
+          <input type="text" id="shop-form-area" class="w-full border border-slate-300 rounded-lg text-sm p-2" placeholder="例：関東エリア">
         </div>
         <div class="flex justify-end gap-3 pt-2 border-t border-slate-100">
           <button type="button" data-close-modal="shop-modal" class="px-4 py-2 rounded-lg text-sm font-semibold text-slate-500 hover:bg-slate-100">キャンセル</button>
