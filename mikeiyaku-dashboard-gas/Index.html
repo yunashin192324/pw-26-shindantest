@@ -517,6 +517,26 @@
         </div>
       </div>
 
+      <!-- ============ 人事名簿からのメールアドレス一括登録 ============ -->
+      <div class="bg-white rounded-xl shadow p-4">
+        <h2 class="text-base font-bold text-slate-800 mb-1"><i class="fa-solid fa-envelope text-blue-600"></i> メールアドレスの一括登録（人事名簿）</h2>
+        <p class="text-xs text-slate-500 mb-3">
+          人事名簿（CSV または Excel）の「担当者NO」「社員番号」とスタッフの社員番号を突き合わせ、Googleアカウント欄をまとめて登録します。
+          登録された人から、権限（一般＝自店舗のみ など）が正しく効くようになります。
+          すでに別のアドレスが入っている人・名簿の氏名が一致しない人・どちらの人か決められない人は登録せず、一覧でお知らせします。
+        </p>
+        <div class="flex flex-wrap gap-2 items-center">
+          <input type="file" id="staff-email-file" accept=".csv,.tsv,.txt,.xls,.xlsx" class="text-xs">
+          <button id="btn-staff-email-preview" class="bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg px-3 py-1.5 text-xs font-semibold">
+            <i class="fa-solid fa-magnifying-glass"></i> 内容を確認する
+          </button>
+          <button id="btn-staff-email-apply" class="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-1.5 text-xs font-semibold shadow disabled:opacity-40 disabled:cursor-not-allowed" disabled>
+            <i class="fa-solid fa-floppy-disk"></i> この内容で登録する
+          </button>
+        </div>
+        <div id="staff-email-result" class="hidden text-xs mt-3"></div>
+      </div>
+
       <!-- ============ 取り込み済みデータの整理 ============ -->
       <div class="bg-white rounded-xl shadow p-4">
         <h2 class="text-base font-bold text-slate-800 mb-1"><i class="fa-solid fa-broom text-slate-500"></i> 取り込み済みデータの整理</h2>

@@ -215,7 +215,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // 画面側が前提としているサーバー（Code.gs）の版数。Code.gs の SERVER_VERSION と対で更新する。
-const REQUIRED_SERVER_VERSION = '2026-09-28-2';
+const REQUIRED_SERVER_VERSION = '2026-09-28-3';
 
 /**
  * Code.gs が画面と同じ版数まで更新されているか確認する。
@@ -2383,7 +2383,7 @@ function onSubmitRegisterForm(ev) {
       submitBtn.disabled = false;
       showToast('通信エラー（addUncontractedData）: ' + err.message, 'error');
     })
-    .addUncontractedData(rowObject, Number(staffRowIndex));
+    .addUncontractedData(rowObject, Number(staffRowIndex), staffIdentityOf(registerStaffCache, staffRowIndex));
 }
 
 // ============================================================================
@@ -2683,6 +2683,13 @@ function formatArchivePeriodLinks(periods) {
 let shopMasterCache = [];
 let staffMasterCache = [];
 
+// スタッフも行番号で指定して操作するため、画面を開いた時点の社員番号・社員名を一緒に送り、
+// サーバー側で「今もその人の行か」を確かめてもらう（一覧の並びが変わっていたら中止される）。
+function staffIdentityOf(cache, rowIndex) {
+  const s = (cache || []).find(function (x) { return String(x.rowIndex) === String(rowIndex); });
+  return s ? { employeeNo: s.employeeNo, employeeName: s.employeeName } : null;
+}
+
 function initAdminEvents() {
   document.querySelectorAll('[data-close-modal]').forEach(function (btn) {
     btn.addEventListener('click', function () { closeAdminModal(btn.dataset.closeModal); });
@@ -2700,6 +2707,92 @@ function initAdminEvents() {
   document.getElementById('btn-merge-placeholders').addEventListener('click', onMergePlaceholderShops);
   document.getElementById('btn-check-archive').addEventListener('click', onCheckArchivePreview);
   document.getElementById('btn-run-archive').addEventListener('click', onRunArchive);
+  document.getElementById('staff-email-file').addEventListener('change', function () {
+    // ファイルを選び直したら、前の確認結果では登録できないようにする
+    document.getElementById('btn-staff-email-apply').disabled = true;
+    document.getElementById('staff-email-result').classList.add('hidden');
+  });
+  document.getElementById('btn-staff-email-preview').addEventListener('click', function () { runStaffEmailImport(true); });
+  document.getElementById('btn-staff-email-apply').addEventListener('click', function () { runStaffEmailImport(false); });
+}
+
+// ---- 人事名簿からのメールアドレス一括登録 -----------------------------------
+function runStaffEmailImport(dryRun) {
+  const fileInput = document.getElementById('staff-email-file');
+  const file = fileInput.files && fileInput.files[0];
+  const box = document.getElementById('staff-email-result');
+  const applyBtn = document.getElementById('btn-staff-email-apply');
+  const previewBtn = document.getElementById('btn-staff-email-preview');
+  if (!file) { showToast('人事名簿のファイルを選んでください。', 'error'); return; }
+  if (!dryRun && !window.confirm('確認した内容で、スタッフのGoogleアカウントを一括登録します。よろしいですか？')) return;
+
+  applyBtn.disabled = true;
+  previewBtn.disabled = true;
+  showLoading(true);
+  readImportFile(file).then(function (payload) {
+    google.script.run
+      .withSuccessHandler(function (res) {
+        showLoading(false);
+        previewBtn.disabled = false;
+        box.classList.remove('hidden');
+        if (!res || !res.success) {
+          box.className = 'text-xs mt-3 text-red-600 whitespace-pre-line';
+          box.textContent = '失敗しました：' + (res ? res.error : '不明なエラー');
+          return;
+        }
+        box.className = 'text-xs mt-3';
+        box.innerHTML = renderStaffEmailResult(res);
+        if (dryRun) {
+          applyBtn.disabled = !(res.counts.apply > 0);
+        } else {
+          showToast(res.appliedCount + '名のGoogleアカウントを登録しました。', 'success');
+          applyBtn.disabled = true;
+          loadAdminData();
+        }
+      })
+      .withFailureHandler(function (err) {
+        showLoading(false);
+        previewBtn.disabled = false;
+        box.classList.remove('hidden');
+        box.className = 'text-xs mt-3 text-red-600';
+        box.textContent = '通信エラー：' + err.message;
+      })
+      .importStaffEmails(payload, dryRun);
+  }).catch(function (err) {
+    showLoading(false);
+    previewBtn.disabled = false;
+    showToast('ファイルを読み込めませんでした: ' + err.message, 'error');
+  });
+}
+
+function renderStaffEmailResult(res) {
+  const c = res.counts;
+  const who = function (x) { return escapeHtml(x.officeName) + '・' + escapeHtml(x.employeeName) + '（' + escapeHtml(x.employeeNo) + '）'; };
+  const list = function (title, items, fmt, cls) {
+    if (!items || !items.length) return '';
+    const shown = items.slice(0, 200).map(function (x) { return '<li>' + fmt(x) + '</li>'; }).join('');
+    return '<details class="mt-1"' + (cls === 'open' ? ' open' : '') + '><summary class="cursor-pointer font-semibold">' +
+      escapeHtml(title) + '（' + items.length + '名）</summary><ul class="list-disc pl-5 mt-1 space-y-0.5">' + shown +
+      (items.length > 200 ? '<li>…ほか' + (items.length - 200) + '名</li>' : '') + '</ul></details>';
+  };
+  let html = '<p class="text-slate-500">使った列：番号＝' + escapeHtml(res.columns.id.join('・')) +
+    '／メール＝' + escapeHtml(res.columns.email) + (res.columns.name ? '／氏名＝' + escapeHtml(res.columns.name) : '（氏名の列が無いため氏名の照合はしていません）') +
+    '／名簿の人数：' + res.rosterCount + '名</p>';
+  html += res.dryRun
+    ? '<p class="mt-1 font-semibold text-amber-700">登録予定：' + c.apply + '名（まだ登録されていません。内容を確認して「この内容で登録する」を押してください）</p>'
+    : '<p class="mt-1 font-semibold text-emerald-700">' + res.appliedCount + '名を登録しました。</p>';
+  html += list(res.dryRun ? '登録予定' : '登録した人', res.items.apply, function (x) { return who(x) + ' → ' + escapeHtml(x.email); });
+  html += list('要確認：名簿の氏名がスタッフの氏名と一致しないため登録しません', res.items.nameMismatch,
+    function (x) { return who(x) + ' ／ 名簿の氏名：' + escapeHtml(x.rosterName) + ' ／ ' + escapeHtml(x.email); }, 'open');
+  html += list('要確認：どちらの人か決められないため登録しません', res.items.conflict,
+    function (x) { return who(x) + ' ／ ' + escapeHtml(x.reason); }, 'open');
+  html += list('要確認：メールアドレスの形式が正しくないため登録しません', res.items.invalidEmail,
+    function (x) { return who(x) + ' ／ 名簿の値：' + escapeHtml(x.email) + '（名簿の' + x.rosterRow + '行目）'; }, 'open');
+  html += list('すでに別のアドレスが登録済みのため変更しません（必要なら個別に「編集」してください）', res.items.keepExisting,
+    function (x) { return who(x) + ' ／ 現在：' + escapeHtml(x.current) + ' ／ 名簿：' + escapeHtml(x.roster); });
+  html += list('すでに同じアドレスが登録済み', res.items.alreadySame, who);
+  html += list('名簿に見つからなかったスタッフ', res.items.notInRoster, who);
+  return html;
 }
 
 /** 「未設定(店番)」の仮店舗を、同じ店番の正式な店舗へ統合する */
@@ -3424,7 +3517,8 @@ function onSubmitStaffForm(ev) {
     });
 
   if (rowIndexRaw) {
-    runner.updateStaffMaster(Number(rowIndexRaw), officeCode, empNo, empName, googleAccount, role);
+    runner.updateStaffMaster(Number(rowIndexRaw), officeCode, empNo, empName, googleAccount, role,
+      staffIdentityOf(staffMasterCache, rowIndexRaw));
   } else {
     runner.addStaffMaster(officeCode, empNo, empName, googleAccount, role);
   }
@@ -3450,7 +3544,7 @@ function onDeleteStaff(rowIndex) {
       showLoading(false);
       showToast('通信エラー: ' + err.message, 'error');
     })
-    .deleteStaffMaster(rowIndex);
+    .deleteStaffMaster(rowIndex, staffIdentityOf(staffMasterCache, rowIndex));
 }
 
 function quickAddStaff(officeCode, employeeNo, employeeName) {
@@ -3491,6 +3585,7 @@ function mergeUnregisteredStaff(officeCode, employeeNo, employeeName, targetRowI
       showLoading(false);
       showToast('通信エラー: ' + err.message, 'error');
     })
-    .mergeUnregisteredStaff(officeCode, employeeNo, employeeName, targetRowIndex);
+    .mergeUnregisteredStaff(officeCode, employeeNo, employeeName, targetRowIndex,
+      staffIdentityOf(staffMasterCache, targetRowIndex));
 }
 </script>

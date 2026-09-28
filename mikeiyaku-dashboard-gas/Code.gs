@@ -408,8 +408,12 @@ function normalizeRole_(rawValue) {
  * ・マスタ管理　　　　＝ 全店舗閲覧＋CSVインポート＋店舗/スタッフマスタの編集・追加
  * ・管理者（所長・チーフ）＝ 全店舗閲覧のみ（CSV・マスタ編集は不可）
  * ・一般　　　　　　　＝ officeCode で自店舗のデータのみに絞り込む
- * ・メール取得不可、またはスタッフマスタに未登録（導入初期の未登録ユーザー等）の場合は
- *   フェイルオープン（＝マスタ管理相当）とする。締め出しを避けるため。
+ * ・メール取得不可、またはスタッフマスタに未登録（Googleアカウント欄が空欄・無効化済み）の場合：
+ *   - 「マスタ管理」がGoogleアカウント付きで1人も登録されていない導入初期は、締め出しを
+ *     避けるため従来どおりマスタ管理相当とする。
+ *   - マスタ管理が1人でも登録された後は「管理者」相当（全店舗の閲覧・入力は可、全データ削除・
+ *     CSV取込・店舗/スタッフ編集・アーカイブは不可）とする。全社展開後は大多数の社員が未登録の
+ *     ため、誰か1人の誤操作で全社のデータが消える事態を防ぐ。
  */
 function getCurrentUserContext_() {
   let email = '';
@@ -420,13 +424,8 @@ function getCurrentUserContext_() {
   }
 
   const staff = getStaffMasterRows_();
-  let matched = null;
-  if (email) {
-    const emailLower = email.trim().toLowerCase();
-    matched = staff.find(function (s) {
-      return s.googleAccount && s.googleAccount.trim().toLowerCase() === emailLower;
-    }) || null;
-  }
+  const resolved = resolveRoleForEmail_(email, staff);
+  const matched = resolved.matched;
 
   let role, officeCode, officeName, employeeName, identified;
   if (matched) {
@@ -440,7 +439,7 @@ function getCurrentUserContext_() {
     employeeName = matched.employeeName;
     identified = true;
   } else {
-    role = ROLE_MASTER; // フェイルオープン：未登録ユーザーの締め出しを避けるため最上位権限扱い
+    role = resolved.role;
     officeCode = null;
     officeName = null;
     employeeName = null;
@@ -458,6 +457,59 @@ function getCurrentUserContext_() {
     canImportCsv: role === ROLE_MASTER,
     canManageMaster: role === ROLE_MASTER
   };
+}
+
+// スタッフも行番号で指定して操作するため、画面を開いた後に一覧の並びが変わると
+// 別の人を編集・削除してしまう。操作のたびに社員番号＋社員名が一致するか確かめる。
+const STAFF_ROW_MOVED_MESSAGE =
+  'スタッフ一覧を開いた後に、一覧の並びや内容が変わっています（他の方の追加・削除・重複整理など）。' +
+  '別のスタッフを変更しないよう処理を中止しました。画面を再読み込みしてから、もう一度操作してください。';
+
+function assertStaffRowIdentity_(staffRow, expected) {
+  if (!staffRow || !expected || typeof expected !== 'object' ||
+      employeeKey_(staffRow.employeeNo, staffRow.employeeName) !== employeeKey_(expected.employeeNo, expected.employeeName)) {
+    throw new Error(STAFF_ROW_MOVED_MESSAGE);
+  }
+}
+
+/**
+ * メールアドレスとスタッフ一覧から権限を決める（ログイン時と、スタッフ編集時の
+ * 「自分を締め出さないか」の確認で、必ず同じ規則を使うための唯一の判定関数）。
+ * ・有効なスタッフのGoogleアカウントと一致 → その人の権限
+ * ・一致しない（未登録・無効化・メール取得不可）→ マスタ管理が1人も登録されていない導入初期は
+ *   締め出し防止のためマスタ管理、それ以降は管理者相当
+ */
+function resolveRoleForEmail_(email, staffRows) {
+  const emailLower = String(email || '').trim().toLowerCase();
+  const matched = emailLower ? ((staffRows || []).find(function (s) {
+    return s.active && s.googleAccount && String(s.googleAccount).trim().toLowerCase() === emailLower;
+  }) || null) : null;
+  if (matched) return { matched: matched, role: matched.role };
+  return { matched: null, role: hasRegisteredMaster_(staffRows) ? ROLE_MANAGER : ROLE_MASTER };
+}
+
+/** Googleアカウント付きで有効な「マスタ管理」が1人以上登録されているか */
+function hasRegisteredMaster_(staffRows) {
+  return (staffRows || []).some(function (s) {
+    return s.active && s.role === ROLE_MASTER && !!s.googleAccount;
+  });
+}
+
+/**
+ * スタッフマスタの変更によって、操作している本人がマスタ管理でなくなってしまう
+ * （＝管理タブが開けなくなり、自分では元に戻せなくなる）操作を止める。
+ * 判定はログイン時と同じ resolveRoleForEmail_ で「変更後の一覧」に対して行う。
+ * @param {Array} afterRows 変更を反映した後のスタッフ一覧（getStaffMasterRows_と同じ形）
+ */
+function assertNotLockingSelfOut_(afterRows) {
+  let email = '';
+  try { email = String(Session.getActiveUser().getEmail() || '').trim().toLowerCase(); } catch (e) { email = ''; }
+  if (resolveRoleForEmail_(email, afterRows).role !== ROLE_MASTER) {
+    throw new Error(
+      'この変更を保存すると、操作しているあなた（' + (email || 'Googleアカウントを確認できません') + '）が' +
+      '「マスタ管理」でなくなり、この管理画面を使えなくなります（ご自身では元に戻せません）。\n' +
+      '先にご自身をGoogleアカウント付きの「マスタ管理」として登録してから、もう一度操作してください。');
+  }
 }
 
 /**
@@ -853,12 +905,12 @@ function getActiveStaffForSelection() {
  *   営業所コード・社員番号・社員名は不要。staffRowIndexから解決するため無視される）
  * @param {number} staffRowIndex 担当スタッフの、スタッフマスタ上の行番号
  */
-function addUncontractedData(rowObject, staffRowIndex) {
-  return lockedEndpoint_(function () { return addUncontractedDataImpl_(rowObject, staffRowIndex); });
+function addUncontractedData(rowObject, staffRowIndex, expectedStaff) {
+  return lockedEndpoint_(function () { return addUncontractedDataImpl_(rowObject, staffRowIndex, expectedStaff); });
 }
 
 /** addUncontractedData の本体（同時実行制御は上の公開関数で行う。直接呼ばないこと） */
-function addUncontractedDataImpl_(rowObject, staffRowIndex) {
+function addUncontractedDataImpl_(rowObject, staffRowIndex, expectedStaff) {
   try {
     const rIdx = parseInt(staffRowIndex, 10);
     if (isNaN(rIdx) || rIdx < 2) {
@@ -868,6 +920,7 @@ function addUncontractedDataImpl_(rowObject, staffRowIndex) {
     if (!staff || !staff.active) {
       throw new Error('指定された担当スタッフが見つかりません（マスタから削除・無効化された可能性があります）。');
     }
+    assertStaffRowIdentity_(staff, expectedStaff);
     if (isHqOfficeCode_(staff.officeCode)) {
       throw new Error('本部所属のスタッフは実績データを持てないため、担当者に指定できません。');
     }
@@ -1145,7 +1198,7 @@ function lockedEndpoint_(fn) {
  * 「is not a function」という分かりにくいエラーになるため、
  * 画面側から版数を確認できるようにしている。
  */
-const SERVER_VERSION = '2026-09-28-2';
+const SERVER_VERSION = '2026-09-28-3';
 
 /**
  * サーバー側の版数を返す。画面側は、自分が期待する版数と一致するかを起動時に確認する。
@@ -1842,11 +1895,18 @@ function saveRowChangesImpl_(changes) {
     const updatedRows = [];
     const failures = [];
 
+    // 権限確認は店舗マスタ・スタッフマスタを読み込むため、行ごとに行うと数百行の保存で
+    // 数百回の読み込みになり非常に遅くなる。1回の保存の中では権限は変わらないので、店舗ごとに1回だけ確かめる。
+    const scopeCheckedSheets = {};
+
     changes.forEach(function (change) {
       const sheetName = change && change.sheetName;
       const rowIndex = change && change.rowIndex;
       try {
-        assertShopInScope_(sheetName);
+        if (!scopeCheckedSheets[sheetName]) {
+          assertShopInScope_(sheetName);
+          scopeCheckedSheets[sheetName] = true;
+        }
 
         const rIdx = parseInt(rowIndex, 10);
         if (isNaN(rIdx) || rIdx < 2) throw new Error('不正な行番号です: ' + rowIndex);
@@ -3139,6 +3199,7 @@ function addStaffMasterImpl_(officeCode, employeeNo, employeeName, googleAccount
     if (!sheet) {
       throw new Error(setupRequiredMessage_('スタッフマスタ'));
     }
+    assertNotLockingSelfOut_(existing.concat([{ active: true, role: role, googleAccount: googleAccount }]));
     sheet.appendRow([officeCode, normalizeEmployeeNo_(employeeNo), employeeName, googleAccount, role, true]);
 
     return { success: true };
@@ -3150,12 +3211,12 @@ function addStaffMasterImpl_(officeCode, employeeNo, employeeName, googleAccount
 /**
  * スタッフマスタの既存行を更新する（rowIndexで対象行を特定）。マスタ管理者のみ利用可能。
  */
-function updateStaffMaster(rowIndex, officeCode, employeeNo, employeeName, googleAccount, role) {
-  return lockedEndpoint_(function () { return updateStaffMasterImpl_(rowIndex, officeCode, employeeNo, employeeName, googleAccount, role); });
+function updateStaffMaster(rowIndex, officeCode, employeeNo, employeeName, googleAccount, role, expectedStaff) {
+  return lockedEndpoint_(function () { return updateStaffMasterImpl_(rowIndex, officeCode, employeeNo, employeeName, googleAccount, role, expectedStaff); });
 }
 
 /** updateStaffMaster の本体（同時実行制御は上の公開関数で行う。直接呼ばないこと） */
-function updateStaffMasterImpl_(rowIndex, officeCode, employeeNo, employeeName, googleAccount, role) {
+function updateStaffMasterImpl_(rowIndex, officeCode, employeeNo, employeeName, googleAccount, role, expectedStaff) {
   try {
     assertCanManageMaster_();
     const rIdx = parseInt(rowIndex, 10);
@@ -3192,12 +3253,16 @@ function updateStaffMasterImpl_(rowIndex, officeCode, employeeNo, employeeName, 
       throw new Error('同じGoogleアカウントが既に別のスタッフに登録されています。');
     }
     const before = existing.find(function (s) { return s.rowIndex === rIdx; });
+    assertStaffRowIdentity_(before, expectedStaff);
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(STAFF_MASTER_SHEET_NAME);
     if (!sheet) {
       throw new Error('「スタッフマスタ」シートが見つかりません。');
     }
+    assertNotLockingSelfOut_(existing.map(function (s) {
+      return s.rowIndex === rIdx ? { active: s.active, role: role, googleAccount: googleAccount } : s;
+    }));
     sheet.getRange(rIdx, 1, 1, 5).setValues([[officeCode, employeeNo === undefined || employeeNo === null ? '' : employeeNo, employeeName, googleAccount, role]]);
 
     // 社員名・所属店舗（異動）が変わっていれば、過去に取り込み済みのリセールリストの
@@ -3330,12 +3395,12 @@ function applyStaffRenameOrTransfer_(beforeOfficeCode, beforeEmployeeNo, beforeE
  * @param {string} sourceEmployeeName 統合元候補の社員名
  * @param {number} targetRowIndex 統合先スタッフの、スタッフマスタ上の行番号
  */
-function mergeUnregisteredStaff(sourceOfficeCode, sourceEmployeeNo, sourceEmployeeName, targetRowIndex) {
-  return lockedEndpoint_(function () { return mergeUnregisteredStaffImpl_(sourceOfficeCode, sourceEmployeeNo, sourceEmployeeName, targetRowIndex); });
+function mergeUnregisteredStaff(sourceOfficeCode, sourceEmployeeNo, sourceEmployeeName, targetRowIndex, expectedTarget) {
+  return lockedEndpoint_(function () { return mergeUnregisteredStaffImpl_(sourceOfficeCode, sourceEmployeeNo, sourceEmployeeName, targetRowIndex, expectedTarget); });
 }
 
 /** mergeUnregisteredStaff の本体（同時実行制御は上の公開関数で行う。直接呼ばないこと） */
-function mergeUnregisteredStaffImpl_(sourceOfficeCode, sourceEmployeeNo, sourceEmployeeName, targetRowIndex) {
+function mergeUnregisteredStaffImpl_(sourceOfficeCode, sourceEmployeeNo, sourceEmployeeName, targetRowIndex, expectedTarget) {
   try {
     assertCanManageMaster_();
     sourceOfficeCode = normalizeOfficeCode_(sourceOfficeCode);
@@ -3353,6 +3418,7 @@ function mergeUnregisteredStaffImpl_(sourceOfficeCode, sourceEmployeeNo, sourceE
     if (!target) {
       throw new Error('統合先のスタッフが見つかりません。');
     }
+    assertStaffRowIdentity_(target, expectedTarget);
     if (canonicalKeyPart_(target.employeeNo) === canonicalKeyPart_(sourceEmployeeNo) &&
         target.employeeName === sourceEmployeeName && target.officeCode === sourceOfficeCode) {
       throw new Error('統合元と統合先が同じです。');
@@ -3369,15 +3435,229 @@ function mergeUnregisteredStaffImpl_(sourceOfficeCode, sourceEmployeeNo, sourceE
   }
 }
 
+// ============================================================================
+// 人事名簿からのメールアドレス一括登録
+// ----------------------------------------------------------------------------
+// 営業日報CSVにはメールアドレスが無いため、CSVから自動登録されたスタッフは
+// Googleアカウント欄が空欄になる（＝本人を見分けられず、権限が正しく効かない）。
+// 人事名簿（CSV / Excel）の「担当者NO」「社員番号」とスタッフマスタの社員番号を突き合わせ、
+// Googleアカウント欄をまとめて埋める。誤って別人のアドレスを入れると、その人に
+// 別の人の権限・閲覧範囲が付いてしまうため、少しでも怪しいものは登録せず一覧で知らせる。
+// ============================================================================
+
+/** 見出し・番号の比較用：全角→半角、大文字化、空白・記号の除去 */
+function normalizeForMatch_(value) {
+  let s = String(value === null || value === undefined ? '' : value);
+  if (typeof s.normalize === 'function') s = s.normalize('NFKC');
+  return s.replace(/[\s　]+/g, '').toUpperCase();
+}
+
+/** 社員番号の突き合わせ用キー（全角・先頭の0・空白の違いを吸収） */
+function staffIdMatchKey_(value) {
+  const s = normalizeForMatch_(value).replace(/[.\-‐－ー]/g, '');
+  return s === '' ? '' : canonicalKeyPart_(s);
+}
+
+function rosterHeaderKind_(header) {
+  const h = normalizeForMatch_(header).replace(/[.．・_\-（）()]/g, '');
+  if (!h) return '';
+  if (/^(担当者|社員|従業員|職員)(NO|NUMBER|番号|コード|CD|ID)$/.test(h)) return 'id';
+  if (/(メール|MAIL|アドレス|GOOGLEアカウント|アカウント)/.test(h)) return 'email';
+  if (/^(氏名|社員名|担当者名|従業員名|職員名|名前|氏名漢字|漢字氏名)$/.test(h)) return 'name';
+  return '';
+}
+
+function isValidEmail_(v) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || ''));
+}
+
+/**
+ * 人事名簿を読み込み、スタッフマスタのGoogleアカウント欄をまとめて登録する（マスタ管理者のみ）。
+ * @param {Object} payload readImportFileの結果（{kind:'text', text} または {kind:'workbook', base64, fileName, mimeType}）
+ * @param {boolean} dryRun trueなら登録せずに結果の見込みだけを返す（画面の「内容を確認する」）
+ */
+function importStaffEmails(payload, dryRun) {
+  return lockedEndpoint_(function () { return importStaffEmailsImpl_(payload, dryRun); });
+}
+
+/** importStaffEmails の本体（同時実行制御は上の公開関数で行う。直接呼ばないこと） */
+function importStaffEmailsImpl_(payload, dryRun) {
+  try {
+    assertCanManageMaster_();
+    if (!payload || (payload.kind !== 'text' && payload.kind !== 'workbook')) {
+      throw new Error('名簿ファイルを選んでください。');
+    }
+    let rows;
+    if (payload.kind === 'workbook') {
+      rows = readWorkbookRows_(payload.base64, payload.fileName, payload.mimeType);
+    } else {
+      assertNotBinaryWorkbook_(payload.text);
+      const text = String(payload.text || '');
+      const lines = text.split(/\r\n|\r|\n/).filter(function (l) { return l.trim() !== ''; }).slice(0, 5).join('\n');
+      let delimiter = ',', best = 0;
+      [',', '\t', ';'].forEach(function (d) { const c = lines.split(d).length - 1; if (c > best) { best = c; delimiter = d; } });
+      rows = Utilities.parseCsv(text, delimiter);
+    }
+    if (!rows || rows.length === 0) throw new Error('名簿の中身が空でした。');
+
+    // 見出し行を探す（先頭30行のうち、番号列とメール列の両方がある最初の行）
+    let headerIdx = -1, idCols = [], emailCol = -1, nameCol = -1;
+    for (let i = 0; i < Math.min(rows.length, 30) && headerIdx === -1; i++) {
+      const ids = [], emails = [], names = [];
+      (rows[i] || []).forEach(function (cell, c) {
+        const k = rosterHeaderKind_(cell);
+        if (k === 'id') ids.push(c); else if (k === 'email') emails.push(c); else if (k === 'name') names.push(c);
+      });
+      if (ids.length > 0 && emails.length > 0) {
+        headerIdx = i; idCols = ids; nameCol = names.length ? names[0] : -1;
+        // メールらしい列が複数ある場合（「メールアドレス」「メール配信可否」など）は、
+        // 実際にアドレスの形をした値が最も多い列を使う
+        let bestCount = -1;
+        emails.forEach(function (c) {
+          let n = 0;
+          for (let r = i + 1; r < Math.min(rows.length, i + 201); r++) {
+            if (isValidEmail_(String((rows[r] || [])[c] || '').trim())) n++;
+          }
+          if (n > bestCount) { bestCount = n; emailCol = c; }
+        });
+      }
+    }
+    if (headerIdx === -1) {
+      throw new Error('名簿の見出し行が見つかりません。「担当者NO」または「社員番号」の列と、「メールアドレス」の列が' +
+        '必要です（1行目付近に見出しがあるかご確認ください）。\n実際に読み取れた1行目：' + summarizeRowForError_(rows[0]));
+    }
+    const header = rows[headerIdx];
+
+    // 名簿を番号で引けるようにする（担当者NO・社員番号の両方で引けるよう、1人を複数の番号で登録）
+    const rosterByKey = {};
+    let rosterCount = 0;
+    for (let r = headerIdx + 1; r < rows.length; r++) {
+      const row = rows[r] || [];
+      const email = String(row[emailCol] === undefined || row[emailCol] === null ? '' : row[emailCol]).trim();
+      const name = nameCol >= 0 ? String(row[nameCol] || '').trim() : '';
+      const keys = [];
+      idCols.forEach(function (c) {
+        const k = staffIdMatchKey_(row[c]);
+        if (k && keys.indexOf(k) === -1) keys.push(k);
+      });
+      if (!keys.length || !email) continue;
+      rosterCount++;
+      const entry = { email: email, name: name, rosterRow: r + 1 };
+      keys.forEach(function (k) { (rosterByKey[k] = rosterByKey[k] || []).push(entry); });
+    }
+
+    const staffRows = getStaffMasterRows_();
+    const shopNameByCode = {};
+    getShopList_().forEach(function (sh) { shopNameByCode[sh.code] = sh.name; });
+    const label = function (s) {
+      return { rowIndex: s.rowIndex, officeName: officeNameForCode_(s.officeCode, shopNameByCode),
+        employeeNo: s.employeeNo, employeeName: s.employeeName };
+    };
+    // 同じ社員番号のスタッフ行が複数あると、どちらの人か決められないため対象外にする
+    const staffCountByKey = {};
+    staffRows.forEach(function (s) {
+      if (!s.active) return;
+      const k = staffIdMatchKey_(s.employeeNo);
+      if (k) staffCountByKey[k] = (staffCountByKey[k] || 0) + 1;
+    });
+    // 既に使われているアドレス（重複登録を防ぐ）
+    const usedEmail = {};
+    staffRows.forEach(function (s) { if (s.googleAccount) usedEmail[s.googleAccount.toLowerCase()] = s.rowIndex; });
+
+    const result = { apply: [], alreadySame: [], keepExisting: [], nameMismatch: [], conflict: [], invalidEmail: [], notInRoster: [] };
+    const proposals = []; // 登録候補（アドレスの重複を確かめてから確定する）
+    staffRows.forEach(function (s) {
+      if (!s.active) return;
+      const k = staffIdMatchKey_(s.employeeNo);
+      if (!k) return;
+      const hits = rosterByKey[k] || [];
+      const distinct = [];
+      hits.forEach(function (h) { if (!distinct.some(function (d) { return d.email.toLowerCase() === h.email.toLowerCase(); })) distinct.push(h); });
+      if (distinct.length === 0) { result.notInRoster.push(label(s)); return; }
+      if (distinct.length > 1) {
+        result.conflict.push(Object.assign(label(s), { reason: '名簿に同じ番号の人が複数います（' + distinct.map(function (d) { return d.email; }).join('、') + '）' }));
+        return;
+      }
+      if (staffCountByKey[k] > 1) {
+        result.conflict.push(Object.assign(label(s), { reason: 'スタッフマスタに同じ社員番号の人が複数登録されています' }));
+        return;
+      }
+      const entry = distinct[0];
+      if (!isValidEmail_(entry.email)) {
+        result.invalidEmail.push(Object.assign(label(s), { email: entry.email, rosterRow: entry.rosterRow }));
+        return;
+      }
+      if (entry.name && normalizeForMatch_(entry.name) !== normalizeForMatch_(s.employeeName)) {
+        result.nameMismatch.push(Object.assign(label(s), { email: entry.email, rosterName: entry.name }));
+        return;
+      }
+      if (s.googleAccount) {
+        if (s.googleAccount.toLowerCase() === entry.email.toLowerCase()) result.alreadySame.push(label(s));
+        else result.keepExisting.push(Object.assign(label(s), { current: s.googleAccount, roster: entry.email }));
+        return;
+      }
+      proposals.push({ staff: s, email: entry.email });
+    });
+
+    // 同じアドレスが複数の人に割り当てられそうな場合（名簿の誤りなど）は、先に並んでいる人が
+    // 取ってしまわないよう、該当する全員を登録しない（どちらが本人か決められないため）
+    const proposedCount = {};
+    proposals.forEach(function (p) { const e = p.email.toLowerCase(); proposedCount[e] = (proposedCount[e] || 0) + 1; });
+    proposals.forEach(function (p) {
+      const e = p.email.toLowerCase();
+      const owner = usedEmail[e];
+      if (proposedCount[e] > 1 || (owner !== undefined && owner !== p.staff.rowIndex)) {
+        result.conflict.push(Object.assign(label(p.staff), {
+          reason: 'このアドレス（' + p.email + '）が' + (proposedCount[e] > 1 ? '名簿で複数の人に付いています' : '別のスタッフに登録済みです')
+        }));
+        return;
+      }
+      result.apply.push(Object.assign(label(p.staff), { email: p.email }));
+    });
+
+    let appliedCount = 0;
+    if (!dryRun && result.apply.length > 0) {
+      const byRow = {};
+      result.apply.forEach(function (a) { byRow[a.rowIndex] = a.email; });
+      // 登録した結果、操作している本人がマスタ管理でなくならないか（自分を締め出さないか）を先に確かめる
+      assertNotLockingSelfOut_(staffRows.map(function (s) {
+        return byRow[s.rowIndex] ? Object.assign({}, s, { googleAccount: byRow[s.rowIndex] }) : s;
+      }));
+      const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(STAFF_MASTER_SHEET_NAME);
+      const lastRow = sheet.getLastRow();
+      const col = sheet.getRange(2, 4, lastRow - 1, 1).getValues();
+      Object.keys(byRow).forEach(function (r) { col[Number(r) - 2][0] = byRow[r]; });
+      sheet.getRange(2, 4, lastRow - 1, 1).setValues(col);
+      appliedCount = result.apply.length;
+    }
+
+    return {
+      success: true,
+      dryRun: !!dryRun,
+      appliedCount: appliedCount,
+      rosterCount: rosterCount,
+      columns: {
+        id: idCols.map(function (c) { return String(header[c]); }),
+        email: String(header[emailCol]),
+        name: nameCol >= 0 ? String(header[nameCol]) : ''
+      },
+      counts: Object.keys(result).reduce(function (o, k) { o[k] = result[k].length; return o; }, {}),
+      items: result
+    };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
 /**
  * スタッフマスタの行を削除する（過去の実績データ自体は削除されない）。マスタ管理者のみ利用可能。
  */
-function deleteStaffMaster(rowIndex) {
-  return lockedEndpoint_(function () { return deleteStaffMasterImpl_(rowIndex); });
+function deleteStaffMaster(rowIndex, expectedStaff) {
+  return lockedEndpoint_(function () { return deleteStaffMasterImpl_(rowIndex, expectedStaff); });
 }
 
 /** deleteStaffMaster の本体（同時実行制御は上の公開関数で行う。直接呼ばないこと） */
-function deleteStaffMasterImpl_(rowIndex) {
+function deleteStaffMasterImpl_(rowIndex, expectedStaff) {
   try {
     assertCanManageMaster_();
     const rIdx = parseInt(rowIndex, 10);
@@ -3390,6 +3670,9 @@ function deleteStaffMasterImpl_(rowIndex) {
     if (!sheet) {
       throw new Error('「スタッフマスタ」シートが見つかりません。');
     }
+    const staffRows = getStaffMasterRows_();
+    assertStaffRowIdentity_(staffRows.filter(function (s) { return s.rowIndex === rIdx; })[0], expectedStaff);
+    assertNotLockingSelfOut_(staffRows.filter(function (s) { return s.rowIndex !== rIdx; }));
     sheet.deleteRow(rIdx);
 
     return { success: true };
