@@ -1,18 +1,23 @@
 /**
- * 卒花アンケート回答の通知メール送信
+ * 卒花アンケート回答時の自動通知
+ * ・管理者＋担当店舗へ回答内容を通知
+ * ・お客様へ回答の控えを送信
  */
 function notifyNewSurveyResponse(e) {
-  // 宛先のメールアドレス
-  const recipient = 't-avantikikaku02@his-world.com';
-
-  // メールの件名
-  const subject = '卒花アンケート回答がありました。';
-
   // 送信元と送信者名の設定
   const options = {
     from: 'his-wedding@his-world.com',
-    name: 'HIS WEDDING送信専用メール' // ※ご希望があれば変更可能です
+    name: 'HIS WEDDING送信専用メール'
   };
+
+  // 管理者の宛先
+  const adminEmail = 't-avantikikaku02@his-world.com';
+
+  // リスト管理用シート（シートA）。C列：お客様メールアドレス／E列：担当店舗名
+  const listSsUrl = 'https://docs.google.com/spreadsheets/d/1EVSi4_wzORHt1PCLZjMkrdhh9zVkxp7BzCJa3Twk9fc/edit';
+
+  // シートA内に作る店舗アドレス帳のタブ名（A列：店舗名／B列：店舗メールアドレス）
+  const STORE_MASTER_SHEET = '店舗マスタ';
 
   // ここに書いた順番でメールに掲載されます。
   // スプレッドシートの列見出し（質問文）と一字一句同じにしてください。
@@ -46,49 +51,103 @@ function notifyNewSurveyResponse(e) {
     '必ずお読みください'
   ];
 
-  // メール本文の作成
-  let body = "卒花アンケートに新しい回答がありました。\n\n";
-  body += "━━━━━━━━━━━━━━━━━━━━━\n";
-  body += "【回答内容】\n\n";
+  const namedValues = (e && e.namedValues) ? e.namedValues : null;
 
-  // e.namedValues には「スプレッドシートの列名（質問）」と「回答」がセットで入っています
-  if (e && e.namedValues) {
-    const namedValues = e.namedValues;
+  // ---- 回答内容をテキスト化（決めた順番で並べ、未記入の質問は書かない） ----
+  let answerText = '';
+  if (namedValues) {
     const printed = new Set();
-
-    // 未記入（空欄）の質問はメールに書かない
-    const appendIfAnswered = function (question, answer) {
-      const trimmed = (answer === undefined || answer === null) ? "" : String(answer).trim();
-      if (!trimmed) return;
-      body += "■ " + question + "\n" + trimmed + "\n\n";
+    const append = function (question) {
+      printed.add(question);
+      const values = namedValues[question];
+      const answer = values ? String(values[0] || '').trim() : '';
+      if (answer) answerText += '■ ' + question + '\n' + answer + '\n\n';
     };
-
-    // 1. QUESTION_ORDER で決めた順番どおりに出力
     QUESTION_ORDER.forEach(function (question) {
-      if (Object.prototype.hasOwnProperty.call(namedValues, question)) {
-        printed.add(question);
-        appendIfAnswered(question, namedValues[question][0]);
-      }
+      if (Object.prototype.hasOwnProperty.call(namedValues, question)) append(question);
     });
-
-    // 2. QUESTION_ORDER に書き漏れている質問があれば、末尾にまとめて追加（表示漏れ防止）
-    for (let question in namedValues) {
-      if (!printed.has(question)) {
-        appendIfAnswered(question, namedValues[question][0]);
-      }
-    }
-  } else {
-    body += "※エラー：フォームからのデータが正しく取得できませんでした。\n\n";
+    Object.keys(namedValues).forEach(function (question) {
+      if (!printed.has(question)) append(question);
+    });
   }
 
-  body += "━━━━━━━━━━━━━━━━━━━━━\n";
-  body += "▼ スプレッドシートを確認する ▼\n";
-  body += "https://docs.google.com/spreadsheets/d/18Gi1mhU3UjSQ-oQaD10XIy4moJYnPn7cH_FCgBkPQxM/edit\n";
+  // ---- お客様のメールアドレスをキーにシートAを検索し、担当店舗を特定 ----
+  const customerEmail = (namedValues && namedValues['メールアドレス'])
+    ? String(namedValues['メールアドレス'][0] || '').trim()
+    : '';
+
+  let foundInList = false;
+  let storeName = '';
+  let storeEmail = '';
+
+  if (customerEmail) {
+    try {
+      const listSs = SpreadsheetApp.openByUrl(listSsUrl);
+      const listData = listSs.getActiveSheet().getDataRange().getValues();
+      const key = customerEmail.toLowerCase();
+
+      // 同じお客様が複数行ある場合は、一番下（最新）の行を採用
+      for (let i = listData.length - 1; i >= 1; i--) {
+        if (String(listData[i][2]).trim().toLowerCase() === key) {
+          foundInList = true;
+          storeName = String(listData[i][4]).trim();
+          break;
+        }
+      }
+
+      const master = listSs.getSheetByName(STORE_MASTER_SHEET);
+      if (storeName && master) {
+        const masterData = master.getDataRange().getValues();
+        for (let i = 1; i < masterData.length; i++) {
+          if (String(masterData[i][0]).trim() === storeName) {
+            storeEmail = String(masterData[i][1]).trim();
+            break;
+          }
+        }
+      }
+    } catch (error) {
+      console.log('担当店舗の検索に失敗しました: ' + error.message);
+    }
+  }
+
+  // ---- ① 社内（管理者＋担当店舗）への通知 ----
+  const storeLabel = storeName || '店舗不明';
+  let internalTo = adminEmail;
+  if (storeEmail) internalTo += ',' + storeEmail;
+
+  const internalSubject = '卒花アンケート回答がありました（' + storeLabel + '）';
+  let internalBody = '卒花アンケートに新しい回答がありました。\n\n';
+  internalBody += '担当店舗：' + storeLabel + '\n';
+  if (!storeEmail) {
+    internalBody += '※担当店舗のメールアドレスが特定できなかったため、管理者のみに送信しています。\n';
+  }
+  internalBody += '\n━━━━━━━━━━━━━━━━━━━━━\n';
+  internalBody += '【回答内容】\n\n';
+  internalBody += namedValues ? answerText : '※エラー：フォームからのデータが正しく取得できませんでした。\n\n';
+  internalBody += '━━━━━━━━━━━━━━━━━━━━━\n';
 
   try {
-    // メール送信を実行
-    GmailApp.sendEmail(recipient, subject, body, options);
+    GmailApp.sendEmail(internalTo, internalSubject, internalBody, options);
   } catch (error) {
-    console.log("通知メールの送信に失敗しました: " + error.message);
+    console.log('社内向け通知メールの送信に失敗しました: ' + error.message);
+  }
+
+  // ---- ② お客様への回答控え ----
+  // シートAに登録済みのアドレスにだけ送る（フォームに他人のアドレスを入れて悪用されるのを防ぐ）
+  if (foundInList && answerText) {
+    const customerSubject = '【HIS WEDDING】アンケートへのご回答ありがとうございました';
+    let customerBody = 'この度は、アンケートにご協力いただき誠にありがとうございました。\n';
+    customerBody += '以下の内容で回答を受け付けいたしました。\n\n';
+    customerBody += '━━━━━━━━━━━━━━━━━━━━━\n';
+    customerBody += '【ご回答内容】\n\n';
+    customerBody += answerText;
+    customerBody += '━━━━━━━━━━━━━━━━━━━━━\n\n';
+    customerBody += '※このメールは送信専用アドレスから自動送信されています。ご返信いただけません。\n';
+
+    try {
+      GmailApp.sendEmail(customerEmail, customerSubject, customerBody, options);
+    } catch (error) {
+      console.log('お客様向けメールの送信に失敗しました: ' + error.message);
+    }
   }
 }
