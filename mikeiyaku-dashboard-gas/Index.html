@@ -559,6 +559,24 @@
             <p id="duplicate-result" class="hidden text-xs mt-2"></p>
           </div>
 
+          <div class="border border-slate-200 rounded-lg p-3">
+            <p class="text-sm font-semibold text-slate-700">古いデータを履歴アーカイブへ退避する</p>
+            <p class="text-xs text-slate-500 mt-1 mb-3">
+              保存期間（直近2年）を過ぎたデータを、別の「未成約リスト履歴アーカイブ」スプレッドシートへ移します。
+              店舗数・データ量が増えてもダッシュボードの読み込みが重くならないようにするための整理で、
+              ダッシュボードの見え方（直近2年分の表示）は変わりません。データは消えず、アーカイブ側にそのまま残ります。
+            </p>
+            <div class="flex gap-2">
+              <button id="btn-check-archive" class="bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg px-3 py-1.5 text-xs font-semibold">
+                <i class="fa-solid fa-magnifying-glass"></i> 件数を確認する
+              </button>
+              <button id="btn-run-archive" class="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-1.5 text-xs font-semibold shadow">
+                <i class="fa-solid fa-box-archive"></i> アーカイブを実行する
+              </button>
+            </div>
+            <p id="archive-result" class="hidden text-xs mt-2"></p>
+          </div>
+
           <div class="border border-red-200 bg-red-50/40 rounded-lg p-3">
             <p class="text-sm font-semibold text-red-700">取り込んだデータをすべて削除する</p>
             <p class="text-xs text-slate-500 mt-1 mb-3">

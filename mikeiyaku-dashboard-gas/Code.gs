@@ -1381,6 +1381,16 @@ function importParsedRows_(rows) {
       importedCount += newRows.length;
     });
 
+    // 保存期間を過ぎたデータが溜まっていれば、この取り込みのついでに履歴アーカイブへ退避する。
+    // （対象年月日の列だけを見て判定するため、退避対象が無い日はほぼ負荷がかからない）
+    let archiveResult = null;
+    try {
+      archiveResult = archiveOldData_(ss);
+    } catch (archiveErr) {
+      // アーカイブに失敗してもCSV取り込み自体は成功として扱う（次回の取り込み時に再試行される）
+      archiveResult = { success: false, error: archiveErr.message };
+    }
+
     return {
       success: true,
       importedCount: importedCount,
@@ -1389,7 +1399,9 @@ function importParsedRows_(rows) {
       autoRegisteredShopCodes: autoRegisteredShopCodes,
       renamedShopNames: renamedShopNames,
       autoRegisteredStaffCount: autoRegisteredStaffCount,
-      perSheetCounts: perSheetCounts
+      perSheetCounts: perSheetCounts,
+      archivedCount: (archiveResult && archiveResult.success) ? archiveResult.archivedCount : 0,
+      archiveUrl: (archiveResult && archiveResult.success) ? archiveResult.archiveUrl : ''
     };
   } catch (err) {
     // 画面には原因と対処だけを出し、スタックトレースは「技術的な詳細」に畳んで表示する
@@ -1990,6 +2002,180 @@ function removeDuplicateStaffRows_(ss, dryRun) {
   sheet.getRange(2, 1, kept.length, 6).setValues(kept);
   sheet.getRange(2 + kept.length, 1, removed, 6).clearContent();
   return removed;
+}
+
+// ---- 古いデータのアーカイブ（多店舗展開時にダッシュボードが重くならないようにする） -------
+
+// アーカイブ用スプレッドシートのIDを保存しておくスクリプトプロパティのキー
+const ARCHIVE_SPREADSHEET_PROPERTY_KEY = 'ARCHIVE_SPREADSHEET_ID';
+// 1回の実行にかける時間の上限（Apps Scriptの実行時間制限（6分）に対して余裕を持たせる）
+const ARCHIVE_TIME_BUDGET_MS = 4.5 * 60 * 1000;
+
+/**
+ * 保存期間（直近2年）を過ぎたデータを「未成約リスト履歴アーカイブ」という
+ * 別のスプレッドシートへ退避し、各店舗のデータシートからは削除する（マスタ管理者のみ）。
+ *
+ * ダッシュボードは常に各店舗シートを先頭行から最終行まで丸ごと読んでから絞り込みを
+ * かけているため、これをしないと店舗数・運用年数が増えるほど読み込みが際限なく
+ * 重くなってしまう。削除の基準は getRetentionCutoffDate_()（＝ダッシュボードに
+ * 表示されなくなる基準）と同じなので、実行してもダッシュボードの見え方は変わらない。
+ *
+ * ・退避したデータは消えるわけではなく、アーカイブ側のスプレッドシートにそのまま残る。
+ * ・処理に時間がかかりすぎる場合は途中で安全に打ち切り、残りの店舗は次回の実行
+ *   （このボタンの再実行、または次回のCSVインポート時）に自動的に続きから処理される。
+ *   何度実行しても同じ基準でスキャンし直すだけなので、重ねて実行しても安全（冪等）。
+ */
+function archiveOldData() {
+  try {
+    assertCanManageMaster_();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    return archiveOldData_(ss);
+  } catch (err) {
+    return { success: false, error: err.message + '\n' + err.stack };
+  }
+}
+
+/**
+ * 実行前に「今アーカイブを実行すると何件動くか」を確認するための軽量プレビュー。
+ * 対象年月日の列だけを読むため、実データ全体を読むより軽い。
+ */
+function getArchivePreview() {
+  try {
+    assertCanManageMaster_();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const cutoff = getRetentionCutoffDate_();
+    const shops = getShopList_();
+    let eligibleCount = 0;
+    shops.forEach(function (shop) {
+      const sheet = ss.getSheetByName(shop.name);
+      if (!sheet) return;
+      const lastRow = sheet.getLastRow();
+      if (lastRow < 2) return;
+      const dates = sheet.getRange(2, 5, lastRow - 1, 1).getValues(); // 対象年月日（5列目）だけ
+      dates.forEach(function (r) {
+        const d = String(r[0] || '');
+        if (d && d < cutoff) eligibleCount++;
+      });
+    });
+    return { success: true, cutoffDate: cutoff, eligibleCount: eligibleCount, archiveUrl: getArchiveUrlIfExists_() };
+  } catch (err) {
+    return { success: false, error: err.message + '\n' + err.stack };
+  }
+}
+
+/** 実際の退避処理。CSV取り込み完了時の自動実行と、手動ボタンの両方から呼ばれる。 */
+function archiveOldData_(ss) {
+  const cutoff = getRetentionCutoffDate_();
+  const shops = getShopList_();
+  const startTime = Date.now();
+  const perShopCounts = {};
+  let totalArchived = 0;
+  const processedShops = [];
+  const remainingShops = [];
+  let archiveSs = null; // 実際に退避が必要になった時点で初めて開く（毎回開くと無駄なため）
+
+  for (let i = 0; i < shops.length; i++) {
+    if (Date.now() - startTime > ARCHIVE_TIME_BUDGET_MS) {
+      remainingShops.push(shops[i].name);
+      continue;
+    }
+    const shop = shops[i];
+    const sheet = ss.getSheetByName(shop.name);
+    if (!sheet) continue;
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) { processedShops.push(shop.name); continue; }
+
+    const values = sheet.getRange(2, 1, lastRow - 1, HEADERS_MAIN.length).getValues();
+    const toArchive = [];
+    const toKeep = [];
+    values.forEach(function (row) {
+      const targetDate = String(row[4] || ''); // 対象年月日（5列目）
+      if (targetDate && targetDate < cutoff) {
+        toArchive.push(row);
+      } else {
+        toKeep.push(row);
+      }
+    });
+
+    if (toArchive.length === 0) {
+      processedShops.push(shop.name);
+      continue;
+    }
+
+    if (!archiveSs) archiveSs = getOrCreateArchiveSpreadsheet_();
+    const archiveSheet = ensureArchiveShopSheet_(archiveSs, shop.name);
+    const archiveStartRow = archiveSheet.getLastRow() + 1;
+    ensureRowCapacity_(archiveSheet, archiveStartRow + toArchive.length - 1);
+    archiveSheet.getRange(archiveStartRow, 1, toArchive.length, HEADERS_MAIN.length).setValues(toArchive);
+
+    // 生き残る行を先頭から詰めて書き直し、余った行は消す
+    sheet.getRange(2, 1, toKeep.length, HEADERS_MAIN.length).setValues(toKeep);
+    const surplus = values.length - toKeep.length;
+    if (surplus > 0) {
+      sheet.getRange(2 + toKeep.length, 1, surplus, HEADERS_MAIN.length).clearContent();
+    }
+
+    perShopCounts[shop.name] = toArchive.length;
+    totalArchived += toArchive.length;
+    processedShops.push(shop.name);
+  }
+
+  return {
+    success: true,
+    cutoffDate: cutoff,
+    archivedCount: totalArchived,
+    perShopCounts: perShopCounts,
+    processedShopCount: processedShops.length,
+    remainingShopCount: remainingShops.length,
+    remainingShops: remainingShops,
+    archiveUrl: archiveSs ? archiveSs.getUrl() : getArchiveUrlIfExists_()
+  };
+}
+
+/** アーカイブ用スプレッドシートを取得する。無ければ新規作成してIDを記憶する。 */
+function getOrCreateArchiveSpreadsheet_() {
+  const props = PropertiesService.getScriptProperties();
+  const existingId = props.getProperty(ARCHIVE_SPREADSHEET_PROPERTY_KEY);
+  if (existingId) {
+    try {
+      return SpreadsheetApp.openById(existingId);
+    } catch (e) {
+      // 保存されていたIDのファイルが開けない（削除された等）場合は作り直す
+    }
+  }
+  const archiveSs = SpreadsheetApp.create('未成約リスト履歴アーカイブ');
+  props.setProperty(ARCHIVE_SPREADSHEET_PROPERTY_KEY, archiveSs.getId());
+  return archiveSs;
+}
+
+/** 既に作成済みのアーカイブがあればURLを返す（無ければ空文字。新規作成はしない） */
+function getArchiveUrlIfExists_() {
+  const id = PropertiesService.getScriptProperties().getProperty(ARCHIVE_SPREADSHEET_PROPERTY_KEY);
+  if (!id) return '';
+  try {
+    return SpreadsheetApp.openById(id).getUrl();
+  } catch (e) {
+    return '';
+  }
+}
+
+/** アーカイブ側に、店舗ごとの27列ヘッダー付きシートを用意する（無ければ作る） */
+function ensureArchiveShopSheet_(archiveSs, shopName) {
+  let sheet = archiveSs.getSheetByName(shopName);
+  if (!sheet) {
+    sheet = archiveSs.insertSheet(shopName);
+    sheet.getRange(1, 1, 1, HEADERS_MAIN.length).setValues([HEADERS_MAIN]);
+    sheet.getRange(1, 1, 1, HEADERS_MAIN.length)
+      .setFontWeight('bold').setBackground('#1c4587').setFontColor('#ffffff').setHorizontalAlignment('center');
+    sheet.setFrozenRows(1);
+
+    // 新規作成直後だけ存在する既定シート（「シート1」「Sheet1」）が空のまま残らないよう削除する
+    const defaultSheet = archiveSs.getSheetByName('シート1') || archiveSs.getSheetByName('Sheet1');
+    if (defaultSheet && archiveSs.getSheets().length > 1) {
+      archiveSs.deleteSheet(defaultSheet);
+    }
+  }
+  return sheet;
 }
 
 /**
