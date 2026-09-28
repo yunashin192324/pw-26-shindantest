@@ -163,7 +163,7 @@ function notifyNewSurveyResponse(e) {
  * ・QUESTION_TITLE は、フォーム1に実際に書かれている質問文と一字一句同じにする
  */
 function syncStoreChoicesToStaffForm() {
-  const STAFF_FORM_ID = 'ここにフォーム1のIDを入力してください';
+  const STAFF_FORM_ID = '1Tc6OxnuGNWcPk0RoS0-7U74Mragj5e4PmzVGS-7aKdI';
   const QUESTION_TITLE = '担当店舗';
 
   // シートA（リスト管理用シート）の中の「店舗マスタ」タブを正として同期する
