@@ -76,13 +76,13 @@
           <p class="text-xs opacity-80">📶 Wifi販売台数</p>
           <p id="kpi-wifi" class="text-2xl font-bold">0</p>
         </div>
-        <div class="kpi-card bg-gradient-to-br from-indigo-600 via-indigo-600 to-purple-700 text-white rounded-xl p-3 shadow" title="TAViCA加入数の合計">
-          <p class="text-xs opacity-80">🛂 TAViCA契約件数</p>
-          <p id="kpi-tavica" class="text-2xl font-bold">0</p>
-        </div>
         <div class="kpi-card bg-gradient-to-br from-slate-600 to-slate-700 text-white rounded-xl p-3 shadow" title="キャンサポ加入PAX数の合計">
           <p class="text-xs opacity-80">🩹 キャンサポ契約数</p>
           <p id="kpi-cansapo" class="text-2xl font-bold">0</p>
+        </div>
+        <div class="kpi-card bg-gradient-to-br from-indigo-600 via-indigo-600 to-purple-700 text-white rounded-xl p-3 shadow" title="TAViCA加入数の合計">
+          <p class="text-xs opacity-80">🛂 TAViCA契約件数</p>
+          <p id="kpi-tavica" class="text-2xl font-bold">0</p>
         </div>
       </div>
 
@@ -155,10 +155,19 @@
             <select id="dash-filter-category" multiple class="border border-slate-300 rounded-lg text-sm p-2 min-w-[140px] h-20"></select>
           </div>
           <div>
+            <label class="text-xs font-semibold text-slate-500 block mb-1">ツアーブランド区分</label>
+            <select id="dash-filter-tourbrand" multiple class="border border-slate-300 rounded-lg text-sm p-2 min-w-[160px] h-20"></select>
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-500 block mb-1">方面別（最終目的地）</label>
+            <select id="dash-filter-destination" multiple class="border border-slate-300 rounded-lg text-sm p-2 min-w-[140px] h-20"></select>
+          </div>
+          <div>
             <label class="text-xs font-semibold text-slate-500 block mb-1">基準日</label>
             <select id="dash-filter-date-field" class="border border-slate-300 rounded-lg text-sm p-2">
               <option value="bookingDate">予約日</option>
               <option value="departureDate">出発予定日</option>
+              <option value="chkDate">CHK日</option>
             </select>
           </div>
           <div>
@@ -202,23 +211,34 @@
           </div>
         </div>
 
-        <!-- 付帯商品（保険・Wifi・TAViCA・キャンサポ）の月別推移 -->
+        <!-- 付帯商品（保険・Wifi・キャンサポ・TAViCA）総合：月別販売数の折れ線グラフ -->
+        <div class="bg-white rounded-xl shadow p-4">
+          <h2 class="font-bold text-slate-700 mb-2"><i class="fa-solid fa-chart-line text-blue-600"></i> 付帯商品 総合（月別販売数）</h2>
+          <canvas id="chart-ancillary-combined" height="200"></canvas>
+          <p class="text-xs text-slate-400 mt-2">保険・Wifi・キャンサポ・TAViCAの月別数量（加入・販売数）を1つの折れ線グラフで比較できます。</p>
+        </div>
+
+        <!-- 付帯商品（保険・Wifi・キャンサポ・TAViCA）の月別推移＋NB付帯/PUSH成約の実績 -->
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
           <div class="bg-white rounded-xl shadow p-4">
             <h2 class="font-bold text-slate-700 mb-2 text-sm"><i class="fa-solid fa-shield-heart text-blue-600"></i> 保険</h2>
+            <p id="ancillary-breakdown-insurance" class="text-xs text-slate-500 mb-2"></p>
             <canvas id="chart-insurance" height="200"></canvas>
           </div>
           <div class="bg-white rounded-xl shadow p-4">
             <h2 class="font-bold text-slate-700 mb-2 text-sm"><i class="fa-solid fa-wifi text-blue-600"></i> Wifi</h2>
+            <p id="ancillary-breakdown-wifi" class="text-xs text-slate-500 mb-2"></p>
             <canvas id="chart-wifi" height="200"></canvas>
           </div>
           <div class="bg-white rounded-xl shadow p-4">
-            <h2 class="font-bold text-slate-700 mb-2 text-sm"><i class="fa-solid fa-passport text-blue-600"></i> TAViCA</h2>
-            <canvas id="chart-tavica" height="200"></canvas>
+            <h2 class="font-bold text-slate-700 mb-2 text-sm"><i class="fa-solid fa-hand-holding-medical text-blue-600"></i> キャンサポ</h2>
+            <p id="ancillary-breakdown-cansapo" class="text-xs text-slate-500 mb-2"></p>
+            <canvas id="chart-cansapo" height="200"></canvas>
           </div>
           <div class="bg-white rounded-xl shadow p-4">
-            <h2 class="font-bold text-slate-700 mb-2 text-sm"><i class="fa-solid fa-hand-holding-medical text-blue-600"></i> キャンサポ</h2>
-            <canvas id="chart-cansapo" height="200"></canvas>
+            <h2 class="font-bold text-slate-700 mb-2 text-sm"><i class="fa-solid fa-passport text-blue-600"></i> TAViCA</h2>
+            <p id="ancillary-breakdown-tavica" class="text-xs text-slate-500 mb-2"></p>
+            <canvas id="chart-tavica" height="200"></canvas>
           </div>
         </div>
         <p class="text-xs text-slate-400 -mt-2">各グラフは棒＝リスト数（予約件数）、折れ線＝加入・販売数です。基準日・期間は上部フィルタに従います。</p>
@@ -331,13 +351,14 @@
           <table class="min-w-full text-sm">
             <thead>
               <tr class="bg-slate-100 text-slate-600">
+                <th class="sortable px-3 py-2 text-left" data-sort="area">エリア</th>
                 <th class="sortable px-3 py-2 text-left" data-sort="office">営業所名</th>
                 <th class="sortable px-3 py-2 text-left" data-sort="staff">担当者</th>
                 <th class="sortable px-3 py-2 text-right" data-sort="count">記録件数</th>
-                <th class="sortable px-3 py-2 text-right" data-sort="insuranceQty">保険（加入PAX数）</th>
-                <th class="sortable px-3 py-2 text-right" data-sort="wifiQty">Wifi（販売台数）</th>
-                <th class="sortable px-3 py-2 text-right" data-sort="tavicaQty">TAViCA（加入数）</th>
-                <th class="sortable px-3 py-2 text-right" data-sort="cansapoQty">キャンサポ（加入PAX数）</th>
+                <th class="px-3 py-2 text-right">保険<br><span class="text-[10px] font-normal text-slate-400">合計／NB付帯／PUSH成約</span></th>
+                <th class="px-3 py-2 text-right">Wifi<br><span class="text-[10px] font-normal text-slate-400">合計／NB付帯／PUSH成約</span></th>
+                <th class="px-3 py-2 text-right">キャンサポ<br><span class="text-[10px] font-normal text-slate-400">合計／NB付帯／PUSH成約</span></th>
+                <th class="px-3 py-2 text-right">TAViCA<br><span class="text-[10px] font-normal text-slate-400">合計／NB付帯／PUSH成約</span></th>
               </tr>
             </thead>
             <tbody id="personal-tbody" class="divide-y divide-slate-100"></tbody>

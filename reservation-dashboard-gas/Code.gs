@@ -87,8 +87,8 @@ ALL_COLUMNS.forEach(function (c, i) { ALL_COLUMN_INDEX_BY_KEY[c.key] = i; });
 var ANCILLARY_ITEMS = [
   { key: 'insurance', label: '保険',      statusKey: 'insuranceStatus', qtyKey: 'insuranceQty', reasonKey: 'insuranceReason' },
   { key: 'wifi',       label: 'Wifi',      statusKey: 'wifiStatus',      qtyKey: 'wifiQty',       reasonKey: 'wifiReason' },
-  { key: 'tavica',     label: 'TAViCA',    statusKey: 'tavicaStatus',    qtyKey: 'tavicaQty',     reasonKey: 'tavicaReason' },
-  { key: 'cansapo',    label: 'キャンサポ', statusKey: 'cansapoStatus',  qtyKey: 'cansapoQty',    reasonKey: 'cansapoReason' }
+  { key: 'cansapo',    label: 'キャンサポ', statusKey: 'cansapoStatus',  qtyKey: 'cansapoQty',    reasonKey: 'cansapoReason' },
+  { key: 'tavica',     label: 'TAViCA',    statusKey: 'tavicaStatus',    qtyKey: 'tavicaQty',     reasonKey: 'tavicaReason' }
 ];
 var ANCILLARY_ITEM_BY_KEY = {};
 ANCILLARY_ITEMS.forEach(function (a) { ANCILLARY_ITEM_BY_KEY[a.key] = a; });
