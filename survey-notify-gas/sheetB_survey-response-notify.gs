@@ -1,4 +1,20 @@
 /**
+ * ▼▼▼ これは「シートB」（お客様アンケートの回答が溜まるシート）に貼るコードです ▼▼▼
+ *
+ * シートB = お客様用アンケートフォーム（フォーム2）の回答が自動で溜まる方のスプレッドシート
+ *
+ * 【貼り方】
+ * 1. お客様用アンケートフォームの回答が溜まっているスプレッドシート（シートB）を開く
+ * 2. メニュー「拡張機能」→「Apps Script」でエディタを開く
+ * 3. このファイルの内容をまるごと貼り付けて保存
+ * 4. エディタで一度 notifyNewSurveyResponse を手動実行し、権限を許可する
+ *    （e が空のため「フォームからのデータが正しく取得できませんでした」という
+ *      内容のメールが管理者に1通届きますが、これは動作確認としては正常です）
+ * 5. 自動化する場合は「トリガー」を追加する
+ *    イベントのソース：スプレッドシートから／イベントの種類：フォーム送信時／関数：notifyNewSurveyResponse
+ */
+
+/**
  * 卒花アンケート回答時の自動通知
  * ・管理者＋担当店舗へ回答内容を通知
  * ・お客様へ回答の控えを送信
@@ -16,7 +32,7 @@ function notifyNewSurveyResponse(e) {
   // リスト管理用シート（シートA）。C列：お客様メールアドレス／E列：担当店舗名
   const listSsUrl = 'https://docs.google.com/spreadsheets/d/1EVSi4_wzORHt1PCLZjMkrdhh9zVkxp7BzCJa3Twk9fc/edit';
 
-  // シートA内に作る店舗アドレス帳のタブ名（A列：店舗名／B列：店舗メールアドレス）
+  // シートA内にある店舗アドレス帳のタブ名（A列：店舗名／B列：店舗メールアドレス）
   const STORE_MASTER_SHEET = '店舗マスタ';
 
   // ここに書いた順番でメールに掲載されます。
@@ -149,65 +165,5 @@ function notifyNewSurveyResponse(e) {
     } catch (error) {
       console.log('お客様向けメールの送信に失敗しました: ' + error.message);
     }
-  }
-}
-
-/**
- * 店舗マスタの内容を、フォーム1（スタッフがお客様メアド・担当店舗を入力するフォーム）の
- * 「担当店舗」の選択肢にそのまま反映する。
- *
- * 【事前準備】
- * ・フォーム1の「担当店舗」を尋ねる質問は、プルダウン（リスト）かラジオボタン（選択式）にしておく
- * ・下の STAFF_FORM_ID に、フォーム1の編集画面URLの
- *   https://docs.google.com/forms/d/【ここ】/edit の部分を入れる
- * ・QUESTION_TITLE は、フォーム1に実際に書かれている質問文と一字一句同じにする
- */
-function syncStoreChoicesToStaffForm() {
-  const STAFF_FORM_ID = '1Tc6OxnuGNWcPk0RoS0-7U74Mragj5e4PmzVGS-7aKdI';
-  const QUESTION_TITLE = '担当店舗';
-
-  // シートA（リスト管理用シート）の中の「店舗マスタ」タブを正として同期する
-  const listSsUrl = 'https://docs.google.com/spreadsheets/d/1EVSi4_wzORHt1PCLZjMkrdhh9zVkxp7BzCJa3Twk9fc/edit';
-  const STORE_MASTER_SHEET = '店舗マスタ';
-
-  const ss = SpreadsheetApp.openByUrl(listSsUrl);
-  const master = ss.getSheetByName(STORE_MASTER_SHEET);
-  if (!master) throw new Error('「' + STORE_MASTER_SHEET + '」タブが見つかりません。');
-
-  const lastRow = master.getLastRow();
-  if (lastRow < 2) throw new Error('店舗マスタに店舗が登録されていません。');
-
-  const storeNames = master.getRange(2, 1, lastRow - 1, 1).getValues()
-    .map(function (row) { return String(row[0]).trim(); })
-    .filter(Boolean);
-
-  if (storeNames.length === 0) throw new Error('店舗マスタに有効な店舗名がありません。');
-
-  const form = FormApp.openById(STAFF_FORM_ID);
-  const target = form.getItems().filter(function (item) { return item.getTitle() === QUESTION_TITLE; })[0];
-  if (!target) throw new Error('「' + QUESTION_TITLE + '」という質問がフォームに見つかりません。');
-
-  const type = target.getType();
-  if (type === FormApp.ItemType.LIST) {
-    target.asListItem().setChoiceValues(storeNames);
-  } else if (type === FormApp.ItemType.MULTIPLE_CHOICE) {
-    target.asMultipleChoiceItem().setChoiceValues(storeNames);
-  } else {
-    throw new Error('「' + QUESTION_TITLE + '」はプルダウンまたはラジオボタン形式にしてください（現在: ' + type + '）。');
-  }
-}
-
-/**
- * 店舗マスタタブが編集されたら、自動でフォーム1の選択肢を同期する。
- * ※ このプロジェクトに「スプレッドシートから／編集時」のインストール型トリガーとして登録し、
- *    対象スプレッドシートはシートA（店舗マスタタブを含むファイル）を指定してください。
- */
-function onEditSyncStoreChoices(e) {
-  try {
-    const sheet = e.range.getSheet();
-    if (sheet.getName() !== '店舗マスタ') return;
-    syncStoreChoicesToStaffForm();
-  } catch (error) {
-    console.log('店舗選択肢の同期に失敗しました: ' + error.message);
   }
 }
