@@ -1401,7 +1401,7 @@ function importParsedRows_(rows) {
       autoRegisteredStaffCount: autoRegisteredStaffCount,
       perSheetCounts: perSheetCounts,
       archivedCount: (archiveResult && archiveResult.success) ? archiveResult.archivedCount : 0,
-      archiveUrl: (archiveResult && archiveResult.success) ? archiveResult.archiveUrl : ''
+      archivePeriods: (archiveResult && archiveResult.success) ? archiveResult.periods : []
     };
   } catch (err) {
     // 画面には原因と対処だけを出し、スタックトレースは「技術的な詳細」に畳んで表示する
@@ -2006,20 +2006,26 @@ function removeDuplicateStaffRows_(ss, dryRun) {
 
 // ---- 古いデータのアーカイブ（多店舗展開時にダッシュボードが重くならないようにする） -------
 
-// アーカイブ用スプレッドシートのIDを保存しておくスクリプトプロパティのキー
-const ARCHIVE_SPREADSHEET_PROPERTY_KEY = 'ARCHIVE_SPREADSHEET_ID';
+// 期ごとのアーカイブ用スプレッドシートID一覧を保存しておくスクリプトプロパティのキー
+// （{"46": {"id":"...", "url":"..."}, "47": {...}} というJSON文字列で保存する）
+const ARCHIVE_SPREADSHEET_MAP_PROPERTY_KEY = 'ARCHIVE_SPREADSHEET_IDS_BY_PERIOD';
 // 1回の実行にかける時間の上限（Apps Scriptの実行時間制限（6分）に対して余裕を持たせる）
 const ARCHIVE_TIME_BUDGET_MS = 4.5 * 60 * 1000;
 
 /**
- * 保存期間（直近2年）を過ぎたデータを「未成約リスト履歴アーカイブ」という
- * 別のスプレッドシートへ退避し、各店舗のデータシートからは削除する（マスタ管理者のみ）。
+ * 保存期間（直近2年）を過ぎたデータを、対象年月日が属する期（11月始まり・10月終わり）
+ * ごとに分けて「未成約リスト履歴アーカイブ_◯◯期」という別のスプレッドシートへ退避し、
+ * 各店舗のデータシートからは削除する（マスタ管理者のみ）。
  *
  * ダッシュボードは常に各店舗シートを先頭行から最終行まで丸ごと読んでから絞り込みを
  * かけているため、これをしないと店舗数・運用年数が増えるほど読み込みが際限なく
  * 重くなってしまう。削除の基準は getRetentionCutoffDate_()（＝ダッシュボードに
  * 表示されなくなる基準）と同じなので、実行してもダッシュボードの見え方は変わらない。
  *
+ * ・アーカイブを1つのファイルにまとめず期ごとに分けているのは、このファイル自体が
+ *   将来（60店舗規模で何年も運用した場合に）Googleスプレッドシート1ファイルあたりの
+ *   セル数上限（1000万セル）に達してしまうのを防ぐため。期ごとに新しいファイルへ
+ *   切り替わるので、1ファイルが際限なく大きくなることがない。
  * ・退避したデータは消えるわけではなく、アーカイブ側のスプレッドシートにそのまま残る。
  * ・処理に時間がかかりすぎる場合は途中で安全に打ち切り、残りの店舗は次回の実行
  *   （このボタンの再実行、または次回のCSVインポート時）に自動的に続きから処理される。
@@ -2036,8 +2042,8 @@ function archiveOldData() {
 }
 
 /**
- * 実行前に「今アーカイブを実行すると何件動くか」を確認するための軽量プレビュー。
- * 対象年月日の列だけを読むため、実データ全体を読むより軽い。
+ * 実行前に「今アーカイブを実行すると何件動くか」を期ごとの内訳つきで確認するための
+ * 軽量プレビュー。対象年月日の列だけを読むため、実データ全体を読むより軽い。
  */
 function getArchivePreview() {
   try {
@@ -2046,6 +2052,7 @@ function getArchivePreview() {
     const cutoff = getRetentionCutoffDate_();
     const shops = getShopList_();
     let eligibleCount = 0;
+    const countsByPeriod = {};
     shops.forEach(function (shop) {
       const sheet = ss.getSheetByName(shop.name);
       if (!sheet) return;
@@ -2054,13 +2061,46 @@ function getArchivePreview() {
       const dates = sheet.getRange(2, 5, lastRow - 1, 1).getValues(); // 対象年月日（5列目）だけ
       dates.forEach(function (r) {
         const d = String(r[0] || '');
-        if (d && d < cutoff) eligibleCount++;
+        if (d && d < cutoff) {
+          eligibleCount++;
+          addToPeriodCount_(countsByPeriod, d);
+        }
       });
     });
-    return { success: true, cutoffDate: cutoff, eligibleCount: eligibleCount, archiveUrl: getArchiveUrlIfExists_() };
+    return {
+      success: true,
+      cutoffDate: cutoff,
+      eligibleCount: eligibleCount,
+      periods: buildPeriodBreakdown_(countsByPeriod)
+    };
   } catch (err) {
     return { success: false, error: err.message + '\n' + err.stack };
   }
+}
+
+/** 対象年月日が属する期をキーにして件数を積み上げる（期を特定できない値は無視する） */
+function addToPeriodCount_(countsByPeriod, targetDate) {
+  const info = getFiscalPeriodInfo_(targetDate);
+  if (!info) return;
+  const key = String(info.periodNumber);
+  countsByPeriod[key] = (countsByPeriod[key] || 0) + 1;
+}
+
+/** 期ごとの件数マップを、画面表示用に「古い期→新しい期」の順の配列へ整形する */
+function buildPeriodBreakdown_(countsByPeriod) {
+  const archiveMap = getArchiveSpreadsheetMap_();
+  return Object.keys(countsByPeriod)
+    .map(Number)
+    .sort(function (a, b) { return a - b; })
+    .map(function (periodNumber) {
+      const entry = archiveMap[String(periodNumber)];
+      return {
+        periodNumber: periodNumber,
+        label: fiscalYearLabel_(periodNumber),
+        count: countsByPeriod[String(periodNumber)],
+        archiveUrl: entry ? entry.url : ''
+      };
+    });
 }
 
 /** 実際の退避処理。CSV取り込み完了時の自動実行と、手動ボタンの両方から呼ばれる。 */
@@ -2069,10 +2109,10 @@ function archiveOldData_(ss) {
   const shops = getShopList_();
   const startTime = Date.now();
   const perShopCounts = {};
+  const countsByPeriod = {};
   let totalArchived = 0;
   const processedShops = [];
   const remainingShops = [];
-  let archiveSs = null; // 実際に退避が必要になった時点で初めて開く（毎回開くと無駄なため）
 
   for (let i = 0; i < shops.length; i++) {
     if (Date.now() - startTime > ARCHIVE_TIME_BUDGET_MS) {
@@ -2086,37 +2126,48 @@ function archiveOldData_(ss) {
     if (lastRow < 2) { processedShops.push(shop.name); continue; }
 
     const values = sheet.getRange(2, 1, lastRow - 1, HEADERS_MAIN.length).getValues();
-    const toArchive = [];
     const toKeep = [];
+    const toArchiveByPeriod = {}; // 期番号(文字列) -> 行の配列
     values.forEach(function (row) {
       const targetDate = String(row[4] || ''); // 対象年月日（5列目）
-      if (targetDate && targetDate < cutoff) {
-        toArchive.push(row);
+      const info = targetDate && targetDate < cutoff ? getFiscalPeriodInfo_(targetDate) : null;
+      if (info) {
+        const key = String(info.periodNumber);
+        if (!toArchiveByPeriod[key]) toArchiveByPeriod[key] = [];
+        toArchiveByPeriod[key].push(row);
       } else {
         toKeep.push(row);
       }
     });
 
-    if (toArchive.length === 0) {
+    const periodKeys = Object.keys(toArchiveByPeriod);
+    if (periodKeys.length === 0) {
       processedShops.push(shop.name);
       continue;
     }
 
-    if (!archiveSs) archiveSs = getOrCreateArchiveSpreadsheet_();
-    const archiveSheet = ensureArchiveShopSheet_(archiveSs, shop.name);
-    const archiveStartRow = archiveSheet.getLastRow() + 1;
-    ensureRowCapacity_(archiveSheet, archiveStartRow + toArchive.length - 1);
-    archiveSheet.getRange(archiveStartRow, 1, toArchive.length, HEADERS_MAIN.length).setValues(toArchive);
+    periodKeys.forEach(function (periodKey) {
+      const rowsForPeriod = toArchiveByPeriod[periodKey];
+      const archiveSs = getOrCreateArchiveSpreadsheetForPeriod_(Number(periodKey));
+      const archiveSheet = ensureArchiveShopSheet_(archiveSs, shop.name);
+      const archiveStartRow = archiveSheet.getLastRow() + 1;
+      ensureRowCapacity_(archiveSheet, archiveStartRow + rowsForPeriod.length - 1);
+      archiveSheet.getRange(archiveStartRow, 1, rowsForPeriod.length, HEADERS_MAIN.length).setValues(rowsForPeriod);
 
-    // 生き残る行を先頭から詰めて書き直し、余った行は消す
-    sheet.getRange(2, 1, toKeep.length, HEADERS_MAIN.length).setValues(toKeep);
+      countsByPeriod[periodKey] = (countsByPeriod[periodKey] || 0) + rowsForPeriod.length;
+      totalArchived += rowsForPeriod.length;
+    });
+
+    // 生き残る行を先頭から詰めて書き直し、余った行は消す（生存行が0件のこともあるためgetRangeを分岐）
+    if (toKeep.length > 0) {
+      sheet.getRange(2, 1, toKeep.length, HEADERS_MAIN.length).setValues(toKeep);
+    }
     const surplus = values.length - toKeep.length;
     if (surplus > 0) {
       sheet.getRange(2 + toKeep.length, 1, surplus, HEADERS_MAIN.length).clearContent();
     }
 
-    perShopCounts[shop.name] = toArchive.length;
-    totalArchived += toArchive.length;
+    perShopCounts[shop.name] = values.length - toKeep.length;
     processedShops.push(shop.name);
   }
 
@@ -2125,38 +2176,49 @@ function archiveOldData_(ss) {
     cutoffDate: cutoff,
     archivedCount: totalArchived,
     perShopCounts: perShopCounts,
+    periods: buildPeriodBreakdown_(countsByPeriod),
     processedShopCount: processedShops.length,
     remainingShopCount: remainingShops.length,
-    remainingShops: remainingShops,
-    archiveUrl: archiveSs ? archiveSs.getUrl() : getArchiveUrlIfExists_()
+    remainingShops: remainingShops
   };
 }
 
-/** アーカイブ用スプレッドシートを取得する。無ければ新規作成してIDを記憶する。 */
-function getOrCreateArchiveSpreadsheet_() {
-  const props = PropertiesService.getScriptProperties();
-  const existingId = props.getProperty(ARCHIVE_SPREADSHEET_PROPERTY_KEY);
-  if (existingId) {
+/** 期番号から「46期（2025年11月～2026年10月）」のような表示用ラベルを作る */
+function fiscalYearLabel_(periodNumber) {
+  const fiscalStartCalYear = FISCAL_BASE_START_CAL_YEAR + (periodNumber - FISCAL_BASE_PERIOD);
+  return periodNumber + '期（' + fiscalStartCalYear + '年11月～' + (fiscalStartCalYear + 1) + '年10月）';
+}
+
+/** 期ごとのアーカイブ用スプレッドシートID一覧を読み込む（{"46":{"id","url"}, ...}） */
+function getArchiveSpreadsheetMap_() {
+  const raw = PropertiesService.getScriptProperties().getProperty(ARCHIVE_SPREADSHEET_MAP_PROPERTY_KEY);
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw) || {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveArchiveSpreadsheetMap_(map) {
+  PropertiesService.getScriptProperties().setProperty(ARCHIVE_SPREADSHEET_MAP_PROPERTY_KEY, JSON.stringify(map));
+}
+
+/** 指定した期のアーカイブ用スプレッドシートを取得する。無ければ新規作成してIDを記憶する。 */
+function getOrCreateArchiveSpreadsheetForPeriod_(periodNumber) {
+  const map = getArchiveSpreadsheetMap_();
+  const key = String(periodNumber);
+  if (map[key]) {
     try {
-      return SpreadsheetApp.openById(existingId);
+      return SpreadsheetApp.openById(map[key].id);
     } catch (e) {
       // 保存されていたIDのファイルが開けない（削除された等）場合は作り直す
     }
   }
-  const archiveSs = SpreadsheetApp.create('未成約リスト履歴アーカイブ');
-  props.setProperty(ARCHIVE_SPREADSHEET_PROPERTY_KEY, archiveSs.getId());
+  const archiveSs = SpreadsheetApp.create('未成約リスト履歴アーカイブ_' + fiscalYearLabel_(periodNumber));
+  map[key] = { id: archiveSs.getId(), url: archiveSs.getUrl() };
+  saveArchiveSpreadsheetMap_(map);
   return archiveSs;
-}
-
-/** 既に作成済みのアーカイブがあればURLを返す（無ければ空文字。新規作成はしない） */
-function getArchiveUrlIfExists_() {
-  const id = PropertiesService.getScriptProperties().getProperty(ARCHIVE_SPREADSHEET_PROPERTY_KEY);
-  if (!id) return '';
-  try {
-    return SpreadsheetApp.openById(id).getUrl();
-  } catch (e) {
-    return '';
-  }
 }
 
 /** アーカイブ側に、店舗ごとの27列ヘッダー付きシートを用意する（無ければ作る） */

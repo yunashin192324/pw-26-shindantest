@@ -2640,10 +2640,19 @@ function renderCsvImportResult(res) {
   }
   if (res.archivedCount) {
     html += '<p class="mt-1 text-slate-500">保存期間（直近2年）を過ぎたデータ ' + res.archivedCount + ' 件を履歴アーカイブへ退避しました。' +
-      (res.archiveUrl ? '<a href="' + escapeHtml(res.archiveUrl) + '" target="_blank" class="text-blue-600 underline ml-1">アーカイブを開く</a>' : '') +
-      '</p>';
+      formatArchivePeriodLinks(res.archivePeriods) + '</p>';
   }
   box.innerHTML = html;
+}
+
+/** 期ごとのアーカイブ内訳（{periodNumber, label, count, archiveUrl}の配列）をリンク付きの文字列にする */
+function formatArchivePeriodLinks(periods) {
+  if (!periods || !periods.length) return '';
+  return periods.map(function (p) {
+    const link = p.archiveUrl
+      ? ' <a href="' + escapeHtml(p.archiveUrl) + '" target="_blank" class="text-blue-600 underline">開く</a>' : '';
+    return escapeHtml(p.label) + '：' + p.count + '件' + link;
+  }).join(' / ');
 }
 
 // ============================================================================
@@ -2791,7 +2800,8 @@ function onCheckArchivePreview() {
         return;
       }
       box.className = 'text-xs mt-2 text-amber-700';
-      box.textContent = res.eligibleCount + ' 件が対象です（' + res.cutoffDate + ' より前のデータ）。「アーカイブを実行する」を押すと退避されます。';
+      box.innerHTML = res.eligibleCount + ' 件が対象です（' + res.cutoffDate + ' より前のデータ）。期ごとの内訳：' +
+        formatArchivePeriodLinks(res.periods) + '。「アーカイブを実行する」を押すと退避されます。';
     })
     .withFailureHandler(function (err) {
       showLoading(false);
@@ -2821,18 +2831,17 @@ function onRunArchive() {
         box.textContent = '失敗しました：' + (res ? res.error : '不明なエラー');
         return;
       }
-      const archiveLink = res.archiveUrl
-        ? ' <a href="' + escapeHtml(res.archiveUrl) + '" target="_blank" class="text-blue-600 underline">アーカイブを開く</a>' : '';
+      const periodBreakdown = formatArchivePeriodLinks(res.periods);
       if (res.archivedCount === 0) {
         box.className = 'text-xs mt-2 text-slate-500';
         box.textContent = 'アーカイブ対象のデータはありませんでした。';
       } else if (res.remainingShopCount > 0) {
         box.className = 'text-xs mt-2 text-amber-700';
-        box.innerHTML = res.archivedCount + ' 件を退避しました。残り ' + res.remainingShopCount +
-          ' 店舗分は時間の都合で今回は処理できなかったため、もう一度「アーカイブを実行する」を押してください。' + archiveLink;
+        box.innerHTML = res.archivedCount + ' 件を退避しました（' + periodBreakdown + '）。残り ' + res.remainingShopCount +
+          ' 店舗分は時間の都合で今回は処理できなかったため、もう一度「アーカイブを実行する」を押してください。';
       } else {
         box.className = 'text-xs mt-2 text-emerald-700';
-        box.innerHTML = res.archivedCount + ' 件を履歴アーカイブへ退避しました。' + archiveLink;
+        box.innerHTML = res.archivedCount + ' 件を履歴アーカイブへ退避しました（' + periodBreakdown + '）。';
       }
       loadAllData();
     })
