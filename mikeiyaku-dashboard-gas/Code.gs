@@ -2078,18 +2078,22 @@ function getArchivePreview() {
   }
 }
 
-/** 対象年月日が属する期をキーにして件数を積み上げる（期を特定できない値は無視する） */
+// 対象年月日から期を特定できない行（想定外の日付形式など）をまとめておくための特別キー。
+// 空扱いで永遠に退避されず取り残されることが無いよう、この行も必ずどこかのアーカイブへ入れる。
+const ARCHIVE_UNKNOWN_PERIOD_KEY = 'unknown';
+
+/** 対象年月日が属する期をキーにして件数を積み上げる（期を特定できない値は「期不明」に計上する） */
 function addToPeriodCount_(countsByPeriod, targetDate) {
   const info = getFiscalPeriodInfo_(targetDate);
-  if (!info) return;
-  const key = String(info.periodNumber);
+  const key = info ? String(info.periodNumber) : ARCHIVE_UNKNOWN_PERIOD_KEY;
   countsByPeriod[key] = (countsByPeriod[key] || 0) + 1;
 }
 
-/** 期ごとの件数マップを、画面表示用に「古い期→新しい期」の順の配列へ整形する */
+/** 期ごとの件数マップを、画面表示用に「古い期→新しい期→期不明」の順の配列へ整形する */
 function buildPeriodBreakdown_(countsByPeriod) {
   const archiveMap = getArchiveSpreadsheetMap_();
-  return Object.keys(countsByPeriod)
+  const result = Object.keys(countsByPeriod)
+    .filter(function (k) { return k !== ARCHIVE_UNKNOWN_PERIOD_KEY; })
     .map(Number)
     .sort(function (a, b) { return a - b; })
     .map(function (periodNumber) {
@@ -2101,6 +2105,16 @@ function buildPeriodBreakdown_(countsByPeriod) {
         archiveUrl: entry ? entry.url : ''
       };
     });
+  if (countsByPeriod[ARCHIVE_UNKNOWN_PERIOD_KEY]) {
+    const entry = archiveMap[ARCHIVE_UNKNOWN_PERIOD_KEY];
+    result.push({
+      periodNumber: null,
+      label: '期を判定できなかったデータ',
+      count: countsByPeriod[ARCHIVE_UNKNOWN_PERIOD_KEY],
+      archiveUrl: entry ? entry.url : ''
+    });
+  }
+  return result;
 }
 
 /** 実際の退避処理。CSV取り込み完了時の自動実行と、手動ボタンの両方から呼ばれる。 */
@@ -2113,6 +2127,9 @@ function archiveOldData_(ss) {
   let totalArchived = 0;
   const processedShops = [];
   const remainingShops = [];
+  // このアーカイブ実行1回の間だけ有効なキャッシュ。店舗×期の組み合わせごとに
+  // スクリプトプロパティの再読込・スプレッドシートの再オープンをしないようにするため。
+  const archiveRunCache = { map: null, spreadsheets: {} };
 
   for (let i = 0; i < shops.length; i++) {
     if (Date.now() - startTime > ARCHIVE_TIME_BUDGET_MS) {
@@ -2127,17 +2144,20 @@ function archiveOldData_(ss) {
 
     const values = sheet.getRange(2, 1, lastRow - 1, HEADERS_MAIN.length).getValues();
     const toKeep = [];
-    const toArchiveByPeriod = {}; // 期番号(文字列) -> 行の配列
+    const toArchiveByPeriod = {}; // 期番号(文字列)または"unknown" -> 行の配列
     values.forEach(function (row) {
       const targetDate = String(row[4] || ''); // 対象年月日（5列目）
-      const info = targetDate && targetDate < cutoff ? getFiscalPeriodInfo_(targetDate) : null;
-      if (info) {
-        const key = String(info.periodNumber);
-        if (!toArchiveByPeriod[key]) toArchiveByPeriod[key] = [];
-        toArchiveByPeriod[key].push(row);
-      } else {
+      if (!(targetDate && targetDate < cutoff)) {
         toKeep.push(row);
+        return;
       }
+      // 保存期間を過ぎている以上、対象年月日から期が判定できない場合でも「期不明」として
+      // 必ずどこかへ退避する（判定できないからといって元のシートに残すと、原因が直らない限り
+      // 毎回スキャン対象になり続け、永久に軽くならないため）。
+      const info = getFiscalPeriodInfo_(targetDate);
+      const key = info ? String(info.periodNumber) : ARCHIVE_UNKNOWN_PERIOD_KEY;
+      if (!toArchiveByPeriod[key]) toArchiveByPeriod[key] = [];
+      toArchiveByPeriod[key].push(row);
     });
 
     const periodKeys = Object.keys(toArchiveByPeriod);
@@ -2148,7 +2168,7 @@ function archiveOldData_(ss) {
 
     periodKeys.forEach(function (periodKey) {
       const rowsForPeriod = toArchiveByPeriod[periodKey];
-      const archiveSs = getOrCreateArchiveSpreadsheetForPeriod_(Number(periodKey));
+      const archiveSs = getOrCreateArchiveSpreadsheetForPeriod_(periodKey, archiveRunCache);
       const archiveSheet = ensureArchiveShopSheet_(archiveSs, shop.name);
       const archiveStartRow = archiveSheet.getLastRow() + 1;
       ensureRowCapacity_(archiveSheet, archiveStartRow + rowsForPeriod.length - 1);
@@ -2204,20 +2224,37 @@ function saveArchiveSpreadsheetMap_(map) {
   PropertiesService.getScriptProperties().setProperty(ARCHIVE_SPREADSHEET_MAP_PROPERTY_KEY, JSON.stringify(map));
 }
 
-/** 指定した期のアーカイブ用スプレッドシートを取得する。無ければ新規作成してIDを記憶する。 */
-function getOrCreateArchiveSpreadsheetForPeriod_(periodNumber) {
-  const map = getArchiveSpreadsheetMap_();
-  const key = String(periodNumber);
+/**
+ * 指定した期（または期不明バケット）のアーカイブ用スプレッドシートを取得する。
+ * 無ければ新規作成してIDを記憶する。
+ * @param {string} periodKey 期番号を文字列化したもの、または ARCHIVE_UNKNOWN_PERIOD_KEY
+ * @param {{map: (Object|null), spreadsheets: Object}=} runCache 1回のarchiveOldData_実行内で
+ *   プロパティの再読込・スプレッドシートの再オープンを避けるための使い回しキャッシュ（省略可）
+ */
+function getOrCreateArchiveSpreadsheetForPeriod_(periodKey, runCache) {
+  const key = String(periodKey);
+  if (runCache && runCache.spreadsheets[key]) return runCache.spreadsheets[key];
+
+  const map = (runCache && runCache.map) ? runCache.map : getArchiveSpreadsheetMap_();
+  if (runCache) runCache.map = map;
+
+  let archiveSs = null;
   if (map[key]) {
     try {
-      return SpreadsheetApp.openById(map[key].id);
+      archiveSs = SpreadsheetApp.openById(map[key].id);
     } catch (e) {
       // 保存されていたIDのファイルが開けない（削除された等）場合は作り直す
     }
   }
-  const archiveSs = SpreadsheetApp.create('未成約リスト履歴アーカイブ_' + fiscalYearLabel_(periodNumber));
-  map[key] = { id: archiveSs.getId(), url: archiveSs.getUrl() };
-  saveArchiveSpreadsheetMap_(map);
+  if (!archiveSs) {
+    const fileName = key === ARCHIVE_UNKNOWN_PERIOD_KEY
+      ? '未成約リスト履歴アーカイブ_期不明'
+      : '未成約リスト履歴アーカイブ_' + fiscalYearLabel_(Number(key));
+    archiveSs = SpreadsheetApp.create(fileName);
+    map[key] = { id: archiveSs.getId(), url: archiveSs.getUrl() };
+    saveArchiveSpreadsheetMap_(map); // 作成の都度保存する（実行が途中で打ち切られても作成済み分を見失わないように）
+  }
+  if (runCache) runCache.spreadsheets[key] = archiveSs;
   return archiveSs;
 }
 
@@ -2226,6 +2263,9 @@ function ensureArchiveShopSheet_(archiveSs, shopName) {
   let sheet = archiveSs.getSheetByName(shopName);
   if (!sheet) {
     sheet = archiveSs.insertSheet(shopName);
+    // 新規シートの既定列数（26列）はHEADERS_MAIN（27列）に満たないため、書き込み前に必ず広げる
+    // （InitSheet.gsのcreateShopSheets_と同じ理由・同じ対処）
+    ensureColumnCount_(sheet, HEADERS_MAIN.length);
     sheet.getRange(1, 1, 1, HEADERS_MAIN.length).setValues([HEADERS_MAIN]);
     sheet.getRange(1, 1, 1, HEADERS_MAIN.length)
       .setFontWeight('bold').setBackground('#1c4587').setFontColor('#ffffff').setHorizontalAlignment('center');
