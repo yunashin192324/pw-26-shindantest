@@ -646,6 +646,71 @@ function setAncillaryLost(rowIndex, itemKey, reason) {
   return { ok: true };
 }
 
+/**
+ * 複数行まとめて選択して同じ値を入力する「一括登録」機能（CHK日・メモ用）。
+ * 付帯商品（保険/Wifi/TAViCA/キャンサポ）のステータスは bulkSetAncillaryStatus を使うこと。
+ * 1件でも編集できない行があってもエラーで全体を止めず、成功した行数とエラー内容を返す。
+ */
+function bulkUpdateCellValue(rowIndexes, columnKey, value) {
+  if (columnKey !== 'chkDate' && columnKey !== 'memo') {
+    throw new Error('この項目は一括登録できません。');
+  }
+  var ctx = getCurrentUserContext_();
+  var sheet = getDataSheet_();
+  var col = ALL_COLUMNS[ALL_COLUMN_INDEX_BY_KEY[columnKey]];
+  var normalized = normalizeEditableInput_(col, value);
+
+  var updated = 0, errors = [];
+  (rowIndexes || []).forEach(function (rowIndexRaw) {
+    try {
+      assertRowEditable_(ctx, sheet, rowIndexRaw);
+      writeCell_(sheet, Number(rowIndexRaw), columnKey, normalized);
+      updated++;
+    } catch (e) {
+      errors.push({ rowIndex: rowIndexRaw, message: e.message });
+    }
+  });
+  return { ok: true, updated: updated, errors: errors };
+}
+
+/**
+ * 複数行まとめて、同じ付帯商品（保険/Wifi/TAViCA/キャンサポ）に同じステータス（・数量・理由）を
+ * 一括登録する。ステータスによって数量・理由の扱いが変わる（updateCellValue/setAncillaryLostと同じ規則）。
+ * ・×（失注）：数量は0固定、理由を保存
+ * ・〇（NB付帯）／☆（PUSH成約）：数量に bulkQty を保存（未入力なら空欄のまま。理由は空にする）
+ * ・それ以外（－／△）：数量・理由とも空にする
+ */
+function bulkSetAncillaryStatus(rowIndexes, itemKey, status, bulkQty, reason) {
+  var item = ANCILLARY_ITEM_BY_KEY[itemKey];
+  if (!item) throw new Error('付帯商品の指定が不正です。');
+  var ctx = getCurrentUserContext_();
+  var sheet = getDataSheet_();
+  var normalizedQty = (bulkQty === '' || bulkQty === null || bulkQty === undefined) ? null : Number(bulkQty);
+
+  var updated = 0, errors = [];
+  (rowIndexes || []).forEach(function (rowIndexRaw) {
+    try {
+      assertRowEditable_(ctx, sheet, rowIndexRaw);
+      var rowIndex = Number(rowIndexRaw);
+      writeCell_(sheet, rowIndex, item.statusKey, status);
+      if (status === '×') {
+        writeCell_(sheet, rowIndex, item.qtyKey, 0);
+        writeCell_(sheet, rowIndex, item.reasonKey, String(reason || '').trim());
+      } else if (status === '〇' || status === '☆') {
+        writeCell_(sheet, rowIndex, item.qtyKey, normalizedQty);
+        writeCell_(sheet, rowIndex, item.reasonKey, null);
+      } else {
+        writeCell_(sheet, rowIndex, item.qtyKey, null);
+        writeCell_(sheet, rowIndex, item.reasonKey, null);
+      }
+      updated++;
+    } catch (e) {
+      errors.push({ rowIndex: rowIndexRaw, message: e.message });
+    }
+  });
+  return { ok: true, updated: updated, errors: errors };
+}
+
 /** 編集項目の入力値を正規形（readAllRows_と同じ形）に変換する。 */
 function normalizeEditableInput_(col, value) {
   if (value === null || value === undefined) return null;
@@ -894,4 +959,107 @@ function deleteStaffName(rowIndex) {
   }
   sheet.deleteRow(rowIndex);
   return getStaffNameList();
+}
+
+/** 人事データCSVの見出しラベルを正規化する（BOM除去・前後空白除去のみ。数字プレフィックスは付かない想定）。 */
+function normalizeStaffCsvHeaderLabel_(raw) {
+  if (raw === null || raw === undefined) return '';
+  return String(raw).replace(/^﻿/, '').trim();
+}
+
+/** 見出し行の中から、指定した条件に一致する最初の列番号を探す。見つからなければ-1。 */
+function findStaffCsvColumnIndex_(headerRow, matchFn) {
+  for (var c = 0; c < headerRow.length; c++) {
+    if (matchFn(normalizeStaffCsvHeaderLabel_(headerRow[c]))) return c;
+  }
+  return -1;
+}
+
+/**
+ * 人事データCSVの先頭数行の中から、「■担当者NO」「社員名称」の2列がそろっている見出し行を探す。
+ * 「■担当者NO」は先頭の■の有無を問わず「担当者NO」部分の一致で判定する。
+ */
+function detectStaffCsvHeaderRow_(matrix) {
+  var scanLimit = Math.min(matrix.length, 5);
+  for (var r = 0; r < scanLimit; r++) {
+    var codeIdx = findStaffCsvColumnIndex_(matrix[r], function (label) { return label.replace(/^■/, '').trim() === '担当者NO'; });
+    var nameIdx = findStaffCsvColumnIndex_(matrix[r], function (label) { return label === '社員名称'; });
+    if (codeIdx !== -1 && nameIdx !== -1) {
+      return { rowIndex: r, codeIdx: codeIdx, nameIdx: nameIdx };
+    }
+  }
+  return null;
+}
+
+/**
+ * 人事データCSVを取り込み、担当者マスタ（担当者コード→氏名）へ一括反映する（マスタ権限のみ）。
+ * ・CSVの「■担当者NO」列と「社員名称」列だけを使う（他の人事項目は読み捨てる）。
+ * ・担当者マスタに同じ担当者コードが既にあれば氏名を上書きし、無ければ新規追加する。
+ * ・CSV内に同じ担当者コードが複数行ある場合は、CSV内の最後の行を採用する。
+ */
+function importStaffNameCsv(csvText, fileName) {
+  assertMaster_();
+  if (!csvText || !String(csvText).trim()) {
+    throw new Error('CSVの内容が空です。ファイルをご確認ください。');
+  }
+  var matrix;
+  try {
+    matrix = Utilities.parseCsv(csvText);
+  } catch (e) {
+    throw new Error('CSVの解析に失敗しました。ファイル形式・文字コードをご確認ください。（' + e.message + '）');
+  }
+  if (!matrix || matrix.length < 2) {
+    throw new Error('CSVにデータ行が見つかりません。');
+  }
+
+  var headerInfo = detectStaffCsvHeaderRow_(matrix);
+  if (!headerInfo) {
+    throw new Error('CSVのヘッダー行から「■担当者NO」「社員名称」の列を検出できませんでした。見出し行をご確認ください。');
+  }
+
+  var csvMap = {}; // 担当者コード → 社員名称（CSV内で重複があれば最後の行を採用）
+  var skipped = 0;
+  for (var r = headerInfo.rowIndex + 1; r < matrix.length; r++) {
+    var row = matrix[r];
+    var rowIsBlank = !row || row.every(function (v) { return v === undefined || String(v).trim() === ''; });
+    if (rowIsBlank) { skipped++; continue; }
+    var code = String(row[headerInfo.codeIdx] || '').trim();
+    var name = String(row[headerInfo.nameIdx] || '').trim();
+    if (!code || !name) { skipped++; continue; }
+    csvMap[code] = name;
+  }
+
+  var sheet = getOrCreateStaffNameSheet_();
+  var existingByCode = {};
+  getStaffNameList().forEach(function (s) { existingByCode[s.code] = s; });
+
+  var added = 0, updated = 0;
+  var rowsToAppend = [];
+  Object.keys(csvMap).forEach(function (code) {
+    var name = csvMap[code];
+    var target = existingByCode[code];
+    if (target) {
+      if (target.name !== name) {
+        sheet.getRange(target.rowIndex, 2).setValue(name);
+        updated++;
+      }
+    } else {
+      rowsToAppend.push([code, name]);
+      added++;
+    }
+  });
+
+  if (rowsToAppend.length > 0) {
+    var startRow = sheet.getLastRow() + 1;
+    sheet.getRange(startRow, 1, rowsToAppend.length, 2).setNumberFormat('@').setValues(rowsToAppend);
+  }
+
+  return {
+    fileName: fileName || '',
+    csvDataRows: matrix.length - headerInfo.rowIndex - 1,
+    added: added,
+    updated: updated,
+    skipped: skipped,
+    list: getStaffNameList()
+  };
 }

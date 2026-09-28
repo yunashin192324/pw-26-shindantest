@@ -397,8 +397,52 @@ th.sortable:hover{background:var(--blue-100);}
         CSV由来の項目は読み取り専用です。
         <span style="display:inline-block; width:9px; height:9px; background:var(--blue-100); border:1px solid var(--blue-300); vertical-align:middle; margin:0 4px;"></span>
         の列（CHK日・保険・Wifi・TAViCA・キャンサポ・メモ）は入力・編集できます。
+        行のチェックボックスで複数選択すると、下の「一括登録」から同じ値をまとめて登録できます。
         CSVインポートは「データ管理」タブから行えます。
       </p>
+    </div>
+
+    <!-- ============ 一括登録バー（行を選択すると表示） ============ -->
+    <div id="bulk-edit-bar" class="card hidden" style="background:var(--blue-50); border:1px solid var(--blue-200);">
+      <div style="display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:10px;">
+        <span style="font-weight:700; color:var(--blue-800); font-size:13px;"><span id="bulk-selected-count">0</span>件選択中 — 一括登録</span>
+        <button type="button" id="btn-bulk-clear-selection" class="btn-ghost" style="margin-left:auto;">選択解除</button>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr; gap:10px;" class="grid-3">
+        <div style="display:flex; align-items:flex-end; gap:6px;">
+          <div style="flex:1;"><label style="display:block; font-size:11px; font-weight:600; color:var(--slate-500); margin-bottom:4px;">CHK日を一括設定</label><input type="date" id="bulk-chkdate-input" style="width:100%;"></div>
+          <button type="button" class="btn-primary bulk-apply-field-btn" data-field="chkDate">適用</button>
+        </div>
+        <div style="display:flex; align-items:flex-end; gap:6px;">
+          <div style="flex:1;"><label style="display:block; font-size:11px; font-weight:600; color:var(--slate-500); margin-bottom:4px;">メモを一括設定</label><input type="text" id="bulk-memo-input" placeholder="メモ" style="width:100%;"></div>
+          <button type="button" class="btn-primary bulk-apply-field-btn" data-field="memo">適用</button>
+        </div>
+        <div style="display:flex; align-items:flex-end; gap:6px;">
+          <div style="flex:1;"><label style="display:block; font-size:11px; font-weight:600; color:var(--slate-500); margin-bottom:4px;">保険を一括設定</label>
+            <div style="display:flex; gap:4px;"><select id="bulk-insurance-status" class="bulk-ancillary-status" data-item="insurance" style="flex:1;"></select><input type="number" min="0" id="bulk-insurance-qty" placeholder="数" style="width:56px;"></div>
+          </div>
+          <button type="button" class="btn-primary bulk-apply-ancillary-btn" data-item="insurance">適用</button>
+        </div>
+        <div style="display:flex; align-items:flex-end; gap:6px;">
+          <div style="flex:1;"><label style="display:block; font-size:11px; font-weight:600; color:var(--slate-500); margin-bottom:4px;">Wifiを一括設定</label>
+            <div style="display:flex; gap:4px;"><select id="bulk-wifi-status" class="bulk-ancillary-status" data-item="wifi" style="flex:1;"></select><input type="number" min="0" id="bulk-wifi-qty" placeholder="数" style="width:56px;"></div>
+          </div>
+          <button type="button" class="btn-primary bulk-apply-ancillary-btn" data-item="wifi">適用</button>
+        </div>
+        <div style="display:flex; align-items:flex-end; gap:6px;">
+          <div style="flex:1;"><label style="display:block; font-size:11px; font-weight:600; color:var(--slate-500); margin-bottom:4px;">キャンサポを一括設定</label>
+            <div style="display:flex; gap:4px;"><select id="bulk-cansapo-status" class="bulk-ancillary-status" data-item="cansapo" style="flex:1;"></select><input type="number" min="0" id="bulk-cansapo-qty" placeholder="数" style="width:56px;"></div>
+          </div>
+          <button type="button" class="btn-primary bulk-apply-ancillary-btn" data-item="cansapo">適用</button>
+        </div>
+        <div style="display:flex; align-items:flex-end; gap:6px;">
+          <div style="flex:1;"><label style="display:block; font-size:11px; font-weight:600; color:var(--slate-500); margin-bottom:4px;">TAViCAを一括設定</label>
+            <div style="display:flex; gap:4px;"><select id="bulk-tavica-status" class="bulk-ancillary-status" data-item="tavica" style="flex:1;"></select><input type="number" min="0" id="bulk-tavica-qty" placeholder="数" style="width:56px;"></div>
+          </div>
+          <button type="button" class="btn-primary bulk-apply-ancillary-btn" data-item="tavica">適用</button>
+        </div>
+      </div>
+      <p id="bulk-edit-result" class="muted hidden" style="margin-top:10px;"></p>
     </div>
 
     <div class="card">
@@ -513,11 +557,15 @@ th.sortable:hover{background:var(--blue-100);}
       </div>
 
       <div class="card">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+        <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px;">
           <h2 style="margin:0;">🪪 担当者マスタ</h2>
-          <button class="btn-primary" id="btn-open-staff-name-modal">＋ 担当者を追加</button>
+          <div style="display:flex; gap:8px;">
+            <button class="btn-emerald" id="btn-open-staff-name-import-modal">📥 人事データCSVインポート</button>
+            <button class="btn-primary" id="btn-open-staff-name-modal">＋ 担当者を追加</button>
+          </div>
         </div>
-        <p class="muted" style="margin-bottom:10px;">CSVの「担当者」列（例：BGK078）に対応する氏名を登録すると、「予約データ一覧」「個人別サマリー」の担当者列がコードの代わりに氏名で表示されます。</p>
+        <p class="muted" style="margin-bottom:10px;">CSVの「担当者」列（例：BGK078）に対応する氏名を登録すると、「予約データ一覧」「個人別サマリー」の担当者列がコードの代わりに氏名で表示されます。
+          人事データCSV（「■担当者NO」「社員名称」の列を含むもの）を取り込むと、一致した担当者コードの氏名をまとめて登録・更新できます。</p>
         <div class="table-scroll" style="max-height:40vh;">
           <table>
             <thead>
@@ -613,6 +661,39 @@ th.sortable:hover{background:var(--blue-100);}
         <button type="submit" class="btn-primary">💾 保存する</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- ============ 担当者マスタ 人事データCSVインポートモーダル ============ -->
+<div id="staff-name-import-modal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3>📥 担当者マスタ：人事データCSVインポート</h3>
+      <button class="modal-close" id="btn-close-staff-name-import-modal">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px; color:var(--slate-600); line-height:1.6;">
+        人事データCSVを選択してください。見出し行の「■担当者NO」列と「社員名称」列だけを使い、
+        担当者マスタ（担当者コード→氏名）へまとめて反映します（実際にファイルの中身を読み取って判定します）。
+      </p>
+      <p class="muted">既に登録済みの担当者コードは氏名を上書き更新し、未登録の担当者コードは新規追加します。</p>
+      <div>
+        <label style="display:block; font-size:11px; font-weight:600; color:var(--slate-500); margin-bottom:4px;">人事データCSVファイル</label>
+        <input type="file" id="staff-name-import-file-input" accept=".csv,text/csv,text/plain" style="width:100%;">
+        <p id="staff-name-import-file-summary" class="muted hidden" style="margin-top:8px; background:var(--slate-50); border:1px solid var(--slate-200); border-radius:8px; padding:8px 10px;"></p>
+      </div>
+      <div id="staff-name-import-progress" class="hidden">
+        <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--slate-600); margin-bottom:4px;">
+          <span>取り込んでいます…</span><span id="staff-name-import-progress-time">0秒</span>
+        </div>
+        <div class="progress-track"><div id="staff-name-import-progress-bar" class="progress-fill"></div></div>
+      </div>
+      <div id="staff-name-import-result" class="result-box"></div>
+      <div style="display:flex; justify-content:flex-end; gap:10px; border-top:1px solid var(--slate-100); padding-top:14px;">
+        <button class="btn-ghost" id="btn-cancel-staff-name-import-modal">閉じる</button>
+        <button class="btn-emerald" id="btn-submit-staff-name-import" disabled>⬆ 取り込む</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -822,7 +903,10 @@ var STATE = {
     { rowIndex: 3, code: '00L625', name: '鈴木 花子' },
     { rowIndex: 4, code: 'BGK074', name: '田中 次郎' }
   ],
-  staffNameMap: {}
+  staffNameMap: {},
+
+  selectedRowIndexes: {}, // 予約データ一覧の一括登録用：チェックされている行番号の集合
+  currentPageRowIndexes: []
 };
 function rebuildStaffNameMap(){
   STATE.staffNameMap = {};
@@ -847,6 +931,7 @@ function boot(){
   setTimeout(function(){
     applyRoleScope();
     populateFilterOptions();
+    populateBulkAncillarySelects();
     applyRoleUi();
     renderColumnOrderEditor();
     renderDataThead();
@@ -1242,7 +1327,8 @@ function clearDataFilters(){
 
 function renderDataThead(){
   var thead = document.getElementById('data-thead');
-  thead.innerHTML = '<tr>' + STATE.columnOrder.map(function(key){
+  var checkboxTh = '<th style="width:28px; text-align:center;"><input type="checkbox" id="data-select-all-page" title="このページの行をすべて選択"></th>';
+  thead.innerHTML = '<tr>' + checkboxTh + STATE.columnOrder.map(function(key){
     var def = DISPLAY_COLUMN_DEFS_BY_KEY[key];
     if (!def) return '';
     var sortable = def.kind !== 'ancillary';
@@ -1260,6 +1346,13 @@ function renderDataThead(){
       if (STATE.dataSortKey === key) STATE.dataSortDir *= -1; else { STATE.dataSortKey = key; STATE.dataSortDir = 1; }
       renderDataThead(); renderDataTable();
     });
+  });
+  document.getElementById('data-select-all-page').addEventListener('change', function(e){
+    var checked = e.target.checked;
+    STATE.currentPageRowIndexes.forEach(function(ri){
+      if (checked) STATE.selectedRowIndexes[ri] = true; else delete STATE.selectedRowIndexes[ri];
+    });
+    renderDataTable();
   });
 }
 function compareRows(a, b, def){
@@ -1282,13 +1375,41 @@ function renderDataTable(){
   var pageRows = rows.slice(start, start+STATE.dataPageSize);
 
   document.getElementById('data-empty').classList.toggle('hidden', total>0);
+  STATE.currentPageRowIndexes = pageRows.map(function(r){ return r.rowIndex; });
   document.getElementById('data-tbody').innerHTML = pageRows.map(function(r){
-    return '<tr>' + STATE.columnOrder.map(function(key){ return buildCellHtml(r, DISPLAY_COLUMN_DEFS_BY_KEY[key]); }).join('') + '</tr>';
+    var checked = STATE.selectedRowIndexes[r.rowIndex] ? ' checked' : '';
+    var checkboxTd = '<td style="text-align:center;"><input type="checkbox" class="row-select-checkbox" data-row="'+r.rowIndex+'"'+checked+'></td>';
+    return '<tr>' + checkboxTd + STATE.columnOrder.map(function(key){ return buildCellHtml(r, DISPLAY_COLUMN_DEFS_BY_KEY[key]); }).join('') + '</tr>';
   }).join('');
 
   document.getElementById('pagination-info').textContent = total===0 ? '0件' : (start+1)+'〜'+Math.min(start+STATE.dataPageSize,total)+' / '+total+'件';
   document.getElementById('btn-prev-page').disabled = STATE.dataPage<=1;
   document.getElementById('btn-next-page').disabled = STATE.dataPage>=totalPages;
+
+  syncSelectAllCheckbox();
+  updateBulkEditBar();
+}
+
+function syncSelectAllCheckbox(){
+  var cb = document.getElementById('data-select-all-page');
+  if (!cb) return;
+  var pageIndexes = STATE.currentPageRowIndexes;
+  var allSelected = pageIndexes.length > 0 && pageIndexes.every(function(ri){ return !!STATE.selectedRowIndexes[ri]; });
+  var someSelected = pageIndexes.some(function(ri){ return !!STATE.selectedRowIndexes[ri]; });
+  cb.checked = allSelected;
+  cb.indeterminate = !allSelected && someSelected;
+}
+function getSelectedRowIndexes(){ return Object.keys(STATE.selectedRowIndexes).map(Number); }
+function clearRowSelection(){
+  STATE.selectedRowIndexes = {};
+  renderDataTable();
+}
+function updateBulkEditBar(){
+  var count = getSelectedRowIndexes().length;
+  var countEl = document.getElementById('bulk-selected-count');
+  if (countEl) countEl.textContent = count;
+  var bar = document.getElementById('bulk-edit-bar');
+  if (bar) bar.classList.toggle('hidden', count === 0);
 }
 function formatCell(v, col){
   if (v===null||v===undefined||v==='') return '<span style="color:var(--slate-300)">－</span>';
@@ -1401,6 +1522,76 @@ function handleAncillaryQtyBlur(inputEl){
   }
   saveCell(rowIndex, inputEl.dataset.col, inputEl.value);
 }
+
+/* ---- 一括登録（複数行を選択して同じ値をまとめて登録する） ---- */
+function populateBulkAncillarySelects(){
+  document.querySelectorAll('.bulk-ancillary-status').forEach(function(el){
+    el.innerHTML = ANCILLARY_STATUS_OPTIONS.map(function(o){
+      return '<option value="'+o.value+'">'+o.value+' '+o.label+'</option>';
+    }).join('');
+  });
+}
+function showBulkEditResult(updated){
+  var el = document.getElementById('bulk-edit-result');
+  el.textContent = formatNumber(updated) + '件に反映しました（デモ）。';
+  el.classList.remove('hidden');
+  showToast(formatNumber(updated) + '件に反映しました（デモ）', 'success');
+}
+function applyBulkField(field){
+  var rowIndexes = getSelectedRowIndexes();
+  if (rowIndexes.length === 0){ showToast('行が選択されていません。', 'error'); return; }
+  var value = field === 'chkDate' ? document.getElementById('bulk-chkdate-input').value : document.getElementById('bulk-memo-input').value;
+  var normalized = value === '' ? null : value;
+  rowIndexes.forEach(function(ri){
+    var row = STATE.rows.find(function(r){ return r.rowIndex === ri; });
+    if (row) row[field] = normalized;
+  });
+  afterCellSaved();
+  showBulkEditResult(rowIndexes.length);
+}
+function applyBulkAncillary(itemKey){
+  var rowIndexes = getSelectedRowIndexes();
+  if (rowIndexes.length === 0){ showToast('行が選択されていません。', 'error'); return; }
+  var item = ANCILLARY_BY_KEY[itemKey];
+  var status = document.getElementById('bulk-'+itemKey+'-status').value;
+  var qtyInput = document.getElementById('bulk-'+itemKey+'-qty');
+  var qty = qtyInput.value;
+  var reason = '';
+  if (status === '×'){
+    reason = window.prompt('失注理由を入力してください（キャンセルすると変更されません）', '');
+    if (reason === null) return;
+  } else if (isAncillaryQtyEditable(status) && qty.trim() === ''){
+    showToast(item.label + 'の数量を入力してください。', 'error');
+    return;
+  }
+  rowIndexes.forEach(function(ri){
+    var row = STATE.rows.find(function(r){ return r.rowIndex === ri; });
+    if (!row) return;
+    row[item.statusKey] = status;
+    if (status === '×'){ row[item.qtyKey] = 0; row[item.reasonKey] = reason.trim(); }
+    else if (isAncillaryQtyEditable(status)){ row[item.qtyKey] = qty === '' ? null : Number(qty); row[item.reasonKey] = ''; }
+    else { row[item.qtyKey] = null; row[item.reasonKey] = ''; }
+  });
+  afterCellSaved();
+  showBulkEditResult(rowIndexes.length);
+}
+function bindBulkEditEvents(){
+  document.getElementById('btn-bulk-clear-selection').addEventListener('click', clearRowSelection);
+  document.querySelectorAll('.bulk-apply-field-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){ applyBulkField(btn.dataset.field); });
+  });
+  document.querySelectorAll('.bulk-apply-ancillary-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){ applyBulkAncillary(btn.dataset.item); });
+  });
+  document.querySelectorAll('.bulk-ancillary-status').forEach(function(sel){
+    sel.addEventListener('change', function(){
+      var qtyInput = document.getElementById('bulk-'+sel.dataset.item+'-qty');
+      qtyInput.disabled = !isAncillaryQtyEditable(sel.value);
+      if (qtyInput.disabled) qtyInput.value = '';
+    });
+  });
+}
+
 function beginMemoEdit(span){
   var rowIndex = Number(span.dataset.row), col = span.dataset.col;
   var row = STATE.rows.find(function(r){ return r.rowIndex === rowIndex; });
@@ -1422,6 +1613,12 @@ function bindDataTableEditEvents(){
     if (t.matches('input[type="date"][data-col]')) saveCell(Number(t.dataset.row), t.dataset.col, t.value);
     else if (t.matches('select.ancillary-status')) handleAncillaryStatusChange(t);
     else if (t.matches('input.ancillary-qty')) handleAncillaryQtyBlur(t);
+    else if (t.matches('input.row-select-checkbox')){
+      var rowIndex = Number(t.dataset.row);
+      if (t.checked) STATE.selectedRowIndexes[rowIndex] = true; else delete STATE.selectedRowIndexes[rowIndex];
+      syncSelectAllCheckbox();
+      updateBulkEditBar();
+    }
   });
   tbody.addEventListener('blur', function(e){
     var t = e.target;
@@ -1706,6 +1903,152 @@ function openStaffNameModal(rowIndex){
 }
 function closeStaffNameModal(){ document.getElementById('staff-name-modal').classList.remove('open'); }
 
+/* ---- 担当者マスタ：人事データCSVインポート（実際にファイルを読み取って解析するデモ） ---- */
+var staffNameImportSelectedText = null;
+var staffNameImportTimer = null;
+
+/** 簡易CSVパーサー（ダブルクォート対応）。人事データCSVインポートのみで使用。 */
+function parseSimpleCsv(text){
+  var rows = [], row = [], field = '', inQuotes = false;
+  for (var i = 0; i < text.length; i++){
+    var c = text[i];
+    if (inQuotes){
+      if (c === '"'){ if (text[i+1] === '"'){ field += '"'; i++; } else { inQuotes = false; } }
+      else field += c;
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === ','){ row.push(field); field = ''; }
+      else if (c === '\n'){ row.push(field); rows.push(row); row = []; field = ''; }
+      else if (c === '\r'){ /* skip */ }
+      else field += c;
+    }
+  }
+  if (field.length > 0 || row.length > 0){ row.push(field); rows.push(row); }
+  return rows.filter(function(r){ return !(r.length === 1 && r[0] === ''); });
+}
+function normalizeStaffCsvHeaderLabel(raw){
+  return String(raw === null || raw === undefined ? '' : raw).replace(/^﻿/, '').trim();
+}
+function detectStaffCsvHeaderRow(matrix){
+  var scanLimit = Math.min(matrix.length, 5);
+  for (var r = 0; r < scanLimit; r++){
+    var codeIdx = -1, nameIdx = -1;
+    for (var c = 0; c < matrix[r].length; c++){
+      var label = normalizeStaffCsvHeaderLabel(matrix[r][c]);
+      if (codeIdx === -1 && label.replace(/^■/, '').trim() === '担当者NO') codeIdx = c;
+      if (nameIdx === -1 && label === '社員名称') nameIdx = c;
+    }
+    if (codeIdx !== -1 && nameIdx !== -1) return { rowIndex: r, codeIdx: codeIdx, nameIdx: nameIdx };
+  }
+  return null;
+}
+function openStaffNameImportModal(){
+  staffNameImportSelectedText = null;
+  document.getElementById('staff-name-import-file-input').value = '';
+  document.getElementById('staff-name-import-file-summary').classList.add('hidden');
+  document.getElementById('staff-name-import-result').style.display = 'none';
+  document.getElementById('staff-name-import-progress').classList.add('hidden');
+  document.getElementById('btn-submit-staff-name-import').disabled = true;
+  document.getElementById('staff-name-import-modal').classList.add('open');
+}
+function closeStaffNameImportModal(){
+  document.getElementById('staff-name-import-modal').classList.remove('open');
+  if (staffNameImportTimer){ clearInterval(staffNameImportTimer); staffNameImportTimer = null; }
+}
+function onStaffNameImportFileSelected(e){
+  var file = e.target.files[0];
+  document.getElementById('staff-name-import-result').style.display = 'none';
+  if (!file){ document.getElementById('btn-submit-staff-name-import').disabled = true; return; }
+  var reader = new FileReader();
+  reader.onload = function(evt){
+    staffNameImportSelectedText = evt.target.result;
+    var summary = document.getElementById('staff-name-import-file-summary');
+    summary.textContent = 'ファイル：' + file.name + '（' + Math.ceil(file.size/1024) + ' KB）';
+    summary.classList.remove('hidden');
+    document.getElementById('btn-submit-staff-name-import').disabled = false;
+  };
+  reader.onerror = function(){ showToast('ファイルの読み込みに失敗しました。', 'error'); };
+  reader.readAsText(file, 'UTF-8');
+}
+function submitStaffNameImportDemo(){
+  if (!staffNameImportSelectedText) return;
+  document.getElementById('btn-submit-staff-name-import').disabled = true;
+  var box = document.getElementById('staff-name-import-progress');
+  var bar = document.getElementById('staff-name-import-progress-bar');
+  var timeLabel = document.getElementById('staff-name-import-progress-time');
+  box.classList.remove('hidden');
+  var elapsed = 0;
+  bar.style.width = '5%';
+  staffNameImportTimer = setInterval(function(){
+    elapsed++;
+    timeLabel.textContent = elapsed + '秒';
+    bar.style.width = Math.min(95, 5 + elapsed*30) + '%';
+    if (elapsed >= 1){
+      clearInterval(staffNameImportTimer); staffNameImportTimer = null;
+      bar.style.width = '100%';
+      finishStaffNameImportDemo();
+    }
+  }, 300);
+}
+function finishStaffNameImportDemo(){
+  var box = document.getElementById('staff-name-import-result');
+  var matrix = parseSimpleCsv(staffNameImportSelectedText);
+  if (!matrix || matrix.length < 2){
+    box.innerHTML = '<p style="color:var(--red-700); font-weight:600;">❌ CSVにデータ行が見つかりませんでした。</p>';
+    box.style.display = 'block';
+    document.getElementById('btn-submit-staff-name-import').disabled = false;
+    return;
+  }
+  var headerInfo = detectStaffCsvHeaderRow(matrix);
+  if (!headerInfo){
+    box.innerHTML = '<p style="color:var(--red-700); font-weight:600;">❌ 見出し行から「■担当者NO」「社員名称」の列を検出できませんでした。</p>';
+    box.style.display = 'block';
+    document.getElementById('btn-submit-staff-name-import').disabled = false;
+    return;
+  }
+  var csvMap = {}, skipped = 0;
+  for (var r = headerInfo.rowIndex + 1; r < matrix.length; r++){
+    var row = matrix[r];
+    var code = String(row[headerInfo.codeIdx] || '').trim();
+    var name = String(row[headerInfo.nameIdx] || '').trim();
+    if (!code || !name){ skipped++; continue; }
+    csvMap[code] = name;
+  }
+  var existingByCode = {};
+  STATE.staffNameList.forEach(function(s){ existingByCode[s.code] = s; });
+  var added = 0, updated = 0;
+  Object.keys(csvMap).forEach(function(code){
+    var name = csvMap[code];
+    var target = existingByCode[code];
+    if (target){
+      if (target.name !== name){ target.name = name; updated++; }
+    } else {
+      var rowIndex = Math.max.apply(null, STATE.staffNameList.map(function(s){return s.rowIndex;}).concat([1])) + 1;
+      var created = { rowIndex: rowIndex, code: code, name: name };
+      STATE.staffNameList.push(created);
+      existingByCode[code] = created;
+      added++;
+    }
+  });
+  renderStaffNameList();
+  box.innerHTML =
+    '<p style="color:var(--emerald-700); font-weight:600;">✅ 取り込みが完了しました</p>' +
+    '<p>CSVのデータ行数：' + formatNumber(matrix.length - headerInfo.rowIndex - 1) + ' 行</p>' +
+    '<p>新規登録：<b>' + formatNumber(added) + '</b> 件</p>' +
+    '<p>氏名を更新：<b>' + formatNumber(updated) + '</b> 件</p>' +
+    '<p>担当者NO・社員名称が空欄などのためスキップ：' + formatNumber(skipped) + ' 件</p>';
+  box.style.display = 'block';
+  showToast('人事データCSVを取り込みました（新規 ' + added + ' 件・更新 ' + updated + ' 件）', 'success');
+  document.getElementById('btn-submit-staff-name-import').disabled = false;
+}
+function bindStaffNameImportEvents(){
+  document.getElementById('btn-open-staff-name-import-modal').addEventListener('click', openStaffNameImportModal);
+  document.getElementById('btn-close-staff-name-import-modal').addEventListener('click', closeStaffNameImportModal);
+  document.getElementById('btn-cancel-staff-name-import-modal').addEventListener('click', closeStaffNameImportModal);
+  document.getElementById('staff-name-import-file-input').addEventListener('change', onStaffNameImportFileSelected);
+  document.getElementById('btn-submit-staff-name-import').addEventListener('click', submitStaffNameImportDemo);
+}
+
 /* ---- CSVインポート（見た目のみのダミー動作） ---- */
 var csvTimer = null;
 function openCsvModal(){
@@ -1796,6 +2139,7 @@ function bindEvents(){
   document.getElementById('btn-prev-page').addEventListener('click', function(){ STATE.dataPage--; renderDataTable(); });
   document.getElementById('btn-next-page').addEventListener('click', function(){ STATE.dataPage++; renderDataTable(); });
   bindDataTableEditEvents();
+  bindBulkEditEvents();
 
   document.getElementById('btn-open-csv-modal').addEventListener('click', openCsvModal);
   document.getElementById('btn-close-csv-modal').addEventListener('click', closeCsvModal);
@@ -1817,6 +2161,7 @@ function bindEvents(){
   document.getElementById('btn-clear-all-data').addEventListener('click', clearAllDataDemo);
   bindStaffEvents();
   bindStaffNameEvents();
+  bindStaffNameImportEvents();
 }
 function switchTab(tab){
   document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-tab')===tab); });

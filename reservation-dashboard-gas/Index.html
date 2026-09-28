@@ -312,8 +312,76 @@
             CSV由来の項目は読み取り専用です。
             <span class="inline-block w-2.5 h-2.5 rounded-sm bg-blue-100 border border-blue-300 align-middle ml-2 mr-1"></span>
             の列（CHK日・保険・Wifi・TAViCA・キャンサポ・メモ）は入力・編集できます。
+            行のチェックボックスで複数選択すると、下の「一括登録」から同じ値をまとめて登録できます。
             CSVインポートは「データ管理」タブから行えます。
           </p>
+        </div>
+
+        <!-- ============ 一括登録バー（行を選択すると表示） ============ -->
+        <div id="bulk-edit-bar" class="bg-blue-50 border border-blue-200 rounded-xl p-4 hidden">
+          <div class="flex flex-wrap items-center gap-3 mb-3">
+            <span class="text-sm font-bold text-blue-800">
+              <i class="fa-solid fa-list-check"></i> <span id="bulk-selected-count">0</span>件選択中 — 一括登録
+            </span>
+            <button type="button" id="btn-bulk-clear-selection" class="text-xs text-slate-500 hover:text-blue-700 ml-auto">選択解除</button>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            <div class="flex items-end gap-2">
+              <div class="flex-1">
+                <label class="text-xs font-semibold text-slate-500 block mb-1">CHK日を一括設定</label>
+                <input type="date" id="bulk-chkdate-input" class="border border-slate-300 rounded-lg text-sm p-2 w-full">
+              </div>
+              <button type="button" class="bulk-apply-field-btn bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-2 text-xs font-semibold whitespace-nowrap" data-field="chkDate">適用</button>
+            </div>
+            <div class="flex items-end gap-2">
+              <div class="flex-1">
+                <label class="text-xs font-semibold text-slate-500 block mb-1">メモを一括設定</label>
+                <input type="text" id="bulk-memo-input" placeholder="メモ" class="border border-slate-300 rounded-lg text-sm p-2 w-full">
+              </div>
+              <button type="button" class="bulk-apply-field-btn bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-2 text-xs font-semibold whitespace-nowrap" data-field="memo">適用</button>
+            </div>
+            <div class="flex items-end gap-2">
+              <div class="flex-1">
+                <label class="text-xs font-semibold text-slate-500 block mb-1">保険を一括設定</label>
+                <div class="flex gap-1">
+                  <select id="bulk-insurance-status" class="bulk-ancillary-status border border-slate-300 rounded-lg text-xs p-2 flex-1" data-item="insurance"></select>
+                  <input type="number" min="0" id="bulk-insurance-qty" placeholder="数" class="border border-slate-300 rounded-lg text-xs p-2 w-14">
+                </div>
+              </div>
+              <button type="button" class="bulk-apply-ancillary-btn bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-2 text-xs font-semibold whitespace-nowrap" data-item="insurance">適用</button>
+            </div>
+            <div class="flex items-end gap-2">
+              <div class="flex-1">
+                <label class="text-xs font-semibold text-slate-500 block mb-1">Wifiを一括設定</label>
+                <div class="flex gap-1">
+                  <select id="bulk-wifi-status" class="bulk-ancillary-status border border-slate-300 rounded-lg text-xs p-2 flex-1" data-item="wifi"></select>
+                  <input type="number" min="0" id="bulk-wifi-qty" placeholder="数" class="border border-slate-300 rounded-lg text-xs p-2 w-14">
+                </div>
+              </div>
+              <button type="button" class="bulk-apply-ancillary-btn bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-2 text-xs font-semibold whitespace-nowrap" data-item="wifi">適用</button>
+            </div>
+            <div class="flex items-end gap-2">
+              <div class="flex-1">
+                <label class="text-xs font-semibold text-slate-500 block mb-1">キャンサポを一括設定</label>
+                <div class="flex gap-1">
+                  <select id="bulk-cansapo-status" class="bulk-ancillary-status border border-slate-300 rounded-lg text-xs p-2 flex-1" data-item="cansapo"></select>
+                  <input type="number" min="0" id="bulk-cansapo-qty" placeholder="数" class="border border-slate-300 rounded-lg text-xs p-2 w-14">
+                </div>
+              </div>
+              <button type="button" class="bulk-apply-ancillary-btn bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-2 text-xs font-semibold whitespace-nowrap" data-item="cansapo">適用</button>
+            </div>
+            <div class="flex items-end gap-2">
+              <div class="flex-1">
+                <label class="text-xs font-semibold text-slate-500 block mb-1">TAViCAを一括設定</label>
+                <div class="flex gap-1">
+                  <select id="bulk-tavica-status" class="bulk-ancillary-status border border-slate-300 rounded-lg text-xs p-2 flex-1" data-item="tavica"></select>
+                  <input type="number" min="0" id="bulk-tavica-qty" placeholder="数" class="border border-slate-300 rounded-lg text-xs p-2 w-14">
+                </div>
+              </div>
+              <button type="button" class="bulk-apply-ancillary-btn bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-2 text-xs font-semibold whitespace-nowrap" data-item="tavica">適用</button>
+            </div>
+          </div>
+          <p id="bulk-edit-result" class="text-xs text-slate-500 mt-3 hidden"></p>
         </div>
 
         <div class="bg-white rounded-xl shadow p-4">
@@ -459,15 +527,22 @@
 
           <!-- 担当者マスタ（CSVの担当者コード→氏名の対応表） -->
           <div class="bg-white rounded-xl shadow p-4">
-            <div class="flex items-center justify-between mb-3">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
               <h2 class="text-base font-bold text-slate-800"><i class="fa-solid fa-id-card text-blue-600"></i> 担当者マスタ</h2>
-              <button id="btn-open-staff-name-modal" class="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-1.5 text-xs font-semibold shadow">
-                <i class="fa-solid fa-circle-plus"></i> 担当者を追加
-              </button>
+              <div class="flex gap-2">
+                <button id="btn-open-staff-name-import-modal" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-1.5 text-xs font-semibold shadow">
+                  <i class="fa-solid fa-file-import"></i> 人事データCSVインポート
+                </button>
+                <button id="btn-open-staff-name-modal" class="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-1.5 text-xs font-semibold shadow">
+                  <i class="fa-solid fa-circle-plus"></i> 担当者を追加
+                </button>
+              </div>
             </div>
             <p class="text-xs text-slate-500 mb-3">
               CSVの「担当者」列（例：BGK078）に対応する氏名を登録すると、「予約データ一覧」「個人別サマリー」の
               担当者列がコードの代わりに氏名で表示されます。未登録のコードはそのまま表示されます。
+              人事データCSV（「■担当者NO」「社員名称」の列を含むもの）を取り込むと、一致した担当者コードの
+              氏名をまとめて登録・更新できます。
             </p>
             <div class="overflow-auto max-h-[50vh]">
               <table class="min-w-full text-sm">
@@ -607,6 +682,48 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- ============ 担当者マスタ 人事データCSVインポートモーダル ============ -->
+  <div id="staff-name-import-modal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+        <h3 class="font-bold text-lg text-emerald-700"><i class="fa-solid fa-file-import"></i> 担当者マスタ：人事データCSVインポート</h3>
+        <button id="btn-close-staff-name-import-modal" class="text-slate-400 hover:text-slate-700 text-xl">&times;</button>
+      </div>
+      <div class="p-6 space-y-4">
+        <p class="text-sm text-slate-600">
+          人事データCSVを選択してください。見出し行の「■担当者NO」列と「社員名称」列だけを使い、
+          担当者マスタ（担当者コード→氏名）へまとめて反映します。他の人事項目の列は読み捨てます。
+        </p>
+        <p class="text-xs text-slate-400">
+          既に登録済みの担当者コードは氏名を上書き更新し、未登録の担当者コードは新規追加します。
+        </p>
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">人事データCSVファイル</label>
+          <input type="file" id="staff-name-import-file-input" accept=".csv,text/csv,text/plain" class="w-full border border-slate-300 rounded-lg text-sm p-2 bg-white">
+          <p class="text-xs text-slate-400 mt-1">文字コードは UTF-8（BOM付き可）を想定しています。</p>
+          <p id="staff-name-import-file-summary" class="hidden text-xs text-slate-600 mt-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"></p>
+        </div>
+
+        <div id="staff-name-import-progress" class="hidden">
+          <div class="flex items-center justify-between text-xs text-slate-600 mb-1">
+            <span>取り込んでいます…</span>
+            <span id="staff-name-import-progress-time" class="tabular-nums">0秒</span>
+          </div>
+          <div class="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+            <div id="staff-name-import-progress-bar" class="h-full bg-emerald-500 rounded-full" style="width:0%; transition:width .4s ease;"></div>
+          </div>
+        </div>
+        <div id="staff-name-import-result" class="hidden text-sm bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1"></div>
+        <div class="flex justify-end gap-3 pt-2 border-t border-slate-100">
+          <button type="button" id="btn-cancel-staff-name-import-modal" class="px-4 py-2 rounded-lg text-sm font-semibold text-slate-500 hover:bg-slate-100">閉じる</button>
+          <button type="button" id="btn-submit-staff-name-import" class="px-5 py-2 rounded-lg text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow" disabled>
+            <i class="fa-solid fa-upload"></i> 取り込む
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 

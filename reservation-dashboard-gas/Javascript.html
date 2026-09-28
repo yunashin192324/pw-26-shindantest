@@ -71,7 +71,10 @@ var STATE = {
   personalSortKey: 'count', personalSortDir: -1,
 
   columnOrder: DEFAULT_COLUMN_ORDER.slice(),
-  charts: {}
+  charts: {},
+
+  selectedRowIndexes: {}, // 予約データ一覧の一括登録用：チェックされている行番号の集合
+  currentPageRowIndexes: []
 };
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -145,6 +148,7 @@ function onBootstrapSuccess(data) {
   STATE.columnOrder = sanitizeColumnOrder_(data.columnOrder);
 
   populateFilterOptions();
+  populateBulkAncillarySelects_();
   applyRoleUi_();
   renderColumnOrderEditor();
   renderDataThead();
@@ -637,7 +641,8 @@ function clearDataFilters() {
 
 function renderDataThead() {
   var thead = document.getElementById('data-thead');
-  thead.innerHTML = '<tr>' + STATE.columnOrder.map(function (key) {
+  var checkboxTh = '<th class="px-2 py-2 text-center w-8"><input type="checkbox" id="data-select-all-page" title="このページの行をすべて選択"></th>';
+  thead.innerHTML = '<tr>' + checkboxTh + STATE.columnOrder.map(function (key) {
     var def = DISPLAY_COLUMN_DEFS_BY_KEY[key];
     if (!def) return '';
     var sortable = def.kind !== 'ancillary';
@@ -657,6 +662,14 @@ function renderDataThead() {
       renderDataThead();
       renderDataTable();
     });
+  });
+
+  document.getElementById('data-select-all-page').addEventListener('change', function (e) {
+    var checked = e.target.checked;
+    STATE.currentPageRowIndexes.forEach(function (ri) {
+      if (checked) STATE.selectedRowIndexes[ri] = true; else delete STATE.selectedRowIndexes[ri];
+    });
+    renderDataTable();
   });
 }
 
@@ -687,8 +700,12 @@ function renderDataTable() {
   var tbody = document.getElementById('data-tbody');
   document.getElementById('data-empty').classList.toggle('hidden', total > 0);
 
+  STATE.currentPageRowIndexes = pageRows.map(function (r) { return r.rowIndex; });
+
   tbody.innerHTML = pageRows.map(function (r) {
-    return '<tr class="hover:bg-slate-50">' + STATE.columnOrder.map(function (key) {
+    var checked = STATE.selectedRowIndexes[r.rowIndex] ? ' checked' : '';
+    var checkboxTd = '<td class="px-2 py-2 text-center"><input type="checkbox" class="row-select-checkbox" data-row="' + r.rowIndex + '"' + checked + '></td>';
+    return '<tr class="hover:bg-slate-50">' + checkboxTd + STATE.columnOrder.map(function (key) {
       return buildCellHtml_(r, DISPLAY_COLUMN_DEFS_BY_KEY[key]);
     }).join('') + '</tr>';
   }).join('');
@@ -697,6 +714,38 @@ function renderDataTable() {
     total === 0 ? '0件' : (start + 1) + '〜' + Math.min(start + STATE.dataPageSize, total) + ' / ' + total + '件';
   document.getElementById('btn-prev-page').disabled = STATE.dataPage <= 1;
   document.getElementById('btn-next-page').disabled = STATE.dataPage >= totalPages;
+
+  syncSelectAllCheckbox_();
+  updateBulkEditBar_();
+}
+
+/** ヘッダーの「このページを全選択」チェックボックスを、現在の選択状態に合わせて更新する（全選択／一部選択／未選択）。 */
+function syncSelectAllCheckbox_() {
+  var cb = document.getElementById('data-select-all-page');
+  if (!cb) return;
+  var pageIndexes = STATE.currentPageRowIndexes;
+  var allSelected = pageIndexes.length > 0 && pageIndexes.every(function (ri) { return !!STATE.selectedRowIndexes[ri]; });
+  var someSelected = pageIndexes.some(function (ri) { return !!STATE.selectedRowIndexes[ri]; });
+  cb.checked = allSelected;
+  cb.indeterminate = !allSelected && someSelected;
+}
+
+function getSelectedRowIndexes_() { return Object.keys(STATE.selectedRowIndexes).map(Number); }
+
+function clearRowSelection_() {
+  STATE.selectedRowIndexes = {};
+  syncSelectAllCheckbox_();
+  updateBulkEditBar_();
+  renderDataTable();
+}
+
+/** 一括登録バーの表示・選択件数を、現在の選択状態に合わせて更新する。 */
+function updateBulkEditBar_() {
+  var count = getSelectedRowIndexes_().length;
+  var countEl = document.getElementById('bulk-selected-count');
+  if (countEl) countEl.textContent = count;
+  var bar = document.getElementById('bulk-edit-bar');
+  if (bar) bar.classList.toggle('hidden', count === 0);
 }
 
 function formatCell_(v, col) {
@@ -879,6 +928,112 @@ function handleAncillaryQtyBlur(inputEl) {
   saveCell(rowIndex, item.qtyKey, inputEl.value);
 }
 
+// ============================================================================
+// 予約データ一覧：一括登録（複数行を選択して同じ値をまとめて登録する）
+// ============================================================================
+
+/** 一括登録バーの保険/Wifi/キャンサポ/TAViCAステータス選択肢を、通常の行と同じ5段階で用意する。 */
+function populateBulkAncillarySelects_() {
+  document.querySelectorAll('.bulk-ancillary-status').forEach(function (el) {
+    el.innerHTML = STATE.ancillaryStatusOptions.map(function (o) {
+      return '<option value="' + o.value + '">' + o.value + ' ' + escapeHtml(o.label) + '</option>';
+    }).join('');
+  });
+}
+
+/** 一括登録結果（成功件数・エラー件数）をバー下部に表示する。 */
+function showBulkEditResult_(result) {
+  var el = document.getElementById('bulk-edit-result');
+  var lines = [formatNumber(result.updated) + '件に反映しました。'];
+  if (result.errors && result.errors.length > 0) {
+    lines.push('（' + formatNumber(result.errors.length) + '件は編集権限が無いため反映されませんでした）');
+  }
+  el.textContent = lines.join('');
+  el.classList.remove('hidden');
+  showToast(lines.join(''), result.errors && result.errors.length > 0 ? 'error' : 'success');
+}
+
+/** CHK日・メモの一括登録（選択中の行すべてに同じ値を設定する）。 */
+function applyBulkField_(field) {
+  var rowIndexes = getSelectedRowIndexes_();
+  if (rowIndexes.length === 0) { showToast('行が選択されていません。', 'error'); return; }
+  var value = field === 'chkDate'
+    ? document.getElementById('bulk-chkdate-input').value
+    : document.getElementById('bulk-memo-input').value;
+
+  google.script.run
+    .withSuccessHandler(function (result) {
+      var normalized = value === '' ? null : value;
+      rowIndexes.forEach(function (ri) {
+        var row = STATE.rows.filter(function (r) { return r.rowIndex === ri; })[0];
+        if (row) row[field] = normalized;
+      });
+      afterCellSaved_();
+      showBulkEditResult_(result);
+    })
+    .withFailureHandler(onServerError)
+    .bulkUpdateCellValue(rowIndexes, field, value);
+}
+
+/** 保険/Wifi/キャンサポ/TAViCAの一括登録（選択中の行すべてに同じステータス・数量を設定する）。 */
+function applyBulkAncillary_(itemKey) {
+  var rowIndexes = getSelectedRowIndexes_();
+  if (rowIndexes.length === 0) { showToast('行が選択されていません。', 'error'); return; }
+  var item = STATE.ancillaryItemByKey[itemKey];
+  var status = document.getElementById('bulk-' + itemKey + '-status').value;
+  var qtyInput = document.getElementById('bulk-' + itemKey + '-qty');
+  var qty = qtyInput.value;
+  var reason = '';
+
+  if (status === '×') {
+    reason = window.prompt('失注理由を入力してください（キャンセルすると変更されません）', '');
+    if (reason === null) return;
+  } else if ((status === '〇' || status === '☆') && qty.trim() === '') {
+    showToast(item.label + 'の数量を入力してください。', 'error');
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function (result) {
+      rowIndexes.forEach(function (ri) {
+        var row = STATE.rows.filter(function (r) { return r.rowIndex === ri; })[0];
+        if (!row) return;
+        row[item.statusKey] = status;
+        if (status === '×') {
+          row[item.qtyKey] = 0;
+          row[item.reasonKey] = reason.trim();
+        } else if (status === '〇' || status === '☆') {
+          row[item.qtyKey] = qty === '' ? null : Number(qty);
+          row[item.reasonKey] = null;
+        } else {
+          row[item.qtyKey] = null;
+          row[item.reasonKey] = null;
+        }
+      });
+      afterCellSaved_();
+      showBulkEditResult_(result);
+    })
+    .withFailureHandler(onServerError)
+    .bulkSetAncillaryStatus(rowIndexes, itemKey, status, qty, reason);
+}
+
+function bindBulkEditEvents_() {
+  document.getElementById('btn-bulk-clear-selection').addEventListener('click', clearRowSelection_);
+  document.querySelectorAll('.bulk-apply-field-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () { applyBulkField_(btn.dataset.field); });
+  });
+  document.querySelectorAll('.bulk-apply-ancillary-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () { applyBulkAncillary_(btn.dataset.item); });
+  });
+  document.querySelectorAll('.bulk-ancillary-status').forEach(function (sel) {
+    sel.addEventListener('change', function () {
+      var qtyInput = document.getElementById('bulk-' + sel.dataset.item + '-qty');
+      qtyInput.disabled = !isAncillaryQtyEditable_(sel.value);
+      if (qtyInput.disabled) qtyInput.value = '';
+    });
+  });
+}
+
 /** メモ欄をダブルクリックしたセルだけを、その場でテキスト入力に切り替える。 */
 function beginMemoEdit_(span) {
   var rowIndex = Number(span.dataset.row);
@@ -902,6 +1057,11 @@ function bindDataTableEditEvents_() {
       handleAncillaryStatusChange(t);
     } else if (t.matches('input.ancillary-qty')) {
       handleAncillaryQtyBlur(t);
+    } else if (t.matches('input.row-select-checkbox')) {
+      var rowIndex = Number(t.dataset.row);
+      if (t.checked) STATE.selectedRowIndexes[rowIndex] = true; else delete STATE.selectedRowIndexes[rowIndex];
+      syncSelectAllCheckbox_();
+      updateBulkEditBar_();
     }
   });
 
@@ -1308,6 +1468,107 @@ function onStaffNameSaved(list) {
 }
 
 // ============================================================================
+// 担当者マスタ：人事データCSVインポート
+// ============================================================================
+
+var staffNameImportSelectedText = null;
+var staffNameImportSelectedFileName = null;
+var staffNameImportProgressTimer = null;
+
+function bindStaffNameImportEvents_() {
+  document.getElementById('btn-open-staff-name-import-modal').addEventListener('click', openStaffNameImportModal);
+  document.getElementById('btn-close-staff-name-import-modal').addEventListener('click', closeStaffNameImportModal);
+  document.getElementById('btn-cancel-staff-name-import-modal').addEventListener('click', closeStaffNameImportModal);
+  document.getElementById('staff-name-import-file-input').addEventListener('change', onStaffNameImportFileSelected);
+  document.getElementById('btn-submit-staff-name-import').addEventListener('click', submitStaffNameImport);
+}
+
+function openStaffNameImportModal() {
+  resetStaffNameImportModal_();
+  document.getElementById('staff-name-import-modal').classList.remove('hidden');
+  document.getElementById('staff-name-import-modal').classList.add('flex');
+}
+function closeStaffNameImportModal() {
+  document.getElementById('staff-name-import-modal').classList.add('hidden');
+  document.getElementById('staff-name-import-modal').classList.remove('flex');
+  stopStaffNameImportProgress_();
+}
+function resetStaffNameImportModal_() {
+  staffNameImportSelectedText = null;
+  staffNameImportSelectedFileName = null;
+  document.getElementById('staff-name-import-file-input').value = '';
+  document.getElementById('staff-name-import-file-summary').classList.add('hidden');
+  document.getElementById('staff-name-import-result').classList.add('hidden');
+  document.getElementById('staff-name-import-progress').classList.add('hidden');
+  document.getElementById('btn-submit-staff-name-import').disabled = true;
+}
+
+function onStaffNameImportFileSelected(e) {
+  var file = e.target.files[0];
+  document.getElementById('staff-name-import-result').classList.add('hidden');
+  if (!file) { document.getElementById('btn-submit-staff-name-import').disabled = true; return; }
+
+  var reader = new FileReader();
+  reader.onload = function (evt) {
+    staffNameImportSelectedText = evt.target.result;
+    staffNameImportSelectedFileName = file.name;
+    var summary = document.getElementById('staff-name-import-file-summary');
+    summary.textContent = 'ファイル：' + file.name + '（' + Math.ceil(file.size / 1024) + ' KB）';
+    summary.classList.remove('hidden');
+    document.getElementById('btn-submit-staff-name-import').disabled = false;
+  };
+  reader.onerror = function () { showToast('ファイルの読み込みに失敗しました。', 'error'); };
+  reader.readAsText(file, 'UTF-8');
+}
+
+function submitStaffNameImport() {
+  if (!staffNameImportSelectedText) return;
+  document.getElementById('btn-submit-staff-name-import').disabled = true;
+  startStaffNameImportProgress_();
+  google.script.run
+    .withSuccessHandler(function (result) { stopStaffNameImportProgress_(); onStaffNameImportSuccess(result); })
+    .withFailureHandler(function (err) {
+      stopStaffNameImportProgress_();
+      document.getElementById('btn-submit-staff-name-import').disabled = false;
+      onServerError(err);
+    })
+    .importStaffNameCsv(staffNameImportSelectedText, staffNameImportSelectedFileName);
+}
+
+function startStaffNameImportProgress_() {
+  var box = document.getElementById('staff-name-import-progress');
+  var bar = document.getElementById('staff-name-import-progress-bar');
+  var timeLabel = document.getElementById('staff-name-import-progress-time');
+  box.classList.remove('hidden');
+  var elapsed = 0;
+  bar.style.width = '5%';
+  staffNameImportProgressTimer = setInterval(function () {
+    elapsed++;
+    timeLabel.textContent = elapsed + '秒';
+    bar.style.width = Math.min(90, 5 + elapsed * 4) + '%';
+  }, 1000);
+}
+function stopStaffNameImportProgress_() {
+  if (staffNameImportProgressTimer) { clearInterval(staffNameImportProgressTimer); staffNameImportProgressTimer = null; }
+  document.getElementById('staff-name-import-progress-bar').style.width = '100%';
+}
+
+function onStaffNameImportSuccess(result) {
+  var box = document.getElementById('staff-name-import-result');
+  box.innerHTML = [
+    '<p class="font-semibold text-emerald-700"><i class="fa-solid fa-circle-check"></i> 取り込みが完了しました</p>',
+    '<p>CSVのデータ行数：' + formatNumber(result.csvDataRows) + ' 行</p>',
+    '<p>新規登録：<b>' + formatNumber(result.added) + '</b> 件</p>',
+    '<p>氏名を更新：<b>' + formatNumber(result.updated) + '</b> 件</p>',
+    '<p>担当者NO・社員名称が空欄などのためスキップ：' + formatNumber(result.skipped) + ' 件</p>'
+  ].join('');
+  box.classList.remove('hidden');
+  showToast('人事データCSVを取り込みました（新規 ' + result.added + ' 件・更新 ' + result.updated + ' 件）', 'success');
+  renderStaffNameList(result.list);
+  document.getElementById('btn-submit-staff-name-import').disabled = false;
+}
+
+// ============================================================================
 // CSVインポート
 // ============================================================================
 
@@ -1445,6 +1706,7 @@ function bindStaticEvents() {
   document.getElementById('btn-prev-page').addEventListener('click', function () { STATE.dataPage--; renderDataTable(); });
   document.getElementById('btn-next-page').addEventListener('click', function () { STATE.dataPage++; renderDataTable(); });
   bindDataTableEditEvents_();
+  bindBulkEditEvents_();
 
   document.getElementById('btn-open-csv-modal').addEventListener('click', openCsvModal);
   document.getElementById('btn-close-csv-modal').addEventListener('click', closeCsvModal);
@@ -1468,6 +1730,7 @@ function bindStaticEvents() {
   document.getElementById('btn-clear-all-data').addEventListener('click', clearAllData);
   bindStaffEvents_();
   bindStaffNameEvents_();
+  bindStaffNameImportEvents_();
 }
 
 function switchTab(tab) {
