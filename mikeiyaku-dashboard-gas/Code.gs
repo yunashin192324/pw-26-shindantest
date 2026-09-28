@@ -198,6 +198,24 @@ function normalizeEmployeeNo_(value) {
  * そのまま比べると別物になってしまう。数字だけの値は先頭の0を落として比べる。
  * これにより「046」と「46」、「01234」と「1234」が同じものとして扱われる。
  */
+/**
+ * 対象年月日を比較・判定用の「YYYYMMDD」にそろえる。
+ * 保存期間の判定・期の判定・重複判定は文字列の大小で行うため、スプレッドシート上で
+ * 日付型になったセル（直接入力すると自動で日付になる）・「2026/8/1」「2026-08-01」形式・
+ * 前後の空白などがそのままだと、最近の相談が「2年以上前」と誤判定されて一覧から消え、
+ * アーカイブへ移されてしまう。読み取れない値はそのまま返す（消すより見えている方が安全なため）。
+ */
+function normalizeTargetDate_(value) {
+  if (value === null || value === undefined) return '';
+  if (Object.prototype.toString.call(value) === '[object Date]') {
+    return isNaN(value.getTime()) ? '' : Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyyMMdd');
+  }
+  const s = String(value).trim();
+  const m = /^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/.exec(s);
+  if (m) return m[1] + ('0' + m[2]).slice(-2) + ('0' + m[3]).slice(-2);
+  return s;
+}
+
 function canonicalKeyPart_(value) {
   const s = String(value === null || value === undefined ? '' : value).trim();
   if (/^\d+$/.test(s)) return String(parseInt(s, 10));
@@ -218,6 +236,8 @@ function employeeKey_(empNo, empName) {
  * 多店舗展開（60店舗規模）に伴い、店舗を束ねる「エリア」区分をCSVから取り込んで
  * 絞り込みに使えるようにするため、店舗単位の属性として店舗マスタに持たせている。
  * 既存の店番・店舗名・有効列はそのまま、4列目が空欄のときだけ見出しを補う。
+ * 読み取り処理（全ユーザーの画面表示のたびに走る）からは呼ばない。エリア名を書き込む
+ * 処理の直前にだけ呼ぶことで、閲覧のたびにシートへ書き込みが発生しないようにしている。
  */
 function ensureShopMasterAreaColumn_(sheet) {
   if (sheet.getMaxColumns() < 4) {
@@ -236,20 +256,27 @@ function getAllShopMasterRows_() {
   const sheet = ss.getSheetByName(SHOP_MASTER_SHEET_NAME);
   if (!sheet) return null;
 
-  ensureShopMasterAreaColumn_(sheet);
-
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
 
-  const values = sheet.getRange(2, 1, lastRow - 1, 4).getValues();
+  // エリア名（4列目）が無い旧環境でも読めるよう、実在する列数までだけ読む（ここでは書き込まない）
+  const readCols = Math.min(4, sheet.getMaxColumns());
+  const values = sheet.getRange(2, 1, lastRow - 1, readCols).getValues();
   const list = [];
   values.forEach(function (row, i) {
     const code = normalizeOfficeCode_(row[0]);
     const name = String(row[1] || '').trim();
     if (!code && !name) return;
-    list.push({ rowIndex: i + 2, code: code, name: name, active: row[2] !== false, area: String(row[3] || '').trim() });
+    const area = readCols >= 4 ? String(row[3] === null || row[3] === undefined ? '' : row[3]).trim() : '';
+    list.push({ rowIndex: i + 2, code: code, name: name, active: row[2] !== false, area: area });
   });
   return list;
+}
+
+/** 店舗マスタの指定行にエリア名を書き込む（4列目が無い旧環境では先に列を補う） */
+function setShopMasterArea_(masterSheet, rowIndex, area) {
+  ensureShopMasterAreaColumn_(masterSheet);
+  masterSheet.getRange(rowIndex, 4).setValue(area);
 }
 
 /**
@@ -637,7 +664,7 @@ function getDashboardData() {
         if (hasError) continue;
 
         // 保存期間（直近2年）より前のデータは対象外
-        const targetDate = String(row[4] || ''); // 対象年月日（5列目）
+        const targetDate = normalizeTargetDate_(row[4]); // 対象年月日（5列目）
         if (targetDate && targetDate < cutoffDate) continue;
 
         const obj = {};
@@ -646,6 +673,7 @@ function getDashboardData() {
           if (PAYLOAD_SKIP_COLUMNS[HEADERS_MAIN[c]]) continue;
           obj[HEADERS_MAIN[c]] = serializeCellValue_(row[c]);
         }
+        obj['対象年月日'] = targetDate; // 画面側の日付絞り込み・アラート判定もYYYYMMDD前提のため、そろえた値を渡す
         obj.__sheetName = shop.name;
         obj.__rowIndex = i + 2; // スプレッドシート上の物理行番号（2行目スタート）
         obj['エリア名'] = shop.area || ''; // 店舗マスタのエリア区分（店舗単位の属性のため行データ自体には持たない）
@@ -736,7 +764,7 @@ function getEmployeeSummary(periodKey) {
         const resale = row[0];
         const sts = row[1];
         const pax = row[2];
-        const targetDate = String(row[4] || ''); // 対象年月日（実際の年を含む。会計期の判定に使用）
+        const targetDate = normalizeTargetDate_(row[4]); // 対象年月日（実際の年を含む。会計期の判定に使用）
         const empNo = row[6];
         const empName = row[7];
         if ((empNo === '' || empNo === null) && (empName === '' || empName === null)) return;
@@ -826,6 +854,11 @@ function getActiveStaffForSelection() {
  * @param {number} staffRowIndex 担当スタッフの、スタッフマスタ上の行番号
  */
 function addUncontractedData(rowObject, staffRowIndex) {
+  return lockedEndpoint_(function () { return addUncontractedDataImpl_(rowObject, staffRowIndex); });
+}
+
+/** addUncontractedData の本体（同時実行制御は上の公開関数で行う。直接呼ばないこと） */
+function addUncontractedDataImpl_(rowObject, staffRowIndex) {
   try {
     const rIdx = parseInt(staffRowIndex, 10);
     if (isNaN(rIdx) || rIdx < 2) {
@@ -863,10 +896,12 @@ function addUncontractedData(rowObject, staffRowIndex) {
     newRow[HEADERS_MAIN.indexOf('社員名')] = staff.employeeName;
 
     // 「対象年月日」（YYYYMMDD）から月（2桁文字列）を自動抽出し、「月」列（4列目）へ反映
-    const targetDate = String((rowObject && rowObject['対象年月日']) || '');
-    if (targetDate.length >= 6) {
-      newRow[3] = targetDate.substring(4, 6);
+    const targetDate = normalizeTargetDate_(rowObject && rowObject['対象年月日']);
+    if (!/^\d{8}$/.test(targetDate)) {
+      throw new Error('対象年月日を正しい日付で入力してください（入力値: ' + (rowObject && rowObject['対象年月日']) + '）');
     }
+    newRow[HEADERS_MAIN.indexOf('対象年月日')] = targetDate;
+    newRow[3] = targetDate.substring(4, 6);
 
     const lastRow = sheet.getLastRow();
     const targetRowIndex = lastRow + 1;
@@ -897,7 +932,7 @@ function addUncontractedData(rowObject, staffRowIndex) {
  */
 function normalizeHeaderName_(value) {
   return String(value === null || value === undefined ? '' : value)
-    .replace(/^﻿/, '')       // 先頭のBOM
+    .replace(/^\uFEFF/, '')       // 先頭のBOM
     .replace(/[　\s]+/g, '')  // 全角・半角の空白
     .replace(/^["']|["']$/g, '')  // 前後の引用符
     .trim();
@@ -1040,6 +1075,11 @@ function htmlCellToText_(cell) {
  * @param {string} csvText CSVファイルの中身（テキスト）
  */
 function importUncontractedCsv(csvText) {
+  return lockedEndpoint_(function () { return importUncontractedCsvImpl_(csvText); });
+}
+
+/** importUncontractedCsv の本体（同時実行制御は上の公開関数で行う。直接呼ばないこと） */
+function importUncontractedCsvImpl_(csvText) {
   try {
     assertCanImportCsv_();
 
@@ -1059,13 +1099,53 @@ function importUncontractedCsv(csvText) {
   }
 }
 
+// ============================================================================
+// 同時実行の制御
+// ----------------------------------------------------------------------------
+// 全社（多店舗）で同時に保存・CSV取り込み・アーカイブなどが走っても、互いの書き込みを
+// 上書きしたり、別の行へ書き込んだりしないよう、データを書き換える処理は1件ずつ順番に
+// 実行する（Apps Scriptのスクリプトロック）。読み取りだけの処理はロックしない。
+// ============================================================================
+const DATA_LOCK_TIMEOUT_MS = 30000;
+const DATA_LOCK_BUSY_MESSAGE =
+  'ほかの方の保存・取り込み処理が実行中のため、今回は処理できませんでした。数十秒おいてから、もう一度お試しください。';
+let dataLockDepth_ = 0; // 同じ実行の中で既にロックを持っているか（入れ子呼び出しで二重取得しないため）
+
+/** データを書き換える処理を、スクリプトロックを取ったうえで実行する。取れなければ例外。 */
+function withDataLock_(fn) {
+  if (dataLockDepth_ > 0) return fn();
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(DATA_LOCK_TIMEOUT_MS)) {
+    throw new Error(DATA_LOCK_BUSY_MESSAGE);
+  }
+  dataLockDepth_++;
+  try {
+    return fn();
+  } finally {
+    dataLockDepth_--;
+    // 書き込みは遅れて反映されることがあるため、次の処理が古い内容を読まないよう
+    // ロックを放す前に確定させる（Google推奨の手順）
+    SpreadsheetApp.flush();
+    lock.releaseLock();
+  }
+}
+
+/** 画面から呼ばれる書き込みAPI用。ロックが取れなかった場合も画面へ分かるメッセージで返す。 */
+function lockedEndpoint_(fn) {
+  try {
+    return withDataLock_(fn);
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
 /**
  * サーバー側（このファイル）の版数。画面ファイルと対で更新する。
  * 画面だけ新しくしてCode.gsが古いままだと、新機能の呼び出しが
  * 「is not a function」という分かりにくいエラーになるため、
  * 画面側から版数を確認できるようにしている。
  */
-const SERVER_VERSION = '2026-09-28';
+const SERVER_VERSION = '2026-09-28-2';
 
 /**
  * サーバー側の版数を返す。画面側は、自分が期待する版数と一致するかを起動時に確認する。
@@ -1091,6 +1171,11 @@ function assertCanImportCsv_() {
  * @param {string} mimeType ファイルのMIMEタイプ
  */
 function importUncontractedWorkbook(base64Data, fileName, mimeType) {
+  return lockedEndpoint_(function () { return importUncontractedWorkbookImpl_(base64Data, fileName, mimeType); });
+}
+
+/** importUncontractedWorkbook の本体（同時実行制御は上の公開関数で行う。直接呼ばないこと） */
+function importUncontractedWorkbookImpl_(base64Data, fileName, mimeType) {
   try {
     assertCanImportCsv_();
     if (!base64Data) {
@@ -1243,7 +1328,7 @@ function importParsedRows_(rows) {
       const row = rows[r];
       if (!row || row.every(function (c) { return String(c).trim() === ''; })) continue;
 
-      const targetDate = getVal(row, '対象年月日');
+      const targetDate = normalizeTargetDate_(getVal(row, '対象年月日'));
       // CSV側が「46」と桁落ちしていても「046」として扱えるようそろえる
       const officeCode = normalizeOfficeCode_(getVal(row, '営業所コード'));
       // CSVに営業所名があれば、それをそのまま店舗名として使う
@@ -1337,7 +1422,7 @@ function importParsedRows_(rows) {
     // 重複判定キー：対象年月日＋営業所コード＋社員番号＋都市コード＋出発年月
     // シート上では「046」が数値46として保存されるため、必ず正規化してから突き合わせる
     const buildKey = function (row) {
-      return [row[4], row[5], row[6], row[9], row[11]].map(canonicalKeyPart_).join('｜');
+      return [normalizeTargetDate_(row[4]), row[5], row[6], row[9], row[11]].map(canonicalKeyPart_).join('｜');
     };
 
     Object.keys(rowsBySheet).forEach(function (sheetName) {
@@ -1431,7 +1516,7 @@ function autoRegisterShop_(ss, officeCode, csvShopName, csvAreaName) {
       masterSheet.getRange(preferred.rowIndex, 3).setValue(true); // 取り込み対象にするため有効へ戻す
     }
     if (masterSheet && csvAreaName && !preferred.area) {
-      masterSheet.getRange(preferred.rowIndex, 4).setValue(csvAreaName); // エリア名が未設定ならCSVの値で補う
+      setShopMasterArea_(masterSheet, preferred.rowIndex, csvAreaName); // エリア名が未設定ならCSVの値で補う
     }
     const shop = { code: preferred.code, name: preferred.name };
     createShopSheets_(ss, [shop], HEADERS_MAIN); // シートが無ければ作る（既にあれば見出しの補修のみ）
@@ -1446,6 +1531,7 @@ function autoRegisterShop_(ss, officeCode, csvShopName, csvAreaName) {
     ? csvShopName
     : '未設定(' + officeCode + ')';
   if (masterSheet) {
+    ensureShopMasterAreaColumn_(masterSheet);
     masterSheet.appendRow([officeCode, placeholderName, true, csvAreaName || '']);
   }
   const newShop = { code: officeCode, name: placeholderName };
@@ -1468,7 +1554,7 @@ function updateShopAreaFromCsv_(ss, officeCode, csvAreaName) {
   if (!target || target.area === csvAreaName) return;
   const masterSheet = ss.getSheetByName(SHOP_MASTER_SHEET_NAME);
   if (!masterSheet) return;
-  masterSheet.getRange(target.rowIndex, 4).setValue(csvAreaName);
+  setShopMasterArea_(masterSheet, target.rowIndex, csvAreaName);
 }
 
 /**
@@ -1478,7 +1564,12 @@ function updateShopAreaFromCsv_(ss, officeCode, csvAreaName) {
  * @param {string} newStatus "失注" | "成約" | "リセール中"
  * @param {number|string} contractPax 成約PAX（newStatusが"成約"の場合のみ使用）
  */
-function updateStatus(sheetName, rowIndex, newStatus, contractPax) {
+function updateStatus(sheetName, rowIndex, newStatus, contractPax, expectedIdentity) {
+  return lockedEndpoint_(function () { return updateStatusImpl_(sheetName, rowIndex, newStatus, contractPax, expectedIdentity); });
+}
+
+/** updateStatus の本体（同時実行制御は上の公開関数で行う。直接呼ばないこと） */
+function updateStatusImpl_(sheetName, rowIndex, newStatus, contractPax, expectedIdentity) {
   try {
     assertShopInScope_(sheetName);
 
@@ -1499,6 +1590,7 @@ function updateStatus(sheetName, rowIndex, newStatus, contractPax) {
     if (!sheet) {
       throw new Error('シートが見つかりません: ' + sheetName);
     }
+    assertRowIdentity_(sheet, rIdx, expectedIdentity);
 
     if (status === '') {
       sheet.getRange(rIdx, 2).clearContent(); // STSを未対応（空欄）に戻す
@@ -1528,6 +1620,7 @@ function updateStatus(sheetName, rowIndex, newStatus, contractPax) {
     for (let c = 0; c < HEADERS_MAIN.length; c++) {
       updatedObj[HEADERS_MAIN[c]] = serializeCellValue_(updatedValues[c]);
     }
+    updatedObj['対象年月日'] = normalizeTargetDate_(updatedValues[4]);
     updatedObj.__sheetName = sheetName;
     updatedObj.__rowIndex = rIdx;
 
@@ -1535,6 +1628,36 @@ function updateStatus(sheetName, rowIndex, newStatus, contractPax) {
   } catch (err) {
     return { success: false, error: err.message + '\n' + err.stack };
   }
+}
+
+// ---- 行の取り違え防止 --------------------------------------------------------
+// 画面は「シート名＋行番号」で行を指定して保存するが、画面を開いた後にアーカイブ・異動・
+// 重複整理などで行の並びが変わると、同じ行番号に別の相談が入っていることがある。
+// そのまま書き込むと別のお客様の行を上書きしてしまうため、保存のたびに
+// 「画面を開いた時点でその行に入っていた相談」と一致するかを確かめてから書き込む。
+// 照合に使う列はCSV取り込みの重複判定キーと同じ（1シート内で相談を一意に特定できる）。
+const ROW_IDENTITY_COLUMNS = ['対象年月日', '営業所コード', '社員番号', '都市コード', '出発年月'];
+const ROW_MOVED_MESSAGE =
+  '画面を開いた後に、この行の並びや内容が変わっています（アーカイブ・異動・重複整理などによるもの）。' +
+  '別の行への書き込みを防ぐため、保存を中止しました。画面を再読み込みしてから、もう一度入力してください。';
+
+/**
+ * 書き込み先の行が、画面が想定している相談と同じかを確かめる。違えば例外。
+ * @param {Object} expected 画面側が持っている照合用の値（ROW_IDENTITY_COLUMNSの各列）
+ */
+function assertRowIdentity_(sheet, rowIndex, expected) {
+  if (!expected || typeof expected !== 'object') {
+    throw new Error(ROW_MOVED_MESSAGE); // 照合情報を送らない古い画面からの保存も、安全のため受け付けない
+  }
+  const values = sheet.getRange(rowIndex, 1, 1, HEADERS_MAIN.length).getValues()[0];
+  const isBlankRow = values.every(function (v) { return v === '' || v === null; });
+  const mismatch = isBlankRow || ROW_IDENTITY_COLUMNS.some(function (col) {
+    const raw = values[HEADERS_MAIN.indexOf(col)];
+    const actual = col === '対象年月日' ? normalizeTargetDate_(raw) : serializeCellValue_(raw);
+    const want = col === '対象年月日' ? normalizeTargetDate_(expected[col]) : expected[col];
+    return canonicalKeyPart_(actual) !== canonicalKeyPart_(want);
+  });
+  if (mismatch) throw new Error(ROW_MOVED_MESSAGE);
 }
 
 // ---- リセールリストでスタッフが編集できる列（それ以外はCSV由来の読み取り専用） ---
@@ -1606,7 +1729,12 @@ function normalizeContractPax_(value) {
  * @param {string} columnName HEADERS_MAIN に含まれる列名（EDITABLE_COLUMNSのいずれかのみ）
  * @param {*} value 更新後の値
  */
-function updateCellValue(sheetName, rowIndex, columnName, value) {
+function updateCellValue(sheetName, rowIndex, columnName, value, expectedIdentity) {
+  return lockedEndpoint_(function () { return updateCellValueImpl_(sheetName, rowIndex, columnName, value, expectedIdentity); });
+}
+
+/** updateCellValue の本体（同時実行制御は上の公開関数で行う。直接呼ばないこと） */
+function updateCellValueImpl_(sheetName, rowIndex, columnName, value, expectedIdentity) {
   try {
     assertShopInScope_(sheetName);
 
@@ -1635,6 +1763,7 @@ function updateCellValue(sheetName, rowIndex, columnName, value) {
     if (!sheet) {
       throw new Error('シートが見つかりません: ' + sheetName);
     }
+    assertRowIdentity_(sheet, rIdx, expectedIdentity);
 
     if (TEXT_CELL_COLUMNS[columnName]) {
       setTextCell_(sheet, rIdx, colIdx + 1, value);
@@ -1654,6 +1783,7 @@ function updateCellValue(sheetName, rowIndex, columnName, value) {
     for (let c = 0; c < HEADERS_MAIN.length; c++) {
       updatedObj[HEADERS_MAIN[c]] = serializeCellValue_(updatedValues[c]);
     }
+    updatedObj['対象年月日'] = normalizeTargetDate_(updatedValues[4]);
     updatedObj.__sheetName = sheetName;
     updatedObj.__rowIndex = rIdx;
 
@@ -1683,6 +1813,11 @@ function updateCellValue(sheetName, rowIndex, columnName, value) {
  * @return {Object} 成功件数・失敗した行の内訳・更新後の行データ
  */
 function saveRowChanges(changes) {
+  return lockedEndpoint_(function () { return saveRowChangesImpl_(changes); });
+}
+
+/** saveRowChanges の本体（同時実行制御は上の公開関数で行う。直接呼ばないこと） */
+function saveRowChangesImpl_(changes) {
   try {
     if (!Array.isArray(changes) || changes.length === 0) {
       return { success: true, updatedCount: 0, updatedRows: [], failures: [] };
@@ -1718,6 +1853,7 @@ function saveRowChanges(changes) {
 
         const sheet = ss.getSheetByName(sheetName);
         if (!sheet) throw new Error('シートが見つかりません: ' + sheetName);
+        assertRowIdentity_(sheet, rIdx, change.__identity);
 
         const hasResale = Object.prototype.hasOwnProperty.call(change, 'リセール');
         const hasSts = Object.prototype.hasOwnProperty.call(change, 'STS');
@@ -1817,6 +1953,7 @@ function saveRowChanges(changes) {
         for (let c = 0; c < HEADERS_MAIN.length; c++) {
           obj[HEADERS_MAIN[c]] = serializeCellValue_(values[c]);
         }
+        obj['対象年月日'] = normalizeTargetDate_(values[4]);
         obj.__sheetName = sheetName;
         obj.__rowIndex = rIdx;
         updatedRows.push(obj);
@@ -1876,6 +2013,11 @@ function ensureRowCapacity_(sheet, needed) {
  * @param {boolean} dryRun trueなら件数を数えるだけで削除しない
  */
 function removeDuplicateRows(dryRun) {
+  return lockedEndpoint_(function () { return removeDuplicateRowsImpl_(dryRun); });
+}
+
+/** removeDuplicateRows の本体（同時実行制御は上の公開関数で行う。直接呼ばないこと） */
+function removeDuplicateRowsImpl_(dryRun) {
   try {
     assertCanManageMaster_();
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -1892,7 +2034,7 @@ function removeDuplicateRows(dryRun) {
       });
     };
     const buildKey = function (row) {
-      return [row[4], row[5], row[6], row[9], row[11]].map(canonicalKeyPart_).join('｜');
+      return [normalizeTargetDate_(row[4]), row[5], row[6], row[9], row[11]].map(canonicalKeyPart_).join('｜');
     };
 
     shops.forEach(function (shop) {
@@ -2032,6 +2174,11 @@ const ARCHIVE_TIME_BUDGET_MS = 4.5 * 60 * 1000;
  *   何度実行しても同じ基準でスキャンし直すだけなので、重ねて実行しても安全（冪等）。
  */
 function archiveOldData() {
+  return lockedEndpoint_(function () { return archiveOldDataImpl_(); });
+}
+
+/** archiveOldData の本体（同時実行制御は上の公開関数で行う。直接呼ばないこと） */
+function archiveOldDataImpl_() {
   try {
     assertCanManageMaster_();
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -2060,7 +2207,7 @@ function getArchivePreview() {
       if (lastRow < 2) return;
       const dates = sheet.getRange(2, 5, lastRow - 1, 1).getValues(); // 対象年月日（5列目）だけ
       dates.forEach(function (r) {
-        const d = String(r[0] || '');
+        const d = normalizeTargetDate_(r[0]);
         if (d && d < cutoff) {
           eligibleCount++;
           addToPeriodCount_(countsByPeriod, d);
@@ -2146,7 +2293,7 @@ function archiveOldData_(ss) {
     const toKeep = [];
     const toArchiveByPeriod = {}; // 期番号(文字列)または"unknown" -> 行の配列
     values.forEach(function (row) {
-      const targetDate = String(row[4] || ''); // 対象年月日（5列目）
+      const targetDate = normalizeTargetDate_(row[4]); // 対象年月日（5列目）
       if (!(targetDate && targetDate < cutoff)) {
         toKeep.push(row);
         return;
@@ -2290,6 +2437,11 @@ function ensureArchiveShopSheet_(archiveSs, shopName) {
  * ・同じ店番に正式な店舗が無い仮登録は、そのまま残す（消すと実績が失われるため）
  */
 function mergePlaceholderShops() {
+  return lockedEndpoint_(function () { return mergePlaceholderShopsImpl_(); });
+}
+
+/** mergePlaceholderShops の本体（同時実行制御は上の公開関数で行う。直接呼ばないこと） */
+function mergePlaceholderShopsImpl_() {
   try {
     assertCanManageMaster_();
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -2312,7 +2464,7 @@ function mergePlaceholderShops() {
     });
 
     const buildKey = function (row) {
-      return [row[4], row[5], row[6], row[9], row[11]].map(canonicalKeyPart_).join('｜');
+      return [normalizeTargetDate_(row[4]), row[5], row[6], row[9], row[11]].map(canonicalKeyPart_).join('｜');
     };
 
     let mergedCount = 0;
@@ -2462,6 +2614,11 @@ function restoreKnownShopNames_(ss) {
  * @param {string} confirmText 利用者が入力した確認文字列
  */
 function clearAllImportedData(confirmText) {
+  return lockedEndpoint_(function () { return clearAllImportedDataImpl_(confirmText); });
+}
+
+/** clearAllImportedData の本体（同時実行制御は上の公開関数で行う。直接呼ばないこと） */
+function clearAllImportedDataImpl_(confirmText) {
   try {
     assertCanManageMaster_();
     if (String(confirmText || '').trim() !== '削除') {
@@ -2529,6 +2686,11 @@ function getSetupStatus() {
  * 何度実行しても安全で、既存シートのデータは失われない。
  */
 function runInitialSetup() {
+  return lockedEndpoint_(function () { return runInitialSetupImpl_(); });
+}
+
+/** runInitialSetup の本体（同時実行制御は上の公開関数で行う。直接呼ばないこと） */
+function runInitialSetupImpl_() {
   try {
     assertCanManageMaster_();
     buildAllSheets_();
@@ -2564,6 +2726,11 @@ function getShopMasterList() {
  * ③店舗別サマリの各集計ブロックへこの店舗の行（COUNTIFS/SUMIFS数式つき）を追加する。
  */
 function addShopMaster(code, name, area) {
+  return lockedEndpoint_(function () { return addShopMasterImpl_(code, name, area); });
+}
+
+/** addShopMaster の本体（同時実行制御は上の公開関数で行う。直接呼ばないこと） */
+function addShopMasterImpl_(code, name, area) {
   try {
     assertCanManageMaster_();
     code = String(code || '').trim();
@@ -2590,6 +2757,7 @@ function addShopMaster(code, name, area) {
       throw new Error('同名のシート「' + name + '」が既に存在します。');
     }
 
+    ensureShopMasterAreaColumn_(masterSheet);
     masterSheet.appendRow([code, name, true, area]);
     createShopSheets_(ss, [{ code: code, name: name }], HEADERS_MAIN);
     appendShopRowToSummary_(ss, { code: code, name: name });
@@ -2605,6 +2773,11 @@ function addShopMaster(code, name, area) {
  * 店舗マスタと、店舗別サマリ上の店舗名テキストセル（数式ではない箇所）を更新する。
  */
 function renameShopMaster(code, newName, area) {
+  return lockedEndpoint_(function () { return renameShopMasterImpl_(code, newName, area); });
+}
+
+/** renameShopMaster の本体（同時実行制御は上の公開関数で行う。直接呼ばないこと） */
+function renameShopMasterImpl_(code, newName, area) {
   try {
     assertCanManageMaster_();
     code = String(code || '').trim();
@@ -2641,7 +2814,7 @@ function renameShopMaster(code, newName, area) {
     }
 
     if (hasAreaArg && area !== target.area) {
-      masterSheet.getRange(target.rowIndex, 4).setValue(area);
+      setShopMasterArea_(masterSheet, target.rowIndex, area);
     }
 
     return { success: true, code: code, name: newName, area: hasAreaArg ? area : target.area };
@@ -2655,6 +2828,11 @@ function renameShopMaster(code, newName, area) {
  * 除外されるが、データシート自体は削除されない。
  */
 function setShopActive(code, active) {
+  return lockedEndpoint_(function () { return setShopActiveImpl_(code, active); });
+}
+
+/** setShopActive の本体（同時実行制御は上の公開関数で行う。直接呼ばないこと） */
+function setShopActiveImpl_(code, active) {
   try {
     assertCanManageMaster_();
     code = String(code || '').trim();
@@ -2682,6 +2860,11 @@ function setShopActive(code, active) {
  * データ行が1件でも残っている場合はエラーとし、setShopActive() による無効化を促す。
  */
 function deleteShopMaster(code) {
+  return lockedEndpoint_(function () { return deleteShopMasterImpl_(code); });
+}
+
+/** deleteShopMaster の本体（同時実行制御は上の公開関数で行う。直接呼ばないこと） */
+function deleteShopMasterImpl_(code) {
   try {
     assertCanManageMaster_();
     code = String(code || '').trim();
@@ -2772,23 +2955,25 @@ function appendShopRowToSummary_(ss, shop) {
 
     sheet.getRange(rowNum, col店番).setValue(shop.code);
     sheet.getRange(rowNum, col店舗).setValue(shopName);
+    // 数式内のシート参照 '店舗名'! では、店舗名に含まれる ' を '' と二重にしないと数式が壊れる
+    const sheetRef = String(shopName).replace(/'/g, "''");
 
     let f未成約, fリセールアクション, f成約, fPAX, fリセール中, f失注;
 
     if (blockIdx === 0) {
-      f未成約 = "=COUNTA('" + shopName + "'!$E$2:$E)";
-      fリセールアクション = "=COUNTIFS('" + shopName + "'!$A$2:$A,\"〇\")";
-      f成約 = "=COUNTIFS('" + shopName + "'!$B$2:$B,\"成約\")";
-      fPAX = "=SUMIFS('" + shopName + "'!$C$2:$C,'" + shopName + "'!$B$2:$B,\"成約\")";
-      fリセール中 = "=COUNTIFS('" + shopName + "'!$B$2:$B,\"リセール中\")";
-      f失注 = "=COUNTIFS('" + shopName + "'!$B$2:$B,\"失注\")";
+      f未成約 = "=COUNTA('" + sheetRef + "'!$E$2:$E)";
+      fリセールアクション = "=COUNTIFS('" + sheetRef + "'!$A$2:$A,\"〇\")";
+      f成約 = "=COUNTIFS('" + sheetRef + "'!$B$2:$B,\"成約\")";
+      fPAX = "=SUMIFS('" + sheetRef + "'!$C$2:$C,'" + sheetRef + "'!$B$2:$B,\"成約\")";
+      fリセール中 = "=COUNTIFS('" + sheetRef + "'!$B$2:$B,\"リセール中\")";
+      f失注 = "=COUNTIFS('" + sheetRef + "'!$B$2:$B,\"失注\")";
     } else {
-      f未成約 = "=COUNTIFS('" + shopName + "'!$D$2:$D,\"" + monthCode + "\")";
-      fリセールアクション = "=COUNTIFS('" + shopName + "'!$D$2:$D,\"" + monthCode + "\",'" + shopName + "'!$A$2:$A,\"〇\")";
-      f成約 = "=COUNTIFS('" + shopName + "'!$D$2:$D,\"" + monthCode + "\",'" + shopName + "'!$B$2:$B,\"成約\")";
-      fPAX = "=SUMIFS('" + shopName + "'!$C$2:$C,'" + shopName + "'!$D$2:$D,\"" + monthCode + "\",'" + shopName + "'!$B$2:$B,\"成約\")";
-      fリセール中 = "=COUNTIFS('" + shopName + "'!$D$2:$D,\"" + monthCode + "\",'" + shopName + "'!$B$2:$B,\"リセール中\")";
-      f失注 = "=COUNTIFS('" + shopName + "'!$D$2:$D,\"" + monthCode + "\",'" + shopName + "'!$B$2:$B,\"失注\")";
+      f未成約 = "=COUNTIFS('" + sheetRef + "'!$D$2:$D,\"" + monthCode + "\")";
+      fリセールアクション = "=COUNTIFS('" + sheetRef + "'!$D$2:$D,\"" + monthCode + "\",'" + sheetRef + "'!$A$2:$A,\"〇\")";
+      f成約 = "=COUNTIFS('" + sheetRef + "'!$D$2:$D,\"" + monthCode + "\",'" + sheetRef + "'!$B$2:$B,\"成約\")";
+      fPAX = "=SUMIFS('" + sheetRef + "'!$C$2:$C,'" + sheetRef + "'!$D$2:$D,\"" + monthCode + "\",'" + sheetRef + "'!$B$2:$B,\"成約\")";
+      fリセール中 = "=COUNTIFS('" + sheetRef + "'!$D$2:$D,\"" + monthCode + "\",'" + sheetRef + "'!$B$2:$B,\"リセール中\")";
+      f失注 = "=COUNTIFS('" + sheetRef + "'!$D$2:$D,\"" + monthCode + "\",'" + sheetRef + "'!$B$2:$B,\"失注\")";
     }
 
     sheet.getRange(rowNum, col未成約).setFormula(f未成約);
@@ -2908,6 +3093,11 @@ function getStaffMasterList() {
  * @param {string} role 権限レベル（'一般' | '管理者' | 'マスタ管理'）。
  */
 function addStaffMaster(officeCode, employeeNo, employeeName, googleAccount, role) {
+  return lockedEndpoint_(function () { return addStaffMasterImpl_(officeCode, employeeNo, employeeName, googleAccount, role); });
+}
+
+/** addStaffMaster の本体（同時実行制御は上の公開関数で行う。直接呼ばないこと） */
+function addStaffMasterImpl_(officeCode, employeeNo, employeeName, googleAccount, role) {
   try {
     assertCanManageMaster_();
     officeCode = String(officeCode || '').trim();
@@ -2961,6 +3151,11 @@ function addStaffMaster(officeCode, employeeNo, employeeName, googleAccount, rol
  * スタッフマスタの既存行を更新する（rowIndexで対象行を特定）。マスタ管理者のみ利用可能。
  */
 function updateStaffMaster(rowIndex, officeCode, employeeNo, employeeName, googleAccount, role) {
+  return lockedEndpoint_(function () { return updateStaffMasterImpl_(rowIndex, officeCode, employeeNo, employeeName, googleAccount, role); });
+}
+
+/** updateStaffMaster の本体（同時実行制御は上の公開関数で行う。直接呼ばないこと） */
+function updateStaffMasterImpl_(rowIndex, officeCode, employeeNo, employeeName, googleAccount, role) {
   try {
     assertCanManageMaster_();
     const rIdx = parseInt(rowIndex, 10);
@@ -3136,6 +3331,11 @@ function applyStaffRenameOrTransfer_(beforeOfficeCode, beforeEmployeeNo, beforeE
  * @param {number} targetRowIndex 統合先スタッフの、スタッフマスタ上の行番号
  */
 function mergeUnregisteredStaff(sourceOfficeCode, sourceEmployeeNo, sourceEmployeeName, targetRowIndex) {
+  return lockedEndpoint_(function () { return mergeUnregisteredStaffImpl_(sourceOfficeCode, sourceEmployeeNo, sourceEmployeeName, targetRowIndex); });
+}
+
+/** mergeUnregisteredStaff の本体（同時実行制御は上の公開関数で行う。直接呼ばないこと） */
+function mergeUnregisteredStaffImpl_(sourceOfficeCode, sourceEmployeeNo, sourceEmployeeName, targetRowIndex) {
   try {
     assertCanManageMaster_();
     sourceOfficeCode = normalizeOfficeCode_(sourceOfficeCode);
@@ -3173,6 +3373,11 @@ function mergeUnregisteredStaff(sourceOfficeCode, sourceEmployeeNo, sourceEmploy
  * スタッフマスタの行を削除する（過去の実績データ自体は削除されない）。マスタ管理者のみ利用可能。
  */
 function deleteStaffMaster(rowIndex) {
+  return lockedEndpoint_(function () { return deleteStaffMasterImpl_(rowIndex); });
+}
+
+/** deleteStaffMaster の本体（同時実行制御は上の公開関数で行う。直接呼ばないこと） */
+function deleteStaffMasterImpl_(rowIndex) {
   try {
     assertCanManageMaster_();
     const rIdx = parseInt(rowIndex, 10);
@@ -3217,7 +3422,8 @@ const AI_SUMMARY_SHEET_NAME = 'AI分析用サマリ';
 /**
  * 「AI分析用サマリ」シートを最新のデータで作り直す。スプレッドシートのメニューから実行する。
  */
-function buildAiAnalysisSheet() {
+// 末尾に_を付けて非公開にしている（画面のブラウザから直接呼び出されないようにするため。メニュー専用）
+function buildAiAnalysisSheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const shopList = getShopList_();
   const cutoff = getRetentionCutoffDate_();
@@ -3234,7 +3440,7 @@ function buildAiAnalysisSheet() {
     if (lastRow < 2) return;
     const values = sheet.getRange(2, 1, lastRow - 1, HEADERS_MAIN.length).getValues();
     values.forEach(function (r) {
-      const targetDate = String(r[4] || '');
+      const targetDate = normalizeTargetDate_(r[4]);
       if (!targetDate || targetDate < cutoff) return;
       const info = getFiscalPeriodInfo_(targetDate);
       rows.push({
@@ -3334,7 +3540,7 @@ function buildAiAnalysisSheet() {
  */
 function buildAiAnalysisSheetFromMenu() {
   try {
-    const res = buildAiAnalysisSheet();
+    const res = withDataLock_(buildAiAnalysisSheet_);
     SpreadsheetApp.getUi().alert(
       '「' + AI_SUMMARY_SHEET_NAME + '」シートを更新しました。\n\n' +
       '元データ ' + res.sourceRowCount + ' 件から ' + res.rowCount + ' 行の集計を作成しました。\n' +
@@ -3384,6 +3590,11 @@ function ensureAiReportSheet_() {
  * @param {string} body Geminiが出力した分析文
  */
 function saveAiReport(scopeLabel, body) {
+  return lockedEndpoint_(function () { return saveAiReportImpl_(scopeLabel, body); });
+}
+
+/** saveAiReport の本体（同時実行制御は上の公開関数で行う。直接呼ばないこと） */
+function saveAiReportImpl_(scopeLabel, body) {
   try {
     const ctx = getCurrentUserContext_();
     if (!ctx.canManageMaster) {
@@ -3470,6 +3681,11 @@ function getAiReports(limit) {
  * @param {boolean} latestOnly trueなら最新の1件だけ、falseなら全件を消す
  */
 function clearAiReports(latestOnly) {
+  return lockedEndpoint_(function () { return clearAiReportsImpl_(latestOnly); });
+}
+
+/** clearAiReports の本体（同時実行制御は上の公開関数で行う。直接呼ばないこと） */
+function clearAiReportsImpl_(latestOnly) {
   try {
     const ctx = getCurrentUserContext_();
     if (!ctx.canManageMaster) {

@@ -29,7 +29,7 @@ function onOpen() {
  * ウェブアプリからは buildAllSheets_() を直接呼ぶこと。
  */
 function setupAllSheets() {
-  buildAllSheets_();
+  withDataLock_(buildAllSheets_); // 画面からの保存・取り込みと同時に走らないように
   SpreadsheetApp.getUi().alert('シート構築が完了しました。\n（既存シートはスキップされています）');
 }
 
@@ -335,25 +335,27 @@ function createShopSummarySheet_(ss, shopList, monthCodesFull) {
 
       sheet.getRange(rowNum, col店番).setValue(shop.code);
       sheet.getRange(rowNum, col店舗).setValue(shopName);
+      // 数式内のシート参照 '店舗名'! では、店舗名に含まれる ' を '' と二重にしないと数式が壊れる
+      const sheetRef = String(shopName).replace(/'/g, "''");
 
       let f未成約, fリセールアクション, f成約, fPAX, fリセール中, f失注;
 
       if (blockIdx === 0) {
         // 46期累計：シート全体を対象に集計
-        f未成約 = "=COUNTA('" + shopName + "'!$E$2:$E)";
-        fリセールアクション = "=COUNTIFS('" + shopName + "'!$A$2:$A,\"〇\")";
-        f成約 = "=COUNTIFS('" + shopName + "'!$B$2:$B,\"成約\")";
-        fPAX = "=SUMIFS('" + shopName + "'!$C$2:$C,'" + shopName + "'!$B$2:$B,\"成約\")";
-        fリセール中 = "=COUNTIFS('" + shopName + "'!$B$2:$B,\"リセール中\")";
-        f失注 = "=COUNTIFS('" + shopName + "'!$B$2:$B,\"失注\")";
+        f未成約 = "=COUNTA('" + sheetRef + "'!$E$2:$E)";
+        fリセールアクション = "=COUNTIFS('" + sheetRef + "'!$A$2:$A,\"〇\")";
+        f成約 = "=COUNTIFS('" + sheetRef + "'!$B$2:$B,\"成約\")";
+        fPAX = "=SUMIFS('" + sheetRef + "'!$C$2:$C,'" + sheetRef + "'!$B$2:$B,\"成約\")";
+        fリセール中 = "=COUNTIFS('" + sheetRef + "'!$B$2:$B,\"リセール中\")";
+        f失注 = "=COUNTIFS('" + sheetRef + "'!$B$2:$B,\"失注\")";
       } else {
         // 月別：「月」列（D列）が対象月コードと一致する行のみ集計
-        f未成約 = "=COUNTIFS('" + shopName + "'!$D$2:$D,\"" + monthCode + "\")";
-        fリセールアクション = "=COUNTIFS('" + shopName + "'!$D$2:$D,\"" + monthCode + "\",'" + shopName + "'!$A$2:$A,\"〇\")";
-        f成約 = "=COUNTIFS('" + shopName + "'!$D$2:$D,\"" + monthCode + "\",'" + shopName + "'!$B$2:$B,\"成約\")";
-        fPAX = "=SUMIFS('" + shopName + "'!$C$2:$C,'" + shopName + "'!$D$2:$D,\"" + monthCode + "\",'" + shopName + "'!$B$2:$B,\"成約\")";
-        fリセール中 = "=COUNTIFS('" + shopName + "'!$D$2:$D,\"" + monthCode + "\",'" + shopName + "'!$B$2:$B,\"リセール中\")";
-        f失注 = "=COUNTIFS('" + shopName + "'!$D$2:$D,\"" + monthCode + "\",'" + shopName + "'!$B$2:$B,\"失注\")";
+        f未成約 = "=COUNTIFS('" + sheetRef + "'!$D$2:$D,\"" + monthCode + "\")";
+        fリセールアクション = "=COUNTIFS('" + sheetRef + "'!$D$2:$D,\"" + monthCode + "\",'" + sheetRef + "'!$A$2:$A,\"〇\")";
+        f成約 = "=COUNTIFS('" + sheetRef + "'!$D$2:$D,\"" + monthCode + "\",'" + sheetRef + "'!$B$2:$B,\"成約\")";
+        fPAX = "=SUMIFS('" + sheetRef + "'!$C$2:$C,'" + sheetRef + "'!$D$2:$D,\"" + monthCode + "\",'" + sheetRef + "'!$B$2:$B,\"成約\")";
+        fリセール中 = "=COUNTIFS('" + sheetRef + "'!$D$2:$D,\"" + monthCode + "\",'" + sheetRef + "'!$B$2:$B,\"リセール中\")";
+        f失注 = "=COUNTIFS('" + sheetRef + "'!$D$2:$D,\"" + monthCode + "\",'" + sheetRef + "'!$B$2:$B,\"失注\")";
       }
 
       sheet.getRange(rowNum, col未成約).setFormula(f未成約);

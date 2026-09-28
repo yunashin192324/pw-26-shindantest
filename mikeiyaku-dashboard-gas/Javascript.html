@@ -95,7 +95,7 @@ function renderUndoRedoButtons() {
  */
 function restoreCellValue(sheetName, rowIndex, column, value, callback) {
   if (PENDING_COLUMNS.indexOf(column) !== -1) {
-    const change = { sheetName: sheetName, rowIndex: rowIndex };
+    const change = { sheetName: sheetName, rowIndex: rowIndex, __identity: rowIdentityOf(sheetName, rowIndex) };
     change[column] = value;
     google.script.run
       .withSuccessHandler(function (res) {
@@ -114,8 +114,25 @@ function restoreCellValue(sheetName, rowIndex, column, value, callback) {
         callback(true);
       })
       .withFailureHandler(function (err) { callback(false, err.message); })
-      .updateCellValue(sheetName, rowIndex, column, value);
+      .updateCellValue(sheetName, rowIndex, column, value, rowIdentityOf(sheetName, rowIndex));
   }
+}
+
+// 行の取り違え防止：保存時に「画面を開いた時点でこの行に入っていた相談」をサーバーへ一緒に送る。
+// サーバーは書き込み前に、その行が今もこの相談かを確かめる（アーカイブ・異動・重複整理などで
+// 行の並びが変わっていれば保存を中止し、別のお客様の行を上書きしないようにする）。
+const ROW_IDENTITY_COLUMNS = ['対象年月日', '営業所コード', '社員番号', '都市コード', '出発年月'];
+
+function rowIdentityOf(sheetName, rowIndex) {
+  const row = allDataCache.find(function (r) {
+    return r.__sheetName === sheetName && String(r.__rowIndex) === String(rowIndex);
+  });
+  if (!row) return null;
+  const identity = {};
+  ROW_IDENTITY_COLUMNS.forEach(function (col) {
+    identity[col] = row[col] === null || row[col] === undefined ? '' : row[col];
+  });
+  return identity;
 }
 
 function onUndoEdit() {
@@ -198,7 +215,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // 画面側が前提としているサーバー（Code.gs）の版数。Code.gs の SERVER_VERSION と対で更新する。
-const REQUIRED_SERVER_VERSION = '2026-09-28';
+const REQUIRED_SERVER_VERSION = '2026-09-28-2';
 
 /**
  * Code.gs が画面と同じ版数まで更新されているか確認する。
@@ -504,7 +521,8 @@ function showToast(message, type) {
 
 function escapeHtml(str) {
   return String(str === undefined || str === null ? '' : str)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 // ============================================================================
@@ -1715,7 +1733,7 @@ function renderDataManagerGrid() {
     // 列順：スタッフが毎日触る編集項目（リセール〜メモ）を左端にまとめ、
     // 参照用のCSV由来項目をその右に並べる。
     // リセール〜ACT日の4列は横スクロールしても隠れないよう固定する（dm-sticky）。
-    return '<tr class="' + rowClass + '" data-rid="' + rid + '">' +
+    return '<tr class="' + rowClass + '" data-rid="' + escapeHtml(rid) + '">' +
       '<td class="dm-sticky dm-sticky-1 px-2 py-1">' +
         '<select class="' + resaleClass + '" data-sheet="' + escapeHtml(row.__sheetName) + '" data-row="' + row.__rowIndex + '" data-rid="' + escapeHtml(rid) + '">' +
           '<option value="">－</option>' + resaleOpts +
@@ -1971,7 +1989,7 @@ function onSavePendingChanges() {
 
   const changes = keys.map(function (k) {
     const entry = pendingChanges[k];
-    const change = { sheetName: entry.sheetName, rowIndex: entry.rowIndex };
+    const change = { sheetName: entry.sheetName, rowIndex: entry.rowIndex, __identity: rowIdentityOf(entry.sheetName, entry.rowIndex) };
     Object.keys(entry.values).forEach(function (col) { change[col] = entry.values[col]; });
     return change;
   });
@@ -2196,21 +2214,25 @@ function callUpdateCellValue(sheetName, rowIndex, columnName, value, oldValue) {
       showToast('通信エラー（updateCellValue）: ' + err.message, 'error');
       renderDataManagerGrid();
     })
-    .updateCellValue(sheetName, rowIndex, columnName, value);
+    .updateCellValue(sheetName, rowIndex, columnName, value, rowIdentityOf(sheetName, rowIndex));
 }
 
+// 保存後にサーバーから返る行データには、ダッシュボード読み込み時にだけ付ける項目
+// （店舗マスタから付与する「エリア名」など）が含まれない。丸ごと置き換えるとそれらが消え、
+// 保存した行だけエリアの絞り込みから漏れてしまうため、既存の行に重ね合わせて更新する。
 function applyUpdatedRowToCache(updatedRow) {
-  const idx = allDataCache.findIndex(function (r) {
+  if (!updatedRow) return;
+  const sameRow = function (r) {
     return r.__sheetName === updatedRow.__sheetName && String(r.__rowIndex) === String(updatedRow.__rowIndex);
-  });
+  };
+  const idx = allDataCache.findIndex(sameRow);
+  const merged = Object.assign({}, idx !== -1 ? allDataCache[idx] : {}, updatedRow);
   if (idx !== -1) {
-    allDataCache[idx] = updatedRow;
+    allDataCache[idx] = merged;
   }
-  const dmIdx = dmFilteredCache.findIndex(function (r) {
-    return r.__sheetName === updatedRow.__sheetName && String(r.__rowIndex) === String(updatedRow.__rowIndex);
-  });
+  const dmIdx = dmFilteredCache.findIndex(sameRow);
   if (dmIdx !== -1) {
-    dmFilteredCache[dmIdx] = updatedRow;
+    dmFilteredCache[dmIdx] = merged;
   }
 }
 
@@ -3201,8 +3223,8 @@ function sortStaffRows(rows) {
     if (diff !== 0) return diff * sign;
 
     // 同順位は「店舗 → 社員名」の五十音順で安定させる
-    const sa = String(a.officeName || '') + ' ' + String(a.employeeName || '');
-    const sb = String(b.officeName || '') + ' ' + String(b.employeeName || '');
+    const sa = String(a.officeName || '') + '\u0000' + String(a.employeeName || '');
+    const sb = String(b.officeName || '') + '\u0000' + String(b.employeeName || '');
     return dmCollator ? dmCollator.compare(sa, sb) : (sa < sb ? -1 : sa > sb ? 1 : 0);
   });
 }
