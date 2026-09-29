@@ -215,7 +215,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // 画面側が前提としているサーバー（Code.gs）の版数。Code.gs の SERVER_VERSION と対で更新する。
-const REQUIRED_SERVER_VERSION = '2026-09-29';
+const REQUIRED_SERVER_VERSION = '2026-09-29-2';
 
 /**
  * Code.gs が画面と同じ版数まで更新されているか確認する。
@@ -452,7 +452,8 @@ function applyUserContextToUi() {
   if (accountLabel) {
     const acct = currentUserContext.email || 'アカウントを確認できません';
     accountLabel.textContent = 'ログイン中：' + acct + '　権限：' + currentUserContext.role +
-      (currentUserContext.identified && currentUserContext.employeeName ? '（' + currentUserContext.employeeName + '）' : '');
+      (currentUserContext.identified && currentUserContext.employeeName ? '（' + currentUserContext.employeeName + '）' : '') +
+      (currentUserContext.isOwner ? '　※スプレッドシートの所有者のため常にマスタ管理' : '');
     accountLabel.classList.remove('hidden');
   }
   // スタッフマスタに登録がなく、かつマスタ管理者が既にいる場合は、管理者と同じ扱いに制限されている

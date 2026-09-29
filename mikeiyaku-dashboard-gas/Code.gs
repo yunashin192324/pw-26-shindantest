@@ -424,20 +424,20 @@ function getCurrentUserContext_() {
   }
 
   const staff = getStaffMasterRows_();
-  const resolved = resolveRoleForEmail_(email, staff);
+  const resolved = resolveRoleForEmail_(email, staff, getSpreadsheetOwnerEmail_());
   const matched = resolved.matched;
 
   let role, officeCode, officeName, employeeName, identified;
   if (matched) {
     const shopList = getShopList_();
     const shop = shopList.find(function (s) { return s.code === matched.officeCode; });
-    role = matched.role;
     officeCode = matched.officeCode;
     officeName = isHqOfficeCode_(matched.officeCode)
       ? HQ_OFFICE_NAME
       : (shop ? shop.name : matched.officeCode);
     employeeName = matched.employeeName;
     identified = true;
+    role = resolved.role; // 所有者の場合は、スタッフマスタの権限より所有者としてのマスタ管理を優先する
   } else {
     role = resolved.role;
     officeCode = null;
@@ -454,6 +454,7 @@ function getCurrentUserContext_() {
     officeName: officeName,
     employeeName: employeeName,
     hasMaster: hasRegisteredMaster_(staff),
+    isOwner: resolved.isOwner === true,
     canViewAllStores: role === ROLE_MANAGER || role === ROLE_MASTER,
     canImportCsv: role === ROLE_MASTER,
     canManageMaster: role === ROLE_MASTER
@@ -480,13 +481,28 @@ function assertStaffRowIdentity_(staffRow, expected) {
  * ・一致しない（未登録・無効化・メール取得不可）→ マスタ管理が1人も登録されていない導入初期は
  *   締め出し防止のためマスタ管理、それ以降は管理者相当
  */
-function resolveRoleForEmail_(email, staffRows) {
+function resolveRoleForEmail_(email, staffRows, ownerEmail) {
   const emailLower = String(email || '').trim().toLowerCase();
   const matched = emailLower ? ((staffRows || []).find(function (s) {
     return s.active && s.googleAccount && String(s.googleAccount).trim().toLowerCase() === emailLower;
   }) || null) : null;
-  if (matched) return { matched: matched, role: matched.role };
-  return { matched: null, role: hasRegisteredMaster_(staffRows) ? ROLE_MANAGER : ROLE_MASTER };
+  // このスプレッドシートの所有者は、スタッフマスタの登録内容に関係なく常にマスタ管理。
+  // 所有者はシートを直接編集できる立場なので新しい権限を与えることにはならず、登録アドレスの
+  // 誤りなどで所有者自身が管理画面に入れなくなる事故（締め出し）を防ぐ。
+  const isOwner = !!emailLower && !!ownerEmail && emailLower === String(ownerEmail).trim().toLowerCase();
+  if (isOwner) return { matched: matched, role: ROLE_MASTER, isOwner: true };
+  if (matched) return { matched: matched, role: matched.role, isOwner: false };
+  return { matched: null, role: hasRegisteredMaster_(staffRows) ? ROLE_MANAGER : ROLE_MASTER, isOwner: false };
+}
+
+/** このスプレッドシートの所有者のメールアドレス（小文字）。共有ドライブ上などで取得できなければ空文字。 */
+function getSpreadsheetOwnerEmail_() {
+  try {
+    const owner = SpreadsheetApp.getActiveSpreadsheet().getOwner();
+    return owner ? String(owner.getEmail() || '').trim().toLowerCase() : '';
+  } catch (e) {
+    return '';
+  }
 }
 
 /** Googleアカウント付きで有効な「マスタ管理」が1人以上登録されているか */
@@ -505,7 +521,7 @@ function hasRegisteredMaster_(staffRows) {
 function assertNotLockingSelfOut_(afterRows) {
   let email = '';
   try { email = String(Session.getActiveUser().getEmail() || '').trim().toLowerCase(); } catch (e) { email = ''; }
-  if (resolveRoleForEmail_(email, afterRows).role !== ROLE_MASTER) {
+  if (resolveRoleForEmail_(email, afterRows, getSpreadsheetOwnerEmail_()).role !== ROLE_MASTER) {
     throw new Error(
       'この変更を保存すると、操作しているあなた（' + (email || 'Googleアカウントを確認できません') + '）が' +
       '「マスタ管理」でなくなり、この管理画面を使えなくなります（ご自身では元に戻せません）。\n' +
@@ -1208,7 +1224,7 @@ function lockedEndpoint_(fn) {
  * 「is not a function」という分かりにくいエラーになるため、
  * 画面側から版数を確認できるようにしている。
  */
-const SERVER_VERSION = '2026-09-29';
+const SERVER_VERSION = '2026-09-29-2';
 
 /**
  * サーバー側の版数を返す。画面側は、自分が期待する版数と一致するかを起動時に確認する。
@@ -2071,7 +2087,7 @@ function permissionDeniedMessage_(what, ctx) {
     reason = 'スタッフマスタのGoogleアカウント欄に登録が見つからない（または無効化されている）ため、管理者と同じ扱いになっています。';
   }
   return what + 'は「マスタ管理」権限を持つ方のみ実行できます。\n' + who + '：' + reason + '\n' +
-    'マスタ管理者に登録を依頼してください。マスタ管理者がいない場合は、スプレッドシートのメニュー' +
+    'マスタ管理者に登録を依頼してください。スプレッドシートを編集できる方は、メニュー' +
     '「46期未成約ダッシュボード」→「自分をマスタ管理者として登録」から登録できます。';
 }
 
@@ -3477,7 +3493,7 @@ function getAccessDiagnosis_() {
   let email = '';
   try { email = String(Session.getActiveUser().getEmail() || '').trim(); } catch (e) { email = ''; }
   const staff = getStaffMasterRows_();
-  const resolved = resolveRoleForEmail_(email, staff);
+  const resolved = resolveRoleForEmail_(email, staff, getSpreadsheetOwnerEmail_());
   const masters = staff.filter(function (x) { return x.active && x.role === ROLE_MASTER && x.googleAccount; });
   const lowered = email.toLowerCase();
   const inactiveSame = !resolved.matched && !!lowered && staff.some(function (x) {
@@ -3488,6 +3504,7 @@ function getAccessDiagnosis_() {
     identified: !!resolved.matched,
     role: resolved.role,
     canManageMaster: resolved.role === ROLE_MASTER,
+    isOwner: resolved.isOwner === true,
     staffName: resolved.matched ? resolved.matched.employeeName : '',
     hasMaster: masters.length > 0,
     masterAccounts: masters.map(function (x) { return x.googleAccount; }),
@@ -3540,6 +3557,7 @@ function showAccessDiagnosis() {
     '判定された権限：' + d.role + (d.identified ? '（スタッフマスタの「' + d.staffName + '」さんとして登録済み）' : '（スタッフマスタに登録が見つかりません）'),
     'Googleアカウント付きのマスタ管理者：' + (d.hasMaster ? d.masterAccounts.join('、') : 'まだ登録されていません（導入初期のため、全員がマスタ管理相当です）')
   ];
+  if (d.isOwner) lines.push('※あなたはこのスプレッドシートの所有者のため、スタッフマスタの登録内容に関係なく常にマスタ管理として扱われます。');
   if (d.registeredButInactive) lines.push('※あなたのアドレスの行は「有効」がFALSEのため権限が使えません。スタッフマスタの「有効」をTRUEにしてください。');
   if (!d.canManageMaster) lines.push('\n管理画面が使えない場合は、メニュー「自分をマスタ管理者として登録」から登録できます。');
   ui.alert('アクセスの診断', lines.join('\n'), ui.ButtonSet.OK);
