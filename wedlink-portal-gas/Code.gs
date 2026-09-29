@@ -55,7 +55,14 @@ const MAIL_FAILURE_SHEET_NAME = '通知メール失敗履歴';
 const BLACKOUT_SHEET_NAME = '撮影不可日';
 
 // --- システムエラー通知先 ---
+// 支店マスタのメールアドレスとは無関係の、コードに直接書かれた宛先（システムの異常を知らせる先）。
 const SYSTEM_ALERT_EMAIL = 'it-planning@his-world.com';
+// ★項目119：「[WEDLINK][スプレッドシートの確認] N件の問題」という毎日のメールを送るかどうか。
+// 支店マスタにパスコードが空欄の行・コードが重複した行が残っていると、直るまで毎日届くため、
+// 既定では送らない（false）。マスタ管理画面での確認（apiGetBranchMasterIssues）は従来どおり使える。
+// 再び送りたいときだけ true にする。なお、エラー発生・通知メール失敗・送信上限の警告は
+// この設定とは無関係に、これまでどおり SYSTEM_ALERT_EMAIL へ届く。
+let MASTER_INTEGRITY_MAIL_ENABLED = false;
 
 // --- ロール ---
 const BRANCH_ROLE = 'BRANCH';
@@ -5992,6 +5999,7 @@ function checkMasterIntegrityCore_(errors) {
   const issues = allIntegrityIssues_();
   if (!issues.length) return;
   console.log(`[checkMasterIntegrity] スプレッドシートの不整合 ${issues.length} 件`);
+  if (!MASTER_INTEGRITY_MAIL_ENABLED) return; // 項目119：毎日のメールは既定で停止
   if (!SYSTEM_ALERT_EMAIL) return;
   try {
     MailApp.sendEmail(

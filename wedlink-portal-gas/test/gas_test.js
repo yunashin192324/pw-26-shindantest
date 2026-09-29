@@ -4692,11 +4692,21 @@ section('79. 【機能追加】支店マスタの不整合を検出する（ス�
   check('ログインパスコードが空欄なのを検出する',
         dup2.issues.some(m => m.includes('パスコードが空欄')), JSON.stringify(dup2.issues));
 
-  // 日次の確認で管理者へ届く
+  // 項目119：既定では毎日のメールを送らない（問題が残っていても届かない）
+  ctx.__mail.length = 0;
+  ctx.checkMasterIntegrity();
+  check('既定では、問題が残っていても日次のメールは送られない（項目119）',
+        ctx.__mail.filter(m => String(m.subj).includes('スプレッドシートの確認')).length === 0,
+        JSON.stringify(ctx.__mail.map(m => m.subj)));
+  check('メールを止めても、マスタ管理画面での確認結果は従来どおり出る',
+        ctx.apiGetBranchMasterIssues(jpToken).issues.length > 0);
+
+  // スイッチをONにした場合は、従来どおり管理者へ届く
+  require('vm').runInContext('MASTER_INTEGRITY_MAIL_ENABLED = true', ctx);
   ctx.__mail.length = 0;
   ctx.checkMasterIntegrity();
   const mails = ctx.__mail.filter(m => String(m.subj).includes('スプレッドシートの確認'));
-  check('日次の確認で管理者へ知らせが届く', mails.length === 1, JSON.stringify(ctx.__mail.map(m => m.subj)));
+  check('スイッチをONにすると日次の確認で管理者へ知らせが届く', mails.length === 1, JSON.stringify(ctx.__mail.map(m => m.subj)));
   check('本文に問題の内容が並ぶ', mails[0] && mails[0].body.includes('DUP'), mails[0] && mails[0].body);
 
   // 問題が無ければ通知しない
