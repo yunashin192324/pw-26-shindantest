@@ -375,6 +375,9 @@ function makeContext() {
   names.forEach((n, i) => { this[n] = vals[i]; });
 }).call(this);`;
   vm.runInContext(src, ctx);
+  // 本番のシステム通知先は空欄（項目120）。システム通知の送信ロジックを検査できるよう、
+  // テストでは架空の宛先を与える（実在するアドレスは使わない）。
+  vm.runInContext("SYSTEM_ALERT_EMAIL = 'system-alert@example.com'", ctx);
   // vm は別realmなので、Node側で作った Date は `instanceof Date` が false になる。
   // シートに入れる日付は必ずこのファクトリ経由で「vm内のDate」を作る。
   ctx.__newDate = vm.runInContext('(function (y, m, d) { return new Date(y, m, d); })', ctx);

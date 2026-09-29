@@ -818,7 +818,7 @@ function triggerFixture() {
   check('1件失敗しても処理は継続する', result.errors === 1, `実際のエラー数: ${result.errors}`);
   const caseMails = ctx.__mail.filter(m => m.subj.indexOf('撮影45日前') === 0 || m.subj.indexOf('[要確認]') === 0);
   check('失敗した1件を除く2件は通知される', caseMails.length === 2, `実際: ${caseMails.length}`);
-  const sysMails = ctx.__mail.filter(m => m.to === 'it-planning@his-world.com');
+  const sysMails = ctx.__mail.filter(m => m.to === 'system-alert@example.com');
   check('システム管理者へ障害通知が届く', sysMails.length === 1, `実際: ${sysMails.length}`);
   check('通知にエラー件数が含まれる', sysMails[0] && sysMails[0].subj.includes('1件'), sysMails[0] && sysMails[0].subj);
   check('通知に失敗した案件の管理番号が含まれる',
@@ -832,7 +832,7 @@ function triggerFixture() {
   const result = ctx.checkAlerts();
   check('正常終了時はエラー0件', result.ok === true && result.errors === 0);
   check('正常時はシステム通知を送らない',
-        ctx.__mail.filter(m => m.to === 'it-planning@his-world.com').length === 0);
+        ctx.__mail.filter(m => m.to === 'system-alert@example.com').length === 0);
 }
 {
   // 行単位ではなく「処理全体」が落ちるケースでも、握りつぶさず通知されること
@@ -842,7 +842,7 @@ function triggerFixture() {
   const result = ctx.checkDeliveryAlerts();
   ctx.branchMetaMap_ = realMeta;
 
-  const sys = ctx.__mail.filter(m => m.to === 'it-planning@his-world.com');
+  const sys = ctx.__mail.filter(m => m.to === 'system-alert@example.com');
   check('処理全体の例外も捕捉して通知する', result.ok === false && sys.length === 1,
         `errors=${result.errors} sysMail=${sys.length}`);
   check('通知に「処理全体」と原因が含まれる',
@@ -6023,6 +6023,37 @@ section('94. 【総当たり】3つの役割がランダムに操作を大量に
   check('ランダム操作のあとも、案件の管理番号が重複していない', nos94.length === new Set(nos94).size, `${nos94.length}件`);
   check('ランダム操作のあとも、案件が消えていない', kanriList.every(k => nos94.includes(k)),
         kanriList.filter(k => !nos94.includes(k)).join(','));
+}
+
+// ---------------------------------------------------------------
+section('95. 【設定変更】システム通知先を空欄にして、ローマ支店など特定の拠点へシステム通知が飛ばないようにする（項目120）');
+{
+  const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'Code.gs'), 'utf8');
+  check('Code.gsの通知先の初期値は空欄（どこにも送らない）',
+        /let SYSTEM_ALERT_EMAIL = '';/.test(src));
+  check('特定の拠点のアドレス（it-planning@）がコードに書かれていない',
+        !/it-planning@/.test(src.replace(/\/\/.*$/gm, '')));
+
+  // 本番と同じ空欄にして、エラーが起きても、どこにも送られず、処理も落ちないことを確かめる
+  const ctx = triggerFixture();
+  require('vm').runInContext("SYSTEM_ALERT_EMAIL = ''", ctx);
+  const realMeta = ctx.branchMetaMap_;
+  ctx.branchMetaMap_ = function () { throw new Error('支店マスタの読み込みに失敗'); };
+  ctx.__mail.length = 0;
+  let threw = null, result = null;
+  try { result = ctx.checkDeliveryAlerts(); } catch (e) { threw = e.message; }
+  ctx.branchMetaMap_ = realMeta;
+  check('通知先が空欄でも、エラー時に処理が例外で落ちない', threw === null, String(threw));
+  check('通知先が空欄なら、システムエラーのメールは1通も送られない',
+        ctx.__mail.filter(m => String(m.subj).includes('システムエラー')).length === 0,
+        JSON.stringify(ctx.__mail.map(m => m.to + ':' + m.subj)));
+
+  // 手配課の行が無いとき、案件の通知が「システム通知先」へ回らない
+  const ctx2 = makeContext(); CTX = ctx2;
+  require('vm').runInContext("SYSTEM_ALERT_EMAIL = ''", ctx2);
+  ctx2.ensureSheetWithHeaders_(ctx2.__ss, '支店マスタ', ctx2.BRANCH_MASTER_HEADERS);
+  check('手配課の行が見つからないときの宛先は空文字（別拠点へ回さない）',
+        ctx2.getJpTeamEmail_('関東') === '');
 }
 
 // ---------------------------------------------------------------

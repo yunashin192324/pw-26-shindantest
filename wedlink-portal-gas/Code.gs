@@ -55,8 +55,13 @@ const MAIL_FAILURE_SHEET_NAME = '通知メール失敗履歴';
 const BLACKOUT_SHEET_NAME = '撮影不可日';
 
 // --- システムエラー通知先 ---
-// 支店マスタのメールアドレスとは無関係の、コードに直接書かれた宛先（システムの異常を知らせる先）。
-const SYSTEM_ALERT_EMAIL = 'it-planning@his-world.com';
+// システムの異常（定期処理のエラー・通知メール失敗のまとめ・メール送信上限の警告・実行時間の警告）を
+// 知らせる宛先。支店マスタのメールアドレスとは無関係で、コードに直接書く。
+// ★項目120：以前は 'it-planning@his-world.com' が書かれていたが、これは最初に参考にした
+// ローマ支店向けシステムの時代のアドレスで、実際にはローマ支店のアドレスそのものだった
+// （システム全体の異常がローマ支店へ届いていた）。空欄にして、どこにも送らない状態にした。
+// システム管理者が異常に気づけるようにしたい場合は、管理者自身のアドレスをここに書く。
+let SYSTEM_ALERT_EMAIL = '';
 // ★項目119：「[WEDLINK][スプレッドシートの確認] N件の問題」という毎日のメールを送るかどうか。
 // 支店マスタにパスコードが空欄の行・コードが重複した行が残っていると、直るまで毎日届くため、
 // 既定では送らない（false）。マスタ管理画面での確認（apiGetBranchMasterIssues）は従来どおり使える。
@@ -5612,7 +5617,9 @@ function getJpTeamEmail_(teamLabel) {
   if (found) return found.email;
   // "管轄"が未設定・不明な場合は関東手配課へフォールバック
   const fallback = rows.find(r => r.role === JP_ROLE && r.team === '関東');
-  return fallback ? fallback.email : SYSTEM_ALERT_EMAIL;
+  // ★項目120：見つからないときの最後の逃げ先はシステム通知先だったが、それは今は空欄
+  // （かつて別拠点のアドレスだった）ため、宛先なし（空文字）を返す。呼び出し側は空を許容する。
+  return fallback ? fallback.email : '';
 }
 
 // =====================================================
@@ -6140,6 +6147,7 @@ function checkAlertsCore_(errors) {
       if (incomplete.length === 0) return;
       const area = row[headers.indexOf(COL_AREA)];
       const recipient = getJpTeamEmail_(area);
+      if (!recipient) return; // 宛先が見つからない案件は送らない（空の宛先で送信エラーにしない）
       MailApp.sendEmail(
         recipient,
         `[要確認] 撮影${ALERT_DAYS_BEFORE}日前：${row[headers.indexOf(COL_KANRI_NO)]}（${row[headers.indexOf(COL_BRANCH_CODE)]}支店）`,
