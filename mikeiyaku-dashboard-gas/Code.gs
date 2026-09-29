@@ -453,6 +453,7 @@ function getCurrentUserContext_() {
     officeCode: officeCode,
     officeName: officeName,
     employeeName: employeeName,
+    hasMaster: hasRegisteredMaster_(staff),
     canViewAllStores: role === ROLE_MANAGER || role === ROLE_MASTER,
     canImportCsv: role === ROLE_MASTER,
     canManageMaster: role === ROLE_MASTER
@@ -519,7 +520,7 @@ function getCurrentUserContext() {
   try {
     return { success: true, context: getCurrentUserContext_() };
   } catch (err) {
-    return { success: false, error: err.message + '\n' + err.stack };
+    return { success: false, error: errorForClient_(err) };
   }
 }
 
@@ -588,7 +589,7 @@ function getMetaMasters() {
       userContext: ctx
     };
   } catch (err) {
-    return { success: false, error: err.message + '\n' + err.stack };
+    return { success: false, error: errorForClient_(err) };
   }
 }
 
@@ -650,7 +651,7 @@ function getAvailablePeriods() {
   try {
     return { success: true, periods: getRecentPeriods_() };
   } catch (err) {
-    return { success: false, error: err.message + '\n' + err.stack };
+    return { success: false, error: errorForClient_(err) };
   }
 }
 
@@ -736,7 +737,7 @@ function getDashboardData() {
 
     return { success: true, data: result, count: result.length, userContext: ctx };
   } catch (err) {
-    return { success: false, error: err.message + '\n' + err.stack };
+    return { success: false, error: errorForClient_(err) };
   }
 }
 
@@ -833,7 +834,7 @@ function getEmployeeSummary(periodKey) {
 
     return { success: true, period: { key: target.key, label: target.label }, availablePeriods: recentPeriods, employees: employees, userContext: ctx };
   } catch (err) {
-    return { success: false, error: err.message + '\n' + err.stack };
+    return { success: false, error: errorForClient_(err) };
   }
 }
 
@@ -890,7 +891,7 @@ function getActiveStaffForSelection() {
       })
     };
   } catch (err) {
-    return { success: false, error: err.message + '\n' + err.stack };
+    return { success: false, error: errorForClient_(err) };
   }
 }
 
@@ -973,7 +974,7 @@ function addUncontractedDataImpl_(rowObject, staffRowIndex, expectedStaff) {
       row: newRow
     };
   } catch (err) {
-    return { success: false, error: err.message + '\n' + err.stack };
+    return { success: false, error: errorForClient_(err) };
   }
 }
 
@@ -1152,6 +1153,15 @@ function importUncontractedCsvImpl_(csvText) {
   }
 }
 
+/**
+ * 画面へ返すエラー文を作る。スタックトレース（内部のコード位置）は利用者に見せても
+ * 対処の役に立たず分かりにくいだけなので、メッセージだけを返し、詳細は実行ログに残す。
+ */
+function errorForClient_(err) {
+  try { console.error(String(err && err.stack ? err.stack : err)); } catch (e) { /* ログ出力の失敗は無視 */ }
+  return String(err && err.message ? err.message : err);
+}
+
 // ============================================================================
 // 同時実行の制御
 // ----------------------------------------------------------------------------
@@ -1198,7 +1208,7 @@ function lockedEndpoint_(fn) {
  * 「is not a function」という分かりにくいエラーになるため、
  * 画面側から版数を確認できるようにしている。
  */
-const SERVER_VERSION = '2026-09-28-3';
+const SERVER_VERSION = '2026-09-29';
 
 /**
  * サーバー側の版数を返す。画面側は、自分が期待する版数と一致するかを起動時に確認する。
@@ -1211,7 +1221,7 @@ function getServerVersion() {
 /** CSV取込の権限チェック（テキスト・Excelブックの両方から使う） */
 function assertCanImportCsv_() {
   if (!getCurrentUserContext_().canImportCsv) {
-    throw new Error('CSVインポートはマスタ管理権限を持つユーザーのみ実行できます。');
+    throw new Error(permissionDeniedMessage_('CSVインポート', getCurrentUserContext_()));
   }
 }
 
@@ -1679,7 +1689,7 @@ function updateStatusImpl_(sheetName, rowIndex, newStatus, contractPax, expected
 
     return { success: true, data: updatedObj };
   } catch (err) {
-    return { success: false, error: err.message + '\n' + err.stack };
+    return { success: false, error: errorForClient_(err) };
   }
 }
 
@@ -1842,7 +1852,7 @@ function updateCellValueImpl_(sheetName, rowIndex, columnName, value, expectedId
 
     return { success: true, data: updatedObj };
   } catch (err) {
-    return { success: false, error: err.message + '\n' + err.stack };
+    return { success: false, error: errorForClient_(err) };
   }
 }
 
@@ -2030,7 +2040,7 @@ function saveRowChangesImpl_(changes) {
       failures: failures
     };
   } catch (err) {
-    return { success: false, error: err.message + '\n' + err.stack };
+    return { success: false, error: errorForClient_(err) };
   }
 }
 
@@ -2042,9 +2052,27 @@ function saveRowChangesImpl_(changes) {
  * マスタ管理権限が無い場合はエラーを投げる（店舗・スタッフ管理系API共通のガード）。
  */
 function assertCanManageMaster_() {
-  if (!getCurrentUserContext_().canManageMaster) {
-    throw new Error('店舗・スタッフマスタの管理はマスタ管理権限を持つユーザーのみ実行できます。');
+  const ctx = getCurrentUserContext_();
+  if (!ctx.canManageMaster) {
+    throw new Error(permissionDeniedMessage_('店舗・スタッフマスタの管理', ctx));
   }
+}
+
+/**
+ * 権限がない操作を断るときの文言。「なぜ断られたか」と「どうすれば使えるか」が分からないと、
+ * 利用者は原因を探せないため、システムが認識している今のアカウントと状態を必ず添える。
+ */
+function permissionDeniedMessage_(what, ctx) {
+  const who = ctx.email ? 'ログイン中のアカウント「' + ctx.email + '」' : 'ログイン中のアカウント（メールアドレスを確認できません）';
+  let reason;
+  if (ctx.identified) {
+    reason = 'スタッフマスタでの権限は「' + ctx.role + '」です。';
+  } else {
+    reason = 'スタッフマスタのGoogleアカウント欄に登録が見つからない（または無効化されている）ため、管理者と同じ扱いになっています。';
+  }
+  return what + 'は「マスタ管理」権限を持つ方のみ実行できます。\n' + who + '：' + reason + '\n' +
+    'マスタ管理者に登録を依頼してください。マスタ管理者がいない場合は、スプレッドシートのメニュー' +
+    '「46期未成約ダッシュボード」→「自分をマスタ管理者として登録」から登録できます。';
 }
 
 /**
@@ -2244,7 +2272,7 @@ function archiveOldDataImpl_() {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     return archiveOldData_(ss);
   } catch (err) {
-    return { success: false, error: err.message + '\n' + err.stack };
+    return { success: false, error: errorForClient_(err) };
   }
 }
 
@@ -2281,7 +2309,7 @@ function getArchivePreview() {
       periods: buildPeriodBreakdown_(countsByPeriod)
     };
   } catch (err) {
-    return { success: false, error: err.message + '\n' + err.stack };
+    return { success: false, error: errorForClient_(err) };
   }
 }
 
@@ -2777,7 +2805,7 @@ function getShopMasterList() {
     }
     return { success: true, shops: rows };
   } catch (err) {
-    return { success: false, error: err.message + '\n' + err.stack };
+    return { success: false, error: errorForClient_(err) };
   }
 }
 
@@ -2824,7 +2852,7 @@ function addShopMasterImpl_(code, name, area) {
 
     return { success: true, code: code, name: name, area: area };
   } catch (err) {
-    return { success: false, error: err.message + '\n' + err.stack };
+    return { success: false, error: errorForClient_(err) };
   }
 }
 
@@ -2879,7 +2907,7 @@ function renameShopMasterImpl_(code, newName, area) {
 
     return { success: true, code: code, name: newName, area: hasAreaArg ? area : target.area };
   } catch (err) {
-    return { success: false, error: err.message + '\n' + err.stack };
+    return { success: false, error: errorForClient_(err) };
   }
 }
 
@@ -2911,7 +2939,7 @@ function setShopActiveImpl_(code, active) {
 
     return { success: true, code: code, active: !!active };
   } catch (err) {
-    return { success: false, error: err.message + '\n' + err.stack };
+    return { success: false, error: errorForClient_(err) };
   }
 }
 
@@ -2954,7 +2982,7 @@ function deleteShopMasterImpl_(code) {
 
     return { success: true };
   } catch (err) {
-    return { success: false, error: err.message + '\n' + err.stack };
+    return { success: false, error: errorForClient_(err) };
   }
 }
 
@@ -3143,7 +3171,7 @@ function getStaffMasterList() {
       unregistered: Object.keys(unregisteredMap).map(function (k) { return unregisteredMap[k]; })
     };
   } catch (err) {
-    return { success: false, error: err.message + '\n' + err.stack };
+    return { success: false, error: errorForClient_(err) };
   }
 }
 
@@ -3204,7 +3232,7 @@ function addStaffMasterImpl_(officeCode, employeeNo, employeeName, googleAccount
 
     return { success: true };
   } catch (err) {
-    return { success: false, error: err.message + '\n' + err.stack };
+    return { success: false, error: errorForClient_(err) };
   }
 }
 
@@ -3278,7 +3306,7 @@ function updateStaffMasterImpl_(rowIndex, officeCode, employeeNo, employeeName, 
 
     return { success: true, updatedRecordCount: updatedRecordCount };
   } catch (err) {
-    return { success: false, error: err.message + '\n' + err.stack };
+    return { success: false, error: errorForClient_(err) };
   }
 }
 
@@ -3431,8 +3459,121 @@ function mergeUnregisteredStaffImpl_(sourceOfficeCode, sourceEmployeeNo, sourceE
 
     return { success: true, updatedRecordCount: updatedRecordCount, target: target };
   } catch (err) {
-    return { success: false, error: err.message + '\n' + err.stack };
+    return { success: false, error: errorForClient_(err) };
   }
+}
+
+// ============================================================================
+// 非常口：スプレッドシートのメニューから、自分をマスタ管理者として登録する
+// ----------------------------------------------------------------------------
+// 画面（Webアプリ）の管理機能は「マスタ管理」だけが使えるため、登録したアドレスと実際に
+// ログインしているアドレスが食い違う等でマスタ管理者が1人もいなくなると、画面からは直せない。
+// スプレッドシートの編集権限がある人は、そもそもスタッフマスタのシートを直接書き換えられるため、
+// このメニューはセキュリティ上の新しい抜け道にはならない（誤入力を防ぐ安全な手順を用意するだけ）。
+// ============================================================================
+
+/** 今ログインしているアカウントが、システムからどう見えているかを返す（診断用） */
+function getAccessDiagnosis_() {
+  let email = '';
+  try { email = String(Session.getActiveUser().getEmail() || '').trim(); } catch (e) { email = ''; }
+  const staff = getStaffMasterRows_();
+  const resolved = resolveRoleForEmail_(email, staff);
+  const masters = staff.filter(function (x) { return x.active && x.role === ROLE_MASTER && x.googleAccount; });
+  const lowered = email.toLowerCase();
+  const inactiveSame = !resolved.matched && !!lowered && staff.some(function (x) {
+    return !x.active && String(x.googleAccount || '').trim().toLowerCase() === lowered;
+  });
+  return {
+    email: email,
+    identified: !!resolved.matched,
+    role: resolved.role,
+    canManageMaster: resolved.role === ROLE_MASTER,
+    staffName: resolved.matched ? resolved.matched.employeeName : '',
+    hasMaster: masters.length > 0,
+    masterAccounts: masters.map(function (x) { return x.googleAccount; }),
+    registeredButInactive: inactiveSame
+  };
+}
+
+/**
+ * 指定アカウントをマスタ管理者として登録する（ロックの内側で呼ぶこと）。
+ * ・スタッフマスタに同じアドレスの行があれば、その行の権限を「マスタ管理」・有効にする
+ * ・無ければ、本部所属の新しい行として追加する（氏名が必要）
+ * @return {{ok:boolean, action:string, message:string}}
+ */
+function registerAccountAsMaster_(email, name) {
+  email = String(email || '').trim();
+  name = String(name || '').trim();
+  if (!isValidEmail_(email)) {
+    return { ok: false, action: 'none', message: 'ログイン中のメールアドレスを確認できないため登録できません。会社のGoogleアカウントでログインし直して、もう一度お試しください。' };
+  }
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(STAFF_MASTER_SHEET_NAME);
+  if (!sheet) {
+    return { ok: false, action: 'none', message: '「スタッフマスタ」シートがありません。先に「① 全シートを初期化」を実行してください。' };
+  }
+  const rows = getStaffMasterRows_();
+  const lowered = email.toLowerCase();
+  const same = rows.filter(function (x) { return String(x.googleAccount || '').trim().toLowerCase() === lowered; });
+  if (same.length > 0) {
+    const row = same[0];
+    if (row.role === ROLE_MASTER && row.active) {
+      return { ok: true, action: 'already', message: 'すでにマスタ管理者として登録されています（' + row.employeeName + '）。' };
+    }
+    sheet.getRange(row.rowIndex, 5).setValue(ROLE_MASTER);
+    if (!row.active) sheet.getRange(row.rowIndex, 6).setValue(true);
+    return { ok: true, action: 'updated', message: row.employeeName + ' さんの権限を「マスタ管理」にしました。' };
+  }
+  if (!name) {
+    return { ok: false, action: 'needName', message: '氏名が必要です。' };
+  }
+  sheet.appendRow([HQ_OFFICE_CODE, '', name, email, ROLE_MASTER, true]);
+  return { ok: true, action: 'added', message: name + ' さん（' + email + '）を本部所属のマスタ管理者として追加しました。' };
+}
+
+/** メニュー：現在のアカウントと権限の状態を表示する */
+function showAccessDiagnosis() {
+  const ui = SpreadsheetApp.getUi();
+  const d = getAccessDiagnosis_();
+  const lines = [
+    'システムから見えているあなたのアカウント：' + (d.email || '（確認できません）'),
+    '判定された権限：' + d.role + (d.identified ? '（スタッフマスタの「' + d.staffName + '」さんとして登録済み）' : '（スタッフマスタに登録が見つかりません）'),
+    'Googleアカウント付きのマスタ管理者：' + (d.hasMaster ? d.masterAccounts.join('、') : 'まだ登録されていません（導入初期のため、全員がマスタ管理相当です）')
+  ];
+  if (d.registeredButInactive) lines.push('※あなたのアドレスの行は「有効」がFALSEのため権限が使えません。スタッフマスタの「有効」をTRUEにしてください。');
+  if (!d.canManageMaster) lines.push('\n管理画面が使えない場合は、メニュー「自分をマスタ管理者として登録」から登録できます。');
+  ui.alert('アクセスの診断', lines.join('\n'), ui.ButtonSet.OK);
+}
+
+/** メニュー：自分（ログイン中のアカウント）をマスタ管理者として登録する */
+function registerMyselfAsMaster() {
+  const ui = SpreadsheetApp.getUi();
+  const d = getAccessDiagnosis_();
+  if (!d.email) {
+    ui.alert('登録できません', 'ログイン中のメールアドレスを確認できません。会社のGoogleアカウントでログインし直してください。', ui.ButtonSet.OK);
+    return;
+  }
+  const others = d.hasMaster ? '\n\n現在のマスタ管理者：' + d.masterAccounts.join('、') + '\n（追加しても、他の方の権限は変わりません）' : '';
+  const ok = ui.alert('自分をマスタ管理者として登録',
+    'あなた（' + d.email + '）を「マスタ管理」として登録します。\nマスタ管理は、全データ削除・CSV取込・店舗/スタッフ管理などができる最上位の権限です。よろしいですか？' + others,
+    ui.ButtonSet.YES_NO);
+  if (ok !== ui.Button.YES) return;
+
+  let name = '';
+  const existing = getStaffMasterRows_().some(function (x) { return String(x.googleAccount || '').trim().toLowerCase() === d.email.toLowerCase(); });
+  if (!existing) {
+    const r = ui.prompt('氏名の入力', 'スタッフマスタに新しく追加します。あなたの氏名を入力してください（例：山田 太郎）', ui.ButtonSet.OK_CANCEL);
+    if (r.getSelectedButton() !== ui.Button.OK) return;
+    name = r.getResponseText();
+  }
+  let result;
+  try {
+    result = withDataLock_(function () { return registerAccountAsMaster_(d.email, name); });
+  } catch (err) {
+    result = { ok: false, message: err.message };
+  }
+  ui.alert(result.ok ? '登録しました' : '登録できませんでした',
+    result.message + (result.ok ? '\nWebアプリの画面を再読み込みすると、「店舗・スタッフ管理」タブが使えるようになります。' : ''), ui.ButtonSet.OK);
 }
 
 // ============================================================================
@@ -3677,7 +3818,7 @@ function deleteStaffMasterImpl_(rowIndex, expectedStaff) {
 
     return { success: true };
   } catch (err) {
-    return { success: false, error: err.message + '\n' + err.stack };
+    return { success: false, error: errorForClient_(err) };
   }
 }
 
@@ -3881,7 +4022,7 @@ function saveAiReportImpl_(scopeLabel, body) {
   try {
     const ctx = getCurrentUserContext_();
     if (!ctx.canManageMaster) {
-      throw new Error('分析レポートの保存はマスタ管理権限を持つユーザーのみ実行できます。');
+      throw new Error(permissionDeniedMessage_('分析レポートの保存', ctx));
     }
     body = String(body || '').trim();
     if (!body) {
@@ -3901,7 +4042,7 @@ function saveAiReportImpl_(scopeLabel, body) {
 
     return { success: true, report: { savedAt: savedAt, author: author, scope: String(scopeLabel || ''), body: body } };
   } catch (err) {
-    return { success: false, error: err.message + '\n' + err.stack };
+    return { success: false, error: errorForClient_(err) };
   }
 }
 
@@ -3954,7 +4095,7 @@ function getAiReports(limit) {
       });
     return { success: true, reports: reports, canSave: ctx.canManageMaster };
   } catch (err) {
-    return { success: false, error: err.message + '\n' + err.stack };
+    return { success: false, error: errorForClient_(err) };
   }
 }
 
@@ -3972,7 +4113,7 @@ function clearAiReportsImpl_(latestOnly) {
   try {
     const ctx = getCurrentUserContext_();
     if (!ctx.canManageMaster) {
-      throw new Error('分析レポートの削除はマスタ管理権限を持つユーザーのみ実行できます。');
+      throw new Error(permissionDeniedMessage_('分析レポートの削除', ctx));
     }
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -3992,6 +4133,6 @@ function clearAiReportsImpl_(latestOnly) {
     sheet.getRange(2, 1, count, 4).clearContent();
     return { success: true, clearedCount: count };
   } catch (err) {
-    return { success: false, error: err.message + '\n' + err.stack };
+    return { success: false, error: errorForClient_(err) };
   }
 }

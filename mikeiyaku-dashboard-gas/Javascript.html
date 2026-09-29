@@ -215,7 +215,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // 画面側が前提としているサーバー（Code.gs）の版数。Code.gs の SERVER_VERSION と対で更新する。
-const REQUIRED_SERVER_VERSION = '2026-09-28-3';
+const REQUIRED_SERVER_VERSION = '2026-09-29';
 
 /**
  * Code.gs が画面と同じ版数まで更新されているか確認する。
@@ -407,6 +407,24 @@ function loadAllData() {
     .getCurrentUserContext();
 }
 
+// 権限だけを取り直して画面へ反映する。画面を開いたあとにスタッフマスタが変わって、
+// 画面の表示（管理タブなど）と実際の権限が食い違ったときに、表示を実態へ合わせるために使う。
+function refreshUserContext() {
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (res && res.success) {
+        currentUserContext = res.context;
+        applyUserContextToUi();
+      }
+    })
+    .getCurrentUserContext();
+}
+
+// サーバーが「権限がない」と断ったかどうか
+function isPermissionDeniedError(message) {
+  return /「マスタ管理」権限を持つ方のみ/.test(String(message || ''));
+}
+
 // ログイン中ユーザーの権限（マスタ管理／管理者（所長・チーフ）／一般）をUIへ反映する。
 // ・マスタ管理：CSVインポートボタン・「店舗・スタッフ管理」タブを表示
 // ・管理者（所長・チーフ）：全店舗閲覧はできるがCSV・マスタ管理タブは非表示
@@ -426,6 +444,28 @@ function applyUserContextToUi() {
   adminTabBtn.classList.toggle('hidden', !currentUserContext.canManageMaster);
   if (!currentUserContext.canManageMaster && adminTabBtn.classList.contains('active')) {
     document.querySelector('.tab-btn[data-tab="dashboard"]').click();
+  }
+
+  // 今システムが認識しているアカウントと権限を常に表示する（権限が思った通りでないとき、
+  // どのアカウントとして見えているかをすぐ確認できるようにするため）
+  const accountLabel = document.getElementById('user-account-label');
+  if (accountLabel) {
+    const acct = currentUserContext.email || 'アカウントを確認できません';
+    accountLabel.textContent = 'ログイン中：' + acct + '　権限：' + currentUserContext.role +
+      (currentUserContext.identified && currentUserContext.employeeName ? '（' + currentUserContext.employeeName + '）' : '');
+    accountLabel.classList.remove('hidden');
+  }
+  // スタッフマスタに登録がなく、かつマスタ管理者が既にいる場合は、管理者と同じ扱いに制限されている
+  const restricted = document.getElementById('restricted-account-banner');
+  if (restricted) {
+    const isRestricted = !currentUserContext.identified && currentUserContext.hasMaster === true;
+    restricted.classList.toggle('hidden', !isRestricted);
+    if (isRestricted) {
+      restricted.textContent = (currentUserContext.email
+        ? 'お使いのアカウント（' + currentUserContext.email + '）はスタッフマスタに登録されていないため、'
+        : 'お使いのアカウントのメールアドレスを確認できないため、') +
+        '管理者と同じ扱い（全店舗の閲覧・入力のみ）です。店舗・スタッフ管理やCSV取込が必要な場合は、マスタ管理者にアカウントの登録を依頼してください。';
+    }
   }
 
   const badge = document.getElementById('user-scope-badge');
@@ -3018,7 +3058,17 @@ function closeAdminModal(id) {
   document.getElementById(id).classList.remove('flex');
 }
 
+let adminAccessDenied = false;
+
+// 管理画面の読み込みを権限がないと断られたとき：赤いエラーを重ねて出さず、理由と対処を1回だけ示し、
+// 管理タブを隠して画面の表示を実際の権限に合わせる。
+function showAdminAccessDenied(message) {
+  showToast(String(message).replace(/\n/g, ' '), 'error');
+  refreshUserContext();
+}
+
 function loadAdminData() {
+  adminAccessDenied = false;
   showLoading(true);
   let doneCount = 0;
   const onEachDone = function () {
@@ -3032,6 +3082,9 @@ function loadAdminData() {
         shopMasterCache = res.shops;
         renderShopMasterTable();
         populateStaffShopSelect();
+      } else if (res && isPermissionDeniedError(res.error)) {
+        adminAccessDenied = true;
+        showAdminAccessDenied(res.error);
       } else {
         showToast('店舗マスタの取得に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
       }
@@ -3048,6 +3101,9 @@ function loadAdminData() {
       if (res && res.success) {
         staffMasterCache = res.staff;
         renderStaffMasterTable(res.unregistered || []);
+      } else if (res && isPermissionDeniedError(res.error)) {
+        // 店舗マスタ側で表示済み（同じ内容を2回出さない）
+        if (!adminAccessDenied) showAdminAccessDenied(res.error);
       } else {
         showToast('スタッフマスタの取得に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
       }

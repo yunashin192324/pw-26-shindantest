@@ -20,6 +20,9 @@ function onOpen() {
     .createMenu('46期未成約ダッシュボード')
     .addItem('① 全シートを初期化（InitSheet）', 'setupAllSheets')
     .addItem('② AI分析用サマリを作成／更新（Gemini用）', 'buildAiAnalysisSheetFromMenu')
+    .addSeparator()
+    .addItem('アクセスの診断（自分の権限を確認）', 'showAccessDiagnosis')
+    .addItem('自分をマスタ管理者として登録', 'registerMyselfAsMaster')
     .addToUi();
 }
 
