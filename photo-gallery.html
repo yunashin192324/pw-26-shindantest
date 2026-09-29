@@ -28,37 +28,42 @@
     --wg-serif: "Cormorant Garamond", "Zen Old Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
     background: var(--wg-bg);
     color: var(--wg-ink);
-    padding: 40px 12px 56px;
+    padding: 24px 8px 28px;
     box-sizing: border-box;
     font-family: "Zen Old Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
   }
   .wg *, .wg *::before, .wg *::after { box-sizing: border-box; }
 
-  .wg-head { text-align: center; margin: 0 auto 28px; }
-  .wg-en { font-family: var(--wg-serif); font-size: 13px; letter-spacing: .32em; color: var(--wg-gold); margin: 0 0 10px; text-transform: uppercase; }
-  .wg-title { font-family: var(--wg-serif); font-weight: 500; font-size: 26px; letter-spacing: .12em; margin: 0; line-height: 1.5; }
-  .wg-rule { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 16px 0 0; color: var(--wg-gold); }
+  .wg-head { text-align: center; margin: 0 auto 16px; }
+  .wg-en { font-family: var(--wg-serif); font-size: 13px; letter-spacing: .32em; color: var(--wg-gold); margin: 0 0 4px; text-transform: uppercase; }
+  .wg-title { font-family: var(--wg-serif); font-weight: 500; font-size: 20px; letter-spacing: .1em; margin: 0; line-height: 1.5; }
+  .wg-rule { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 10px 0 0; color: var(--wg-gold); }
   .wg-rule::before, .wg-rule::after { content: ""; width: 44px; height: 1px; background: var(--wg-gold); opacity: .7; }
   .wg-rule i { width: 6px; height: 6px; background: var(--wg-gold); transform: rotate(45deg); }
-  .wg-count { font-size: 12px; letter-spacing: .12em; color: var(--wg-sub); margin: 12px 0 0; }
+  .wg-count { font-size: 12px; letter-spacing: .12em; color: var(--wg-sub); margin: 8px 0 0; }
 
   /* カテゴリ切り替え */
-  .wg-tabs { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 6px; margin: 0 auto 24px; padding: 0; list-style: none; }
+  .wg-tabs { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 6px; margin: 0 auto 14px; padding: 0; list-style: none; }
   .wg-tab { appearance: none; background: transparent; border: 1px solid var(--wg-line); color: var(--wg-sub);
-    font: inherit; font-size: 13px; letter-spacing: .1em; padding: 8px 16px; min-height: 40px; border-radius: 999px; cursor: pointer; }
+    font: inherit; font-size: 13px; letter-spacing: .1em; padding: 6px 14px; min-height: 36px; border-radius: 999px; cursor: pointer; }
   .wg-tab[aria-pressed="true"] { background: var(--wg-gold); border-color: var(--wg-gold); color: #fff; }
   .wg-tab:focus-visible { outline: 2px solid var(--wg-gold); outline-offset: 2px; }
 
   /* 写真一覧(縦横まちまちの写真を隙間なく並べる) */
-  .wg-grid { column-count: 2; column-gap: 8px; max-width: 1100px; margin: 0 auto; }
-  .wg-item { display: block; width: 100%; margin: 0 0 8px; padding: 0; border: 0; background: #efe7da;
+  .wg-grid { column-count: 3; column-gap: 4px; max-width: 1100px; margin: 0 auto; }
+  .wg-item { display: block; width: 100%; margin: 0 0 4px; padding: 0; border: 0; background: #efe7da;
     break-inside: avoid; cursor: zoom-in; position: relative; overflow: hidden; }
   .wg-item img { display: block; width: 100%; height: auto; transition: transform .5s ease, opacity .4s ease; }
   .wg-item:hover img { transform: scale(1.03); }
   .wg-item:focus-visible { outline: 2px solid var(--wg-gold); outline-offset: 2px; }
   .wg-item[hidden] { display: none; }
-  @media (min-width: 640px) { .wg-grid { column-count: 3; column-gap: 12px; } .wg-item { margin-bottom: 12px; } .wg-title { font-size: 32px; } }
-  @media (min-width: 960px) { .wg-grid { column-count: 4; } }
+  @media (min-width: 640px) { .wg-grid { column-count: 4; column-gap: 8px; } .wg-item { margin-bottom: 8px; } .wg-title { font-size: 26px; } }
+  @media (min-width: 960px) { .wg-grid { column-count: 5; } }
+  .wg-more { display: block; margin: 16px auto 0; appearance: none; background: transparent; border: 1px solid var(--wg-gold); color: var(--wg-gold);
+    font: inherit; font-size: 13px; letter-spacing: .16em; padding: 10px 32px; min-height: 44px; border-radius: 999px; cursor: pointer; }
+  .wg-more:hover { background: var(--wg-gold); color: #fff; }
+  .wg-more:focus-visible { outline: 2px solid var(--wg-gold); outline-offset: 2px; }
+  .wg-more[hidden] { display: none; }
 
   /* 拡大表示 */
   .wg-lb { position: fixed; inset: 0; z-index: 99999; background: rgba(28, 23, 19, .96); display: none; touch-action: pan-y;
@@ -91,6 +96,7 @@
   </header>
   <ul class="wg-tabs" id="wgTabs" hidden></ul>
   <div class="wg-grid" id="wgGrid"></div>
+  <button class="wg-more" id="wgMore" type="button" hidden></button>
 
   <div class="wg-lb" id="wgLb" role="dialog" aria-modal="true" aria-label="写真の拡大表示">
     <div class="wg-top">
@@ -135,7 +141,8 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var grid = $("wgGrid"), tabs = $("wgTabs"), lb = $("wgLb"), img = $("wgImg"), stage = $("wgStage");
-  var current = "all", visible = [], idx = 0;
+  var PAGE = 12; /* 最初に表示する枚数と、「もっと見る」1回で増える枚数 */
+  var current = "all", visible = [], idx = 0, limit = PAGE;
 
   $("wgCount").textContent = WG_PHOTOS.length + " photos";
 
@@ -161,7 +168,7 @@
       t.addEventListener("click", function () {
         current = n === 0 ? "all" : name;
         Array.prototype.forEach.call(tabs.querySelectorAll(".wg-tab"), function (x) { x.setAttribute("aria-pressed", x === t ? "true" : "false"); });
-        applyFilter();
+        limit = PAGE; applyFilter();
       });
       li.appendChild(t); tabs.appendChild(li);
     });
@@ -169,11 +176,22 @@
   function applyFilter() {
     visible = [];
     Array.prototype.forEach.call(grid.children, function (el, i) {
-      var show = current === "all" || WG_PHOTOS[i].cat === current;
-      el.hidden = !show; if (show) visible.push(i);
+      var match = current === "all" || WG_PHOTOS[i].cat === current;
+      if (match) visible.push(i);
+      el.hidden = !(match && visible.length <= limit);
     });
     $("wgCount").textContent = visible.length + " photos";
+    var more = $("wgMore");
+    if (visible.length <= PAGE) { more.hidden = true; return; }
+    more.hidden = false;
+    more.textContent = limit >= visible.length ? "たたむ" : "もっと見る  " + Math.min(limit, visible.length) + " / " + visible.length;
   }
+  $("wgMore").addEventListener("click", function () {
+    var collapse = limit >= visible.length;
+    limit = collapse ? PAGE : limit + PAGE;
+    applyFilter();
+    if (collapse) grid.scrollIntoView({ block: "start" });
+  });
   applyFilter();
 
   /* 拡大表示 */
