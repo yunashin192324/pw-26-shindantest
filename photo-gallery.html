@@ -1,0 +1,244 @@
+<title>ウィーン フォトギャラリー</title>
+<!-- ============================================================
+  フォトギャラリー(フリーHTML欄に貼り付け用)
+  使い方:
+   1. 下の「WG_PHOTOS」に画像URLを追加する(1行=1枚)
+   2. <link>から</script>までを全部コピーして、フリーHTML欄に貼る
+   ※ WG_PHOTOS が空のあいだは、見本の仮画像が表示されます
+   ※ 「モックアップ用」と書かれた部分は、貼り付け時に不要です
+============================================================ -->
+
+<!-- モックアップ用(貼り付け時は不要) -->
+<style>
+  body { background: #fbf8f3; margin: 0; }
+  .mock-note { font: 12px/1.6 sans-serif; color: #8a7d6b; text-align: center; padding: 10px 16px 0; }
+</style>
+<p class="mock-note">▼ ここからがフリーHTML欄に入れる部分です(画像は仮のものです)</p>
+<!-- /モックアップ用 -->
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500&family=Zen+Old+Mincho:wght@400;500&display=swap">
+<style>
+  /* すべて .wg 配下に限定し、既存ページのデザインに影響しないようにしています */
+  .wg {
+    --wg-bg: #fbf8f3;
+    --wg-ink: #4a4038;
+    --wg-sub: #8a7d6b;
+    --wg-gold: #b39366;
+    --wg-line: #e6ddd0;
+    --wg-serif: "Cormorant Garamond", "Zen Old Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
+    background: var(--wg-bg);
+    color: var(--wg-ink);
+    padding: 40px 12px 56px;
+    box-sizing: border-box;
+    font-family: "Zen Old Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  }
+  .wg *, .wg *::before, .wg *::after { box-sizing: border-box; }
+
+  .wg-head { text-align: center; margin: 0 auto 28px; }
+  .wg-en { font-family: var(--wg-serif); font-size: 13px; letter-spacing: .32em; color: var(--wg-gold); margin: 0 0 10px; text-transform: uppercase; }
+  .wg-title { font-family: var(--wg-serif); font-weight: 500; font-size: 26px; letter-spacing: .12em; margin: 0; line-height: 1.5; }
+  .wg-rule { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 16px 0 0; color: var(--wg-gold); }
+  .wg-rule::before, .wg-rule::after { content: ""; width: 44px; height: 1px; background: var(--wg-gold); opacity: .7; }
+  .wg-rule i { width: 6px; height: 6px; background: var(--wg-gold); transform: rotate(45deg); }
+  .wg-count { font-size: 12px; letter-spacing: .12em; color: var(--wg-sub); margin: 12px 0 0; }
+
+  /* カテゴリ切り替え */
+  .wg-tabs { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 6px; margin: 0 auto 24px; padding: 0; list-style: none; }
+  .wg-tab { appearance: none; background: transparent; border: 1px solid var(--wg-line); color: var(--wg-sub);
+    font: inherit; font-size: 13px; letter-spacing: .1em; padding: 8px 16px; min-height: 40px; border-radius: 999px; cursor: pointer; }
+  .wg-tab[aria-pressed="true"] { background: var(--wg-gold); border-color: var(--wg-gold); color: #fff; }
+  .wg-tab:focus-visible { outline: 2px solid var(--wg-gold); outline-offset: 2px; }
+
+  /* 写真一覧(縦横まちまちの写真を隙間なく並べる) */
+  .wg-grid { column-count: 2; column-gap: 8px; max-width: 1100px; margin: 0 auto; }
+  .wg-item { display: block; width: 100%; margin: 0 0 8px; padding: 0; border: 0; background: #efe7da;
+    break-inside: avoid; cursor: zoom-in; position: relative; overflow: hidden; }
+  .wg-item img { display: block; width: 100%; height: auto; transition: transform .5s ease, opacity .4s ease; }
+  .wg-item:hover img { transform: scale(1.03); }
+  .wg-item:focus-visible { outline: 2px solid var(--wg-gold); outline-offset: 2px; }
+  .wg-item[hidden] { display: none; }
+  @media (min-width: 640px) { .wg-grid { column-count: 3; column-gap: 12px; } .wg-item { margin-bottom: 12px; } .wg-title { font-size: 32px; } }
+  @media (min-width: 960px) { .wg-grid { column-count: 4; } }
+
+  /* 拡大表示 */
+  .wg-lb { position: fixed; inset: 0; z-index: 99999; background: rgba(28, 23, 19, .96); display: none; touch-action: pan-y;
+    -webkit-user-select: none; user-select: none; }
+  .wg-lb.is-open { display: block; }
+  .wg-stage { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 56px 0 64px; overflow: hidden; }
+  .wg-img { max-width: 100%; max-height: 100%; object-fit: contain; will-change: transform; touch-action: pan-y; -webkit-user-drag: none; }
+  .wg-img.is-anim { transition: transform .28s ease, opacity .28s ease; }
+  .wg-top, .wg-bottom { position: absolute; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; color: #efe7da; }
+  .wg-top { top: 0; height: 56px; }
+  .wg-bottom { bottom: 0; height: 64px; justify-content: center; padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .wg-num { font-family: var(--wg-serif); font-size: 16px; letter-spacing: .18em; }
+  .wg-cap { font-size: 12px; letter-spacing: .1em; color: #cbbfae; }
+  .wg-btn { appearance: none; background: transparent; border: 0; color: #efe7da; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 50%; }
+  .wg-btn:hover { background: rgba(255,255,255,.1); }
+  .wg-btn:focus-visible { outline: 2px solid var(--wg-gold); }
+  .wg-btn svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+  .wg-arrow { position: absolute; top: 50%; transform: translateY(-50%); display: none; }
+  .wg-prev { left: 12px; } .wg-next { right: 12px; }
+  @media (min-width: 720px) { .wg-arrow { display: flex; } }
+  @media (prefers-reduced-motion: reduce) { .wg-item img, .wg-img.is-anim { transition: none; } }
+</style>
+
+<section class="wg" id="wg">
+  <header class="wg-head">
+    <p class="wg-en">Photo Gallery</p>
+    <h2 class="wg-title">ウィーン フォトウェディング</h2>
+    <div class="wg-rule"><i></i></div>
+    <p class="wg-count" id="wgCount"></p>
+  </header>
+  <ul class="wg-tabs" id="wgTabs" hidden></ul>
+  <div class="wg-grid" id="wgGrid"></div>
+
+  <div class="wg-lb" id="wgLb" role="dialog" aria-modal="true" aria-label="写真の拡大表示">
+    <div class="wg-top">
+      <span class="wg-num" id="wgNum"></span>
+      <button class="wg-btn" id="wgClose" type="button" aria-label="閉じる"><svg viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/></svg></button>
+    </div>
+    <div class="wg-stage" id="wgStage"><img class="wg-img" id="wgImg" alt=""></div>
+    <button class="wg-btn wg-arrow wg-prev" id="wgPrev" type="button" aria-label="前の写真"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <button class="wg-btn wg-arrow wg-next" id="wgNext" type="button" aria-label="次の写真"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+    <div class="wg-bottom"><span class="wg-cap" id="wgCap">左右にスワイプして次の写真へ</span></div>
+  </div>
+</section>
+
+<script>
+(function () {
+  /* ===== ここに画像URLを追加してください =====
+     src : 拡大表示用の画像URL(必須)
+     thumb : 一覧用の小さい画像URL(任意。あると読み込みが速くなります)
+     cat : カテゴリ名(任意。2種類以上あると切り替えボタンが出ます)
+     alt : 写真の説明(任意)
+     例) { src: "https://example.com/photos/001.jpg", thumb: "https://example.com/photos/001_s.jpg", cat: "街並み", alt: "石畳の路地" }, */
+  var WG_PHOTOS = [
+  ];
+
+  /* ===== 見本の仮画像(WG_PHOTOS が空のときだけ使われます) ===== */
+  if (!WG_PHOTOS.length) {
+    var cats = ["街並み", "宮殿と庭園", "カフェ", "衣装"];
+    var pal = [["#e9dccb", "#c9b08a"], ["#dfe3d6", "#a9b394"], ["#efe0da", "#cf9f94"], ["#dcdfe6", "#9aa5bb"], ["#f0e6cf", "#c9a95f"]];
+    var ratios = [[3, 4], [4, 3], [2, 3], [1, 1], [3, 2], [4, 5]];
+    for (var i = 0; i < 40; i++) {
+      var r = ratios[(i * 7 + (i >> 2)) % ratios.length], p = pal[(i * 3) % pal.length];
+      var w = 900, h = Math.round(w * r[1] / r[0]);
+      var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '">' +
+        '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' + p[0] + '"/><stop offset="1" stop-color="' + p[1] + '"/></linearGradient></defs>' +
+        '<rect width="100%" height="100%" fill="url(#g)"/>' +
+        '<circle cx="' + w * 0.5 + '" cy="' + h * 0.42 + '" r="' + w * 0.13 + '" fill="none" stroke="#fff" stroke-opacity=".7" stroke-width="3"/>' +
+        '<text x="50%" y="' + (h * 0.42 + 8) + '" text-anchor="middle" font-family="Georgia,serif" font-size="30" fill="#fff" fill-opacity=".9" letter-spacing="4">' + String(i + 1).padStart(2, "0") + '</text>' +
+        '<text x="50%" y="' + (h * 0.42 + w * 0.13 + 44) + '" text-anchor="middle" font-family="Georgia,serif" font-size="20" fill="#fff" fill-opacity=".8" letter-spacing="6">SAMPLE PHOTO</text></svg>';
+      WG_PHOTOS.push({ src: "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg), cat: cats[i % cats.length], alt: "見本写真 " + (i + 1) });
+    }
+  }
+
+  var $ = function (id) { return document.getElementById(id); };
+  var grid = $("wgGrid"), tabs = $("wgTabs"), lb = $("wgLb"), img = $("wgImg"), stage = $("wgStage");
+  var current = "all", visible = [], idx = 0;
+
+  $("wgCount").textContent = WG_PHOTOS.length + " photos";
+
+  /* 一覧を作る */
+  WG_PHOTOS.forEach(function (p, i) {
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "wg-item"; b.setAttribute("data-i", i);
+    b.setAttribute("aria-label", (p.alt || "写真") + "を拡大する");
+    var im = document.createElement("img");
+    im.src = p.thumb || p.src; im.alt = p.alt || ""; im.loading = "lazy"; im.decoding = "async";
+    b.appendChild(im); grid.appendChild(b);
+  });
+
+  /* カテゴリ切り替え */
+  var catList = [];
+  WG_PHOTOS.forEach(function (p) { if (p.cat && catList.indexOf(p.cat) < 0) catList.push(p.cat); });
+  if (catList.length > 1) {
+    tabs.hidden = false;
+    ["すべて"].concat(catList).forEach(function (name, n) {
+      var li = document.createElement("li"), t = document.createElement("button");
+      t.type = "button"; t.className = "wg-tab"; t.textContent = name;
+      t.setAttribute("aria-pressed", n === 0 ? "true" : "false");
+      t.addEventListener("click", function () {
+        current = n === 0 ? "all" : name;
+        Array.prototype.forEach.call(tabs.querySelectorAll(".wg-tab"), function (x) { x.setAttribute("aria-pressed", x === t ? "true" : "false"); });
+        applyFilter();
+      });
+      li.appendChild(t); tabs.appendChild(li);
+    });
+  }
+  function applyFilter() {
+    visible = [];
+    Array.prototype.forEach.call(grid.children, function (el, i) {
+      var show = current === "all" || WG_PHOTOS[i].cat === current;
+      el.hidden = !show; if (show) visible.push(i);
+    });
+    $("wgCount").textContent = visible.length + " photos";
+  }
+  applyFilter();
+
+  /* 拡大表示 */
+  function preload(n) {
+    if (!visible.length) return;
+    var k = visible[(n + visible.length) % visible.length];
+    (new Image()).src = WG_PHOTOS[k].src;
+  }
+  function show(pos, dir) {
+    idx = (pos + visible.length) % visible.length;
+    var p = WG_PHOTOS[visible[idx]];
+    img.classList.remove("is-anim");
+    img.style.transform = dir ? "translateX(" + (dir * 40) + "px)" : "none";
+    img.style.opacity = dir ? "0" : "1";
+    img.src = p.src; img.alt = p.alt || "";
+    void img.offsetWidth;
+    img.classList.add("is-anim");
+    img.style.transform = "none"; img.style.opacity = "1";
+    $("wgNum").textContent = String(idx + 1).padStart(2, "0") + " / " + String(visible.length).padStart(2, "0");
+    preload(idx + 1); preload(idx - 1);
+  }
+  function open(i) {
+    var pos = visible.indexOf(i); if (pos < 0) return;
+    lb.classList.add("is-open");
+    document.documentElement.style.overflow = "hidden";
+    show(pos, 0); $("wgClose").focus();
+  }
+  function close() {
+    lb.classList.remove("is-open");
+    document.documentElement.style.overflow = "";
+  }
+  grid.addEventListener("click", function (e) {
+    var b = e.target.closest(".wg-item"); if (b) open(+b.getAttribute("data-i"));
+  });
+  $("wgClose").addEventListener("click", close);
+  $("wgPrev").addEventListener("click", function () { show(idx - 1, -1); });
+  $("wgNext").addEventListener("click", function () { show(idx + 1, 1); });
+  stage.addEventListener("click", function (e) { if (e.target === stage) close(); });
+  document.addEventListener("keydown", function (e) {
+    if (!lb.classList.contains("is-open")) return;
+    if (e.key === "Escape") close();
+    else if (e.key === "ArrowLeft") show(idx - 1, -1);
+    else if (e.key === "ArrowRight") show(idx + 1, 1);
+  });
+
+  /* スワイプ(指に追従して動き、一定以上動かすと次の写真へ) */
+  var sx = 0, sy = 0, dx = 0, drag = false, decided = false, horiz = false;
+  lb.addEventListener("touchstart", function (e) {
+    if (e.touches.length !== 1) { drag = false; return; }
+    sx = e.touches[0].clientX; sy = e.touches[0].clientY; dx = 0; drag = true; decided = false; horiz = false;
+    img.classList.remove("is-anim");
+  }, { passive: true });
+  lb.addEventListener("touchmove", function (e) {
+    if (!drag) return;
+    var mx = e.touches[0].clientX - sx, my = e.touches[0].clientY - sy;
+    if (!decided && (Math.abs(mx) > 8 || Math.abs(my) > 8)) { decided = true; horiz = Math.abs(mx) > Math.abs(my); }
+    if (!horiz) return;
+    dx = mx; img.style.transform = "translateX(" + dx + "px)";
+    img.style.opacity = String(1 - Math.min(Math.abs(dx) / 500, .5));
+  }, { passive: true });
+  lb.addEventListener("touchend", function () {
+    if (!drag) return; drag = false;
+    if (horiz && Math.abs(dx) > 60) { show(idx + (dx < 0 ? 1 : -1), dx < 0 ? 1 : -1); }
+    else { img.classList.add("is-anim"); img.style.transform = "none"; img.style.opacity = "1"; }
+  });
+  lb.addEventListener("touchcancel", function () { drag = false; img.classList.add("is-anim"); img.style.transform = "none"; img.style.opacity = "1"; });
+})();
+</script>
