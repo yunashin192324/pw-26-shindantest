@@ -588,65 +588,6 @@ function writeCell_(sheet, rowIndex, columnKey, normalizedValue) {
 }
 
 /**
- * 一覧表の現場入力項目を1セルだけ更新する。
- * ・CSV由来の19項目は編集不可（EDITABLE_KEY_SET に無いキーは拒否する）。
- * ・自分の閲覧範囲外の行（社員=他店舗／所長・チーフ=他エリア）は編集不可。
- * ・保険/Wifi/TAViCA/キャンサポのステータスを変更したときは、数量・理由を
- *   ステータスに応じて自動調整する（〇・☆は数量を維持、×は数量0、それ以外は数量を空に。
- *   ×以外に変えたら理由は消す）。「×」への変更自体は setAncillaryLost() を使うこと
- *   （理由の入力とセットで1回のサーバー呼び出しにするため）。
- */
-function updateCellValue(rowIndex, columnKey, value) {
-  if (!EDITABLE_KEY_SET[columnKey]) {
-    throw new Error('この項目は編集できません。');
-  }
-  var ctx = getCurrentUserContext_();
-  var sheet = getDataSheet_();
-  assertRowEditable_(ctx, sheet, rowIndex);
-  rowIndex = Number(rowIndex);
-
-  var col = ALL_COLUMNS[ALL_COLUMN_INDEX_BY_KEY[columnKey]];
-  var normalized = normalizeEditableInput_(col, value);
-  writeCell_(sheet, rowIndex, columnKey, normalized);
-
-  var ancillary = ANCILLARY_ITEM_BY_STATUS_KEY[columnKey];
-  if (ancillary) {
-    if (normalized === '〇' || normalized === '☆') {
-      // 数量は現在の値を維持する（クライアント側で入力必須のアラートを出す）。
-    } else if (normalized === '×') {
-      writeCell_(sheet, rowIndex, ancillary.qtyKey, 0);
-    } else {
-      writeCell_(sheet, rowIndex, ancillary.qtyKey, null);
-    }
-    if (normalized !== '×') {
-      writeCell_(sheet, rowIndex, ancillary.reasonKey, null);
-    }
-  }
-
-  return { ok: true };
-}
-
-/**
- * 保険/Wifi/TAViCA/キャンサポを「×（失注）」にする専用API。
- * ステータス・数量(0)・理由を1回のサーバー呼び出しでまとめて保存する
- * （updateCellValueを複数回呼ぶと、通信の順序によって理由が消えてしまう恐れがあるため）。
- */
-function setAncillaryLost(rowIndex, itemKey, reason) {
-  var item = ANCILLARY_ITEM_BY_KEY[itemKey];
-  if (!item) throw new Error('付帯商品の指定が不正です。');
-  var ctx = getCurrentUserContext_();
-  var sheet = getDataSheet_();
-  assertRowEditable_(ctx, sheet, rowIndex);
-  rowIndex = Number(rowIndex);
-
-  writeCell_(sheet, rowIndex, item.statusKey, '×');
-  writeCell_(sheet, rowIndex, item.qtyKey, 0);
-  writeCell_(sheet, rowIndex, item.reasonKey, String(reason || '').trim());
-
-  return { ok: true };
-}
-
-/**
  * 複数行まとめて選択して同じ値を入力する「一括登録」機能（CHK日・メモ用）。
  * 付帯商品（保険/Wifi/TAViCA/キャンサポ）のステータスは bulkSetAncillaryStatus を使うこと。
  * 1件でも編集できない行があってもエラーで全体を止めず、成功した行数とエラー内容を返す。
@@ -675,7 +616,7 @@ function bulkUpdateCellValue(rowIndexes, columnKey, value) {
 
 /**
  * 複数行まとめて、同じ付帯商品（保険/Wifi/TAViCA/キャンサポ）に同じステータス（・数量・理由）を
- * 一括登録する。ステータスによって数量・理由の扱いが変わる（updateCellValue/setAncillaryLostと同じ規則）。
+ * 一括登録する。ステータスによって数量・理由の扱いが変わる（他の編集APIと同じ規則）。
  * ・×（失注）：数量は0固定、理由を保存
  * ・〇（NB付帯）／☆（PUSH成約）：数量に bulkQty を保存（未入力なら空欄のまま。理由は空にする）
  * ・それ以外（－／△）：数量・理由とも空にする
@@ -708,6 +649,60 @@ function bulkSetAncillaryStatus(rowIndexes, itemKey, status, bulkQty, reason) {
       errors.push({ rowIndex: rowIndexRaw, message: e.message });
     }
   });
+  return { ok: true, updated: updated, errors: errors };
+}
+
+/**
+ * 「まとめて保存する」機能：予約データ一覧の画面上でまだサーバーへ送っていない複数のセル編集を、
+ * 1回のサーバー呼び出しでまとめて反映する（他のリセール管理システムの「まとめて保存する」と同様、
+ * 1項目ずつ即時保存ではなく、複数の変更をためておいて一括で保存する運用に対応するためのAPI）。
+ * changes の各要素は次のいずれかの形：
+ *   ・CHK日／メモ： { kind:'field', rowIndex, columnKey:'chkDate'|'memo', value }
+ *   ・保険/Wifi/TAViCA/キャンサポ： { kind:'ancillary', rowIndex, itemKey, status, qty, reason }
+ * 1件でも編集できない変更（他店舗・他エリアの行など）があってもエラーで全体を止めず、
+ * 成功件数とエラー内容（該当rowIndexとメッセージ）を返す。
+ */
+function batchUpdateCells(changes) {
+  var ctx = getCurrentUserContext_();
+  var sheet = getDataSheet_();
+  var updated = 0, errors = [];
+
+  (changes || []).forEach(function (change) {
+    try {
+      assertRowEditable_(ctx, sheet, change.rowIndex);
+      var rowIndex = Number(change.rowIndex);
+
+      if (change.kind === 'field') {
+        if (change.columnKey !== 'chkDate' && change.columnKey !== 'memo') {
+          throw new Error('この項目はまとめて保存できません。');
+        }
+        var col = ALL_COLUMNS[ALL_COLUMN_INDEX_BY_KEY[change.columnKey]];
+        writeCell_(sheet, rowIndex, change.columnKey, normalizeEditableInput_(col, change.value));
+      } else if (change.kind === 'ancillary') {
+        var item = ANCILLARY_ITEM_BY_KEY[change.itemKey];
+        if (!item) throw new Error('付帯商品の指定が不正です。');
+        var status = change.status;
+        writeCell_(sheet, rowIndex, item.statusKey, status);
+        if (status === '×') {
+          writeCell_(sheet, rowIndex, item.qtyKey, 0);
+          writeCell_(sheet, rowIndex, item.reasonKey, String(change.reason || '').trim());
+        } else if (status === '〇' || status === '☆') {
+          var qty = (change.qty === '' || change.qty === null || change.qty === undefined) ? null : Number(change.qty);
+          writeCell_(sheet, rowIndex, item.qtyKey, qty);
+          writeCell_(sheet, rowIndex, item.reasonKey, null);
+        } else {
+          writeCell_(sheet, rowIndex, item.qtyKey, null);
+          writeCell_(sheet, rowIndex, item.reasonKey, null);
+        }
+      } else {
+        throw new Error('不正な変更内容です。');
+      }
+      updated++;
+    } catch (e) {
+      errors.push({ rowIndex: change.rowIndex, message: e.message });
+    }
+  });
+
   return { ok: true, updated: updated, errors: errors };
 }
 

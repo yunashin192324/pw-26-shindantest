@@ -142,6 +142,11 @@ select[multiple]{height:88px; font-size:13px;}
 .ancillary-pair input[type=number]{width:52px; flex:none;}
 .editable-cell-inline input, .editable-cell-inline select{background:var(--blue-50);}
 .ancillary-flagged{outline:2px solid var(--amber-500); outline-offset:-2px; border-radius:6px;}
+.pending-edit{outline:2px solid #f97316; outline-offset:-2px; border-radius:6px;}
+.pending-changes-bar{position:sticky; top:0; z-index:55; background:#fbbf24; color:#78350f; border-radius:12px; box-shadow:0 6px 16px rgba(0,0,0,.18); padding:12px 14px; margin-bottom:10px;}
+.pending-changes-bar .btn-row{margin-top:8px;}
+.pending-changes-bar .btn-save-pending{background:#b45309; color:#fff; border:none; border-radius:9px; padding:11px 14px; font-size:13px; font-weight:700; min-height:42px; flex:1;}
+.pending-changes-bar .btn-discard-pending{background:#fff; color:#78350f; border:1px solid #d97706; border-radius:9px; padding:11px 14px; font-size:13px; font-weight:600; min-height:42px; flex:1;}
 .ancillary-reason{font-size:10.5px; color:var(--red-700); background:var(--red-50); border:1px solid var(--red-200); border-radius:6px; padding:5px 7px; margin-top:5px; line-height:1.4;}
 .memo-display{display:block; padding:6px 0; word-break:break-word;}
 
@@ -334,6 +339,16 @@ select[multiple]{height:88px; font-size:13px;}
 
     <!-- ============ 予約データ一覧 ============ -->
     <section id="panel-data" class="panel hidden">
+      <!-- ============ 未保存の変更バー（編集すると表示。保存するまでサーバーには反映されない） ============ -->
+      <div id="pending-changes-bar" class="pending-changes-bar hidden">
+        <div style="font-weight:700; font-size:13px;">✏️ 未保存の変更：<span id="pending-changes-count">0</span>件</div>
+        <div class="btn-row">
+          <button type="button" class="btn-save-pending" id="btn-save-pending-changes">💾 まとめて保存する</button>
+          <button type="button" class="btn-discard-pending" id="btn-discard-pending-changes">取り消す</button>
+        </div>
+        <p style="font-size:11px; margin:6px 0 0;">CHK日・保険/Wifi/TAViCA/キャンサポ・メモの変更は、このボタンを押すまで保存されません。</p>
+      </div>
+
       <button class="filter-toggle" data-target="data-filter-panel">🔍 絞り込み <span id="data-filter-badge"></span><span class="chev">▾</span></button>
       <div class="filter-panel" id="data-filter-panel">
         <div class="filter-field"><label>エリア</label><select id="data-filter-area" multiple></select></div>
@@ -763,7 +778,9 @@ var STATE = {
   ],
   staffNameMap: {},
 
-  selectedRowIndexes: {} // 予約データ一覧の一括登録用：チェックされている行番号の集合
+  selectedRowIndexes: {}, // 予約データ一覧の一括登録用：チェックされている行番号の集合
+
+  pendingChanges: {} // 予約データ一覧「まとめて保存する」用：未保存の編集（key→変更内容）
 };
 function rebuildStaffNameMap(){
   STATE.staffNameMap = {};
@@ -1194,11 +1211,13 @@ function buildRecordCard(row){
   var editGrid = '<div class="rc-edit-grid editable-cell-inline">' + editDefs.map(function(d){
     if (d.kind === 'date'){
       var dv = row[d.field] || '';
-      return '<div class="rc-edit-item"><label>'+escapeHtml(d.label)+'</label><input type="date" data-row="'+row.rowIndex+'" data-col="'+d.field+'" value="'+escapeHtml(dv)+'"></div>';
+      var pendingDate = hasPendingFieldChange(row.rowIndex, d.field) ? ' pending-edit' : '';
+      return '<div class="rc-edit-item"><label>'+escapeHtml(d.label)+'</label><input type="date" class="'+pendingDate.trim()+'" data-row="'+row.rowIndex+'" data-col="'+d.field+'" value="'+escapeHtml(dv)+'"></div>';
     }
     if (d.kind === 'memo'){
       var mv = row[d.field] || '';
-      return '<div class="rc-edit-item full"><label>'+escapeHtml(d.label)+'</label><input type="text" data-row="'+row.rowIndex+'" data-col="'+d.field+'" value="'+escapeHtml(mv)+'" placeholder="メモ"></div>';
+      var pendingMemo = hasPendingFieldChange(row.rowIndex, d.field) ? ' pending-edit' : '';
+      return '<div class="rc-edit-item full"><label>'+escapeHtml(d.label)+'</label><input type="text" class="'+pendingMemo.trim()+'" data-row="'+row.rowIndex+'" data-col="'+d.field+'" value="'+escapeHtml(mv)+'" placeholder="メモ"></div>';
     }
     // ancillary
     var item = ANCILLARY_BY_KEY[d.item];
@@ -1211,25 +1230,82 @@ function buildRecordCard(row){
     var qtyEditable = isAncillaryQtyEditable(status);
     var qtyVal = (qty===null||qty===undefined) ? '' : qty;
     var flagged = qtyEditable && (qtyVal==='') ? ' ancillary-flagged' : '';
+    var pendingAncillary = hasPendingAncillaryChange(row.rowIndex, item.key) ? ' pending-edit' : '';
     var reasonHtml = (status === '×' && reason) ? '<div class="ancillary-reason">失注理由：'+escapeHtml(reason)+'</div>' : '';
     return '<div class="rc-edit-item"><label>'+escapeHtml(d.label)+'</label><div class="ancillary-pair">' +
-      '<select class="ancillary-status" data-row="'+row.rowIndex+'" data-item="'+item.key+'" data-col="'+item.statusKey+'">'+opts+'</select>' +
-      '<input type="number" min="0" class="ancillary-qty'+flagged+'" data-row="'+row.rowIndex+'" data-col="'+item.qtyKey+'" value="'+escapeHtml(String(qtyVal))+'" '+(qtyEditable?'':'disabled')+' placeholder="数">' +
+      '<select class="ancillary-status'+pendingAncillary+'" data-row="'+row.rowIndex+'" data-item="'+item.key+'" data-col="'+item.statusKey+'">'+opts+'</select>' +
+      '<input type="number" min="0" class="ancillary-qty'+flagged+pendingAncillary+'" data-row="'+row.rowIndex+'" data-col="'+item.qtyKey+'" value="'+escapeHtml(String(qtyVal))+'" '+(qtyEditable?'':'disabled')+' placeholder="数">' +
       '</div>'+reasonHtml+'</div>';
   }).join('') + '</div>';
 
   return '<div class="record-card">' + head + primaryGrid + moreToggle + moreGrid + editGrid + '</div>';
 }
 
+/* ---- 編集の「まとめて保存する」（他のリセール管理システムと同様、1項目ずつ即時保存ではなく複数の編集をためて一括保存する） ---- */
+function pendingKey(rowIndex, fieldOrItem){ return rowIndex + '|' + fieldOrItem; }
+function hasPendingFieldChange(rowIndex, columnKey){ return !!STATE.pendingChanges[pendingKey(rowIndex, columnKey)]; }
+function hasPendingAncillaryChange(rowIndex, itemKey){ return !!STATE.pendingChanges[pendingKey(rowIndex, 'ancillary:'+itemKey)]; }
+function getOrCreatePendingAncillary(rowIndex, itemKey){
+  var key = pendingKey(rowIndex, 'ancillary:'+itemKey);
+  if (!STATE.pendingChanges[key]){
+    var row = STATE.rows.find(function(r){ return r.rowIndex === rowIndex; });
+    var item = ANCILLARY_BY_KEY[itemKey];
+    STATE.pendingChanges[key] = { kind:'ancillary', rowIndex: rowIndex, itemKey: itemKey, original: { status: row[item.statusKey], qty: row[item.qtyKey], reason: row[item.reasonKey] } };
+  }
+  return STATE.pendingChanges[key];
+}
+function updatePendingChangesBar(){
+  var count = Object.keys(STATE.pendingChanges).length;
+  var countEl = document.getElementById('pending-changes-count');
+  if (countEl) countEl.textContent = count;
+  var bar = document.getElementById('pending-changes-bar');
+  if (bar) bar.classList.toggle('hidden', count === 0);
+}
 function afterCellSaved(){
   renderDataList();
   applyDashFilters();
   renderPersonalTab();
+  updatePendingChangesBar();
 }
+function saveAllPendingChanges(){
+  var changes = Object.keys(STATE.pendingChanges).map(function(k){ return STATE.pendingChanges[k]; });
+  if (changes.length === 0) return;
+  STATE.pendingChanges = {};
+  afterCellSaved();
+  showToast(formatNumber(changes.length) + '件を保存しました', 'success');
+}
+function discardPendingChanges(){
+  var count = Object.keys(STATE.pendingChanges).length;
+  if (count === 0) return;
+  if (!window.confirm('未保存の変更（'+count+'件）を取り消します。よろしいですか？')) return;
+  Object.keys(STATE.pendingChanges).forEach(function(k){
+    var c = STATE.pendingChanges[k];
+    var row = STATE.rows.find(function(r){ return r.rowIndex === c.rowIndex; });
+    if (!row) return;
+    if (c.kind === 'field'){ row[c.columnKey] = c.original; }
+    else {
+      var item = ANCILLARY_BY_KEY[c.itemKey];
+      row[item.statusKey] = c.original.status;
+      row[item.qtyKey] = c.original.qty;
+      row[item.reasonKey] = c.original.reason;
+    }
+  });
+  STATE.pendingChanges = {};
+  afterCellSaved();
+  showToast('未保存の変更を取り消しました', 'info');
+}
+function bindPendingChangesEvents(){
+  document.getElementById('btn-save-pending-changes').addEventListener('click', saveAllPendingChanges);
+  document.getElementById('btn-discard-pending-changes').addEventListener('click', discardPendingChanges);
+}
+
 function saveCell(rowIndex, columnKey, value){
   var row = STATE.rows.find(function(r){ return r.rowIndex === rowIndex; });
   if (!row) return;
   var normalized = value === '' ? null : value;
+  var key = pendingKey(rowIndex, columnKey);
+  if (!STATE.pendingChanges[key]) STATE.pendingChanges[key] = { kind:'field', rowIndex: rowIndex, columnKey: columnKey, original: row[columnKey] };
+  STATE.pendingChanges[key].value = normalized;
   row[columnKey] = normalized;
   afterCellSaved();
 }
@@ -1244,12 +1320,19 @@ function handleAncillaryStatusChange(selectEl){
   if (newStatus === '×'){
     var reason = window.prompt('失注理由を入力してください（キャンセルすると変更されません）', '');
     if (reason === null){ selectEl.value = prevStatus; return; }
+    var pendingLost = getOrCreatePendingAncillary(rowIndex, item.key);
+    pendingLost.status = '×'; pendingLost.qty = 0; pendingLost.reason = reason.trim();
     row[item.statusKey] = '×';
     row[item.qtyKey] = 0;
     row[item.reasonKey] = reason.trim();
     afterCellSaved();
     return;
   }
+
+  var pending = getOrCreatePendingAncillary(rowIndex, item.key);
+  pending.status = newStatus;
+  pending.qty = isAncillaryQtyEditable(newStatus) ? row[item.qtyKey] : null;
+  pending.reason = '';
 
   row[item.statusKey] = newStatus;
   if (!isAncillaryQtyEditable(newStatus)) row[item.qtyKey] = null;
@@ -1277,7 +1360,11 @@ function handleAncillaryQtyBlur(inputEl){
     showToast(item.label + 'の数量が入力されていません。数量を入力してください。', 'error');
     return;
   }
-  saveCell(rowIndex, inputEl.dataset.col, inputEl.value);
+  var normalizedQty = inputEl.value === '' ? null : Number(inputEl.value);
+  var pending = getOrCreatePendingAncillary(rowIndex, item.key);
+  pending.status = status; pending.qty = normalizedQty; pending.reason = row[item.reasonKey];
+  row[item.qtyKey] = normalizedQty;
+  afterCellSaved();
 }
 function bindDataListEditEvents(){
   var list = document.getElementById('data-list');
@@ -1860,6 +1947,7 @@ function bindEvents(){
   document.getElementById('btn-next-page').addEventListener('click', function(){ STATE.dataPage++; renderDataList(); window.scrollTo(0,0); });
   bindDataListEditEvents();
   bindBulkEditEvents();
+  bindPendingChangesEvents();
 
   document.getElementById('btn-open-csv-modal').addEventListener('click', openCsvModal);
   document.getElementById('btn-close-csv-modal').addEventListener('click', closeCsvModal);
