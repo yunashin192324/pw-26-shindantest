@@ -15,14 +15,43 @@
   endif
 
   assign pp_cta_url = '/pages/propose#destinations'
+  assign pp_place_types = 'beach,chapel,church,monument,restaurant,hotel' | split: ','
+  if metaobject
+    assign pp_loc_ja = metaobject.location_name.value
+    assign pp_from = metaobject.plan_product.value.variants[0].price
+  endif
+-%}
+{%- if metaobject -%}
+  {%- comment -%} Default title/description (used when seo_title / seo_description are empty): keyword + place types + price. {%- endcomment -%}
+  {%- assign pp_place_n = 0 -%}
+  {%- capture pp_places_short -%}
+    {%- for t in pp_place_types -%}
+      {%- assign venue_key = t | append: '_venues' -%}
+      {%- if metaobject.place_types.value contains t or metaobject[venue_key].value != blank -%}
+        {%- if pp_place_n > 0 and pp_place_n < 3 %}・{% endif -%}
+        {%- if pp_place_n < 3 %}{% render 'propose-place-type', type: t, part: 'ja' %}{% endif -%}
+        {%- assign pp_place_n = pp_place_n | plus: 1 -%}
+      {%- endif -%}
+    {%- endfor -%}
+  {%- endcapture -%}
+  {%- if pp_place_n > 0 and pp_from -%}
+    {%- capture pp_default_title -%}{{ pp_loc_ja }}でプロポーズ｜{{ pp_places_short }}から選べる {{ pp_from | money }}〜{%- endcapture -%}
+    {%- capture pp_default_desc -%}{{ pp_loc_ja }}でのプロポーズを、花束・写真撮影・動画撮影の3つのプランでお手伝い。{{ pp_places_short }}などから場所を選べます。{{ pp_from | money }}〜、{{ metaobject.lead_time.value | default: 3 }}日前までリクエストできます。{%- endcapture -%}
+  {%- endif -%}
+{%- endif -%}
+{%- liquid
   if metaobject
     if metaobject.seo_title.value != blank
       assign pp_title = metaobject.seo_title.value
+    elsif pp_default_title != blank
+      assign pp_title = pp_default_title
     elsif metaobject.location_name.value != blank
       assign pp_title = metaobject.location_name.value | append: 'でプロポーズ'
     endif
     if metaobject.seo_description.value != blank
       assign pp_desc = metaobject.seo_description.value
+    elsif pp_default_desc != blank
+      assign pp_desc = pp_default_desc
     elsif metaobject.description.value != blank
       assign pp_desc = metaobject.description.value
     endif
@@ -36,6 +65,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#faf9f6">
   <script>document.documentElement.className += " js";</script>
   <title>{{ pp_title }}{% unless pp_title contains shop.name %}｜{{ shop.name }}{% endunless %}</title>
   {%- if pp_desc != blank %}
@@ -44,9 +74,12 @@
   <link rel="canonical" href="{{ canonical_url }}">
   {%- if pp_is_booking %}
   <meta name="robots" content="noindex">
+  {%- else %}
+  <meta name="robots" content="index, follow, max-image-preview:large">
   {%- endif %}
 
   <meta property="og:site_name" content="{{ shop.name | escape }}">
+  <meta property="og:locale" content="ja_JP">
   <meta property="og:type" content="website">
   <meta property="og:url" content="{{ canonical_url }}">
   <meta property="og:title" content="{{ pp_title | escape }}">
@@ -55,8 +88,10 @@
   {%- endif %}
   {%- if pp_image != blank %}
   <meta property="og:image" content="https:{{ pp_image | image_url: width: 1200 }}">
+  <meta name="twitter:image" content="https:{{ pp_image | image_url: width: 1200 }}">
   {%- endif %}
   <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ pp_title | escape }}">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -66,14 +101,30 @@
   {%- endif %}
   {{ 'propose.css' | asset_url | stylesheet_tag }}
 
+  {%- unless pp_is_booking %}
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      { "@type": "Organization", "@id": {{ shop.url | append: '/#organization' | json }}, "name": {{ shop.name | json }}, "url": {{ shop.url | json }} },
+      { "@type": "WebSite", "@id": {{ shop.url | append: '/#website' | json }}, "name": {{ shop.name | json }}, "url": {{ shop.url | json }}, "inLanguage": "ja", "publisher": { "@id": {{ shop.url | append: '/#organization' | json }} } }
+    ]
+  }
+  </script>
+  {%- endunless %}
+
   {{ content_for_header }}
 </head>
 <body class="pp{% if pp_is_booking %} pp-booking{% endif %}">
+  <nav aria-label="スキップリンク"><a class="skip" href="#main">本文へ移動</a></nav>
+
   {%- unless pp_is_booking -%}
     {% render 'propose-header', cta_url: pp_cta_url %}
   {%- endunless -%}
 
-  {{ content_for_layout }}
+  <main id="main" tabindex="-1">
+    {{ content_for_layout }}
+  </main>
 
   {%- unless pp_is_booking -%}
     {% render 'propose-footer' %}

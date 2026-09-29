@@ -27,10 +27,12 @@ ADDITIONS = """
 /* ---------- Shopify build additions ---------- */
 section[id], #avail { scroll-margin-top: 72px; }
 @media (min-width: 960px) { section[id] { scroll-margin-top: 84px; } }
-.photo .pp-placeholder { position: absolute; inset: 0; width: 100%; height: 100%; fill: var(--off); background: var(--paper-deep); }
+#main:focus { outline: none; }
 .bk-error { margin: 0 0 20px; padding: 14px 16px; border: 1px solid var(--few); color: var(--few); font-size: .86rem; line-height: 1.8; background: var(--white); }
 .pp-booking .bk-main { min-height: 60vh; }
-.theme-results:not(.is-open) { display: none; }
+/* The place filter needs JS (it only hides/shows server-rendered cards). */
+.pf { display: none; }
+.js .pf { display: block; }
 """
 
 

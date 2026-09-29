@@ -1,6 +1,6 @@
 {%- comment -%} TOP: full-screen hero. The main action is 「旅行先から探す」; undecided visitors get a quiet text link. {%- endcomment -%}
 <section class="hero" aria-labelledby="hero-title">
-  {% render 'propose-photo', image: section.settings.image, pos: section.settings.image_position, alt: section.settings.image_alt, eager: true %}
+  {% render 'propose-photo', image: section.settings.image, pos: section.settings.image_position, alt: section.settings.image_alt, eager: true, fallback_name: 'PROPOSE' %}
   <div class="hero-scrim"></div>
   <div class="hero-body">
     <span class="label">{{ section.settings.label | escape }}</span>
@@ -8,7 +8,7 @@
     <p class="hero-text">{{ section.settings.text | escape | newline_to_br }}</p>
     <div class="hero-cta">
       <button type="button" class="btn btn-light" data-scroll="destinations">旅行先から探す <span class="arrow" aria-hidden="true">→</span></button>
-      <button type="button" class="link" data-scroll="find">まだ旅行先が決まっていない方</button>
+      <button type="button" class="link" data-scroll="destinations">場所（ビーチ・チャペルなど）から探す</button>
     </div>
   </div>
 </section>

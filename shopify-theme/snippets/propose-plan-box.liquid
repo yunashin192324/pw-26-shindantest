@@ -1,70 +1,76 @@
 {%- comment -%}
-  Three plan tiers + add-on options (TOP and location pages).
+  The three plans as ONE comparison table (a row per plan, a column per thing included, then
+  the price), followed by the add-on options.
   Accepts:
-    light_price / standard_price / luxury_price — variant prices (cents)
-    from        — true on TOP: prices are "from" (lowest across destinations), with a note
-    booking_url — optional CTA under the plans (location page)
-  Reads:
-    metaobject propose_settings: light_includes / standard_includes / luxury_includes (lists)
-    collections['propose-options'] (add-on products)
+    light_price / standard_price / luxury_price — variant prices (cents); nil hides that row
+    from        — true on TOP: lowest prices across destinations, shown with "〜" and a note
+    booking_url — optional CTA under the options (location page)
+  What each plan includes is fixed here: the 4-digit codes below are 花束 / 写真 / 動画 / 装飾
+  (1 = included). Change a code, or a line in the legend, to change the offer.
+  Reads: collections['propose-options'] (add-on products, tag propose-option)
 {%- endcomment -%}
 {%- liquid
-  assign pp_settings = metaobjects.propose_settings.values.first
-  assign light_inc = pp_settings.light_includes.value
-  if light_inc == blank
-    assign light_inc = 'プロポーズ用の花束,日本語サポート' | split: ','
-  endif
-  assign standard_inc = pp_settings.standard_includes.value
-  if standard_inc == blank
-    assign standard_inc = 'プロポーズ用の花束,プロフォトグラファーによる写真撮影（30分）,写真データ30枚以上（オンライン納品）,日本語サポート' | split: ','
-  endif
-  assign luxury_inc = pp_settings.luxury_includes.value
-  if luxury_inc == blank
-    assign luxury_inc = 'プロポーズ用の花束,プロフォトグラファーによる写真撮影（30分）,写真データ30枚以上（オンライン納品）,動画撮影,プロポーズの場所のデコレーション,日本語サポート' | split: ','
-  endif
   assign options = collections['propose-options'].products
+  assign plan_ids = 'light,standard,luxury' | split: ','
 -%}
-<div class="tiers">
-  {%- for tier in (1..3) -%}
-    {%- liquid
-      case tier
-        when 1
-          assign t_name = 'LIGHT PLAN'
-          assign t_ja = 'ライトプラン'
-          assign t_sum = '花束のみ'
-          assign t_price = light_price
-          assign t_inc = light_inc
-        when 2
-          assign t_name = 'STANDARD PLAN'
-          assign t_ja = 'スタンダードプラン'
-          assign t_sum = '花束＋写真撮影'
-          assign t_price = standard_price
-          assign t_inc = standard_inc
-        else
-          assign t_name = 'LUXURY PLAN'
-          assign t_ja = 'ラグジュアリープラン'
-          assign t_sum = '花束＋写真撮影＋動画撮影＋デコレーション'
-          assign t_price = luxury_price
-          assign t_inc = luxury_inc
-      endcase
-    -%}
-    {%- if t_price -%}
-    <div class="tier reveal">
-      <div class="tier-name">{{ t_name }}</div>
-      <div class="tier-ja">{{ t_ja }}</div>
-      <p class="tier-sum">{{ t_sum }}</p>
-      <div class="tier-price"><span class="price">{{ t_price | money }}</span>{% if from %}<small>〜</small>{% endif %}</div>
-      <ul class="tier-inc">
-        {%- for item in t_inc %}<li>{{ item | escape }}</li>{% endfor -%}
-      </ul>
-    </div>
-    {%- endif -%}
-  {%- endfor -%}
+<div class="ptable-wrap reveal">
+  <table class="ptable">
+    <caption class="sr-only">プランの比較表</caption>
+    <colgroup><col style="width:35%"><col style="width:8.5%"><col style="width:8.5%"><col style="width:8.5%"><col style="width:8.5%"><col style="width:31%"></colgroup>
+    <thead>
+      <tr><th scope="col"><span class="sr-only">プラン</span></th><th scope="col">花束</th><th scope="col">写真</th><th scope="col">動画</th><th scope="col">装飾</th><th scope="col">料金</th></tr>
+    </thead>
+    <tbody>
+      {%- for id in plan_ids -%}
+        {%- liquid
+          case id
+            when 'light'
+              assign p_ja = 'ライト'
+              assign p_en = 'LIGHT'
+              assign p_price = light_price
+              assign p_has = '1000'
+            when 'standard'
+              assign p_ja = 'スタンダード'
+              assign p_en = 'STANDARD'
+              assign p_price = standard_price
+              assign p_has = '1100'
+            else
+              assign p_ja = 'ラグジュアリー'
+              assign p_en = 'LUXURY'
+              assign p_price = luxury_price
+              assign p_has = '1111'
+          endcase
+        -%}
+        {%- if p_price -%}
+        <tr>
+          <th scope="row"><span class="pt-ja">{{ p_ja }}</span><span class="pt-en">{{ p_en }}</span></th>
+          {%- for i in (0..3) -%}
+            {%- assign flag = p_has | slice: i, 1 -%}
+            {%- if flag == '1' -%}
+              <td><span class="yes" aria-hidden="true">✓</span><span class="sr-only">含む</span></td>
+            {%- else -%}
+              <td><span class="no" aria-hidden="true">–</span><span class="sr-only">含まない</span></td>
+            {%- endif -%}
+          {%- endfor -%}
+          <td class="pt-price"><span class="price">{{ p_price | money }}</span>{% if from %}<small>〜</small>{% endif %}</td>
+        </tr>
+        {%- endif -%}
+      {%- endfor -%}
+    </tbody>
+  </table>
 </div>
-{%- if from %}<p class="note plan-price-note">料金は行き先により異なります。</p>{% endif %}
+<ul class="pt-legend reveal">
+  <li><b>花束</b>プロポーズの瞬間に渡す花束</li>
+  <li><b>写真</b>プロのフォトグラファーが30分撮影。写真データ30枚以上をオンライン納品</li>
+  <li><b>動画</b>動画撮影</li>
+  <li><b>装飾</b>プロポーズの場所のデコレーション</li>
+  <li><b>共通</b>日本語サポート</li>
+</ul>
+<p class="pt-guide reveal">写真や動画を残すなら、スタンダード以上を。花束だけでも、サプライズは成立します。</p>
+{%- if from %}<p class="note">料金は旅行先によって異なります。各旅行先のページで確認できます。</p>{% endif %}
 {%- if options.size > 0 %}
 <div class="plan-options reveal">
-  <p class="sub-h">Option</p>
+  <p class="sub-h">オプション（追加できるもの）</p>
   <div class="opt-list">
     {%- for o in options -%}
       {%- liquid
@@ -72,9 +78,10 @@
         if o_desc == blank
           assign o_desc = o.description | strip_html | truncate: 80
         endif
+        assign o_ja = o.metafields.propose.name_ja.value | default: o.title
       -%}
       <div class="opt-row">
-        <div class="en">＋ {{ o.title | escape }}<span>{{ o.metafields.propose.name_ja.value | escape }}</span></div>
+        <div class="opt-name"><b>{{ o_ja | escape }}</b><span class="en-sm">{{ o.title | escape }}</span></div>
         <div class="price">{{ o.price | money }}</div>
         <p>{{ o_desc | escape }}{% if o.metafields.propose.requires_photo.value %}（写真撮影付きのプランで選べます）{% endif %}</p>
       </div>

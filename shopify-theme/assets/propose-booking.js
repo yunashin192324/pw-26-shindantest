@@ -3,7 +3,7 @@
    Ported from propose-lp/src/app.js (BOOKING).
 
    Steps adapt to what is already known:
-     [location] → date → time → plan & options → your details → review
+     [location] → date & time → place → plan & options → your details → review
    ?loc=&date=&time= (from a location page) skip the steps already answered.
 
    Nothing is charged here. "予約をリクエストする" fills the hidden Shopify
@@ -36,13 +36,12 @@
     function fromPrice(l) { return l.plans[0].price; }
 
     var STEP_META = {
-      location: { ja: "旅行先", en: "DESTINATION" },
-      date: { ja: "日付", en: "DATE" },
-      time: { ja: "時間", en: "TIME" },
-      place: { ja: "場所", en: "PLACE" },
-      plan: { ja: "プラン・オプション", en: "PLAN" },
-      customer: { ja: "お客様情報", en: "YOUR DETAILS" },
-      confirm: { ja: "リクエスト内容の確認", en: "REVIEW" }
+      location: { ja: "旅行先" },
+      date: { ja: "日にち・時間" },
+      place: { ja: "場所" },
+      plan: { ja: "プラン・オプション" },
+      customer: { ja: "お客様情報" },
+      confirm: { ja: "リクエスト内容の確認" }
     };
     var bk = null;
     var calOffset = 0;
@@ -75,7 +74,6 @@
 
     function stepsFor(withLocation) {
       var s = withLocation ? ["location", "date"] : ["date"];
-      if (!bk.loc || hasSlots()) s.push("time");
       if (!bk.loc || placesOf(bLoc()).length) s.push("place");
       return s.concat(["plan", "customer", "confirm"]);
     }
@@ -92,7 +90,7 @@
       if (l && !saved && params.date && A.isOpen(A.dateStatus(l, params.date))) bk.date = params.date;
       if (l && !saved && bk.date && params.time && l.timeSlots.indexOf(params.time) > -1 && A.isOpen(A.slotStatus(l, bk.date, params.time))) bk.time = params.time;
       if (saved) bk.i = bk.steps.indexOf("confirm");
-      else bk.i = bk.steps.indexOf(!bk.loc ? "location" : !bk.date ? "date" : (hasSlots() && !bk.time) ? "time" : (!bk.placeSet && bk.steps.indexOf("place") > -1) ? "place" : "plan");
+      else bk.i = bk.steps.indexOf(!bk.loc ? "location" : (!bk.date || (hasSlots() && !bk.time)) ? "date" : (!bk.placeSet && bk.steps.indexOf("place") > -1) ? "place" : "plan");
       calOffset = 0;
       if (bk.date) {
         var dd = new Date(bk.date + "T00:00:00"), t = A.today();
@@ -100,7 +98,7 @@
       }
       var back = $("#bk-back-link");
       back.href = l ? l.url : C.topUrl;
-      back.textContent = l ? "← " + l.name : "← TOP";
+      back.textContent = l ? "← " + l.nameJa : "← TOP";
       bRender();
     }
 
@@ -115,8 +113,7 @@
     function canNext() {
       switch (curStep()) {
         case "location": return !!bk.loc;
-        case "date": return !!bk.date;
-        case "time": return !!bk.time;
+        case "date": return !!bk.date && (!hasSlots() || !!bk.time);
         case "place": return true;
         case "plan": return true;
         case "customer":
@@ -130,14 +127,13 @@
     function bRender(errorMsg) {
       var step = curStep(), total = bk.steps.length;
       $("#bk-step-count").textContent = "STEP " + (bk.i + 1) + " / " + total + "　" + STEP_META[step].ja;
-      $("#bk-step-en").textContent = STEP_META[step].en;
       $("#bk-bar-fill").style.width = ((bk.i + 1) / total * 100) + "%";
       $("#bk-progress").classList.remove("hidden");
       $("#bk-bar").classList.remove("hidden");
 
       var l = bLoc(), chips = [];
-      if (l && step !== "location") chips.push('<span class="chip"><span class="en">' + esc(l.name) + "</span>" + esc(l.nameJa) + '<button type="button" data-change="location">変更</button></span>');
-      if (bk.date && ["time", "place", "plan", "customer", "confirm"].indexOf(step) > -1) chips.push('<span class="chip">' + A.fmtShort(bk.date) + (bk.time && step !== "time" ? " " + esc(bk.time) : "") + '<button type="button" data-change="date">変更</button></span>');
+      if (l && step !== "location") chips.push('<span class="chip"><b>' + esc(l.nameJa) + '</b><button type="button" data-change="location">変更</button></span>');
+      if (bk.date && ["place", "plan", "customer", "confirm"].indexOf(step) > -1) chips.push('<span class="chip">' + A.fmtShort(bk.date) + (bk.time ? " " + esc(bk.time) : "") + '<button type="button" data-change="date">変更</button></span>');
       if (bk.placeSet && ["plan", "customer", "confirm"].indexOf(step) > -1) chips.push('<span class="chip">' + esc(placeLabel(bk)) + '<button type="button" data-change="place">変更</button></span>');
       $("#bk-context").innerHTML = chips.join("");
 
@@ -163,12 +159,22 @@
       return '<div class="photo"><img src="' + esc(l.photo) + '" alt="" loading="lazy" decoding="async" style="object-position:' + esc(l.photoPos) + '"></div>';
     }
 
+    function slotBoxHTML(l) {
+      if (!bk.date) return '<p class="slots-empty">日にちを選ぶと、その日の時間が表示されます。</p>';
+      if (!l.timeSlots.length) return '<p class="slots-empty">時間は、確定のご連絡の際にご相談します。</p>';
+      return '<h3 class="h3 slot-h">' + A.fmtDate(bk.date) + ' の時間を選ぶ</h3><div class="slots">' + l.timeSlots.map(function (t) {
+        var st = A.slotStatus(l, bk.date, t);
+        return '<button type="button" class="slot is-' + st + (bk.time === t ? " is-selected" : "") + '" data-time="' + esc(t) + '"' + (A.isOpen(st) ? "" : " disabled") + '><span class="t">' + esc(t) + '</span><span class="best">' +
+          (l.bestTime && t === l.bestTime ? "<b>ベストタイム</b>" + esc(l.bestTimeNote) : "") + '</span><span class="st">' + STATUS[st].ja + "</span></button>";
+      }).join("") + "</div>";
+    }
+
     var RENDER = {
       location: function () {
         return '<h2 class="h2">どこへ行きますか？</h2><p class="lede">旅行先を選んでください。</p><div class="pick-grid">' +
           C.locations.map(function (l) {
             return '<button type="button" class="pick' + (bk.loc === l.id ? " is-selected" : "") + '" data-loc="' + esc(l.id) + '">' + photoHTML(l) +
-              '<span class="pick-name"><span class="en">' + esc(l.name) + '</span><span class="price">' + money(fromPrice(l)) + "〜</span></span></button>";
+              '<span class="pick-name"><b>' + esc(l.nameJa) + '</b><span class="price">' + money(fromPrice(l)) + "〜</span></span></button>";
           }).join("") + "</div>";
       },
       date: function () {
@@ -187,21 +193,13 @@
           cells.push('<button type="button" class="day-btn is-' + st + (past ? " is-past" : "") + (bk.date === iso ? " is-selected" : "") + '" data-date="' + iso + '"' + (A.isOpen(st) ? "" : " disabled") +
             ' aria-label="' + A.fmtDate(iso) + " " + STATUS[st].ja + '"><span class="dn">' + d + '</span><span class="ds">' + (past ? "" : STATUS[st].mark) + "</span></button>");
         }
-        return '<h2 class="h2">プロポーズの日を選ぶ</h2><p class="lede">' + esc(l.nameJa) + "は" + l.leadDays + "日前までリクエストできます。旅行中の日付を選んでください。</p>" +
-          '<div class="cal-nav"><button type="button" data-cal="-1"' + (calOffset <= 0 ? " disabled" : "") + ' aria-label="前の月">←</button><span class="cal-month">' + y + "." + String(m + 1).padStart(2, "0") +
-          '</span><button type="button" data-cal="1"' + (calOffset >= 11 ? " disabled" : "") + ' aria-label="次の月">→</button></div>' +
+        return '<h2 class="h2">日にちと時間を選ぶ</h2><p class="lede">' + esc(l.nameJa) + "は" + l.leadDays + "日前までリクエストできます。旅行中の日にちを選んでください。</p>" +
+          '<div class="cal-nav"><button type="button" data-cal="-1"' + (calOffset <= 0 ? " disabled" : "") + ' aria-label="前の月">←</button><span class="cal-month">' + y + "年" + (m + 1) +
+          '月</span><button type="button" data-cal="1"' + (calOffset >= 11 ? " disabled" : "") + ' aria-label="次の月">→</button></div>' +
           '<div class="cal">' + DOW.map(function (w) { return '<span class="cal-dow">' + w + "</span>"; }).join("") + cells.join("") + "</div>" +
           '<div class="cal-foot">' + A.LEGEND + "</div>" +
-          '<p class="note" style="margin-top:10px">※ 日時はリクエスト後、手配を確認してから確定します。</p>';
-      },
-      time: function () {
-        var l = bLoc();
-        return '<h2 class="h2">時間を選ぶ</h2><p class="lede">' + A.fmtDate(bk.date) + " に申し込める時間です。</p>" +
-          '<div class="slots" style="margin-top:0">' + l.timeSlots.map(function (t) {
-            var st = A.slotStatus(l, bk.date, t);
-            return '<button type="button" class="slot is-' + st + (bk.time === t ? " is-selected" : "") + '" data-time="' + esc(t) + '"' + (A.isOpen(st) ? "" : " disabled") + '><span class="t">' + esc(t) + '</span><span class="best">' +
-              (l.bestTime && t === l.bestTime ? "<b>BEST TIME</b>" + esc(l.bestTimeNote) : "") + '</span><span class="st">' + STATUS[st].en + "</span></button>";
-          }).join("") + "</div>";
+          '<div class="slot-box" id="bk-slotbox" aria-live="polite">' + slotBoxHTML(l) + "</div>" +
+          '<p class="note" style="margin-top:14px">※ 日時は、リクエストのあと手配を確認してから確定します。</p>';
       },
       place: function () {
         var l = bLoc(), entry = placeEntry(l, bk.place);
@@ -210,16 +208,16 @@
           '<div class="plan-toggle" role="radiogroup" aria-label="場所">' + opts.map(function (o) {
             var t = o.type ? placeType(o.type) : null, on = bk.place === o.type;
             var sub = t ? esc(t.desc) + (o.venues.length ? "（会場の指定もできます）" : "") : esc(l.meetingPoint || "おすすめの場所") + "など、その日にいちばん合う場所をご案内します。";
-            return '<button type="button" role="radio" aria-checked="' + on + '" class="plan-opt is-place' + (on ? " is-selected" : "") + '" data-place="' + esc(o.type) + '"><span class="radio"></span><span><span class="en">' +
-              (t ? t.en : "ANY") + '</span><b class="place-ja">' + (t ? esc(t.ja) : "おまかせ") + "</b><p>" + sub + "</p></span></button>";
+            return '<button type="button" role="radio" aria-checked="' + on + '" class="plan-opt is-place' + (on ? " is-selected" : "") + '" data-place="' + esc(o.type) + '"><span class="radio"></span><span>' +
+              '<b class="place-ja">' + (t ? esc(t.ja) : "おまかせ") + "</b>" + (t ? '<span class="en-sm">' + esc(t.en) + "</span>" : "") + "<p>" + sub + "</p></span></button>";
           }).join("") + "</div>" +
           (entry && entry.venues.length ?
-            '<p class="sub-h">Venue</p>' +
+            '<p class="sub-h">会場を指定する</p>' +
             '<div class="plan-toggle venue-toggle" role="radiogroup" aria-label="会場">' + [""].concat(entry.venues).map(function (v) {
               var on = bk.venue === v;
               return '<button type="button" role="radio" aria-checked="' + on + '" class="plan-opt is-compact' + (on ? " is-selected" : "") + '" data-pvenue="' + esc(v) + '"><span class="radio"></span><span>' + (v ? esc(v) : "指定なし（おすすめをご案内）") + "</span></button>";
             }).join("") + "</div>" : "") +
-          (bk.place ? '<div class="field"><label for="c-placenote">ご希望があればご記入ください<span class="req" style="color:var(--ink-faint)">任意</span></label><input id="c-placenote" type="text" maxlength="200" value="' + esc(bk.placeNote) + '" placeholder="例：滞在中のホテル名、行きたいお店など"></div>' : "") +
+          (bk.place ? '<div class="field"><label for="c-placenote">ご希望があればご記入ください<span class="req opt">任意</span></label><input id="c-placenote" type="text" maxlength="200" value="' + esc(bk.placeNote) + '" placeholder="例：滞在中のホテル名、行きたいお店など"></div>' : "") +
           (FEE_TYPES.indexOf(bk.place) > -1 ? '<p class="note">' + VENUE_NOTE + "</p>" : "");
       },
       plan: function () {
@@ -227,19 +225,19 @@
         return '<h2 class="h2">プランとオプション</h2><p class="lede">プランを選び、必要なものだけ追加してください。</p>' +
           '<div class="plan-toggle" role="radiogroup" aria-label="プラン">' + l.plans.map(function (p) {
             var on = cur.id === p.id;
-            return '<button type="button" role="radio" aria-checked="' + on + '" class="plan-opt' + (on ? " is-selected" : "") + '" data-plan="' + p.id + '"><span class="radio"></span><span><span class="en">' +
-              esc(p.name) + "</span><p>" + esc(p.nameJa) + "｜" + esc(p.summary) + '</p></span><span class="price">' + money(p.price) + "</span></button>";
+            return '<button type="button" role="radio" aria-checked="' + on + '" class="plan-opt' + (on ? " is-selected" : "") + '" data-plan="' + p.id + '"><span class="radio"></span><span>' +
+              '<b class="place-ja">' + esc(p.nameJa) + '</b><span class="en-sm">' + esc(p.name) + "</span><p>" + esc(p.summary) + '</p></span><span class="price">' + money(p.price) + "</span></button>";
           }).join("") + "</div>" +
-          (C.options.length ? '<p class="sub-h">Option</p>' + C.options.map(function (o) {
+          (C.options.length ? '<p class="sub-h">オプション（追加できるもの）</p>' + C.options.map(function (o) {
             var ok = optionAvailable(o, cur), on = ok && bk.options.indexOf(o.id) > -1;
             return '<button type="button" role="checkbox" aria-checked="' + on + '" class="opt-pick' + (on ? " is-on" : "") + '" data-opt="' + esc(o.id) + '"' + (ok ? "" : " disabled") + '><span class="box">' + (on ? "✓" : "") +
-              '</span><span><span class="en">' + esc(o.name) + (o.nameJa ? "<span>" + esc(o.nameJa) + "</span>" : "") + "</span><p>" + esc(o.desc) + '</p></span><span class="price">' + (ok ? "+" + money(o.price) : "撮影付きプランのみ") + "</span></button>";
+              '</span><span><b class="place-ja">' + esc(o.nameJa || o.name) + '</b><span class="en-sm">' + esc(o.name) + "</span><p>" + esc(o.desc) + '</p></span><span class="price">' + (ok ? "+" + money(o.price) : "撮影付きプランのみ") + "</span></button>";
           }).join("") : "");
       },
       customer: function () {
         var c = bk.customer;
         function f(id, label, type, req, ac, ph) {
-          return '<div class="field"><label for="c-' + id + '">' + label + (req ? '<span class="req">必須</span>' : '<span class="req" style="color:var(--ink-faint)">任意</span>') + "</label>" +
+          return '<div class="field"><label for="c-' + id + '">' + label + (req ? '<span class="req">必須</span>' : '<span class="req opt">任意</span>') + "</label>" +
             '<input id="c-' + id + '" type="' + type + '" autocomplete="' + ac + '" value="' + esc(c[id] || "") + '" placeholder="' + ph + '"' + (req ? " required" : "") + "></div>";
         }
         var terms = C.termsUrl ? '<a href="' + esc(C.termsUrl) + '" target="_blank" rel="noopener" style="text-decoration:underline">利用規約・キャンセルポリシー</a>' : "利用規約・キャンセルポリシー";
@@ -271,17 +269,17 @@
       var x = describe(s), l = x.l, p = x.p;
       if (!l || !p) return "";
       var rows = [
-        ["Destination", esc(l.name) + "（" + esc(l.nameJa) + "）"],
-        ["Date", A.fmtDate(s.date, true)]
+        ["旅行先", esc(l.nameJa) + "（" + esc(l.name) + "）"],
+        ["日にち", A.fmtDate(s.date, true)]
       ];
-      if (s.time) rows.push(["Time", esc(s.time) + (l.bestTime && s.time === l.bestTime ? "<small>BEST TIME・" + esc(l.bestTimeNote) + "</small>" : "")]);
-      rows.push(["Meeting", esc(l.meetingPoint || "確定のご連絡でご案内します")]);
-      rows.push(["Plan", esc(p.name) + "<small>" + esc(p.summary) + "・" + money(p.price) + "</small>"]);
-      if (x.hasPlaces) rows.push(["Place", esc(placeLabel(s)) + (s.placeNote ? "<small>" + esc(s.placeNote) + "</small>" : "")]);
-      if (s.time) rows.push(["Flexible", s.customer && s.customer.flex ? "同じ日の別の時間でも可" : "希望の時間のみ"]);
-      rows.push(["Option", x.extra.length ? x.extra.map(function (o) { return esc(o.nameJa || o.name) + " +" + money(o.price); }).join("<br>") : "なし"]);
+      if (s.time) rows.push(["時間", esc(s.time) + (l.bestTime && s.time === l.bestTime ? "<small>ベストタイム・" + esc(l.bestTimeNote) + "</small>" : "")]);
+      rows.push(["集合場所", esc(l.meetingPoint || "確定のご連絡でご案内します")]);
+      if (x.hasPlaces) rows.push(["場所", esc(placeLabel(s)) + (s.placeNote ? "<small>" + esc(s.placeNote) + "</small>" : "")]);
+      rows.push(["プラン", esc(p.nameJa) + "<small>" + esc(p.summary) + "・" + money(p.price) + "</small>"]);
+      if (s.time) rows.push(["時間の調整", s.customer && s.customer.flex ? "同じ日の別の時間でも可" : "希望の時間のみ"]);
+      rows.push(["オプション", x.extra.length ? x.extra.map(function (o) { return esc(o.nameJa || o.name) + " +" + money(o.price); }).join("<br>") : "なし"]);
       return '<dl class="summary">' + rows.map(function (r) { return '<div class="sum-row"><dt>' + r[0] + "</dt><dd>" + r[1] + "</dd></div>"; }).join("") +
-        '<div class="sum-total"><dt>TOTAL<small>確定後のお支払い</small></dt><dd class="price">' + money(x.total) + "</dd></div></dl>";
+        '<div class="sum-total"><dt>合計<small>確定後のお支払い</small></dt><dd class="price">' + money(x.total) + "</dd></div></dl>";
     }
 
     var BIND = {
@@ -298,22 +296,30 @@
         });
       },
       date: function (b) {
+        var l = bLoc(), box = $("#bk-slotbox", b);
         b.addEventListener("click", function (e) {
           var c = e.target.closest("[data-cal]:not(:disabled)");
           if (c) { calOffset += Number(c.getAttribute("data-cal")); bRender(); return; }
-          var d = e.target.closest(".day-btn:not(:disabled)"); if (!d) return;
-          if (bk.date !== d.getAttribute("data-date")) bk.time = null;
-          bk.date = d.getAttribute("data-date");
-          $$(".day-btn", b).forEach(function (x) { x.classList.toggle("is-selected", x === d); });
-          updateBar(); autoNext();
-        });
-      },
-      time: function (b) {
-        b.addEventListener("click", function (e) {
-          var t = e.target.closest(".slot:not(:disabled)"); if (!t) return;
-          bk.time = t.getAttribute("data-time");
-          $$(".slot", b).forEach(function (x) { x.classList.toggle("is-selected", x === t); });
-          updateBar(); autoNext();
+          var d = e.target.closest(".day-btn:not(:disabled)");
+          if (d) {
+            if (bk.date !== d.getAttribute("data-date")) bk.time = null;
+            bk.date = d.getAttribute("data-date");
+            $$(".day-btn", b).forEach(function (x) { x.classList.toggle("is-selected", x === d); });
+            box.innerHTML = slotBoxHTML(l);
+            updateBar();
+            if (!hasSlots()) { autoNext(); return; }
+            // Bring the times into view without jumping the page to the top.
+            var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+            var r = box.getBoundingClientRect();
+            if (r.top > window.innerHeight * 0.55) window.scrollTo({ top: r.top + window.scrollY - 150, behavior: reduce ? "auto" : "smooth" });
+            return;
+          }
+          var t = e.target.closest(".slot:not(:disabled)");
+          if (t) {
+            bk.time = t.getAttribute("data-time");
+            $$(".slot", b).forEach(function (x) { x.classList.toggle("is-selected", x === t); });
+            updateBar(); autoNext();
+          }
         });
       },
       place: function (b) {
@@ -363,10 +369,10 @@
         "【プロポーズ予約リクエスト】" + code,
         "旅行先: " + l.name + "（" + l.nameJa + "）",
         "希望日: " + A.fmtDate(s.date, true),
-        "時間: " + (s.time ? s.time + (l.bestTime && s.time === l.bestTime ? "（BEST TIME・" + l.bestTimeNote + "）" : "") : "未指定（確定時に相談）"),
+        "時間: " + (s.time ? s.time + (l.bestTime && s.time === l.bestTime ? "（ベストタイム・" + l.bestTimeNote + "）" : "") : "未指定（確定時に相談）"),
         "時間の調整: " + (c.flex ? "同じ日の別の時間でも可" : "希望の時間のみ"),
         "集合場所: " + (l.meetingPoint || "-"),
-        "プラン: " + p.name + "（" + p.summary + "） " + money(p.price),
+        "プラン: " + p.nameJa + "（" + p.summary + "） " + money(p.price),
         "場所: " + (x.hasPlaces ? placeLabel(s) + (s.placeNote ? "（ご希望：" + s.placeNote + "）" : "") : "-"),
         "オプション: " + (x.extra.length ? x.extra.map(function (o) { return (o.nameJa || o.name) + " +" + money(o.price); }).join(" / ") : "なし"),
         "合計: " + money(x.total),
@@ -392,7 +398,7 @@
         date: A.fmtDate(bk.date, true),
         time: bk.time || "未指定",
         flexible: c.flex ? "同じ日の別の時間でも可" : "希望の時間のみ",
-        plan: x.p.name + "（" + x.p.summary + "） " + money(x.p.price),
+        plan: x.p.nameJa + "（" + x.p.summary + "） " + money(x.p.price),
         place: x.hasPlaces ? placeLabel(bk) + (bk.placeNote ? "（ご希望：" + bk.placeNote + "）" : "") : "",
         options: x.extra.length ? x.extra.map(function (o) { return (o.nameJa || o.name) + " +" + money(o.price); }).join(" / ") : "なし",
         total: money(x.total),

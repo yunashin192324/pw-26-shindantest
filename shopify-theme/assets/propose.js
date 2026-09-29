@@ -4,7 +4,7 @@
      - header over the hero, mobile drawer, sticky CTA
      - smooth in-page scrolling (data-scroll / same-page #links)
      - reveal on scroll
-     - FAQ "show all", scene explorer
+     - FAQ "show all", TOP place filter, location place cards
      - availability rules (window.ProposeAvail) + the 14-day quick check
    Ported from propose-lp/src/app.js; markup is server-rendered by Liquid.
    ===================================================================== */
@@ -26,10 +26,10 @@
        few     — listed in few_left_slots  (same format)
        available — everything else */
   var STATUS = {
-    available: { mark: "◎", ja: "受付中", en: "OPEN" },
-    few: { mark: "△", ja: "残りわずか", en: "FEW LEFT" },
-    soldout: { mark: "×", ja: "受付終了", en: "FULL" },
-    closed: { mark: "―", ja: "締切", en: "CLOSED" }
+    available: { mark: "◎", ja: "受付中" },
+    few: { mark: "△", ja: "残りわずか" },
+    soldout: { mark: "×", ja: "受付終了" },
+    closed: { mark: "―", ja: "締切" }
   };
   function pad(n) { return String(n).padStart(2, "0"); }
   function isoDate(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
@@ -173,28 +173,44 @@
     });
   });
 
-  /* ---------------- scene explorer (TOP) ---------------- */
-  var themes = $("[data-themes]"), results = $("[data-theme-results]");
-  if (themes && results) {
-    themes.addEventListener("click", function (e) {
-      var btn = e.target.closest(".theme");
-      if (!btn) return;
-      var on = btn.getAttribute("aria-pressed") !== "true";
-      $$(".theme", themes).forEach(function (b) { b.setAttribute("aria-pressed", "false"); });
-      btn.setAttribute("aria-pressed", String(on));
-      var tag = " " + btn.getAttribute("data-theme") + " ";
-      var any = false;
-      $$(".result-row", results).forEach(function (row) {
-        var match = on && (row.getAttribute("data-tags") || "").indexOf(tag) > -1;
-        row.classList.toggle("hidden", !match);
-        any = any || match;
+  /* ---------------- place filter (TOP) ----------------
+     Tiles narrow the destination cards to those offering a place type. Cards are all in the
+     HTML (crawlable); this only hides/shows them and appends ?place= to their links. */
+  var pf = $("[data-pf]");
+  if (pf) {
+    var pfState = "";
+    var pfCards = $$(".dest-card[data-place-types]");
+    var pfStatus = $("[data-pf-status]", pf);
+    var applyPf = function () {
+      var shown = 0;
+      pfCards.forEach(function (c) {
+        var has = !pfState || (" " + c.getAttribute("data-place-types") + " ").indexOf(" " + pfState + " ") > -1;
+        c.hidden = !has;
+        if (has) shown++;
+        $$("[data-match-type]", c).forEach(function (m) { m.hidden = !(pfState && m.getAttribute("data-match-type") === pfState); });
+        var pl = $("[data-places]", c); if (pl) pl.hidden = !!pfState;
+        var base = c.getAttribute("data-dest-url");
+        c.setAttribute("href", pfState ? base + (base.indexOf("?") > -1 ? "&" : "?") + "place=" + pfState : base);
       });
-      results.classList.toggle("is-open", any);
+      $$("[data-pf-type]", pf).forEach(function (t) { t.setAttribute("aria-pressed", String(t.getAttribute("data-pf-type") === pfState)); });
+      if (pfState) {
+        var tile = $('[data-pf-type="' + pfState + '"]', pf);
+        pfStatus.innerHTML = "<span><b>" + esc(tile.getAttribute("data-pf-label")) + "</b>でプロポーズできる旅行先：" + shown + 'か所</span><button type="button" class="link" data-pf-reset>すべて表示</button>';
+        observeReveals(document);
+      } else {
+        pfStatus.innerHTML = "";
+      }
+    };
+    pf.addEventListener("click", function (e) {
+      var t = e.target.closest("[data-pf-type]"), r = e.target.closest("[data-pf-reset]");
+      if (t) { pfState = pfState === t.getAttribute("data-pf-type") ? "" : t.getAttribute("data-pf-type"); applyPf(); }
+      if (r) { pfState = ""; applyPf(); }
     });
   }
 
-  /* ---------------- place picker (location page) ----------------
-     The chosen place travels with every booking link on the page as &place=<type>. */
+  /* ---------------- place cards (location page) ----------------
+     The chosen place travels with every booking link on the page as &place=<type>.
+     Clicking the selected card again clears it ("おまかせ"). */
   var currentPlace = "";
   var picker = $("[data-place-picker]");
   function applyPlace() {
@@ -207,7 +223,7 @@
   function selectPlace(type) {
     if (!picker) return;
     currentPlace = type;
-    $$(".place-chip", picker).forEach(function (c) {
+    $$(".pcard", picker).forEach(function (c) {
       var on = c.getAttribute("data-place") === type;
       c.classList.toggle("is-selected", on);
       c.setAttribute("aria-checked", String(on));
@@ -217,11 +233,11 @@
   }
   if (picker) {
     picker.addEventListener("click", function (e) {
-      var c = e.target.closest("[data-place]");
-      if (c) selectPlace(c.getAttribute("data-place"));
+      var c = e.target.closest(".pcard");
+      if (c) selectPlace(currentPlace === c.getAttribute("data-place") ? "" : c.getAttribute("data-place"));
     });
-    var fromUrl = new URLSearchParams(location.search).get("place");
-    if (fromUrl && picker.querySelector('[data-place="' + fromUrl.replace(/[^a-z]/g, "") + '"]')) selectPlace(fromUrl);
+    var fromUrl = (new URLSearchParams(location.search).get("place") || "").replace(/[^a-z]/g, "");
+    if (fromUrl && picker.querySelector('.pcard[data-place="' + fromUrl + '"]')) selectPlace(fromUrl);
   }
 
   /* ---------------- 14-day quick check (location page) ---------------- */
@@ -253,16 +269,16 @@
         var st = slotStatus(l, sel.date, t);
         return '<button type="button" class="slot is-' + st + (sel.time === t ? " is-selected" : "") + '" data-time="' + esc(t) + '"' + (isOpen(st) ? "" : " disabled") + ">" +
           '<span class="t">' + esc(t) + "</span>" +
-          '<span class="best">' + (l.bestTime && t === l.bestTime ? "<b>BEST TIME</b>" + esc(l.bestTimeNote) : "") + "</span>" +
-          '<span class="st">' + STATUS[st].en + "</span></button>";
+          '<span class="best">' + (l.bestTime && t === l.bestTime ? "<b>ベストタイム</b>" + esc(l.bestTimeNote) : "") + "</span>" +
+          '<span class="st">' + STATUS[st].ja + "</span></button>";
       }).join("");
       var ready = sel.date && (sel.time || !l.timeSlots.length);
       var go = ready
-        ? '<p class="avail-pick"><b>' + fmtDate(sel.date) + (sel.time ? " " + esc(sel.time) : "") + "</b> ・受付中</p>" +
+        ? '<p class="avail-pick"><b>' + fmtDate(sel.date) + (sel.time ? " " + esc(sel.time) : "") + "</b>　受付中</p>" +
           '<a class="btn btn-block" href="' + bookBase + "&date=" + sel.date + (sel.time ? "&time=" + encodeURIComponent(sel.time) : "") + '">この日時で申し込む <span class="arrow" aria-hidden="true">→</span></a>'
-        : '<p class="avail-pick" style="color:var(--ink-faint)">時間を選ぶと、そのまま予約リクエストに進めます。</p>';
+        : '<p class="avail-pick avail-hint">時間を選ぶと、そのまま予約リクエストに進めます。</p>';
       box.innerHTML =
-        '<div class="avail-head"><span class="en">NEXT 14 DAYS</span>' + LEGEND + "</div>" +
+        '<div class="avail-head"><span class="avail-title">今日から14日間</span>' + LEGEND + "</div>" +
         '<div class="days" role="group" aria-label="日付を選ぶ">' + dayBtns + "</div>" +
         (sel.date ? '<p class="note" style="margin-top:16px">' + fmtDate(sel.date) + " の受付状況</p>" : "") +
         '<div class="slots" role="group" aria-label="時間を選ぶ">' + slots + "</div>" +

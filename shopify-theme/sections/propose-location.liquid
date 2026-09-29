@@ -1,9 +1,13 @@
 {%- comment -%}
   Location page — templates/metaobject/propose.json → /pages/propose/<handle>.
-  Answers, top to bottom: where / how much / can I book → what's included, how long,
-  when, rain → what the day looks like → can I still get my date → price → FAQ.
 
-  Everything location-specific comes from the `propose` metaobject (see PROPOSE-SETUP.md §3).
+  Order follows what someone about to propose asks, top to bottom:
+    where can I do it? (hero → reassurance → PLACE CARDS) → what will the day be like? →
+    how much? → is my date open? → what if…? (FAQ)
+  Each fact appears once: the deadline/reply/payment reassurance sits under the intro, rain sits
+  next to the dates, prices live in the plan table (plus the two "from" prices in the hero).
+
+  Everything location-specific comes from the `propose` metaobject (see PROPOSE-SETUP.md §4).
   Block text may use {location} {meeting_point} {lead_time} {reply_hours}.
 {%- endcomment -%}
 {%- liquid
@@ -31,96 +35,114 @@
     endif
   endif
   assign pp_types = 'beach,chapel,church,monument,restaurant,hotel' | split: ','
-  assign fee_types = 'chapel,church,restaurant,hotel' 
-  assign hero_alt = loc.location_name.value | append: 'の景色'
+  assign fee_types = 'chapel,church,restaurant,hotel'
+  assign hero_alt = name_ja | append: 'の景色'
+  assign place_count = 0
 -%}
+{%- capture place_names -%}
+  {%- for t in pp_types -%}
+    {%- assign venue_key = t | append: '_venues' -%}
+    {%- if loc.place_types.value contains t or loc[venue_key].value != blank -%}
+      {%- if place_count > 0 %}・{% endif -%}{% render 'propose-place-type', type: t, part: 'ja' %}
+      {%- assign place_count = place_count | plus: 1 -%}
+    {%- endif -%}
+  {%- endfor -%}
+{%- endcapture -%}
 
 <section class="lhero" aria-labelledby="l-title">
-  {% render 'propose-photo', image: loc.hero_image.value, pos: loc.hero_image_position.value, alt: hero_alt, eager: true %}
+  {% render 'propose-photo', image: loc.hero_image.value, pos: loc.hero_image_position.value, alt: hero_alt, eager: true, fallback_name: name_en %}
   <div class="hero-scrim"></div>
-  <p class="crumb"><a href="/pages/propose">TOP</a> ／ <a href="/pages/propose#destinations">DESTINATIONS</a> ／ {{ name_en | escape }}</p>
+  <p class="crumb"><a href="/pages/propose">TOP</a> ／ <a href="/pages/propose#destinations">旅行先</a> ／ {{ name_ja | escape }}</p>
   <div class="lhero-body">
     <span class="label">Propose in {{ name_title | escape }}</span>
     <p class="lhero-name" aria-hidden="true">{{ name_en | escape }}</p>
     <h1 class="h1" id="l-title">{{ loc.catch_copy.value | escape | newline_to_br }}</h1>
     {%- if plan %}
-    <p class="lhero-price">From<span class="price">{{ light_price | money }}</span></p>
+    <p class="lhero-price"><span>花束のみ <b class="price">{{ light_price | money }}</b>〜</span>{% if std_price %}<span>写真付き <b class="price">{{ std_price | money }}</b>〜</span>{% endif %}</p>
     {%- endif %}
     <div class="lhero-cta">
-      <button type="button" class="btn btn-light" data-scroll="loc-avail">受付状況を見る</button>
-      <a class="btn btn-line" href="{{ booking_url }}">予約する</a>
+      {%- if place_count > 0 %}<button type="button" class="btn btn-light" data-scroll="loc-place">場所を選ぶ</button>{% endif %}
+      <button type="button" class="btn btn-line" data-scroll="loc-avail">日程を確認する</button>
     </div>
   </div>
 </section>
 
-<section class="sec" style="padding-bottom:calc(var(--sec) * .6)">
+<section class="sec" style="padding-bottom:calc(var(--sec) * .5)" aria-labelledby="l-about">
   <div class="wrap">
     <div class="lintro reveal">
-      <div><span class="label">About {{ name_en | escape }}</span><h2 class="h2">{{ loc.tagline.value | escape }}</h2></div>
+      <div><span class="label">About {{ name_en | escape }}</span><h2 class="h2" id="l-about">{{ loc.tagline.value | escape }}</h2></div>
       <p class="lede" style="margin-top:0">{{ loc.description.value | escape | newline_to_br }}</p>
     </div>
-    <dl class="facts reveal" style="margin-top:56px">
-      {%- if plan %}
-      <div class="fact"><dt>Price</dt><dd><span class="price">{{ light_price | money }}</span><small>ライトプラン（花束のみ）</small></dd></div>
-      {%- endif %}
-      <div class="fact"><dt>Time</dt><dd>{{ loc.duration.value | escape }}<small>{{ section.settings.time_sub | escape }}</small></dd></div>
-      {%- if has_best %}
-      <div class="fact"><dt>Best Time</dt><dd>{{ loc.best_time.value | escape }}<small>{{ loc.best_time_note.value | escape }}</small></dd></div>
-      {%- endif %}
-      <div class="fact"><dt>Book By</dt><dd>最短{{ lead_time }}日前まで<small>{{ reply_hours }}時間以内に確定のご連絡</small></dd></div>
-      <div class="fact"><dt>Rain</dt><dd>{{ section.settings.rain_value | escape }}<small>{{ section.settings.rain_sub | escape }}</small></dd></div>
-      <div class="fact"><dt>Support</dt><dd>{{ section.settings.support_value | escape }}<small>{{ section.settings.support_sub | escape }}</small></dd></div>
+    <dl class="facts reveal">
+      <div class="fact"><dt>受付期限</dt><dd>{{ lead_time }}日前まで<small>リクエストの受付</small></dd></div>
+      <div class="fact"><dt>確定のご連絡</dt><dd>{{ reply_hours }}時間以内<small>メールでお知らせ</small></dd></div>
+      <div class="fact"><dt>お支払い</dt><dd>確定のあと<small>リクエストは無料</small></dd></div>
+      <div class="fact"><dt>サプライズ</dt><dd>配慮あり<small>件名を控えめに</small></dd></div>
     </dl>
-    {%- comment -%}
-      Place picker: server-rendered options + one detail panel each. propose.js switches the
-      panel and adds &place=<type> to every booking link on the page (also from ?place=).
-    {%- endcomment -%}
-    <div class="place reveal" id="loc-place" data-place-picker>
-      <div class="place-head">
-        <span class="label">Place</span>
-        <h3 class="h3">{{ section.settings.place_heading | escape }}</h3>
-        <p>{{ name_ja | escape }}では、次の場所から選べます。予約のときにも選び直せます。</p>
-      </div>
-      <div class="place-chips" role="radiogroup" aria-label="プロポーズの場所">
-        <button type="button" role="radio" aria-checked="true" class="place-chip is-selected" data-place=""><span class="en">ANY</span>おまかせ</button>
-        {%- for t in pp_types -%}
-          {%- assign venue_key = t | append: '_venues' -%}
-          {%- if loc.place_types.value contains t or loc[venue_key].value != blank -%}
-          <button type="button" role="radio" aria-checked="false" class="place-chip" data-place="{{ t }}"><span class="en">{% render 'propose-place-type', type: t, part: 'en' %}</span>{% render 'propose-place-type', type: t, part: 'ja' %}</button>
-          {%- endif -%}
-        {%- endfor -%}
-      </div>
-      <div class="place-detail" aria-live="polite">
-        <div data-place-panel=""><p><b>おまかせ</b>{{ meeting_point | escape }}など、その日にいちばん合う場所をご案内します。</p></div>
-        {%- for t in pp_types -%}
-          {%- assign venue_key = t | append: '_venues' -%}
-          {%- assign venues = loc[venue_key].value -%}
-          {%- if loc.place_types.value contains t or venues != blank -%}
-          <div data-place-panel="{{ t }}" hidden>
-            <p><b>{% render 'propose-place-type', type: t, part: 'ja' %}</b>{% render 'propose-place-type', type: t, part: 'desc' %}</p>
-            {%- if venues != blank %}
-            <p class="place-venues">選べる会場：{{ venues | join: '／' | escape }}</p>
-            {%- else %}
-            <p class="place-venues">会場は、ご希望に合わせてご案内します。</p>
-            {%- endif %}
-            {%- if fee_types contains t %}<p class="note">{{ section.settings.venue_note | escape }}</p>{% endif %}
-          </div>
-          {%- endif -%}
-        {%- endfor -%}
-      </div>
-    </div>
   </div>
 </section>
 
-<section class="sec sec-deep" aria-labelledby="l-day">
-  <div class="wrap day">
-    {% render 'propose-photo', image: loc.hero_image.value, class: 'reveal-img', decorative: true, sizes: '(min-width: 900px) 50vw, 100vw' %}
+{%- if place_count > 0 %}
+{%- comment -%}
+  Place cards: every option is visible text (headings + venue names). propose.js toggles the
+  selection, shows the matching detail panel, and adds &place=<type> to every booking link
+  on the page (also from ?place= in the URL).
+{%- endcomment -%}
+<section class="sec sec-deep" id="loc-place" aria-labelledby="l-place">
+  <div class="wrap" data-place-picker>
+    <div class="sec-head reveal">
+      <span class="label">Place</span>
+      <h2 class="h2" id="l-place">{{ name_ja | escape }}の、<br class="br-sp">プロポーズ場所を選ぶ。</h2>
+      <p class="lede">{{ place_names }}から選べます。選んだ場所は、そのまま予約に引き継がれます。</p>
+    </div>
+    <div class="pcards reveal" role="radiogroup" aria-label="プロポーズの場所">
+      {%- for t in pp_types -%}
+        {%- assign venue_key = t | append: '_venues' -%}
+        {%- assign venues = loc[venue_key].value -%}
+        {%- if loc.place_types.value contains t or venues != blank -%}
+        <button type="button" role="radio" aria-checked="false" class="pcard" data-place="{{ t }}">
+          {% render 'propose-icon', name: t %}
+          <span class="tick" aria-hidden="true">✓</span>
+          <b>{% render 'propose-place-type', type: t, part: 'ja' %}</b>
+          <span class="en-sm">{% render 'propose-place-type', type: t, part: 'en' %}</span>
+          <p>{% render 'propose-place-type', type: t, part: 'desc' %}</p>
+          {%- if venues != blank %}<span class="pv">{% for v in venues %}{{ v | escape }}{% unless forloop.last %}<br>{% endunless %}{% endfor %}</span>{% endif %}
+        </button>
+        {%- endif -%}
+      {%- endfor -%}
+    </div>
+    <div class="place-detail" aria-live="polite">
+      <div data-place-panel=""><p class="pd-hint">まだ選ばなくても大丈夫です。迷ったときは、その日にいちばん合う場所をご案内します。</p></div>
+      {%- for t in pp_types -%}
+        {%- assign venue_key = t | append: '_venues' -%}
+        {%- assign venues = loc[venue_key].value -%}
+        {%- if loc.place_types.value contains t or venues != blank -%}
+        <div data-place-panel="{{ t }}" hidden>
+          <p class="pd-title"><b>{% render 'propose-place-type', type: t, part: 'ja' %}</b>で申し込む</p>
+          <p>{% render 'propose-place-type', type: t, part: 'desc' %}</p>
+          {%- if venues != blank %}
+          <p class="place-venues">選べる会場：{{ venues | join: '／' | escape }}</p>
+          {%- else %}
+          <p class="place-venues">会場は、ご希望に合わせてご案内します。</p>
+          {%- endif %}
+          {%- if fee_types contains t %}<p class="note">{{ section.settings.venue_note | escape }}</p>{% endif %}
+          <button type="button" class="btn" data-scroll="loc-avail">日程を確認する <span class="arrow" aria-hidden="true">↓</span></button>
+        </div>
+        {%- endif -%}
+      {%- endfor -%}
+    </div>
+  </div>
+</section>
+{%- endif %}
+
+<section class="sec" aria-labelledby="l-day">
+  <div class="wrap assure-wrap">
+    <div class="sec-head reveal">
+      <span class="label">Your Proposal</span>
+      <h2 class="h2" id="l-day">{{ name_ja | escape }}での、<br class="br-sp">当日の流れ。</h2>
+      <p class="lede">{{ loc.duration.value | escape }}。{{ section.settings.day_lede | escape }}</p>
+    </div>
     <div>
-      <div class="sec-head reveal">
-        <span class="label">Your Proposal</span>
-        <h2 class="h2" id="l-day">{{ section.settings.day_heading | escape | newline_to_br }}</h2>
-        {%- if section.settings.day_lede != blank %}<p class="lede">{{ section.settings.day_lede | escape }}</p>{% endif %}
-      </div>
       <ol class="timeline reveal">
         {%- assign step_no = 0 -%}
         {%- for block in section.blocks -%}
@@ -140,25 +162,11 @@
   </div>
 </section>
 
-<section class="sec" id="loc-avail" aria-labelledby="l-avail">
-  <div class="wrap-narrow">
-    <div class="sec-head reveal">
-      <span class="label">Availability</span>
-      <h2 class="h2" id="l-avail">{{ section.settings.avail_heading | escape | newline_to_br }}</h2>
-      <p class="lede">日付を選ぶと、その日に申し込める時間が分かります。予約はリクエスト制で、{{ reply_hours }}時間以内に確定をご連絡します。</p>
-    </div>
-    <div class="avail reveal" id="avail" data-avail="pp-location-data">
-      <noscript><a class="btn btn-block" href="{{ booking_url }}">日付を選んで申し込む</a></noscript>
-    </div>
-  </div>
-</section>
-
 <section class="sec sec-deep" aria-labelledby="l-plan">
   <div class="wrap">
     <div class="sec-head reveal">
       <span class="label">Plan</span>
-      <h2 class="h2" id="l-plan">{{ name_ja | escape }}の料金</h2>
-      <p class="lede">{{ section.settings.plan_lede | escape }}</p>
+      <h2 class="h2" id="l-plan">{{ name_ja | escape }}の、<br class="br-sp">プランと料金。</h2>
     </div>
     {%- if plan -%}
       {% render 'propose-plan-box', light_price: light_price, standard_price: std_price, luxury_price: lux_price, booking_url: booking_url %}
@@ -166,23 +174,43 @@
   </div>
 </section>
 
-<section class="sec" aria-labelledby="l-faq">
+<section class="sec" id="loc-avail" aria-labelledby="l-avail">
   <div class="wrap-narrow">
     <div class="sec-head reveal">
-      <span class="label">If It Rains &amp; FAQ</span>
-      <h2 class="h2" id="l-faq">{{ section.settings.faq_heading | escape | newline_to_br }}</h2>
+      <span class="label">Availability</span>
+      <h2 class="h2" id="l-avail">{{ name_ja | escape }}の、<br class="br-sp">日程を確認する。</h2>
+      <p class="lede">旅行中の日付を選ぶと、申し込める時間が分かります。</p>
+    </div>
+    <div class="avail reveal" id="avail" data-avail="pp-location-data">
+      <noscript><a class="btn btn-block" href="{{ booking_url }}">日付を選んで申し込む</a></noscript>
     </div>
     {%- if loc.rain_plan.value != blank %}
-    <div class="rain reveal"><span class="en">IF IT RAINS</span><p>{{ loc.rain_plan.value | escape | newline_to_br }}</p></div>
+    <p class="rain-note reveal"><b>雨の日</b>{{ loc.rain_plan.value | escape }}</p>
     {%- endif %}
-    <div class="faq" style="margin-top:32px">
+  </div>
+</section>
+
+<section class="sec sec-deep" aria-labelledby="l-faq">
+  <div class="wrap-narrow">
+    <div class="sec-head reveal">
+      <span class="label">FAQ</span>
+      <h2 class="h2" id="l-faq">{{ name_ja | escape }}のプロポーズ、<br class="br-sp">よくあるご質問</h2>
+    </div>
+    <div class="faq">
       {%- for block in section.blocks -%}
-        {%- if block.type == 'faq' -%}
+        {%- if block.type == 'faq' or block.type == 'rain_faq' -%}
           {%- liquid
             assign q = block.settings.question | replace: '{location}', name_ja
-            assign a = block.settings.answer | replace: '{location}', name_ja | replace: '{meeting_point}', meeting_point | replace: '{lead_time}', lead_time | replace: '{reply_hours}', reply_hours | escape | newline_to_br
+            if block.type == 'rain_faq'
+              assign a = loc.rain_plan.value
+            else
+              assign a = block.settings.answer | replace: '{location}', name_ja | replace: '{meeting_point}', meeting_point | replace: '{lead_time}', lead_time | replace: '{reply_hours}', reply_hours
+            endif
+            assign a_html = a | escape | newline_to_br
           -%}
-          <div {{ block.shopify_attributes }}>{% render 'propose-faq-list', question: q, answer: a %}</div>
+          {%- if a != blank -%}
+          <div {{ block.shopify_attributes }}>{% render 'propose-faq-list', question: q, answer: a_html %}</div>
+          {%- endif -%}
         {%- endif -%}
       {%- endfor -%}
     </div>
@@ -190,13 +218,13 @@
 </section>
 
 <section class="final">
-  {% render 'propose-photo', image: loc.hero_image.value, pos: '50% 40%', decorative: true %}
+  {% render 'propose-photo', image: loc.hero_image.value, pos: '50% 18%', decorative: true, fallback_name: name_en %}
   <div class="wrap">
     <span class="label">Propose in {{ name_title | escape }}</span>
     <h2 class="h2">{{ section.settings.final_heading | escape }}</h2>
-    {%- if plan %}<p class="lede">{{ name_ja | escape }}のプロポーズ {{ light_price | money }}〜</p>{% endif %}
+    {%- if plan %}<p class="lede">{{ name_ja | escape }}のプロポーズ　花束のみ {{ light_price | money }}〜{% if std_price %}／写真付き {{ std_price | money }}〜{% endif %}</p>{% endif %}
     <a class="btn btn-light" href="{{ booking_url }}">この場所で予約する <span class="arrow" aria-hidden="true">→</span></a>
-    <nav class="ft-links" style="justify-content:center;margin-top:48px;color:rgba(255,255,255,.85)" aria-label="ほかの旅行先">
+    <nav class="ft-links" style="justify-content:center;margin-top:48px" aria-label="ほかの旅行先">
       {%- for other in metaobjects.propose.values -%}
         {%- unless other.system.handle == loc.system.handle -%}
           {%- liquid
@@ -205,7 +233,7 @@
               assign other_url = '/pages/propose/' | append: other.system.handle
             endif
           -%}
-          <a href="{{ other_url }}">{{ other.location_name_en.value | escape }}</a>
+          <a href="{{ other_url }}">{{ other.location_name.value | escape }}</a>
         {%- endunless -%}
       {%- endfor -%}
     </nav>
@@ -213,7 +241,7 @@
 </section>
 
 <div class="sticky-cta" id="sticky-cta" aria-hidden="true">
-  {%- if plan %}<div class="sticky-price"><small>FROM</small><span class="price">{{ light_price | money }}</span></div>{% endif %}
+  {%- if plan %}<div class="sticky-price"><small>{% if std_price %}写真付き{% else %}FROM{% endif %}</small><span class="price">{{ std_price | default: light_price | money }}〜</span></div>{% endif %}
   <a class="btn" href="{{ booking_url }}">この場所で予約する</a>
 </div>
 
@@ -253,14 +281,51 @@
       "brand": { "@type": "Brand", "name": {{ shop.name | json }} },
       "offers": {
         "@type": "AggregateOffer",
+        "priceCurrency": {{ shop.currency | json }},
         "lowPrice": {{ light_price | money_without_currency | remove: ',' | json }},
         "highPrice": {{ lux_price | default: std_price | default: light_price | money_without_currency | remove: ',' | json }},
-        "offerCount": {{ plan.variants.size }},
-        "priceCurrency": {{ shop.currency | json }},
-        "url": {{ canonical_url | json }}
+        "offerCount": {{ plan.variants.size | at_most: 3 }},
+        "offers": [
+          {%- for v in plan.variants limit: 3 -%}
+            {%- liquid
+              case forloop.index
+                when 1
+                  assign o_name = 'ライトプラン（花束のみ）'
+                when 2
+                  assign o_name = 'スタンダードプラン（花束＋写真撮影）'
+                else
+                  assign o_name = 'ラグジュアリープラン（花束＋写真撮影＋動画撮影＋デコレーション）'
+              endcase
+            -%}
+          { "@type": "Offer", "name": {{ o_name | json }}, "price": {{ v.price | money_without_currency | remove: ',' | json }}, "priceCurrency": {{ shop.currency | json }}, "url": {{ canonical_url | json }} }{% unless forloop.last %},{% endunless %}
+          {%- endfor -%}
+        ]
       }
     }
-    {%- endif %}
+    {%- endif -%},
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {%- assign faq_first = true -%}
+        {%- for block in section.blocks -%}
+          {%- if block.type == 'faq' or block.type == 'rain_faq' -%}
+            {%- liquid
+              assign q = block.settings.question | replace: '{location}', name_ja
+              if block.type == 'rain_faq'
+                assign a = loc.rain_plan.value
+              else
+                assign a = block.settings.answer | replace: '{location}', name_ja | replace: '{meeting_point}', meeting_point | replace: '{lead_time}', lead_time | replace: '{reply_hours}', reply_hours
+              endif
+            -%}
+            {%- if a != blank -%}
+              {%- unless faq_first %},{% endunless -%}
+              { "@type": "Question", "name": {{ q | json }}, "acceptedAnswer": { "@type": "Answer", "text": {{ a | json }} } }
+              {%- assign faq_first = false -%}
+            {%- endif -%}
+          {%- endif -%}
+        {%- endfor -%}
+      ]
+    }
   ]
 }
 </script>
@@ -269,22 +334,11 @@
 {
   "name": "プロポーズ 旅行先ページ",
   "settings": [
-    { "type": "header", "content": "概要の表" },
-    { "type": "text", "id": "time_sub", "label": "所要時間の補足", "default": "写真撮影は30分" },
-    { "type": "text", "id": "rain_value", "label": "雨天時", "default": "無料で振替" },
-    { "type": "text", "id": "rain_sub", "label": "雨天時の補足", "default": "翌日以降の空き枠へ" },
-    { "type": "text", "id": "support_value", "label": "サポート", "default": "日本語対応" },
-    { "type": "text", "id": "support_sub", "label": "サポートの補足", "default": "当日の連絡も日本語で" },
-    { "type": "header", "content": "見出し" },
-    { "type": "textarea", "id": "day_heading", "label": "当日の流れ 見出し", "default": "当日は、\nこんな時間になります。" },
-    { "type": "text", "id": "day_lede", "label": "当日の流れ 説明", "default": "最初は旅の記念撮影として。気づかれないまま、その瞬間へ。" },
+    { "type": "header", "content": "文章" },
+    { "type": "text", "id": "day_lede", "label": "当日の流れ 説明", "default": "最初は旅の記念撮影として、気づかれないまま、その瞬間へ。" },
     { "type": "textarea", "id": "day_note", "label": "当日の流れ 注記", "default": "※ 写真撮影付きのプラン（スタンダード・ラグジュアリー）の流れです。ライトプランは撮影がありません。" },
-    { "type": "text", "id": "place_heading", "label": "場所 見出し", "default": "どこで伝えますか？" },
     { "type": "text", "id": "venue_note", "label": "場所 注記（チャペル・教会・レストラン・ホテル）", "default": "※ 会場の使用料や条件は会場ごとに異なるため、確定のご連絡でご案内します。" },
-    { "type": "textarea", "id": "avail_heading", "label": "受付状況 見出し", "default": "あなたの旅行日に、\n間に合いますか？" },
-    { "type": "text", "id": "plan_lede", "label": "料金 説明", "default": "花束だけのライトから、写真と動画を残すラグジュアリーまで。必要なものはオプションで足せます。" },
-    { "type": "textarea", "id": "faq_heading", "label": "FAQ 見出し", "default": "雨の日も、\n直前の予約も。" },
-    { "type": "text", "id": "final_heading", "label": "締めの見出し", "default": "あとは、日付を選ぶだけ。" }
+    { "type": "text", "id": "final_heading", "label": "締めの見出し", "default": "あとは、日程を選ぶだけ。" }
   ],
   "blocks": [
     {
@@ -302,6 +356,14 @@
       "settings": [
         { "type": "text", "id": "question", "label": "質問", "info": "{location} が使えます。" },
         { "type": "textarea", "id": "answer", "label": "回答", "info": "{location} {meeting_point} {lead_time} {reply_hours} が使えます。" }
+      ]
+    },
+    {
+      "type": "rain_faq",
+      "name": "FAQ（雨の日・旅行先の「雨天時の対応」を回答に使う）",
+      "limit": 1,
+      "settings": [
+        { "type": "text", "id": "question", "label": "質問", "default": "雨が降ったらどうなりますか？" }
       ]
     }
   ]

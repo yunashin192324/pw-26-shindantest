@@ -62,6 +62,7 @@ def main():
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr(TOP + "/00_はじめにお読みください.html", guide_html(guide))
         z.writestr(TOP + "/設定マニュアル.md", guide)
+        z.write(os.path.join(THEME, "UX-AUDIT.md"), TOP + "/UX検証レポート.md")
         for rel in THEME_FILES:
             z.write(os.path.join(THEME, rel), TOP + "/theme/" + rel)
         for name in ("products.csv", "locations-data.csv"):

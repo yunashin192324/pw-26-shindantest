@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>世界のプロポーズプラン</title>
-<meta name="description" content="旅行先はもう決まっている。あとは、その旅を一生忘れない一日に。ハワイ・パリ・沖縄・グアムなど12の旅行先で。ビーチ・チャペル・教会・レストラン・ホテルなど場所も選べ、料金・当日の流れ・受付状況を確認して、そのまま予約をリクエストできます。">
+<meta name="description" content="旅行先はもう決まっている。あとは、その旅を一生忘れない一日に。ハワイ・パリ・沖縄・グアムなど12の旅行先で、ビーチ・チャペル・教会・レストラン・ホテルなど場所も選べ、そのまま予約をリクエストできます。">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Noto+Sans+JP:wght@300;400;500&display=swap" rel="stylesheet">
@@ -14,24 +14,25 @@
 </head>
 <body>
 
+<nav aria-label="スキップリンク"><a class="skip" id="skip" href="#">本文へ移動</a></nav>
+
 <header class="hd is-over" id="hd">
-  <a href="#/" class="hd-logo" aria-label="世界のプロポーズプラン TOP">PROPOSE<small>世界のプロポーズプラン</small></a>
+  <a href="#/" class="hd-logo">PROPOSE<small>世界のプロポーズプラン</small></a>
   <nav class="hd-nav" aria-label="メインメニュー">
-    <a href="#destinations">DESTINATIONS</a>
-    <a href="#proposal">YOUR PROPOSAL</a>
-    <a href="#plan">PLAN</a>
-    <a href="#faq">FAQ</a>
+    <a href="#destinations">旅行先</a>
+    <a href="#proposal">当日の流れ</a>
+    <a href="#plan">プラン</a>
+    <a href="#faq">よくある質問</a>
     <a href="#destinations" class="btn">予約する</a>
   </nav>
   <button class="hd-menu" id="hd-menu" aria-label="メニューを開く" aria-expanded="false" aria-controls="hd-drawer"><span></span><span></span><span></span></button>
 </header>
 <nav class="hd-drawer" id="hd-drawer" aria-label="メニュー">
-  <a href="#destinations">DESTINATIONS <small>旅行先から探す</small></a>
-  <a href="#proposal">YOUR PROPOSAL <small>当日の流れ</small></a>
-  <a href="#place">PLACE <small>場所から選ぶ</small></a>
-  <a href="#plan">PLAN <small>料金</small></a>
-  <a href="#faq">FAQ <small>よくある質問</small></a>
-  <a href="#find">NOT DECIDED <small>旅行先が未定の方</small></a>
+  <a href="#destinations">旅行先から探す <small>DESTINATIONS</small></a>
+  <a href="#destinations">場所から探す <small>PLACE</small></a>
+  <a href="#proposal">当日の流れ <small>YOUR PROPOSAL</small></a>
+  <a href="#plan">プラン・料金 <small>PLAN</small></a>
+  <a href="#faq">よくある質問 <small>FAQ</small></a>
   <a href="#destinations" class="btn">旅行先から探す</a>
 </nav>
 
@@ -47,9 +48,13 @@
       <p class="hero-text">旅行先は、もう決まっている。<br>あとは、その旅を<br class="br-sp">一生忘れない一日に。</p>
       <div class="hero-cta">
         <button class="btn btn-light" data-scroll="destinations">旅行先から探す <span class="arrow" aria-hidden="true">→</span></button>
-        <button class="link" data-scroll="find">まだ旅行先が決まっていない方</button>
+        <button class="link" data-scroll="destinations">場所（ビーチ・チャペルなど）から探す</button>
       </div>
     </div>
+  </section>
+
+  <section class="trust" aria-label="安心のポイント">
+    <div class="wrap"><ul class="trust-list" id="trust-list"></ul></div>
   </section>
 
   <section class="sec" id="destinations" aria-labelledby="dest-title">
@@ -57,48 +62,24 @@
       <div class="sec-head reveal">
         <span class="label">Destinations</span>
         <h2 class="h2" id="dest-title">旅行先から、<br>プロポーズを探す。</h2>
-        <p class="lede">行き先を選ぶと、料金・当日の流れ・受付状況がすぐに分かります。</p>
+        <p class="lede">行き先を選ぶと、料金・当日の流れ・受付状況がすぐに分かります。旅行先がまだ決まっていない方は、プロポーズしたい「場所」から絞り込めます。</p>
       </div>
+      <div class="pf" id="pf"></div>
       <div class="dest-grid" id="dest-grid"></div>
-      <div class="undecided-link reveal">
-        <p>まだ旅行先が決まっていない方へ</p>
-        <button class="link" data-scroll="find">景色から探す <span class="arrow" aria-hidden="true">→</span></button>
-      </div>
     </div>
   </section>
 
-  <section class="sec sec-deep" id="lastminute" aria-labelledby="lm-title">
+  <section class="sec sec-deep" id="proposal" aria-labelledby="pr-title">
     <div class="wrap assure-wrap">
-      <div class="sec-head reveal">
-        <span class="label">Last Minute</span>
-        <h2 class="h2" id="lm-title">出発の直前でも、<br>間に合います。</h2>
-        <p class="lede">日付と時間を選んで、オンラインでリクエスト。手配を確認して、確定をご連絡します。</p>
-      </div>
-      <ul class="assure-list" id="assure-list"></ul>
-    </div>
-  </section>
-
-  <section class="sec" id="proposal" aria-labelledby="pr-title">
-    <div class="wrap">
       <div class="sec-head reveal">
         <span class="label">Your Proposal</span>
         <h2 class="h2" id="pr-title">当日は、<br class="br-sp">こんな時間になります。</h2>
         <p class="lede">撮影だと気づかれないまま、その瞬間へ。すべて約2時間です。</p>
       </div>
-      <ol class="steps" id="top-steps"></ol>
-      <p class="note photo-note">※ 写真撮影付きのプラン（スタンダード・ラグジュアリー）の流れです。ライトプランは撮影がありません。写真はイメージです。</p>
-    </div>
-  </section>
-
-  <section class="sec sec-deep" id="place" aria-labelledby="place-title">
-    <div class="wrap">
-      <div class="sec-head reveal">
-        <span class="label">Place</span>
-        <h2 class="h2" id="place-title">ビーチでも、<br class="br-sp">チャペルでも。</h2>
-        <p class="lede">旅行先ごとに、プロポーズする場所を選べます。気になる場所から、旅行先を探すこともできます。</p>
+      <div>
+        <ol class="timeline reveal" id="top-steps"></ol>
+        <p class="note" style="margin-top:24px">※ 写真撮影付きのプラン（スタンダード・ラグジュアリー）の流れです。ライトプランは撮影がありません。</p>
       </div>
-      <div class="place-list" id="place-list"></div>
-      <p class="note" style="margin-top:20px">※ 選べる場所は旅行先によって異なります。会場の使用料や条件は会場ごとに異なるため、確定のご連絡でご案内します。</p>
     </div>
   </section>
 
@@ -124,20 +105,8 @@
     </div>
   </section>
 
-  <section class="sec" id="find" aria-labelledby="find-title">
-    <div class="wrap">
-      <div class="sec-head reveal">
-        <span class="label">Not Decided Yet</span>
-        <h2 class="h2" id="find-title">まだ旅行先が<br class="br-sp">決まっていない方へ</h2>
-        <p class="lede">惹かれる景色をひとつ選んでください。合う旅行先を表示します。</p>
-      </div>
-      <div class="themes" id="themes" role="group" aria-label="景色から探す"></div>
-      <div class="theme-results" id="theme-results" aria-live="polite"></div>
-    </div>
-  </section>
-
   <section class="final" aria-labelledby="final-title">
-    <div class="photo" data-photo="maldives" data-alt="上空から見たモルディブの海" data-pos="50% 30%"></div>
+    <div class="photo" data-photo="maldives" data-alt="" data-pos="50% 30%"></div>
     <div class="wrap">
       <span class="label">Ready?</span>
       <h2 class="h2" id="final-title">行き先を選ぶだけで、<br>準備は始まります。</h2>
@@ -155,41 +124,44 @@
   <header class="bk-hd">
     <div class="bk-top">
       <a class="bk-back" id="bk-back-link" href="#/">← 戻る</a>
-      <a href="#/" class="hd-logo" aria-label="TOP">PROPOSE</a>
+      <a href="#/" class="hd-logo">PROPOSE</a>
       <span></span>
     </div>
     <div class="bk-progress" id="bk-progress">
-      <div class="bk-step-label"><span id="bk-step-count"></span><b id="bk-step-en"></b></div>
+      <div class="bk-step-label"><span id="bk-step-count"></span><b id="bk-step-en">お支払いは確定後</b></div>
       <div class="bk-bar-track"><div class="bk-bar-fill" id="bk-bar-fill"></div></div>
     </div>
   </header>
   <div class="bk-main">
+    <h1 class="sr-only">プロポーズの予約リクエスト</h1>
     <div class="bk-context" id="bk-context"></div>
     <div id="bk-body"></div>
   </div>
   <div class="bk-bar" id="bk-bar">
     <div class="bk-bar-in">
-      <div class="bk-total"><small>TOTAL</small><span class="price" id="bk-total">—</span></div>
+      <div class="bk-total"><small>合計（確定後のお支払い）</small><span class="price" id="bk-total">—</span></div>
       <button class="btn btn-ghost" id="bk-prev">戻る</button>
       <button class="btn" id="bk-next">次へ</button>
     </div>
   </div>
 </main>
 
-<div class="sticky-cta" id="sticky-cta" aria-hidden="true"></div>
+<div class="sticky-cta" id="sticky-cta" role="region" aria-label="予約への近道" aria-hidden="true"></div>
 
 <footer class="ft" id="ft">
   <div class="wrap">
     <div class="ft-top">
       <a href="#/" class="hd-logo">PROPOSE<small>世界のプロポーズプラン</small></a>
       <nav class="ft-links" aria-label="フッターメニュー">
-        <a href="#destinations">DESTINATIONS</a>
-        <a href="#faq">FAQ</a>
-        <a href="#/">TERMS</a>
-        <a href="#/">PRIVACY</a>
-        <a href="#/">CONTACT</a>
+        <a href="#destinations">旅行先</a>
+        <a href="#plan">プラン</a>
+        <a href="#faq">よくある質問</a>
+        <a href="#/">利用規約</a>
+        <a href="#/">プライバシー</a>
+        <a href="#/">お問い合わせ</a>
       </nav>
     </div>
+    <nav class="ft-dests" id="ft-dests" aria-label="旅行先一覧"></nav>
     <p class="ft-meta">このページはデザインモックアップです。料金・所要時間・受付締切・確定連絡までの時間・受付状況はデモ用の仮データで、実際の予約リクエスト・決済は行われません。</p>
   </div>
 </footer>

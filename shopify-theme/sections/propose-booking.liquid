@@ -19,15 +19,15 @@
     assign terms_url = shop.terms_of_service.url
   endif
 -%}
-<main class="bk" id="view-booking">
+<div class="bk" id="view-booking">
   <header class="bk-hd">
     <div class="bk-top">
       <a class="bk-back" id="bk-back-link" href="/pages/propose">← TOP</a>
-      <a href="/pages/propose" class="hd-logo" aria-label="TOP">PROPOSE</a>
+      <a href="/pages/propose" class="hd-logo">PROPOSE</a>
       <span></span>
     </div>
     <div class="bk-progress" id="bk-progress">
-      <div class="bk-step-label"><span id="bk-step-count"></span><b id="bk-step-en"></b></div>
+      <div class="bk-step-label"><span id="bk-step-count"></span><b id="bk-step-en">お支払いは確定後</b></div>
       <div class="bk-bar-track"><div class="bk-bar-fill" id="bk-bar-fill"></div></div>
     </div>
   </header>
@@ -40,12 +40,12 @@
   </div>
   <div class="bk-bar" id="bk-bar">
     <div class="bk-bar-in">
-      <div class="bk-total"><small>TOTAL</small><span class="price" id="bk-total">—</span></div>
+      <div class="bk-total"><small>合計（確定後のお支払い）</small><span class="price" id="bk-total">—</span></div>
       <button type="button" class="btn btn-ghost" id="bk-prev">戻る</button>
       <button type="button" class="btn" id="bk-next">次へ</button>
     </div>
   </div>
-</main>
+</div>
 
 {%- comment -%}
   The actual submission. Every contact[...] field appears in the notification email

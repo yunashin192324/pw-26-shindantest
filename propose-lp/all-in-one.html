@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>世界のプロポーズプラン</title>
-<meta name="description" content="旅行先はもう決まっている。あとは、その旅を一生忘れない一日に。ハワイ・パリ・沖縄・グアムなど12の旅行先で。ビーチ・チャペル・教会・レストラン・ホテルなど場所も選べ、料金・当日の流れ・受付状況を確認して、そのまま予約をリクエストできます。">
+<meta name="description" content="旅行先はもう決まっている。あとは、その旅を一生忘れない一日に。ハワイ・パリ・沖縄・グアムなど12の旅行先で、ビーチ・チャペル・教会・レストラン・ホテルなど場所も選べ、そのまま予約をリクエストできます。">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Noto+Sans+JP:wght@300;400;500&display=swap" rel="stylesheet">
@@ -28,12 +28,13 @@ button { background: none; border: 0; cursor: pointer; }
   --paper-deep: #f2efe8;
   --ink: #161512;
   --ink-soft: #4d4a44;
-  --ink-faint: #8b877d;
+  --ink-faint: #6b665b;
   --line: #e3ded2;
   --gold: #a3803f;
+  --gold-ink: #79601f;
   --white: #ffffff;
   --ok: #3f6b52;
-  --few: #a86a2a;
+  --few: #94601f;
   --off: #b9b5ab;
 
   --en: "Cormorant Garamond", "Times New Roman", Georgia, serif;
@@ -72,7 +73,7 @@ body {
   font-size: .82rem;
   letter-spacing: .26em;
   text-transform: uppercase;
-  color: var(--gold);
+  color: var(--gold-ink);
   line-height: 1.4;
   margin-bottom: 18px;
 }
@@ -121,13 +122,12 @@ body {
 
 /* ---------- Photos ---------- */
 .photo { position: relative; overflow: hidden; background: var(--paper-deep); }
-.photo img, .photo svg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.photo .soon {
-  position: absolute; right: 10px; bottom: 8px; z-index: 1;
-  font-family: var(--en); font-size: .64rem; letter-spacing: .14em; text-transform: uppercase; white-space: nowrap;
-  color: rgba(255,255,255,.85); text-shadow: 0 1px 4px rgba(0,0,0,.35);
-}
-.photo-credit { font-size: .7rem; color: var(--ink-faint); }
+.photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.photo .ph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: linear-gradient(165deg, var(--c1, #5b6b73), var(--c2, #c9c2b4)); color: rgba(255,255,255,.94); }
+.ph-name { font-family: var(--en); font-size: clamp(1.05rem, 4.6vw, 1.5rem); letter-spacing: .22em; font-weight: 500; text-align: center; padding: 0 8px; text-shadow: 0 1px 8px rgba(0,0,0,.2); }
+.ph-soon { position: absolute; right: 10px; bottom: 8px; font-size: .75rem; letter-spacing: .1em; color: rgba(255,255,255,.92); text-shadow: 0 1px 4px rgba(0,0,0,.4); }
+.lhero .ph-name, .final .ph-name, .hero .ph-name { display: none; }
+
 
 /* ---------- Header ---------- */
 .hd {
@@ -141,8 +141,8 @@ body {
 }
 .hd.is-over { background: transparent; color: var(--white); border-color: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
 .hd-logo { font-family: var(--en); font-size: 1.3rem; font-weight: 500; letter-spacing: .2em; }
-.hd-logo small { display: block; font-family: var(--ja); font-size: .56rem; letter-spacing: .2em; font-weight: 400; line-height: 1; margin-top: -2px; opacity: .8; }
-.hd-nav { display: none; align-items: center; gap: 36px; font-family: var(--en); font-size: .88rem; font-weight: 500; letter-spacing: .2em; }
+.hd-logo small { display: block; font-family: var(--ja); font-size: .75rem; letter-spacing: .2em; font-weight: 400; line-height: 1; margin-top: -2px; opacity: .8; }
+.hd-nav { display: none; align-items: center; gap: 34px; font-size: .88rem; font-weight: 400; letter-spacing: .1em; }
 .hd-nav a:not(.btn):hover { opacity: .6; }
 .hd-nav .btn { min-height: 42px; padding: 0 22px; font-size: .8rem; }
 .hd.is-over .hd-nav .btn { background: var(--white); color: var(--ink); border-color: var(--white); }
@@ -159,8 +159,9 @@ body {
   transition: opacity .3s var(--ease), transform .3s var(--ease), visibility .3s;
 }
 .hd-drawer.is-open { opacity: 1; transform: none; visibility: visible; }
-.hd-drawer a { display: flex; justify-content: space-between; align-items: baseline; padding: 18px 0; border-bottom: 1px solid var(--line); font-family: var(--en); font-size: 1.15rem; letter-spacing: .16em; }
-.hd-drawer a small { font-family: var(--ja); font-size: .78rem; letter-spacing: .08em; color: var(--ink-faint); }
+.hd-drawer a { display: flex; justify-content: space-between; align-items: baseline; padding: 18px 0; border-bottom: 1px solid var(--line); font-size: 1.02rem; letter-spacing: .08em; }
+.hd-drawer a small { font-family: var(--en); font-size: .78rem; letter-spacing: .16em; color: var(--ink-faint); }
+.hd-drawer a.btn { justify-content: center; }
 .hd-drawer .btn { margin-top: 28px; }
 @media (min-width: 960px) {
   .hd { height: 76px; }
@@ -188,97 +189,86 @@ body {
 @media (min-width: 760px) { .dest-grid { grid-template-columns: repeat(3, 1fr); gap: 56px 24px; } }
 @media (min-width: 1100px) { .dest-grid { grid-template-columns: repeat(4, 1fr); gap: 64px 24px; } }
 .dest-card { display: block; }
-.dest-card .photo { aspect-ratio: 3 / 4; }
-.dest-card .photo img, .dest-card .photo svg { transition: transform 1.2s var(--ease); }
-.dest-card:hover .photo img, .dest-card:hover .photo svg { transform: scale(1.04); }
+.dest-card .photo { aspect-ratio: 4 / 5; }
+.dest-card .photo img { transition: transform 1.2s var(--ease); }
+.dest-card:hover .photo img { transform: scale(1.04); }
+.dest-card[hidden] { display: none; }
 .dest-body { padding-top: 16px; }
 .dest-name { font-family: var(--en); font-size: 1.28rem; font-weight: 500; letter-spacing: .14em; line-height: 1.3; }
-.dest-ja { font-size: .78rem; color: var(--ink-faint); letter-spacing: .1em; line-height: 1.6; }
-.dest-price { margin-top: 10px; font-size: .78rem; color: var(--ink-soft); line-height: 1.6; }
-.dest-price .price { font-size: 1.12rem; color: var(--ink); margin-left: 4px; }
+.dest-ja { font-size: .82rem; color: var(--ink-soft); letter-spacing: .1em; line-height: 1.6; }
+.dest-places, .dest-match { margin-top: 6px; font-size: .78rem; color: var(--ink-soft); line-height: 1.7; }
+.dest-match { color: var(--ink); }
+.dest-match b { font-weight: 500; color: var(--gold-ink); margin-right: 8px; }
+.dest-places[hidden], .dest-match[hidden] { display: none; }
+.dest-price { margin-top: 10px; font-size: .82rem; color: var(--ink-soft); line-height: 1.5; }
+.dest-price small { font-size: .78rem; margin-right: 6px; }
+.dest-price .price { font-size: 1.2rem; color: var(--ink); }
+.dest-sub { font-size: .78rem; color: var(--ink-soft); line-height: 1.6; }
 .dest-more { margin-top: 10px; display: inline-flex; gap: 8px; font-size: .78rem; letter-spacing: .06em; white-space: nowrap; border-bottom: 1px solid var(--line); padding-bottom: 2px; transition: border-color .3s; }
 .dest-card:hover .dest-more { border-color: var(--ink); }
-@media (max-width: 459px) { .dest-more .sm-hide { display: none; } }
-.undecided-link { margin-top: clamp(56px, 8vw, 88px); padding-top: 28px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: center; justify-content: space-between; }
-.undecided-link p { font-size: .88rem; color: var(--ink-soft); }
-
-/* ---------- TOP: last-minute reassurance ---------- */
-.assure-list { display: grid; gap: 0; border-top: 1px solid var(--line); }
-.assure-item { display: grid; grid-template-columns: 88px 1fr; gap: 16px; align-items: baseline; padding: 26px 0; border-bottom: 1px solid var(--line); }
-.assure-key { font-family: var(--en); font-size: 2.1rem; font-weight: 500; line-height: 1; font-variant-numeric: lining-nums; }
-.assure-key small { font-family: var(--ja); font-size: .72rem; font-weight: 400; margin-left: 2px; }
-.assure-item .h3 { margin-bottom: 4px; }
-.assure-item p { font-size: .86rem; color: var(--ink-soft); line-height: 1.9; }
+/* ---------- TOP: trust strip ---------- */
+.trust { background: var(--paper); border-bottom: 1px solid var(--line); }
+.trust-list { display: grid; grid-template-columns: 1fr 1fr; }
+.trust-item { display: flex; gap: 12px; align-items: flex-start; padding: 18px 8px 18px 0; border-bottom: 1px solid var(--line); }
+.trust-item:nth-child(2n) { padding-left: 14px; border-left: 1px solid var(--line); }
+.trust-item:nth-last-child(-n+2) { border-bottom: 0; }
+.trust-item .ic { width: 28px; height: 28px; flex: none; color: var(--gold-ink); margin-top: 2px; }
+.trust-item b { display: block; font-weight: 500; font-size: .92rem; line-height: 1.5; letter-spacing: .04em; }
+.trust-item span { display: block; font-size: .8rem; color: var(--ink-soft); line-height: 1.7; }
+@media (min-width: 900px) {
+  .trust-list { grid-template-columns: repeat(4, 1fr); }
+  .trust-item, .trust-item:nth-child(2n) { padding: 26px 24px; border-bottom: 0; border-left: 1px solid var(--line); }
+  .trust-item:first-child { border-left: 0; padding-left: 0; }
+}
+.assure-wrap { display: block; }
 @media (min-width: 900px) {
   .assure-wrap { display: grid; grid-template-columns: 5fr 7fr; gap: 80px; align-items: start; }
   .assure-wrap .sec-head { margin-bottom: 0; position: sticky; top: 120px; }
 }
 
-/* ---------- Proposal steps (TOP, with photos) ---------- */
-.steps { display: grid; gap: 28px; counter-reset: s; }
-.step { display: grid; grid-template-columns: 38% 1fr; gap: 18px; align-items: center; align-content: start; }
-.step .photo { aspect-ratio: 4 / 5; }
-.step-no { font-family: var(--en); font-size: .82rem; letter-spacing: .24em; color: var(--gold); display: block; margin-bottom: 6px; }
-.step .h3 { margin-bottom: 4px; }
-.step p { font-size: .84rem; color: var(--ink-soft); line-height: 1.85; }
-@media (min-width: 900px) {
-  .steps { grid-template-columns: repeat(5, 1fr); gap: 24px; position: relative; }
-  .step { grid-template-columns: 1fr; align-items: start; gap: 20px; }
-  .step .photo { aspect-ratio: 3 / 4; }
-}
-.photo-note { margin-top: 28px; }
+.step-no { font-family: var(--en); font-size: .82rem; letter-spacing: .24em; color: var(--gold-ink); display: block; margin-bottom: 6px; }
 
-/* ---------- Plan overview ---------- */
-.plan-box { display: grid; gap: 40px; }
-@media (min-width: 900px) { .plan-box { grid-template-columns: 5fr 6fr; gap: 80px; align-items: start; } }
-.plan-main { background: var(--white); border: 1px solid var(--line); padding: clamp(28px, 5vw, 48px); }
-.plan-name { font-family: var(--en); font-size: 1.35rem; font-weight: 500; letter-spacing: .18em; }
-.plan-price { margin: 10px 0 24px; display: flex; align-items: baseline; gap: 6px; }
-.plan-price .price { font-size: clamp(2.2rem, 7vw, 2.9rem); line-height: 1; }
-.plan-price small { font-size: 1rem; color: var(--ink-soft); }
-.plan-price-note { margin: -16px 0 24px; }
-.includes { border-top: 1px solid var(--line); padding-top: 18px; }
-.includes-h { font-size: .74rem; letter-spacing: .14em; color: var(--ink-faint); margin-bottom: 8px; }
-.includes li { position: relative; padding-left: 18px; font-size: .9rem; line-height: 2.1; }
-.includes li::before { content: ""; position: absolute; left: 0; top: 1.05em; width: 8px; height: 1px; background: var(--gold); }
+/* ---------- Plans: comparison table + options ---------- */
+.ptable-wrap { background: var(--white); border: 1px solid var(--line); }
+.ptable { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.ptable th, .ptable td { padding: 16px 2px; text-align: center; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.ptable tr:last-child th, .ptable tr:last-child td { border-bottom: 0; }
+.ptable thead th { padding: 16px 0 12px; font-size: .75rem; font-weight: 500; letter-spacing: 0; white-space: nowrap; border-bottom: 1px solid var(--ink); background: var(--paper); }
+.ptable tbody th { text-align: left; padding: 16px 0 16px 12px; font-weight: 400; }
+.pt-ja { display: block; font-weight: 500; font-size: .86rem; line-height: 1.4; letter-spacing: 0; white-space: nowrap; }
+.pt-en { display: block; font-family: var(--en); font-size: .75rem; letter-spacing: .1em; color: var(--ink-faint); line-height: 1.4; font-weight: 500; }
+.ptable .yes { color: var(--gold-ink); font-size: 1.2rem; line-height: 1; }
+.ptable .no { color: var(--ink-faint); }
+.pt-price { padding-right: 10px; }
+.pt-price .price { font-size: 1.1rem; }
+.pt-price small { font-size: .8rem; color: var(--ink-soft); margin-left: 1px; }
+@media (min-width: 760px) { .ptable thead th { font-size: .9rem; letter-spacing: .04em; } .ptable th, .ptable td { padding: 22px 8px; } .ptable tbody th { padding: 22px 8px 22px 28px; } .pt-ja { font-size: .95rem; } .pt-price { padding-right: 24px; } .pt-price .price { font-size: 1.35rem; } }
+.pt-legend { margin-top: 20px; display: grid; gap: 4px; }
+.pt-legend li { font-size: .84rem; color: var(--ink-soft); line-height: 1.8; display: grid; grid-template-columns: 3.2em 1fr; gap: 8px; }
+.pt-legend b { font-weight: 500; color: var(--ink); }
+.pt-guide { margin-top: 18px; padding: 16px 18px; background: var(--paper-deep); border-left: 2px solid var(--gold); font-size: .9rem; line-height: 1.9; }
+.sec-deep .pt-guide { background: var(--white); }
+.plan-options { margin-top: clamp(40px, 6vw, 64px); max-width: 760px; }
 .opt-list { border-top: 1px solid var(--ink); }
 .opt-row { display: grid; grid-template-columns: 1fr auto; gap: 4px 20px; padding: 20px 0; border-bottom: 1px solid var(--line); }
-.opt-row .en { font-size: 1.05rem; font-weight: 500; letter-spacing: .14em; }
-.opt-row .en span { display: inline-block; font-family: var(--ja); font-size: .78rem; letter-spacing: .06em; color: var(--ink-soft); margin-left: 8px; font-weight: 400; white-space: nowrap; }
+.opt-name b { font-weight: 500; font-size: 1.02rem; letter-spacing: .04em; margin-right: 10px; }
+.en-sm { font-family: var(--en); font-size: .75rem; letter-spacing: .14em; color: var(--ink-faint); font-weight: 500; }
 .opt-row .price { font-size: 1.1rem; text-align: right; }
-.opt-row p { grid-column: 1 / -1; font-size: .82rem; color: var(--ink-soft); line-height: 1.8; }
-.opt-row.is-allin { border-bottom: 0; margin-top: 12px; padding: 24px; background: var(--paper-deep); border-top: 0; }
+.opt-row p { grid-column: 1 / -1; font-size: .84rem; color: var(--ink-soft); line-height: 1.8; }
+.plan-cta { margin-top: 36px; max-width: 480px; }
 
 /* ---------- FAQ (native details) ---------- */
 .faq { border-top: 1px solid var(--line); }
 .faq details { border-bottom: 1px solid var(--line); }
 .faq summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: 28px 1fr 20px; gap: 8px; align-items: baseline; padding: 22px 0; font-weight: 500; font-size: .95rem; line-height: 1.7; }
 .faq summary::-webkit-details-marker { display: none; }
-.faq summary .q { font-family: var(--en); font-size: 1.1rem; color: var(--gold); }
+.faq summary .q { font-family: var(--en); font-size: 1.1rem; color: var(--gold-ink); }
 .faq summary .pm { position: relative; width: 14px; height: 14px; align-self: center; }
 .faq summary .pm::before, .faq summary .pm::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--ink); transition: transform .3s var(--ease); }
 .faq summary .pm::after { transform: rotate(90deg); }
 .faq details[open] summary .pm::after { transform: rotate(0); }
 .faq .a { padding: 0 28px 24px 36px; color: var(--ink-soft); font-size: .9rem; line-height: 2; }
 .faq-more { margin-top: 32px; text-align: center; }
-
-/* ---------- Undecided explorer ---------- */
-.themes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-@media (min-width: 900px) { .themes { grid-template-columns: repeat(6, 1fr); gap: 16px; } }
-.theme { position: relative; display: block; text-align: left; }
-.theme .photo { aspect-ratio: 1 / 1; }
-.theme .photo::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,.55)); transition: background .3s; }
-.theme-label { position: absolute; left: 10px; bottom: 8px; z-index: 1; color: var(--white); line-height: 1.3; }
-.theme-label .en { display: block; font-size: .68rem; letter-spacing: .22em; opacity: .85; }
-.theme-label b { font-weight: 500; font-size: .92rem; letter-spacing: .1em; }
-.theme[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: 3px; }
-.theme[aria-pressed="true"] .photo::after { background: linear-gradient(180deg, rgba(0,0,0,.1), rgba(0,0,0,.6)); }
-.theme-results { margin-top: 36px; border-top: 1px solid var(--line); }
-.theme-results:empty { display: none; }
-.result-row { display: grid; grid-template-columns: 76px 1fr auto; gap: 16px; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--line); }
-.result-row .photo { aspect-ratio: 1 / 1; }
-.result-row .dest-name { font-size: 1.05rem; }
-.result-row .price { font-size: 1rem; }
 
 /* ---------- Final CTA + footer ---------- */
 .final { position: relative; color: var(--white); text-align: center; padding: clamp(120px, 18vw, 200px) 0; }
@@ -290,9 +280,12 @@ body {
 .ft { background: var(--ink); color: rgba(255,255,255,.72); padding: 56px 0 calc(40px + var(--bar-h)); font-size: .8rem; }
 .ft-top { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 28px; }
 .ft .hd-logo { color: var(--white); }
-.ft-links { display: flex; flex-wrap: wrap; gap: 12px 28px; font-family: var(--en); letter-spacing: .18em; font-size: .86rem; }
+.ft-links { display: flex; flex-wrap: wrap; gap: 12px 28px; letter-spacing: .1em; font-size: .86rem; }
+.final .ft-links { color: rgba(255,255,255,.9); }
+.ft-dests { margin-top: 32px; padding-top: 24px; border-top: 1px solid rgba(255,255,255,.12); display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: .8rem; }
+.ft-dests a:hover { color: var(--white); }
 .ft-links a:hover { color: var(--white); }
-.ft-meta { margin-top: 40px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,.12); font-size: .72rem; line-height: 1.9; color: rgba(255,255,255,.5); }
+.ft-meta { margin-top: 32px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,.12); font-size: .78rem; line-height: 1.9; color: rgba(255,255,255,.66); }
 @media (min-width: 900px) { .ft { padding-bottom: 40px; } }
 
 /* ---------- Sticky mobile CTA ---------- */
@@ -307,7 +300,7 @@ body {
 .sticky-cta.is-shown { transform: none; }
 .sticky-cta .btn { flex: 1; min-height: 50px; padding: 0 16px; }
 .sticky-price { line-height: 1.25; }
-.sticky-price small { display: block; font-size: .64rem; letter-spacing: .12em; color: var(--ink-faint); }
+.sticky-price small { display: block; font-size: .75rem; letter-spacing: .08em; color: var(--ink-soft); }
 .sticky-price .price { font-size: 1.2rem; }
 @media (min-width: 960px) { .sticky-cta { display: none; } }
 
@@ -317,26 +310,26 @@ body {
 .lhero { position: relative; height: 92svh; min-height: 600px; max-height: 960px; color: var(--white); }
 .lhero .photo { position: absolute; inset: 0; }
 .lhero-body { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 var(--gut) clamp(36px, 8vh, 88px); max-width: var(--wrap); margin: 0 auto; }
-.crumb { position: absolute; top: 76px; left: 0; right: 0; max-width: var(--wrap); margin: 0 auto; padding: 0 var(--gut); z-index: 2; font-size: .72rem; letter-spacing: .12em; color: rgba(255,255,255,.85); }
+.crumb { position: absolute; top: 76px; left: 0; right: 0; max-width: var(--wrap); margin: 0 auto; padding: 0 var(--gut); z-index: 2; font-size: .75rem; letter-spacing: .12em; color: rgba(255,255,255,.85); }
 .crumb a:hover { text-decoration: underline; }
 @media (min-width: 960px) { .crumb { top: 96px; } }
 .lhero .label { color: rgba(255,255,255,.9); margin-bottom: 8px; }
 .lhero-name { font-family: var(--en); font-weight: 400; font-size: clamp(2.5rem, 11vw, 6.4rem); letter-spacing: .06em; line-height: 1; margin-bottom: 22px; }
 .lhero .h1 { color: var(--white); font-size: clamp(1.35rem, 5vw, 2.1rem); }
-.lhero-price { margin-top: 16px; font-size: .82rem; letter-spacing: .12em; color: rgba(255,255,255,.9); }
-.lhero-price .price { font-size: 1.6rem; margin-left: 6px; color: var(--white); }
+.lhero-price { margin-top: 16px; font-size: .84rem; letter-spacing: .08em; color: rgba(255,255,255,.94); display: flex; flex-wrap: wrap; gap: 4px 22px; align-items: baseline; }
+.lhero-price .price { font-size: 1.5rem; margin: 0 2px 0 4px; color: var(--white); }
 .lhero-cta { margin-top: 28px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; max-width: 480px; }
 .lhero-cta .btn { padding: 0 12px; }
 
-.facts { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--line); }
+.facts { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--line); margin-top: 48px; }
 .fact { padding: 22px 16px 22px 0; border-bottom: 1px solid var(--line); }
 .fact:nth-child(2n) { padding-left: 16px; border-left: 1px solid var(--line); }
-.fact dt { font-family: var(--en); font-size: .74rem; letter-spacing: .22em; color: var(--ink-faint); text-transform: uppercase; }
+.fact dt { font-size: .8rem; letter-spacing: .08em; color: var(--gold-ink); font-weight: 500; }
 .fact dd { margin-top: 4px; font-weight: 500; font-size: .95rem; line-height: 1.7; }
-.fact dd small { display: block; font-weight: 300; font-size: .76rem; color: var(--ink-soft); line-height: 1.7; }
-.fact dd .price { font-size: 1.35rem; font-weight: 500; }
+.fact dd small { display: block; font-weight: 400; font-size: .8rem; color: var(--ink-soft); line-height: 1.7; }
+
 @media (min-width: 900px) {
-  .facts { grid-template-columns: repeat(6, 1fr); }
+  .facts { grid-template-columns: repeat(4, 1fr); }
   .fact, .fact:nth-child(2n) { padding: 26px 20px; border-left: 1px solid var(--line); }
   .fact:first-child { border-left: 0; padding-left: 0; }
 }
@@ -344,23 +337,21 @@ body {
 .lintro { display: grid; gap: 40px; }
 @media (min-width: 900px) { .lintro { grid-template-columns: 5fr 7fr; gap: 80px; align-items: end; } }
 
-/* Location: the day (text timeline + one big photo) */
-.day { display: grid; gap: 48px; }
-@media (min-width: 900px) { .day { grid-template-columns: 1fr 1fr; gap: 88px; align-items: start; } .day .photo { position: sticky; top: 110px; } }
-.day .photo { aspect-ratio: 4 / 5; }
+/* Location: the day (text timeline) */
 .timeline { border-left: 1px solid var(--line); margin-left: 6px; }
 .tl-item { position: relative; padding: 0 0 34px 30px; }
 .tl-item:last-child { padding-bottom: 0; }
 .tl-item::before { content: ""; position: absolute; left: -5px; top: .7em; width: 9px; height: 9px; border-radius: 50%; background: var(--paper); border: 1px solid var(--gold); }
 .tl-item.is-key::before { background: var(--gold); }
 .tl-item .step-no { margin-bottom: 2px; }
-.tl-item p { font-size: .88rem; color: var(--ink-soft); line-height: 1.9; }
+.tl-item .h3 { margin-bottom: 2px; }
+.tl-item p { font-size: .9rem; color: var(--ink-soft); line-height: 1.9; }
 
 /* Location: availability quick check */
 .avail { background: var(--white); border: 1px solid var(--line); padding: clamp(20px, 4vw, 40px); }
 .avail-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
-.avail-head .en { font-size: 1.05rem; font-weight: 500; letter-spacing: .14em; }
-.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: .72rem; color: var(--ink-faint); }
+.avail-title { font-size: 1rem; font-weight: 500; letter-spacing: .08em; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: .78rem; color: var(--ink-soft); }
 .legend i { font-style: normal; margin-right: 4px; }
 .days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
 .day-btn {
@@ -368,9 +359,9 @@ body {
   min-height: 62px; border: 1px solid var(--line); background: var(--paper);
   font-variant-numeric: tabular-nums; line-height: 1.3; transition: border-color .2s, background .2s;
 }
-.day-btn .dw { font-size: .6rem; letter-spacing: .06em; color: var(--ink-faint); }
+.day-btn .dw { font-size: .75rem; letter-spacing: .06em; color: var(--ink-faint); }
 .day-btn .dn { font-family: var(--en); font-size: 1.15rem; font-weight: 500; }
-.day-btn .ds { font-size: .66rem; }
+.day-btn .ds { font-size: .75rem; }
 .day-btn.is-available .ds { color: var(--ok); }
 .day-btn.is-few .ds { color: var(--few); }
 .day-btn.is-soldout, .day-btn.is-closed { background: transparent; color: var(--off); cursor: not-allowed; }
@@ -385,9 +376,9 @@ body {
   padding: 16px 12px; border-bottom: 1px solid var(--line); text-align: left; transition: background .2s;
 }
 .slot .t { font-family: var(--en); font-size: 1.4rem; font-weight: 500; font-variant-numeric: tabular-nums; }
-.slot .best { font-size: .72rem; letter-spacing: .06em; color: var(--gold); line-height: 1.6; }
-.slot .best b { display: block; font-family: var(--en); font-weight: 600; font-size: .72rem; letter-spacing: .18em; }
-.slot .st { font-family: var(--en); font-size: .8rem; letter-spacing: .16em; font-weight: 500; }
+.slot .best { font-size: .75rem; letter-spacing: .06em; color: var(--gold-ink); line-height: 1.6; }
+.slot .best b { display: block; font-weight: 500; font-size: .78rem; letter-spacing: .06em; }
+.slot .st { font-size: .84rem; letter-spacing: .04em; font-weight: 500; white-space: nowrap; }
 .slot.is-available .st { color: var(--ok); }
 .slot.is-few .st { color: var(--few); }
 .slot.is-soldout { color: var(--off); cursor: not-allowed; }
@@ -396,20 +387,14 @@ body {
 .slot.is-selected { background: var(--ink); color: var(--white); }
 .slot.is-selected .st, .slot.is-selected .best { color: rgba(255,255,255,.85); }
 .avail-go { margin-top: 20px; display: grid; gap: 12px; }
-.avail-pick { font-size: .88rem; }
+.avail-pick { font-size: .92rem; }
+.avail-hint { color: var(--ink-soft); }
 .avail-pick b { font-weight: 500; }
 .avail-more { margin-top: 18px; text-align: right; }
 
-/* Location: rain */
-.rain { display: grid; grid-template-columns: 1fr; gap: 12px; padding: 28px; background: var(--paper-deep); }
-.rain .en { font-size: .82rem; letter-spacing: .24em; color: var(--gold); }
-.rain p { font-size: .92rem; line-height: 1.9; }
-
-/* Location: photo band */
-.band { position: relative; height: 72svh; min-height: 420px; max-height: 820px; }
-.band .photo { position: absolute; inset: 0; }
-.band::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0) 45%, rgba(0,0,0,.45)); }
-.band-copy { position: absolute; left: 0; right: 0; bottom: clamp(32px, 7vw, 80px); z-index: 1; text-align: center; color: var(--white); font-weight: 500; font-size: clamp(1.2rem, 4vw, 1.8rem); letter-spacing: .12em; }
+/* Location: rain note (next to the dates, where the worry arises) */
+.rain-note { margin-top: 18px; padding: 16px 18px; background: var(--paper-deep); font-size: .88rem; line-height: 1.9; color: var(--ink-soft); }
+.rain-note b { font-weight: 500; color: var(--ink); margin-right: 12px; }
 
 /* =====================================================================
    BOOKING
@@ -421,14 +406,14 @@ body {
 .bk-top .hd-logo { font-size: 1.1rem; }
 .bk-progress { padding: 0 var(--gut) 14px; max-width: 720px; margin: 0 auto; }
 .bk-step-label { display: flex; justify-content: space-between; align-items: baseline; font-size: .76rem; color: var(--ink-faint); margin-bottom: 8px; }
-.bk-step-label b { font-family: var(--en); font-size: .82rem; font-weight: 500; letter-spacing: .2em; color: var(--ink); }
+.bk-step-label b { font-size: .8rem; font-weight: 500; letter-spacing: .04em; color: var(--ink); }
 .bk-bar-track { height: 2px; background: var(--line); }
 .bk-bar-fill { height: 2px; background: var(--ink); transition: width .5s var(--ease); }
 .bk-main { max-width: 720px; margin: 0 auto; padding: 32px var(--gut) calc(var(--bar-h) + 56px); }
 .bk-context { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 28px; }
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border: 1px solid var(--line); background: var(--white); font-size: .76rem; line-height: 1.6; }
-.chip .en { font-size: .82rem; font-weight: 500; letter-spacing: .12em; }
-.chip button { font-size: .72rem; color: var(--ink-faint); text-decoration: underline; margin-left: 4px; }
+.chip b { font-size: .84rem; font-weight: 500; letter-spacing: .06em; }
+.chip button { font-size: .75rem; color: var(--ink-faint); text-decoration: underline; margin-left: 4px; }
 .bk-step { animation: bkIn .45s var(--ease); }
 @keyframes bkIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .bk-step .h2 { font-size: clamp(1.25rem, 4.6vw, 1.6rem); }
@@ -439,7 +424,7 @@ body {
 .pick { position: relative; display: block; text-align: left; border: 1px solid transparent; }
 .pick .photo { aspect-ratio: 4 / 3; }
 .pick-name { display: flex; justify-content: space-between; align-items: baseline; padding: 8px 2px 4px; }
-.pick-name .en { font-size: .98rem; font-weight: 500; letter-spacing: .12em; }
+.pick-name b { font-size: .96rem; font-weight: 500; letter-spacing: .06em; }
 .pick-name .price { font-size: .9rem; color: var(--ink-soft); }
 .pick.is-selected { outline: 2px solid var(--ink); outline-offset: 2px; }
 
@@ -448,7 +433,7 @@ body {
 .cal-nav button:disabled { opacity: .35; cursor: not-allowed; }
 .cal-month { font-family: var(--en); font-size: 1.2rem; font-weight: 500; letter-spacing: .1em; }
 .cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
-.cal-dow { text-align: center; font-size: .66rem; color: var(--ink-faint); padding-bottom: 6px; }
+.cal-dow { text-align: center; font-size: .75rem; color: var(--ink-faint); padding-bottom: 6px; }
 .cal .day-btn { min-height: 54px; }
 .cal .empty { visibility: hidden; }
 .day-btn.is-past { border-color: transparent; background: transparent; color: var(--line); }
@@ -460,16 +445,15 @@ body {
 .plan-opt.is-selected { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
 .plan-opt.is-selected .radio { border-color: var(--ink); }
 .plan-opt.is-selected .radio::after { content: ""; position: absolute; inset: 4px; border-radius: 50%; background: var(--ink); }
-.plan-opt .en { font-size: 1.05rem; font-weight: 500; letter-spacing: .14em; }
+.plan-opt .place-ja, .opt-pick .place-ja { display: block; font-weight: 500; font-size: 1rem; letter-spacing: .06em; line-height: 1.5; }
+.plan-opt .en-sm, .opt-pick .en-sm { display: block; }
 .plan-opt p { font-size: .8rem; color: var(--ink-soft); line-height: 1.8; }
 .plan-opt .price { font-size: 1.2rem; }
-.sub-h { font-family: var(--en); font-size: .82rem; letter-spacing: .24em; text-transform: uppercase; color: var(--gold); margin-bottom: 10px; }
+.sub-h { font-size: .86rem; font-weight: 500; letter-spacing: .1em; color: var(--gold-ink); margin-bottom: 10px; }
 .opt-pick { width: 100%; display: grid; grid-template-columns: 22px 1fr auto; gap: 14px; align-items: start; padding: 18px 4px; border-bottom: 1px solid var(--line); text-align: left; }
 .opt-pick:first-of-type { border-top: 1px solid var(--line); }
 .opt-pick .box { width: 20px; height: 20px; border: 1px solid var(--ink-faint); margin-top: 3px; display: flex; align-items: center; justify-content: center; font-size: .75rem; }
 .opt-pick.is-on .box { background: var(--ink); border-color: var(--ink); color: var(--white); }
-.opt-pick .en { font-size: .98rem; font-weight: 500; letter-spacing: .12em; }
-.opt-pick .en span { font-family: var(--ja); font-size: .76rem; font-weight: 400; letter-spacing: .06em; color: var(--ink-soft); margin-left: 6px; display: inline-block; white-space: nowrap; }
 .opt-pick p { font-size: .78rem; color: var(--ink-soft); line-height: 1.75; }
 .opt-pick .price { font-size: 1rem; white-space: nowrap; }
 .opt-pick:disabled { cursor: default; }
@@ -477,20 +461,21 @@ body {
 
 .field { margin-bottom: 20px; }
 .field label { display: block; font-size: .8rem; font-weight: 400; color: var(--ink-soft); margin-bottom: 6px; }
-.field label .req { color: var(--gold); margin-left: 4px; font-size: .72rem; }
+.field label .req { color: var(--gold-ink); margin-left: 6px; font-size: .78rem; }
+.field label .req.opt { color: var(--ink-faint); }
 .field input, .field textarea { width: 100%; min-height: 52px; padding: 12px 14px; border: 1px solid var(--line); background: var(--white); font-size: 16px; border-radius: 0; -webkit-appearance: none; appearance: none; }
 .field input:focus, .field textarea:focus { outline: none; border-color: var(--ink); }
 .check { display: grid; grid-template-columns: 22px 1fr; gap: 10px; align-items: start; font-size: .86rem; line-height: 1.8; margin-bottom: 14px; cursor: pointer; }
 .check input { width: 18px; height: 18px; margin-top: 4px; accent-color: var(--ink); }
 
 .summary { background: var(--white); border: 1px solid var(--line); padding: 8px 24px; margin-bottom: 24px; }
-.sum-row { display: grid; grid-template-columns: 110px 1fr; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--line); font-size: .88rem; line-height: 1.7; }
+.sum-row { display: grid; grid-template-columns: 96px 1fr; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--line); font-size: .88rem; line-height: 1.7; }
 .sum-row:last-child { border-bottom: 0; }
-.sum-row dt { font-family: var(--en); font-size: .76rem; letter-spacing: .2em; color: var(--ink-faint); padding-top: 2px; }
+.sum-row dt { font-size: .8rem; letter-spacing: .04em; color: var(--ink-soft); padding-top: 1px; }
 .sum-row dd { text-align: right; }
 .sum-row dd small { display: block; color: var(--ink-faint); font-size: .76rem; }
 .sum-total { display: flex; justify-content: space-between; align-items: baseline; padding: 18px 0 14px; border-top: 1px solid var(--ink); margin-top: 4px; }
-.sum-total dt { font-family: var(--en); font-weight: 500; letter-spacing: .2em; }
+.sum-total dt { font-weight: 500; letter-spacing: .1em; }
 .sum-total .price { font-size: 1.8rem; }
 
 .bk-bar {
@@ -501,7 +486,7 @@ body {
 }
 .bk-bar-in { max-width: 720px; margin: 0 auto; display: flex; align-items: center; gap: 12px; min-height: 52px; }
 .bk-total { flex: 1; line-height: 1.2; }
-.bk-total small { display: block; font-family: var(--en); font-size: .7rem; letter-spacing: .22em; color: var(--ink-faint); }
+.bk-total small { display: block; font-family: var(--en); font-size: .75rem; letter-spacing: .22em; color: var(--ink-faint); }
 .bk-total .price { font-size: 1.45rem; }
 .bk-bar .btn { min-height: 50px; padding: 0 20px; }
 .bk-bar .btn-ghost { padding: 0 16px; }
@@ -512,7 +497,7 @@ body {
 .done .summary { text-align: left; }
 .next-steps { text-align: left; margin: 40px 0; }
 .next-steps li { display: grid; grid-template-columns: 32px 1fr; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: .88rem; line-height: 1.8; }
-.next-steps li b { font-family: var(--en); color: var(--gold); font-weight: 500; }
+.next-steps li b { font-family: var(--en); color: var(--gold-ink); font-weight: 500; }
 
 /* ---------- Views + reveal ---------- */
 .view { display: none; }
@@ -529,90 +514,81 @@ body {
 }
 .hidden { display: none !important; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.sum-total dt small { display: block; font-family: var(--ja); font-size: .72rem; letter-spacing: .04em; color: var(--ink-soft); margin-top: 4px; }
+.sum-total dt small { display: block; font-family: var(--ja); font-size: .75rem; letter-spacing: .04em; color: var(--ink-soft); margin-top: 4px; }
 
-/* ---------- Plans: three tiers ---------- */
-.tiers { display: grid; gap: 14px; }
-@media (min-width: 900px) { .tiers { grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: stretch; } }
-.tier { background: var(--white); border: 1px solid var(--line); padding: clamp(24px, 4vw, 36px); display: flex; flex-direction: column; }
-.tier-name { font-family: var(--en); font-size: 1.25rem; font-weight: 500; letter-spacing: .16em; line-height: 1.3; }
-.tier-ja { font-size: .76rem; color: var(--ink-faint); letter-spacing: .1em; }
-.tier-sum { margin-top: 14px; font-size: .88rem; font-weight: 500; line-height: 1.7; min-height: 3.4em; }
-.tier-price { margin: 8px 0 18px; display: flex; align-items: baseline; gap: 4px; }
-.tier-price .price { font-size: clamp(1.9rem, 6vw, 2.3rem); line-height: 1; }
-.tier-price small { color: var(--ink-soft); }
-.tier-inc { border-top: 1px solid var(--line); padding-top: 14px; }
-.tier-inc li { position: relative; padding-left: 18px; font-size: .84rem; line-height: 2; color: var(--ink-soft); }
-.tier-inc li::before { content: ""; position: absolute; left: 0; top: 1em; width: 8px; height: 1px; background: var(--gold); }
-@media (max-width: 899px) { .tier-sum { min-height: 0; } }
-.tiers + .plan-price-note { margin: 14px 0 0; }
-.plan-options { margin-top: clamp(40px, 6vw, 64px); max-width: 760px; }
-.plan-cta { margin-top: 36px; max-width: 480px; }
+/* ---------- Skip link ---------- */
+.skip { position: absolute; left: -9999px; top: 0; z-index: 100; background: var(--ink); color: var(--white); padding: 12px 18px; font-size: .9rem; }
+.skip:focus { left: 8px; top: 8px; }
 
-/* ---------- Places (beach / chapel / church / monument / restaurant / hotel) ---------- */
-.dest-places { margin-top: 4px; font-size: .7rem; letter-spacing: .06em; color: var(--ink-soft); line-height: 1.6; }
-.place-list { border-top: 1px solid var(--ink); }
-.place-row { display: grid; gap: 6px 24px; padding: 22px 0; border-bottom: 1px solid var(--line); }
-.place-type .en { display: block; font-family: var(--en); font-size: .76rem; font-weight: 600; letter-spacing: .22em; color: var(--gold); line-height: 1.4; }
-.place-type b { font-weight: 500; font-size: 1.05rem; letter-spacing: .1em; }
-.place-desc { font-size: .84rem; color: var(--ink-soft); line-height: 1.8; }
-.place-cities { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
-.place-cities a { display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border: 1px solid var(--line); background: var(--white); font-size: .84rem; letter-spacing: .06em; transition: border-color .25s; }
-.place-cities a:hover { border-color: var(--ink); }
-@media (min-width: 900px) {
-  .place-row { grid-template-columns: 180px 1fr; align-items: start; }
-  .place-desc { grid-column: 2; grid-row: 1; padding-top: 2px; }
-  .place-cities { grid-column: 2; margin-top: 0; }
-}
+/* ---------- TOP: place filter (the main "where do you want to propose?" control) ---------- */
+.pf { margin-bottom: clamp(32px, 5vw, 48px); padding: clamp(20px, 3.5vw, 32px); background: var(--paper-deep); }
+.pf-title { font-weight: 500; font-size: 1.02rem; letter-spacing: .06em; line-height: 1.7; }
+.pf-title small { display: block; font-weight: 400; font-size: .82rem; color: var(--ink-soft); letter-spacing: .04em; }
+.pf-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 16px; }
+@media (min-width: 760px) { .pf-tiles { grid-template-columns: repeat(6, 1fr); gap: 12px; } }
+.pf-tile { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 96px; padding: 12px 2px; border: 1px solid var(--line); background: var(--white); font-size: .88rem; font-weight: 500; letter-spacing: .02em; white-space: nowrap; transition: border-color .2s, background .2s, color .2s; }
+.pf-tile .ic { width: 30px; height: 30px; color: var(--gold-ink); margin-bottom: 2px; }
+.pf-tile small { font-size: .78rem; font-weight: 400; color: var(--ink-soft); letter-spacing: .02em; }
+.pf-tile:hover { border-color: var(--ink); }
+.pf-tile[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--white); }
+.pf-tile[aria-pressed="true"] .ic { color: var(--white); }
+.pf-tile[aria-pressed="true"] small { color: rgba(255,255,255,.85); }
+.pf-status { min-height: 0; margin-top: 0; font-size: .9rem; display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; }
+.pf-status:not(:empty) { margin-top: 16px; }
+.pf-status b { font-weight: 500; }
 
-.place { margin-top: clamp(48px, 7vw, 80px); padding: clamp(24px, 4vw, 40px); background: var(--paper-deep); }
-.place .label { margin-bottom: 10px; }
-.place-head p { margin-top: 6px; font-size: .88rem; color: var(--ink-soft); line-height: 1.9; }
-.place-chips { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 22px; }
-@media (min-width: 600px) { .place-chips { grid-template-columns: repeat(4, 1fr); } }
-@media (min-width: 900px) { .place-chips { grid-template-columns: repeat(7, 1fr); } }
-.place-chip { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 60px; padding: 10px 14px; border: 1px solid var(--line); background: var(--white); text-align: left; font-size: .92rem; font-weight: 500; letter-spacing: .06em; transition: border-color .2s, background .2s; }
-.place-chip .en { font-size: .66rem; font-weight: 600; letter-spacing: .2em; color: var(--gold); }
-.place-chip:hover { border-color: var(--ink); }
-.place-chip.is-selected { background: var(--ink); border-color: var(--ink); color: var(--white); }
-.place-chip.is-selected .en { color: rgba(255,255,255,.75); }
-.place-detail { margin-top: 18px; font-size: .88rem; line-height: 1.9; }
-.place-detail b { font-weight: 500; margin-right: 12px; }
+/* ---------- Location: place cards ---------- */
+.pcards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+@media (min-width: 760px) { .pcards { grid-template-columns: repeat(3, 1fr); gap: 14px; } }
+.pcard { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 20px 16px 16px; min-height: 176px; border: 1px solid var(--line); background: var(--white); text-align: left; transition: border-color .2s, box-shadow .2s; }
+.pcard .ic { width: 36px; height: 36px; color: var(--gold-ink); margin-bottom: 8px; }
+.pcard b { font-weight: 500; font-size: 1.08rem; letter-spacing: .06em; line-height: 1.4; }
+.pcard p { margin-top: 6px; font-size: .84rem; color: var(--ink-soft); line-height: 1.75; }
+.pcard .pv { display: block; width: 100%; margin-top: auto; padding-top: 10px; border-top: 1px solid var(--line); font-size: .8rem; line-height: 1.7; }
+.pcard p + .pv { margin-top: 12px; }
+.pcard:hover { border-color: var(--ink); }
+.pcard .tick { position: absolute; top: 12px; right: 12px; width: 24px; height: 24px; border: 1px solid var(--line); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .8rem; line-height: 1; color: transparent; }
+.pcard[aria-checked="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.pcard[aria-checked="true"] .tick { background: var(--ink); border-color: var(--ink); color: var(--white); }
+.place-detail { margin-top: 20px; padding: 18px 20px; background: var(--white); border: 1px solid var(--line); font-size: .9rem; line-height: 1.9; }
+.place-detail .pd-hint { color: var(--ink-soft); }
+.place-detail .pd-title b { font-weight: 500; font-size: 1.05rem; }
+.place-detail .btn { margin-top: 14px; min-height: 48px; }
 .place-venues { color: var(--ink-soft); }
-.place-detail .note { margin-top: 6px; }
+.place-detail .note { margin-top: 4px; }
 
-.plan-opt.is-place .en { font-size: .7rem; font-weight: 600; letter-spacing: .2em; color: var(--gold); display: block; line-height: 1.4; }
-.plan-opt .place-ja { display: block; font-weight: 500; font-size: 1rem; letter-spacing: .08em; }
+/* ---------- Booking: place + venue choices ---------- */
 .plan-opt.is-place { grid-template-columns: 22px 1fr; }
-
 .plan-opt.is-compact { padding: 14px 16px; grid-template-columns: 22px 1fr; align-items: center; font-size: .9rem; }
 .plan-opt.is-compact .radio { margin-top: 0; }
 .venue-toggle { margin-bottom: 36px; }
-.plan-opt .en { white-space: nowrap; }
-@media (max-width: 419px) { .plan-opt { gap: 12px; padding: 18px 16px; } .plan-opt .en { font-size: .95rem; letter-spacing: .1em; } .plan-opt .price { font-size: 1.05rem; } }
+.slot-box { margin-top: 28px; scroll-margin-top: 150px; }
+.slot-h { margin-bottom: 4px; font-size: 1rem; }
+.slot-box .slots { margin-top: 8px; }
 
 </style>
 </head>
 <body>
 
+<nav aria-label="スキップリンク"><a class="skip" id="skip" href="#">本文へ移動</a></nav>
+
 <header class="hd is-over" id="hd">
-  <a href="#/" class="hd-logo" aria-label="世界のプロポーズプラン TOP">PROPOSE<small>世界のプロポーズプラン</small></a>
+  <a href="#/" class="hd-logo">PROPOSE<small>世界のプロポーズプラン</small></a>
   <nav class="hd-nav" aria-label="メインメニュー">
-    <a href="#destinations">DESTINATIONS</a>
-    <a href="#proposal">YOUR PROPOSAL</a>
-    <a href="#plan">PLAN</a>
-    <a href="#faq">FAQ</a>
+    <a href="#destinations">旅行先</a>
+    <a href="#proposal">当日の流れ</a>
+    <a href="#plan">プラン</a>
+    <a href="#faq">よくある質問</a>
     <a href="#destinations" class="btn">予約する</a>
   </nav>
   <button class="hd-menu" id="hd-menu" aria-label="メニューを開く" aria-expanded="false" aria-controls="hd-drawer"><span></span><span></span><span></span></button>
 </header>
 <nav class="hd-drawer" id="hd-drawer" aria-label="メニュー">
-  <a href="#destinations">DESTINATIONS <small>旅行先から探す</small></a>
-  <a href="#proposal">YOUR PROPOSAL <small>当日の流れ</small></a>
-  <a href="#place">PLACE <small>場所から選ぶ</small></a>
-  <a href="#plan">PLAN <small>料金</small></a>
-  <a href="#faq">FAQ <small>よくある質問</small></a>
-  <a href="#find">NOT DECIDED <small>旅行先が未定の方</small></a>
+  <a href="#destinations">旅行先から探す <small>DESTINATIONS</small></a>
+  <a href="#destinations">場所から探す <small>PLACE</small></a>
+  <a href="#proposal">当日の流れ <small>YOUR PROPOSAL</small></a>
+  <a href="#plan">プラン・料金 <small>PLAN</small></a>
+  <a href="#faq">よくある質問 <small>FAQ</small></a>
   <a href="#destinations" class="btn">旅行先から探す</a>
 </nav>
 
@@ -628,9 +604,13 @@ body {
       <p class="hero-text">旅行先は、もう決まっている。<br>あとは、その旅を<br class="br-sp">一生忘れない一日に。</p>
       <div class="hero-cta">
         <button class="btn btn-light" data-scroll="destinations">旅行先から探す <span class="arrow" aria-hidden="true">→</span></button>
-        <button class="link" data-scroll="find">まだ旅行先が決まっていない方</button>
+        <button class="link" data-scroll="destinations">場所（ビーチ・チャペルなど）から探す</button>
       </div>
     </div>
+  </section>
+
+  <section class="trust" aria-label="安心のポイント">
+    <div class="wrap"><ul class="trust-list" id="trust-list"></ul></div>
   </section>
 
   <section class="sec" id="destinations" aria-labelledby="dest-title">
@@ -638,48 +618,24 @@ body {
       <div class="sec-head reveal">
         <span class="label">Destinations</span>
         <h2 class="h2" id="dest-title">旅行先から、<br>プロポーズを探す。</h2>
-        <p class="lede">行き先を選ぶと、料金・当日の流れ・受付状況がすぐに分かります。</p>
+        <p class="lede">行き先を選ぶと、料金・当日の流れ・受付状況がすぐに分かります。旅行先がまだ決まっていない方は、プロポーズしたい「場所」から絞り込めます。</p>
       </div>
+      <div class="pf" id="pf"></div>
       <div class="dest-grid" id="dest-grid"></div>
-      <div class="undecided-link reveal">
-        <p>まだ旅行先が決まっていない方へ</p>
-        <button class="link" data-scroll="find">景色から探す <span class="arrow" aria-hidden="true">→</span></button>
-      </div>
     </div>
   </section>
 
-  <section class="sec sec-deep" id="lastminute" aria-labelledby="lm-title">
+  <section class="sec sec-deep" id="proposal" aria-labelledby="pr-title">
     <div class="wrap assure-wrap">
-      <div class="sec-head reveal">
-        <span class="label">Last Minute</span>
-        <h2 class="h2" id="lm-title">出発の直前でも、<br>間に合います。</h2>
-        <p class="lede">日付と時間を選んで、オンラインでリクエスト。手配を確認して、確定をご連絡します。</p>
-      </div>
-      <ul class="assure-list" id="assure-list"></ul>
-    </div>
-  </section>
-
-  <section class="sec" id="proposal" aria-labelledby="pr-title">
-    <div class="wrap">
       <div class="sec-head reveal">
         <span class="label">Your Proposal</span>
         <h2 class="h2" id="pr-title">当日は、<br class="br-sp">こんな時間になります。</h2>
         <p class="lede">撮影だと気づかれないまま、その瞬間へ。すべて約2時間です。</p>
       </div>
-      <ol class="steps" id="top-steps"></ol>
-      <p class="note photo-note">※ 写真撮影付きのプラン（スタンダード・ラグジュアリー）の流れです。ライトプランは撮影がありません。写真はイメージです。</p>
-    </div>
-  </section>
-
-  <section class="sec sec-deep" id="place" aria-labelledby="place-title">
-    <div class="wrap">
-      <div class="sec-head reveal">
-        <span class="label">Place</span>
-        <h2 class="h2" id="place-title">ビーチでも、<br class="br-sp">チャペルでも。</h2>
-        <p class="lede">旅行先ごとに、プロポーズする場所を選べます。気になる場所から、旅行先を探すこともできます。</p>
+      <div>
+        <ol class="timeline reveal" id="top-steps"></ol>
+        <p class="note" style="margin-top:24px">※ 写真撮影付きのプラン（スタンダード・ラグジュアリー）の流れです。ライトプランは撮影がありません。</p>
       </div>
-      <div class="place-list" id="place-list"></div>
-      <p class="note" style="margin-top:20px">※ 選べる場所は旅行先によって異なります。会場の使用料や条件は会場ごとに異なるため、確定のご連絡でご案内します。</p>
     </div>
   </section>
 
@@ -705,20 +661,8 @@ body {
     </div>
   </section>
 
-  <section class="sec" id="find" aria-labelledby="find-title">
-    <div class="wrap">
-      <div class="sec-head reveal">
-        <span class="label">Not Decided Yet</span>
-        <h2 class="h2" id="find-title">まだ旅行先が<br class="br-sp">決まっていない方へ</h2>
-        <p class="lede">惹かれる景色をひとつ選んでください。合う旅行先を表示します。</p>
-      </div>
-      <div class="themes" id="themes" role="group" aria-label="景色から探す"></div>
-      <div class="theme-results" id="theme-results" aria-live="polite"></div>
-    </div>
-  </section>
-
   <section class="final" aria-labelledby="final-title">
-    <div class="photo" data-photo="maldives" data-alt="上空から見たモルディブの海" data-pos="50% 30%"></div>
+    <div class="photo" data-photo="maldives" data-alt="" data-pos="50% 30%"></div>
     <div class="wrap">
       <span class="label">Ready?</span>
       <h2 class="h2" id="final-title">行き先を選ぶだけで、<br>準備は始まります。</h2>
@@ -736,41 +680,44 @@ body {
   <header class="bk-hd">
     <div class="bk-top">
       <a class="bk-back" id="bk-back-link" href="#/">← 戻る</a>
-      <a href="#/" class="hd-logo" aria-label="TOP">PROPOSE</a>
+      <a href="#/" class="hd-logo">PROPOSE</a>
       <span></span>
     </div>
     <div class="bk-progress" id="bk-progress">
-      <div class="bk-step-label"><span id="bk-step-count"></span><b id="bk-step-en"></b></div>
+      <div class="bk-step-label"><span id="bk-step-count"></span><b id="bk-step-en">お支払いは確定後</b></div>
       <div class="bk-bar-track"><div class="bk-bar-fill" id="bk-bar-fill"></div></div>
     </div>
   </header>
   <div class="bk-main">
+    <h1 class="sr-only">プロポーズの予約リクエスト</h1>
     <div class="bk-context" id="bk-context"></div>
     <div id="bk-body"></div>
   </div>
   <div class="bk-bar" id="bk-bar">
     <div class="bk-bar-in">
-      <div class="bk-total"><small>TOTAL</small><span class="price" id="bk-total">—</span></div>
+      <div class="bk-total"><small>合計（確定後のお支払い）</small><span class="price" id="bk-total">—</span></div>
       <button class="btn btn-ghost" id="bk-prev">戻る</button>
       <button class="btn" id="bk-next">次へ</button>
     </div>
   </div>
 </main>
 
-<div class="sticky-cta" id="sticky-cta" aria-hidden="true"></div>
+<div class="sticky-cta" id="sticky-cta" role="region" aria-label="予約への近道" aria-hidden="true"></div>
 
 <footer class="ft" id="ft">
   <div class="wrap">
     <div class="ft-top">
       <a href="#/" class="hd-logo">PROPOSE<small>世界のプロポーズプラン</small></a>
       <nav class="ft-links" aria-label="フッターメニュー">
-        <a href="#destinations">DESTINATIONS</a>
-        <a href="#faq">FAQ</a>
-        <a href="#/">TERMS</a>
-        <a href="#/">PRIVACY</a>
-        <a href="#/">CONTACT</a>
+        <a href="#destinations">旅行先</a>
+        <a href="#plan">プラン</a>
+        <a href="#faq">よくある質問</a>
+        <a href="#/">利用規約</a>
+        <a href="#/">プライバシー</a>
+        <a href="#/">お問い合わせ</a>
       </nav>
     </div>
+    <nav class="ft-dests" id="ft-dests" aria-label="旅行先一覧"></nav>
     <p class="ft-meta">このページはデザインモックアップです。料金・所要時間・受付締切・確定連絡までの時間・受付状況はデモ用の仮データで、実際の予約リクエスト・決済は行われません。</p>
   </div>
 </footer>
@@ -802,18 +749,25 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
   // ---- Plans (Shopify: one Product per location, three Variants in this order) ----
   // Every plan includes the bouquet; the tiers differ in what is recorded
   // and how the place is dressed. Prices are DEMO values.
+  // Columns of the comparison table, in order. `has` on each tier says which are included.
+  var PLAN_COLS = [
+    { id: "flower", label: "花束", detail: "プロポーズの瞬間に渡す花束" },
+    { id: "photo", label: "写真", detail: "プロのフォトグラファーが30分撮影。写真データ30枚以上をオンライン納品" },
+    { id: "video", label: "動画", detail: "動画撮影" },
+    { id: "deco", label: "装飾", detail: "プロポーズの場所のデコレーション" }
+  ];
   var PLAN_TIERS = [
-    { id: "light", name: "LIGHT PLAN", nameJa: "ライトプラン", summary: "花束のみ", hasPhoto: false,
+    { id: "light", name: "LIGHT PLAN", nameJa: "ライトプラン", summary: "花束のみ", hasPhoto: false, has: { flower: 1, photo: 0, video: 0, deco: 0 },
       includes: ["プロポーズ用の花束", "日本語サポート"] },
-    { id: "standard", name: "STANDARD PLAN", nameJa: "スタンダードプラン", summary: "花束＋写真撮影", hasPhoto: true,
+    { id: "standard", name: "STANDARD PLAN", nameJa: "スタンダードプラン", summary: "花束＋写真撮影", hasPhoto: true, has: { flower: 1, photo: 1, video: 0, deco: 0 },
       includes: ["プロポーズ用の花束", "プロフォトグラファーによる写真撮影（30分）", "写真データ30枚以上（オンライン納品）", "日本語サポート"] },
-    { id: "luxury", name: "LUXURY PLAN", nameJa: "ラグジュアリープラン", summary: "花束＋写真撮影＋動画撮影＋デコレーション", hasPhoto: true,
+    { id: "luxury", name: "LUXURY PLAN", nameJa: "ラグジュアリープラン", summary: "花束＋写真撮影＋動画撮影＋デコレーション", hasPhoto: true, has: { flower: 1, photo: 1, video: 1, deco: 1 },
       includes: ["プロポーズ用の花束", "プロフォトグラファーによる写真撮影（30分）", "写真データ30枚以上（オンライン納品）", "動画撮影", "プロポーズの場所のデコレーション", "日本語サポート"] }
   ];
   function plansFor(base) {
     var prices = { light: Math.round(base * 0.4 / 1000) * 1000, standard: base, luxury: base + 100000 };
     return PLAN_TIERS.map(function (t) {
-      return { id: t.id, name: t.name, nameJa: t.nameJa, summary: t.summary, hasPhoto: t.hasPhoto, includes: t.includes, price: prices[t.id] };
+      return { id: t.id, name: t.name, nameJa: t.nameJa, summary: t.summary, hasPhoto: t.hasPhoto, has: t.has, includes: t.includes, price: prices[t.id] };
     });
   }
 
@@ -821,7 +775,7 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
   // A destination offers some of these types; each type may list named venues.
   var PLACE_TYPES = [
     { id: "beach", en: "BEACH", ja: "ビーチ", desc: "波の音が聞こえる砂浜で。" },
-    { id: "chapel", en: "CHAPEL", ja: "チャペル", desc: "チャペルの静けさの中で。" },
+    { id: "chapel", en: "CHAPEL", ja: "チャペル", desc: "チャペルの静けさの中で、ゆっくりと。" },
     { id: "church", en: "CHURCH", ja: "教会", desc: "歴史ある教会で、厳かに。" },
     { id: "monument", en: "MONUMENT", ja: "モニュメント", desc: "誰もが知る景色を背に。" },
     { id: "restaurant", en: "RESTAURANT", ja: "レストラン", desc: "食事の席で、さりげなく。" },
@@ -844,132 +798,132 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
   var LOCATIONS = [
     {
       id: "hawaii", name: "HAWAII", nameJa: "ハワイ", popular: true,
-      catch: "ハワイで、\n一生忘れない瞬間を。",
+      catch: "ハワイで、\n一生忘れないプロポーズを。",
       tagline: "夕日のビーチで、ふたりきりに。",
       lede: "ヤシの並木と緑の山々、そして夕暮れの海。オアフ島で、ふたりだけの時間をつくります。",
       photo: "hawaii", photoAlt: "ヤシの並木の先にそびえるオアフ島の緑の山々", photoPos: "50% 45%", hue: ["#2c5f74", "#e08a4f"], motif: "palm",
       base: 128000, duration: "約2時間", meetingPoint: "ワイキキ・ホテル周辺（ご滞在先に合わせてご案内）",
       timeSlots: ["16:00", "16:30", "17:00", "17:30", "18:00"], bestTime: "17:30", bestTimeNote: "夕日の時間",
-      leadDays: 3, rainPlan: "雨の場合は、翌日以降の空き枠へ無料で振替できます。", tags: ["sea", "sunset", "resort"],
+      leadDays: 3, rainPlan: "雨の場合は、翌日以降の空き枠へ無料で振替できます。",
       places: { beach: [], chapel: [], church: ["キャルバリー・バイ・ザ・シー教会"], restaurant: [], hotel: ["ハレクラニ", "ザ・カハラ・ホテル＆リゾート"] }
     },
     {
       id: "miyakojima", name: "MIYAKOJIMA", nameJa: "宮古島", popular: true,
-      catch: "宮古島で、\n一生忘れない瞬間を。",
+      catch: "宮古島で、\n一生忘れないプロポーズを。",
       tagline: "どこまでも続く青の中で。",
       lede: "パスポートのいらない、日本でいちばん青い海。遠浅の白い砂浜で伝えます。",
       photo: "miyakojima", photoAlt: "宮古島のエメラルドグリーンの海と白い砂浜", photoPos: "30% 50%", hue: ["#1c7f9c", "#7fd8d0"], motif: "wave",
       base: 108000, duration: "約2時間", meetingPoint: "与那覇前浜ビーチ 駐車場",
       timeSlots: ["16:30", "17:00", "17:30", "18:00", "18:30"], bestTime: "18:30", bestTimeNote: "夕日の時間",
-      leadDays: 2, rainPlan: "雨の場合は、翌日以降の空き枠へ無料で振替できます。", tags: ["sea", "resort", "sunset"],
+      leadDays: 2, rainPlan: "雨の場合は、翌日以降の空き枠へ無料で振替できます。",
       places: { beach: [], chapel: [], hotel: [] }
     },
     {
       id: "okinawa", name: "OKINAWA", nameJa: "沖縄本島", popular: true,
-      catch: "沖縄で、\n一生忘れない瞬間を。",
+      catch: "沖縄で、\n一生忘れないプロポーズを。",
       tagline: "ビーチでも、チャペルでも。",
       lede: "青い海と白い砂浜の島で。ビーチはもちろん、チャペルを貸し切ってのプロポーズもできます。",
       photo: null, photoAlt: "", hue: ["#1d6f8f", "#9fdcd3"], motif: "wave",
       base: 108000, duration: "約2時間", meetingPoint: "ご滞在ホテル、またはご希望の会場",
       timeSlots: ["10:00", "16:30", "17:30", "18:30"], bestTime: "18:30", bestTimeNote: "夕日の時間",
-      leadDays: 3, rainPlan: "雨の場合は、翌日以降の空き枠へ無料で振替できます。", tags: ["sea", "resort", "sunset"],
+      leadDays: 3, rainPlan: "雨の場合は、翌日以降の空き枠へ無料で振替できます。",
       places: { beach: [], chapel: ["ラソール ガーデン・アリビラ", "ラソール シーリゾート", "ザ・サーフ ビーチサイドテラス", "アートグレイス沖縄", "サザンチャペル"], hotel: [] }
     },
     {
       id: "guam", name: "GUAM", nameJa: "グアム", popular: true,
-      catch: "グアムで、\n一生忘れない瞬間を。",
+      catch: "グアムで、\n一生忘れないプロポーズを。",
       tagline: "ビーチでも、チャペルでも。",
       lede: "日本から近い南の島。青い海と白い砂浜の前で、想いを伝えます。",
       photo: null, photoAlt: "", hue: ["#127a9e", "#a8e0e0"], motif: "palm",
       base: 98000, duration: "約2時間", meetingPoint: "タモン地区（ご滞在ホテル周辺）",
       timeSlots: ["10:00", "16:30", "17:30", "18:30"], bestTime: "18:30", bestTimeNote: "夕日の時間",
-      leadDays: 3, rainPlan: "雨の場合は、翌日以降の空き枠へ無料で振替できます。", tags: ["sea", "resort", "sunset"],
+      leadDays: 3, rainPlan: "雨の場合は、翌日以降の空き枠へ無料で振替できます。",
       places: { beach: [], chapel: [], hotel: [] }
     },
     {
       id: "santorini", name: "SANTORINI", nameJa: "サントリーニ島", popular: true,
-      catch: "サントリーニで、\n一生忘れない瞬間を。",
+      catch: "サントリーニで、\n一生忘れないプロポーズを。",
       tagline: "白と青の街で。",
       lede: "断崖に広がる白い街と、エーゲ海に沈む夕日。世界でいちばん有名な夕景の中で。",
       photo: "santorini", photoAlt: "イアの青いドームの教会とエーゲ海", photoPos: "60% 58%", hue: ["#1e4d8c", "#f4f1ea"], motif: "dome",
       base: 168000, duration: "約2時間", meetingPoint: "イア地区 展望テラス付近",
       timeSlots: ["17:00", "18:00", "19:00", "19:30"], bestTime: "19:30", bestTimeNote: "イアの夕日",
-      leadDays: 5, rainPlan: "天候不良の場合は、翌日以降の空き枠へ無料で振替できます。", tags: ["town", "sunset", "special"],
+      leadDays: 5, rainPlan: "天候不良の場合は、翌日以降の空き枠へ無料で振替できます。",
       places: { monument: ["サントリーニ島（イアの街並み）"], hotel: [] }
     },
     {
       id: "italy", name: "ITALY", nameJa: "イタリア", popular: false,
-      catch: "イタリアで、\n一生忘れない瞬間を。",
+      catch: "イタリアで、\n一生忘れないプロポーズを。",
       tagline: "歴史ある街角で。",
       lede: "ローマの石畳と、何百年も変わらない街並み。映画のワンシーンのような一日に。",
       photo: "italy", photoAlt: "上空から見たローマのコロッセオと街並み", photoPos: "50% 55%", hue: ["#7a5230", "#d9b979"], motif: "arch",
       base: 178000, duration: "約2時間", meetingPoint: "ローマ市内（ご滞在先に合わせてご案内）",
       timeSlots: ["08:00", "09:00", "16:00", "17:00"], bestTime: "08:00", bestTimeNote: "人の少ない朝",
-      leadDays: 5, rainPlan: "雨の場合は、屋根のある回廊での撮影、または翌日以降へ無料で振替できます。", tags: ["town"],
+      leadDays: 5, rainPlan: "雨の場合は、屋根のある回廊での撮影、または翌日以降へ無料で振替できます。",
       places: { church: [], monument: ["コロッセオ"], hotel: [] }
     },
     {
       id: "paris", name: "PARIS", nameJa: "パリ", popular: true,
-      catch: "パリで、\n一生忘れない瞬間を。",
+      catch: "パリで、\n一生忘れないプロポーズを。",
       tagline: "憧れの街を、ふたりの記念日に。",
       lede: "エッフェル塔が見える通りを、ふたりで歩く。誰もが憧れる街で、想いを伝えます。",
       photo: "paris", photoAlt: "エッフェル塔が見えるパリの街並み", photoPos: "50% 40%", hue: ["#4a4e69", "#c9ada7"], motif: "tower",
       base: 158000, duration: "約2時間", meetingPoint: "トロカデロ広場",
       timeSlots: ["08:00", "10:00", "16:00", "18:00"], bestTime: "08:00", bestTimeNote: "人の少ない朝",
-      leadDays: 5, rainPlan: "雨の場合は、アーケードやカフェでの撮影、または翌日以降へ無料で振替できます。", tags: ["town"],
+      leadDays: 5, rainPlan: "雨の場合は、アーケードやカフェでの撮影、または翌日以降へ無料で振替できます。",
       places: { monument: ["エッフェル塔"], hotel: [] }
     },
     {
       id: "cappadocia", name: "CAPPADOCIA", nameJa: "カッパドキア", popular: false,
-      catch: "カッパドキアで、\n一生忘れない瞬間を。",
+      catch: "カッパドキアで、\n一生忘れないプロポーズを。",
       tagline: "気球が浮かぶ朝焼けの中で。",
       lede: "夜明けとともに、何十もの気球が空へ。この景色は、朝にしか見られません。",
       photo: "cappadocia", photoAlt: "朝焼けのカッパドキアに浮かぶ気球", photoPos: "50% 45%", hue: ["#b5651d", "#f2c078"], motif: "balloon",
       base: 188000, duration: "約2時間（早朝）", meetingPoint: "ご滞在ホテル（ギョレメ周辺）",
       timeSlots: ["05:30", "06:00", "06:30"], bestTime: "06:00", bestTimeNote: "気球が上がる時間",
-      leadDays: 5, rainPlan: "気球が飛ばない天候の場合は、翌朝以降へ無料で振替できます。", tags: ["nature", "special"]
+      leadDays: 5, rainPlan: "気球が飛ばない天候の場合は、翌朝以降へ無料で振替できます。"
     },
     {
       id: "maldives", name: "MALDIVES", nameJa: "モルディブ", popular: false,
-      catch: "モルディブで、\n一生忘れない瞬間を。",
+      catch: "モルディブで、\n一生忘れないプロポーズを。",
       tagline: "水平線に浮かぶ楽園で。",
       lede: "透き通る海と、水上ヴィラ。滞在中のリゾートの中で、ふたりきりの時間をつくります。",
       photo: "maldives", photoAlt: "上空から見たモルディブの水上ヴィラと海", photoPos: "50% 50%", hue: ["#0f6e8c", "#bfe6dd"], motif: "villa",
       base: 198000, duration: "約2時間", meetingPoint: "ご滞在リゾート内",
       timeSlots: ["16:00", "17:00", "17:30", "18:00"], bestTime: "17:30", bestTimeNote: "夕日の時間",
-      leadDays: 7, rainPlan: "雨の場合は、滞在中の別日へ無料で振替できます。", tags: ["sea", "resort"],
+      leadDays: 7, rainPlan: "雨の場合は、滞在中の別日へ無料で振替できます。",
       places: { chapel: ["フォーシーズンズ ランダーギラーヴァルのチャペル"], restaurant: [], hotel: ["フォーシーズンズ ランダーギラーヴァル", "ギリ ランカンフシ"] }
     },
     {
       id: "bali", name: "BALI", nameJa: "バリ島", popular: false,
-      catch: "バリ島で、\n一生忘れない瞬間を。",
+      catch: "バリ島で、\n一生忘れないプロポーズを。",
       tagline: "緑の棚田に包まれて。",
       lede: "ヤシの木と、どこまでも続く棚田。朝の静かな空気の中で、ふたりで歩きます。",
       photo: "bali", photoAlt: "ヤシの木に囲まれたバリ島の棚田を歩くふたり", photoPos: "50% 70%", hue: ["#2f6e4f", "#f4d35e"], motif: "gate",
       base: 118000, duration: "約2時間", meetingPoint: "テガラランの棚田（ウブド）",
       timeSlots: ["07:00", "08:00", "16:00", "17:00"], bestTime: "07:00", bestTimeNote: "朝の静かな棚田",
-      leadDays: 4, rainPlan: "雨の場合は、翌日以降の空き枠へ無料で振替できます。", tags: ["nature", "resort"],
+      leadDays: 4, rainPlan: "雨の場合は、翌日以降の空き枠へ無料で振替できます。",
       places: { beach: [], chapel: [], hotel: [] }
     },
     {
       id: "cancun", name: "CANCUN", nameJa: "カンクン", popular: false,
-      catch: "カンクンで、\n一生忘れない瞬間を。",
+      catch: "カンクンで、\n一生忘れないプロポーズを。",
       tagline: "カリブ海の白い砂浜で。",
       lede: "カリブ海から昇る朝日と、真っ白な砂浜。リゾートの朝を、特別な一日の始まりに。",
       photo: "cancun", photoAlt: "上空から見たカンクンのビーチとホテル街", photoPos: "50% 60%", hue: ["#0a9396", "#e9d8a6"], motif: "palm",
       base: 148000, duration: "約2時間", meetingPoint: "ホテルゾーン（ご滞在ホテル前のビーチ）",
       timeSlots: ["06:30", "07:30", "16:00", "17:00"], bestTime: "06:30", bestTimeNote: "カリブ海の朝日",
-      leadDays: 5, rainPlan: "雨の場合は、翌日以降の空き枠へ無料で振替できます。", tags: ["sea", "resort"]
+      leadDays: 5, rainPlan: "雨の場合は、翌日以降の空き枠へ無料で振替できます。"
     },
     {
       id: "ayersrock", name: "AYERS ROCK", nameJa: "エアーズロック", popular: false,
-      catch: "エアーズロックで、\n一生忘れない瞬間を。",
+      catch: "エアーズロックで、\n一生忘れないプロポーズを。",
       tagline: "大地が赤く染まる瞬間に。",
       lede: "夕日を浴びて、ウルルが真っ赤に燃える数分間。地球の大きさを感じる場所で。",
       photo: "ayersrock", photoAlt: "夕日で赤く染まるエアーズロック（ウルル）", photoPos: "50% 55%", hue: ["#a4462f", "#e8c07d"], motif: "rock",
       base: 168000, duration: "約2時間", meetingPoint: "サンセットビューイングエリア",
       timeSlots: ["05:30", "17:30"], bestTime: "17:30", bestTimeNote: "赤く染まる夕景",
-      leadDays: 5, rainPlan: "雨の場合は、翌日以降の空き枠へ無料で振替できます。", tags: ["nature", "sunset", "special"]
+      leadDays: 5, rainPlan: "雨の場合は、翌日以降の空き枠へ無料で振替できます。"
     }
   ];
 
@@ -982,27 +936,18 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
   });
 
   // ---- Explorer themes for undecided visitors (photo-first, one tap) ----
-  var THEMES = [
-    { id: "sea", label: "海", en: "SEA", photo: "maldives" },
-    { id: "town", label: "街", en: "TOWN", photo: "paris" },
-    { id: "sunset", label: "夕日", en: "SUNSET", photo: "ayersrock" },
-    { id: "nature", label: "大自然", en: "NATURE", photo: "bali" },
-    { id: "resort", label: "リゾート", en: "RESORT", photo: "cancun" },
-    { id: "special", label: "特別な景色", en: "SPECIAL", photo: "cappadocia" }
-  ];
-
   var FAQ = [
     { q: "出発の数日前でも予約できますか？", a: "はい。行き先ごとに「最短○日前まで」の受付締切があり、各ページと受付状況カレンダーで確認できます。" },
     { q: "予約はすぐに確定しますか？", a: "予約はリクエスト制です。担当スタッフが手配を確認し、" + REPLY_HOURS + "時間以内に確定可否をメールでご連絡します。お支払いは確定のご連絡のあとです。" },
     { q: "相手にプロポーズだと気づかれませんか？", a: "「旅の記念撮影」として自然に始めます。予約確認の連絡も、控えめな件名を選べます。" },
     { q: "雨が降ったらどうなりますか？", a: "行き先ごとの雨天対応があります。多くの場所で、翌日以降の空き枠へ無料で振替できます。" },
+    { q: "プロポーズの場所は選べますか？", a: "はい。旅行先ごとに、ビーチ・チャペル・教会・モニュメント・レストラン・ホテルの中から選べる場所をご案内しています（選べる場所は旅行先によって異なります）。ハワイのハレクラニやザ・カハラ、沖縄のチャペルなど、会場を指定することもできます。会場の使用料や条件は会場ごとに異なるため、確定のご連絡でご案内します。" },
+    { q: "写真撮影なしでも頼めますか？", a: "はい。ライトプランは、花束のご用意のみのプランです。写真や動画を残したい場合は、スタンダードプランかラグジュアリープランをお選びください。" },
     { q: "現地で日本語は通じますか？", a: "日本語サポートが付いています。当日の連絡も日本語で行えます。" },
     { q: "キャンセルはできますか？", a: "予約日の一定期間前まではキャンセル・返金が可能です。規定は予約確認画面とメールでご案内します。" },
     { q: "写真はいつ届きますか？", a: "撮影後、オンラインで順次お届けします。目安の日数は予約確認メールでご案内します。" },
     { q: "指輪や花束は用意してもらえますか？", a: "花束はすべてのプランに含まれています。指輪はご自身でご用意ください。" },
-    { q: "写真撮影なしでも頼めますか？", a: "はい。ライトプランは、花束のご用意のみのプランです。写真や動画を残したい場合は、スタンダードプランかラグジュアリープランをお選びください。" },
-    { q: "プロポーズの場所は選べますか？", a: "はい。旅行先ごとに、ビーチ・チャペル・教会・モニュメント・レストラン・ホテルの中から選べる場所をご案内しています（選べる場所は旅行先によって異なります）。ハワイのハレクラニやザ・カハラ、沖縄のチャペルなど、会場を指定することもできます。会場の使用料や条件は会場ごとに異なるため、確定のご連絡でご案内します。" },
-    { q: "撮影場所は変えられますか？", a: "行き先ごとの推奨スポットをもとに、当日の天候や混雑に合わせてフォトグラファーが調整します。" }
+    { q: "当日の場所は、天候や混雑で変わることはありますか？", a: "選んだ場所を基本に、当日の天候や混雑に合わせて、担当スタッフとフォトグラファーが調整します。" }
   ];
 
   // ---- Deterministic demo availability (never a live feed) ----
@@ -1036,32 +981,15 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
     return "soldout";
   }
 
-  // ---- Illustrated fallback for locations without a licensed photo ----
-  function silhouettePath(motif) {
-    var f = 'fill="rgba(20,15,10,.45)"';
-    switch (motif) {
-      case "palm": return '<path d="M52 100 L54 58 Q42 52 36 42 Q47 46 54 52 Q51 36 40 27 Q53 31 56 45 Q60 29 73 23 Q63 34 58 47 Q69 40 80 42 Q68 46 57 54 Q60 58 58 68 L57 100 Z" ' + f + '/>';
-      case "dome": return '<rect x="30" y="72" width="12" height="16" ' + f + '/><rect x="46" y="66" width="14" height="22" ' + f + '/><circle cx="53" cy="62" r="8" ' + f + '/><rect x="64" y="76" width="10" height="12" ' + f + '/>';
-      default: return "";
-    }
-  }
-  function sceneSVG(c1, c2, motif) {
-    var gid = "g" + Math.random().toString(36).slice(2, 9);
-    return '<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
-      '<defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + c1 + '"/><stop offset=".58" stop-color="' + c1 + '"/><stop offset="1" stop-color="' + c2 + '"/></linearGradient></defs>' +
-      '<rect width="100" height="100" fill="url(#' + gid + ')"/><circle cx="70" cy="28" r="16" fill="#fff" opacity=".16"/><circle cx="70" cy="28" r="8" fill="#fff" opacity=".5"/>' +
-      '<line x1="0" y1="58" x2="100" y2="58" stroke="#fff" stroke-opacity=".3" stroke-width=".6"/>' + silhouettePath(motif) + "</svg>";
-  }
-
   global.ProposeData = {
     locations: LOCATIONS,
     options: OPTIONS,
     planTiers: PLAN_TIERS,
+    planCols: PLAN_COLS,
     placeTypes: PLACE_TYPES,
     getPlaceType: function (id) { return PLACE_TYPES.filter(function (t) { return t.id === id; })[0] || null; },
     replyHours: REPLY_HOURS,
     proposalSteps: PROPOSAL_STEPS,
-    themes: THEMES,
     faq: FAQ,
     getLocation: function (id) { return LOCATIONS.filter(function (l) { return l.id === id; })[0] || null; },
     minLeadDays: Math.min.apply(null, LOCATIONS.map(function (l) { return l.leadDays; })),
@@ -1073,7 +1001,6 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
     daysFromToday: daysFromToday,
     isoDate: isoDate,
     today: today,
-    sceneSVG: sceneSVG,
     yen: function (n) { return "¥" + Number(n).toLocaleString("ja-JP"); }
   };
 })(window);
@@ -1085,8 +1012,8 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
    Hash routes keep the browser Back button working and mirror the
    intended Shopify URLs:
      #/                         → /pages/propose
-     #/propose/<id>             → /pages/propose/<id>
-     #/book?loc=&date=&time=    → /pages/propose-booking?...
+     #/propose/<id>?place=      → /pages/propose/<id>?place=
+     #/book?loc=&date=&time=&place=  → /pages/propose-booking?...
      #<section-id>              → TOP, scrolled to that section
    ===================================================================== */
 (function () {
@@ -1111,28 +1038,48 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
     return (d.getMonth() + 1) + "/" + d.getDate() + "（" + DOW[d.getDay()] + "）";
   }
   var STATUS = {
-    available: { mark: "◎", ja: "受付中", en: "OPEN" },
-    few: { mark: "△", ja: "残りわずか", en: "FEW LEFT" },
-    soldout: { mark: "×", ja: "受付終了", en: "FULL" },
-    closed: { mark: "―", ja: "締切", en: "CLOSED" }
+    available: { mark: "◎", ja: "受付中" },
+    few: { mark: "△", ja: "残りわずか" },
+    soldout: { mark: "×", ja: "受付終了" },
+    closed: { mark: "―", ja: "締切" }
   };
+  var LEGEND = '<span class="legend"><span><i>◎</i>受付中</span><span><i>△</i>残りわずか</span><span><i>×</i>受付終了</span><span><i>―</i>締切</span></span>';
+  var VENUE_NOTE = "※ 会場の使用料や条件は会場ごとに異なるため、確定のご連絡でご案内します。";
+  var FEE_TYPES = ["chapel", "church", "restaurant", "hotel"];
+
+  /* ---------------- icons (line, 32px grid) ---------------- */
+  var ICONS = {
+    beach: '<circle cx="22" cy="9" r="3.6"/><path d="M3 22c3.2-3 6.4-3 9.6 0s6.4 3 9.6 0 6.4-3 9.8 0"/><path d="M3 27c3.2-3 6.4-3 9.6 0s6.4 3 9.6 0 6.4-3 9.8 0"/>',
+    chapel: '<path d="M16 2.5v6M13.2 5.3h5.6"/><path d="M8 28V16l8-5.5 8 5.5v12z"/><path d="M13 28v-6.5a3 3 0 0 1 6 0V28"/><path d="M4 28h24"/>',
+    church: '<path d="M16 2v5M13.5 4.5h5"/><path d="M12 13l4-6 4 6v15h-8z"/><path d="M12 17H7l-2 3v8h7M20 17h5l2 3v8h-7"/><path d="M14.2 28v-5h3.6v5"/>',
+    monument: '<path d="M16 2.5v4"/><path d="M13.5 28 16 6.5 18.5 28"/><path d="M14.6 16.5h2.8M13.9 21h4.2"/><path d="M10 28h12"/>',
+    restaurant: '<path d="M8 3v7a3 3 0 0 0 6 0V3M11 3v25"/><path d="M20 3h7l-.9 8a2.6 2.6 0 0 1-5.2 0zM23.5 13.6V28M20 28h7"/>',
+    hotel: '<path d="M7 28V5h13v23"/><path d="M20 13h5v15"/><path d="M3 28h26"/><path d="M11 10h1.6M15 10h1.6M11 14.5h1.6M15 14.5h1.6M11 19h1.6M15 19h1.6"/><path d="M12 28v-4h4v4"/>',
+    calendar: '<rect x="5" y="7" width="22" height="20" rx="1.5"/><path d="M5 13h22M11 4v5M21 4v5M11 18h3M18 18h3M11 22h3"/>',
+    clock: '<circle cx="16" cy="16" r="11"/><path d="M16 9v7l4.5 3"/>',
+    yen: '<circle cx="16" cy="16" r="11"/><path d="M11.5 9.5 16 16l4.5-6.5M16 16v8M12 18.5h8M12 21.5h8"/>',
+    lock: '<rect x="7" y="14" width="18" height="13" rx="1.5"/><path d="M11 14v-4a5 5 0 0 1 10 0v4"/>'
+  };
+  function icon(name) {
+    return '<svg class="ic" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' + (ICONS[name] || "") + "</svg>";
+  }
 
   /* ---------------- photos ---------------- */
-  // Real photo when a licensed one exists; otherwise the illustrated
-  // fallback, captioned so nobody mistakes it for final imagery.
+  // Real photo when one exists; otherwise a quiet typographic tile in the
+  // destination's colours, captioned so nobody mistakes it for final imagery.
   function photoInner(key, alt, loc, eager) {
     var src = key && PHOTOS[key];
     if (src) {
-      return '<img src="' + src + '" alt="' + esc(alt || "") + '" decoding="async">';
+      return '<img src="' + src + '" alt="' + esc(alt || "") + '" decoding="async"' + (eager ? ' fetchpriority="high"' : "") + ">";
     }
     var hue = loc ? loc.hue : ["#3a4a55", "#c9a88a"];
-    return D.sceneSVG(hue[0], hue[1], loc ? loc.motif : "") + '<span class="soon">Photo coming soon</span>';
+    return '<div class="ph" style="--c1:' + hue[0] + ";--c2:" + hue[1] + '"><span class="ph-name">' + esc(loc ? loc.name : "") + '</span><span class="ph-soon">写真準備中</span></div>';
   }
   function photo(loc, opts) {
     opts = opts || {};
     var pos = opts.pos || (loc && loc.photoPos) || "50% 50%";
     var cls = "photo" + (opts.reveal ? " reveal-img" : "") + (opts.cls ? " " + opts.cls : "");
-    var html = photoInner(loc ? loc.photo : opts.key, opts.alt || (loc && loc.photoAlt), loc, opts.eager);
+    var html = photoInner(loc ? loc.photo : opts.key, opts.alt !== undefined ? opts.alt : (loc && loc.photoAlt), loc, opts.eager);
     return '<div class="' + cls + '" style="--pos:' + pos + '">' + html.replace("<img ", '<img style="object-position:' + pos + '" ') + "</div>";
   }
   function hydrateStaticPhotos(root) {
@@ -1163,38 +1110,41 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
     }).join("");
   }
   function faqAbout(word) { return D.faq.filter(function (f) { return f.q.indexOf(word) > -1; })[0]; }
-  // Three tiers side by side (stacked on phones) + add-on options.
-  // loc = a location (its own prices) or null on TOP (lowest price per tier, "〜").
-  function planHTML(loc) {
-    var from = !loc;
-    var tiers = D.planTiers.map(function (t) {
+
+  // Plans as one comparison table: a row per plan, a column per thing included, then the price.
+  // loc = a destination (its own prices) or null on TOP (lowest per plan, with "〜").
+  function planTable(loc) {
+    var from = !loc, cols = D.planCols;
+    var head = '<tr><th scope="col"><span class="sr-only">プラン</span></th>' + cols.map(function (c) { return '<th scope="col">' + c.label + "</th>"; }).join("") + '<th scope="col">料金</th></tr>';
+    var rows = D.planTiers.map(function (t) {
       var price = loc ? loc.plans.filter(function (p) { return p.id === t.id; })[0].price : D.minPrice(t.id);
-      return (
-        '<div class="tier reveal">' +
-          '<div class="tier-name">' + esc(t.name) + '</div><div class="tier-ja">' + esc(t.nameJa) + "</div>" +
-          '<p class="tier-sum">' + esc(t.summary) + "</p>" +
-          '<div class="tier-price"><span class="price">' + yen(price) + "</span>" + (from ? "<small>〜</small>" : "") + "</div>" +
-          '<ul class="tier-inc">' + t.includes.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + "</ul>" +
-        "</div>"
-      );
+      return '<tr><th scope="row"><span class="pt-ja">' + t.nameJa.replace(/プラン$/, "") + '</span><span class="pt-en">' + t.name.replace(/ PLAN$/, "") + "</span></th>" +
+        cols.map(function (c) {
+          return t.has[c.id] ? '<td><span class="yes" aria-hidden="true">✓</span><span class="sr-only">含む</span></td>' : '<td><span class="no" aria-hidden="true">–</span><span class="sr-only">含まない</span></td>';
+        }).join("") +
+        '<td class="pt-price"><span class="price">' + yen(price) + "</span>" + (from ? "<small>〜</small>" : "") + "</td></tr>";
     }).join("");
     return (
-      '<div class="tiers">' + tiers + "</div>" +
-      (from ? '<p class="note plan-price-note">料金は行き先により異なります。</p>' : "") +
-      '<div class="plan-options reveal">' +
-        '<p class="sub-h">Option</p>' +
-        '<div class="opt-list">' +
-          D.options.map(function (o) {
-            return '<div class="opt-row"><div class="en">＋ ' + esc(o.name) + "<span>" + esc(o.nameJa) + '</span></div><div class="price">' + yen(o.price) + "</div><p>" + esc(o.desc) + (o.requiresPhoto ? "（写真撮影付きのプランで選べます）" : "") + "</p></div>";
-          }).join("") +
-        "</div>" +
-      "</div>" +
-      (loc ? '<a class="btn btn-block plan-cta" href="#/book?loc=' + loc.id + '">この場所で予約する <span class="arrow" aria-hidden="true">→</span></a>' : "")
+      '<div class="ptable-wrap reveal"><table class="ptable"><caption class="sr-only">' + (loc ? esc(loc.nameJa) + "の" : "") + 'プランの比較表</caption>' +
+        '<colgroup><col style="width:35%"><col style="width:8.5%"><col style="width:8.5%"><col style="width:8.5%"><col style="width:8.5%"><col style="width:31%"></colgroup>' +
+        "<thead>" + head + "</thead><tbody>" + rows + "</tbody></table></div>" +
+      '<ul class="pt-legend reveal">' + cols.map(function (c) { return "<li><b>" + c.label + "</b>" + esc(c.detail) + "</li>"; }).join("") + "<li><b>共通</b>日本語サポート</li></ul>" +
+      '<p class="pt-guide reveal">写真や動画を残すなら、スタンダード以上を。花束だけでも、サプライズは成立します。</p>' +
+      (from ? '<p class="note">料金は旅行先によって異なります。各旅行先のページで確認できます。</p>' : "")
     );
   }
-  // ---- proposal places (beach / chapel / church / monument / restaurant / hotel) ----
+  function optionsHTML() {
+    return (
+      '<div class="plan-options reveal"><p class="sub-h">オプション（追加できるもの）</p><div class="opt-list">' +
+      D.options.map(function (o) {
+        return '<div class="opt-row"><div class="opt-name"><b>' + esc(o.nameJa) + '</b><span class="en-sm">' + esc(o.name) + '</span></div><div class="price">' + yen(o.price) + "</div><p>" + esc(o.desc) + (o.requiresPhoto ? "（写真撮影付きのプランで選べます）" : "") + "</p></div>";
+      }).join("") + "</div></div>"
+    );
+  }
+
+  /* ---- proposal places (beach / chapel / church / monument / restaurant / hotel) ---- */
+  function hasPlace(l, type) { return l.placeList.some(function (p) { return p.type === type; }); }
   function placeNames(l) { return l.placeList.map(function (p) { return D.getPlaceType(p.type).ja; }); }
-  var FEE_TYPES = ["chapel", "church", "restaurant", "hotel"];
   // The place chosen on a location page travels with every booking link on it.
   var locPlace = "";
   function withPlace(href) {
@@ -1204,89 +1154,111 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
   function applyPlaceToLinks() {
     $$('a[href^="#/book?loc="]').forEach(function (a) { a.setAttribute("href", withPlace(a.getAttribute("href"))); });
   }
-  function placePicker(l) {
-    var opts = [{ type: "", venues: [] }].concat(l.placeList);
+  function placeDetail(l) {
+    if (!locPlace) return '<p class="pd-hint">まだ選ばなくても大丈夫です。迷ったときは、その日にいちばん合う場所をご案内します。</p>';
+    var t = D.getPlaceType(locPlace), p = l.placeList.filter(function (x) { return x.type === locPlace; })[0];
+    return '<p class="pd-title"><b>' + t.ja + "</b>で申し込む</p><p>" + esc(t.desc) + "</p>" +
+      (p && p.venues.length ? '<p class="place-venues">選べる会場：' + p.venues.map(esc).join("／") + "</p>" : '<p class="place-venues">会場は、ご希望に合わせてご案内します。</p>') +
+      (FEE_TYPES.indexOf(locPlace) > -1 ? '<p class="note">' + VENUE_NOTE + "</p>" : "") +
+      '<button type="button" class="btn" data-scroll="loc-avail">日程を確認する <span class="arrow" aria-hidden="true">↓</span></button>';
+  }
+  function placeSection(l) {
     return (
-      '<div class="place reveal" id="loc-place">' +
-        '<div class="place-head"><span class="label">Place</span><h3 class="h3">どこで伝えますか？</h3>' +
-        "<p>" + esc(l.nameJa) + "では、次の場所から選べます。予約のときにも選び直せます。</p></div>" +
-        '<div class="place-chips" role="radiogroup" aria-label="プロポーズの場所">' + opts.map(function (o) {
-          var t = o.type ? D.getPlaceType(o.type) : null;
-          var on = locPlace === o.type;
-          return '<button type="button" role="radio" aria-checked="' + on + '" class="place-chip' + (on ? " is-selected" : "") + '" data-place="' + o.type + '">' +
-            '<span class="en">' + (t ? t.en : "ANY") + "</span>" + (t ? t.ja : "おまかせ") + "</button>";
+      '<section class="sec sec-deep" id="loc-place" aria-labelledby="l-place"><div class="wrap">' +
+        '<div class="sec-head reveal"><span class="label">Place</span><h2 class="h2" id="l-place">' + esc(l.nameJa) + "の、<br class=\"br-sp\">プロポーズ場所を選ぶ。</h2>" +
+        '<p class="lede">' + placeNames(l).join("・") + "から選べます。選んだ場所は、そのまま予約に引き継がれます。</p></div>" +
+        '<div class="pcards reveal" role="radiogroup" aria-label="プロポーズの場所">' + l.placeList.map(function (p) {
+          var t = D.getPlaceType(p.type), on = locPlace === p.type;
+          return '<button type="button" role="radio" aria-checked="' + on + '" class="pcard' + (on ? " is-selected" : "") + '" data-place="' + p.type + '">' + icon(p.type) +
+            '<span class="tick" aria-hidden="true">✓</span><b>' + t.ja + '</b><span class="en-sm">' + t.en + "</span><p>" + esc(t.desc) + "</p>" +
+            (p.venues.length ? '<span class="pv">' + p.venues.map(esc).join("<br>") + "</span>" : "") + "</button>";
         }).join("") + "</div>" +
         '<div class="place-detail" aria-live="polite">' + placeDetail(l) + "</div>" +
-      "</div>"
+      "</div></section>"
     );
   }
-  function placeDetail(l) {
-    if (!locPlace) return "<p><b>おまかせ</b>" + esc(l.meetingPoint) + "など、その日にいちばん合う場所をご案内します。</p>";
-    var t = D.getPlaceType(locPlace), p = l.placeList.filter(function (x) { return x.type === locPlace; })[0];
-    return "<p><b>" + t.ja + "</b>" + t.desc + "</p>" +
-      (p && p.venues.length ? '<p class="place-venues">選べる会場：' + p.venues.map(esc).join("／") + "</p>" : '<p class="place-venues">会場は、ご希望に合わせてご案内します。</p>') +
-      (FEE_TYPES.indexOf(locPlace) > -1 ? '<p class="note">' + VENUE_NOTE + "</p>" : "");
-  }
-  var VENUE_NOTE = "※ 会場の使用料や条件は会場ごとに異なるため、確定のご連絡でご案内します。";
 
   /* =============================================================
      TOP
      ============================================================= */
   var topBuilt = false;
+  var pfState = "";
+
+  function destCard(l) {
+    var light = l.plans[0], std = l.plans[1] || l.plans[0];
+    return (
+      '<a class="dest-card reveal" href="#/propose/' + l.id + '" data-dest="' + l.id + '">' +
+        photo(l) +
+        '<div class="dest-body">' +
+          '<div class="dest-name">' + esc(l.name) + "</div>" +
+          '<div class="dest-ja">' + esc(l.nameJa) + "</div>" +
+          '<div class="dest-places" data-places>' + placeNames(l).join("・") + "</div>" +
+          '<div class="dest-match" data-match hidden></div>' +
+          '<div class="dest-price"><small>写真付き</small><span class="price">' + yen(std.price) + "</span>〜</div>" +
+          '<div class="dest-sub">花束のみ ' + yen(light.price) + "〜</div>" +
+          '<span class="dest-more"><span>プランを見る</span><span aria-hidden="true">→</span></span>' +
+        "</div>" +
+      "</a>"
+    );
+  }
+
+  function applyFilter() {
+    var f = pfState, shown = 0;
+    $$("#dest-grid .dest-card").forEach(function (card) {
+      var l = D.getLocation(card.dataset.dest);
+      var entry = f ? l.placeList.filter(function (p) { return p.type === f; })[0] : null;
+      var match = !f || !!entry;
+      card.hidden = !match;
+      if (match) shown++;
+      var m = $("[data-match]", card), pl = $("[data-places]", card);
+      if (f && entry) {
+        var t = D.getPlaceType(f);
+        m.innerHTML = "<b>" + t.ja + "</b>" + (entry.venues.length ? esc(entry.venues.slice(0, 2).join("／")) + (entry.venues.length > 2 ? " ほか" : "") : "");
+        m.hidden = false; pl.hidden = true;
+      } else { m.hidden = true; pl.hidden = false; }
+      card.setAttribute("href", "#/propose/" + l.id + (f ? "?place=" + f : ""));
+    });
+    $$("#pf .pf-tile").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.pf === f)); });
+    var st = $("#pf-status");
+    st.innerHTML = f ? "<span><b>" + D.getPlaceType(f).ja + "</b>でプロポーズできる旅行先：" + shown + 'か所</span><button type="button" class="link" data-pf-reset>すべて表示</button>' : "";
+    if (f) observeReveals($("#dest-grid"));
+  }
+
   function buildTop() {
     if (topBuilt) return;
     topBuilt = true;
     var view = $("#view-top");
 
-    $("#dest-grid").innerHTML = D.locations.map(function (l) {
-      return (
-        '<a class="dest-card reveal" href="#/propose/' + l.id + '">' +
-          photo(l) +
-          '<div class="dest-body">' +
-            '<div class="dest-name">' + esc(l.name) + "</div>" +
-            '<div class="dest-ja">' + esc(l.nameJa) + "</div>" +
-            '<div class="dest-places">' + placeNames(l).join("・") + "</div>" +
-            '<div class="dest-price">From<span class="price">' + yen(l.fromPrice) + "</span></div>" +
-            '<span class="dest-more"><span><span class="sm-hide">プロポーズ</span>プランを見る</span><span aria-hidden="true">→</span></span>' +
-          "</div>" +
-        "</a>"
-      );
-    }).join("");
-
-    $("#assure-list").innerHTML = [
-      { key: D.minLeadDays + "<small>日前</small>", h: "まで予約できます", p: "受付締切は行き先ごとに異なります。各ページでご確認ください。" },
-      { key: "14<small>日分</small>", h: "の受付状況をすぐ確認", p: "旅行日を選ぶだけで、その日に申し込める時間が分かります。" },
-      { key: D.replyHours + "<small>時間</small>", h: "以内に確定のご連絡", p: "リクエスト後、担当スタッフとフォトグラファーの手配を確認して、メールでお知らせします。お支払いは確定のあとです。" },
-      { key: "JP", h: "日本語でサポート", p: "予約から当日の連絡まで、日本語で対応します。" }
+    $("#trust-list").innerHTML = [
+      { ic: "calendar", k: "最短" + D.minLeadDays + "日前まで", t: "出発の直前でも申し込めます" },
+      { ic: "clock", k: D.replyHours + "時間以内に", t: "確定のご連絡をお送りします" },
+      { ic: "yen", k: "お支払いは確定後", t: "リクエストは無料です" },
+      { ic: "lock", k: "サプライズ配慮", t: "メールの件名を控えめにできます" }
     ].map(function (a) {
-      return '<li class="assure-item reveal"><span class="assure-key">' + a.key + '</span><div><h3 class="h3">' + a.h + "</h3><p>" + a.p + "</p></div></li>";
+      return '<li class="trust-item">' + icon(a.ic) + "<div><b>" + a.k + "</b><span>" + a.t + "</span></div></li>";
     }).join("");
 
-    $("#top-steps").innerHTML = D.proposalSteps.map(function (s) {
-      var loc = D.getLocation(s.photo);
-      return (
-        '<li class="step reveal">' +
-          photo(loc, { alt: "", pos: loc && loc.photoPos }) +
-          '<div><span class="step-no">' + s.no + '</span><h3 class="h3">' + esc(s.title) + "</h3><p>" + esc(s.text) + "</p></div>" +
-        "</li>"
-      );
+    // Place filter — the way in for people who know where they want to propose, not which city.
+    $("#pf").innerHTML =
+      '<p class="pf-title" id="pf-title">プロポーズしたい場所は？<small>選ぶと、その場所でできる旅行先だけを表示します（任意）</small></p>' +
+      '<div class="pf-tiles" role="group" aria-labelledby="pf-title">' + D.placeTypes.map(function (t) {
+        var n = D.locations.filter(function (l) { return hasPlace(l, t.id); }).length;
+        return '<button type="button" class="pf-tile" data-pf="' + t.id + '" aria-pressed="false">' + icon(t.id) + "<span>" + t.ja + "</span><small>" + n + "か所</small></button>";
+      }).join("") + "</div>" +
+      '<p class="pf-status" id="pf-status" aria-live="polite"></p>';
+    $("#pf").addEventListener("click", function (e) {
+      var t = e.target.closest("[data-pf]"), r = e.target.closest("[data-pf-reset]");
+      if (t) { pfState = pfState === t.dataset.pf ? "" : t.dataset.pf; applyFilter(); }
+      if (r) { pfState = ""; applyFilter(); }
+    });
+
+    $("#dest-grid").innerHTML = D.locations.map(destCard).join("");
+
+    $("#top-steps").innerHTML = D.proposalSteps.map(function (s, i) {
+      return '<li class="tl-item' + (i === 3 ? " is-key" : "") + '"><span class="step-no">' + s.no + '</span><h3 class="h3">' + esc(s.title) + "</h3><p>" + esc(s.text) + "</p></li>";
     }).join("");
 
-    $("#top-plan").innerHTML = planHTML(null);
-
-    $("#place-list").innerHTML = D.placeTypes.map(function (t) {
-      var locs = D.locations.filter(function (l) { return l.placeList.some(function (p) { return p.type === t.id; }); });
-      if (!locs.length) return "";
-      return (
-        '<div class="place-row reveal">' +
-          '<div class="place-type"><span class="en">' + t.en + "</span><b>" + t.ja + "</b></div>" +
-          '<p class="place-desc">' + esc(t.desc) + "</p>" +
-          '<div class="place-cities">' + locs.map(function (l) {
-            return '<a href="#/propose/' + l.id + "?place=" + t.id + '">' + esc(l.nameJa) + "</a>";
-          }).join("") + "</div>" +
-        "</div>"
-      );
-    }).join("");
+    $("#top-plan").innerHTML = planTable(null) + optionsHTML();
 
     var faq = $("#top-faq");
     faq.innerHTML = faqHTML(D.faq.slice(0, 5));
@@ -1295,35 +1267,7 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
       this.parentNode.remove();
     });
 
-    var themes = $("#themes");
-    themes.innerHTML = D.themes.map(function (t) {
-      var loc = D.getLocation(t.photo);
-      return (
-        '<button type="button" class="theme" data-theme="' + t.id + '" aria-pressed="false">' +
-          photo(loc, { alt: "" }) +
-          '<span class="theme-label"><span class="en">' + t.en + "</span><b>" + esc(t.label) + "</b></span>" +
-        "</button>"
-      );
-    }).join("");
-    themes.addEventListener("click", function (e) {
-      var btn = e.target.closest(".theme");
-      if (!btn) return;
-      var on = btn.getAttribute("aria-pressed") !== "true";
-      $$(".theme", themes).forEach(function (b) { b.setAttribute("aria-pressed", "false"); });
-      btn.setAttribute("aria-pressed", String(on));
-      var res = $("#theme-results");
-      if (!on) { res.innerHTML = ""; return; }
-      var matches = D.locations.filter(function (l) { return l.tags.indexOf(btn.dataset.theme) > -1; });
-      res.innerHTML = matches.map(function (l) {
-        return (
-          '<a class="result-row" href="#/propose/' + l.id + '">' +
-            photo(l, { alt: "" }) +
-            '<div><div class="dest-name">' + esc(l.name) + '</div><div class="dest-ja">' + esc(l.nameJa) + "・" + esc(l.tagline) + "</div></div>" +
-            '<div class="price">' + yen(l.fromPrice) + "〜</div>" +
-          "</a>"
-        );
-      }).join("");
-    });
+    $("#ft-dests").innerHTML = D.locations.map(function (l) { return '<a href="#/propose/' + l.id + '">' + esc(l.nameJa) + "でプロポーズ</a>"; }).join("");
 
     hydrateStaticPhotos(view);
   }
@@ -1336,9 +1280,10 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
     var view = $("#view-location");
     if (!l) { view.innerHTML = '<section class="sec"><div class="wrap"><p>旅行先が見つかりませんでした。</p><a class="link" href="#destinations">旅行先一覧へ</a></div></section>'; return; }
 
-    document.title = l.nameJa + "でプロポーズ｜世界のプロポーズプラン";
+    var light = l.plans[0], std = l.plans[1] || l.plans[0];
+    document.title = l.nameJa + "でプロポーズ｜" + placeNames(l).slice(0, 4).join("・") + "から選べる " + yen(light.price) + "〜｜世界のプロポーズプラン";
     var qPlace = q && q.place;
-    locPlace = l.placeList.some(function (p) { return p.type === qPlace; }) ? qPlace : "";
+    locPlace = hasPlace(l, qPlace) ? qPlace : "";
 
     var steps = D.proposalSteps.map(function (s, i) {
       var text = i === 0 ? l.meetingPoint + "で、フォトグラファーがお二人をお迎えします。" : s.text;
@@ -1346,105 +1291,100 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
     }).join("");
 
     var others = D.locations.filter(function (x) { return x.id !== l.id; }).map(function (x) {
-      return '<a href="#/propose/' + x.id + '">' + esc(x.name) + "</a>";
+      return '<a href="#/propose/' + x.id + '">' + esc(x.nameJa) + "</a>";
     }).join("");
+
+    var faqs = [faqAbout("気づかれ"), { q: "雨が降ったらどうなりますか？", a: l.rainPlan }, faqAbout("すぐに確定"), faqAbout("写真撮影なし"), faqAbout("キャンセル"), faqAbout("指輪や花束")];
 
     view.innerHTML =
       '<section class="lhero" aria-labelledby="l-title">' +
         photo(l, { eager: true }) +
         '<div class="hero-scrim"></div>' +
-        '<p class="crumb"><a href="#/">TOP</a> ／ <a href="#destinations">DESTINATIONS</a> ／ ' + esc(l.name) + "</p>" +
+        '<p class="crumb"><a href="#/">TOP</a> ／ <a href="#destinations">旅行先</a> ／ ' + esc(l.nameJa) + "</p>" +
         '<div class="lhero-body">' +
           '<span class="label">Propose in ' + esc(l.name.charAt(0) + l.name.slice(1).toLowerCase()) + "</span>" +
           '<p class="lhero-name" aria-hidden="true">' + esc(l.name) + "</p>" +
           '<h1 class="h1" id="l-title">' + nl2br(l.catch) + "</h1>" +
-          '<p class="lhero-price">From<span class="price">' + yen(l.fromPrice) + "</span></p>" +
+          '<p class="lhero-price"><span>花束のみ <b class="price">' + yen(light.price) + "</b>〜</span><span>写真付き <b class=\"price\">" + yen(std.price) + "</b>〜</span></p>" +
           '<div class="lhero-cta">' +
-            '<button class="btn btn-light" data-scroll="loc-avail">受付状況を見る</button>' +
-            '<a class="btn btn-line" href="#/book?loc=' + l.id + '">予約する</a>' +
+            '<button class="btn btn-light" data-scroll="loc-place">場所を選ぶ</button>' +
+            '<button class="btn btn-line" data-scroll="loc-avail">日程を確認する</button>' +
           "</div>" +
         "</div>" +
       "</section>" +
 
-      '<section class="sec" style="padding-bottom:calc(var(--sec) * .6)">' +
+      '<section class="sec" style="padding-bottom:calc(var(--sec) * .5)" aria-labelledby="l-about">' +
         '<div class="wrap">' +
           '<div class="lintro reveal">' +
-            '<div><span class="label">About ' + esc(l.name) + '</span><h2 class="h2">' + esc(l.tagline) + "</h2></div>" +
+            '<div><span class="label">About ' + esc(l.name) + '</span><h2 class="h2" id="l-about">' + esc(l.tagline) + "</h2></div>" +
             '<p class="lede" style="margin-top:0">' + esc(l.lede) + "</p>" +
           "</div>" +
-          '<dl class="facts reveal" style="margin-top:56px">' +
-            '<div class="fact"><dt>Price</dt><dd><span class="price">' + yen(l.fromPrice) + "</span><small>ライトプラン（花束のみ）</small></dd></div>" +
-            '<div class="fact"><dt>Time</dt><dd>' + esc(l.duration) + "<small>写真撮影は30分</small></dd></div>" +
-            '<div class="fact"><dt>Best Time</dt><dd>' + esc(l.bestTime) + "<small>" + esc(l.bestTimeNote) + "</small></dd></div>" +
-            '<div class="fact"><dt>Book By</dt><dd>最短' + l.leadDays + "日前まで<small>" + D.replyHours + "時間以内に確定のご連絡</small></dd></div>" +
-            '<div class="fact"><dt>Rain</dt><dd>無料で振替<small>翌日以降の空き枠へ</small></dd></div>' +
-            '<div class="fact"><dt>Support</dt><dd>日本語対応<small>当日の連絡も日本語で</small></dd></div>' +
+          '<dl class="facts reveal">' +
+            '<div class="fact"><dt>受付期限</dt><dd>' + l.leadDays + "日前まで<small>リクエストの受付</small></dd></div>" +
+            '<div class="fact"><dt>確定のご連絡</dt><dd>' + D.replyHours + "時間以内<small>メールでお知らせ</small></dd></div>" +
+            '<div class="fact"><dt>お支払い</dt><dd>確定のあと<small>リクエストは無料</small></dd></div>' +
+            '<div class="fact"><dt>サプライズ</dt><dd>配慮あり<small>件名を控えめに</small></dd></div>' +
           "</dl>" +
-          '<p class="note facts-note">※ 料金・所要時間・受付締切・確定連絡までの時間・雨天対応・受付状況はデモ用の仮データです。</p>' +
-          placePicker(l) +
+          '<p class="note facts-note">※ 料金・受付期限・確定連絡までの時間・雨天対応・受付状況はデモ用の仮データです。</p>' +
         "</div>" +
       "</section>" +
 
-      '<section class="sec sec-deep" aria-labelledby="l-day">' +
-        '<div class="wrap day">' +
-          photo(l, { reveal: true, pos: "50% 50%" }) +
+      placeSection(l) +
+
+      '<section class="sec" aria-labelledby="l-day">' +
+        '<div class="wrap assure-wrap">' +
+          '<div class="sec-head reveal"><span class="label">Your Proposal</span><h2 class="h2" id="l-day">' + esc(l.nameJa) + "での、<br class=\"br-sp\">当日の流れ。</h2>" +
+          '<p class="lede">' + esc(l.duration) + "。最初は旅の記念撮影として、気づかれないまま、その瞬間へ。</p></div>" +
           "<div>" +
-            '<div class="sec-head reveal"><span class="label">Your Proposal</span><h2 class="h2" id="l-day">当日は、<br>こんな時間になります。</h2>' +
-            '<p class="lede">最初は旅の記念撮影として。気づかれないまま、その瞬間へ。</p></div>' +
             '<ol class="timeline reveal">' + steps + "</ol>" +
             '<p class="note" style="margin-top:24px">※ 写真撮影付きのプラン（スタンダード・ラグジュアリー）の流れです。ライトプランは撮影がありません。</p>' +
           "</div>" +
         "</div>" +
       "</section>" +
 
-      '<section class="sec" id="loc-avail" aria-labelledby="l-avail">' +
-        '<div class="wrap-narrow">' +
-          '<div class="sec-head reveal"><span class="label">Availability</span><h2 class="h2" id="l-avail">あなたの旅行日に、<br>間に合いますか？</h2>' +
-          '<p class="lede">日付を選ぶと、その日に申し込める時間が分かります。予約はリクエスト制で、' + D.replyHours + '時間以内に確定をご連絡します。</p></div>' +
-          '<div class="avail reveal" id="avail"></div>' +
-        "</div>" +
-      "</section>" +
-
       '<section class="sec sec-deep" aria-labelledby="l-plan">' +
         '<div class="wrap">' +
-          '<div class="sec-head reveal"><span class="label">Plan</span><h2 class="h2" id="l-plan">' + esc(l.nameJa) + "の料金</h2>" +
-          '<p class="lede">花束だけのライトから、写真と動画を残すラグジュアリーまで。必要なものはオプションで足せます。</p></div>' +
-          planHTML(l) +
+          '<div class="sec-head reveal"><span class="label">Plan</span><h2 class="h2" id="l-plan">' + esc(l.nameJa) + "の、<br class=\"br-sp\">プランと料金。</h2></div>" +
+          planTable(l) + optionsHTML() +
         "</div>" +
       "</section>" +
 
-      '<section class="sec" aria-labelledby="l-faq">' +
+      '<section class="sec" id="loc-avail" aria-labelledby="l-avail">' +
         '<div class="wrap-narrow">' +
-          '<div class="sec-head reveal"><span class="label">If It Rains &amp; FAQ</span><h2 class="h2" id="l-faq">雨の日も、<br class="br-sp">直前の予約も。</h2></div>' +
-          '<div class="rain reveal"><span class="en">IF IT RAINS</span><p>' + esc(l.rainPlan) + "</p></div>" +
-          '<div class="faq" style="margin-top:32px">' + faqHTML([
-            { q: "何日前まで予約できますか？", a: esc(l.nameJa) + "は、プロポーズの日の" + l.leadDays + "日前までリクエストできます。確定のご連絡は" + D.replyHours + "時間以内です。" },
-            { q: "集合場所はどこですか？", a: l.meetingPoint + "です。詳細は確定のご連絡でご案内します。" },
-            faqAbout("すぐに確定"), faqAbout("気づかれ"), faqAbout("日本語"), faqAbout("キャンセル")
-          ]) + "</div>" +
+          '<div class="sec-head reveal"><span class="label">Availability</span><h2 class="h2" id="l-avail">' + esc(l.nameJa) + "の、<br class=\"br-sp\">日程を確認する。</h2>" +
+          '<p class="lede">旅行中の日付を選ぶと、申し込める時間が分かります。</p></div>' +
+          '<div class="avail reveal" id="avail"></div>' +
+          '<p class="rain-note reveal"><b>雨の日</b>' + esc(l.rainPlan) + "</p>" +
         "</div>" +
       "</section>" +
 
-      '<section class="final">' + photo(l, { pos: "50% 40%" }) +
-        '<div class="wrap"><span class="label">Propose in ' + esc(l.name.charAt(0) + l.name.slice(1).toLowerCase()) + '</span><h2 class="h2">あとは、日付を選ぶだけ。</h2>' +
-        '<p class="lede">' + esc(l.nameJa) + "のプロポーズ " + yen(l.fromPrice) + "〜</p>" +
+      '<section class="sec sec-deep" aria-labelledby="l-faq">' +
+        '<div class="wrap-narrow">' +
+          '<div class="sec-head reveal"><span class="label">FAQ</span><h2 class="h2" id="l-faq">' + esc(l.nameJa) + "のプロポーズ、<br class=\"br-sp\">よくあるご質問</h2></div>" +
+          '<div class="faq">' + faqHTML(faqs) + "</div>" +
+        "</div>" +
+      "</section>" +
+
+      '<section class="final">' + photo(l, { pos: "50% 18%", alt: "" }) +
+        '<div class="wrap"><span class="label">Propose in ' + esc(l.name.charAt(0) + l.name.slice(1).toLowerCase()) + '</span><h2 class="h2">あとは、日程を選ぶだけ。</h2>' +
+        '<p class="lede">' + esc(l.nameJa) + "のプロポーズ　花束のみ " + yen(light.price) + "〜／写真付き " + yen(std.price) + "〜</p>" +
         '<a class="btn btn-light" href="#/book?loc=' + l.id + '">この場所で予約する <span class="arrow" aria-hidden="true">→</span></a>' +
-        '<nav class="ft-links" style="justify-content:center;margin-top:48px;color:rgba(255,255,255,.85)" aria-label="ほかの旅行先">' + others + "</nav></div>" +
+        '<nav class="ft-links" style="justify-content:center;margin-top:48px" aria-label="ほかの旅行先">' + others + "</nav></div>" +
       "</section>";
 
     renderAvail(l);
-    var picker = $("#loc-place", view);
-    picker.addEventListener("click", function (e) {
+    var cards = $(".pcards", view);
+    cards.addEventListener("click", function (e) {
       var c = e.target.closest("[data-place]"); if (!c) return;
-      locPlace = c.dataset.place;
-      $$(".place-chip", picker).forEach(function (x) { var on = x === c; x.classList.toggle("is-selected", on); x.setAttribute("aria-checked", String(on)); });
-      $(".place-detail", picker).innerHTML = placeDetail(l);
+      locPlace = locPlace === c.dataset.place ? "" : c.dataset.place;
+      $$(".pcard", cards).forEach(function (x) { var on = x.dataset.place === locPlace; x.classList.toggle("is-selected", on); x.setAttribute("aria-checked", String(on)); });
+      $(".place-detail", view).innerHTML = placeDetail(l);
       applyPlaceToLinks();
     });
     observeReveals(view);
   }
 
-  // 14-day quick check → pick a slot → jump straight to PLAN in booking.
+  // 14-day quick check → pick a slot → jump straight to the next unanswered step in booking.
   function renderAvail(l) {
     var box = $("#avail");
     var start = D.today();
@@ -1476,20 +1416,19 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
         return (
           '<button type="button" class="slot is-' + st + (sel.time === t ? " is-selected" : "") + '" data-time="' + t + '"' + (disabled ? " disabled" : "") + ">" +
             '<span class="t">' + t + "</span>" +
-            '<span class="best">' + (t === l.bestTime ? "<b>BEST TIME</b>" + esc(l.bestTimeNote) : "") + "</span>" +
-            '<span class="st">' + STATUS[st].en + "</span>" +
+            '<span class="best">' + (t === l.bestTime ? "<b>ベストタイム</b>" + esc(l.bestTimeNote) : "") + "</span>" +
+            '<span class="st">' + STATUS[st].ja + "</span>" +
           "</button>"
         );
       }).join("") : '<p class="slots-empty">この先2週間は受付を終了しています。先の日付をご確認ください。</p>';
 
       var go = sel.date && sel.time
-        ? '<p class="avail-pick"><b>' + fmtDate(sel.date) + " " + sel.time + "</b> ・受付中</p>" +
+        ? '<p class="avail-pick"><b>' + fmtDate(sel.date) + " " + sel.time + "</b>　受付中</p>" +
           '<a class="btn btn-block" href="#/book?loc=' + l.id + "&date=" + sel.date + "&time=" + sel.time + '">この日時で申し込む <span class="arrow" aria-hidden="true">→</span></a>'
-        : '<p class="avail-pick" style="color:var(--ink-faint)">時間を選ぶと、そのまま予約リクエストに進めます。</p>';
+        : '<p class="avail-pick avail-hint">時間を選ぶと、そのまま予約リクエストに進めます。</p>';
 
       box.innerHTML =
-        '<div class="avail-head"><span class="en">NEXT 14 DAYS</span>' +
-        '<span class="legend"><span><i>◎</i>受付中</span><span><i>△</i>残りわずか</span><span><i>×</i>受付終了</span><span><i>―</i>締切</span></span></div>' +
+        '<div class="avail-head"><span class="avail-title">今日から14日間</span>' + LEGEND + "</div>" +
         '<div class="days" role="group" aria-label="日付を選ぶ">' + dayBtns + "</div>" +
         (sel.date ? '<p class="note" style="margin-top:16px">' + fmtDate(sel.date) + " の受付状況</p>" : "") +
         '<div class="slots" role="group" aria-label="時間を選ぶ">' + slots + "</div>" +
@@ -1510,13 +1449,12 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
      BOOKING
      ============================================================= */
   var STEP_META = {
-    location: { ja: "旅行先", en: "DESTINATION" },
-    date: { ja: "日付", en: "DATE" },
-    time: { ja: "時間", en: "TIME" },
-    place: { ja: "場所", en: "PLACE" },
-    plan: { ja: "プラン・オプション", en: "PLAN" },
-    customer: { ja: "お客様情報", en: "YOUR DETAILS" },
-    confirm: { ja: "リクエスト内容の確認", en: "REVIEW" }
+    location: { ja: "旅行先" },
+    date: { ja: "日にち・時間" },
+    place: { ja: "場所" },
+    plan: { ja: "プラン・オプション" },
+    customer: { ja: "お客様情報" },
+    confirm: { ja: "リクエスト内容の確認" }
   };
   var bk = null;
   var calOffset = 0;
@@ -1549,8 +1487,8 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
   function startBooking(params) {
     var l = params.loc && D.getLocation(params.loc);
     bk = { loc: l ? l.id : null, date: null, time: null, plan: ["light", "standard", "luxury"].indexOf(params.plan) > -1 ? params.plan : "standard", place: "", venue: "", placeNote: "", placeSet: false, options: [], customer: {}, steps: [], i: 0, done: false };
-    bk.steps = (l ? [] : ["location"]).concat(["date", "time", "place", "plan", "customer", "confirm"]);
-    if (l && params.place && l.placeList.some(function (p) { return p.type === params.place; })) { bk.place = params.place; bk.placeSet = true; }
+    bk.steps = (l ? [] : ["location"]).concat(["date", "place", "plan", "customer", "confirm"]);
+    if (l && params.place && hasPlace(l, params.place)) { bk.place = params.place; bk.placeSet = true; }
     if (l && params.date) {
       var st = D.dateStatus(l, params.date);
       if (st === "available" || st === "few") bk.date = params.date;
@@ -1559,14 +1497,14 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
       var ss = D.slotStatus(l, bk.date, params.time);
       if (ss === "available" || ss === "few") bk.time = params.time;
     }
-    bk.i = bk.steps.indexOf(!bk.loc ? "location" : !bk.date ? "date" : !bk.time ? "time" : !bk.placeSet ? "place" : "plan");
+    bk.i = bk.steps.indexOf(!bk.loc ? "location" : (!bk.date || !bk.time) ? "date" : !bk.placeSet ? "place" : "plan");
     calOffset = 0;
     if (bk.date) {
       var dd = new Date(bk.date + "T00:00:00"), t = D.today();
       calOffset = (dd.getFullYear() - t.getFullYear()) * 12 + dd.getMonth() - t.getMonth();
     }
     $("#bk-back-link").href = bk.loc ? "#/propose/" + bk.loc : "#/";
-    $("#bk-back-link").textContent = bk.loc ? "← " + D.getLocation(bk.loc).name : "← TOP";
+    $("#bk-back-link").textContent = bk.loc ? "← " + D.getLocation(bk.loc).nameJa : "← TOP";
     bRender();
   }
 
@@ -1580,8 +1518,7 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
   function canNext() {
     switch (curStep()) {
       case "location": return !!bk.loc;
-      case "date": return !!bk.date;
-      case "time": return !!bk.time;
+      case "date": return !!bk.date && !!bk.time;
       case "place": return true;
       case "plan": return true;
       case "customer":
@@ -1596,15 +1533,14 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
     var step = curStep();
     var total = bk.steps.length;
     $("#bk-step-count").textContent = "STEP " + (bk.i + 1) + " / " + total + "　" + STEP_META[step].ja;
-    $("#bk-step-en").textContent = STEP_META[step].en;
     $("#bk-bar-fill").style.width = ((bk.i + 1) / total * 100) + "%";
     $("#bk-progress").classList.remove("hidden");
     $("#bk-bar").classList.remove("hidden");
 
     var l = bLoc();
     var chips = [];
-    if (l && step !== "location") chips.push('<span class="chip"><span class="en">' + esc(l.name) + "</span>" + esc(l.nameJa) + '<button type="button" data-change="location">変更</button></span>');
-    if (bk.date && ["time", "place", "plan", "customer", "confirm"].indexOf(step) > -1) chips.push('<span class="chip">' + fmtShort(bk.date) + (bk.time && step !== "time" ? " " + bk.time : "") + '<button type="button" data-change="date">変更</button></span>');
+    if (l && step !== "location") chips.push('<span class="chip"><b>' + esc(l.nameJa) + '</b><button type="button" data-change="location">変更</button></span>');
+    if (bk.date && bk.time && ["place", "plan", "customer", "confirm"].indexOf(step) > -1) chips.push('<span class="chip">' + fmtShort(bk.date) + " " + bk.time + '<button type="button" data-change="date">変更</button></span>');
     if (bk.placeSet && ["plan", "customer", "confirm"].indexOf(step) > -1) chips.push('<span class="chip">' + esc(placeLabel()) + '<button type="button" data-change="place">変更</button></span>');
     $("#bk-context").innerHTML = chips.join("");
 
@@ -1626,12 +1562,21 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
     next.disabled = !canNext();
   }
 
+  function slotBoxHTML(l) {
+    if (!bk.date) return '<p class="slots-empty">日にちを選ぶと、その日の時間が表示されます。</p>';
+    return '<h3 class="h3 slot-h">' + fmtDate(bk.date) + ' の時間を選ぶ</h3><div class="slots">' + l.timeSlots.map(function (t) {
+      var st = D.slotStatus(l, bk.date, t), dis = st === "soldout" || st === "closed";
+      return '<button type="button" class="slot is-' + st + (bk.time === t ? " is-selected" : "") + '" data-time="' + t + '"' + (dis ? " disabled" : "") + '><span class="t">' + t + '</span><span class="best">' +
+        (t === l.bestTime ? "<b>ベストタイム</b>" + esc(l.bestTimeNote) : "") + '</span><span class="st">' + STATUS[st].ja + "</span></button>";
+    }).join("") + "</div>";
+  }
+
   var RENDER = {
     location: function () {
       return '<h2 class="h2">どこへ行きますか？</h2><p class="lede">旅行先を選んでください。</p><div class="pick-grid">' +
         D.locations.map(function (l) {
           return '<button type="button" class="pick' + (bk.loc === l.id ? " is-selected" : "") + '" data-loc="' + l.id + '">' + photo(l, { alt: "" }) +
-            '<span class="pick-name"><span class="en">' + esc(l.name) + '</span><span class="price">' + yen(l.fromPrice) + "〜</span></span></button>";
+            '<span class="pick-name"><b>' + esc(l.nameJa) + '</b><span class="price">' + yen(l.fromPrice) + "〜</span></span></button>";
         }).join("") + "</div>";
     },
     date: function () {
@@ -1652,21 +1597,13 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
         cells.push('<button type="button" class="day-btn is-' + st + (past ? " is-past" : "") + (bk.date === iso ? " is-selected" : "") + '" data-date="' + iso + '"' + (dis ? " disabled" : "") +
           ' aria-label="' + fmtDate(iso) + " " + STATUS[st].ja + '"><span class="dn">' + d + '</span><span class="ds">' + (past ? "" : STATUS[st].mark) + "</span></button>");
       }
-      return '<h2 class="h2">プロポーズの日を選ぶ</h2><p class="lede">' + esc(l.nameJa) + "は" + l.leadDays + "日前まで予約できます。旅行中の日付を選んでください。</p>" +
-        '<div class="cal-nav"><button type="button" data-cal="-1"' + (calOffset <= 0 ? " disabled" : "") + ' aria-label="前の月">←</button><span class="cal-month">' + y + "." + String(m + 1).padStart(2, "0") +
-        '</span><button type="button" data-cal="1"' + (calOffset >= 5 ? " disabled" : "") + ' aria-label="次の月">→</button></div>' +
+      return '<h2 class="h2">日にちと時間を選ぶ</h2><p class="lede">' + esc(l.nameJa) + "は" + l.leadDays + "日前までリクエストできます。旅行中の日にちを選んでください。</p>" +
+        '<div class="cal-nav"><button type="button" data-cal="-1"' + (calOffset <= 0 ? " disabled" : "") + ' aria-label="前の月">←</button><span class="cal-month">' + y + "年" + (m + 1) +
+        '月</span><button type="button" data-cal="1"' + (calOffset >= 5 ? " disabled" : "") + ' aria-label="次の月">→</button></div>' +
         '<div class="cal">' + DOW.map(function (w) { return '<span class="cal-dow">' + w + "</span>"; }).join("") + cells.join("") + "</div>" +
-        '<div class="cal-foot"><span class="legend"><span><i>◎</i>受付中</span><span><i>△</i>残りわずか</span><span><i>×</i>受付終了</span><span><i>―</i>締切</span></span></div>' +
-        '<p class="note" style="margin-top:10px">※ 受付状況はデモ表示です。日時はリクエスト後に確定します。</p>';
-    },
-    time: function () {
-      var l = bLoc();
-      return '<h2 class="h2">時間を選ぶ</h2><p class="lede">' + fmtDate(bk.date) + " に申し込める時間です。</p>" +
-        '<div class="slots" style="margin-top:0">' + l.timeSlots.map(function (t) {
-          var st = D.slotStatus(l, bk.date, t), dis = st === "soldout" || st === "closed";
-          return '<button type="button" class="slot is-' + st + (bk.time === t ? " is-selected" : "") + '" data-time="' + t + '"' + (dis ? " disabled" : "") + '><span class="t">' + t + '</span><span class="best">' +
-            (t === l.bestTime ? "<b>BEST TIME</b>" + esc(l.bestTimeNote) : "") + '</span><span class="st">' + STATUS[st].en + "</span></button>";
-        }).join("") + "</div>";
+        '<div class="cal-foot">' + LEGEND + "</div>" +
+        '<div class="slot-box" id="bk-slotbox" aria-live="polite">' + slotBoxHTML(l) + "</div>" +
+        '<p class="note" style="margin-top:14px">※ 日時は、リクエストのあと手配を確認してから確定します。受付状況はデモ表示です。</p>';
     },
     place: function () {
       var l = bLoc(), entry = bPlaceEntry();
@@ -1674,37 +1611,37 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
       return '<h2 class="h2">プロポーズの場所を選ぶ</h2><p class="lede">' + esc(l.nameJa) + "で選べる場所です。会場を指定することもできます。</p>" +
         '<div class="plan-toggle" role="radiogroup" aria-label="場所">' + opts.map(function (o) {
           var t = o.type ? D.getPlaceType(o.type) : null, on = bk.place === o.type;
-          var sub = t ? t.desc + (o.venues.length ? "（会場の指定もできます）" : "") : esc(l.meetingPoint) + "など、その日にいちばん合う場所をご案内します。";
-          return '<button type="button" role="radio" aria-checked="' + on + '" class="plan-opt is-place' + (on ? " is-selected" : "") + '" data-place="' + o.type + '"><span class="radio"></span><span><span class="en">' +
-            (t ? t.en : "ANY") + '</span><b class="place-ja">' + (t ? t.ja : "おまかせ") + "</b><p>" + sub + "</p></span></button>";
+          var sub = t ? esc(t.desc) + (o.venues.length ? "（会場の指定もできます）" : "") : esc(l.meetingPoint) + "など、その日にいちばん合う場所をご案内します。";
+          return '<button type="button" role="radio" aria-checked="' + on + '" class="plan-opt is-place' + (on ? " is-selected" : "") + '" data-place="' + o.type + '"><span class="radio"></span><span>' +
+            '<b class="place-ja">' + (t ? t.ja : "おまかせ") + "</b>" + (t ? '<span class="en-sm">' + t.en + "</span>" : "") + "<p>" + sub + "</p></span></button>";
         }).join("") + "</div>" +
         (entry && entry.venues.length ?
-          '<p class="sub-h">Venue</p>' +
+          '<p class="sub-h">会場を指定する</p>' +
           '<div class="plan-toggle venue-toggle" role="radiogroup" aria-label="会場">' + [""].concat(entry.venues).map(function (v) {
             var on = bk.venue === v;
             return '<button type="button" role="radio" aria-checked="' + on + '" class="plan-opt is-compact' + (on ? " is-selected" : "") + '" data-pvenue="' + esc(v) + '"><span class="radio"></span><span>' + (v ? esc(v) : "指定なし（おすすめをご案内）") + "</span></button>";
           }).join("") + "</div>" : "") +
-        (bk.place ? '<div class="field"><label for="c-placenote">ご希望があればご記入ください<span class="req" style="color:var(--ink-faint)">任意</span></label><input id="c-placenote" type="text" value="' + esc(bk.placeNote) + '" placeholder="例：滞在中のホテル名、行きたいお店など"></div>' : "") +
+        (bk.place ? '<div class="field"><label for="c-placenote">ご希望があればご記入ください<span class="req opt">任意</span></label><input id="c-placenote" type="text" maxlength="200" value="' + esc(bk.placeNote) + '" placeholder="例：滞在中のホテル名、行きたいお店など"></div>' : "") +
         (FEE_TYPES.indexOf(bk.place) > -1 ? '<p class="note">' + VENUE_NOTE + "</p>" : "");
     },
     plan: function () {
       var l = bLoc();
       return '<h2 class="h2">プランとオプション</h2><p class="lede">プランを選び、必要なものだけ追加してください。</p>' +
         '<div class="plan-toggle" role="radiogroup" aria-label="プラン">' + l.plans.map(function (p) {
-          return '<button type="button" role="radio" aria-checked="' + (bk.plan === p.id) + '" class="plan-opt' + (bk.plan === p.id ? " is-selected" : "") + '" data-plan="' + p.id + '"><span class="radio"></span><span><span class="en">' +
-            esc(p.name) + "</span><p>" + esc(p.nameJa) + "｜" + esc(p.summary) + '</p></span><span class="price">' + yen(p.price) + "</span></button>";
+          return '<button type="button" role="radio" aria-checked="' + (bk.plan === p.id) + '" class="plan-opt' + (bk.plan === p.id ? " is-selected" : "") + '" data-plan="' + p.id + '"><span class="radio"></span><span>' +
+            '<b class="place-ja">' + esc(p.nameJa) + '</b><span class="en-sm">' + esc(p.name) + "</span><p>" + esc(p.summary) + '</p></span><span class="price">' + yen(p.price) + "</span></button>";
         }).join("") + "</div>" +
-        '<p class="sub-h">Option</p>' +
+        '<p class="sub-h">オプション（追加できるもの）</p>' +
         D.options.map(function (o) {
           var ok = optionAvailable(o), on = ok && bk.options.indexOf(o.id) > -1;
           return '<button type="button" role="checkbox" aria-checked="' + on + '" class="opt-pick' + (on ? " is-on" : "") + '" data-opt="' + o.id + '"' + (ok ? "" : " disabled") + '><span class="box">' + (on ? "✓" : "") +
-            '</span><span><span class="en">' + esc(o.name) + "<span>" + esc(o.nameJa) + "</span></span><p>" + esc(o.desc) + '</p></span><span class="price">' + (ok ? "+" + yen(o.price) : "撮影付きプランのみ") + "</span></button>";
+            '</span><span><b class="place-ja">' + esc(o.nameJa) + '</b><span class="en-sm">' + esc(o.name) + "</span><p>" + esc(o.desc) + '</p></span><span class="price">' + (ok ? "+" + yen(o.price) : "撮影付きプランのみ") + "</span></button>";
         }).join("");
     },
     customer: function () {
       var c = bk.customer;
       function f(id, label, type, req, ac, ph) {
-        return '<div class="field"><label for="c-' + id + '">' + label + (req ? '<span class="req">必須</span>' : '<span class="req" style="color:var(--ink-faint)">任意</span>') + "</label>" +
+        return '<div class="field"><label for="c-' + id + '">' + label + (req ? '<span class="req">必須</span>' : '<span class="req opt">任意</span>') + "</label>" +
           '<input id="c-' + id + '" type="' + type + '" autocomplete="' + ac + '" value="' + esc(c[id] || "") + '" placeholder="' + ph + '"' + (req ? " required" : "") + "></div>";
       }
       return '<h2 class="h2">ご予約者さまの情報</h2><p class="lede">確定のご連絡と当日の連絡に使います。この時点でのお支払いはありません。</p>' +
@@ -1727,17 +1664,17 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
     var l = bLoc(), p = bPlan();
     var extra = bOptions();
     var rows = [
-      ["Destination", l.name + "（" + l.nameJa + "）"],
-      ["Date", fmtDate(bk.date, true)],
-      ["Time", bk.time + (bk.time === l.bestTime ? "<small>BEST TIME・" + esc(l.bestTimeNote) + "</small>" : "")],
-      ["Meeting", esc(l.meetingPoint)],
-      ["Plan", esc(p.name) + "<small>" + esc(p.summary) + "・" + yen(p.price) + "</small>"]
+      ["旅行先", esc(l.nameJa) + "（" + esc(l.name) + "）"],
+      ["日にち", fmtDate(bk.date, true)],
+      ["時間", bk.time + (bk.time === l.bestTime ? "<small>ベストタイム・" + esc(l.bestTimeNote) + "</small>" : "")],
+      ["集合場所", esc(l.meetingPoint)],
+      ["場所", esc(placeLabel()) + (bk.placeNote ? "<small>" + esc(bk.placeNote) + "</small>" : "")],
+      ["プラン", esc(p.nameJa) + "<small>" + esc(p.summary) + "・" + yen(p.price) + "</small>"],
+      ["時間の調整", bk.customer.flex ? "同じ日の別の時間でも可" : "希望の時間のみ"],
+      ["オプション", extra.length ? extra.map(function (o) { return esc(o.nameJa) + " +" + yen(o.price); }).join("<br>") : "なし"]
     ];
-    rows.push(["Place", esc(placeLabel()) + (bk.placeNote ? "<small>" + esc(bk.placeNote) + "</small>" : "")]);
-    rows.push(["Flexible", bk.customer.flex ? "同じ日の別の時間でも可" : "希望の時間のみ"]);
-    rows.push(["Option", extra.length ? extra.map(function (o) { return esc(o.nameJa) + " +" + yen(o.price); }).join("<br>") : "なし"]);
     return '<dl class="summary">' + rows.map(function (r) { return '<div class="sum-row"><dt>' + r[0] + "</dt><dd>" + r[1] + "</dd></div>"; }).join("") +
-      '<div class="sum-total"><dt>TOTAL<small>確定後のお支払い</small></dt><dd class="price">' + yen(bTotal()) + "</dd></div></dl>";
+      '<div class="sum-total"><dt>合計<small>確定後のお支払い</small></dt><dd class="price">' + yen(bTotal()) + "</dd></div></dl>";
   }
 
   var BIND = {
@@ -1751,22 +1688,29 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
       });
     },
     date: function (b) {
+      var l = bLoc(), box = $("#bk-slotbox", b);
       b.addEventListener("click", function (e) {
         var c = e.target.closest("[data-cal]:not(:disabled)");
         if (c) { calOffset += Number(c.dataset.cal); bRender(); return; }
-        var d = e.target.closest(".day-btn:not(:disabled)"); if (!d) return;
-        if (bk.date !== d.dataset.date) bk.time = null;
-        bk.date = d.dataset.date;
-        $$(".day-btn", b).forEach(function (x) { x.classList.toggle("is-selected", x === d); });
-        updateBar(); autoNext();
-      });
-    },
-    time: function (b) {
-      b.addEventListener("click", function (e) {
-        var t = e.target.closest(".slot:not(:disabled)"); if (!t) return;
-        bk.time = t.dataset.time;
-        $$(".slot", b).forEach(function (x) { x.classList.toggle("is-selected", x === t); });
-        updateBar(); autoNext();
+        var d = e.target.closest(".day-btn:not(:disabled)");
+        if (d) {
+          if (bk.date !== d.dataset.date) bk.time = null;
+          bk.date = d.dataset.date;
+          $$(".day-btn", b).forEach(function (x) { x.classList.toggle("is-selected", x === d); });
+          box.innerHTML = slotBoxHTML(l);
+          updateBar();
+          // Bring the times into view without jumping the page to the top.
+          var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+          var top = box.getBoundingClientRect().top + window.scrollY - 150;
+          if (box.getBoundingClientRect().top > window.innerHeight * 0.55) window.scrollTo({ top: top, behavior: reduce ? "auto" : "smooth" });
+          return;
+        }
+        var t = e.target.closest(".slot:not(:disabled)");
+        if (t) {
+          bk.time = t.dataset.time;
+          $$(".slot", b).forEach(function (x) { x.classList.toggle("is-selected", x === t); });
+          updateBar(); autoNext();
+        }
       });
     },
     place: function (b) {
@@ -1776,9 +1720,7 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
           if (bk.place !== c.dataset.place) { bk.venue = ""; }
           bk.place = c.dataset.place; bk.placeSet = true;
           bRender();
-          // Types without named venues need no second choice: move on like the date/time steps.
-          var entry = bPlaceEntry();
-          if (!entry || !entry.venues.length) { if (!bk.place) autoNext(); }
+          if (!bk.place) autoNext(); // "おまかせ" needs nothing else
         }
         if (v) { bk.venue = v.dataset.pvenue; bRender(); }
       });
@@ -1892,7 +1834,7 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
       var l = D.getLocation(r.id);
       if (l) {
         setHeaderCta("#/book?loc=" + l.id, "予約する");
-        setSticky('<div class="sticky-price"><small>FROM</small><span class="price">' + yen(l.fromPrice) + '</span></div><a class="btn" href="#/book?loc=' + l.id + '">この場所で予約する</a>');
+        setSticky('<div class="sticky-price"><small>写真付き</small><span class="price">' + yen((l.plans[1] || l.plans[0]).price) + '〜</span></div><a class="btn" href="#/book?loc=' + l.id + '">この場所で予約する</a>');
         applyPlaceToLinks();
       }
       window.scrollTo(0, 0);
@@ -1946,6 +1888,12 @@ window.PROPOSE_PHOTOS = {"ayersrock": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ
     this.setAttribute("aria-expanded", String(open));
     document.body.style.overflow = open ? "hidden" : "";
     onScroll();
+  });
+
+  $("#skip").addEventListener("click", function (e) {
+    e.preventDefault();
+    var v = $(".view.is-active");
+    v.setAttribute("tabindex", "-1"); v.focus(); v.scrollIntoView();
   });
 
   document.addEventListener("click", function (e) {

@@ -63,10 +63,11 @@
 ```
 世界のプロポーズプラン_Shopify一式/
 ├── 00_はじめにお読みください.html   … このマニュアル（ブラウザで開けます）
-├── theme/                            … テーマに追加するファイル（24個）
+├── UX検証レポート.md                 … 画面の作りの考え方と、検証結果（なぜこの構成か）
+├── theme/                            … テーマに追加するファイル（23個）
 │   ├── layout/propose.liquid
-│   ├── sections/propose-*.liquid     （11個）
-│   ├── snippets/propose-*.liquid     （6個）
+│   ├── sections/propose-*.liquid     （9個）
+│   ├── snippets/propose-*.liquid     （7個）
 │   ├── templates/page.propose.json
 │   ├── templates/page.propose-booking.json
 │   ├── templates/metaobject/propose.json
@@ -116,8 +117,8 @@ shopify theme push --store あなたのストア.myshopify.com --theme <複製�
 | フォルダ | ファイル |
 |---|---|
 | layout | `propose.liquid` |
-| snippets | `propose-header` `propose-footer` `propose-photo` `propose-plan-box` `propose-faq-list` `propose-place-type` （各 `.liquid`） |
-| sections | `propose-hero` `propose-destinations` `propose-lastminute` `propose-steps` `propose-places` `propose-plan` `propose-faq` `propose-find` `propose-final` `propose-location` `propose-booking` （各 `.liquid`） |
+| snippets | `propose-header` `propose-footer` `propose-photo` `propose-plan-box` `propose-faq-list` `propose-place-type` `propose-icon` （各 `.liquid`） |
+| sections | `propose-hero` `propose-trust` `propose-destinations` `propose-steps` `propose-plan` `propose-faq` `propose-final` `propose-location` `propose-booking` （各 `.liquid`） |
 | assets | `propose.css` `propose.js` `propose-booking.js` |
 | templates | `page.propose.json` `page.propose-booking.json` `metaobject/propose.json` |
 
@@ -133,7 +134,7 @@ shopify theme push --store あなたのストア.myshopify.com --theme <複製�
    - **沖縄本島とグアムの写真はまだありません。** 用意できたら `propose-okinawa.jpg` / `propose-guam.jpg` としてアップロードし、旅行先エントリーの写真に設定してください
      （未設定の間は「Photo coming soon」の仮表示になります）。
 
-TOP ページの写真（ヒーロー・当日の流れ・景色から探す・締め）は、このファイル名を使って自動で表示されます。
+TOP ページの写真（ヒーローと締め）は、このファイル名を使って自動で表示されます（当日の流れは文章のみです）。
 同じ名前のファイルが既にあると Shopify が名前を変えるため、写真が出ない場合は §8 でテーマエディタから選び直してください。
 
 - 各ファイルの「代替テキスト（alt）」に、`import/locations-data.csv` の「写真の代替テキスト」を入れてください（SEO とアクセシビリティのため）。
@@ -159,20 +160,15 @@ TOP ページの写真（ヒーロー・当日の流れ・景色から探す・�
 | 名前 | キー | タイプ |
 |---|---|---|
 | 返信までの時間 | `reply_hours` | 整数 |
-| ライトプランに含まれるもの | `light_includes` | 単一行テキスト（**リスト**） |
-| スタンダードプランに含まれるもの | `standard_includes` | 単一行テキスト（**リスト**） |
-| ラグジュアリープランに含まれるもの | `luxury_includes` | 単一行テキスト（**リスト**） |
 
 保存したら **コンテンツ > メタオブジェクト > プロポーズ設定** で **エントリーを 1 件だけ** 作ります。
 
 - 返信までの時間：`24`（運営が実際に守れる時間を入れてください）
-- ライト：`プロポーズ用の花束` / `日本語サポート`
-- スタンダード：`プロポーズ用の花束` / `プロフォトグラファーによる写真撮影（30分）` / `写真データ30枚以上（オンライン納品）` / `日本語サポート`
-- ラグジュアリー：スタンダードの内容 ＋ `動画撮影` / `プロポーズの場所のデコレーション`
 
-（1 行ずつ入力。動画の長さやデコレーションの内容が決まったら、ここに書き足してください）
+> このエントリーがない場合も、24 時間で表示されます。
 
-> このエントリーがない場合も、24 時間と上記の内容で表示されます。
+各プランに含まれるもの（花束・写真・動画・装飾）の表は、`snippets/propose-plan-box.liquid` にあります。
+動画の長さやデコレーションの内容が決まったら、そのファイルの説明文（`<ul class="pt-legend">`）を書き換えてください。
 
 ### 4.2 メタオブジェクト「プロポーズ旅行先」（旅行先 1 件＝1 エントリー）
 
@@ -195,7 +191,7 @@ TOP ページの写真（ヒーロー・当日の流れ・景色から探す・�
 | 旅行先名 | `location_name` | 単一行テキスト | ○ | ハワイ |
 | 英語名 | `location_name_en` | 単一行テキスト | ○ | HAWAII（大文字） |
 | キャッチコピー | `catch_copy` | 複数行テキスト | ○ | ページの H1。改行がそのまま反映 |
-| 見出し | `tagline` | 単一行テキスト | ○ | 紹介欄の見出し・景色から探すの一覧 |
+| 見出し | `tagline` | 単一行テキスト | ○ | 旅行先ページの紹介欄の見出し |
 | 紹介文 | `description` | 複数行テキスト | ○ | 1〜2 行 |
 | 写真 | `hero_image` | ファイル（画像） | ○ | §3 の写真 |
 | 写真の表示位置 | `hero_image_position` | 単一行テキスト |  | `50% 45%`（横 縦）。スマホで大事な部分が切れるときに調整 |
@@ -207,7 +203,6 @@ TOP ページの写真（ヒーロー・当日の流れ・景色から探す・�
 | ベストタイムの理由 | `best_time_note` | 単一行テキスト |  | 「夕日の時間」。**空なら BEST TIME を表示しません**（根拠のない「おすすめ」を出さないため） |
 | 何日前まで | `lead_time` | 整数 | ○ | `3` ＝プロポーズの日の 3 日前まで受付 |
 | 雨天時の対応 | `rain_plan` | 複数行テキスト | ○ | |
-| 景色タグ | `tags` | 単一行テキスト（リスト） |  | `sea` `town` `sunset` `nature` `resort` `special` から |
 | 選べる場所 | `place_types` | 単一行テキスト（リスト） |  | `beach` `chapel` `church` `monument` `restaurant` `hotel` から。「選択肢を制限する」でこの 6 つに限定すると入力ミスを防げます |
 | ビーチの会場名 | `beach_venues` | 単一行テキスト（リスト） |  | 指定できるビーチがあれば。空なら「ご希望に合わせてご案内」 |
 | チャペルの会場名 | `chapel_venues` | 単一行テキスト（リスト） |  | 例：ラソール シーリゾート |
@@ -290,7 +285,7 @@ TOP ページの写真（ヒーロー・当日の流れ・景色から探す・�
 
 - `import/locations-data.csv` を Excel で開き、1 行を 1 エントリーとして各欄を写します。
 - エントリーの **ハンドル** は CSV の「ハンドル（URL）」（`hawaii` など）にしてください。URL になります。
-- 「時間枠」「景色タグ」はリストなので、1 つずつ追加します。
+- 「時間枠」「選べる場所」「〇〇_venues」はリストなので、1 つずつ追加します。
 - 保存時に **ステータスを「アクティブ」** にします（下書きのままだとサイトに出ません）。
 
 ### 6.2 TOP ページと予約ページ
@@ -380,7 +375,8 @@ TOP ページの写真（ヒーロー・当日の流れ・景色から探す・�
 | 変えたいもの | 場所 |
 |---|---|
 | 料金 | 商品のバリアント価格 |
-| 返信までの時間・各プランに含まれるもの | コンテンツ > メタオブジェクト > プロポーズ設定 |
+| 返信までの時間 | コンテンツ > メタオブジェクト > プロポーズ設定 |
+| 各プランに含まれるもの（表とその説明） | `snippets/propose-plan-box.liquid` |
 | 選べる場所・会場名 | 旅行先エントリーの `place_types` / `〇〇_venues` |
 | 場所の説明文（「波の音が聞こえる砂浜で。」など） | `snippets/propose-place-type.liquid` |
 | 旅行先の文章・写真・時間枠 | コンテンツ > メタオブジェクト > プロポーズ旅行先 |
@@ -411,13 +407,13 @@ FAQ などの文章では、次の記号が自動で置き換わります：
 
 - [ ] スマホで `/pages/propose` を開き、写真・料金（From ¥…）・選べる場所が 12 件とも出ている
 - [ ] 料金表に 3 プランが出ていて、金額が正しい（ライト／スタンダード／ラグジュアリーの順）
-- [ ] 「ビーチでも、チャペルでも。」の各行に正しい旅行先が並び、押すとその場所が選ばれた状態で旅行先ページが開く
+- [ ] TOP の「プロポーズしたい場所は？」で場所を選ぶと、その場所でできる旅行先だけが残り、押すとその場所が選ばれた状態で旅行先ページが開く
 - [ ] 旅行先ページで場所を選ぶと、「この日時で申し込む」から進んだ予約フォームにその場所が入っている
 - [ ] **掲載した会場すべてについて、実施できることと条件を確認済み**
 - [ ] 予約フォームでライトプランを選ぶと、追加撮影が選べなくなる
 - [ ] 旅行先ページで BEST TIME が「理由を入力した旅行先だけ」に出ている
 - [ ] 受付状況で、`lead_time` 以内の日が「締切」になっている
-- [ ] 受付状況で時間を選ぶ →「この日時で申し込む」→ 予約フォームが STEP 3 から始まる
+- [ ] 旅行先ページで場所と日時を選ぶ →「この日時で申し込む」→ 予約フォームが「プラン・オプション」から始まる
 - [ ] 送迎を選ぶとホテル欄が出て、未入力では進めない
 - [ ] 自分のメールアドレスでテストリクエストを送り、完了画面が出る・ストアにメールが届く
 - [ ] テストの下書き注文を作り、請求書メールが届く（支払わずに削除してかまいません）
@@ -428,7 +424,37 @@ FAQ などの文章では、次の記号が自動で置き換わります：
 
 ---
 
-## 10. うまくいかないとき
+## 10. 検索に載せるための設定（SEO・AI検索）
+
+サイト側でできることは、あらかじめ組み込んであります。**運営が入力する部分**が、検索結果の見え方を決めます。
+
+**組み込み済み**
+- 旅行先ページの H1 は「ハワイで、一生忘れないプロポーズを。」の形（旅行先名＋プロポーズ）。各見出しにも旅行先名が入ります。
+- タイトルと説明文は、空欄でも自動で作られます（例：「ハワイでプロポーズ｜ビーチ・チャペル・教会から選べる ¥51,000〜」）。
+  旅行先データの `seo_title` / `seo_description` に入力すると、そちらが優先されます。
+- 構造化データ（検索エンジン・AI が読み取る情報）：サイト全体（Organization／WebSite）、TOP の旅行先一覧（ItemList）と FAQ、
+  旅行先ページのパンくず・商品（3プランの価格 ＝ ライト／スタンダード／ラグジュアリー）・FAQ。
+- フッターに全旅行先へのリンク。旅行先ページ ⇄ TOP ⇄ ほかの旅行先を、通常のリンクでつないでいます。
+- 予約ページは検索に出しません（noindex）。写真は遅延読み込み・サイズ指定つきで、最初の写真だけ先に読み込みます。
+
+**運営の作業**
+1. 写真をアップロードしたら、各ファイルの **代替テキスト** を入れる（例：「ヤシの並木の先にそびえるオアフ島の緑の山々」）。
+   旅行先データ CSV の「写真の代替テキスト」欄を使えます。写真の内容を説明する文にします（「ハワイ プロポーズ」の連呼は不要です）。
+2. 旅行先ごとの `seo_title` / `seo_description` を、必要なら自分の言葉で書き直す。タイトルは 30〜35 文字、説明文は 100 文字前後が目安です。
+3. 公開後、**Google Search Console** でストアのサイトマップ（`/sitemap.xml`）を送信し、`/pages/propose` と各旅行先ページの
+   「インデックス登録をリクエスト」を押す。
+4. **リッチリザルト テスト**（Google 公式）で、旅行先ページの URL を入れて Product・FAQ・パンくずがエラーなく読めることを確認する。
+5. 料金・所要時間・受付期限は、画面とデータで食い違いがないようにする（価格は商品の価格が正です）。
+
+**今後の伸ばし方（おすすめ）**
+- 「ハワイ　ホテル　プロポーズ」「宮古島　ビーチ　プロポーズ」のような **場所ごとのページ** は、検索する人が最も具体的です。
+  会場ごとの本物の写真・実施の流れ・注意点が揃ったら、旅行先ごと・場所ごとに専用ページを作ると効果的です。
+  （いまは場所を旅行先ページの中で選ぶ作りです。会場の情報がない状態で作ると、内容の薄いページになるため見送っています。）
+- お客様の声・実績・フォトグラファーの紹介は、**実際のものが揃ってから** 追加してください（信頼の材料として最も強い部分です）。
+
+---
+
+## 11. うまくいかないとき
 
 | 症状 | 確認すること |
 |---|---|
@@ -442,19 +468,20 @@ FAQ などの文章では、次の記号が自動で置き換わります：
 
 ---
 
-## 11. ファイルと役割（開発者向け）
+## 12. ファイルと役割（開発者向け）
 
 | ファイル | 役割 |
 |---|---|
-| `layout/propose.liquid` | 専用レイアウト。title／description／OGP／canonical、予約ページの noindex |
+| `layout/propose.liquid` | 専用レイアウト。title／description（空欄なら旅行先データから自動生成）／OGP／canonical、予約ページの noindex、スキップリンク、Organization／WebSite の構造化データ |
 | `sections/propose-hero` 〜 `propose-final` | TOP の各セクション（テーマエディタで編集可） |
-| `sections/propose-location.liquid` | 旅行先ページ本体。`metaobject` を読み、受付状況用の JSON を出力。Product／パンくずの構造化データ |
+| `sections/propose-location.liquid` | 旅行先ページ本体。`metaobject` を読み、受付状況用の JSON を出力。Product（3プランの Offer）／パンくず／FAQPage の構造化データ |
 | `sections/propose-booking.liquid` | 予約リクエスト。旅行先・プラン・オプションを JSON で渡し、`{% form 'contact' %}` で送信 |
-| `snippets/propose-plan-box.liquid` | 料金表（TOP・旅行先ページ共通） |
+| `snippets/propose-plan-box.liquid` | 3プランの比較表とオプション（TOP・旅行先ページ共通） |
+| `snippets/propose-icon.liquid` / `propose-place-type.liquid` | 線のアイコン／場所の種類の名前と説明文 |
 | `snippets/propose-photo.liquid` | 写真（srcset・遅延読み込み・トリミング位置） |
-| `assets/propose.js` | ヘッダー・スクロール・FAQ・景色から探す・受付状況の判定（`window.ProposeAvail`） |
+| `assets/propose.js` | ヘッダー・スクロール・FAQ・TOP の場所フィルター・旅行先ページの場所カード・受付状況の判定（`window.ProposeAvail`） |
 | `assets/propose-booking.js` | 予約ステップ、送信、完了画面（送信後はセッションストレージから復元） |
-| `assets/propose.css` | デザイン（`propose-lp/src/styles.css` と同じ） |
+| `assets/propose.css` | デザイン。`propose-lp/src/styles.css` から `tools/sync_css.py` で生成（直接編集しない） |
 
 - 画面の元は `propose-lp/`（モックアップ）です。見た目を変えるときはモックアップと両方に反映してください。
 - 価格はすべて Liquid の商品価格（最小通貨単位）から計算し、JS では `shop.money_format` で整形します。

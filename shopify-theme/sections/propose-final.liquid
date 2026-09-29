@@ -1,6 +1,6 @@
 {%- comment -%} TOP: closing call to action over a photo. {%- endcomment -%}
 <section class="final" aria-labelledby="final-title">
-  {% render 'propose-photo', image: section.settings.image, pos: section.settings.image_position, decorative: true %}
+  {% render 'propose-photo', image: section.settings.image, pos: section.settings.image_position, decorative: true, fallback_name: 'PROPOSE' %}
   <div class="wrap">
     <span class="label">{{ section.settings.label | escape }}</span>
     <h2 class="h2" id="final-title">{{ section.settings.heading | escape | newline_to_br }}</h2>

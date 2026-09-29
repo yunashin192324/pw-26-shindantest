@@ -1,5 +1,8 @@
 {%- comment -%}
-  TOP: the main UI — every destination as a photo card linking to its page.
+  TOP: the main UI — every destination as a photo card linking to its page — plus a place
+  filter (ビーチ / チャペル / 教会 / モニュメント / レストラン / ホテル) for people who know
+  WHERE they want to propose but not which city. All cards are in the HTML; propose.js only
+  hides/shows them and adds ?place= to their links. Without JS the filter is hidden.
   Locations come from the section setting (to control order); empty = all entries.
 {%- endcomment -%}
 {%- liquid
@@ -16,6 +19,27 @@
       <h2 class="h2" id="dest-title">{{ section.settings.heading | escape | newline_to_br }}</h2>
       {%- if section.settings.lede != blank %}<p class="lede">{{ section.settings.lede | escape }}</p>{% endif %}
     </div>
+
+    <div class="pf" data-pf>
+      <p class="pf-title" id="pf-title">{{ section.settings.pf_title | escape }}<small>{{ section.settings.pf_note | escape }}</small></p>
+      <div class="pf-tiles" role="group" aria-labelledby="pf-title">
+        {%- for t in pp_types -%}
+          {%- assign venue_key = t | append: '_venues' -%}
+          {%- assign n = 0 -%}
+          {%- for loc in locations -%}
+            {%- if loc.place_types.value contains t or loc[venue_key].value != blank -%}{%- assign n = n | plus: 1 -%}{%- endif -%}
+          {%- endfor -%}
+          {%- if n > 0 -%}
+            {%- capture t_ja %}{% render 'propose-place-type', type: t, part: 'ja' %}{% endcapture -%}
+            <button type="button" class="pf-tile" data-pf-type="{{ t }}" data-pf-label="{{ t_ja | strip }}" aria-pressed="false">
+              {% render 'propose-icon', name: t %}<span>{{ t_ja }}</span><small>{{ n }}か所</small>
+            </button>
+          {%- endif -%}
+        {%- endfor -%}
+      </div>
+      <p class="pf-status" data-pf-status aria-live="polite"></p>
+    </div>
+
     <div class="dest-grid">
       {%- for loc in locations -%}
         {%- liquid
@@ -26,36 +50,65 @@
           endif
           assign loc_alt = loc.location_name.value | append: 'の景色'
         -%}
-        <a class="dest-card reveal" href="{{ loc_url }}">
-          {% render 'propose-photo', image: loc.hero_image.value, pos: loc.hero_image_position.value, alt: loc_alt, sizes: '(min-width: 1100px) 20vw, (min-width: 760px) 33vw, 50vw' %}
+        {%- capture place_keys -%}
+          {%- for t in pp_types -%}
+            {%- assign venue_key = t | append: '_venues' -%}
+            {%- if loc.place_types.value contains t or loc[venue_key].value != blank %} {{ t }}{% endif -%}
+          {%- endfor -%}
+        {%- endcapture -%}
+        {%- assign shown = 0 -%}
+        {%- capture place_names -%}
+          {%- for t in pp_types -%}
+            {%- assign venue_key = t | append: '_venues' -%}
+            {%- if loc.place_types.value contains t or loc[venue_key].value != blank -%}
+              {%- if shown > 0 %}・{% endif -%}{% render 'propose-place-type', type: t, part: 'ja' %}
+              {%- assign shown = shown | plus: 1 -%}
+            {%- endif -%}
+          {%- endfor -%}
+        {%- endcapture -%}
+        <a class="dest-card reveal" href="{{ loc_url }}" data-dest-url="{{ loc_url }}" data-place-types="{{ place_keys | strip }}">
+          {% render 'propose-photo', image: loc.hero_image.value, pos: loc.hero_image_position.value, alt: loc_alt, sizes: '(min-width: 1100px) 22vw, (min-width: 760px) 30vw, 46vw', fallback_name: loc.location_name_en.value %}
           <div class="dest-body">
             <div class="dest-name">{{ loc.location_name_en.value | escape }}</div>
             <div class="dest-ja">{{ loc.location_name.value | escape }}</div>
-            {%- assign shown = 0 -%}
-            {%- capture place_names -%}
-              {%- for t in pp_types -%}
-                {%- assign venue_key = t | append: '_venues' -%}
-                {%- if loc.place_types.value contains t or loc[venue_key].value != blank -%}
-                  {%- if shown > 0 %}・{% endif -%}{% render 'propose-place-type', type: t, part: 'ja' %}
-                  {%- assign shown = shown | plus: 1 -%}
-                {%- endif -%}
-              {%- endfor -%}
-            {%- endcapture -%}
-            {%- if place_names != blank %}<div class="dest-places">{{ place_names }}</div>{% endif %}
+            {%- if place_names != blank %}<div class="dest-places" data-places>{{ place_names }}</div>{% endif %}
+            {%- for t in pp_types -%}
+              {%- assign venue_key = t | append: '_venues' -%}
+              {%- assign venues = loc[venue_key].value -%}
+              {%- if loc.place_types.value contains t or venues != blank %}
+              <div class="dest-match" data-match-type="{{ t }}" hidden><b>{% render 'propose-place-type', type: t, part: 'ja' %}</b>{% if venues != blank %}{{ venues | slice: 0, 2 | join: '／' | escape }}{% if venues.size > 2 %} ほか{% endif %}{% endif %}</div>
+              {%- endif -%}
+            {%- endfor -%}
             {%- if plan %}
-            <div class="dest-price">From<span class="price">{{ plan.variants.first.price | money }}</span></div>
+            <div class="dest-price"><small>写真付き</small><span class="price">{{ plan.variants[1].price | default: plan.variants[0].price | money }}</span>〜</div>
+            <div class="dest-sub">花束のみ {{ plan.variants[0].price | money }}〜</div>
             {%- endif %}
-            <span class="dest-more"><span><span class="sm-hide">プロポーズ</span>プランを見る</span><span aria-hidden="true">→</span></span>
+            <span class="dest-more"><span>プランを見る</span><span aria-hidden="true">→</span></span>
           </div>
         </a>
       {%- endfor -%}
     </div>
-    <div class="undecided-link reveal">
-      <p>まだ旅行先が決まっていない方へ</p>
-      <button type="button" class="link" data-scroll="find">景色から探す <span class="arrow" aria-hidden="true">→</span></button>
-    </div>
   </div>
 </section>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "ItemList",
+  "name": {{ section.settings.heading | strip_newlines | json }},
+  "itemListElement": [
+    {%- for loc in locations -%}
+      {%- liquid
+        assign loc_url = loc.system.url
+        if loc_url == blank
+          assign loc_url = '/pages/propose/' | append: loc.system.handle
+        endif
+      -%}
+    { "@type": "ListItem", "position": {{ forloop.index }}, "name": {{ loc.location_name.value | append: 'でプロポーズ' | json }}, "url": {{ shop.url | append: loc_url | json }} }{% unless forloop.last %},{% endunless %}
+    {%- endfor -%}
+  ]
+}
+</script>
 
 {% schema %}
 {
@@ -64,7 +117,10 @@
     { "type": "metaobject_list", "id": "locations", "metaobject_type": "propose", "label": "表示する旅行先と並び順", "info": "空欄の場合はすべての旅行先を表示します。" },
     { "type": "text", "id": "label", "label": "英語ラベル", "default": "Destinations" },
     { "type": "textarea", "id": "heading", "label": "見出し", "default": "旅行先から、\nプロポーズを探す。" },
-    { "type": "text", "id": "lede", "label": "説明文", "default": "行き先を選ぶと、料金・当日の流れ・受付状況がすぐに分かります。" }
+    { "type": "text", "id": "lede", "label": "説明文", "default": "行き先を選ぶと、料金・当日の流れ・受付状況がすぐに分かります。旅行先がまだ決まっていない方は、プロポーズしたい「場所」から絞り込めます。" },
+    { "type": "header", "content": "場所で絞り込む" },
+    { "type": "text", "id": "pf_title", "label": "見出し", "default": "プロポーズしたい場所は？" },
+    { "type": "text", "id": "pf_note", "label": "補足", "default": "選ぶと、その場所でできる旅行先だけを表示します（任意）" }
   ],
   "presets": [{ "name": "プロポーズ 旅行先一覧" }]
 }
