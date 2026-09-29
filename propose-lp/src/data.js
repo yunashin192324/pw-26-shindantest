@@ -30,11 +30,11 @@
   ];
   var PLAN_TIERS = [
     { id: "light", name: "LIGHT PLAN", nameJa: "ライトプラン", summary: "花束のみ", hasPhoto: false, has: { flower: 1, photo: 0, video: 0, deco: 0 },
-      includes: ["プロポーズ用の花束", "日本語サポート"] },
+      includes: ["プロポーズ用の花束"] },
     { id: "standard", name: "STANDARD PLAN", nameJa: "スタンダードプラン", summary: "花束＋写真撮影", hasPhoto: true, has: { flower: 1, photo: 1, video: 0, deco: 0 },
-      includes: ["プロポーズ用の花束", "プロフォトグラファーによる写真撮影（30分）", "写真データ30枚以上（オンライン納品）", "日本語サポート"] },
+      includes: ["プロポーズ用の花束", "プロフォトグラファーによる写真撮影（30分）", "写真データ30枚以上（オンライン納品）"] },
     { id: "luxury", name: "LUXURY PLAN", nameJa: "ラグジュアリープラン", summary: "花束＋写真撮影＋動画撮影＋デコレーション", hasPhoto: true, has: { flower: 1, photo: 1, video: 1, deco: 1 },
-      includes: ["プロポーズ用の花束", "プロフォトグラファーによる写真撮影（30分）", "写真データ30枚以上（オンライン納品）", "動画撮影", "プロポーズの場所のデコレーション", "日本語サポート"] }
+      includes: ["プロポーズ用の花束", "プロフォトグラファーによる写真撮影（30分）", "写真データ30枚以上（オンライン納品）", "動画撮影", "プロポーズの場所のデコレーション"] }
   ];
   function plansFor(base) {
     var prices = { light: Math.round(base * 0.4 / 1000) * 1000, standard: base, luxury: base + 100000 };

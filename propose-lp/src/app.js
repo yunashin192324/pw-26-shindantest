@@ -46,10 +46,6 @@
     monument: '<path d="M16 2.5v4"/><path d="M13.5 28 16 6.5 18.5 28"/><path d="M14.6 16.5h2.8M13.9 21h4.2"/><path d="M10 28h12"/>',
     restaurant: '<path d="M8 3v7a3 3 0 0 0 6 0V3M11 3v25"/><path d="M20 3h7l-.9 8a2.6 2.6 0 0 1-5.2 0zM23.5 13.6V28M20 28h7"/>',
     hotel: '<path d="M7 28V5h13v23"/><path d="M20 13h5v15"/><path d="M3 28h26"/><path d="M11 10h1.6M15 10h1.6M11 14.5h1.6M15 14.5h1.6M11 19h1.6M15 19h1.6"/><path d="M12 28v-4h4v4"/>',
-    calendar: '<rect x="5" y="7" width="22" height="20" rx="1.5"/><path d="M5 13h22M11 4v5M21 4v5M11 18h3M18 18h3M11 22h3"/>',
-    clock: '<circle cx="16" cy="16" r="11"/><path d="M16 9v7l4.5 3"/>',
-    yen: '<circle cx="16" cy="16" r="11"/><path d="M11.5 9.5 16 16l4.5-6.5M16 16v8M12 18.5h8M12 21.5h8"/>',
-    lock: '<rect x="7" y="14" width="18" height="13" rx="1.5"/><path d="M11 14v-4a5 5 0 0 1 10 0v4"/>'
   };
   function icon(name) {
     return '<svg class="ic" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' + (ICONS[name] || "") + "</svg>";
@@ -119,7 +115,7 @@
       '<div class="ptable-wrap reveal"><table class="ptable"><caption class="sr-only">' + (loc ? esc(loc.nameJa) + "の" : "") + 'プランの比較表</caption>' +
         '<colgroup><col style="width:35%"><col style="width:8.5%"><col style="width:8.5%"><col style="width:8.5%"><col style="width:8.5%"><col style="width:31%"></colgroup>' +
         "<thead>" + head + "</thead><tbody>" + rows + "</tbody></table></div>" +
-      '<ul class="pt-legend reveal">' + cols.map(function (c) { return "<li><b>" + c.label + "</b>" + esc(c.detail) + "</li>"; }).join("") + "<li><b>共通</b>日本語サポート</li></ul>" +
+      '<ul class="pt-legend reveal">' + cols.map(function (c) { return "<li><b>" + c.label + "</b>" + esc(c.detail) + "</li>"; }).join("") + "</ul>" +
       '<p class="pt-guide reveal">写真や動画を残すなら、スタンダード以上を。花束だけでも、サプライズは成立します。</p>' +
       (from ? '<p class="note">料金は旅行先によって異なります。各旅行先のページで確認できます。</p>' : "")
     );
@@ -220,15 +216,6 @@
     topBuilt = true;
     var view = $("#view-top");
 
-    $("#trust-list").innerHTML = [
-      { ic: "calendar", k: "最短" + D.minLeadDays + "日前まで", t: "出発の直前でも申し込めます" },
-      { ic: "clock", k: D.replyHours + "時間以内に", t: "確定のご連絡をお送りします" },
-      { ic: "yen", k: "お支払いは確定後", t: "リクエストは無料です" },
-      { ic: "lock", k: "サプライズ配慮", t: "メールの件名を控えめにできます" }
-    ].map(function (a) {
-      return '<li class="trust-item">' + icon(a.ic) + "<div><b>" + a.k + "</b><span>" + a.t + "</span></div></li>";
-    }).join("");
-
     // Place filter — the way in for people who know where they want to propose, not which city.
     $("#pf").innerHTML =
       '<p class="pf-title" id="pf-title">プロポーズしたい場所は？<small>選ぶと、その場所でできる旅行先だけを表示します（任意）</small></p>' +
@@ -310,13 +297,7 @@
             '<div><span class="label">About ' + esc(l.name) + '</span><h2 class="h2" id="l-about">' + esc(l.tagline) + "</h2></div>" +
             '<p class="lede" style="margin-top:0">' + esc(l.lede) + "</p>" +
           "</div>" +
-          '<dl class="facts reveal">' +
-            '<div class="fact"><dt>受付期限</dt><dd>' + l.leadDays + "日前まで<small>リクエストの受付</small></dd></div>" +
-            '<div class="fact"><dt>確定のご連絡</dt><dd>' + D.replyHours + "時間以内<small>メールでお知らせ</small></dd></div>" +
-            '<div class="fact"><dt>お支払い</dt><dd>確定のあと<small>リクエストは無料</small></dd></div>' +
-            '<div class="fact"><dt>サプライズ</dt><dd>配慮あり<small>件名を控えめに</small></dd></div>' +
-          "</dl>" +
-          '<p class="note facts-note">※ 料金・受付期限・確定連絡までの時間・雨天対応・受付状況はデモ用の仮データです。</p>' +
+          '<p class="note facts-note">※ 料金・受付期限・雨天対応・受付状況はデモ用の仮データです。</p>' +
         "</div>" +
       "</section>" +
 

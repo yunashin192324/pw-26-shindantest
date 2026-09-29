@@ -64,9 +64,9 @@
 世界のプロポーズプラン_Shopify一式/
 ├── 00_はじめにお読みください.html   … このマニュアル（ブラウザで開けます）
 ├── UX検証レポート.md                 … 画面の作りの考え方と、検証結果（なぜこの構成か）
-├── theme/                            … テーマに追加するファイル（23個）
+├── theme/                            … テーマに追加するファイル（22個）
 │   ├── layout/propose.liquid
-│   ├── sections/propose-*.liquid     （9個）
+│   ├── sections/propose-*.liquid     （8個）
 │   ├── snippets/propose-*.liquid     （7個）
 │   ├── templates/page.propose.json
 │   ├── templates/page.propose-booking.json
@@ -118,7 +118,7 @@ shopify theme push --store あなたのストア.myshopify.com --theme <複製�
 |---|---|
 | layout | `propose.liquid` |
 | snippets | `propose-header` `propose-footer` `propose-photo` `propose-plan-box` `propose-faq-list` `propose-place-type` `propose-icon` （各 `.liquid`） |
-| sections | `propose-hero` `propose-trust` `propose-destinations` `propose-steps` `propose-plan` `propose-faq` `propose-final` `propose-location` `propose-booking` （各 `.liquid`） |
+| sections | `propose-hero` `propose-destinations` `propose-steps` `propose-plan` `propose-faq` `propose-final` `propose-location` `propose-booking` （各 `.liquid`） |
 | assets | `propose.css` `propose.js` `propose-booking.js` |
 | templates | `page.propose.json` `page.propose-booking.json` `metaobject/propose.json` |
 

@@ -8,50 +8,6 @@
         "image_position": "50% 45%"
       }
     },
-    "trust": {
-      "type": "propose-trust",
-      "settings": {},
-      "blocks": {
-        "item_1": {
-          "type": "item",
-          "settings": {
-            "icon": "calendar",
-            "title": "最短{min_lead}日前まで",
-            "text": "出発の直前でも申し込めます"
-          }
-        },
-        "item_2": {
-          "type": "item",
-          "settings": {
-            "icon": "clock",
-            "title": "{reply_hours}時間以内に",
-            "text": "確定のご連絡をお送りします"
-          }
-        },
-        "item_3": {
-          "type": "item",
-          "settings": {
-            "icon": "yen",
-            "title": "お支払いは確定後",
-            "text": "リクエストは無料です"
-          }
-        },
-        "item_4": {
-          "type": "item",
-          "settings": {
-            "icon": "lock",
-            "title": "サプライズ配慮",
-            "text": "メールの件名を控えめにできます"
-          }
-        }
-      },
-      "block_order": [
-        "item_1",
-        "item_2",
-        "item_3",
-        "item_4"
-      ]
-    },
     "destinations": {
       "type": "propose-destinations",
       "settings": {}
@@ -221,7 +177,6 @@
   },
   "order": [
     "hero",
-    "trust",
     "destinations",
     "steps",
     "plan",

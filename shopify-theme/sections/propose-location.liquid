@@ -4,8 +4,8 @@
   Order follows what someone about to propose asks, top to bottom:
     where can I do it? (hero → reassurance → PLACE CARDS) → what will the day be like? →
     how much? → is my date open? → what if…? (FAQ)
-  Each fact appears once: the deadline/reply/payment reassurance sits under the intro, rain sits
-  next to the dates, prices live in the plan table (plus the two "from" prices in the hero).
+  Each fact appears once: rain sits next to the dates, prices live in the plan table (plus the two
+  "from" prices in the hero).
 
   Everything location-specific comes from the `propose` metaobject (see PROPOSE-SETUP.md §4).
   Block text may use {location} {meeting_point} {lead_time} {reply_hours}.
@@ -73,12 +73,6 @@
       <div><span class="label">About {{ name_en | escape }}</span><h2 class="h2" id="l-about">{{ loc.tagline.value | escape }}</h2></div>
       <p class="lede" style="margin-top:0">{{ loc.description.value | escape | newline_to_br }}</p>
     </div>
-    <dl class="facts reveal">
-      <div class="fact"><dt>受付期限</dt><dd>{{ lead_time }}日前まで<small>リクエストの受付</small></dd></div>
-      <div class="fact"><dt>確定のご連絡</dt><dd>{{ reply_hours }}時間以内<small>メールでお知らせ</small></dd></div>
-      <div class="fact"><dt>お支払い</dt><dd>確定のあと<small>リクエストは無料</small></dd></div>
-      <div class="fact"><dt>サプライズ</dt><dd>配慮あり<small>件名を控えめに</small></dd></div>
-    </dl>
   </div>
 </section>
 
