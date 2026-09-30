@@ -26,6 +26,11 @@ var STAFF_NAME_SHEET_NAME = '担当者マスタ';
 var TIMEZONE = 'Asia/Tokyo';
 var SERVER_VERSION = '2.1.0';
 
+// 予約番号（チャレンジ番号）は半角英数字ちょうど11桁（Javascript.htmlのCHALLENGE_RECORD_BASE_URL判定と同じ桁数）。
+// 数字だけの予約番号（例：01234567890）はGoogleスプレッドシート上で数値として誤認識され、
+// 先頭の0が失われることがあるため、読み込み時に11桁へゼロ埋めして復元する。
+var RESERVATION_NO_DIGIT_LENGTH = 11;
+
 // ---- 権限レベル ----
 var ROLE_STAFF = '社員';
 var ROLE_MANAGER = '所長・チーフ';
@@ -332,7 +337,20 @@ function normalizeCellValue_(col, v) {
   if (col.type === 'number') {
     return (v === '' || v === null || v === undefined) ? null : Number(v);
   }
+  if (col.key === 'reservationNo' && typeof v === 'number') {
+    return zeroPadReservationNo_(v);
+  }
   return (v === null || v === undefined) ? '' : String(v);
+}
+
+/**
+ * 予約番号（チャレンジ番号）がシート上で数値化され、先頭の0が失われてしまった値を
+ * 本来の桁数（11桁）に復元する。数字だけの予約番号は必ず11桁という前提のもとの処理。
+ */
+function zeroPadReservationNo_(numericValue) {
+  var digits = String(numericValue);
+  if (digits.length >= RESERVATION_NO_DIGIT_LENGTH) return digits;
+  return ('00000000000' + digits).slice(-RESERVATION_NO_DIGIT_LENGTH);
 }
 
 /** 正規形の値1つを、シートに書き込むセル値（Date/Number/String）に変換する。 */
@@ -465,6 +483,8 @@ function appendRecords_(sheet, records) {
   var startRow = sheet.getLastRow() + 1;
   ensureRowCapacity_(sheet, startRow + records.length - 1);
   applyColumnFormats_(sheet, startRow, records.length);
+  // 表示形式（文字列は@）の変更を書き込み前に確定させ、数値化による先頭0落ちを防ぐ。
+  SpreadsheetApp.flush();
   var values = recordsToSheetRows_(records);
   sheet.getRange(startRow, 1, values.length, ALL_COLUMNS.length).setValues(values);
 }

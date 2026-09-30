@@ -383,14 +383,6 @@ th.sortable:hover{background:var(--blue-100);}
 
   <!-- ============ タブ2: 予約データ一覧 ============ -->
   <section id="panel-data" class="panel hidden">
-    <!-- ============ 未保存の変更バー（編集すると表示。保存するまでサーバーには反映されない） ============ -->
-    <div id="pending-changes-bar" class="pending-changes-bar hidden">
-      <span style="font-weight:700; font-size:13px;">✏️ 未保存の変更：<span id="pending-changes-count">0</span>件</span>
-      <button type="button" class="btn-save-pending" id="btn-save-pending-changes">💾 まとめて保存する</button>
-      <button type="button" class="btn-discard-pending" id="btn-discard-pending-changes">取り消す</button>
-      <span style="font-size:11px;">CHK日・保険/Wifi/TAViCA/キャンサポ・メモの変更は、このボタンを押すまで保存されません。</span>
-    </div>
-
     <div class="card filter-bar">
       <div class="filter-field"><label>エリア</label><select id="data-filter-area" multiple></select></div>
       <div class="filter-field"><label>店舗</label><select id="data-filter-office" multiple></select></div>
@@ -457,6 +449,14 @@ th.sortable:hover{background:var(--blue-100);}
         </div>
       </div>
       <p id="bulk-edit-result" class="muted hidden" style="margin-top:10px;"></p>
+    </div>
+
+    <!-- ============ 未保存の変更バー（編集すると表示。保存するまでサーバーには反映されない） ============ -->
+    <div id="pending-changes-bar" class="pending-changes-bar hidden">
+      <span style="font-weight:700; font-size:13px;">✏️ 未保存の変更：<span id="pending-changes-count">0</span>件</span>
+      <button type="button" class="btn-save-pending" id="btn-save-pending-changes">💾 まとめて保存する</button>
+      <button type="button" class="btn-discard-pending" id="btn-discard-pending-changes">取り消す</button>
+      <span style="font-size:11px;">CHK日・保険/Wifi/TAViCA/キャンサポ・メモの変更は、このボタンを押すまで保存されません。</span>
     </div>
 
     <div class="card">
