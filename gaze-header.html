@@ -15,7 +15,7 @@
     --gold: #b89b6a;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { background: var(--bg); color: var(--ink); }
+  html, body { background: var(--bg); color: var(--ink); touch-action: none; }
   body {
     min-height: 100vh;
     font-family: "Noto Serif JP", "Hiragino Mincho ProN", "Yu Mincho", serif;
@@ -75,8 +75,14 @@
   .status::before { content: ""; width: 28px; height: 1px; background: var(--gold); }
 
   @media (max-width: 640px) {
-    .bar { padding: 18px 20px; }
-    .row { gap: 20px; }
+    .bar { padding: 16px 20px; font-size: 12px; }
+    .hero { padding: 24px 16px 32px; gap: 24px; justify-content: flex-start; }
+    .stage { width: 100%; }
+    .row { gap: 14px; flex-wrap: nowrap; }
+    .lead { font-size: 12px; line-height: 1.9; letter-spacing: .04em; min-width: 0; flex: 1; }
+    .lead br { display: none; }
+    .cta { font-size: 12px; letter-spacing: .18em; padding: 13px 16px; }
+    .status { font-size: 12px; letter-spacing: .18em; }
   }
 </style>
 </head>
@@ -174,7 +180,7 @@ function setTargetFromPointer(px, py) {
   lastMove = performance.now();
 }
 addEventListener('pointermove', e => setTargetFromPointer(e.clientX, e.clientY), { passive: true });
-document.documentElement.addEventListener('pointerleave', () => { target = [0, 0]; });
+document.documentElement.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') target = [0, 0]; });
 
 function nearest(g, from) {
   let best = from, bd = Infinity;
@@ -210,7 +216,7 @@ function tick(now) {
 
   const moving = Math.abs(tg[0] - gaze[0]) + Math.abs(tg[1] - gaze[1]) > 0.004;
   if (now < holdUntil) statusEl.textContent = '目が合っています';
-  else statusEl.textContent = moving ? '追従中' : (now - lastMove < 1e9 && lastMove ? '静止中' : '待機中 — カーソルを動かしてください');
+  else statusEl.textContent = moving ? '追従中' : (now - lastMove < 1e9 && lastMove ? '静止中' : (matchMedia('(pointer: coarse)').matches ? '待機中 — 画面をなぞってください' : '待機中 — カーソルを動かしてください'));
   requestAnimationFrame(tick);
 }
 
