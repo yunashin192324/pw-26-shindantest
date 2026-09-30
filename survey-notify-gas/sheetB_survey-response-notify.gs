@@ -5,6 +5,7 @@
  *
  * 【貼り方】
  * 1. お客様用アンケートフォームの回答が溜まっているスプレッドシート（シートB）を開く
+ *    （※シートAではありません。フォームURLの末尾にメアドが付いた、お客様が回答する方のフォームの回答先です）
  * 2. メニュー「拡張機能」→「Apps Script」でエディタを開く
  * 3. このファイルの内容をまるごと貼り付けて保存
  * 4. エディタで一度 notifyNewSurveyResponse を手動実行し、権限を許可する
@@ -99,7 +100,7 @@ function notifyNewSurveyResponse(e) {
   if (customerEmail) {
     try {
       const listSs = SpreadsheetApp.openByUrl(listSsUrl);
-      const listData = listSs.getActiveSheet().getDataRange().getValues();
+      const listData = listSs.getSheets()[0].getDataRange().getValues();
       const key = customerEmail.toLowerCase();
 
       // 同じお客様が複数行ある場合は、一番下（最新）の行を採用
