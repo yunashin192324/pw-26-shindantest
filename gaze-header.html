@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gaze — 視線追従ヘッダー</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500&family=Noto+Serif+JP:wght@300;400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #12100e;
+    --ink: #efe9df;
+    --sub: #9a9187;
+    --line: rgba(239, 233, 223, .18);
+    --gold: #b89b6a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); color: var(--ink); }
+  body {
+    min-height: 100vh;
+    font-family: "Noto Serif JP", "Hiragino Mincho ProN", "Yu Mincho", serif;
+    font-weight: 300;
+    display: flex;
+    flex-direction: column;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---- ヘッダー(上部の細いバー。キャラクターには重ならない) ---- */
+  .bar {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 22px 40px;
+    border-bottom: 1px solid var(--line);
+    font-family: "Cormorant Garamond", "Times New Roman", serif;
+    letter-spacing: .32em; font-size: 14px; text-transform: uppercase;
+  }
+  .bar span:last-child { color: var(--sub); }
+
+  /* ---- ヘッダー中央: 視線追従 ---- */
+  .hero {
+    flex: 1;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 40px 24px 48px;
+    gap: 36px;
+  }
+  .stage {
+    width: min(100%, 1040px, calc((100vh - 300px) * 16 / 9));
+    min-width: min(100%, 320px);
+    aspect-ratio: 16 / 9;
+    position: relative;
+    box-shadow: 0 0 0 1px var(--line), 0 40px 80px -30px rgba(0, 0, 0, .8);
+    background: #cfc8bb;
+  }
+  canvas { display: block; width: 100%; height: 100%; }
+
+  /* ---- 説明文 + CTA(CTAは説明文のすぐ右横)、その下にステータス ---- */
+  .info { width: min(100%, 1040px); display: flex; flex-direction: column; gap: 22px; }
+  .row { display: flex; align-items: center; gap: 32px; flex-wrap: wrap; }
+  .lead {
+    font-size: 15px; line-height: 2; letter-spacing: .08em; color: var(--ink);
+    max-width: 30em;
+  }
+  .cta {
+    font: inherit; font-size: 13px; letter-spacing: .28em;
+    color: var(--ink); background: transparent;
+    border: 1px solid var(--gold); padding: 15px 34px; cursor: pointer;
+    transition: background .4s, color .4s;
+    white-space: nowrap;
+  }
+  .cta:hover:not(:disabled), .cta:focus-visible { background: var(--gold); color: var(--bg); outline: none; }
+  .cta:disabled { opacity: .35; cursor: default; }
+  .status {
+    font-family: "Cormorant Garamond", serif; font-size: 14px; letter-spacing: .24em;
+    color: var(--sub); text-transform: uppercase; display: flex; gap: 14px; align-items: center;
+  }
+  .status::before { content: ""; width: 28px; height: 1px; background: var(--gold); }
+
+  @media (max-width: 640px) {
+    .bar { padding: 18px 20px; }
+    .row { gap: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="bar"><span>Atelier Gaze</span><span>Portrait 01</span></header>
+
+<main class="hero">
+  <div class="stage"><canvas id="cv" aria-label="カーソルを目で追う猫"></canvas></div>
+
+  <section class="info">
+    <div class="row">
+      <p class="lead">画面の中の猫は、あなたのカーソルを静かに目で追います。<br>そっと見つめ返してほしいときは、こちらから。</p>
+      <button class="cta" id="cta" disabled>目を合わせる</button>
+    </div>
+    <p class="status" id="status" role="status">読み込み中 0%</p>
+  </section>
+</main>
+
+<script>
+/*
+ * フレームベースのカーソル追従。
+ *   元動画 → WebP連番(gaze-frames/) → 全フレームをプリロード → Canvas
+ *   → カーソル座標 → 視線(gaze)の目標値 → なめらかに補間 → 最も近いフレームを描画
+ * video要素・video.currentTime は使用しない。キャラクターをCSSで動かしてもいない。
+ */
+const FRAME_COUNT = 240;
+const frameUrl = i => `gaze-frames/f${String(i).padStart(3, '0')}.webp`;
+
+// 各フレームが向いている視線方向 (x: 右+ / y: 上+, 正面=(0,0))。
+// 元動画を目視で確認した代表フレームに値を与え、間は線形補間する。
+const ANCHORS = [
+  [0, 0, -0.8], [24, 0.15, -0.8], [30, -0.1, -0.7], [36, -0.5, -0.6],
+  [42, -0.8, -0.2], [48, -1, 0.3], [54, -1, 0.2], [60, -1, 0], [66, -1, 0],
+  [72, -0.6, -0.3], [78, -0.2, -0.2], [84, 0, 0], [90, 0.2, 0],
+  [96, 0.5, -0.4], [102, 0.8, -0.6], [108, 1, -0.3], [114, 1, 0], [120, 1, 0.2],
+  [126, 0.9, 0.4], [132, 0.7, 0.7], [138, 0.4, 0.9], [144, 0.2, 1],
+  [150, 0, 1], [162, 0, 1], [168, 0, 0.8], [174, 0, 0.4], [180, 0, 0.1],
+  [186, 0, -0.3], [198, 0, -0.6], [210, 0, -0.9], [239, 0, -1],
+];
+const BLINK = [183, 195];           // 目を閉じているフレームは候補から除外
+
+const gazeOf = new Array(FRAME_COUNT);
+for (let a = 0; a < ANCHORS.length - 1; a++) {
+  const [f0, x0, y0] = ANCHORS[a], [f1, x1, y1] = ANCHORS[a + 1];
+  for (let f = f0; f <= f1; f++) {
+    const t = (f - f0) / (f1 - f0);
+    gazeOf[f] = [x0 + (x1 - x0) * t, y0 + (y1 - y0) * t];
+  }
+}
+const candidates = [];
+for (let f = 0; f < FRAME_COUNT; f++) if (f < BLINK[0] || f > BLINK[1]) candidates.push(f);
+
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const statusEl = document.getElementById('status');
+const cta = document.getElementById('cta');
+const frames = new Array(FRAME_COUNT);
+
+function fit() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = Math.round(cv.clientWidth * dpr), h = Math.round(cv.clientHeight * dpr);
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; dirty = true; }
+}
+
+async function preload() {
+  let done = 0, next = 0;
+  async function worker() {
+    while (next < FRAME_COUNT) {
+      const i = next++;
+      const blob = await (await fetch(frameUrl(i))).blob();
+      frames[i] = await createImageBitmap(blob);
+      done++;
+      statusEl.textContent = `読み込み中 ${Math.round(done / FRAME_COUNT * 100)}%`;
+    }
+  }
+  await Promise.all(Array.from({ length: 8 }, worker));
+}
+
+// ---- 視線の状態 ----
+let target = [0, 0], gaze = [0, 0];
+let cur = 84, prev = 84, fade = 1;   // fade: 前フレームから現フレームへの切替(0→1)
+let holdUntil = 0, lastMove = 0, dirty = true;
+
+function setTargetFromPointer(px, py) {
+  const cx0 = innerWidth / 2, cy0 = innerHeight / 2;   // 画面中央=正面
+  let x = (px - cx0) / (innerWidth / 2) * 1.35;
+  let y = -(py - cy0) / (innerHeight / 2) * 1.35;
+  x = Math.max(-1, Math.min(1, x)); y = Math.max(-1, Math.min(1, y));
+  // 左下は「下」のフレームを使う(下に寄るほど左成分を弱める)
+  if (x < 0 && y < 0) x *= 1 + y;
+  const m = Math.hypot(x, y);                  // 中央付近は正面に吸着
+  if (m < 0.06) { x = 0; y = 0; }
+  target = [x, y];
+  lastMove = performance.now();
+}
+addEventListener('pointermove', e => setTargetFromPointer(e.clientX, e.clientY), { passive: true });
+document.documentElement.addEventListener('pointerleave', () => { target = [0, 0]; });
+
+function nearest(g, from) {
+  let best = from, bd = Infinity;
+  for (const f of candidates) {
+    const d = (gazeOf[f][0] - g[0]) ** 2 + (gazeOf[f][1] - g[1]) ** 2;
+    if (d < bd) { bd = d; best = f; }
+  }
+  // 現フレームとほぼ同等なら切り替えない(ちらつき防止)
+  const dc = (gazeOf[from][0] - g[0]) ** 2 + (gazeOf[from][1] - g[1]) ** 2;
+  return dc - bd < 0.0009 && candidates.includes(from) ? from : best;
+}
+
+function draw() {
+  const w = cv.width, h = cv.height;
+  ctx.globalAlpha = 1;
+  ctx.drawImage(frames[fade < 1 ? prev : cur], 0, 0, w, h);
+  if (fade < 1) { ctx.globalAlpha = fade; ctx.drawImage(frames[cur], 0, 0, w, h); ctx.globalAlpha = 1; }
+}
+
+let last = performance.now();
+function tick(now) {
+  const dt = Math.min(now - last, 50); last = now;
+  const tg = now < holdUntil ? [0, 0] : target;
+  const k = 1 - Math.exp(-dt / 90);             // 時間基準の指数補間(フレームレート非依存)
+  gaze[0] += (tg[0] - gaze[0]) * k; gaze[1] += (tg[1] - gaze[1]) * k;
+  if (Math.abs(tg[0] - gaze[0]) < 0.001) gaze[0] = tg[0];
+  if (Math.abs(tg[1] - gaze[1]) < 0.001) gaze[1] = tg[1];
+
+  const want = nearest(gaze, cur);
+  if (want !== cur) { prev = cur; cur = want; fade = 0; dirty = true; }
+  if (fade < 1) { fade = Math.min(1, fade + dt / 70); dirty = true; }
+  if (dirty) { draw(); dirty = false; }
+
+  const moving = Math.abs(tg[0] - gaze[0]) + Math.abs(tg[1] - gaze[1]) > 0.004;
+  if (now < holdUntil) statusEl.textContent = '目が合っています';
+  else statusEl.textContent = moving ? '追従中' : (now - lastMove < 1e9 && lastMove ? '静止中' : '待機中 — カーソルを動かしてください');
+  requestAnimationFrame(tick);
+}
+
+cta.addEventListener('click', () => { holdUntil = performance.now() + 3200; });
+addEventListener('resize', fit);
+
+(async () => {
+  await preload();
+  fit();
+  cta.disabled = false;
+  window.__gaze = { get frame() { return cur; }, get gaze() { return gaze.slice(); }, frames: FRAME_COUNT };
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
