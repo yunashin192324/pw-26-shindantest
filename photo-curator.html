@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AI写真セレクター</title>
+<title>写真セレクター</title>
 <style>
-:root{--bg:#0a0a0a;--panel:#111;--panel2:#151515;--line:#262626;--fg:#e8e0d8;--mute:#8a8a8a;--gold:#c9a96e;--ok:#22c55e;--warn:#f59e0b;--bad:#ef4444}
+:root{--bg:#0a0a0a;--panel:#111;--line:#262626;--fg:#e8e0d8;--mute:#8a8a8a;--gold:#c9a96e;--ok:#22c55e;--warn:#f59e0b;--bad:#ef4444}
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,"Hiragino Sans","Yu Gothic",Meiryo,sans-serif;font-size:14px}
 button,select,input{font:inherit;color:inherit}
@@ -20,23 +20,26 @@ header small{color:var(--mute);font-size:11px}
 .btn.gold:hover{background:#d8b97e}
 .btn:disabled{opacity:.45;cursor:not-allowed}
 .btn.danger:hover{background:#3a1515;color:#fca5a5}
-select,input[type=text],input[type=password],input[type=number]{background:#1a1a1a;border:1px solid #333;border-radius:6px;padding:6px 8px;font-size:12px}
+.btn.on{border-color:var(--gold);color:var(--gold);background:rgba(201,169,110,.12)}
+.btn.ng.on{border-color:var(--bad);color:#fca5a5;background:rgba(239,68,68,.12)}
+select,input[type=number]{background:#1a1a1a;border:1px solid #333;border-radius:6px;padding:6px 8px;font-size:12px}
 #progress{display:none;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line)}
 #progress .bar{height:6px;background:#222;border-radius:3px;overflow:hidden;margin-top:6px}
-#progress .bar i{display:block;height:100%;width:0;background:var(--gold);transition:width .25s}
+#progress .bar i{display:block;height:100%;width:0;background:var(--gold);transition:width .2s}
 #progress .t{display:flex;justify-content:space-between;font-size:12px;color:#aaa}
 .toolbar{padding:10px 16px;border-bottom:1px solid #1a1a1a;display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center}
 .chip{border:1px solid #333;background:transparent;border-radius:999px;padding:5px 12px;font-size:12px;color:#aaa}
 .chip.on{border-color:var(--gold);color:var(--gold);background:rgba(201,169,110,.1)}
 #summary{display:none;margin:12px 16px 0;padding:12px 14px;background:#14120e;border:1px solid #3a3222;border-radius:8px;font-size:12px;line-height:1.7;color:#d8ccb8}
 #summary b{color:var(--gold)}
+#notice{margin:12px 16px 0;padding:10px 14px;border:1px solid #2a2a2a;border-radius:8px;font-size:12px;line-height:1.7;color:#aaa;background:#101010}
 #drop{margin:24px auto;max-width:640px;border:2px dashed #333;border-radius:16px;padding:56px 20px;text-align:center;cursor:pointer;color:var(--mute);line-height:1.8}
 #drop.over{border-color:var(--gold);background:rgba(201,169,110,.08)}
 #drop b{display:block;font-size:18px;color:var(--fg);margin-bottom:6px}
 #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;padding:16px 16px 90px}
-.card{background:var(--panel);border:1px solid #1e1e1e;border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
-.card.done{cursor:pointer}
+.card{background:var(--panel);border:1px solid #1e1e1e;border-radius:10px;overflow:hidden;display:flex;flex-direction:column;cursor:pointer}
 .card.rec{border-color:#2a3a2a}
+.card.ng{opacity:.5}
 .card.sel{outline:2px solid var(--gold);outline-offset:2px}
 .card .im{position:relative;aspect-ratio:4/3;background:#050505;overflow:hidden}
 .card img{width:100%;height:100%;object-fit:cover;display:block}
@@ -44,25 +47,23 @@ select,input[type=text],input[type=password],input[type=number]{background:#1a1a
 .bd{background:rgba(0,0,0,.72);border-radius:4px;padding:1px 6px;font-size:10px;color:#ddd}
 .bd.g{color:var(--gold);border:1px solid rgba(201,169,110,.35)}
 .bd.c{background:rgba(201,169,110,.92);color:#000;font-weight:600}
-.bd.dup{background:rgba(120,60,20,.85);color:#fed7aa}
+.bd.pin{background:var(--gold);color:#000;font-weight:700}
 .num{position:absolute;top:6px;right:6px;background:var(--gold);color:#000;font-weight:800;border-radius:999px;min-width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:12px;padding:0 6px}
-.ov{position:absolute;inset:0;background:rgba(0,0,0,.6);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:12px;text-align:center;padding:10px;gap:6px}
+.ov{position:absolute;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;font-size:12px;text-align:center;padding:10px}
 .ov.err{background:rgba(70,10,10,.78);color:#fecaca}
 .body{padding:10px 12px;display:flex;flex-direction:column;gap:8px;flex:1}
 .top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
 .nm{font-size:11px;color:#999;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;padding-top:3px}
 .score{font-family:ui-monospace,monospace;font-weight:700;font-size:18px;color:#fff;border-radius:6px;padding:0 8px}
 .score.h{background:var(--ok)}.score.m{background:var(--warn)}.score.l{background:var(--bad)}
-.desc{font-size:12px;line-height:1.5;color:#ccc}
 .flaws{display:flex;flex-wrap:wrap;gap:4px}
 .flaws span{font-size:10px;background:#3a1a1a;color:#fca5a5;border-radius:4px;padding:1px 6px}
 .crit{margin-top:auto;border-top:1px solid #222;padding-top:8px}
 .crit div{display:flex;align-items:center;gap:6px;font-size:10px;color:#999;margin-bottom:3px}
-.crit em{font-style:normal;width:56px}
+.crit em{font-style:normal;width:64px}
 .crit .b{flex:1;height:4px;background:#222;border-radius:2px;overflow:hidden}
 .crit .b i{display:block;height:100%}
-.crit span{width:16px;text-align:right}
-.acts{display:flex;justify-content:flex-end;gap:6px}
+.acts{display:flex;justify-content:flex-end;gap:6px;flex-wrap:wrap}
 .acts .btn{font-size:10px;padding:4px 8px}
 #fab{position:fixed;left:0;right:0;bottom:0;z-index:30;background:rgba(15,15,15,.97);border-top:1px solid #222;padding:10px 16px;display:none;align-items:center;gap:12px}
 #fab .names{flex:1;font-size:11px;color:#777;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -72,7 +73,7 @@ select,input[type=text],input[type=password],input[type=number]{background:#1a1a
 .modal h3{margin:0 0 10px;font-size:16px}
 .modal p,.modal label{font-size:12px;line-height:1.7;color:#bbb}
 .modal label{display:block;margin-top:10px}
-.modal input,.modal select{width:100%;margin-top:4px}
+.modal input[type=number]{width:100%;margin-top:4px}
 .modal .row{justify-content:flex-end;margin-top:16px}
 .note{font-size:11px;color:#888;line-height:1.6}
 </style>
@@ -80,8 +81,8 @@ select,input[type=text],input[type=password],input[type=number]{background:#1a1a
 <body>
 <header>
   <div>
-    <small>AI PHOTO CURATOR</small>
-    <h1>自動画像評価システム</h1>
+    <small>PHOTO CURATOR（外部通信なし）</small>
+    <h1>写真セレクター</h1>
   </div>
   <div class="row">
     <span id="stat" style="font-size:12px;color:#aaa"></span>
@@ -89,7 +90,6 @@ select,input[type=text],input[type=password],input[type=number]{background:#1a1a
     <select id="pickCount" style="display:none" title="掲載枠数（横写真=1枠、縦写真=0.5枠）"></select>
     <button class="btn" id="btnAdd">写真を追加</button>
     <button class="btn" id="btnFolder">フォルダ読込</button>
-    <button class="btn" id="btnRetry" style="display:none">失敗分を再評価</button>
     <button class="btn" id="btnSettings">設定</button>
     <button class="btn danger" id="btnClear" style="display:none">全データ消去</button>
   </div>
@@ -101,7 +101,8 @@ select,input[type=text],input[type=password],input[type=number]{background:#1a1a
 </div>
 
 <main>
-  <div id="drop"><b>画像ファイルをここにドロップ</b>またはクリックして選択（複数可・JPEG / PNG / WebP）<br>最初に右上の「設定」でGemini APIキーを入力してください</div>
+  <div id="drop"><b>画像ファイルをここにドロップ</b>またはクリックして選択（複数可・JPEG / PNG / WebP）<br>写真はこのパソコンの中だけで処理され、外部へは送信されません</div>
+  <div id="notice" style="display:none"></div>
   <div id="summary"></div>
   <div class="toolbar" id="toolbar" style="display:none">
     <div class="row" id="filters"></div>
@@ -118,31 +119,16 @@ select,input[type=text],input[type=password],input[type=number]{background:#1a1a
 
 <div class="modal" id="mSettings"><div class="box">
   <h3>設定</h3>
-  <label>Gemini APIキー
-    <input type="password" id="sKey" placeholder="AIza..." autocomplete="off">
-  </label>
-  <p class="note">キーはこのブラウザ内にのみ保存されます。ただしこのページを開いた人は誰でもキーを入力・利用でき、ページ内のコードからキーを読み取ることもできます。共有サイトに貼る場合は、キーを埋め込まず利用者ごとに入力する運用にし、Google側でキーの利用上限を設定してください。</p>
-  <label>モデル
-    <select id="sModel">
-      <option value="gemini-2.5-flash">gemini-2.5-flash（標準・精度重視）</option>
-      <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite（高速・低コスト）</option>
-    </select>
-  </label>
-  <label>同時リクエスト数（1〜8。エラーが多い場合は下げる）
-    <input type="number" id="sConc" min="1" max="8">
-  </label>
-  <label>1回に送る写真の枚数（1〜8）
-    <input type="number" id="sBatch" min="1" max="8">
-  </label>
   <label>保存サイズ（横px × 縦px）
-    <div class="row" style="flex-wrap:nowrap"><input type="number" id="sW" min="100" max="6000"><input type="number" id="sH" min="100" max="6000"></div>
+    <div class="row" style="flex-wrap:nowrap;justify-content:flex-start"><input type="number" id="sW" min="100" max="6000"><input type="number" id="sH" min="100" max="6000"></div>
   </label>
+  <label><input type="checkbox" id="sHalf"> 縦写真は幅を半分にして保存する（横幅の半分×同じ高さ。縦2枚で1枠分になります）</label>
   <div class="row"><button class="btn" id="sCancel">閉じる</button><button class="btn gold" id="sSave">保存</button></div>
 </div></div>
 
 <div class="modal" id="mConfirm"><div class="box">
   <h3 style="color:#f87171">データを完全に消去しますか？</h3>
-  <p>ブラウザに保存されている画像データとAIの評価結果をすべて削除します。取り消せません。</p>
+  <p>ブラウザに保存されている画像データと解析結果をすべて削除します。取り消せません。</p>
   <div class="row"><button class="btn" id="cNo">キャンセル</button><button class="btn danger" id="cYes">完全に消去する</button></div>
 </div></div>
 
@@ -158,37 +144,29 @@ select,input[type=text],input[type=password],input[type=number]{background:#1a1a
 <script>
 "use strict";
 // ==========================================================
-// 定数
+// 定数（このページは外部サーバーと一切通信しません）
 // ==========================================================
-const CATS = ["ビーチ・海","大聖堂・教会・歴史的建造物","自然・緑・森","岩山・荒野・砂漠","街並み・ストリート","屋内・ホテル・カジノ","夕景・夜景","その他"];
-const SHOTS = ["wide","medium","close-up"];
-const SHOT_LABEL = {wide:"引き",medium:"全身/標準","close-up":"アップ"};
-const FLAWS = {
-  eyes_closed:["目つぶり",3], blurry:["ブレ・ピンぼけ",3], unflattering_expression:["表情が不自然",2],
-  awkward_pose:["ポーズが不自然",2], cropped_subject:["人物が見切れ",1.5], stranger_in_frame:["他人が写り込み",1.5],
-  dark_or_overexposed:["暗い/白飛び",1.5], cluttered_background:["背景がごちゃつく",1]
-};
-const HARD_FLAWS = ["eyes_closed","blurry"];
-const CRITERIA = [
-  {key:"location",label:"撮影場所",w:2},{key:"composition",label:"配置・均衡",w:2},
-  {key:"brightness",label:"明るさ・色",w:1.5},{key:"naturalness",label:"自然な姿",w:1.5},{key:"storytelling",label:"物語性",w:1}
+const TONES = ["青系（海・空）","緑系（自然）","暖色系（夕景・街）","白系（明るい室内・教会等）","暗め（夜景・室内）","その他"];
+const SHOT_LABEL = {wide:"引き",medium:"標準","close-up":"寄り"};
+const PARTS = [
+  {key:"sharp",label:"ピント",w:3},{key:"focus",label:"被写体のピント",w:0.5},{key:"expo",label:"明るさ",w:2},
+  {key:"contrast",label:"コントラスト",w:1},{key:"color",label:"色の鮮やかさ",w:1},{key:"person",label:"人物(推定)",w:2},{key:"res",label:"解像度",w:0.5}
 ];
-const WSUM = CRITERIA.reduce((a,c)=>a+c.w,0);
-const AI_EDGE = 640;      // AIへ送る画像の長辺(px)
-const DEFAULTS = {apiKey:"",model:"gemini-2.5-flash",conc:4,batch:4,w:900,h:600};
+const AI_EDGE = 192;
+const DEFAULTS = {w:900,h:600,half:true};
 
-// ==========================================================
-// 保存領域（Googleサイト等の制限環境でも動くよう全て try/catch）
-// ==========================================================
 const mem = {};
 const ls = {
   get(k){ try{ return localStorage.getItem(k); }catch(e){ return mem[k]??null; } },
   set(k,v){ try{ localStorage.setItem(k,v); }catch(e){ mem[k]=v; } }
 };
 let settings = Object.assign({}, DEFAULTS);
-try{ Object.assign(settings, JSON.parse(ls.get("curator.settings")||"{}")); }catch(e){}
+try{ Object.assign(settings, JSON.parse(ls.get("curator2.settings")||"{}")); }catch(e){}
 
-const DB_NAME="AIPhotoCurator2", STORE="photos";
+// ==========================================================
+// 保存（IndexedDB。使えない環境では今回の作業中のみ保持）
+// ==========================================================
+const DB_NAME="PhotoCurator3", STORE="photos";
 let dbP=null;
 function db(){
   if(!dbP) dbP=new Promise((res,rej)=>{
@@ -200,10 +178,10 @@ function db(){
   });
   return dbP;
 }
+const SAVE_KEYS=["id","fp","name","file","thumb","status","errorMsg","local","orientation","w","h","selected","pin","ng"];
 async function dbPut(p){
   try{
-    const d=await db(); const o={};
-    for(const k of ["id","fp","name","file","thumb","status","errorMsg","result","local","orientation","selected"]) o[k]=p[k];
+    const d=await db(); const o={}; for(const k of SAVE_KEYS) o[k]=p[k];
     await new Promise((res,rej)=>{ const t=d.transaction(STORE,"readwrite"); t.objectStore(STORE).put(o); t.oncomplete=res; t.onerror=()=>rej(t.error); });
   }catch(e){}
 }
@@ -216,12 +194,10 @@ async function dbClear(){
 }
 
 // ==========================================================
-// 画像処理（ブラウザ内で完結・API不要）
+// 画像解析（すべてブラウザ内）
 // ==========================================================
 async function decode(file){
-  if(window.createImageBitmap){
-    try{ return await createImageBitmap(file); }catch(e){}
-  }
+  if(window.createImageBitmap){ try{ return await createImageBitmap(file); }catch(e){} }
   const url=URL.createObjectURL(file);
   try{
     return await new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=()=>rej(new Error("画像を読み込めません")); i.src=url; });
@@ -235,70 +211,82 @@ function canvasOf(src,edge){
   return c;
 }
 const toBlob=(c,q)=>new Promise(r=>c.toBlob(r,"image/jpeg",q));
-const blobToB64=(b)=>new Promise((res,rej)=>{ const f=new FileReader(); f.onload=()=>res(String(f.result).split(",")[1]); f.onerror=rej; f.readAsDataURL(b); });
 
-// 鮮明度・明暗・色の偏り・類似判定用の指紋を計算
 function localMetrics(src){
-  const c=canvasOf(src,192), W=c.width, H=c.height;
+  const c=canvasOf(src,256), W=c.width, H=c.height;
   const d=c.getContext("2d").getImageData(0,0,W,H).data, n=W*H;
   const g=new Float32Array(n), hist=new Float32Array(64);
-  let lum=0,dark=0,bright=0,sat=0;
+  let lum=0,lum2=0,dark=0,bright=0,sat=0,rg=0,rg2=0,yb=0,yb2=0,skin=0,skinC=0,cn=0,blue=0,green=0,warm=0;
+  const x0=W*0.25,x1=W*0.75,y0=H*0.25,y1=H*0.75;
   for(let i=0;i<n;i++){
     const r=d[i*4],gg=d[i*4+1],b=d[i*4+2], y=0.299*r+0.587*gg+0.114*b;
-    g[i]=y; lum+=y; if(y<35)dark++; if(y>238)bright++;
-    const mx=Math.max(r,gg,b), mn=Math.min(r,gg,b); sat+= mx?(mx-mn)/mx:0;
+    g[i]=y; lum+=y; lum2+=y*y; if(y<35)dark++; if(y>238)bright++;
+    const mx=Math.max(r,gg,b), mn=Math.min(r,gg,b); sat+=mx?(mx-mn)/mx:0;
     hist[(r>>6)*16+(gg>>6)*4+(b>>6)]++;
+    const a=r-gg, bb=0.5*(r+gg)-b; rg+=a; rg2+=a*a; yb+=bb; yb2+=bb*bb;
+    const isSkin=r>95&&gg>40&&b>20&&mx-mn>15&&Math.abs(r-gg)>15&&r>gg&&r>b&&y>60;
+    const px=i%W, py=(i/W)|0, inC=px>=x0&&px<x1&&py>=y0&&py<y1;
+    if(inC) cn++;
+    if(isSkin){ skin++; if(inC) skinC++; }
+    if(b>r+15&&b>gg-5) blue++; else if(gg>r+10&&gg>b+10) green++; else if(r>b+25&&r>=gg) warm++;
   }
-  // 鮮明度: 8x8マス毎のラプラシアン平均のうち上位10%の平均（背景ぼかし写真を不当に下げない）
+  const mean=lum/n, sd=Math.sqrt(Math.max(0,lum2/n-mean*mean));
+  const mRg=rg/n, mYb=yb/n;
+  const colorfulness=Math.sqrt(Math.max(0,rg2/n-mRg*mRg)+Math.max(0,yb2/n-mYb*mYb))+0.3*Math.sqrt(mRg*mRg+mYb*mYb);
+  // ピント: 8x8マスごとのラプラシアン平均。全体は上位10%マス、中央/周辺は各領域の上位マス
   const T=8, tw=Math.ceil(W/T), th=Math.ceil(H/T), tile=new Float32Array(tw*th), cnt=new Float32Array(tw*th);
   for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){
     const i=y*W+x, l=Math.abs(4*g[i]-g[i-1]-g[i+1]-g[i-W]-g[i+W]), t=((y/T)|0)*tw+((x/T)|0);
     tile[t]+=l; cnt[t]++;
   }
-  const tv=[]; for(let t=0;t<tile.length;t++) if(cnt[t]) tv.push(tile[t]/cnt[t]);
-  tv.sort((a,b)=>b-a);
-  const top=tv.slice(0,Math.max(1,Math.ceil(tv.length*0.1)));
-  const sharp=top.reduce((a,b)=>a+b,0)/top.length;
+  const all=[],ctr=[],edg=[];
+  for(let ty=0;ty<th;ty++)for(let tx=0;tx<tw;tx++){
+    const t=ty*tw+tx; if(!cnt[t]) continue; const v=tile[t]/cnt[t]; all.push(v);
+    (tx>=tw*0.25&&tx<tw*0.75&&ty>=th*0.25&&ty<th*0.75?ctr:edg).push(v);
+  }
+  const topMean=(arr,f)=>{ if(!arr.length) return 0; const s=[...arr].sort((a,b)=>b-a).slice(0,Math.max(1,Math.ceil(arr.length*f))); return s.reduce((a,b)=>a+b,0)/s.length; };
   for(let i=0;i<64;i++) hist[i]/=n;
-  // dHash 9x8
   const h=document.createElement("canvas"); h.width=9; h.height=8;
   h.getContext("2d").drawImage(c,0,0,9,8);
   const hd=h.getContext("2d").getImageData(0,0,9,8).data; let bits="";
-  for(let y=0;y<8;y++)for(let x=0;x<8;x++){
-    const a=0.299*hd[(y*9+x)*4]+0.587*hd[(y*9+x)*4+1]+0.114*hd[(y*9+x)*4+2];
-    const b=0.299*hd[(y*9+x+1)*4]+0.587*hd[(y*9+x+1)*4+1]+0.114*hd[(y*9+x+1)*4+2];
-    bits+=a>b?"1":"0";
-  }
-  return {sharp:+sharp.toFixed(2), lum:lum/n, dark:dark/n, bright:bright/n, sat:sat/n, hash:bits, hist:Array.from(hist,v=>+v.toFixed(4))};
+  const gy=(x,y)=>0.299*hd[(y*9+x)*4]+0.587*hd[(y*9+x)*4+1]+0.114*hd[(y*9+x)*4+2];
+  for(let y=0;y<8;y++)for(let x=0;x<8;x++) bits+=gy(x,y)>gy(x+1,y)?"1":"0";
+  return {sharp:+topMean(all,0.1).toFixed(2), center:+topMean(ctr,0.3).toFixed(2), edge:+topMean(edg,0.3).toFixed(2),
+    lum:mean, sd, dark:dark/n, bright:bright/n, sat:sat/n, cf:colorfulness, skin:skin/n, skinC:cn?skinC/cn:0,
+    blue:blue/n, green:green/n, warm:warm/n, hash:bits, hist:Array.from(hist,v=>+v.toFixed(4))};
 }
 const hamming=(a,b)=>{let d=0;for(let i=0;i<a.length;i++) if(a[i]!==b[i]) d++;return d;};
 const cosine=(a,b)=>{let s=0,x=0,y=0;for(let i=0;i<a.length;i++){s+=a[i]*b[i];x+=a[i]*a[i];y+=b[i]*b[i];}return s/(Math.sqrt(x*y)||1);};
 
-// 1枚を読み込み、AI用画像・サムネ・ローカル指標を一度のデコードで作る
 async function prepare(p){
   const src=await decode(p.file);
   try{
-    const c=canvasOf(src,AI_EDGE);
-    const blob=await toBlob(c,0.72);
-    p.thumb=blob;
-    p.orientation=bh(src)>bw(src)?"portrait":"landscape";
+    p.w=bw(src); p.h=bh(src);
+    p.orientation=p.h>p.w?"portrait":"landscape";
+    p.thumb=await toBlob(canvasOf(src,480),0.75);
     p.local=localMetrics(src);
-    return await blobToB64(blob);
   } finally { if(src.close) src.close(); }
 }
 
-function coverBlob(url,W,H){
+function coverBlob(file,W,H){
   return new Promise((res,rej)=>{
-    const i=new Image();
+    const url=URL.createObjectURL(file), i=new Image();
     i.onload=()=>{
+      URL.revokeObjectURL(url);
       const c=document.createElement("canvas"); c.width=W; c.height=H;
+      const x=c.getContext("2d"); x.imageSmoothingQuality="high";
       const sr=i.width/i.height, dr=W/H; let sx=0,sy=0,sw=i.width,sh=i.height;
       if(sr>dr){ sw=i.height*dr; sx=(i.width-sw)/2; } else { sh=i.width/dr; sy=(i.height-sh)/2; }
-      c.getContext("2d").drawImage(i,sx,sy,sw,sh,0,0,W,H);
+      x.drawImage(i,sx,sy,sw,sh,0,0,W,H);
       c.toBlob(b=>b?res(b):rej(new Error("変換失敗")),"image/jpeg",0.92);
     };
-    i.onerror=()=>rej(new Error("画像を読み込めません")); i.src=url;
+    i.onerror=()=>{ URL.revokeObjectURL(url); rej(new Error("画像を読み込めません")); };
+    i.src=url;
   });
+}
+function outSize(p){
+  const W=+settings.w||900,H=+settings.h||600;
+  return p.orientation==="portrait"&&settings.half?[Math.round(W/2),H]:[W,H];
 }
 
 // ---- 依存なしの簡易ZIP作成（JPEGは圧縮済みのため無圧縮格納） ----
@@ -331,101 +319,55 @@ function saveBlob(blob,name){
 }
 
 // ==========================================================
-// Gemini API（複数枚まとめて送信・思考オフで高速化）
-// ==========================================================
-const PROMPT = `あなたは旅行会社のウェディング事例ページに載せる写真を選ぶ、厳しい写真編集者です。
-これから複数枚の写真を順に渡します（各写真の直前に「画像 N」と番号を示します）。すべての写真を評価し、items配列に写真1枚につき1要素を返してください。indexは画像の番号です。
-
-【採点】各項目を1〜10の整数で採点。甘い採点は禁止です。
-- 5=平凡、7=良い、9以上は全体の1割未満のみ。ほとんどの写真は4〜7点に収まります。
-- 写真同士を見比べ、点数に差をつけてください（全部が同じ点数は不可）。
-- location=背景・撮影場所の魅力 / composition=人物と背景の配置・均衡 / brightness=明るさ・色・光の美しさ / naturalness=表情とポーズの自然さ / storytelling=物語性・幸福感
-
-【欠点 flaws】当てはまるものだけ列挙（無ければ空配列）。
-eyes_closed=目つぶり / blurry=ブレ・ピンぼけ / unflattering_expression=不自然な表情 / awkward_pose=不自然なポーズ / cropped_subject=人物や手足の不自然な見切れ / stranger_in_frame=他人の写り込み / dark_or_overexposed=暗すぎ・白飛び / cluttered_background=背景がごちゃつく
-
-【分類】
-- sceneCategory: 写真の大部分を占める背景に最も近いものを1つ。
-- shotType: wide=風景メインで人物が小さい / medium=人物の全身〜膝上 / close-up=バストアップ・顔・手元などの寄り。
-- isMonochrome: 白黒またはセピア調ならtrue。
-- contentDescription: 被写体・ポーズ・距離感を20文字以内で。重複判定に使うので具体的に（例「エッフェル塔を背に見つめ合う上半身」）。`;
-
-function schema(){
-  const I={type:"INTEGER"};
-  return {type:"OBJECT",properties:{items:{type:"ARRAY",items:{type:"OBJECT",properties:{
-    index:I,location:I,composition:I,brightness:I,naturalness:I,storytelling:I,
-    flaws:{type:"ARRAY",items:{type:"STRING",enum:Object.keys(FLAWS)}},
-    sceneCategory:{type:"STRING",enum:CATS},
-    shotType:{type:"STRING",enum:SHOTS},
-    isMonochrome:{type:"BOOLEAN"},
-    contentDescription:{type:"STRING"}
-  },required:["index","location","composition","brightness","naturalness","storytelling","flaws","sceneCategory","shotType","isMonochrome","contentDescription"]}}},required:["items"]};
-}
-class FatalApiError extends Error{}
-const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
-
-async function callGemini(b64list){
-  if(!settings.apiKey) throw new FatalApiError("APIキーが未設定です。右上の「設定」からGemini APIキーを入力してください。");
-  const parts=[{text:PROMPT}];
-  b64list.forEach((b,i)=>{ parts.push({text:`画像 ${i+1}`}); parts.push({inlineData:{mimeType:"image/jpeg",data:b}}); });
-  const body=JSON.stringify({
-    contents:[{role:"user",parts}],
-    generationConfig:{temperature:0.2,responseMimeType:"application/json",responseSchema:schema(),thinkingConfig:{thinkingBudget:0}}
-  });
-  const url=`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(settings.model)}:generateContent?key=${encodeURIComponent(settings.apiKey)}`;
-  const delays=[1500,3000,6000,12000];
-  let last;
-  for(let a=0;a<=delays.length;a++){
-    try{
-      const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body});
-      if(!r.ok){
-        const t=await r.text(); const e=new Error(`HTTP ${r.status} ${t.slice(0,200)}`); e.status=r.status; throw e;
-      }
-      const j=await r.json();
-      const text=j.candidates?.[0]?.content?.parts?.map(p=>p.text||"").join("");
-      if(!text) throw new Error("AIの応答が空でした（安全フィルタの可能性）");
-      const obj=JSON.parse(text);
-      if(!Array.isArray(obj.items)) throw new Error("AIの応答形式が不正です");
-      return obj.items;
-    }catch(e){
-      last=e;
-      if([400,401,403,404].includes(e.status)){
-        throw new FatalApiError(e.status===400||e.status===403||e.status===401
-          ?"APIキーが無効、または利用が許可されていません（"+e.status+"）。設定のAPIキーとモデル名を確認してください。"
-          :"モデルが見つかりません。設定でモデルを選び直してください。");
-      }
-      if(a<delays.length) await sleep(delays[a]+Math.random()*500);
-    }
-  }
-  throw last;
-}
-
-// ==========================================================
-// スコア計算・選定ロジック（すべてブラウザ内・即時）
+// スコア計算・選定ロジック（ブラウザ内・即時）
 // ==========================================================
 const collator=new Intl.Collator("ja",{numeric:true});
 const byName=(a,b)=>collator.compare(a.name,b.name);
+const clamp01=(x)=>Math.max(0,Math.min(1,x));
 
-// 全写真を見比べた相対評価を含む最終スコアを計算
+function toneOf(L){
+  if(L.lum<60) return TONES[4];
+  if(L.blue>=0.3&&L.blue>=L.green&&L.blue>=L.warm) return TONES[0];
+  if(L.green>=0.3&&L.green>=L.warm) return TONES[1];
+  if(L.warm>=0.35) return TONES[2];
+  if(L.lum>165&&L.sat<0.22) return TONES[3];
+  return TONES[5];
+}
+function shotOf(L){ return L.skin>=0.18?"close-up":L.skin>=0.05?"medium":"wide"; }
+
 function computeScores(){
-  const done=state.photos.filter(p=>p.status==="done"&&p.result);
-  const sharps=done.map(p=>p.local?.sharp||0).sort((a,b)=>a-b);
+  const done=state.photos.filter(p=>p.status==="done"&&p.local);
+  const sharps=done.map(p=>p.local.sharp).sort((a,b)=>a-b);
   for(const p of done){
-    const r=p.result;
-    let base=CRITERIA.reduce((s,c)=>s+(+r[c.key]||0)*c.w,0)/WSUM;
-    const fl=(r.flaws||[]).filter(f=>FLAWS[f]);
-    let pen=Math.min(5,fl.reduce((s,f)=>s+FLAWS[f][1],0));
-    const L=p.local||{};
-    // 鮮明度: データセット内で下位15%かつ数値が低い場合のみ減点（最大1.5）
-    if(sharps.length>=8){
-      const pct=sharps.findIndex(v=>v>=L.sharp)/sharps.length;
-      if(pct<0.15) pen+=(0.15-pct)/0.15*1.5;
-    }
-    if(L.dark>0.55||L.bright>0.4) pen+=1.2;
-    const mono=!!r.isMonochrome||(L.sat!==undefined&&L.sat<0.05);
-    p.q={score:Math.max(0,Math.min(10,+(base-pen).toFixed(1))),base:+base.toFixed(1),flaws:fl,mono,
-         hard:fl.some(f=>HARD_FLAWS.includes(f)),rec:base-pen>=6.3&&!fl.some(f=>HARD_FLAWS.includes(f))};
+    const L=p.local, parts={};
+    let lt=0,eq=0; for(const v of sharps){ if(v<L.sharp) lt++; else if(v===L.sharp) eq++; }
+    const pct=sharps.length>1?(lt+(eq-1)/2)/(sharps.length-1):0.5;
+    parts.sharp=pct;
+    parts.focus=L.edge>0?clamp01((L.center/L.edge)/1.5):0.5;
+    const dev=L.lum<100?(100-L.lum)/100:L.lum>185?(L.lum-185)/70:0;
+    parts.expo=clamp01(1-dev*1.2-Math.max(0,L.dark-0.25)*1.5-Math.max(0,L.bright-0.15)*2);
+    parts.contrast=L.sd<35?clamp01(L.sd/35):clamp01(1-(L.sd-70)/60);
+    const mono=L.sat<0.05;
+    parts.color=mono?0.6:clamp01(L.cf/45);
+    parts.person=clamp01((L.skinC-0.02)/0.10);
+    parts.res=clamp01(Math.max(p.w,p.h)/1800);
+    let s=0; for(const k of PARTS) s+=parts[k.key]*k.w;
+    const flaws=[];
+    if(sharps.length>=8&&pct<0.15) flaws.push("ピンぼけの疑い");
+    if(L.lum<60||L.dark>0.5) flaws.push("暗い");
+    if(L.bright>0.3) flaws.push("白飛び");
+    if(Math.max(p.w,p.h)<1200) flaws.push("解像度が低い");
+    if(flaws.includes("ピンぼけの疑い")) s-=2;
+    if(flaws.includes("暗い")) s-=2;
+    if(flaws.includes("白飛び")) s-=1;
+    s=Math.max(0,s);
+    p.q={score:+s.toFixed(1),parts,flaws,mono,tone:toneOf(L),shot:shotOf(L),hard:flaws.includes("ピンぼけの疑い")||flaws.includes("暗い")};
   }
+  // 推奨: 上位40%かつ重大な欠点なし
+  const ranked=done.filter(p=>!p.q.hard).sort((a,b)=>b.q.score-a.q.score);
+  done.forEach(p=>{p.q.rec=false;});
+  const cut=Math.ceil(ranked.length*0.4);
+  ranked.forEach((p,i)=>{ p.q.rec=i<cut; });
 }
 
 // 枠数(横=1,縦=0.5)に合わせて、品質・多様性・撮影順の均等配分を同時に満たす写真を選ぶ
@@ -434,21 +376,21 @@ function selectPhotos(slots){
   const ordered=[...done].sort(byName); const idx=new Map(ordered.map((p,i)=>[p.id,i]));
   const N=ordered.length; if(!N) return null;
   const cost=(p)=>p.orientation==="portrait"?0.5:1;
+  const capacity=(arr)=>arr.reduce((s,p)=>s+cost(p),0);
+  const notes=[];
 
-  // 1) 候補整理: 目つぶり/ブレ除外 → ほぼ同一の写真は最良の1枚だけ残す
-  let pool=done.filter(p=>!p.q.hard);
+  const pins=done.filter(p=>p.pin&&!p.ng);
+  const usable=done.filter(p=>!p.ng&&!p.pin);
+  let pool=usable.filter(p=>!p.q.hard);
   const kept=[], dups=[];
   for(const p of [...pool].sort((a,b)=>b.q.score-a.q.score)){
-    (kept.some(k=>hamming(k.local.hash,p.local.hash)<=10)?dups:kept).push(p);
+    (kept.some(k=>hamming(k.local.hash,p.local.hash)<=10)||pins.some(k=>hamming(k.local.hash,p.local.hash)<=10)?dups:kept).push(p);
   }
   pool=kept;
-  const capacity=(arr)=>arr.reduce((s,p)=>s+cost(p),0);
-  if(capacity(pool)<slots) pool=pool.concat(dups.sort((a,b)=>b.q.score-a.q.score));
-  if(capacity(pool)<slots) pool=pool.concat(done.filter(p=>p.q.hard));
-  const notes=[];
-  if(capacity(pool)<slots) notes.push(`評価済みの写真が少なく、${slots}枠を満たせません（候補は合計${capacity(pool)}枠分）。`);
+  if(capacity(pool)+capacity(pins)<slots) pool=pool.concat(dups.sort((a,b)=>b.q.score-a.q.score));
+  if(capacity(pool)+capacity(pins)<slots) pool=pool.concat(usable.filter(p=>p.q.hard));
+  if(capacity(pool)+capacity(pins)<slots) notes.push(`使える写真が少なく、${slots}枠を満たせません（候補は合計${capacity(pool)+capacity(pins)}枠分）。`);
 
-  // 2) 逐次選定
   const sel=[]; let used=0, mono=0;
   const spacing=Math.max(1,N/Math.max(1,slots*0.9));
   const chosen=new Set();
@@ -459,21 +401,21 @@ function selectPhotos(slots){
       for(const s of sel){
         const d=Math.abs(idx.get(s.id)-idx.get(c.id)); if(d<dmin) dmin=d;
         if(hamming(s.local.hash,c.local.hash)<=10) near=true;
-        const sameCat=s.result.sceneCategory===c.result.sceneCategory;
-        if(sameCat){ catN++; if(d<=spacing*0.6) adjSame=true; }
-        if(s.result.shotType===c.result.shotType) shotN++;
+        if(s.q.tone===c.q.tone){ catN++; if(d<=spacing*0.6) adjSame=true; }
+        if(s.q.shot===c.q.shot) shotN++;
         const cs=cosine(s.local.hist,c.local.hist); if(cs>cosMax) cosMax=cs;
       }
-      v+=1.6*Math.min(1,dmin/spacing);                 // 撮影順に均等に散らす
-      v-=near?6:0;                                     // ほぼ同一写真
-      v-=2.5*(catN/sel.length);                        // 同じ背景の偏り
-      v-=1.2*(shotN/sel.length);                       // 同じ寄り引きの偏り
-      v-=cosMax>0.93?1.5:0;                            // 色合いが酷似
-      v-=adjSame?1.5:0;                                // 前後が同じ背景
+      v+=1.6*Math.min(1,dmin/spacing);
+      v-=near?6:0;
+      v-=2.0*(catN/sel.length);
+      v-=1.2*(shotN/sel.length);
+      v-=cosMax>0.93?1.5:0;
+      v-=adjSame?1.5:0;
     }
     return v;
   };
   const pick=(c)=>{ sel.push(c); chosen.add(c.id); used+=cost(c); if(c.q.mono) mono++; };
+  for(const p of pins){ if(used+cost(p)<=slots+1e-9) pick(p); else notes.push(`「必ず採用」の写真が多く、${p.name} は枠に入りませんでした。`); }
   for(;;){
     const slack=slots-used; if(slack<=0) break;
     let best=null,bv=-1e9;
@@ -485,12 +427,11 @@ function selectPhotos(slots){
     if(!best) break;
     pick(best);
   }
-  // 3) 縦写真の偶数調整（余り0.5枠を縦写真で埋める／無理なら縦を1枚外して横を入れる）
   if(slots-used===0.5){
     const add=pool.filter(c=>!chosen.has(c.id)&&cost(c)===0.5&&!(c.q.mono&&mono>=2)).sort((a,b)=>value(b)-value(a))[0];
     if(add) pick(add);
     else{
-      const ports=sel.filter(p=>cost(p)===0.5).sort((a,b)=>a.q.score-b.q.score);
+      const ports=sel.filter(p=>cost(p)===0.5&&!p.pin).sort((a,b)=>a.q.score-b.q.score);
       if(ports.length){
         const rm=ports[0]; sel.splice(sel.indexOf(rm),1); chosen.delete(rm.id); used-=0.5; if(rm.q.mono) mono--;
         const l=pool.filter(c=>!chosen.has(c.id)&&cost(c)===1).sort((a,b)=>value(b)-value(a))[0];
@@ -500,67 +441,60 @@ function selectPhotos(slots){
   }
   if(Math.abs(slots-used)>1e-6) notes.push(`枠数が${used}/${slots}になりました（縦横の組み合わせ上、ぴったり埋められませんでした）。`);
   sel.sort(byName);
-
-  // 集計
   const tally=(f)=>{const m={};sel.forEach(p=>{const k=f(p);m[k]=(m[k]||0)+1;});return m;};
-  return {sel,used,notes,cat:tally(p=>p.result.sceneCategory),shot:tally(p=>SHOT_LABEL[p.result.shotType]||p.result.shotType),
-          mono,dupRemoved:dups.length,hardRemoved:done.filter(p=>p.q.hard).length,total:N,
-          adjacent:sel.slice(1).filter((p,i)=>p.result.sceneCategory===sel[i].result.sceneCategory).length};
+  return {sel,used,notes,tone:tally(p=>p.q.tone),shot:tally(p=>SHOT_LABEL[p.q.shot]),mono,
+          dupRemoved:dups.length,hardRemoved:usable.filter(p=>p.q.hard).length,ngN:done.filter(p=>p.ng).length,pinN:pins.length,total:N,
+          adjacent:sel.slice(1).filter((p,i)=>p.q.tone===sel[i].q.tone).length};
 }
 
 // ==========================================================
-// アプリ状態
+// アプリ状態・描画
 // ==========================================================
-const state={photos:[],filter:"all",sort:"score",pick:16,run:{on:false,total:0,finished:0,start:0,abort:false}};
+const state={photos:[],filter:"all",sort:"score",pick:16,run:{on:false,total:0,finished:0,start:0}};
 const $=(s)=>document.querySelector(s);
-const cards=new Map();
-const urls=new Map();
+const cards=new Map(), urls=new Map();
 const urlOf=(p)=>{ if(!p.thumb) return ""; let u=urls.get(p.id); if(!u){u=URL.createObjectURL(p.thumb);urls.set(p.id,u);} return u; };
 function el(tag,cls,text){const e=document.createElement(tag); if(cls)e.className=cls; if(text!==undefined)e.textContent=text; return e;}
 const uid=()=>crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2)+Date.now().toString(36);
-
 function showError(msg){ $("#errText").textContent=msg; $("#mError").classList.add("on"); }
 let raf=0; const schedule=()=>{ if(!raf) raf=requestAnimationFrame(()=>{raf=0;renderAll();}); };
-let selInfo=null;   // 直近の自動選定結果 {rank map}
+let selInfo=null;
 
-// ==========================================================
-// 描画
-// ==========================================================
 function buildCard(p){
   let c=cards.get(p.id); if(!c){ c=el("div","card"); c.addEventListener("click",()=>{ if(p.status==="done") toggle(p.id); }); cards.set(p.id,c); }
-  const done=p.status==="done"&&p.result;
-  c.className="card"+(done?" done":"")+(done&&p.q?.rec?" rec":"")+(p.selected?" sel":"");
+  const done=p.status==="done"&&p.q;
+  c.className="card"+(done&&p.q.rec?" rec":"")+(p.selected?" sel":"")+(p.ng?" ng":"");
   c.textContent="";
   const im=el("div","im"); const img=el("img"); img.loading="lazy"; img.alt=p.name; img.src=urlOf(p); im.appendChild(img);
   if(done){
     const b=el("div","badges");
-    b.append(el("span","bd g",p.orientation==="portrait"?"縦":"横"), el("span","bd",SHOT_LABEL[p.result.shotType]||""));
-    if(p.q?.mono) b.append(el("span","bd","モノクロ"));
-    if(p.dup) b.append(el("span","bd dup","類似"));
-    b.append(el("span","bd c",p.result.sceneCategory)); im.appendChild(b);
+    if(p.pin) b.append(el("span","bd pin","必ず採用"));
+    b.append(el("span","bd g",p.orientation==="portrait"?"縦":"横"), el("span","bd",SHOT_LABEL[p.q.shot]+"(推定)"));
+    if(p.q.mono) b.append(el("span","bd","モノクロ"));
+    b.append(el("span","bd c",p.q.tone)); im.appendChild(b);
     const rank=selInfo?.rank.get(p.id);
     if(p.selected) im.appendChild(el("div","num",rank?String(rank):"✓"));
   } else if(p.status==="error"){
-    const o=el("div","ov err"); o.append(el("b",null,"評価失敗"), el("span",null,(p.errorMsg||"").slice(0,90))); im.appendChild(o);
-  } else {
-    const o=el("div","ov"); o.textContent="評価待機中…"; im.appendChild(o);
-  }
+    const o=el("div","ov err"); o.textContent="解析失敗: "+(p.errorMsg||"").slice(0,80); im.appendChild(o);
+  } else { const o=el("div","ov"); o.textContent="解析中…"; im.appendChild(o); }
   c.appendChild(im);
-  const body=el("div","body"), top=el("div","top"); top.appendChild(el("div","nm",p.name)); top.lastChild.title=p.name;
-  if(done){ const s=p.q.score; top.appendChild(el("div","score "+(s>=7.5?"h":s>=6?"m":"l"),s.toFixed(1))); }
+  const body=el("div","body"), top=el("div","top"); const nm=el("div","nm",p.name); nm.title=p.name; top.appendChild(nm);
+  if(done){ const s=p.q.score; top.appendChild(el("div","score "+(s>=7?"h":s>=5?"m":"l"),s.toFixed(1))); }
   body.appendChild(top);
   if(done){
-    body.appendChild(el("div","desc",p.result.contentDescription||""));
-    if(p.q.flaws.length){ const f=el("div","flaws"); p.q.flaws.forEach(k=>f.appendChild(el("span",null,FLAWS[k][0]))); body.appendChild(f); }
+    if(p.q.flaws.length){ const f=el("div","flaws"); p.q.flaws.forEach(k=>f.appendChild(el("span",null,k))); body.appendChild(f); }
     const cr=el("div","crit");
-    for(const k of CRITERIA){
-      const v=+p.result[k.key]||0, row=el("div"), bar=el("div","b"), i=el("i");
-      i.style.width=v*10+"%"; i.style.background=v>=8?"var(--ok)":v>=6?"var(--warn)":"var(--bad)"; bar.appendChild(i);
-      row.append(el("em",null,k.label),bar,el("span",null,String(v))); cr.appendChild(row);
+    for(const k of PARTS){
+      const v=p.q.parts[k.key], row=el("div"), bar=el("div","b"), i=el("i");
+      i.style.width=Math.round(v*100)+"%"; i.style.background=v>=0.7?"var(--ok)":v>=0.4?"var(--warn)":"var(--bad)"; bar.appendChild(i);
+      row.append(el("em",null,k.label),bar); cr.appendChild(row);
     }
     body.appendChild(cr);
-    const acts=el("div","acts"), dl=el("button","btn","個別保存");
-    dl.addEventListener("click",(e)=>{e.stopPropagation();downloadOne(p);}); acts.appendChild(dl); body.appendChild(acts);
+    const acts=el("div","acts");
+    const pin=el("button","btn"+(p.pin?" on":""),"★必ず採用"); pin.onclick=(e)=>{e.stopPropagation();p.pin=!p.pin;if(p.pin)p.ng=false;dbPut(p);schedule();};
+    const ng=el("button","btn ng"+(p.ng?" on":""),"✕使わない"); ng.onclick=(e)=>{e.stopPropagation();p.ng=!p.ng;if(p.ng){p.pin=false;p.selected=false;}dbPut(p);schedule();};
+    const dl=el("button","btn","個別保存"); dl.onclick=(e)=>{e.stopPropagation();downloadOne(p);};
+    acts.append(pin,ng,dl); body.appendChild(acts);
   }
   c.appendChild(body);
   return c;
@@ -570,8 +504,7 @@ function visiblePhotos(){
   const list=[...state.photos];
   list.sort((a,b)=>{
     if(state.sort==="name") return byName(a,b);
-    const sa=a.q?.score??(a.status==="error"?-1:-0.5), sb=b.q?.score??(b.status==="error"?-1:-0.5);
-    return sb-sa;
+    const sa=a.q?.score??-1, sb=b.q?.score??-1; return sb-sa;
   });
   return list.filter(p=>{
     if(state.filter==="rec") return p.q?.rec;
@@ -587,136 +520,85 @@ function renderAll(){
   $("#drop").style.display=has?"none":"block";
   $("#toolbar").style.display=has?"flex":"none";
   for(const id of ["#btnPick","#pickCount","#btnClear"]) $(id).style.display=has?"":"none";
-  const nDone=P.filter(p=>p.status==="done").length, nErr=P.filter(p=>p.status==="error").length, nSel=P.filter(p=>p.selected).length;
-  $("#btnRetry").style.display=nErr&&!state.run.on?"":"none";
+  const nDone=P.filter(p=>p.status==="done").length, nSel=P.filter(p=>p.selected).length;
   $("#btnPick").disabled=state.run.on||nDone===0;
   $("#btnPick").textContent=`おすすめを自動選定（${state.pick}枠）`;
-  $("#stat").textContent=has?`評価完了 ${nDone}/${P.length}枚 ／ 選択中 ${nSel}枚`:"";
-  // フィルタ・並び替え
+  $("#stat").textContent=has?`解析完了 ${nDone}/${P.length}枚 ／ 選択中 ${nSel}枚`:"";
+  const nt=$("#notice");
+  if(has&&nDone){ nt.style.display="block"; nt.textContent="※ この版はAIを使わず、ピント・明るさ・コントラスト・色・人物の写り（肌色の面積からの推定）・類似度だけで自動判定します。表情や目つぶり、構図の良し悪しは判定できません。最終確認は目視で行い、「★必ず採用」「✕使わない」で調整してください。背景の分類（色調）と寄り引きは色からの推定で、誤ることがあります。"; }
+  else nt.style.display="none";
   const F=[["all",`すべて (${P.length})`],["rec",`推奨 (${P.filter(p=>p.q?.rec).length})`],["sel",`選択中 (${nSel})`],["ex",`非推奨 (${P.filter(p=>p.status==="done"&&!p.q?.rec).length})`]];
   $("#filters").replaceChildren(...F.map(([k,l])=>{const b=el("button","chip"+(state.filter===k?" on":""),l);b.onclick=()=>{state.filter=k;renderAll();};return b;}));
   $("#sorts").replaceChildren(el("span","note","並び替え:"),...[["score","点数順"],["name","ファイル名順"]].map(([k,l])=>{const b=el("button","chip"+(state.sort===k?" on":""),l);b.onclick=()=>{state.sort=k;renderAll();};return b;}));
-  // グリッド
   const vis=visiblePhotos();
   $("#grid").replaceChildren(...vis.map(buildCard));
   if(!vis.length&&has) $("#grid").appendChild(el("div","note","表示できる画像がありません。"));
-  // 下部バー
   $("#fab").style.display=nSel?"flex":"none";
   $("#fabCount").textContent=`${nSel}枚選択中`;
   $("#fabNames").textContent=P.filter(p=>p.selected).sort(byName).map(p=>p.name).join(" / ");
-  // 進捗
   const r=state.run;
   $("#progress").style.display=r.on?"block":"none";
   if(r.on){
     const pct=r.total?Math.round(r.finished/r.total*100):0;
-    let eta="計算中…";
-    if(r.finished>0){ const s=Math.round((Date.now()-r.start)/r.finished*(r.total-r.finished)/1000); eta=`残り約 ${s>=60?Math.floor(s/60)+"分":""}${String(s%60)}秒`; }
-    $("#pgText").textContent=`AIが画像を評価しています（${r.finished}/${r.total}枚） ${eta}`;
+    $("#pgText").textContent=`画像を解析しています（${r.finished}/${r.total}枚）`;
     $("#pgPct").textContent=pct+"%"; $("#pgBar").style.width=pct+"%";
   }
-  // 選定結果の説明
   const sm=$("#summary");
   if(selInfo&&nSel){
     const s=selInfo, kv=(o)=>Object.entries(o).map(([k,v])=>`${k} ${v}枚`).join(" / ");
-    sm.style.display="block";
-    sm.innerHTML="";
-    const add=(t)=>{const d=el("div");d.innerHTML=t;sm.appendChild(d);};
-    const esc=(t)=>String(t).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-    add(`<b>自動選定の結果</b>：${s.sel.length}枚（${s.used}枠）を撮影順に並べました。番号は撮影順です。`);
-    add(`背景：${esc(kv(s.cat))}`); add(`寄り引き：${esc(kv(s.shot))}${s.mono?` ／ モノクロ ${s.mono}枚`:""}`);
-    add(`除外：ほぼ同じ写真 ${s.dupRemoved}枚、目つぶり・ブレ ${s.hardRemoved}枚（候補全${s.total}枚中）`);
-    if(s.adjacent) add(`前後で同じ背景になっている箇所が ${s.adjacent} か所あります（候補の背景が偏っている可能性があります）。`);
-    s.notes.forEach(n=>add("※ "+esc(n)));
+    sm.style.display="block"; sm.textContent="";
+    const add=(html,text)=>{const d=el("div"); if(html){const b=el("b",null,html); d.appendChild(b);} d.appendChild(document.createTextNode(text)); sm.appendChild(d);};
+    add("自動選定の結果","："+`${s.sel.length}枚（${s.used}枠）を撮影順（ファイル名順）に並べました。番号がその順序です。`);
+    add(null,"色調："+kv(s.tone)); add(null,"寄り引き（推定）："+kv(s.shot)+(s.mono?` ／ モノクロ ${s.mono}枚`:""));
+    add(null,`除外：ほぼ同じ写真 ${s.dupRemoved}枚、ピンぼけ疑い・暗い写真 ${s.hardRemoved}枚、「使わない」${s.ngN}枚（候補全${s.total}枚中）／ 「必ず採用」${s.pinN}枚`);
+    if(s.adjacent) add(null,`前後で同じ色調になっている箇所が ${s.adjacent} か所あります。`);
+    s.notes.forEach(n=>add(null,"※ "+n));
   } else sm.style.display="none";
 }
 
 function toggle(id){
   const p=state.photos.find(x=>x.id===id); if(!p) return;
-  p.selected=!p.selected; dbPut(p); if(selInfo) selInfo.rank.delete(id); schedule();
+  p.selected=!p.selected; if(p.selected) p.ng=false; dbPut(p); if(selInfo) selInfo.rank.delete(id); schedule();
 }
 
 // ==========================================================
-// 取り込みとAI評価（バッチ＋並列）
+// 取り込みと解析
 // ==========================================================
 async function handleFiles(fileList){
   const files=Array.from(fileList).filter(f=>/^image\/(jpeg|png|webp)$/.test(f.type));
   if(!files.length) return;
-  if(!settings.apiKey){ showError("先に右上の「設定」からGemini APIキーを入力してください。"); }
   const known=new Set(state.photos.map(p=>p.fp));
   const fresh=[];
   for(const f of files){
     const fp=`${f.name}|${f.size}|${f.lastModified}`;
     if(known.has(fp)) continue; known.add(fp);
-    fresh.push({id:uid(),fp,name:f.name,file:f,thumb:null,status:"pending",errorMsg:"",result:null,local:null,orientation:null,selected:false});
+    fresh.push({id:uid(),fp,name:f.name,file:f,thumb:null,status:"pending",errorMsg:"",local:null,orientation:null,w:0,h:0,selected:false,pin:false,ng:false});
   }
   if(!fresh.length){ showError("同じ写真は追加済みです。"); return; }
-  state.photos.push(...fresh); fresh.forEach(dbPut); schedule();
-  runAnalysis(fresh);
-}
-
-async function runAnalysis(list){
-  if(state.run.on){ // 実行中なら待ち行列に追加
-    state.run.queue.push(...list); state.run.total+=list.length; schedule(); return;
-  }
-  const r=state.run; Object.assign(r,{on:true,total:list.length,finished:0,start:Date.now(),abort:false,queue:[...list]});
+  state.photos.push(...fresh);
+  const r=state.run;
+  if(r.on){ r.queue.push(...fresh); r.total+=fresh.length; schedule(); return; }
+  Object.assign(r,{on:true,total:fresh.length,finished:0,start:Date.now(),queue:[...fresh]});
   schedule();
-  const bs=Math.max(1,Math.min(8,+settings.batch||4)), cc=Math.max(1,Math.min(8,+settings.conc||4));
   const worker=async()=>{
-    while(!r.abort&&r.queue.length){
-      const group=r.queue.splice(0,bs);
-      await processGroup(group);
-      r.finished+=group.length; schedule();
+    while(r.queue.length){
+      const p=r.queue.shift();
+      try{ await prepare(p); p.status="done"; }
+      catch(e){ p.status="error"; p.errorMsg=e.message||"読み込みに失敗"; }
+      await dbPut(p);
+      r.finished++; schedule();
     }
   };
-  await Promise.all(Array.from({length:Math.min(cc,Math.ceil(r.queue.length/bs))},worker));
-  // 中断時に残った分は失敗扱い
-  for(const p of r.queue){ p.status="error"; p.errorMsg=r.abortMsg||"中断されました"; dbPut(p); }
-  r.on=false; r.queue=[]; schedule();
-  if(r.abortMsg){ showError(r.abortMsg); r.abortMsg=""; }
+  await Promise.all(Array.from({length:Math.min(3,fresh.length)},worker));
+  r.on=false; schedule();
 }
-
-async function processGroup(group){
-  // ローカル前処理（デコード→縮小→指標）
-  const ready=[], b64=[];
-  for(const p of group){
-    try{ b64.push(await prepare(p)); ready.push(p); }
-    catch(e){ fail(p,e.message||"画像の読み込みに失敗"); }
-  }
-  if(!ready.length) return;
-  try{
-    const items=await callGemini(b64);
-    const got=new Map(); for(const it of items) if(Number.isInteger(it.index)) got.set(it.index,it);
-    const missing=[];
-    ready.forEach((p,i)=>{ const it=got.get(i+1); if(it) ok(p,it); else missing.push([p,b64[i]]); });
-    // 取りこぼしは1枚ずつ再送
-    for(const [p,b] of missing){
-      try{ const one=await callGemini([b]); if(one[0]) ok(p,one[0]); else fail(p,"AIが評価を返しませんでした"); }
-      catch(e){ if(e instanceof FatalApiError) throw e; fail(p,e.message); }
-    }
-  }catch(e){
-    if(e instanceof FatalApiError){ state.run.abort=true; state.run.abortMsg=e.message; }
-    for(const p of ready) if(p.status!=="done") fail(p,e.message);
-  }
-}
-function ok(p,it){
-  const r={}; for(const c of CRITERIA) r[c.key]=Math.max(1,Math.min(10,Math.round(+it[c.key]||5)));
-  r.flaws=(it.flaws||[]).filter(f=>FLAWS[f]);
-  r.sceneCategory=CATS.includes(it.sceneCategory)?it.sceneCategory:"その他";
-  r.shotType=SHOTS.includes(it.shotType)?it.shotType:"medium";
-  r.isMonochrome=!!it.isMonochrome; r.contentDescription=String(it.contentDescription||"").slice(0,40);
-  p.result=r; p.status="done"; p.errorMsg=""; dbPut(p);
-}
-function fail(p,msg){ p.status="error"; p.errorMsg=msg; dbPut(p); }
 
 // ==========================================================
 // 保存
 // ==========================================================
 async function downloadOne(p){
-  try{
-    const u=URL.createObjectURL(p.file);
-    const b=await coverBlob(u,+settings.w||900,+settings.h||600); URL.revokeObjectURL(u);
-    saveBlob(b,p.name.replace(/\.[^.]+$/,"")+"_resized.jpg");
-  }catch(e){ showError("画像の個別保存に失敗しました。"); }
+  try{ const [W,H]=outSize(p); saveBlob(await coverBlob(p.file,W,H),p.name.replace(/\.[^.]+$/,"")+"_resized.jpg"); }
+  catch(e){ showError("画像の個別保存に失敗しました。"); }
 }
 async function downloadZip(){
   const sel=state.photos.filter(p=>p.selected).sort(byName); if(!sel.length) return;
@@ -724,9 +606,8 @@ async function downloadZip(){
   try{
     const files=[];
     for(let i=0;i<sel.length;i++){
-      const u=URL.createObjectURL(sel[i].file);
-      const b=await coverBlob(u,+settings.w||900,+settings.h||600); URL.revokeObjectURL(u);
-      files.push({name:`${String(i+1).padStart(2,"0")}_${sel[i].name.replace(/\.[^.]+$/,"")}_resized.jpg`,blob:b});
+      const [W,H]=outSize(sel[i]);
+      files.push({name:`${String(i+1).padStart(2,"0")}_${sel[i].name.replace(/\.[^.]+$/,"")}_resized.jpg`,blob:await coverBlob(sel[i].file,W,H)});
     }
     saveBlob(await makeZip(files),`wedding_photos_${new Date().toISOString().slice(0,10).replace(/-/g,"")}.zip`);
   }catch(e){ showError("ZIPの作成・保存に失敗しました。埋め込み環境で制限されている場合は「個別保存」をお使いください。"); }
@@ -739,7 +620,7 @@ async function downloadZip(){
 function autoSelect(){
   computeScores();
   const res=selectPhotos(state.pick);
-  if(!res){ showError("評価が完了した写真がありません。"); return; }
+  if(!res){ showError("解析が完了した写真がありません。"); return; }
   const ids=new Set(res.sel.map(p=>p.id)); res.rank=new Map(res.sel.map((p,i)=>[p.id,i+1]));
   for(const p of state.photos){ const s=ids.has(p.id); if(p.selected!==s){p.selected=s;dbPut(p);} }
   selInfo=res; state.filter="sel"; state.sort="name"; renderAll();
@@ -753,22 +634,16 @@ $("#btnFolder").onclick=()=>$("#folderIn").click();
 $("#fileIn").onchange=(e)=>{handleFiles(e.target.files);e.target.value="";};
 $("#folderIn").onchange=(e)=>{handleFiles(e.target.files);e.target.value="";};
 $("#btnZip").onclick=downloadZip;
-$("#btnRetry").onclick=()=>{
-  const list=state.photos.filter(p=>p.status==="error"); list.forEach(p=>{p.status="pending";p.errorMsg="";dbPut(p);}); schedule(); runAnalysis(list);
-};
 const drop=$("#drop");
 drop.onclick=()=>$("#fileIn").click();
 ["dragover","dragenter"].forEach(t=>document.addEventListener(t,e=>{e.preventDefault();drop.classList.add("over");}));
 ["dragleave","drop"].forEach(t=>document.addEventListener(t,e=>{e.preventDefault();drop.classList.remove("over");}));
 document.addEventListener("drop",e=>{ if(e.dataTransfer?.files?.length) handleFiles(e.dataTransfer.files); });
-$("#btnSettings").onclick=()=>{
-  $("#sKey").value=settings.apiKey; $("#sModel").value=settings.model; $("#sConc").value=settings.conc; $("#sBatch").value=settings.batch; $("#sW").value=settings.w; $("#sH").value=settings.h;
-  $("#mSettings").classList.add("on");
-};
+$("#btnSettings").onclick=()=>{ $("#sW").value=settings.w; $("#sH").value=settings.h; $("#sHalf").checked=!!settings.half; $("#mSettings").classList.add("on"); };
 $("#sCancel").onclick=()=>$("#mSettings").classList.remove("on");
 $("#sSave").onclick=()=>{
-  settings={apiKey:$("#sKey").value.trim(),model:$("#sModel").value,conc:+$("#sConc").value||4,batch:+$("#sBatch").value||4,w:+$("#sW").value||900,h:+$("#sH").value||600};
-  ls.set("curator.settings",JSON.stringify(settings)); $("#mSettings").classList.remove("on");
+  settings={w:+$("#sW").value||900,h:+$("#sH").value||600,half:$("#sHalf").checked};
+  ls.set("curator2.settings",JSON.stringify(settings)); $("#mSettings").classList.remove("on");
 };
 $("#btnClear").onclick=()=>$("#mConfirm").classList.add("on");
 $("#cNo").onclick=()=>$("#mConfirm").classList.remove("on");
@@ -778,15 +653,13 @@ $("#cYes").onclick=async()=>{
 };
 $("#eClose").onclick=()=>$("#mError").classList.remove("on");
 
-// 起動時に保存済みデータを復元
 (async()=>{
   const saved=await dbAll();
   for(const s of saved){
-    if(s.status==="pending"){ s.status="error"; s.errorMsg="再読み込みにより中断されました。「失敗分を再評価」で再開できます。"; dbPut(s); }
+    if(s.status==="pending"){ s.status="error"; s.errorMsg="再読み込みにより中断されました。写真を追加し直してください。"; dbPut(s); }
     state.photos.push(s);
   }
   renderAll();
-  if(!settings.apiKey && !saved.length) $("#btnSettings").click();
 })();
 renderAll();
 </script>
