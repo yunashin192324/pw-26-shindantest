@@ -175,3 +175,24 @@ function onEditSyncStoreChoices(e) {
     console.log('店舗選択肢の同期に失敗しました: ' + error.message);
   }
 }
+
+/**
+ * スプレッドシートを開いたときに、メニュー「店舗マスタ」を追加する（トリガー設定は不要）。
+ * 自動反映がうまくいかない時は、このメニューから手動で更新できる。
+ */
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('店舗マスタ')
+    .addItem('フォームの担当店舗を今すぐ更新', 'syncStoreChoicesFromMenu')
+    .addToUi();
+}
+
+function syncStoreChoicesFromMenu() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    syncStoreChoicesToStaffForm();
+    ui.alert('フォームの「担当店舗」の選択肢を更新しました。');
+  } catch (error) {
+    ui.alert('更新に失敗しました: ' + error.message);
+  }
+}
