@@ -191,6 +191,7 @@ let loadCompletedCount = 0;
 const LOAD_TARGET = 4;
 let currentUserContext = {
   email: '', identified: false, role: 'マスタ管理', officeCode: null, officeName: null, employeeName: null,
+  scope: 'all', areaName: '', areaMissing: false, scopeLabel: '全エリア',
   canViewAllStores: true, canImportCsv: true, canManageMaster: true
 };
 
@@ -215,7 +216,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // 画面側が前提としているサーバー（Code.gs）の版数。Code.gs の SERVER_VERSION と対で更新する。
-const REQUIRED_SERVER_VERSION = '2026-09-29-2';
+const REQUIRED_SERVER_VERSION = '2026-09-30';
 
 /**
  * Code.gs が画面と同じ版数まで更新されているか確認する。
@@ -425,10 +426,11 @@ function isPermissionDeniedError(message) {
   return /「マスタ管理」権限を持つ方のみ/.test(String(message || ''));
 }
 
-// ログイン中ユーザーの権限（マスタ管理／管理者（所長・チーフ）／一般）をUIへ反映する。
-// ・マスタ管理：CSVインポートボタン・「店舗・スタッフ管理」タブを表示
-// ・管理者（所長・チーフ）：全店舗閲覧はできるがCSV・マスタ管理タブは非表示
-// ・一般：CSVインポート・マスタ管理タブを非表示にし、閲覧スコープ（自店舗）をヘッダーに表示
+// ログイン中ユーザーの権限（マスタ管理／AL／管理者／一般）をUIへ反映する。
+// ・マスタ管理：すべての権限。CSVインポートボタン・「店舗・スタッフ管理」タブを表示
+// ・AL：全エリアの閲覧・入力はできるがCSV・マスタ管理タブは非表示
+// ・管理者：自エリアのみ閲覧・入力（CSV・マスタ管理タブは非表示）。閲覧範囲をヘッダーに表示
+// ・一般：自店舗のみ閲覧・入力（CSV・マスタ管理タブは非表示）。閲覧範囲をヘッダーに表示
 function applyUserContextToUi() {
   const csvBtn = document.getElementById('btn-open-csv-modal');
   csvBtn.classList.toggle('hidden', !currentUserContext.canImportCsv);
@@ -453,10 +455,11 @@ function applyUserContextToUi() {
     const acct = currentUserContext.email || 'アカウントを確認できません';
     accountLabel.textContent = 'ログイン中：' + acct + '　権限：' + currentUserContext.role +
       (currentUserContext.identified && currentUserContext.employeeName ? '（' + currentUserContext.employeeName + '）' : '') +
+      (currentUserContext.scopeLabel ? '　閲覧・入力できる範囲：' + currentUserContext.scopeLabel : '') +
       (currentUserContext.isOwner ? '　※スプレッドシートの所有者のため常にマスタ管理' : '');
     accountLabel.classList.remove('hidden');
   }
-  // スタッフマスタに登録がなく、かつマスタ管理者が既にいる場合は、管理者と同じ扱いに制限されている
+  // スタッフマスタに登録がなく、かつマスタ管理者が既にいる場合は、AL権限と同じ扱いに制限されている
   const restricted = document.getElementById('restricted-account-banner');
   if (restricted) {
     const isRestricted = !currentUserContext.identified && currentUserContext.hasMaster === true;
@@ -465,14 +468,18 @@ function applyUserContextToUi() {
       restricted.textContent = (currentUserContext.email
         ? 'お使いのアカウント（' + currentUserContext.email + '）はスタッフマスタに登録されていないため、'
         : 'お使いのアカウントのメールアドレスを確認できないため、') +
-        '管理者と同じ扱い（全店舗の閲覧・入力のみ）です。店舗・スタッフ管理やCSV取込が必要な場合は、マスタ管理者にアカウントの登録を依頼してください。';
+        'AL権限と同じ扱い（全エリアの閲覧・入力のみ）です。店舗・スタッフ管理やCSV取込が必要な場合は、マスタ管理者にアカウントの登録を依頼してください。';
     }
   }
 
   const badge = document.getElementById('user-scope-badge');
   const badgeText = document.getElementById('user-scope-badge-text');
-  if (!currentUserContext.canViewAllStores && currentUserContext.officeName) {
-    badgeText.textContent = '表示範囲：' + currentUserContext.officeName + '（自店舗のみ）';
+  if (currentUserContext.scope === 'area') {
+    badgeText.textContent = '表示範囲：エリア「' + currentUserContext.areaName + '」（自エリアのみ）';
+    badge.classList.remove('hidden');
+  } else if (!currentUserContext.canViewAllStores && currentUserContext.officeName) {
+    badgeText.textContent = '表示範囲：' + currentUserContext.officeName + '（自店舗のみ）' +
+      (currentUserContext.areaMissing ? '　※所属店舗のエリアが未設定のため自店舗のみです。マスタ管理者にエリアの設定を依頼してください。' : '');
     badge.classList.remove('hidden');
   } else {
     badge.classList.add('hidden');
@@ -630,11 +637,13 @@ function isAlertRow(row) {
 function populateAllMasterSelects() {
   const shopList = metaMasters.shopList || [];
 
-  fillOptions('filter-shop', shopList.map(function (s) { return { value: s, label: s }; }), true);
+  fillOptions('filter-area', (metaMasters.areaList || []).map(function (a) { return { value: a, label: a }; }), true);
+  refreshDashboardShopOptions();
   fillOptions('filter-month', MONTH_CODES.map(function (c, i) { return { value: c, label: MONTH_LABELS[i] }; }), true);
 
-  fillSelectWithBlank('dm-filter-shop', shopList);
   fillSelectWithBlank('dm-filter-area', metaMasters.areaList || []);
+  populateDmShopSelect();
+  populateEmpAreaSelect();
   fillSelectWithBlank('dm-filter-month', MONTH_CODES.map(function (c, i) { return MONTH_LABELS[i]; }), MONTH_CODES);
   fillSelectWithBlank('dm-filter-contact', metaMasters.contactMaster || []);
   fillSelectWithBlank('dm-filter-purpose', metaMasters.purposeMaster || []);
@@ -679,13 +688,68 @@ function getSelectedMultiValues(elId) {
   return Array.from(document.getElementById(elId).selectedOptions).map(function (o) { return o.value; });
 }
 
+// ---- エリアに合わせた店舗の選択肢 -------------------------------------------
+// 店舗は、選んだエリアに属する店舗だけを選択肢に出す（エリア未選択なら全て）。
+function shopsForAreas(areas) {
+  const all = metaMasters.shopList || [];
+  if (!areas || !areas.length) return all;
+  const map = metaMasters.shopAreaMap || {};
+  return all.filter(function (s) { return areas.indexOf(map[s]) !== -1; });
+}
+
+// 実際に絞り込みの対象になっている店舗。店舗を直接選んでいればその店舗、
+// 店舗は選ばずエリアだけ選んでいればそのエリアの店舗、どちらも未選択なら空（＝全店舗）。
+function effectiveSelectedShops() {
+  const shops = getSelectedMultiValues('filter-shop');
+  if (shops.length) return shops;
+  const areas = getSelectedMultiValues('filter-area');
+  return areas.length ? shopsForAreas(areas) : [];
+}
+
+/** ダッシュボードの店舗選択肢を、選択中のエリアに合わせて作り直す（選択済みの店舗は、残れるものだけ保つ） */
+function refreshDashboardShopOptions() {
+  const areas = getSelectedMultiValues('filter-area');
+  const keep = getSelectedMultiValues('filter-shop');
+  fillOptions('filter-shop', shopsForAreas(areas).map(function (s) { return { value: s, label: s }; }), true);
+  Array.from(document.getElementById('filter-shop').options).forEach(function (o) { o.selected = keep.indexOf(o.value) !== -1; });
+}
+
+/** リセールリストの店舗選択肢を、選択中のエリアに合わせて作り直す */
+function populateDmShopSelect() {
+  const select = document.getElementById('dm-filter-shop');
+  if (!select) return;
+  const area = document.getElementById('dm-filter-area').value;
+  const keep = select.value;
+  const shops = shopsForAreas(area ? [area] : []);
+  fillSelectWithBlank('dm-filter-shop', shops);
+  select.value = shops.indexOf(keep) !== -1 ? keep : '';
+}
+
+/** 個人別サマリのエリア選択肢（権限で見えるエリアだけ）を作り直す */
+function populateEmpAreaSelect() {
+  const select = document.getElementById('emp-filter-area');
+  if (!select) return;
+  const keep = select.value;
+  const areas = metaMasters.areaList || [];
+  select.innerHTML = '<option value="">エリア：すべて</option>' + areas.map(function (a) {
+    return '<option value="' + escapeHtml(a) + '">' + escapeHtml(a) + '</option>';
+  }).join('');
+  select.value = areas.indexOf(keep) !== -1 ? keep : '';
+}
+
 // ============================================================================
 // タブ1: 店舗分析ダッシュボード
 // ============================================================================
 function initDashboardEvents() {
+  document.getElementById('filter-area').addEventListener('change', function () {
+    refreshDashboardShopOptions(); // 選んだエリアの店舗だけを店舗の選択肢に出す
+    renderDashboardTab();
+  });
   document.getElementById('filter-shop').addEventListener('change', renderDashboardTab);
   document.getElementById('filter-month').addEventListener('change', renderDashboardTab);
   document.getElementById('btn-clear-dashboard-filter').addEventListener('click', function () {
+    Array.from(document.getElementById('filter-area').options).forEach(function (o) { o.selected = false; });
+    refreshDashboardShopOptions();
     Array.from(document.getElementById('filter-shop').options).forEach(function (o) { o.selected = false; });
     Array.from(document.getElementById('filter-month').options).forEach(function (o) { o.selected = false; });
     renderDashboardTab();
@@ -746,7 +810,8 @@ function aggregateRows(rows) {
 
 function buildAiSummaryText() {
   const data = getDashboardFilteredData();
-  const selectedShops = getSelectedMultiValues('filter-shop');
+  const selectedShops = effectiveSelectedShops();
+  const selectedAreas = getSelectedMultiValues('filter-area');
   const selectedMonths = getSelectedMultiValues('filter-month');
   const isSingleShop = selectedShops.length === 1; // 1店舗だけに絞っているか（依頼文の出し分けに使う）
   const all = aggregateRows(data);
@@ -756,9 +821,10 @@ function buildAiSummaryText() {
   const pad = function (n) { return String(n).padStart(2, '0'); };
   L.push('# 未成約リセール 傾向分析用サマリ');
   L.push('作成日時: ' + now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()));
-  L.push('閲覧範囲: ' + (currentUserContext.canViewAllStores ? '全店舗' : (currentUserContext.officeName || '自店舗') + 'のみ'));
+  L.push('閲覧範囲: ' + (currentUserContext.scopeLabel || (currentUserContext.canViewAllStores ? '全エリア' : (currentUserContext.officeName || '自店舗') + 'のみ')));
   L.push('表示期間: 直近2年（' + availablePeriods.map(function (p) { return p.label; }).join('・') + '）');
-  L.push('絞り込み: 店舗=' + (selectedShops.length ? selectedShops.join('/') : 'すべて') +
+  L.push('絞り込み: エリア=' + (selectedAreas.length ? selectedAreas.join('/') : 'すべて') +
+    ' , 店舗=' + (selectedShops.length ? selectedShops.join('/') : 'すべて') +
     ' , 月=' + (selectedMonths.length ? selectedMonths.join('/') : 'すべて'));
   L.push('');
   L.push('## 用語');
@@ -947,7 +1013,9 @@ function buildAiSummaryText() {
 
 // この分析がどの範囲を対象にしているか（保存時の記録用）
 function currentScopeLabel() {
-  const shops = getSelectedMultiValues('filter-shop');
+  // エリアだけを選んでいる場合も「全店舗」と記録してしまわないよう、そのエリアの店舗名を記録する
+  // （閲覧範囲が自エリアの人に、範囲内のレポートだけを見せる判定に使うため）
+  const shops = effectiveSelectedShops();
   const months = getSelectedMultiValues('filter-month');
   return (shops.length ? shops.join('・') : '全店舗') + ' / ' + (months.length ? months.join('・') + '月' : '全期間');
 }
@@ -1114,10 +1182,12 @@ function copyAiSummaryToClipboard() {
 }
 
 function getDashboardFilteredData() {
+  const areas = getSelectedMultiValues('filter-area');
   const shops = getSelectedMultiValues('filter-shop');
   const months = getSelectedMultiValues('filter-month');
 
   return allDataCache.filter(function (row) {
+    if (areas.length && areas.indexOf(row['エリア名']) === -1) return false;
     if (shops.length && shops.indexOf(row.__sheetName) === -1) return false;
     if (months.length && months.indexOf(String(row['月'])) === -1) return false;
     return true;
@@ -1360,6 +1430,7 @@ function renderRankingTable(data) {
 // ============================================================================
 function initEmployeeEvents() {
   document.getElementById('emp-search').addEventListener('input', renderEmployeeTab);
+  document.getElementById('emp-filter-area').addEventListener('change', renderEmployeeTab);
 }
 
 // 直近2年（4半期）分のタブボタンを動的に生成する（例: 45期上期・45期下期・46期上期・46期下期）
@@ -1426,6 +1497,7 @@ function renderEmployeeTab() {
   }
 
   thead.innerHTML = '<tr>' +
+    '<th class="px-3 py-2 text-left">エリア</th>' +
     '<th class="px-3 py-2 text-left">営業所名</th>' +
     '<th class="px-3 py-2 text-left">社員名</th>' +
     '<th class="px-3 py-2 text-right">未成約数</th>' +
@@ -1437,11 +1509,14 @@ function renderEmployeeTab() {
     '</tr>';
 
   const keyword = document.getElementById('emp-search').value.trim().toLowerCase();
+  const areaFilter = document.getElementById('emp-filter-area').value;
   const employees = cache.employees.filter(function (e) {
+    if (areaFilter && e.areaName !== areaFilter) return false;
     if (!keyword) return true;
     return String(e.employeeName).toLowerCase().indexOf(keyword) !== -1 ||
       String(e.employeeNo).toLowerCase().indexOf(keyword) !== -1 ||
-      String(e.officeName).toLowerCase().indexOf(keyword) !== -1;
+      String(e.officeName).toLowerCase().indexOf(keyword) !== -1 ||
+      String(e.areaName || '').toLowerCase().indexOf(keyword) !== -1;
   });
 
   if (employees.length === 0) {
@@ -1457,6 +1532,7 @@ function renderEmployeeTab() {
     const numer = Number(s['リセール数']) || 0;
     const rate = denom > 0 ? (numer / denom) * 100 : 0;
     return '<tr class="hover:bg-blue-50">' +
+      '<td class="px-3 py-2">' + escapeHtml(e.areaName || '') + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(e.officeName) + '</td>' +
       '<td class="px-3 py-2">' +
         '<button type="button" class="text-blue-700 hover:underline font-semibold emp-detail-link" data-emp-no="' + escapeHtml(e.employeeNo) + '" data-emp-name="' + escapeHtml(e.employeeName) + '">' +
@@ -1545,6 +1621,7 @@ function initDataManagerEvents() {
     'dm-filter-act-date-from', 'dm-filter-act-date-to', 'dm-filter-alert-only'].forEach(function (id) {
     document.getElementById(id).addEventListener('change', function () {
       // 店舗を選んだら、社員の選択肢もその店舗の人だけに絞る
+      if (id === 'dm-filter-area') { populateDmShopSelect(); populateDmEmployeeSelect(); }
       if (id === 'dm-filter-shop') populateDmEmployeeSelect();
       dmCurrentPage = 1;
       renderDataManagerTab();
@@ -1580,15 +1657,16 @@ function populateDmEmployeeSelect() {
   const select = document.getElementById('dm-filter-employee');
   if (!select) return;
   const shop = document.getElementById('dm-filter-shop').value;
+  const area = document.getElementById('dm-filter-area').value;
   const keep = select.value;
 
-  // 店舗未選択のときは、マスタの全社員（従来どおり）
+  // 店舗・エリアとも未選択のときは、マスタの全社員（従来どおり）
   let names;
-  if (!shop) {
+  if (!shop && !area) {
     names = (metaMasters.employeeList || []).map(function (e) { return e.employeeName; });
   } else {
     names = allDataCache
-      .filter(function (r) { return r.__sheetName === shop; })
+      .filter(function (r) { return (!shop || r.__sheetName === shop) && (!area || r['エリア名'] === area); })
       .map(function (r) { return r['社員名']; });
   }
   names = names
@@ -3320,6 +3398,7 @@ function ensureStaffShopOptions(keepValue) {
 
 const ROLE_BADGE_CLASSES = {
   'マスタ管理': 'bg-purple-100 text-purple-700',
+  'AL': 'bg-teal-100 text-teal-700',
   '管理者': 'bg-indigo-100 text-indigo-700',
   '一般': 'bg-slate-100 text-slate-500'
 };
@@ -3330,7 +3409,7 @@ let staffSortState = { key: 'officeName', dir: 'asc' };
 let staffUnregisteredCache = [];
 
 // 権限は「重い順」に並ぶほうが分かりやすいので、五十音ではなく段階の順で比較する
-const ROLE_ORDER = { 'マスタ管理': 0, '管理者': 1, '一般': 2 };
+const ROLE_ORDER = { 'マスタ管理': 0, 'AL': 1, '管理者': 2, '一般': 3 };
 
 /** 検索欄・権限セレクトの条件でスタッフを絞り込む */
 function filterStaffRows(rows) {
@@ -3543,9 +3622,9 @@ function onSubmitStaffForm(ev) {
   const googleAccount = document.getElementById('staff-form-google-account').value.trim();
   const role = document.getElementById('staff-form-role').value;
   if (!officeCode || !empName) { showToast('所属店舗と社員名は必須です。', 'error'); return; }
-  if (role !== '一般' && !googleAccount) { showToast('管理者・マスタ管理権限を付与するスタッフは、Googleアカウントの登録が必須です。', 'error'); return; }
-  if (officeCode === 'HQ' && role === '一般') {
-    showToast('本部の所属で登録できるのは「管理者」「マスタ管理」のみです。本部は担当店舗を持たないため、「一般」権限では表示できるデータがありません。', 'error');
+  if (role !== '一般' && !googleAccount) { showToast('管理者・AL・マスタ管理権限を付与するスタッフは、Googleアカウントの登録が必須です。', 'error'); return; }
+  if (officeCode === 'HQ' && role !== 'AL' && role !== 'マスタ管理') {
+    showToast('本部の所属で登録できるのは「AL」「マスタ管理」のみです。本部は担当店舗・担当エリアを持たないため、「一般」「管理者」権限では表示できるデータがありません。', 'error');
     return;
   }
 
@@ -3561,6 +3640,7 @@ function onSubmitStaffForm(ev) {
           ? ('スタッフ情報を更新しました。' + (updatedRecordCount > 0 ? '（過去のリセールリスト ' + updatedRecordCount + '件も修正しました）' : ''))
           : 'スタッフを追加しました。';
         showToast(message, 'success');
+        if (res.warning) showToast(res.warning, 'info');
         closeAdminModal('staff-modal');
         loadAdminData();
         loadAllData(); // フィルタ等の社員一覧・権限コンテキストを最新化

@@ -172,6 +172,10 @@
     <section id="tab-panel-dashboard" class="tab-panel space-y-5">
       <div class="bg-white rounded-xl shadow p-4 flex flex-wrap gap-4 items-end">
         <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">エリア</label>
+          <select id="filter-area" multiple class="border border-slate-300 rounded-lg text-sm p-2 min-w-[180px] h-24"></select>
+        </div>
+        <div>
           <label class="text-xs font-semibold text-slate-500 block mb-1">店舗</label>
           <select id="filter-shop" multiple class="border border-slate-300 rounded-lg text-sm p-2 min-w-[220px] h-24"></select>
         </div>
@@ -268,7 +272,12 @@
     <section id="tab-panel-employee" class="tab-panel hidden space-y-5">
       <div class="bg-white rounded-xl shadow p-4 flex flex-wrap gap-3 items-center justify-between">
         <div id="emp-period-tabs" class="flex gap-2 flex-wrap"></div>
-        <input id="emp-search" type="text" placeholder="社員名・社員番号・店舗名で検索" class="border border-slate-300 rounded-lg text-sm p-2 w-72">
+        <div class="flex flex-wrap gap-2 items-center">
+          <select id="emp-filter-area" class="border border-slate-300 rounded-lg text-sm p-2" title="エリアで絞り込み">
+            <option value="">エリア：すべて</option>
+          </select>
+          <input id="emp-search" type="text" placeholder="社員名・社員番号・店舗名・エリアで検索" class="border border-slate-300 rounded-lg text-sm p-2 w-80">
+        </div>
       </div>
 
       <div class="bg-white rounded-xl shadow p-4">
@@ -488,6 +497,7 @@
             <select id="staff-filter-role" class="border border-slate-300 rounded-lg text-sm px-2 py-1.5">
               <option value="">権限：すべて</option>
               <option value="マスタ管理">マスタ管理</option>
+              <option value="AL">AL</option>
               <option value="管理者">管理者</option>
               <option value="一般">一般</option>
             </select>
@@ -524,7 +534,7 @@
         <h2 class="text-base font-bold text-slate-800 mb-1"><i class="fa-solid fa-envelope text-blue-600"></i> メールアドレスの一括登録（人事名簿）</h2>
         <p class="text-xs text-slate-500 mb-3">
           人事名簿（CSV または Excel）の「担当者NO」「社員番号」とスタッフの社員番号を突き合わせ、Googleアカウント欄をまとめて登録します。
-          登録された人から、権限（一般＝自店舗のみ など）が正しく効くようになります。
+          登録された人から、権限（一般＝自店舗のみ、管理者＝自エリアのみ など）が正しく効くようになります。
           すでに別のアドレスが入っている人・名簿の氏名が一致しない人・どちらの人か決められない人は登録せず、一覧でお知らせします。
         </p>
         <div class="flex flex-wrap gap-2 items-center">
@@ -821,16 +831,17 @@
         <div>
           <label class="text-xs font-semibold text-slate-500 block mb-1">Googleアカウント（gmail等）</label>
           <input type="email" id="staff-form-google-account" placeholder="example@gmail.com" class="w-full border border-slate-300 rounded-lg text-sm p-2">
-          <p class="text-xs text-slate-400 mt-1">ログイン時にここに登録したアカウントで本人を識別します。管理者・マスタ管理は必ず登録してください。</p>
+          <p class="text-xs text-slate-400 mt-1">ログイン時にここに登録したアカウントで本人を識別します。管理者・AL・マスタ管理は必ず登録してください。</p>
         </div>
         <div>
           <label class="text-xs font-semibold text-slate-500 block mb-1">権限レベル</label>
           <select id="staff-form-role" class="w-full border border-slate-300 rounded-lg text-sm p-2">
-            <option value="一般">一般（自店舗のみ閲覧）</option>
-            <option value="管理者">管理者（所長・チーフ・全店舗閲覧）</option>
-            <option value="マスタ管理">マスタ管理（全店舗閲覧＋CSVインポート＋マスタ編集）</option>
+            <option value="一般">一般（自店舗のみ閲覧・入力）</option>
+            <option value="管理者">管理者（自エリアのみ閲覧・入力）</option>
+            <option value="AL">AL（全エリア閲覧・入力）</option>
+            <option value="マスタ管理">マスタ管理（すべての権限：CSV取込・マスタ編集など）</option>
           </select>
-          <p class="text-xs text-slate-400 mt-1">「管理者」「マスタ管理」を選ぶ場合、Googleアカウントの登録が必須です。</p>
+          <p class="text-xs text-slate-400 mt-1">「一般」以外を選ぶ場合、Googleアカウントの登録が必須です。本部所属は「AL」「マスタ管理」のみ選べます。「管理者」の範囲は、所属店舗のエリアで決まります。</p>
         </div>
         <div class="flex justify-end gap-3 pt-2 border-t border-slate-100">
           <button type="button" data-close-modal="staff-modal" class="px-4 py-2 rounded-lg text-sm font-semibold text-slate-500 hover:bg-slate-100">キャンセル</button>

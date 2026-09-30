@@ -350,9 +350,14 @@ function officeNameForCode_(code, shopNameByCode) {
 }
 
 // ---- 権限レベル（スタッフマスタ「権限レベル」列に格納する文字列） -----------
-const ROLE_GENERAL = '一般';       // 自店舗のみ閲覧
-const ROLE_MANAGER = '管理者';     // 所長・チーフ：全店舗を閲覧（CSV・マスタ編集は不可）
-const ROLE_MASTER = 'マスタ管理';  // 全店舗閲覧＋CSVインポート＋店舗・スタッフマスタの編集/追加
+//   一般　　　＝自店舗のみ閲覧・入力
+//   管理者　　＝自エリア（所属店舗と同じエリアの全店舗）のみ閲覧・入力
+//   AL　　　　＝全エリアを閲覧・入力（CSV取込・マスタ編集は不可）
+//   マスタ管理＝すべての権限（全エリア閲覧・入力＋CSV取込＋店舗/スタッフマスタの編集・追加など）
+const ROLE_GENERAL = '一般';
+const ROLE_MANAGER = '管理者';
+const ROLE_AL = 'AL';
+const ROLE_MASTER = 'マスタ管理';
 
 /**
  * 「スタッフマスタ」シートの全行を返す。
@@ -389,15 +394,20 @@ function getStaffMasterRows_() {
 }
 
 /**
- * スタッフマスタ「権限レベル」列の値を、既知の3値（一般／管理者／マスタ管理）に正規化する。
- * 空欄・不明な値は「一般」として扱う。旧バージョンのTRUE/FALSE（管理者権限チェックボックス）が
- * 残っている場合は、後方互換のためTRUE→管理者として読み替える。
+ * スタッフマスタ「権限レベル」列の値を、既知の4値（一般／管理者／AL／マスタ管理）に正規化する。
+ * 空欄・不明な値は「一般」として扱う（安全側）。旧バージョンのTRUE/FALSE（管理者権限チェックボックス）が
+ * 残っている場合は、後方互換のためTRUE→AL（全エリア閲覧）として読み替える。
  */
 function normalizeRole_(rawValue) {
   const v = String(rawValue === undefined || rawValue === null ? '' : rawValue).trim();
-  if (v === ROLE_MASTER) return ROLE_MASTER;
+  // 全角・半角や大文字小文字の違い（「ＡＬ」「al」など）は同じ値として扱う
+  const k = (typeof v.normalize === 'function' ? v.normalize('NFKC') : v).replace(/\s+/g, '').toUpperCase();
+  if (v === ROLE_MASTER || k === 'マスタ') return ROLE_MASTER;
+  if (k === 'AL') return ROLE_AL;
   if (v === ROLE_MANAGER) return ROLE_MANAGER;
-  if (v.toUpperCase() === 'TRUE') return ROLE_MANAGER; // 旧仕様（管理者権限チェックボックス）からの後方互換
+  // 旧仕様（管理者権限チェックボックス）のTRUEは、当時「全店舗を閲覧できる管理者」だったため、
+  // 同じ範囲を見られるALへ読み替える（新しい「管理者」は自エリアのみ）
+  if (k === 'TRUE') return ROLE_AL;
   return ROLE_GENERAL;
 }
 
@@ -426,25 +436,49 @@ function getCurrentUserContext_() {
   const staff = getStaffMasterRows_();
   const resolved = resolveRoleForEmail_(email, staff, getSpreadsheetOwnerEmail_());
   const matched = resolved.matched;
+  const shopList = getShopList_();
+  const shopByCode = {};
+  shopList.forEach(function (s) { shopByCode[s.code] = s; });
 
-  let role, officeCode, officeName, employeeName, identified;
+  let role = resolved.role;
+  let officeCode = null, officeName = null, employeeName = null, identified = false;
   if (matched) {
-    const shopList = getShopList_();
-    const shop = shopList.find(function (s) { return s.code === matched.officeCode; });
+    const shop = shopByCode[matched.officeCode];
     officeCode = matched.officeCode;
     officeName = isHqOfficeCode_(matched.officeCode)
       ? HQ_OFFICE_NAME
       : (shop ? shop.name : matched.officeCode);
     employeeName = matched.employeeName;
     identified = true;
-    role = resolved.role; // 所有者の場合は、スタッフマスタの権限より所有者としてのマスタ管理を優先する
-  } else {
-    role = resolved.role;
-    officeCode = null;
-    officeName = null;
-    employeeName = null;
-    identified = false;
   }
+
+  // 閲覧・入力できる範囲（scope）：all＝全エリア／area＝自エリアのみ／store＝自店舗のみ
+  let scope = 'store', areaName = '', areaMissing = false;
+  if (role === ROLE_MASTER || role === ROLE_AL) {
+    scope = 'all';
+  } else if (role === ROLE_MANAGER) {
+    if (isHqOfficeCode_(officeCode)) {
+      // 本部所属の「管理者」は担当エリアを持たず、自エリアのデータが無い。旧仕様では全店舗を
+      // 見られたため、画面が空になってしまわないようALと同じ扱いにする。
+      role = ROLE_AL;
+      scope = 'all';
+    } else {
+      const own = shopByCode[officeCode];
+      areaName = own && own.area ? own.area : '';
+      if (areaName) {
+        scope = 'area';
+      } else {
+        // 所属店舗にエリアが未設定なら、範囲を広げず自店舗のみにとどめる（安全側）
+        scope = 'store';
+        areaMissing = true;
+      }
+    }
+  }
+
+  let scopeLabel;
+  if (scope === 'all') scopeLabel = '全エリア';
+  else if (scope === 'area') scopeLabel = 'エリア「' + areaName + '」のみ';
+  else scopeLabel = '自店舗のみ' + (areaMissing ? '（所属店舗のエリアが未設定のため）' : '');
 
   return {
     email: email,
@@ -455,10 +489,47 @@ function getCurrentUserContext_() {
     employeeName: employeeName,
     hasMaster: hasRegisteredMaster_(staff),
     isOwner: resolved.isOwner === true,
-    canViewAllStores: role === ROLE_MANAGER || role === ROLE_MASTER,
+    scope: scope,
+    areaName: areaName,
+    areaMissing: areaMissing,
+    scopeLabel: scopeLabel,
+    canViewAllStores: scope === 'all',
     canImportCsv: role === ROLE_MASTER,
     canManageMaster: role === ROLE_MASTER
   };
+}
+
+/**
+ * 店舗が、現在のユーザーの閲覧・入力できる範囲に入っているか。
+ * 範囲が決まらない（自店舗のみなのに所属店舗が不明、など）場合は、何も見せない（安全側）。
+ */
+function isShopInScope_(ctx, shop) {
+  if (!shop) return false;
+  if (ctx.scope === 'all') return true;
+  if (ctx.scope === 'area') return !!ctx.areaName && shop.area === ctx.areaName;
+  return !!ctx.officeCode && shop.code === ctx.officeCode;
+}
+
+function filterShopsByScope_(shopList, ctx) {
+  return shopList.filter(function (s) { return isShopInScope_(ctx, s); });
+}
+
+/** 営業所コードが範囲に入っているか（本部・未登録の営業所は、全エリアを見られる人だけに見える） */
+function isOfficeInScope_(ctx, officeCode, shopByCode) {
+  if (ctx.scope === 'all') return true;
+  return isShopInScope_(ctx, shopByCode[officeCode]);
+}
+
+/**
+ * 「管理者」は所属店舗のエリアの全店舗を見られる権限。所属店舗にエリアが未設定だと
+ * 範囲を決められず自店舗のみの表示になるため、登録時にその旨を知らせる。
+ */
+function managerAreaWarning_(role, officeCode) {
+  if (role !== ROLE_MANAGER || isHqOfficeCode_(officeCode)) return '';
+  const shop = getShopList_().filter(function (s) { return s.code === officeCode; })[0];
+  if (shop && shop.area) return '';
+  return '所属店舗にエリアが未設定のため、この方は当面「自店舗のみ」の表示になります。' +
+    'エリアは営業日報CSVの取り込み、または「店舗管理」の編集で設定できます。';
 }
 
 // スタッフも行番号で指定して操作するため、画面を開いた後に一覧の並びが変わると
@@ -479,7 +550,7 @@ function assertStaffRowIdentity_(staffRow, expected) {
  * 「自分を締め出さないか」の確認で、必ず同じ規則を使うための唯一の判定関数）。
  * ・有効なスタッフのGoogleアカウントと一致 → その人の権限
  * ・一致しない（未登録・無効化・メール取得不可）→ マスタ管理が1人も登録されていない導入初期は
- *   締め出し防止のためマスタ管理、それ以降は管理者相当
+ *   締め出し防止のためマスタ管理、それ以降はAL相当（全エリアの閲覧・入力のみ）
  */
 function resolveRoleForEmail_(email, staffRows, ownerEmail) {
   const emailLower = String(email || '').trim().toLowerCase();
@@ -492,7 +563,7 @@ function resolveRoleForEmail_(email, staffRows, ownerEmail) {
   const isOwner = !!emailLower && !!ownerEmail && emailLower === String(ownerEmail).trim().toLowerCase();
   if (isOwner) return { matched: matched, role: ROLE_MASTER, isOwner: true };
   if (matched) return { matched: matched, role: matched.role, isOwner: false };
-  return { matched: null, role: hasRegisteredMaster_(staffRows) ? ROLE_MANAGER : ROLE_MASTER, isOwner: false };
+  return { matched: null, role: hasRegisteredMaster_(staffRows) ? ROLE_AL : ROLE_MASTER, isOwner: false };
 }
 
 /** このスプレッドシートの所有者のメールアドレス（小文字）。共有ドライブ上などで取得できなければ空文字。 */
@@ -546,18 +617,18 @@ function getCurrentUserContext() {
 function getMetaMasters() {
   try {
     const ctx = getCurrentUserContext_();
-    let shopList = getShopList_();
-    if (!ctx.canViewAllStores && ctx.officeCode) {
-      shopList = shopList.filter(function (s) { return s.code === ctx.officeCode; });
-    }
+    const allShops = getShopList_();
+    const allShopByCode = {};
+    allShops.forEach(function (s) { allShopByCode[s.code] = s; });
+    const shopList = filterShopsByScope_(allShops, ctx);
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const employeeMap = {};
 
     // スタッフマスタに登録済みの社員（まだ実績が無いスタッフも含む）を先に反映
-    // （一般スタッフは自店舗のスタッフのみに絞り込む）
+    // （閲覧できる範囲（自店舗／自エリア／全エリア）のスタッフだけに絞り込む）
     getStaffMasterRows_().forEach(function (s) {
       if (!s.active) return;
-      if (!ctx.canViewAllStores && ctx.officeCode && s.officeCode !== ctx.officeCode) return;
+      if (!isOfficeInScope_(ctx, s.officeCode, allShopByCode)) return;
       const key = String(s.employeeNo) + '_' + String(s.employeeName);
       employeeMap[key] = { employeeNo: s.employeeNo, employeeName: s.employeeName, officeCode: s.officeCode };
     });
@@ -596,6 +667,8 @@ function getMetaMasters() {
     return {
       success: true,
       shopList: shopList.map(function (s) { return s.name; }),
+      // 店舗名→エリア名（画面で、選んだエリアに合わせて店舗の選択肢を絞り込むために使う）
+      shopAreaMap: shopList.reduce(function (m, s) { m[s.name] = s.area || ''; return m; }, {}),
       areaList: areaList,
       reasonMaster: REASON_MASTER.slice(),
       typeMaster: TYPE_MASTER.slice(),
@@ -703,10 +776,7 @@ function getDashboardData() {
   try {
     const ctx = getCurrentUserContext_();
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    let shopList = getShopList_();
-    if (!ctx.canViewAllStores && ctx.officeCode) {
-      shopList = shopList.filter(function (s) { return s.code === ctx.officeCode; });
-    }
+    const shopList = filterShopsByScope_(getShopList_(), ctx);
     const result = [];
     const errorTokens = ['#NUM!', '#REF!', '#N/A', '#VALUE!', '#DIV/0!', '#NAME?', '#NULL!', '#ERROR!'];
     const lastCol = HEADERS_MAIN.length;
@@ -786,10 +856,10 @@ function getEmployeeSummary(periodKey) {
     const target = recentPeriods.filter(function (p) { return p.key === periodKey; })[0]
       || recentPeriods[recentPeriods.length - 1]; // 不正・未指定の場合は最新期にフォールバック
 
-    let shopList = getShopList_();
-    if (!ctx.canViewAllStores && ctx.officeCode) {
-      shopList = shopList.filter(function (s) { return s.code === ctx.officeCode; });
-    }
+    const allShops = getShopList_();
+    const allShopByCode = {};
+    allShops.forEach(function (s) { allShopByCode[s.code] = s; });
+    const shopList = filterShopsByScope_(allShops, ctx);
     const shopNameByCode = {};
     shopList.forEach(function (s) { shopNameByCode[s.code] = s.name; });
 
@@ -800,9 +870,11 @@ function getEmployeeSummary(periodKey) {
       // 社員番号が桁落ちしていても同一人物としてまとめる（01234 と 1234 を分けない）
       const key = employeeKey_(empNo, empName);
       if (!employeesByKey[key]) {
+        const code = normalizeOfficeCode_(officeCode);
         employeesByKey[key] = {
-          officeCode: normalizeOfficeCode_(officeCode),
-          officeName: shopNameByCode[normalizeOfficeCode_(officeCode)] || officeCode,
+          officeCode: code,
+          officeName: officeNameForCode_(code, shopNameByCode),
+          areaName: (allShopByCode[code] && allShopByCode[code].area) || '',
           employeeNo: normalizeEmployeeNo_(empNo),
           employeeName: empName,
           stats: { '未成約数': 0, 'リセール数': 0, 'リセール中': 0, '成約件数': 0, 'PAX数': 0 }
@@ -813,10 +885,10 @@ function getEmployeeSummary(periodKey) {
     };
 
     // スタッフマスタ登録分は、実績が無くても一覧に表示されるよう先に確保しておく
-    // （一般スタッフは自店舗のスタッフのみに絞り込む）
+    // （閲覧できる範囲（自店舗／自エリア／全エリア）のスタッフだけに絞り込む）
     getStaffMasterRows_().forEach(function (s) {
       if (!s.active) return;
-      if (!ctx.canViewAllStores && ctx.officeCode && s.officeCode !== ctx.officeCode) return;
+      if (!isOfficeInScope_(ctx, s.officeCode, allShopByCode)) return;
       ensureEmployee(s.officeCode, s.employeeNo, s.employeeName);
     });
 
@@ -856,19 +928,21 @@ function getEmployeeSummary(periodKey) {
 
 /**
  * 対象の店舗シートを、現在のユーザーが閲覧・編集してよいかを検証する。
- * 一般スタッフは自店舗のみ操作できる（管理者・マスタ管理は全店舗可）。
+ * 一般は自店舗のみ、管理者は自エリアのみ、AL・マスタ管理は全エリア操作できる。
  * 画面上は他店舗の行がそもそも表示されないが、google.script.run は
  * ブラウザから直接呼び出せてしまうため、サーバー側でも必ず検証する。
  */
-function assertShopInScope_(sheetName) {
-  const shopList = getShopList_();
+function assertShopInScope_(sheetName, shopListOpt, ctxOpt) {
+  // まとめて保存のように同じ確認を何度も行う処理は、店舗一覧と権限を1回だけ読み込んで渡せる
+  const shopList = shopListOpt || getShopList_();
   const shop = shopList.filter(function (s) { return s.name === sheetName; })[0];
   if (!shop) {
     throw new Error('不正な店舗名です: ' + sheetName);
   }
-  const ctx = getCurrentUserContext_();
-  if (!ctx.canViewAllStores && ctx.officeCode && shop.code !== ctx.officeCode) {
-    throw new Error('他店舗のデータは操作できません（自店舗のみ操作可能です）: ' + sheetName);
+  const ctx = ctxOpt || getCurrentUserContext_();
+  if (!isShopInScope_(ctx, shop)) {
+    throw new Error((ctx.scope === 'area' ? '他エリアのデータは操作できません（自エリアのみ操作可能です）: '
+      : '他店舗のデータは操作できません（自店舗のみ操作可能です）: ') + sheetName);
   }
 }
 
@@ -876,7 +950,7 @@ function assertShopInScope_(sheetName) {
  * 「新規相談登録」で担当スタッフを検索・選択するための一覧を返す。
  * 表記ゆれ（社員番号・社員名の手入力ミス）を防ぐため、新規登録の担当者は
  * 自由入力ではなくこの一覧から選ばせる。閲覧できる範囲は権限に準じ、
- * 一般スタッフは自店舗のみ・管理者以上は全店舗が対象。
+ * 一般は自店舗のみ・管理者は自エリアのみ・AL以上は全エリアが対象。
  * 本部（店舗を持たない）スタッフは実績データを持てないため対象外。
  */
 function getActiveStaffForSelection() {
@@ -884,13 +958,14 @@ function getActiveStaffForSelection() {
     const ctx = getCurrentUserContext_();
     const shopList = getShopList_();
     const shopNameByCode = {};
-    shopList.forEach(function (s) { shopNameByCode[s.code] = s.name; });
+    const shopByCode = {};
+    shopList.forEach(function (s) { shopNameByCode[s.code] = s.name; shopByCode[s.code] = s; });
 
     const staff = getStaffMasterRows_().filter(function (s) {
       if (!s.active) return false;
       if (isHqOfficeCode_(s.officeCode)) return false;
       if (!shopNameByCode[s.officeCode]) return false;
-      if (!ctx.canViewAllStores && ctx.officeCode && s.officeCode !== ctx.officeCode) return false;
+      if (!isShopInScope_(ctx, shopByCode[s.officeCode])) return false;
       return true;
     });
 
@@ -1224,7 +1299,7 @@ function lockedEndpoint_(fn) {
  * 「is not a function」という分かりにくいエラーになるため、
  * 画面側から版数を確認できるようにしている。
  */
-const SERVER_VERSION = '2026-09-29-2';
+const SERVER_VERSION = '2026-09-30';
 
 /**
  * サーバー側の版数を返す。画面側は、自分が期待する版数と一致するかを起動時に確認する。
@@ -1922,17 +1997,15 @@ function saveRowChangesImpl_(changes) {
     const failures = [];
 
     // 権限確認は店舗マスタ・スタッフマスタを読み込むため、行ごとに行うと数百行の保存で
-    // 数百回の読み込みになり非常に遅くなる。1回の保存の中では権限は変わらないので、店舗ごとに1回だけ確かめる。
-    const scopeCheckedSheets = {};
+    // 数百回の読み込みになり非常に遅くなる。1回の保存の中では権限は変わらないので、最初に1回だけ読み込んで使い回す。
+    const scopeShopList = getShopList_();
+    const scopeCtx = getCurrentUserContext_();
 
     changes.forEach(function (change) {
       const sheetName = change && change.sheetName;
       const rowIndex = change && change.rowIndex;
       try {
-        if (!scopeCheckedSheets[sheetName]) {
-          assertShopInScope_(sheetName);
-          scopeCheckedSheets[sheetName] = true;
-        }
+        assertShopInScope_(sheetName, scopeShopList, scopeCtx);
 
         const rIdx = parseInt(rowIndex, 10);
         if (isNaN(rIdx) || rIdx < 2) throw new Error('不正な行番号です: ' + rowIndex);
@@ -2084,7 +2157,7 @@ function permissionDeniedMessage_(what, ctx) {
   if (ctx.identified) {
     reason = 'スタッフマスタでの権限は「' + ctx.role + '」です。';
   } else {
-    reason = 'スタッフマスタのGoogleアカウント欄に登録が見つからない（または無効化されている）ため、管理者と同じ扱いになっています。';
+    reason = 'スタッフマスタのGoogleアカウント欄に登録が見つからない（または無効化されている）ため、AL権限（全エリアの閲覧・入力のみ）と同じ扱いになっています。';
   }
   return what + 'は「マスタ管理」権限を持つ方のみ実行できます。\n' + who + '：' + reason + '\n' +
     'マスタ管理者に登録を依頼してください。スプレッドシートを編集できる方は、メニュー' +
@@ -3217,9 +3290,9 @@ function addStaffMasterImpl_(officeCode, employeeNo, employeeName, googleAccount
 
     if (isHqOfficeCode_(officeCode)) {
       // 本部は店舗を持たないため、自店舗しか見られない「一般」では画面に何も出せない
-      if (role === ROLE_GENERAL) {
-        throw new Error('本部の所属で登録できるのは「管理者」「マスタ管理」のみです。' +
-          '（本部は担当店舗を持たないため、自店舗のみ閲覧する「一般」権限では表示できるデータがありません）');
+      if (role !== ROLE_AL && role !== ROLE_MASTER) {
+        throw new Error('本部の所属で登録できるのは「AL」「マスタ管理」のみです。' +
+          '（本部は担当店舗・担当エリアを持たないため、自店舗・自エリアのみ閲覧する「一般」「管理者」権限では表示できるデータがありません）');
       }
       officeCode = HQ_OFFICE_CODE;
     } else {
@@ -3246,7 +3319,7 @@ function addStaffMasterImpl_(officeCode, employeeNo, employeeName, googleAccount
     assertNotLockingSelfOut_(existing.concat([{ active: true, role: role, googleAccount: googleAccount }]));
     sheet.appendRow([officeCode, normalizeEmployeeNo_(employeeNo), employeeName, googleAccount, role, true]);
 
-    return { success: true };
+    return { success: true, warning: managerAreaWarning_(role, officeCode) };
   } catch (err) {
     return { success: false, error: errorForClient_(err) };
   }
@@ -3280,9 +3353,9 @@ function updateStaffMasterImpl_(rowIndex, officeCode, employeeNo, employeeName, 
 
     if (isHqOfficeCode_(officeCode)) {
       // 本部は店舗を持たないため、自店舗しか見られない「一般」では画面に何も出せない
-      if (role === ROLE_GENERAL) {
-        throw new Error('本部の所属で登録できるのは「管理者」「マスタ管理」のみです。' +
-          '（本部は担当店舗を持たないため、自店舗のみ閲覧する「一般」権限では表示できるデータがありません）');
+      if (role !== ROLE_AL && role !== ROLE_MASTER) {
+        throw new Error('本部の所属で登録できるのは「AL」「マスタ管理」のみです。' +
+          '（本部は担当店舗・担当エリアを持たないため、自店舗・自エリアのみ閲覧する「一般」「管理者」権限では表示できるデータがありません）');
       }
       officeCode = HQ_OFFICE_CODE;
     } else {
@@ -3320,7 +3393,7 @@ function updateStaffMasterImpl_(rowIndex, officeCode, employeeNo, employeeName, 
       );
     }
 
-    return { success: true, updatedRecordCount: updatedRecordCount };
+    return { success: true, updatedRecordCount: updatedRecordCount, warning: managerAreaWarning_(role, officeCode) };
   } catch (err) {
     return { success: false, error: errorForClient_(err) };
   }
@@ -3499,11 +3572,13 @@ function getAccessDiagnosis_() {
   const inactiveSame = !resolved.matched && !!lowered && staff.some(function (x) {
     return !x.active && String(x.googleAccount || '').trim().toLowerCase() === lowered;
   });
+  const ctx = getCurrentUserContext_();
   return {
     email: email,
     identified: !!resolved.matched,
-    role: resolved.role,
-    canManageMaster: resolved.role === ROLE_MASTER,
+    role: ctx.role,
+    scopeLabel: ctx.scopeLabel,
+    canManageMaster: ctx.role === ROLE_MASTER,
     isOwner: resolved.isOwner === true,
     staffName: resolved.matched ? resolved.matched.employeeName : '',
     hasMaster: masters.length > 0,
@@ -3554,7 +3629,7 @@ function showAccessDiagnosis() {
   const d = getAccessDiagnosis_();
   const lines = [
     'システムから見えているあなたのアカウント：' + (d.email || '（確認できません）'),
-    '判定された権限：' + d.role + (d.identified ? '（スタッフマスタの「' + d.staffName + '」さんとして登録済み）' : '（スタッフマスタに登録が見つかりません）'),
+    '判定された権限：' + d.role + '（閲覧・入力できる範囲：' + d.scopeLabel + '）' + (d.identified ? '（スタッフマスタの「' + d.staffName + '」さんとして登録済み）' : '（スタッフマスタに登録が見つかりません）'),
     'Googleアカウント付きのマスタ管理者：' + (d.hasMaster ? d.masterAccounts.join('、') : 'まだ登録されていません（導入初期のため、全員がマスタ管理相当です）')
   ];
   if (d.isOwner) lines.push('※あなたはこのスプレッドシートの所有者のため、スタッフマスタの登録内容に関係なく常にマスタ管理として扱われます。');
@@ -4065,23 +4140,22 @@ function saveAiReportImpl_(scopeLabel, body) {
 }
 
 /**
- * 分析レポートの対象範囲（「水戸コムボックス310 / 全期間」形式）が、
- * 指定した店舗ただ1店舗だけを対象にしているかを判定する。
- * 一般スタッフに他店舗の数字を含む文章を見せないための絞り込みに使う。
+ * 分析レポートの対象範囲（「水戸コムボックス310・高崎オーパ / 全期間」形式）が、
+ * 閲覧できる店舗（inScopeShopNames）だけを対象にしているかを判定する。
+ * 自店舗・自エリアの権限の人に、範囲外の店舗の数字を含む文章を見せないための絞り込みに使う。
  */
-function isReportLimitedToShop_(scope, officeName) {
-  if (!officeName) return false;
+function isReportWithinScope_(scope, inScopeShopNames) {
   const shopPart = String(scope || '').split('/')[0].trim();
   if (!shopPart || shopPart === '全店舗') return false;
   const shops = shopPart.split('・').map(function (x) { return x.trim(); }).filter(function (x) { return x; });
-  return shops.length === 1 && shops[0] === officeName;
+  return shops.length > 0 && shops.every(function (x) { return inScopeShopNames.indexOf(x) !== -1; });
 }
 
 /**
  * 保存済みの分析レポートを新しい順に返す。
- * 一般スタッフには「自店舗のみを対象に作成されたレポート」だけを返す。
- * （全店舗を対象にしたレポートは本文に他店舗の数字が含まれるため、
- *   閲覧範囲＝自店舗のみという権限設定に合わせて除外する）
+ * 一般・管理者には「自分が閲覧できる範囲（自店舗／自エリア）の店舗だけを対象に作成されたレポート」
+ * だけを返す。（範囲外の店舗を含むレポートは本文に他店舗の数字が含まれるため、
+ *   閲覧範囲の権限設定に合わせて除外する）
  * @param {number} limit 取得件数（既定5件）
  */
 function getAiReports(limit) {
@@ -4095,12 +4169,13 @@ function getAiReports(limit) {
     if (lastRow < 2) return { success: true, reports: [], canSave: ctx.canManageMaster };
 
     const want = Math.max(1, parseInt(limit, 10) || 5);
+    const inScopeShopNames = filterShopsByScope_(getShopList_(), ctx).map(function (s) { return s.name; });
     const values = sheet.getRange(2, 1, lastRow - 1, 4).getValues();
     const reports = values
       .filter(function (r) { return String(r[3] || '').trim() !== ''; })
       .filter(function (r) {
-        if (ctx.canViewAllStores) return true;
-        return isReportLimitedToShop_(String(r[2] || ''), ctx.officeName);
+        if (ctx.scope === 'all') return true;
+        return isReportWithinScope_(String(r[2] || ''), inScopeShopNames);
       })
       .slice(0, want)
       .map(function (r) {
