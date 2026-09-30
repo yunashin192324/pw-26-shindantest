@@ -1555,6 +1555,42 @@ function onStaffNameSaved(list) {
 }
 
 // ============================================================================
+// CSVファイルの文字コード自動判定（UTF-8 / Shift_JIS 両対応）
+// ============================================================================
+
+/**
+ * CSVファイルの中身をArrayBufferから文字列に変換する。
+ * UTF-8のBOM付き／BOM無しはUTF-8として、UTF-8として解釈できない場合は
+ * 業務系システムのCSV書き出しで多いShift_JIS（CP932）として解釈する。
+ * これにより「006:エリア」等の見出しが文字化けして検出できない、という問題を防ぐ。
+ */
+function decodeCsvArrayBuffer_(buffer) {
+  var bytes = new Uint8Array(buffer);
+  if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
+    return new TextDecoder('utf-8').decode(bytes.subarray(3));
+  }
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch (e) {
+    return new TextDecoder('shift_jis').decode(bytes);
+  }
+}
+
+/** ファイル選択イベントから、文字コードを自動判定してテキストを読み込む共通処理。 */
+function readCsvFileAuto_(file, onText, onError) {
+  var reader = new FileReader();
+  reader.onload = function (evt) {
+    try {
+      onText(decodeCsvArrayBuffer_(evt.target.result));
+    } catch (e) {
+      onError(e);
+    }
+  };
+  reader.onerror = function () { onError(reader.error); };
+  reader.readAsArrayBuffer(file);
+}
+
+// ============================================================================
 // 担当者マスタ：人事データCSVインポート
 // ============================================================================
 
@@ -1595,17 +1631,14 @@ function onStaffNameImportFileSelected(e) {
   document.getElementById('staff-name-import-result').classList.add('hidden');
   if (!file) { document.getElementById('btn-submit-staff-name-import').disabled = true; return; }
 
-  var reader = new FileReader();
-  reader.onload = function (evt) {
-    staffNameImportSelectedText = evt.target.result;
+  readCsvFileAuto_(file, function (text) {
+    staffNameImportSelectedText = text;
     staffNameImportSelectedFileName = file.name;
     var summary = document.getElementById('staff-name-import-file-summary');
     summary.textContent = 'ファイル：' + file.name + '（' + Math.ceil(file.size / 1024) + ' KB）';
     summary.classList.remove('hidden');
     document.getElementById('btn-submit-staff-name-import').disabled = false;
-  };
-  reader.onerror = function () { showToast('ファイルの読み込みに失敗しました。', 'error'); };
-  reader.readAsText(file, 'UTF-8');
+  }, function () { showToast('ファイルの読み込みに失敗しました。', 'error'); });
 }
 
 function submitStaffNameImport() {
@@ -1688,17 +1721,14 @@ function onCsvFileSelected(e) {
   document.getElementById('csv-import-result').classList.add('hidden');
   if (!file) { document.getElementById('btn-submit-csv').disabled = true; return; }
 
-  var reader = new FileReader();
-  reader.onload = function (evt) {
-    csvSelectedText = evt.target.result;
+  readCsvFileAuto_(file, function (text) {
+    csvSelectedText = text;
     csvSelectedFileName = file.name;
     var summary = document.getElementById('csv-file-summary');
     summary.textContent = 'ファイル：' + file.name + '（' + Math.ceil(file.size / 1024) + ' KB）';
     summary.classList.remove('hidden');
     document.getElementById('btn-submit-csv').disabled = false;
-  };
-  reader.onerror = function () { showToast('ファイルの読み込みに失敗しました。', 'error'); };
-  reader.readAsText(file, 'UTF-8');
+  }, function () { showToast('ファイルの読み込みに失敗しました。', 'error'); });
 }
 
 function submitCsvImport() {

@@ -1761,20 +1761,36 @@ function closeStaffNameImportModal(){
   document.getElementById('staff-name-import-modal').classList.remove('open');
   if (staffNameImportTimer){ clearInterval(staffNameImportTimer); staffNameImportTimer = null; }
 }
+/**
+ * CSVファイルの文字コード自動判定（UTF-8 / Shift_JIS 両対応）。
+ * 業務系システムの書き出しに多いShift_JIS（CP932）のCSVでも、見出しが文字化けせず
+ * 検出できるようにするための処理。
+ */
+function decodeCsvArrayBuffer(buffer){
+  var bytes = new Uint8Array(buffer);
+  if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF){
+    return new TextDecoder('utf-8').decode(bytes.subarray(3));
+  }
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch (e) {
+    return new TextDecoder('shift_jis').decode(bytes);
+  }
+}
 function onStaffNameImportFileSelected(e){
   var file = e.target.files[0];
   document.getElementById('staff-name-import-result').style.display = 'none';
   if (!file){ document.getElementById('btn-submit-staff-name-import').disabled = true; return; }
   var reader = new FileReader();
   reader.onload = function(evt){
-    staffNameImportSelectedText = evt.target.result;
+    staffNameImportSelectedText = decodeCsvArrayBuffer(evt.target.result);
     var summary = document.getElementById('staff-name-import-file-summary');
     summary.textContent = 'ファイル：' + file.name + '（' + Math.ceil(file.size/1024) + ' KB）';
     summary.classList.remove('hidden');
     document.getElementById('btn-submit-staff-name-import').disabled = false;
   };
   reader.onerror = function(){ showToast('ファイルの読み込みに失敗しました。', 'error'); };
-  reader.readAsText(file, 'UTF-8');
+  reader.readAsArrayBuffer(file);
 }
 function submitStaffNameImportDemo(){
   if (!staffNameImportSelectedText) return;
