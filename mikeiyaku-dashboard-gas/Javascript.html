@@ -2766,6 +2766,7 @@ function renderCsvImportResult(res) {
   html += '<p>取込件数：<b>' + res.importedCount + '</b> 件</p>';
   html += '<p>重複スキップ：' + res.skippedDuplicateCount + ' 件</p>';
   if (res.skippedBlankCount) html += '<p>対象年月日／営業所コード未入力によるスキップ：' + res.skippedBlankCount + ' 件</p>';
+  if (res.skippedInvalidDateCount) html += '<p class="text-amber-700">対象年月日が正しい日付でないため取り込まなかった行：' + res.skippedInvalidDateCount + ' 件（元のCSVをご確認ください）</p>';
   if (res.autoRegisteredStaffCount) {
     html += '<p class="text-blue-600">スタッフマスタへ自動登録：<b>' + res.autoRegisteredStaffCount + '</b> 名</p>';
   }

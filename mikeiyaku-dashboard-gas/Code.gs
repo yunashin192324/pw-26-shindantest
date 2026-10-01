@@ -210,10 +210,23 @@ function normalizeTargetDate_(value) {
   if (Object.prototype.toString.call(value) === '[object Date]') {
     return isNaN(value.getTime()) ? '' : Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyyMMdd');
   }
-  const s = String(value).trim();
+  // 全角数字・全角記号（２０２６／０９／０１ など）は半角にそろえてから判定する
+  let s = String(value).trim();
+  if (typeof s.normalize === 'function') s = s.normalize('NFKC');
   const m = /^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/.exec(s);
   if (m) return m[1] + ('0' + m[2]).slice(-2) + ('0' + m[3]).slice(-2);
   return s;
+}
+
+/** "YYYYMMDD" が実在する日付か（20261340 や abc のような値を弾く。年は2000〜2100のみ） */
+function isValidYmd_(s) {
+  if (!/^\d{8}$/.test(String(s))) return false;
+  const y = parseInt(String(s).substring(0, 4), 10);
+  const m = parseInt(String(s).substring(4, 6), 10);
+  const d = parseInt(String(s).substring(6, 8), 10);
+  if (y < 2000 || y > 2100) return false;
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
 }
 
 function canonicalKeyPart_(value) {
@@ -1042,7 +1055,7 @@ function addUncontractedDataImpl_(rowObject, staffRowIndex, expectedStaff) {
 
     // 「対象年月日」（YYYYMMDD）から月（2桁文字列）を自動抽出し、「月」列（4列目）へ反映
     const targetDate = normalizeTargetDate_(rowObject && rowObject['対象年月日']);
-    if (!/^\d{8}$/.test(targetDate)) {
+    if (!isValidYmd_(targetDate)) {
       throw new Error('対象年月日を正しい日付で入力してください（入力値: ' + (rowObject && rowObject['対象年月日']) + '）');
     }
     newRow[HEADERS_MAIN.indexOf('対象年月日')] = targetDate;
@@ -1477,6 +1490,7 @@ function importParsedRows_(rows) {
     const rowsBySheet = {}; // sheetName -> 27列配列の配列
     let skippedDuplicateCount = 0;
     let skippedBlankCount = 0;
+    let skippedInvalidDateCount = 0; // 対象年月日が実在する日付でない行（取り込まずに件数だけ報告する）
 
     for (let r = headerRowIndex + 1; r < rows.length; r++) {
       const row = rows[r];
@@ -1492,6 +1506,10 @@ function importParsedRows_(rows) {
 
       if (!targetDate || !officeCode) {
         skippedBlankCount++;
+        continue;
+      }
+      if (!isValidYmd_(targetDate)) {
+        skippedInvalidDateCount++;
         continue;
       }
 
@@ -1635,6 +1653,7 @@ function importParsedRows_(rows) {
       importedCount: importedCount,
       skippedDuplicateCount: skippedDuplicateCount,
       skippedBlankCount: skippedBlankCount,
+      skippedInvalidDateCount: skippedInvalidDateCount,
       autoRegisteredShopCodes: autoRegisteredShopCodes,
       renamedShopNames: renamedShopNames,
       autoRegisteredStaffCount: autoRegisteredStaffCount,
@@ -2426,12 +2445,14 @@ function archiveOldData_(ss) {
     const values = sheet.getRange(2, 1, lastRow - 1, HEADERS_MAIN.length).getValues();
     const toKeep = [];
     const toArchiveByPeriod = {}; // 期番号(文字列)または"unknown" -> 行の配列
-    values.forEach(function (row) {
+    const oldIdxs = []; // 退避する行の位置（values内の0始まり。シート上は +2 行目）
+    values.forEach(function (row, idx) {
       const targetDate = normalizeTargetDate_(row[4]); // 対象年月日（5列目）
       if (!(targetDate && targetDate < cutoff)) {
         toKeep.push(row);
         return;
       }
+      oldIdxs.push(idx);
       // 保存期間を過ぎている以上、対象年月日から期が判定できない場合でも「期不明」として
       // 必ずどこかへ退避する（判定できないからといって元のシートに残すと、原因が直らない限り
       // 毎回スキャン対象になり続け、永久に軽くならないため）。
@@ -2451,22 +2472,21 @@ function archiveOldData_(ss) {
       const rowsForPeriod = toArchiveByPeriod[periodKey];
       const archiveSs = getOrCreateArchiveSpreadsheetForPeriod_(periodKey, archiveRunCache);
       const archiveSheet = ensureArchiveShopSheet_(archiveSs, shop.name);
-      const archiveStartRow = archiveSheet.getLastRow() + 1;
-      ensureRowCapacity_(archiveSheet, archiveStartRow + rowsForPeriod.length - 1);
-      setValuesSafe_(archiveSheet.getRange(archiveStartRow, 1, rowsForPeriod.length, HEADERS_MAIN.length), rowsForPeriod);
+      // 前回の実行が「退避先へ書いた後、元のシートを書き直す前」に止まっていた場合、同じ行が
+      // 退避先に既にある。二重に書かないよう、退避先にある同一の行は書き込みから除く
+      // （元のシートからはどのみち取り除く）。
+      const rowsToWrite = excludeAlreadyArchivedRows_(archiveSheet, rowsForPeriod);
+      if (rowsToWrite.length > 0) {
+        const archiveStartRow = archiveSheet.getLastRow() + 1;
+        ensureRowCapacity_(archiveSheet, archiveStartRow + rowsToWrite.length - 1);
+        setValuesSafe_(archiveSheet.getRange(archiveStartRow, 1, rowsToWrite.length, HEADERS_MAIN.length), rowsToWrite);
+      }
 
       countsByPeriod[periodKey] = (countsByPeriod[periodKey] || 0) + rowsForPeriod.length;
       totalArchived += rowsForPeriod.length;
     });
 
-    // 生き残る行を先頭から詰めて書き直し、余った行は消す（生存行が0件のこともあるためgetRangeを分岐）
-    if (toKeep.length > 0) {
-      setValuesSafe_(sheet.getRange(2, 1, toKeep.length, HEADERS_MAIN.length), toKeep);
-    }
-    const surplus = values.length - toKeep.length;
-    if (surplus > 0) {
-      sheet.getRange(2 + toKeep.length, 1, surplus, HEADERS_MAIN.length).clearContent();
-    }
+    removeArchivedRowsFromSheet_(sheet, values, toKeep, oldIdxs);
 
     perShopCounts[shop.name] = values.length - toKeep.length;
     processedShops.push(shop.name);
@@ -2482,6 +2502,46 @@ function archiveOldData_(ss) {
     remainingShopCount: remainingShops.length,
     remainingShops: remainingShops
   };
+}
+
+/**
+ * 退避し終えた行を元の店舗シートから取り除く。
+ * 連続した退避行のかたまりごとに、下から順に行を削除する。1回の削除は途中で終わらないため、
+ * 処理が途中で止まっても「行が重複して残る」ことはなく、次回の実行で残りを続きから退避できる
+ * （退避先には同じ行を二重に書かない）。
+ * 古い行が飛び飛びに大量にある特殊な並びのときだけは、削除回数が多すぎて時間切れになるのを避けるため、
+ * 残す行を詰めて書き直す方法を使う（この場合、途中で止まると末尾に同じ行が残ることがあり、
+ * 「重複を削除」で整理できる）。
+ */
+const ARCHIVE_MAX_DELETE_RUNS = 40;
+function removeArchivedRowsFromSheet_(sheet, values, toKeep, oldIdxs) {
+  if (oldIdxs.length === 0) return;
+  // 連続区間（開始位置, 件数）にまとめる
+  const runs = [];
+  oldIdxs.forEach(function (idx) {
+    const last = runs[runs.length - 1];
+    if (last && last.start + last.count === idx) last.count++;
+    else runs.push({ start: idx, count: 1 });
+  });
+
+  if (runs.length > ARCHIVE_MAX_DELETE_RUNS) {
+    if (toKeep.length > 0) {
+      setValuesSafe_(sheet.getRange(2, 1, toKeep.length, HEADERS_MAIN.length), toKeep);
+    }
+    const surplus = values.length - toKeep.length;
+    if (surplus > 0) {
+      sheet.getRange(2 + toKeep.length, 1, surplus, HEADERS_MAIN.length).clearContent();
+    }
+    return;
+  }
+
+  // シートの見出し行（固定行）以外の行を全部は削除できないため、行数の余裕を確保しておく
+  if (sheet.getMaxRows() < values.length + 3) {
+    sheet.insertRowsAfter(sheet.getMaxRows(), values.length + 3 - sheet.getMaxRows());
+  }
+  for (let i = runs.length - 1; i >= 0; i--) {
+    sheet.deleteRows(runs[i].start + 2, runs[i].count);
+  }
 }
 
 /** 期番号から「46期（2025年11月～2026年10月）」のような表示用ラベルを作る */
@@ -2539,14 +2599,55 @@ function getOrCreateArchiveSpreadsheetForPeriod_(periodKey, runCache) {
   return archiveSs;
 }
 
+/** 行全体を比べるための文字列。数値化・桁落ち（046と46）・前後の空白の違いは同じものとして扱う */
+function rowSignature_(row) {
+  return row.map(function (v) {
+    if (Object.prototype.toString.call(v) === '[object Date]') return normalizeTargetDate_(v);
+    return canonicalKeyPart_(v);
+  }).join('\u0001');
+}
+
+/**
+ * 退避先のシートに既にある行（全列が同一）を、これから書く行の中から取り除いて返す。
+ * 同じ内容の行が複数あっても、退避先にある件数ぶんだけを取り除く（件数は保たれる）。
+ */
+function excludeAlreadyArchivedRows_(archiveSheet, rows) {
+  const lastRow = archiveSheet.getLastRow();
+  if (lastRow < 2 || rows.length === 0) return rows;
+  const existing = archiveSheet.getRange(2, 1, lastRow - 1, HEADERS_MAIN.length).getValues();
+  const remaining = {};
+  existing.forEach(function (r) {
+    const sig = rowSignature_(r);
+    remaining[sig] = (remaining[sig] || 0) + 1;
+  });
+  return rows.filter(function (r) {
+    const sig = rowSignature_(r);
+    if (remaining[sig] > 0) { remaining[sig]--; return false; }
+    return true;
+  });
+}
+
 /** アーカイブ側に、店舗ごとの27列ヘッダー付きシートを用意する（無ければ作る） */
 function ensureArchiveShopSheet_(archiveSs, shopName) {
   let sheet = archiveSs.getSheetByName(shopName);
   if (!sheet) {
     sheet = archiveSs.insertSheet(shopName);
+  }
+  // 見出し（1行目）が書き込み済みなら、シートの準備は完了している。
+  // 準備の途中で処理が止まった場合（時間切れ・一時エラー）は、見出しが無いまま
+  // シートだけが残るため、次回の実行でここからやり直せるよう「見出しを最後に書く」順にしている。
+  if (String(sheet.getRange(1, 1).getValue() || '').trim() === '') {
     // 新規シートの既定列数（26列）はHEADERS_MAIN（27列）に満たないため、書き込み前に必ず広げる
     // （InitSheet.gsのcreateShopSheets_と同じ理由・同じ対処）
     ensureColumnCount_(sheet, HEADERS_MAIN.length);
+
+    // 営業所コード・社員番号・対象年月日などは、既定の書式のままだと「046」→46、「01234」→1234、
+    // 月「03」→3 のように先頭の0が消える。元の店舗シートと同じ列を「書式なしテキスト」にして
+    // 退避した行が1文字も変わらないようにする（InitSheet.gs の repairOfficeCodeFormatting_ と同じ列）
+    [4, 5, 6, 7, 12, 17, 18, 21, 24].forEach(function (c) {
+      sheet.getRange(1, c, sheet.getMaxRows(), 1).setNumberFormat('@');
+    });
+
     sheet.getRange(1, 1, 1, HEADERS_MAIN.length).setValues([HEADERS_MAIN]);
     sheet.getRange(1, 1, 1, HEADERS_MAIN.length)
       .setFontWeight('bold').setBackground('#1c4587').setFontColor('#ffffff').setHorizontalAlignment('center');
