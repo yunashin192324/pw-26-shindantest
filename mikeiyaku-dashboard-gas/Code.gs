@@ -782,59 +782,135 @@ function getRetentionCutoffDate_() {
 }
 
 /**
+ * 1店舗ぶんの生データを、画面用の行オブジェクトにして返す（保存期間外・空行・エラー値の行は除く）。
+ * getDashboardData（一括）と getDashboardChunk（分割）の共通処理。
+ */
+function collectDashboardRowsForShop_(ss, shop, cutoffDate) {
+  const result = [];
+  const errorTokens = ['#NUM!', '#REF!', '#N/A', '#VALUE!', '#DIV/0!', '#NAME?', '#NULL!', '#ERROR!'];
+  const lastCol = HEADERS_MAIN.length;
+  const sheet = ss.getSheetByName(shop.name);
+  if (!sheet) return result;
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return result;
+
+  const values = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+
+  for (let i = 0; i < values.length; i++) {
+    const row = values[i];
+
+    const isBlank = row.every(function (cell) { return cell === '' || cell === null; });
+    if (isBlank) continue;
+
+    const hasError = row.some(function (cell) {
+      return typeof cell === 'string' && errorTokens.indexOf(cell) !== -1;
+    });
+    if (hasError) continue;
+
+    // 保存期間（直近2年）より前のデータは対象外
+    const targetDate = normalizeTargetDate_(row[4]); // 対象年月日（5列目）
+    if (targetDate && targetDate < cutoffDate) continue;
+
+    const obj = {};
+    for (let c = 0; c < lastCol; c++) {
+      // 画面で使わない列は送らない（件数が増えるほど通信量に効く）
+      if (PAYLOAD_SKIP_COLUMNS[HEADERS_MAIN[c]]) continue;
+      obj[HEADERS_MAIN[c]] = serializeCellValue_(row[c]);
+    }
+    obj['対象年月日'] = targetDate; // 画面側の日付絞り込み・アラート判定もYYYYMMDD前提のため、そろえた値を渡す
+    obj.__sheetName = shop.name;
+    obj.__rowIndex = i + 2; // スプレッドシート上の物理行番号（2行目スタート）
+    obj['エリア名'] = shop.area || ''; // 店舗マスタのエリア区分（店舗単位の属性のため行データ自体には持たない）
+
+    result.push(obj);
+  }
+  return result;
+}
+
+/**
  * ③ 全店舗シートの生データを統合・クリーニングして返す（ダッシュボードの主データソース）。
  * 直近2年（＝保存期間）より前の対象年月日の行は除外する。
+ * ※全社規模（60店舗・約17万行）では1回の応答が大きくなりすぎるため、画面は下の
+ *   getDashboardPlan / getDashboardChunk（店舗ごとに分割・圧縮）で取得する。
+ *   この関数は互換用に残している。
  */
 function getDashboardData() {
   try {
     const ctx = getCurrentUserContext_();
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const shopList = filterShopsByScope_(getShopList_(), ctx);
-    const result = [];
-    const errorTokens = ['#NUM!', '#REF!', '#N/A', '#VALUE!', '#DIV/0!', '#NAME?', '#NULL!', '#ERROR!'];
-    const lastCol = HEADERS_MAIN.length;
     const cutoffDate = getRetentionCutoffDate_();
-
+    let result = [];
     shopList.forEach(function (shop) {
-      const sheet = ss.getSheetByName(shop.name);
-      if (!sheet) return;
-
-      const lastRow = sheet.getLastRow();
-      if (lastRow < 2) return;
-
-      const values = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
-
-      for (let i = 0; i < values.length; i++) {
-        const row = values[i];
-
-        const isBlank = row.every(function (cell) { return cell === '' || cell === null; });
-        if (isBlank) continue;
-
-        const hasError = row.some(function (cell) {
-          return typeof cell === 'string' && errorTokens.indexOf(cell) !== -1;
-        });
-        if (hasError) continue;
-
-        // 保存期間（直近2年）より前のデータは対象外
-        const targetDate = normalizeTargetDate_(row[4]); // 対象年月日（5列目）
-        if (targetDate && targetDate < cutoffDate) continue;
-
-        const obj = {};
-        for (let c = 0; c < lastCol; c++) {
-          // 画面で使わない列は送らない（件数が増えるほど通信量に効く）
-          if (PAYLOAD_SKIP_COLUMNS[HEADERS_MAIN[c]]) continue;
-          obj[HEADERS_MAIN[c]] = serializeCellValue_(row[c]);
-        }
-        obj['対象年月日'] = targetDate; // 画面側の日付絞り込み・アラート判定もYYYYMMDD前提のため、そろえた値を渡す
-        obj.__sheetName = shop.name;
-        obj.__rowIndex = i + 2; // スプレッドシート上の物理行番号（2行目スタート）
-        obj['エリア名'] = shop.area || ''; // 店舗マスタのエリア区分（店舗単位の属性のため行データ自体には持たない）
-
-        result.push(obj);
-      }
+      result = result.concat(collectDashboardRowsForShop_(ss, shop, cutoffDate));
     });
-
     return { success: true, data: result, count: result.length, userContext: ctx };
+  } catch (err) {
+    return { success: false, error: errorForClient_(err) };
+  }
+}
+
+// ---- ダッシュボードデータの分割取得（全社規模でも1回の通信を小さく保つ） ---------------
+// 60店舗×2年分（約17万行）を1回で返すと約100MBになり、通信・画面ともに止まってしまうため、
+// 閲覧できる店舗を数店舗ずつのグループに分け、グループごとに「列名＋値の配列」を
+// gzip圧縮して返す（約1/30）。画面側で順番どおりに組み立て直す。
+const DASHBOARD_CHUNK_SHOPS = 5;      // 1回の取得で読む店舗数
+const DASHBOARD_CHUNK_MAX_SHOPS = 12; // 1回の取得で受け付ける店舗数の上限（不正な呼び出し対策）
+
+/** 画面へ送る列（HEADERS_MAIN から送らない列を除き、末尾に内部用の3項目を付ける） */
+function dashboardColumns_() {
+  const cols = [];
+  HEADERS_MAIN.forEach(function (h) { if (!PAYLOAD_SKIP_COLUMNS[h]) cols.push(h); });
+  return cols.concat(['__sheetName', '__rowIndex', 'エリア名']);
+}
+
+/** 閲覧できる店舗を取得グループに分けて返す。画面はこの順に getDashboardChunk を呼ぶ。 */
+function getDashboardPlan() {
+  try {
+    const ctx = getCurrentUserContext_();
+    const names = filterShopsByScope_(getShopList_(), ctx).map(function (s) { return s.name; });
+    const groups = [];
+    for (let i = 0; i < names.length; i += DASHBOARD_CHUNK_SHOPS) {
+      groups.push(names.slice(i, i + DASHBOARD_CHUNK_SHOPS));
+    }
+    return { success: true, groups: groups, shopCount: names.length };
+  } catch (err) {
+    return { success: false, error: errorForClient_(err) };
+  }
+}
+
+/**
+ * 指定した店舗（閲覧できる範囲のみ）の行を返す。
+ * @param {string[]} shopNames 店舗シート名（getDashboardPlan の1グループ）
+ * @param {boolean} useGzip trueなら gzip＋base64 の文字列で返す（画面側が解凍できる場合）
+ */
+function getDashboardChunk(shopNames, useGzip) {
+  try {
+    if (!Array.isArray(shopNames) || shopNames.length === 0 || shopNames.length > DASHBOARD_CHUNK_MAX_SHOPS ||
+        shopNames.some(function (n) { return typeof n !== 'string'; })) {
+      throw new Error('取得する店舗の指定が正しくありません。');
+    }
+    const ctx = getCurrentUserContext_();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const allShops = getShopList_();
+    const cutoffDate = getRetentionCutoffDate_();
+    const cols = dashboardColumns_();
+    let rows = [];
+    shopNames.forEach(function (name) {
+      const shopName = String(name);
+      assertShopInScope_(shopName, allShops, ctx); // 範囲外・存在しない店舗は拒否
+      const shop = allShops.filter(function (s) { return s.name === shopName; })[0];
+      collectDashboardRowsForShop_(ss, shop, cutoffDate).forEach(function (obj) {
+        rows.push(cols.map(function (c) { return obj[c]; }));
+      });
+    });
+    if (useGzip) {
+      const json = JSON.stringify(rows);
+      const gz = Utilities.gzip(Utilities.newBlob(json, 'application/json', 'rows.json'));
+      return { success: true, count: rows.length, cols: cols, encoding: 'gzip-base64', payload: Utilities.base64Encode(gz.getBytes()) };
+    }
+    return { success: true, count: rows.length, cols: cols, encoding: 'json', rows: rows };
   } catch (err) {
     return { success: false, error: errorForClient_(err) };
   }
@@ -1312,7 +1388,7 @@ function lockedEndpoint_(fn) {
  * 「is not a function」という分かりにくいエラーになるため、
  * 画面側から版数を確認できるようにしている。
  */
-const SERVER_VERSION = '2026-09-30';
+const SERVER_VERSION = '2026-10-01';
 
 /**
  * サーバー側の版数を返す。画面側は、自分が期待する版数と一致するかを起動時に確認する。
@@ -3981,6 +4057,8 @@ function serializeCellValue_(value) {
     return Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd');
   }
   if (value === null || value === undefined) return '';
+  // NaN・無限大は画面への受け渡しで失われる（null になる）ため空にする
+  if (typeof value === 'number' && !isFinite(value)) return '';
   return value;
 }
 

@@ -424,7 +424,7 @@ footer.doc-foot {
       <span class="meta-chip">対象年度　<b>46期（2025年11月〜2026年10月）</b></span>
       <span class="meta-chip">上期　<b>11月〜4月</b>　／　下期　<b>5月〜10月</b></span>
       <span class="meta-chip">ログイン　<b>Googleアカウント（自動判定）</b></span>
-      <span class="meta-chip">対応バージョン　<b>2026-09-30</b></span>
+      <span class="meta-chip">対応バージョン　<b>2026-10-01</b></span>
     </div>
   </div>
 </div>
@@ -754,6 +754,14 @@ footer.doc-foot {
       <div class="callout tip">
         <span class="glyph">i</span>
         <p><strong>未登録の営業所コード・社員は自動的に仮登録されます。</strong>CSV中に店舗マスタに無い営業所コードがあれば「未設定(コード)」という仮の店舗名で自動登録され、未登録の社員番号・社員名も権限「一般」で自動登録されます。店舗名は登録後、下記の店舗管理から正式名称に変更してください。店舗・スタッフの登録は、基本的にこのCSVインポートによる自動登録を前提としています。</p>
+      </div>
+      <div class="callout tip">
+        <span class="glyph">i</span>
+        <p><strong>対象年月日が正しい日付でない行は取り込まれません。</strong>「20261340」のように実在しない日付や、日付でない文字の行は、取り込まずに件数だけ結果へ表示します（全角数字の日付は自動で半角にそろえて取り込みます）。表示が出たときは元のCSVの該当行をご確認ください。</p>
+      </div>
+      <div class="callout tip">
+        <span class="glyph">i</span>
+        <p><strong>「=」「+」「-」「@」で始まる文字も、数式にならずそのまま文字として保存されます。</strong>CSVの内容や画面での入力（詳細・ACT内容など）に「=」や「-」で始まる文章があっても、スプレッドシートの数式として実行されることはありません（シート内の情報が外部へ送られるのを防ぐための安全策です）。</p>
       </div>
       <div class="callout tip">
         <span class="glyph">i</span>

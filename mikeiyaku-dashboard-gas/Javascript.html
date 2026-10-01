@@ -216,7 +216,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // 画面側が前提としているサーバー（Code.gs）の版数。Code.gs の SERVER_VERSION と対で更新する。
-const REQUIRED_SERVER_VERSION = '2026-09-30';
+const REQUIRED_SERVER_VERSION = '2026-10-01';
 
 /**
  * Code.gs が画面と同じ版数まで更新されているか確認する。
@@ -307,6 +307,94 @@ function onRunInitialSetup() {
     .runInitialSetup();
 }
 
+// ---- ダッシュボードデータの取得（店舗グループごとに分割・圧縮して取得） -----------------
+// 全社規模（60店舗×2年分で約17万行）を1回で受け取ると約100MBとなり止まってしまうため、
+// サーバーが返す店舗グループごとに、gzip圧縮（ブラウザが解凍できる場合）した小さな応答で取得し、
+// 順番どおりに1つの配列へ組み立てる。
+const DASHBOARD_FETCH_CONCURRENCY = 3;   // 同時に取得するグループ数
+const DASHBOARD_FETCH_RETRIES = 1;       // 通信の一時エラー時の再試行回数
+
+function canGunzipInBrowser() {
+  return typeof DecompressionStream === 'function' && typeof Blob === 'function' && typeof Response === 'function' && typeof atob === 'function';
+}
+
+/** サーバーの1グループぶんの応答を「行オブジェクトの配列」に戻す（Promiseを返す） */
+function decodeDashboardChunk(res) {
+  const toObjects = function (rows) {
+    const cols = res.cols;
+    const out = new Array(rows.length);
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const o = {};
+      for (let j = 0; j < cols.length; j++) o[cols[j]] = row[j];
+      out[i] = o;
+    }
+    return out;
+  };
+  if (res.encoding === 'json') return Promise.resolve(toObjects(res.rows));
+  const bin = atob(res.payload);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return new Response(stream).text().then(function (text) { return toObjects(JSON.parse(text)); });
+}
+
+/**
+ * ダッシュボードの全行を取得する。callback(rows) で成功、callback(null, エラー文) で失敗。
+ * 失敗時は呼び出し側が今までの内容（allDataCache）をそのまま使い続けられるよう、途中結果は渡さない。
+ */
+function fetchDashboardRows(callback) {
+  let finished = false;
+  const finish = function (rows, message) {
+    if (finished) return;
+    finished = true;
+    callback(rows, message);
+  };
+  google.script.run
+    .withSuccessHandler(function (plan) {
+      if (!plan || !plan.success) { finish(null, plan ? plan.error : '不明なエラー'); return; }
+      const groups = plan.groups || [];
+      if (groups.length === 0) { finish([]); return; }
+      const useGzip = canGunzipInBrowser();
+      const results = new Array(groups.length);
+      let next = 0, inflight = 0, done = 0;
+      const pump = function () {
+        while (!finished && inflight < DASHBOARD_FETCH_CONCURRENCY && next < groups.length) {
+          fetchOne(next++, 0);
+        }
+      };
+      const fetchOne = function (idx, attempt) {
+        inflight++;
+        const fail = function (message) {
+          inflight--;
+          if (attempt < DASHBOARD_FETCH_RETRIES) { fetchOne(idx, attempt + 1); return; }
+          finish(null, message);
+        };
+        google.script.run
+          .withSuccessHandler(function (res) {
+            if (!res || !res.success) { fail(res ? res.error : '不明なエラー'); return; }
+            // 展開中の例外（壊れたデータ等）も必ず失敗として扱えるよう、Promiseの中で実行する
+            Promise.resolve().then(function () { return decodeDashboardChunk(res); }).then(function (rows) {
+              results[idx] = rows;
+              inflight--; done++;
+              if (done === groups.length) {
+                finish([].concat.apply([], results));
+              } else {
+                pump();
+              }
+            }).catch(function (e) { fail('データの展開に失敗しました: ' + (e && e.message ? e.message : e)); });
+          })
+          .withFailureHandler(function (err) { fail('通信エラー（getDashboardChunk）: ' + (err && err.message ? err.message : err)); })
+          .getDashboardChunk(groups[idx], useGzip);
+      };
+      pump();
+    })
+    .withFailureHandler(function (err) {
+      finish(null, '通信エラー（getDashboardPlan）: ' + (err && err.message ? err.message : err));
+    })
+    .getDashboardPlan();
+}
+
 function loadAllData() {
   showLoading(true);
   loadCompletedCount = 0;
@@ -321,25 +409,19 @@ function loadAllData() {
   renderUndoRedoButtons();
   renderPendingBar();
 
-  google.script.run
-    .withSuccessHandler(function (res) {
-      try {
-        if (res && res.success) {
-          allDataCache = res.data;
-        } else {
-          showToast('ダッシュボードデータの取得に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
-        }
-      } catch (e) {
-        showToast('ダッシュボードデータの処理中にエラーが発生しました: ' + e.message, 'error');
-      } finally {
-        onLoadStepComplete();
+  fetchDashboardRows(function (rows, errorMessage) {
+    try {
+      if (rows) {
+        allDataCache = rows;
+      } else {
+        showToast('ダッシュボードデータの取得に失敗しました: ' + errorMessage, 'error');
       }
-    })
-    .withFailureHandler(function (err) {
-      showToast('通信エラー（getDashboardData）: ' + err.message, 'error');
+    } catch (e) {
+      showToast('ダッシュボードデータの処理中にエラーが発生しました: ' + e.message, 'error');
+    } finally {
       onLoadStepComplete();
-    })
-    .getDashboardData();
+    }
+  });
 
   google.script.run
     .withSuccessHandler(function (res) {
