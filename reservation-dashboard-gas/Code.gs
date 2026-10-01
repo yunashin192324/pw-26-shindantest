@@ -990,9 +990,32 @@ function findStaffCsvColumnIndex_(headerRow, matchFn) {
   return -1;
 }
 
+// ---- 人事データCSVからGoogleアカウント（スタッフ権限）も一括登録するための、任意列の見出し候補 ----
+// 列名はCSVの出力元によって異なりうるため、よくある表記を複数候補として扱う（大小文字・前後の記号は無視）。
+var STAFF_CSV_OPTIONAL_COLUMN_CANDIDATES = {
+  email: ['Googleアカウント', 'Google Workspaceアカウント', 'メールアドレス', 'メール', 'Eメール', 'E-mail', 'Email', 'mail'],
+  office: ['所属店舗', '配属店舗', '店舗'],
+  area: ['所属エリア', 'エリア'],
+  role: ['権限', '権限区分', '役職']
+};
+
+/** 任意列の見出しラベルを、候補リストのいずれかと一致するか判定する（大文字小文字・前後の■等の記号は無視）。 */
+function findOptionalStaffCsvColumn_(headerRow, candidates) {
+  for (var c = 0; c < headerRow.length; c++) {
+    var label = normalizeStaffCsvHeaderLabel_(headerRow[c]).replace(/^[■●◆□]+/, '').trim();
+    var labelLower = label.toLowerCase();
+    for (var i = 0; i < candidates.length; i++) {
+      if (label === candidates[i] || labelLower === candidates[i].toLowerCase()) return c;
+    }
+  }
+  return -1;
+}
+
 /**
  * 人事データCSVの先頭数行の中から、「■担当者NO」「社員名称」の2列がそろっている見出し行を探す。
  * 「■担当者NO」は先頭の■の有無を問わず「担当者NO」部分の一致で判定する。
+ * 同じ見出し行の中にGoogleアカウント・所属店舗・所属エリア・権限の列があれば、その列番号も合わせて返す
+ * （無ければ-1。これらは任意列のため、無くても「■担当者NO」「社員名称」だけで取り込みを続行できる）。
  */
 function detectStaffCsvHeaderRow_(matrix) {
   var scanLimit = Math.min(matrix.length, 5);
@@ -1000,17 +1023,52 @@ function detectStaffCsvHeaderRow_(matrix) {
     var codeIdx = findStaffCsvColumnIndex_(matrix[r], function (label) { return label.replace(/^■/, '').trim() === '担当者NO'; });
     var nameIdx = findStaffCsvColumnIndex_(matrix[r], function (label) { return label === '社員名称'; });
     if (codeIdx !== -1 && nameIdx !== -1) {
-      return { rowIndex: r, codeIdx: codeIdx, nameIdx: nameIdx };
+      return {
+        rowIndex: r,
+        codeIdx: codeIdx,
+        nameIdx: nameIdx,
+        emailIdx: findOptionalStaffCsvColumn_(matrix[r], STAFF_CSV_OPTIONAL_COLUMN_CANDIDATES.email),
+        officeIdx: findOptionalStaffCsvColumn_(matrix[r], STAFF_CSV_OPTIONAL_COLUMN_CANDIDATES.office),
+        areaIdx: findOptionalStaffCsvColumn_(matrix[r], STAFF_CSV_OPTIONAL_COLUMN_CANDIDATES.area),
+        roleIdx: findOptionalStaffCsvColumn_(matrix[r], STAFF_CSV_OPTIONAL_COLUMN_CANDIDATES.role)
+      };
     }
   }
   return null;
 }
 
 /**
+ * 人事データCSVの「権限」欄の表記を、本アプリの3段階権限（社員／所長・チーフ／マスタ権限）へ変換する。
+ * 安全のため、CSVの値が「マスタ」「管理者」等を含んでいても、ここでは絶対にマスタ権限へ昇格させない
+ * （マスタ権限はWebアプリの権限管理から手動でのみ付与する）。該当する場合はdowngradedをtrueで返す。
+ */
+function mapCsvRoleToAppRole_(raw) {
+  var s = String(raw || '').trim();
+  if (!s) return { role: ROLE_STAFF, downgraded: false, original: '' };
+  if (s.indexOf('マスタ') !== -1 || s.indexOf('管理者') !== -1 || s.indexOf('admin') !== -1) {
+    return { role: ROLE_STAFF, downgraded: true, original: s };
+  }
+  if (s.indexOf('所長') !== -1 || s.indexOf('チーフ') !== -1 || s.indexOf('店長') !== -1) {
+    return { role: ROLE_MANAGER, downgraded: false, original: s };
+  }
+  return { role: ROLE_STAFF, downgraded: false, original: s };
+}
+
+var EMAIL_PATTERN_ = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+/**
  * 人事データCSVを取り込み、担当者マスタ（担当者コード→氏名）へ一括反映する（マスタ権限のみ）。
  * ・CSVの「■担当者NO」列と「社員名称」列だけを使う（他の人事項目は読み捨てる）。
  * ・担当者マスタに同じ担当者コードが既にあれば氏名を上書きし、無ければ新規追加する。
  * ・CSV内に同じ担当者コードが複数行ある場合は、CSV内の最後の行を採用する。
+ *
+ * CSVにGoogleアカウント（メールアドレス）の列も含まれている場合は、あわせて「スタッフ権限」への
+ * 一括登録も行う（所属店舗・所属エリア・権限の列があれば、それも読み取って設定する）。
+ * ・スタッフ権限に同じGoogleアカウントが既にあれば氏名・所属店舗・所属エリアだけを更新し、
+ *   権限（社員／所長・チーフ／マスタ権限）は上書きしない（システムの権限付与は常に手動が優先）。
+ * ・新規のGoogleアカウントは、CSVの「権限」欄から社員／所長・チーフを判定して登録する。
+ *   「マスタ権限」に相当する表記があっても、安全のため自動ではマスタ権限を付与せず社員として登録する
+ *   （マスタ権限は「権限管理（スタッフ権限）」画面から手動でのみ付与する）。
  */
 function importStaffNameCsv(csvText, fileName) {
   assertMaster_();
@@ -1031,9 +1089,11 @@ function importStaffNameCsv(csvText, fileName) {
   if (!headerInfo) {
     throw new Error('CSVのヘッダー行から「■担当者NO」「社員名称」の列を検出できませんでした。見出し行をご確認ください。');
   }
+  var accountsDetected = headerInfo.emailIdx !== -1;
 
   var csvMap = {}; // 担当者コード → 社員名称（CSV内で重複があれば最後の行を採用）
-  var skipped = 0;
+  var csvAccounts = {}; // Googleアカウント（小文字）→ アカウント情報（CSV内で重複があれば最後の行を採用）
+  var skipped = 0, accountsSkipped = 0;
   for (var r = headerInfo.rowIndex + 1; r < matrix.length; r++) {
     var row = matrix[r];
     var rowIsBlank = !row || row.every(function (v) { return v === undefined || String(v).trim() === ''; });
@@ -1042,6 +1102,19 @@ function importStaffNameCsv(csvText, fileName) {
     var name = String(row[headerInfo.nameIdx] || '').trim();
     if (!code || !name) { skipped++; continue; }
     csvMap[code] = name;
+
+    if (accountsDetected) {
+      var email = String(row[headerInfo.emailIdx] || '').trim().toLowerCase();
+      if (!email) { continue; }
+      if (!EMAIL_PATTERN_.test(email)) { accountsSkipped++; continue; }
+      csvAccounts[email] = {
+        email: email,
+        name: name,
+        office: headerInfo.officeIdx !== -1 ? String(row[headerInfo.officeIdx] || '').trim() : '',
+        area: headerInfo.areaIdx !== -1 ? String(row[headerInfo.areaIdx] || '').trim() : '',
+        roleRaw: headerInfo.roleIdx !== -1 ? String(row[headerInfo.roleIdx] || '').trim() : ''
+      };
+    }
   }
 
   var sheet = getOrCreateStaffNameSheet_();
@@ -1069,12 +1142,47 @@ function importStaffNameCsv(csvText, fileName) {
     sheet.getRange(startRow, 1, rowsToAppend.length, 2).setNumberFormat('@').setValues(rowsToAppend);
   }
 
+  var accountsAdded = 0, accountsUpdated = 0, accountsMasterDowngraded = 0;
+  if (accountsDetected) {
+    var staffSheet = getOrCreateStaffSheet_();
+    var existingByEmail = {};
+    getStaffAccessList().forEach(function (s) { existingByEmail[s.email.toLowerCase()] = s; });
+
+    var accountRowsToAppend = [];
+    Object.keys(csvAccounts).forEach(function (email) {
+      var acc = csvAccounts[email];
+      var existing = existingByEmail[email];
+      if (existing) {
+        if (existing.name !== acc.name || existing.office !== acc.office || existing.area !== acc.area) {
+          staffSheet.getRange(existing.rowIndex, 2, 1, 3).setValues([[acc.name, acc.office, acc.area]]);
+          accountsUpdated++;
+        }
+      } else {
+        var mapped = mapCsvRoleToAppRole_(acc.roleRaw);
+        if (mapped.downgraded) accountsMasterDowngraded++;
+        accountRowsToAppend.push([acc.email, acc.name, acc.office, acc.area, mapped.role]);
+        accountsAdded++;
+      }
+    });
+
+    if (accountRowsToAppend.length > 0) {
+      var accountStartRow = staffSheet.getLastRow() + 1;
+      staffSheet.getRange(accountStartRow, 1, accountRowsToAppend.length, 5).setValues(accountRowsToAppend);
+    }
+  }
+
   return {
     fileName: fileName || '',
     csvDataRows: matrix.length - headerInfo.rowIndex - 1,
     added: added,
     updated: updated,
     skipped: skipped,
-    list: getStaffNameList()
+    list: getStaffNameList(),
+    accountsDetected: accountsDetected,
+    accountsAdded: accountsAdded,
+    accountsUpdated: accountsUpdated,
+    accountsSkipped: accountsSkipped,
+    accountsMasterDowngraded: accountsMasterDowngraded,
+    staffAccessList: accountsDetected ? getStaffAccessList() : null
   };
 }

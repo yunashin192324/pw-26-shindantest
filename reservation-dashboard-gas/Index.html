@@ -602,7 +602,7 @@
         <div>
           <label class="text-xs font-semibold text-slate-500 block mb-1">CSVファイル</label>
           <input type="file" id="csv-file-input" accept=".csv,text/csv,text/plain" class="w-full border border-slate-300 rounded-lg text-sm p-2 bg-white">
-          <p class="text-xs text-slate-400 mt-1">文字コードは UTF-8（BOM付き可）を想定しています。</p>
+          <p class="text-xs text-slate-400 mt-1">文字コードはUTF-8・Shift_JISのどちらでも自動判定して取り込みます。</p>
           <p id="csv-file-summary" class="hidden text-xs text-slate-600 mt-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"></p>
         </div>
 
@@ -716,10 +716,15 @@
         <p class="text-xs text-slate-400">
           既に登録済みの担当者コードは氏名を上書き更新し、未登録の担当者コードは新規追加します。
         </p>
+        <p class="text-xs text-slate-400">
+          CSVに「Googleアカウント」等のメールアドレス列もある場合は、「権限管理（スタッフ権限）」への
+          一括登録もあわせて行います（所属店舗・所属エリア・権限の列があればそれも読み取ります。
+          既存アカウントの権限は変更せず、CSVの権限欄が「マスタ権限」相当でも安全のため自動では付与しません）。
+        </p>
         <div>
           <label class="text-xs font-semibold text-slate-500 block mb-1">人事データCSVファイル</label>
           <input type="file" id="staff-name-import-file-input" accept=".csv,text/csv,text/plain" class="w-full border border-slate-300 rounded-lg text-sm p-2 bg-white">
-          <p class="text-xs text-slate-400 mt-1">文字コードは UTF-8（BOM付き可）を想定しています。</p>
+          <p class="text-xs text-slate-400 mt-1">文字コードはUTF-8・Shift_JISのどちらでも自動判定して取り込みます。</p>
           <p id="staff-name-import-file-summary" class="hidden text-xs text-slate-600 mt-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"></p>
         </div>
 

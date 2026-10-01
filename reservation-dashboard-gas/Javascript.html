@@ -1675,16 +1675,39 @@ function stopStaffNameImportProgress_() {
 
 function onStaffNameImportSuccess(result) {
   var box = document.getElementById('staff-name-import-result');
-  box.innerHTML = [
+  var lines = [
     '<p class="font-semibold text-emerald-700"><i class="fa-solid fa-circle-check"></i> 取り込みが完了しました</p>',
     '<p>CSVのデータ行数：' + formatNumber(result.csvDataRows) + ' 行</p>',
-    '<p>新規登録：<b>' + formatNumber(result.added) + '</b> 件</p>',
-    '<p>氏名を更新：<b>' + formatNumber(result.updated) + '</b> 件</p>',
+    '<p>担当者マスタ：新規登録 <b>' + formatNumber(result.added) + '</b> 件／氏名を更新 <b>' + formatNumber(result.updated) + '</b> 件</p>',
     '<p>担当者NO・社員名称が空欄などのためスキップ：' + formatNumber(result.skipped) + ' 件</p>'
-  ].join('');
+  ];
+  if (result.accountsDetected) {
+    lines.push(
+      '<p class="mt-2 pt-2 border-t border-slate-200 font-semibold text-slate-700">Googleアカウント（スタッフ権限）も検出しました</p>',
+      '<p>スタッフ権限：新規登録 <b>' + formatNumber(result.accountsAdded) + '</b> 件／氏名・所属を更新 <b>' + formatNumber(result.accountsUpdated) + '</b> 件</p>'
+    );
+    if (result.accountsSkipped > 0) {
+      lines.push('<p>メールアドレスの形式が不正なためスキップ：' + formatNumber(result.accountsSkipped) + ' 件</p>');
+    }
+    if (result.accountsMasterDowngraded > 0) {
+      lines.push(
+        '<p class="text-amber-700"><i class="fa-solid fa-triangle-exclamation"></i> ' +
+        formatNumber(result.accountsMasterDowngraded) +
+        ' 件はCSVの権限欄が「マスタ権限」相当でしたが、安全のため自動では付与せず「社員」として登録しました。' +
+        '必要な場合は「権限管理（スタッフ権限）」から手動でマスタ権限に変更してください。</p>'
+      );
+    }
+    lines.push('<p class="text-slate-500">既存のGoogleアカウントは氏名・所属店舗・所属エリアのみ更新し、権限は変更していません。</p>');
+  } else {
+    lines.push('<p class="text-slate-500">CSVにGoogleアカウント（メールアドレス）の列が見つからなかったため、スタッフ権限への登録は行っていません。</p>');
+  }
+  box.innerHTML = lines.join('');
   box.classList.remove('hidden');
-  showToast('人事データCSVを取り込みました（新規 ' + result.added + ' 件・更新 ' + result.updated + ' 件）', 'success');
+  showToast('人事データCSVを取り込みました（担当者マスタ：新規 ' + result.added + ' 件・更新 ' + result.updated + ' 件）', 'success');
   renderStaffNameList(result.list);
+  if (result.accountsDetected && result.staffAccessList) {
+    renderStaffList(result.staffAccessList);
+  }
   document.getElementById('btn-submit-staff-name-import').disabled = false;
 }
 

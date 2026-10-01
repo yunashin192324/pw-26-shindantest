@@ -2015,6 +2015,24 @@ function parseSimpleCsv(text){
 function normalizeStaffCsvHeaderLabel(raw){
   return String(raw === null || raw === undefined ? '' : raw).replace(/^﻿/, '').trim();
 }
+// 人事データCSVからGoogleアカウント（スタッフ権限）も一括登録するための、任意列の見出し候補。
+// 列名はCSVの出力元によって異なりうるため、よくある表記を複数候補として扱う（大小文字・前後の記号は無視）。
+var STAFF_CSV_OPTIONAL_COLUMN_CANDIDATES = {
+  email: ['Googleアカウント', 'Google Workspaceアカウント', 'メールアドレス', 'メール', 'Eメール', 'E-mail', 'Email', 'mail'],
+  office: ['所属店舗', '配属店舗', '店舗'],
+  area: ['所属エリア', 'エリア'],
+  role: ['権限', '権限区分', '役職']
+};
+function findOptionalStaffCsvColumn(headerRow, candidates){
+  for (var c = 0; c < headerRow.length; c++){
+    var label = normalizeStaffCsvHeaderLabel(headerRow[c]).replace(/^[■●◆□]+/, '').trim();
+    var labelLower = label.toLowerCase();
+    for (var i = 0; i < candidates.length; i++){
+      if (label === candidates[i] || labelLower === candidates[i].toLowerCase()) return c;
+    }
+  }
+  return -1;
+}
 function detectStaffCsvHeaderRow(matrix){
   var scanLimit = Math.min(matrix.length, 5);
   for (var r = 0; r < scanLimit; r++){
@@ -2024,10 +2042,27 @@ function detectStaffCsvHeaderRow(matrix){
       if (codeIdx === -1 && label.replace(/^■/, '').trim() === '担当者NO') codeIdx = c;
       if (nameIdx === -1 && label === '社員名称') nameIdx = c;
     }
-    if (codeIdx !== -1 && nameIdx !== -1) return { rowIndex: r, codeIdx: codeIdx, nameIdx: nameIdx };
+    if (codeIdx !== -1 && nameIdx !== -1){
+      return {
+        rowIndex: r, codeIdx: codeIdx, nameIdx: nameIdx,
+        emailIdx: findOptionalStaffCsvColumn(matrix[r], STAFF_CSV_OPTIONAL_COLUMN_CANDIDATES.email),
+        officeIdx: findOptionalStaffCsvColumn(matrix[r], STAFF_CSV_OPTIONAL_COLUMN_CANDIDATES.office),
+        areaIdx: findOptionalStaffCsvColumn(matrix[r], STAFF_CSV_OPTIONAL_COLUMN_CANDIDATES.area),
+        roleIdx: findOptionalStaffCsvColumn(matrix[r], STAFF_CSV_OPTIONAL_COLUMN_CANDIDATES.role)
+      };
+    }
   }
   return null;
 }
+/** CSVの「権限」欄の表記を3段階権限へ変換する。安全のため、CSVの値がマスタ相当でも自動ではマスタ権限にしない。 */
+function mapCsvRoleToAppRole(raw){
+  var s = String(raw || '').trim();
+  if (!s) return { role: '社員', downgraded: false };
+  if (s.indexOf('マスタ') !== -1 || s.indexOf('管理者') !== -1 || s.indexOf('admin') !== -1) return { role: '社員', downgraded: true };
+  if (s.indexOf('所長') !== -1 || s.indexOf('チーフ') !== -1 || s.indexOf('店長') !== -1) return { role: '所長・チーフ', downgraded: false };
+  return { role: '社員', downgraded: false };
+}
+var EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 function openStaffNameImportModal(){
   staffNameImportSelectedText = null;
   document.getElementById('staff-name-import-file-input').value = '';
@@ -2108,13 +2143,25 @@ function finishStaffNameImportDemo(){
     document.getElementById('btn-submit-staff-name-import').disabled = false;
     return;
   }
-  var csvMap = {}, skipped = 0;
+  var accountsDetected = headerInfo.emailIdx !== -1;
+  var csvMap = {}, csvAccounts = {}, skipped = 0, accountsSkipped = 0;
   for (var r = headerInfo.rowIndex + 1; r < matrix.length; r++){
     var row = matrix[r];
     var code = String(row[headerInfo.codeIdx] || '').trim();
     var name = String(row[headerInfo.nameIdx] || '').trim();
     if (!code || !name){ skipped++; continue; }
     csvMap[code] = name;
+    if (accountsDetected){
+      var email = String(row[headerInfo.emailIdx] || '').trim().toLowerCase();
+      if (!email) continue;
+      if (!EMAIL_PATTERN.test(email)){ accountsSkipped++; continue; }
+      csvAccounts[email] = {
+        email: email, name: name,
+        office: headerInfo.officeIdx !== -1 ? String(row[headerInfo.officeIdx] || '').trim() : '',
+        area: headerInfo.areaIdx !== -1 ? String(row[headerInfo.areaIdx] || '').trim() : '',
+        roleRaw: headerInfo.roleIdx !== -1 ? String(row[headerInfo.roleIdx] || '').trim() : ''
+      };
+    }
   }
   var existingByCode = {};
   STATE.staffNameList.forEach(function(s){ existingByCode[s.code] = s; });
@@ -2133,14 +2180,54 @@ function finishStaffNameImportDemo(){
     }
   });
   renderStaffNameList();
-  box.innerHTML =
-    '<p style="color:var(--emerald-700); font-weight:600;">✅ 取り込みが完了しました</p>' +
-    '<p>CSVのデータ行数：' + formatNumber(matrix.length - headerInfo.rowIndex - 1) + ' 行</p>' +
-    '<p>新規登録：<b>' + formatNumber(added) + '</b> 件</p>' +
-    '<p>氏名を更新：<b>' + formatNumber(updated) + '</b> 件</p>' +
-    '<p>担当者NO・社員名称が空欄などのためスキップ：' + formatNumber(skipped) + ' 件</p>';
+
+  var accountsAdded = 0, accountsUpdated = 0, accountsMasterDowngraded = 0;
+  if (accountsDetected){
+    var existingByEmail = {};
+    STATE.staffList.forEach(function(s){ existingByEmail[s.email.toLowerCase()] = s; });
+    Object.keys(csvAccounts).forEach(function(email){
+      var acc = csvAccounts[email];
+      var existing = existingByEmail[email];
+      if (existing){
+        if (existing.name !== acc.name || existing.office !== acc.office || existing.area !== acc.area){
+          existing.name = acc.name; existing.office = acc.office; existing.area = acc.area;
+          accountsUpdated++;
+        }
+      } else {
+        var mapped = mapCsvRoleToAppRole(acc.roleRaw);
+        if (mapped.downgraded) accountsMasterDowngraded++;
+        var rowIndex = Math.max.apply(null, STATE.staffList.map(function(s){return s.rowIndex;}).concat([1])) + 1;
+        var created = { rowIndex: rowIndex, email: acc.email, name: acc.name, office: acc.office, area: acc.area, role: mapped.role };
+        STATE.staffList.push(created);
+        existingByEmail[email] = created;
+        accountsAdded++;
+      }
+    });
+    renderStaffList();
+  }
+
+  var lines = [
+    '<p style="color:var(--emerald-700); font-weight:600;">✅ 取り込みが完了しました</p>',
+    '<p>CSVのデータ行数：' + formatNumber(matrix.length - headerInfo.rowIndex - 1) + ' 行</p>',
+    '<p>担当者マスタ：新規登録 <b>' + formatNumber(added) + '</b> 件／氏名を更新 <b>' + formatNumber(updated) + '</b> 件</p>',
+    '<p>担当者NO・社員名称が空欄などのためスキップ：' + formatNumber(skipped) + ' 件</p>'
+  ];
+  if (accountsDetected){
+    lines.push(
+      '<p style="margin-top:8px; padding-top:8px; border-top:1px solid var(--slate-200); font-weight:600;">Googleアカウント（スタッフ権限）も検出しました</p>',
+      '<p>スタッフ権限：新規登録 <b>' + formatNumber(accountsAdded) + '</b> 件／氏名・所属を更新 <b>' + formatNumber(accountsUpdated) + '</b> 件</p>'
+    );
+    if (accountsSkipped > 0) lines.push('<p>メールアドレスの形式が不正なためスキップ：' + formatNumber(accountsSkipped) + ' 件</p>');
+    if (accountsMasterDowngraded > 0){
+      lines.push('<p style="color:var(--amber-700);">⚠ ' + formatNumber(accountsMasterDowngraded) + ' 件はCSVの権限欄が「マスタ権限」相当でしたが、安全のため「社員」として登録しました。必要な場合は「権限管理（スタッフ権限）」から手動で変更してください。</p>');
+    }
+    lines.push('<p class="muted">既存のGoogleアカウントは氏名・所属店舗・所属エリアのみ更新し、権限は変更していません。</p>');
+  } else {
+    lines.push('<p class="muted">CSVにGoogleアカウント（メールアドレス）の列が見つからなかったため、スタッフ権限への登録は行っていません。</p>');
+  }
+  box.innerHTML = lines.join('');
   box.style.display = 'block';
-  showToast('人事データCSVを取り込みました（新規 ' + added + ' 件・更新 ' + updated + ' 件）', 'success');
+  showToast('人事データCSVを取り込みました（担当者マスタ：新規 ' + added + ' 件・更新 ' + updated + ' 件）', 'success');
   document.getElementById('btn-submit-staff-name-import').disabled = false;
 }
 function bindStaffNameImportEvents(){
