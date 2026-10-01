@@ -1718,7 +1718,12 @@ function importParsedRows_(rows) {
     // （対象年月日の列だけを見て判定するため、退避対象が無い日はほぼ負荷がかからない）
     let archiveResult = null;
     try {
-      archiveResult = archiveOldData_(ss);
+      if (executionElapsedMs_() > ARCHIVE_AFTER_IMPORT_MAX_START_MS) {
+        // 取り込みに時間がかかった回は、6分の制限を超えないようアーカイブを次回以降に回す
+        archiveResult = { success: true, archivedCount: 0, periods: [], skippedForTime: true };
+      } else {
+        archiveResult = archiveOldData_(ss);
+      }
     } catch (archiveErr) {
       // アーカイブに失敗してもCSV取り込み自体は成功として扱う（次回の取り込み時に再試行される）
       archiveResult = { success: false, error: archiveErr.message };
@@ -2382,6 +2387,16 @@ function removeDuplicateStaffRows_(ss, dryRun) {
 const ARCHIVE_SPREADSHEET_MAP_PROPERTY_KEY = 'ARCHIVE_SPREADSHEET_IDS_BY_PERIOD';
 // 1回の実行にかける時間の上限（Apps Scriptの実行時間制限（6分）に対して余裕を持たせる）
 const ARCHIVE_TIME_BUDGET_MS = 4.5 * 60 * 1000;
+// CSV取り込みのついでにアーカイブを走らせるのは、取り込みまでに使った時間が短いときだけ
+// （同じ1回の実行の中で合計6分の制限を超えないため）
+const ARCHIVE_AFTER_IMPORT_MAX_START_MS = 2.5 * 60 * 1000;
+
+// この実行（Webアプリの1回の呼び出し）が始まってからの経過時間を測る基準。
+// Apps Scriptは呼び出しのたびにこのファイルを読み込み直すため、ここが実行の開始時刻になる。
+const EXECUTION_STARTED_AT_MS = Date.now();
+function executionElapsedMs_() {
+  return Date.now() - EXECUTION_STARTED_AT_MS;
+}
 
 /**
  * 保存期間（直近2年）を過ぎたデータを、対象年月日が属する期（11月始まり・10月終わり）
@@ -2497,7 +2512,6 @@ function buildPeriodBreakdown_(countsByPeriod) {
 function archiveOldData_(ss) {
   const cutoff = getRetentionCutoffDate_();
   const shops = getShopList_();
-  const startTime = Date.now();
   const perShopCounts = {};
   const countsByPeriod = {};
   let totalArchived = 0;
@@ -2508,7 +2522,8 @@ function archiveOldData_(ss) {
   const archiveRunCache = { map: null, spreadsheets: {} };
 
   for (let i = 0; i < shops.length; i++) {
-    if (Date.now() - startTime > ARCHIVE_TIME_BUDGET_MS) {
+    // 取り込みなど、アーカイブより前に使った時間も含めた「この実行の経過時間」で打ち切る
+    if (executionElapsedMs_() > ARCHIVE_TIME_BUDGET_MS) {
       remainingShops.push(shops[i].name);
       continue;
     }
