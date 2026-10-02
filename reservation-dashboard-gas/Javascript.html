@@ -249,8 +249,7 @@ function populateFilterOptions() {
   fillMultiSelect_('dash-filter-destination', distinctValues_('destination'));
 
   fillMultiSelect_('data-filter-area', distinctValues_('area'));
-  fillMultiSelect_('data-filter-office', distinctValues_('office'));
-  fillMultiSelect_('data-filter-staff', distinctValues_('staff'));
+  updateDataOfficeStaffFilterOptions_();
   fillMultiSelectWithLabels_('data-filter-insurance-status', STATE.ancillaryStatusOptions);
   fillMultiSelectWithLabels_('data-filter-wifi-status', STATE.ancillaryStatusOptions);
   fillMultiSelectWithLabels_('data-filter-tavica-status', STATE.ancillaryStatusOptions);
@@ -269,6 +268,42 @@ function toSet_(arr) {
   var s = {};
   arr.forEach(function (v) { s[v] = true; });
   return s;
+}
+
+/** 行配列から、指定キーの重複無し値一覧を五十音順で返す（distinctValues_のSTATE.rows全体版に対して、絞り込み済みの行集合に使う）。 */
+function distinctValuesFromRows_(rows, key) {
+  var set = {};
+  rows.forEach(function (r) {
+    var v = r[key];
+    if (v !== null && v !== undefined && v !== '') set[v] = true;
+  });
+  return Object.keys(set).sort(function (a, b) { return a.localeCompare(b, 'ja'); });
+}
+
+/** 選択肢を入れ替えつつ、入れ替え後も有効な選択済みの値は選択状態を維持する（連動フィルタ用）。 */
+function fillMultiSelectPreserving_(id, values, labelFn) {
+  var el = document.getElementById(id);
+  var prevSelected = toSet_(Array.from(el.selectedOptions).map(function (o) { return o.value; }));
+  el.innerHTML = values.map(function (v) {
+    var label = labelFn ? labelFn(v) : v;
+    var sel = (prevSelected && prevSelected[v]) ? ' selected' : '';
+    return '<option value="' + escapeHtml(v) + '"' + sel + '>' + escapeHtml(label) + '</option>';
+  }).join('');
+}
+
+/**
+ * 予約データ一覧の「店舗」「担当者」フィルタの選択肢を、現在の「エリア」「店舗」の選択状況に応じて絞り込む。
+ * エリアを選ぶと同じエリアの店舗だけに、店舗を選ぶと同じ店舗の担当者だけに選択肢が絞り込まれる。
+ * 担当者の表示名は担当者マスタで氏名に変換する（コードのまま出さない）。
+ */
+function updateDataOfficeStaffFilterOptions_() {
+  var areaSet = toSet_(getSelectedValues_('data-filter-area'));
+  var rowsInArea = areaSet ? STATE.rows.filter(function (r) { return areaSet[r.area]; }) : STATE.rows;
+  fillMultiSelectPreserving_('data-filter-office', distinctValuesFromRows_(rowsInArea, 'office'));
+
+  var officeSet = toSet_(getSelectedValues_('data-filter-office'));
+  var rowsInOffice = officeSet ? rowsInArea.filter(function (r) { return officeSet[r.office]; }) : rowsInArea;
+  fillMultiSelectPreserving_('data-filter-staff', distinctValuesFromRows_(rowsInOffice, 'staff'), formatStaffName_);
 }
 
 // ============================================================================
@@ -362,10 +397,8 @@ function upsertChart_(canvasId, config) {
 
 function renderCharts() {
   var rows = STATE.dashFiltered;
-  renderMonthlyChart_(rows);
-  renderStsChart_(rows);
   renderCategoryChart_(rows);
-  renderTopChart_('chart-nationality', rows, 'nationality');
+  renderDestinationComboChart_(rows);
   renderTopChart_('chart-carrier', rows, 'carrier');
   renderAncillaryCombinedChart_(rows);
   renderAncillaryChart_('chart-insurance', rows, 'insuranceQty', '保険加入数');
@@ -437,37 +470,6 @@ function renderAncillaryBreakdown_(rows) {
   });
 }
 
-function renderMonthlyChart_(rows) {
-  var field = getDashDateField_();
-  var byMonth = {};
-  rows.forEach(function (r) {
-    var v = r[field];
-    if (!v) return;
-    var month = v.slice(0, 7);
-    if (!byMonth[month]) byMonth[month] = { count: 0, sales: 0 };
-    byMonth[month].count++;
-    if (typeof r.salesAmount === 'number') byMonth[month].sales += r.salesAmount;
-  });
-  var months = Object.keys(byMonth).sort();
-  upsertChart_('chart-monthly', {
-    data: {
-      labels: months,
-      datasets: [
-        { type: 'bar', label: '予約件数', data: months.map(function (m) { return byMonth[m].count; }), backgroundColor: '#93c5fd', yAxisID: 'y' },
-        { type: 'line', label: '売上合計', data: months.map(function (m) { return byMonth[m].sales; }), borderColor: '#1d4ed8', backgroundColor: '#1d4ed8', yAxisID: 'y1', tension: 0.25 }
-      ]
-    },
-    options: {
-      responsive: true,
-      interaction: { mode: 'index', intersect: false },
-      scales: {
-        y: { beginAtZero: true, title: { display: true, text: '件数' } },
-        y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: '売上(円)' } }
-      }
-    }
-  });
-}
-
 /** 保険・Wifi・TAViCA・キャンサポ共通：棒＝リスト数（月別件数）、折れ線＝加入・販売数（数量合計）。 */
 function renderAncillaryChart_(canvasId, rows, qtyKey, lineLabel) {
   var field = getDashDateField_();
@@ -502,16 +504,54 @@ function renderAncillaryChart_(canvasId, rows, qtyKey, lineLabel) {
   });
 }
 
-function renderStsChart_(rows) {
-  var map = countBy_(rows, 'sts');
-  var entries = topEntries_(map, 12);
-  upsertChart_('chart-sts', {
-    type: 'doughnut',
+/**
+ * 方面別（最終目的地）グラフ：棒＝方面ごとの予約件数（上位10）、折れ線＝同じ方面の
+ * 保険・Wifi・キャンサポ・TAViCA各付帯の販売数量。件数の多い方面トップ10に絞って表示する。
+ */
+function renderDestinationComboChart_(rows) {
+  var items = [
+    { qtyKey: 'insuranceQty', label: '保険', color: '#1d4ed8' },
+    { qtyKey: 'wifiQty', label: 'Wifi', color: '#f59e0b' },
+    { qtyKey: 'cansapoQty', label: 'キャンサポ', color: '#ec4899' },
+    { qtyKey: 'tavicaQty', label: 'TAViCA', color: '#8b5cf6' }
+  ];
+  var countMap = countBy_(rows, 'destination');
+  var topDestinations = topEntries_(countMap, 10).map(function (e) { return e[0]; });
+
+  var qtyByDestination = {};
+  topDestinations.forEach(function (d) {
+    qtyByDestination[d] = { insuranceQty: 0, wifiQty: 0, cansapoQty: 0, tavicaQty: 0 };
+  });
+  rows.forEach(function (r) {
+    var d = (r.destination === null || r.destination === undefined || r.destination === '') ? '(空欄)' : r.destination;
+    if (!qtyByDestination[d]) return;
+    items.forEach(function (it) {
+      if (typeof r[it.qtyKey] === 'number') qtyByDestination[d][it.qtyKey] += r[it.qtyKey];
+    });
+  });
+
+  upsertChart_('chart-destination', {
     data: {
-      labels: entries.map(function (e) { return e[0]; }),
-      datasets: [{ data: entries.map(function (e) { return e[1]; }), backgroundColor: CHART_COLORS }]
+      labels: topDestinations,
+      datasets: [
+        { type: 'bar', label: '予約件数', data: topDestinations.map(function (d) { return countMap[d]; }), backgroundColor: '#c7d2fe', yAxisID: 'y' }
+      ].concat(items.map(function (it) {
+        return {
+          type: 'line', label: it.label, data: topDestinations.map(function (d) { return qtyByDestination[d][it.qtyKey]; }),
+          borderColor: it.color, backgroundColor: it.color, yAxisID: 'y1', tension: 0.25
+        };
+      }))
     },
-    options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } },
+      scales: {
+        y: { beginAtZero: true, ticks: { precision: 0, font: { size: 9 } } },
+        y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { precision: 0, font: { size: 9 } } },
+        x: { ticks: { font: { size: 9 } } }
+      }
+    }
   });
 }
 
@@ -546,51 +586,32 @@ function renderTopChart_(canvasId, rows, key) {
   });
 }
 
-function buildOfficeRanking_(rows) {
-  var map = {};
-  rows.forEach(function (r) {
-    var office = r.office || '(未設定)';
-    if (!map[office]) map[office] = { office: office, count: 0, salesAmount: 0, paymentAmount: 0, daysSum: 0, daysN: 0 };
-    var b = map[office];
-    b.count++;
-    if (typeof r.salesAmount === 'number') b.salesAmount += r.salesAmount;
-    if (typeof r.paymentAmount === 'number') b.paymentAmount += r.paymentAmount;
-    if (typeof r.travelDays === 'number') { b.daysSum += r.travelDays; b.daysN++; }
-  });
-  return Object.keys(map).map(function (k) {
-    var b = map[k];
-    return {
-      office: b.office,
-      count: b.count,
-      salesAmount: b.salesAmount,
-      paymentAmount: b.paymentAmount,
-      paymentRate: b.salesAmount > 0 ? (b.paymentAmount / b.salesAmount * 100) : 0,
-      avgDays: b.daysN > 0 ? (b.daysSum / b.daysN) : 0
-    };
-  });
-}
-
+/** 営業所別ランキング：個人別サマリーと同じ集計（エリア・営業所・担当者ごとの記録件数と付帯実績）を使う。 */
 function renderRanking() {
-  var list = buildOfficeRanking_(STATE.dashFiltered);
+  var list = buildPersonalSummary_(STATE.dashFiltered);
   var key = STATE.rankingSortKey, dir = STATE.rankingSortDir;
   list.sort(function (a, b) {
+    if (key === 'area') return a.area.localeCompare(b.area, 'ja') * dir;
     if (key === 'office') return a.office.localeCompare(b.office, 'ja') * dir;
+    if (key === 'staff') return a.staff.localeCompare(b.staff, 'ja') * dir;
     return (a[key] - b[key]) * dir;
   });
 
   var tbody = document.getElementById('ranking-tbody');
   if (list.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-slate-400 py-6">データがありません</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-slate-400 py-6">データがありません</td></tr>';
     return;
   }
   tbody.innerHTML = list.map(function (b) {
     return '<tr class="hover:bg-slate-50">' +
+      '<td class="px-3 py-2">' + escapeHtml(b.area) + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(b.office) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(formatStaffName_(b.staff)) + '</td>' +
       '<td class="px-3 py-2 text-right">' + formatNumber(b.count) + '</td>' +
-      '<td class="px-3 py-2 text-right">' + formatCurrency(b.salesAmount) + '</td>' +
-      '<td class="px-3 py-2 text-right">' + formatCurrency(b.paymentAmount) + '</td>' +
-      '<td class="px-3 py-2 text-right bg-indigo-50 font-semibold text-indigo-700">' + b.paymentRate.toFixed(1) + '%</td>' +
-      '<td class="px-3 py-2 text-right">' + b.avgDays.toFixed(1) + '日</td>' +
+      '<td class="px-3 py-2 text-right">' + formatAncillaryTallyCell_(b.insurance) + '</td>' +
+      '<td class="px-3 py-2 text-right">' + formatAncillaryTallyCell_(b.wifi) + '</td>' +
+      '<td class="px-3 py-2 text-right">' + formatAncillaryTallyCell_(b.cansapo) + '</td>' +
+      '<td class="px-3 py-2 text-right">' + formatAncillaryTallyCell_(b.tavica) + '</td>' +
       '</tr>';
   }).join('');
 }
@@ -638,6 +659,7 @@ function clearDataFilters() {
   });
   document.getElementById('data-filter-date-from').value = '';
   document.getElementById('data-filter-date-to').value = '';
+  updateDataOfficeStaffFilterOptions_();
   applyDataFilters();
 }
 
@@ -1835,7 +1857,13 @@ function bindStaticEvents() {
   });
 
   // 予約データ一覧タブのフィルタ
-  ['data-filter-area', 'data-filter-office', 'data-filter-staff',
+  ['data-filter-area', 'data-filter-office'].forEach(function (id) {
+    document.getElementById(id).addEventListener('change', function () {
+      updateDataOfficeStaffFilterOptions_();
+      applyDataFilters();
+    });
+  });
+  ['data-filter-staff',
     'data-filter-insurance-status', 'data-filter-wifi-status', 'data-filter-tavica-status', 'data-filter-cansapo-status'].forEach(function (id) {
     document.getElementById(id).addEventListener('change', applyDataFilters);
   });
@@ -1884,7 +1912,6 @@ function switchTab(tab) {
 // ============================================================================
 
 function formatNumber(n) { return Number(n || 0).toLocaleString('ja-JP'); }
-function formatCurrency(n) { return '¥' + Number(n || 0).toLocaleString('ja-JP'); }
 function formatDateTime(iso) {
   var d = new Date(iso);
   if (isNaN(d.getTime())) return iso;

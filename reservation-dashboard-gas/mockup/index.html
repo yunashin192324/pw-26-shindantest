@@ -294,50 +294,6 @@ th.sortable:hover{background:var(--blue-100);}
 
     <div class="grid-2">
       <div class="card">
-        <h2>📊 月次推移（予約件数 / 売上合計）</h2>
-        <div id="chart-monthly" class="vbar-chart"></div>
-        <div class="legend">
-          <span><span class="dot" style="background:var(--blue-300)"></span>予約件数</span>
-          <span><span class="dot" style="background:var(--blue-700)"></span>売上合計（正規化表示）</span>
-        </div>
-      </div>
-      <div class="card">
-        <h2>🟢 STS別 件数</h2>
-        <div class="donut-wrap">
-          <div id="chart-sts" class="donut"></div>
-          <div id="chart-sts-legend" class="legend" style="flex-direction:column; gap:6px;"></div>
-        </div>
-        <p class="muted" style="margin-top:10px;">STSはCSV上の処理ステータスコードをそのまま表示しています（各コードの意味はCSV提供元の定義をご確認ください）。</p>
-      </div>
-    </div>
-
-    <div class="grid-3">
-      <div class="card">
-        <h2 class="sm">🏷️ 商品分類別 件数</h2>
-        <div class="donut-wrap">
-          <div id="chart-category" class="donut"></div>
-          <div id="chart-category-legend" class="legend" style="flex-direction:column; gap:6px;"></div>
-        </div>
-      </div>
-      <div class="card">
-        <h2 class="sm">🌏 国籍別 件数（上位10）</h2>
-        <div id="chart-nationality"></div>
-      </div>
-      <div class="card">
-        <h2 class="sm">✈️ キャリア別 件数（上位10）</h2>
-        <div id="chart-carrier"></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h2>📈 付帯商品 総合（月別販売数）</h2>
-      <div id="chart-ancillary-combined" class="vbar-chart"></div>
-      <div class="legend" id="chart-ancillary-combined-legend"></div>
-      <p class="muted" style="margin-top:10px;">保険・Wifi・キャンサポ・TAViCAの月別数量（加入・販売数）を並べて比較できます。</p>
-    </div>
-
-    <div class="grid-4">
-      <div class="card">
         <h2 class="sm">🛡️ 保険</h2>
         <p class="muted" id="ancillary-breakdown-insurance" style="margin:0 0 8px;"></p>
         <div id="chart-insurance" class="vbar-chart"></div>
@@ -363,17 +319,46 @@ th.sortable:hover{background:var(--blue-100);}
       <span class="dot" style="background:var(--emerald-600); display:inline-block; width:9px; height:9px; border-radius:2px; vertical-align:middle; margin:0 4px 0 12px;"></span>加入・販売数
     </p>
 
+    <div class="card">
+      <h2>📈 付帯商品 総合（月別販売数）</h2>
+      <div id="chart-ancillary-combined" class="vbar-chart"></div>
+      <div class="legend" id="chart-ancillary-combined-legend"></div>
+      <p class="muted" style="margin-top:10px;">保険・Wifi・キャンサポ・TAViCAの月別数量（加入・販売数）を並べて比較できます。</p>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h2 class="sm">🏷️ 商品分類別 件数</h2>
+        <div class="donut-wrap">
+          <div id="chart-category" class="donut"></div>
+          <div id="chart-category-legend" class="legend" style="flex-direction:column; gap:6px;"></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2 class="sm">🌏 方面別（最終目的地）件数・付帯販売数（上位10）</h2>
+        <div id="chart-destination" class="vbar-chart"></div>
+        <div class="legend" id="chart-destination-legend"></div>
+        <p class="muted" style="margin-top:8px;">棒＝方面別の予約件数、線＝方面別の各付帯商品の販売数です。</p>
+      </div>
+      <div class="card">
+        <h2 class="sm">✈️ キャリア別 件数（上位10）</h2>
+        <div id="chart-carrier"></div>
+      </div>
+    </div>
+
     <div class="card" style="overflow-x:auto;">
       <h2>🏆 営業所別ランキング</h2>
       <table>
         <thead>
           <tr>
-            <th class="sortable" data-sort="office">営業所</th>
-            <th class="sortable text-right" data-sort="count">件数</th>
-            <th class="sortable text-right" data-sort="salesAmount">売上合計</th>
-            <th class="sortable text-right" data-sort="paymentAmount">入金額合計</th>
-            <th class="sortable text-right" data-sort="paymentRate">⭐ 入金消化率</th>
-            <th class="sortable text-right" data-sort="avgDays">平均旅行日数</th>
+            <th class="sortable" data-sort="area">エリア</th>
+            <th class="sortable" data-sort="office">営業所名</th>
+            <th class="sortable" data-sort="staff">担当者</th>
+            <th class="sortable text-right" data-sort="count">記録件数</th>
+            <th class="text-right">保険<br><span class="muted" style="font-weight:normal;">合計／NB付帯／PUSH成約</span></th>
+            <th class="text-right">Wifi<br><span class="muted" style="font-weight:normal;">合計／NB付帯／PUSH成約</span></th>
+            <th class="text-right">キャンサポ<br><span class="muted" style="font-weight:normal;">合計／NB付帯／PUSH成約</span></th>
+            <th class="text-right">TAViCA<br><span class="muted" style="font-weight:normal;">合計／NB付帯／PUSH成約</span></th>
           </tr>
         </thead>
         <tbody id="ranking-tbody"></tbody>
@@ -1021,8 +1006,7 @@ function populateFilterOptions(){
   fillMultiSelect('dash-filter-tourbrand', distinctValues('tourBrand'));
   fillMultiSelect('dash-filter-destination', distinctValues('destination'));
   fillMultiSelect('data-filter-area', distinctValues('area'));
-  fillMultiSelect('data-filter-office', distinctValues('office'));
-  fillMultiSelect('data-filter-staff', distinctValues('staff'));
+  updateDataOfficeStaffFilterOptions();
   fillMultiSelectWithLabels('data-filter-insurance-status', ANCILLARY_STATUS_OPTIONS);
   fillMultiSelectWithLabels('data-filter-wifi-status', ANCILLARY_STATUS_OPTIONS);
   fillMultiSelectWithLabels('data-filter-tavica-status', ANCILLARY_STATUS_OPTIONS);
@@ -1032,6 +1016,33 @@ function populateFilterOptions(){
 }
 function getSelected(id){ return Array.from(document.getElementById(id).selectedOptions).map(function(o){return o.value;}); }
 function toSet(arr){ if(!arr||arr.length===0) return null; var s={}; arr.forEach(function(v){s[v]=true;}); return s; }
+
+/** 行配列から、指定キーの重複無し値一覧を五十音順で返す（絞り込み済みの行集合に使う）。 */
+function distinctValuesFromRows(rows, key){
+  var set = {};
+  rows.forEach(function(r){ var v = r[key]; if (v !== null && v !== undefined && v !== '') set[v] = true; });
+  return Object.keys(set).sort(function(a,b){ return a.localeCompare(b,'ja'); });
+}
+/** 選択肢を入れ替えつつ、入れ替え後も有効な選択済みの値は選択状態を維持する（連動フィルタ用）。 */
+function fillMultiSelectPreserving(id, values, labelFn){
+  var el = document.getElementById(id);
+  var prevSelected = toSet(Array.from(el.selectedOptions).map(function(o){ return o.value; }));
+  el.innerHTML = values.map(function(v){
+    var label = labelFn ? labelFn(v) : v;
+    var sel = (prevSelected && prevSelected[v]) ? ' selected' : '';
+    return '<option value="'+escapeHtml(v)+'"'+sel+'>'+escapeHtml(label)+'</option>';
+  }).join('');
+}
+/** 予約データ一覧の「店舗」「担当者」フィルタを、現在の「エリア」「店舗」選択に応じて絞り込む。 */
+function updateDataOfficeStaffFilterOptions(){
+  var areaSet = toSet(getSelected('data-filter-area'));
+  var rowsInArea = areaSet ? STATE.rows.filter(function(r){ return areaSet[r.area]; }) : STATE.rows;
+  fillMultiSelectPreserving('data-filter-office', distinctValuesFromRows(rowsInArea, 'office'));
+
+  var officeSet = toSet(getSelected('data-filter-office'));
+  var rowsInOffice = officeSet ? rowsInArea.filter(function(r){ return officeSet[r.office]; }) : rowsInArea;
+  fillMultiSelectPreserving('data-filter-staff', distinctValuesFromRows(rowsInOffice, 'staff'), formatStaffName);
+}
 
 /* ---- 分析ダッシュボードタブ ---- */
 function applyDashFilters(){
@@ -1058,10 +1069,8 @@ function applyDashFilters(){
   document.getElementById('dash-filter-summary').textContent = STATE.dashFiltered.length + ' 件を表示中（閲覧できる ' + STATE.rows.length + ' 件中）';
 
   renderKpis();
-  renderMonthlyChart();
-  renderDonut('chart-sts', 'chart-sts-legend', countBy(STATE.dashFiltered,'sts'));
   renderDonut('chart-category', 'chart-category-legend', countBy(STATE.dashFiltered,'productCategory'));
-  renderHBar('chart-nationality', topEntries(countBy(STATE.dashFiltered,'nationality'), 10));
+  renderDestinationComboChart();
   renderHBar('chart-carrier', topEntries(countBy(STATE.dashFiltered,'carrier'), 10));
   renderAncillaryCombinedChart();
   renderAncillaryChart('chart-insurance', STATE.dashFiltered, 'insuranceQty');
@@ -1100,36 +1109,6 @@ function renderKpis(){
 }
 
 function getDashDateField(){ return document.getElementById('dash-filter-date-field').value || 'bookingDate'; }
-
-function renderMonthlyChart(){
-  var field = getDashDateField();
-  var byMonth = {};
-  STATE.dashFiltered.forEach(function(r){
-    var v = r[field]; if (!v) return;
-    var month = v.slice(0,7);
-    if (!byMonth[month]) byMonth[month] = {count:0, sales:0};
-    byMonth[month].count++;
-    byMonth[month].sales += r.salesAmount || 0;
-  });
-  var months = Object.keys(byMonth).sort();
-  var maxCount = Math.max.apply(null, months.map(function(m){return byMonth[m].count;}).concat([1]));
-  var maxSales = Math.max.apply(null, months.map(function(m){return byMonth[m].sales;}).concat([1]));
-
-  var el = document.getElementById('chart-monthly');
-  if (months.length === 0){ el.innerHTML = '<p class="empty-msg">データがありません</p>'; return; }
-  el.innerHTML = months.map(function(m){
-    var b = byMonth[m];
-    var hCount = Math.max(2, Math.round(b.count / maxCount * 160));
-    var hSales = Math.max(2, Math.round(b.sales / maxSales * 160));
-    return '<div class="vbar-col">' +
-      '<div class="vbar-pair">' +
-        '<div class="vbar count" style="height:'+hCount+'px" title="'+m+' 予約件数: '+formatNumber(b.count)+'"></div>' +
-        '<div class="vbar sales" style="height:'+hSales+'px" title="'+m+' 売上合計: '+formatCurrency(b.sales)+'"></div>' +
-      '</div>' +
-      '<div class="vbar-month">'+m.slice(2)+'</div>' +
-    '</div>';
-  }).join('');
-}
 
 /** 保険・Wifi・TAViCA・キャンサポ共通：棒＝リスト数（月別件数）、折れ線相当＝加入・販売数（数量合計）。 */
 function renderAncillaryChart(id, rows, qtyKey){
@@ -1225,6 +1204,73 @@ function renderAncillaryBreakdown(){
   });
 }
 
+/**
+ * 方面別（最終目的地）グラフ：棒＝方面ごとの予約件数（上位10）、折れ線＝同じ方面の
+ * 保険・Wifi・キャンサポ・TAViCA各付帯の販売数量。件数の多い方面トップ10に絞って表示する
+ * （外部ライブラリ不使用・インラインSVGで棒＋折れ線を重ねて描画）。
+ */
+function renderDestinationComboChart(){
+  var rows = STATE.dashFiltered;
+  var items = [
+    { qtyKey:'insuranceQty', label:'保険', color:'#1d4ed8' },
+    { qtyKey:'wifiQty', label:'Wifi', color:'#f59e0b' },
+    { qtyKey:'cansapoQty', label:'キャンサポ', color:'#ec4899' },
+    { qtyKey:'tavicaQty', label:'TAViCA', color:'#8b5cf6' }
+  ];
+  var countMap = countBy(rows, 'destination');
+  var topDestinations = topEntries(countMap, 10).map(function(e){ return e[0]; });
+
+  var el = document.getElementById('chart-destination');
+  var legendEl = document.getElementById('chart-destination-legend');
+  if (topDestinations.length === 0){ el.innerHTML = '<p class="empty-msg">データがありません</p>'; if (legendEl) legendEl.innerHTML=''; return; }
+
+  var qtyByDestination = {};
+  topDestinations.forEach(function(d){ qtyByDestination[d] = { insuranceQty:0, wifiQty:0, cansapoQty:0, tavicaQty:0 }; });
+  rows.forEach(function(r){
+    var d = (r.destination === null || r.destination === undefined || r.destination === '') ? '(空欄)' : r.destination;
+    if (!qtyByDestination[d]) return;
+    items.forEach(function(it){ if (typeof r[it.qtyKey] === 'number') qtyByDestination[d][it.qtyKey] += r[it.qtyKey]; });
+  });
+
+  var w = 680, h = 220, padL = 32, padR = 32, padT = 14, padB = 46;
+  var maxCount = Math.max.apply(null, topDestinations.map(function(d){ return countMap[d]; }).concat([1]));
+  var maxQty = Math.max.apply(null, topDestinations.map(function(d){
+    return Math.max(qtyByDestination[d].insuranceQty, qtyByDestination[d].wifiQty, qtyByDestination[d].cansapoQty, qtyByDestination[d].tavicaQty);
+  }).concat([1]));
+  var n = topDestinations.length;
+  var slotW = (w - padL - padR) / n;
+  var barW = Math.min(36, slotW * 0.5);
+  function xCenter(i){ return padL + slotW * i + slotW / 2; }
+  function yCount(v){ return padT + (h - padT - padB) * (1 - v / maxCount); }
+  function yQty(v){ return padT + (h - padT - padB) * (1 - v / maxQty); }
+
+  var barsHtml = topDestinations.map(function(d, i){
+    var cx = xCenter(i);
+    var barH = Math.max(2, (h - padT - padB) * (countMap[d] / maxCount));
+    return '<rect x="'+(cx - barW/2).toFixed(1)+'" y="'+yCount(countMap[d]).toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+barH.toFixed(1)+'" fill="#c7d2fe"><title>'+escapeHtml(d)+' 予約件数: '+formatNumber(countMap[d])+'</title></rect>';
+  }).join('');
+
+  var linesHtml = items.map(function(it){
+    var points = topDestinations.map(function(d, i){ return xCenter(i).toFixed(1)+','+yQty(qtyByDestination[d][it.qtyKey]).toFixed(1); }).join(' ');
+    var dots = topDestinations.map(function(d, i){
+      return '<circle cx="'+xCenter(i).toFixed(1)+'" cy="'+yQty(qtyByDestination[d][it.qtyKey]).toFixed(1)+'" r="2.5" fill="'+it.color+'"><title>'+escapeHtml(d)+' '+escapeHtml(it.label)+': '+formatNumber(qtyByDestination[d][it.qtyKey])+'</title></circle>';
+    }).join('');
+    return '<polyline points="'+points+'" fill="none" stroke="'+it.color+'" stroke-width="2"></polyline>' + dots;
+  }).join('');
+
+  var xLabels = topDestinations.map(function(d, i){
+    var label = d.length > 6 ? d.slice(0, 6) + '…' : d;
+    return '<text x="'+xCenter(i).toFixed(1)+'" y="'+(h-padB+16)+'" font-size="9" fill="#94a3b8" text-anchor="middle">'+escapeHtml(label)+'</text>';
+  }).join('');
+
+  el.innerHTML = '<svg viewBox="0 0 '+w+' '+h+'" style="width:100%; height:220px; display:block;">' + barsHtml + linesHtml + xLabels + '</svg>';
+  if (legendEl){
+    legendEl.innerHTML = '<span><span class="dot" style="background:#c7d2fe"></span>予約件数</span>' + items.map(function(it){
+      return '<span><span class="dot" style="background:'+it.color+'"></span>'+escapeHtml(it.label)+'</span>';
+    }).join('');
+  }
+}
+
 function renderDonut(chartId, legendId, map){
   var entries = topEntries(map, 12);
   var total = entries.reduce(function(s,e){return s+e[1];}, 0);
@@ -1262,43 +1308,28 @@ function renderHBar(id, entries){
   }).join('');
 }
 
-function buildOfficeRanking(rows){
-  var map = {};
-  rows.forEach(function(r){
-    var office = r.office || '(未設定)';
-    if (!map[office]) map[office] = {office:office, count:0, salesAmount:0, paymentAmount:0, daysSum:0, daysN:0};
-    var b = map[office];
-    b.count++;
-    b.salesAmount += r.salesAmount || 0;
-    b.paymentAmount += r.paymentAmount || 0;
-    if (typeof r.travelDays === 'number'){ b.daysSum += r.travelDays; b.daysN++; }
-  });
-  return Object.keys(map).map(function(k){
-    var b = map[k];
-    return {
-      office: b.office, count: b.count, salesAmount: b.salesAmount, paymentAmount: b.paymentAmount,
-      paymentRate: b.salesAmount>0 ? b.paymentAmount/b.salesAmount*100 : 0,
-      avgDays: b.daysN>0 ? b.daysSum/b.daysN : 0
-    };
-  });
-}
+/** 営業所別ランキング：個人別サマリーと同じ集計（エリア・営業所・担当者ごとの記録件数と付帯実績）を使う。 */
 function renderRanking(){
-  var list = buildOfficeRanking(STATE.dashFiltered);
+  var list = buildPersonalSummary(STATE.dashFiltered);
   var key = STATE.rankingSortKey, dir = STATE.rankingSortDir;
   list.sort(function(a,b){
+    if (key === 'area') return a.area.localeCompare(b.area,'ja') * dir;
     if (key === 'office') return a.office.localeCompare(b.office,'ja') * dir;
+    if (key === 'staff') return a.staff.localeCompare(b.staff,'ja') * dir;
     return (a[key]-b[key]) * dir;
   });
   var tbody = document.getElementById('ranking-tbody');
-  if (list.length === 0){ tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">データがありません</td></tr>'; return; }
+  if (list.length === 0){ tbody.innerHTML = '<tr><td colspan="8" class="empty-msg">データがありません</td></tr>'; return; }
   tbody.innerHTML = list.map(function(b){
     return '<tr>' +
+      '<td>'+escapeHtml(b.area)+'</td>' +
       '<td>'+escapeHtml(b.office)+'</td>' +
+      '<td>'+escapeHtml(formatStaffName(b.staff))+'</td>' +
       '<td class="text-right">'+formatNumber(b.count)+'</td>' +
-      '<td class="text-right">'+formatCurrency(b.salesAmount)+'</td>' +
-      '<td class="text-right">'+formatCurrency(b.paymentAmount)+'</td>' +
-      '<td class="text-right rank-rate">'+b.paymentRate.toFixed(1)+'%</td>' +
-      '<td class="text-right">'+b.avgDays.toFixed(1)+'日</td>' +
+      '<td class="text-right">'+formatAncillaryTallyCell(b.insurance)+'</td>' +
+      '<td class="text-right">'+formatAncillaryTallyCell(b.wifi)+'</td>' +
+      '<td class="text-right">'+formatAncillaryTallyCell(b.cansapo)+'</td>' +
+      '<td class="text-right">'+formatAncillaryTallyCell(b.tavica)+'</td>' +
     '</tr>';
   }).join('');
 }
@@ -1338,6 +1369,7 @@ function clearDataFilters(){
   });
   document.getElementById('data-filter-date-from').value = '';
   document.getElementById('data-filter-date-to').value = '';
+  updateDataOfficeStaffFilterOptions();
   applyDataFilters();
 }
 
@@ -2318,7 +2350,13 @@ function bindEvents(){
     });
   });
 
-  ['data-filter-area','data-filter-office','data-filter-staff','data-filter-insurance-status','data-filter-wifi-status','data-filter-tavica-status','data-filter-cansapo-status'].forEach(function(id){
+  ['data-filter-area','data-filter-office'].forEach(function(id){
+    document.getElementById(id).addEventListener('change', function(){
+      updateDataOfficeStaffFilterOptions();
+      applyDataFilters();
+    });
+  });
+  ['data-filter-staff','data-filter-insurance-status','data-filter-wifi-status','data-filter-tavica-status','data-filter-cansapo-status'].forEach(function(id){
     document.getElementById(id).addEventListener('change', applyDataFilters);
   });
   document.getElementById('data-filter-date-from').addEventListener('change', applyDataFilters);
@@ -2360,7 +2398,6 @@ function switchTab(tab){
 
 /* ---- 共通ユーティリティ ---- */
 function formatNumber(n){ return Number(n||0).toLocaleString('ja-JP'); }
-function formatCurrency(n){ return '¥'+Number(n||0).toLocaleString('ja-JP'); }
 function escapeHtml(s){
   return String(s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; });
 }

@@ -185,42 +185,8 @@
           <p id="dash-filter-summary" class="text-xs text-slate-400 w-full"></p>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <div class="bg-white rounded-xl shadow p-4">
-            <h2 class="font-bold text-slate-700 mb-2"><i class="fa-solid fa-chart-column text-blue-600"></i> 月次推移（予約件数 / 売上合計）</h2>
-            <canvas id="chart-monthly" height="220"></canvas>
-          </div>
-          <div class="bg-white rounded-xl shadow p-4">
-            <h2 class="font-bold text-slate-700 mb-2"><i class="fa-solid fa-chart-pie text-blue-600"></i> STS別 件数</h2>
-            <canvas id="chart-sts" height="220"></canvas>
-            <p class="text-xs text-slate-400 mt-2">STSはCSV上の処理ステータスコードをそのまま表示しています（各コードの意味はCSV提供元の定義をご確認ください）。</p>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          <div class="bg-white rounded-xl shadow p-4">
-            <h2 class="font-bold text-slate-700 mb-2 text-sm"><i class="fa-solid fa-tags text-blue-600"></i> 商品分類別 件数</h2>
-            <canvas id="chart-category" height="200"></canvas>
-          </div>
-          <div class="bg-white rounded-xl shadow p-4">
-            <h2 class="font-bold text-slate-700 mb-2 text-sm"><i class="fa-solid fa-earth-asia text-blue-600"></i> 国籍別 件数（上位10）</h2>
-            <canvas id="chart-nationality" height="200"></canvas>
-          </div>
-          <div class="bg-white rounded-xl shadow p-4">
-            <h2 class="font-bold text-slate-700 mb-2 text-sm"><i class="fa-solid fa-plane text-blue-600"></i> キャリア別 件数（上位10）</h2>
-            <canvas id="chart-carrier" height="200"></canvas>
-          </div>
-        </div>
-
-        <!-- 付帯商品（保険・Wifi・キャンサポ・TAViCA）総合：月別販売数の折れ線グラフ -->
-        <div class="bg-white rounded-xl shadow p-4">
-          <h2 class="font-bold text-slate-700 mb-2"><i class="fa-solid fa-chart-line text-blue-600"></i> 付帯商品 総合（月別販売数）</h2>
-          <canvas id="chart-ancillary-combined" height="200"></canvas>
-          <p class="text-xs text-slate-400 mt-2">保険・Wifi・キャンサポ・TAViCAの月別数量（加入・販売数）を1つの折れ線グラフで比較できます。</p>
-        </div>
-
-        <!-- 付帯商品（保険・Wifi・キャンサポ・TAViCA）の月別推移＋NB付帯/PUSH成約の実績 -->
-        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+        <!-- 付帯商品（保険・Wifi・キャンサポ・TAViCA）の月別推移＋NB付帯/PUSH成約の実績：最優先で確認する指標のためTOPに配置 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
           <div class="bg-white rounded-xl shadow p-4">
             <h2 class="font-bold text-slate-700 mb-2 text-sm"><i class="fa-solid fa-shield-heart text-blue-600"></i> 保険</h2>
             <p id="ancillary-breakdown-insurance" class="text-xs text-slate-500 mb-2"></p>
@@ -244,17 +210,42 @@
         </div>
         <p class="text-xs text-slate-400 -mt-2">各グラフは棒＝リスト数（予約件数）、折れ線＝加入・販売数です。基準日・期間は上部フィルタに従います。</p>
 
+        <!-- 付帯商品（保険・Wifi・キャンサポ・TAViCA）総合：月別販売数の折れ線グラフ -->
+        <div class="bg-white rounded-xl shadow p-4">
+          <h2 class="font-bold text-slate-700 mb-2"><i class="fa-solid fa-chart-line text-blue-600"></i> 付帯商品 総合（月別販売数）</h2>
+          <canvas id="chart-ancillary-combined" height="200"></canvas>
+          <p class="text-xs text-slate-400 mt-2">保険・Wifi・キャンサポ・TAViCAの月別数量（加入・販売数）を1つの折れ線グラフで比較できます。</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div class="bg-white rounded-xl shadow p-4">
+            <h2 class="font-bold text-slate-700 mb-2 text-sm"><i class="fa-solid fa-tags text-blue-600"></i> 商品分類別 件数</h2>
+            <canvas id="chart-category" height="200"></canvas>
+          </div>
+          <div class="bg-white rounded-xl shadow p-4">
+            <h2 class="font-bold text-slate-700 mb-2 text-sm"><i class="fa-solid fa-earth-asia text-blue-600"></i> 方面別（最終目的地）件数・付帯販売数（上位10）</h2>
+            <canvas id="chart-destination" height="200"></canvas>
+            <p class="text-xs text-slate-400 mt-2">棒＝方面別の予約件数、折れ線＝方面別の各付帯商品（保険・Wifi・キャンサポ・TAViCA）の販売数です。</p>
+          </div>
+          <div class="bg-white rounded-xl shadow p-4">
+            <h2 class="font-bold text-slate-700 mb-2 text-sm"><i class="fa-solid fa-plane text-blue-600"></i> キャリア別 件数（上位10）</h2>
+            <canvas id="chart-carrier" height="200"></canvas>
+          </div>
+        </div>
+
         <div class="bg-white rounded-xl shadow p-4 overflow-x-auto">
           <h2 class="font-bold text-slate-700 mb-2"><i class="fa-solid fa-ranking-star text-blue-600"></i> 営業所別ランキング</h2>
           <table class="min-w-full text-sm">
             <thead>
               <tr class="bg-slate-100 text-slate-600">
-                <th class="sortable px-3 py-2 text-left" data-sort="office">営業所</th>
-                <th class="sortable px-3 py-2 text-right" data-sort="count">件数</th>
-                <th class="sortable px-3 py-2 text-right" data-sort="salesAmount">売上合計</th>
-                <th class="sortable px-3 py-2 text-right" data-sort="paymentAmount">入金額合計</th>
-                <th class="sortable px-3 py-2 text-right bg-indigo-50" data-sort="paymentRate">⭐ 入金消化率</th>
-                <th class="sortable px-3 py-2 text-right" data-sort="avgDays">平均旅行日数</th>
+                <th class="sortable px-3 py-2 text-left" data-sort="area">エリア</th>
+                <th class="sortable px-3 py-2 text-left" data-sort="office">営業所名</th>
+                <th class="sortable px-3 py-2 text-left" data-sort="staff">担当者</th>
+                <th class="sortable px-3 py-2 text-right" data-sort="count">記録件数</th>
+                <th class="px-3 py-2 text-right">保険<br><span class="text-[10px] font-normal text-slate-400">合計／NB付帯／PUSH成約</span></th>
+                <th class="px-3 py-2 text-right">Wifi<br><span class="text-[10px] font-normal text-slate-400">合計／NB付帯／PUSH成約</span></th>
+                <th class="px-3 py-2 text-right">キャンサポ<br><span class="text-[10px] font-normal text-slate-400">合計／NB付帯／PUSH成約</span></th>
+                <th class="px-3 py-2 text-right">TAViCA<br><span class="text-[10px] font-normal text-slate-400">合計／NB付帯／PUSH成約</span></th>
               </tr>
             </thead>
             <tbody id="ranking-tbody" class="divide-y divide-slate-100"></tbody>
