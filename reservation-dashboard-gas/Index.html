@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <title>営業セールスダッシュボード</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    body { font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif; background:#f3f4f6; }
+    .tab-btn.active { background:#1d4ed8; color:#ffffff; }
+    .tab-btn { transition: all .15s ease; }
+    .kpi-card { transition: transform .15s ease, box-shadow .15s ease; }
+    .kpi-card:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(29,78,216,.15); }
+    ::-webkit-scrollbar { height:8px; width:8px; }
+    ::-webkit-scrollbar-thumb { background:#93c5fd; border-radius:4px; }
+    .sortable { cursor:pointer; user-select:none; }
+    .sortable:hover { background:#dbeafe; }
+    .sortable .sort-mark { color:#1d4ed8; font-size:10px; margin-left:2px; }
+    .toast { animation: slideIn .25s ease-out; }
+    @keyframes slideIn { from { opacity:0; transform:translateX(30px);} to {opacity:1; transform:translateX(0);} }
+    .data-thead { position:sticky; top:0; z-index:20; }
+    .spinner { border-top-color:#1d4ed8; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .editable-cell input, .editable-cell select { background:#eff6ff; }
+    .editable-cell input:focus, .editable-cell select:focus { outline:2px solid #93c5fd; }
+    .col-order-row { transition: background .15s ease; }
+    .col-order-row:hover { background:#f8fafc; }
+    .memo-display { cursor:text; display:inline-block; min-width:70px; }
+    .memo-display:hover { background:#dbeafe; border-radius:4px; }
+    .ancillary-flagged { outline:2px solid #f59e0b; outline-offset:-2px; border-radius:4px; }
+    .pending-edit { outline:2px solid #f97316; outline-offset:-2px; border-radius:4px; }
+  </style>
+</head>
+<body class="text-slate-800">
+
+  <!-- ローディングスピナー -->
+  <div id="loading-overlay" class="fixed inset-0 bg-white/80 z-50 flex flex-col items-center justify-center gap-4">
+    <div class="spinner w-14 h-14 rounded-full border-4 border-blue-100"></div>
+    <p class="text-blue-700 font-semibold">データを読み込んでいます...</p>
+  </div>
+
+  <!-- トースト通知コンテナ -->
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 w-80"></div>
+
+  <!-- メモ全文・失注理由のホバー表示用ポップアップ -->
+  <div id="hover-tooltip" class="hidden fixed z-50 max-w-sm bg-slate-800 text-white text-xs rounded-lg shadow-2xl p-3 whitespace-pre-wrap break-words pointer-events-none"></div>
+
+  <!-- 永続ヘッダー -->
+  <header class="sticky top-0 z-40 bg-white shadow-sm border-b border-slate-200">
+    <div class="max-w-[1600px] mx-auto px-4 py-3">
+      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h1 class="text-xl font-bold text-blue-800 flex items-center gap-2">
+          <i class="fa-solid fa-chart-line"></i> 営業セールスダッシュボード
+        </h1>
+        <div class="flex items-center gap-3">
+          <span id="role-badge" class="hidden text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-1.5"></span>
+          <span id="last-imported-label" class="text-xs text-slate-400 hidden"></span>
+          <button id="btn-refresh" class="text-sm text-blue-700 border border-blue-200 rounded-lg px-3 py-1.5 hover:bg-blue-50">
+            <i class="fa-solid fa-rotate"></i> データ再読込
+          </button>
+        </div>
+      </div>
+
+      <!-- KPIサマリーカード（分析ダッシュボードタブのフィルタが反映されます） -->
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div class="kpi-card bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-xl p-3 shadow">
+          <p class="text-xs opacity-80">予約件数</p>
+          <p id="kpi-total" class="text-2xl font-bold">0</p>
+        </div>
+        <div class="kpi-card bg-gradient-to-br from-emerald-500 to-emerald-600 text-white rounded-xl p-3 shadow" title="保険加入PAX数の合計">
+          <p class="text-xs opacity-80">🛡️ 保険契約数</p>
+          <p id="kpi-insurance" class="text-2xl font-bold">0</p>
+        </div>
+        <div class="kpi-card bg-gradient-to-br from-amber-500 to-amber-600 text-white rounded-xl p-3 shadow" title="Wifi販売台数の合計">
+          <p class="text-xs opacity-80">📶 Wifi販売台数</p>
+          <p id="kpi-wifi" class="text-2xl font-bold">0</p>
+        </div>
+        <div class="kpi-card bg-gradient-to-br from-slate-600 to-slate-700 text-white rounded-xl p-3 shadow" title="キャンサポ加入PAX数の合計">
+          <p class="text-xs opacity-80">🩹 キャンサポ契約数</p>
+          <p id="kpi-cansapo" class="text-2xl font-bold">0</p>
+        </div>
+        <div class="kpi-card bg-gradient-to-br from-indigo-600 via-indigo-600 to-purple-700 text-white rounded-xl p-3 shadow" title="TAViCA加入数の合計">
+          <p class="text-xs opacity-80">🛂 TAViCA契約件数</p>
+          <p id="kpi-tavica" class="text-2xl font-bold">0</p>
+        </div>
+      </div>
+
+      <!-- タブナビゲーション -->
+      <div class="flex gap-2 mt-4">
+        <button data-tab="dashboard" class="tab-btn active flex-1 md:flex-none px-4 py-2 rounded-lg text-sm font-semibold bg-slate-100 text-slate-600">
+          <i class="fa-solid fa-chart-pie"></i> 分析ダッシュボード
+        </button>
+        <button data-tab="data" class="tab-btn flex-1 md:flex-none px-4 py-2 rounded-lg text-sm font-semibold bg-slate-100 text-slate-600">
+          <i class="fa-solid fa-table-list"></i> 予約データ一覧
+        </button>
+        <button data-tab="personal" class="tab-btn flex-1 md:flex-none px-4 py-2 rounded-lg text-sm font-semibold bg-slate-100 text-slate-600">
+          <i class="fa-solid fa-users"></i> 個人別サマリー
+        </button>
+        <button data-tab="admin" class="tab-btn flex-1 md:flex-none px-4 py-2 rounded-lg text-sm font-semibold bg-slate-100 text-slate-600">
+          <i class="fa-solid fa-gear"></i> データ管理
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-[1600px] mx-auto px-4 py-5">
+
+    <!-- ============ 初期セットアップ未実行のときだけ出る案内バー ============ -->
+    <div id="setup-banner" class="hidden mb-5 bg-amber-50 border border-amber-300 rounded-xl p-4">
+      <div class="flex flex-wrap items-start gap-3">
+        <i class="fa-solid fa-triangle-exclamation text-amber-500 text-xl mt-0.5"></i>
+        <div class="flex-1 min-w-0">
+          <p class="font-bold text-amber-800">初期セットアップがまだ完了していません</p>
+          <p class="text-sm text-amber-700 mt-1">
+            データを保存するシート「予約データ」「スタッフ権限」が作られていないため、画面が正しく動きません。
+          </p>
+          <p id="setup-banner-detail" class="text-xs text-amber-600 mt-1"></p>
+        </div>
+        <button id="btn-run-setup" class="bg-amber-600 hover:bg-amber-700 text-white rounded-lg px-4 py-2 text-sm font-semibold shadow whitespace-nowrap">
+          <i class="fa-solid fa-wand-magic-sparkles"></i> 初期セットアップを実行する
+        </button>
+      </div>
+    </div>
+
+    <!-- ============ アクセス権が無いユーザーに出る案内 ============ -->
+    <div id="access-denied-banner" class="hidden mb-5 bg-red-50 border border-red-300 rounded-xl p-4">
+      <div class="flex items-start gap-3">
+        <i class="fa-solid fa-lock text-red-500 text-xl mt-0.5"></i>
+        <div>
+          <p class="font-bold text-red-800">アクセス権がありません</p>
+          <p class="text-sm text-red-700 mt-1">
+            あなたのGoogleアカウント（<span id="access-denied-email" class="font-mono"></span>）は
+            「スタッフ権限」シートに登録されていません。マスタ権限のご担当者に登録を依頼してください。
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div id="app-content" class="hidden">
+
+      <!-- ============ タブ1: 分析ダッシュボード ============ -->
+      <section id="tab-panel-dashboard" class="tab-panel space-y-5">
+        <div class="bg-white rounded-xl shadow p-4 flex flex-wrap gap-4 items-end">
+          <div>
+            <label class="text-xs font-semibold text-slate-500 block mb-1">エリア</label>
+            <select id="dash-filter-area" multiple class="border border-slate-300 rounded-lg text-sm p-2 min-w-[160px] h-20"></select>
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-500 block mb-1">営業所</label>
+            <select id="dash-filter-office" multiple class="border border-slate-300 rounded-lg text-sm p-2 min-w-[200px] h-20"></select>
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-500 block mb-1">商品分類</label>
+            <select id="dash-filter-category" multiple class="border border-slate-300 rounded-lg text-sm p-2 min-w-[140px] h-20"></select>
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-500 block mb-1">ツアーブランド区分</label>
+            <select id="dash-filter-tourbrand" multiple class="border border-slate-300 rounded-lg text-sm p-2 min-w-[160px] h-20"></select>
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-500 block mb-1">方面別（最終目的地）</label>
+            <select id="dash-filter-destination" multiple class="border border-slate-300 rounded-lg text-sm p-2 min-w-[140px] h-20"></select>
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-500 block mb-1">基準日</label>
+            <select id="dash-filter-date-field" class="border border-slate-300 rounded-lg text-sm p-2">
+              <option value="bookingDate">予約日</option>
+              <option value="departureDate">出発予定日</option>
+              <option value="chkDate">CHK日</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-500 block mb-1">From</label>
+            <input type="date" id="dash-filter-date-from" class="border border-slate-300 rounded-lg text-sm p-2">
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-500 block mb-1">To</label>
+            <input type="date" id="dash-filter-date-to" class="border border-slate-300 rounded-lg text-sm p-2">
+          </div>
+          <button id="btn-clear-dash-filter" class="text-sm text-slate-500 hover:text-blue-700 px-3 py-2">
+            <i class="fa-solid fa-filter-circle-xmark"></i> フィルタ解除
+          </button>
+          <p id="dash-filter-summary" class="text-xs text-slate-400 w-full"></p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div class="bg-white rounded-xl shadow p-4">
+            <h2 class="font-bold text-slate-700 mb-2"><i class="fa-solid fa-chart-column text-blue-600"></i> 月次推移（予約件数 / 売上合計）</h2>
+            <canvas id="chart-monthly" height="220"></canvas>
+          </div>
+          <div class="bg-white rounded-xl shadow p-4">
+            <h2 class="font-bold text-slate-700 mb-2"><i class="fa-solid fa-chart-pie text-blue-600"></i> STS別 件数</h2>
+            <canvas id="chart-sts" height="220"></canvas>
+            <p class="text-xs text-slate-400 mt-2">STSはCSV上の処理ステータスコードをそのまま表示しています（各コードの意味はCSV提供元の定義をご確認ください）。</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          <div class="bg-white rounded-xl shadow p-4">
+            <h2 class="font-bold text-slate-700 mb-2 text-sm"><i class="fa-solid fa-tags text-blue-600"></i> 商品分類別 件数</h2>
+            <canvas id="chart-category" height="200"></canvas>
+          </div>
+          <div class="bg-white rounded-xl shadow p-4">
+            <h2 class="font-bold text-slate-700 mb-2 text-sm"><i class="fa-solid fa-earth-asia text-blue-600"></i> 国籍別 件数（上位10）</h2>
+            <canvas id="chart-nationality" height="200"></canvas>
+          </div>
+          <div class="bg-white rounded-xl shadow p-4">
+            <h2 class="font-bold text-slate-700 mb-2 text-sm"><i class="fa-solid fa-plane text-blue-600"></i> キャリア別 件数（上位10）</h2>
+            <canvas id="chart-carrier" height="200"></canvas>
+          </div>
+        </div>
+
+        <!-- 付帯商品（保険・Wifi・キャンサポ・TAViCA）総合：月別販売数の折れ線グラフ -->
+        <div class="bg-white rounded-xl shadow p-4">
+          <h2 class="font-bold text-slate-700 mb-2"><i class="fa-solid fa-chart-line text-blue-600"></i> 付帯商品 総合（月別販売数）</h2>
+          <canvas id="chart-ancillary-combined" height="200"></canvas>
+          <p class="text-xs text-slate-400 mt-2">保険・Wifi・キャンサポ・TAViCAの月別数量（加入・販売数）を1つの折れ線グラフで比較できます。</p>
+        </div>
+
+        <!-- 付帯商品（保険・Wifi・キャンサポ・TAViCA）の月別推移＋NB付帯/PUSH成約の実績 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+          <div class="bg-white rounded-xl shadow p-4">
+            <h2 class="font-bold text-slate-700 mb-2 text-sm"><i class="fa-solid fa-shield-heart text-blue-600"></i> 保険</h2>
+            <p id="ancillary-breakdown-insurance" class="text-xs text-slate-500 mb-2"></p>
+            <canvas id="chart-insurance" height="200"></canvas>
+          </div>
+          <div class="bg-white rounded-xl shadow p-4">
+            <h2 class="font-bold text-slate-700 mb-2 text-sm"><i class="fa-solid fa-wifi text-blue-600"></i> Wifi</h2>
+            <p id="ancillary-breakdown-wifi" class="text-xs text-slate-500 mb-2"></p>
+            <canvas id="chart-wifi" height="200"></canvas>
+          </div>
+          <div class="bg-white rounded-xl shadow p-4">
+            <h2 class="font-bold text-slate-700 mb-2 text-sm"><i class="fa-solid fa-hand-holding-medical text-blue-600"></i> キャンサポ</h2>
+            <p id="ancillary-breakdown-cansapo" class="text-xs text-slate-500 mb-2"></p>
+            <canvas id="chart-cansapo" height="200"></canvas>
+          </div>
+          <div class="bg-white rounded-xl shadow p-4">
+            <h2 class="font-bold text-slate-700 mb-2 text-sm"><i class="fa-solid fa-passport text-blue-600"></i> TAViCA</h2>
+            <p id="ancillary-breakdown-tavica" class="text-xs text-slate-500 mb-2"></p>
+            <canvas id="chart-tavica" height="200"></canvas>
+          </div>
+        </div>
+        <p class="text-xs text-slate-400 -mt-2">各グラフは棒＝リスト数（予約件数）、折れ線＝加入・販売数です。基準日・期間は上部フィルタに従います。</p>
+
+        <div class="bg-white rounded-xl shadow p-4 overflow-x-auto">
+          <h2 class="font-bold text-slate-700 mb-2"><i class="fa-solid fa-ranking-star text-blue-600"></i> 営業所別ランキング</h2>
+          <table class="min-w-full text-sm">
+            <thead>
+              <tr class="bg-slate-100 text-slate-600">
+                <th class="sortable px-3 py-2 text-left" data-sort="office">営業所</th>
+                <th class="sortable px-3 py-2 text-right" data-sort="count">件数</th>
+                <th class="sortable px-3 py-2 text-right" data-sort="salesAmount">売上合計</th>
+                <th class="sortable px-3 py-2 text-right" data-sort="paymentAmount">入金額合計</th>
+                <th class="sortable px-3 py-2 text-right bg-indigo-50" data-sort="paymentRate">⭐ 入金消化率</th>
+                <th class="sortable px-3 py-2 text-right" data-sort="avgDays">平均旅行日数</th>
+              </tr>
+            </thead>
+            <tbody id="ranking-tbody" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ============ タブ2: 予約データ一覧 ============ -->
+      <section id="tab-panel-data" class="tab-panel hidden space-y-5">
+        <div class="bg-white rounded-xl shadow p-4 flex flex-wrap gap-4 items-end">
+          <div>
+            <label class="text-xs font-semibold text-slate-500 block mb-1">エリア</label>
+            <select id="data-filter-area" multiple class="border border-slate-300 rounded-lg text-sm p-2 min-w-[150px] h-20"></select>
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-500 block mb-1">店舗</label>
+            <select id="data-filter-office" multiple class="border border-slate-300 rounded-lg text-sm p-2 min-w-[180px] h-20"></select>
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-500 block mb-1">担当者</label>
+            <select id="data-filter-staff" multiple class="border border-slate-300 rounded-lg text-sm p-2 min-w-[140px] h-20"></select>
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-500 block mb-1">出発予定日（From）</label>
+            <input type="date" id="data-filter-date-from" class="border border-slate-300 rounded-lg text-sm p-2">
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-500 block mb-1">出発予定日（To）</label>
+            <input type="date" id="data-filter-date-to" class="border border-slate-300 rounded-lg text-sm p-2">
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-500 block mb-1">保険STS</label>
+            <select id="data-filter-insurance-status" multiple class="border border-slate-300 rounded-lg text-sm p-2 min-w-[110px] h-20"></select>
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-500 block mb-1">WifiSTS</label>
+            <select id="data-filter-wifi-status" multiple class="border border-slate-300 rounded-lg text-sm p-2 min-w-[110px] h-20"></select>
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-500 block mb-1">TAViCA STS</label>
+            <select id="data-filter-tavica-status" multiple class="border border-slate-300 rounded-lg text-sm p-2 min-w-[110px] h-20"></select>
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-500 block mb-1">キャンサポSTS</label>
+            <select id="data-filter-cansapo-status" multiple class="border border-slate-300 rounded-lg text-sm p-2 min-w-[110px] h-20"></select>
+          </div>
+          <button id="btn-clear-data-filter" class="text-sm text-slate-500 hover:text-blue-700 px-3 py-2">
+            <i class="fa-solid fa-filter-circle-xmark"></i> フィルタ解除
+          </button>
+          <p id="data-filter-summary" class="text-xs text-slate-400 w-full"></p>
+        </div>
+
+        <div class="bg-white rounded-xl shadow p-4">
+          <h2 class="text-base font-bold text-slate-800"><i class="fa-solid fa-table-list text-blue-600"></i> 予約データ一覧</h2>
+          <p class="text-xs text-slate-500 mt-0.5">
+            CSV由来の項目は読み取り専用です。
+            <span class="inline-block w-2.5 h-2.5 rounded-sm bg-blue-100 border border-blue-300 align-middle ml-2 mr-1"></span>
+            の列（CHK日・保険・Wifi・TAViCA・キャンサポ・メモ）は入力・編集できます。編集は画面上にすぐ反映されますが、
+            サーバーへの保存は上部の「まとめて保存する」を押すまで行われません。
+            行のチェックボックスで複数選択すると、下の「一括登録」から同じ値をまとめて登録できます。
+            CSVインポートは「データ管理」タブから行えます。
+          </p>
+        </div>
+
+        <!-- ============ 一括登録バー（行を選択すると表示） ============ -->
+        <div id="bulk-edit-bar" class="bg-blue-50 border border-blue-200 rounded-xl p-4 hidden">
+          <div class="flex flex-wrap items-center gap-3 mb-3">
+            <span class="text-sm font-bold text-blue-800">
+              <i class="fa-solid fa-list-check"></i> <span id="bulk-selected-count">0</span>件選択中 — 一括登録
+            </span>
+            <button type="button" id="btn-bulk-clear-selection" class="text-xs text-slate-500 hover:text-blue-700 ml-auto">選択解除</button>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            <div class="flex items-end gap-2">
+              <div class="flex-1">
+                <label class="text-xs font-semibold text-slate-500 block mb-1">CHK日を一括設定</label>
+                <input type="date" id="bulk-chkdate-input" class="border border-slate-300 rounded-lg text-sm p-2 w-full">
+              </div>
+              <button type="button" class="bulk-apply-field-btn bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-2 text-xs font-semibold whitespace-nowrap" data-field="chkDate">適用</button>
+            </div>
+            <div class="flex items-end gap-2">
+              <div class="flex-1">
+                <label class="text-xs font-semibold text-slate-500 block mb-1">メモを一括設定</label>
+                <input type="text" id="bulk-memo-input" placeholder="メモ" class="border border-slate-300 rounded-lg text-sm p-2 w-full">
+              </div>
+              <button type="button" class="bulk-apply-field-btn bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-2 text-xs font-semibold whitespace-nowrap" data-field="memo">適用</button>
+            </div>
+            <div class="flex items-end gap-2">
+              <div class="flex-1">
+                <label class="text-xs font-semibold text-slate-500 block mb-1">保険を一括設定</label>
+                <div class="flex gap-1">
+                  <select id="bulk-insurance-status" class="bulk-ancillary-status border border-slate-300 rounded-lg text-xs p-2 flex-1" data-item="insurance"></select>
+                  <input type="number" min="0" id="bulk-insurance-qty" placeholder="数" class="border border-slate-300 rounded-lg text-xs p-2 w-14">
+                </div>
+              </div>
+              <button type="button" class="bulk-apply-ancillary-btn bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-2 text-xs font-semibold whitespace-nowrap" data-item="insurance">適用</button>
+            </div>
+            <div class="flex items-end gap-2">
+              <div class="flex-1">
+                <label class="text-xs font-semibold text-slate-500 block mb-1">Wifiを一括設定</label>
+                <div class="flex gap-1">
+                  <select id="bulk-wifi-status" class="bulk-ancillary-status border border-slate-300 rounded-lg text-xs p-2 flex-1" data-item="wifi"></select>
+                  <input type="number" min="0" id="bulk-wifi-qty" placeholder="数" class="border border-slate-300 rounded-lg text-xs p-2 w-14">
+                </div>
+              </div>
+              <button type="button" class="bulk-apply-ancillary-btn bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-2 text-xs font-semibold whitespace-nowrap" data-item="wifi">適用</button>
+            </div>
+            <div class="flex items-end gap-2">
+              <div class="flex-1">
+                <label class="text-xs font-semibold text-slate-500 block mb-1">キャンサポを一括設定</label>
+                <div class="flex gap-1">
+                  <select id="bulk-cansapo-status" class="bulk-ancillary-status border border-slate-300 rounded-lg text-xs p-2 flex-1" data-item="cansapo"></select>
+                  <input type="number" min="0" id="bulk-cansapo-qty" placeholder="数" class="border border-slate-300 rounded-lg text-xs p-2 w-14">
+                </div>
+              </div>
+              <button type="button" class="bulk-apply-ancillary-btn bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-2 text-xs font-semibold whitespace-nowrap" data-item="cansapo">適用</button>
+            </div>
+            <div class="flex items-end gap-2">
+              <div class="flex-1">
+                <label class="text-xs font-semibold text-slate-500 block mb-1">TAViCAを一括設定</label>
+                <div class="flex gap-1">
+                  <select id="bulk-tavica-status" class="bulk-ancillary-status border border-slate-300 rounded-lg text-xs p-2 flex-1" data-item="tavica"></select>
+                  <input type="number" min="0" id="bulk-tavica-qty" placeholder="数" class="border border-slate-300 rounded-lg text-xs p-2 w-14">
+                </div>
+              </div>
+              <button type="button" class="bulk-apply-ancillary-btn bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-2 text-xs font-semibold whitespace-nowrap" data-item="tavica">適用</button>
+            </div>
+          </div>
+          <p id="bulk-edit-result" class="text-xs text-slate-500 mt-3 hidden"></p>
+        </div>
+
+        <!-- ============ 未保存の変更バー（編集すると表示。保存するまでサーバーには反映されない） ============ -->
+        <div id="pending-changes-bar" class="hidden sticky top-0 z-30 bg-amber-400 text-amber-950 rounded-xl shadow-lg px-4 py-3 flex flex-wrap items-center gap-3">
+          <span class="font-bold text-sm whitespace-nowrap">
+            <i class="fa-solid fa-pen"></i> 未保存の変更：<span id="pending-changes-count">0</span>件
+          </span>
+          <button id="btn-save-pending-changes" class="bg-amber-700 hover:bg-amber-800 text-white rounded-lg px-4 py-2 text-sm font-bold shadow whitespace-nowrap">
+            <i class="fa-solid fa-floppy-disk"></i> まとめて保存する
+          </button>
+          <button id="btn-discard-pending-changes" class="bg-white hover:bg-amber-50 text-amber-800 border border-amber-300 rounded-lg px-4 py-2 text-sm font-semibold whitespace-nowrap">
+            取り消す
+          </button>
+          <span class="text-xs text-amber-900">CHK日・保険/Wifi/TAViCA/キャンサポ・メモの変更は、このボタンを押すまで保存されません。</span>
+        </div>
+
+        <div class="bg-white rounded-xl shadow p-4">
+          <div class="overflow-auto max-h-[65vh]">
+            <table class="min-w-full text-sm whitespace-nowrap">
+              <thead id="data-thead" class="data-thead bg-slate-100 text-slate-600"></thead>
+              <tbody id="data-tbody" class="divide-y divide-slate-100"></tbody>
+            </table>
+            <p id="data-empty" class="text-center text-slate-400 py-6 hidden">データがありません</p>
+          </div>
+          <div class="flex items-center justify-between mt-3 text-sm">
+            <p id="pagination-info" class="text-slate-500"></p>
+            <div class="flex gap-2">
+              <button id="btn-prev-page" class="border border-slate-300 rounded-lg px-3 py-1.5 hover:bg-slate-50">
+                <i class="fa-solid fa-chevron-left"></i> 前へ
+              </button>
+              <button id="btn-next-page" class="border border-slate-300 rounded-lg px-3 py-1.5 hover:bg-slate-50">
+                次へ <i class="fa-solid fa-chevron-right"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ タブ3: 個人別サマリー ============ -->
+      <section id="tab-panel-personal" class="tab-panel hidden space-y-5">
+        <div class="bg-white rounded-xl shadow p-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 class="text-base font-bold text-slate-800"><i class="fa-solid fa-users text-blue-600"></i> 個人別サマリー</h2>
+            <p class="text-xs text-slate-500 mt-0.5">担当者ごとの記録件数と付帯商品の実績です（現在あなたが閲覧できる範囲のデータが対象です）。</p>
+          </div>
+          <input type="text" id="personal-search" placeholder="営業所名・担当者で検索" class="border border-slate-300 rounded-lg text-sm p-2 w-64">
+        </div>
+        <div class="bg-white rounded-xl shadow p-4 overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead>
+              <tr class="bg-slate-100 text-slate-600">
+                <th class="sortable px-3 py-2 text-left" data-sort="area">エリア</th>
+                <th class="sortable px-3 py-2 text-left" data-sort="office">営業所名</th>
+                <th class="sortable px-3 py-2 text-left" data-sort="staff">担当者</th>
+                <th class="sortable px-3 py-2 text-right" data-sort="count">記録件数</th>
+                <th class="px-3 py-2 text-right">保険<br><span class="text-[10px] font-normal text-slate-400">合計／NB付帯／PUSH成約</span></th>
+                <th class="px-3 py-2 text-right">Wifi<br><span class="text-[10px] font-normal text-slate-400">合計／NB付帯／PUSH成約</span></th>
+                <th class="px-3 py-2 text-right">キャンサポ<br><span class="text-[10px] font-normal text-slate-400">合計／NB付帯／PUSH成約</span></th>
+                <th class="px-3 py-2 text-right">TAViCA<br><span class="text-[10px] font-normal text-slate-400">合計／NB付帯／PUSH成約</span></th>
+              </tr>
+            </thead>
+            <tbody id="personal-tbody" class="divide-y divide-slate-100"></tbody>
+          </table>
+          <p id="personal-empty" class="text-center text-slate-400 py-6 hidden">データがありません</p>
+        </div>
+      </section>
+
+      <!-- ============ タブ4: データ管理 ============ -->
+      <section id="tab-panel-admin" class="tab-panel hidden space-y-5">
+        <div class="bg-white rounded-xl shadow p-4">
+          <h2 class="text-base font-bold text-slate-800 mb-1"><i class="fa-solid fa-circle-info text-blue-600"></i> データの状態</h2>
+          <div id="admin-status" class="text-sm text-slate-600 space-y-1 mt-2"></div>
+        </div>
+
+        <!-- 列の表示順（誰でも変更できる。保存すると全員に反映される） -->
+        <div class="bg-white rounded-xl shadow p-4">
+          <h2 class="text-base font-bold text-slate-800 mb-1"><i class="fa-solid fa-arrow-down-up-across-line text-blue-600"></i> 予約データ一覧の列の並び順</h2>
+          <p class="text-xs text-slate-500 mb-3">▲▼で並び替えて保存すると、「予約データ一覧」タブの表示順が全員分変わります。</p>
+          <div id="column-order-list" class="border border-slate-200 rounded-lg divide-y divide-slate-100 max-w-md"></div>
+          <div class="flex gap-2 mt-3">
+            <button id="btn-save-column-order" class="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-1.5 text-xs font-semibold shadow">
+              <i class="fa-solid fa-floppy-disk"></i> この並び順を保存する
+            </button>
+            <button id="btn-reset-column-order" class="border border-slate-300 text-slate-600 hover:bg-slate-100 rounded-lg px-3 py-1.5 text-xs font-semibold">
+              既定の並び順に戻す
+            </button>
+          </div>
+          <p id="column-order-result" class="hidden text-xs mt-2"></p>
+        </div>
+
+        <div id="master-only-admin" class="hidden space-y-5">
+          <div class="bg-white rounded-xl shadow p-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 class="text-base font-bold text-slate-800"><i class="fa-solid fa-file-csv text-emerald-600"></i> CSVインポート</h2>
+              <p class="text-xs text-slate-500 mt-0.5">営業日報CSVから対象19項目を取り込みます。取り込んだデータは「予約データ一覧」タブに反映されます。</p>
+            </div>
+            <button id="btn-open-csv-modal" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-semibold shadow">
+              <i class="fa-solid fa-file-csv"></i> CSVインポート
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div class="bg-white rounded-xl shadow p-4">
+              <p class="text-sm font-semibold text-slate-700">重複した行を削除する</p>
+              <p class="text-xs text-slate-500 mt-1 mb-3">
+                CSV由来19項目すべてが完全一致する行を1件にまとめます。同じCSVを重ねて取り込んだ場合にご利用ください。
+              </p>
+              <button id="btn-remove-duplicates" class="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-1.5 text-xs font-semibold shadow">
+                <i class="fa-solid fa-broom"></i> 重複を削除する
+              </button>
+              <p id="duplicate-result" class="hidden text-xs mt-2"></p>
+            </div>
+
+            <div class="bg-white rounded-xl shadow p-4 border border-red-200 bg-red-50/40">
+              <p class="text-sm font-semibold text-red-700">取り込んだデータをすべて削除する</p>
+              <p class="text-xs text-slate-500 mt-1 mb-3">
+                「予約データ」シートのデータ行をすべて消し、CSVを入れ直せる状態に戻します。<b class="text-red-600">元に戻せません。</b>
+              </p>
+              <div class="flex gap-2 items-center">
+                <input type="text" id="clear-confirm-input" placeholder="削除 と入力" class="border border-slate-300 rounded-lg text-xs p-1.5 w-28">
+                <button id="btn-clear-all-data" class="bg-red-600 hover:bg-red-700 text-white rounded-lg px-3 py-1.5 text-xs font-semibold shadow">
+                  <i class="fa-solid fa-trash"></i> すべて削除する
+                </button>
+              </div>
+              <p id="clear-result" class="hidden text-xs mt-2"></p>
+            </div>
+          </div>
+
+          <!-- 権限管理（スタッフ権限） -->
+          <div class="bg-white rounded-xl shadow p-4">
+            <div class="flex items-center justify-between mb-3">
+              <h2 class="text-base font-bold text-slate-800"><i class="fa-solid fa-user-shield text-blue-600"></i> 権限管理（スタッフ権限）</h2>
+              <button id="btn-open-staff-modal" class="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-1.5 text-xs font-semibold shadow">
+                <i class="fa-solid fa-circle-plus"></i> アカウントを追加
+              </button>
+            </div>
+            <p class="text-xs text-slate-500 mb-3">
+              社員＝自店舗のみ閲覧／所長・チーフ＝自エリアのみ閲覧／マスタ権限＝全エリア閲覧＋CSVインポート・データ削除が可能です。
+            </p>
+            <div class="overflow-auto max-h-[50vh]">
+              <table class="min-w-full text-sm">
+                <thead class="bg-slate-100 text-slate-600 sticky top-0">
+                  <tr>
+                    <th class="px-3 py-2 text-left">Googleアカウント</th>
+                    <th class="px-3 py-2 text-left">氏名</th>
+                    <th class="px-3 py-2 text-left">所属店舗</th>
+                    <th class="px-3 py-2 text-left">所属エリア</th>
+                    <th class="px-3 py-2 text-left">権限</th>
+                    <th class="px-3 py-2 text-right">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="staff-tbody" class="divide-y divide-slate-100"></tbody>
+              </table>
+              <p id="staff-empty" class="text-center text-slate-400 py-6 hidden">登録がありません</p>
+            </div>
+          </div>
+
+          <!-- 担当者マスタ（CSVの担当者コード→氏名の対応表） -->
+          <div class="bg-white rounded-xl shadow p-4">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <h2 class="text-base font-bold text-slate-800"><i class="fa-solid fa-id-card text-blue-600"></i> 担当者マスタ</h2>
+              <div class="flex gap-2">
+                <button id="btn-open-staff-name-import-modal" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-1.5 text-xs font-semibold shadow">
+                  <i class="fa-solid fa-file-import"></i> 人事データCSVインポート
+                </button>
+                <button id="btn-open-staff-name-modal" class="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-1.5 text-xs font-semibold shadow">
+                  <i class="fa-solid fa-circle-plus"></i> 担当者を追加
+                </button>
+              </div>
+            </div>
+            <p class="text-xs text-slate-500 mb-3">
+              CSVの「担当者」列（例：BGK078）に対応する氏名を登録すると、「予約データ一覧」「個人別サマリー」の
+              担当者列がコードの代わりに氏名で表示されます。未登録のコードはそのまま表示されます。
+              人事データCSV（「■担当者NO」「社員名称」の列を含むもの）を取り込むと、一致した担当者コードの
+              氏名をまとめて登録・更新できます。
+            </p>
+            <div class="overflow-auto max-h-[50vh]">
+              <table class="min-w-full text-sm">
+                <thead class="bg-slate-100 text-slate-600 sticky top-0">
+                  <tr>
+                    <th class="px-3 py-2 text-left">担当者コード</th>
+                    <th class="px-3 py-2 text-left">氏名</th>
+                    <th class="px-3 py-2 text-right">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="staff-name-tbody" class="divide-y divide-slate-100"></tbody>
+              </table>
+              <p id="staff-name-empty" class="text-center text-slate-400 py-6 hidden">登録がありません</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- ============ CSV一括インポートモーダル ============ -->
+  <div id="csv-import-modal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+        <h3 class="font-bold text-lg text-emerald-700"><i class="fa-solid fa-file-csv"></i> 予約データCSVの一括インポート</h3>
+        <button id="btn-close-csv-modal" class="text-slate-400 hover:text-slate-700 text-xl">&times;</button>
+      </div>
+      <div class="p-6 space-y-4">
+        <p class="text-sm text-slate-600">
+          営業日報から出力したCSVファイルを選択してください。「006:エリア」のような見出し行を自動検出し、
+          対象の19項目だけを抽出して取り込みます。列の並び順が異なっていても、見出しの文言で判定します。
+          19項目すべてが完全一致する行は重複としてスキップされます。
+        </p>
+        <p class="text-xs text-slate-400">
+          取り込むのは「エリア・営業所・最終目的地・予約日・出発予定日・顧客ID・予約番号・性別・国籍・商品分類・
+          キャリア・ツアーブランド区分・ツアーコード・売上(商品請求金額)・入金額・STS・担当者・商品タイトル・旅行日数」
+          の19項目のみです。それ以外の列が含まれていても自動的に無視されます。
+          CHK日・保険・Wifi・TAViCA・キャンサポ・メモは取り込み後に一覧から入力してください。
+        </p>
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">CSVファイル</label>
+          <input type="file" id="csv-file-input" accept=".csv,text/csv,text/plain" class="w-full border border-slate-300 rounded-lg text-sm p-2 bg-white">
+          <p class="text-xs text-slate-400 mt-1">文字コードはUTF-8・Shift_JISのどちらでも自動判定して取り込みます。</p>
+          <p id="csv-file-summary" class="hidden text-xs text-slate-600 mt-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"></p>
+        </div>
+
+        <div id="csv-progress" class="hidden">
+          <div class="flex items-center justify-between text-xs text-slate-600 mb-1">
+            <span id="csv-progress-label">取り込んでいます…</span>
+            <span id="csv-progress-time" class="tabular-nums">0秒</span>
+          </div>
+          <div class="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+            <div id="csv-progress-bar" class="h-full bg-emerald-500 rounded-full" style="width:0%; transition:width .4s ease;"></div>
+          </div>
+          <p class="text-xs text-slate-400 mt-1">この画面を閉じたり再読み込みしたりせずにお待ちください。</p>
+        </div>
+        <div id="csv-import-result" class="hidden text-sm bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1"></div>
+        <div class="flex justify-end gap-3 pt-2 border-t border-slate-100">
+          <button type="button" id="btn-cancel-csv-modal" class="px-4 py-2 rounded-lg text-sm font-semibold text-slate-500 hover:bg-slate-100">閉じる</button>
+          <button type="button" id="btn-submit-csv" class="px-5 py-2 rounded-lg text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow" disabled>
+            <i class="fa-solid fa-upload"></i> 取り込む
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ スタッフ権限 追加・編集モーダル ============ -->
+  <div id="staff-modal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+        <h3 id="staff-modal-title" class="font-bold text-lg text-blue-800"><i class="fa-solid fa-user-shield"></i> アカウントを追加</h3>
+        <button type="button" id="btn-close-staff-modal" class="text-slate-400 hover:text-slate-700 text-xl">&times;</button>
+      </div>
+      <form id="staff-form" class="p-6 space-y-4">
+        <input type="hidden" id="staff-form-rowindex" value="">
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">Googleアカウント <span class="text-red-500">*</span></label>
+          <input type="email" id="staff-form-email" required placeholder="example@gmail.com" class="w-full border border-slate-300 rounded-lg text-sm p-2">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">氏名</label>
+          <input type="text" id="staff-form-name" class="w-full border border-slate-300 rounded-lg text-sm p-2">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">所属店舗（営業所）</label>
+          <input type="text" id="staff-form-office" list="staff-office-options" placeholder="例：717:イーアスつくば" class="w-full border border-slate-300 rounded-lg text-sm p-2">
+          <datalist id="staff-office-options"></datalist>
+          <p class="text-xs text-slate-400 mt-1">社員権限の閲覧範囲を店舗単位で絞り込むのに使います。</p>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">所属エリア</label>
+          <input type="text" id="staff-form-area" list="staff-area-options" placeholder="例：10:郊外エリア" class="w-full border border-slate-300 rounded-lg text-sm p-2">
+          <datalist id="staff-area-options"></datalist>
+          <p class="text-xs text-slate-400 mt-1">所長・チーフ権限の閲覧範囲をエリア単位で絞り込むのに使います。</p>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">権限</label>
+          <select id="staff-form-role" class="w-full border border-slate-300 rounded-lg text-sm p-2">
+            <option value="社員">社員（自店舗のみ閲覧）</option>
+            <option value="所長・チーフ">所長・チーフ（自エリアのみ閲覧）</option>
+            <option value="マスタ権限">マスタ権限（全エリア閲覧＋CSVインポート）</option>
+          </select>
+        </div>
+        <div class="flex justify-end gap-3 pt-2 border-t border-slate-100">
+          <button type="button" id="btn-cancel-staff-modal" class="px-4 py-2 rounded-lg text-sm font-semibold text-slate-500 hover:bg-slate-100">キャンセル</button>
+          <button type="submit" class="px-5 py-2 rounded-lg text-sm font-semibold bg-blue-700 hover:bg-blue-800 text-white shadow">
+            <i class="fa-solid fa-floppy-disk"></i> 保存する
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============ 担当者マスタ 追加・編集モーダル ============ -->
+  <div id="staff-name-modal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+        <h3 id="staff-name-modal-title" class="font-bold text-lg text-blue-800"><i class="fa-solid fa-id-card"></i> 担当者を追加</h3>
+        <button type="button" id="btn-close-staff-name-modal" class="text-slate-400 hover:text-slate-700 text-xl">&times;</button>
+      </div>
+      <form id="staff-name-form" class="p-6 space-y-4">
+        <input type="hidden" id="staff-name-form-rowindex" value="">
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">担当者コード <span class="text-red-500">*</span></label>
+          <input type="text" id="staff-name-form-code" required placeholder="例：BGK078" class="w-full border border-slate-300 rounded-lg text-sm p-2">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">氏名 <span class="text-red-500">*</span></label>
+          <input type="text" id="staff-name-form-name" required class="w-full border border-slate-300 rounded-lg text-sm p-2">
+        </div>
+        <div class="flex justify-end gap-3 pt-2 border-t border-slate-100">
+          <button type="button" id="btn-cancel-staff-name-modal" class="px-4 py-2 rounded-lg text-sm font-semibold text-slate-500 hover:bg-slate-100">キャンセル</button>
+          <button type="submit" class="px-5 py-2 rounded-lg text-sm font-semibold bg-blue-700 hover:bg-blue-800 text-white shadow">
+            <i class="fa-solid fa-floppy-disk"></i> 保存する
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============ 担当者マスタ 人事データCSVインポートモーダル ============ -->
+  <div id="staff-name-import-modal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+        <h3 class="font-bold text-lg text-emerald-700"><i class="fa-solid fa-file-import"></i> 担当者マスタ：人事データCSVインポート</h3>
+        <button id="btn-close-staff-name-import-modal" class="text-slate-400 hover:text-slate-700 text-xl">&times;</button>
+      </div>
+      <div class="p-6 space-y-4">
+        <p class="text-sm text-slate-600">
+          人事データCSVを選択してください。見出し行の「■担当者NO」列と「社員名称」列だけを使い、
+          担当者マスタ（担当者コード→氏名）へまとめて反映します。他の人事項目の列は読み捨てます。
+        </p>
+        <p class="text-xs text-slate-400">
+          既に登録済みの担当者コードは氏名を上書き更新し、未登録の担当者コードは新規追加します。
+        </p>
+        <p class="text-xs text-slate-400">
+          CSVに「Googleアカウント」等のメールアドレス列もある場合は、「権限管理（スタッフ権限）」への
+          一括登録もあわせて行います（所属店舗・所属エリア・権限の列があればそれも読み取ります。
+          既存アカウントの権限は変更せず、CSVの権限欄が「マスタ権限」相当でも安全のため自動では付与しません）。
+        </p>
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-1">人事データCSVファイル</label>
+          <input type="file" id="staff-name-import-file-input" accept=".csv,text/csv,text/plain" class="w-full border border-slate-300 rounded-lg text-sm p-2 bg-white">
+          <p class="text-xs text-slate-400 mt-1">文字コードはUTF-8・Shift_JISのどちらでも自動判定して取り込みます。</p>
+          <p id="staff-name-import-file-summary" class="hidden text-xs text-slate-600 mt-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"></p>
+        </div>
+
+        <div id="staff-name-import-progress" class="hidden">
+          <div class="flex items-center justify-between text-xs text-slate-600 mb-1">
+            <span>取り込んでいます…</span>
+            <span id="staff-name-import-progress-time" class="tabular-nums">0秒</span>
+          </div>
+          <div class="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+            <div id="staff-name-import-progress-bar" class="h-full bg-emerald-500 rounded-full" style="width:0%; transition:width .4s ease;"></div>
+          </div>
+        </div>
+        <div id="staff-name-import-result" class="hidden text-sm bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1"></div>
+        <div class="flex justify-end gap-3 pt-2 border-t border-slate-100">
+          <button type="button" id="btn-cancel-staff-name-import-modal" class="px-4 py-2 rounded-lg text-sm font-semibold text-slate-500 hover:bg-slate-100">閉じる</button>
+          <button type="button" id="btn-submit-staff-name-import" class="px-5 py-2 rounded-lg text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow" disabled>
+            <i class="fa-solid fa-upload"></i> 取り込む
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <?!= include('Javascript'); ?>
+</body>
+</html>

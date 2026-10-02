@@ -1,0 +1,2385 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>営業セールスダッシュボード（UI/UXモックアップ）</title>
+<style>
+/* ============================================================================
+   このファイルは単体で完結する「見た目確認専用」のモックアップです。
+   外部CDN（Tailwind / FontAwesome / Chart.js等）は一切使用していないため、
+   インターネットに接続していないPCでもダブルクリックするだけで開けます。
+   実際のGoogleスプレッドシートには接続しておらず、表示データはすべて
+   このファイル内で生成した架空のサンプルです。
+   ============================================================================ */
+:root{
+  --blue-50:#eff6ff; --blue-100:#dbeafe; --blue-200:#bfdbfe; --blue-300:#93c5fd;
+  --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af;
+  --amber-50:#fffbeb; --amber-300:#fcd34d; --amber-500:#f59e0b; --amber-600:#d97706; --amber-700:#b45309; --amber-800:#92400e;
+  --emerald-500:#10b981; --emerald-600:#059669; --emerald-700:#047857;
+  --indigo-300:#a5b4fc; --indigo-600:#4f46e5; --purple-700:#6d28d9;
+  --red-50:#fef2f2; --red-200:#fecaca; --red-300:#fca5a5; --red-600:#dc2626; --red-700:#b91c1c;
+  --slate-50:#f8fafc; --slate-100:#f1f5f9; --slate-200:#e2e8f0; --slate-300:#cbd5e1;
+  --slate-400:#94a3b8; --slate-500:#64748b; --slate-600:#475569; --slate-700:#334155; --slate-800:#1e293b;
+  color-scheme: light;
+}
+*{box-sizing:border-box;}
+body{
+  margin:0; background:var(--slate-100); color:var(--slate-800);
+  font-family:"Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo",sans-serif;
+  font-size:14px;
+}
+.wrap{max-width:1600px; margin:0 auto; padding:0 16px;}
+a{color:inherit;}
+button{font-family:inherit; cursor:pointer;}
+::-webkit-scrollbar{height:8px; width:8px;}
+::-webkit-scrollbar-thumb{background:var(--blue-300); border-radius:4px;}
+
+/* ---- ヘッダー ---- */
+header{position:sticky; top:0; z-index:40; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.06); border-bottom:1px solid var(--slate-200);}
+header .inner{padding:12px 0;}
+.header-top{display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; gap:12px; flex-wrap:wrap;}
+h1{font-size:20px; font-weight:700; color:var(--blue-800); margin:0; display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+.btn-refresh{font-size:13px; color:var(--blue-700); border:1px solid var(--blue-200); border-radius:8px; padding:6px 12px; background:#fff;}
+.btn-refresh:hover{background:var(--blue-50);}
+.last-imported{font-size:11px; color:var(--slate-400);}
+.role-switcher{display:flex; align-items:center; gap:6px; font-size:12px; color:var(--slate-500);}
+.role-switcher select{font-size:12px; padding:5px 6px;}
+.role-badge{font-size:11px; font-weight:700; color:var(--blue-700); background:var(--blue-50); border:1px solid var(--blue-200); border-radius:8px; padding:5px 10px; white-space:nowrap;}
+
+.kpi-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:12px;}
+@media(min-width:768px){ .kpi-grid{grid-template-columns:repeat(5,1fr);} }
+.kpi-card{border-radius:12px; padding:12px; color:#fff; box-shadow:0 1px 3px rgba(0,0,0,.12); transition:transform .15s ease, box-shadow .15s ease; position:relative;}
+.kpi-card:hover{transform:translateY(-2px); box-shadow:0 8px 20px rgba(29,78,216,.15);}
+.kpi-card p.label{font-size:11px; opacity:.85; margin:0 0 4px;}
+.kpi-card p.value{font-size:22px; font-weight:700; margin:0;}
+.kpi-blue{background:linear-gradient(135deg,var(--blue-600),var(--blue-700));}
+.kpi-emerald{background:linear-gradient(135deg,var(--emerald-500),var(--emerald-700));}
+.kpi-amber{background:linear-gradient(135deg,var(--amber-500),var(--amber-600));}
+.kpi-slate{background:linear-gradient(135deg,var(--slate-600),var(--slate-700));}
+.kpi-main{background:linear-gradient(135deg,var(--indigo-600),var(--purple-700)); box-shadow:0 0 0 2px var(--indigo-300), 0 4px 14px rgba(0,0,0,.15);}
+.kpi-main .badge{position:absolute; top:6px; right:8px; font-size:9px; font-weight:700; background:rgba(255,255,255,.2); border-radius:4px; padding:2px 6px;}
+.kpi-main p.value{font-size:26px;}
+
+.tabs{display:flex; gap:8px; margin-top:16px; flex-wrap:wrap;}
+.tab-btn{flex:1 1 auto; padding:8px 16px; border-radius:8px; font-size:13px; font-weight:600; background:var(--slate-100); color:var(--slate-600); border:none;}
+.tab-btn.active{background:var(--blue-700); color:#fff;}
+
+main{padding:20px 0;}
+.card{background:#fff; border-radius:12px; box-shadow:0 1px 3px rgba(0,0,0,.08); padding:16px; margin-bottom:20px;}
+.card h2{font-size:15px; font-weight:700; color:var(--slate-700); margin:0 0 10px; display:flex; align-items:center; gap:6px;}
+.card h2.sm{font-size:13px;}
+.muted{color:var(--slate-400); font-size:12px;}
+
+.grid-2{display:grid; grid-template-columns:1fr; gap:20px;}
+.grid-3{display:grid; grid-template-columns:1fr; gap:20px;}
+.grid-4{display:grid; grid-template-columns:1fr; gap:20px;}
+@media(min-width:1024px){ .grid-2{grid-template-columns:1fr 1fr;} .grid-3{grid-template-columns:1fr 1fr 1fr;} }
+@media(min-width:768px) and (max-width:1279px){ .grid-4{grid-template-columns:1fr 1fr;} }
+@media(min-width:1280px){ .grid-4{grid-template-columns:1fr 1fr 1fr 1fr;} }
+
+/* ---- 案内バー ---- */
+.banner{border-radius:12px; padding:16px; margin-bottom:20px; display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap;}
+.banner-amber{background:var(--amber-50); border:1px solid var(--amber-300);}
+.banner-red{background:var(--red-50); border:1px solid var(--red-200);}
+.banner p.title{font-weight:700; margin:0 0 4px;}
+.banner-amber p.title{color:var(--amber-800);}
+.banner-red p.title{color:var(--red-700);}
+.banner p.desc{font-size:13px; margin:0;}
+.banner-amber p.desc{color:var(--amber-700);}
+.banner-red p.desc{color:var(--red-700);}
+.btn-primary{background:var(--blue-700); color:#fff; border:none; border-radius:8px; padding:9px 18px; font-size:13px; font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,.1);}
+.btn-primary:hover{background:var(--blue-800);}
+.btn-amber{background:var(--amber-600); color:#fff; border:none; border-radius:8px; padding:9px 18px; font-size:13px; font-weight:600;}
+.btn-amber:hover{background:var(--amber-700);}
+.btn-emerald{background:var(--emerald-600); color:#fff; border:none; border-radius:8px; padding:9px 18px; font-size:13px; font-weight:600;}
+.btn-emerald:hover{background:var(--emerald-700);}
+.btn-red{background:var(--red-600); color:#fff; border:none; border-radius:8px; padding:7px 12px; font-size:12px; font-weight:600;}
+.btn-red:hover{background:var(--red-700);}
+.btn-ghost{background:#fff; border:1px solid var(--slate-300); border-radius:8px; padding:7px 12px; font-size:12px; font-weight:600; color:var(--slate-600);}
+.btn-ghost:hover{background:var(--slate-50);}
+.btn-ghost:disabled{opacity:.35; cursor:default;}
+
+/* ---- フィルタバー ---- */
+.filter-bar{display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end;}
+.filter-field label{display:block; font-size:11px; font-weight:600; color:var(--slate-500); margin-bottom:4px;}
+select, input[type=date], input[type=text], input[type=email], input[type=number]{
+  border:1px solid var(--slate-300); border-radius:8px; font-size:13px; padding:7px 8px; background:#fff; color:var(--slate-800);
+}
+select[multiple]{min-width:140px; height:80px;}
+.filter-kw{flex:1 1 220px;}
+.filter-kw input{width:100%;}
+
+/* ---- グラフ（外部ライブラリ不使用：CSS/自作HTMLで描画） ---- */
+.legend{display:flex; flex-wrap:wrap; gap:8px 14px; margin-top:10px; font-size:11px; color:var(--slate-600);}
+.legend .dot{display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:5px; vertical-align:middle;}
+
+.donut-wrap{display:flex; align-items:center; gap:18px; flex-wrap:wrap;}
+.donut{width:150px; height:150px; border-radius:50%; flex:none; position:relative;}
+.donut::after{content:""; position:absolute; inset:22%; background:#fff; border-radius:50%;}
+
+.hbar-row{display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:12px;}
+.hbar-label{width:150px; flex:none; color:var(--slate-600); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.hbar-track{flex:1; background:var(--slate-100); border-radius:4px; height:14px; overflow:hidden;}
+.hbar-fill{height:100%; background:var(--blue-700); border-radius:4px;}
+.hbar-value{width:52px; flex:none; text-align:right; color:var(--slate-500); font-variant-numeric:tabular-nums;}
+
+.vbar-chart{display:flex; align-items:flex-end; gap:6px; height:200px; padding-top:20px; overflow-x:auto;}
+.vbar-col{flex:none; min-width:22px; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; gap:2px;}
+.vbar-pair{display:flex; align-items:flex-end; gap:2px; height:100%; width:100%; justify-content:center;}
+.vbar{width:9px; border-radius:2px 2px 0 0; position:relative;}
+.vbar.count{background:var(--blue-300);}
+.vbar.sales{background:var(--blue-700);}
+.vbar.count-alt{background:#c7d2fe;}
+.vbar.qty{background:var(--emerald-600);}
+.vbar-month{font-size:10px; color:var(--slate-400); margin-top:6px; white-space:nowrap;}
+
+/* ---- テーブル ---- */
+table{width:100%; border-collapse:collapse; font-size:13px;}
+thead th{background:var(--slate-100); color:var(--slate-600); text-align:left; padding:8px 10px; font-weight:600; white-space:nowrap;}
+thead th.editable-col{background:var(--blue-50);}
+tbody td{padding:8px 10px; border-top:1px solid var(--slate-100); white-space:nowrap;}
+tbody tr:hover{background:var(--slate-50);}
+th.sortable{cursor:pointer; user-select:none;}
+th.sortable:hover{background:var(--blue-100);}
+.sort-mark{color:var(--blue-700); font-size:9px; margin-left:3px;}
+.text-right{text-align:right;}
+.text-center{text-align:center;}
+.table-scroll{overflow:auto; max-height:65vh;}
+.table-scroll thead th{position:sticky; top:0; z-index:5;}
+.rank-rate{background:#eef2ff; color:var(--indigo-600); font-weight:700;}
+.editable-cell select, .editable-cell input{background:var(--blue-50); font-size:12px; padding:4px 5px;}
+.editable-cell input[type=date]{width:126px;}
+.editable-cell input[type=text]{width:150px;}
+.editable-cell input[type=number]{width:56px;}
+.editable-cell input:disabled{background:var(--slate-100); color:var(--slate-300);}
+.ancillary-pair{display:flex; align-items:center; justify-content:center; gap:4px;}
+.ancillary-flagged{outline:2px solid var(--amber-500); outline-offset:-2px; border-radius:4px;}
+.pending-edit{outline:2px solid #f97316; outline-offset:-2px; border-radius:4px;}
+.pending-changes-bar{position:sticky; top:0; z-index:30; background:#fbbf24; color:#78350f; border-radius:12px; box-shadow:0 6px 16px rgba(0,0,0,.15); padding:12px 16px; display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-bottom:20px;}
+.pending-changes-bar .btn-save-pending{background:#b45309; color:#fff; border:none; border-radius:8px; padding:9px 16px; font-size:13px; font-weight:700;}
+.pending-changes-bar .btn-save-pending:hover{background:#92400e;}
+.pending-changes-bar .btn-discard-pending{background:#fff; color:#78350f; border:1px solid #d97706; border-radius:8px; padding:9px 16px; font-size:13px; font-weight:600;}
+.pending-changes-bar .btn-discard-pending:hover{background:#fffbeb;}
+.memo-display{cursor:text; display:inline-block; min-width:70px; padding:2px 4px; border-radius:4px;}
+.memo-display:hover{background:var(--blue-100);}
+.memo-placeholder{color:var(--slate-300);}
+#hover-tooltip{position:fixed; z-index:80; max-width:280px; background:var(--slate-800); color:#fff; font-size:12px; border-radius:8px; box-shadow:0 6px 16px rgba(0,0,0,.25); padding:8px 10px; white-space:pre-wrap; word-break:break-word; pointer-events:none;}
+
+.pagination{display:flex; align-items:center; justify-content:space-between; margin-top:12px; font-size:13px;}
+.pagination .buttons{display:flex; gap:8px;}
+.pagination button:disabled{opacity:.4; cursor:default;}
+
+/* ---- 列の並び順エディタ ---- */
+.col-order-list{border:1px solid var(--slate-200); border-radius:8px; max-width:420px;}
+.col-order-row{display:flex; align-items:center; justify-content:space-between; padding:7px 12px; font-size:13px; border-top:1px solid var(--slate-100);}
+.col-order-row:first-child{border-top:none;}
+.col-order-row:hover{background:var(--slate-50);}
+.col-order-row .buttons{display:flex; gap:2px;}
+.col-order-row button{background:none; border:none; color:var(--slate-400); padding:2px 6px; font-size:13px;}
+.col-order-row button:hover:not(:disabled){color:var(--blue-700);}
+.col-order-row button:disabled{opacity:.3; cursor:default;}
+
+/* ---- モーダル ---- */
+.modal-overlay{position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:50; display:none; align-items:center; justify-content:center; padding:16px;}
+.modal-overlay.open{display:flex;}
+.modal-box{background:#fff; border-radius:16px; box-shadow:0 20px 40px rgba(0,0,0,.25); width:100%; max-width:520px; max-height:90vh; overflow-y:auto;}
+.modal-head{display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--slate-200);}
+.modal-head h3{font-size:16px; font-weight:700; margin:0; color:var(--emerald-700); display:flex; gap:8px; align-items:center;}
+.modal-head h3.blue{color:var(--blue-800);}
+.modal-close{background:none; border:none; font-size:20px; color:var(--slate-400);}
+.modal-body{padding:20px; display:flex; flex-direction:column; gap:14px;}
+.form-field label{display:block; font-size:11px; font-weight:600; color:var(--slate-500); margin-bottom:4px;}
+.form-field input, .form-field select{width:100%;}
+.progress-track{width:100%; height:8px; background:var(--slate-200); border-radius:4px; overflow:hidden;}
+.progress-fill{height:100%; background:var(--emerald-500); width:0%; transition:width .4s ease;}
+.result-box{background:var(--slate-50); border:1px solid var(--slate-200); border-radius:8px; padding:12px; font-size:13px; display:none;}
+.result-box p{margin:2px 0;}
+
+/* ---- トースト ---- */
+.toast-container{position:fixed; top:16px; right:16px; z-index:60; display:flex; flex-direction:column; gap:8px; width:300px;}
+.toast{color:#fff; font-size:13px; border-radius:8px; box-shadow:0 6px 16px rgba(0,0,0,.18); padding:10px 14px; display:flex; gap:8px; align-items:flex-start; animation:slideIn .25s ease-out; transition:opacity .3s ease;}
+@keyframes slideIn{from{opacity:0; transform:translateX(30px);} to{opacity:1; transform:translateX(0);}}
+.toast.success{background:var(--emerald-600);}
+.toast.error{background:var(--red-600);}
+.toast.info{background:var(--slate-700);}
+
+/* ---- ローディング ---- */
+.loading-overlay{position:fixed; inset:0; background:rgba(255,255,255,.85); z-index:70; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;}
+.loading-overlay.hidden{display:none;}
+.spinner{width:52px; height:52px; border-radius:50%; border:4px solid var(--blue-100); border-top-color:var(--blue-700); animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.hidden{display:none !important;}
+.empty-msg{text-align:center; color:var(--slate-400); padding:24px 0;}
+</style>
+</head>
+<body>
+
+<div id="loading-overlay" class="loading-overlay hidden">
+  <div class="spinner"></div>
+  <p style="color:var(--blue-700); font-weight:600;">データを読み込んでいます...</p>
+</div>
+
+<div id="toast-container" class="toast-container"></div>
+<div id="hover-tooltip" class="hidden"></div>
+
+<header>
+  <div class="wrap inner">
+    <div class="header-top">
+      <h1>📈 営業セールスダッシュボード <span style="font-size:11px; font-weight:600; color:var(--slate-400); background:var(--slate-100); border-radius:6px; padding:2px 8px;">UI/UXモックアップ（オフライン・サンプルデータ）</span></h1>
+      <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+        <div class="role-switcher">
+          <span>表示権限を切替：</span>
+          <select id="role-switcher">
+            <option value="マスタ権限">マスタ権限（全エリア）</option>
+            <option value="所長・チーフ">所長・チーフ（自エリアのみ）</option>
+            <option value="社員">社員（自店舗のみ）</option>
+          </select>
+        </div>
+        <span class="role-badge" id="role-badge"></span>
+        <span class="last-imported" id="last-imported-label"></span>
+        <button class="btn-refresh" id="btn-refresh">⟳ データ再読込</button>
+      </div>
+    </div>
+
+    <div class="kpi-grid">
+      <div class="kpi-card kpi-blue"><p class="label">予約件数</p><p class="value" id="kpi-total">0</p></div>
+      <div class="kpi-card kpi-emerald" title="保険加入PAX数の合計"><p class="label">🛡️ 保険契約数</p><p class="value" id="kpi-insurance">0</p></div>
+      <div class="kpi-card kpi-amber" title="Wifi販売台数の合計"><p class="label">📶 Wifi販売台数</p><p class="value" id="kpi-wifi">0</p></div>
+      <div class="kpi-card kpi-slate" title="キャンサポ加入PAX数の合計"><p class="label">🩹 キャンサポ契約数</p><p class="value" id="kpi-cansapo">0</p></div>
+      <div class="kpi-card kpi-main" title="TAViCA加入数の合計"><p class="label">🛂 TAViCA契約件数</p><p class="value" id="kpi-tavica">0</p></div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="dashboard">📊 分析ダッシュボード</button>
+      <button class="tab-btn" data-tab="data">📋 予約データ一覧</button>
+      <button class="tab-btn" data-tab="personal">👥 個人別サマリー</button>
+      <button class="tab-btn" data-tab="admin">⚙️ データ管理</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="banner banner-red hidden" id="access-denied-banner">
+    <div>
+      <p class="title">🔒 アクセス権がありません</p>
+      <p class="desc">このアカウントは「スタッフ権限」シートに登録されていません（このモックアップでは権限切替で再現しています）。</p>
+    </div>
+  </div>
+
+  <div id="app-content">
+
+  <!-- ============ タブ1: 分析ダッシュボード ============ -->
+  <section id="panel-dashboard" class="panel">
+    <div class="card filter-bar">
+      <div class="filter-field"><label>エリア</label><select id="dash-filter-area" multiple></select></div>
+      <div class="filter-field"><label>営業所</label><select id="dash-filter-office" multiple></select></div>
+      <div class="filter-field"><label>商品分類</label><select id="dash-filter-category" multiple></select></div>
+      <div class="filter-field"><label>ツアーブランド区分</label><select id="dash-filter-tourbrand" multiple></select></div>
+      <div class="filter-field"><label>方面別（最終目的地）</label><select id="dash-filter-destination" multiple></select></div>
+      <div class="filter-field">
+        <label>基準日</label>
+        <select id="dash-filter-date-field">
+          <option value="bookingDate">予約日</option>
+          <option value="departureDate">出発予定日</option>
+          <option value="chkDate">CHK日</option>
+        </select>
+      </div>
+      <div class="filter-field"><label>From</label><input type="date" id="dash-filter-date-from"></div>
+      <div class="filter-field"><label>To</label><input type="date" id="dash-filter-date-to"></div>
+      <button class="btn-ghost" id="btn-clear-dash-filter">✕ フィルタ解除</button>
+      <p class="muted" id="dash-filter-summary" style="width:100%; margin:0;"></p>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h2>📊 月次推移（予約件数 / 売上合計）</h2>
+        <div id="chart-monthly" class="vbar-chart"></div>
+        <div class="legend">
+          <span><span class="dot" style="background:var(--blue-300)"></span>予約件数</span>
+          <span><span class="dot" style="background:var(--blue-700)"></span>売上合計（正規化表示）</span>
+        </div>
+      </div>
+      <div class="card">
+        <h2>🟢 STS別 件数</h2>
+        <div class="donut-wrap">
+          <div id="chart-sts" class="donut"></div>
+          <div id="chart-sts-legend" class="legend" style="flex-direction:column; gap:6px;"></div>
+        </div>
+        <p class="muted" style="margin-top:10px;">STSはCSV上の処理ステータスコードをそのまま表示しています（各コードの意味はCSV提供元の定義をご確認ください）。</p>
+      </div>
+    </div>
+
+    <div class="grid-3">
+      <div class="card">
+        <h2 class="sm">🏷️ 商品分類別 件数</h2>
+        <div class="donut-wrap">
+          <div id="chart-category" class="donut"></div>
+          <div id="chart-category-legend" class="legend" style="flex-direction:column; gap:6px;"></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2 class="sm">🌏 国籍別 件数（上位10）</h2>
+        <div id="chart-nationality"></div>
+      </div>
+      <div class="card">
+        <h2 class="sm">✈️ キャリア別 件数（上位10）</h2>
+        <div id="chart-carrier"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>📈 付帯商品 総合（月別販売数）</h2>
+      <div id="chart-ancillary-combined" class="vbar-chart"></div>
+      <div class="legend" id="chart-ancillary-combined-legend"></div>
+      <p class="muted" style="margin-top:10px;">保険・Wifi・キャンサポ・TAViCAの月別数量（加入・販売数）を並べて比較できます。</p>
+    </div>
+
+    <div class="grid-4">
+      <div class="card">
+        <h2 class="sm">🛡️ 保険</h2>
+        <p class="muted" id="ancillary-breakdown-insurance" style="margin:0 0 8px;"></p>
+        <div id="chart-insurance" class="vbar-chart"></div>
+      </div>
+      <div class="card">
+        <h2 class="sm">📶 Wifi</h2>
+        <p class="muted" id="ancillary-breakdown-wifi" style="margin:0 0 8px;"></p>
+        <div id="chart-wifi" class="vbar-chart"></div>
+      </div>
+      <div class="card">
+        <h2 class="sm">🩹 キャンサポ</h2>
+        <p class="muted" id="ancillary-breakdown-cansapo" style="margin:0 0 8px;"></p>
+        <div id="chart-cansapo" class="vbar-chart"></div>
+      </div>
+      <div class="card">
+        <h2 class="sm">🛂 TAViCA</h2>
+        <p class="muted" id="ancillary-breakdown-tavica" style="margin:0 0 8px;"></p>
+        <div id="chart-tavica" class="vbar-chart"></div>
+      </div>
+    </div>
+    <p class="muted" style="margin-top:-10px;">
+      <span class="dot" style="background:#c7d2fe; display:inline-block; width:9px; height:9px; border-radius:2px; vertical-align:middle; margin-right:4px;"></span>リスト数（予約件数）
+      <span class="dot" style="background:var(--emerald-600); display:inline-block; width:9px; height:9px; border-radius:2px; vertical-align:middle; margin:0 4px 0 12px;"></span>加入・販売数
+    </p>
+
+    <div class="card" style="overflow-x:auto;">
+      <h2>🏆 営業所別ランキング</h2>
+      <table>
+        <thead>
+          <tr>
+            <th class="sortable" data-sort="office">営業所</th>
+            <th class="sortable text-right" data-sort="count">件数</th>
+            <th class="sortable text-right" data-sort="salesAmount">売上合計</th>
+            <th class="sortable text-right" data-sort="paymentAmount">入金額合計</th>
+            <th class="sortable text-right" data-sort="paymentRate">⭐ 入金消化率</th>
+            <th class="sortable text-right" data-sort="avgDays">平均旅行日数</th>
+          </tr>
+        </thead>
+        <tbody id="ranking-tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ タブ2: 予約データ一覧 ============ -->
+  <section id="panel-data" class="panel hidden">
+    <div class="card filter-bar">
+      <div class="filter-field"><label>エリア</label><select id="data-filter-area" multiple></select></div>
+      <div class="filter-field"><label>店舗</label><select id="data-filter-office" multiple></select></div>
+      <div class="filter-field"><label>担当者</label><select id="data-filter-staff" multiple></select></div>
+      <div class="filter-field"><label>出発予定日（From）</label><input type="date" id="data-filter-date-from"></div>
+      <div class="filter-field"><label>出発予定日（To）</label><input type="date" id="data-filter-date-to"></div>
+      <div class="filter-field"><label>保険 STS</label><select id="data-filter-insurance-status" multiple></select></div>
+      <div class="filter-field"><label>Wifi STS</label><select id="data-filter-wifi-status" multiple></select></div>
+      <div class="filter-field"><label>TAViCA STS</label><select id="data-filter-tavica-status" multiple></select></div>
+      <div class="filter-field"><label>キャンサポ STS</label><select id="data-filter-cansapo-status" multiple></select></div>
+      <button class="btn-ghost" id="btn-clear-data-filter">✕ フィルタ解除</button>
+      <p class="muted" id="data-filter-summary" style="width:100%; margin:0;"></p>
+    </div>
+
+    <div class="card">
+      <h2 style="margin:0;">📋 予約データ一覧</h2>
+      <p class="muted" style="margin-top:4px;">
+        CSV由来の項目は読み取り専用です。
+        <span style="display:inline-block; width:9px; height:9px; background:var(--blue-100); border:1px solid var(--blue-300); vertical-align:middle; margin:0 4px;"></span>
+        の列（CHK日・保険・Wifi・TAViCA・キャンサポ・メモ）は入力・編集できます。
+        行のチェックボックスで複数選択すると、下の「一括登録」から同じ値をまとめて登録できます。
+        CSVインポートは「データ管理」タブから行えます。
+      </p>
+    </div>
+
+    <!-- ============ 一括登録バー（行を選択すると表示） ============ -->
+    <div id="bulk-edit-bar" class="card hidden" style="background:var(--blue-50); border:1px solid var(--blue-200);">
+      <div style="display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:10px;">
+        <span style="font-weight:700; color:var(--blue-800); font-size:13px;"><span id="bulk-selected-count">0</span>件選択中 — 一括登録</span>
+        <button type="button" id="btn-bulk-clear-selection" class="btn-ghost" style="margin-left:auto;">選択解除</button>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr; gap:10px;" class="grid-3">
+        <div style="display:flex; align-items:flex-end; gap:6px;">
+          <div style="flex:1;"><label style="display:block; font-size:11px; font-weight:600; color:var(--slate-500); margin-bottom:4px;">CHK日を一括設定</label><input type="date" id="bulk-chkdate-input" style="width:100%;"></div>
+          <button type="button" class="btn-primary bulk-apply-field-btn" data-field="chkDate">適用</button>
+        </div>
+        <div style="display:flex; align-items:flex-end; gap:6px;">
+          <div style="flex:1;"><label style="display:block; font-size:11px; font-weight:600; color:var(--slate-500); margin-bottom:4px;">メモを一括設定</label><input type="text" id="bulk-memo-input" placeholder="メモ" style="width:100%;"></div>
+          <button type="button" class="btn-primary bulk-apply-field-btn" data-field="memo">適用</button>
+        </div>
+        <div style="display:flex; align-items:flex-end; gap:6px;">
+          <div style="flex:1;"><label style="display:block; font-size:11px; font-weight:600; color:var(--slate-500); margin-bottom:4px;">保険を一括設定</label>
+            <div style="display:flex; gap:4px;"><select id="bulk-insurance-status" class="bulk-ancillary-status" data-item="insurance" style="flex:1;"></select><input type="number" min="0" id="bulk-insurance-qty" placeholder="数" style="width:56px;"></div>
+          </div>
+          <button type="button" class="btn-primary bulk-apply-ancillary-btn" data-item="insurance">適用</button>
+        </div>
+        <div style="display:flex; align-items:flex-end; gap:6px;">
+          <div style="flex:1;"><label style="display:block; font-size:11px; font-weight:600; color:var(--slate-500); margin-bottom:4px;">Wifiを一括設定</label>
+            <div style="display:flex; gap:4px;"><select id="bulk-wifi-status" class="bulk-ancillary-status" data-item="wifi" style="flex:1;"></select><input type="number" min="0" id="bulk-wifi-qty" placeholder="数" style="width:56px;"></div>
+          </div>
+          <button type="button" class="btn-primary bulk-apply-ancillary-btn" data-item="wifi">適用</button>
+        </div>
+        <div style="display:flex; align-items:flex-end; gap:6px;">
+          <div style="flex:1;"><label style="display:block; font-size:11px; font-weight:600; color:var(--slate-500); margin-bottom:4px;">キャンサポを一括設定</label>
+            <div style="display:flex; gap:4px;"><select id="bulk-cansapo-status" class="bulk-ancillary-status" data-item="cansapo" style="flex:1;"></select><input type="number" min="0" id="bulk-cansapo-qty" placeholder="数" style="width:56px;"></div>
+          </div>
+          <button type="button" class="btn-primary bulk-apply-ancillary-btn" data-item="cansapo">適用</button>
+        </div>
+        <div style="display:flex; align-items:flex-end; gap:6px;">
+          <div style="flex:1;"><label style="display:block; font-size:11px; font-weight:600; color:var(--slate-500); margin-bottom:4px;">TAViCAを一括設定</label>
+            <div style="display:flex; gap:4px;"><select id="bulk-tavica-status" class="bulk-ancillary-status" data-item="tavica" style="flex:1;"></select><input type="number" min="0" id="bulk-tavica-qty" placeholder="数" style="width:56px;"></div>
+          </div>
+          <button type="button" class="btn-primary bulk-apply-ancillary-btn" data-item="tavica">適用</button>
+        </div>
+      </div>
+      <p id="bulk-edit-result" class="muted hidden" style="margin-top:10px;"></p>
+    </div>
+
+    <!-- ============ 未保存の変更バー（編集すると表示。保存するまでサーバーには反映されない） ============ -->
+    <div id="pending-changes-bar" class="pending-changes-bar hidden">
+      <span style="font-weight:700; font-size:13px;">✏️ 未保存の変更：<span id="pending-changes-count">0</span>件</span>
+      <button type="button" class="btn-save-pending" id="btn-save-pending-changes">💾 まとめて保存する</button>
+      <button type="button" class="btn-discard-pending" id="btn-discard-pending-changes">取り消す</button>
+      <span style="font-size:11px;">CHK日・保険/Wifi/TAViCA/キャンサポ・メモの変更は、このボタンを押すまで保存されません。</span>
+    </div>
+
+    <div class="card">
+      <div class="table-scroll">
+        <table>
+          <thead id="data-thead"></thead>
+          <tbody id="data-tbody"></tbody>
+        </table>
+        <p id="data-empty" class="empty-msg hidden">データがありません</p>
+      </div>
+      <div class="pagination">
+        <p class="muted" id="pagination-info"></p>
+        <div class="buttons">
+          <button class="btn-ghost" id="btn-prev-page">‹ 前へ</button>
+          <button class="btn-ghost" id="btn-next-page">次へ ›</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ タブ3: 個人別サマリー ============ -->
+  <section id="panel-personal" class="panel hidden">
+    <div class="card" style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px;">
+      <div>
+        <h2 style="margin:0;">👥 個人別サマリー</h2>
+        <p class="muted" style="margin-top:4px;">担当者ごとの記録件数と付帯商品の実績です（現在の権限で閲覧できる範囲のデータが対象）。</p>
+      </div>
+      <input type="text" id="personal-search" placeholder="営業所名・担当者で検索" style="width:220px;">
+    </div>
+    <div class="card" style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th class="sortable" data-sort="area">エリア</th>
+            <th class="sortable" data-sort="office">営業所名</th>
+            <th class="sortable" data-sort="staff">担当者</th>
+            <th class="sortable text-right" data-sort="count">記録件数</th>
+            <th class="text-right">保険<br><span class="muted" style="font-weight:normal;">合計／NB付帯／PUSH成約</span></th>
+            <th class="text-right">Wifi<br><span class="muted" style="font-weight:normal;">合計／NB付帯／PUSH成約</span></th>
+            <th class="text-right">キャンサポ<br><span class="muted" style="font-weight:normal;">合計／NB付帯／PUSH成約</span></th>
+            <th class="text-right">TAViCA<br><span class="muted" style="font-weight:normal;">合計／NB付帯／PUSH成約</span></th>
+          </tr>
+        </thead>
+        <tbody id="personal-tbody"></tbody>
+      </table>
+      <p id="personal-empty" class="empty-msg hidden">データがありません</p>
+    </div>
+  </section>
+
+  <!-- ============ タブ4: データ管理 ============ -->
+  <section id="panel-admin" class="panel hidden">
+    <div class="card">
+      <h2>ℹ️ データの状態</h2>
+      <div id="admin-status" style="font-size:13px; color:var(--slate-600); line-height:1.8;"></div>
+    </div>
+
+    <div class="card">
+      <h2>↕️ 予約データ一覧の列の並び順</h2>
+      <p class="muted" style="margin-bottom:10px;">▲▼で並び替えて保存すると、「予約データ一覧」タブの表示順が変わります（このモックアップでは表示中のみ反映されます）。</p>
+      <div class="col-order-list" id="column-order-list"></div>
+      <div style="display:flex; gap:8px; margin-top:12px;">
+        <button class="btn-primary" id="btn-save-column-order">💾 この並び順を保存する</button>
+        <button class="btn-ghost" id="btn-reset-column-order">既定の並び順に戻す</button>
+      </div>
+      <p id="column-order-result" class="muted hidden" style="margin-top:8px;"></p>
+    </div>
+
+    <div id="master-only-admin">
+      <div class="card" style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px;">
+        <div>
+          <h2 style="margin:0;">📄 CSVインポート</h2>
+          <p class="muted" style="margin-top:4px;">営業日報CSVから対象19項目を取り込みます。取り込んだデータは「予約データ一覧」タブに反映されます。</p>
+        </div>
+        <button class="btn-emerald" id="btn-open-csv-modal">📄 CSVインポート</button>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <p style="font-weight:600; margin:0 0 4px;">重複した行を削除する</p>
+          <p class="muted" style="margin:0 0 12px;">CSV由来19項目すべてが完全一致する行を1件にまとめます（このモックアップではダミー動作です）。</p>
+          <button class="btn-primary" id="btn-remove-duplicates">🧹 重複を削除する</button>
+          <p id="duplicate-result" class="muted hidden" style="margin-top:8px;"></p>
+        </div>
+        <div class="card" style="border:1px solid var(--red-200); background:var(--red-50);">
+          <p style="font-weight:600; margin:0 0 4px; color:var(--red-700);">取り込んだデータをすべて削除する</p>
+          <p class="muted" style="margin:0 0 12px;">元に戻せません（このモックアップではサンプルデータを消すだけのダミー動作です）。</p>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input type="text" id="clear-confirm-input" placeholder="削除 と入力" style="width:110px;">
+            <button class="btn-red" id="btn-clear-all-data">🗑️ すべて削除する</button>
+          </div>
+          <p id="clear-result" class="muted hidden" style="margin-top:8px;"></p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+          <h2 style="margin:0;">🛡️ 権限管理（スタッフ権限）</h2>
+          <button class="btn-primary" id="btn-open-staff-modal">＋ アカウントを追加</button>
+        </div>
+        <p class="muted" style="margin-bottom:10px;">社員＝自店舗のみ閲覧／所長・チーフ＝自エリアのみ閲覧／マスタ権限＝全エリア閲覧＋CSVインポート・データ削除が可能です。</p>
+        <div class="table-scroll" style="max-height:40vh;">
+          <table>
+            <thead>
+              <tr>
+                <th>Googleアカウント</th><th>氏名</th><th>所属店舗</th><th>所属エリア</th><th>権限</th><th class="text-right">操作</th>
+              </tr>
+            </thead>
+            <tbody id="staff-tbody"></tbody>
+          </table>
+          <p id="staff-empty" class="empty-msg hidden">登録がありません</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px;">
+          <h2 style="margin:0;">🪪 担当者マスタ</h2>
+          <div style="display:flex; gap:8px;">
+            <button class="btn-emerald" id="btn-open-staff-name-import-modal">📥 人事データCSVインポート</button>
+            <button class="btn-primary" id="btn-open-staff-name-modal">＋ 担当者を追加</button>
+          </div>
+        </div>
+        <p class="muted" style="margin-bottom:10px;">CSVの「担当者」列（例：BGK078）に対応する氏名を登録すると、「予約データ一覧」「個人別サマリー」の担当者列がコードの代わりに氏名で表示されます。
+          人事データCSV（「■担当者NO」「社員名称」の列を含むもの）を取り込むと、一致した担当者コードの氏名をまとめて登録・更新できます。</p>
+        <div class="table-scroll" style="max-height:40vh;">
+          <table>
+            <thead>
+              <tr><th>担当者コード</th><th>氏名</th><th class="text-right">操作</th></tr>
+            </thead>
+            <tbody id="staff-name-tbody"></tbody>
+          </table>
+          <p id="staff-name-empty" class="empty-msg hidden">登録がありません</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  </div>
+</main>
+
+<!-- ============ CSVインポートモーダル ============ -->
+<div id="csv-import-modal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3>📄 予約データCSVの一括インポート</h3>
+      <button class="modal-close" id="btn-close-csv-modal">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px; color:var(--slate-600); line-height:1.6;">
+        営業日報から出力したCSVファイルを選択してください。「006:エリア」のような見出し行を自動検出し、
+        対象の19項目だけを抽出して取り込みます（実際のアプリの動作です）。CHK日・保険・Wifi・TAViCA・
+        キャンサポ・メモは取り込み後に一覧から入力します。
+      </p>
+      <p class="muted">このモックアップではファイルの中身をサーバーへ送信せず、取り込み画面の流れだけを再現しています。</p>
+      <div>
+        <label style="display:block; font-size:11px; font-weight:600; color:var(--slate-500); margin-bottom:4px;">CSVファイル</label>
+        <input type="file" id="csv-file-input" accept=".csv,text/csv,text/plain" style="width:100%;">
+        <p id="csv-file-summary" class="muted hidden" style="margin-top:8px; background:var(--slate-50); border:1px solid var(--slate-200); border-radius:8px; padding:8px 10px;"></p>
+      </div>
+      <div id="csv-progress" class="hidden">
+        <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--slate-600); margin-bottom:4px;">
+          <span>取り込んでいます…</span><span id="csv-progress-time">0秒</span>
+        </div>
+        <div class="progress-track"><div id="csv-progress-bar" class="progress-fill"></div></div>
+      </div>
+      <div id="csv-import-result" class="result-box"></div>
+      <div style="display:flex; justify-content:flex-end; gap:10px; border-top:1px solid var(--slate-100); padding-top:14px;">
+        <button class="btn-ghost" id="btn-cancel-csv-modal">閉じる</button>
+        <button class="btn-emerald" id="btn-submit-csv" disabled>⬆ 取り込む</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ スタッフ権限 追加・編集モーダル ============ -->
+<div id="staff-modal" class="modal-overlay">
+  <div class="modal-box" style="max-width:420px;">
+    <div class="modal-head">
+      <h3 class="blue" id="staff-modal-title">🛡️ アカウントを追加</h3>
+      <button class="modal-close" id="btn-close-staff-modal">&times;</button>
+    </div>
+    <form id="staff-form" class="modal-body">
+      <input type="hidden" id="staff-form-rowindex" value="">
+      <div class="form-field"><label>Googleアカウント *</label><input type="email" id="staff-form-email" required placeholder="example@gmail.com"></div>
+      <div class="form-field"><label>氏名</label><input type="text" id="staff-form-name"></div>
+      <div class="form-field"><label>所属店舗（営業所）</label><input type="text" id="staff-form-office" list="staff-office-options" placeholder="例：717:イーアスつくば"><datalist id="staff-office-options"></datalist></div>
+      <div class="form-field"><label>所属エリア</label><input type="text" id="staff-form-area" list="staff-area-options" placeholder="例：10:郊外エリア"><datalist id="staff-area-options"></datalist></div>
+      <div class="form-field">
+        <label>権限</label>
+        <select id="staff-form-role">
+          <option value="社員">社員（自店舗のみ閲覧）</option>
+          <option value="所長・チーフ">所長・チーフ（自エリアのみ閲覧）</option>
+          <option value="マスタ権限">マスタ権限（全エリア閲覧＋CSVインポート）</option>
+        </select>
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:10px; border-top:1px solid var(--slate-100); padding-top:14px;">
+        <button type="button" class="btn-ghost" id="btn-cancel-staff-modal">キャンセル</button>
+        <button type="submit" class="btn-primary">💾 保存する</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ============ 担当者マスタ 追加・編集モーダル ============ -->
+<div id="staff-name-modal" class="modal-overlay">
+  <div class="modal-box" style="max-width:360px;">
+    <div class="modal-head">
+      <h3 class="blue" id="staff-name-modal-title">🪪 担当者を追加</h3>
+      <button class="modal-close" id="btn-close-staff-name-modal">&times;</button>
+    </div>
+    <form id="staff-name-form" class="modal-body">
+      <input type="hidden" id="staff-name-form-rowindex" value="">
+      <div class="form-field"><label>担当者コード *</label><input type="text" id="staff-name-form-code" required placeholder="例：BGK078"></div>
+      <div class="form-field"><label>氏名 *</label><input type="text" id="staff-name-form-name" required placeholder="例：山田 太郎"></div>
+      <div style="display:flex; justify-content:flex-end; gap:10px; border-top:1px solid var(--slate-100); padding-top:14px;">
+        <button type="button" class="btn-ghost" id="btn-cancel-staff-name-modal">キャンセル</button>
+        <button type="submit" class="btn-primary">💾 保存する</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ============ 担当者マスタ 人事データCSVインポートモーダル ============ -->
+<div id="staff-name-import-modal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3>📥 担当者マスタ：人事データCSVインポート</h3>
+      <button class="modal-close" id="btn-close-staff-name-import-modal">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px; color:var(--slate-600); line-height:1.6;">
+        人事データCSVを選択してください。見出し行の「■担当者NO」列と「社員名称」列だけを使い、
+        担当者マスタ（担当者コード→氏名）へまとめて反映します（実際にファイルの中身を読み取って判定します）。
+      </p>
+      <p class="muted">既に登録済みの担当者コードは氏名を上書き更新し、未登録の担当者コードは新規追加します。</p>
+      <div>
+        <label style="display:block; font-size:11px; font-weight:600; color:var(--slate-500); margin-bottom:4px;">人事データCSVファイル</label>
+        <input type="file" id="staff-name-import-file-input" accept=".csv,text/csv,text/plain" style="width:100%;">
+        <p id="staff-name-import-file-summary" class="muted hidden" style="margin-top:8px; background:var(--slate-50); border:1px solid var(--slate-200); border-radius:8px; padding:8px 10px;"></p>
+      </div>
+      <div id="staff-name-import-progress" class="hidden">
+        <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--slate-600); margin-bottom:4px;">
+          <span>取り込んでいます…</span><span id="staff-name-import-progress-time">0秒</span>
+        </div>
+        <div class="progress-track"><div id="staff-name-import-progress-bar" class="progress-fill"></div></div>
+      </div>
+      <div id="staff-name-import-result" class="result-box"></div>
+      <div style="display:flex; justify-content:flex-end; gap:10px; border-top:1px solid var(--slate-100); padding-top:14px;">
+        <button class="btn-ghost" id="btn-cancel-staff-name-import-modal">閉じる</button>
+        <button class="btn-emerald" id="btn-submit-staff-name-import" disabled>⬆ 取り込む</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================================
+   サンプルデータ生成（すべて架空の値。実データは一切含みません）
+   実運用のCode.gsと同じ33項目（CSV由来19＋現場入力14）・同じキー名で、
+   シード付き乱数により毎回同じ見た目になるダミーデータを生成しています。
+   ============================================================================ */
+function mulberry32(seed){
+  return function(){
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    var t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+var rand = mulberry32(20260919);
+function pick(arr){ return arr[Math.floor(rand() * arr.length)]; }
+function pickWeighted(pairs){
+  var total = pairs.reduce(function(s,p){return s+p[1];}, 0);
+  var r = rand() * total;
+  for (var i=0;i<pairs.length;i++){ r -= pairs[i][1]; if (r <= 0) return pairs[i][0]; }
+  return pairs[pairs.length-1][0];
+}
+function randInt(min, max){ return Math.floor(rand()*(max-min+1))+min; }
+function pad2(n){ return (n<10?'0':'')+n; }
+
+var AREA_LIST = ['10:郊外エリア', '13:アバンティ'];
+var OFFICE_LIST = [
+  '717:イーアスつくば','053:イオンモール甲府昭和','596:けやきウォーク前橋','046:水戸コムボックス310',
+  '054:宇都宮','763:長野','081:ららぽーと沼津','051:高崎オーパ','B66:イオンモール太田','038:さいたま新都心'
+];
+// 郊外エリア=先頭7店舗、アバンティ=残り3店舗（デモの権限切替用に固定で対応付ける）
+var OFFICE_AREA_MAP = {};
+OFFICE_LIST.forEach(function(o, i){ OFFICE_AREA_MAP[o] = i < 7 ? AREA_LIST[0] : AREA_LIST[1]; });
+var DEST_LIST = ['SEL','HNL','TPE','GUM','BKK','SIN','PAR','HKG','LAX','CTS'];
+var NATIONALITY_LIST = [['JPN',0.92],['PHL',0.02],['IDN',0.02],['KOR',0.015],['CHN',0.01],['THA',0.01],['USA',0.005],['-',0.02]];
+var CATEGORY_LIST = [['2S:ツアー',0.6],['1A:エアー',0.38],['4J:代売',0.02]];
+var CARRIER_LIST = [['NH',0.22],['JL',0.10],['SQ',0.06],['KE',0.06],['TK',0.05],['OZ',0.05],['BX',0.04],['@@',0.06],['CX',0.04],['BR',0.04],['TG',0.04],['CI',0.04],['OTHER',0.20]];
+var TOUR_BRAND_LIST = [['AB:【使用不可】A＋H判別用（募集）',0.27],['CI:チャオ',0.25],['RA:WEB限定',0.14],['IP:インプレッソ',0.12],['WO:ワールド',0.03],['VL:クルーズ',0.02],['GR:法人・団体企画手配',0.01],['',0.16]];
+var STAFF_LIST = ['BGK078','BGK074','BGK073','BGK077','00L625','BGKG96','BGKG53','00J867','BGK040','BGK052'];
+var STS_LIST = [['FN',0.505],['OK',0.49],['WT',0.0025],['RQ',0.0025]];
+var PRODUCT_TITLES = [
+  'ANA ご利用往復航空券（大人）','JAL ご利用往復航空券（大人）','KOREAN AIR（大韓航空） ご利用往復航空券（大人）',
+  'ASIANA AIRLINES（アシアナ航空） ご利用往復航空券（大人）','SINGAPORE AIRLINES（シンガポール航空） ご利用往復航空券（大人）',
+  'CATHAY PACIFIC AIRWAYS（キャセイパシフィック航空） ご利用往復航空券（大人）','ホテル宿泊プラン（大人1名）','海外ツアーパッケージ（添乗員なし）'
+];
+var ANCILLARY_STATUS_OPTIONS = [
+  { value: '-', label: 'NO ACT' },
+  { value: '〇', label: 'NB付帯' },
+  { value: '×', label: '失注' },
+  { value: '△', label: 'セールス中' },
+  { value: '☆', label: 'PUSH成約' }
+];
+var ANCILLARY_STATUS_WEIGHTED = [['-', 0.45], ['〇', 0.28], ['×', 0.15], ['△', 0.08], ['☆', 0.04]];
+var LOST_REASON_SAMPLES = ['価格面で他社に決定', '不要と回答', '検討の上見送り', '出発直前のため加入不可', '既に他社で加入済み'];
+
+function genAncillary(){
+  var status = pickWeighted(ANCILLARY_STATUS_WEIGHTED);
+  var qty = (status === '〇' || status === '☆') ? randInt(1, 4) : (status === '×' ? 0 : null);
+  var reason = status === '×' ? pick(LOST_REASON_SAMPLES) : '';
+  return { status: status, qty: qty, reason: reason };
+}
+
+var nextRowIndex = 2;
+function genSampleRows(n){
+  var rows = [];
+  for (var i=0;i<n;i++){
+    var y = 2026, m = randInt(1,9), d = randInt(1,28);
+    var bookingDate = y+'-'+pad2(m)+'-'+pad2(d);
+    var dm = m + randInt(0,3); var dy = y; if (dm > 12) { dm -= 12; dy += 1; }
+    var departureDate = dy+'-'+pad2(dm)+'-'+pad2(randInt(1,28));
+    var sales = randInt(5,400) * 1000;
+    var paidRatio = rand() < 0.15 ? 0 : (rand() < 0.6 ? 1 : rand());
+    var payment = Math.round(sales * paidRatio / 100) * 100;
+    var office = pick(OFFICE_LIST);
+    var ins = genAncillary(), wifi = genAncillary(), tavica = genAncillary(), cansapo = genAncillary();
+    rows.push({
+      rowIndex: nextRowIndex++,
+      area: OFFICE_AREA_MAP[office],
+      office: office,
+      destination: pick(DEST_LIST),
+      bookingDate: bookingDate,
+      departureDate: departureDate,
+      customerId: String(randInt(1000000000000, 9999999999999)),
+      reservationNo: pad2(randInt(1,99)) + String(randInt(100000000,999999999)),
+      gender: rand() < 0.58 ? '2:女性' : '1:男性',
+      nationality: pickWeighted(NATIONALITY_LIST),
+      productCategory: pickWeighted(CATEGORY_LIST),
+      carrier: pickWeighted(CARRIER_LIST),
+      tourBrand: pickWeighted(TOUR_BRAND_LIST),
+      tourCode: rand() < 0.4 ? '-' : ('T' + pick(['J','G','I','N']) + '-' + pick(['FZA','ZZA','KMI','FSS']) + randInt(1000,9999)),
+      salesAmount: sales,
+      paymentAmount: payment,
+      sts: pickWeighted(STS_LIST),
+      staff: pick(STAFF_LIST),
+      productTitle: pick(PRODUCT_TITLES),
+      travelDays: randInt(2,10),
+      chkDate: rand() < 0.4 ? bookingDate : null,
+      insuranceStatus: ins.status, insuranceQty: ins.qty, insuranceReason: ins.reason,
+      wifiStatus: wifi.status, wifiQty: wifi.qty, wifiReason: wifi.reason,
+      tavicaStatus: tavica.status, tavicaQty: tavica.qty, tavicaReason: tavica.reason,
+      cansapoStatus: cansapo.status, cansapoQty: cansapo.qty, cansapoReason: cansapo.reason,
+      memo: rand() < 0.15 ? pick(['要フォロー：出発前に再度連絡して保険加入の意思を確認する予定', 'オプション確認済み', 'キャンセル待ち相談中', '再連絡予定']) : ''
+    });
+  }
+  return rows;
+}
+
+var COLUMNS = [
+  { key:'area', label:'エリア', type:'text' },
+  { key:'office', label:'営業所', type:'text' },
+  { key:'destination', label:'最終目的地', type:'text' },
+  { key:'bookingDate', label:'予約日', type:'date' },
+  { key:'departureDate', label:'出発予定日', type:'date' },
+  { key:'customerId', label:'顧客ID', type:'text' },
+  { key:'reservationNo', label:'予約番号', type:'text' },
+  { key:'gender', label:'性別', type:'text' },
+  { key:'nationality', label:'国籍', type:'text' },
+  { key:'productCategory', label:'商品分類', type:'text' },
+  { key:'carrier', label:'キャリア', type:'text' },
+  { key:'tourBrand', label:'ツアーブランド区分', type:'text' },
+  { key:'tourCode', label:'ツアーコード', type:'text' },
+  { key:'salesAmount', label:'売上(商品請求金額)', type:'number' },
+  { key:'paymentAmount', label:'入金額', type:'number' },
+  { key:'sts', label:'STS', type:'text' },
+  { key:'staff', label:'担当者', type:'text' },
+  { key:'productTitle', label:'商品タイトル', type:'text' },
+  { key:'travelDays', label:'旅行日数', type:'number' }
+];
+var COLUMN_BY_KEY = {};
+COLUMNS.forEach(function(c){ COLUMN_BY_KEY[c.key] = c; });
+
+var ANCILLARY_ITEMS = [
+  { key:'insurance', label:'保険', statusKey:'insuranceStatus', qtyKey:'insuranceQty', reasonKey:'insuranceReason' },
+  { key:'wifi', label:'Wifi', statusKey:'wifiStatus', qtyKey:'wifiQty', reasonKey:'wifiReason' },
+  { key:'cansapo', label:'キャンサポ', statusKey:'cansapoStatus', qtyKey:'cansapoQty', reasonKey:'cansapoReason' },
+  { key:'tavica', label:'TAViCA', statusKey:'tavicaStatus', qtyKey:'tavicaQty', reasonKey:'tavicaReason' }
+];
+var ANCILLARY_BY_KEY = {}, ANCILLARY_BY_STATUS_KEY = {}, ANCILLARY_BY_QTY_KEY = {};
+ANCILLARY_ITEMS.forEach(function(a){ ANCILLARY_BY_KEY[a.key] = a; ANCILLARY_BY_STATUS_KEY[a.statusKey] = a; ANCILLARY_BY_QTY_KEY[a.qtyKey] = a; });
+function isAncillaryQtyEditable(status){ return status === '〇' || status === '☆'; }
+function normalizeAncillaryStatus(v){ return (v===null||v===undefined||v==='') ? '-' : v; }
+
+// 予約データ一覧タブの列定義（ご指定の並び順を初期値にしている）。
+var DISPLAY_COLUMN_DEFS = [
+  { key:'reservationNo', label:'予約番号', kind:'csv', field:'reservationNo' },
+  { key:'staff', label:'担当者', kind:'csv', field:'staff' },
+  { key:'departureDate', label:'出発予定日', kind:'csv', field:'departureDate' },
+  { key:'chkDate', label:'CHK日', kind:'date', field:'chkDate' },
+  { key:'memo', label:'メモ', kind:'memo', field:'memo' },
+  { key:'insurance', label:'保険', kind:'ancillary', item:'insurance' },
+  { key:'wifi', label:'Wifi', kind:'ancillary', item:'wifi' },
+  { key:'cansapo', label:'キャンサポ', kind:'ancillary', item:'cansapo' },
+  { key:'tavica', label:'TAViCA', kind:'ancillary', item:'tavica' },
+  { key:'bookingDate', label:'予約日', kind:'csv', field:'bookingDate' },
+  { key:'destination', label:'最終目的地', kind:'csv', field:'destination' },
+  { key:'travelDays', label:'旅行日数', kind:'csv', field:'travelDays' },
+  { key:'productCategory', label:'商品分類', kind:'csv', field:'productCategory' },
+  { key:'tourBrand', label:'ツアーブランド区分', kind:'csv', field:'tourBrand' },
+  { key:'tourCode', label:'ツアーコード', kind:'csv', field:'tourCode' },
+  { key:'carrier', label:'キャリア', kind:'csv', field:'carrier' },
+  { key:'salesAmount', label:'売上(商品請求金額)', kind:'csv', field:'salesAmount' },
+  { key:'paymentAmount', label:'入金額', kind:'csv', field:'paymentAmount' },
+  { key:'sts', label:'STS', kind:'csv', field:'sts' },
+  { key:'productTitle', label:'商品タイトル', kind:'csv', field:'productTitle' },
+  { key:'office', label:'営業所', kind:'csv', field:'office' }
+];
+var DISPLAY_COLUMN_DEFS_BY_KEY = {};
+DISPLAY_COLUMN_DEFS.forEach(function(d){ DISPLAY_COLUMN_DEFS_BY_KEY[d.key] = d; });
+var DEFAULT_COLUMN_ORDER = DISPLAY_COLUMN_DEFS.map(function(d){ return d.key; });
+
+// ---- 予約番号（記録番号／チャレンジ番号）→「チャレンジ記録」へのリンク ----
+var CHALLENGE_RECORD_BASE_URL = 'http://applweb.center.his/cgi-bin/b/btcq1_0_3ui?scid=_new&rsv=01102';
+function buildChallengeRecordUrl(value){
+  if (typeof value !== 'string' || !/^[0-9A-Za-z]{11}$/.test(value)) return null;
+  return CHALLENGE_RECORD_BASE_URL + value;
+}
+
+// ---- 権限切替デモ用のアカウント定義 ----
+var ROLE_ACCOUNTS = {
+  'マスタ権限': { office: '', area: '' },
+  '所長・チーフ': { office: '', area: AREA_LIST[0] },
+  '社員': { office: OFFICE_LIST[0], area: OFFICE_AREA_MAP[OFFICE_LIST[0]] }
+};
+
+var STATE = {
+  allRows: genSampleRows(320),
+  rows: [], // 現在の権限で見える行
+  role: 'マスタ権限',
+
+  dashFiltered: [], dataFiltered: [],
+  rankingSortKey: 'count', rankingSortDir: -1,
+  dataSortKey: 'departureDate', dataSortDir: -1,
+  dataPage: 1, dataPageSize: 50,
+  personalSortKey: 'count', personalSortDir: -1,
+
+  columnOrder: DEFAULT_COLUMN_ORDER.slice(),
+  staffList: [
+    { rowIndex: 2, email: 'master@example.com', name: 'マスタ太郎', office: '', area: '', role: 'マスタ権限' },
+    { rowIndex: 3, email: 'chief@example.com', name: '所長次郎', office: '', area: AREA_LIST[0], role: '所長・チーフ' },
+    { rowIndex: 4, email: 'staff@example.com', name: '社員花子', office: OFFICE_LIST[0], area: OFFICE_AREA_MAP[OFFICE_LIST[0]], role: '社員' }
+  ],
+  staffNameList: [
+    { rowIndex: 2, code: 'BGK078', name: '佐藤 一郎' },
+    { rowIndex: 3, code: '00L625', name: '鈴木 花子' },
+    { rowIndex: 4, code: 'BGK074', name: '田中 次郎' }
+  ],
+  staffNameMap: {},
+
+  selectedRowIndexes: {}, // 予約データ一覧の一括登録用：チェックされている行番号の集合
+  currentPageRowIndexes: [],
+
+  pendingChanges: {} // 予約データ一覧「まとめて保存する」用：未保存の編集（key→変更内容）
+};
+function rebuildStaffNameMap(){
+  STATE.staffNameMap = {};
+  STATE.staffNameList.forEach(function(s){ if (s.code) STATE.staffNameMap[s.code] = s.name; });
+}
+rebuildStaffNameMap();
+function formatStaffName(code){
+  if (!code) return code;
+  return STATE.staffNameMap[code] || code;
+}
+
+var CHART_COLORS = ['#1d4ed8','#f59e0b','#10b981','#ef4444','#8b5cf6','#0ea5e9','#f97316','#84cc16','#ec4899','#64748b','#14b8a6','#a855f7'];
+
+document.addEventListener('DOMContentLoaded', function(){
+  bindEvents();
+  document.getElementById('last-imported-label').textContent = '最終取込：2026/09/18 18:24（サンプルデータ）';
+  boot();
+});
+
+function boot(){
+  showLoading(true);
+  setTimeout(function(){
+    applyRoleScope();
+    populateFilterOptions();
+    populateBulkAncillarySelects();
+    applyRoleUi();
+    renderColumnOrderEditor();
+    renderDataThead();
+    applyDashFilters();
+    applyDataFilters();
+    renderPersonalTab();
+    renderStaffList();
+    renderStaffNameList();
+    renderAdminStatus();
+    showLoading(false);
+  }, 300); // ローディング演出（実アプリのサーバー通信を模したウェイト）
+}
+
+function showLoading(v){ document.getElementById('loading-overlay').classList.toggle('hidden', !v); }
+
+/* ---- 権限（表示切替デモ） ---- */
+function applyRoleScope(){
+  var role = STATE.role;
+  var account = ROLE_ACCOUNTS[role];
+  if (role === 'マスタ権限') {
+    STATE.rows = STATE.allRows;
+  } else if (role === '所長・チーフ') {
+    STATE.rows = STATE.allRows.filter(function(r){ return r.area === account.area; });
+  } else {
+    STATE.rows = STATE.allRows.filter(function(r){ return r.office === account.office; });
+  }
+  var accessDenied = false; // このデモでは3ロールとも常に登録済みという想定
+  document.getElementById('access-denied-banner').classList.toggle('hidden', !accessDenied);
+  document.getElementById('app-content').classList.toggle('hidden', accessDenied);
+
+  var badge = document.getElementById('role-badge');
+  var scope = role === 'マスタ権限' ? '全エリア' : (role === '所長・チーフ' ? 'エリア：' + account.area : '店舗：' + account.office);
+  badge.textContent = '🛡️ ' + role + '（' + scope + '）';
+}
+
+function applyRoleUi(){
+  var isMaster = STATE.role === 'マスタ権限';
+  document.getElementById('btn-open-csv-modal').classList.toggle('hidden', !isMaster);
+  document.getElementById('master-only-admin').classList.toggle('hidden', !isMaster);
+}
+
+function onRoleChanged(){
+  STATE.role = document.getElementById('role-switcher').value;
+  boot();
+  showToast(STATE.role + ' の見え方に切り替えました', 'info');
+}
+
+/* ---- フィルタ共通 ---- */
+function distinctValues(key){
+  var set = {};
+  STATE.rows.forEach(function(r){ if (r[key]) set[r[key]] = true; });
+  return Object.keys(set).sort(function(a,b){ return a.localeCompare(b,'ja'); });
+}
+function fillMultiSelect(id, values){
+  document.getElementById(id).innerHTML = values.map(function(v){
+    return '<option value="'+escapeHtml(v)+'">'+escapeHtml(v)+'</option>';
+  }).join('');
+}
+function fillDatalist(id, values){
+  document.getElementById(id).innerHTML = values.map(function(v){ return '<option value="'+escapeHtml(v)+'">'; }).join('');
+}
+function fillMultiSelectWithLabels(id, options){
+  document.getElementById(id).innerHTML = options.map(function(o){
+    return '<option value="'+escapeHtml(o.value)+'">'+escapeHtml(o.value)+' '+escapeHtml(o.label)+'</option>';
+  }).join('');
+}
+function populateFilterOptions(){
+  fillMultiSelect('dash-filter-area', distinctValues('area'));
+  fillMultiSelect('dash-filter-office', distinctValues('office'));
+  fillMultiSelect('dash-filter-category', distinctValues('productCategory'));
+  fillMultiSelect('dash-filter-tourbrand', distinctValues('tourBrand'));
+  fillMultiSelect('dash-filter-destination', distinctValues('destination'));
+  fillMultiSelect('data-filter-area', distinctValues('area'));
+  fillMultiSelect('data-filter-office', distinctValues('office'));
+  fillMultiSelect('data-filter-staff', distinctValues('staff'));
+  fillMultiSelectWithLabels('data-filter-insurance-status', ANCILLARY_STATUS_OPTIONS);
+  fillMultiSelectWithLabels('data-filter-wifi-status', ANCILLARY_STATUS_OPTIONS);
+  fillMultiSelectWithLabels('data-filter-tavica-status', ANCILLARY_STATUS_OPTIONS);
+  fillMultiSelectWithLabels('data-filter-cansapo-status', ANCILLARY_STATUS_OPTIONS);
+  fillDatalist('staff-office-options', OFFICE_LIST);
+  fillDatalist('staff-area-options', AREA_LIST);
+}
+function getSelected(id){ return Array.from(document.getElementById(id).selectedOptions).map(function(o){return o.value;}); }
+function toSet(arr){ if(!arr||arr.length===0) return null; var s={}; arr.forEach(function(v){s[v]=true;}); return s; }
+
+/* ---- 分析ダッシュボードタブ ---- */
+function applyDashFilters(){
+  var area = toSet(getSelected('dash-filter-area'));
+  var office = toSet(getSelected('dash-filter-office'));
+  var category = toSet(getSelected('dash-filter-category'));
+  var tourBrand = toSet(getSelected('dash-filter-tourbrand'));
+  var destination = toSet(getSelected('dash-filter-destination'));
+  var dateField = document.getElementById('dash-filter-date-field').value;
+  var dateFrom = document.getElementById('dash-filter-date-from').value;
+  var dateTo = document.getElementById('dash-filter-date-to').value;
+
+  STATE.dashFiltered = STATE.rows.filter(function(r){
+    if (area && !area[r.area]) return false;
+    if (office && !office[r.office]) return false;
+    if (category && !category[r.productCategory]) return false;
+    if (tourBrand && !tourBrand[r.tourBrand]) return false;
+    if (destination && !destination[r.destination]) return false;
+    var dv = r[dateField];
+    if (dateFrom && (!dv || dv < dateFrom)) return false;
+    if (dateTo && (!dv || dv > dateTo)) return false;
+    return true;
+  });
+  document.getElementById('dash-filter-summary').textContent = STATE.dashFiltered.length + ' 件を表示中（閲覧できる ' + STATE.rows.length + ' 件中）';
+
+  renderKpis();
+  renderMonthlyChart();
+  renderDonut('chart-sts', 'chart-sts-legend', countBy(STATE.dashFiltered,'sts'));
+  renderDonut('chart-category', 'chart-category-legend', countBy(STATE.dashFiltered,'productCategory'));
+  renderHBar('chart-nationality', topEntries(countBy(STATE.dashFiltered,'nationality'), 10));
+  renderHBar('chart-carrier', topEntries(countBy(STATE.dashFiltered,'carrier'), 10));
+  renderAncillaryCombinedChart();
+  renderAncillaryChart('chart-insurance', STATE.dashFiltered, 'insuranceQty');
+  renderAncillaryChart('chart-wifi', STATE.dashFiltered, 'wifiQty');
+  renderAncillaryChart('chart-cansapo', STATE.dashFiltered, 'cansapoQty');
+  renderAncillaryChart('chart-tavica', STATE.dashFiltered, 'tavicaQty');
+  renderAncillaryBreakdown();
+  renderRanking();
+}
+function clearDashFilters(){
+  ['dash-filter-area','dash-filter-office','dash-filter-category','dash-filter-tourbrand','dash-filter-destination'].forEach(function(id){
+    Array.from(document.getElementById(id).options).forEach(function(o){ o.selected = false; });
+  });
+  document.getElementById('dash-filter-date-from').value = '';
+  document.getElementById('dash-filter-date-to').value = '';
+  applyDashFilters();
+}
+
+function sumBy(rows,key){ var s=0; rows.forEach(function(r){ if (typeof r[key]==='number') s+=r[key]; }); return s; }
+function avgBy(rows,key){ var s=0,n=0; rows.forEach(function(r){ if (typeof r[key]==='number'){s+=r[key];n++;} }); return n>0?s/n:0; }
+function countBy(rows,key){
+  var map = {};
+  rows.forEach(function(r){ var v = r[key] || '(空欄)'; map[v] = (map[v]||0)+1; });
+  return map;
+}
+function topEntries(map,n){
+  return Object.keys(map).map(function(k){return [k,map[k]];}).sort(function(a,b){return b[1]-a[1];}).slice(0,n);
+}
+function renderKpis(){
+  var rows = STATE.dashFiltered;
+  document.getElementById('kpi-total').textContent = formatNumber(rows.length);
+  document.getElementById('kpi-insurance').textContent = formatNumber(sumBy(rows,'insuranceQty'));
+  document.getElementById('kpi-wifi').textContent = formatNumber(sumBy(rows,'wifiQty'));
+  document.getElementById('kpi-tavica').textContent = formatNumber(sumBy(rows,'tavicaQty'));
+  document.getElementById('kpi-cansapo').textContent = formatNumber(sumBy(rows,'cansapoQty'));
+}
+
+function getDashDateField(){ return document.getElementById('dash-filter-date-field').value || 'bookingDate'; }
+
+function renderMonthlyChart(){
+  var field = getDashDateField();
+  var byMonth = {};
+  STATE.dashFiltered.forEach(function(r){
+    var v = r[field]; if (!v) return;
+    var month = v.slice(0,7);
+    if (!byMonth[month]) byMonth[month] = {count:0, sales:0};
+    byMonth[month].count++;
+    byMonth[month].sales += r.salesAmount || 0;
+  });
+  var months = Object.keys(byMonth).sort();
+  var maxCount = Math.max.apply(null, months.map(function(m){return byMonth[m].count;}).concat([1]));
+  var maxSales = Math.max.apply(null, months.map(function(m){return byMonth[m].sales;}).concat([1]));
+
+  var el = document.getElementById('chart-monthly');
+  if (months.length === 0){ el.innerHTML = '<p class="empty-msg">データがありません</p>'; return; }
+  el.innerHTML = months.map(function(m){
+    var b = byMonth[m];
+    var hCount = Math.max(2, Math.round(b.count / maxCount * 160));
+    var hSales = Math.max(2, Math.round(b.sales / maxSales * 160));
+    return '<div class="vbar-col">' +
+      '<div class="vbar-pair">' +
+        '<div class="vbar count" style="height:'+hCount+'px" title="'+m+' 予約件数: '+formatNumber(b.count)+'"></div>' +
+        '<div class="vbar sales" style="height:'+hSales+'px" title="'+m+' 売上合計: '+formatCurrency(b.sales)+'"></div>' +
+      '</div>' +
+      '<div class="vbar-month">'+m.slice(2)+'</div>' +
+    '</div>';
+  }).join('');
+}
+
+/** 保険・Wifi・TAViCA・キャンサポ共通：棒＝リスト数（月別件数）、折れ線相当＝加入・販売数（数量合計）。 */
+function renderAncillaryChart(id, rows, qtyKey){
+  var field = getDashDateField();
+  var byMonth = {};
+  rows.forEach(function(r){
+    var v = r[field]; if (!v) return;
+    var month = v.slice(0,7);
+    if (!byMonth[month]) byMonth[month] = {count:0, qty:0};
+    byMonth[month].count++;
+    if (typeof r[qtyKey] === 'number') byMonth[month].qty += r[qtyKey];
+  });
+  var months = Object.keys(byMonth).sort();
+  var el = document.getElementById(id);
+  if (months.length === 0){ el.innerHTML = '<p class="empty-msg">データがありません</p>'; return; }
+  var maxCount = Math.max.apply(null, months.map(function(m){return byMonth[m].count;}).concat([1]));
+  var maxQty = Math.max.apply(null, months.map(function(m){return byMonth[m].qty;}).concat([1]));
+  el.innerHTML = months.map(function(m){
+    var b = byMonth[m];
+    var hCount = Math.max(2, Math.round(b.count / maxCount * 140));
+    var hQty = Math.max(2, Math.round(b.qty / maxQty * 140));
+    return '<div class="vbar-col">' +
+      '<div class="vbar-pair">' +
+        '<div class="vbar count-alt" style="height:'+hCount+'px" title="'+m+' リスト数: '+formatNumber(b.count)+'"></div>' +
+        '<div class="vbar qty" style="height:'+hQty+'px" title="'+m+' 加入・販売数: '+formatNumber(b.qty)+'"></div>' +
+      '</div>' +
+      '<div class="vbar-month">'+m.slice(2)+'</div>' +
+    '</div>';
+  }).join('');
+}
+
+/** 複数系列の折れ線グラフ（外部ライブラリ不使用・インラインSVGで描画）。series: [{label,color,values}] */
+function renderMultiLineChart(containerId, legendId, months, series){
+  var el = document.getElementById(containerId);
+  if (months.length === 0){ el.innerHTML = '<p class="empty-msg">データがありません</p>'; if (legendId) document.getElementById(legendId).innerHTML=''; return; }
+  var w = 680, h = 190, padL = 28, padR = 12, padT = 12, padB = 22;
+  var maxVal = 1;
+  series.forEach(function(s){ s.values.forEach(function(v){ if (v > maxVal) maxVal = v; }); });
+  var stepX = (w - padL - padR) / Math.max(1, months.length - 1);
+  function xAt(i){ return padL + stepX * i; }
+  function yAt(v){ return padT + (h - padT - padB) * (1 - v / maxVal); }
+  var linesHtml = series.map(function(s){
+    var points = s.values.map(function(v,i){ return xAt(i).toFixed(1)+','+yAt(v).toFixed(1); }).join(' ');
+    var dots = s.values.map(function(v,i){ return '<circle cx="'+xAt(i).toFixed(1)+'" cy="'+yAt(v).toFixed(1)+'" r="2.5" fill="'+s.color+'"><title>'+escapeHtml(s.label)+' '+months[i]+': '+formatNumber(v)+'</title></circle>'; }).join('');
+    return '<polyline points="'+points+'" fill="none" stroke="'+s.color+'" stroke-width="2"></polyline>' + dots;
+  }).join('');
+  var xLabels = months.map(function(m,i){ return (i % Math.ceil(months.length/12 || 1) === 0) ? '<text x="'+xAt(i).toFixed(1)+'" y="'+(h-4)+'" font-size="9" fill="#94a3b8" text-anchor="middle">'+m.slice(2)+'</text>' : ''; }).join('');
+  el.innerHTML = '<svg viewBox="0 0 '+w+' '+h+'" style="width:100%; height:190px; display:block;">'+linesHtml+xLabels+'</svg>';
+  if (legendId){
+    document.getElementById(legendId).innerHTML = series.map(function(s){
+      return '<span><span class="dot" style="background:'+s.color+'"></span>'+escapeHtml(s.label)+'</span>';
+    }).join('');
+  }
+}
+
+/** 保険/Wifi/キャンサポ/TAViCAの月別数量（加入・販売数）を1つの折れ線グラフに重ねて表示する（総合比較用）。 */
+function renderAncillaryCombinedChart(){
+  var field = getDashDateField();
+  var rows = STATE.dashFiltered;
+  var monthSet = {};
+  rows.forEach(function(r){ var v = r[field]; if (v) monthSet[v.slice(0,7)] = true; });
+  var months = Object.keys(monthSet).sort();
+  var items = [
+    { qtyKey:'insuranceQty', label:'保険', color:'#1d4ed8' },
+    { qtyKey:'wifiQty', label:'Wifi', color:'#f59e0b' },
+    { qtyKey:'cansapoQty', label:'キャンサポ', color:'#ec4899' },
+    { qtyKey:'tavicaQty', label:'TAViCA', color:'#8b5cf6' }
+  ];
+  var series = items.map(function(it){
+    var byMonth = {}; months.forEach(function(m){ byMonth[m] = 0; });
+    rows.forEach(function(r){
+      var v = r[field]; if (!v) return;
+      var m = v.slice(0,7);
+      if (typeof r[it.qtyKey] === 'number') byMonth[m] += r[it.qtyKey];
+    });
+    return { label: it.label, color: it.color, values: months.map(function(m){ return byMonth[m]; }) };
+  });
+  renderMultiLineChart('chart-ancillary-combined', 'chart-ancillary-combined-legend', months, series);
+}
+
+/** 保険/Wifi/キャンサポ/TAViCAそれぞれの「NB付帯（〇）」「PUSH成約（☆）」の実績件数を表示する。 */
+function renderAncillaryBreakdown(){
+  ANCILLARY_ITEMS.forEach(function(item){
+    var el = document.getElementById('ancillary-breakdown-'+item.key);
+    if (!el) return;
+    var nb = 0, push = 0;
+    STATE.dashFiltered.forEach(function(r){
+      var status = r[item.statusKey];
+      if (status === '〇') nb++;
+      else if (status === '☆') push++;
+    });
+    el.textContent = 'NB付帯実績：' + formatNumber(nb) + '件／PUSH成約実績：' + formatNumber(push) + '件';
+  });
+}
+
+function renderDonut(chartId, legendId, map){
+  var entries = topEntries(map, 12);
+  var total = entries.reduce(function(s,e){return s+e[1];}, 0);
+  var el = document.getElementById(chartId);
+  var legend = document.getElementById(legendId);
+  if (total === 0){ el.style.background = '#e2e8f0'; legend.innerHTML = '<span class="muted">データがありません</span>'; return; }
+
+  var stops = [], acc = 0;
+  entries.forEach(function(e, i){
+    var pct = e[1] / total * 100;
+    var color = CHART_COLORS[i % CHART_COLORS.length];
+    stops.push(color + ' ' + acc.toFixed(2) + '% ' + (acc+pct).toFixed(2) + '%');
+    acc += pct;
+  });
+  el.style.background = 'conic-gradient(' + stops.join(',') + ')';
+
+  legend.innerHTML = entries.map(function(e, i){
+    var color = CHART_COLORS[i % CHART_COLORS.length];
+    var pct = (e[1] / total * 100).toFixed(1);
+    return '<span><span class="dot" style="background:'+color+'"></span>' + escapeHtml(e[0]) + '（' + formatNumber(e[1]) + '件・' + pct + '%）</span>';
+  }).join('');
+}
+
+function renderHBar(id, entries){
+  var el = document.getElementById(id);
+  if (entries.length === 0){ el.innerHTML = '<p class="empty-msg">データがありません</p>'; return; }
+  var max = entries[0][1];
+  el.innerHTML = entries.map(function(e){
+    var pct = Math.max(3, Math.round(e[1] / max * 100));
+    return '<div class="hbar-row">' +
+      '<div class="hbar-label" title="'+escapeHtml(e[0])+'">'+escapeHtml(e[0])+'</div>' +
+      '<div class="hbar-track"><div class="hbar-fill" style="width:'+pct+'%"></div></div>' +
+      '<div class="hbar-value">'+formatNumber(e[1])+'</div>' +
+    '</div>';
+  }).join('');
+}
+
+function buildOfficeRanking(rows){
+  var map = {};
+  rows.forEach(function(r){
+    var office = r.office || '(未設定)';
+    if (!map[office]) map[office] = {office:office, count:0, salesAmount:0, paymentAmount:0, daysSum:0, daysN:0};
+    var b = map[office];
+    b.count++;
+    b.salesAmount += r.salesAmount || 0;
+    b.paymentAmount += r.paymentAmount || 0;
+    if (typeof r.travelDays === 'number'){ b.daysSum += r.travelDays; b.daysN++; }
+  });
+  return Object.keys(map).map(function(k){
+    var b = map[k];
+    return {
+      office: b.office, count: b.count, salesAmount: b.salesAmount, paymentAmount: b.paymentAmount,
+      paymentRate: b.salesAmount>0 ? b.paymentAmount/b.salesAmount*100 : 0,
+      avgDays: b.daysN>0 ? b.daysSum/b.daysN : 0
+    };
+  });
+}
+function renderRanking(){
+  var list = buildOfficeRanking(STATE.dashFiltered);
+  var key = STATE.rankingSortKey, dir = STATE.rankingSortDir;
+  list.sort(function(a,b){
+    if (key === 'office') return a.office.localeCompare(b.office,'ja') * dir;
+    return (a[key]-b[key]) * dir;
+  });
+  var tbody = document.getElementById('ranking-tbody');
+  if (list.length === 0){ tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">データがありません</td></tr>'; return; }
+  tbody.innerHTML = list.map(function(b){
+    return '<tr>' +
+      '<td>'+escapeHtml(b.office)+'</td>' +
+      '<td class="text-right">'+formatNumber(b.count)+'</td>' +
+      '<td class="text-right">'+formatCurrency(b.salesAmount)+'</td>' +
+      '<td class="text-right">'+formatCurrency(b.paymentAmount)+'</td>' +
+      '<td class="text-right rank-rate">'+b.paymentRate.toFixed(1)+'%</td>' +
+      '<td class="text-right">'+b.avgDays.toFixed(1)+'日</td>' +
+    '</tr>';
+  }).join('');
+}
+
+/* ---- 予約データ一覧タブ ---- */
+function applyDataFilters(){
+  var area = toSet(getSelected('data-filter-area'));
+  var office = toSet(getSelected('data-filter-office'));
+  var staff = toSet(getSelected('data-filter-staff'));
+  var dateFrom = document.getElementById('data-filter-date-from').value;
+  var dateTo = document.getElementById('data-filter-date-to').value;
+  var insuranceSts = toSet(getSelected('data-filter-insurance-status'));
+  var wifiSts = toSet(getSelected('data-filter-wifi-status'));
+  var tavicaSts = toSet(getSelected('data-filter-tavica-status'));
+  var cansapoSts = toSet(getSelected('data-filter-cansapo-status'));
+
+  STATE.dataFiltered = STATE.rows.filter(function(r){
+    if (area && !area[r.area]) return false;
+    if (office && !office[r.office]) return false;
+    if (staff && !staff[r.staff]) return false;
+    var dep = r.departureDate;
+    if (dateFrom && (!dep || dep < dateFrom)) return false;
+    if (dateTo && (!dep || dep > dateTo)) return false;
+    if (insuranceSts && !insuranceSts[normalizeAncillaryStatus(r.insuranceStatus)]) return false;
+    if (wifiSts && !wifiSts[normalizeAncillaryStatus(r.wifiStatus)]) return false;
+    if (tavicaSts && !tavicaSts[normalizeAncillaryStatus(r.tavicaStatus)]) return false;
+    if (cansapoSts && !cansapoSts[normalizeAncillaryStatus(r.cansapoStatus)]) return false;
+    return true;
+  });
+  document.getElementById('data-filter-summary').textContent = STATE.dataFiltered.length + ' 件を表示中（閲覧できる ' + STATE.rows.length + ' 件中）';
+  STATE.dataPage = 1;
+  renderDataTable();
+}
+function clearDataFilters(){
+  ['data-filter-area','data-filter-office','data-filter-staff','data-filter-insurance-status','data-filter-wifi-status','data-filter-tavica-status','data-filter-cansapo-status'].forEach(function(id){
+    Array.from(document.getElementById(id).options).forEach(function(o){ o.selected = false; });
+  });
+  document.getElementById('data-filter-date-from').value = '';
+  document.getElementById('data-filter-date-to').value = '';
+  applyDataFilters();
+}
+
+function renderDataThead(){
+  var thead = document.getElementById('data-thead');
+  var checkboxTh = '<th style="width:28px; text-align:center;"><input type="checkbox" id="data-select-all-page" title="このページの行をすべて選択"></th>';
+  thead.innerHTML = '<tr>' + checkboxTh + STATE.columnOrder.map(function(key){
+    var def = DISPLAY_COLUMN_DEFS_BY_KEY[key];
+    if (!def) return '';
+    var sortable = def.kind !== 'ancillary';
+    var col = def.kind === 'csv' ? COLUMN_BY_KEY[def.field] : null;
+    var align = (col && col.type==='number') ? 'text-right' : (def.kind==='ancillary' ? 'text-center' : '');
+    var editableCls = (def.kind==='ancillary'||def.kind==='date'||def.kind==='memo') ? ' editable-col' : '';
+    var mark = (sortable && STATE.dataSortKey===key) ? ('<span class="sort-mark">'+(STATE.dataSortDir>0?'▲':'▼')+'</span>') : '';
+    var cls = (sortable?'sortable ':'') + align + editableCls;
+    var dataSort = sortable ? ' data-sort="'+key+'"' : '';
+    return '<th class="'+cls+'"'+dataSort+'>'+escapeHtml(def.label)+mark+'</th>';
+  }).join('') + '</tr>';
+  thead.querySelectorAll('.sortable').forEach(function(th){
+    th.addEventListener('click', function(){
+      var key = th.getAttribute('data-sort');
+      if (STATE.dataSortKey === key) STATE.dataSortDir *= -1; else { STATE.dataSortKey = key; STATE.dataSortDir = 1; }
+      renderDataThead(); renderDataTable();
+    });
+  });
+  document.getElementById('data-select-all-page').addEventListener('change', function(e){
+    var checked = e.target.checked;
+    STATE.currentPageRowIndexes.forEach(function(ri){
+      if (checked) STATE.selectedRowIndexes[ri] = true; else delete STATE.selectedRowIndexes[ri];
+    });
+    renderDataTable();
+  });
+}
+function compareRows(a, b, def){
+  if (!def) return 0;
+  var va=a[def.field], vb=b[def.field];
+  var type = def.kind === 'csv' ? COLUMN_BY_KEY[def.field].type : (def.kind === 'date' ? 'date' : 'text');
+  var ae = (va===null||va===undefined||va===''), be=(vb===null||vb===undefined||vb==='');
+  if (ae&&be) return 0; if (ae) return 1; if (be) return -1;
+  if (type === 'number') return va-vb;
+  return String(va).localeCompare(String(vb),'ja');
+}
+function renderDataTable(){
+  var def = DISPLAY_COLUMN_DEFS_BY_KEY[STATE.dataSortKey];
+  var rows = STATE.dataFiltered.slice();
+  rows.sort(function(a,b){ return compareRows(a,b,def) * STATE.dataSortDir; });
+  var total = rows.length;
+  var totalPages = Math.max(1, Math.ceil(total / STATE.dataPageSize));
+  if (STATE.dataPage > totalPages) STATE.dataPage = totalPages;
+  var start = (STATE.dataPage-1) * STATE.dataPageSize;
+  var pageRows = rows.slice(start, start+STATE.dataPageSize);
+
+  document.getElementById('data-empty').classList.toggle('hidden', total>0);
+  STATE.currentPageRowIndexes = pageRows.map(function(r){ return r.rowIndex; });
+  document.getElementById('data-tbody').innerHTML = pageRows.map(function(r){
+    var checked = STATE.selectedRowIndexes[r.rowIndex] ? ' checked' : '';
+    var checkboxTd = '<td style="text-align:center;"><input type="checkbox" class="row-select-checkbox" data-row="'+r.rowIndex+'"'+checked+'></td>';
+    return '<tr>' + checkboxTd + STATE.columnOrder.map(function(key){ return buildCellHtml(r, DISPLAY_COLUMN_DEFS_BY_KEY[key]); }).join('') + '</tr>';
+  }).join('');
+
+  document.getElementById('pagination-info').textContent = total===0 ? '0件' : (start+1)+'〜'+Math.min(start+STATE.dataPageSize,total)+' / '+total+'件';
+  document.getElementById('btn-prev-page').disabled = STATE.dataPage<=1;
+  document.getElementById('btn-next-page').disabled = STATE.dataPage>=totalPages;
+
+  syncSelectAllCheckbox();
+  updateBulkEditBar();
+}
+
+function syncSelectAllCheckbox(){
+  var cb = document.getElementById('data-select-all-page');
+  if (!cb) return;
+  var pageIndexes = STATE.currentPageRowIndexes;
+  var allSelected = pageIndexes.length > 0 && pageIndexes.every(function(ri){ return !!STATE.selectedRowIndexes[ri]; });
+  var someSelected = pageIndexes.some(function(ri){ return !!STATE.selectedRowIndexes[ri]; });
+  cb.checked = allSelected;
+  cb.indeterminate = !allSelected && someSelected;
+}
+function getSelectedRowIndexes(){ return Object.keys(STATE.selectedRowIndexes).map(Number); }
+function clearRowSelection(){
+  STATE.selectedRowIndexes = {};
+  renderDataTable();
+}
+function updateBulkEditBar(){
+  var count = getSelectedRowIndexes().length;
+  var countEl = document.getElementById('bulk-selected-count');
+  if (countEl) countEl.textContent = count;
+  var bar = document.getElementById('bulk-edit-bar');
+  if (bar) bar.classList.toggle('hidden', count === 0);
+}
+function formatCell(v, col){
+  if (v===null||v===undefined||v==='') return '<span style="color:var(--slate-300)">－</span>';
+  if (col.type==='number') return formatNumber(v);
+  if (col.type==='date') return escapeHtml(String(v).replace(/-/g,'/'));
+  return escapeHtml(String(v));
+}
+function buildCellHtml(row, def){
+  if (!def) return '<td></td>';
+  if (def.kind === 'csv'){
+    var col = COLUMN_BY_KEY[def.field];
+    var align = col.type === 'number' ? 'text-right' : '';
+    var displayValue = row[def.field];
+    if (def.field === 'staff' && displayValue) displayValue = formatStaffName(displayValue);
+    if (def.field === 'reservationNo' && displayValue){
+      var challengeUrl = buildChallengeRecordUrl(displayValue);
+      if (challengeUrl){
+        return '<td class="'+align+'"><a href="'+escapeHtml(challengeUrl)+'" target="_blank" rel="noopener noreferrer" style="color:var(--blue-700);">'+escapeHtml(displayValue)+'</a></td>';
+      }
+    }
+    return '<td class="'+align+'">'+formatCell(displayValue, col)+'</td>';
+  }
+  if (def.kind === 'date'){
+    var dv = row[def.field] || '';
+    var pendingDate = hasPendingFieldChange(row.rowIndex, def.field) ? ' pending-edit' : '';
+    return '<td class="editable-cell"><input type="date" class="'+pendingDate.trim()+'" data-row="'+row.rowIndex+'" data-col="'+def.field+'" value="'+escapeHtml(dv)+'"></td>';
+  }
+  if (def.kind === 'memo'){
+    var mv = row[def.field] || '';
+    var pendingMemo = hasPendingFieldChange(row.rowIndex, def.field) ? ' pending-edit' : '';
+    if (!mv) {
+      return '<td class="editable-cell"><span class="memo-display memo-placeholder'+pendingMemo+'" data-row="'+row.rowIndex+'" data-col="'+def.field+'">（ダブルクリックで入力）</span></td>';
+    }
+    var truncated = mv.length > 10 ? escapeHtml(mv.slice(0,10)) + '…' : escapeHtml(mv);
+    return '<td class="editable-cell"><span class="memo-display'+pendingMemo+'" data-row="'+row.rowIndex+'" data-col="'+def.field+'" data-tooltip="'+escapeHtml(mv)+'">'+truncated+'</span></td>';
+  }
+  if (def.kind === 'ancillary'){
+    var item = ANCILLARY_BY_KEY[def.item];
+    var status = normalizeAncillaryStatus(row[item.statusKey]);
+    var qty = row[item.qtyKey];
+    var reason = row[item.reasonKey] || '';
+    var opts = ANCILLARY_STATUS_OPTIONS.map(function(o){
+      return '<option value="'+o.value+'"'+(status===o.value?' selected':'')+'>'+o.value+' '+o.label+'</option>';
+    }).join('');
+    var qtyEditable = isAncillaryQtyEditable(status);
+    var qtyVal = (qty===null||qty===undefined) ? '' : qty;
+    var flagged = qtyEditable && (qtyVal==='') ? ' ancillary-flagged' : '';
+    var pendingAncillary = hasPendingAncillaryChange(row.rowIndex, item.key) ? ' pending-edit' : '';
+    var qtyTooltipAttr = (status === '×' && reason) ? ' data-tooltip="失注理由：'+escapeHtml(reason)+'"' : '';
+    return '<td class="editable-cell text-center"><div class="ancillary-pair"'+qtyTooltipAttr+'>' +
+      '<select class="ancillary-status'+pendingAncillary+'" data-row="'+row.rowIndex+'" data-item="'+item.key+'" data-col="'+item.statusKey+'" data-qtycol="'+item.qtyKey+'" data-reasoncol="'+item.reasonKey+'">'+opts+'</select>' +
+      '<input type="number" min="0" class="ancillary-qty'+flagged+pendingAncillary+'" data-row="'+row.rowIndex+'" data-col="'+item.qtyKey+'" value="'+escapeHtml(String(qtyVal))+'" '+(qtyEditable?'':'disabled')+' placeholder="数">' +
+      '</div></td>';
+  }
+  return '<td></td>';
+}
+
+/* ---- 編集の「まとめて保存する」（他のリセール管理システムと同様、1項目ずつ即時保存ではなく複数の編集をためて一括保存する） ---- */
+function pendingKey(rowIndex, fieldOrItem){ return rowIndex + '|' + fieldOrItem; }
+function hasPendingFieldChange(rowIndex, columnKey){ return !!STATE.pendingChanges[pendingKey(rowIndex, columnKey)]; }
+function hasPendingAncillaryChange(rowIndex, itemKey){ return !!STATE.pendingChanges[pendingKey(rowIndex, 'ancillary:'+itemKey)]; }
+function getOrCreatePendingAncillary(rowIndex, itemKey){
+  var key = pendingKey(rowIndex, 'ancillary:'+itemKey);
+  if (!STATE.pendingChanges[key]){
+    var row = STATE.rows.find(function(r){ return r.rowIndex === rowIndex; });
+    var item = ANCILLARY_BY_KEY[itemKey];
+    STATE.pendingChanges[key] = { kind:'ancillary', rowIndex: rowIndex, itemKey: itemKey, original: { status: row[item.statusKey], qty: row[item.qtyKey], reason: row[item.reasonKey] } };
+  }
+  return STATE.pendingChanges[key];
+}
+function updatePendingChangesBar(){
+  var count = Object.keys(STATE.pendingChanges).length;
+  var countEl = document.getElementById('pending-changes-count');
+  if (countEl) countEl.textContent = count;
+  var bar = document.getElementById('pending-changes-bar');
+  if (bar) bar.classList.toggle('hidden', count === 0);
+}
+function afterCellSaved(){
+  renderDataTable();
+  applyDashFilters(); // 保険/Wifi等の入力はダッシュボードの数量にも影響するため再集計する
+  renderPersonalTab();
+  updatePendingChangesBar();
+}
+function saveAllPendingChanges(){
+  var changes = Object.keys(STATE.pendingChanges).map(function(k){ return STATE.pendingChanges[k]; });
+  if (changes.length === 0) return;
+  STATE.pendingChanges = {};
+  afterCellSaved();
+  showToast(formatNumber(changes.length) + '件を保存しました（デモ）', 'success');
+}
+function discardPendingChanges(){
+  var count = Object.keys(STATE.pendingChanges).length;
+  if (count === 0) return;
+  if (!window.confirm('未保存の変更（'+count+'件）を取り消します。よろしいですか？')) return;
+  Object.keys(STATE.pendingChanges).forEach(function(k){
+    var c = STATE.pendingChanges[k];
+    var row = STATE.rows.find(function(r){ return r.rowIndex === c.rowIndex; });
+    if (!row) return;
+    if (c.kind === 'field'){ row[c.columnKey] = c.original; }
+    else {
+      var item = ANCILLARY_BY_KEY[c.itemKey];
+      row[item.statusKey] = c.original.status;
+      row[item.qtyKey] = c.original.qty;
+      row[item.reasonKey] = c.original.reason;
+    }
+  });
+  STATE.pendingChanges = {};
+  afterCellSaved();
+  showToast('未保存の変更を取り消しました', 'info');
+}
+function bindPendingChangesEvents(){
+  document.getElementById('btn-save-pending-changes').addEventListener('click', saveAllPendingChanges);
+  document.getElementById('btn-discard-pending-changes').addEventListener('click', discardPendingChanges);
+}
+
+function saveCell(rowIndex, columnKey, value){
+  var row = STATE.rows.find(function(r){ return r.rowIndex === rowIndex; });
+  if (!row) return;
+  var normalized = value === '' ? null : value;
+  var key = pendingKey(rowIndex, columnKey);
+  if (!STATE.pendingChanges[key]) STATE.pendingChanges[key] = { kind:'field', rowIndex: rowIndex, columnKey: columnKey, original: row[columnKey] };
+  STATE.pendingChanges[key].value = normalized;
+  row[columnKey] = normalized;
+  afterCellSaved();
+}
+function handleAncillaryStatusChange(selectEl){
+  var rowIndex = Number(selectEl.dataset.row);
+  var row = STATE.rows.find(function(r){ return r.rowIndex === rowIndex; });
+  if (!row) return;
+  var item = ANCILLARY_BY_KEY[selectEl.dataset.item];
+  var newStatus = selectEl.value;
+  var prevStatus = normalizeAncillaryStatus(row[item.statusKey]);
+
+  if (newStatus === '×'){
+    var reason = window.prompt('失注理由を入力してください（キャンセルすると変更されません）', '');
+    if (reason === null){ selectEl.value = prevStatus; return; }
+    var pendingLost = getOrCreatePendingAncillary(rowIndex, item.key);
+    pendingLost.status = '×'; pendingLost.qty = 0; pendingLost.reason = reason.trim();
+    row[item.statusKey] = '×';
+    row[item.qtyKey] = 0;
+    row[item.reasonKey] = reason.trim();
+    afterCellSaved();
+    return;
+  }
+
+  var pending = getOrCreatePendingAncillary(rowIndex, item.key);
+  pending.status = newStatus;
+  pending.qty = isAncillaryQtyEditable(newStatus) ? row[item.qtyKey] : null;
+  pending.reason = '';
+
+  row[item.statusKey] = newStatus;
+  if (!isAncillaryQtyEditable(newStatus)) row[item.qtyKey] = null;
+  row[item.reasonKey] = '';
+  afterCellSaved();
+
+  if (isAncillaryQtyEditable(newStatus)){
+    var qty = row[item.qtyKey];
+    if (qty === null || qty === undefined || qty === ''){
+      showToast(item.label + 'の数量が入力されていません。数量を入力してください。', 'error');
+      var qtyInput = document.querySelector('input.ancillary-qty[data-row="'+rowIndex+'"][data-col="'+item.qtyKey+'"]');
+      if (qtyInput) qtyInput.focus();
+    }
+  }
+}
+function handleAncillaryQtyBlur(inputEl){
+  var rowIndex = Number(inputEl.dataset.row);
+  var row = STATE.rows.find(function(r){ return r.rowIndex === rowIndex; });
+  if (!row) return;
+  var item = ANCILLARY_BY_QTY_KEY[inputEl.dataset.col];
+  var status = normalizeAncillaryStatus(row[item.statusKey]);
+  if (isAncillaryQtyEditable(status) && inputEl.value === ''){
+    // 自分自身のblurハンドラーからfocus()し直すと、ブラウザによってはblur→focusの無限ループを招くため
+    // フォーカスは戻さずトースト表示のみに留める（値も保存しない）。
+    showToast(item.label + 'の数量が入力されていません。数量を入力してください。', 'error');
+    return;
+  }
+  var normalizedQty = inputEl.value === '' ? null : Number(inputEl.value);
+  var pending = getOrCreatePendingAncillary(rowIndex, item.key);
+  pending.status = status; pending.qty = normalizedQty; pending.reason = row[item.reasonKey];
+  row[item.qtyKey] = normalizedQty;
+  afterCellSaved();
+}
+
+/* ---- 一括登録（複数行を選択して同じ値をまとめて登録する） ---- */
+function populateBulkAncillarySelects(){
+  document.querySelectorAll('.bulk-ancillary-status').forEach(function(el){
+    el.innerHTML = ANCILLARY_STATUS_OPTIONS.map(function(o){
+      return '<option value="'+o.value+'">'+o.value+' '+o.label+'</option>';
+    }).join('');
+  });
+}
+function showBulkEditResult(updated){
+  var el = document.getElementById('bulk-edit-result');
+  el.textContent = formatNumber(updated) + '件に反映しました（デモ）。';
+  el.classList.remove('hidden');
+  showToast(formatNumber(updated) + '件に反映しました（デモ）', 'success');
+}
+function applyBulkField(field){
+  var rowIndexes = getSelectedRowIndexes();
+  if (rowIndexes.length === 0){ showToast('行が選択されていません。', 'error'); return; }
+  var value = field === 'chkDate' ? document.getElementById('bulk-chkdate-input').value : document.getElementById('bulk-memo-input').value;
+  var normalized = value === '' ? null : value;
+  rowIndexes.forEach(function(ri){
+    var row = STATE.rows.find(function(r){ return r.rowIndex === ri; });
+    if (row) row[field] = normalized;
+  });
+  afterCellSaved();
+  showBulkEditResult(rowIndexes.length);
+}
+function applyBulkAncillary(itemKey){
+  var rowIndexes = getSelectedRowIndexes();
+  if (rowIndexes.length === 0){ showToast('行が選択されていません。', 'error'); return; }
+  var item = ANCILLARY_BY_KEY[itemKey];
+  var status = document.getElementById('bulk-'+itemKey+'-status').value;
+  var qtyInput = document.getElementById('bulk-'+itemKey+'-qty');
+  var qty = qtyInput.value;
+  var reason = '';
+  if (status === '×'){
+    reason = window.prompt('失注理由を入力してください（キャンセルすると変更されません）', '');
+    if (reason === null) return;
+  } else if (isAncillaryQtyEditable(status) && qty.trim() === ''){
+    showToast(item.label + 'の数量を入力してください。', 'error');
+    return;
+  }
+  rowIndexes.forEach(function(ri){
+    var row = STATE.rows.find(function(r){ return r.rowIndex === ri; });
+    if (!row) return;
+    row[item.statusKey] = status;
+    if (status === '×'){ row[item.qtyKey] = 0; row[item.reasonKey] = reason.trim(); }
+    else if (isAncillaryQtyEditable(status)){ row[item.qtyKey] = qty === '' ? null : Number(qty); row[item.reasonKey] = ''; }
+    else { row[item.qtyKey] = null; row[item.reasonKey] = ''; }
+  });
+  afterCellSaved();
+  showBulkEditResult(rowIndexes.length);
+}
+function bindBulkEditEvents(){
+  document.getElementById('btn-bulk-clear-selection').addEventListener('click', clearRowSelection);
+  document.querySelectorAll('.bulk-apply-field-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){ applyBulkField(btn.dataset.field); });
+  });
+  document.querySelectorAll('.bulk-apply-ancillary-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){ applyBulkAncillary(btn.dataset.item); });
+  });
+  document.querySelectorAll('.bulk-ancillary-status').forEach(function(sel){
+    sel.addEventListener('change', function(){
+      var qtyInput = document.getElementById('bulk-'+sel.dataset.item+'-qty');
+      qtyInput.disabled = !isAncillaryQtyEditable(sel.value);
+      if (qtyInput.disabled) qtyInput.value = '';
+    });
+  });
+}
+
+function beginMemoEdit(span){
+  var rowIndex = Number(span.dataset.row), col = span.dataset.col;
+  var row = STATE.rows.find(function(r){ return r.rowIndex === rowIndex; });
+  if (!row) return;
+  var input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'memo-edit-input';
+  input.dataset.row = rowIndex;
+  input.dataset.col = col;
+  input.value = row[col] || '';
+  span.replaceWith(input);
+  input.focus();
+  input.select();
+}
+function bindDataTableEditEvents(){
+  var tbody = document.getElementById('data-tbody');
+  tbody.addEventListener('change', function(e){
+    var t = e.target;
+    if (t.matches('input[type="date"][data-col]')) saveCell(Number(t.dataset.row), t.dataset.col, t.value);
+    else if (t.matches('select.ancillary-status')) handleAncillaryStatusChange(t);
+    else if (t.matches('input.ancillary-qty')) handleAncillaryQtyBlur(t);
+    else if (t.matches('input.row-select-checkbox')){
+      var rowIndex = Number(t.dataset.row);
+      if (t.checked) STATE.selectedRowIndexes[rowIndex] = true; else delete STATE.selectedRowIndexes[rowIndex];
+      syncSelectAllCheckbox();
+      updateBulkEditBar();
+    }
+  });
+  tbody.addEventListener('blur', function(e){
+    var t = e.target;
+    if (t.matches('input.memo-edit-input')) saveCell(Number(t.dataset.row), t.dataset.col, t.value);
+    else if (t.matches('input.ancillary-qty')) handleAncillaryQtyBlur(t);
+  }, true);
+  tbody.addEventListener('dblclick', function(e){
+    var span = e.target.closest('.memo-display');
+    if (span) beginMemoEdit(span);
+  });
+  tbody.addEventListener('mouseover', function(e){
+    var el = e.target.closest('[data-tooltip]');
+    if (el) showHoverTooltip(e.clientX, e.clientY, el.getAttribute('data-tooltip'));
+  });
+  tbody.addEventListener('mousemove', function(e){
+    var el = e.target.closest('[data-tooltip]');
+    if (el) positionHoverTooltip(e.clientX, e.clientY);
+  });
+  tbody.addEventListener('mouseout', function(e){
+    var el = e.target.closest('[data-tooltip]');
+    if (el) hideHoverTooltip();
+  });
+}
+function positionHoverTooltip(x, y){
+  var tip = document.getElementById('hover-tooltip');
+  var left = x + 14, top = y + 14;
+  tip.style.left = Math.min(left, window.innerWidth - 300) + 'px';
+  tip.style.top = Math.min(top, window.innerHeight - 80) + 'px';
+}
+function showHoverTooltip(x, y, text){
+  var tip = document.getElementById('hover-tooltip');
+  tip.textContent = text;
+  tip.classList.remove('hidden');
+  positionHoverTooltip(x, y);
+}
+function hideHoverTooltip(){ document.getElementById('hover-tooltip').classList.add('hidden'); }
+
+/* ---- 列の並び順エディタ ---- */
+function renderColumnOrderEditor(){
+  var container = document.getElementById('column-order-list');
+  container.innerHTML = STATE.columnOrder.map(function(key, i){
+    var def = DISPLAY_COLUMN_DEFS_BY_KEY[key];
+    if (!def) return '';
+    return '<div class="col-order-row">' +
+      '<span>'+escapeHtml(def.label)+'</span>' +
+      '<span class="buttons">' +
+        '<button type="button" class="col-order-up" data-index="'+i+'"'+(i===0?' disabled':'')+'>▲</button>' +
+        '<button type="button" class="col-order-down" data-index="'+i+'"'+(i===STATE.columnOrder.length-1?' disabled':'')+'>▼</button>' +
+      '</span></div>';
+  }).join('');
+}
+function bindColumnOrderEvents(){
+  document.getElementById('column-order-list').addEventListener('click', function(e){
+    var up = e.target.closest('.col-order-up'), down = e.target.closest('.col-order-down');
+    if (!up && !down) return;
+    var idx = Number((up||down).dataset.index);
+    var swapWith = up ? idx-1 : idx+1;
+    if (swapWith<0 || swapWith>=STATE.columnOrder.length) return;
+    var tmp = STATE.columnOrder[idx]; STATE.columnOrder[idx]=STATE.columnOrder[swapWith]; STATE.columnOrder[swapWith]=tmp;
+    renderColumnOrderEditor(); renderDataThead(); renderDataTable();
+  });
+  document.getElementById('btn-save-column-order').addEventListener('click', function(){
+    var el = document.getElementById('column-order-result');
+    el.textContent = '並び順を保存しました（このモックアップでは表示中のみ反映されます）。';
+    el.classList.remove('hidden');
+    showToast('列の並び順を保存しました（デモ）', 'success');
+  });
+  document.getElementById('btn-reset-column-order').addEventListener('click', function(){
+    STATE.columnOrder = DEFAULT_COLUMN_ORDER.slice();
+    renderColumnOrderEditor(); renderDataThead(); renderDataTable();
+  });
+}
+
+/* ---- 個人別サマリータブ ---- */
+function emptyAncillaryTally(){ return { qty:0, nb:0, push:0 }; }
+function addToAncillaryTally(tally, row, item){
+  if (typeof row[item.qtyKey] === 'number') tally.qty += row[item.qtyKey];
+  var status = row[item.statusKey];
+  if (status === '〇') tally.nb++;
+  else if (status === '☆') tally.push++;
+}
+function formatAncillaryTallyCell(tally){
+  return '<div>合計 '+formatNumber(tally.qty)+'</div>' +
+    '<div class="muted">NB付帯 '+formatNumber(tally.nb)+'／PUSH成約 '+formatNumber(tally.push)+'</div>';
+}
+function buildPersonalSummary(rows){
+  var map = {};
+  rows.forEach(function(r){
+    var key = (r.area||'(未設定)') + '\u0001' + (r.office||'(未設定)') + '\u0001' + (r.staff||'(未設定)');
+    if (!map[key]) map[key] = {
+      area:r.area||'(未設定)', office:r.office||'(未設定)', staff:r.staff||'(未設定)', count:0,
+      insurance: emptyAncillaryTally(), wifi: emptyAncillaryTally(), cansapo: emptyAncillaryTally(), tavica: emptyAncillaryTally()
+    };
+    var b = map[key];
+    b.count++;
+    addToAncillaryTally(b.insurance, r, ANCILLARY_BY_KEY.insurance);
+    addToAncillaryTally(b.wifi, r, ANCILLARY_BY_KEY.wifi);
+    addToAncillaryTally(b.cansapo, r, ANCILLARY_BY_KEY.cansapo);
+    addToAncillaryTally(b.tavica, r, ANCILLARY_BY_KEY.tavica);
+  });
+  return Object.keys(map).map(function(k){ return map[k]; });
+}
+function renderPersonalTab(){
+  var keyword = (document.getElementById('personal-search').value||'').trim().toLowerCase();
+  var list = buildPersonalSummary(STATE.rows).filter(function(b){
+    if (!keyword) return true;
+    return (b.area+' '+b.office+' '+b.staff).toLowerCase().indexOf(keyword) !== -1;
+  });
+  var key=STATE.personalSortKey, dir=STATE.personalSortDir;
+  list.sort(function(a,b){
+    if (key==='area') return a.area.localeCompare(b.area,'ja')*dir;
+    if (key==='office') return a.office.localeCompare(b.office,'ja')*dir;
+    if (key==='staff') return a.staff.localeCompare(b.staff,'ja')*dir;
+    return (a[key]-b[key])*dir;
+  });
+  var tbody = document.getElementById('personal-tbody');
+  document.getElementById('personal-empty').classList.toggle('hidden', list.length>0);
+  tbody.innerHTML = list.map(function(b){
+    return '<tr>' +
+      '<td>'+escapeHtml(b.area)+'</td>' +
+      '<td>'+escapeHtml(b.office)+'</td>' +
+      '<td>'+escapeHtml(formatStaffName(b.staff))+'</td>' +
+      '<td class="text-right">'+formatNumber(b.count)+'</td>' +
+      '<td class="text-right">'+formatAncillaryTallyCell(b.insurance)+'</td>' +
+      '<td class="text-right">'+formatAncillaryTallyCell(b.wifi)+'</td>' +
+      '<td class="text-right">'+formatAncillaryTallyCell(b.cansapo)+'</td>' +
+      '<td class="text-right">'+formatAncillaryTallyCell(b.tavica)+'</td>' +
+    '</tr>';
+  }).join('');
+}
+
+/* ---- データ管理タブ ---- */
+function renderAdminStatus(){
+  document.getElementById('admin-status').innerHTML =
+    '<p>あなたが閲覧できる件数（サンプル）：<b>'+formatNumber(STATE.rows.length)+'</b> 件</p>' +
+    '<p>分析ダッシュボードの現在の絞り込み結果：<b>'+formatNumber(STATE.dashFiltered.length)+'</b> 件</p>';
+}
+function removeDuplicatesDemo(){
+  if (!window.confirm('CSV由来19項目すべてが完全一致する重複行を削除します。よろしいですか？（デモ動作）')) return;
+  var el = document.getElementById('duplicate-result');
+  el.textContent = '重複している行はありませんでした。（サンプルデータのためデモ動作です）';
+  el.classList.remove('hidden');
+  showToast('重複削除を実行しました（デモ）', 'success');
+}
+function clearAllDataDemo(){
+  var input = document.getElementById('clear-confirm-input');
+  if (input.value !== '削除'){ showToast('確認欄に「削除」と入力してください。', 'error'); return; }
+  if (!window.confirm('サンプルデータをすべて削除します（デモ動作。ページ再読込で元に戻ります）。よろしいですか？')) return;
+  STATE.allRows = [];
+  input.value = '';
+  var el = document.getElementById('clear-result');
+  el.textContent = '削除しました（デモ）。';
+  el.classList.remove('hidden');
+  showToast('データを削除しました（デモ）', 'success');
+  boot();
+}
+
+/* ---- 権限管理（スタッフ権限）デモ ---- */
+function renderStaffList(){
+  var tbody = document.getElementById('staff-tbody');
+  document.getElementById('staff-empty').classList.toggle('hidden', STATE.staffList.length>0);
+  tbody.innerHTML = STATE.staffList.map(function(s){
+    return '<tr>' +
+      '<td style="font-family:monospace; font-size:12px;">'+escapeHtml(s.email)+'</td>' +
+      '<td>'+escapeHtml(s.name)+'</td>' +
+      '<td>'+escapeHtml(s.office)+'</td>' +
+      '<td>'+escapeHtml(s.area)+'</td>' +
+      '<td>'+escapeHtml(s.role)+'</td>' +
+      '<td class="text-right">' +
+        '<button type="button" class="staff-edit" data-row="'+s.rowIndex+'" style="background:none;border:none;color:var(--blue-600);font-size:12px;margin-right:8px;">編集</button>' +
+        '<button type="button" class="staff-delete" data-row="'+s.rowIndex+'" style="background:none;border:none;color:var(--red-600);font-size:12px;">削除</button>' +
+      '</td></tr>';
+  }).join('');
+}
+function bindStaffEvents(){
+  document.getElementById('btn-open-staff-modal').addEventListener('click', function(){ openStaffModal(null); });
+  document.getElementById('btn-close-staff-modal').addEventListener('click', closeStaffModal);
+  document.getElementById('btn-cancel-staff-modal').addEventListener('click', closeStaffModal);
+  document.getElementById('staff-tbody').addEventListener('click', function(e){
+    var editBtn = e.target.closest('.staff-edit'), delBtn = e.target.closest('.staff-delete');
+    if (editBtn) openStaffModal(Number(editBtn.dataset.row));
+    if (delBtn){
+      if (!window.confirm('このアカウントを削除しますか？（デモ動作）')) return;
+      STATE.staffList = STATE.staffList.filter(function(s){ return s.rowIndex !== Number(delBtn.dataset.row); });
+      renderStaffList();
+    }
+  });
+  document.getElementById('staff-form').addEventListener('submit', function(ev){
+    ev.preventDefault();
+    var rowIndex = document.getElementById('staff-form-rowindex').value;
+    var payload = {
+      email: document.getElementById('staff-form-email').value.trim(),
+      name: document.getElementById('staff-form-name').value.trim(),
+      office: document.getElementById('staff-form-office').value.trim(),
+      area: document.getElementById('staff-form-area').value.trim(),
+      role: document.getElementById('staff-form-role').value
+    };
+    if (rowIndex){
+      var target = STATE.staffList.find(function(s){ return s.rowIndex === Number(rowIndex); });
+      if (target) Object.assign(target, payload);
+    } else {
+      payload.rowIndex = Math.max.apply(null, STATE.staffList.map(function(s){return s.rowIndex;}).concat([1])) + 1;
+      STATE.staffList.push(payload);
+    }
+    renderStaffList();
+    closeStaffModal();
+    showToast('保存しました（デモ）', 'success');
+  });
+}
+function openStaffModal(rowIndex){
+  var isEdit = rowIndex !== null;
+  document.getElementById('staff-modal-title').textContent = isEdit ? '🛡️ アカウントを編集' : '🛡️ アカウントを追加';
+  var target = isEdit ? STATE.staffList.find(function(s){ return s.rowIndex === rowIndex; }) : null;
+  document.getElementById('staff-form-rowindex').value = isEdit ? rowIndex : '';
+  document.getElementById('staff-form-email').value = target ? target.email : '';
+  document.getElementById('staff-form-name').value = target ? target.name : '';
+  document.getElementById('staff-form-office').value = target ? target.office : '';
+  document.getElementById('staff-form-area').value = target ? target.area : '';
+  document.getElementById('staff-form-role').value = target ? target.role : '社員';
+  document.getElementById('staff-modal').classList.add('open');
+}
+function closeStaffModal(){ document.getElementById('staff-modal').classList.remove('open'); }
+
+/* ---- 担当者マスタ デモ ---- */
+function renderStaffNameList(){
+  rebuildStaffNameMap();
+  var tbody = document.getElementById('staff-name-tbody');
+  document.getElementById('staff-name-empty').classList.toggle('hidden', STATE.staffNameList.length>0);
+  tbody.innerHTML = STATE.staffNameList.map(function(s){
+    return '<tr>' +
+      '<td style="font-family:monospace; font-size:12px;">'+escapeHtml(s.code)+'</td>' +
+      '<td>'+escapeHtml(s.name)+'</td>' +
+      '<td class="text-right">' +
+        '<button type="button" class="staff-name-edit" data-row="'+s.rowIndex+'" style="background:none;border:none;color:var(--blue-600);font-size:12px;margin-right:8px;">編集</button>' +
+        '<button type="button" class="staff-name-delete" data-row="'+s.rowIndex+'" style="background:none;border:none;color:var(--red-600);font-size:12px;">削除</button>' +
+      '</td></tr>';
+  }).join('');
+  renderDataTable();
+  renderPersonalTab();
+}
+function bindStaffNameEvents(){
+  document.getElementById('btn-open-staff-name-modal').addEventListener('click', function(){ openStaffNameModal(null); });
+  document.getElementById('btn-close-staff-name-modal').addEventListener('click', closeStaffNameModal);
+  document.getElementById('btn-cancel-staff-name-modal').addEventListener('click', closeStaffNameModal);
+  document.getElementById('staff-name-tbody').addEventListener('click', function(e){
+    var editBtn = e.target.closest('.staff-name-edit'), delBtn = e.target.closest('.staff-name-delete');
+    if (editBtn) openStaffNameModal(Number(editBtn.dataset.row));
+    if (delBtn){
+      if (!window.confirm('この担当者を削除しますか？（デモ動作）')) return;
+      STATE.staffNameList = STATE.staffNameList.filter(function(s){ return s.rowIndex !== Number(delBtn.dataset.row); });
+      renderStaffNameList();
+    }
+  });
+  document.getElementById('staff-name-form').addEventListener('submit', function(ev){
+    ev.preventDefault();
+    var rowIndex = document.getElementById('staff-name-form-rowindex').value;
+    var payload = {
+      code: document.getElementById('staff-name-form-code').value.trim(),
+      name: document.getElementById('staff-name-form-name').value.trim()
+    };
+    if (!payload.code || !payload.name){ showToast('担当者コードと氏名を入力してください。', 'error'); return; }
+    if (rowIndex){
+      var target = STATE.staffNameList.find(function(s){ return s.rowIndex === Number(rowIndex); });
+      if (target) Object.assign(target, payload);
+    } else {
+      payload.rowIndex = Math.max.apply(null, STATE.staffNameList.map(function(s){return s.rowIndex;}).concat([1])) + 1;
+      STATE.staffNameList.push(payload);
+    }
+    renderStaffNameList();
+    closeStaffNameModal();
+    showToast('保存しました（デモ）', 'success');
+  });
+}
+function openStaffNameModal(rowIndex){
+  var isEdit = rowIndex !== null;
+  document.getElementById('staff-name-modal-title').textContent = isEdit ? '🪪 担当者を編集' : '🪪 担当者を追加';
+  var target = isEdit ? STATE.staffNameList.find(function(s){ return s.rowIndex === rowIndex; }) : null;
+  document.getElementById('staff-name-form-rowindex').value = isEdit ? rowIndex : '';
+  document.getElementById('staff-name-form-code').value = target ? target.code : '';
+  document.getElementById('staff-name-form-name').value = target ? target.name : '';
+  document.getElementById('staff-name-modal').classList.add('open');
+}
+function closeStaffNameModal(){ document.getElementById('staff-name-modal').classList.remove('open'); }
+
+/* ---- 担当者マスタ：人事データCSVインポート（実際にファイルを読み取って解析するデモ） ---- */
+var staffNameImportSelectedText = null;
+var staffNameImportTimer = null;
+
+/** 簡易CSVパーサー（ダブルクォート対応）。人事データCSVインポートのみで使用。 */
+function parseSimpleCsv(text){
+  var rows = [], row = [], field = '', inQuotes = false;
+  for (var i = 0; i < text.length; i++){
+    var c = text[i];
+    if (inQuotes){
+      if (c === '"'){ if (text[i+1] === '"'){ field += '"'; i++; } else { inQuotes = false; } }
+      else field += c;
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === ','){ row.push(field); field = ''; }
+      else if (c === '\n'){ row.push(field); rows.push(row); row = []; field = ''; }
+      else if (c === '\r'){ /* skip */ }
+      else field += c;
+    }
+  }
+  if (field.length > 0 || row.length > 0){ row.push(field); rows.push(row); }
+  return rows.filter(function(r){ return !(r.length === 1 && r[0] === ''); });
+}
+function normalizeStaffCsvHeaderLabel(raw){
+  return String(raw === null || raw === undefined ? '' : raw).replace(/^﻿/, '').trim();
+}
+// 人事データCSVからGoogleアカウント（スタッフ権限）も一括登録するための、任意列の見出し候補。
+// 列名はCSVの出力元によって異なりうるため、よくある表記を複数候補として扱う（大小文字・前後の記号は無視）。
+var STAFF_CSV_OPTIONAL_COLUMN_CANDIDATES = {
+  email: ['Googleアカウント', 'Google Workspaceアカウント', 'メールアドレス', 'メール', 'Eメール', 'E-mail', 'Email', 'mail'],
+  office: ['所属店舗', '配属店舗', '店舗'],
+  area: ['所属エリア', 'エリア'],
+  role: ['権限', '権限区分', '役職']
+};
+function findOptionalStaffCsvColumn(headerRow, candidates){
+  for (var c = 0; c < headerRow.length; c++){
+    var label = normalizeStaffCsvHeaderLabel(headerRow[c]).replace(/^[■●◆□]+/, '').trim();
+    var labelLower = label.toLowerCase();
+    for (var i = 0; i < candidates.length; i++){
+      if (label === candidates[i] || labelLower === candidates[i].toLowerCase()) return c;
+    }
+  }
+  return -1;
+}
+function detectStaffCsvHeaderRow(matrix){
+  var scanLimit = Math.min(matrix.length, 5);
+  for (var r = 0; r < scanLimit; r++){
+    var codeIdx = -1, nameIdx = -1;
+    for (var c = 0; c < matrix[r].length; c++){
+      var label = normalizeStaffCsvHeaderLabel(matrix[r][c]);
+      if (codeIdx === -1 && label.replace(/^■/, '').trim() === '担当者NO') codeIdx = c;
+      if (nameIdx === -1 && label === '社員名称') nameIdx = c;
+    }
+    if (codeIdx !== -1 && nameIdx !== -1){
+      return {
+        rowIndex: r, codeIdx: codeIdx, nameIdx: nameIdx,
+        emailIdx: findOptionalStaffCsvColumn(matrix[r], STAFF_CSV_OPTIONAL_COLUMN_CANDIDATES.email),
+        officeIdx: findOptionalStaffCsvColumn(matrix[r], STAFF_CSV_OPTIONAL_COLUMN_CANDIDATES.office),
+        areaIdx: findOptionalStaffCsvColumn(matrix[r], STAFF_CSV_OPTIONAL_COLUMN_CANDIDATES.area),
+        roleIdx: findOptionalStaffCsvColumn(matrix[r], STAFF_CSV_OPTIONAL_COLUMN_CANDIDATES.role)
+      };
+    }
+  }
+  return null;
+}
+/** CSVの「権限」欄の表記を3段階権限へ変換する。安全のため、CSVの値がマスタ相当でも自動ではマスタ権限にしない。 */
+function mapCsvRoleToAppRole(raw){
+  var s = String(raw || '').trim();
+  if (!s) return { role: '社員', downgraded: false };
+  if (s.indexOf('マスタ') !== -1 || s.indexOf('管理者') !== -1 || s.indexOf('admin') !== -1) return { role: '社員', downgraded: true };
+  if (s.indexOf('所長') !== -1 || s.indexOf('チーフ') !== -1 || s.indexOf('店長') !== -1) return { role: '所長・チーフ', downgraded: false };
+  return { role: '社員', downgraded: false };
+}
+var EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+function openStaffNameImportModal(){
+  staffNameImportSelectedText = null;
+  document.getElementById('staff-name-import-file-input').value = '';
+  document.getElementById('staff-name-import-file-summary').classList.add('hidden');
+  document.getElementById('staff-name-import-result').style.display = 'none';
+  document.getElementById('staff-name-import-progress').classList.add('hidden');
+  document.getElementById('btn-submit-staff-name-import').disabled = true;
+  document.getElementById('staff-name-import-modal').classList.add('open');
+}
+function closeStaffNameImportModal(){
+  document.getElementById('staff-name-import-modal').classList.remove('open');
+  if (staffNameImportTimer){ clearInterval(staffNameImportTimer); staffNameImportTimer = null; }
+}
+/**
+ * CSVファイルの文字コード自動判定（UTF-8 / Shift_JIS 両対応）。
+ * 業務系システムの書き出しに多いShift_JIS（CP932）のCSVでも、見出しが文字化けせず
+ * 検出できるようにするための処理。
+ */
+function decodeCsvArrayBuffer(buffer){
+  var bytes = new Uint8Array(buffer);
+  if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF){
+    return new TextDecoder('utf-8').decode(bytes.subarray(3));
+  }
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch (e) {
+    return new TextDecoder('shift_jis').decode(bytes);
+  }
+}
+function onStaffNameImportFileSelected(e){
+  var file = e.target.files[0];
+  document.getElementById('staff-name-import-result').style.display = 'none';
+  if (!file){ document.getElementById('btn-submit-staff-name-import').disabled = true; return; }
+  var reader = new FileReader();
+  reader.onload = function(evt){
+    staffNameImportSelectedText = decodeCsvArrayBuffer(evt.target.result);
+    var summary = document.getElementById('staff-name-import-file-summary');
+    summary.textContent = 'ファイル：' + file.name + '（' + Math.ceil(file.size/1024) + ' KB）';
+    summary.classList.remove('hidden');
+    document.getElementById('btn-submit-staff-name-import').disabled = false;
+  };
+  reader.onerror = function(){ showToast('ファイルの読み込みに失敗しました。', 'error'); };
+  reader.readAsArrayBuffer(file);
+}
+function submitStaffNameImportDemo(){
+  if (!staffNameImportSelectedText) return;
+  document.getElementById('btn-submit-staff-name-import').disabled = true;
+  var box = document.getElementById('staff-name-import-progress');
+  var bar = document.getElementById('staff-name-import-progress-bar');
+  var timeLabel = document.getElementById('staff-name-import-progress-time');
+  box.classList.remove('hidden');
+  var elapsed = 0;
+  bar.style.width = '5%';
+  staffNameImportTimer = setInterval(function(){
+    elapsed++;
+    timeLabel.textContent = elapsed + '秒';
+    bar.style.width = Math.min(95, 5 + elapsed*30) + '%';
+    if (elapsed >= 1){
+      clearInterval(staffNameImportTimer); staffNameImportTimer = null;
+      bar.style.width = '100%';
+      finishStaffNameImportDemo();
+    }
+  }, 300);
+}
+function finishStaffNameImportDemo(){
+  var box = document.getElementById('staff-name-import-result');
+  var matrix = parseSimpleCsv(staffNameImportSelectedText);
+  if (!matrix || matrix.length < 2){
+    box.innerHTML = '<p style="color:var(--red-700); font-weight:600;">❌ CSVにデータ行が見つかりませんでした。</p>';
+    box.style.display = 'block';
+    document.getElementById('btn-submit-staff-name-import').disabled = false;
+    return;
+  }
+  var headerInfo = detectStaffCsvHeaderRow(matrix);
+  if (!headerInfo){
+    box.innerHTML = '<p style="color:var(--red-700); font-weight:600;">❌ 見出し行から「■担当者NO」「社員名称」の列を検出できませんでした。</p>';
+    box.style.display = 'block';
+    document.getElementById('btn-submit-staff-name-import').disabled = false;
+    return;
+  }
+  var accountsDetected = headerInfo.emailIdx !== -1;
+  var csvMap = {}, csvAccounts = {}, skipped = 0, accountsSkipped = 0;
+  for (var r = headerInfo.rowIndex + 1; r < matrix.length; r++){
+    var row = matrix[r];
+    var code = String(row[headerInfo.codeIdx] || '').trim();
+    var name = String(row[headerInfo.nameIdx] || '').trim();
+    if (!code || !name){ skipped++; continue; }
+    csvMap[code] = name;
+    if (accountsDetected){
+      var email = String(row[headerInfo.emailIdx] || '').trim().toLowerCase();
+      if (!email) continue;
+      if (!EMAIL_PATTERN.test(email)){ accountsSkipped++; continue; }
+      csvAccounts[email] = {
+        email: email, name: name,
+        office: headerInfo.officeIdx !== -1 ? String(row[headerInfo.officeIdx] || '').trim() : '',
+        area: headerInfo.areaIdx !== -1 ? String(row[headerInfo.areaIdx] || '').trim() : '',
+        roleRaw: headerInfo.roleIdx !== -1 ? String(row[headerInfo.roleIdx] || '').trim() : ''
+      };
+    }
+  }
+  var existingByCode = {};
+  STATE.staffNameList.forEach(function(s){ existingByCode[s.code] = s; });
+  var added = 0, updated = 0;
+  Object.keys(csvMap).forEach(function(code){
+    var name = csvMap[code];
+    var target = existingByCode[code];
+    if (target){
+      if (target.name !== name){ target.name = name; updated++; }
+    } else {
+      var rowIndex = Math.max.apply(null, STATE.staffNameList.map(function(s){return s.rowIndex;}).concat([1])) + 1;
+      var created = { rowIndex: rowIndex, code: code, name: name };
+      STATE.staffNameList.push(created);
+      existingByCode[code] = created;
+      added++;
+    }
+  });
+  renderStaffNameList();
+
+  var accountsAdded = 0, accountsUpdated = 0, accountsMasterDowngraded = 0;
+  if (accountsDetected){
+    var existingByEmail = {};
+    STATE.staffList.forEach(function(s){ existingByEmail[s.email.toLowerCase()] = s; });
+    Object.keys(csvAccounts).forEach(function(email){
+      var acc = csvAccounts[email];
+      var existing = existingByEmail[email];
+      if (existing){
+        if (existing.name !== acc.name || existing.office !== acc.office || existing.area !== acc.area){
+          existing.name = acc.name; existing.office = acc.office; existing.area = acc.area;
+          accountsUpdated++;
+        }
+      } else {
+        var mapped = mapCsvRoleToAppRole(acc.roleRaw);
+        if (mapped.downgraded) accountsMasterDowngraded++;
+        var rowIndex = Math.max.apply(null, STATE.staffList.map(function(s){return s.rowIndex;}).concat([1])) + 1;
+        var created = { rowIndex: rowIndex, email: acc.email, name: acc.name, office: acc.office, area: acc.area, role: mapped.role };
+        STATE.staffList.push(created);
+        existingByEmail[email] = created;
+        accountsAdded++;
+      }
+    });
+    renderStaffList();
+  }
+
+  var lines = [
+    '<p style="color:var(--emerald-700); font-weight:600;">✅ 取り込みが完了しました</p>',
+    '<p>CSVのデータ行数：' + formatNumber(matrix.length - headerInfo.rowIndex - 1) + ' 行</p>',
+    '<p>担当者マスタ：新規登録 <b>' + formatNumber(added) + '</b> 件／氏名を更新 <b>' + formatNumber(updated) + '</b> 件</p>',
+    '<p>担当者NO・社員名称が空欄などのためスキップ：' + formatNumber(skipped) + ' 件</p>'
+  ];
+  if (accountsDetected){
+    lines.push(
+      '<p style="margin-top:8px; padding-top:8px; border-top:1px solid var(--slate-200); font-weight:600;">Googleアカウント（スタッフ権限）も検出しました</p>',
+      '<p>スタッフ権限：新規登録 <b>' + formatNumber(accountsAdded) + '</b> 件／氏名・所属を更新 <b>' + formatNumber(accountsUpdated) + '</b> 件</p>'
+    );
+    if (accountsSkipped > 0) lines.push('<p>メールアドレスの形式が不正なためスキップ：' + formatNumber(accountsSkipped) + ' 件</p>');
+    if (accountsMasterDowngraded > 0){
+      lines.push('<p style="color:var(--amber-700);">⚠ ' + formatNumber(accountsMasterDowngraded) + ' 件はCSVの権限欄が「マスタ権限」相当でしたが、安全のため「社員」として登録しました。必要な場合は「権限管理（スタッフ権限）」から手動で変更してください。</p>');
+    }
+    lines.push('<p class="muted">既存のGoogleアカウントは氏名・所属店舗・所属エリアのみ更新し、権限は変更していません。</p>');
+  } else {
+    lines.push('<p class="muted">CSVにGoogleアカウント（メールアドレス）の列が見つからなかったため、スタッフ権限への登録は行っていません。</p>');
+  }
+  box.innerHTML = lines.join('');
+  box.style.display = 'block';
+  showToast('人事データCSVを取り込みました（担当者マスタ：新規 ' + added + ' 件・更新 ' + updated + ' 件）', 'success');
+  document.getElementById('btn-submit-staff-name-import').disabled = false;
+}
+function bindStaffNameImportEvents(){
+  document.getElementById('btn-open-staff-name-import-modal').addEventListener('click', openStaffNameImportModal);
+  document.getElementById('btn-close-staff-name-import-modal').addEventListener('click', closeStaffNameImportModal);
+  document.getElementById('btn-cancel-staff-name-import-modal').addEventListener('click', closeStaffNameImportModal);
+  document.getElementById('staff-name-import-file-input').addEventListener('change', onStaffNameImportFileSelected);
+  document.getElementById('btn-submit-staff-name-import').addEventListener('click', submitStaffNameImportDemo);
+}
+
+/* ---- CSVインポート（見た目のみのダミー動作） ---- */
+var csvTimer = null;
+function openCsvModal(){
+  document.getElementById('csv-import-modal').classList.add('open');
+  document.getElementById('csv-file-input').value = '';
+  document.getElementById('csv-file-summary').classList.add('hidden');
+  document.getElementById('csv-import-result').style.display = 'none';
+  document.getElementById('csv-progress').classList.add('hidden');
+  document.getElementById('btn-submit-csv').disabled = true;
+}
+function closeCsvModal(){
+  document.getElementById('csv-import-modal').classList.remove('open');
+  if (csvTimer) { clearInterval(csvTimer); csvTimer = null; }
+}
+function onCsvFileSelected(e){
+  var file = e.target.files[0];
+  if (!file) { document.getElementById('btn-submit-csv').disabled = true; return; }
+  var summary = document.getElementById('csv-file-summary');
+  summary.textContent = 'ファイル：' + file.name + '（' + Math.ceil(file.size/1024) + ' KB）';
+  summary.classList.remove('hidden');
+  document.getElementById('btn-submit-csv').disabled = false;
+}
+function submitCsvImportDemo(){
+  document.getElementById('btn-submit-csv').disabled = true;
+  var box = document.getElementById('csv-progress');
+  var bar = document.getElementById('csv-progress-bar');
+  var timeLabel = document.getElementById('csv-progress-time');
+  box.classList.remove('hidden');
+  var elapsed = 0;
+  bar.style.width = '5%';
+  csvTimer = setInterval(function(){
+    elapsed++;
+    timeLabel.textContent = elapsed + '秒';
+    bar.style.width = Math.min(95, 5+elapsed*20) + '%';
+    if (elapsed >= 2){
+      clearInterval(csvTimer); csvTimer = null;
+      bar.style.width = '100%';
+      finishCsvImportDemo();
+    }
+  }, 300);
+}
+function finishCsvImportDemo(){
+  var addN = randInt(15, 40);
+  var added = genSampleRows(addN);
+  STATE.allRows = STATE.allRows.concat(added);
+  document.getElementById('last-imported-label').textContent = '最終取込：' + new Date().toLocaleString('ja-JP') + '（サンプル・デモ取込）';
+
+  var box = document.getElementById('csv-import-result');
+  box.style.display = 'block';
+  box.innerHTML =
+    '<p style="color:var(--emerald-700); font-weight:600;">✅ 取り込みが完了しました（デモ）</p>' +
+    '<p>新規登録：<b>'+formatNumber(addN)+'</b> 件（CHK日・保険等は空欄で追加されます）</p>' +
+    '<p>取込後の合計件数：'+formatNumber(STATE.allRows.length)+' 件</p>';
+  showToast('CSVを取り込みました（デモ・新規 '+addN+' 件）', 'success');
+  boot();
+}
+
+/* ---- イベント結線・タブ切り替え ---- */
+function bindEvents(){
+  document.querySelectorAll('.tab-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){ switchTab(btn.getAttribute('data-tab')); });
+  });
+  document.getElementById('btn-refresh').addEventListener('click', boot);
+  document.getElementById('role-switcher').addEventListener('change', onRoleChanged);
+
+  ['dash-filter-area','dash-filter-office','dash-filter-category','dash-filter-tourbrand','dash-filter-destination','dash-filter-date-field'].forEach(function(id){
+    document.getElementById(id).addEventListener('change', applyDashFilters);
+  });
+  document.getElementById('dash-filter-date-from').addEventListener('change', applyDashFilters);
+  document.getElementById('dash-filter-date-to').addEventListener('change', applyDashFilters);
+  document.getElementById('btn-clear-dash-filter').addEventListener('click', clearDashFilters);
+
+  document.querySelectorAll('#panel-dashboard [data-sort]').forEach(function(th){
+    th.addEventListener('click', function(){
+      var key = th.getAttribute('data-sort');
+      if (STATE.rankingSortKey === key) STATE.rankingSortDir *= -1; else { STATE.rankingSortKey = key; STATE.rankingSortDir = -1; }
+      renderRanking();
+    });
+  });
+
+  ['data-filter-area','data-filter-office','data-filter-staff','data-filter-insurance-status','data-filter-wifi-status','data-filter-tavica-status','data-filter-cansapo-status'].forEach(function(id){
+    document.getElementById(id).addEventListener('change', applyDataFilters);
+  });
+  document.getElementById('data-filter-date-from').addEventListener('change', applyDataFilters);
+  document.getElementById('data-filter-date-to').addEventListener('change', applyDataFilters);
+  document.getElementById('btn-clear-data-filter').addEventListener('click', clearDataFilters);
+
+  document.getElementById('btn-prev-page').addEventListener('click', function(){ STATE.dataPage--; renderDataTable(); });
+  document.getElementById('btn-next-page').addEventListener('click', function(){ STATE.dataPage++; renderDataTable(); });
+  bindDataTableEditEvents();
+  bindBulkEditEvents();
+  bindPendingChangesEvents();
+
+  document.getElementById('btn-open-csv-modal').addEventListener('click', openCsvModal);
+  document.getElementById('btn-close-csv-modal').addEventListener('click', closeCsvModal);
+  document.getElementById('btn-cancel-csv-modal').addEventListener('click', closeCsvModal);
+  document.getElementById('csv-file-input').addEventListener('change', onCsvFileSelected);
+  document.getElementById('btn-submit-csv').addEventListener('click', submitCsvImportDemo);
+
+  document.getElementById('personal-search').addEventListener('input', debounce(renderPersonalTab, 200));
+  document.querySelectorAll('#panel-personal [data-sort]').forEach(function(th){
+    th.addEventListener('click', function(){
+      var key = th.getAttribute('data-sort');
+      if (STATE.personalSortKey === key) STATE.personalSortDir *= -1; else { STATE.personalSortKey = key; STATE.personalSortDir = -1; }
+      renderPersonalTab();
+    });
+  });
+
+  bindColumnOrderEvents();
+  document.getElementById('btn-remove-duplicates').addEventListener('click', removeDuplicatesDemo);
+  document.getElementById('btn-clear-all-data').addEventListener('click', clearAllDataDemo);
+  bindStaffEvents();
+  bindStaffNameEvents();
+  bindStaffNameImportEvents();
+}
+function switchTab(tab){
+  document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-tab')===tab); });
+  document.querySelectorAll('.panel').forEach(function(p){ p.classList.toggle('hidden', p.id !== 'panel-'+tab); });
+}
+
+/* ---- 共通ユーティリティ ---- */
+function formatNumber(n){ return Number(n||0).toLocaleString('ja-JP'); }
+function formatCurrency(n){ return '¥'+Number(n||0).toLocaleString('ja-JP'); }
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; });
+}
+function debounce(fn, wait){
+  var t=null;
+  return function(){ var args=arguments; clearTimeout(t); t=setTimeout(function(){ fn.apply(null,args); }, wait); };
+}
+function showToast(message, type){
+  var container = document.getElementById('toast-container');
+  var toast = document.createElement('div');
+  toast.className = 'toast ' + (type||'info');
+  var icon = type==='error' ? '❗' : (type==='success' ? '✅' : 'ℹ️');
+  toast.innerHTML = '<span>'+icon+'</span><span>'+escapeHtml(message)+'</span>';
+  container.appendChild(toast);
+  setTimeout(function(){
+    toast.style.opacity = '0';
+    setTimeout(function(){ toast.remove(); }, 300);
+  }, 4000);
+}
+</script>
+</body>
+</html>
