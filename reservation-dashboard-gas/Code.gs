@@ -993,10 +993,10 @@ function findStaffCsvColumnIndex_(headerRow, matchFn) {
 // ---- 人事データCSVからGoogleアカウント（スタッフ権限）も一括登録するための、任意列の見出し候補 ----
 // 列名はCSVの出力元によって異なりうるため、よくある表記を複数候補として扱う（大小文字・前後の記号は無視）。
 var STAFF_CSV_OPTIONAL_COLUMN_CANDIDATES = {
-  email: ['Googleアカウント', 'Google Workspaceアカウント', 'メールアドレス', 'メール', 'Eメール', 'E-mail', 'Email', 'mail'],
-  office: ['所属店舗', '配属店舗', '店舗'],
-  area: ['所属エリア', 'エリア'],
-  role: ['権限', '権限区分', '役職']
+  email: ['Googleアカウント', 'Google Workspaceアカウント', 'メールアドレス', 'メール', 'Eメール', 'E-mail', 'Email', 'mail', 'Gmailアドレス', 'Gmail アドレス', 'Gmail'],
+  office: ['所属店舗', '配属店舗', '店舗', '駐在所属名称'],
+  area: ['所属エリア', 'エリア', 'エリア名'],
+  role: ['権限', '権限区分', '役職', '役割等級']
 };
 
 /** 任意列の見出しラベルを、候補リストのいずれかと一致するか判定する（大文字小文字・前後の■等の記号は無視）。 */
