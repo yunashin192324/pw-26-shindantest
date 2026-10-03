@@ -1,0 +1,244 @@
+<script>document.addEventListener('DOMContentLoaded',()=>{(e=document.querySelector('.photoplan_photographerbox .basic_areatitle01'))&&(e.innerHTML='INFORMATION<span>スケジュール・基本情報</span>')});</script>
+<style type="text/css">@media screen and (min-width:769px){  .pps{max-width:1000px;margin:0 auto!important;padding:0 20px} }
+.pps table{width:100%;border-collapse:collapse;font-size:14px;margin-bottom:20px}
+.pps th{padding:10px; background:#f9f9f9; border-bottom:2px solid #76ae98; color:#555;}
+.pps tr{border-bottom:1px solid #eee}
+.pps td{padding:10px; text-align:center;}
+/* 1列目（プラン名）を元のテイストのグリーン太字に設定 */
+.pps td:first-child{width:120px;color:#76ae98;font-weight:bold; text-align:left;}
+.tab-wrap { display: flex; flex-wrap: wrap; margin-bottom: 20px; }
+.tab-label { order: 1; flex: 1; text-align: center; padding: 12px; background: #eaeaea; color: #888; cursor: pointer; font-weight: bold; border-radius: 5px 5px 0 0; margin-right: 2px; transition: 0.2s; font-size: 15px;}
+/* スマホ閲覧時にタブ文字が収まるよう微調整 */
+@media screen and (max-width:768px){ .tab-label { font-size: 11px; padding: 10px 2px; } }
+.tab-label[data-tab="content_4"] { margin-right: 0; }
+.tab-content { order: 2; width: 100%; display: none; padding: 20px 5px 0; border-top: 3px solid #76ae98; animation: fadeDown 0.4s ease; overflow-x: auto; }
+/* 選択中のタブ・内容（JavaScriptが無効でも初期状態で瀬良垣島教会が表示される） */
+.tab-content.is-active { display: block; }
+.tab-label.is-active { background: #76ae98; color: #fff; }
+</style>
+<div class="pps">
+<div class="tab-wrap">
+<div class="tab-label is-active" data-tab="content_1" role="button" tabindex="0">瀬良垣島教会</div> 
+<div class="tab-label" data-tab="content_2" role="button" tabindex="0">ザ・ビーチチャペル</div> 
+<div class="tab-label" data-tab="content_3" role="button" tabindex="0">美らの教会</div> 
+<div class="tab-label" data-tab="content_4" role="button" tabindex="0">瀬良垣島教会＆美らの教会</div>
+
+<!-- ▼ 瀬良垣島教会 -->
+<div class="tab-content is-active" id="content_1">
+<table style="min-width: 600px;">
+	<thead>
+		<tr>
+			<th>フォトプラン名</th>
+			<th>施行打合せ</th>
+			<th>当日メイク開始時間</th>
+			<th>撮影開始時間</th>
+			<th style="color:#d9534f;">【予約時】挙式時間</th>
+		</tr>
+	</thead>
+	<tbody>
+		<tr>
+			<td>Light Plan A</td>
+			<td>7:30</td>
+			<td>8:00</td>
+			<td>9:45</td>
+			<td>10:30</td>
+		</tr>
+		<tr>
+			<td>Light Plan B</td>
+			<td>11:30</td>
+			<td>12:00</td>
+			<td>13:45</td>
+			<td>14:30</td>
+		</tr>
+		<tr>
+			<td>Light Plan C</td>
+			<td>15:00</td>
+			<td>15:30</td>
+			<td>17:15</td>
+			<td>18:30</td>
+		</tr>
+		<tr>
+			<td>Premium Plan A</td>
+			<td>7:30</td>
+			<td>8:00</td>
+			<td>9:45</td>
+			<td>10:30</td>
+		</tr>
+		<tr>
+			<td>Premium Plan B</td>
+			<td>11:30</td>
+			<td>12:00</td>
+			<td>13:45</td>
+			<td>14:30</td>
+		</tr>
+		<tr>
+			<td>Premium Plan C</td>
+			<td>13:30</td>
+			<td>14:00</td>
+			<td>15:45</td>
+			<td>18:30</td>
+		</tr>
+	</tbody>
+</table>
+<p style="font-size:13px; color:#666; margin-top:10px; line-height:1.6;">※施行打合せの時間は、状況によって変更になる可能性がございます。</p>
+</div>
+
+<!-- ▼ ザ・ビーチチャペル -->
+<div class="tab-content" id="content_2">
+<table style="min-width: 600px;">
+	<thead>
+		<tr>
+			<th>フォトプラン名</th>
+			<th>施行打合せ</th>
+			<th>当日メイク開始時間</th>
+			<th>撮影開始時間</th>
+			<th style="color:#d9534f;">【予約時】挙式時間</th>
+		</tr>
+	</thead>
+	<tbody>
+		<tr>
+			<td>Light Plan A</td>
+			<td>6:30</td>
+			<td>7:00</td>
+			<td>8:45</td>
+			<td>10:00</td>
+		</tr>
+		<tr>
+			<td>Light Plan B</td>
+			<td>10:30</td>
+			<td>11:00</td>
+			<td>12:45</td>
+			<td>14:00</td>
+		</tr>
+		<tr>
+			<td>Premium Plan A</td>
+			<td>6:30</td>
+			<td>7:00</td>
+			<td>8:45</td>
+			<td>10:00</td>
+		</tr>
+		<tr>
+			<td>Premium Plan B</td>
+			<td>10:30</td>
+			<td>11:00</td>
+			<td>12:45</td>
+			<td>14:00</td>
+		</tr>
+	</tbody>
+</table>
+<p style="font-size:13px; color:#666; margin-top:10px; line-height:1.6;">※施行打合せの時間は、状況によって変更になる可能性がございます。</p>
+</div>
+
+<!-- ▼ 美らの教会 -->
+<div class="tab-content" id="content_3">
+<table style="min-width: 600px;">
+	<thead>
+		<tr>
+			<th>フォトプラン名</th>
+			<th>施行打合せ</th>
+			<th>当日メイク開始時間</th>
+			<th>撮影開始時間</th>
+			<th style="color:#d9534f;">【予約時】挙式時間</th>
+		</tr>
+	</thead>
+	<tbody>
+		<tr>
+			<td>Premium Plan A</td>
+			<td>7:00</td>
+			<td>7:30</td>
+			<td>9:15</td>
+			<td>10:15</td>
+		</tr>
+		<tr>
+			<td>Premium Plan B</td>
+			<td>8:15</td>
+			<td>8:45</td>
+			<td>10:30</td>
+			<td>11:30</td>
+		</tr>
+		<tr>
+			<td>Premium Plan C</td>
+			<td>10:45</td>
+			<td>11:15</td>
+			<td>13:00</td>
+			<td>14:00</td>
+		</tr>
+		<tr>
+			<td>Premium Plan D</td>
+			<td>12:00</td>
+			<td>12:30</td>
+			<td>14:15</td>
+			<td>15:15</td>
+		</tr>
+	</tbody>
+</table>
+<p style="font-size:13px; color:#666; margin-top:10px; line-height:1.6;">※施行打合せの時間は、状況によって変更になる可能性がございます。</p>
+</div>
+
+<!-- ▼ 瀬良垣島教会＆美らの教会 -->
+<div class="tab-content" id="content_4">
+<table style="min-width: 650px;">
+	<thead>
+		<tr>
+			<th>フォトプラン名</th>
+			<th>施行打合せ</th>
+			<th>当日メイク開始時間</th>
+			<th>撮影開始時間</th>
+			<th style="color:#d9534f;">【予約時】<br />瀬良垣島教会<br />挙式時間</th>
+			<th style="color:#d9534f;">【予約時】<br />美らの教会<br />挙式時間</th>
+		</tr>
+	</thead>
+	<tbody>
+		<tr>
+			<td>Premium Plan A</td>
+			<td>7:00</td>
+			<td>7:30</td>
+			<td>9:15</td>
+			<td>10:30</td>
+			<td>14:00</td>
+		</tr>
+		<tr>
+			<td>Premium Plan B</td>
+			<td>11:15</td>
+			<td>11:45</td>
+			<td>13:30</td>
+			<td>18:30</td>
+			<td>15:15</td>
+		</tr>
+		<tr>
+			<td>Premium Plan C</td>
+			<td>11:30</td>
+			<td>12:00</td>
+			<td>13:45</td>
+			<td>14:30</td>
+			<td>17:45</td>
+		</tr>
+	</tbody>
+</table>
+<p style="font-size:13px; color:#666; margin-top:10px; line-height:1.6;">※施行打合せの時間は、状況によって変更になる可能性がございます。</p>
+</div>
+
+</div>
+</div>
+<script>
+(function(){
+  function init(){
+    var wrap=document.querySelector('.pps .tab-wrap');
+    if(!wrap)return;
+    var labels=wrap.querySelectorAll('.tab-label');
+    var contents=wrap.querySelectorAll('.tab-content');
+    function show(id){
+      for(var i=0;i<labels.length;i++){labels[i].classList.toggle('is-active',labels[i].getAttribute('data-tab')===id);}
+      for(var j=0;j<contents.length;j++){contents[j].classList.toggle('is-active',contents[j].id===id);}
+    }
+    for(var k=0;k<labels.length;k++){
+      (function(l){
+        l.addEventListener('click',function(){show(l.getAttribute('data-tab'));});
+        l.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();show(l.getAttribute('data-tab'));}});
+      })(labels[k]);
+    }
+    show('content_1');
+  }
+  if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',init);}else{init();}
+})();
+</script>
