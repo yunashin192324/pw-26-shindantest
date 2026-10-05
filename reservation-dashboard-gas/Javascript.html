@@ -1706,8 +1706,14 @@ function onStaffNameImportSuccess(result) {
   if (result.accountsDetected) {
     lines.push(
       '<p class="mt-2 pt-2 border-t border-slate-200 font-semibold text-slate-700">Googleアカウント（スタッフ権限）も検出しました</p>',
-      '<p>スタッフ権限：新規登録 <b>' + formatNumber(result.accountsAdded) + '</b> 件／氏名・所属を更新 <b>' + formatNumber(result.accountsUpdated) + '</b> 件</p>'
+      '<p>スタッフ権限：新規登録 <b>' + formatNumber(result.accountsAdded) + '</b> 件／氏名を更新 <b>' + formatNumber(result.accountsUpdated) + '</b> 件</p>'
     );
+    if (result.accountsAffiliationChanged > 0) {
+      lines.push(
+        '<p>所属（所属店舗・所属エリア）が変わったため、既存の行は残したまま新しい行として追加：<b>' +
+        formatNumber(result.accountsAffiliationChanged) + '</b> 件</p>'
+      );
+    }
     if (result.accountsSkipped > 0) {
       lines.push('<p>メールアドレスの形式が不正なためスキップ：' + formatNumber(result.accountsSkipped) + ' 件</p>');
     }
@@ -1719,7 +1725,7 @@ function onStaffNameImportSuccess(result) {
         '必要な場合は「権限管理（スタッフ権限）」から手動でマスタ権限に変更してください。</p>'
       );
     }
-    lines.push('<p class="text-slate-500">既存のGoogleアカウントは氏名・所属店舗・所属エリアのみ更新し、権限は変更していません。</p>');
+    lines.push('<p class="text-slate-500">既存のGoogleアカウントは氏名のみ更新します。所属が変わった場合は既存行を変更せず新しい行を追加し、権限はどちらの場合も変更していません。</p>');
   } else {
     lines.push('<p class="text-slate-500">CSVにGoogleアカウント（メールアドレス）の列が見つからなかったため、スタッフ権限への登録は行っていません。</p>');
   }

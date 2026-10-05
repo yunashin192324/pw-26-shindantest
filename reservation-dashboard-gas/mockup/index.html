@@ -282,7 +282,7 @@ th.sortable:hover{background:var(--blue-100);}
         <label>基準日</label>
         <select id="dash-filter-date-field">
           <option value="bookingDate">予約日</option>
-          <option value="departureDate">出発予定日</option>
+          <option value="departureDate" selected>出発予定日</option>
           <option value="chkDate">CHK日</option>
         </select>
       </div>
@@ -2213,7 +2213,7 @@ function finishStaffNameImportDemo(){
   });
   renderStaffNameList();
 
-  var accountsAdded = 0, accountsUpdated = 0, accountsMasterDowngraded = 0;
+  var accountsAdded = 0, accountsUpdated = 0, accountsMasterDowngraded = 0, accountsAffiliationChanged = 0;
   if (accountsDetected){
     var existingByEmail = {};
     STATE.staffList.forEach(function(s){ existingByEmail[s.email.toLowerCase()] = s; });
@@ -2221,8 +2221,16 @@ function finishStaffNameImportDemo(){
       var acc = csvAccounts[email];
       var existing = existingByEmail[email];
       if (existing){
-        if (existing.name !== acc.name || existing.office !== acc.office || existing.area !== acc.area){
-          existing.name = acc.name; existing.office = acc.office; existing.area = acc.area;
+        var affiliationChanged = existing.office !== acc.office || existing.area !== acc.area;
+        if (affiliationChanged){
+          // 所属が変わった場合は既存行をそのまま残し、同じ権限を引き継いだ新しい行を追加する（履歴を残すため）。
+          var rowIndex = Math.max.apply(null, STATE.staffList.map(function(s){return s.rowIndex;}).concat([1])) + 1;
+          var created = { rowIndex: rowIndex, email: acc.email, name: acc.name, office: acc.office, area: acc.area, role: existing.role };
+          STATE.staffList.push(created);
+          existingByEmail[email] = created;
+          accountsAffiliationChanged++;
+        } else if (existing.name !== acc.name){
+          existing.name = acc.name;
           accountsUpdated++;
         }
       } else {
@@ -2247,13 +2255,16 @@ function finishStaffNameImportDemo(){
   if (accountsDetected){
     lines.push(
       '<p style="margin-top:8px; padding-top:8px; border-top:1px solid var(--slate-200); font-weight:600;">Googleアカウント（スタッフ権限）も検出しました</p>',
-      '<p>スタッフ権限：新規登録 <b>' + formatNumber(accountsAdded) + '</b> 件／氏名・所属を更新 <b>' + formatNumber(accountsUpdated) + '</b> 件</p>'
+      '<p>スタッフ権限：新規登録 <b>' + formatNumber(accountsAdded) + '</b> 件／氏名を更新 <b>' + formatNumber(accountsUpdated) + '</b> 件</p>'
     );
+    if (accountsAffiliationChanged > 0){
+      lines.push('<p>所属（所属店舗・所属エリア）が変わったため、既存の行は残したまま新しい行として追加：<b>' + formatNumber(accountsAffiliationChanged) + '</b> 件</p>');
+    }
     if (accountsSkipped > 0) lines.push('<p>メールアドレスの形式が不正なためスキップ：' + formatNumber(accountsSkipped) + ' 件</p>');
     if (accountsMasterDowngraded > 0){
       lines.push('<p style="color:var(--amber-700);">⚠ ' + formatNumber(accountsMasterDowngraded) + ' 件はCSVの権限欄が「マスタ権限」相当でしたが、安全のため「社員」として登録しました。必要な場合は「権限管理（スタッフ権限）」から手動で変更してください。</p>');
     }
-    lines.push('<p class="muted">既存のGoogleアカウントは氏名・所属店舗・所属エリアのみ更新し、権限は変更していません。</p>');
+    lines.push('<p class="muted">既存のGoogleアカウントは氏名のみ更新します。所属が変わった場合は既存行を変更せず新しい行を追加し、権限はどちらの場合も変更していません。</p>');
   } else {
     lines.push('<p class="muted">CSVにGoogleアカウント（メールアドレス）の列が見つからなかったため、スタッフ権限への登録は行っていません。</p>');
   }

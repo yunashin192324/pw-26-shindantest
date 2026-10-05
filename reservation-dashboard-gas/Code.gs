@@ -195,6 +195,11 @@ function getDataSheet_() {
  *   全員をマスタ権限として扱う（bootstrapMode: true）。
  * ・シートはあるが該当アカウントの登録が無い場合は、閲覧不可（role: ''）として返す。
  */
+/**
+ * 同じGoogleアカウントの行がスタッフ権限シートに複数ある場合（人事データCSVインポートで
+ * 所属変更を新規行として追加したことによる履歴）は、シート上で一番下＝最後に追加された行を
+ * 現在の所属・権限として採用する。
+ */
 function getCurrentUserContext_() {
   var email = (Session.getActiveUser().getEmail() || '').trim().toLowerCase();
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(STAFF_SHEET_NAME);
@@ -202,11 +207,12 @@ function getCurrentUserContext_() {
     return { email: email, name: '', office: '', area: '', role: ROLE_MASTER, registered: false, bootstrapMode: true };
   }
   var values = sheet.getRange(2, 1, sheet.getLastRow() - 1, 5).getValues();
+  var found = null;
   for (var i = 0; i < values.length; i++) {
     var row = values[i];
     var rowEmail = String(row[0] || '').trim().toLowerCase();
     if (rowEmail && rowEmail === email) {
-      return {
+      found = {
         email: email,
         name: String(row[1] || ''),
         office: String(row[2] || ''),
@@ -217,6 +223,7 @@ function getCurrentUserContext_() {
       };
     }
   }
+  if (found) return found;
   return { email: email, name: '', office: '', area: '', role: '', registered: false, bootstrapMode: false };
 }
 
@@ -1064,8 +1071,12 @@ var EMAIL_PATTERN_ = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
  *
  * CSVにGoogleアカウント（メールアドレス）の列も含まれている場合は、あわせて「スタッフ権限」への
  * 一括登録も行う（所属店舗・所属エリア・権限の列があれば、それも読み取って設定する）。
- * ・スタッフ権限に同じGoogleアカウントが既にあれば氏名・所属店舗・所属エリアだけを更新し、
- *   権限（社員／所長・チーフ／マスタ権限）は上書きしない（システムの権限付与は常に手動が優先）。
+ * ・スタッフ権限に同じGoogleアカウントが既にあり、氏名だけが変わった場合はその行の氏名を更新する。
+ * ・既存のGoogleアカウントで所属店舗・所属エリアが変わった場合は、既存の行は一切変更せずに残し、
+ *   同じ権限を引き継いだ新しい行を追加する（過去の所属履歴を失わないため）。ログイン時の権限判定は、
+ *   同じGoogleアカウントの行が複数あればシート上で一番下＝最後に追加された行を使う。
+ * ・権限（社員／所長・チーフ／マスタ権限）は、既存アカウントについては氏名・所属の更新とは別に、
+ *   このインポートでは一切上書きしない（システムの権限付与は常に手動が優先）。
  * ・新規のGoogleアカウントは、CSVの「権限」欄から社員／所長・チーフを判定して登録する。
  *   「マスタ権限」に相当する表記があっても、安全のため自動ではマスタ権限を付与せず社員として登録する
  *   （マスタ権限は「権限管理（スタッフ権限）」画面から手動でのみ付与する）。
@@ -1142,7 +1153,7 @@ function importStaffNameCsv(csvText, fileName) {
     sheet.getRange(startRow, 1, rowsToAppend.length, 2).setNumberFormat('@').setValues(rowsToAppend);
   }
 
-  var accountsAdded = 0, accountsUpdated = 0, accountsMasterDowngraded = 0;
+  var accountsAdded = 0, accountsUpdated = 0, accountsMasterDowngraded = 0, accountsAffiliationChanged = 0;
   if (accountsDetected) {
     var staffSheet = getOrCreateStaffSheet_();
     var existingByEmail = {};
@@ -1153,8 +1164,15 @@ function importStaffNameCsv(csvText, fileName) {
       var acc = csvAccounts[email];
       var existing = existingByEmail[email];
       if (existing) {
-        if (existing.name !== acc.name || existing.office !== acc.office || existing.area !== acc.area) {
-          staffSheet.getRange(existing.rowIndex, 2, 1, 3).setValues([[acc.name, acc.office, acc.area]]);
+        var affiliationChanged = existing.office !== acc.office || existing.area !== acc.area;
+        if (affiliationChanged) {
+          // 所属（所属店舗・所属エリア）が変わった場合は、既存の行は一切変更せずそのまま残し、
+          // 同じ権限を引き継いだ新しい行を追加する（過去の所属履歴を失わないため）。
+          // ログイン時の権限判定は、同じGoogleアカウントの行が複数あれば一番下（最新）の行を使う。
+          accountRowsToAppend.push([acc.email, acc.name, acc.office, acc.area, existing.role]);
+          accountsAffiliationChanged++;
+        } else if (existing.name !== acc.name) {
+          staffSheet.getRange(existing.rowIndex, 2).setValue(acc.name);
           accountsUpdated++;
         }
       } else {
@@ -1183,6 +1201,7 @@ function importStaffNameCsv(csvText, fileName) {
     accountsUpdated: accountsUpdated,
     accountsSkipped: accountsSkipped,
     accountsMasterDowngraded: accountsMasterDowngraded,
+    accountsAffiliationChanged: accountsAffiliationChanged,
     staffAccessList: accountsDetected ? getStaffAccessList() : null
   };
 }
