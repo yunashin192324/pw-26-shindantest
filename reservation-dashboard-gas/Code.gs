@@ -1096,6 +1096,7 @@ function findStaffCsvColumnIndex_(headerRow, matchFn) {
 
 // ---- 人事データCSVからGoogleアカウント（スタッフ権限）も一括登録するための、任意列の見出し候補 ----
 // 列名はCSVの出力元によって異なりうるため、よくある表記を複数候補として扱う（大小文字・前後の記号は無視）。
+// 権限欄（role）は、「役割等級I」のように末尾に等級・号数が付く表記にも findRoleColumnIndex_ で対応する。
 var STAFF_CSV_OPTIONAL_COLUMN_CANDIDATES = {
   email: ['Googleアカウント', 'Google Workspaceアカウント', 'メールアドレス', 'メール', 'Eメール', 'E-mail', 'Email', 'mail', 'Gmailアドレス', 'Gmail アドレス', 'Gmail'],
   office: ['所属店舗', '配属店舗', '店舗', '駐在所属名称'],
@@ -1116,6 +1117,28 @@ function findOptionalStaffCsvColumn_(headerRow, candidates) {
 }
 
 /**
+ * 権限欄の見出し列を探す。まずSTAFF_CSV_OPTIONAL_COLUMN_CANDIDATES.roleとの完全一致を試し、
+ * 見つからなければ「役割等級I」「グレードA」のように、候補の末尾に等級・号数
+ * （ローマ数字・算用数字・アルファベット1〜3文字程度）が付いた表記にも対応する。
+ */
+function findRoleColumnIndex_(headerRow) {
+  var exact = findOptionalStaffCsvColumn_(headerRow, STAFF_CSV_OPTIONAL_COLUMN_CANDIDATES.role);
+  if (exact !== -1) return exact;
+  var suffixPattern = /^[IVXivxⅠ-Ⅻ0-9A-Za-z]{0,3}$/;
+  for (var c = 0; c < headerRow.length; c++) {
+    var label = normalizeStaffCsvHeaderLabel_(headerRow[c]).replace(/^[■●◆□]+/, '').trim();
+    for (var i = 0; i < STAFF_CSV_OPTIONAL_COLUMN_CANDIDATES.role.length; i++) {
+      var base = STAFF_CSV_OPTIONAL_COLUMN_CANDIDATES.role[i];
+      if (label.indexOf(base) === 0) {
+        var suffix = label.slice(base.length).trim();
+        if (suffix && suffixPattern.test(suffix)) return c;
+      }
+    }
+  }
+  return -1;
+}
+
+/**
  * 人事データCSVの先頭数行の中から、「■担当者NO」「社員名称」の2列がそろっている見出し行を探す。
  * 「■担当者NO」は先頭の■の有無を問わず「担当者NO」部分の一致で判定する。
  * 同じ見出し行の中にGoogleアカウント・所属店舗・所属エリア・権限の列があれば、その列番号も合わせて返す
@@ -1127,7 +1150,7 @@ function detectStaffCsvHeaderRow_(matrix) {
     var codeIdx = findStaffCsvColumnIndex_(matrix[r], function (label) { return label.replace(/^■/, '').trim() === '担当者NO'; });
     var nameIdx = findStaffCsvColumnIndex_(matrix[r], function (label) { return label === '社員名称'; });
     if (codeIdx !== -1 && nameIdx !== -1) {
-      var roleIdx = findOptionalStaffCsvColumn_(matrix[r], STAFF_CSV_OPTIONAL_COLUMN_CANDIDATES.role);
+      var roleIdx = findRoleColumnIndex_(matrix[r]);
       return {
         rowIndex: r,
         codeIdx: codeIdx,
