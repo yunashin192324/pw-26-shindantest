@@ -102,6 +102,10 @@ function buildRangeOptionFromUi_() {
   var mode = document.getElementById('data-window-mode').value;
   if (mode === 'all') return { mode: 'all' };
   if (mode === '1y') return { mode: 'custom', from: isoDateMonthsAgo_(12), to: null };
+  if (mode === 'fy-current' || mode === 'fy-prev') {
+    var fy = computeFiscalYearRange_(mode === 'fy-current' ? 0 : -1);
+    return { mode: 'custom', from: fy.from, to: fy.to };
+  }
   if (mode === 'custom') {
     var from = document.getElementById('data-window-from').value || null;
     var to = document.getElementById('data-window-to').value || null;
@@ -116,6 +120,17 @@ function isoDateMonthsAgo_(n) {
   d.setMonth(d.getMonth() - n);
   var pad = function (v) { return (v < 10 ? '0' : '') + v; };
   return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+}
+
+/**
+ * 「期」の範囲（出発予定日ベース、開始は11月・終了は翌年10月）を'yyyy-MM-dd'で返す。
+ * offsetYears: 0=今期、-1=前期。
+ */
+function computeFiscalYearRange_(offsetYears) {
+  var now = new Date();
+  var fyStartYear = (now.getMonth() + 1 >= 11) ? now.getFullYear() : now.getFullYear() - 1;
+  fyStartYear += offsetYears;
+  return { from: fyStartYear + '-11-01', to: (fyStartYear + 1) + '-10-31' };
 }
 
 /** 表示期間セレクタが変更されたときの処理。「期間を指定」は入力欄を出すだけで、「適用」を押すまで再読み込みしない。 */
@@ -1771,8 +1786,17 @@ function onStaffNameImportSuccess(result) {
   if (result.accountsDetected) {
     lines.push(
       '<p class="mt-2 pt-2 border-t border-slate-200 font-semibold text-slate-700">Googleアカウント（スタッフ権限）も検出しました</p>',
-      '<p>スタッフ権限：新規登録 <b>' + formatNumber(result.accountsAdded) + '</b> 件／氏名を更新 <b>' + formatNumber(result.accountsUpdated) + '</b> 件</p>'
+      '<p>スタッフ権限：新規登録 <b>' + formatNumber(result.accountsAdded) + '</b> 件／氏名を更新 <b>' + formatNumber(result.accountsUpdated) + '</b> 件／権限を同期 <b>' + formatNumber(result.accountsRoleSynced) + '</b> 件</p>'
     );
+    if (result.roleColumnDetected) {
+      lines.push('<p class="text-slate-500">権限欄として「' + escapeHtml(result.roleColumnHeader || '') + '」列を使用しました。</p>');
+    } else {
+      lines.push(
+        '<p class="text-amber-700"><i class="fa-solid fa-triangle-exclamation"></i> CSVから権限（役職）の列を検出できなかったため、' +
+        '新規アカウントはすべて「社員」として登録されました。見出し行の列名をご確認ください' +
+        '（「権限」「役職」「役職名」などの表記に対応しています）。</p>'
+      );
+    }
     if (result.accountsAffiliationChanged > 0) {
       lines.push(
         '<p>所属（所属店舗・所属エリア）が変わったため、既存の行は残したまま新しい行として追加：<b>' +
@@ -1790,7 +1814,22 @@ function onStaffNameImportSuccess(result) {
         '必要な場合は「権限管理（スタッフ権限）」から手動でマスタ権限に変更してください。</p>'
       );
     }
-    lines.push('<p class="text-slate-500">既存のGoogleアカウントは氏名のみ更新します。所属が変わった場合は既存行を変更せず新しい行を追加し、権限はどちらの場合も変更していません。</p>');
+    if (result.roleRawTally) {
+      var tallyKeys = Object.keys(result.roleRawTally);
+      if (tallyKeys.length > 0) {
+        var tallyRows = tallyKeys.map(function (k) {
+          return '<tr><td class="pr-3">' + escapeHtml(k) + '</td><td class="text-right">' + formatNumber(result.roleRawTally[k]) + ' 件</td></tr>';
+        }).join('');
+        lines.push(
+          '<details class="mt-1"><summary class="text-xs text-slate-500 cursor-pointer">CSVの権限欄の内訳を見る</summary>' +
+          '<table class="text-xs mt-1"><tbody>' + tallyRows + '</tbody></table></details>'
+        );
+      }
+    }
+    lines.push(
+      '<p class="text-slate-500">既存のGoogleアカウントは、マスタ権限を除き、CSVの権限欄（役職名）に合わせて権限も同期します' +
+      '（権限欄が空欄の行は変更しません）。所属が変わった場合は既存行を変更せず新しい行を追加します。</p>'
+    );
   } else {
     lines.push('<p class="text-slate-500">CSVにGoogleアカウント（メールアドレス）の列が見つからなかったため、スタッフ権限への登録は行っていません。</p>');
   }

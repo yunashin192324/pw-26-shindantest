@@ -1100,7 +1100,7 @@ var STAFF_CSV_OPTIONAL_COLUMN_CANDIDATES = {
   email: ['Googleアカウント', 'Google Workspaceアカウント', 'メールアドレス', 'メール', 'Eメール', 'E-mail', 'Email', 'mail', 'Gmailアドレス', 'Gmail アドレス', 'Gmail'],
   office: ['所属店舗', '配属店舗', '店舗', '駐在所属名称'],
   area: ['所属エリア', 'エリア', 'エリア名'],
-  role: ['権限', '権限区分', '役職', '役割等級']
+  role: ['権限', '権限区分', '役職', '役職名', '役割等級', '資格', '資格等級', '職位', '職位名', '等級', 'グレード', 'ポジション', '職階', 'Role', 'Grade', 'Position', 'Title']
 };
 
 /** 任意列の見出しラベルを、候補リストのいずれかと一致するか判定する（大文字小文字・前後の■等の記号は無視）。 */
@@ -1127,6 +1127,7 @@ function detectStaffCsvHeaderRow_(matrix) {
     var codeIdx = findStaffCsvColumnIndex_(matrix[r], function (label) { return label.replace(/^■/, '').trim() === '担当者NO'; });
     var nameIdx = findStaffCsvColumnIndex_(matrix[r], function (label) { return label === '社員名称'; });
     if (codeIdx !== -1 && nameIdx !== -1) {
+      var roleIdx = findOptionalStaffCsvColumn_(matrix[r], STAFF_CSV_OPTIONAL_COLUMN_CANDIDATES.role);
       return {
         rowIndex: r,
         codeIdx: codeIdx,
@@ -1134,7 +1135,9 @@ function detectStaffCsvHeaderRow_(matrix) {
         emailIdx: findOptionalStaffCsvColumn_(matrix[r], STAFF_CSV_OPTIONAL_COLUMN_CANDIDATES.email),
         officeIdx: findOptionalStaffCsvColumn_(matrix[r], STAFF_CSV_OPTIONAL_COLUMN_CANDIDATES.office),
         areaIdx: findOptionalStaffCsvColumn_(matrix[r], STAFF_CSV_OPTIONAL_COLUMN_CANDIDATES.area),
-        roleIdx: findOptionalStaffCsvColumn_(matrix[r], STAFF_CSV_OPTIONAL_COLUMN_CANDIDATES.role)
+        roleIdx: roleIdx,
+        // 診断用：実際に検出した権限列の見出し文言そのもの（取込結果画面で確認できるようにする）。
+        roleColumnHeader: roleIdx !== -1 ? normalizeStaffCsvHeaderLabel_(matrix[r][roleIdx]) : null
       };
     }
   }
@@ -1166,8 +1169,13 @@ var STAFF_CSV_ROLE_MAP_ = {
 function mapCsvRoleToAppRole_(raw) {
   var s = String(raw || '').trim();
   if (!s) return { role: ROLE_STAFF, downgraded: false, original: '' };
+  // 括弧の注記（例：「所長（関東エリア）」「Ｍ１（一般職）」）を取り除いた上で完全一致を試す。
+  var cleaned = s.replace(/[（(][^）)]*[）)]/g, '').trim();
   if (Object.prototype.hasOwnProperty.call(STAFF_CSV_ROLE_MAP_, s)) {
     return { role: STAFF_CSV_ROLE_MAP_[s], downgraded: false, original: s };
+  }
+  if (cleaned && cleaned !== s && Object.prototype.hasOwnProperty.call(STAFF_CSV_ROLE_MAP_, cleaned)) {
+    return { role: STAFF_CSV_ROLE_MAP_[cleaned], downgraded: false, original: s };
   }
   if (s.indexOf('マスタ') !== -1 || s.indexOf('管理者') !== -1 || s.indexOf('admin') !== -1) {
     return { role: ROLE_STAFF, downgraded: true, original: s };
@@ -1193,12 +1201,16 @@ var EMAIL_PATTERN_ = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
  * 一括登録も行う（所属店舗・所属エリア・権限の列があれば、それも読み取って設定する）。
  * ・スタッフ権限に同じGoogleアカウントが既にあり、氏名だけが変わった場合はその行の氏名を更新する。
  * ・既存のGoogleアカウントで所属店舗・所属エリアが変わった場合は、既存の行は一切変更せずに残し、
- *   同じ権限を引き継いだ新しい行を追加する（過去の所属履歴を失わないため）。ログイン時の権限判定は、
+ *   新しい行を追加する（過去の所属履歴を失わないため）。ログイン時の権限判定は、
  *   同じGoogleアカウントの行が複数あればシート上で一番下＝最後に追加された行を使う。
- * ・権限（社員／所長・チーフ／AL／マスタ権限）は、既存アカウントについては氏名・所属の更新とは別に、
- *   このインポートでは一切上書きしない（システムの権限付与は常に手動が優先）。
- * ・新規のGoogleアカウントは、CSVの「権限」欄（役職名）から社員／所長・チーフ／ALを判定して登録する
- *   （詳しい対応はmapCsvRoleToAppRole_のSTAFF_CSV_ROLE_MAP_を参照）。
+ * ・権限（社員／所長・チーフ／AL）は、既存アカウントについてもCSVの「権限」欄（役職名）に
+ *   書かれている内容へ毎回同期する（詳しい対応はmapCsvRoleToAppRole_のSTAFF_CSV_ROLE_MAP_を参照）。
+ *   ただし次の2つは例外として権限を変更しない。
+ *   (1) 現在「マスタ権限」のアカウントは、人事データでは絶対に変更しない（手動付与した
+ *       管理権限を保護するため。マスタ権限の変更は「権限管理（スタッフ権限）」画面から手動でのみ行う）。
+ *   (2) CSVの権限欄がその行だけ空欄の場合は、データ欠落で意図せず社員に引き下げてしまうことを
+ *       防ぐため、既存の権限をそのまま維持する。
+ * ・新規のGoogleアカウントは、CSVの「権限」欄（役職名）から社員／所長・チーフ／ALを判定して登録する。
  *   「マスタ権限」に相当する表記があっても、安全のため自動ではマスタ権限を付与せず社員として登録する
  *   （マスタ権限は「権限管理（スタッフ権限）」画面から手動でのみ付与する）。
  */
@@ -1274,7 +1286,8 @@ function importStaffNameCsv(csvText, fileName) {
     sheet.getRange(startRow, 1, rowsToAppend.length, 2).setNumberFormat('@').setValues(rowsToAppend);
   }
 
-  var accountsAdded = 0, accountsUpdated = 0, accountsMasterDowngraded = 0, accountsAffiliationChanged = 0;
+  var accountsAdded = 0, accountsUpdated = 0, accountsMasterDowngraded = 0, accountsAffiliationChanged = 0, accountsRoleSynced = 0;
+  var roleRawTally = {}; // 診断用：CSVの権限欄に実際に書かれていた文言ごとの件数
   if (accountsDetected) {
     var staffSheet = getOrCreateStaffSheet_();
     var existingByEmail = {};
@@ -1283,18 +1296,39 @@ function importStaffNameCsv(csvText, fileName) {
     var accountRowsToAppend = [];
     Object.keys(csvAccounts).forEach(function (email) {
       var acc = csvAccounts[email];
+      var tallyKey = acc.roleRaw || '（空欄）';
+      roleRawTally[tallyKey] = (roleRawTally[tallyKey] || 0) + 1;
+
       var existing = existingByEmail[email];
       if (existing) {
+        // 権限（社員／所長・チーフ／AL）は、CSVの権限欄（役職名）に書かれている内容へ同期する。
+        // ・マスタ権限は人事データでは絶対に変更しない（手動付与した管理権限を保護するため）。
+        // ・CSVの権限欄が空欄の行は、既存の権限を変更しない（データ欠落で意図せず社員に
+        //   引き下げてしまうことを防ぐため）。
+        var nextRole = existing.role;
+        if (acc.roleRaw && existing.role !== ROLE_MASTER) {
+          var mappedExisting = mapCsvRoleToAppRole_(acc.roleRaw);
+          nextRole = mappedExisting.role;
+        }
+        var roleChanged = nextRole !== existing.role;
         var affiliationChanged = existing.office !== acc.office || existing.area !== acc.area;
+
         if (affiliationChanged) {
           // 所属（所属店舗・所属エリア）が変わった場合は、既存の行は一切変更せずそのまま残し、
-          // 同じ権限を引き継いだ新しい行を追加する（過去の所属履歴を失わないため）。
+          // 新しい行を追加する（過去の所属履歴を失わないため）。権限は上記で同期した結果を引き継ぐ。
           // ログイン時の権限判定は、同じGoogleアカウントの行が複数あれば一番下（最新）の行を使う。
-          accountRowsToAppend.push([acc.email, acc.name, acc.office, acc.area, existing.role]);
+          accountRowsToAppend.push([acc.email, acc.name, acc.office, acc.area, nextRole]);
           accountsAffiliationChanged++;
-        } else if (existing.name !== acc.name) {
-          staffSheet.getRange(existing.rowIndex, 2).setValue(acc.name);
-          accountsUpdated++;
+          if (roleChanged) accountsRoleSynced++;
+        } else {
+          if (existing.name !== acc.name) {
+            staffSheet.getRange(existing.rowIndex, 2).setValue(acc.name);
+            accountsUpdated++;
+          }
+          if (roleChanged) {
+            staffSheet.getRange(existing.rowIndex, 5).setValue(nextRole);
+            accountsRoleSynced++;
+          }
         }
       } else {
         var mapped = mapCsvRoleToAppRole_(acc.roleRaw);
@@ -1323,6 +1357,10 @@ function importStaffNameCsv(csvText, fileName) {
     accountsSkipped: accountsSkipped,
     accountsMasterDowngraded: accountsMasterDowngraded,
     accountsAffiliationChanged: accountsAffiliationChanged,
+    accountsRoleSynced: accountsRoleSynced,
+    roleColumnDetected: accountsDetected ? (headerInfo.roleIdx !== -1) : null,
+    roleColumnHeader: accountsDetected ? (headerInfo.roleColumnHeader || null) : null,
+    roleRawTally: accountsDetected ? roleRawTally : null,
     staffAccessList: accountsDetected ? getStaffAccessList() : null
   };
 }

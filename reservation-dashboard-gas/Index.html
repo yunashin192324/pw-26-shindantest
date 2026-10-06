@@ -147,6 +147,8 @@
         <div class="flex items-center gap-2 flex-wrap">
           <select id="data-window-mode" class="border border-blue-300 rounded-lg text-xs p-1.5 bg-white">
             <option value="default">既定（直近6ヶ月＋今後の予定）</option>
+            <option value="fy-current">今期（出発予定日：11月〜10月）</option>
+            <option value="fy-prev">前期（出発予定日：11月〜10月）</option>
             <option value="1y">直近1年＋今後の予定</option>
             <option value="all">全期間を表示</option>
             <option value="custom">期間を指定...</option>
@@ -732,11 +734,12 @@
         <p class="text-xs text-slate-400">
           CSVに「Googleアカウント」等のメールアドレス列もある場合は、「権限管理（スタッフ権限）」への
           一括登録もあわせて行います（所属店舗・所属エリア・権限の列があればそれも読み取ります。
-          新規アカウントの権限は、CSVの権限欄（役職名）から次のように判定します：
+          権限は、CSVの権限欄（役職名）から次のように判定します：
           M0／M1／M2／M3／契約社員／嘱託社員／アルバイト＝社員、
           エグゼクティブコンサルタント・チーフ／チーフ／所長／副所長／担当リーダー／大型店所長＝所長・チーフ、
-          エリアリーダー＝AL。既存アカウントの権限は変更せず、CSVの権限欄が「マスタ権限」相当でも
-          安全のため自動では付与しません）。
+          エリアリーダー＝AL。既存アカウントも、マスタ権限を除き、権限欄の内容に合わせて権限を同期します
+          （権限欄が空欄の行は変更しません）。CSVの権限欄が「マスタ権限」相当でも、安全のため自動では
+          マスタ権限を付与しません）。
         </p>
         <div>
           <label class="text-xs font-semibold text-slate-500 block mb-1">人事データCSVファイル</label>
