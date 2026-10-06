@@ -181,7 +181,7 @@ function renderRoleBadge() {
   var el = document.getElementById('role-badge');
   var ctx = STATE.userContext;
   if (!ctx || !ctx.role) { el.classList.add('hidden'); return; }
-  var scope = ctx.role === 'マスタ権限'
+  var scope = (ctx.role === 'マスタ権限' || ctx.role === 'AL')
     ? '全エリア'
     : (ctx.role === '所長・チーフ' ? ('エリア：' + (ctx.area || '未設定')) : ('店舗：' + (ctx.office || '未設定')));
   el.innerHTML = '<i class="fa-solid fa-shield-halved"></i> ' + escapeHtml(ctx.role) + '（' + escapeHtml(scope) + '）' +

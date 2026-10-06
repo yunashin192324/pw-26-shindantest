@@ -213,6 +213,7 @@ select[multiple]{height:88px; font-size:13px;}
     <div class="role-row">
       <select id="role-switcher">
         <option value="マスタ権限">マスタ権限（全エリア）</option>
+        <option value="AL">AL（全エリア）</option>
         <option value="所長・チーフ">所長・チーフ（自エリアのみ）</option>
         <option value="社員">社員（自店舗のみ）</option>
       </select>
@@ -515,6 +516,7 @@ select[multiple]{height:88px; font-size:13px;}
         <select id="staff-form-role">
           <option value="社員">社員（自店舗のみ）</option>
           <option value="所長・チーフ">所長・チーフ（自エリアのみ）</option>
+          <option value="AL">AL（全エリア）</option>
           <option value="マスタ権限">マスタ権限（全エリア）</option>
         </select>
       </div>
@@ -737,6 +739,7 @@ function buildChallengeRecordUrl(value){
 
 var ROLE_ACCOUNTS = {
   'マスタ権限': { office: '', area: '' },
+  'AL': { office: '', area: '' },
   '所長・チーフ': { office: '', area: AREA_LIST[0] },
   '社員': { office: OFFICE_LIST[0], area: OFFICE_AREA_MAP[OFFICE_LIST[0]] }
 };
@@ -753,8 +756,9 @@ var STATE = {
   expandedCards: {},
   staffList: [
     { rowIndex: 2, email: 'master@example.com', name: 'マスタ太郎', office: '', area: '', role: 'マスタ権限' },
-    { rowIndex: 3, email: 'chief@example.com', name: '所長次郎', office: '', area: AREA_LIST[0], role: '所長・チーフ' },
-    { rowIndex: 4, email: 'staff@example.com', name: '社員花子', office: OFFICE_LIST[0], area: OFFICE_AREA_MAP[OFFICE_LIST[0]], role: '社員' }
+    { rowIndex: 3, email: 'al@example.com', name: 'エリア三郎', office: '', area: '', role: 'AL' },
+    { rowIndex: 4, email: 'chief@example.com', name: '所長次郎', office: '', area: AREA_LIST[0], role: '所長・チーフ' },
+    { rowIndex: 5, email: 'staff@example.com', name: '社員花子', office: OFFICE_LIST[0], area: OFFICE_AREA_MAP[OFFICE_LIST[0]], role: '社員' }
   ],
   staffNameList: [
     { rowIndex: 2, code: 'BGK078', name: '佐藤 一郎' },
@@ -809,7 +813,7 @@ function showLoading(v){ document.getElementById('loading-overlay').classList.to
 function applyRoleScope(){
   var role = STATE.role;
   var account = ROLE_ACCOUNTS[role];
-  if (role === 'マスタ権限') STATE.rows = STATE.allRows;
+  if (role === 'マスタ権限' || role === 'AL') STATE.rows = STATE.allRows;
   else if (role === '所長・チーフ') STATE.rows = STATE.allRows.filter(function(r){ return r.area === account.area; });
   else STATE.rows = STATE.allRows.filter(function(r){ return r.office === account.office; });
 
@@ -817,7 +821,7 @@ function applyRoleScope(){
   document.getElementById('app-content').classList.remove('hidden');
 
   var badge = document.getElementById('role-badge');
-  var scope = role === 'マスタ権限' ? '全エリア' : (role === '所長・チーフ' ? account.area : account.office);
+  var scope = (role === 'マスタ権限' || role === 'AL') ? '全エリア' : (role === '所長・チーフ' ? account.area : account.office);
   badge.textContent = '🛡️ ' + scope;
 }
 function applyRoleUi(){
@@ -1831,12 +1835,16 @@ function detectStaffCsvHeaderRow(matrix){
   }
   return null;
 }
-/** CSVの「権限」欄の表記を3段階権限へ変換する。安全のため、CSVの値がマスタ相当でも自動ではマスタ権限にしない。 */
+/** CSVの「権限」欄の表記を権限（社員／所長・チーフ／AL）へ変換する。安全のため、CSVの値がマスタ相当でも自動ではマスタ権限にしない。 */
 function mapCsvRoleToAppRole(raw){
   var s = String(raw || '').trim();
   if (!s) return { role: '社員', downgraded: false };
+  if (['M0','M1','M2','M3','契約社員','嘱託社員','アルバイト'].indexOf(s) !== -1) return { role: '社員', downgraded: false };
+  if (['エグゼクティブコンサルタント・チーフ','チーフ','所長','副所長','担当リーダー','大型店所長'].indexOf(s) !== -1) return { role: '所長・チーフ', downgraded: false };
+  if (s === 'エリアリーダー') return { role: 'AL', downgraded: false };
   if (s.indexOf('マスタ') !== -1 || s.indexOf('管理者') !== -1 || s.indexOf('admin') !== -1) return { role: '社員', downgraded: true };
-  if (s.indexOf('所長') !== -1 || s.indexOf('チーフ') !== -1 || s.indexOf('店長') !== -1) return { role: '所長・チーフ', downgraded: false };
+  if (s.indexOf('エリアリーダー') !== -1) return { role: 'AL', downgraded: false };
+  if (s.indexOf('所長') !== -1 || s.indexOf('チーフ') !== -1 || s.indexOf('店長') !== -1 || s.indexOf('リーダー') !== -1) return { role: '所長・チーフ', downgraded: false };
   return { role: '社員', downgraded: false };
 }
 var EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;

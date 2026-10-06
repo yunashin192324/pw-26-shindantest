@@ -512,7 +512,8 @@
               </button>
             </div>
             <p class="text-xs text-slate-500 mb-3">
-              社員＝自店舗のみ閲覧／所長・チーフ＝自エリアのみ閲覧／マスタ権限＝全エリア閲覧＋CSVインポート・データ削除が可能です。
+              社員＝自店舗のみ閲覧・入力／所長・チーフ＝自エリアのみ閲覧・入力／AL＝全エリア閲覧・入力／
+              マスタ権限＝全ての権限（閲覧・入力に加え、CSVインポート・データ削除・権限管理も可能）です。
             </p>
             <div class="overflow-auto max-h-[50vh]">
               <table class="min-w-full text-sm">
@@ -650,8 +651,9 @@
         <div>
           <label class="text-xs font-semibold text-slate-500 block mb-1">権限</label>
           <select id="staff-form-role" class="w-full border border-slate-300 rounded-lg text-sm p-2">
-            <option value="社員">社員（自店舗のみ閲覧）</option>
-            <option value="所長・チーフ">所長・チーフ（自エリアのみ閲覧）</option>
+            <option value="社員">社員（自店舗のみ閲覧・入力）</option>
+            <option value="所長・チーフ">所長・チーフ（自エリアのみ閲覧・入力）</option>
+            <option value="AL">AL（全エリア閲覧・入力）</option>
             <option value="マスタ権限">マスタ権限（全エリア閲覧＋CSVインポート）</option>
           </select>
         </div>
@@ -710,7 +712,11 @@
         <p class="text-xs text-slate-400">
           CSVに「Googleアカウント」等のメールアドレス列もある場合は、「権限管理（スタッフ権限）」への
           一括登録もあわせて行います（所属店舗・所属エリア・権限の列があればそれも読み取ります。
-          既存アカウントの権限は変更せず、CSVの権限欄が「マスタ権限」相当でも安全のため自動では付与しません）。
+          新規アカウントの権限は、CSVの権限欄（役職名）から次のように判定します：
+          M0／M1／M2／M3／契約社員／嘱託社員／アルバイト＝社員、
+          エグゼクティブコンサルタント・チーフ／チーフ／所長／副所長／担当リーダー／大型店所長＝所長・チーフ、
+          エリアリーダー＝AL。既存アカウントの権限は変更せず、CSVの権限欄が「マスタ権限」相当でも
+          安全のため自動では付与しません）。
         </p>
         <div>
           <label class="text-xs font-semibold text-slate-500 block mb-1">人事データCSVファイル</label>

@@ -232,6 +232,7 @@ th.sortable:hover{background:var(--blue-100);}
           <span>表示権限を切替：</span>
           <select id="role-switcher">
             <option value="マスタ権限">マスタ権限（全エリア）</option>
+            <option value="AL">AL（全エリア）</option>
             <option value="所長・チーフ">所長・チーフ（自エリアのみ）</option>
             <option value="社員">社員（自店舗のみ）</option>
           </select>
@@ -541,7 +542,7 @@ th.sortable:hover{background:var(--blue-100);}
           <h2 style="margin:0;">🛡️ 権限管理（スタッフ権限）</h2>
           <button class="btn-primary" id="btn-open-staff-modal">＋ アカウントを追加</button>
         </div>
-        <p class="muted" style="margin-bottom:10px;">社員＝自店舗のみ閲覧／所長・チーフ＝自エリアのみ閲覧／マスタ権限＝全エリア閲覧＋CSVインポート・データ削除が可能です。</p>
+        <p class="muted" style="margin-bottom:10px;">社員＝自店舗のみ閲覧・入力／所長・チーフ＝自エリアのみ閲覧・入力／AL＝全エリア閲覧・入力／マスタ権限＝全ての権限（閲覧・入力に加え、CSVインポート・データ削除・権限管理も可能）です。</p>
         <div class="table-scroll" style="max-height:40vh;">
           <table>
             <thead>
@@ -631,8 +632,9 @@ th.sortable:hover{background:var(--blue-100);}
       <div class="form-field">
         <label>権限</label>
         <select id="staff-form-role">
-          <option value="社員">社員（自店舗のみ閲覧）</option>
-          <option value="所長・チーフ">所長・チーフ（自エリアのみ閲覧）</option>
+          <option value="社員">社員（自店舗のみ閲覧・入力）</option>
+          <option value="所長・チーフ">所長・チーフ（自エリアのみ閲覧・入力）</option>
+          <option value="AL">AL（全エリア閲覧・入力）</option>
           <option value="マスタ権限">マスタ権限（全エリア閲覧＋CSVインポート）</option>
         </select>
       </div>
@@ -876,6 +878,7 @@ function buildChallengeRecordUrl(value){
 // ---- 権限切替デモ用のアカウント定義 ----
 var ROLE_ACCOUNTS = {
   'マスタ権限': { office: '', area: '' },
+  'AL': { office: '', area: '' },
   '所長・チーフ': { office: '', area: AREA_LIST[0] },
   '社員': { office: OFFICE_LIST[0], area: OFFICE_AREA_MAP[OFFICE_LIST[0]] }
 };
@@ -894,8 +897,9 @@ var STATE = {
   columnOrder: DEFAULT_COLUMN_ORDER.slice(),
   staffList: [
     { rowIndex: 2, email: 'master@example.com', name: 'マスタ太郎', office: '', area: '', role: 'マスタ権限' },
-    { rowIndex: 3, email: 'chief@example.com', name: '所長次郎', office: '', area: AREA_LIST[0], role: '所長・チーフ' },
-    { rowIndex: 4, email: 'staff@example.com', name: '社員花子', office: OFFICE_LIST[0], area: OFFICE_AREA_MAP[OFFICE_LIST[0]], role: '社員' }
+    { rowIndex: 3, email: 'al@example.com', name: 'エリア三郎', office: '', area: '', role: 'AL' },
+    { rowIndex: 4, email: 'chief@example.com', name: '所長次郎', office: '', area: AREA_LIST[0], role: '所長・チーフ' },
+    { rowIndex: 5, email: 'staff@example.com', name: '社員花子', office: OFFICE_LIST[0], area: OFFICE_AREA_MAP[OFFICE_LIST[0]], role: '社員' }
   ],
   staffNameList: [
     { rowIndex: 2, code: 'BGK078', name: '佐藤 一郎' },
@@ -952,19 +956,19 @@ function showLoading(v){ document.getElementById('loading-overlay').classList.to
 function applyRoleScope(){
   var role = STATE.role;
   var account = ROLE_ACCOUNTS[role];
-  if (role === 'マスタ権限') {
+  if (role === 'マスタ権限' || role === 'AL') {
     STATE.rows = STATE.allRows;
   } else if (role === '所長・チーフ') {
     STATE.rows = STATE.allRows.filter(function(r){ return r.area === account.area; });
   } else {
     STATE.rows = STATE.allRows.filter(function(r){ return r.office === account.office; });
   }
-  var accessDenied = false; // このデモでは3ロールとも常に登録済みという想定
+  var accessDenied = false; // このデモでは4ロールとも常に登録済みという想定
   document.getElementById('access-denied-banner').classList.toggle('hidden', !accessDenied);
   document.getElementById('app-content').classList.toggle('hidden', accessDenied);
 
   var badge = document.getElementById('role-badge');
-  var scope = role === 'マスタ権限' ? '全エリア' : (role === '所長・チーフ' ? 'エリア：' + account.area : '店舗：' + account.office);
+  var scope = (role === 'マスタ権限' || role === 'AL') ? '全エリア' : (role === '所長・チーフ' ? 'エリア：' + account.area : '店舗：' + account.office);
   badge.textContent = '🛡️ ' + role + '（' + scope + '）';
 }
 
@@ -2086,12 +2090,16 @@ function detectStaffCsvHeaderRow(matrix){
   }
   return null;
 }
-/** CSVの「権限」欄の表記を3段階権限へ変換する。安全のため、CSVの値がマスタ相当でも自動ではマスタ権限にしない。 */
+/** CSVの「権限」欄の表記を権限（社員／所長・チーフ／AL）へ変換する。安全のため、CSVの値がマスタ相当でも自動ではマスタ権限にしない。 */
 function mapCsvRoleToAppRole(raw){
   var s = String(raw || '').trim();
   if (!s) return { role: '社員', downgraded: false };
+  if (['M0','M1','M2','M3','契約社員','嘱託社員','アルバイト'].indexOf(s) !== -1) return { role: '社員', downgraded: false };
+  if (['エグゼクティブコンサルタント・チーフ','チーフ','所長','副所長','担当リーダー','大型店所長'].indexOf(s) !== -1) return { role: '所長・チーフ', downgraded: false };
+  if (s === 'エリアリーダー') return { role: 'AL', downgraded: false };
   if (s.indexOf('マスタ') !== -1 || s.indexOf('管理者') !== -1 || s.indexOf('admin') !== -1) return { role: '社員', downgraded: true };
-  if (s.indexOf('所長') !== -1 || s.indexOf('チーフ') !== -1 || s.indexOf('店長') !== -1) return { role: '所長・チーフ', downgraded: false };
+  if (s.indexOf('エリアリーダー') !== -1) return { role: 'AL', downgraded: false };
+  if (s.indexOf('所長') !== -1 || s.indexOf('チーフ') !== -1 || s.indexOf('店長') !== -1 || s.indexOf('リーダー') !== -1) return { role: '所長・チーフ', downgraded: false };
   return { role: '社員', downgraded: false };
 }
 var EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;

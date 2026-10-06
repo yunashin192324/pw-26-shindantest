@@ -32,10 +32,15 @@ var SERVER_VERSION = '2.1.0';
 var RESERVATION_NO_DIGIT_LENGTH = 11;
 
 // ---- 権限レベル ----
+// 社員　　　＝自店舗のみ閲覧・入力
+// 所長・チーフ＝自エリアのみ閲覧・入力
+// AL　　　　＝全エリア閲覧・入力（CSVインポート・権限管理などの管理機能は不可）
+// マスタ権限＝全ての権限（閲覧・入力に加え、CSVインポート・データ削除・権限管理も可能）
 var ROLE_STAFF = '社員';
 var ROLE_MANAGER = '所長・チーフ';
+var ROLE_AL = 'AL';
 var ROLE_MASTER = 'マスタ権限';
-var ROLES = [ROLE_STAFF, ROLE_MANAGER, ROLE_MASTER];
+var ROLES = [ROLE_STAFF, ROLE_MANAGER, ROLE_AL, ROLE_MASTER];
 
 // ---- CSVから抽出する19項目の定義（表示順・シート列1〜19の並びに統一する） ----
 // key   : プログラム内部で使うキー
@@ -232,9 +237,9 @@ function getCurrentUserContext() {
   return getCurrentUserContext_();
 }
 
-/** 権限に応じてデータ行を絞り込む（社員=自店舗のみ、所長・チーフ=自エリアのみ、マスタ=全件）。 */
+/** 権限に応じてデータ行を絞り込む（社員=自店舗のみ、所長・チーフ=自エリアのみ、AL・マスタ=全件）。 */
 function applyRoleScope_(rows, ctx) {
-  if (ctx.role === ROLE_MASTER) return rows;
+  if (ctx.role === ROLE_MASTER || ctx.role === ROLE_AL) return rows;
   if (ctx.role === ROLE_MANAGER) return rows.filter(function (r) { return r.area === ctx.area; });
   if (ctx.role === ROLE_STAFF) return rows.filter(function (r) { return r.office === ctx.office; });
   return []; // 権限未登録・不明なロールには何も見せない
@@ -578,7 +583,7 @@ function importCsv(csvText, fileName) {
 
 /**
  * 実行者が指定行を編集してよいかを確認し、CSV由来19項目を正規形で返す。
- * 社員=自店舗、所長・チーフ=自エリア以外の行は編集させない。
+ * 社員=自店舗、所長・チーフ=自エリア以外の行は編集させない（AL・マスタは全件編集可）。
  */
 function assertRowEditable_(ctx, sheet, rowIndex) {
   if (!ctx.bootstrapMode && !ctx.registered) {
@@ -599,7 +604,7 @@ function assertRowEditable_(ctx, sheet, rowIndex) {
   if (ctx.role === ROLE_MANAGER && rowRecord.area !== ctx.area) {
     throw new Error('自エリア以外のデータは編集できません。');
   }
-  if ([ROLE_STAFF, ROLE_MANAGER, ROLE_MASTER].indexOf(ctx.role) === -1) {
+  if ([ROLE_STAFF, ROLE_MANAGER, ROLE_AL, ROLE_MASTER].indexOf(ctx.role) === -1) {
     throw new Error('アクセス権がありません。');
   }
   return rowRecord;
@@ -1045,17 +1050,40 @@ function detectStaffCsvHeaderRow_(matrix) {
 }
 
 /**
- * 人事データCSVの「権限」欄の表記を、本アプリの3段階権限（社員／所長・チーフ／マスタ権限）へ変換する。
+ * 人事データCSVの「権限」欄の代表的な表記（完全一致）を、本アプリの権限へ対応付ける一覧。
+ * ・M0／M1／M2／M3／契約社員／嘱託社員／アルバイト → 社員（自店舗のみ閲覧・入力）
+ * ・エグゼクティブコンサルタント・チーフ／チーフ／所長／副所長／担当リーダー／大型店所長
+ *   → 所長・チーフ（自エリアのみ閲覧・入力）
+ * ・エリアリーダー → AL（全エリア閲覧・入力。マスタ権限のような管理機能は無いため、CSV取込で
+ *   自動付与してよい権限として扱う）
+ */
+var STAFF_CSV_ROLE_MAP_ = {
+  'M0': ROLE_STAFF, 'M1': ROLE_STAFF, 'M2': ROLE_STAFF, 'M3': ROLE_STAFF,
+  '契約社員': ROLE_STAFF, '嘱託社員': ROLE_STAFF, 'アルバイト': ROLE_STAFF,
+  'エグゼクティブコンサルタント・チーフ': ROLE_MANAGER, 'チーフ': ROLE_MANAGER,
+  '所長': ROLE_MANAGER, '副所長': ROLE_MANAGER, '担当リーダー': ROLE_MANAGER, '大型店所長': ROLE_MANAGER,
+  'エリアリーダー': ROLE_AL
+};
+
+/**
+ * 人事データCSVの「権限」欄の表記を、本アプリの権限（社員／所長・チーフ／AL／マスタ権限）へ変換する。
+ * まずSTAFF_CSV_ROLE_MAP_との完全一致を試し、一致しなければ部分一致で推定する。
  * 安全のため、CSVの値が「マスタ」「管理者」等を含んでいても、ここでは絶対にマスタ権限へ昇格させない
  * （マスタ権限はWebアプリの権限管理から手動でのみ付与する）。該当する場合はdowngradedをtrueで返す。
  */
 function mapCsvRoleToAppRole_(raw) {
   var s = String(raw || '').trim();
   if (!s) return { role: ROLE_STAFF, downgraded: false, original: '' };
+  if (Object.prototype.hasOwnProperty.call(STAFF_CSV_ROLE_MAP_, s)) {
+    return { role: STAFF_CSV_ROLE_MAP_[s], downgraded: false, original: s };
+  }
   if (s.indexOf('マスタ') !== -1 || s.indexOf('管理者') !== -1 || s.indexOf('admin') !== -1) {
     return { role: ROLE_STAFF, downgraded: true, original: s };
   }
-  if (s.indexOf('所長') !== -1 || s.indexOf('チーフ') !== -1 || s.indexOf('店長') !== -1) {
+  if (s.indexOf('エリアリーダー') !== -1) {
+    return { role: ROLE_AL, downgraded: false, original: s };
+  }
+  if (s.indexOf('所長') !== -1 || s.indexOf('チーフ') !== -1 || s.indexOf('店長') !== -1 || s.indexOf('リーダー') !== -1) {
     return { role: ROLE_MANAGER, downgraded: false, original: s };
   }
   return { role: ROLE_STAFF, downgraded: false, original: s };
@@ -1075,9 +1103,10 @@ var EMAIL_PATTERN_ = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
  * ・既存のGoogleアカウントで所属店舗・所属エリアが変わった場合は、既存の行は一切変更せずに残し、
  *   同じ権限を引き継いだ新しい行を追加する（過去の所属履歴を失わないため）。ログイン時の権限判定は、
  *   同じGoogleアカウントの行が複数あればシート上で一番下＝最後に追加された行を使う。
- * ・権限（社員／所長・チーフ／マスタ権限）は、既存アカウントについては氏名・所属の更新とは別に、
+ * ・権限（社員／所長・チーフ／AL／マスタ権限）は、既存アカウントについては氏名・所属の更新とは別に、
  *   このインポートでは一切上書きしない（システムの権限付与は常に手動が優先）。
- * ・新規のGoogleアカウントは、CSVの「権限」欄から社員／所長・チーフを判定して登録する。
+ * ・新規のGoogleアカウントは、CSVの「権限」欄（役職名）から社員／所長・チーフ／ALを判定して登録する
+ *   （詳しい対応はmapCsvRoleToAppRole_のSTAFF_CSV_ROLE_MAP_を参照）。
  *   「マスタ権限」に相当する表記があっても、安全のため自動ではマスタ権限を付与せず社員として登録する
  *   （マスタ権限は「権限管理（スタッフ権限）」画面から手動でのみ付与する）。
  */
