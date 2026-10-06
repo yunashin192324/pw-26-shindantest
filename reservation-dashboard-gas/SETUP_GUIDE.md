@@ -109,6 +109,7 @@ reservation-dashboard-gas/
 ├─ InitSheet.gs       … シート初期化（メニュー実行）
 ├─ Index.html         … 画面のHTML構造
 ├─ Javascript.html    … 画面のロジック（フィルタ・集計・グラフ描画）
+├─ manual.html        … オフラインで開ける操作マニュアル（利用者向け）
 └─ mockup/
    ├─ index.html        … オフラインで見られるPC版モックアップ
    └─ index-mobile.html … オフラインで見られるスマホ版モックアップ
