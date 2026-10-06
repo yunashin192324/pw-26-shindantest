@@ -24,7 +24,7 @@ var SHEET_NAME = '予約データ';
 var STAFF_SHEET_NAME = 'スタッフ権限';
 var STAFF_NAME_SHEET_NAME = '担当者マスタ';
 var TIMEZONE = 'Asia/Tokyo';
-var SERVER_VERSION = '2.1.0';
+var SERVER_VERSION = '2.2.0';
 
 // 予約番号（チャレンジ番号）は半角英数字ちょうど11桁（Javascript.htmlのCHALLENGE_RECORD_BASE_URL判定と同じ桁数）。
 // 数字だけの予約番号（例：01234567890）はGoogleスプレッドシート上で数値として誤認識され、
@@ -237,12 +237,17 @@ function getCurrentUserContext() {
   return getCurrentUserContext_();
 }
 
+/** 権限に応じて、1行（所属店舗・所属エリア）が閲覧範囲に入るかを判定する（社員=自店舗のみ、所長・チーフ=自エリアのみ、AL・マスタ=全件）。 */
+function isRowInRoleScope_(ctx, office, area) {
+  if (ctx.role === ROLE_MASTER || ctx.role === ROLE_AL) return true;
+  if (ctx.role === ROLE_MANAGER) return area === ctx.area;
+  if (ctx.role === ROLE_STAFF) return office === ctx.office;
+  return false; // 権限未登録・不明なロールには何も見せない
+}
+
 /** 権限に応じてデータ行を絞り込む（社員=自店舗のみ、所長・チーフ=自エリアのみ、AL・マスタ=全件）。 */
 function applyRoleScope_(rows, ctx) {
-  if (ctx.role === ROLE_MASTER || ctx.role === ROLE_AL) return rows;
-  if (ctx.role === ROLE_MANAGER) return rows.filter(function (r) { return r.area === ctx.area; });
-  if (ctx.role === ROLE_STAFF) return rows.filter(function (r) { return r.office === ctx.office; });
-  return []; // 権限未登録・不明なロールには何も見せない
+  return rows.filter(function (r) { return isRowInRoleScope_(ctx, r.office, r.area); });
 }
 
 function assertMaster_(ctxArg) {
@@ -257,11 +262,42 @@ function assertMaster_(ctxArg) {
 // 画面初期表示データ
 // ============================================================================
 
+// ---- 表示期間（データが増えるほど画面が重くなるのを防ぐための既定の絞り込み） ----
+// 既定では「出発予定日が直近Nヶ月以内、または未来（まだ出発していない予定）」の行だけを読み込む。
+// 過去の古いデータは、画面側の「表示期間」操作（全期間を表示／期間を指定）で明示的に呼び出したときだけ読み込む。
+var DEFAULT_LIST_WINDOW_MONTHS = 6;
+
 /**
- * 画面ロード時に一度だけ呼ぶ。項目定義＋（権限で絞り込んだ）全データ行＋メタ情報を
- * まとめて返す。以降の絞り込み・並べ替え・集計はすべてブラウザ側（Javascript.html）で行う。
+ * rangeOption（省略可）から、実際に使う表示期間（from/to、'yyyy-MM-dd'文字列）を決める。
+ * ・省略 または {mode:'default'}      → 出発予定日が「今日からNヶ月前」以降（未来は上限なし）
+ * ・{mode:'all'}                      → 絞り込み無し（全期間）
+ * ・{mode:'custom', from, to}         → 指定された期間（from・toはどちらか省略可）
  */
-function getBootstrapData() {
+function resolveListWindow_(rangeOption) {
+  if (rangeOption && rangeOption.mode === 'all') {
+    return { mode: 'all', from: null, to: null };
+  }
+  if (rangeOption && rangeOption.mode === 'custom') {
+    var from = rangeOption.from || null;
+    var to = rangeOption.to || null;
+    if (!from && !to) return { mode: 'all', from: null, to: null }; // 期間未指定は全期間として扱う
+    return { mode: 'custom', from: from, to: to };
+  }
+  var cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - DEFAULT_LIST_WINDOW_MONTHS);
+  return { mode: 'default', from: Utilities.formatDate(cutoff, TIMEZONE, 'yyyy-MM-dd'), to: null, months: DEFAULT_LIST_WINDOW_MONTHS };
+}
+
+/**
+ * 画面ロード時に呼ぶ。項目定義＋（権限と表示期間で絞り込んだ）データ行＋メタ情報をまとめて返す。
+ * データ件数が増えてもサーバー・ブラウザ双方が重くならないよう、次の2段階の絞り込みを
+ * シートを1回読み込む中で同時に行う（readScopedRows_参照）。
+ * ・権限による絞り込み（社員=自店舗のみ／所長・チーフ=自エリアのみ／AL・マスタ=全件）
+ * ・表示期間による絞り込み（既定では出発予定日が直近6ヶ月＋今後の予定のみ。過去の古いデータは
+ *   既定では読み込まない。全期間を見たい場合は rangeOption に {mode:'all'} を指定して呼び直す）
+ * 以降、読み込んだ範囲内での絞り込み・並べ替え・集計はブラウザ側（Javascript.html）で行う。
+ */
+function getBootstrapData(rangeOption) {
   var status = getSetupStatus();
   var ctx = getCurrentUserContext_();
 
@@ -284,7 +320,8 @@ function getBootstrapData() {
   }
 
   var sheet = getDataSheet_();
-  var rows = applyRoleScope_(readAllRows_(sheet), ctx);
+  var window_ = resolveListWindow_(rangeOption);
+  var scoped = readScopedRows_(sheet, ctx, window_);
   var props = PropertiesService.getDocumentProperties();
 
   var columnOrder = null;
@@ -302,11 +339,14 @@ function getBootstrapData() {
     ancillaryItems: ANCILLARY_ITEMS,
     ancillaryStatusOptions: ANCILLARY_STATUS_OPTIONS,
     columnOrder: columnOrder,
-    rows: rows,
+    rows: scoped.rows,
     staffNameMap: getStaffNameMap_(),
     userContext: ctx,
     meta: {
-      totalRows: rows.length,
+      totalRows: scoped.rows.length,
+      window: window_,
+      totalRowsInYourScope: scoped.totalInRoleScope,
+      excludedByWindow: scoped.excludedByWindow,
       lastImportedAt: props.getProperty('lastImportedAt') || null,
       lastImportedFile: props.getProperty('lastImportedFile') || null,
       sheetUrl: SpreadsheetApp.getActiveSpreadsheet().getUrl(),
@@ -339,6 +379,58 @@ function readAllRows_(sheet) {
     rows.push(obj);
   }
   return rows;
+}
+
+/**
+ * getBootstrapData専用：シートを1回読み込む中で、権限（office/area）と表示期間（出発予定日）の
+ * 両方の絞り込みを同時に行い、画面に返す行だけを正規形オブジェクトに変換する。
+ * 全件をreadAllRows_()で正規形に変換してから絞り込む（従来の実装）よりも、除外される行については
+ * 19＋14項目分のオブジェクト化を行わない分、データ件数が増えても負荷が増えにくい。
+ * ・出発予定日が空欄の行は、表示期間による絞り込みでは除外しない（期間指定で行が消えて見えなくなるのを防ぐ）。
+ * ・totalInRoleScope：権限上見えるはずの件数（表示期間を無視した件数）。
+ * ・excludedByWindow：権限上見える範囲のうち、表示期間で除外された件数（= totalInRoleScope - rows.length）。
+ */
+function readScopedRows_(sheet, ctx, window_) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { rows: [], totalInRoleScope: 0, excludedByWindow: 0 };
+  var values = sheet.getRange(2, 1, lastRow - 1, ALL_COLUMNS.length).getValues();
+  var officeCol = ALL_COLUMNS[ALL_COLUMN_INDEX_BY_KEY.office];
+  var areaCol = ALL_COLUMNS[ALL_COLUMN_INDEX_BY_KEY.area];
+  var departureCol = ALL_COLUMNS[ALL_COLUMN_INDEX_BY_KEY.departureDate];
+  var officeIdx = ALL_COLUMN_INDEX_BY_KEY.office;
+  var areaIdx = ALL_COLUMN_INDEX_BY_KEY.area;
+  var departureIdx = ALL_COLUMN_INDEX_BY_KEY.departureDate;
+  var hasWindow = !!(window_ && (window_.from || window_.to));
+
+  var rows = [];
+  var totalInRoleScope = 0;
+  for (var r = 0; r < values.length; r++) {
+    var raw = values[r];
+    var isBlank = raw.every(function (v) { return v === '' || v === null; });
+    if (isBlank) continue;
+
+    var office = normalizeCellValue_(officeCol, raw[officeIdx]);
+    var area = normalizeCellValue_(areaCol, raw[areaIdx]);
+    if (!isRowInRoleScope_(ctx, office, area)) continue;
+    totalInRoleScope++;
+
+    if (hasWindow) {
+      var departureDate = normalizeCellValue_(departureCol, raw[departureIdx]);
+      if (departureDate) {
+        if (window_.from && departureDate < window_.from) continue;
+        if (window_.to && departureDate > window_.to) continue;
+      }
+    }
+
+    var obj = {};
+    for (var c = 0; c < ALL_COLUMNS.length; c++) {
+      var col = ALL_COLUMNS[c];
+      obj[col.key] = normalizeCellValue_(col, raw[c]);
+    }
+    obj.rowIndex = r + 2;
+    rows.push(obj);
+  }
+  return { rows: rows, totalInRoleScope: totalInRoleScope, excludedByWindow: totalInRoleScope - rows.length };
 }
 
 /** シートのセル値1つを、項目の型に応じた正規形（日付=文字列/数値=Number/文字=String）に変換する。 */

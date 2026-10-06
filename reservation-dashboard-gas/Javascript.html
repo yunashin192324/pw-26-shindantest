@@ -57,6 +57,7 @@ var STATE = {
   ancillaryItems: [], ancillaryItemByKey: {},
   ancillaryStatusOptions: [], ancillaryStatusLabelByValue: {},
   userContext: null,
+  meta: null,
   rows: [],
   staffList: [],
   staffNameMap: {},
@@ -89,11 +90,73 @@ document.addEventListener('DOMContentLoaded', function () {
 // ============================================================================
 
 function boot() {
+  requestDataWindow_(buildRangeOptionFromUi_());
+}
+
+// ============================================================================
+// 表示期間（データが増えるほど画面が重くなるのを防ぐための絞り込み。Code.gsのgetBootstrapData参照）
+// ============================================================================
+
+/** 「表示期間」セレクタ・カスタム期間入力の現在値から、getBootstrapData()へ渡すrangeOptionを作る。既定時はundefined（サーバー側の既定値を使う）。 */
+function buildRangeOptionFromUi_() {
+  var mode = document.getElementById('data-window-mode').value;
+  if (mode === 'all') return { mode: 'all' };
+  if (mode === '1y') return { mode: 'custom', from: isoDateMonthsAgo_(12), to: null };
+  if (mode === 'custom') {
+    var from = document.getElementById('data-window-from').value || null;
+    var to = document.getElementById('data-window-to').value || null;
+    return { mode: 'custom', from: from, to: to };
+  }
+  return undefined; // 既定（直近6ヶ月＋今後の予定。サーバー側で計算する）
+}
+
+/** 今日からNヶ月前の日付を'yyyy-MM-dd'で返す（表示期間セレクタの「直近1年」用）。 */
+function isoDateMonthsAgo_(n) {
+  var d = new Date();
+  d.setMonth(d.getMonth() - n);
+  var pad = function (v) { return (v < 10 ? '0' : '') + v; };
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+}
+
+/** 表示期間セレクタが変更されたときの処理。「期間を指定」は入力欄を出すだけで、「適用」を押すまで再読み込みしない。 */
+function onDataWindowModeChange_() {
+  var mode = document.getElementById('data-window-mode').value;
+  var customBox = document.getElementById('data-window-custom');
+  var isCustom = mode === 'custom';
+  customBox.classList.toggle('hidden', !isCustom);
+  customBox.classList.toggle('flex', isCustom);
+  if (isCustom) return;
+  requestDataWindow_(buildRangeOptionFromUi_());
+}
+
+/** rangeOptionを指定してサーバーからデータを読み込み直す（onBootstrapSuccessで画面を丸ごと更新する）。 */
+function requestDataWindow_(rangeOption) {
   showLoading(true);
-  google.script.run
+  var call = google.script.run
     .withSuccessHandler(onBootstrapSuccess)
-    .withFailureHandler(function (err) { showLoading(false); onServerError(err); })
-    .getBootstrapData();
+    .withFailureHandler(function (err) { showLoading(false); onServerError(err); });
+  if (rangeOption) call.getBootstrapData(rangeOption); else call.getBootstrapData();
+}
+
+/** 表示期間バーの説明文（現在の期間・件数・期間外で非表示になっている件数）を更新する。 */
+function renderDataWindowBanner_() {
+  var box = document.getElementById('data-window-summary');
+  var meta = STATE.meta;
+  if (!box || !meta || !meta.window) { if (box) box.textContent = ''; return; }
+  var w = meta.window;
+  var rangeText;
+  if (w.mode === 'all') {
+    rangeText = '全期間';
+  } else {
+    var fromText = w.from ? ('出発予定日 ' + w.from + ' 以降') : '';
+    var toText = w.to ? '（' + w.to + ' まで）' : '（今後の予定も含む）';
+    rangeText = fromText + toText;
+  }
+  var text = '表示期間：' + rangeText + '　／　表示中：' + formatNumber(meta.totalRows) + ' 件';
+  if (meta.excludedByWindow > 0) {
+    text += '　／　表示期間外のため非表示：' + formatNumber(meta.excludedByWindow) + ' 件（「全期間を表示」で確認できます）';
+  }
+  box.textContent = text;
 }
 
 function onBootstrapSuccess(data) {
@@ -148,6 +211,8 @@ function onBootstrapSuccess(data) {
   }
 
   STATE.columnOrder = sanitizeColumnOrder_(data.columnOrder);
+  STATE.meta = data.meta || null;
+  renderDataWindowBanner_();
 
   populateFilterOptions();
   populateBulkAncillarySelects_();
@@ -1845,6 +1910,14 @@ function bindStaticEvents() {
 
   document.getElementById('btn-refresh').addEventListener('click', boot);
   document.getElementById('btn-run-setup').addEventListener('click', runSetup);
+
+  // 表示期間（データが増えるほど画面が重くなるのを防ぐための絞り込み）
+  document.getElementById('data-window-mode').addEventListener('change', onDataWindowModeChange_);
+  document.getElementById('btn-apply-data-window').addEventListener('click', function () {
+    var from = document.getElementById('data-window-from').value || null;
+    var to = document.getElementById('data-window-to').value || null;
+    requestDataWindow_({ mode: 'custom', from: from, to: to });
+  });
 
   // 分析ダッシュボードタブのフィルタ
   ['dash-filter-area', 'dash-filter-office', 'dash-filter-category', 'dash-filter-tourbrand', 'dash-filter-destination', 'dash-filter-date-field'].forEach(function (id) {

@@ -140,6 +140,26 @@
 
     <div id="app-content" class="hidden">
 
+      <!-- ============ 表示期間バー（データ増加対策：既定では直近期間＋今後の予定のみ読み込む） ============ -->
+      <div id="data-window-banner" class="mb-5 bg-blue-50 border border-blue-200 rounded-xl p-3 flex flex-wrap items-center gap-3">
+        <i class="fa-solid fa-clock-rotate-left text-blue-600"></i>
+        <p id="data-window-summary" class="text-sm text-blue-800 flex-1 min-w-[240px]"></p>
+        <div class="flex items-center gap-2 flex-wrap">
+          <select id="data-window-mode" class="border border-blue-300 rounded-lg text-xs p-1.5 bg-white">
+            <option value="default">既定（直近6ヶ月＋今後の予定）</option>
+            <option value="1y">直近1年＋今後の予定</option>
+            <option value="all">全期間を表示</option>
+            <option value="custom">期間を指定...</option>
+          </select>
+          <span id="data-window-custom" class="hidden items-center gap-1">
+            <input type="date" id="data-window-from" class="border border-blue-300 rounded-lg text-xs p-1.5">
+            <span class="text-xs text-blue-600">〜</span>
+            <input type="date" id="data-window-to" class="border border-blue-300 rounded-lg text-xs p-1.5">
+            <button type="button" id="btn-apply-data-window" class="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-1.5 text-xs font-semibold">適用</button>
+          </span>
+        </div>
+      </div>
+
       <!-- ============ タブ1: 分析ダッシュボード ============ -->
       <section id="tab-panel-dashboard" class="tab-panel space-y-5">
         <div class="bg-white rounded-xl shadow p-4 flex flex-wrap gap-4 items-end">
