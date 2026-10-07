@@ -1314,13 +1314,15 @@ var STAFF_CSV_ROLE_MAP_ = {
 };
 
 /**
- * 役職表記の完全一致判定のための正規化（「・」「･」「、」「，」「/」「-」や前後の空白などの区切り記号を
- * 除去する）。例えば「エリア・リーダー」も「エリアリーダー」と同じキーとして扱えるようにする
+ * 役職表記の完全一致判定のための正規化。Unicode正規化（NFKC。半角カタカナ→全角カタカナ、
+ * 全角英数字→半角英数字などの表記ゆれを吸収する）を行った上で、「・」「･」「、」「，」「/」「-」や
+ * 前後の空白などの区切り記号を除去する。例えば「エリア・リーダー」や半角カタカナの「ｴﾘｱﾘｰﾀﾞｰ」も、
+ * すべて「エリアリーダー」と同じキーとして扱えるようにする
  * （本アプリの対応表自体が「エグゼクティブコンサルタント・チーフ」のように中点区切りの表記を含むため、
- * 人事データ側の区切り記号の使い方が多少違っても判定がぶれないようにするための処理）。
+ * 人事データ側の表記（区切り記号・文字の全角半角）が多少違っても判定がぶれないようにするための処理）。
  */
 function normalizeRoleKey_(s) {
-  return String(s || '').replace(/[\s・･、，,\/\-]/g, '');
+  return String(s || '').normalize('NFKC').replace(/[\s・･、，,\/\-]/g, '');
 }
 var STAFF_CSV_ROLE_MAP_NORMALIZED_ = (function () {
   var m = {};
@@ -1338,33 +1340,37 @@ var STAFF_CSV_ROLE_MAP_NORMALIZED_ = (function () {
  * （マスタ権限はWebアプリの権限管理から手動でのみ付与する）。該当する場合はdowngradedをtrueで返す。
  */
 function mapCsvRoleToAppRole_(raw) {
-  var s = String(raw || '').trim();
-  if (!s) return { role: ROLE_STAFF, downgraded: false, original: '' };
+  var original = String(raw || '').trim();
+  if (!original) return { role: ROLE_STAFF, downgraded: false, original: '' };
+  // 半角カタカナ・全角英数字などの表記ゆれを、Unicode正規化（NFKC）でまとめて吸収する。
+  // 例：「ｴﾘｱﾘｰﾀﾞｰ」（半角カタカナ）は「エリアリーダー」（全角カタカナ）に、
+  //     「Ｍ１」（全角英数字）は「M1」（半角英数字）に変換してから判定する。
+  var s = original.normalize('NFKC');
   // 括弧の注記（例：「所長（関東エリア）」「Ｍ１（一般職）」）を取り除いた上で完全一致を試す。
   var cleaned = s.replace(/[（(][^）)]*[）)]/g, '').trim();
   var normalized = normalizeRoleKey_(cleaned || s);
   if (Object.prototype.hasOwnProperty.call(STAFF_CSV_ROLE_MAP_, s)) {
-    return { role: STAFF_CSV_ROLE_MAP_[s], downgraded: false, original: s };
+    return { role: STAFF_CSV_ROLE_MAP_[s], downgraded: false, original: original };
   }
   if (cleaned && cleaned !== s && Object.prototype.hasOwnProperty.call(STAFF_CSV_ROLE_MAP_, cleaned)) {
-    return { role: STAFF_CSV_ROLE_MAP_[cleaned], downgraded: false, original: s };
+    return { role: STAFF_CSV_ROLE_MAP_[cleaned], downgraded: false, original: original };
   }
   if (normalized && Object.prototype.hasOwnProperty.call(STAFF_CSV_ROLE_MAP_NORMALIZED_, normalized)) {
-    return { role: STAFF_CSV_ROLE_MAP_NORMALIZED_[normalized], downgraded: false, original: s };
+    return { role: STAFF_CSV_ROLE_MAP_NORMALIZED_[normalized], downgraded: false, original: original };
   }
-  if (s.indexOf('マスタ') !== -1 || s.indexOf('管理者') !== -1 || s.indexOf('admin') !== -1) {
-    return { role: ROLE_STAFF, downgraded: true, original: s };
+  if (s.indexOf('マスタ') !== -1 || s.indexOf('管理者') !== -1 || s.toLowerCase().indexOf('admin') !== -1) {
+    return { role: ROLE_STAFF, downgraded: true, original: original };
   }
   // 「エリアリーダー」判定は、区切り記号違いにも対応した正規化後の文字列（normalized）で行う。
   // こうしないと「エリア・リーダー」のような中点区切りの表記が、下の「所長・チーフ」側の
   // 部分一致（「リーダー」を含む）に先に拾われてしまい、ALではなく所長・チーフに誤判定される。
   if (normalized.indexOf('エリアリーダー') !== -1) {
-    return { role: ROLE_AL, downgraded: false, original: s };
+    return { role: ROLE_AL, downgraded: false, original: original };
   }
   if (s.indexOf('所長') !== -1 || s.indexOf('チーフ') !== -1 || s.indexOf('店長') !== -1 || s.indexOf('リーダー') !== -1) {
-    return { role: ROLE_MANAGER, downgraded: false, original: s };
+    return { role: ROLE_MANAGER, downgraded: false, original: original };
   }
-  return { role: ROLE_STAFF, downgraded: false, original: s };
+  return { role: ROLE_STAFF, downgraded: false, original: original };
 }
 
 var EMAIL_PATTERN_ = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
