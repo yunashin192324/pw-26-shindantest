@@ -324,6 +324,20 @@ function getBootstrapData(rangeOption) {
   var scoped = readScopedRows_(sheet, ctx, window_);
   var props = PropertiesService.getDocumentProperties();
 
+  // 「アーカイブ済みデータも含める」が指定された場合だけ、アーカイブ先スプレッドシートも読み込んで
+  // 合算する（既定表示を軽いままにするため、指定が無い限りアーカイブ側には一切アクセスしない）。
+  var includeArchive = !!(rangeOption && rangeOption.includeArchive);
+  var archivedRowCount = 0;
+  if (includeArchive) {
+    var archiveScoped = getArchiveRowsForWindow_(ctx, window_);
+    archivedRowCount = archiveScoped.rows.length;
+    scoped = {
+      rows: scoped.rows.concat(archiveScoped.rows),
+      totalInRoleScope: scoped.totalInRoleScope + archiveScoped.totalInRoleScope,
+      excludedByWindow: scoped.excludedByWindow + archiveScoped.excludedByWindow
+    };
+  }
+
   var columnOrder = null;
   var columnOrderRaw = props.getProperty('dataListColumnOrder');
   if (columnOrderRaw) {
@@ -347,6 +361,8 @@ function getBootstrapData(rangeOption) {
       window: window_,
       totalRowsInYourScope: scoped.totalInRoleScope,
       excludedByWindow: scoped.excludedByWindow,
+      includesArchive: includeArchive,
+      archivedRowCount: archivedRowCount,
       lastImportedAt: props.getProperty('lastImportedAt') || null,
       lastImportedFile: props.getProperty('lastImportedFile') || null,
       sheetUrl: SpreadsheetApp.getActiveSpreadsheet().getUrl(),
@@ -932,13 +948,19 @@ function clearAllData(confirmText) {
 // ・現場入力項目（CHK日・保険など）も含め、行のすべての値をそのままアーカイブへ移す。
 // ・アーカイブ先スプレッドシートは初回実行時に自動作成し、以後はそのスプレッドシートを使い回す
 //   （ドキュメントプロパティにスプレッドシートIDを保存する）。
-// ・アーカイブ後のデータはこのWebアプリからは閲覧できない（容量を減らすのが目的のため）。
-// 　過去データを確認したい場合は、アーカイブ先スプレッドシートを直接Googleスプレッドシートで開く。
+// ・アーカイブ後のデータは、画面を開いたときの既定表示には含まれない（既定表示を軽いままにするため）。
+// 　「表示期間」の「アーカイブ済みデータも含める」を選んだときだけ、アーカイブ先スプレッドシートも
+// 　あわせて読み込んで表示する（getArchiveRowsForWindow_）。閲覧専用で、この画面からは編集できない。
 // ============================================================================
 
 var ARCHIVE_SPREADSHEET_ID_PROP_ = 'archiveSpreadsheetId';
 var ARCHIVE_LAST_RUN_PROP_ = 'lastArchivedAt';
 var ARCHIVE_SPREADSHEET_NAME_ = APP_TITLE + '（アーカイブ）';
+// アーカイブ行をブラウザへ返すときのrowIndexに足すオフセット。予約データシートが現実的に
+// 到達しない大きさにしてあり、本体シートの行番号と絶対に衝突しないようにする
+// （衝突すると、編集対象の行取り違えにつながるため）。このオフセットを超えるrowIndexで
+// 編集APIが呼ばれても、本体シートの行数を超えるため「対象の行が見つかりません」で安全に拒否される。
+var ARCHIVE_ROW_INDEX_OFFSET_ = 10000000;
 
 /**
  * アーカイブ先スプレッドシートを取得する。ドキュメントプロパティに保存済みのIDがあればそれを使い、
@@ -960,6 +982,34 @@ function getOrCreateArchiveSpreadsheet_() {
   if (ss.getSheets().length > 1) { ss.deleteSheet(defaultSheet); }
   props.setProperty(ARCHIVE_SPREADSHEET_ID_PROP_, ss.getId());
   return ss;
+}
+
+/**
+ * アーカイブ先スプレッドシートから、権限と表示期間で絞り込んだ行を読み込む（getBootstrapData専用）。
+ * アーカイブがまだ一度も実行されていない場合は空で返す（新規にアーカイブ先を作成したりはしない）。
+ * 各行には isArchived:true を付け、rowIndex は本体シートの行番号と衝突しないよう
+ * ARCHIVE_ROW_INDEX_OFFSET_ を加算する（この画面からこの行を編集することはできない）。
+ */
+function getArchiveRowsForWindow_(ctx, window_) {
+  var empty = { rows: [], totalInRoleScope: 0, excludedByWindow: 0 };
+  var id = PropertiesService.getDocumentProperties().getProperty(ARCHIVE_SPREADSHEET_ID_PROP_);
+  if (!id) return empty;
+  var archiveSheet;
+  try {
+    var archiveSs = SpreadsheetApp.openById(id);
+    archiveSheet = archiveSs.getSheetByName(SHEET_NAME);
+  } catch (e) {
+    return empty; // アーカイブ先が削除済み等で開けない場合は、無視して本体データのみ返す。
+  }
+  if (!archiveSheet) return empty;
+
+  var scoped = readScopedRows_(archiveSheet, ctx, window_);
+  scoped.rows = scoped.rows.map(function (r) {
+    r.isArchived = true;
+    r.rowIndex = ARCHIVE_ROW_INDEX_OFFSET_ + r.rowIndex;
+    return r;
+  });
+  return scoped;
 }
 
 /** アーカイブ先スプレッドシートのURLと最終実行日時を返す（マスタ権限のみ。「データ管理」タブの表示用）。 */

@@ -97,21 +97,30 @@ function boot() {
 // 表示期間（データが増えるほど画面が重くなるのを防ぐための絞り込み。Code.gsのgetBootstrapData参照）
 // ============================================================================
 
-/** 「表示期間」セレクタ・カスタム期間入力の現在値から、getBootstrapData()へ渡すrangeOptionを作る。既定時はundefined（サーバー側の既定値を使う）。 */
+/**
+ * 「表示期間」セレクタ・カスタム期間入力・「アーカイブ済みデータも含める」チェックボックスの
+ * 現在値から、getBootstrapData()へ渡すrangeOptionを作る。
+ */
 function buildRangeOptionFromUi_() {
   var mode = document.getElementById('data-window-mode').value;
-  if (mode === 'all') return { mode: 'all' };
-  if (mode === '1y') return { mode: 'custom', from: isoDateMonthsAgo_(12), to: null };
-  if (mode === 'fy-current' || mode === 'fy-prev') {
+  var includeArchiveEl = document.getElementById('data-window-include-archive');
+  var includeArchive = !!(includeArchiveEl && includeArchiveEl.checked);
+
+  var base;
+  if (mode === 'all') base = { mode: 'all' };
+  else if (mode === '1y') base = { mode: 'custom', from: isoDateMonthsAgo_(12), to: null };
+  else if (mode === 'fy-current' || mode === 'fy-prev') {
     var fy = computeFiscalYearRange_(mode === 'fy-current' ? 0 : -1);
-    return { mode: 'custom', from: fy.from, to: fy.to };
-  }
-  if (mode === 'custom') {
+    base = { mode: 'custom', from: fy.from, to: fy.to };
+  } else if (mode === 'custom') {
     var from = document.getElementById('data-window-from').value || null;
     var to = document.getElementById('data-window-to').value || null;
-    return { mode: 'custom', from: from, to: to };
+    base = { mode: 'custom', from: from, to: to };
+  } else {
+    base = { mode: 'default' }; // 既定（直近6ヶ月＋今後の予定。サーバー側で計算する）
   }
-  return undefined; // 既定（直近6ヶ月＋今後の予定。サーバー側で計算する）
+  base.includeArchive = includeArchive;
+  return base;
 }
 
 /** 今日からNヶ月前の日付を'yyyy-MM-dd'で返す（表示期間セレクタの「直近1年」用）。 */
@@ -168,6 +177,9 @@ function renderDataWindowBanner_() {
     rangeText = fromText + toText;
   }
   var text = '表示期間：' + rangeText + '　／　表示中：' + formatNumber(meta.totalRows) + ' 件';
+  if (meta.includesArchive) {
+    text += '　／　うちアーカイブ済み：' + formatNumber(meta.archivedRowCount || 0) + ' 件（閲覧専用）';
+  }
   if (meta.excludedByWindow > 0) {
     text += '　／　表示期間外のため非表示：' + formatNumber(meta.excludedByWindow) + ' 件（「全期間を表示」で確認できます）';
   }
@@ -804,12 +816,20 @@ function renderDataTable() {
   var tbody = document.getElementById('data-tbody');
   document.getElementById('data-empty').classList.toggle('hidden', total > 0);
 
-  STATE.currentPageRowIndexes = pageRows.map(function (r) { return r.rowIndex; });
+  // アーカイブ済みの行（閲覧専用）は、「このページを全選択」や一括登録の対象に含めない。
+  STATE.currentPageRowIndexes = pageRows.filter(function (r) { return !r.isArchived; }).map(function (r) { return r.rowIndex; });
 
   tbody.innerHTML = pageRows.map(function (r) {
-    var checked = STATE.selectedRowIndexes[r.rowIndex] ? ' checked' : '';
-    var checkboxTd = '<td class="px-2 py-2 text-center"><input type="checkbox" class="row-select-checkbox" data-row="' + r.rowIndex + '"' + checked + '></td>';
-    return '<tr class="hover:bg-slate-50">' + checkboxTd + STATE.columnOrder.map(function (key) {
+    // アーカイブ済みの行（別スプレッドシートから読み込んだ過去データ）は閲覧専用。
+    // 一括登録の選択対象にもしない（選択チェックボックスの代わりに鍵アイコンを表示する）。
+    var checkboxTd = r.isArchived
+      ? '<td class="px-2 py-2 text-center text-slate-300" title="アーカイブ済み（閲覧専用）"><i class="fa-solid fa-lock"></i></td>'
+      : (function () {
+          var checked = STATE.selectedRowIndexes[r.rowIndex] ? ' checked' : '';
+          return '<td class="px-2 py-2 text-center"><input type="checkbox" class="row-select-checkbox" data-row="' + r.rowIndex + '"' + checked + '></td>';
+        })();
+    var rowClass = r.isArchived ? 'hover:bg-amber-50 bg-amber-50/40' : 'hover:bg-slate-50';
+    return '<tr class="' + rowClass + '">' + checkboxTd + STATE.columnOrder.map(function (key) {
       return buildCellHtml_(r, DISPLAY_COLUMN_DEFS_BY_KEY[key]);
     }).join('') + '</tr>';
   }).join('');
@@ -866,19 +886,46 @@ function isAncillaryQtyEditable_(status) {
 
 function buildCellHtml_(row, def) {
   if (!def) return '<td></td>';
+  var archived = !!row.isArchived;
 
   if (def.kind === 'csv') {
     var col = STATE.columnByKey[def.field];
     var align = col.type === 'number' ? 'text-right' : 'text-left';
     var displayValue = row[def.field];
     if (def.field === 'staff' && displayValue) displayValue = formatStaffName_(displayValue);
-    if (def.field === 'reservationNo' && displayValue) {
-      var challengeUrl = buildChallengeRecordUrl_(displayValue);
-      if (challengeUrl) {
-        return '<td class="px-3 py-2 ' + align + '"><a href="' + escapeHtml(challengeUrl) + '" target="_blank" rel="noopener noreferrer" class="text-blue-700 hover:underline">' + escapeHtml(displayValue) + '</a></td>';
+    if (def.field === 'reservationNo') {
+      var badge = archived ? '<span class="text-[10px] font-semibold text-amber-600 bg-amber-100 rounded px-1 py-0.5 mr-1" title="アーカイブ済み（閲覧専用）">アーカイブ</span>' : '';
+      if (displayValue) {
+        var challengeUrl = buildChallengeRecordUrl_(displayValue);
+        if (challengeUrl) {
+          return '<td class="px-3 py-2 ' + align + '">' + badge + '<a href="' + escapeHtml(challengeUrl) + '" target="_blank" rel="noopener noreferrer" class="text-blue-700 hover:underline">' + escapeHtml(displayValue) + '</a></td>';
+        }
+        return '<td class="px-3 py-2 ' + align + '">' + badge + formatCell_(displayValue, col) + '</td>';
       }
+      return '<td class="px-3 py-2 ' + align + '">' + badge + formatCell_(displayValue, col) + '</td>';
     }
     return '<td class="px-3 py-2 ' + align + '">' + formatCell_(displayValue, col) + '</td>';
+  }
+
+  // アーカイブ済みの行は、現場入力項目（CHK日・保険/Wifi/TAViCA/キャンサポ・メモ）も
+  // 編集用の入力欄ではなく、通常のCSV項目と同じ読み取り専用表示にする
+  // （アーカイブ先スプレッドシートへの書き戻しには対応していないため）。
+  if (archived) {
+    if (def.kind === 'date') {
+      return '<td class="px-3 py-2 text-left">' + formatCell_(row[def.field], { type: 'date' }) + '</td>';
+    }
+    if (def.kind === 'memo') {
+      var mv0 = row[def.field] || '';
+      var truncated0 = mv0.length > 10 ? mv0.slice(0, 10) + '…' : mv0;
+      return '<td class="px-3 py-2 text-left"' + (mv0 ? ' title="' + escapeHtml(mv0) + '"' : '') + '>' + (mv0 ? escapeHtml(truncated0) : '<span class="text-slate-300">－</span>') + '</td>';
+    }
+    if (def.kind === 'ancillary') {
+      var item0 = STATE.ancillaryItemByKey[def.item];
+      var status0 = normalizeAncillaryStatus_(row[item0.statusKey]);
+      var qty0 = row[item0.qtyKey];
+      var text0 = status0 + (qty0 !== null && qty0 !== undefined && qty0 !== '' ? '（' + formatNumber(qty0) + '）' : '');
+      return '<td class="px-3 py-2 text-center">' + escapeHtml(text0) + '</td>';
+    }
   }
 
   if (def.kind === 'date') {
@@ -2025,9 +2072,10 @@ function bindStaticEvents() {
   // 表示期間（データが増えるほど画面が重くなるのを防ぐための絞り込み）
   document.getElementById('data-window-mode').addEventListener('change', onDataWindowModeChange_);
   document.getElementById('btn-apply-data-window').addEventListener('click', function () {
-    var from = document.getElementById('data-window-from').value || null;
-    var to = document.getElementById('data-window-to').value || null;
-    requestDataWindow_({ mode: 'custom', from: from, to: to });
+    requestDataWindow_(buildRangeOptionFromUi_());
+  });
+  document.getElementById('data-window-include-archive').addEventListener('change', function () {
+    requestDataWindow_(buildRangeOptionFromUi_());
   });
 
   // 分析ダッシュボードタブのフィルタ
