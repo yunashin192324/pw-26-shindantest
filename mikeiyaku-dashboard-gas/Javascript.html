@@ -11,7 +11,7 @@
 const MONTH_CODES = ['11', '12', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10'];
 const MONTH_LABELS = MONTH_CODES.map(function (c) { return (c.indexOf('0') === 0 ? c.substring(1) : c) + '月'; });
 const PAGE_SIZE = 50;
-const ALERT_THRESHOLD_DAYS = 7; // 相談日（対象年月日）からこの日数以上経過してもSTS未入力（未対応）の場合にアラート対象とする
+const ALERT_THRESHOLD_DAYS = 7; // 相談日（対象年月日）からこの日数以上経過してもACT日が未入力の場合にアラート対象とする
 const MULTILINE_COLUMNS = ['次回ACT・進捗★手入力', '詳細']; // インライン編集時にテキストエリアを使う列（メモ・詳細）
 
 // ---- グローバル状態 ----------------------------------------------------------
@@ -216,7 +216,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // 画面側が前提としているサーバー（Code.gs）の版数。Code.gs の SERVER_VERSION と対で更新する。
-const REQUIRED_SERVER_VERSION = '2026-10-01';
+const REQUIRED_SERVER_VERSION = '2026-10-07';
 
 /**
  * Code.gs が画面と同じ版数まで更新されているか確認する。
@@ -269,7 +269,7 @@ function checkSetupStatus() {
       const banner = document.getElementById('setup-banner');
       banner.classList.remove('hidden');
       document.getElementById('setup-banner-detail').textContent =
-        '未作成のシート：' + res.missingSheets.join('、');
+        '未作成のシート：' + (res.missingSheets || []).join('、');
       // マスタ管理権限が無い人はボタンを押せないため、担当者への依頼を促す
       document.getElementById('btn-run-setup').classList.toggle('hidden', !res.canRunSetup);
       document.getElementById('setup-banner-note').textContent = res.canRunSetup
@@ -923,7 +923,7 @@ function buildAiSummaryText() {
   L.push('- リセール継続率: ' + pct(all.resaleAction, all.total) + ' %');
   L.push('- リセール中: ' + all.resaleProgress + ' 件 / 失注: ' + all.lost + ' 件');
   L.push('- 成約: ' + all.contract + ' 件 / PAX: ' + all.pax);
-  L.push('- 長期未対応（相談日から' + ALERT_THRESHOLD_DAYS + '日以上STS未入力）: ' + all.alert + ' 件');
+  L.push('- 長期未対応（相談日から' + ALERT_THRESHOLD_DAYS + '日以上ACT日が未入力）: ' + all.alert + ' 件');
   L.push('');
 
   // ---- 店舗別 ----
@@ -1552,7 +1552,7 @@ function ensureEmployeeSummaryLoaded() {
   google.script.run
     .withSuccessHandler(function (res) {
       showLoading(false);
-      if (res && res.success) {
+      if (res && res.success && res.period && Array.isArray(res.employees)) {
         employeeSummaryCache[res.period.key] = res;
         renderEmployeeTab();
       } else {

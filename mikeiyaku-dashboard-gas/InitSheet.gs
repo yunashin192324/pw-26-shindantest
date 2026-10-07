@@ -32,8 +32,11 @@ function onOpen() {
  * ウェブアプリからは buildAllSheets_() を直接呼ぶこと。
  */
 function setupAllSheets() {
+  // メニュー専用。ウェブ画面（google.script.run）から呼ばれても何も書き込まないよう、先にUIを取得する
+  // （ウェブからの呼び出しでは getUi() が例外になる）。ウェブ画面からの初期セットアップは runInitialSetup（マスタ管理権限が必要）を使う
+  const ui = SpreadsheetApp.getUi();
   withDataLock_(buildAllSheets_); // 画面からの保存・取り込みと同時に走らないように
-  SpreadsheetApp.getUi().alert('シート構築が完了しました。\n（既存シートはスキップされています）');
+  ui.alert('シート構築が完了しました。\n（既存シートはスキップされています）');
 }
 
 /**

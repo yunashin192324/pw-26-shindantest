@@ -1388,7 +1388,7 @@ function lockedEndpoint_(fn) {
  * 「is not a function」という分かりにくいエラーになるため、
  * 画面側から版数を確認できるようにしている。
  */
-const SERVER_VERSION = '2026-10-01';
+const SERVER_VERSION = '2026-10-07';
 
 /**
  * サーバー側の版数を返す。画面側は、自分が期待する版数と一致するかを起動時に確認する。
@@ -1781,7 +1781,10 @@ function autoRegisterShop_(ss, officeCode, csvShopName, csvAreaName) {
   // CSVに営業所名があればそれを店舗名にする。無いときだけ仮の名前を付ける。
   const existingNames = {};
   (getAllShopMasterRows_() || []).forEach(function (s) { existingNames[s.name] = true; });
-  const placeholderName = (csvShopName && !existingNames[csvShopName])
+  // 既に同名のシート（「スタッフマスタ」「店舗別サマリ」など、システムのシートを含む）がある名前は使わない。
+  // 使うと、そのシートへお客様の行を書き込んでしまう。シート名は100文字までのため、長すぎる名前も使わない。
+  const nameUsable = csvShopName && !existingNames[csvShopName] && csvShopName.length <= 100 && !ss.getSheetByName(csvShopName);
+  const placeholderName = nameUsable
     ? csvShopName
     : '未設定(' + officeCode + ')';
   if (masterSheet) {
@@ -2875,7 +2878,7 @@ function renameShopIfPlaceholder_(ss, officeCode, currentName, newName) {
   const rows = getAllShopMasterRows_() || [];
   // 同じ名前が他の店舗で使われている場合は変えない（名前の重複を作らない）
   if (rows.some(function (s) { return s.code !== officeCode && s.name === newName; })) return '';
-  if (ss.getSheetByName(newName)) return ''; // 同名シートがある場合も触らない
+  if (ss.getSheetByName(newName) || String(newName).length > 100) return ''; // 同名シートがある場合・長すぎる名前も触らない
 
   const target = rows.filter(function (s) { return s.code === officeCode; })[0];
   if (!target) return '';
@@ -3082,6 +3085,9 @@ function addShopMasterImpl_(code, name, area) {
     if (ss.getSheetByName(name)) {
       throw new Error('同名のシート「' + name + '」が既に存在します。');
     }
+    if (name.length > 100) {
+      throw new Error('店舗名は100文字以内にしてください。');
+    }
 
     ensureShopMasterAreaColumn_(masterSheet);
     masterSheet.appendRow([code, safeCell_(name), true, safeCell_(area)]);
@@ -3124,6 +3130,12 @@ function renameShopMasterImpl_(code, newName, area) {
     }
     if (rows.some(function (s) { return s.code !== code && s.name === newName; })) {
       throw new Error('店舗名「' + newName + '」は既に使われています。');
+    }
+    if (newName !== target.name && SpreadsheetApp.getActiveSpreadsheet().getSheetByName(newName)) {
+      throw new Error('同名のシート「' + newName + '」が既に存在します（システムのシート名とは重複できません）。');
+    }
+    if (newName.length > 100) {
+      throw new Error('店舗名は100文字以内にしてください。');
     }
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -4207,9 +4219,13 @@ function buildAiAnalysisSheet_() {
  * メニューから実行したときに、完了メッセージをダイアログで知らせる。
  */
 function buildAiAnalysisSheetFromMenu() {
+  // メニューから開いたスプレッドシート上でしか動かない関数。ウェブ画面（google.script.run）からは
+  // 呼び出せてしまうため、先に画面（UI）を取得して、スプレッドシートを開いていない呼び出しを弾く
+  // （ウェブからの呼び出しでは getUi() が例外になり、何も書き込まれない）
+  const ui = SpreadsheetApp.getUi();
   try {
     const res = withDataLock_(buildAiAnalysisSheet_);
-    SpreadsheetApp.getUi().alert(
+    ui.alert(
       '「' + AI_SUMMARY_SHEET_NAME + '」シートを更新しました。\n\n' +
       '元データ ' + res.sourceRowCount + ' 件から ' + res.rowCount + ' 行の集計を作成しました。\n' +
       'このシートを開いた状態で、サイドパネルのGeminiに質問すると傾向分析ができます。\n\n' +
@@ -4219,7 +4235,7 @@ function buildAiAnalysisSheetFromMenu() {
       '・期をまたいで継続率が落ちている店舗はある？'
     );
   } catch (err) {
-    SpreadsheetApp.getUi().alert('AI分析用サマリの作成に失敗しました:\n' + err.message);
+    ui.alert('AI分析用サマリの作成に失敗しました:\n' + err.message);
   }
 }
 
