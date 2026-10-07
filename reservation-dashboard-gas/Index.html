@@ -525,6 +525,35 @@
             </div>
           </div>
 
+          <!-- データアーカイブ（容量対策：古いデータを別スプレッドシートへ退避する） -->
+          <div class="bg-white rounded-xl shadow p-4">
+            <h2 class="text-base font-bold text-slate-800 mb-1"><i class="fa-solid fa-box-archive text-amber-600"></i> データアーカイブ（容量対策）</h2>
+            <p class="text-xs text-slate-500 mt-1 mb-3">
+              指定した基準日より前（出発予定日が基準日より前）のデータを、別のスプレッドシート（アーカイブ）へ移動します。
+              出発予定日が空欄の行は対象になりません。データ量が増え続けても、このスプレッドシートが重くならないようにするための機能です。
+              <b class="text-amber-700">アーカイブ後のデータはこのWebアプリからは見えなくなります。</b>
+              確認する場合はアーカイブ先スプレッドシートを直接開いてください。
+            </p>
+            <p id="archive-info" class="text-xs text-slate-500 mb-3">読み込み中…</p>
+            <div class="flex flex-wrap items-end gap-3">
+              <div>
+                <label class="text-xs font-semibold text-slate-500 block mb-1">基準日（この日より前を対象にします）</label>
+                <input type="date" id="archive-cutoff-date" class="border border-slate-300 rounded-lg text-xs p-1.5">
+              </div>
+              <button id="btn-preview-archive" class="border border-amber-400 text-amber-700 hover:bg-amber-50 rounded-lg px-3 py-1.5 text-xs font-semibold">
+                <i class="fa-solid fa-magnifying-glass"></i> 対象件数を確認する
+              </button>
+            </div>
+            <p id="archive-preview-result" class="hidden text-xs mt-2 text-slate-600"></p>
+            <div class="flex gap-2 items-center mt-3">
+              <input type="text" id="archive-confirm-input" placeholder="アーカイブ と入力" class="border border-slate-300 rounded-lg text-xs p-1.5 w-32">
+              <button id="btn-run-archive" class="bg-amber-600 hover:bg-amber-700 text-white rounded-lg px-3 py-1.5 text-xs font-semibold shadow">
+                <i class="fa-solid fa-box-archive"></i> アーカイブを実行する
+              </button>
+            </div>
+            <p id="archive-run-result" class="hidden text-xs mt-2"></p>
+          </div>
+
           <!-- 権限管理（スタッフ権限） -->
           <div class="bg-white rounded-xl shadow p-4">
             <div class="flex items-center justify-between mb-3">

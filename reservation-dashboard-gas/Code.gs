@@ -923,6 +923,136 @@ function clearAllData(confirmText) {
 }
 
 // ============================================================================
+// データアーカイブ（容量対策）※マスタ権限のみ
+// ----------------------------------------------------------------------------
+// 予約データが増え続けてもこのスプレッドシートが重くならないよう、指定した基準日より
+// 古い（出発予定日が基準日より前の）行を、別スプレッドシート（アーカイブ）へ移動する。
+// ・出発予定日が空欄の行はアーカイブの対象にしない（判断できないデータを誤って
+//   動かさないため、常に「予約データ」シート側に残す）。
+// ・現場入力項目（CHK日・保険など）も含め、行のすべての値をそのままアーカイブへ移す。
+// ・アーカイブ先スプレッドシートは初回実行時に自動作成し、以後はそのスプレッドシートを使い回す
+//   （ドキュメントプロパティにスプレッドシートIDを保存する）。
+// ・アーカイブ後のデータはこのWebアプリからは閲覧できない（容量を減らすのが目的のため）。
+// 　過去データを確認したい場合は、アーカイブ先スプレッドシートを直接Googleスプレッドシートで開く。
+// ============================================================================
+
+var ARCHIVE_SPREADSHEET_ID_PROP_ = 'archiveSpreadsheetId';
+var ARCHIVE_LAST_RUN_PROP_ = 'lastArchivedAt';
+var ARCHIVE_SPREADSHEET_NAME_ = APP_TITLE + '（アーカイブ）';
+
+/**
+ * アーカイブ先スプレッドシートを取得する。ドキュメントプロパティに保存済みのIDがあればそれを使い、
+ * 無い（または削除済みで開けない）場合は新規作成し、「予約データ」シートを本体と同じ列構成で用意する。
+ */
+function getOrCreateArchiveSpreadsheet_() {
+  var props = PropertiesService.getDocumentProperties();
+  var id = props.getProperty(ARCHIVE_SPREADSHEET_ID_PROP_);
+  if (id) {
+    try {
+      return SpreadsheetApp.openById(id);
+    } catch (e) {
+      // 保存されていたIDのスプレッドシートが削除済み等で開けない場合は、新規に作り直す。
+    }
+  }
+  var ss = SpreadsheetApp.create(ARCHIVE_SPREADSHEET_NAME_);
+  var defaultSheet = ss.getSheets()[0];
+  buildDataSheet_(ss);
+  if (ss.getSheets().length > 1) { ss.deleteSheet(defaultSheet); }
+  props.setProperty(ARCHIVE_SPREADSHEET_ID_PROP_, ss.getId());
+  return ss;
+}
+
+/** アーカイブ先スプレッドシートのURLと最終実行日時を返す（マスタ権限のみ。「データ管理」タブの表示用）。 */
+function getArchiveInfo() {
+  assertMaster_();
+  var props = PropertiesService.getDocumentProperties();
+  var id = props.getProperty(ARCHIVE_SPREADSHEET_ID_PROP_);
+  var url = null;
+  if (id) {
+    try { url = SpreadsheetApp.openById(id).getUrl(); } catch (e) { url = null; }
+  }
+  return {
+    archiveSpreadsheetUrl: url,
+    lastArchivedAt: props.getProperty(ARCHIVE_LAST_RUN_PROP_) || null
+  };
+}
+
+/** 基準日（'yyyy-MM-dd'）の形式を確認する。不正な場合はエラーを投げる。 */
+function assertValidDateString_(dateStr, label) {
+  var s = String(dateStr || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    throw new Error(label + 'の形式が正しくありません（例：2025-11-01）。');
+  }
+  return s;
+}
+
+/**
+ * 指定した基準日より前（出発予定日 < cutoffDate）の行が何件あるか、実際には動かさずに確認する
+ * （マスタ権限のみ。アーカイブ実行前の確認表示用）。
+ */
+function previewArchiveCandidates(cutoffDate) {
+  assertMaster_();
+  var cutoff = assertValidDateString_(cutoffDate, '基準日');
+  var sheet = getDataSheet_();
+  var rows = readAllRows_(sheet);
+  var archivable = rows.filter(function (r) { return r.departureDate && r.departureDate < cutoff; }).length;
+  return { archivable: archivable, totalRows: rows.length };
+}
+
+/**
+ * 指定した基準日より前（出発予定日 < cutoffDate）の行を、アーカイブ先スプレッドシートへ移動する
+ * （マスタ権限のみ）。confirmTextが「アーカイブ」と完全一致した場合のみ実行する。
+ * 出発予定日が空欄の行は対象にせず、常に「予約データ」シート側に残す。
+ */
+function archiveOldReservations(cutoffDate, confirmText) {
+  assertMaster_();
+  if (confirmText !== 'アーカイブ') {
+    throw new Error('確認文字列が一致しません。「アーカイブ」と入力してから実行してください。');
+  }
+  var cutoff = assertValidDateString_(cutoffDate, '基準日');
+
+  var sheet = getDataSheet_();
+  var rows = readAllRows_(sheet);
+  var toArchive = [];
+  var toKeep = [];
+  rows.forEach(function (r) {
+    if (r.departureDate && r.departureDate < cutoff) {
+      toArchive.push(r);
+    } else {
+      toKeep.push(r);
+    }
+  });
+
+  var props = PropertiesService.getDocumentProperties();
+  if (toArchive.length === 0) {
+    return {
+      archived: 0,
+      kept: toKeep.length,
+      archiveSpreadsheetUrl: null,
+      lastArchivedAt: props.getProperty(ARCHIVE_LAST_RUN_PROP_) || null
+    };
+  }
+
+  var archiveSs = getOrCreateArchiveSpreadsheet_();
+  var archiveSheet = archiveSs.getSheetByName(SHEET_NAME);
+  appendRecords_(archiveSheet, toArchive);
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow > 1) sheet.getRange(2, 1, lastRow - 1, ALL_COLUMNS.length).clearContent();
+  appendRecords_(sheet, toKeep);
+
+  var now = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd HH:mm');
+  props.setProperty(ARCHIVE_LAST_RUN_PROP_, now);
+
+  return {
+    archived: toArchive.length,
+    kept: toKeep.length,
+    archiveSpreadsheetUrl: archiveSs.getUrl(),
+    lastArchivedAt: now
+  };
+}
+
+// ============================================================================
 // スタッフ権限の管理（マスタ権限のみ）
 // ============================================================================
 
@@ -1184,8 +1314,26 @@ var STAFF_CSV_ROLE_MAP_ = {
 };
 
 /**
+ * 役職表記の完全一致判定のための正規化（「・」「･」「、」「，」「/」「-」や前後の空白などの区切り記号を
+ * 除去する）。例えば「エリア・リーダー」も「エリアリーダー」と同じキーとして扱えるようにする
+ * （本アプリの対応表自体が「エグゼクティブコンサルタント・チーフ」のように中点区切りの表記を含むため、
+ * 人事データ側の区切り記号の使い方が多少違っても判定がぶれないようにするための処理）。
+ */
+function normalizeRoleKey_(s) {
+  return String(s || '').replace(/[\s・･、，,\/\-]/g, '');
+}
+var STAFF_CSV_ROLE_MAP_NORMALIZED_ = (function () {
+  var m = {};
+  Object.keys(STAFF_CSV_ROLE_MAP_).forEach(function (k) {
+    m[normalizeRoleKey_(k)] = STAFF_CSV_ROLE_MAP_[k];
+  });
+  return m;
+})();
+
+/**
  * 人事データCSVの「権限」欄の表記を、本アプリの権限（社員／所長・チーフ／AL／マスタ権限）へ変換する。
- * まずSTAFF_CSV_ROLE_MAP_との完全一致を試し、一致しなければ部分一致で推定する。
+ * まずSTAFF_CSV_ROLE_MAP_との完全一致（区切り記号の違いを無視した正規化後の一致を含む）を試し、
+ * 一致しなければ部分一致で推定する。
  * 安全のため、CSVの値が「マスタ」「管理者」等を含んでいても、ここでは絶対にマスタ権限へ昇格させない
  * （マスタ権限はWebアプリの権限管理から手動でのみ付与する）。該当する場合はdowngradedをtrueで返す。
  */
@@ -1194,16 +1342,23 @@ function mapCsvRoleToAppRole_(raw) {
   if (!s) return { role: ROLE_STAFF, downgraded: false, original: '' };
   // 括弧の注記（例：「所長（関東エリア）」「Ｍ１（一般職）」）を取り除いた上で完全一致を試す。
   var cleaned = s.replace(/[（(][^）)]*[）)]/g, '').trim();
+  var normalized = normalizeRoleKey_(cleaned || s);
   if (Object.prototype.hasOwnProperty.call(STAFF_CSV_ROLE_MAP_, s)) {
     return { role: STAFF_CSV_ROLE_MAP_[s], downgraded: false, original: s };
   }
   if (cleaned && cleaned !== s && Object.prototype.hasOwnProperty.call(STAFF_CSV_ROLE_MAP_, cleaned)) {
     return { role: STAFF_CSV_ROLE_MAP_[cleaned], downgraded: false, original: s };
   }
+  if (normalized && Object.prototype.hasOwnProperty.call(STAFF_CSV_ROLE_MAP_NORMALIZED_, normalized)) {
+    return { role: STAFF_CSV_ROLE_MAP_NORMALIZED_[normalized], downgraded: false, original: s };
+  }
   if (s.indexOf('マスタ') !== -1 || s.indexOf('管理者') !== -1 || s.indexOf('admin') !== -1) {
     return { role: ROLE_STAFF, downgraded: true, original: s };
   }
-  if (s.indexOf('エリアリーダー') !== -1) {
+  // 「エリアリーダー」判定は、区切り記号違いにも対応した正規化後の文字列（normalized）で行う。
+  // こうしないと「エリア・リーダー」のような中点区切りの表記が、下の「所長・チーフ」側の
+  // 部分一致（「リーダー」を含む）に先に拾われてしまい、ALではなく所長・チーフに誤判定される。
+  if (normalized.indexOf('エリアリーダー') !== -1) {
     return { role: ROLE_AL, downgraded: false, original: s };
   }
   if (s.indexOf('所長') !== -1 || s.indexOf('チーフ') !== -1 || s.indexOf('店長') !== -1 || s.indexOf('リーダー') !== -1) {

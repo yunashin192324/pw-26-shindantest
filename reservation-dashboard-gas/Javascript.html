@@ -274,7 +274,7 @@ function applyRoleUi_() {
   var isMaster = STATE.userContext && STATE.userContext.role === 'マスタ権限';
   document.getElementById('btn-open-csv-modal').classList.toggle('hidden', !isMaster);
   document.getElementById('master-only-admin').classList.toggle('hidden', !isMaster);
-  if (isMaster) { loadStaffList(); loadStaffNameList(); }
+  if (isMaster) { loadStaffList(); loadStaffNameList(); loadArchiveInfo(); }
 }
 
 /** 担当者コードを、担当者マスタに登録があれば氏名に変換する（未登録ならコードのまま）。 */
@@ -1476,6 +1476,78 @@ function clearAllData() {
     .clearAllData(input.value);
 }
 
+// ============================================================================
+// データアーカイブ（容量対策）※マスタ権限のみ
+// ============================================================================
+
+/** 基準日の入力欄に既定値（前期の開始日＝今期・前期・今後の予定は残し、それより古いものを対象にする）を入れる。 */
+function initArchiveCutoffDefault_() {
+  var input = document.getElementById('archive-cutoff-date');
+  if (!input.value) {
+    input.value = computeFiscalYearRange_(-1).from;
+  }
+}
+
+function loadArchiveInfo() {
+  initArchiveCutoffDefault_();
+  google.script.run
+    .withSuccessHandler(renderArchiveInfo_)
+    .withFailureHandler(onServerError)
+    .getArchiveInfo();
+}
+
+function renderArchiveInfo_(info) {
+  var box = document.getElementById('archive-info');
+  if (!info || !info.archiveSpreadsheetUrl) {
+    box.textContent = 'まだアーカイブは実行されていません。';
+    return;
+  }
+  box.innerHTML = 'アーカイブ先：<a href="' + escapeHtml(info.archiveSpreadsheetUrl) + '" target="_blank" class="text-blue-700 hover:underline">' +
+    'スプレッドシートを開く <i class="fa-solid fa-arrow-up-right-from-square"></i></a>' +
+    (info.lastArchivedAt ? '　／　最終実行：' + escapeHtml(info.lastArchivedAt) : '');
+}
+
+function previewArchive() {
+  var cutoff = document.getElementById('archive-cutoff-date').value;
+  if (!cutoff) { showToast('基準日を指定してください。', 'error'); return; }
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (result) {
+      showLoading(false);
+      var el = document.getElementById('archive-preview-result');
+      el.textContent = '対象：' + formatNumber(result.archivable) + ' 件（全' + formatNumber(result.totalRows) + '件中。残りは' +
+        formatNumber(result.totalRows - result.archivable) + '件になります）';
+      el.classList.remove('hidden');
+    })
+    .withFailureHandler(function (err) { showLoading(false); onServerError(err); })
+    .previewArchiveCandidates(cutoff);
+}
+
+function runArchive() {
+  var cutoff = document.getElementById('archive-cutoff-date').value;
+  if (!cutoff) { showToast('基準日を指定してください。', 'error'); return; }
+  var input = document.getElementById('archive-confirm-input');
+  if (input.value !== 'アーカイブ') { showToast('確認欄に「アーカイブ」と入力してください。', 'error'); return; }
+  if (!window.confirm(cutoff + ' より前の出発予定日のデータを、別のスプレッドシートへ移動します。このWebアプリからは見えなくなります。よろしいですか？')) return;
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (result) {
+      showLoading(false);
+      input.value = '';
+      var el = document.getElementById('archive-run-result');
+      el.textContent = result.archived > 0
+        ? result.archived + ' 件をアーカイブしました（残り ' + result.kept + ' 件）。'
+        : 'アーカイブ対象のデータはありませんでした。';
+      el.className = 'text-xs mt-2 ' + (result.archived > 0 ? 'text-emerald-600' : 'text-slate-500');
+      el.classList.remove('hidden');
+      document.getElementById('archive-preview-result').classList.add('hidden');
+      showToast(result.archived > 0 ? 'データをアーカイブしました' : 'アーカイブ対象はありませんでした', 'success');
+      if (result.archived > 0) { renderArchiveInfo_(result); boot(); }
+    })
+    .withFailureHandler(function (err) { showLoading(false); onServerError(err); })
+    .archiveOldReservations(cutoff, input.value);
+}
+
 function runSetup() {
   showLoading(true);
   google.script.run
@@ -2015,6 +2087,8 @@ function bindStaticEvents() {
   bindColumnOrderEvents_();
   document.getElementById('btn-remove-duplicates').addEventListener('click', removeDuplicates);
   document.getElementById('btn-clear-all-data').addEventListener('click', clearAllData);
+  document.getElementById('btn-preview-archive').addEventListener('click', previewArchive);
+  document.getElementById('btn-run-archive').addEventListener('click', runArchive);
   bindStaffEvents_();
   bindStaffNameEvents_();
   bindStaffNameImportEvents_();
