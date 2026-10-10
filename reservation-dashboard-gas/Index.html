@@ -138,6 +138,28 @@
       </div>
     </div>
 
+    <!-- ============ 登録はあるが権限の値が不正（空欄・無効な値）なユーザーに出る案内 ============ -->
+    <div id="invalid-role-banner" class="hidden mb-5 bg-amber-50 border border-amber-300 rounded-xl p-4">
+      <div class="flex items-start gap-3">
+        <i class="fa-solid fa-triangle-exclamation text-amber-500 text-xl mt-0.5"></i>
+        <div>
+          <p class="font-bold text-amber-800">権限が正しく設定されていません</p>
+          <p class="text-sm text-amber-700 mt-1">
+            あなたのGoogleアカウント（<span id="invalid-role-email" class="font-mono"></span>）は
+            「スタッフ権限」シートに登録されていますが、権限欄が空欄か、社員／所長・チーフ／AL／マスタ権限の
+            いずれでもない値になっているため、データを表示できません。
+          </p>
+          <p class="text-xs text-amber-600 mt-2">
+            よくある原因：「スタッフ権限」シートを直接編集した際、権限欄のプルダウン（データの入力規則）が
+            古いままでALを選べず、入力が反映されなかった。マスタ権限の方は、「権限管理（スタッフ権限）」画面
+            から権限を設定し直すか、スプレッドシートのメニュー「営業セールスダッシュボード」→
+            「① 初期セットアップ（シート作成）」を再実行してプルダウンの選択肢を最新にしてから、
+            権限欄を設定し直してください。
+          </p>
+        </div>
+      </div>
+    </div>
+
     <div id="app-content" class="hidden">
 
       <!-- ============ 表示期間バー（データ増加対策：既定では直近期間＋今後の予定のみ読み込む） ============ -->

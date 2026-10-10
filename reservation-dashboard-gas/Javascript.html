@@ -52,6 +52,7 @@ function buildChallengeRecordUrl_(value) {
 var STATE = {
   ready: false,
   accessDenied: false,
+  invalidRole: false,
   columns: [], columnByKey: {},
   editableColumns: [], editableColumnByKey: {},
   ancillaryItems: [], ancillaryItemByKey: {},
@@ -210,21 +211,28 @@ function onBootstrapSuccess(data) {
   STATE.rows = data.rows || [];
   STATE.ready = data.ready;
   STATE.accessDenied = !!data.accessDenied;
+  STATE.invalidRole = !!data.invalidRole;
 
   document.getElementById('setup-banner').classList.toggle('hidden', data.ready);
   if (!data.ready) {
     document.getElementById('setup-banner-detail').textContent = (data.status && data.status.detail) || '';
     document.getElementById('access-denied-banner').classList.add('hidden');
+    document.getElementById('invalid-role-banner').classList.add('hidden');
     document.getElementById('app-content').classList.add('hidden');
     renderRoleBadge();
     return;
   }
 
   document.getElementById('access-denied-banner').classList.toggle('hidden', !STATE.accessDenied);
-  document.getElementById('app-content').classList.toggle('hidden', STATE.accessDenied);
+  document.getElementById('invalid-role-banner').classList.toggle('hidden', !STATE.invalidRole);
+  document.getElementById('app-content').classList.toggle('hidden', STATE.accessDenied || STATE.invalidRole);
   renderRoleBadge();
   if (STATE.accessDenied) {
     document.getElementById('access-denied-email').textContent = (STATE.userContext && STATE.userContext.email) || '';
+    return;
+  }
+  if (STATE.invalidRole) {
+    document.getElementById('invalid-role-email').textContent = (STATE.userContext && STATE.userContext.email) || '';
     return;
   }
 

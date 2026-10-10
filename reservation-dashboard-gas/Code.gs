@@ -319,6 +319,19 @@ function getBootstrapData(rangeOption) {
     };
   }
 
+  // 「スタッフ権限」シートに登録はあるが、権限欄が空欄、または社員／所長・チーフ／AL／マスタ権限の
+  // いずれでもない値になっている場合（例：古いデータ検証ルールのプルダウンでALが選べず、スプレッドシート
+  // を直接編集した際に入力が反映されなかった等）。この場合、権限による絞り込みでは常に0件になり、
+  // 原因が分からないまま「データが空」に見えてしまうため、accessDeniedとは別に明示的に知らせる。
+  if (!ctx.bootstrapMode && ctx.registered && ROLES.indexOf(ctx.role) === -1) {
+    return {
+      ready: true, accessDenied: false, invalidRole: true, status: status,
+      columns: COLUMNS, editableColumns: EDITABLE_COLUMNS, ancillaryItems: ANCILLARY_ITEMS,
+      ancillaryStatusOptions: ANCILLARY_STATUS_OPTIONS,
+      columnOrder: null, rows: [], staffNameMap: {}, meta: null, userContext: ctx
+    };
+  }
+
   var sheet = getDataSheet_();
   var window_ = resolveListWindow_(rangeOption);
   var scoped = readScopedRows_(sheet, ctx, window_);
@@ -347,6 +360,7 @@ function getBootstrapData(rangeOption) {
   return {
     ready: true,
     accessDenied: false,
+    invalidRole: false,
     status: status,
     columns: COLUMNS,
     editableColumns: EDITABLE_COLUMNS,
