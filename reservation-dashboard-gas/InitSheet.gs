@@ -117,8 +117,18 @@ function buildStaffSheet_(ss) {
   var widths = [220, 120, 160, 120, 130];
   widths.forEach(function (w, i) { sheet.setColumnWidth(i + 1, w); });
 
-  // 権限列にプルダウン（社員／所長・チーフ／AL／マスタ権限）を設定しておく
-  var rule = SpreadsheetApp.newDataValidation().requireValueInList(ROLES, true).setAllowInvalid(false).build();
+  // 権限列にプルダウン（社員／所長・チーフ／AL／マスタ権限）を設定しておく。
+  // setAllowInvalid(true)にしているのは、リストにない値が入っていても警告（セル右上の赤い三角）
+  // だけにとどめ、書き込み自体は拒否しないようにするため。setAllowInvalid(false)（厳格モード）だと、
+  // Google Apps Scriptからの書き込み（Range.setValues等）も、このシートを最後に初期セットアップした
+  // 時点のROLESに基づくルールに違反する値（例：ROLESへAL追加前に作ったシートへ"AL"を書き込む場合）は
+  // 例外で拒否されてしまう。これはスプレッドシートを直接手入力した場合だけでなく、Webアプリの
+  // 「権限管理（スタッフ権限）」画面経由でCode.gsがRange.setValues()で書き込む場合も同様に拒否される
+  // ため、厳格モードのままだと運用中にROLESを追加するたびに「① 初期セットアップ」の再実行が必須になり、
+  // 忘れると原因の分かりにくいエラーになる。警告モードにしておけば、コード側のROLESさえ最新であれば
+  // 書き込みは常に成功し、見た目の選択肢（プルダウン）だけが初期セットアップ再実行まで古いままになる
+  // （実害が無い）。
+  var rule = SpreadsheetApp.newDataValidation().requireValueInList(ROLES, true).setAllowInvalid(true).build();
   sheet.getRange(2, 5, Math.max(maxRows - 1, 1), 1).setDataValidation(rule);
 
   if (sheet.getMaxColumns() > headerLabels.length) {
