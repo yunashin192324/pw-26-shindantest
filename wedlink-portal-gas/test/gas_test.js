@@ -6026,11 +6026,11 @@ section('94. 【総当たり】3つの役割がランダムに操作を大量に
 }
 
 // ---------------------------------------------------------------
-section('95. 【設定変更】システム通知先を空欄にして、ローマ支店など特定の拠点へシステム通知が飛ばないようにする（項目120）');
+section('95. 【設定変更】システム通知先をローマ支店のアドレスから管理者のアドレスへ変更（項目120・121）');
 {
   const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'Code.gs'), 'utf8');
-  check('Code.gsの通知先の初期値は空欄（どこにも送らない）',
-        /let SYSTEM_ALERT_EMAIL = '';/.test(src));
+  check('Code.gsの通知先は、指定された管理者のアドレス（tw-avanti@his-world.com）（項目121）',
+        /let SYSTEM_ALERT_EMAIL = 'tw-avanti@his-world\.com';/.test(src));
   check('特定の拠点のアドレス（it-planning@）がコードに書かれていない',
         !/it-planning@/.test(src.replace(/\/\/.*$/gm, '')));
 

@@ -142,6 +142,12 @@ async function openApp(ctx) {
       window.google = { script: { get run() { return makeRunner(); } } };
       window.confirm = () => true;
       window.alert = () => {};
+      // 実際のブラウザには必ずある CSS.escape が、新しい版のjsdomには無いため補う
+      // （画面のコードは CSS.escape を使っている。無いと該当の操作がエラーで止まる）
+      if (!window.CSS) window.CSS = {};
+      if (typeof window.CSS.escape !== 'function') {
+        window.CSS.escape = (v) => String(v).replace(/[^a-zA-Z0-9_\u00A0-\uFFFF-]/g, (ch) => '\\' + ch);
+      }
     }
   });
   await settle();
@@ -1069,7 +1075,7 @@ function paneHidden(document, key) {
   {
     const kanri4 = ctx.apiShopCreateRequest(ctx.apiLogin('SHOP1', 'CHANGE-ME-SHOP1').session.token, {
       branchCode: 'VIE', team: '関東', groomLastName: 'Bulk', groomName: 'Tester', brideLastName: 'Bulk', brideName: 'Bride',
-      hope1: '2026-10-01', hope2: '2026-10-02', hope3: '2026-10-03', challengeNo: 'BULK0001AAA'
+      hope1: '2027-10-01', hope2: '2027-10-02', hope3: '2027-10-03', challengeNo: 'BULK0001AAA'
     }).kanriNo;
 
     document.getElementById('nav-logout').click();
