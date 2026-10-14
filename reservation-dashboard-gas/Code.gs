@@ -258,6 +258,26 @@ function assertMaster_(ctxArg) {
   return ctx;
 }
 
+/**
+ * 書き込み系API共通の排他制御。スクリプトロックを取得してからfnを実行し、
+ * 必ずロックを解放する。複数人が同時にCSVインポート・一括登録・重複削除・アーカイブ等を
+ * 実行すると、シートへの書き込み位置（getLastRow()+1）が衝突してデータが上書き・消失したり、
+ * 行の詰め直し（重複削除・アーカイブ）の最中に他のユーザーの保存が古い行番号に書き込まれて
+ * 無関係の行を破壊したりする事故が起こり得るため、これらの操作は同時に1つしか実行できないようにする。
+ * ロックが取得できない場合（既に誰かが実行中）は、待たせすぎないよう一定時間でエラーにする。
+ */
+function withScriptLock_(fn) {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) {
+    throw new Error('他のユーザーがデータを更新中です。少し待ってから再度お試しください。');
+  }
+  try {
+    return fn();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 // ============================================================================
 // 画面初期表示データ
 // ============================================================================
@@ -558,6 +578,12 @@ function convertValue_(col, raw) {
     var n = Number(s.replace(/,/g, ''));
     return isNaN(n) ? null : n;
   }
+  if (col.key === 'reservationNo' && /^\d+$/.test(s) && s.length > 0 && s.length < RESERVATION_NO_DIGIT_LENGTH) {
+    // CSVを作る側（Excel等）で既に先頭の0が失われた数字だけの予約番号も、シート上で数値化された場合
+    // (normalizeCellValue_)と同様に11桁へ復元する。先頭0を保ったまま文字列として届いた場合は
+    // 既に11桁あるのでここには来ない。
+    return zeroPadReservationNo_(s);
+  }
   return s; // text: "10:郊外エリア" のような表記もそのまま保持する
 }
 
@@ -567,10 +593,14 @@ function convertValue_(col, raw) {
  * 現場入力項目（CHK日・保険など）はキーに含めない（値が違っても同じ予約とみなす）。
  */
 function buildDedupeKey_(record) {
+  // 区切り文字（制御文字\u0001。通常のデータには含まれない）を挟んで連結する。
+  // 区切り文字が無いと、例えば customerId="12"+reservationNo="345" と customerId="123"+reservationNo="45"
+  // のように、隣接する列の値の桁数が違うだけで連結結果が一致してしまい、別の予約データを誤って
+  // 「重複」と判定してしまう（CSVインポート時にスキップされる／重複削除で消去される）。
   return COLUMNS.map(function (col) {
     var v = record[col.key];
     return (v === null || v === undefined) ? '' : String(v);
-  }).join('');
+  }).join('\u0001');
 }
 
 /** 行オブジェクトのうち、現場入力項目が何個埋まっているかを数える（重複統合時の優先判定に使う）。 */
@@ -647,6 +677,11 @@ function importCsv(csvText, fileName) {
   }
 
   var headerInfo = detectHeaderRow_(matrix);
+
+  // 既存データの重複チェックから追記までを排他ロックの中で行う。ロックが無いと、
+  // 複数人が同時にCSVインポートした場合に、お互いの「既存行」の読み取りがすれ違って
+  // 重複チェックが効かなくなったり、書き込み位置（末尾行）が衝突したりする。
+  return withScriptLock_(function () {
   var sheet = getDataSheet_();
   var existingRows = readAllRows_(sheet);
   var existingKeys = {};
@@ -697,6 +732,7 @@ function importCsv(csvText, fileName) {
     missingColumns: headerInfo.missingLabels,
     totalRows: Math.max(sheet.getLastRow() - 1, 0)
   };
+  });
 }
 
 // ============================================================================
@@ -750,6 +786,7 @@ function bulkUpdateCellValue(rowIndexes, columnKey, value) {
   if (columnKey !== 'chkDate' && columnKey !== 'memo') {
     throw new Error('この項目は一括登録できません。');
   }
+  return withScriptLock_(function () {
   var ctx = getCurrentUserContext_();
   var sheet = getDataSheet_();
   var col = ALL_COLUMNS[ALL_COLUMN_INDEX_BY_KEY[columnKey]];
@@ -766,6 +803,7 @@ function bulkUpdateCellValue(rowIndexes, columnKey, value) {
     }
   });
   return { ok: true, updated: updated, errors: errors };
+  });
 }
 
 /**
@@ -778,9 +816,10 @@ function bulkUpdateCellValue(rowIndexes, columnKey, value) {
 function bulkSetAncillaryStatus(rowIndexes, itemKey, status, bulkQty, reason) {
   var item = ANCILLARY_ITEM_BY_KEY[itemKey];
   if (!item) throw new Error('付帯商品の指定が不正です。');
+  var normalizedQty = parseAncillaryQty_(bulkQty);
+  return withScriptLock_(function () {
   var ctx = getCurrentUserContext_();
   var sheet = getDataSheet_();
-  var normalizedQty = (bulkQty === '' || bulkQty === null || bulkQty === undefined) ? null : Number(bulkQty);
 
   var updated = 0, errors = [];
   (rowIndexes || []).forEach(function (rowIndexRaw) {
@@ -804,6 +843,7 @@ function bulkSetAncillaryStatus(rowIndexes, itemKey, status, bulkQty, reason) {
     }
   });
   return { ok: true, updated: updated, errors: errors };
+  });
 }
 
 /**
@@ -817,6 +857,7 @@ function bulkSetAncillaryStatus(rowIndexes, itemKey, status, bulkQty, reason) {
  * 成功件数とエラー内容（該当rowIndexとメッセージ）を返す。
  */
 function batchUpdateCells(changes) {
+  return withScriptLock_(function () {
   var ctx = getCurrentUserContext_();
   var sheet = getDataSheet_();
   var updated = 0, errors = [];
@@ -841,7 +882,7 @@ function batchUpdateCells(changes) {
           writeCell_(sheet, rowIndex, item.qtyKey, 0);
           writeCell_(sheet, rowIndex, item.reasonKey, String(change.reason || '').trim());
         } else if (status === '〇' || status === '☆') {
-          var qty = (change.qty === '' || change.qty === null || change.qty === undefined) ? null : Number(change.qty);
+          var qty = parseAncillaryQty_(change.qty);
           writeCell_(sheet, rowIndex, item.qtyKey, qty);
           writeCell_(sheet, rowIndex, item.reasonKey, null);
         } else {
@@ -858,9 +899,25 @@ function batchUpdateCells(changes) {
   });
 
   return { ok: true, updated: updated, errors: errors };
+  });
 }
 
 /** 編集項目の入力値を正規形（readAllRows_と同じ形）に変換する。 */
+/**
+ * 保険/Wifi/TAViCA/キャンサポの数量を検証・正規化する。空欄はnull（未入力）として許可するが、
+ * 数値として解釈できない値・負の値は拒否する（HTML側のinput type="number"は目安に過ぎず、
+ * ブラウザの種類や直接のAPI呼び出しによっては不正な値が送られてくる可能性があるため、
+ * サーバー側でも必ず検証する）。0以上の整数に丸める。
+ */
+function parseAncillaryQty_(value) {
+  if (value === '' || value === null || value === undefined) return null;
+  var n = Number(value);
+  if (!isFinite(n) || n < 0) {
+    throw new Error('数量には0以上の数値を入力してください。');
+  }
+  return Math.floor(n);
+}
+
 function normalizeEditableInput_(col, value) {
   if (value === null || value === undefined) return null;
   var s = String(value).trim();
@@ -907,6 +964,9 @@ function saveColumnOrderPreference(orderKeys) {
  */
 function removeDuplicateRows() {
   assertMaster_();
+  // シート全体を読んで詰め直すため、他のユーザーの保存処理と重なると行番号がずれて
+  // 無関係の行を上書きする事故につながる。排他ロックで同時実行を防ぐ。
+  return withScriptLock_(function () {
   var sheet = getDataSheet_();
   var rows = readAllRows_(sheet);
   var bestByKey = {};
@@ -933,6 +993,7 @@ function removeDuplicateRows() {
   appendRecords_(sheet, deduped);
 
   return { removed: removed, totalRows: deduped.length };
+  });
 }
 
 /** データ行をすべて削除する（見出し行は残す）。confirmText が「削除」と完全一致した場合のみ実行する。 */
@@ -941,6 +1002,7 @@ function clearAllData(confirmText) {
   if (confirmText !== '削除') {
     throw new Error('確認文字列が一致しません。「削除」と入力してから実行してください。');
   }
+  return withScriptLock_(function () {
   var sheet = getDataSheet_();
   var lastRow = sheet.getLastRow();
   if (lastRow > 1) {
@@ -950,6 +1012,7 @@ function clearAllData(confirmText) {
   props.deleteProperty('lastImportedAt');
   props.deleteProperty('lastImportedFile');
   return { ok: true };
+  });
 }
 
 // ============================================================================
@@ -1075,6 +1138,9 @@ function archiveOldReservations(cutoffDate, confirmText) {
   }
   var cutoff = assertValidDateString_(cutoffDate, '基準日');
 
+  // シート全体を読んで詰め直すため、他のユーザーの保存処理と重なると行番号がずれて
+  // 無関係の行を上書きする事故につながる。排他ロックで同時実行を防ぐ。
+  return withScriptLock_(function () {
   var sheet = getDataSheet_();
   var rows = readAllRows_(sheet);
   var toArchive = [];
@@ -1114,6 +1180,7 @@ function archiveOldReservations(cutoffDate, confirmText) {
     archiveSpreadsheetUrl: archiveSs.getUrl(),
     lastArchivedAt: now
   };
+  });
 }
 
 // ============================================================================
@@ -1163,16 +1230,19 @@ function validateStaffInput_(email, role) {
 function addStaffAccess(email, name, office, area, role) {
   assertMaster_();
   validateStaffInput_(email, role);
+  return withScriptLock_(function () {
   var sheet = getOrCreateStaffSheet_();
   var rowIndex = sheet.getLastRow() + 1;
   sheet.getRange(rowIndex, 1, 1, 5).setValues([[String(email).trim().toLowerCase(), name || '', office || '', area || '', role]]);
   return getStaffAccessList();
+  });
 }
 
 /** スタッフ権限を1件更新する（マスタ権限のみ）。 */
 function updateStaffAccess(rowIndex, email, name, office, area, role) {
   assertMaster_();
   validateStaffInput_(email, role);
+  return withScriptLock_(function () {
   var sheet = getOrCreateStaffSheet_();
   rowIndex = Number(rowIndex);
   if (!rowIndex || rowIndex < 2 || rowIndex > sheet.getLastRow()) {
@@ -1180,11 +1250,13 @@ function updateStaffAccess(rowIndex, email, name, office, area, role) {
   }
   sheet.getRange(rowIndex, 1, 1, 5).setValues([[String(email).trim().toLowerCase(), name || '', office || '', area || '', role]]);
   return getStaffAccessList();
+  });
 }
 
 /** スタッフ権限を1件削除する（マスタ権限のみ）。 */
 function deleteStaffAccess(rowIndex) {
   assertMaster_();
+  return withScriptLock_(function () {
   var sheet = getOrCreateStaffSheet_();
   rowIndex = Number(rowIndex);
   if (!rowIndex || rowIndex < 2 || rowIndex > sheet.getLastRow()) {
@@ -1192,6 +1264,7 @@ function deleteStaffAccess(rowIndex) {
   }
   sheet.deleteRow(rowIndex);
   return getStaffAccessList();
+  });
 }
 
 // ============================================================================
@@ -1243,16 +1316,19 @@ function validateStaffNameInput_(code, name) {
 function addStaffName(code, name) {
   assertMaster_();
   validateStaffNameInput_(code, name);
+  return withScriptLock_(function () {
   var sheet = getOrCreateStaffNameSheet_();
   var rowIndex = sheet.getLastRow() + 1;
   sheet.getRange(rowIndex, 1, 1, 2).setValues([[String(code).trim(), String(name).trim()]]);
   return getStaffNameList();
+  });
 }
 
 /** 担当者マスタを1件更新する（マスタ権限のみ）。 */
 function updateStaffName(rowIndex, code, name) {
   assertMaster_();
   validateStaffNameInput_(code, name);
+  return withScriptLock_(function () {
   var sheet = getOrCreateStaffNameSheet_();
   rowIndex = Number(rowIndex);
   if (!rowIndex || rowIndex < 2 || rowIndex > sheet.getLastRow()) {
@@ -1260,11 +1336,13 @@ function updateStaffName(rowIndex, code, name) {
   }
   sheet.getRange(rowIndex, 1, 1, 2).setValues([[String(code).trim(), String(name).trim()]]);
   return getStaffNameList();
+  });
 }
 
 /** 担当者マスタを1件削除する（マスタ権限のみ）。 */
 function deleteStaffName(rowIndex) {
   assertMaster_();
+  return withScriptLock_(function () {
   var sheet = getOrCreateStaffNameSheet_();
   rowIndex = Number(rowIndex);
   if (!rowIndex || rowIndex < 2 || rowIndex > sheet.getLastRow()) {
@@ -1272,6 +1350,7 @@ function deleteStaffName(rowIndex) {
   }
   sheet.deleteRow(rowIndex);
   return getStaffNameList();
+  });
 }
 
 /** 人事データCSVの見出しラベルを正規化する（BOM除去・前後空白除去のみ。数字プレフィックスは付かない想定）。 */
@@ -1483,6 +1562,10 @@ function importStaffNameCsv(csvText, fileName) {
   }
   var accountsDetected = headerInfo.emailIdx !== -1;
 
+  // 既存データの読み取りから追記・更新までを排他ロックの中で行う（他のユーザーの同時書き込みとの
+  // 競合を防ぐ）。
+  return withScriptLock_(function () {
+
   var csvMap = {}; // 担当者コード → 社員名称（CSV内で重複があれば最後の行を採用）
   var csvAccounts = {}; // Googleアカウント（小文字）→ アカウント情報（CSV内で重複があれば最後の行を採用）
   var skipped = 0, accountsSkipped = 0;
@@ -1611,4 +1694,5 @@ function importStaffNameCsv(csvText, fileName) {
     roleRawTally: accountsDetected ? roleRawTally : null,
     staffAccessList: accountsDetected ? getStaffAccessList() : null
   };
+  });
 }

@@ -78,7 +78,14 @@ var STATE = {
   selectedRowIndexes: {}, // 予約データ一覧の一括登録用：チェックされている行番号の集合
   currentPageRowIndexes: [],
 
-  pendingChanges: {} // 予約データ一覧「まとめて保存する」用：未保存の編集（key→変更内容）
+  pendingChanges: {}, // 予約データ一覧「まとめて保存する」用：未保存の編集（key→変更内容）
+
+  // 編集は常に「予約データ一覧」タブで発生するため、見えていないダッシュボード／個人別サマリータブは
+  // 編集直後には再描画せず「汚れている」とだけ記録しておき、実際にそのタブへ切り替えられた時点で
+  // まとめて再描画する（非表示タブのグラフ再描画・再集計という無駄な処理を避けるための遅延評価）。
+  activeTab: 'dashboard',
+  dashDirty: false,
+  personalDirty: false
 };
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -207,6 +214,14 @@ function onBootstrapSuccess(data) {
 
   STATE.staffNameMap = data.staffNameMap || {};
 
+  // データを読み込み直すと行番号(rowIndex)の対応関係が変わる可能性がある（重複削除・アーカイブ等で
+  // 行がずれる、表示期間の変更で対象行の集合が変わる等）。古いrowIndexを指したまま残った選択・
+  // 未保存の変更は、後で別の行を誤って一括編集・上書きする事故につながるため、読み込み直す前に
+  // 必ず破棄し、未保存の変更があった場合はその旨を知らせる。
+  var hadPendingChanges = STATE.pendingChanges && Object.keys(STATE.pendingChanges).length > 0;
+  STATE.pendingChanges = {};
+  STATE.selectedRowIndexes = {};
+
   STATE.userContext = data.userContext || null;
   STATE.rows = data.rows || [];
   STATE.ready = data.ready;
@@ -258,6 +273,10 @@ function onBootstrapSuccess(data) {
   applyDataFilters();
   renderPersonalTab();
   renderAdminStatus();
+  updatePendingChangesBar_();
+  if (hadPendingChanges) {
+    showToast('データを再読み込みしたため、保存されていなかった編集内容は破棄されました。', 'error');
+  }
 }
 
 function onServerError(err) {
@@ -449,14 +468,17 @@ function clearDashFilters() {
   applyDashFilters();
 }
 
+// typeof NaN === 'number' となるため、typeof チェックだけではNaNを除外できない。
+// 1件でもNaNが混ざると集計全体がNaNに汚染されてしまうため、isNaN()も必ず併用する。
+function isValidNumber_(v) { return typeof v === 'number' && !isNaN(v); }
 function sumBy_(rows, key) {
   var sum = 0;
-  rows.forEach(function (r) { if (typeof r[key] === 'number') sum += r[key]; });
+  rows.forEach(function (r) { if (isValidNumber_(r[key])) sum += r[key]; });
   return sum;
 }
 function avgBy_(rows, key) {
   var sum = 0, n = 0;
-  rows.forEach(function (r) { if (typeof r[key] === 'number') { sum += r[key]; n++; } });
+  rows.forEach(function (r) { if (isValidNumber_(r[key])) { sum += r[key]; n++; } });
   return n > 0 ? sum / n : 0;
 }
 function countBy_(rows, key) {
@@ -745,6 +767,13 @@ function applyDataFilters() {
     return true;
   });
 
+  // フィルタ変更で画面から隠れた行の選択は、本人が見えないまま一括編集の対象になってしまうため解除する。
+  var visibleRowIndexes = {};
+  STATE.dataFiltered.forEach(function (r) { visibleRowIndexes[r.rowIndex] = true; });
+  Object.keys(STATE.selectedRowIndexes).forEach(function (ri) {
+    if (!visibleRowIndexes[ri]) delete STATE.selectedRowIndexes[ri];
+  });
+
   document.getElementById('data-filter-summary').textContent =
     STATE.dataFiltered.length + ' 件を表示中（あなたが閲覧できる ' + STATE.rows.length + ' 件中）';
 
@@ -998,11 +1027,17 @@ function getOrCreatePendingAncillary_(rowIndex, itemKey) {
   return STATE.pendingChanges[key];
 }
 
-/** 画面を編集した直後の共通処理（この時点ではまだサーバーには保存しない）。 */
+/**
+ * 画面を編集した直後の共通処理（この時点ではまだサーバーには保存しない）。
+ * 編集は常に「予約データ一覧」タブで行われるため、そのタブだけは必ず再描画する。
+ * ダッシュボード（グラフ7〜8個）・個人別サマリーは、今見えていないタブなら再描画せず
+ * 「汚れている」フラグだけ立て、実際にそのタブへ切り替えられた時に再描画する
+ * （1件編集するたびに非表示のグラフまで全部再描画する無駄を避けるため）。
+ */
 function afterLocalEdit_() {
   renderDataTable();
-  applyDashFilters();
-  renderPersonalTab();
+  if (STATE.activeTab === 'dashboard') applyDashFilters(); else STATE.dashDirty = true;
+  if (STATE.activeTab === 'personal') renderPersonalTab(); else STATE.personalDirty = true;
   updatePendingChangesBar_();
 }
 // 旧名（他の箇所からの呼び出しと互換のため残す）。
@@ -1208,9 +1243,16 @@ function applyBulkField_(field) {
   google.script.run
     .withSuccessHandler(function (result) {
       var normalized = value === '' ? null : value;
+      var failedRowIndexes = {};
+      (result.errors || []).forEach(function (err) { failedRowIndexes[err.rowIndex] = true; });
       rowIndexes.forEach(function (ri) {
+        if (failedRowIndexes[ri]) return; // サーバー側で拒否された行には反映しない
         var row = STATE.rows.filter(function (r) { return r.rowIndex === ri; })[0];
         if (row) row[field] = normalized;
+        // 一括登録はサーバーへ即時保存されるため、この行に関する未保存の変更（保留中）は
+        // 古い値のまま残ってしまうと、後で「まとめて保存する」を押した際に今回の一括登録結果を
+        // 上書きしてしまう。保存済みになった分の保留は破棄する。
+        delete STATE.pendingChanges[pendingKey_(ri, field)];
       });
       afterCellSaved_();
       showBulkEditResult_(result);
@@ -1239,7 +1281,10 @@ function applyBulkAncillary_(itemKey) {
 
   google.script.run
     .withSuccessHandler(function (result) {
+      var failedRowIndexes = {};
+      (result.errors || []).forEach(function (err) { failedRowIndexes[err.rowIndex] = true; });
       rowIndexes.forEach(function (ri) {
+        if (failedRowIndexes[ri]) return; // サーバー側で拒否された行には反映しない
         var row = STATE.rows.filter(function (r) { return r.rowIndex === ri; })[0];
         if (!row) return;
         row[item.statusKey] = status;
@@ -1253,6 +1298,8 @@ function applyBulkAncillary_(itemKey) {
           row[item.qtyKey] = null;
           row[item.reasonKey] = null;
         }
+        // applyBulkField_と同様、保存済みになった分の保留中の変更は破棄する（古い値による上書きを防ぐ）。
+        delete STATE.pendingChanges[pendingKey_(ri, 'ancillary:' + itemKey)];
       });
       afterCellSaved_();
       showBulkEditResult_(result);
@@ -1299,8 +1346,6 @@ function bindDataTableEditEvents_() {
       saveCell(Number(t.dataset.row), t.dataset.col, t.value);
     } else if (t.matches('select.ancillary-status')) {
       handleAncillaryStatusChange(t);
-    } else if (t.matches('input.ancillary-qty')) {
-      handleAncillaryQtyBlur(t);
     } else if (t.matches('input.row-select-checkbox')) {
       var rowIndex = Number(t.dataset.row);
       if (t.checked) STATE.selectedRowIndexes[rowIndex] = true; else delete STATE.selectedRowIndexes[rowIndex];
@@ -1451,14 +1496,16 @@ function renderPersonalTab() {
   var keyword = (document.getElementById('personal-search').value || '').trim().toLowerCase();
   var list = buildPersonalSummary_(STATE.rows).filter(function (b) {
     if (!keyword) return true;
-    return (b.area + ' ' + b.office + ' ' + b.staff).toLowerCase().indexOf(keyword) !== -1;
+    // 画面に表示されるのは担当者コードを氏名に変換した表示名のため、検索も表示名を対象にする
+    // （担当者コードのままだと、画面に見えている氏名で検索しても0件になってしまう）。
+    return (b.area + ' ' + b.office + ' ' + formatStaffName_(b.staff)).toLowerCase().indexOf(keyword) !== -1;
   });
 
   var key = STATE.personalSortKey, dir = STATE.personalSortDir;
   list.sort(function (a, b) {
     if (key === 'area') return a.area.localeCompare(b.area, 'ja') * dir;
     if (key === 'office') return a.office.localeCompare(b.office, 'ja') * dir;
-    if (key === 'staff') return a.staff.localeCompare(b.staff, 'ja') * dir;
+    if (key === 'staff') return formatStaffName_(a.staff).localeCompare(formatStaffName_(b.staff), 'ja') * dir;
     return (a[key] - b[key]) * dir;
   });
 
@@ -1583,7 +1630,7 @@ function runArchive() {
   if (!cutoff) { showToast('基準日を指定してください。', 'error'); return; }
   var input = document.getElementById('archive-confirm-input');
   if (input.value !== 'アーカイブ') { showToast('確認欄に「アーカイブ」と入力してください。', 'error'); return; }
-  if (!window.confirm(cutoff + ' より前の出発予定日のデータを、別のスプレッドシートへ移動します。このWebアプリからは見えなくなります。よろしいですか？')) return;
+  if (!window.confirm(cutoff + ' より前の出発予定日のデータを、別のスプレッドシートへ移動します。移動後は編集できません（「アーカイブ済みデータも含める」で閲覧のみ可能です）。よろしいですか？')) return;
   showLoading(true);
   google.script.run
     .withSuccessHandler(function (result) {
@@ -2153,6 +2200,10 @@ function bindStaticEvents() {
 function switchTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-tab') === tab); });
   document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.toggle('hidden', p.id !== 'tab-panel-' + tab); });
+  STATE.activeTab = tab;
+  // 非表示の間に編集が行われて「汚れている」タブへ切り替えた時だけ、ここで初めて再描画する。
+  if (tab === 'dashboard' && STATE.dashDirty) { applyDashFilters(); STATE.dashDirty = false; }
+  if (tab === 'personal' && STATE.personalDirty) { renderPersonalTab(); STATE.personalDirty = false; }
 }
 
 // ============================================================================
