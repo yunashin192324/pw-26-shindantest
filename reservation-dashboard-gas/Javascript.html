@@ -84,6 +84,7 @@ var STATE = {
   // 編集直後には再描画せず「汚れている」とだけ記録しておき、実際にそのタブへ切り替えられた時点で
   // まとめて再描画する（非表示タブのグラフ再描画・再集計という無駄な処理を避けるための遅延評価）。
   activeTab: 'dashboard',
+  appliedDataWindowUi: null, // 最後に実際に読み込んだときの表示期間の入力欄の状態（再読込を取りやめた時に戻す用）
   dashDirty: false,
   personalDirty: false
 };
@@ -93,12 +94,60 @@ document.addEventListener('DOMContentLoaded', function () {
   boot();
 });
 
+// 未保存の変更がある状態でタブを閉じる・再読み込みする場合に、ブラウザの確認を出す。
+// （Apps ScriptのWebアプリは埋め込み枠の中で動くため、ブラウザによっては確認が表示されない場合がある）
+window.addEventListener('beforeunload', function (e) {
+  if (!hasPendingChanges_()) return;
+  e.preventDefault();
+  e.returnValue = '';
+});
+
 // ============================================================================
 // 初期ロード
 // ============================================================================
 
+/**
+ * データを読み込み直す。サーバー側でデータを変更した直後（CSV取込・重複削除など）に呼ぶため、
+ * 未保存の変更の確認は呼び出し元の操作の前に済ませておく（confirmDiscardPending_）。
+ */
 function boot() {
-  requestDataWindow_(buildRangeOptionFromUi_());
+  requestDataWindow_(buildRangeOptionFromUi_(), { skipConfirm: true });
+}
+
+function hasPendingChanges_() { return Object.keys(STATE.pendingChanges).length > 0; }
+
+/**
+ * 未保存の変更がある場合に、それが破棄される操作を行ってよいかを事前に確認する。
+ * 変更が無ければ確認せずtrueを返す。actionTextは「データを読み込み直す」のような操作の説明。
+ */
+function confirmDiscardPending_(actionText) {
+  if (!hasPendingChanges_()) return true;
+  return window.confirm('未保存の変更が' + Object.keys(STATE.pendingChanges).length + '件あります。' + actionText +
+    'と、保存されていない変更は破棄されます。続けますか？\n（保存する場合は「キャンセル」を押し、「まとめて保存する」を押してください）');
+}
+
+/** 表示期間の入力欄（期間の種類・期間指定・アーカイブを含めるか）の現在値を記録用に取り出す。 */
+function snapshotDataWindowUi_() {
+  return {
+    mode: document.getElementById('data-window-mode').value,
+    from: document.getElementById('data-window-from').value,
+    to: document.getElementById('data-window-to').value,
+    includeArchive: document.getElementById('data-window-include-archive').checked
+  };
+}
+
+/** 表示期間の入力欄を、最後に実際に読み込んだときの状態に戻す（再読込を取りやめた場合用）。 */
+function restoreDataWindowUi_() {
+  var ui = STATE.appliedDataWindowUi;
+  if (!ui) return;
+  document.getElementById('data-window-mode').value = ui.mode;
+  document.getElementById('data-window-from').value = ui.from;
+  document.getElementById('data-window-to').value = ui.to;
+  document.getElementById('data-window-include-archive').checked = ui.includeArchive;
+  var customBox = document.getElementById('data-window-custom');
+  var isCustom = ui.mode === 'custom';
+  customBox.classList.toggle('hidden', !isCustom);
+  customBox.classList.toggle('flex', isCustom);
 }
 
 // ============================================================================
@@ -161,11 +210,23 @@ function onDataWindowModeChange_() {
   requestDataWindow_(buildRangeOptionFromUi_());
 }
 
-/** rangeOptionを指定してサーバーからデータを読み込み直す（onBootstrapSuccessで画面を丸ごと更新する）。 */
-function requestDataWindow_(rangeOption) {
+/**
+ * rangeOptionを指定してサーバーからデータを読み込み直す（onBootstrapSuccessで画面を丸ごと更新する）。
+ * 読み込み直すと未保存の変更は破棄されるため、変更がある場合は事前に確認する（opts.skipConfirmで省略）。
+ * 取りやめた場合は、表示期間の入力欄を元の状態に戻す。
+ */
+function requestDataWindow_(rangeOption, opts) {
+  if (!(opts && opts.skipConfirm) && !confirmDiscardPending_('データを読み込み直す')) {
+    restoreDataWindowUi_();
+    return;
+  }
+  var uiAtRequest = snapshotDataWindowUi_();
   showLoading(true);
   var call = google.script.run
-    .withSuccessHandler(onBootstrapSuccess)
+    .withSuccessHandler(function (data) {
+      STATE.appliedDataWindowUi = uiAtRequest;
+      onBootstrapSuccess(data);
+    })
     .withFailureHandler(function (err) { showLoading(false); onServerError(err); });
   if (rangeOption) call.getBootstrapData(rangeOption); else call.getBootstrapData();
 }
@@ -275,7 +336,7 @@ function onBootstrapSuccess(data) {
   renderAdminStatus();
   updatePendingChangesBar_();
   if (hadPendingChanges) {
-    showToast('データを再読み込みしたため、保存されていなかった編集内容は破棄されました。', 'error');
+    showToast('データを読み込み直したため、保存されていなかった編集内容は破棄されました。', 'info');
   }
 }
 
@@ -422,7 +483,11 @@ function updateDataOfficeStaffFilterOptions_() {
 
   var officeSet = toSet_(getSelectedValues_('data-filter-office'));
   var rowsInOffice = officeSet ? rowsInArea.filter(function (r) { return officeSet[r.office]; }) : rowsInArea;
-  fillMultiSelectPreserving_('data-filter-staff', distinctValuesFromRows_(rowsInOffice, 'staff'), formatStaffName_);
+  // 担当者の選択肢は、表示している氏名の五十音順に並べる（担当者コード順にしない）。
+  var staffCodes = distinctValuesFromRows_(rowsInOffice, 'staff').sort(function (a, b) {
+    return String(formatStaffName_(a)).localeCompare(String(formatStaffName_(b)), 'ja');
+  });
+  fillMultiSelectPreserving_('data-filter-staff', staffCodes, formatStaffName_);
 }
 
 // ============================================================================
@@ -715,9 +780,10 @@ function renderRanking() {
   list.sort(function (a, b) {
     if (key === 'area') return a.area.localeCompare(b.area, 'ja') * dir;
     if (key === 'office') return a.office.localeCompare(b.office, 'ja') * dir;
-    if (key === 'staff') return a.staff.localeCompare(b.staff, 'ja') * dir;
+    if (key === 'staff') return formatStaffName_(a.staff).localeCompare(formatStaffName_(b.staff), 'ja') * dir;
     return (a[key] - b[key]) * dir;
   });
+  renderSortMarks_('tab-panel-dashboard', key, dir);
 
   var tbody = document.getElementById('ranking-tbody');
   if (list.length === 0) {
@@ -836,6 +902,8 @@ function compareRows_(a, b, def) {
   if (aEmpty) return 1;
   if (bEmpty) return -1;
   if (type === 'number') return va - vb;
+  // 担当者は画面に表示している氏名（担当者マスタで変換した名前）の順に並べる。
+  if (def.field === 'staff') return String(formatStaffName_(va)).localeCompare(String(formatStaffName_(vb)), 'ja');
   return String(va).localeCompare(String(vb), 'ja');
 }
 
@@ -852,6 +920,7 @@ function renderDataTable() {
 
   var tbody = document.getElementById('data-tbody');
   document.getElementById('data-empty').classList.toggle('hidden', total > 0);
+  hideHoverTooltip_(); // 再描画でホバー中の要素が消えると、ツールチップが消えずに残るため
 
   // アーカイブ済みの行（閲覧専用）は、「このページを全選択」や一括登録の対象に含めない。
   STATE.currentPageRowIndexes = pageRows.filter(function (r) { return !r.isArchived; }).map(function (r) { return r.rowIndex; });
@@ -866,7 +935,7 @@ function renderDataTable() {
           return '<td class="px-2 py-2 text-center"><input type="checkbox" class="row-select-checkbox" data-row="' + r.rowIndex + '"' + checked + '></td>';
         })();
     var rowClass = r.isArchived ? 'hover:bg-amber-50 bg-amber-50/40' : 'hover:bg-slate-50';
-    return '<tr class="' + rowClass + '">' + checkboxTd + STATE.columnOrder.map(function (key) {
+    return '<tr class="' + rowClass + '" data-row-index="' + r.rowIndex + '">' + checkboxTd + STATE.columnOrder.map(function (key) {
       return buildCellHtml_(r, DISPLAY_COLUMN_DEFS_BY_KEY[key]);
     }).join('') + '</tr>';
   }).join('');
@@ -994,10 +1063,15 @@ function buildCellHtml_(row, def) {
     var qtyTooltip = (status === '×' && reason) ? ' data-tooltip="失注理由：' + escapeHtml(reason) + '"' : '';
     var flagged = (status === '〇' || status === '☆') && (qty === null || qty === undefined || qty === '') ? ' ancillary-flagged' : '';
     var pendingAncillary = hasPendingAncillaryChange_(row.rowIndex, item.key) ? ' pending-edit' : '';
+    // 失注（×）の行は、同じ「×」を選び直しても変更イベントが起きず理由を直せないため、理由の編集ボタンを出す。
+    var reasonBtn = status === '×'
+      ? '<button type="button" class="ancillary-reason-edit text-slate-400 hover:text-blue-700 text-xs px-1" data-row="' + row.rowIndex + '" data-item="' + item.key + '" title="失注理由を編集"><i class="fa-solid fa-pen"></i></button>'
+      : '';
     return '<td class="editable-cell px-2 py-1 text-center">' +
       '<div class="flex items-center justify-center gap-1"' + qtyTooltip + '>' +
       '<select data-row="' + row.rowIndex + '" data-col="' + item.statusKey + '" data-item="' + item.key + '" class="ancillary-status border border-slate-300 rounded px-1 py-1 text-xs' + pendingAncillary + '">' + opts + '</select>' +
-      '<input type="number" min="0" data-row="' + row.rowIndex + '" data-col="' + item.qtyKey + '" data-item="' + item.key + '" value="' + escapeHtml(String(qtyVal)) + '" ' + (qtyEditable ? '' : 'disabled') + ' class="ancillary-qty' + flagged + pendingAncillary + ' border border-slate-300 rounded px-1 py-1 text-xs w-14" placeholder="数">' +
+      '<input type="number" min="0" step="1" data-row="' + row.rowIndex + '" data-col="' + item.qtyKey + '" data-item="' + item.key + '" value="' + escapeHtml(String(qtyVal)) + '" ' + (qtyEditable ? '' : 'disabled') + ' class="ancillary-qty' + flagged + pendingAncillary + ' border border-slate-300 rounded px-1 py-1 text-xs w-14" placeholder="数">' +
+      reasonBtn +
       '</div></td>';
   }
 
@@ -1027,21 +1101,70 @@ function getOrCreatePendingAncillary_(rowIndex, itemKey) {
   return STATE.pendingChanges[key];
 }
 
+/** rowIndexの行データを返す（無ければundefined）。 */
+function findRow_(rowIndex) {
+  return STATE.rows.filter(function (r) { return r.rowIndex === rowIndex; })[0];
+}
+
+/**
+ * 予約データ一覧の、1行の1項目（CHK日・メモ・付帯商品1件）のセルだけを描き直す。
+ * 表全体（tbody）を作り直すと、編集を確定した瞬間（入力欄からフォーカスが外れた瞬間）に、
+ * 次にクリック・Tabキーで移ろうとしていた別のセルの入力欄やプルダウンまで作り直されてしまい、
+ * クリックが空振りしたりフォーカスが消えたりするため。並べ替え・絞り込みもこの時点では適用し直さない
+ * （入力した瞬間に行が別の位置・別のページへ飛ばないようにするため。次に絞り込み・並べ替え・
+ * ページ移動をした時点で反映される）。該当セルが今のページに表示されていなければfalseを返す。
+ */
+function refreshDataCell_(rowIndex, displayKey) {
+  var tr = document.querySelector('#data-tbody tr[data-row-index="' + rowIndex + '"]');
+  var colPos = STATE.columnOrder.indexOf(displayKey);
+  var row = findRow_(rowIndex);
+  if (!tr || colPos === -1 || !row) return false;
+  var td = tr.children[colPos + 1]; // 先頭の列は選択チェックボックス
+  if (!td) return false;
+  var holder = document.createElement('tbody');
+  holder.innerHTML = '<tr>' + buildCellHtml_(row, DISPLAY_COLUMN_DEFS_BY_KEY[displayKey]) + '</tr>';
+  hideHoverTooltip_();
+  td.replaceWith(holder.firstChild.firstChild);
+  return true;
+}
+
 /**
  * 画面を編集した直後の共通処理（この時点ではまだサーバーには保存しない）。
- * 編集は常に「予約データ一覧」タブで行われるため、そのタブだけは必ず再描画する。
+ * rowIndexとdisplayKey（CHK日='chkDate'、メモ='memo'、付帯商品=itemKey）が指定されれば、
+ * 予約データ一覧はそのセルだけを描き直す（refreshDataCell_参照）。指定が無ければ表全体を描き直す。
  * ダッシュボード（グラフ7〜8個）・個人別サマリーは、今見えていないタブなら再描画せず
  * 「汚れている」フラグだけ立て、実際にそのタブへ切り替えられた時に再描画する
  * （1件編集するたびに非表示のグラフまで全部再描画する無駄を避けるため）。
  */
-function afterLocalEdit_() {
-  renderDataTable();
+function afterLocalEdit_(rowIndex, displayKey) {
+  if (rowIndex === undefined || !refreshDataCell_(rowIndex, displayKey)) renderDataTable();
   if (STATE.activeTab === 'dashboard') applyDashFilters(); else STATE.dashDirty = true;
   if (STATE.activeTab === 'personal') renderPersonalTab(); else STATE.personalDirty = true;
   updatePendingChangesBar_();
 }
 // 旧名（他の箇所からの呼び出しと互換のため残す）。
 function afterCellSaved_() { afterLocalEdit_(); }
+
+/** 未入力（null・undefined・空文字）を同じものとみなして、2つの値が同じかを判定する。 */
+function sameEditValue_(a, b) {
+  var na = (a === null || a === undefined || a === '') ? null : String(a).trim();
+  var nb = (b === null || b === undefined || b === '') ? null : String(b).trim();
+  return na === nb;
+}
+
+/**
+ * 保留中の変更が、結果的に元の値と同じになった（何も変えずにフォーカスを外した・元の値に戻した）
+ * 場合は、「未保存の変更」から取り除く。
+ */
+function prunePendingIfUnchanged_(key) {
+  var c = STATE.pendingChanges[key];
+  if (!c) return;
+  var unchanged = c.kind === 'field'
+    ? sameEditValue_(c.value, c.original)
+    : (normalizeAncillaryStatus_(c.status) === normalizeAncillaryStatus_(c.original.status) &&
+       sameEditValue_(c.qty, c.original.qty) && sameEditValue_(c.reason, c.original.reason));
+  if (unchanged) delete STATE.pendingChanges[key];
+}
 
 /** 未保存の変更バー（件数表示・保存/取消ボタン）の表示を更新する。 */
 function updatePendingChangesBar_() {
@@ -1057,18 +1180,26 @@ function updatePendingChangesBar_() {
  * ハンドラーを使う）。サーバーへは送らず、「まとめて保存する」を押すまで保留する。
  */
 function saveCell(rowIndex, columnKey, value) {
-  var row = STATE.rows.filter(function (r) { return r.rowIndex === rowIndex; })[0];
+  var row = findRow_(rowIndex);
   if (!row) return;
-  var normalized = (value === '' || value === undefined) ? null : value;
+  // サーバー側でも前後の空白は取り除いて保存するため、画面上の値もそろえておく。
+  var trimmed = (value === undefined || value === null) ? '' : String(value).trim();
+  var normalized = trimmed === '' ? null : trimmed;
 
   var key = pendingKey_(rowIndex, columnKey);
   if (!STATE.pendingChanges[key]) {
+    if (sameEditValue_(normalized, row[columnKey])) {
+      // 値を変えずにフォーカスを外しただけ：未保存の変更にはしない（メモの編集欄を表示に戻すだけ）。
+      afterLocalEdit_(rowIndex, columnKey);
+      return;
+    }
     STATE.pendingChanges[key] = { kind: 'field', rowIndex: rowIndex, columnKey: columnKey, original: row[columnKey] };
   }
   STATE.pendingChanges[key].value = normalized;
   row[columnKey] = normalized;
+  prunePendingIfUnchanged_(key);
 
-  afterLocalEdit_();
+  afterLocalEdit_(rowIndex, columnKey);
 }
 
 /**
@@ -1100,7 +1231,8 @@ function handleAncillaryStatusChange(selectEl) {
     row[item.statusKey] = '×';
     row[item.qtyKey] = 0;
     row[item.reasonKey] = reason.trim();
-    afterLocalEdit_();
+    prunePendingIfUnchanged_(pendingKey_(rowIndex, 'ancillary:' + itemKey));
+    afterLocalEdit_(rowIndex, itemKey);
     return;
   }
 
@@ -1112,8 +1244,9 @@ function handleAncillaryStatusChange(selectEl) {
   row[item.statusKey] = newStatus;
   if (newStatus !== '〇' && newStatus !== '☆') row[item.qtyKey] = null;
   row[item.reasonKey] = null;
+  prunePendingIfUnchanged_(pendingKey_(rowIndex, 'ancillary:' + itemKey));
 
-  afterLocalEdit_();
+  afterLocalEdit_(rowIndex, itemKey);
 
   if ((newStatus === '〇' || newStatus === '☆') && (row[item.qtyKey] === null || row[item.qtyKey] === undefined || row[item.qtyKey] === '')) {
     showToast(item.label + 'の数量が入力されていません。数量を入力してください。', 'error');
@@ -1135,27 +1268,81 @@ function handleAncillaryQtyBlur(inputEl) {
   var row = STATE.rows.filter(function (r) { return r.rowIndex === rowIndex; })[0];
   if (!row || !item) return;
   var status = normalizeAncillaryStatus_(row[item.statusKey]);
+  var currentQty = row[item.qtyKey];
+  // 入力欄の表示を、内部で保持している数量（変更しなかった場合は元の値）に戻す。
+  var restoreInput = function () {
+    inputEl.value = (currentQty === null || currentQty === undefined) ? '' : String(currentQty);
+  };
+  if (!isAncillaryQtyEditable_(status)) { restoreInput(); return; }
 
-  if (isAncillaryQtyEditable_(status) && inputEl.value.trim() === '') {
+  // 入力欄が数値として読めない文字（記号だけ等）の場合も、ブラウザはvalueを空文字にする。
+  var raw = inputEl.value.trim();
+  if (raw === '') {
     // ここで inputEl.focus() を呼ぶと、自分自身のblurハンドラーの中で再度フォーカスし直すことになり、
     // ブラウザによってはblur→focus→blur…の無限ループ（アラートが閉じられず画面が固まる不具合）を招く。
-    // そのためフォーカスは戻さず、トースト通知のみで知らせる（値も変更しない）。
+    // そのためフォーカスは戻さず、トースト通知のみで知らせる。値は変更せず、表示も元の値に戻す
+    // （空欄の表示のまま内部の値だけ元の数量が残り、見た目と実データが食い違うのを防ぐ）。
     showToast(item.label + 'の数量が入力されていません。数量を入力してください。', 'error');
+    restoreInput();
     return;
   }
-  var normalizedQty = inputEl.value === '' ? null : Number(inputEl.value);
+  var n = Number(raw);
+  if (!isFinite(n) || n < 0) {
+    showToast('数量には0以上の数値を入力してください。', 'error');
+    restoreInput();
+    return;
+  }
+  // サーバー側と同じく0以上の整数にそろえる（小数は切り捨て）。画面の表示・集計と保存値を一致させるため。
+  var normalizedQty = Math.floor(n);
+  if (sameEditValue_(normalizedQty, currentQty)) { restoreInput(); return; }
   var pending = getOrCreatePendingAncillary_(rowIndex, itemKey);
   pending.status = status;
   pending.qty = normalizedQty;
   pending.reason = row[item.reasonKey];
   row[item.qtyKey] = normalizedQty;
-  afterLocalEdit_();
+  prunePendingIfUnchanged_(pendingKey_(rowIndex, 'ancillary:' + itemKey));
+  afterLocalEdit_(rowIndex, itemKey);
+}
+
+/** 失注（×）の行で、失注理由だけを編集し直す（同じ「×」を選び直しても変更イベントが起きないため）。 */
+function editAncillaryReason_(btn) {
+  var rowIndex = Number(btn.dataset.row);
+  var itemKey = btn.dataset.item;
+  var item = STATE.ancillaryItemByKey[itemKey];
+  var row = findRow_(rowIndex);
+  if (!row || !item || normalizeAncillaryStatus_(row[item.statusKey]) !== '×') return;
+  var reason = window.prompt('失注理由を入力してください（キャンセルすると変更されません）', row[item.reasonKey] || '');
+  if (reason === null) return;
+  var pending = getOrCreatePendingAncillary_(rowIndex, itemKey);
+  pending.status = '×';
+  pending.qty = 0;
+  pending.reason = reason.trim();
+  row[item.reasonKey] = reason.trim();
+  prunePendingIfUnchanged_(pendingKey_(rowIndex, 'ancillary:' + itemKey));
+  afterLocalEdit_(rowIndex, itemKey);
 }
 
 /** 「まとめて保存する」：保留中の変更をすべて1回のサーバー呼び出しで反映する。 */
 function saveAllPendingChanges_() {
-  var changes = Object.keys(STATE.pendingChanges).map(function (k) { return STATE.pendingChanges[k]; });
+  var sentKeys = Object.keys(STATE.pendingChanges);
+  var changes = sentKeys.map(function (k) { return STATE.pendingChanges[k]; });
   if (changes.length === 0) return;
+
+  // 「〇（NB付帯）」「☆（PUSH成約）」なのに数量が空欄の変更は保存させない（件数と数量合計の集計が合わなくなるため）。
+  var missingQty = changes.filter(function (c) {
+    return c.kind === 'ancillary' && (c.status === '〇' || c.status === '☆') &&
+      (c.qty === null || c.qty === undefined || c.qty === '');
+  });
+  if (missingQty.length > 0) {
+    var first = missingQty[0];
+    var firstItem = STATE.ancillaryItemByKey[first.itemKey];
+    showToast('「〇」「☆」なのに数量が入力されていない変更が' + missingQty.length + '件あります（例：' +
+      (firstItem ? firstItem.label : '') + '）。数量を入力してから保存してください。', 'error');
+    var qtyInput = document.querySelector('input.ancillary-qty[data-row="' + first.rowIndex + '"][data-item="' + first.itemKey + '"]');
+    if (qtyInput) qtyInput.focus();
+    return;
+  }
+
   var payload = changes.map(function (c) {
     return c.kind === 'field'
       ? { kind: 'field', rowIndex: c.rowIndex, columnKey: c.columnKey, value: c.value }
@@ -1166,13 +1353,26 @@ function saveAllPendingChanges_() {
   google.script.run
     .withSuccessHandler(function (result) {
       showLoading(false);
-      STATE.pendingChanges = {};
+      // 保存できなかった変更は「未保存の変更」として残す（オレンジ枠のまま。「取り消す」で元の値に戻せる）。
+      // 以前はすべて消していたため、保存に失敗した行も画面上は保存済みに見えていた。
+      var errors = result.errors || [];
+      var failedKeys = {};
+      errors.forEach(function (err) {
+        if (err.kind === 'field') failedKeys[pendingKey_(err.rowIndex, err.columnKey)] = true;
+        else if (err.kind === 'ancillary') failedKeys[pendingKey_(err.rowIndex, 'ancillary:' + err.itemKey)] = true;
+      });
+      var sentKeySet = {};
+      sentKeys.forEach(function (k) { sentKeySet[k] = true; });
+      Object.keys(STATE.pendingChanges).forEach(function (k) {
+        if (sentKeySet[k] && !failedKeys[k]) delete STATE.pendingChanges[k];
+      });
       afterLocalEdit_();
-      showToast(
-        formatNumber(result.updated) + '件を保存しました' +
-        (result.errors && result.errors.length > 0 ? '（' + formatNumber(result.errors.length) + '件は編集権限が無いため反映されませんでした）' : ''),
-        result.errors && result.errors.length > 0 ? 'error' : 'success'
-      );
+      if (errors.length > 0) {
+        showToast(formatNumber(result.updated) + '件を保存しました。' + formatNumber(errors.length) +
+          '件は保存できませんでした（理由：' + errors[0].message + '）。保存できなかった変更は未保存のまま残しています。', 'error');
+      } else {
+        showToast(formatNumber(result.updated) + '件を保存しました', 'success');
+      }
     })
     .withFailureHandler(function (err) { showLoading(false); onServerError(err); })
     .batchUpdateCells(payload);
@@ -1225,7 +1425,7 @@ function showBulkEditResult_(result) {
   var el = document.getElementById('bulk-edit-result');
   var lines = [formatNumber(result.updated) + '件に反映しました。'];
   if (result.errors && result.errors.length > 0) {
-    lines.push('（' + formatNumber(result.errors.length) + '件は編集権限が無いため反映されませんでした）');
+    lines.push('（' + formatNumber(result.errors.length) + '件は反映されませんでした。理由：' + result.errors[0].message + '）');
   }
   el.textContent = lines.join('');
   el.classList.remove('hidden');
@@ -1240,9 +1440,13 @@ function applyBulkField_(field) {
     ? document.getElementById('bulk-chkdate-input').value
     : document.getElementById('bulk-memo-input').value;
 
+  // 処理中にボタンを何度も押されないよう、完了まで読み込み中の表示で画面を覆う。
+  showLoading(true);
   google.script.run
     .withSuccessHandler(function (result) {
-      var normalized = value === '' ? null : value;
+      showLoading(false);
+      var trimmed = String(value || '').trim();
+      var normalized = trimmed === '' ? null : trimmed;
       var failedRowIndexes = {};
       (result.errors || []).forEach(function (err) { failedRowIndexes[err.rowIndex] = true; });
       rowIndexes.forEach(function (ri) {
@@ -1257,7 +1461,7 @@ function applyBulkField_(field) {
       afterCellSaved_();
       showBulkEditResult_(result);
     })
-    .withFailureHandler(onServerError)
+    .withFailureHandler(function (err) { showLoading(false); onServerError(err); })
     .bulkUpdateCellValue(rowIndexes, field, value);
 }
 
@@ -1277,10 +1481,15 @@ function applyBulkAncillary_(itemKey) {
   } else if ((status === '〇' || status === '☆') && qty.trim() === '') {
     showToast(item.label + 'の数量を入力してください。', 'error');
     return;
+  } else if ((status === '〇' || status === '☆') && (!isFinite(Number(qty)) || Number(qty) < 0)) {
+    showToast('数量には0以上の数値を入力してください。', 'error');
+    return;
   }
 
+  showLoading(true);
   google.script.run
     .withSuccessHandler(function (result) {
+      showLoading(false);
       var failedRowIndexes = {};
       (result.errors || []).forEach(function (err) { failedRowIndexes[err.rowIndex] = true; });
       rowIndexes.forEach(function (ri) {
@@ -1292,7 +1501,7 @@ function applyBulkAncillary_(itemKey) {
           row[item.qtyKey] = 0;
           row[item.reasonKey] = reason.trim();
         } else if (status === '〇' || status === '☆') {
-          row[item.qtyKey] = qty === '' ? null : Number(qty);
+          row[item.qtyKey] = qty === '' ? null : Math.floor(Number(qty)); // サーバー側と同じく整数に切り捨て
           row[item.reasonKey] = null;
         } else {
           row[item.qtyKey] = null;
@@ -1304,7 +1513,7 @@ function applyBulkAncillary_(itemKey) {
       afterCellSaved_();
       showBulkEditResult_(result);
     })
-    .withFailureHandler(onServerError)
+    .withFailureHandler(function (err) { showLoading(false); onServerError(err); })
     .bulkSetAncillaryStatus(rowIndexes, itemKey, status, qty, reason);
 }
 
@@ -1331,6 +1540,8 @@ function beginMemoEdit_(span) {
   var columnKey = span.dataset.col;
   var current = span.getAttribute('data-tooltip') || '';
   var td = span.closest('td');
+  // ホバー中の要素（span）を消すとツールチップを閉じるきっかけ（mouseout）が起きなくなるため、先に閉じる。
+  hideHoverTooltip_();
   td.innerHTML = '<input type="text" class="memo-edit-input border border-slate-300 rounded px-1 py-1 text-xs w-48" data-row="' + rowIndex + '" data-col="' + columnKey + '" value="' + escapeHtml(current) + '">';
   var input = td.querySelector('input');
   input.focus();
@@ -1358,11 +1569,35 @@ function bindDataTableEditEvents_() {
   tbody.addEventListener('blur', function (e) {
     var t = e.target;
     if (t.matches('input.memo-edit-input')) {
+      if (t.dataset.cancelled === '1') {
+        // Escキーで取り消した場合は保存せず、元の表示に戻すだけにする。
+        afterLocalEdit_(Number(t.dataset.row), t.dataset.col);
+        return;
+      }
       saveCell(Number(t.dataset.row), t.dataset.col, t.value);
     } else if (t.matches('input.ancillary-qty')) {
       handleAncillaryQtyBlur(t);
     }
   }, true);
+
+  // メモ欄・数量欄：Enterキーで確定、メモ欄はEscキーで取り消し。
+  tbody.addEventListener('keydown', function (e) {
+    var t = e.target;
+    if (!t.matches('input.memo-edit-input, input.ancillary-qty')) return;
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      t.blur();
+    } else if (e.key === 'Escape' && t.matches('input.memo-edit-input')) {
+      e.preventDefault();
+      t.dataset.cancelled = '1';
+      t.blur();
+    }
+  });
+
+  tbody.addEventListener('click', function (e) {
+    var btn = e.target.closest('.ancillary-reason-edit');
+    if (btn) editAncillaryReason_(btn);
+  });
 
   tbody.addEventListener('dblclick', function (e) {
     var span = e.target.closest('.memo-display');
@@ -1381,6 +1616,8 @@ function bindDataTableEditEvents_() {
   tbody.addEventListener('mouseout', function (e) {
     if (e.target.closest('[data-tooltip]')) hideHoverTooltip_();
   });
+  // 表や画面をスクロールすると、ツールチップだけが元の位置に取り残されるため閉じる。
+  window.addEventListener('scroll', hideHoverTooltip_, true);
 }
 
 /** メモ全文・失注理由を表示する共通のホバーポップアップ。 */
@@ -1388,9 +1625,15 @@ function showHoverTooltip_(x, y, text) {
   if (!text) return;
   var el = document.getElementById('hover-tooltip');
   el.textContent = text;
-  el.style.left = Math.min(x + 12, window.innerWidth - 380) + 'px';
-  el.style.top = (y + 16) + 'px';
   el.classList.remove('hidden');
+  // 実際の大きさを測ってから、画面の右端・下端からはみ出さない位置に置く（狭い画面・画面下部でも見切れないように）。
+  var margin = 8;
+  var w = el.offsetWidth, h = el.offsetHeight;
+  var left = Math.max(margin, Math.min(x + 12, window.innerWidth - w - margin));
+  var top = y + 16;
+  if (top + h > window.innerHeight - margin) top = Math.max(margin, y - h - 12);
+  el.style.left = left + 'px';
+  el.style.top = top + 'px';
 }
 function hideHoverTooltip_() {
   document.getElementById('hover-tooltip').classList.add('hidden');
@@ -1486,6 +1729,20 @@ function buildPersonalSummary_(rows) {
   return Object.keys(map).map(function (k) { return map[k]; });
 }
 
+/** ランキング・個人別サマリーの見出しに、現在の並べ替えの列と向き（▲昇順／▼降順）を表示する。 */
+function renderSortMarks_(panelId, key, dir) {
+  document.querySelectorAll('#' + panelId + ' th[data-sort]').forEach(function (th) {
+    var old = th.querySelector('.sort-mark');
+    if (old) old.remove();
+    if (th.getAttribute('data-sort') === key) {
+      var mark = document.createElement('span');
+      mark.className = 'sort-mark';
+      mark.textContent = dir > 0 ? '▲' : '▼';
+      th.appendChild(mark);
+    }
+  });
+}
+
 /** 付帯商品1件分のセル表示：合計／NB付帯／PUSH成約の3つの数値を1セルにまとめて表示する。 */
 function formatAncillaryTallyCell_(tally) {
   return '<div>合計 ' + formatNumber(tally.qty) + '</div>' +
@@ -1508,6 +1765,7 @@ function renderPersonalTab() {
     if (key === 'staff') return formatStaffName_(a.staff).localeCompare(formatStaffName_(b.staff), 'ja') * dir;
     return (a[key] - b[key]) * dir;
   });
+  renderSortMarks_('tab-panel-personal', key, dir);
 
   var tbody = document.getElementById('personal-tbody');
   document.getElementById('personal-empty').classList.toggle('hidden', list.length > 0);
@@ -1541,6 +1799,7 @@ function renderAdminStatus() {
 }
 
 function removeDuplicates() {
+  if (!confirmDiscardPending_('重複削除を行う')) return;
   if (!window.confirm('CSV由来19項目すべてが完全一致する重複行を削除します。よろしいですか？')) return;
   showLoading(true);
   google.script.run
@@ -1562,6 +1821,7 @@ function removeDuplicates() {
 function clearAllData() {
   var input = document.getElementById('clear-confirm-input');
   if (input.value !== '削除') { showToast('確認欄に「削除」と入力してください。', 'error'); return; }
+  if (!confirmDiscardPending_('全データ削除を行う')) return;
   if (!window.confirm('取り込んだデータをすべて削除します。元に戻せません。よろしいですか？')) return;
   showLoading(true);
   google.script.run
@@ -1630,6 +1890,7 @@ function runArchive() {
   if (!cutoff) { showToast('基準日を指定してください。', 'error'); return; }
   var input = document.getElementById('archive-confirm-input');
   if (input.value !== 'アーカイブ') { showToast('確認欄に「アーカイブ」と入力してください。', 'error'); return; }
+  if (!confirmDiscardPending_('アーカイブを行う')) return;
   if (!window.confirm(cutoff + ' より前の出発予定日のデータを、別のスプレッドシートへ移動します。移動後は編集できません（「アーカイブ済みデータも含める」で閲覧のみ可能です）。よろしいですか？')) return;
   showLoading(true);
   google.script.run
@@ -1669,22 +1930,58 @@ function loadStaffList() {
     .getStaffAccessList();
 }
 
+/**
+ * 同じGoogleアカウントの行が複数ある場合（人事データCSVで所属変更を履歴として追加した場合など）、
+ * ログイン時に実際に使われるのは一番下の行だけ（Code.gsのgetCurrentUserContext_）。
+ * どの行が有効かを返す（メールアドレス（小文字）→ 有効な行のrowIndex）。
+ */
+function latestStaffRowIndexByEmail_(list) {
+  var latest = {};
+  list.forEach(function (s) { latest[String(s.email || '').trim().toLowerCase()] = s.rowIndex; });
+  return latest;
+}
+
 function renderStaffList(list) {
   STATE.staffList = list || [];
   var tbody = document.getElementById('staff-tbody');
   document.getElementById('staff-empty').classList.toggle('hidden', STATE.staffList.length > 0);
+  var latest = latestStaffRowIndexByEmail_(STATE.staffList);
   tbody.innerHTML = STATE.staffList.map(function (s) {
-    return '<tr>' +
-      '<td class="px-3 py-2 font-mono text-xs">' + escapeHtml(s.email) + '</td>' +
+    // 有効でない（古い）行は「履歴」として薄く表示し、編集ボタンは出さない。古い行の権限を変更しても
+    // ログイン時の判定には使われず、「変更したのに本人の権限が変わらない」状態になるため。
+    var isHistory = latest[String(s.email || '').trim().toLowerCase()] !== s.rowIndex;
+    var historyBadge = isHistory
+      ? ' <span class="text-[10px] font-semibold text-slate-500 bg-slate-200 rounded px-1 py-0.5" title="同じアカウントのより新しい行があるため、この行はログイン時の判定に使われません（所属の履歴）">履歴（無効）</span>'
+      : '';
+    var editBtn = isHistory
+      ? ''
+      : '<button type="button" class="staff-edit text-blue-600 hover:underline text-xs mr-2" data-row="' + s.rowIndex + '">編集</button>';
+    return '<tr' + (isHistory ? ' class="text-slate-400 bg-slate-50"' : '') + '>' +
+      '<td class="px-3 py-2 font-mono text-xs">' + escapeHtml(s.email) + historyBadge + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(s.name) + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(s.office) + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(s.area) + '</td>' +
       '<td class="px-3 py-2">' + escapeHtml(s.role) + '</td>' +
-      '<td class="px-3 py-2 text-right">' +
-      '<button type="button" class="staff-edit text-blue-600 hover:underline text-xs mr-2" data-row="' + s.rowIndex + '">編集</button>' +
+      '<td class="px-3 py-2 text-right">' + editBtn +
       '<button type="button" class="staff-delete text-red-600 hover:underline text-xs" data-row="' + s.rowIndex + '">削除</button>' +
       '</td></tr>';
   }).join('');
+}
+
+/**
+ * 権限の追加・変更・削除の後の共通処理。自分自身のマスタ権限を外した（別のマスタ権限の人がいる
+ * 場合のみ可能）ときは、管理画面をそのまま使い続けられないため、画面を読み込み直す。
+ */
+function onStaffListChanged_(list) {
+  renderStaffList(list);
+  var me = STATE.userContext && STATE.userContext.email ? String(STATE.userContext.email).toLowerCase() : '';
+  if (!me) return;
+  var latest = latestStaffRowIndexByEmail_(STATE.staffList);
+  var myRow = STATE.staffList.filter(function (s) { return s.rowIndex === latest[me]; })[0];
+  if (!myRow || myRow.role !== 'マスタ権限') {
+    showToast('あなた自身のマスタ権限が外れたため、画面を読み込み直します。', 'info');
+    boot();
+  }
 }
 
 function bindStaffEvents_() {
@@ -1698,7 +1995,7 @@ function bindStaffEvents_() {
     if (editBtn) openStaffModal(Number(editBtn.dataset.row));
     if (delBtn) {
       if (!window.confirm('このアカウントを削除しますか？')) return;
-      google.script.run.withSuccessHandler(renderStaffList).withFailureHandler(onServerError).deleteStaffAccess(Number(delBtn.dataset.row));
+      google.script.run.withSuccessHandler(onStaffListChanged_).withFailureHandler(onServerError).deleteStaffAccess(Number(delBtn.dataset.row));
     }
   });
 
@@ -1739,9 +2036,9 @@ function closeStaffModal() {
 }
 
 function onStaffSaved(list) {
-  renderStaffList(list);
   closeStaffModal();
   showToast('保存しました', 'success');
+  onStaffListChanged_(list);
 }
 
 // ============================================================================
@@ -2062,6 +2359,7 @@ function onCsvFileSelected(e) {
 
 function submitCsvImport() {
   if (!csvSelectedText) return;
+  if (!confirmDiscardPending_('CSVを取り込む（取込後にデータを読み込み直す）')) return;
   document.getElementById('btn-submit-csv').disabled = true;
   startCsvProgress_();
   google.script.run
@@ -2099,6 +2397,7 @@ function onCsvImportSuccess(result) {
     '<p>CSVのデータ行数：' + formatNumber(result.csvDataRows) + ' 行</p>',
     '<p>新規登録：<b>' + formatNumber(result.imported) + '</b> 件</p>',
     '<p>重複のためスキップ：' + formatNumber(result.skippedDuplicate) + ' 件</p>',
+    (result.skippedArchived > 0 ? '<p>アーカイブ済みのためスキップ：' + formatNumber(result.skippedArchived) + ' 件</p>' : ''),
     '<p>空欄行のためスキップ：' + formatNumber(result.skippedBlank) + ' 件</p>',
     '<p>取込後の合計件数：' + formatNumber(result.totalRows) + ' 件</p>'
   ];
@@ -2201,6 +2500,7 @@ function switchTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-tab') === tab); });
   document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.toggle('hidden', p.id !== 'tab-panel-' + tab); });
   STATE.activeTab = tab;
+  hideHoverTooltip_();
   // 非表示の間に編集が行われて「汚れている」タブへ切り替えた時だけ、ここで初めて再描画する。
   if (tab === 'dashboard' && STATE.dashDirty) { applyDashFilters(); STATE.dashDirty = false; }
   if (tab === 'personal' && STATE.personalDirty) { renderPersonalTab(); STATE.personalDirty = false; }

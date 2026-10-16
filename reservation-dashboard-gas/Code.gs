@@ -237,11 +237,20 @@ function getCurrentUserContext() {
   return getCurrentUserContext_();
 }
 
+/**
+ * 所属店舗・所属エリアの名称を、比較用の形にそろえる。営業日報CSV側は「717:イーアスつくば」
+ * 「10:郊外エリア」のように先頭に番号が付く一方、人事データCSV側は番号の無い名称になっている
+ * ことがあるため、先頭の「数字＋コロン」を取り除き、全角半角の違い（NFKC正規化）と前後の空白を無視する。
+ */
+function affiliationKey_(s) {
+  return String(s === null || s === undefined ? '' : s).normalize('NFKC').replace(/^\s*\d+\s*:\s*/, '').trim();
+}
+
 /** 権限に応じて、1行（所属店舗・所属エリア）が閲覧範囲に入るかを判定する（社員=自店舗のみ、所長・チーフ=自エリアのみ、AL・マスタ=全件）。 */
 function isRowInRoleScope_(ctx, office, area) {
   if (ctx.role === ROLE_MASTER || ctx.role === ROLE_AL) return true;
-  if (ctx.role === ROLE_MANAGER) return area === ctx.area;
-  if (ctx.role === ROLE_STAFF) return office === ctx.office;
+  if (ctx.role === ROLE_MANAGER) return !!ctx.area && affiliationKey_(area) === affiliationKey_(ctx.area);
+  if (ctx.role === ROLE_STAFF) return !!ctx.office && affiliationKey_(office) === affiliationKey_(ctx.office);
   return false; // 権限未登録・不明なロールには何も見せない
 }
 
@@ -486,10 +495,23 @@ function readScopedRows_(sheet, ctx, window_) {
 /** シートのセル値1つを、項目の型に応じた正規形（日付=文字列/数値=Number/文字=String）に変換する。 */
 function normalizeCellValue_(col, v) {
   if (col.type === 'date') {
-    return (v instanceof Date) ? Utilities.formatDate(v, TIMEZONE, 'yyyy-MM-dd') : (v ? String(v) : null);
+    if (v instanceof Date) return Utilities.formatDate(v, TIMEZONE, 'yyyy-MM-dd');
+    if (v === '' || v === null || v === undefined) return null;
+    // スプレッドシートを直接編集して「2026/10/5」のような文字列として入った日付も、CSV取込時
+    // （convertValue_）と同じ 'yyyy-MM-dd' にそろえる。そろえないと、表示期間の判定（文字列の大小比較）・
+    // 重複判定・画面の日付入力欄への表示がずれる。日付として読めない文字列はそのまま返す。
+    var dm = String(v).trim().match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+    return dm ? dm[1] + '-' + ('0' + dm[2]).slice(-2) + '-' + ('0' + dm[3]).slice(-2) : String(v);
   }
   if (col.type === 'number') {
-    return (v === '' || v === null || v === undefined) ? null : Number(v);
+    if (v === '' || v === null || v === undefined) return null;
+    if (typeof v === 'number') return isNaN(v) ? null : v;
+    // 「1,000」のような桁区切り付きの文字列も数値として読み、「-」等の数値でない文字列は空欄扱いにする
+    // （CSV取込時のconvertValue_と同じ扱い。NaNのまま集計や書き戻しに使われるのを防ぐ）。
+    var numText = String(v).replace(/,/g, '').trim();
+    if (numText === '') return null;
+    var n = Number(numText);
+    return isNaN(n) ? null : n;
   }
   if (col.key === 'reservationNo' && typeof v === 'number') {
     return zeroPadReservationNo_(v);
@@ -641,6 +663,36 @@ function applyColumnFormats_(sheet, startRow, numRows) {
   });
 }
 
+/**
+ * 「予約データ」シートのデータ行を、recordsの内容で丸ごと置き換える（重複削除・アーカイブ・全削除用）。
+ * ・先に2行目から上書きし、その後で余った下の行を削除する。以前は「全行の中身を消してから
+ *   書き戻す」順序だったため、書き戻しの途中で失敗（実行時間の上限・一時的なエラー）すると、
+ *   残すはずのデータがシートから消えてしまう危険があった。この順序なら、途中で失敗しても
+ *   元のデータが消えることはない（最悪でも古い行が下に残るだけで、失われはしない）。
+ * ・余った行は中身を消すだけでなく行ごと削除する。スプレッドシートのセル数の上限や重さは、
+ *   値の入っているセル数ではなく、シートの行数×列数で決まるため、行を削除しないと
+ *   アーカイブしても容量が減らない。
+ * ・見出しより下の行をすべて削除することはできない（スプレッドシートの制約）ため、
+ *   0件になる場合も空の2行目だけは残す。
+ */
+function rewriteDataRows_(sheet, records) {
+  var n = records.length;
+  if (n > 0) {
+    ensureRowCapacity_(sheet, n + 1);
+    applyColumnFormats_(sheet, 2, n);
+    // 表示形式（文字列は@）の変更を書き込み前に確定させ、数値化による先頭0落ちを防ぐ。
+    SpreadsheetApp.flush();
+    sheet.getRange(2, 1, n, ALL_COLUMNS.length).setValues(recordsToSheetRows_(records));
+  } else {
+    sheet.getRange(2, 1, 1, sheet.getMaxColumns()).clearContent();
+  }
+  var firstStaleRow = Math.max(n + 2, 3);
+  var maxRows = sheet.getMaxRows();
+  if (maxRows >= firstStaleRow) {
+    sheet.deleteRows(firstStaleRow, maxRows - firstStaleRow + 1);
+  }
+}
+
 /** 正規形レコードの配列をシート末尾へ追記する。 */
 function appendRecords_(sheet, records) {
   if (records.length === 0) return;
@@ -651,6 +703,33 @@ function appendRecords_(sheet, records) {
   SpreadsheetApp.flush();
   var values = recordsToSheetRows_(records);
   sheet.getRange(startRow, 1, values.length, ALL_COLUMNS.length).setValues(values);
+}
+
+/**
+ * CSV取込時に、アーカイブ済みの予約と同じ行を見分けるための重複判定キーの集合を返す。
+ * importCsvの重複チェックは本体シートしか見ていないため、これが無いと、アーカイブ後に過去の
+ * 営業日報CSVを取り込み直した場合に、アーカイブ済みの予約が「新規」として本体へ戻ってしまう。
+ * アーカイブされ得るのは出発予定日がこれまでの基準日より前の行だけなので、取込対象にそのような行が
+ * 無ければアーカイブ先は開かない（通常の取込を遅くしないため）。照合が不要・不可能な場合はnull。
+ */
+function getArchivedKeysIfNeeded_(records) {
+  var props = PropertiesService.getDocumentProperties();
+  var id = props.getProperty(ARCHIVE_SPREADSHEET_ID_PROP_);
+  if (!id || records.length === 0) return null;
+  // 基準日の記録が無い（この照合機能の追加前にアーカイブした）場合は、出発予定日のある行すべてを対象にする。
+  var maxCutoff = props.getProperty(ARCHIVE_MAX_CUTOFF_PROP_);
+  var needed = records.some(function (r) { return r.departureDate && (!maxCutoff || r.departureDate < maxCutoff); });
+  if (!needed) return null;
+  var archiveSheet;
+  try {
+    archiveSheet = SpreadsheetApp.openById(id).getSheetByName(SHEET_NAME);
+  } catch (e) {
+    return null; // アーカイブ先が削除済み等で開けない場合は照合しない。
+  }
+  if (!archiveSheet) return null;
+  var keys = {};
+  readAllRows_(archiveSheet).forEach(function (r) { keys[buildDedupeKey_(r)] = true; });
+  return keys;
 }
 
 /**
@@ -717,6 +796,16 @@ function importCsv(csvText, fileName) {
     newRecords.push(record);
   }
 
+  // アーカイブ済み（別スプレッドシートへ移動済み）の予約と同じ行は、本体へ再登録しない。
+  var skippedArchived = 0;
+  var archivedKeys = getArchivedKeysIfNeeded_(newRecords);
+  if (archivedKeys) {
+    newRecords = newRecords.filter(function (rec) {
+      if (archivedKeys[buildDedupeKey_(rec)]) { skippedArchived++; return false; }
+      return true;
+    });
+  }
+
   appendRecords_(sheet, newRecords);
 
   var props = PropertiesService.getDocumentProperties();
@@ -728,6 +817,7 @@ function importCsv(csvText, fileName) {
     csvDataRows: matrix.length - headerInfo.rowIndex - 1,
     imported: newRecords.length,
     skippedDuplicate: skippedDuplicate,
+    skippedArchived: skippedArchived,
     skippedBlank: skippedBlank,
     missingColumns: headerInfo.missingLabels,
     totalRows: Math.max(sheet.getLastRow() - 1, 0)
@@ -740,41 +830,100 @@ function importCsv(csvText, fileName) {
 // ============================================================================
 
 /**
- * 実行者が指定行を編集してよいかを確認し、CSV由来19項目を正規形で返す。
- * 社員=自店舗、所長・チーフ=自エリア以外の行は編集させない（AL・マスタは全件編集可）。
+ * 編集系API（一括登録・まとめて保存）用に、予約データシートを1回だけ読み込んでメモリ上に持つ。
+ * 以前は1行ごとに「権限確認のための読み込み（getValues）」と「書き込み（setValue）」を交互に
+ * 繰り返しており、Googleスプレッドシートは読み込みのたびに保留中の書き込みを確定させるため、
+ * 数十件の保存でも数十秒かかることがあった。読み込みを最初の1回にまとめ、権限確認・値の変更は
+ * メモリ上で行い、最後に変更のあった行だけを書き戻す（flushEditedRows_）。
  */
-function assertRowEditable_(ctx, sheet, rowIndex) {
+function loadSheetForEdit_(sheet) {
+  var lastRow = sheet.getLastRow();
+  var values = lastRow >= 2 ? sheet.getRange(2, 1, lastRow - 1, ALL_COLUMNS.length).getValues() : [];
+  return { lastRow: lastRow, values: values, dirty: {} };
+}
+
+/**
+ * 実行者が指定行を編集してよいかを、loadSheetForEdit_で読み込んだ内容で確認し、行番号（数値）を返す。
+ * 社員=自店舗、所長・チーフ=自エリア以外の行は編集させない（AL・マスタは全件編集可）。
+ * アーカイブ行（行番号にARCHIVE_ROW_INDEX_OFFSET_を足したもの）はシートの行数を超えるため、ここで拒否される。
+ */
+function checkRowEditable_(ctx, snap, rowIndexRaw) {
   if (!ctx.bootstrapMode && !ctx.registered) {
     throw new Error('アクセス権がありません。管理者にお問い合わせください。');
   }
-  var lastRow = sheet.getLastRow();
-  rowIndex = Number(rowIndex);
-  if (!rowIndex || rowIndex < 2 || rowIndex > lastRow) {
-    throw new Error('対象の行が見つかりません。画面を再読込してください。');
-  }
-  var rowValues = sheet.getRange(rowIndex, 1, 1, COLUMNS.length).getValues()[0];
-  var rowRecord = {};
-  COLUMNS.forEach(function (col, i) { rowRecord[col.key] = normalizeCellValue_(col, rowValues[i]); });
-
-  if (ctx.role === ROLE_STAFF && rowRecord.office !== ctx.office) {
-    throw new Error('自店舗以外のデータは編集できません。');
-  }
-  if (ctx.role === ROLE_MANAGER && rowRecord.area !== ctx.area) {
-    throw new Error('自エリア以外のデータは編集できません。');
-  }
-  if ([ROLE_STAFF, ROLE_MANAGER, ROLE_AL, ROLE_MASTER].indexOf(ctx.role) === -1) {
+  if (ROLES.indexOf(ctx.role) === -1) {
     throw new Error('アクセス権がありません。');
   }
-  return rowRecord;
+  var rowIndex = Number(rowIndexRaw);
+  if (!rowIndex || rowIndex < 2 || rowIndex > snap.lastRow || Math.floor(rowIndex) !== rowIndex) {
+    throw new Error('対象の行が見つかりません。画面を再読込してください。');
+  }
+  var raw = snap.values[rowIndex - 2];
+  var office = normalizeCellValue_(ALL_COLUMNS[ALL_COLUMN_INDEX_BY_KEY.office], raw[ALL_COLUMN_INDEX_BY_KEY.office]);
+  var area = normalizeCellValue_(ALL_COLUMNS[ALL_COLUMN_INDEX_BY_KEY.area], raw[ALL_COLUMN_INDEX_BY_KEY.area]);
+  if (!isRowInRoleScope_(ctx, office, area)) {
+    throw new Error(ctx.role === ROLE_MANAGER ? '自エリア以外のデータは編集できません。' : '自店舗以外のデータは編集できません。');
+  }
+  return rowIndex;
 }
 
-/** 指定セルへ、項目の型に応じた表示形式と値を書き込む。 */
-function writeCell_(sheet, rowIndex, columnKey, normalizedValue) {
-  var col = ALL_COLUMNS[ALL_COLUMN_INDEX_BY_KEY[columnKey]];
-  var colIndex = ALL_COLUMN_INDEX_BY_KEY[columnKey] + 1;
-  var cell = sheet.getRange(rowIndex, colIndex);
-  cell.setNumberFormat(col.type === 'date' ? 'yyyy/mm/dd' : (col.type === 'number' ? '#,##0' : '@'));
-  cell.setValue(cellValueFor_(col, normalizedValue));
+/** メモリ上の1セルを書き換え、その行を「書き戻しが必要な行」として記録する。 */
+function setCellInMemory_(snap, rowIndex, columnKey, normalizedValue) {
+  var idx = ALL_COLUMN_INDEX_BY_KEY[columnKey];
+  snap.values[rowIndex - 2][idx] = cellValueFor_(ALL_COLUMNS[idx], normalizedValue);
+  snap.dirty[rowIndex] = true;
+}
+
+/** 項目の型に応じた表示形式（文字列は@、数値は#,##0、日付はyyyy/mm/dd）。 */
+function numberFormatFor_(col) {
+  return col.type === 'date' ? 'yyyy/mm/dd' : (col.type === 'number' ? '#,##0' : '@');
+}
+
+/**
+ * 変更のあった行の現場入力項目（CHK日〜メモの14列。CSV由来19列には触れない）だけを書き戻す。
+ * 書き込み前に表示形式も設定し直す（メモ「3/4」が日付に、先頭0の値が数値に化けるのを防ぐ）。
+ * 読み込みを挟まず書き込みだけを続けるため、スプレッドシート側でまとめて処理される。
+ */
+function flushEditedRows_(sheet, snap) {
+  var startCol = COLUMNS.length + 1;
+  var formats = [EDITABLE_COLUMNS.map(numberFormatFor_)];
+  Object.keys(snap.dirty).forEach(function (key) {
+    var rowIndex = Number(key);
+    var range = sheet.getRange(rowIndex, startCol, 1, EDITABLE_COLUMNS.length);
+    range.setNumberFormats(formats);
+    range.setValues([snap.values[rowIndex - 2].slice(COLUMNS.length)]);
+  });
+}
+
+/** 保険/Wifi/TAViCA/キャンサポのステータス値を確認する（空欄は「-（NO ACT）」として扱う）。 */
+function normalizeAncillaryStatusInput_(status) {
+  var s = (status === null || status === undefined) ? '' : String(status).trim();
+  if (s === '') return '-';
+  var ok = ANCILLARY_STATUS_OPTIONS.some(function (o) { return o.value === s; });
+  if (!ok) throw new Error('ステータスの指定が不正です。');
+  return s;
+}
+
+/**
+ * 付帯商品1件分（ステータス・数量・理由）をメモリ上に反映する。値の検証（数量の数値チェック等）を
+ * すべて済ませてから書き換えるため、途中でエラーになっても「ステータスだけ書き換わって数量は
+ * 元のまま」のような中途半端な状態にはならない。
+ * ・×（失注）：数量は0固定、理由を保存
+ * ・〇（NB付帯）／☆（PUSH成約）：数量を保存（理由は空にする）
+ * ・それ以外（－／△）：数量・理由とも空にする
+ */
+function applyAncillaryInMemory_(snap, rowIndex, item, statusRaw, qtyRaw, reasonRaw) {
+  var status = normalizeAncillaryStatusInput_(statusRaw);
+  var qty = null, reason = null;
+  if (status === '×') {
+    qty = 0;
+    reason = String(reasonRaw || '').trim() || null;
+  } else if (status === '〇' || status === '☆') {
+    qty = parseAncillaryQty_(qtyRaw);
+  }
+  setCellInMemory_(snap, rowIndex, item.statusKey, status);
+  setCellInMemory_(snap, rowIndex, item.qtyKey, qty);
+  setCellInMemory_(snap, rowIndex, item.reasonKey, reason);
 }
 
 /**
@@ -787,122 +936,107 @@ function bulkUpdateCellValue(rowIndexes, columnKey, value) {
     throw new Error('この項目は一括登録できません。');
   }
   return withScriptLock_(function () {
-  var ctx = getCurrentUserContext_();
-  var sheet = getDataSheet_();
-  var col = ALL_COLUMNS[ALL_COLUMN_INDEX_BY_KEY[columnKey]];
-  var normalized = normalizeEditableInput_(col, value);
+    var ctx = getCurrentUserContext_();
+    var sheet = getDataSheet_();
+    var snap = loadSheetForEdit_(sheet);
+    var col = ALL_COLUMNS[ALL_COLUMN_INDEX_BY_KEY[columnKey]];
+    var normalized = normalizeEditableInput_(col, value);
 
-  var updated = 0, errors = [];
-  (rowIndexes || []).forEach(function (rowIndexRaw) {
-    try {
-      assertRowEditable_(ctx, sheet, rowIndexRaw);
-      writeCell_(sheet, Number(rowIndexRaw), columnKey, normalized);
-      updated++;
-    } catch (e) {
-      errors.push({ rowIndex: rowIndexRaw, message: e.message });
-    }
-  });
-  return { ok: true, updated: updated, errors: errors };
+    var updated = 0, errors = [];
+    (rowIndexes || []).forEach(function (rowIndexRaw) {
+      try {
+        var rowIndex = checkRowEditable_(ctx, snap, rowIndexRaw);
+        setCellInMemory_(snap, rowIndex, columnKey, normalized);
+        updated++;
+      } catch (e) {
+        errors.push({ rowIndex: rowIndexRaw, message: e.message });
+      }
+    });
+    flushEditedRows_(sheet, snap);
+    return { ok: true, updated: updated, errors: errors };
   });
 }
 
 /**
  * 複数行まとめて、同じ付帯商品（保険/Wifi/TAViCA/キャンサポ）に同じステータス（・数量・理由）を
- * 一括登録する。ステータスによって数量・理由の扱いが変わる（他の編集APIと同じ規則）。
- * ・×（失注）：数量は0固定、理由を保存
- * ・〇（NB付帯）／☆（PUSH成約）：数量に bulkQty を保存（未入力なら空欄のまま。理由は空にする）
- * ・それ以外（－／△）：数量・理由とも空にする
+ * 一括登録する。ステータスによる数量・理由の扱いは applyAncillaryInMemory_ を参照。
  */
 function bulkSetAncillaryStatus(rowIndexes, itemKey, status, bulkQty, reason) {
   var item = ANCILLARY_ITEM_BY_KEY[itemKey];
   if (!item) throw new Error('付帯商品の指定が不正です。');
-  var normalizedQty = parseAncillaryQty_(bulkQty);
+  // 値そのものの誤り（不正な数量・ステータス）は、行ごとのエラーではなく全体のエラーとして先に返す。
+  normalizeAncillaryStatusInput_(status);
+  parseAncillaryQty_(bulkQty);
   return withScriptLock_(function () {
-  var ctx = getCurrentUserContext_();
-  var sheet = getDataSheet_();
+    var ctx = getCurrentUserContext_();
+    var sheet = getDataSheet_();
+    var snap = loadSheetForEdit_(sheet);
 
-  var updated = 0, errors = [];
-  (rowIndexes || []).forEach(function (rowIndexRaw) {
-    try {
-      assertRowEditable_(ctx, sheet, rowIndexRaw);
-      var rowIndex = Number(rowIndexRaw);
-      writeCell_(sheet, rowIndex, item.statusKey, status);
-      if (status === '×') {
-        writeCell_(sheet, rowIndex, item.qtyKey, 0);
-        writeCell_(sheet, rowIndex, item.reasonKey, String(reason || '').trim());
-      } else if (status === '〇' || status === '☆') {
-        writeCell_(sheet, rowIndex, item.qtyKey, normalizedQty);
-        writeCell_(sheet, rowIndex, item.reasonKey, null);
-      } else {
-        writeCell_(sheet, rowIndex, item.qtyKey, null);
-        writeCell_(sheet, rowIndex, item.reasonKey, null);
+    var updated = 0, errors = [];
+    (rowIndexes || []).forEach(function (rowIndexRaw) {
+      try {
+        var rowIndex = checkRowEditable_(ctx, snap, rowIndexRaw);
+        applyAncillaryInMemory_(snap, rowIndex, item, status, bulkQty, reason);
+        updated++;
+      } catch (e) {
+        errors.push({ rowIndex: rowIndexRaw, message: e.message });
       }
-      updated++;
-    } catch (e) {
-      errors.push({ rowIndex: rowIndexRaw, message: e.message });
-    }
-  });
-  return { ok: true, updated: updated, errors: errors };
+    });
+    flushEditedRows_(sheet, snap);
+    return { ok: true, updated: updated, errors: errors };
   });
 }
 
 /**
  * 「まとめて保存する」機能：予約データ一覧の画面上でまだサーバーへ送っていない複数のセル編集を、
- * 1回のサーバー呼び出しでまとめて反映する（他のリセール管理システムの「まとめて保存する」と同様、
- * 1項目ずつ即時保存ではなく、複数の変更をためておいて一括で保存する運用に対応するためのAPI）。
+ * 1回のサーバー呼び出しでまとめて反映する。
  * changes の各要素は次のいずれかの形：
  *   ・CHK日／メモ： { kind:'field', rowIndex, columnKey:'chkDate'|'memo', value }
  *   ・保険/Wifi/TAViCA/キャンサポ： { kind:'ancillary', rowIndex, itemKey, status, qty, reason }
- * 1件でも編集できない変更（他店舗・他エリアの行など）があってもエラーで全体を止めず、
- * 成功件数とエラー内容（該当rowIndexとメッセージ）を返す。
+ * 1件でも保存できない変更（他店舗・他エリアの行、不正な数量など）があってもエラーで全体を止めず、
+ * 成功件数とエラー内容を返す。エラーには、画面側でどの変更が失敗したかを特定できるよう
+ * rowIndex・kind・columnKey/itemKey を含める（失敗した変更だけを「未保存」のまま残すため）。
  */
 function batchUpdateCells(changes) {
   return withScriptLock_(function () {
-  var ctx = getCurrentUserContext_();
-  var sheet = getDataSheet_();
-  var updated = 0, errors = [];
+    var ctx = getCurrentUserContext_();
+    var sheet = getDataSheet_();
+    var snap = loadSheetForEdit_(sheet);
+    var updated = 0, errors = [];
 
-  (changes || []).forEach(function (change) {
-    try {
-      assertRowEditable_(ctx, sheet, change.rowIndex);
-      var rowIndex = Number(change.rowIndex);
-
-      if (change.kind === 'field') {
-        if (change.columnKey !== 'chkDate' && change.columnKey !== 'memo') {
-          throw new Error('この項目はまとめて保存できません。');
-        }
-        var col = ALL_COLUMNS[ALL_COLUMN_INDEX_BY_KEY[change.columnKey]];
-        writeCell_(sheet, rowIndex, change.columnKey, normalizeEditableInput_(col, change.value));
-      } else if (change.kind === 'ancillary') {
-        var item = ANCILLARY_ITEM_BY_KEY[change.itemKey];
-        if (!item) throw new Error('付帯商品の指定が不正です。');
-        var status = change.status;
-        writeCell_(sheet, rowIndex, item.statusKey, status);
-        if (status === '×') {
-          writeCell_(sheet, rowIndex, item.qtyKey, 0);
-          writeCell_(sheet, rowIndex, item.reasonKey, String(change.reason || '').trim());
-        } else if (status === '〇' || status === '☆') {
-          var qty = parseAncillaryQty_(change.qty);
-          writeCell_(sheet, rowIndex, item.qtyKey, qty);
-          writeCell_(sheet, rowIndex, item.reasonKey, null);
+    (changes || []).forEach(function (change) {
+      try {
+        var rowIndex = checkRowEditable_(ctx, snap, change.rowIndex);
+        if (change.kind === 'field') {
+          if (change.columnKey !== 'chkDate' && change.columnKey !== 'memo') {
+            throw new Error('この項目はまとめて保存できません。');
+          }
+          var col = ALL_COLUMNS[ALL_COLUMN_INDEX_BY_KEY[change.columnKey]];
+          setCellInMemory_(snap, rowIndex, change.columnKey, normalizeEditableInput_(col, change.value));
+        } else if (change.kind === 'ancillary') {
+          var item = ANCILLARY_ITEM_BY_KEY[change.itemKey];
+          if (!item) throw new Error('付帯商品の指定が不正です。');
+          applyAncillaryInMemory_(snap, rowIndex, item, change.status, change.qty, change.reason);
         } else {
-          writeCell_(sheet, rowIndex, item.qtyKey, null);
-          writeCell_(sheet, rowIndex, item.reasonKey, null);
+          throw new Error('不正な変更内容です。');
         }
-      } else {
-        throw new Error('不正な変更内容です。');
+        updated++;
+      } catch (e) {
+        errors.push({
+          rowIndex: change && change.rowIndex,
+          kind: change && change.kind,
+          columnKey: change && change.columnKey,
+          itemKey: change && change.itemKey,
+          message: e.message
+        });
       }
-      updated++;
-    } catch (e) {
-      errors.push({ rowIndex: change.rowIndex, message: e.message });
-    }
-  });
+    });
 
-  return { ok: true, updated: updated, errors: errors };
+    flushEditedRows_(sheet, snap);
+    return { ok: true, updated: updated, errors: errors };
   });
 }
 
-/** 編集項目の入力値を正規形（readAllRows_と同じ形）に変換する。 */
 /**
  * 保険/Wifi/TAViCA/キャンサポの数量を検証・正規化する。空欄はnull（未入力）として許可するが、
  * 数値として解釈できない値・負の値は拒否する（HTML側のinput type="number"は目安に過ぎず、
@@ -918,6 +1052,7 @@ function parseAncillaryQty_(value) {
   return Math.floor(n);
 }
 
+/** 編集項目の入力値を正規形（readAllRows_と同じ形）に変換する。 */
 function normalizeEditableInput_(col, value) {
   if (value === null || value === undefined) return null;
   var s = String(value).trim();
@@ -988,9 +1123,7 @@ function removeDuplicateRows() {
     return { removed: 0, totalRows: rows.length };
   }
 
-  var lastRow = sheet.getLastRow();
-  if (lastRow > 1) sheet.getRange(2, 1, lastRow - 1, ALL_COLUMNS.length).clearContent();
-  appendRecords_(sheet, deduped);
+  rewriteDataRows_(sheet, deduped);
 
   return { removed: removed, totalRows: deduped.length };
   });
@@ -1004,10 +1137,7 @@ function clearAllData(confirmText) {
   }
   return withScriptLock_(function () {
   var sheet = getDataSheet_();
-  var lastRow = sheet.getLastRow();
-  if (lastRow > 1) {
-    sheet.getRange(2, 1, lastRow - 1, ALL_COLUMNS.length).clearContent();
-  }
+  rewriteDataRows_(sheet, []);
   var props = PropertiesService.getDocumentProperties();
   props.deleteProperty('lastImportedAt');
   props.deleteProperty('lastImportedFile');
@@ -1032,6 +1162,7 @@ function clearAllData(confirmText) {
 
 var ARCHIVE_SPREADSHEET_ID_PROP_ = 'archiveSpreadsheetId';
 var ARCHIVE_LAST_RUN_PROP_ = 'lastArchivedAt';
+var ARCHIVE_MAX_CUTOFF_PROP_ = 'archiveMaxCutoff';
 var ARCHIVE_SPREADSHEET_NAME_ = APP_TITLE + '（アーカイブ）';
 // アーカイブ行をブラウザへ返すときのrowIndexに足すオフセット。予約データシートが現実的に
 // 到達しない大きさにしてあり、本体シートの行番号と絶対に衝突しないようにする
@@ -1167,12 +1298,17 @@ function archiveOldReservations(cutoffDate, confirmText) {
   var archiveSheet = archiveSs.getSheetByName(SHEET_NAME);
   appendRecords_(archiveSheet, toArchive);
 
-  var lastRow = sheet.getLastRow();
-  if (lastRow > 1) sheet.getRange(2, 1, lastRow - 1, ALL_COLUMNS.length).clearContent();
-  appendRecords_(sheet, toKeep);
+  // アーカイブ先への追記が終わってから本体を詰め直す。本体の書き戻しが途中で失敗しても、
+  // 移動対象の行はアーカイブ先と本体の両方に残るだけで、どちらからも消えることはない。
+  SpreadsheetApp.flush();
+  rewriteDataRows_(sheet, toKeep);
 
   var now = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd HH:mm');
   props.setProperty(ARCHIVE_LAST_RUN_PROP_, now);
+  // CSV再取込時に「アーカイブ済みの予約を本体へ再登録してしまう」のを防ぐ照合（importCsv）で使う、
+  // これまでに使った基準日のうち最も新しいもの。
+  var prevMaxCutoff = props.getProperty(ARCHIVE_MAX_CUTOFF_PROP_);
+  if (!prevMaxCutoff || cutoff > prevMaxCutoff) props.setProperty(ARCHIVE_MAX_CUTOFF_PROP_, cutoff);
 
   return {
     archived: toArchive.length,
@@ -1197,6 +1333,16 @@ function getOrCreateStaffSheet_() {
 /** スタッフ権限の一覧を返す（マスタ権限のみ）。 */
 function getStaffAccessList() {
   assertMaster_();
+  return listStaffAccess_();
+}
+
+/**
+ * スタッフ権限の一覧（権限確認なしの内部用）。追加・更新・削除の直後の一覧の返却に使う。
+ * 更新・削除で実行者が自分自身をマスタ権限から外した場合、getStaffAccessList()を呼ぶと
+ * その時点で権限確認に失敗し、保存は済んでいるのに画面には「マスタ権限のユーザーのみ実行できます」
+ * というエラーが表示されてしまうため、保存直後の一覧はこちらで返す。
+ */
+function listStaffAccess_() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(STAFF_SHEET_NAME);
   if (!sheet || sheet.getLastRow() < 2) return [];
   var values = sheet.getRange(2, 1, sheet.getLastRow() - 1, 5).getValues();
@@ -1226,15 +1372,43 @@ function validateStaffInput_(email, role) {
   }
 }
 
+/** スタッフ権限シートの全データ行を [email, name, office, area, role] の配列で返す（見出し行を除く）。 */
+function readStaffRows_(sheet) {
+  var lastRow = sheet.getLastRow();
+  return lastRow >= 2 ? sheet.getRange(2, 1, lastRow - 1, 5).getValues() : [];
+}
+
+/**
+ * 変更後のスタッフ権限シートの内容（rows）に、マスタ権限のアカウントが1件以上残るかを確認する。
+ * 同じGoogleアカウントの行が複数ある場合は、ログイン時の判定（getCurrentUserContext_）と同じく
+ * 一番下の行だけを有効として数える。0件になる操作は、誰も権限管理・データ管理を行えなくなる
+ * （スプレッドシートを直接編集する以外に復旧手段が無い）ため拒否する。
+ * また、シートが空の間は全員がマスタ権限扱いになる仕組み（初期セットアップ用）があるため、
+ * 最初の1件目にマスタ権限以外を登録すると、登録した本人もその瞬間に権限を失う。これも同じ確認で防ぐ。
+ */
+function assertMasterRemains_(rows, message) {
+  var latestRoleByEmail = {};
+  rows.forEach(function (r) {
+    var email = String(r[0] || '').trim().toLowerCase();
+    if (email) latestRoleByEmail[email] = String(r[4] || '').trim();
+  });
+  var hasMaster = Object.keys(latestRoleByEmail).some(function (e) { return latestRoleByEmail[e] === ROLE_MASTER; });
+  if (!hasMaster) {
+    throw new Error(message || 'この操作を行うと、マスタ権限のアカウントが1件も無くなり、誰も権限管理・データ管理を行えなくなります。先に別のアカウント（または自分自身）をマスタ権限で登録してください。');
+  }
+}
+
 /** スタッフ権限を1件追加する（マスタ権限のみ）。 */
 function addStaffAccess(email, name, office, area, role) {
   assertMaster_();
   validateStaffInput_(email, role);
   return withScriptLock_(function () {
   var sheet = getOrCreateStaffSheet_();
+  var newRow = [String(email).trim().toLowerCase(), name || '', office || '', area || '', role];
+  assertMasterRemains_(readStaffRows_(sheet).concat([newRow]));
   var rowIndex = sheet.getLastRow() + 1;
-  sheet.getRange(rowIndex, 1, 1, 5).setValues([[String(email).trim().toLowerCase(), name || '', office || '', area || '', role]]);
-  return getStaffAccessList();
+  sheet.getRange(rowIndex, 1, 1, 5).setValues([newRow]);
+  return listStaffAccess_();
   });
 }
 
@@ -1248,8 +1422,12 @@ function updateStaffAccess(rowIndex, email, name, office, area, role) {
   if (!rowIndex || rowIndex < 2 || rowIndex > sheet.getLastRow()) {
     throw new Error('対象の行が見つかりません。画面を再読込してください。');
   }
-  sheet.getRange(rowIndex, 1, 1, 5).setValues([[String(email).trim().toLowerCase(), name || '', office || '', area || '', role]]);
-  return getStaffAccessList();
+  var newRow = [String(email).trim().toLowerCase(), name || '', office || '', area || '', role];
+  var rowsAfter = readStaffRows_(sheet);
+  rowsAfter[rowIndex - 2] = newRow;
+  assertMasterRemains_(rowsAfter);
+  sheet.getRange(rowIndex, 1, 1, 5).setValues([newRow]);
+  return listStaffAccess_();
   });
 }
 
@@ -1262,8 +1440,11 @@ function deleteStaffAccess(rowIndex) {
   if (!rowIndex || rowIndex < 2 || rowIndex > sheet.getLastRow()) {
     throw new Error('対象の行が見つかりません。画面を再読込してください。');
   }
+  var rowsAfter = readStaffRows_(sheet);
+  rowsAfter.splice(rowIndex - 2, 1);
+  assertMasterRemains_(rowsAfter);
   sheet.deleteRow(rowIndex);
-  return getStaffAccessList();
+  return listStaffAccess_();
   });
 }
 
@@ -1319,7 +1500,7 @@ function addStaffName(code, name) {
   return withScriptLock_(function () {
   var sheet = getOrCreateStaffNameSheet_();
   var rowIndex = sheet.getLastRow() + 1;
-  sheet.getRange(rowIndex, 1, 1, 2).setValues([[String(code).trim(), String(name).trim()]]);
+  sheet.getRange(rowIndex, 1, 1, 2).setNumberFormat('@').setValues([[String(code).trim(), String(name).trim()]]);
   return getStaffNameList();
   });
 }
@@ -1334,7 +1515,7 @@ function updateStaffName(rowIndex, code, name) {
   if (!rowIndex || rowIndex < 2 || rowIndex > sheet.getLastRow()) {
     throw new Error('対象の行が見つかりません。画面を再読込してください。');
   }
-  sheet.getRange(rowIndex, 1, 1, 2).setValues([[String(code).trim(), String(name).trim()]]);
+  sheet.getRange(rowIndex, 1, 1, 2).setNumberFormat('@').setValues([[String(code).trim(), String(name).trim()]]);
   return getStaffNameList();
   });
 }
@@ -1372,9 +1553,10 @@ function findStaffCsvColumnIndex_(headerRow, matchFn) {
 // 権限欄（role）は、「役割等級I」のように末尾に等級・号数が付く表記にも findRoleColumnIndex_ で対応する。
 var STAFF_CSV_OPTIONAL_COLUMN_CANDIDATES = {
   email: ['Googleアカウント', 'Google Workspaceアカウント', 'メールアドレス', 'メール', 'Eメール', 'E-mail', 'Email', 'mail', 'Gmailアドレス', 'Gmail アドレス', 'Gmail'],
-  office: ['所属店舗', '配属店舗', '店舗', '駐在所属名称'],
-  area: ['所属エリア', 'エリア', 'エリア名'],
-  role: ['権限', '権限区分', '役職', '役職名', '役割等級', '資格', '資格等級', '職位', '職位名', '等級', 'グレード', 'ポジション', '職階', 'Role', 'Grade', 'Position', 'Title']
+  office: ['所属店舗', '配属店舗', '店舗', '駐在所属名称', '店舗名', '店舗名称', '営業所', '営業所名', '営業所名称'],
+  area: ['所属エリア', 'エリア', 'エリア名', 'エリア名称', '所属エリア名称'],
+  role: ['権限', '権限区分', '役職', '役職名', '役職名称', '役割等級', '役割等級名', '役割等級名称', '資格', '資格名', '資格名称', '資格等級',
+    '職位', '職位名', '職位名称', '等級', '等級名', '等級名称', 'グレード', 'ポジション', '職階', 'Role', 'Grade', 'Position', 'Title']
 };
 
 /** 任意列の見出しラベルを、候補リストのいずれかと一致するか判定する（大文字小文字・前後の■等の記号は無視）。 */
@@ -1398,13 +1580,16 @@ function findRoleColumnIndex_(headerRow) {
   var exact = findOptionalStaffCsvColumn_(headerRow, STAFF_CSV_OPTIONAL_COLUMN_CANDIDATES.role);
   if (exact !== -1) return exact;
   var suffixPattern = /^[IVXivxⅠ-Ⅻ0-9A-Za-z]{0,3}$/;
+  // 「役職CD」「資格NO」「役割等級ID」のようなコード（番号）の列は、名称ではなく番号が入っているため
+  // 権限欄として扱わない（誤って検出すると、番号からは権限を判定できず全員が社員扱いになる）。
+  var codeSuffixPattern = /^(cd|no|id|nr|code)$/i;
   for (var c = 0; c < headerRow.length; c++) {
     var label = normalizeStaffCsvHeaderLabel_(headerRow[c]).replace(/^[■●◆□]+/, '').trim();
     for (var i = 0; i < STAFF_CSV_OPTIONAL_COLUMN_CANDIDATES.role.length; i++) {
       var base = STAFF_CSV_OPTIONAL_COLUMN_CANDIDATES.role[i];
       if (label.indexOf(base) === 0) {
         var suffix = label.slice(base.length).trim();
-        if (suffix && suffixPattern.test(suffix)) return c;
+        if (suffix && suffixPattern.test(suffix) && !codeSuffixPattern.test(suffix.normalize('NFKC'))) return c;
       }
     }
   }
@@ -1575,8 +1760,10 @@ function importStaffNameCsv(csvText, fileName) {
     if (rowIsBlank) { skipped++; continue; }
     var code = String(row[headerInfo.codeIdx] || '').trim();
     var name = String(row[headerInfo.nameIdx] || '').trim();
-    if (!code || !name) { skipped++; continue; }
-    csvMap[code] = name;
+    if (!name) { skipped++; continue; }
+    // 担当者NOが無い行（内勤・管理職など営業日報に担当者として出てこない人）は、担当者マスタには
+    // 登録できないが、Googleアカウントの列があればスタッフ権限への登録は行う。
+    if (code) csvMap[code] = name; else skipped++;
 
     if (accountsDetected) {
       var email = String(row[headerInfo.emailIdx] || '').trim().toLowerCase();
@@ -1590,6 +1777,14 @@ function importStaffNameCsv(csvText, fileName) {
         roleRaw: headerInfo.roleIdx !== -1 ? String(row[headerInfo.roleIdx] || '').trim() : ''
       };
     }
+  }
+
+  // スタッフ権限シートが空（＝全員がマスタ権限扱いの初期状態）のまま取り込むと、取り込んだ全員が
+  // 社員／所長・チーフ／ALで登録された時点で初期状態が終わり、マスタ権限が誰もいなくなる。
+  if (accountsDetected && Object.keys(csvAccounts).length > 0) {
+    assertMasterRemains_(readStaffRows_(getOrCreateStaffSheet_()),
+      'マスタ権限のアカウントがまだ登録されていません。このまま人事データを取り込むと、取り込んだ全員が社員等の権限で登録され、' +
+      'マスタ権限を持つ人が誰もいなくなります。先に「権限管理（スタッフ権限）」で自分自身をマスタ権限として登録してから取り込んでください。');
   }
 
   var sheet = getOrCreateStaffNameSheet_();
@@ -1642,13 +1837,20 @@ function importStaffNameCsv(csvText, fileName) {
           nextRole = mappedExisting.role;
         }
         var roleChanged = nextRole !== existing.role;
-        var affiliationChanged = existing.office !== acc.office || existing.area !== acc.area;
+        // CSVに所属店舗・所属エリアの列が無い、またはその行だけ空欄の場合は、既存の所属をそのまま使う
+        // （空欄で上書きすると「所属が空欄に異動した」扱いになり、本人が自店舗・自エリアのデータを
+        // 1件も見られなくなるため。権限欄が空欄の場合に既存の権限を維持するのと同じ考え方）。
+        var nextOffice = acc.office || existing.office;
+        var nextArea = acc.area || existing.area;
+        // 「717:イーアスつくば」と「イーアスつくば」のような、先頭の番号の有無だけの違いは異動とみなさない。
+        var affiliationChanged = affiliationKey_(existing.office) !== affiliationKey_(nextOffice) ||
+          affiliationKey_(existing.area) !== affiliationKey_(nextArea);
 
         if (affiliationChanged) {
           // 所属（所属店舗・所属エリア）が変わった場合は、既存の行は一切変更せずそのまま残し、
           // 新しい行を追加する（過去の所属履歴を失わないため）。権限は上記で同期した結果を引き継ぐ。
           // ログイン時の権限判定は、同じGoogleアカウントの行が複数あれば一番下（最新）の行を使う。
-          accountRowsToAppend.push([acc.email, acc.name, acc.office, acc.area, nextRole]);
+          accountRowsToAppend.push([acc.email, acc.name, nextOffice, nextArea, nextRole]);
           accountsAffiliationChanged++;
           if (roleChanged) accountsRoleSynced++;
         } else {

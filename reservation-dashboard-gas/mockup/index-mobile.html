@@ -204,6 +204,7 @@ select[multiple]{height:88px; font-size:13px;}
 
 <div id="toast-container" class="toast-container"></div>
 
+<div style="background:#fffbeb; border-bottom:1px solid #fcd34d; color:#92400e; font-size:12px; padding:6px 12px; text-align:center;">このモックアップは画面イメージ確認用の旧版です。表示期間の切り替え・データアーカイブ・「未保存の変更」の確認など、本体アプリに後から追加した機能は反映されていません。実際の動作は本体アプリと manual.html をご確認ください。</div>
 <header>
   <div class="header-inner">
     <div class="header-top">
@@ -2017,7 +2018,7 @@ function finishStaffNameImportDemo(){
     if (accountsMasterDowngraded > 0){
       lines.push('<p style="color:var(--amber-700);">⚠ ' + formatNumber(accountsMasterDowngraded) + ' 件はCSVの権限欄が「マスタ権限」相当でしたが、安全のため「社員」として登録しました。必要な場合は「権限管理（スタッフ権限）」から手動で変更してください。</p>');
     }
-    lines.push('<p class="muted">既存のGoogleアカウントは氏名のみ更新します。所属が変わった場合は既存行を変更せず新しい行を追加し、権限はどちらの場合も変更していません。</p>');
+    lines.push('<p class="muted">既存のGoogleアカウントは氏名を更新し、権限（社員／所長・チーフ／AL）はCSVの権限欄に同期します（マスタ権限と、権限欄が空欄の行は変更しません）。所属が変わった場合は既存行を変更せず新しい行を追加します。</p>');
   } else {
     lines.push('<p class="muted">CSVにGoogleアカウント（メールアドレス）の列が見つからなかったため、スタッフ権限への登録は行っていません。</p>');
   }
