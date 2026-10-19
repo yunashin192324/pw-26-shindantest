@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>3分で、理想の結婚式場が見つかります。| 結婚式場診断</title>
+<meta name="description" content="質問に答えるだけで、お二人の希望に合う結婚式場を、おすすめの理由とあわせてご提案する診断コンテンツです。">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="grain" aria-hidden="true"></div>
+
+<header class="site-header" id="siteHeader">
+  <span class="header-logo">HIS WEDDING</span>
+  <a class="header-link" id="header-link" href="#" target="_blank" rel="noopener" hidden><span id="header-link-label"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg></a>
+</header>
+
+<main>
+
+<!-- START -->
+<section class="screen active anim-up" id="screen-start" aria-labelledby="start-title">
+  <div class="scene">
+    <div class="scene-bg" id="bg-start" data-tone="0"></div>
+    <div class="scene-veil"></div>
+    <div class="scene-content">
+      <span class="hero-eyebrow">WEDDING VENUE DIAGNOSIS</span>
+      <h1 class="hero-title" id="start-title">
+        <span class="mask-wrap"><span class="reveal-word">3分で、</span></span><br>
+        <span class="mask-wrap"><span class="reveal-word">理想の<em>式場</em>が見つかります。</span></span>
+      </h1>
+      <p class="hero-sub">いくつかの質問に答えるだけで、<br>お二人の希望に合う結婚式場を、<br>おすすめの理由とあわせてご提案します。</p>
+      <div class="hero-pills"><span class="hero-pill">約3分</span><span class="hero-pill" id="pill-count">掲載式場</span><span class="hero-pill">理由つきで提案</span></div>
+      <div class="hero-cta-wrap">
+        <button type="button" class="btn-cinema" id="start-btn"><span>はじめる</span></button>
+        <p class="hero-hint">tap to begin</p>
+      </div>
+      <div class="data-error" id="data-error" role="alert" hidden></div>
+    </div>
+  </div>
+</section>
+
+<!-- QUESTION -->
+<section class="screen" id="screen-q" aria-live="polite">
+  <div class="scene">
+    <div class="scene-bg" id="bg-q" data-tone="1"></div>
+    <div class="scene-veil"></div>
+    <div class="scene-content">
+      <div class="q-wrap">
+        <div class="progress">
+          <div class="progress-top"><span class="progress-step" id="q-step">QUESTION</span><span class="progress-frac" id="q-frac">1 / 7</span></div>
+          <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="q-progress"><div class="progress-fill" id="q-bar" style="width:0%"><div class="progress-dot"></div></div></div>
+        </div>
+        <span class="q-label" id="q-section"></span>
+        <h2 class="q-title" id="q-title">&nbsp;</h2>
+        <p class="q-sub" id="q-sub">&nbsp;</p>
+        <div class="opts-single" id="opts-single" role="radiogroup"></div>
+        <div class="opts-multi" id="opts-multi" role="group" hidden></div>
+        <p class="multi-count" id="multi-count" hidden></p>
+        <div class="nav-wrap">
+          <button type="button" class="btn-next" id="next-btn" disabled hidden>次へ</button>
+          <div class="nav-links">
+            <button type="button" class="btn-text" id="back-btn">← 前に戻る</button>
+            <button type="button" class="btn-text" id="reset-btn">最初からやり直す</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- LOADING -->
+<section class="screen" id="screen-loading" aria-live="polite">
+  <div class="scene">
+    <div class="scene-bg" id="bg-loading" data-tone="5"></div>
+    <div class="scene-veil"></div>
+    <div class="scene-content">
+      <div class="loading-outer">
+        <span class="loading-kicker">SEARCHING YOUR VENUE...</span>
+        <p class="loading-title">お二人の希望に合う<br>式場を探しています</p>
+        <div class="loading-ring" aria-hidden="true"></div>
+        <div class="loading-slot" id="loading-slot" aria-hidden="true"><div class="loading-slot-inner" id="slot-inner"></div></div>
+        <div class="loading-final" id="loading-final"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- RESULT -->
+<section class="screen result-page" id="screen-result">
+  <div class="result-hero">
+    <div class="scene-bg" id="bg-result" data-tone="6"></div>
+    <div class="scene-veil"></div>
+    <div class="result-hero-content">
+      <span class="result-kicker" id="res-kicker">お二人におすすめの式場は</span>
+      <h2 class="result-name" id="res-name">&nbsp;</h2>
+      <div class="result-badges" id="res-badges"></div>
+    </div>
+  </div>
+
+  <div class="result-body">
+    <div class="summary-bar" id="res-summary"></div>
+    <div id="res-notice"></div>
+    <div id="res-main"></div>
+    <div id="res-alt-wrap"></div>
+    <div id="res-trace"></div>
+    <div id="res-consult"></div>
+
+    <div class="share-row" id="share-row">
+      <button type="button" class="share-btn sb-x" id="share-x"><svg fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>Xでシェア</button>
+      <button type="button" class="share-btn sb-line" id="share-line">LINEで送る</button>
+      <button type="button" class="share-btn sb-copy" id="share-copy">URLをコピー</button>
+    </div>
+    <div class="end-actions">
+      <button type="button" class="btn-outline" id="review-btn">回答を見直す</button>
+      <button type="button" class="btn-solid" id="restart-btn">もう一度診断する</button>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- VENUE DETAIL -->
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="modal-box" id="modal-box"></div>
+</div>
+
+<div id="toast" role="status"></div>
+
+<script src="js/data/venues.js"></script>
+<script src="js/data/venue-extras.js"></script>
+<script src="js/data/questions.js"></script>
+<script src="js/config.js"></script>
+<script src="js/logic.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

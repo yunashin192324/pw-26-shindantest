@@ -1,0 +1,1972 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>3分で、理想の結婚式場が見つかります。| 結婚式場診断</title>
+<meta name="description" content="質問に答えるだけで、お二人の希望に合う結婚式場を、おすすめの理由とあわせてご提案する診断コンテンツです。">
+<style>
+/* 結婚式場診断 — 既存のフォトウェディング診断（wedding-destination-quiz.html）のデザインを踏襲 */
+:root{
+  --warm-white:#faf7f2;--ivory:#f3ecdf;--stone:#e7ded0;
+  --gold:#cba876;--gold-lt:#f1e6d2;--gold-dk:#9a7543;
+  --charcoal:#100e0b;--ink:#1c1a16;--ink-2:#4f4a40;--ink-3:#7a7366;
+  --line-soft:rgba(28,26,22,.12);--white:#fff;--off-white:#fbf9f5;
+  --ok:#3f7448;--ok-bg:#eef6ec;--ok-line:#cfe3c9;
+  --serif:"Noto Serif JP","Hiragino Mincho ProN","Hiragino Mincho Pro","Yu Mincho","YuMincho","BIZ UDPMincho","MS PMincho",serif;
+  --display:"Cormorant Garamond","Didot","Bodoni 72","Times New Roman",Georgia,serif;
+  --ease:cubic-bezier(.16,1,.3,1);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--charcoal);font-family:var(--serif);color:var(--ink);-webkit-font-smoothing:antialiased;overflow-x:hidden;line-height:1.6}
+img{max-width:100%;display:block}
+button{font:inherit;color:inherit}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+[hidden]{display:none!important}
+
+.grain{position:fixed;inset:0;z-index:998;pointer-events:none;opacity:.035;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>")}
+
+/* HEADER */
+.site-header{position:fixed;top:0;left:0;right:0;z-index:200;display:flex;align-items:center;justify-content:space-between;
+  padding:22px 40px;transition:padding .4s var(--ease),background .4s var(--ease)}
+.site-header.scrolled{padding:14px 40px;background:rgba(16,14,11,.6);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+.header-logo{font-family:var(--display);font-style:italic;font-weight:500;font-size:1.05rem;letter-spacing:.22em;color:var(--warm-white);text-shadow:0 1px 12px rgba(0,0,0,.35)}
+.header-link{display:inline-flex;align-items:center;gap:8px;font-family:var(--display);font-style:italic;font-size:.8rem;letter-spacing:.18em;
+  color:var(--warm-white);text-decoration:none;border-bottom:1px solid rgba(255,255,255,.4);padding:8px 0 3px;transition:color .25s,border-color .25s}
+.header-link:hover{color:var(--gold);border-color:var(--gold)}
+.header-link svg{width:12px;height:12px}
+
+/* SCREENS */
+.screen{display:none}
+.screen.active{display:block}
+@keyframes cineIn{0%{opacity:0;transform:scale(1.04);filter:blur(14px)}60%{filter:blur(2px)}100%{opacity:1;transform:none;filter:none}}
+@keyframes slideR{from{opacity:0;transform:translateX(36px)}to{opacity:1;transform:none}}
+@keyframes slideL{from{opacity:0;transform:translateX(-36px)}to{opacity:1;transform:none}}
+@keyframes revealUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
+@keyframes wordUp{from{transform:translateY(112%)}to{transform:none}}
+.anim-up{animation:cineIn 1s var(--ease) both}
+.anim-right .scene-content{animation:slideR .6s var(--ease) both}
+.anim-left .scene-content{animation:slideL .6s var(--ease) both}
+.mask-wrap{display:inline-block;overflow:hidden;vertical-align:top}
+.reveal-word{display:inline-block}
+.anim-up .reveal-word{animation:wordUp .95s var(--ease) both}
+
+/* SCENE (full-bleed background) */
+.scene{position:relative;min-height:100vh;min-height:100dvh;width:100%;overflow:hidden;display:flex;align-items:center;justify-content:center;padding:110px 32px 64px}
+.scene-bg{position:absolute;inset:0;z-index:0;overflow:hidden;background:#13201f}
+.scene-bg::before,.scene-bg::after{content:'';position:absolute;border-radius:50%;filter:blur(60px);opacity:.55;pointer-events:none}
+.scene-bg::before{width:70vmax;height:70vmax;left:-20vmax;top:-25vmax;background:radial-gradient(circle,rgba(203,168,118,.45),transparent 65%);animation:glow 18s ease-in-out infinite alternate}
+.scene-bg::after{width:60vmax;height:60vmax;right:-22vmax;bottom:-25vmax;background:radial-gradient(circle,rgba(120,170,165,.35),transparent 65%);animation:glow 22s ease-in-out infinite alternate-reverse}
+@keyframes glow{from{transform:translate(0,0)}to{transform:translate(6vmax,4vmax)}}
+.scene-bg[data-tone="0"]{background:linear-gradient(160deg,#1d3a3a 0%,#0f1716 55%,#1a140d 100%)}
+.scene-bg[data-tone="1"]{background:linear-gradient(160deg,#20333d 0%,#101518 60%,#1b150f 100%)}
+.scene-bg[data-tone="2"]{background:linear-gradient(160deg,#173b42 0%,#0e1a1c 60%,#16120c 100%)}
+.scene-bg[data-tone="3"]{background:linear-gradient(160deg,#2f2a3a 0%,#141218 60%,#1b150f 100%)}
+.scene-bg[data-tone="4"]{background:linear-gradient(160deg,#3a2f25 0%,#161210 60%,#10171a 100%)}
+.scene-bg[data-tone="5"]{background:linear-gradient(160deg,#3a2730 0%,#171013 60%,#14130f 100%)}
+.scene-bg[data-tone="6"]{background:linear-gradient(160deg,#2e3a2b 0%,#121610 60%,#1b150f 100%)}
+.scene-bg img{position:absolute;inset:-5%;width:110%;height:110%;object-fit:cover;z-index:1;animation:kenburns 22s ease-in-out infinite alternate}
+@keyframes kenburns{from{transform:scale(1)}to{transform:scale(1.1) translate(-2%,-1%)}}
+.scene-veil{position:absolute;inset:0;z-index:1;background:linear-gradient(180deg,rgba(9,8,6,.45) 0%,rgba(9,8,6,.12) 35%,rgba(9,8,6,.3) 65%,rgba(9,8,6,.7) 100%)}
+.scene-content{position:relative;z-index:3;width:100%;max-width:640px;text-align:center;color:var(--warm-white)}
+
+/* START */
+.hero-eyebrow{display:inline-block;font-family:var(--display);font-style:italic;font-weight:500;font-size:.8rem;letter-spacing:.38em;color:var(--gold);margin-bottom:24px;animation:revealUp .9s var(--ease) .2s both}
+.hero-title{font-size:clamp(1.55rem,6.6vw,3.2rem);word-break:auto-phrase;font-weight:700;line-height:1.5;letter-spacing:.03em;margin-bottom:24px}
+.hero-title .mask-wrap:nth-of-type(2) .reveal-word{animation-delay:.15s}
+.hero-title em{font-style:normal;color:var(--gold)}
+.hero-sub{word-break:auto-phrase;font-size:1rem;color:rgba(250,247,242,.85);line-height:2;letter-spacing:.04em;max-width:440px;margin:0 auto 34px;animation:revealUp .9s var(--ease) .6s both}
+.hero-pills{display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-bottom:40px;animation:revealUp .9s var(--ease) .75s both}
+.hero-pill{font-size:.84rem;letter-spacing:.12em;color:var(--gold);border-bottom:1px solid rgba(203,168,118,.55);padding-bottom:3px}
+.hero-cta-wrap{display:flex;flex-direction:column;align-items:center;animation:revealUp .9s var(--ease) .9s both}
+.hero-hint{font-family:var(--display);font-style:italic;font-size:.78rem;color:rgba(255,255,255,.6);letter-spacing:.22em;margin-top:16px}
+.data-error{margin:24px auto 0;max-width:460px;background:rgba(160,60,50,.85);color:#fff;border-radius:14px;padding:16px 18px;font-size:.88rem;line-height:1.8;text-align:left}
+
+/* ROUND BUTTONS */
+.btn-cinema,.btn-next{display:flex;align-items:center;justify-content:center;gap:8px;border-radius:50%;flex-shrink:0;
+  background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.5);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  color:var(--warm-white);font-family:var(--serif);font-weight:700;letter-spacing:.14em;cursor:pointer;
+  transition:transform .45s var(--ease),box-shadow .45s var(--ease),background .35s;box-shadow:0 22px 50px -18px rgba(0,0,0,.5)}
+.btn-cinema{width:164px;height:164px;font-size:1rem}
+.btn-next{width:128px;height:128px;font-size:.95rem}
+.btn-cinema::after,.btn-next::after{content:'→';letter-spacing:0;transition:transform .3s var(--ease)}
+.btn-cinema:hover,.btn-next:not(:disabled):hover{transform:scale(1.05);background:rgba(255,255,255,.22);box-shadow:0 26px 58px -14px rgba(203,168,118,.5)}
+.btn-cinema:hover::after,.btn-next:not(:disabled):hover::after{transform:translateX(4px)}
+.btn-cinema:active,.btn-next:not(:disabled):active{transform:scale(.97)}
+.btn-cinema:disabled{opacity:.4;cursor:not-allowed}
+.btn-next:disabled{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.2);color:rgba(255,255,255,.4);cursor:not-allowed;box-shadow:none}
+
+/* QUESTION */
+.q-wrap{width:100%;max-width:600px}
+.progress{margin:0 auto 26px;max-width:260px}
+.progress-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;font-family:var(--display);font-style:italic;color:var(--gold)}
+.progress-step{font-size:.82rem;letter-spacing:.24em}
+.progress-frac{font-size:.95rem;letter-spacing:.08em;color:rgba(250,247,242,.85)}
+.progress-track{height:2px;background:rgba(255,255,255,.22);position:relative}
+.progress-fill{height:100%;background:var(--gold);transition:width .8s var(--ease);position:relative}
+.progress-dot{position:absolute;right:-4px;top:-3px;width:8px;height:8px;background:var(--charcoal);border:1.5px solid var(--gold);border-radius:50%}
+.q-label{display:block;margin-bottom:12px;font-family:var(--display);font-style:italic;font-size:.8rem;letter-spacing:.3em;color:var(--gold)}
+.q-title{word-break:auto-phrase;font-size:clamp(1.25rem,3.6vw,1.75rem);font-weight:700;line-height:1.6;letter-spacing:.02em;margin-bottom:10px}
+.q-sub{word-break:auto-phrase;font-size:.92rem;color:rgba(250,247,242,.8);line-height:1.85;margin-bottom:28px;letter-spacing:.02em}
+
+.opts-single{display:flex;flex-direction:column;border-top:1px solid rgba(255,255,255,.24);text-align:left}
+.opt{display:flex;align-items:center;width:100%;min-height:64px;background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,.24);
+  padding:0;cursor:pointer;text-align:left;color:var(--warm-white);transition:background .3s;position:relative;overflow:hidden;animation:revealUp .55s var(--ease) both}
+@media(hover:hover){.opt:hover{background:rgba(255,255,255,.06)}}
+.opt.selected{background:rgba(203,168,118,.14)}
+.opt-inner{display:flex;align-items:center;justify-content:space-between;width:100%;padding:18px 16px 18px 8px;gap:16px;transition:transform .35s var(--ease)}
+.opt.selected .opt-inner{transform:translateX(8px)}
+@media(hover:hover){.opt:hover .opt-inner{transform:translateX(8px)}}
+.opt-texts{flex:1}
+.opt-main{display:block;font-size:1.02rem;font-weight:700;line-height:1.5;letter-spacing:.03em;transition:color .3s}
+.opt.selected .opt-main{color:var(--gold)}
+.opt-sub-text{display:block;font-size:.84rem;color:rgba(250,247,242,.66);line-height:1.5;margin-top:3px}
+.opt-radio{width:22px;height:22px;border:1.5px solid rgba(255,255,255,.5);border-radius:50%;flex-shrink:0;position:relative}
+.opt.selected .opt-radio{border-color:var(--gold)}
+.opt.selected .opt-radio::after{content:'';position:absolute;inset:5px;background:var(--gold);border-radius:50%;animation:pop .18s var(--ease)}
+@keyframes pop{from{transform:scale(0)}to{transform:scale(1)}}
+.ripple{position:absolute;border-radius:50%;background:rgba(203,168,118,.3);transform:scale(0);animation:ripple .6s linear;pointer-events:none}
+@keyframes ripple{to{transform:scale(4);opacity:0}}
+
+.opts-multi{display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
+.opt-multi{display:flex;align-items:center;gap:10px;min-height:52px;background:rgba(0,0,0,.12);border:1px solid rgba(255,255,255,.4);border-radius:999px;
+  padding:12px 20px;cursor:pointer;color:var(--warm-white);text-align:left;transition:background .3s,border-color .3s,transform .3s var(--ease);animation:revealUp .5s var(--ease) both}
+.opt-multi:hover{transform:translateY(-2px);background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.7)}
+.opt-multi.selected{background:rgba(203,168,118,.26);border-color:var(--gold)}
+.chk{width:20px;height:20px;border:1.5px solid rgba(255,255,255,.6);border-radius:5px;flex-shrink:0;position:relative}
+.opt-multi.selected .chk{background:var(--gold);border-color:var(--gold)}
+.opt-multi.selected .chk::after{content:'';position:absolute;left:6px;top:2px;width:5px;height:10px;border:2px solid var(--charcoal);border-top:none;border-left:none;transform:rotate(45deg)}
+.opt-multi-text{font-size:.95rem;letter-spacing:.03em;line-height:1.5}
+.opt-multi.selected .opt-multi-text{color:var(--gold-lt);font-weight:700}
+.multi-count{margin-top:16px;font-size:.84rem;color:rgba(250,247,242,.75);min-height:1.4em}
+
+.nav-wrap{margin-top:34px;display:flex;flex-direction:column;align-items:center;gap:18px}
+.nav-links{display:flex;gap:28px;justify-content:center;flex-wrap:wrap}
+.btn-text{background:none;border:none;font-size:.9rem;color:rgba(255,255,255,.75);letter-spacing:.08em;cursor:pointer;
+  border-bottom:1px solid rgba(255,255,255,.35);padding:10px 2px 3px;min-height:44px;transition:color .2s,border-color .2s}
+.btn-text:hover{color:var(--gold);border-color:var(--gold)}
+
+/* LOADING */
+.loading-outer{width:100%;max-width:520px}
+.loading-kicker{font-family:var(--display);font-style:italic;font-size:.8rem;letter-spacing:.32em;color:var(--gold);display:block;margin-bottom:26px}
+.loading-title{font-size:1.15rem;font-weight:600;line-height:1.95;letter-spacing:.06em;margin-bottom:40px}
+.loading-ring{width:46px;height:46px;border:1.5px solid rgba(255,255,255,.25);border-top-color:var(--gold);border-radius:50%;animation:spin 1.1s linear infinite;margin:0 auto 34px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-slot{height:64px;overflow:hidden}
+.loading-slot-inner{display:flex;flex-direction:column;transition:transform .12s linear}
+.loading-slot-item{height:64px;display:flex;align-items:center;justify-content:center;font-size:1.15rem;font-weight:600;letter-spacing:.06em;color:var(--gold);padding:0 10px;text-align:center;line-height:1.4}
+.loading-final{display:none;font-size:clamp(1.3rem,4.5vw,1.9rem);font-weight:700;letter-spacing:.06em;color:var(--gold);line-height:1.5;
+  opacity:0;transform:translateY(10px) scale(.95);transition:opacity .8s var(--ease),transform .8s var(--ease);text-shadow:0 0 40px rgba(203,168,118,.4)}
+.loading-final.visible{opacity:1;transform:none}
+
+/* RESULT */
+.result-hero{position:relative;min-height:72vh;min-height:72dvh;display:flex;align-items:flex-end;justify-content:center;padding:130px 32px 110px;text-align:center;overflow:hidden}
+.result-hero-content{position:relative;z-index:3;color:var(--warm-white);max-width:760px}
+.result-kicker{font-family:var(--display);font-style:italic;font-size:.8rem;letter-spacing:.3em;color:var(--gold);display:block;margin-bottom:14px}
+.result-name{font-size:clamp(1.7rem,6vw,3rem);font-weight:700;letter-spacing:.04em;line-height:1.4;margin-bottom:14px;word-break:auto-phrase}
+.result-badges{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.result-badge{font-size:.84rem;letter-spacing:.08em;border:1px solid rgba(203,168,118,.7);color:var(--gold-lt);border-radius:999px;padding:5px 14px;background:rgba(0,0,0,.15)}
+
+.result-body{max-width:780px;margin:0 auto;padding:0 32px 90px;background:var(--warm-white);position:relative;z-index:2}
+.result-hero::after{content:'';position:absolute;left:0;right:0;bottom:0;height:90px;z-index:2;background:linear-gradient(180deg,transparent,var(--warm-white));pointer-events:none}
+.result-page{background:var(--warm-white)}
+
+.section-title{display:flex;align-items:center;gap:14px;margin:40px 0 18px}
+.section-title::before,.section-title::after{content:'';flex:1;height:1px;background:var(--line-soft)}
+.section-title span{font-size:.92rem;font-weight:700;letter-spacing:.14em;color:var(--ink-2);white-space:nowrap}
+
+.summary-bar{display:flex;flex-wrap:wrap;gap:8px;padding:32px 0 22px;justify-content:center;border-bottom:1px solid var(--line-soft)}
+.summary-label{width:100%;text-align:center;font-size:.84rem;color:var(--ink-3);letter-spacing:.1em;margin-bottom:4px}
+.summary-tag{font-size:.84rem;color:var(--ink-2);border:1px solid var(--line-soft);background:var(--off-white);border-radius:999px;padding:6px 14px;letter-spacing:.04em}
+.summary-tag.is-priority{border-color:var(--gold);color:var(--gold-dk);background:var(--gold-lt);font-weight:700}
+
+.notice{margin:24px 0 0;padding:18px 20px;background:var(--gold-lt);border-radius:14px;font-size:.92rem;line-height:1.9;color:var(--ink-2)}
+.notice strong{color:var(--ink)}
+
+.matching{padding-top:28px}
+.matching-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+.matching-label{font-family:var(--display);font-style:italic;font-size:.84rem;letter-spacing:.24em;color:var(--ink-3)}
+.matching-rate{font-family:var(--display);font-style:italic;font-size:1.9rem;font-weight:600;color:var(--gold-dk)}
+.matching-track{height:3px;background:var(--line-soft);border-radius:3px;overflow:hidden}
+.matching-fill{height:100%;width:0;background:linear-gradient(90deg,var(--gold-dk),var(--gold));transition:width 1.3s var(--ease)}
+.matching-caption{font-size:.84rem;color:var(--ink-3);margin-top:8px;text-align:right}
+
+.cond-table{width:100%;border-collapse:collapse;margin-top:22px;font-size:.92rem}
+.cond-table caption{text-align:left;font-size:.88rem;font-weight:700;color:var(--ink-2);letter-spacing:.06em;margin-bottom:8px}
+.cond-table th,.cond-table td{padding:12px 8px;border-bottom:1px solid var(--line-soft);text-align:left;vertical-align:middle}
+.cond-table th{font-weight:400;color:var(--ink-3);font-size:.8rem;letter-spacing:.08em}
+.cond-table td.res{text-align:right;white-space:nowrap;font-weight:700}
+.cond-yes{color:var(--ok)}
+.cond-no{color:var(--ink-3);font-weight:400!important}
+.prio-mark{display:inline-block;font-size:.72rem;font-weight:700;color:var(--gold-dk);border:1px solid var(--gold);border-radius:999px;padding:1px 8px;margin-left:6px;vertical-align:middle;white-space:nowrap}
+.cond-src{display:block;font-size:.78rem;color:var(--ink-3);margin-top:2px}
+
+.reason{margin:30px 0 0;padding:24px 22px;border-left:3px solid var(--gold);background:var(--off-white);border-radius:0 16px 16px 0}
+.reason-title{font-size:.95rem;font-weight:700;letter-spacing:.1em;margin-bottom:10px;color:var(--gold-dk)}
+.reason p{font-size:.95rem;line-height:2;color:var(--ink-2)}
+
+.venue-card{margin:30px 0 0;border-radius:22px;overflow:hidden;background:var(--white);box-shadow:0 28px 60px -30px rgba(28,26,22,.3);
+  opacity:0;transform:translateY(20px);transition:opacity .7s var(--ease),transform .7s var(--ease)}
+.venue-card.card-visible,.alt-card.card-visible{opacity:1;transform:none}
+.venue-card-band{position:relative;height:120px;background:linear-gradient(120deg,#1d3a3a,#3a2f25 70%,#cba876);overflow:hidden}
+.venue-card-band::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at 80% 20%,rgba(255,255,255,.25),transparent 55%)}
+.venue-card-band.has-img{height:auto;aspect-ratio:16/9}
+.venue-card-band img{width:100%;height:100%;object-fit:cover}
+.venue-card-rank{position:absolute;left:22px;bottom:16px;z-index:2;font-family:var(--display);font-style:italic;font-size:1rem;letter-spacing:.2em;color:var(--warm-white);text-shadow:0 1px 10px rgba(0,0,0,.4)}
+.venue-card-body{padding:24px 24px 28px}
+.venue-card-title{font-size:1.25rem;font-weight:700;letter-spacing:.04em;line-height:1.5;margin-bottom:6px}
+.venue-card-meta{font-size:.86rem;color:var(--ink-3);margin-bottom:14px}
+.venue-card-desc{font-size:.92rem;color:var(--ink-2);line-height:1.9;margin-bottom:14px}
+.tag-label{display:block;font-size:.82rem;color:var(--ink-3);letter-spacing:.08em;margin-bottom:8px}
+.tags{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
+.tag{font-size:.82rem;color:var(--ink-2);border:1px solid var(--line-soft);border-radius:999px;padding:5px 12px;background:var(--off-white)}
+.tag.hit{color:var(--ok);border-color:var(--ok-line);background:var(--ok-bg);font-weight:700}
+.btn-row{display:flex;flex-direction:column;gap:10px}
+.btn-solid,.btn-outline{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:54px;border-radius:999px;padding:14px 18px;
+  font-size:.95rem;font-weight:700;letter-spacing:.12em;text-decoration:none;cursor:pointer;transition:background .3s,transform .3s var(--ease),border-color .3s}
+.btn-solid{background:var(--ink);color:var(--white);border:none}
+.btn-solid:hover{background:var(--gold-dk);transform:translateY(-2px)}
+.btn-outline{background:transparent;color:var(--ink);border:1px solid rgba(28,26,22,.3)}
+.btn-outline:hover{border-color:var(--gold);color:var(--gold-dk)}
+
+.alt-grid{display:grid;grid-template-columns:1fr;gap:14px}
+.alt-card{display:flex;flex-direction:column;text-align:left;width:100%;background:var(--white);border:1px solid var(--line-soft);border-radius:18px;padding:18px 18px 16px;cursor:pointer;
+  opacity:0;transform:translateY(16px);transition:opacity .6s var(--ease),transform .6s var(--ease),box-shadow .3s,border-color .3s}
+.alt-card:hover{border-color:var(--gold);box-shadow:0 20px 40px -24px rgba(28,26,22,.35)}
+.alt-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:6px}
+.alt-rank{font-family:var(--display);font-style:italic;font-size:.9rem;letter-spacing:.14em;color:var(--gold-dk);white-space:nowrap}
+.alt-pct{font-size:.84rem;color:var(--gold-dk);white-space:nowrap}
+.alt-name{font-size:1.02rem;font-weight:700;line-height:1.5;margin-bottom:8px}
+.alt-bar{height:3px;background:var(--line-soft);border-radius:3px;margin-bottom:10px;overflow:hidden}
+.alt-bar i{display:block;height:100%;background:var(--gold)}
+.alt-hits{font-size:.84rem;color:var(--ink-2);line-height:1.7}
+.alt-hits b{color:var(--ok);font-weight:700}
+.alt-more{margin-top:10px;font-size:.84rem;color:var(--ink-3);text-decoration:underline}
+
+.trace{margin-top:30px;border:1px solid var(--line-soft);border-radius:16px;background:var(--white)}
+.trace summary{cursor:pointer;padding:16px 18px;font-size:.92rem;font-weight:700;letter-spacing:.06em;color:var(--ink-2);list-style:none;min-height:52px}
+.trace summary::-webkit-details-marker{display:none}
+.trace summary::after{content:'＋';float:right;color:var(--gold-dk)}
+.trace[open] summary::after{content:'－'}
+.trace-body{padding:0 18px 18px;overflow-x:auto}
+.trace-note{font-size:.84rem;color:var(--ink-3);line-height:1.8;margin-bottom:12px}
+.trace-table{width:100%;border-collapse:collapse;font-size:.84rem;min-width:420px}
+.trace-table th,.trace-table td{padding:8px 6px;border-bottom:1px solid var(--line-soft);text-align:left;vertical-align:top}
+.trace-table th{color:var(--ink-3);font-weight:400;white-space:nowrap}
+.trace-table td.num{text-align:center;white-space:nowrap}
+.trace-table tr.zero td{color:var(--ink-3)}
+
+.consult-block{margin:40px 0 22px;background:var(--charcoal);border-radius:22px;padding:32px 26px;text-align:center}
+.consult-label{font-family:var(--display);font-style:italic;font-size:.8rem;letter-spacing:.3em;color:var(--gold);display:block;margin-bottom:12px}
+.consult-title{font-size:1.05rem;font-weight:600;color:var(--white);letter-spacing:.05em;line-height:1.8;margin-bottom:20px;white-space:pre-line}
+.consult-btn{display:flex;align-items:center;justify-content:center;width:100%;min-height:54px;border-radius:999px;padding:14px 18px;font-size:.92rem;font-weight:700;letter-spacing:.12em;text-decoration:none;margin-bottom:10px;transition:background .3s,transform .3s}
+.consult-btn.primary{background:var(--gold);color:var(--charcoal)}
+.consult-btn.primary:hover{background:var(--gold-lt);transform:translateY(-2px)}
+.consult-btn.secondary{border:1px solid rgba(255,255,255,.35);color:var(--white)}
+.consult-note{font-size:.8rem;color:rgba(255,255,255,.6);margin-top:12px;line-height:1.8}
+
+.share-row{display:flex;gap:10px;margin:0 0 14px}
+.share-btn{flex:1;display:flex;align-items:center;justify-content:center;gap:7px;min-height:52px;padding:12px 10px;border:none;border-radius:999px;cursor:pointer;font-size:.86rem;font-weight:700;letter-spacing:.06em;white-space:nowrap;transition:opacity .2s,transform .2s}
+.share-btn:hover{opacity:.85;transform:translateY(-2px)}
+.share-btn svg{width:14px;height:14px;flex-shrink:0}
+.sb-x{background:#111;color:#fff}
+.sb-line{background:#06C755;color:#fff}
+.sb-copy{background:var(--off-white);color:var(--ink);border:1px solid var(--line-soft)}
+.end-actions{display:flex;flex-direction:column;gap:10px}
+
+/* MODAL (venue detail) */
+.modal{position:fixed;inset:0;z-index:500;display:none;align-items:flex-end;justify-content:center;background:rgba(10,9,7,.6);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+.modal.open{display:flex;animation:fadeIn .3s ease both}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.modal-box{width:100%;max-width:640px;max-height:88vh;max-height:88dvh;overflow-y:auto;background:var(--warm-white);border-radius:22px 22px 0 0;padding:28px 22px calc(28px + env(safe-area-inset-bottom));animation:sheetUp .45s var(--ease) both}
+@keyframes sheetUp{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+.modal-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:6px}
+.modal-title{font-size:1.2rem;font-weight:700;line-height:1.5}
+.modal-close{flex-shrink:0;width:44px;height:44px;border-radius:50%;border:1px solid var(--line-soft);background:var(--white);cursor:pointer;font-size:1.2rem}
+.modal-sub{font-size:.84rem;color:var(--ink-3);margin-bottom:16px}
+.cat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px 14px;margin:8px 0 20px}
+.cat-item{display:flex;align-items:center;gap:8px;font-size:.88rem;padding:6px 0;border-bottom:1px dashed var(--line-soft)}
+.cat-item .mk{width:22px;text-align:center;font-weight:700}
+.cat-item.on .mk{color:var(--ok)}
+.cat-item.off{color:#a8a296}
+.cat-item.sel{font-weight:700}
+.extras dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:.9rem;margin-bottom:16px}
+.extras dt{color:var(--ink-3)}
+.modal-note{font-size:.8rem;color:var(--ink-3);line-height:1.8;margin-top:12px}
+
+#toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%) translateY(14px);background:var(--charcoal);color:var(--white);padding:12px 24px;border-radius:999px;font-size:.86rem;letter-spacing:.06em;opacity:0;transition:all .35s var(--ease);pointer-events:none;z-index:999;max-width:calc(100vw - 32px);text-align:center}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+@media(min-width:768px){
+  .alt-grid{grid-template-columns:repeat(2,1fr)}
+  .btn-row{flex-direction:row}
+  .end-actions{flex-direction:row}
+  .modal{align-items:center}
+  .modal-box{border-radius:22px;padding:32px 30px}
+}
+@media(max-width:600px){
+  .site-header{padding:16px 16px}
+  .site-header.scrolled{padding:12px 16px}
+  .header-logo{font-size:.92rem}
+  .header-link{font-size:.72rem;letter-spacing:.12em}
+  .scene{padding:92px 16px 56px}
+  .btn-cinema{width:140px;height:140px;font-size:.95rem}
+  .btn-next{width:112px;height:112px}
+  .q-title{font-size:1.2rem}
+  .opt-inner{padding:16px 6px}
+  .opt-multi{padding:12px 16px;width:100%}
+  .result-hero{padding:110px 16px 96px}
+  .result-body{padding:0 16px 70px}
+  .venue-card-body{padding:20px 18px 24px}
+  .share-row{flex-direction:column}
+  .cat-grid{grid-template-columns:1fr}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
+
+</style>
+</head>
+<body>
+
+<div class="grain" aria-hidden="true"></div>
+
+<header class="site-header" id="siteHeader">
+  <span class="header-logo">HIS WEDDING</span>
+  <a class="header-link" id="header-link" href="#" target="_blank" rel="noopener" hidden><span id="header-link-label"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg></a>
+</header>
+
+<main>
+
+<!-- START -->
+<section class="screen active anim-up" id="screen-start" aria-labelledby="start-title">
+  <div class="scene">
+    <div class="scene-bg" id="bg-start" data-tone="0"></div>
+    <div class="scene-veil"></div>
+    <div class="scene-content">
+      <span class="hero-eyebrow">WEDDING VENUE DIAGNOSIS</span>
+      <h1 class="hero-title" id="start-title">
+        <span class="mask-wrap"><span class="reveal-word">3分で、</span></span><br>
+        <span class="mask-wrap"><span class="reveal-word">理想の<em>式場</em>が見つかります。</span></span>
+      </h1>
+      <p class="hero-sub">いくつかの質問に答えるだけで、<br>お二人の希望に合う結婚式場を、<br>おすすめの理由とあわせてご提案します。</p>
+      <div class="hero-pills"><span class="hero-pill">約3分</span><span class="hero-pill" id="pill-count">掲載式場</span><span class="hero-pill">理由つきで提案</span></div>
+      <div class="hero-cta-wrap">
+        <button type="button" class="btn-cinema" id="start-btn"><span>はじめる</span></button>
+        <p class="hero-hint">tap to begin</p>
+      </div>
+      <div class="data-error" id="data-error" role="alert" hidden></div>
+    </div>
+  </div>
+</section>
+
+<!-- QUESTION -->
+<section class="screen" id="screen-q" aria-live="polite">
+  <div class="scene">
+    <div class="scene-bg" id="bg-q" data-tone="1"></div>
+    <div class="scene-veil"></div>
+    <div class="scene-content">
+      <div class="q-wrap">
+        <div class="progress">
+          <div class="progress-top"><span class="progress-step" id="q-step">QUESTION</span><span class="progress-frac" id="q-frac">1 / 7</span></div>
+          <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="q-progress"><div class="progress-fill" id="q-bar" style="width:0%"><div class="progress-dot"></div></div></div>
+        </div>
+        <span class="q-label" id="q-section"></span>
+        <h2 class="q-title" id="q-title">&nbsp;</h2>
+        <p class="q-sub" id="q-sub">&nbsp;</p>
+        <div class="opts-single" id="opts-single" role="radiogroup"></div>
+        <div class="opts-multi" id="opts-multi" role="group" hidden></div>
+        <p class="multi-count" id="multi-count" hidden></p>
+        <div class="nav-wrap">
+          <button type="button" class="btn-next" id="next-btn" disabled hidden>次へ</button>
+          <div class="nav-links">
+            <button type="button" class="btn-text" id="back-btn">← 前に戻る</button>
+            <button type="button" class="btn-text" id="reset-btn">最初からやり直す</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- LOADING -->
+<section class="screen" id="screen-loading" aria-live="polite">
+  <div class="scene">
+    <div class="scene-bg" id="bg-loading" data-tone="5"></div>
+    <div class="scene-veil"></div>
+    <div class="scene-content">
+      <div class="loading-outer">
+        <span class="loading-kicker">SEARCHING YOUR VENUE...</span>
+        <p class="loading-title">お二人の希望に合う<br>式場を探しています</p>
+        <div class="loading-ring" aria-hidden="true"></div>
+        <div class="loading-slot" id="loading-slot" aria-hidden="true"><div class="loading-slot-inner" id="slot-inner"></div></div>
+        <div class="loading-final" id="loading-final"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- RESULT -->
+<section class="screen result-page" id="screen-result">
+  <div class="result-hero">
+    <div class="scene-bg" id="bg-result" data-tone="6"></div>
+    <div class="scene-veil"></div>
+    <div class="result-hero-content">
+      <span class="result-kicker" id="res-kicker">お二人におすすめの式場は</span>
+      <h2 class="result-name" id="res-name">&nbsp;</h2>
+      <div class="result-badges" id="res-badges"></div>
+    </div>
+  </div>
+
+  <div class="result-body">
+    <div class="summary-bar" id="res-summary"></div>
+    <div id="res-notice"></div>
+    <div id="res-main"></div>
+    <div id="res-alt-wrap"></div>
+    <div id="res-trace"></div>
+    <div id="res-consult"></div>
+
+    <div class="share-row" id="share-row">
+      <button type="button" class="share-btn sb-x" id="share-x"><svg fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>Xでシェア</button>
+      <button type="button" class="share-btn sb-line" id="share-line">LINEで送る</button>
+      <button type="button" class="share-btn sb-copy" id="share-copy">URLをコピー</button>
+    </div>
+    <div class="end-actions">
+      <button type="button" class="btn-outline" id="review-btn">回答を見直す</button>
+      <button type="button" class="btn-solid" id="restart-btn">もう一度診断する</button>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- VENUE DETAIL -->
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="modal-box" id="modal-box"></div>
+</div>
+
+<div id="toast" role="status"></div>
+
+<script>
+/* 自動生成ファイル: tools/build_data.py により 診断.xlsx から生成。直接編集しないでください。
+   式場やカテゴリを変更する場合は Excel を修正し、スクリプトを再実行してください。 */
+(function (root) {
+  root.VENUE_DIAG = root.VENUE_DIAG || {};
+  root.VENUE_DIAG.DATA = /*__DATA_BEGIN__*/{
+ "source": {
+  "file": "診断.xlsx",
+  "venueSheet": "シート1",
+  "categorySheet": "シート2"
+ },
+ "categories": [
+  "ガーデンがある",
+  "海が見える",
+  "ビーチが目の前",
+  "教会・大聖堂",
+  "ステンドグラスがある",
+  "アットホーム",
+  "食事がおいしい",
+  "ホテル内",
+  "写真にこだわる",
+  "パーティ会場併設",
+  "フライト時間が短い",
+  "時差がない",
+  "自然豊か",
+  "水上ヴィラ又はヴィラ",
+  "世界遺産",
+  "子供と一緒",
+  "キャラクターと一緒",
+  "コスパ重視",
+  "衣裳重視"
+ ],
+ "venues": [
+  {
+   "id": "v01",
+   "row": 2,
+   "name": "プルメリアガーデン",
+   "categories": [
+    "ガーデンがある",
+    "海が見える",
+    "アットホーム",
+    "パーティ会場併設",
+    "自然豊か"
+   ]
+  },
+  {
+   "id": "v02",
+   "row": 3,
+   "name": "ザ・モアナチャペル",
+   "categories": [
+    "ガーデンがある",
+    "海が見える",
+    "ビーチが目の前",
+    "ホテル内",
+    "パーティ会場併設"
+   ]
+  },
+  {
+   "id": "v03",
+   "row": 4,
+   "name": "ザ・マカナチャペル",
+   "categories": [
+    "海が見える",
+    "ホテル内",
+    "パーティ会場併設",
+    "子供と一緒",
+    "コスパ重視"
+   ]
+  },
+  {
+   "id": "v04",
+   "row": 5,
+   "name": "ザ・テラス バイ・ザ・シー",
+   "categories": [
+    "海が見える",
+    "食事がおいしい",
+    "パーティ会場併設"
+   ]
+  },
+  {
+   "id": "v05",
+   "row": 6,
+   "name": "ザ・ダイヤモンドヘッド チャペル",
+   "categories": [
+    "海が見える",
+    "ホテル内",
+    "パーティ会場併設"
+   ]
+  },
+  {
+   "id": "v06",
+   "row": 7,
+   "name": "コオリナ・チャペル・プレイス・オブ・ジョイ",
+   "categories": [
+    "海が見える",
+    "ビーチが目の前",
+    "食事がおいしい",
+    "パーティ会場併設"
+   ]
+  },
+  {
+   "id": "v07",
+   "row": 8,
+   "name": "ザ・プライベート・ガーデン・アロハ・ケ･アクア",
+   "categories": [
+    "ガーデンがある",
+    "海が見える",
+    "ステンドグラスがある",
+    "アットホーム",
+    "パーティ会場併設",
+    "自然豊か"
+   ]
+  },
+  {
+   "id": "v08",
+   "row": 9,
+   "name": "アイネスヴィラノッツェ ワイキキレイア",
+   "categories": [
+    "ガーデンがある",
+    "ステンドグラスがある",
+    "アットホーム",
+    "食事がおいしい",
+    "パーティ会場併設",
+    "子供と一緒",
+    "コスパ重視"
+   ]
+  },
+  {
+   "id": "v09",
+   "row": 10,
+   "name": "セント・アンドリュース・カテドラル教会 大聖堂",
+   "categories": [
+    "ガーデンがある",
+    "教会・大聖堂",
+    "ステンドグラスがある"
+   ]
+  },
+  {
+   "id": "v10",
+   "row": 11,
+   "name": "ディズニー・フェアリーテール・ウエディング・アウラニ",
+   "categories": [
+    "ガーデンがある",
+    "海が見える",
+    "ビーチが目の前",
+    "アットホーム",
+    "ホテル内",
+    "パーティ会場併設",
+    "キャラクターと一緒"
+   ]
+  },
+  {
+   "id": "v11",
+   "row": 12,
+   "name": "キャルバリー・バイ・ザ・シー教会",
+   "categories": [
+    "ガーデンがある",
+    "海が見える",
+    "ビーチが目の前",
+    "教会・大聖堂",
+    "アットホーム"
+   ]
+  },
+  {
+   "id": "v12",
+   "row": 13,
+   "name": "ザ・サーフ ポハクプナ ビーチクラブ",
+   "categories": [
+    "ガーデンがある",
+    "海が見える",
+    "ビーチが目の前",
+    "アットホーム",
+    "パーティ会場併設"
+   ]
+  },
+  {
+   "id": "v13",
+   "row": 14,
+   "name": "ザ・カハラ ガーデン ウエディング",
+   "categories": [
+    "ガーデンがある",
+    "海が見える",
+    "ビーチが目の前",
+    "食事がおいしい",
+    "ホテル内",
+    "パーティ会場併設"
+   ]
+  },
+  {
+   "id": "v14",
+   "row": 15,
+   "name": "ハレクラニウェディング",
+   "categories": [
+    "ガーデンがある",
+    "海が見える",
+    "食事がおいしい",
+    "ホテル内",
+    "パーティ会場併設"
+   ]
+  },
+  {
+   "id": "v15",
+   "row": 16,
+   "name": "ザ・ギノザリゾート 美らの教会",
+   "categories": [
+    "ガーデンがある",
+    "海が見える",
+    "パーティ会場併設",
+    "フライト時間が短い",
+    "時差がない",
+    "子供と一緒"
+   ]
+  },
+  {
+   "id": "v16",
+   "row": 17,
+   "name": "アートグレイス オーシャンフロントガーデンチャペル沖縄",
+   "categories": [
+    "ガーデンがある",
+    "海が見える",
+    "食事がおいしい",
+    "ホテル内",
+    "パーティ会場併設",
+    "フライト時間が短い",
+    "時差がない",
+    "子供と一緒",
+    "コスパ重視"
+   ]
+  },
+  {
+   "id": "v17",
+   "row": 18,
+   "name": "サザンチャペル キラナリゾート沖縄",
+   "categories": [
+    "ガーデンがある",
+    "海が見える",
+    "食事がおいしい",
+    "パーティ会場併設",
+    "フライト時間が短い",
+    "時差がない",
+    "子供と一緒",
+    "コスパ重視"
+   ]
+  },
+  {
+   "id": "v18",
+   "row": 19,
+   "name": "ラソール ガーデン・アリビラ",
+   "categories": [
+    "ガーデンがある",
+    "海が見える",
+    "ビーチが目の前",
+    "パーティ会場併設",
+    "フライト時間が短い",
+    "時差がない",
+    "子供と一緒"
+   ]
+  },
+  {
+   "id": "v19",
+   "row": 20,
+   "name": "瀬良垣島教会",
+   "categories": [
+    "ガーデンがある",
+    "海が見える",
+    "ホテル内",
+    "パーティ会場併設",
+    "フライト時間が短い",
+    "時差がない",
+    "子供と一緒"
+   ]
+  },
+  {
+   "id": "v20",
+   "row": 21,
+   "name": "アイネスヴィラノッツェ沖縄",
+   "categories": [
+    "ガーデンがある",
+    "海が見える",
+    "ビーチが目の前",
+    "食事がおいしい",
+    "ホテル内",
+    "パーティ会場併設",
+    "フライト時間が短い",
+    "時差がない",
+    "子供と一緒"
+   ]
+  },
+  {
+   "id": "v21",
+   "row": 22,
+   "name": "ザ・ヨミタンリゾート アクアグレイス・チャペル",
+   "categories": [
+    "ガーデンがある",
+    "海が見える",
+    "ビーチが目の前",
+    "ステンドグラスがある",
+    "食事がおいしい",
+    "パーティ会場併設",
+    "フライト時間が短い",
+    "時差がない",
+    "子供と一緒"
+   ]
+  },
+  {
+   "id": "v22",
+   "row": 23,
+   "name": "シーシェルブルー",
+   "categories": [
+    "海が見える",
+    "アットホーム",
+    "ホテル内",
+    "写真にこだわる",
+    "パーティ会場併設",
+    "フライト時間が短い",
+    "時差がない",
+    "子供と一緒",
+    "コスパ重視"
+   ]
+  },
+  {
+   "id": "v23",
+   "row": 24,
+   "name": "ザ・サーフ ビーチサイドテラス",
+   "categories": [
+    "ガーデンがある",
+    "海が見える",
+    "ビーチが目の前",
+    "アットホーム",
+    "食事がおいしい",
+    "写真にこだわる",
+    "パーティ会場併設",
+    "フライト時間が短い",
+    "時差がない",
+    "子供と一緒",
+    "コスパ重視"
+   ]
+  },
+  {
+   "id": "v24",
+   "row": 25,
+   "name": "ザ・サーフシーサイドシーン宮古島",
+   "categories": [
+    "海が見える",
+    "アットホーム",
+    "食事がおいしい",
+    "写真にこだわる",
+    "パーティ会場併設",
+    "フライト時間が短い",
+    "時差がない",
+    "子供と一緒",
+    "コスパ重視"
+   ]
+  },
+  {
+   "id": "v25",
+   "row": 26,
+   "name": "宮古島チャペル",
+   "categories": [
+    "海が見える",
+    "ホテル内",
+    "パーティ会場併設",
+    "フライト時間が短い",
+    "時差がない",
+    "子供と一緒"
+   ]
+  },
+  {
+   "id": "v26",
+   "row": 27,
+   "name": "アラマンダ チャペル",
+   "categories": [
+    "ガーデンがある",
+    "ステンドグラスがある",
+    "食事がおいしい",
+    "ホテル内",
+    "パーティ会場併設",
+    "フライト時間が短い",
+    "時差がない",
+    "子供と一緒"
+   ]
+  },
+  {
+   "id": "v27",
+   "row": 28,
+   "name": "ラソール シー リゾート シエール教会",
+   "categories": [
+    "海が見える",
+    "ビーチが目の前",
+    "ホテル内",
+    "パーティ会場併設",
+    "フライト時間が短い",
+    "時差がない",
+    "子供と一緒"
+   ]
+  },
+  {
+   "id": "v28",
+   "row": 29,
+   "name": "ホテルアオ石垣",
+   "categories": [
+    "ガーデンがある",
+    "海が見える",
+    "ビーチが目の前",
+    "アットホーム",
+    "ホテル内",
+    "写真にこだわる",
+    "パーティ会場併設",
+    "フライト時間が短い",
+    "時差がない",
+    "子供と一緒",
+    "コスパ重視"
+   ]
+  },
+  {
+   "id": "v29",
+   "row": 30,
+   "name": "ジュエル・バイ・ザ・シー",
+   "categories": [
+    "ガーデンがある",
+    "海が見える",
+    "ビーチが目の前",
+    "食事がおいしい",
+    "ホテル内",
+    "パーティ会場併設",
+    "フライト時間が短い",
+    "子供と一緒"
+   ]
+  },
+  {
+   "id": "v30",
+   "row": 31,
+   "name": "クリスタルチャペル",
+   "categories": [
+    "ガーデンがある",
+    "海が見える",
+    "アットホーム",
+    "食事がおいしい",
+    "ホテル内",
+    "パーティ会場併設",
+    "フライト時間が短い",
+    "子供と一緒"
+   ]
+  },
+  {
+   "id": "v31",
+   "row": 32,
+   "name": "クラウンプラザガーデン",
+   "categories": [
+    "ガーデンがある",
+    "海が見える",
+    "ビーチが目の前",
+    "アットホーム",
+    "ホテル内",
+    "フライト時間が短い",
+    "子供と一緒"
+   ]
+  },
+  {
+   "id": "v32",
+   "row": 33,
+   "name": "ブルーアステール",
+   "categories": [
+    "ガーデンがある",
+    "海が見える",
+    "ビーチが目の前",
+    "パーティ会場併設",
+    "フライト時間が短い",
+    "子供と一緒"
+   ]
+  },
+  {
+   "id": "v33",
+   "row": 34,
+   "name": "アクアシンフォニーチャペル",
+   "categories": [
+    "海が見える",
+    "ステンドグラスがある",
+    "アットホーム",
+    "ホテル内",
+    "写真にこだわる",
+    "パーティ会場併設",
+    "フライト時間が短い",
+    "子供と一緒",
+    "コスパ重視"
+   ]
+  },
+  {
+   "id": "v34",
+   "row": 35,
+   "name": "コンラッド インフィニティ",
+   "categories": [
+    "ガーデンがある",
+    "海が見える",
+    "ビーチが目の前",
+    "食事がおいしい",
+    "ホテル内",
+    "パーティ会場併設",
+    "水上ヴィラ又はヴィラ",
+    "衣裳重視"
+   ]
+  },
+  {
+   "id": "v35",
+   "row": 36,
+   "name": "アヤナ リゾート バリ",
+   "categories": [
+    "ガーデンがある",
+    "海が見える",
+    "アットホーム",
+    "食事がおいしい",
+    "ホテル内",
+    "パーティ会場併設",
+    "水上ヴィラ又はヴィラ"
+   ]
+  },
+  {
+   "id": "v36",
+   "row": 37,
+   "name": "ティルタ・ウルワツ",
+   "categories": [
+    "ガーデンがある",
+    "海が見える",
+    "アットホーム",
+    "食事がおいしい",
+    "パーティ会場併設"
+   ]
+  },
+  {
+   "id": "v37",
+   "row": 38,
+   "name": "オーシャンフロント アプルヴァ チャペル",
+   "categories": [
+    "ガーデンがある",
+    "海が見える",
+    "ビーチが目の前",
+    "食事がおいしい",
+    "ホテル内",
+    "パーティ会場併設",
+    "水上ヴィラ又はヴィラ"
+   ]
+  },
+  {
+   "id": "v38",
+   "row": 39,
+   "name": "ザ・マジェスティックチャペル",
+   "categories": [
+    "ガーデンがある",
+    "海が見える",
+    "ビーチが目の前",
+    "食事がおいしい",
+    "ホテル内",
+    "パーティ会場併設",
+    "水上ヴィラ又はヴィラ"
+   ]
+  },
+  {
+   "id": "v39",
+   "row": 40,
+   "name": "ハーモニーチャペル",
+   "categories": [
+    "ガーデンがある",
+    "海が見える",
+    "食事がおいしい",
+    "ホテル内",
+    "パーティ会場併設",
+    "水上ヴィラ又はヴィラ"
+   ]
+  },
+  {
+   "id": "v40",
+   "row": 41,
+   "name": "ブルーポイントチャペル",
+   "categories": [
+    "ガーデンがある",
+    "海が見える",
+    "ホテル内",
+    "コスパ重視",
+    "衣裳重視"
+   ]
+  },
+  {
+   "id": "v41",
+   "row": 42,
+   "name": "オーシャンガーデンウェディング",
+   "categories": [
+    "ガーデンがある",
+    "海が見える",
+    "ホテル内",
+    "パーティ会場併設",
+    "水上ヴィラ又はヴィラ",
+    "衣裳重視"
+   ]
+  },
+  {
+   "id": "v42",
+   "row": 43,
+   "name": "ウブドフォレスト アット フォーシーズンズ サヤン",
+   "categories": [
+    "ガーデンがある",
+    "ホテル内",
+    "パーティ会場併設",
+    "自然豊か",
+    "水上ヴィラ又はヴィラ",
+    "衣裳重視"
+   ]
+  },
+  {
+   "id": "v43",
+   "row": 44,
+   "name": "ウォーターフォールウェディング",
+   "categories": [
+    "ガーデンがある",
+    "ホテル内",
+    "自然豊か",
+    "水上ヴィラ又はヴィラ",
+    "衣裳重視"
+   ]
+  },
+  {
+   "id": "v44",
+   "row": 45,
+   "name": "アメリカンチャーチ",
+   "categories": [
+    "教会・大聖堂",
+    "ステンドグラスがある",
+    "衣裳重視"
+   ]
+  },
+  {
+   "id": "v45",
+   "row": 46,
+   "name": "セント・ジェームス教会",
+   "categories": [
+    "教会・大聖堂",
+    "ステンドグラスがある",
+    "衣裳重視"
+   ]
+  },
+  {
+   "id": "v46",
+   "row": 47,
+   "name": "セント・ポールズ・ウィズ イン・ザ・ウォールズ教会",
+   "categories": [
+    "教会・大聖堂",
+    "ステンドグラスがある",
+    "衣裳重視"
+   ]
+  },
+  {
+   "id": "v47",
+   "row": 48,
+   "name": "ヒルトン ブルーホライズン",
+   "categories": [
+    "ガーデンがある",
+    "海が見える",
+    "パーティ会場併設",
+    "世界遺産"
+   ]
+  },
+  {
+   "id": "v48",
+   "row": 49,
+   "name": "アラマンダ グレートバリアリーフチャペル",
+   "categories": [
+    "ガーデンがある",
+    "海が見える",
+    "ビーチが目の前",
+    "アットホーム",
+    "パーティ会場併設",
+    "自然豊か",
+    "世界遺産"
+   ]
+  },
+  {
+   "id": "v49",
+   "row": 50,
+   "name": "チャペル・バイ・ザ・レイク",
+   "categories": [
+    "ガーデンがある",
+    "教会・大聖堂",
+    "アットホーム",
+    "パーティ会場併設",
+    "自然豊か",
+    "衣裳重視"
+   ]
+  },
+  {
+   "id": "v50",
+   "row": 51,
+   "name": "フォーシーズンズ ランダギラーバル ウェディング",
+   "categories": [
+    "ガーデンがある",
+    "海が見える",
+    "食事がおいしい",
+    "ホテル内",
+    "パーティ会場併設",
+    "自然豊か",
+    "水上ヴィラ又はヴィラ",
+    "衣裳重視"
+   ]
+  },
+  {
+   "id": "v51",
+   "row": 52,
+   "name": "星野リゾート トマム 水の教会",
+   "categories": [
+    "ガーデンがある",
+    "食事がおいしい",
+    "ホテル内",
+    "パーティ会場併設",
+    "フライト時間が短い",
+    "時差がない",
+    "自然豊か",
+    "子供と一緒"
+   ]
+  }
+ ],
+ "warnings": []
+}/*__DATA_END__*/;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+/* 式場の追加情報（Excel に無い情報）を後から設定するためのファイル。
+   ・キーは Excel（シート1 A列）の式場名と完全に同じ文字列にしてください。
+   ・空欄・未設定の項目は画面に表示されません。存在しない画像やURLは設定しないでください。
+   ・この情報は診断の順位計算には一切使いません（順位の根拠は Excel のカテゴリのみ）。
+
+   設定例:
+   'プルメリアガーデン': {
+     area: '',          // 地域名（例: エリア名）
+     image: '',         // 画像ファイルのパスまたはURL（例: 'images/plumeria.jpg'）
+     imageAlt: '',      // 画像の説明文
+     url: '',           // 詳細ページ・公式サイトのURL
+     address: '',       // 住所
+     price: '',         // 料金の目安（表示用の文字列）
+     description: ''    // 紹介文
+   },
+*/
+(function (root) {
+  root.VENUE_DIAG = root.VENUE_DIAG || {};
+  root.VENUE_DIAG.EXTRAS = {
+  };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+/* 質問と選択肢の定義。
+   各選択肢の categories が、Excel（シート2）のカテゴリ名との対応です。
+   ・categories は Excel のカテゴリ名と完全一致させてください（起動時に自動チェックします）。
+   ・categories が空の選択肢は「条件なし」です（順位に影響しません）。
+   ・exclusive: true の選択肢は、複数選択の質問で他の選択肢と同時に選べません。
+   ・label は「いちばん重視したい条件」の質問で表示する短い表現です（省略時は選択肢の文言）。
+   ・type: 'priority' の質問は、それまでに選ばれた条件が2つ以上ある場合のみ表示されます。 */
+(function (root) {
+  root.VENUE_DIAG = root.VENUE_DIAG || {};
+  root.VENUE_DIAG.QUESTIONS = [
+    {
+      id: 'kids', section: 'GUESTS', type: 'single',
+      title: 'お子さまと一緒に、結婚式を迎えますか？',
+      sub: 'お二人のお子さまや、ご親族のお子さまの参列予定をお聞かせください。',
+      opts: [
+        { v: 'yes', main: 'はい、子どもも一緒です', sub: 'お子さまと一緒に過ごせる式場を探したい', categories: ['子供と一緒'], label: 'お子さまと一緒に過ごせること' },
+        { v: 'no', main: 'いいえ、大人のみです', sub: 'お二人だけ、または大人のゲストのみ', categories: [] }
+      ]
+    },
+    {
+      id: 'access', section: 'ACCESS', type: 'single',
+      title: '式場までの移動について、ご希望はありますか？',
+      sub: '日本からの移動時間や時差について、近いものをお選びください。',
+      opts: [
+        { v: 'nojetlag', main: '時差のない場所がいい', sub: '到着してすぐ、いつもの調子で過ごしたい', categories: ['時差がない'], label: '時差がないこと' },
+        { v: 'short', main: 'フライト時間が短い場所がいい', sub: '多少の時差は気にしない', categories: ['フライト時間が短い'], label: 'フライト時間が短いこと' },
+        { v: 'any', main: '移動時間や時差は気にしない', sub: '遠くの式場も候補に入れたい', categories: [] }
+      ]
+    },
+    {
+      id: 'scenery', section: 'LOCATION', type: 'multi',
+      title: 'どんな景色の中で、誓いの瞬間を迎えたいですか？',
+      sub: '心惹かれるものをすべてお選びください（複数選択可）。',
+      opts: [
+        { v: 'seaview', text: '海が見える式場', categories: ['海が見える'] },
+        { v: 'beach', text: 'ビーチが目の前の式場', categories: ['ビーチが目の前'] },
+        { v: 'garden', text: '緑あふれるガーデン', categories: ['ガーデンがある'] },
+        { v: 'nature', text: '豊かな自然に囲まれた場所', categories: ['自然豊か'] },
+        { v: 'heritage', text: '世界遺産のある場所', categories: ['世界遺産'] },
+        { v: 'none', text: '特にこだわらない', categories: [], exclusive: true }
+      ]
+    },
+    {
+      id: 'space', section: 'CEREMONY', type: 'multi',
+      title: '挙式の空間は、どんな雰囲気に惹かれますか？',
+      sub: '理想に近いものをすべてお選びください（複数選択可）。',
+      opts: [
+        { v: 'church', text: '歴史ある教会・大聖堂', categories: ['教会・大聖堂'] },
+        { v: 'glass', text: 'ステンドグラスのある空間', categories: ['ステンドグラスがある'] },
+        { v: 'athome', text: 'アットホームな雰囲気', categories: ['アットホーム'] },
+        { v: 'none', text: '特にこだわらない', categories: [], exclusive: true }
+      ]
+    },
+    {
+      id: 'stay', section: 'STAY & PARTY', type: 'multi',
+      title: '滞在やパーティについて、叶えたいことはありますか？',
+      sub: 'あてはまるものをすべてお選びください（複数選択可）。',
+      opts: [
+        { v: 'hotel', text: '滞在するホテルの中で挙式したい', categories: ['ホテル内'] },
+        { v: 'villa', text: 'ヴィラ・水上ヴィラに泊まりたい', categories: ['水上ヴィラ又はヴィラ'] },
+        { v: 'party', text: '挙式の後、同じ場所でパーティをしたい', categories: ['パーティ会場併設'] },
+        { v: 'food', text: '料理のおいしさを大切にしたい', categories: ['食事がおいしい'] },
+        { v: 'none', text: '特にこだわらない', categories: [], exclusive: true }
+      ]
+    },
+    {
+      id: 'focus', section: 'YOUR STYLE', type: 'multi',
+      title: '結婚式で、ほかにこだわりたいことはありますか？',
+      sub: 'あてはまるものをすべてお選びください（複数選択可）。',
+      opts: [
+        { v: 'photo', text: '写真にこだわりたい', categories: ['写真にこだわる'] },
+        { v: 'dress', text: 'ドレス・衣裳にこだわりたい', categories: ['衣裳重視'] },
+        { v: 'cost', text: '費用を抑えたい（コスパ重視）', categories: ['コスパ重視'] },
+        { v: 'character', text: 'キャラクターと一緒に過ごしたい', categories: ['キャラクターと一緒'] },
+        { v: 'none', text: '特にこだわらない', categories: [], exclusive: true }
+      ]
+    },
+    {
+      id: 'priority', section: 'PRIORITY', type: 'priority',
+      title: '中でも、いちばん重視したい条件はどれですか？',
+      sub: '選んだ条件に当てはまる式場を、最優先でご提案します。',
+      noneOption: { v: 'none', main: 'どれも同じくらい大切', sub: '優先順位はつけずに選びたい' }
+    }
+  ];
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+/* 表示・動作の設定。診断の根拠データ（式場・カテゴリ）は js/data/venues.js、質問は js/data/questions.js にあります。 */
+(function (root) {
+  root.VENUE_DIAG = root.VENUE_DIAG || {};
+  root.VENUE_DIAG.CONFIG = {
+    // 「その他のおすすめ式場」に表示する最大件数
+    maxAlternatives: 4,
+
+    // 各画面の背景写真。空欄の場合は写真なしのグラデーション背景になります。
+    // 例: start: 'images/bg-start.jpg'（このフォルダからの相対パス、またはURL）
+    sceneImages: {
+      start: '',
+      question: ['', '', '', '', '', '', ''],
+      loading: '',
+      result: ''
+    },
+
+    // 結果画面の相談ボタン。url が空欄のボタンは表示しません。
+    consult: {
+      title: '気になる式場が見つかったら、\n専任スタッフにご相談ください。',
+      buttons: [
+        { label: 'ご来店での無料相談はこちら', url: 'https://www.his-wedding.com/special/shop_visit/', primary: true },
+        { label: 'オンラインでの無料相談はこちら', url: '' }
+      ],
+      note: '診断結果は、診断用データに登録された式場の特徴をもとに算出しています。'
+    },
+
+    // シェア文言（{name} は最もおすすめの式場名に置き換わります）
+    shareText: '結婚式場診断で「{name}」をおすすめされました！',
+
+    // ヘッダー右上のリンク（url が空欄なら非表示）
+    headerLink: { label: 'About HIS WEDDING', url: 'https://www.his-wedding.com/' }
+  };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+/* 診断ロジック（画面処理を含まない純粋な計算部分）。ブラウザと Node.js の両方で動作します。
+
+   判定方法:
+   1. 回答から「希望条件」（= Excel のカテゴリ）を集める。同じカテゴリは1回だけ数える。
+   2. 各式場について、希望条件のうち Excel 上で該当しているものを数える。
+   3. 次の順に並べる（上の項目ほど優先）。
+      (1) 最も重視する条件に該当している式場が上
+      (2) 該当した希望条件の数が多い式場が上
+      (3) 該当した条件が、より多くの質問にまたがっている式場が上（特定の質問だけに偏った一致より、希望全体に広く合う式場を上にする）
+      (4) それでも並ぶ場合は Excel の掲載順（行番号が小さい順）。この場合は画面上「同順位」と表示する。
+   4. 希望条件に1つも該当しない式場は、おすすめに含めない。 */
+(function (root) {
+  'use strict';
+
+  function isSelected(q, answers, v) {
+    var a = answers[q.id];
+    if (q.type === 'multi') return Array.isArray(a) && a.indexOf(v) !== -1;
+    return a === v;
+  }
+
+  /* 回答 → 希望条件の一覧 [{category, questionId, optionText}] */
+  function collectConditions(questions, answers) {
+    var out = [], seen = {};
+    questions.forEach(function (q) {
+      if (q.type === 'priority' || !q.opts) return;
+      q.opts.forEach(function (opt) {
+        if (!isSelected(q, answers, opt.v)) return;
+        (opt.categories || []).forEach(function (cat) {
+          if (seen[cat]) return;
+          seen[cat] = true;
+          out.push({ category: cat, questionId: q.id, optionText: opt.main || opt.text, label: opt.label || opt.main || opt.text });
+        });
+      });
+    });
+    return out;
+  }
+
+  function evaluateVenue(venue, conditions, priority) {
+    var matched = [], unmatched = [], qids = {};
+    conditions.forEach(function (c) {
+      if (venue.categories.indexOf(c.category) !== -1) { matched.push(c); qids[c.questionId] = true; }
+      else unmatched.push(c);
+    });
+    return {
+      venue: venue,
+      matched: matched,
+      unmatched: unmatched,
+      matchCount: matched.length,
+      priorityMatch: !!priority && venue.categories.indexOf(priority) !== -1,
+      breadth: Object.keys(qids).length,
+      rate: conditions.length ? Math.round(matched.length / conditions.length * 100) : 0
+    };
+  }
+
+  function compareResults(a, b) {
+    return (b.priorityMatch - a.priorityMatch) ||
+      (b.matchCount - a.matchCount) ||
+      (b.breadth - a.breadth) ||
+      (a.venue.row - b.venue.row);
+  }
+
+  function sameRank(a, b) {
+    return a.priorityMatch === b.priorityMatch && a.matchCount === b.matchCount && a.breadth === b.breadth;
+  }
+
+  /* 診断の実行。status: 'ok' | 'no_conditions' | 'no_match' */
+  function diagnose(data, questions, answers) {
+    var conditions = collectConditions(questions, answers);
+    var cats = conditions.map(function (c) { return c.category; });
+    var priority = (answers.priority && cats.indexOf(answers.priority) !== -1) ? answers.priority : null;
+
+    if (!conditions.length) {
+      return { status: 'no_conditions', conditions: [], priority: null, ranked: [], recommended: [], ties: 0 };
+    }
+
+    var ranked = data.venues.map(function (v) { return evaluateVenue(v, conditions, priority); });
+    ranked.sort(compareResults);
+    ranked.forEach(function (r, i) {
+      r.rank = (i > 0 && sameRank(r, ranked[i - 1])) ? ranked[i - 1].rank : i + 1;
+    });
+    ranked.forEach(function (r) {
+      r.tied = ranked.some(function (o) { return o !== r && o.rank === r.rank && o.matchCount > 0; });
+    });
+
+    var recommended = ranked.filter(function (r) { return r.matchCount > 0; });
+    var priorityCount = priority ? ranked.filter(function (r) { return r.priorityMatch; }).length : 0;
+    return {
+      status: recommended.length ? 'ok' : 'no_match',
+      conditions: conditions,
+      priority: priority,
+      priorityCount: priorityCount,
+      ranked: ranked,
+      recommended: recommended
+    };
+  }
+
+  /* おすすめ理由の文章（配列）。文中のカテゴリ名は Excel の表記そのまま。 */
+  function buildReasons(result, diag) {
+    var q = function (s) { return '「' + s + '」'; };
+    var lines = [];
+    var total = diag.conditions.length;
+    if (diag.priority) {
+      lines.push(result.priorityMatch
+        ? '最も重視された' + q(diag.priority) + 'に該当する式場です。'
+        : '最も重視された' + q(diag.priority) + 'は、この式場の登録データには含まれていません。');
+    }
+    lines.push('お選びいただいた希望条件' + total + '件のうち、' + result.matchCount + '件（' +
+      result.matched.map(function (c) { return q(c.category); }).join('') + '）に該当しています。');
+    var selected = diag.conditions.map(function (c) { return c.category; });
+    var others = result.venue.categories.filter(function (c) { return selected.indexOf(c) === -1; });
+    if (others.length) lines.push('このほか、' + others.map(q).join('') + 'の特徴も登録されています。');
+    return lines;
+  }
+
+  /* データと質問定義の整合性チェック。errors があると診断を開始しない。 */
+  function validate(data, questions) {
+    var errors = [], warnings = [];
+    if (!data || !Array.isArray(data.venues) || !Array.isArray(data.categories)) {
+      return { errors: ['式場データが読み込めませんでした'], warnings: [] };
+    }
+    var names = {};
+    data.venues.forEach(function (v) {
+      if (names[v.name]) errors.push('式場名が重複しています: ' + v.name);
+      names[v.name] = true;
+      v.categories.forEach(function (c) {
+        if (data.categories.indexOf(c) === -1) errors.push(v.name + ' のカテゴリ「' + c + '」がカテゴリ一覧にありません');
+      });
+    });
+    var used = {};
+    (questions || []).forEach(function (q) {
+      (q.opts || []).forEach(function (o) {
+        (o.categories || []).forEach(function (c) {
+          if (data.categories.indexOf(c) === -1) errors.push('質問「' + q.id + '」の選択肢が、存在しないカテゴリ「' + c + '」を参照しています');
+          if (used[c]) warnings.push('カテゴリ「' + c + '」が複数の選択肢で使われています');
+          used[c] = true;
+        });
+      });
+    });
+    data.categories.forEach(function (c) {
+      if (!used[c]) warnings.push('カテゴリ「' + c + '」は、どの質問でも使われていません');
+    });
+    return { errors: errors, warnings: warnings.concat(data.warnings || []) };
+  }
+
+  var api = {
+    collectConditions: collectConditions,
+    evaluateVenue: evaluateVenue,
+    compareResults: compareResults,
+    diagnose: diagnose,
+    buildReasons: buildReasons,
+    validate: validate
+  };
+  root.VENUE_DIAG = root.VENUE_DIAG || {};
+  root.VENUE_DIAG.logic = api;
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+/* 画面の表示と操作。診断の計算は js/logic.js に分離しています。 */
+(function () {
+  'use strict';
+
+  var NS = window.VENUE_DIAG || {};
+  var DATA = NS.DATA, QUESTIONS = NS.QUESTIONS || [], CONFIG = NS.CONFIG || {}, EXTRAS = NS.EXTRAS || {}, logic = NS.logic;
+
+  var answers = {}, flow = [], curIdx = 0, busy = false, lastDiag = null, loadingTimers = [];
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+  function reducedMotion() { return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
+  function extrasOf(v) { return EXTRAS[v.name] || {}; }
+  function safeUrl(u) { u = String(u || '').trim(); return u && !/^(javascript|data|vbscript):/i.test(u) ? u : ''; }
+
+  /* ───── 質問の流れ（分岐） ───── */
+  function priorityQuestionIndex() {
+    for (var i = 0; i < QUESTIONS.length; i++) if (QUESTIONS[i].type === 'priority') return i;
+    return -1;
+  }
+  function computeFlow() {
+    var list = [];
+    QUESTIONS.forEach(function (q, i) { if (q.type !== 'priority') list.push(i); });
+    var pi = priorityQuestionIndex();
+    if (pi !== -1 && logic.collectConditions(QUESTIONS, answers).length >= 2) list.push(pi);
+    else delete answers.priority;
+    return list;
+  }
+  function currentQ() { return QUESTIONS[flow[curIdx]]; }
+
+  /* 重視条件の質問は、選ばれた条件から選択肢を作る */
+  function optionsFor(q) {
+    if (q.type !== 'priority') return q.opts;
+    var conds = logic.collectConditions(QUESTIONS, answers);
+    var opts = conds.map(function (c) { return { v: c.category, main: c.label, sub: '該当カテゴリ：' + c.category }; });
+    if (q.noneOption) opts.push(q.noneOption);
+    return opts;
+  }
+
+  /* ───── 画面切り替え ───── */
+  function showScreen(id, anim) {
+    var screens = document.querySelectorAll('.screen');
+    for (var i = 0; i < screens.length; i++) screens[i].classList.remove('active', 'anim-up', 'anim-right', 'anim-left');
+    var el = $(id);
+    el.classList.add('active');
+    void el.offsetWidth;
+    el.classList.add(anim || 'anim-up');
+    window.scrollTo(0, 0);
+  }
+
+  function setBg(el, src) {
+    var old = el.querySelector('img');
+    if (old) old.remove();
+    src = safeUrl(src);
+    if (!src) return;
+    var img = document.createElement('img');
+    img.alt = '';
+    img.onerror = function () { img.remove(); };
+    img.src = src;
+    el.appendChild(img);
+  }
+
+  /* ───── 質問画面 ───── */
+  function renderQ(dir) {
+    flow = computeFlow();
+    if (curIdx >= flow.length) curIdx = flow.length - 1;
+    var q = currentQ(), total = flow.length, step = curIdx + 1;
+    var opts = optionsFor(q);
+
+    $('q-step').textContent = 'QUESTION ' + pad2(step);
+    $('q-frac').textContent = step + ' / ' + total;
+    $('q-bar').style.width = (step / total * 100) + '%';
+    $('q-progress').setAttribute('aria-valuenow', String(Math.round(step / total * 100)));
+    $('q-section').textContent = q.section;
+    $('q-title').textContent = q.title;
+    $('q-sub').textContent = q.sub || '';
+    var bg = $('bg-q');
+    bg.setAttribute('data-tone', String((flow[curIdx] % 6) + 1));
+    setBg(bg, (CONFIG.sceneImages && CONFIG.sceneImages.question || [])[flow[curIdx]]);
+
+    var $s = $('opts-single'), $m = $('opts-multi'), $n = $('next-btn'), $c = $('multi-count');
+    $s.innerHTML = ''; $m.innerHTML = '';
+
+    if (q.type === 'multi') {
+      $s.hidden = true; $m.hidden = false; $n.hidden = false; $c.hidden = false;
+      var sel = answers[q.id] || [];
+      var btns = {};
+      opts.forEach(function (opt, k) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'opt-multi';
+        b.style.animationDelay = (k * 0.04) + 's';
+        b.innerHTML = '<span class="chk" aria-hidden="true"></span><span class="opt-multi-text">' + esc(opt.text) + '</span>';
+        b.addEventListener('click', function () { toggleMulti(q, opt); refresh(); });
+        $m.appendChild(b);
+        btns[opt.v] = b;
+      });
+      var refresh = function () {
+        sel = answers[q.id] || [];
+        opts.forEach(function (o) {
+          var on = sel.indexOf(o.v) !== -1;
+          btns[o.v].classList.toggle('selected', on);
+          btns[o.v].setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+        $n.disabled = sel.length === 0;
+        $c.textContent = sel.length ? (sel.length === 1 && isExclusive(q, sel[0]) ? '「' + optText(q, sel[0]) + '」を選択中' : sel.length + '件選択中') : '1つ以上お選びください';
+      };
+      refresh();
+    } else {
+      $s.hidden = false; $m.hidden = true; $c.hidden = true;
+      var hasAnswer = opts.some(function (o) { return answers[q.id] === o.v; });
+      if (q.type === 'priority' && !hasAnswer) delete answers[q.id];
+      $n.hidden = !hasAnswer; $n.disabled = !hasAnswer;
+      opts.forEach(function (opt, k) {
+        var b = document.createElement('button');
+        var on = answers[q.id] === opt.v;
+        b.type = 'button';
+        b.className = 'opt' + (on ? ' selected' : '');
+        b.setAttribute('role', 'radio');
+        b.setAttribute('aria-checked', on ? 'true' : 'false');
+        b.style.animationDelay = (k * 0.06) + 's';
+        b.innerHTML = '<span class="opt-inner"><span class="opt-texts"><span class="opt-main">' + esc(opt.main) + '</span>' +
+          (opt.sub ? '<span class="opt-sub-text">' + esc(opt.sub) + '</span>' : '') + '</span><span class="opt-radio" aria-hidden="true"></span></span>';
+        b.addEventListener('click', function (e) {
+          if (busy) return;
+          busy = true;
+          ripple(b, e);
+          answers[q.id] = opt.v;
+          var all = $s.querySelectorAll('.opt');
+          for (var i = 0; i < all.length; i++) { all[i].classList.remove('selected'); all[i].setAttribute('aria-checked', 'false'); }
+          b.classList.add('selected'); b.setAttribute('aria-checked', 'true');
+          setTimeout(function () { busy = false; goNext(); }, 320);
+        });
+        $s.appendChild(b);
+      });
+    }
+    $n.textContent = curIdx === flow.length - 1 ? '診断する' : '次へ';
+    if (!$('screen-q').classList.contains('active') || dir) showScreen('screen-q', dir === 'left' ? 'anim-left' : 'anim-right');
+  }
+
+  function isExclusive(q, v) { return q.opts.some(function (o) { return o.v === v && o.exclusive; }); }
+  function optText(q, v) { for (var i = 0; i < q.opts.length; i++) if (q.opts[i].v === v) return q.opts[i].text; return ''; }
+
+  function toggleMulti(q, opt) {
+    var sel = (answers[q.id] || []).slice();
+    var i = sel.indexOf(opt.v);
+    if (i !== -1) sel.splice(i, 1);
+    else if (opt.exclusive) sel = [opt.v];
+    else {
+      sel = sel.filter(function (v) { return !isExclusive(q, v); });
+      sel.push(opt.v);
+    }
+    // 選択肢の並び順で保存（回答の再現性のため）
+    answers[q.id] = q.opts.map(function (o) { return o.v; }).filter(function (v) { return sel.indexOf(v) !== -1; });
+  }
+
+  function ripple(btn, e) {
+    if (!e || e.clientX == null) return;
+    var r = document.createElement('span'), rect = btn.getBoundingClientRect(), sz = Math.max(rect.width, rect.height);
+    r.className = 'ripple';
+    r.style.cssText = 'width:' + sz + 'px;height:' + sz + 'px;left:' + (e.clientX - rect.left - sz / 2) + 'px;top:' + (e.clientY - rect.top - sz / 2) + 'px';
+    btn.appendChild(r);
+    setTimeout(function () { r.remove(); }, 700);
+  }
+
+  function answered(q) {
+    var a = answers[q.id];
+    return q.type === 'multi' ? Array.isArray(a) && a.length > 0 : a !== undefined;
+  }
+
+  function goNext() {
+    var q = currentQ();
+    if (!answered(q)) return;
+    flow = computeFlow();
+    if (curIdx < flow.length - 1) { curIdx++; renderQ('right'); }
+    else showLoading();
+  }
+
+  function goBack() {
+    if (busy) return;
+    if (curIdx > 0) { curIdx--; renderQ('left'); }
+    else showScreen('screen-start', 'anim-up');
+  }
+
+  var resetArmed = null;
+  function onReset() {
+    var b = $('reset-btn');
+    if (!resetArmed) {
+      b.textContent = 'もう一度押すと回答を消去します';
+      resetArmed = setTimeout(function () { resetArmed = null; b.textContent = '最初からやり直す'; }, 3000);
+      return;
+    }
+    clearTimeout(resetArmed); resetArmed = null; b.textContent = '最初からやり直す';
+    restart();
+  }
+
+  function restart() {
+    answers = {}; curIdx = 0; lastDiag = null;
+    clearLoading();
+    closeModal();
+    showScreen('screen-start', 'anim-up');
+  }
+
+  /* ───── 読み込み中（結果算出の演出） ───── */
+  function clearLoading() { loadingTimers.forEach(clearTimeout); loadingTimers = []; }
+  function later(fn, ms) { loadingTimers.push(setTimeout(fn, ms)); }
+
+  function showLoading() {
+    lastDiag = logic.diagnose(DATA, QUESTIONS, answers);
+    showScreen('screen-loading', 'anim-up');
+    setBg($('bg-loading'), CONFIG.sceneImages && CONFIG.sceneImages.loading);
+    var slot = $('loading-slot'), inner = $('slot-inner'), fin = $('loading-final');
+    clearLoading();
+    fin.style.display = 'none'; fin.classList.remove('visible'); slot.style.display = 'block';
+    inner.style.transform = 'translateY(0)';
+
+    var top = lastDiag.status === 'ok' ? lastDiag.recommended[0].venue.name : '';
+    if (!top || reducedMotion()) {
+      inner.innerHTML = '';
+      later(function () { renderResult(lastDiag); }, top ? 600 : 1200);
+      return;
+    }
+    var names = DATA.venues.map(function (v) { return v.name; });
+    var items = names.slice(0, 18).concat([top]);
+    inner.innerHTML = items.map(function (n) { return '<div class="loading-slot-item">' + esc(n) + '</div>'; }).join('');
+    var idx = 0, max = items.length - 1;
+    (function spin() {
+      inner.style.transform = 'translateY(-' + (idx * 64) + 'px)';
+      if (idx < max) { idx++; later(spin, idx < max * 0.6 ? 70 : idx < max * 0.85 ? 120 : 200); }
+      else later(function () {
+        slot.style.display = 'none';
+        fin.textContent = top; fin.style.display = 'block';
+        later(function () { fin.classList.add('visible'); }, 40);
+        later(function () { renderResult(lastDiag); }, 1100);
+      }, 300);
+    })();
+  }
+
+  /* ───── 結果画面 ───── */
+  function answerSummary(diag) {
+    var tags = [];
+    flow.forEach(function (qi) {
+      var q = QUESTIONS[qi], a = answers[q.id];
+      if (q.type === 'priority') {
+        if (diag.priority) tags.push({ text: '最重視：' + diag.priority, prio: true });
+        return;
+      }
+      (q.opts || []).forEach(function (o) {
+        if (q.type === 'multi' ? (a || []).indexOf(o.v) !== -1 && !o.exclusive : a === o.v) tags.push({ text: o.main || o.text });
+      });
+    });
+    return tags;
+  }
+
+  function renderResult(diag) {
+    var D = diag;
+    $('res-badges').innerHTML = '';
+    $('res-notice').innerHTML = '';
+    $('res-main').innerHTML = '';
+    $('res-alt-wrap').innerHTML = '';
+    $('res-trace').innerHTML = '';
+    setBg($('bg-result'), CONFIG.sceneImages && CONFIG.sceneImages.result);
+
+    $('res-summary').innerHTML = '<p class="summary-label">あなたの回答</p>' + answerSummary(D).map(function (t) {
+      return '<span class="summary-tag' + (t.prio ? ' is-priority' : '') + '">' + esc(t.text) + '</span>';
+    }).join('');
+
+    if (D.status !== 'ok') {
+      $('res-kicker').textContent = '診断結果';
+      $('res-name').textContent = D.status === 'no_conditions' ? '希望条件が選ばれていません' : '条件に合う式場が見つかりませんでした';
+      $('res-notice').innerHTML = '<div class="notice">' + (D.status === 'no_conditions'
+        ? 'すべての質問で「こだわらない」などを選ばれたため、式場を絞り込む手がかりがありませんでした。根拠のないおすすめは行わないため、順位は表示していません。<br><strong>気になる条件を1つ以上選んで、もう一度お試しください。</strong>'
+        : 'お選びいただいた条件に該当する式場は、登録データ上ありませんでした。<br><strong>条件を変えて、もう一度お試しください。</strong>') + '</div>';
+      $('res-trace').innerHTML = allVenuesList();
+      renderConsult(null);
+      $('share-row').hidden = true;
+      showScreen('screen-result', 'anim-up');
+      return;
+    }
+
+    $('share-row').hidden = false;
+    var top = D.recommended[0];
+    var topTies = D.recommended.filter(function (r) { return r.rank === top.rank; }).length;
+    $('res-kicker').textContent = 'お二人におすすめの式場は';
+    $('res-name').textContent = top.venue.name;
+    var badges = ['一致率 ' + top.rate + '%', '希望条件 ' + D.conditions.length + '件中 ' + top.matchCount + '件に該当'];
+    if (D.priority && top.priorityMatch) badges.push('最重視の条件に該当');
+    $('res-badges').innerHTML = badges.map(function (b) { return '<span class="result-badge">' + esc(b) + '</span>'; }).join('');
+
+    var notes = [];
+    if (topTies > 1) notes.push('同じ評価の式場が<strong>' + topTies + '件</strong>あります。同じ評価の場合は、データの掲載順に表示しています。');
+    if (D.recommended.length <= 3) notes.push('お選びいただいた条件に1つでも該当する式場は<strong>' + D.recommended.length + '件</strong>でした。条件を減らすと、候補が広がります。');
+    if (D.priority && !D.priorityCount) notes.push('最も重視された「' + esc(D.priority) + '」に該当する式場は、登録データ上ありませんでした。');
+    if (notes.length) $('res-notice').innerHTML = '<div class="notice">' + notes.join('<br>') + '</div>';
+
+    $('res-main').innerHTML = mainSection(top, D);
+    var alts = D.recommended.slice(1, 1 + (CONFIG.maxAlternatives || 4));
+    $('res-alt-wrap').innerHTML = '<div class="section-title"><span>その他のおすすめ式場</span></div>' + (alts.length
+      ? '<div class="alt-grid">' + alts.map(function (r) { return altCard(r, D); }).join('') + '</div>'
+      : '<p class="notice">ほかに、希望条件に該当する式場はありませんでした。</p>');
+    $('res-trace').innerHTML = traceTable(D);
+    renderConsult(top);
+
+    showScreen('screen-result', 'anim-up');
+    setTimeout(function () {
+      var f = document.querySelector('#res-main .matching-fill'); if (f) f.style.width = top.rate + '%';
+      var cards = document.querySelectorAll('.venue-card,.alt-card');
+      for (var i = 0; i < cards.length; i++) (function (el, k) { setTimeout(function () { el.classList.add('card-visible'); }, 80 + k * 90); })(cards[i], i);
+    }, 120);
+  }
+
+  function rankLabel(r) { return (r.tied ? '同率 ' : '') + 'No.' + r.rank; }
+
+  function mainSection(r, D) {
+    var v = r.venue, ex = extrasOf(v);
+    var rows = D.conditions.map(function (c) {
+      var hit = v.categories.indexOf(c.category) !== -1;
+      return '<tr><td>' + esc(c.category) + (D.priority === c.category ? '<span class="prio-mark">最重視</span>' : '') +
+        '<span class="cond-src">回答：' + esc(c.optionText) + '</span></td>' +
+        '<td class="res ' + (hit ? 'cond-yes' : 'cond-no') + '">' + (hit ? '○ 該当' : '－ 登録なし') + '</td></tr>';
+    }).join('');
+    var selected = D.conditions.map(function (c) { return c.category; });
+    var img = safeUrl(ex.image);
+    var meta = [ex.area, ex.address, ex.price].filter(Boolean).map(esc).join(' ／ ');
+    return '<div class="section-title"><span>最もおすすめの式場</span></div>' +
+      '<div class="matching"><div class="matching-row"><span class="matching-label">MATCHING SCORE</span><span class="matching-rate">' + r.rate + '%</span></div>' +
+      '<div class="matching-track"><div class="matching-fill"></div></div>' +
+      '<p class="matching-caption">希望条件 ' + D.conditions.length + '件中 ' + r.matchCount + '件に該当</p></div>' +
+      '<table class="cond-table"><caption>希望条件と、この式場の一致状況</caption><thead><tr><th scope="col">希望条件（カテゴリ）</th><th scope="col" style="text-align:right">この式場</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+      '<div class="reason"><p class="reason-title">おすすめの理由</p>' + logic.buildReasons(r, D).map(function (l) { return '<p>' + esc(l) + '</p>'; }).join('') + '</div>' +
+      '<article class="venue-card">' +
+        '<div class="venue-card-band' + (img ? ' has-img' : '') + '">' + (img ? '<img src="' + esc(img) + '" alt="' + esc(ex.imageAlt || v.name) + '" onerror="this.remove()">' : '') +
+        '<span class="venue-card-rank">' + esc(rankLabel(r)) + '</span></div>' +
+        '<div class="venue-card-body"><h3 class="venue-card-title">' + esc(v.name) + '</h3>' +
+        (meta ? '<p class="venue-card-meta">' + meta + '</p>' : '') +
+        (ex.description ? '<p class="venue-card-desc">' + esc(ex.description) + '</p>' : '') +
+        '<span class="tag-label">この式場の特徴（登録データ）</span><div class="tags">' +
+        v.categories.map(function (c) { return '<span class="tag' + (selected.indexOf(c) !== -1 ? ' hit' : '') + '">' + esc(c) + '</span>'; }).join('') + '</div>' +
+        '<div class="btn-row"><button type="button" class="btn-outline" data-detail="' + esc(v.id) + '">特徴の一覧を見る</button>' +
+        (safeUrl(ex.url) ? '<a class="btn-solid" href="' + esc(safeUrl(ex.url)) + '" target="_blank" rel="noopener">式場の詳細ページへ</a>' : '') +
+        '</div></div></article>';
+  }
+
+  function altCard(r, D) {
+    var hits = r.matched.map(function (c) { return c.category; });
+    return '<button type="button" class="alt-card" data-detail="' + esc(r.venue.id) + '">' +
+      '<span class="alt-top"><span class="alt-rank">' + esc(rankLabel(r)) + '</span><span class="alt-pct">一致率 ' + r.rate + '%</span></span>' +
+      '<span class="alt-name">' + esc(r.venue.name) + '</span>' +
+      '<span class="alt-bar"><i style="width:' + r.rate + '%"></i></span>' +
+      '<span class="alt-hits"><b>該当：</b>' + esc(hits.join('・')) +
+      (D.priority ? '<br>最重視の条件：' + (r.priorityMatch ? '該当' : '登録なし') : '') + '</span>' +
+      '<span class="alt-more">特徴の一覧を見る</span></button>';
+  }
+
+  function traceTable(D) {
+    var head = '<tr><th>順位</th><th>式場名</th>' + (D.priority ? '<th>最重視</th>' : '') + '<th>一致数</th><th>該当した希望条件</th></tr>';
+    var body = D.ranked.map(function (r) {
+      var zero = r.matchCount === 0;
+      return '<tr class="' + (zero ? 'zero' : '') + '"><td class="num">' + (zero ? '対象外' : esc(rankLabel(r))) + '</td><td>' + esc(r.venue.name) + '</td>' +
+        (D.priority ? '<td class="num">' + (r.priorityMatch ? '○' : '－') + '</td>' : '') +
+        '<td class="num">' + r.matchCount + ' / ' + D.conditions.length + '</td><td>' + esc(r.matched.map(function (c) { return c.category; }).join('・') || '－') + '</td></tr>';
+    }).join('');
+    return '<details class="trace"><summary>判定の詳細（全' + D.ranked.length + '式場）</summary><div class="trace-body">' +
+      '<p class="trace-note">順位の決め方：①最も重視する条件に該当 → ②該当した希望条件の数 → ③該当した条件がまたがる質問の数 の順に比較し、すべて同じ場合は同順位（データの掲載順に表示）。希望条件に1つも該当しない式場は「対象外」とし、おすすめしません。</p>' +
+      '<table class="trace-table"><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div></details>';
+  }
+
+  function allVenuesList() {
+    return '<details class="trace"><summary>掲載している式場の一覧（全' + DATA.venues.length + '件・掲載順）</summary><div class="trace-body">' +
+      '<p class="trace-note">おすすめ順ではありません。各式場の特徴は「特徴の一覧を見る」で確認できます。</p><div class="alt-grid">' +
+      DATA.venues.map(function (v) {
+        return '<button type="button" class="alt-card card-visible" data-detail="' + esc(v.id) + '"><span class="alt-name">' + esc(v.name) + '</span><span class="alt-more">特徴の一覧を見る</span></button>';
+      }).join('') + '</div></div></details>';
+  }
+
+  function renderConsult() {
+    var c = CONFIG.consult || {};
+    var btns = (c.buttons || []).filter(function (b) { return safeUrl(b.url); });
+    if (!btns.length) { $('res-consult').innerHTML = ''; return; }
+    $('res-consult').innerHTML = '<div class="consult-block"><span class="consult-label">CONSULTATION</span>' +
+      '<p class="consult-title">' + esc(c.title || '') + '</p>' +
+      btns.map(function (b) { return '<a class="consult-btn ' + (b.primary ? 'primary' : 'secondary') + '" href="' + esc(b.url) + '" target="_blank" rel="noopener">' + esc(b.label) + '</a>'; }).join('') +
+      (c.note ? '<p class="consult-note">' + esc(c.note) + '</p>' : '') + '</div>';
+  }
+
+  /* ───── 式場の詳細（全カテゴリの登録状況） ───── */
+  var lastFocus = null;
+  function openDetail(id) {
+    var v = null;
+    for (var i = 0; i < DATA.venues.length; i++) if (DATA.venues[i].id === id) v = DATA.venues[i];
+    if (!v) return;
+    var ex = extrasOf(v);
+    var selected = lastDiag && lastDiag.conditions ? lastDiag.conditions.map(function (c) { return c.category; }) : [];
+    var info = [['エリア', ex.area], ['住所', ex.address], ['料金の目安', ex.price]].filter(function (p) { return p[1]; });
+    var url = safeUrl(ex.url);
+    $('modal-box').innerHTML =
+      '<div class="modal-head"><h3 class="modal-title" id="modal-title">' + esc(v.name) + '</h3><button type="button" class="modal-close" id="modal-close" aria-label="閉じる">×</button></div>' +
+      '<p class="modal-sub">登録されている特徴：' + v.categories.length + ' / ' + DATA.categories.length + 'カテゴリ' + (selected.length ? '（太字はあなたが選んだ条件）' : '') + '</p>' +
+      (ex.description ? '<p class="venue-card-desc">' + esc(ex.description) + '</p>' : '') +
+      (info.length ? '<div class="extras"><dl>' + info.map(function (p) { return '<dt>' + esc(p[0]) + '</dt><dd>' + esc(p[1]) + '</dd>'; }).join('') + '</dl></div>' : '') +
+      '<div class="cat-grid">' + DATA.categories.map(function (c) {
+        var on = v.categories.indexOf(c) !== -1;
+        return '<div class="cat-item ' + (on ? 'on' : 'off') + (selected.indexOf(c) !== -1 ? ' sel' : '') + '"><span class="mk">' + (on ? '○' : '－') + '</span>' + esc(c) + '</div>';
+      }).join('') + '</div>' +
+      (url ? '<a class="btn-solid" href="' + esc(url) + '" target="_blank" rel="noopener">式場の詳細ページへ</a>' : '') +
+      '<p class="modal-note">○は診断用データ（' + esc(DATA.source && DATA.source.file || '') + '）に登録されている特徴です。「－」は登録がないことを示し、対応していないという意味ではありません。詳しくはスタッフにご確認ください。</p>';
+    lastFocus = document.activeElement;
+    $('modal').classList.add('open');
+    $('modal-close').addEventListener('click', closeModal);
+    $('modal-close').focus();
+  }
+  function closeModal() {
+    var m = $('modal');
+    if (!m.classList.contains('open')) return;
+    m.classList.remove('open');
+    if (lastFocus && lastFocus.focus) lastFocus.focus();
+  }
+
+  /* ───── シェア ───── */
+  function toast(msg) {
+    var t = $('toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toast.timer); toast.timer = setTimeout(function () { t.classList.remove('show'); }, 2800);
+  }
+  function pageUrl() { return location.href.split('#')[0].split('?')[0]; }
+  function shareText() {
+    var name = lastDiag && lastDiag.status === 'ok' ? lastDiag.recommended[0].venue.name : '';
+    return (CONFIG.shareText || '').replace('{name}', name);
+  }
+  function copyText(text) {
+    function fallback() {
+      var ta = document.createElement('textarea');
+      ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      ta.remove();
+      toast(ok ? 'URLをコピーしました' : 'コピーできませんでした');
+    }
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(function () { toast('URLをコピーしました'); }, fallback);
+    else fallback();
+  }
+
+  /* ───── 初期化 ───── */
+  function init() {
+    var check = logic ? logic.validate(DATA, QUESTIONS) : { errors: ['診断プログラムが読み込めませんでした'], warnings: [] };
+    if (check.errors.length) {
+      var box = $('data-error');
+      box.hidden = false;
+      box.innerHTML = '診断データに問題があるため、現在診断をご利用いただけません。<br>' + check.errors.map(esc).join('<br>');
+      $('start-btn').disabled = true;
+      return;
+    }
+    $('pill-count').textContent = DATA.venues.length + '式場から診断';
+    var hl = CONFIG.headerLink;
+    if (hl && safeUrl(hl.url)) { $('header-link').href = hl.url; $('header-link-label').textContent = hl.label; $('header-link').hidden = false; }
+    setBg($('bg-start'), CONFIG.sceneImages && CONFIG.sceneImages.start);
+
+    $('start-btn').addEventListener('click', function () { answers = {}; curIdx = 0; renderQ('right'); });
+    $('next-btn').addEventListener('click', goNext);
+    $('back-btn').addEventListener('click', goBack);
+    $('reset-btn').addEventListener('click', onReset);
+    $('restart-btn').addEventListener('click', restart);
+    $('review-btn').addEventListener('click', function () { curIdx = 0; renderQ('left'); });
+    document.addEventListener('click', function (e) {
+      var t = e.target.closest ? e.target.closest('[data-detail]') : null;
+      if (t) openDetail(t.getAttribute('data-detail'));
+    });
+    $('modal').addEventListener('click', function (e) { if (e.target === $('modal')) closeModal(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeModal(); });
+    $('share-x').addEventListener('click', function () { window.open('https://twitter.com/intent/tweet?text=' + encodeURIComponent(shareText() + '\n' + pageUrl()), '_blank', 'noopener'); });
+    $('share-line').addEventListener('click', function () { window.open('https://social-plugins.line.me/lineit/share?url=' + encodeURIComponent(pageUrl()) + '&text=' + encodeURIComponent(shareText()), '_blank', 'noopener'); });
+    $('share-copy').addEventListener('click', function () { copyText(pageUrl()); });
+    window.addEventListener('scroll', function () { $('siteHeader').classList.toggle('scrolled', window.scrollY > 10); }, { passive: true });
+  }
+
+  // テスト・確認用（画面操作には影響しない）
+  NS.app = { getAnswers: function () { return JSON.parse(JSON.stringify(answers)); }, getLastDiagnosis: function () { return lastDiag; } };
+
+  init();
+})();
+
+</script>
+</body>
+</html>
