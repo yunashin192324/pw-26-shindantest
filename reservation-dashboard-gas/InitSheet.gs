@@ -27,6 +27,7 @@ function onOpen() {
 /** メニューから実行する用（完了メッセージをUIで表示する）。ウェブアプリからは runInitialSetup() を呼ぶこと。 */
 function setupAllSheetsFromMenu() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var tz = ensureSpreadsheetTimeZone_(ss);
   buildDataSheet_(ss);
   buildStaffSheet_(ss);
   buildStaffNameSheet_(ss);
@@ -36,7 +37,8 @@ function setupAllSheetsFromMenu() {
     'シート「' + SHEET_NAME + '」「' + STAFF_SHEET_NAME + '」「' + STAFF_NAME_SHEET_NAME + '」の初期セットアップが完了しました。\n' +
     '「' + STAFF_SHEET_NAME + '」シートに、あなた自身のGoogleアカウントを「マスタ権限」で1行登録してください。' +
     (watchOk ? '' : '\n\n※スプレッドシートの直接の変更を検知する設定（変更検知トリガー）を登録できませんでした。' +
-      'Apps Scriptエディタで setupAllSheetsFromMenu を一度実行し、表示される権限の確認を承認してから、もう一度このメニューを実行してください。')
+      'Apps Scriptエディタで setupAllSheetsFromMenu を一度実行し、表示される権限の確認を承認してから、もう一度このメニューを実行してください。') +
+    (tz.warning ? '\n\n※' + tz.warning : '')
   );
 }
 

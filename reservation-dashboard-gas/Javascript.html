@@ -308,8 +308,12 @@ function buildRangeOptionFromUi_() {
 
 /** 今日からNヶ月前の日付を'yyyy-MM-dd'で返す（表示期間セレクタの「直近1年」用）。 */
 function isoDateMonthsAgo_(n) {
+  // その月に同じ日が無い場合は月末にする（2月29日の1年前は2月28日。setMonthだけだと3月1日になる）。
   var d = new Date();
+  var day = d.getDate();
+  d.setDate(1);
   d.setMonth(d.getMonth() - n);
+  d.setDate(Math.min(day, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()));
   var pad = function (v) { return (v < 10 ? '0' : '') + v; };
   return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
 }
@@ -1077,10 +1081,30 @@ function compareRows_(a, b, def) {
   return String(va).localeCompare(String(vb), 'ja');
 }
 
-function renderDataTable() {
+/** 予約データ一覧に表示する順（今の並べ替え）にした行の配列。 */
+function sortedDataRows_() {
   var def = DISPLAY_COLUMN_DEFS_BY_KEY[STATE.dataSortKey];
   var rows = STATE.dataFiltered.slice();
   rows.sort(function (a, b) { return compareRows_(a, b, def) * STATE.dataSortDir; });
+  return rows;
+}
+
+/** 指定した行が載っているページを開く（今の絞り込み結果に無ければfalse）。 */
+function showDataRow_(rowIndex) {
+  var rows = sortedDataRows_();
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].rowIndex === rowIndex) {
+      STATE.dataPage = Math.floor(i / STATE.dataPageSize) + 1;
+      if (STATE.activeTab !== 'data') switchTab('data');
+      renderDataTable();
+      return true;
+    }
+  }
+  return false;
+}
+
+function renderDataTable() {
+  var rows = sortedDataRows_();
 
   var total = rows.length;
   var totalPages = Math.max(1, Math.ceil(total / STATE.dataPageSize));
@@ -1539,7 +1563,18 @@ function saveAllPendingChanges_() {
     showToast('「〇」「☆」なのに数量が入力されていない変更が' + missingQty.length + '件あります（例：' +
       (firstItem ? firstItem.label : '') + '）。数量を入力してから保存してください。', 'error');
     var qtyInput = document.querySelector('input.ancillary-qty[data-row="' + first.rowIndex + '"][data-item="' + first.itemKey + '"]');
-    if (qtyInput) qtyInput.focus();
+    if (!qtyInput && showDataRow_(first.rowIndex)) {
+      // 別のページにある場合は、そのページを開いてから入力欄に移る。
+      qtyInput = document.querySelector('input.ancillary-qty[data-row="' + first.rowIndex + '"][data-item="' + first.itemKey + '"]');
+    }
+    if (qtyInput) {
+      qtyInput.focus();
+    } else {
+      // 絞り込みで一覧に出ていない場合は、予約番号を知らせる。
+      var hiddenRow = findRow_(first.rowIndex);
+      showToast('数量が未入力の行は、今の絞り込み条件では一覧に表示されていません（予約番号：' +
+        ((hiddenRow && hiddenRow.reservationNo) || '不明') + '）。絞り込みを解除して確認してください。', 'error');
+    }
     return;
   }
 
@@ -1620,6 +1655,12 @@ function populateBulkAncillarySelects_() {
     el.innerHTML = STATE.ancillaryStatusOptions.map(function (o) {
       return '<option value="' + o.value + '">' + o.value + ' ' + escapeHtml(o.label) + '</option>';
     }).join('');
+    // 最初に選ばれている状態（NO ACT）では数量を入力できないようにする（入力しても使われないため）。
+    var qtyInput = document.getElementById('bulk-' + el.dataset.item + '-qty');
+    if (qtyInput) {
+      qtyInput.disabled = !isAncillaryQtyEditable_(el.value);
+      if (qtyInput.disabled) qtyInput.value = '';
+    }
   });
 }
 
@@ -2010,10 +2051,16 @@ function renderAdminStatus() {
  */
 function changeWatchWarningHtml_() {
   var isMaster = STATE.userContext && STATE.userContext.role === 'マスタ権限';
-  if (!isMaster || !STATE.meta || STATE.meta.changeWatchInstalled !== false) return '';
+  if (!isMaster || !STATE.meta) return '';
+  var tz = STATE.meta.spreadsheetTimeZone;
+  var tzHtml = (tz && tz !== 'Asia/Tokyo')
+    ? '<p class="mt-2 text-xs text-amber-700">スプレッドシートのタイムゾーンが「' + escapeHtml(tz) + '」になっています（このアプリは「Asia/Tokyo」が前提です）。' +
+      'シート上の日付が1日ずれて表示される場合があります。変更する前に、README「スプレッドシートのタイムゾーン」をご確認ください。</p>'
+    : '';
+  if (STATE.meta.changeWatchInstalled !== false) return tzHtml;
   return '<p class="mt-2 text-xs text-amber-700">スプレッドシートを直接変更したことを検知する設定が、まだ登録されていません。' +
     'スプレッドシートのメニュー「営業セールスダッシュボード」→「① 初期セットアップ」を一度実行してください' +
-    '（未登録の間は、スプレッドシートを直接並べ替えたり行を削除したりした内容が、この画面に反映されるまで最大5分かかります）。</p>';
+    '（未登録の間は、スプレッドシートを直接並べ替えたり行を削除したりした内容が、この画面に反映されるまで最大5分かかります）。</p>' + tzHtml;
 }
 
 /** 直近のデータ読み込みにかかった時間の内訳（遅いと感じたときに、どこで時間がかかっているかを確かめる用）。 */
@@ -2143,7 +2190,12 @@ function runArchive() {
 function runSetup() {
   showLoading(true);
   google.script.run
-    .withSuccessHandler(function () { showLoading(false); showToast('初期セットアップが完了しました', 'success'); boot(); })
+    .withSuccessHandler(function (status) {
+      showLoading(false);
+      showToast('初期セットアップが完了しました', 'success');
+      if (status && status.timeZoneWarning) showToast(status.timeZoneWarning, 'error');
+      boot();
+    })
     .withFailureHandler(function (err) { showLoading(false); onServerError(err); })
     .runInitialSetup();
 }
@@ -2251,6 +2303,16 @@ function renderAffiliationDiagnostics_(d) {
   box.innerHTML = html;
 }
 
+/** 一覧で表示している行（行番号）のGoogleアカウント／担当者コード（サーバー側で今も同じ行かを確かめるために送る）。 */
+function staffEmailAt_(rowIndex) {
+  var t = STATE.staffList.filter(function (s) { return s.rowIndex === rowIndex; })[0];
+  return t ? t.email : null;
+}
+function staffNameCodeAt_(rowIndex) {
+  var t = (STATE.staffNameList || []).filter(function (s) { return s.rowIndex === rowIndex; })[0];
+  return t ? t.code : null;
+}
+
 function bindStaffEvents_() {
   document.getElementById('btn-affiliation-diagnostics').addEventListener('click', loadAffiliationDiagnostics_);
   document.getElementById('btn-open-staff-modal').addEventListener('click', function () { openStaffModal(null); });
@@ -2263,7 +2325,10 @@ function bindStaffEvents_() {
     if (editBtn) openStaffModal(Number(editBtn.dataset.row));
     if (delBtn) {
       if (!window.confirm('このアカウントを削除しますか？')) return;
-      google.script.run.withSuccessHandler(onStaffListChanged_).withFailureHandler(onServerError).deleteStaffAccess(Number(delBtn.dataset.row));
+      var delRow = Number(delBtn.dataset.row);
+      var delTarget = STATE.staffList.filter(function (s) { return s.rowIndex === delRow; })[0];
+      google.script.run.withSuccessHandler(onStaffListChanged_).withFailureHandler(onServerError)
+        .deleteStaffAccess(delRow, delTarget ? delTarget.email : null);
     }
   });
 
@@ -2277,7 +2342,8 @@ function bindStaffEvents_() {
     var role = document.getElementById('staff-form-role').value;
 
     var call = rowIndex
-      ? google.script.run.withSuccessHandler(onStaffSaved).withFailureHandler(onServerError).updateStaffAccess(Number(rowIndex), email, name, office, area, role)
+      ? google.script.run.withSuccessHandler(onStaffSaved).withFailureHandler(onServerError)
+          .updateStaffAccess(Number(rowIndex), email, name, office, area, role, staffEmailAt_(Number(rowIndex)))
       : google.script.run.withSuccessHandler(onStaffSaved).withFailureHandler(onServerError).addStaffAccess(email, name, office, area, role);
   });
 }
@@ -2321,9 +2387,13 @@ function loadStaffNameList() {
 }
 
 function renderStaffNameList(list) {
+  // 担当者マスタが変わる前後で、一覧に出てくる担当者の表示名が変わったかを比べる（変わった場合だけ描き直す）。
+  var shownCodes = distinctStaffCodesInRows_();
+  var before = shownCodes.map(formatStaffName_).join('\u0001');
   STATE.staffNameList = list || [];
   STATE.staffNameMap = {};
   STATE.staffNameList.forEach(function (s) { if (s.code && s.name) STATE.staffNameMap[s.code] = s.name; });
+  var namesChanged = shownCodes.map(formatStaffName_).join('\u0001') !== before;
 
   var tbody = document.getElementById('staff-name-tbody');
   document.getElementById('staff-name-empty').classList.toggle('hidden', STATE.staffNameList.length > 0);
@@ -2337,9 +2407,19 @@ function renderStaffNameList(list) {
       '</td></tr>';
   }).join('');
 
-  // 氏名表示に反映されるよう、一覧・個人別サマリーを再描画する
+  // 氏名表示に反映されるよう、絞り込みの選択肢・一覧・個人別サマリー・ダッシュボード（ランキング）を描き直す
+  if (!namesChanged || !STATE.ready) return;
+  updateDataOfficeStaffFilterOptions_(); // 担当者の絞り込みの選択肢（選択中の項目は保ったまま表示名だけ更新）
   renderDataTable();
-  renderPersonalTab();
+  if (STATE.activeTab === 'personal') renderPersonalTab(); else STATE.personalDirty = true;
+  if (STATE.activeTab === 'dashboard') applyDashFilters(); else STATE.dashDirty = true;
+}
+
+/** 読み込んだ行に出てくる担当者コードの一覧（重複なし）。 */
+function distinctStaffCodesInRows_() {
+  var seen = {}, out = [];
+  (STATE.rows || []).forEach(function (r) { if (r.staff && !seen[r.staff]) { seen[r.staff] = true; out.push(r.staff); } });
+  return out;
 }
 
 function bindStaffNameEvents_() {
@@ -2353,7 +2433,9 @@ function bindStaffNameEvents_() {
     if (editBtn) openStaffNameModal(Number(editBtn.dataset.row));
     if (delBtn) {
       if (!window.confirm('この担当者を削除しますか？')) return;
-      google.script.run.withSuccessHandler(renderStaffNameList).withFailureHandler(onServerError).deleteStaffName(Number(delBtn.dataset.row));
+      var delNameRow = Number(delBtn.dataset.row);
+      google.script.run.withSuccessHandler(renderStaffNameList).withFailureHandler(onServerError)
+        .deleteStaffName(delNameRow, staffNameCodeAt_(delNameRow));
     }
   });
 
@@ -2364,7 +2446,8 @@ function bindStaffNameEvents_() {
     var name = document.getElementById('staff-name-form-name').value.trim();
 
     if (rowIndex) {
-      google.script.run.withSuccessHandler(onStaffNameSaved).withFailureHandler(onServerError).updateStaffName(Number(rowIndex), code, name);
+      google.script.run.withSuccessHandler(onStaffNameSaved).withFailureHandler(onServerError)
+        .updateStaffName(Number(rowIndex), code, name, staffNameCodeAt_(Number(rowIndex)));
     } else {
       google.script.run.withSuccessHandler(onStaffNameSaved).withFailureHandler(onServerError).addStaffName(code, name);
     }
@@ -3225,9 +3308,14 @@ function scoreSheetMatrixForMode_(matrix, mode) {
   } else {
     (STATE.columns || []).forEach(function (c) { labels[normalizeExcelHeaderCell_(c.label)] = 1; });
   }
-  var best = 0, limit = Math.min((matrix || []).length, 20);
+  var best = 0, limit = Math.min((matrix || []).length, 20); // サーバー側の見出し検出（先頭20行）と同じ範囲
   for (var r = 0; r < limit; r++) {
     var score = 0, seen = {};
+    if (mode === 'staff') {
+      // サーバー側で必須の「担当者NO」「社員名称」が同じ行にそろっていれば、そのシートを最優先にする。
+      var keys = (matrix[r] || []).map(normalizeExcelHeaderCell_);
+      if (keys.indexOf('担当者NO') !== -1 && keys.indexOf('社員名称') !== -1) score += 1000;
+    }
     (matrix[r] || []).forEach(function (cell) {
       var key = normalizeExcelHeaderCell_(cell);
       if (key && labels[key] && !seen[key]) { seen[key] = 1; score++; }

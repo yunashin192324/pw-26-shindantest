@@ -24,7 +24,7 @@ var SHEET_NAME = '予約データ';
 var STAFF_SHEET_NAME = 'スタッフ権限';
 var STAFF_NAME_SHEET_NAME = '担当者マスタ';
 var TIMEZONE = 'Asia/Tokyo';
-var SERVER_VERSION = '2.7.0';
+var SERVER_VERSION = '2.7.1';
 
 // 予約番号（チャレンジ番号）は半角英数字ちょうど11桁（Javascript.htmlのCHALLENGE_RECORD_BASE_URL判定と同じ桁数）。
 // 数字だけの予約番号（例：01234567890）はGoogleスプレッドシート上で数値として誤認識され、
@@ -123,14 +123,19 @@ function doGet(e) {
   return HtmlService.createTemplateFromFile('Index')
     .evaluate()
     .setTitle(APP_TITLE)
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  // 他のサイトの枠（iframe）の中に表示させない（既定の設定）。外部のページに透明に重ねて表示し、
+  // 削除などのボタンを押させる攻撃（クリックジャッキング）を防ぐため。Googleサイト等への埋め込みが
+  // 必要になった場合は、README「他のページへの埋め込み」を参照。
 }
 
 /**
  * Index.html から他のHTMLファイルをインクルードするためのヘルパー。
  */
+var INCLUDABLE_FILES_ = ['Javascript'];
 function include(filename) {
+  // 画面（google.script.run）からも呼べてしまうため、画面の部品として読み込むファイルだけに限る。
+  if (INCLUDABLE_FILES_.indexOf(filename) === -1) throw new Error('このファイルは読み込めません。');
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
@@ -169,13 +174,66 @@ function getSetupStatus() {
  * データシート・スタッフ権限シート・担当者マスタシートをまとめて作る。実体は InitSheet.gs 。
  */
 function runInitialSetup() {
+  assertSetupAllowed_();
   var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var tz = ensureSpreadsheetTimeZone_(ss);
   buildDataSheet_(ss);
   buildStaffSheet_(ss);
   buildStaffNameSheet_(ss);
   ensureChangeTrigger_();
   markDataChanged_();
-  return getSetupStatus();
+  var status = getSetupStatus();
+  if (tz.warning) { status.timeZoneWarning = tz.warning; console.warn(tz.warning); }
+  return status;
+}
+
+/** スプレッドシートのタイムゾーン（取得できなければnull）。 */
+function spreadsheetTimeZoneSafe_() {
+  try { return SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(); } catch (e) { return null; }
+}
+
+/** Webアプリをデプロイした（＝スクリプトの実行者になっている）Googleアカウント。取れない場合は空文字。 */
+function deployerEmail_() {
+  try {
+    return (Session.getEffectiveUser().getEmail() || '').trim().toLowerCase();
+  } catch (e) {
+    return '';
+  }
+}
+
+/**
+ * 初期セットアップを実行してよい人か（マスタ権限、またはWebアプリをデプロイした本人）を確かめる。
+ * 画面（google.script.run）から誰でも呼べてしまうため、シートの書式の作り直しや写しの破棄を
+ * 権限の無い人に繰り返し実行されないようにする。Apps Scriptエディタからの実行は、実行者＝デプロイした本人。
+ */
+function assertSetupAllowed_() {
+  var active = (Session.getActiveUser().getEmail() || '').trim().toLowerCase();
+  var deployer = deployerEmail_();
+  if (active && deployer && active === deployer) return;
+  if (getCurrentUserContext_().role === ROLE_MASTER) return;
+  throw new Error('初期セットアップは、マスタ権限のユーザー（またはWebアプリをデプロイした管理者）のみ実行できます。');
+}
+
+/**
+ * スプレッドシートのタイムゾーンを、このアプリの基準（TIMEZONE）にそろえる。
+ * タイムゾーンが違うと、日付を書き込んだときにシート上の表示が前日・翌日にずれる。
+ * ただし、既に予約データが入っている場合に変更すると、入っている日付の読み取り結果がずれるため変更せず、
+ * 警告の文言を返す（管理者がデータの状態を確認したうえで手動で変更する）。
+ */
+function ensureSpreadsheetTimeZone_(ss) {
+  try {
+    var current = ss.getSpreadsheetTimeZone();
+    if (current === TIMEZONE) return { ok: true };
+    var dataSheet = ss.getSheetByName(SHEET_NAME);
+    if (!dataSheet || dataSheet.getLastRow() < 2) {
+      ss.setSpreadsheetTimeZone(TIMEZONE);
+      return { ok: true, changed: true };
+    }
+    return { ok: false, warning: 'スプレッドシートのタイムゾーンが「' + current + '」になっています（このアプリは「' + TIMEZONE + '」が前提です）。' +
+      '既にデータがあるため自動では変更していません。日付が1日ずれて見える場合は、管理者にご相談ください。' };
+  } catch (e) {
+    return { ok: false };
+  }
 }
 
 function assertSetupReady_() {
@@ -199,7 +257,7 @@ function getDataSheet_() {
 /**
  * 実行者のGoogleアカウントを「スタッフ権限」シートで引き、権限情報を返す。
  * ・シートが無い／1件も登録が無い間は、最初のセットアップができるよう
- *   全員をマスタ権限として扱う（bootstrapMode: true）。
+ *   Webアプリをデプロイした本人だけをマスタ権限として扱う（bootstrapMode: true）。それ以外の人は閲覧不可。
  * ・シートはあるが該当アカウントの登録が無い場合は、閲覧不可（role: ''）として返す。
  */
 /**
@@ -211,7 +269,14 @@ function getCurrentUserContext_() {
   var email = (Session.getActiveUser().getEmail() || '').trim().toLowerCase();
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(STAFF_SHEET_NAME);
   if (!sheet || sheet.getLastRow() < 2) {
-    return { email: email, name: '', office: '', area: '', role: ROLE_MASTER, registered: false, bootstrapMode: true };
+    // スタッフ権限が1件も無い間（最初のセットアップ時、またはシートの削除・名前の変更・全行の削除をしてしまった場合）は、
+    // Webアプリをデプロイした本人だけをマスタ権限として扱う（以前は全員をマスタ権限として扱っていたため、
+    // シートを誤って消すと組織内の誰でも全データを閲覧・削除できる状態になっていた）。
+    var deployer = deployerEmail_();
+    if (email && deployer && email === deployer) {
+      return { email: email, name: '', office: '', area: '', role: ROLE_MASTER, registered: false, bootstrapMode: true };
+    }
+    return { email: email, name: '', office: '', area: '', role: '', registered: false, bootstrapMode: false };
   }
   var values = sheet.getRange(2, 1, sheet.getLastRow() - 1, 5).getValues();
   var found = null;
@@ -221,9 +286,9 @@ function getCurrentUserContext_() {
     if (rowEmail && rowEmail === email) {
       found = {
         email: email,
-        name: String(row[1] || ''),
-        office: String(row[2] || ''),
-        area: String(row[3] || ''),
+        name: String(row[1] || '').trim(),
+        office: String(row[2] || '').trim(),
+        area: String(row[3] || '').trim(),
         role: String(row[4] || '').trim(),
         registered: true,
         bootstrapMode: false
@@ -253,6 +318,16 @@ function affiliationCode_(s) {
   return m ? m[1].toUpperCase() : '';
 }
 
+/** 「一」〜「九十九」の漢数字を算用数字の文字列にする（第十一→11、第二十→20、第三→3）。 */
+function kanjiNumberToDigits_(k) {
+  var d = AFFILIATION_KANJI_DIGITS_;
+  var i = k.indexOf('十');
+  if (i === -1) return d[k];
+  var tens = i === 0 ? 1 : Number(d[k.charAt(0)]);
+  var ones = i === k.length - 1 ? 0 : Number(d[k.charAt(i + 1)]);
+  return String(tens * 10 + ones);
+}
+
 /**
  * 所属店舗・所属エリアの名称を、比較用の形にそろえる（推測を含まない、決まった表記ルールだけで変換する）。
  * 営業日報CSV側は「717:イーアスつくば」「71:東京第2エリア」、人事データ側は「イーアスつくば営業所」
@@ -264,7 +339,7 @@ function affiliationCode_(s) {
 function affiliationKey_(s) {
   var t = affiliationText_(s).replace(AFFILIATION_CODE_PATTERN_, '');
   t = t.replace(/[（(][^）)]*[）)]/g, '').replace(/\s+/g, '');
-  t = t.replace(/第([一二三四五六七八九十])/g, function (_, k) { return '第' + AFFILIATION_KANJI_DIGITS_[k]; });
+  t = t.replace(/第([一二三四五六七八九]?十[一二三四五六七八九]?|[一二三四五六七八九])/g, function (_, k) { return '第' + kanjiNumberToDigits_(k); });
   var stripped = t.replace(/(?:営業所|支店|店|エリア)$/, '');
   return stripped || t;
 }
@@ -378,6 +453,20 @@ function withScriptLock_(fn) {
 var DEFAULT_LIST_WINDOW_MONTHS = 6;
 
 /**
+ * 日付のnか月前を返す。その月に同じ日が無い場合は月末にする（8月31日の6か月前は2月28日／29日）。
+ * Date.setMonth だけだと「2月31日」が3月3日に繰り上がり、表示期間の開始日が数日ずれるため。
+ */
+function monthsAgo_(date, n) {
+  var d = new Date(date.getTime());
+  var day = d.getDate();
+  d.setDate(1);
+  d.setMonth(d.getMonth() - n);
+  var lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(day, lastDay));
+  return d;
+}
+
+/**
  * rangeOption（省略可）から、実際に使う表示期間（from/to、'yyyy-MM-dd'文字列）を決める。
  * ・省略 または {mode:'default'}      → 出発予定日が「今日からNヶ月前」以降（未来は上限なし）
  * ・{mode:'all'}                      → 絞り込み無し（全期間）
@@ -393,8 +482,7 @@ function resolveListWindow_(rangeOption) {
     if (!from && !to) return { mode: 'all', from: null, to: null }; // 期間未指定は全期間として扱う
     return { mode: 'custom', from: from, to: to };
   }
-  var cutoff = new Date();
-  cutoff.setMonth(cutoff.getMonth() - DEFAULT_LIST_WINDOW_MONTHS);
+  var cutoff = monthsAgo_(new Date(), DEFAULT_LIST_WINDOW_MONTHS);
   return { mode: 'default', from: Utilities.formatDate(cutoff, TIMEZONE, 'yyyy-MM-dd'), to: null, months: DEFAULT_LIST_WINDOW_MONTHS };
 }
 
@@ -726,8 +814,20 @@ function getArchivePart_(ctx, window_, mainDistinct) {
   }
   if (!archiveSheet) return empty;
   var lastRow = archiveSheet.getLastRow();
-  var values = lastRow >= 2 ? archiveSheet.getRange(2, 1, lastRow - 1, ALL_COLUMNS.length).getValues() : [];
-  var snap = buildColumnar_(values, 2, ARCHIVE_ROW_INDEX_OFFSET_);
+  // アーカイブ先の写しも保存して使い回す（数万件になると、毎回読み込むと時間がかかるため）。
+  // アーカイブ先へ書き込むのはアーカイブの実行だけで、その際に本体の版番号が更新されるため、本体の版番号と
+  // アーカイブ先の最終行番号を写しの名前に含める（アーカイブ先を直接編集した場合は、写しの有効期限まで反映されない）。
+  var archiveKey = CACHE_PREFIX_ + 'a:' + getDataVersion_() + ':' + hashText_(id) + ':' + lastRow;
+  var snap = null;
+  try {
+    var hit = cacheGetLarge_(archiveKey);
+    if (hit) snap = unpackColumnar_(gunzipBase64_(hit.text));
+  } catch (e) { snap = null; }
+  if (!snap) {
+    var values = lastRow >= 2 ? archiveSheet.getRange(2, 1, lastRow - 1, ALL_COLUMNS.length).getValues() : [];
+    snap = buildColumnar_(values, 2, ARCHIVE_ROW_INDEX_OFFSET_);
+    cachePutLarge_(archiveKey, gzipBase64_(packColumnar_([{ cols: snap.cols, n: snap.n, indices: null }], SNAPSHOT_KEYS_)), null);
+  }
   snap.cols.isArchived = snap.cols.rowIndex.map(function () { return true; });
   var offices = distinctOf_(snap.cols.office), areas = distinctOf_(snap.cols.area);
   var affIndex = buildAffiliationIndex_(offices.concat(mainDistinct.offices), areas.concat(mainDistinct.areas));
@@ -875,10 +975,11 @@ function getBootstrapData(rangeOption) {
       archivedRowCount: archivedRowCount,
       lastImportedAt: props.getProperty('lastImportedAt') || null,
       lastImportedFile: props.getProperty('lastImportedFile') || null,
-      sheetUrl: SpreadsheetApp.getActiveSpreadsheet().getUrl(),
+      sheetUrl: ctx.role === ROLE_MASTER ? SpreadsheetApp.getActiveSpreadsheet().getUrl() : null,
       serverVersion: SERVER_VERSION,
       dataVersion: version,
       changeWatchInstalled: props.getProperty(CHANGE_WATCH_PROP_) === '1',
+      spreadsheetTimeZone: ctx.role === ROLE_MASTER ? spreadsheetTimeZoneSafe_() : null,
       timing: timing
     }
   });
@@ -1094,8 +1195,9 @@ function cellValueFor_(col, v) {
  */
 function normalizeHeaderLabel_(raw) {
   if (raw === null || raw === undefined) return '';
-  var s = String(raw).replace(/^﻿/, '').trim();
-  var m = s.match(/^\d{3}\s*[:：]\s*(.+)$/);
+  // Excelの見出しはセル内で改行されていることがあるため、改行を除いてから判定する。
+  var s = String(raw).replace(/^﻿/, '').replace(/[\r\n]+/g, '').trim();
+  var m = s.match(/^\d{3}\s*[:：]\s*([\s\S]+)$/);
   return (m ? m[1] : s).trim();
 }
 
@@ -1103,9 +1205,11 @@ function normalizeHeaderLabel_(raw) {
  * CSVの先頭数行の中から見出し行を推定し、19項目それぞれが何列目にあるかを求める。
  * 列の並び順や余分な列があっても、項目名の一致だけで抽出できるようにするための処理。
  */
+var HEADER_SCAN_ROWS_ = 20; // 見出し行を探す範囲（先頭に表題や集計が入っているExcelにも対応するため。Excel取込の画面側の判定と同じ）
+
 function detectHeaderRow_(matrix) {
   var bestRow = -1, bestCount = -1, bestMap = null;
-  var scanLimit = Math.min(matrix.length, 5);
+  var scanLimit = Math.min(matrix.length, HEADER_SCAN_ROWS_);
   for (var r = 0; r < scanLimit; r++) {
     var map = {};
     var count = 0;
@@ -1510,12 +1614,22 @@ function flushEditedRows_(sheet, snap) {
   var startCol = COLUMNS.length + 1;
   var formats = [EDITABLE_COLUMNS.map(numberFormatFor_)];
   var dirtyRows = Object.keys(snap.dirty);
-  dirtyRows.forEach(function (key) {
-    var rowIndex = Number(key);
-    var range = sheet.getRange(rowIndex, startCol, 1, EDITABLE_COLUMNS.length);
-    range.setNumberFormats(formats);
-    range.setValues(protectSheetRows_([snap.rows[rowIndex].slice(COLUMNS.length)]));
-  });
+  // 続いている行（例：10〜60行目）はまとめて1回で書き込み、シートへの呼び出し回数を減らす。
+  // 変更の無い行は書き込まない（その間に直接入力された内容を、読み込み時点の値で上書きしないため）。
+  var sorted = dirtyRows.map(Number).sort(function (a, b) { return a - b; });
+  for (var i = 0; i < sorted.length; ) {
+    var j = i;
+    while (j + 1 < sorted.length && sorted[j + 1] === sorted[j] + 1) j++;
+    var runRows = [], runFormats = [];
+    for (var k = i; k <= j; k++) {
+      runRows.push(snap.rows[sorted[k]].slice(COLUMNS.length));
+      runFormats.push(formats[0]);
+    }
+    var range = sheet.getRange(sorted[i], startCol, runRows.length, EDITABLE_COLUMNS.length);
+    range.setNumberFormats(runFormats);
+    range.setValues(protectSheetRows_(runRows));
+    i = j + 1;
+  }
   if (dirtyRows.length > 0 || snap.tokenMismatch) {
     SpreadsheetApp.flush(); // 書き込みを確定させてから版番号を変える（逆順だと、古い値の写しが新しい版番号で作られうる）
     bumpDataVersion_();
@@ -1530,6 +1644,8 @@ function normalizeAncillaryStatusInput_(status) {
   if (!ok) throw new Error('ステータスの指定が不正です。');
   return s;
 }
+
+var ANCILLARY_QTY_REQUIRED_MESSAGE_ = '「〇（NB付帯）」「☆（PUSH成約）」の場合は数量を入力してください。';
 
 /**
  * 付帯商品1件分（ステータス・数量・理由）をメモリ上に反映する。値の検証（数量の数値チェック等）を
@@ -1547,6 +1663,8 @@ function applyAncillaryInMemory_(snap, rowIndex, item, statusRaw, qtyRaw, reason
     reason = String(reasonRaw || '').trim() || null;
   } else if (status === '〇' || status === '☆') {
     qty = parseAncillaryQty_(qtyRaw);
+    // 画面側でも止めているが、件数と数量合計の集計が合わなくなるため、サーバー側でも必ず確かめる。
+    if (qty === null) throw new Error(ANCILLARY_QTY_REQUIRED_MESSAGE_);
   }
   setCellInMemory_(snap, rowIndex, item.statusKey, status);
   setCellInMemory_(snap, rowIndex, item.qtyKey, qty);
@@ -1594,6 +1712,10 @@ function bulkSetAncillaryStatus(rowIndexes, itemKey, status, bulkQty, reason, ro
   // 値そのものの誤り（不正な数量・ステータス）は、行ごとのエラーではなく全体のエラーとして先に返す。
   normalizeAncillaryStatusInput_(status);
   parseAncillaryQty_(bulkQty);
+  var bulkStatus = normalizeAncillaryStatusInput_(status);
+  if ((bulkStatus === '〇' || bulkStatus === '☆') && parseAncillaryQty_(bulkQty) === null) {
+    throw new Error(ANCILLARY_QTY_REQUIRED_MESSAGE_);
+  }
   return withScriptLock_(function () {
     var ctx = getCurrentUserContext_();
     var sheet = getDataSheet_();
@@ -1707,6 +1829,11 @@ function getColumnOrderPreference() {
   try { return JSON.parse(raw); } catch (e) { return null; }
 }
 
+/** 予約データ一覧に表示する列（Javascript.html の DISPLAY_COLUMN_DEFS と同じ21項目。列順として保存できるのはこれだけ）。 */
+var DISPLAY_COLUMN_KEYS_ = ['reservationNo', 'staff', 'departureDate', 'chkDate', 'memo', 'insurance', 'wifi', 'cansapo', 'tavica',
+  'bookingDate', 'destination', 'travelDays', 'productCategory', 'tourBrand', 'tourCode', 'carrier', 'salesAmount', 'paymentAmount',
+  'sts', 'productTitle', 'office'];
+
 /** 列順（キーの配列）をスプレッドシート単位で保存し、全員に反映させる。 */
 function saveColumnOrderPreference(orderKeys) {
   // 全員の表示に反映される設定のため、アプリを使える（スタッフ権限に正しく登録された）人だけが変更できる。
@@ -1718,8 +1845,7 @@ function saveColumnOrderPreference(orderKeys) {
     throw new Error('列の並び順が空です。');
   }
   var allowed = {};
-  ALL_COLUMNS.forEach(function (c) { allowed[c.key] = true; });
-  ANCILLARY_ITEMS.forEach(function (a) { allowed[a.key] = true; });
+  DISPLAY_COLUMN_KEYS_.forEach(function (k) { allowed[k] = true; });
   var seen = {};
   var keys = orderKeys.filter(function (k) {
     if (typeof k !== 'string' || !allowed[k] || seen[k]) return false;
@@ -1816,6 +1942,23 @@ var ARCHIVE_SPREADSHEET_NAME_ = APP_TITLE + '（アーカイブ）';
 var ARCHIVE_ROW_INDEX_OFFSET_ = 10000000;
 
 /**
+ * アーカイブ先のスプレッドシートを、元のスプレッドシートの編集者にも共有する（編集者として追加）。
+ * 作成者（デプロイした人）のドライブに作られるため、共有しないと他のマスタ権限の人がリンクを開けない。
+ * 元のスプレッドシートの編集者は、もともと全データを見られる人なので、見られる範囲は広がらない。
+ */
+function shareArchiveWithMainEditors_(archiveSs) {
+  try {
+    var main = SpreadsheetApp.getActiveSpreadsheet();
+    var me = deployerEmail_();
+    var emails = main.getEditors().map(function (u) { return String(u.getEmail() || '').trim(); })
+      .filter(function (e) { return e && e.toLowerCase() !== me; });
+    if (emails.length) archiveSs.addEditors(emails);
+  } catch (e) {
+    console.warn('shareArchiveWithMainEditors_: ' + e);
+  }
+}
+
+/**
  * アーカイブ先スプレッドシートを取得する。ドキュメントプロパティに保存済みのIDがあればそれを使い、
  * 無い（または削除済みで開けない）場合は新規作成し、「予約データ」シートを本体と同じ列構成で用意する。
  */
@@ -1830,6 +1973,8 @@ function getOrCreateArchiveSpreadsheet_() {
     }
   }
   var ss = SpreadsheetApp.create(ARCHIVE_SPREADSHEET_NAME_);
+  try { ss.setSpreadsheetTimeZone(TIMEZONE); } catch (e) { console.warn('archive timezone: ' + e); }
+  shareArchiveWithMainEditors_(ss);
   var defaultSheet = ss.getSheets()[0];
   buildDataSheet_(ss);
   if (ss.getSheets().length > 1) { ss.deleteSheet(defaultSheet); }
@@ -1968,13 +2113,15 @@ function listStaffAccess_() {
   for (var i = 0; i < values.length; i++) {
     var row = values[i];
     if (row.every(function (v) { return v === '' || v === null; })) continue;
+    // ログイン時の判定（getCurrentUserContext_）と同じく前後の空白を除いて扱う。除かないと、シート上で
+    // 「マスタ権限 」のように空白が混ざった行が、人事データ取込で別人扱い・マスタ以外の扱いになる。
     list.push({
       rowIndex: i + 2,
-      email: String(row[0] || ''),
-      name: String(row[1] || ''),
-      office: String(row[2] || ''),
-      area: String(row[3] || ''),
-      role: String(row[4] || '')
+      email: String(row[0] || '').trim(),
+      name: String(row[1] || '').trim(),
+      office: String(row[2] || '').trim(),
+      area: String(row[3] || '').trim(),
+      role: String(row[4] || '').trim()
     });
   }
   return list;
@@ -2031,7 +2178,7 @@ function addStaffAccess(email, name, office, area, role) {
 }
 
 /** スタッフ権限を1件更新する（マスタ権限のみ）。 */
-function updateStaffAccess(rowIndex, email, name, office, area, role) {
+function updateStaffAccess(rowIndex, email, name, office, area, role, expectedEmail) {
   assertMaster_();
   validateStaffInput_(email, role);
   return withScriptLock_(function () {
@@ -2040,6 +2187,7 @@ function updateStaffAccess(rowIndex, email, name, office, area, role) {
   if (!rowIndex || rowIndex < 2 || rowIndex > sheet.getLastRow()) {
     throw new Error('対象の行が見つかりません。画面を再読込してください。');
   }
+  assertRowStillMatches_(sheet, rowIndex, expectedEmail, true);
   var newRow = [String(email).trim().toLowerCase(), name || '', office || '', area || '', role];
   var rowsAfter = readStaffRows_(sheet);
   rowsAfter[rowIndex - 2] = newRow;
@@ -2049,8 +2197,38 @@ function updateStaffAccess(rowIndex, email, name, office, area, role) {
   });
 }
 
+/**
+ * 画面で選んだ行が、今もその人（Googleアカウント／担当者コード）の行かを確かめる。
+ * 画面を開いた後に、別の管理者が上の行を削除するなどして行の位置がずれていると、
+ * 行番号だけで編集・削除すると無関係の別人の行を書き換えてしまうため。
+ * expected が渡されない場合（更新前の古い画面からの呼び出し）は確認しない。
+ */
+function assertRowStillMatches_(sheet, rowIndex, expected, isEmail) {
+  if (expected === undefined || expected === null) return;
+  var actual = String(sheet.getRange(rowIndex, 1).getValue() || '').trim();
+  var want = String(expected).trim();
+  if (isEmail) { actual = actual.toLowerCase(); want = want.toLowerCase(); }
+  if (actual !== want) {
+    throw new Error('一覧が古くなっています（他の方の編集で行の位置が変わった可能性があります）。画面を読み込み直してから、もう一度操作してください。');
+  }
+}
+
+/**
+ * 1行を削除する。見出し行を固定しているシートでは「固定されていない行をすべて削除する」ことが
+ * できない（エラーになる）ため、データ行が最後の1行しか無い場合は、行を消さずに中身だけを消す。
+ */
+function deleteSheetRowSafe_(sheet, rowIndex) {
+  var frozen = 0;
+  try { frozen = sheet.getFrozenRows() || 0; } catch (e) { frozen = 0; }
+  if (sheet.getMaxRows() - Math.max(frozen, 1) <= 1) {
+    sheet.getRange(rowIndex, 1, 1, sheet.getMaxColumns()).clearContent();
+  } else {
+    sheet.deleteRow(rowIndex);
+  }
+}
+
 /** スタッフ権限を1件削除する（マスタ権限のみ）。 */
-function deleteStaffAccess(rowIndex) {
+function deleteStaffAccess(rowIndex, expectedEmail) {
   assertMaster_();
   return withScriptLock_(function () {
   var sheet = getOrCreateStaffSheet_();
@@ -2058,10 +2236,11 @@ function deleteStaffAccess(rowIndex) {
   if (!rowIndex || rowIndex < 2 || rowIndex > sheet.getLastRow()) {
     throw new Error('対象の行が見つかりません。画面を再読込してください。');
   }
+  assertRowStillMatches_(sheet, rowIndex, expectedEmail, true);
   var rowsAfter = readStaffRows_(sheet);
   rowsAfter.splice(rowIndex - 2, 1);
   assertMasterRemains_(rowsAfter);
-  sheet.deleteRow(rowIndex);
+  deleteSheetRowSafe_(sheet, rowIndex);
   return listStaffAccess_();
   });
 }
@@ -2101,7 +2280,7 @@ function getStaffNameList() {
   for (var i = 0; i < values.length; i++) {
     var row = values[i];
     if (row.every(function (v) { return v === '' || v === null; })) continue;
-    list.push({ rowIndex: i + 2, code: String(row[0] || ''), name: String(row[1] || '') });
+    list.push({ rowIndex: i + 2, code: String(row[0] || '').trim(), name: String(row[1] || '').trim() });
   }
   return list;
 }
@@ -2124,7 +2303,7 @@ function addStaffName(code, name) {
 }
 
 /** 担当者マスタを1件更新する（マスタ権限のみ）。 */
-function updateStaffName(rowIndex, code, name) {
+function updateStaffName(rowIndex, code, name, expectedCode) {
   assertMaster_();
   validateStaffNameInput_(code, name);
   return withScriptLock_(function () {
@@ -2133,13 +2312,14 @@ function updateStaffName(rowIndex, code, name) {
   if (!rowIndex || rowIndex < 2 || rowIndex > sheet.getLastRow()) {
     throw new Error('対象の行が見つかりません。画面を再読込してください。');
   }
+  assertRowStillMatches_(sheet, rowIndex, expectedCode, false);
   sheet.getRange(rowIndex, 1, 1, 2).setNumberFormat('@').setValues(protectSheetRows_([[String(code).trim(), String(name).trim()]]));
   return getStaffNameList();
   });
 }
 
 /** 担当者マスタを1件削除する（マスタ権限のみ）。 */
-function deleteStaffName(rowIndex) {
+function deleteStaffName(rowIndex, expectedCode) {
   assertMaster_();
   return withScriptLock_(function () {
   var sheet = getOrCreateStaffNameSheet_();
@@ -2147,7 +2327,8 @@ function deleteStaffName(rowIndex) {
   if (!rowIndex || rowIndex < 2 || rowIndex > sheet.getLastRow()) {
     throw new Error('対象の行が見つかりません。画面を再読込してください。');
   }
-  sheet.deleteRow(rowIndex);
+  assertRowStillMatches_(sheet, rowIndex, expectedCode, false);
+  deleteSheetRowSafe_(sheet, rowIndex);
   return getStaffNameList();
   });
 }
@@ -2155,7 +2336,7 @@ function deleteStaffName(rowIndex) {
 /** 人事データCSVの見出しラベルを正規化する（BOM除去・前後空白除去のみ。数字プレフィックスは付かない想定）。 */
 function normalizeStaffCsvHeaderLabel_(raw) {
   if (raw === null || raw === undefined) return '';
-  return String(raw).replace(/^﻿/, '').trim();
+  return String(raw).replace(/^﻿/, '').replace(/[\r\n]+/g, '').trim();
 }
 
 /** 見出し行の中から、指定した条件に一致する最初の列番号を探す。見つからなければ-1。 */
@@ -2221,7 +2402,7 @@ function findRoleColumnIndex_(headerRow) {
  * （無ければ-1。これらは任意列のため、無くても「■担当者NO」「社員名称」だけで取り込みを続行できる）。
  */
 function detectStaffCsvHeaderRow_(matrix) {
-  var scanLimit = Math.min(matrix.length, 5);
+  var scanLimit = Math.min(matrix.length, HEADER_SCAN_ROWS_);
   for (var r = 0; r < scanLimit; r++) {
     var codeIdx = findStaffCsvColumnIndex_(matrix[r], function (label) { return label.replace(/^■/, '').trim() === '担当者NO'; });
     var nameIdx = findStaffCsvColumnIndex_(matrix[r], function (label) { return label === '社員名称'; });
@@ -2322,6 +2503,28 @@ function mapCsvRoleToAppRole_(raw) {
 var EMAIL_PATTERN_ = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 /**
+ * 人事データ取込で、既存の所属表記と人事データの所属表記から、取込後の所属表記を決める。
+ * ・人事データ側が空欄なら既存のまま
+ * ・同じ所属（比較用表記が同じ）で人事データ側に店舗コードが無い場合は、既存のコード付き表記を残す
+ *   （「717:イオン」を「イオン」で上書きすると、同名の別店舗と区別できなくなり照合できなくなるため）
+ */
+function nextAffiliationValue_(existingValue, csvValue) {
+  if (!csvValue) return existingValue;
+  if (existingValue && affiliationKey_(existingValue) === affiliationKey_(csvValue) &&
+      affiliationCode_(existingValue) && !affiliationCode_(csvValue)) {
+    return existingValue;
+  }
+  return csvValue;
+}
+
+/** 2つの所属表記が別の所属か（比較用表記が違う、または双方に店舗コードがあってコードが違う）。 */
+function affiliationDiffers_(a, b) {
+  if (affiliationKey_(a) !== affiliationKey_(b)) return true;
+  var ca = affiliationCode_(a), cb = affiliationCode_(b);
+  return !!(ca && cb && ca !== cb);
+}
+
+/**
  * 人事データCSVを取り込み、担当者マスタ（担当者コード→氏名）へ一括反映する（マスタ権限のみ）。
  * ・CSVの「■担当者NO」列と「社員名称」列だけを使う（他の人事項目は読み捨てる）。
  * ・担当者マスタに同じ担当者コードが既にあれば氏名を上書きし、無ければ新規追加する。
@@ -2397,18 +2600,21 @@ function importStaffNameCsv(csvText, fileName) {
       'マスタ権限を持つ人が誰もいなくなります。先に「権限管理（スタッフ権限）」で自分自身をマスタ権限として登録してから取り込んでください。');
   }
 
+  // ここからは「何をどう書き換えるか」を先にすべて決め、マスタ権限が残ることを確かめてから書き込む
+  // （途中まで書いてから失敗して、担当者マスタだけ・一部のアカウントだけ反映される状態を作らないため）。
   var sheet = getOrCreateStaffNameSheet_();
   var existingByCode = {};
   getStaffNameList().forEach(function (s) { existingByCode[s.code] = s; });
 
   var added = 0, updated = 0;
   var rowsToAppend = [];
+  var nameUpdates = [];
   Object.keys(csvMap).forEach(function (code) {
     var name = csvMap[code];
     var target = existingByCode[code];
     if (target) {
       if (target.name !== name) {
-        sheet.getRange(target.rowIndex, 2).setValue(protectSheetText_(name));
+        nameUpdates.push({ rowIndex: target.rowIndex, name: name });
         updated++;
       }
     } else {
@@ -2417,19 +2623,14 @@ function importStaffNameCsv(csvText, fileName) {
     }
   });
 
-  if (rowsToAppend.length > 0) {
-    var startRow = sheet.getLastRow() + 1;
-    sheet.getRange(startRow, 1, rowsToAppend.length, 2).setNumberFormat('@').setValues(protectSheetRows_(rowsToAppend));
-  }
-
   var accountsAdded = 0, accountsUpdated = 0, accountsMasterDowngraded = 0, accountsAffiliationChanged = 0, accountsRoleSynced = 0;
   var roleRawTally = {}; // 診断用：CSVの権限欄に実際に書かれていた文言ごとの件数
+  var staffSheet = null, accountRowsToAppend = [], accountCellUpdates = [];
   if (accountsDetected) {
-    var staffSheet = getOrCreateStaffSheet_();
+    staffSheet = getOrCreateStaffSheet_();
     var existingByEmail = {};
-    getStaffAccessList().forEach(function (s) { existingByEmail[s.email.toLowerCase()] = s; });
+    listStaffAccess_().forEach(function (s) { existingByEmail[s.email.toLowerCase()] = s; });
 
-    var accountRowsToAppend = [];
     Object.keys(csvAccounts).forEach(function (email) {
       var acc = csvAccounts[email];
       var tallyKey = acc.roleRaw || '（空欄）';
@@ -2450,11 +2651,9 @@ function importStaffNameCsv(csvText, fileName) {
         // CSVに所属店舗・所属エリアの列が無い、またはその行だけ空欄の場合は、既存の所属をそのまま使う
         // （空欄で上書きすると「所属が空欄に異動した」扱いになり、本人が自店舗・自エリアのデータを
         // 1件も見られなくなるため。権限欄が空欄の場合に既存の権限を維持するのと同じ考え方）。
-        var nextOffice = acc.office || existing.office;
-        var nextArea = acc.area || existing.area;
-        // 「717:イーアスつくば」と「イーアスつくば」のような、先頭の番号の有無だけの違いは異動とみなさない。
-        var affiliationChanged = affiliationKey_(existing.office) !== affiliationKey_(nextOffice) ||
-          affiliationKey_(existing.area) !== affiliationKey_(nextArea);
+        var nextOffice = nextAffiliationValue_(existing.office, acc.office);
+        var nextArea = nextAffiliationValue_(existing.area, acc.area);
+        var affiliationChanged = affiliationDiffers_(existing.office, nextOffice) || affiliationDiffers_(existing.area, nextArea);
 
         if (affiliationChanged) {
           // 所属（所属店舗・所属エリア）が変わった場合は、既存の行は一切変更せずそのまま残し、
@@ -2465,11 +2664,11 @@ function importStaffNameCsv(csvText, fileName) {
           if (roleChanged) accountsRoleSynced++;
         } else {
           if (existing.name !== acc.name) {
-            staffSheet.getRange(existing.rowIndex, 2).setValue(protectSheetText_(acc.name));
+            accountCellUpdates.push({ rowIndex: existing.rowIndex, col: 2, value: acc.name });
             accountsUpdated++;
           }
           if (roleChanged) {
-            staffSheet.getRange(existing.rowIndex, 5).setValue(nextRole);
+            accountCellUpdates.push({ rowIndex: existing.rowIndex, col: 5, value: nextRole });
             accountsRoleSynced++;
           }
         }
@@ -2481,6 +2680,21 @@ function importStaffNameCsv(csvText, fileName) {
       }
     });
 
+    // 書き込んだ後の状態を組み立てて、マスタ権限のアカウントが1件以上残ることを最後にもう一度確かめる。
+    var simulated = readStaffRows_(staffSheet).map(function (r) { return r.slice(); });
+    accountCellUpdates.forEach(function (u) { simulated[u.rowIndex - 2][u.col - 1] = u.value; });
+    assertMasterRemains_(simulated.concat(accountRowsToAppend),
+      'この人事データを取り込むと、マスタ権限のアカウントが1件も無くなるため、取り込みを中止しました（何も書き込んでいません）。' +
+      '「権限管理（スタッフ権限）」で、マスタ権限のアカウントの行（Googleアカウント・権限欄）をご確認ください。');
+  }
+
+  nameUpdates.forEach(function (u) { sheet.getRange(u.rowIndex, 2).setValue(protectSheetText_(u.name)); });
+  if (rowsToAppend.length > 0) {
+    var startRow = sheet.getLastRow() + 1;
+    sheet.getRange(startRow, 1, rowsToAppend.length, 2).setNumberFormat('@').setValues(protectSheetRows_(rowsToAppend));
+  }
+  if (staffSheet) {
+    accountCellUpdates.forEach(function (u) { staffSheet.getRange(u.rowIndex, u.col).setValue(protectSheetText_(u.value)); });
     if (accountRowsToAppend.length > 0) {
       var accountStartRow = staffSheet.getLastRow() + 1;
       staffSheet.getRange(accountStartRow, 1, accountRowsToAppend.length, 5).setValues(protectSheetRows_(accountRowsToAppend));
