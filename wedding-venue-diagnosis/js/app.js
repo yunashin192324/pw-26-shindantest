@@ -263,7 +263,6 @@
     $('res-notice').innerHTML = '';
     $('res-main').innerHTML = '';
     $('res-alt-wrap').innerHTML = '';
-    $('res-trace').innerHTML = '';
     setBg($('bg-result'), CONFIG.sceneImages && CONFIG.sceneImages.result);
 
     $('res-summary').innerHTML = '<p class="summary-label">あなたの回答</p>' + answerSummary(D).map(function (t) {
@@ -276,7 +275,6 @@
       $('res-notice').innerHTML = '<div class="notice">' + (D.status === 'no_conditions'
         ? 'すべての質問で「こだわらない」などを選ばれたため、式場を絞り込む手がかりがありませんでした。根拠のないおすすめは行わないため、順位は表示していません。<br><strong>気になる条件を1つ以上選んで、もう一度お試しください。</strong>'
         : 'お選びいただいた条件に該当する式場は、登録データ上ありませんでした。<br><strong>条件を変えて、もう一度お試しください。</strong>') + '</div>';
-      $('res-trace').innerHTML = allVenuesList();
       renderConsult(null);
       $('share-row').hidden = true;
       showScreen('screen-result', 'anim-up');
@@ -303,7 +301,6 @@
     $('res-alt-wrap').innerHTML = '<div class="section-title"><span>その他のおすすめ式場</span></div>' + (alts.length
       ? '<div class="alt-grid">' + alts.map(function (r) { return altCard(r, D); }).join('') + '</div>'
       : '<p class="notice">ほかに、希望条件に該当する式場はありませんでした。</p>');
-    $('res-trace').innerHTML = traceTable(D);
     renderConsult(top);
 
     showScreen('screen-result', 'anim-up');
@@ -355,27 +352,6 @@
       '<span class="alt-hits"><b>該当：</b>' + esc(hits.join('・')) +
       (D.priority ? '<br>最重視の条件：' + (r.priorityMatch ? '該当' : '登録なし') : '') + '</span>' +
       '<span class="alt-more">特徴の一覧を見る</span></button>';
-  }
-
-  function traceTable(D) {
-    var head = '<tr><th>順位</th><th>式場名</th>' + (D.priority ? '<th>最重視</th>' : '') + '<th>一致数</th><th>該当した希望条件</th></tr>';
-    var body = D.ranked.map(function (r) {
-      var zero = r.matchCount === 0;
-      return '<tr class="' + (zero ? 'zero' : '') + '"><td class="num">' + (zero ? '対象外' : esc(rankLabel(r))) + '</td><td>' + esc(r.venue.name) + '</td>' +
-        (D.priority ? '<td class="num">' + (r.priorityMatch ? '○' : '－') + '</td>' : '') +
-        '<td class="num">' + r.matchCount + ' / ' + D.conditions.length + '</td><td>' + esc(r.matched.map(function (c) { return c.category; }).join('・') || '－') + '</td></tr>';
-    }).join('');
-    return '<details class="trace"><summary>判定の詳細（全' + D.ranked.length + '式場）</summary><div class="trace-body">' +
-      '<p class="trace-note">順位の決め方：①最も重視する条件に該当 → ②該当した希望条件の数 → ③該当した条件がまたがる質問の数 の順に比較し、すべて同じ場合は同順位（データの掲載順に表示）。希望条件に1つも該当しない式場は「対象外」とし、おすすめしません。</p>' +
-      '<table class="trace-table"><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div></details>';
-  }
-
-  function allVenuesList() {
-    return '<details class="trace"><summary>掲載している式場の一覧（全' + DATA.venues.length + '件・掲載順）</summary><div class="trace-body">' +
-      '<p class="trace-note">おすすめ順ではありません。各式場の特徴は「特徴の一覧を見る」で確認できます。</p><div class="alt-grid">' +
-      DATA.venues.map(function (v) {
-        return '<button type="button" class="alt-card card-visible" data-detail="' + esc(v.id) + '"><span class="alt-name">' + esc(v.name) + '</span><span class="alt-more">特徴の一覧を見る</span></button>';
-      }).join('') + '</div></div></details>';
   }
 
   function renderConsult() {
