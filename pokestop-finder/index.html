@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>ストップ候補さがし</title>
+  <meta name="description" content="S2セルを指定するだけで、公開地図データからポケストップ候補を探し、申請文の下書きまで作れる無料ツール。">
+  <meta name="theme-color" content="#0f766e">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%230f766e'/%3E%3Ccircle cx='32' cy='32' r='10' fill='white'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand"><span class="logo" aria-hidden="true"></span>ストップ候補さがし</div>
+    <button id="btn-menu" class="btn ghost" type="button">履歴・データ</button>
+  </header>
+
+  <nav class="steps" aria-label="手順">
+    <ol>
+      <li data-step="1"><span>1</span>セルを指定</li>
+      <li data-step="2"><span>2</span>候補を探す</li>
+      <li data-step="3"><span>3</span>候補を確認</li>
+      <li data-step="4"><span>4</span>申請文を作る</li>
+    </ol>
+  </nav>
+
+  <main class="layout">
+    <div class="col-map">
+      <div id="map-wrap" class="map-wrap">
+        <div id="map" class="map" role="application" aria-label="地図。タップした地点のセルを指定します"></div>
+        <div class="map-modes" role="group" aria-label="地図をタップしたときの動作">
+          <button type="button" class="mode on" data-mode="cell">セルを指定</button>
+          <button type="button" class="mode" data-mode="add">候補を追加</button>
+          <button type="button" class="mode" data-mode="existing">既存スポット登録</button>
+        </div>
+        <div id="map-note" class="map-note" hidden></div>
+      </div>
+    </div>
+
+    <div class="col-panel">
+      <section class="panel" id="sec-cell" aria-labelledby="h-cell">
+        <h2 id="h-cell"><span class="num">1</span>セルを指定</h2>
+        <form id="cell-form" class="input-row" autocomplete="off">
+          <input id="cell-input" type="text" inputmode="text" placeholder="セルID か 緯度,経度 を貼り付け" aria-label="セルIDまたは緯度・経度">
+          <button class="btn" type="submit">表示</button>
+        </form>
+        <div class="sub-row">
+          <span class="muted">地図をタップしても指定できます</span>
+          <button id="btn-here" class="btn ghost small" type="button">現在地</button>
+        </div>
+        <div class="level-row" role="radiogroup" aria-label="判定の単位">
+          <button type="button" class="seg on" data-level="17" role="radio" aria-checked="true">L17<small>ポケストップ</small></button>
+          <button type="button" class="seg" data-level="14" role="radio" aria-checked="false">L14<small>ジム</small></button>
+        </div>
+        <p id="cell-msg" class="msg" role="alert" hidden></p>
+        <div id="cell-info" class="cell-info" hidden></div>
+      </section>
+
+      <section class="panel" id="sec-search" aria-labelledby="h-search">
+        <h2 id="h-search" class="sr-only">候補を探す</h2>
+        <button id="btn-search" class="btn primary big" type="button" disabled><span class="num">2</span>候補を探す</button>
+        <ol id="progress" class="progress" aria-live="polite" hidden></ol>
+        <div id="search-msg" class="msg-box" role="status" hidden></div>
+      </section>
+
+      <section class="panel" id="sec-results" aria-labelledby="h-results" hidden>
+        <h2 id="h-results"><span class="num">3</span>候補を確認</h2>
+        <div id="sources" class="sources"></div>
+        <div id="filters" class="chips" role="tablist" aria-label="絞り込み"></div>
+        <div id="cards" class="cards"></div>
+      </section>
+
+      <section class="panel intro" id="intro">
+        <h2>使い方</h2>
+        <ol>
+          <li>セルIDを貼り付けるか、地図をタップします。</li>
+          <li>「候補を探す」を押すと、公開地図データから候補を集めます。</li>
+          <li>候補を選んで「申請文を作る」を押すと、タイトル・説明文・補助文ができます。</li>
+        </ol>
+        <p class="muted">利用料はかかりません。APIキーや登録も不要です。データはこの端末の中だけに保存されます。</p>
+      </section>
+    </div>
+  </main>
+
+  <div id="sheet" class="sheet" hidden>
+    <div class="sheet-backdrop" data-close></div>
+    <div class="sheet-body" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+      <div class="sheet-head">
+        <button type="button" class="btn ghost small" data-close>← 戻る</button>
+        <h2 id="sheet-title"></h2>
+      </div>
+      <div id="sheet-content" class="sheet-content"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="vendor/s2/s2.bundle.js"></script>
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <script src="js/core/geo.js"></script>
+  <script src="js/core/cell.js"></script>
+  <script src="js/core/sources.js"></script>
+  <script src="js/core/candidates.js"></script>
+  <script src="js/core/writer.js"></script>
+  <script src="js/core/store.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

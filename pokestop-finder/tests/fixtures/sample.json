@@ -1,0 +1,333 @@
+{
+ "note": "テスト用の架空データ。実在の場所・団体とは関係ありません。",
+ "cellToken": "60188bf6dc",
+ "cellDecimal": "6924438319451340800",
+ "overpass": {
+  "version": 0.6,
+  "generator": "Overpass API (sample)",
+  "osm3s": {
+   "copyright": "sample"
+  },
+  "elements": [
+   {
+    "type": "node",
+    "id": 1001,
+    "lat": 35.6797974,
+    "lon": 139.7597219,
+    "tags": {
+     "tourism": "artwork",
+     "artwork_type": "statue",
+     "material": "bronze",
+     "name": "平和の像",
+     "artist_name": "山田太郎",
+     "start_date": "1965"
+    }
+   },
+   {
+    "type": "node",
+    "id": 1002,
+    "lat": 35.6798154,
+    "lon": 139.7597551,
+    "tags": {
+     "tourism": "artwork",
+     "name": "平和の像"
+    }
+   },
+   {
+    "type": "node",
+    "id": 1003,
+    "lat": 35.6796715,
+    "lon": 139.7599101,
+    "tags": {
+     "historic": "memorial",
+     "memorial": "stone",
+     "name": "開園記念碑",
+     "inscription": "昭和四十年開園"
+    }
+   },
+   {
+    "type": "node",
+    "id": 1004,
+    "lat": 35.6796175,
+    "lon": 139.7596112,
+    "tags": {
+     "tourism": "information",
+     "information": "board",
+     "board_type": "history"
+    }
+   },
+   {
+    "type": "node",
+    "id": 1005,
+    "lat": 35.6798513,
+    "lon": 139.7599765,
+    "tags": {
+     "leisure": "playground"
+    }
+   },
+   {
+    "type": "node",
+    "id": 1006,
+    "lat": 35.6810744,
+    "lon": 139.761438,
+    "tags": {
+     "amenity": "place_of_worship",
+     "religion": "shinto",
+     "name": "稲荷神社"
+    }
+   },
+   {
+    "type": "node",
+    "id": 1007,
+    "lat": 35.6796012,
+    "lon": 139.7594674,
+    "tags": {
+     "historic": "wayside_shrine",
+     "name": "地蔵堂"
+    }
+   },
+   {
+    "type": "node",
+    "id": 1008,
+    "lat": 35.6799503,
+    "lon": 139.7595005,
+    "tags": {
+     "tourism": "artwork",
+     "name": "庭のオブジェ",
+     "access": "private"
+    }
+   },
+   {
+    "type": "node",
+    "id": 1009,
+    "lat": 35.6794556,
+    "lon": 139.760054,
+    "tags": {
+     "leisure": "pitch",
+     "sport": "baseball"
+    }
+   },
+   {
+    "type": "way",
+    "id": 2001,
+    "bounds": {},
+    "nodes": [
+     9000,
+     9001,
+     9002,
+     9003,
+     9004
+    ],
+    "geometry": [
+     {
+      "lat": 35.6795456,
+      "lon": 139.7594451
+     },
+     {
+      "lat": 35.6795456,
+      "lon": 139.7600208
+     },
+     {
+      "lat": 35.6799233,
+      "lon": 139.7600208
+     },
+     {
+      "lat": 35.6799233,
+      "lon": 139.7594451
+     },
+     {
+      "lat": 35.6795456,
+      "lon": 139.7594451
+     }
+    ],
+    "tags": {
+     "leisure": "park",
+     "name": "テスト中央公園",
+     "wikidata": "Q900001"
+    }
+   },
+   {
+    "type": "way",
+    "id": 2002,
+    "bounds": {},
+    "nodes": [
+     9000,
+     9001,
+     9002,
+     9003,
+     9004
+    ],
+    "geometry": [
+     {
+      "lat": 35.6793657,
+      "lon": 139.7599987
+     },
+     {
+      "lat": 35.6793657,
+      "lon": 139.7602201
+     },
+     {
+      "lat": 35.6795456,
+      "lon": 139.7602201
+     },
+     {
+      "lat": 35.6795456,
+      "lon": 139.7599987
+     },
+     {
+      "lat": 35.6793657,
+      "lon": 139.7599987
+     }
+    ],
+    "tags": {
+     "amenity": "school",
+     "name": "テスト小学校"
+    }
+   },
+   {
+    "type": "area",
+    "id": 2400002001,
+    "tags": {
+     "leisure": "park",
+     "name": "テスト中央公園"
+    }
+   }
+  ]
+ },
+ "wikipedia": {
+  "batchcomplete": true,
+  "query": {
+   "pages": [
+    {
+     "pageid": 555001,
+     "ns": 0,
+     "title": "テスト中央公園",
+     "index": 1,
+     "coordinates": [
+      {
+       "lat": 35.67973442939406,
+       "lon": 139.75973296746034,
+       "primary": true,
+       "globe": "earth"
+      }
+     ],
+     "pageprops": {
+      "wikibase_item": "Q900001"
+     },
+     "extract": "テスト中央公園は架空の公園である。"
+    },
+    {
+     "pageid": 555002,
+     "ns": 0,
+     "title": "架空駅",
+     "index": 2,
+     "coordinates": [
+      {
+       "lat": 35.67891604786307,
+       "lon": 139.7611058235791,
+       "primary": true,
+       "globe": "earth"
+      }
+     ],
+     "pageprops": {
+      "wikibase_item": "Q900003"
+     },
+     "extract": "架空駅は架空の駅である。"
+    }
+   ]
+  }
+ },
+ "wikidata": {
+  "head": {
+   "vars": [
+    "item",
+    "itemLabel",
+    "coord",
+    "typeLabel",
+    "heritageLabel",
+    "inception",
+    "prec",
+    "image",
+    "article"
+   ]
+  },
+  "results": {
+   "bindings": [
+    {
+     "item": {
+      "type": "uri",
+      "value": "http://www.wikidata.org/entity/Q900001"
+     },
+     "itemLabel": {
+      "type": "literal",
+      "value": "テスト中央公園"
+     },
+     "coord": {
+      "type": "literal",
+      "value": "Point(139.75973296746034 35.67973442939406)"
+     },
+     "typeLabel": {
+      "type": "literal",
+      "value": "都市公園"
+     },
+     "inception": {
+      "type": "literal",
+      "value": "1965-04-01T00:00:00Z"
+     },
+     "prec": {
+      "type": "literal",
+      "value": "11"
+     },
+     "article": {
+      "type": "uri",
+      "value": "https://ja.wikipedia.org/wiki/%E3%83%86%E3%82%B9%E3%83%88%E4%B8%AD%E5%A4%AE%E5%85%AC%E5%9C%92"
+     }
+    },
+    {
+     "item": {
+      "type": "uri",
+      "value": "http://www.wikidata.org/entity/Q900002"
+     },
+     "itemLabel": {
+      "type": "literal",
+      "value": "旧街道道標"
+     },
+     "coord": {
+      "type": "literal",
+      "value": "Point(139.75983261024314 35.67959053813586)"
+     },
+     "typeLabel": {
+      "type": "literal",
+      "value": "道標"
+     },
+     "heritageLabel": {
+      "type": "literal",
+      "value": "架空市指定文化財"
+     },
+     "inception": {
+      "type": "literal",
+      "value": "1800-01-01T00:00:00Z"
+     },
+     "prec": {
+      "type": "literal",
+      "value": "7"
+     }
+    }
+   ]
+  }
+ },
+ "nominatim": {
+  "place_id": 1,
+  "lat": "35.679725436190424",
+  "lon": "139.75977725314158",
+  "display_name": "架空町, 架空区, 架空市, 架空県, 日本",
+  "address": {
+   "neighbourhood": "架空町",
+   "city_district": "架空区",
+   "city": "架空市",
+   "province": "架空県",
+   "country": "日本",
+   "country_code": "jp"
+  }
+ }
+}
