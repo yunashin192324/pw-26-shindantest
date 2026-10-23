@@ -24,7 +24,7 @@ var SHEET_NAME = '予約データ';
 var STAFF_SHEET_NAME = 'スタッフ権限';
 var STAFF_NAME_SHEET_NAME = '担当者マスタ';
 var TIMEZONE = 'Asia/Tokyo';
-var SERVER_VERSION = '2.7.2';
+var SERVER_VERSION = '2.7.3';
 
 // 予約番号（チャレンジ番号）は半角英数字ちょうど11桁（Javascript.htmlのCHALLENGE_RECORD_BASE_URL判定と同じ桁数）。
 // 数字だけの予約番号（例：01234567890）はGoogleスプレッドシート上で数値として誤認識され、
@@ -340,8 +340,16 @@ function affiliationKey_(s) {
   var t = affiliationText_(s).replace(AFFILIATION_CODE_PATTERN_, '');
   t = t.replace(/[（(][^）)]*[）)]/g, '').replace(/\s+/g, '');
   t = t.replace(/第([一二三四五六七八九]?十[一二三四五六七八九]?|[一二三四五六七八九])/g, function (_, k) { return '第' + kanjiNumberToDigits_(k); });
-  var stripped = t.replace(/(?:営業所|支店|店|エリア)$/, '');
-  return stripped || t;
+  t = t.toUpperCase(); // 「No.1」と「NO.1」のような英字の大文字・小文字の違いはそろえる
+  // 末尾の「営業所」「支店」「店」「エリア」を、両側で同じ回数（最大2回）取り除く。1回だけだと、
+  // 「専門店エリア」（→専門店）と「専門店」（→専門）のように、両側で結果がずれて一致しなくなるため。
+  var key = t;
+  for (var i = 0; i < 2; i++) {
+    var next = key.replace(/(?:営業所|支店|店|エリア)$/, '');
+    if (!next || next === key) break;
+    key = next;
+  }
+  return key;
 }
 
 /**
@@ -394,7 +402,7 @@ function affiliationMatches_(staffValue, rowValue, kindIndex) {
  */
 function isRowInRoleScope_(ctx, office, area, affIndex) {
   if (ctx.role === ROLE_MASTER || ctx.role === ROLE_AL) return true;
-  if (ctx.role === ROLE_MANAGER) return !!ctx.area && affiliationMatches_(ctx.area, area, affIndex && affIndex.area);
+  if (ctx.role === ROLE_MANAGER) return !!ctx.area && managerAreaMatches_(ctx, area, affIndex && affIndex.area);
   if (ctx.role === ROLE_STAFF) return !!ctx.office && staffOfficeMatches_(ctx, office, affIndex && affIndex.office);
   return false; // 権限未登録・不明なロールには何も見せない
 }
@@ -408,7 +416,93 @@ function isRowInRoleScope_(ctx, office, area, affIndex) {
 function staffOfficeMatches_(ctx, rowOffice, officeIndex) {
   if (affiliationMatches_(ctx.office, rowOffice, officeIndex)) return true;
   var storeOnly = officeWithoutAreaPrefix_(ctx.office, ctx.area);
-  return !!storeOnly && affiliationMatches_(storeOnly, rowOffice, officeIndex);
+  if (storeOnly && affiliationMatches_(storeOnly, rowOffice, officeIndex)) return true;
+  return aliasTargetsFor_('office', [ctx.office, storeOnly]).some(function (t) { return affiliationText_(t) === affiliationText_(rowOffice); });
+}
+
+/** 所長・チーフの所属エリアと予約データのエリアが同じエリアか（所属の対応表も使う）。 */
+function managerAreaMatches_(ctx, rowArea, areaIndex) {
+  if (affiliationMatches_(ctx.area, rowArea, areaIndex)) return true;
+  return aliasTargetsFor_('area', [ctx.area]).some(function (t) { return affiliationText_(t) === affiliationText_(rowArea); });
+}
+
+// ---- 所属の対応表（略称など、書き方の決まりでは結びつけられない所属名を、管理者が対応づける表） ----
+// 例：人事データの「ﾄﾗﾍﾞﾙﾜﾝﾀﾞｰﾗﾝﾄﾞ新宿」＝予約データの「003:TWL新宿」。シート「所属の対応表」に1行ずつ書く
+// （「所属の照合状況を確認」の画面からも登録できる）。予約データ側は、予約データに実在する表記をそのまま書く。
+var AFFILIATION_ALIAS_SHEET_NAME = '所属の対応表';
+var AFFILIATION_ALIAS_KIND_LABELS_ = { office: '店舗', area: 'エリア' };
+var affiliationAliasMemo_ = null; // 1回の処理の中で使い回す（数秒で読み直すため、シートの変更はすぐ反映される）
+var affiliationAliasMemoAt_ = 0;
+
+function getAffiliationAliases_() {
+  if (affiliationAliasMemo_ && new Date().getTime() - affiliationAliasMemoAt_ < 5000) return affiliationAliasMemo_;
+  var out = { office: {}, area: {}, list: [] };
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(AFFILIATION_ALIAS_SHEET_NAME);
+    if (sheet && sheet.getLastRow() >= 2) {
+      sheet.getRange(2, 1, sheet.getLastRow() - 1, 3).getValues().forEach(function (r) {
+        var kindLabel = String(r[0] || '').trim();
+        var kind = kindLabel === AFFILIATION_ALIAS_KIND_LABELS_.area ? 'area' : (kindLabel === AFFILIATION_ALIAS_KIND_LABELS_.office ? 'office' : null);
+        var fromKey = affiliationKey_(r[1]);
+        var to = affiliationText_(r[2]);
+        if (!kind || !fromKey || !to) return;
+        (out[kind][fromKey] = out[kind][fromKey] || []).push(to);
+        out.list.push({ kind: kind, from: String(r[1]).trim(), to: to });
+      });
+    }
+  } catch (e) {
+    console.warn('getAffiliationAliases_: ' + e);
+  }
+  affiliationAliasMemo_ = out;
+  affiliationAliasMemoAt_ = new Date().getTime();
+  return out;
+}
+
+/** 所属欄の表記（values のいずれか）に対応づけられている、予約データ側の所属名の一覧。 */
+function aliasTargetsFor_(kind, values) {
+  var map = getAffiliationAliases_()[kind];
+  var seen = {}, out = [];
+  (values || []).forEach(function (v) {
+    var k = affiliationKey_(v);
+    (k && map[k] ? map[k] : []).forEach(function (t) { if (!seen[t]) { seen[t] = true; out.push(t); } });
+  });
+  return out;
+}
+
+/**
+ * 所属の対応表に1行追加する（マスタ権限のみ。「所属の照合状況を確認」の画面から呼ぶ）。
+ * 予約データ側の表記は、予約データに実在するものだけを受け付ける（打ち間違いで誰も一致しない行を作らないため）。
+ */
+function addAffiliationAlias(kind, fromText, toValue) {
+  assertMaster_();
+  if (kind !== 'office' && kind !== 'area') throw new Error('種類の指定が正しくありません。');
+  var from = String(fromText || '').trim(), to = String(toValue || '').trim();
+  if (!from || !to) throw new Error('対応づける所属名を指定してください。');
+  var sheet = getDataSheet_();
+  var snap = loadSnapshot_(sheet, getDataVersion_(), sheet.getLastRow(), {}).snap;
+  if (distinctOf_(snap.cols[kind]).map(affiliationText_).indexOf(affiliationText_(to)) === -1) {
+    throw new Error('「' + to + '」は予約データにありません。一覧から選んでください。');
+  }
+  return withScriptLock_(function () {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var aliasSheet = ss.getSheetByName(AFFILIATION_ALIAS_SHEET_NAME);
+    if (!aliasSheet) {
+      aliasSheet = ss.insertSheet(AFFILIATION_ALIAS_SHEET_NAME);
+      aliasSheet.getRange(1, 1, 1, 3).setValues([['種類（店舗／エリア）', 'スタッフ権限・人事データでの所属', '予約データでの所属']]);
+      try { aliasSheet.setFrozenRows(1); } catch (e) { /* 見た目だけの設定のため、失敗しても続ける */ }
+    }
+    affiliationAliasMemo_ = null;
+    var exists = getAffiliationAliases_().list.some(function (a) {
+      return a.kind === kind && affiliationKey_(a.from) === affiliationKey_(from) && a.to === affiliationText_(to);
+    });
+    if (!exists) {
+      var rowIndex = Math.max(aliasSheet.getLastRow(), 1) + 1;
+      aliasSheet.getRange(rowIndex, 1, 1, 3).setNumberFormat('@')
+        .setValues(protectSheetRows_([[AFFILIATION_ALIAS_KIND_LABELS_[kind], from, to]]));
+    }
+    affiliationAliasMemo_ = null;
+    return { ok: true, added: !exists };
+  });
 }
 
 /** 所属店舗の先頭にある、その人の所属エリア名を除いた店舗名（付いていなければ空文字）。 */
@@ -812,8 +906,12 @@ function distinctOf_(arr) {
 /** 利用者ごとの閲覧範囲を表す文字列（同じ範囲の利用者どうしで保存済みの応答を使い回すためのキー）。 */
 function scopeKeyOf_(ctx) {
   if (ctx.role === ROLE_MASTER || ctx.role === ROLE_AL) return 'ALL';
-  if (ctx.role === ROLE_MANAGER) return 'A|' + affiliationText_(ctx.area);
-  if (ctx.role === ROLE_STAFF) return 'O|' + affiliationText_(ctx.office) + '|' + affiliationText_(ctx.area); // 所属エリアも判定に使うため
+  // 所属エリア・所属の対応表も判定に使うため、それらも名前に含める（対応表を変えたら別の応答になる）。
+  if (ctx.role === ROLE_MANAGER) return 'A|' + affiliationText_(ctx.area) + '|' + aliasTargetsFor_('area', [ctx.area]).join(';');
+  if (ctx.role === ROLE_STAFF) {
+    return 'O|' + affiliationText_(ctx.office) + '|' + affiliationText_(ctx.area) + '|' +
+      aliasTargetsFor_('office', [ctx.office, officeWithoutAreaPrefix_(ctx.office, ctx.area)]).join(';');
+  }
   return 'NONE';
 }
 
@@ -1070,7 +1168,9 @@ function getAffiliationDiagnostics() {
     });
     if (item.matchedRows === 0) {
       var kindIndex = isManager ? affIndex.area : affIndex.office;
-      var mineForHint = isManager ? mine : (officeWithoutAreaPrefix_(s.office, s.area) || mine);
+      var mineForHint = isManager ? mine : storeNameWithoutArea_(s.office, s.area);
+      item.kind = isManager ? 'area' : 'office';
+      item.aliasFrom = mineForHint;
       item.suggestions = similarAffiliations_(mineForHint, isManager ? areaCount : officeCount);
       item.problem = kindIndex.ambiguous[affiliationKey_(mineForHint)]
         ? '同じ名前で番号の違う' + (isManager ? 'エリア' : '店舗') + 'が予約データに複数あり、どれか決められないため、何も表示されません。所属欄に番号付き（例：717:○○）で入力してください。'
@@ -1095,7 +1195,8 @@ function getAffiliationDiagnostics() {
     staff: staff,
     ambiguous: { office: ambiguousList(affIndex.office, officeCount), area: ambiguousList(affIndex.area, areaCount) },
     dataOffices: countList(officeCount),
-    dataAreas: countList(areaCount)
+    dataAreas: countList(areaCount),
+    aliases: getAffiliationAliases_().list
   };
 }
 
@@ -2554,13 +2655,25 @@ function mapCsvRoleToAppRole_(raw) {
 var EMAIL_PATTERN_ = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 /**
+ * 所属店舗の先頭に所属エリア名が付いている場合（人事データの「駐在所属名称」が「東京第一ｴﾘｱﾄﾗﾍﾞﾙﾜﾝﾀﾞｰﾗﾝﾄﾞ新宿」のような場合）、
+ * エリア名を外した店舗名を返す（付いていなければそのまま）。元の文字（半角カナなど）はできるだけそのまま残す。
+ */
+function storeNameWithoutArea_(office, area) {
+  var o = String(office || '').trim(), a = String(area || '').trim();
+  if (o && a && o.length > a.length && o.indexOf(a) === 0) return o.slice(a.length).replace(/^[\s・･:：\-－]+/, '').trim();
+  return officeWithoutAreaPrefix_(o, a) || o;
+}
+
+/**
  * 人事データ取込で、既存の所属表記と人事データの所属表記から、取込後の所属表記を決める。
  * ・人事データ側が空欄なら既存のまま
  * ・同じ所属（比較用表記が同じ）で人事データ側に店舗コードが無い場合は、既存のコード付き表記を残す
  *   （「717:イオン」を「イオン」で上書きすると、同名の別店舗と区別できなくなり照合できなくなるため）
  */
-function nextAffiliationValue_(existingValue, csvValue) {
+function nextAffiliationValue_(existingValue, csvValue, kind) {
   if (!csvValue) return existingValue;
+  // 所属の対応表で、人事データの表記が既存の表記（管理者が直した予約データ側の表記など）に対応づけられていれば、既存のまま
+  if (kind && existingValue && aliasTargetsFor_(kind, [csvValue]).indexOf(affiliationText_(existingValue)) !== -1) return existingValue;
   if (existingValue && affiliationKey_(existingValue) === affiliationKey_(csvValue) &&
       affiliationCode_(existingValue) && !affiliationCode_(csvValue)) {
     return existingValue;
@@ -2633,11 +2746,13 @@ function importStaffNameCsv(csvText, fileName) {
       var email = String(row[headerInfo.emailIdx] || '').trim().toLowerCase();
       if (!email) { continue; }
       if (!EMAIL_PATTERN_.test(email)) { accountsSkipped++; continue; }
+      var csvArea = headerInfo.areaIdx !== -1 ? String(row[headerInfo.areaIdx] || '').trim() : '';
+      var csvOffice = headerInfo.officeIdx !== -1 ? String(row[headerInfo.officeIdx] || '').trim() : '';
       csvAccounts[email] = {
         email: email,
         name: name,
-        office: headerInfo.officeIdx !== -1 ? String(row[headerInfo.officeIdx] || '').trim() : '',
-        area: headerInfo.areaIdx !== -1 ? String(row[headerInfo.areaIdx] || '').trim() : '',
+        office: storeNameWithoutArea_(csvOffice, csvArea),
+        area: csvArea,
         roleRaw: headerInfo.roleIdx !== -1 ? String(row[headerInfo.roleIdx] || '').trim() : ''
       };
     }
@@ -2702,9 +2817,15 @@ function importStaffNameCsv(csvText, fileName) {
         // CSVに所属店舗・所属エリアの列が無い、またはその行だけ空欄の場合は、既存の所属をそのまま使う
         // （空欄で上書きすると「所属が空欄に異動した」扱いになり、本人が自店舗・自エリアのデータを
         // 1件も見られなくなるため。権限欄が空欄の場合に既存の権限を維持するのと同じ考え方）。
-        var nextOffice = nextAffiliationValue_(existing.office, acc.office);
-        var nextArea = nextAffiliationValue_(existing.area, acc.area);
-        var affiliationChanged = affiliationDiffers_(existing.office, nextOffice) || affiliationDiffers_(existing.area, nextArea);
+        var nextOffice = nextAffiliationValue_(existing.office, acc.office, 'office');
+        var nextArea = nextAffiliationValue_(existing.area, acc.area, 'area');
+        // 所属店舗の先頭にエリア名が付いた古い表記（以前の取込で保存したもの）と、エリア名を外した新しい表記は、
+        // 同じ店舗として比べる（異動として扱って行を増やさない）。
+        var affiliationChanged = affiliationDiffers_(storeNameWithoutArea_(existing.office, existing.area), storeNameWithoutArea_(nextOffice, nextArea)) ||
+          affiliationDiffers_(existing.area, nextArea);
+        if (!affiliationChanged && nextOffice !== existing.office && affiliationKey_(nextOffice) !== affiliationKey_(existing.office)) {
+          accountCellUpdates.push({ rowIndex: existing.rowIndex, col: 3, value: nextOffice }); // 表記だけを、エリア名を外した形に直す
+        }
 
         if (affiliationChanged) {
           // 所属（所属店舗・所属エリア）が変わった場合は、既存の行は一切変更せずそのまま残し、

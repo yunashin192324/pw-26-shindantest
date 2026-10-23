@@ -2265,6 +2265,63 @@ function onStaffListChanged_(list) {
   }
 }
 
+/**
+ * 照合できない所属名ごとに（同じ所属名の人はまとめて）、予約データ側のどの所属に当たるかを選んで
+ * 「所属の対応表」に登録する欄を作る。候補（名前の近いもの）を先頭に並べ、その他の所属も選べるようにする。
+ */
+function aliasFormHtml_(problems, d) {
+  var groups = {}, order = [];
+  problems.forEach(function (s) {
+    if (!s.kind || !s.aliasFrom) return;
+    var key = s.kind + '|' + s.aliasFrom;
+    if (!groups[key]) { groups[key] = { kind: s.kind, from: s.aliasFrom, count: 0, suggestions: s.suggestions || [] }; order.push(key); }
+    groups[key].count++;
+  });
+  var registeredHtml = (d.aliases || []).length
+    ? '<details class="mt-1"><summary class="cursor-pointer text-slate-600">登録済みの対応（' + formatNumber(d.aliases.length) + '件）</summary>' +
+      d.aliases.map(function (a) { return escapeHtml((a.kind === 'area' ? 'エリア：' : '店舗：') + a.from + ' ＝ ' + a.to); }).join('<br>') + '</details>'
+    : '';
+  if (!order.length) return registeredHtml ? '<div class="mt-2 bg-white rounded-lg p-2">' + registeredHtml + '</div>' : '';
+  order.sort(function (a, b) { return groups[b].count - groups[a].count; });
+  var html = '<div class="mt-2 bg-white rounded-lg p-2"><p class="font-semibold text-indigo-800">予約データ側の所属と対応づける（同じ所属名の人はまとめて直ります）</p>' +
+    '<p class="text-slate-500">略称などで名前が違う場合（例：ﾄﾗﾍﾞﾙﾜﾝﾀﾞｰﾗﾝﾄﾞ新宿＝003:TWL新宿）は、予約データ側の所属を選んで「対応づける」を押してください。' +
+    'シート「所属の対応表」に記録され、次に画面を開いたときから反映されます（取り消す場合は、そのシートの行を削除してください）。</p>' +
+    '<div class="overflow-auto max-h-[40vh]"><table class="w-full"><tbody>';
+  order.forEach(function (key, i) {
+    var g = groups[key];
+    var all = g.kind === 'area' ? (d.dataAreas || []) : (d.dataOffices || []);
+    var sugg = g.suggestions.map(function (v) { return v.value; });
+    var options = '<option value="">（選んでください）</option>' +
+      (sugg.length ? '<optgroup label="名前の近い候補">' + sugg.map(function (v) { return '<option value="' + escapeHtml(v) + '">' + escapeHtml(v) + '</option>'; }).join('') + '</optgroup>' : '') +
+      '<optgroup label="予約データにある' + (g.kind === 'area' ? 'エリア' : '営業所') + '">' +
+      all.filter(function (v) { return sugg.indexOf(v.value) === -1; }).map(function (v) {
+        return '<option value="' + escapeHtml(v.value) + '">' + escapeHtml(v.value) + '（' + formatNumber(v.count) + '件）</option>';
+      }).join('') + '</optgroup>';
+    html += '<tr class="border-t border-slate-100"><td class="px-2 py-1">' + (g.kind === 'area' ? 'エリア' : '店舗') + '</td>' +
+      '<td class="px-2 py-1 font-semibold">' + escapeHtml(g.from) + '</td><td class="px-2 py-1 text-slate-500">' + formatNumber(g.count) + '人</td>' +
+      '<td class="px-2 py-1">＝ <select class="alias-target border border-slate-300 rounded text-xs p-1 max-w-xs" data-index="' + i + '">' + options + '</select></td>' +
+      '<td class="px-2 py-1"><button type="button" class="alias-add bg-indigo-600 hover:bg-indigo-700 text-white rounded px-2 py-1" data-index="' + i +
+      '" data-kind="' + g.kind + '" data-from="' + escapeHtml(g.from) + '">対応づける</button></td></tr>';
+  });
+  html += '</tbody></table></div>' + registeredHtml;
+  return html + '</div>';
+}
+
+function onAliasAddClick_(e) {
+  var btn = e.target.closest('.alias-add');
+  if (!btn) return;
+  var select = document.querySelector('#affiliation-diagnostics select.alias-target[data-index="' + btn.dataset.index + '"]');
+  var to = select ? select.value : '';
+  if (!to) { showToast('予約データ側の所属を選んでください。', 'error'); return; }
+  var kindLabel = btn.dataset.kind === 'area' ? 'エリア' : '店舗';
+  if (!window.confirm(kindLabel + '「' + btn.dataset.from + '」を、予約データの「' + to + '」と同じ' + kindLabel + 'として扱います。よろしいですか？')) return;
+  btn.disabled = true;
+  google.script.run
+    .withSuccessHandler(function () { showToast('対応づけました。照合状況を確認し直します。', 'success'); loadAffiliationDiagnostics_(); })
+    .withFailureHandler(function (err) { btn.disabled = false; onServerError(err); })
+    .addAffiliationAlias(btn.dataset.kind, btn.dataset.from, to);
+}
+
 /** 所属の照合状況（各アカウントに何件の予約が見えるか・表記が紛らわしい所属名）を表示する。 */
 function loadAffiliationDiagnostics_() {
   var box = document.getElementById('affiliation-diagnostics');
@@ -2296,6 +2353,7 @@ function renderAffiliationDiagnostics_(d) {
           '</td></tr>';
       }).join('') + '</tbody></table></div>';
   }
+  html += aliasFormHtml_(problems, d);
   var amb = (d.ambiguous.office || []).concat(d.ambiguous.area || []);
   if (amb.length) {
     html += '<p class="font-semibold text-amber-800 mt-2">番号だけが違う同じ名前の所属（自動では一致させていません）</p><ul class="list-disc pl-5">' +
@@ -2325,6 +2383,7 @@ function staffNameCodeAt_(rowIndex) {
 
 function bindStaffEvents_() {
   document.getElementById('btn-affiliation-diagnostics').addEventListener('click', loadAffiliationDiagnostics_);
+  document.getElementById('affiliation-diagnostics').addEventListener('click', onAliasAddClick_);
   document.getElementById('btn-open-staff-modal').addEventListener('click', function () { openStaffModal(null); });
   document.getElementById('btn-close-staff-modal').addEventListener('click', closeStaffModal);
   document.getElementById('btn-cancel-staff-modal').addEventListener('click', closeStaffModal);
