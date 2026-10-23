@@ -2289,7 +2289,11 @@ function renderAffiliationDiagnostics_(d) {
       problems.map(function (s) {
         return '<tr class="border-t border-slate-100"><td class="px-2 py-1">' + escapeHtml(s.email) + '</td><td class="px-2 py-1">' + escapeHtml(s.name) +
           '</td><td class="px-2 py-1">' + escapeHtml(s.role) + '</td><td class="px-2 py-1">' + escapeHtml(s.office) + '</td><td class="px-2 py-1">' + escapeHtml(s.area) +
-          '</td><td class="px-2 py-1 text-red-700">' + escapeHtml(s.problem) + '</td></tr>';
+          '</td><td class="px-2 py-1 text-red-700">' + escapeHtml(s.problem) +
+          (s.suggestions && s.suggestions.length
+            ? '<div class="text-slate-600 mt-1">予約データ上の近い名前：' + s.suggestions.map(function (v) { return escapeHtml(v.value) + '（' + formatNumber(v.count) + '件）'; }).join('、') + '</div>'
+            : '') +
+          '</td></tr>';
       }).join('') + '</tbody></table></div>';
   }
   var amb = (d.ambiguous.office || []).concat(d.ambiguous.area || []);
@@ -2299,6 +2303,12 @@ function renderAffiliationDiagnostics_(d) {
         return '<li>' + g.values.map(function (v) { return escapeHtml(v.value) + '（' + formatNumber(v.count) + '件）'; }).join('、') + '</li>';
       }).join('') + '</ul><p class="text-slate-500">これらの所属のアカウントは、スタッフ権限シートの所属欄に番号付き（例：717:○○）で入力すると正しく照合されます。</p>';
   }
+  var listHtml = function (title, list) {
+    return '<details class="mt-1"><summary class="cursor-pointer text-indigo-800 font-semibold">' + title + '（' + formatNumber((list || []).length) + '種類）</summary>' +
+      '<div class="overflow-auto max-h-[30vh] bg-white rounded-lg p-2 mt-1">' +
+      (list || []).map(function (v) { return escapeHtml(v.value) + '（' + formatNumber(v.count) + '件）'; }).join('<br>') + '</div></details>';
+  };
+  html += listHtml('予約データにある「営業所」の一覧', d.dataOffices) + listHtml('予約データにある「エリア」の一覧', d.dataAreas);
   html += '<p class="text-slate-500">閲覧範囲は所属欄の表記だけで決まります（氏名・担当者コードなどから推測して広げることはしません）。直す場合はスタッフ権限シート（または上の一覧の「編集」）で所属欄を修正してください。</p>';
   box.innerHTML = html;
 }

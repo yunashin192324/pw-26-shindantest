@@ -24,7 +24,7 @@ var SHEET_NAME = '予約データ';
 var STAFF_SHEET_NAME = 'スタッフ権限';
 var STAFF_NAME_SHEET_NAME = '担当者マスタ';
 var TIMEZONE = 'Asia/Tokyo';
-var SERVER_VERSION = '2.7.1';
+var SERVER_VERSION = '2.7.2';
 
 // 予約番号（チャレンジ番号）は半角英数字ちょうど11桁（Javascript.htmlのCHALLENGE_RECORD_BASE_URL判定と同じ桁数）。
 // 数字だけの予約番号（例：01234567890）はGoogleスプレッドシート上で数値として誤認識され、
@@ -395,8 +395,35 @@ function affiliationMatches_(staffValue, rowValue, kindIndex) {
 function isRowInRoleScope_(ctx, office, area, affIndex) {
   if (ctx.role === ROLE_MASTER || ctx.role === ROLE_AL) return true;
   if (ctx.role === ROLE_MANAGER) return !!ctx.area && affiliationMatches_(ctx.area, area, affIndex && affIndex.area);
-  if (ctx.role === ROLE_STAFF) return !!ctx.office && affiliationMatches_(ctx.office, office, affIndex && affIndex.office);
+  if (ctx.role === ROLE_STAFF) return !!ctx.office && staffOfficeMatches_(ctx, office, affIndex && affIndex.office);
   return false; // 権限未登録・不明なロールには何も見せない
+}
+
+/**
+ * 社員の所属店舗と予約データの営業所が同じ店舗か。所属店舗の先頭に、その人自身の所属エリア名が
+ * 付いている場合（人事データの「駐在所属名称」が「東京第一ｴﾘｱﾄﾗﾍﾞﾙﾜﾝﾀﾞｰﾗﾝﾄﾞ新宿」のように
+ * エリア名＋店舗名になっている場合）は、エリア名を除いた店舗名でも比べる。
+ * 使うのはその人の行に書かれている所属店舗・所属エリアだけで、推測で閲覧範囲を広げることはしない。
+ */
+function staffOfficeMatches_(ctx, rowOffice, officeIndex) {
+  if (affiliationMatches_(ctx.office, rowOffice, officeIndex)) return true;
+  var storeOnly = officeWithoutAreaPrefix_(ctx.office, ctx.area);
+  return !!storeOnly && affiliationMatches_(storeOnly, rowOffice, officeIndex);
+}
+
+/** 所属店舗の先頭にある、その人の所属エリア名を除いた店舗名（付いていなければ空文字）。 */
+function officeWithoutAreaPrefix_(office, area) {
+  var o = affiliationText_(office).replace(AFFILIATION_CODE_PATTERN_, '');
+  var a = affiliationText_(area);
+  if (!o || !a) return '';
+  var candidates = [a, a.replace(AFFILIATION_CODE_PATTERN_, '').trim()];
+  for (var i = 0; i < candidates.length; i++) {
+    var p = candidates[i];
+    if (p && o.length > p.length && o.indexOf(p) === 0) {
+      return o.slice(p.length).replace(/^[\s・:\-－]+/, '').trim();
+    }
+  }
+  return '';
 }
 
 /**
@@ -786,7 +813,7 @@ function distinctOf_(arr) {
 function scopeKeyOf_(ctx) {
   if (ctx.role === ROLE_MASTER || ctx.role === ROLE_AL) return 'ALL';
   if (ctx.role === ROLE_MANAGER) return 'A|' + affiliationText_(ctx.area);
-  if (ctx.role === ROLE_STAFF) return 'O|' + affiliationText_(ctx.office);
+  if (ctx.role === ROLE_STAFF) return 'O|' + affiliationText_(ctx.office) + '|' + affiliationText_(ctx.area); // 所属エリアも判定に使うため
   return 'NONE';
 }
 
@@ -1043,7 +1070,9 @@ function getAffiliationDiagnostics() {
     });
     if (item.matchedRows === 0) {
       var kindIndex = isManager ? affIndex.area : affIndex.office;
-      item.problem = kindIndex.ambiguous[affiliationKey_(mine)]
+      var mineForHint = isManager ? mine : (officeWithoutAreaPrefix_(s.office, s.area) || mine);
+      item.suggestions = similarAffiliations_(mineForHint, isManager ? areaCount : officeCount);
+      item.problem = kindIndex.ambiguous[affiliationKey_(mineForHint)]
         ? '同じ名前で番号の違う' + (isManager ? 'エリア' : '店舗') + 'が予約データに複数あり、どれか決められないため、何も表示されません。所属欄に番号付き（例：717:○○）で入力してください。'
         : '予約データに、この' + (isManager ? '所属エリア' : '所属店舗') + 'と一致する' + (isManager ? 'エリア' : '営業所') + 'がありません（表記の違い・店舗名ではなく部署名が入っている等）。';
     }
@@ -1057,11 +1086,33 @@ function getAffiliationDiagnostics() {
     });
     return Object.keys(groups).map(function (k) { return { key: k, values: groups[k] }; });
   };
+  var countList = function (counts) {
+    return Object.keys(counts).map(function (v) { return { value: v, count: counts[v] }; })
+      .sort(function (x, y) { return y.count - x.count || String(x.value).localeCompare(String(y.value), 'ja'); });
+  };
   return {
     totalRows: loaded.snap.n,
     staff: staff,
-    ambiguous: { office: ambiguousList(affIndex.office, officeCount), area: ambiguousList(affIndex.area, areaCount) }
+    ambiguous: { office: ambiguousList(affIndex.office, officeCount), area: ambiguousList(affIndex.area, areaCount) },
+    dataOffices: countList(officeCount),
+    dataAreas: countList(areaCount)
   };
+}
+
+/**
+ * 診断の表示用：所属欄の表記と名前が近い、予約データ上の営業所・エリア（最大3件）。
+ * 比較用表記の一方が他方を含むものを挙げるだけで、閲覧範囲の判定には使わない（直すかどうかは管理者が判断する）。
+ */
+function similarAffiliations_(mine, counts) {
+  var k = affiliationKey_(mine);
+  if (!k || k.length < 2) return [];
+  var out = [];
+  Object.keys(counts).forEach(function (v) {
+    var kv = affiliationKey_(v);
+    if (kv && kv.length >= 2 && (k.indexOf(kv) !== -1 || kv.indexOf(k) !== -1)) out.push({ value: v, count: counts[v] });
+  });
+  out.sort(function (x, y) { return y.count - x.count; });
+  return out.slice(0, 3);
 }
 
 /**
