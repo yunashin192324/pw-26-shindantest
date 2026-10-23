@@ -24,7 +24,7 @@ var SHEET_NAME = '予約データ';
 var STAFF_SHEET_NAME = 'スタッフ権限';
 var STAFF_NAME_SHEET_NAME = '担当者マスタ';
 var TIMEZONE = 'Asia/Tokyo';
-var SERVER_VERSION = '2.7.4';
+var SERVER_VERSION = '2.7.5';
 
 // 予約番号（チャレンジ番号）は半角英数字ちょうど11桁（Javascript.htmlのCHALLENGE_RECORD_BASE_URL判定と同じ桁数）。
 // 数字だけの予約番号（例：01234567890）はGoogleスプレッドシート上で数値として誤認識され、
@@ -606,26 +606,115 @@ function voteAffiliationLinks_(snap) {
 }
 
 /**
+ * 所属名の「中心の名前」（自動の対応づけの判定用。画面の閲覧範囲の判定そのものには使わない）。
+ * 比較用表記（affiliationKey_）に加えて、点・中点・空白・記号、先頭の「エリア」「HIS」、
+ * 末尾の「営業所」「本店」「支店」「店」「デスク」「サロン」「エリア」「営業部」の違いを無視する。
+ * 例：「ｴｺﾂｱｰﾃﾞｽｸ」と「130:エコツアー」、「H.I.S.The ROOM of journey IKEBUKURO」と「742:HIS The ROOM of journey IKEBUKURO」。
+ */
+function affiliationCoreName_(s) {
+  var t = affiliationText_(s).replace(AFFILIATION_CODE_PATTERN_, '');
+  t = t.replace(/[（(][^）)]*[）)]/g, '');
+  t = t.replace(/第([一二三四五六七八九]?十[一二三四五六七八九]?|[一二三四五六七八九])/g, function (_, k) { return '第' + kanjiNumberToDigits_(k); });
+  t = t.toUpperCase().replace(/[\s・.,\-‐－_\/'’&＋+]/g, ''); // 長音「ー」は名前の一部なので消さない
+  t = t.replace(/^(?:エリア)+/, '');
+  if (/^HIS.{2,}$/.test(t)) t = t.slice(3);
+  for (var i = 0; i < 3; i++) {
+    var next = t.replace(/(?:営業所|本店|支店|店|デスク|サロン|エリア|営業部)$/, '');
+    if (!next || next === t) break;
+    t = next;
+  }
+  return t;
+}
+
+/**
+ * 照合できない所属名1つ（v：voteAffiliationLinks_ の結果の1件）について、予約データ側の対応先の案を作る。
+ * auto=true のものだけ自動で登録し、それ以外は管理者に確認してもらう案として画面に出す。
+ * ・名前：中心の名前が完全に同じで、予約データ側の候補が1つだけ → 自動
+ * ・名前＋予約：片方の中心の名前がもう片方に含まれ、候補が1つだけで、その所属の人の担当予約の50%以上（3件以上）がそこ → 自動
+ *   （含まれているだけで決めないのは、「西新宿」と「新宿」のように別の店舗の場合があるため）
+ * ・予約：担当予約による多数決の条件（voteAffiliationLinks_ の confident）を満たす → 自動
+ */
+function proposeAffiliationLink_(v, dataValues) {
+  var core = affiliationCoreName_(v.from);
+  if (core) {
+    var equal = dataValues.filter(function (d) { return affiliationCoreName_(d) === core; });
+    if (equal.length === 1) return { to: equal[0], auto: true, reason: '自動（名前が一致）' };
+    if (equal.length > 1) return { to: equal[0], auto: false, reason: '同じ名前の候補が複数あります（' + equal.join('、') + '）' };
+    var contained = dataValues.filter(function (d) {
+      var c = affiliationCoreName_(d);
+      return c.length >= 2 && core.length >= 2 && (core.indexOf(c) !== -1 || c.indexOf(core) !== -1);
+    });
+    if (contained.length === 1) {
+      if (v.top === contained[0] && v.share >= 0.5 && v.total >= 3) {
+        return { to: contained[0], auto: true, reason: '自動（名前が含まれ、' + v.peopleWithRows + '人の担当予約' + v.total + '件のうち' + Math.round(v.share * 100) + '%がここ）' };
+      }
+      return { to: contained[0], auto: false, reason: '名前が含まれています（担当予約による裏付けが足りないため確認してください）' };
+    }
+    if (contained.length > 1) {
+      // 候補が複数のときは、担当予約が半分以上そこに入っている場合だけ案として選んでおく（それ以外は人が選ぶ）。
+      var pick = contained.indexOf(v.top) !== -1 && v.share >= 0.5 ? v.top : null;
+      return { to: pick, auto: false, reason: '名前が含まれる候補が複数あります（' + contained.join('、') + '）' };
+    }
+  }
+  if (v.top && v.confident) {
+    return { to: v.top, auto: true, reason: '自動（' + v.peopleWithRows + '人の担当予約' + v.total + '件のうち' + Math.round(v.share * 100) + '%）' };
+  }
+  if (v.top && v.share >= 0.5) {
+    return { to: v.top, auto: false, reason: 'この所属の人の担当予約' + v.total + '件のうち' + Math.round(v.share * 100) + '%がここ（' + v.peopleWithRows + '人分）' };
+  }
+  if (v.top) {
+    // 担当予約が複数の営業所に分かれている（コールセンター・本社の部署など、店舗ではない可能性が高い）。案としては選ばない。
+    return { to: null, auto: false, reason: '担当予約が複数の所に分かれています（一番多い ' + v.top + ' でも' + Math.round(v.share * 100) + '%）。店舗ではない部署の可能性があります' };
+  }
+  return null;
+}
+
+/**
  * 条件を満たす所属名を、所属の対応表へ自動で登録する（排他ロックの中で呼ぶこと）。
  * 一度自動で登録したもの（後で管理者が行を削除したものを含む）は、二度目は登録しない。
- * 戻り値：{ linked: 今回登録したもの, votes: すべての集計結果 }
+ * 戻り値：{ linked: 今回登録したもの, votes: すべての集計結果（proposal：対応先の案 付き） }
  */
 function autoLinkAffiliations_(snap) {
   var votes = voteAffiliationLinks_(snap);
+  var dataValues = { office: distinctOf_(snap.cols.office), area: distinctOf_(snap.cols.area) };
   var props = PropertiesService.getDocumentProperties();
   var done = {};
   try { (JSON.parse(props.getProperty(AUTO_LINK_DONE_PROP_) || '[]') || []).forEach(function (k) { done[k] = true; }); } catch (e) { done = {}; }
   var linked = [];
   votes.forEach(function (v) {
-    if (!v.confident) return;
-    var doneKey = v.kind + '|' + affiliationKey_(v.from) + '|' + affiliationText_(v.top);
+    v.proposal = proposeAffiliationLink_(v, dataValues[v.kind]);
+    if (!v.proposal || !v.proposal.auto) return;
+    var doneKey = v.kind + '|' + affiliationKey_(v.from) + '|' + affiliationText_(v.proposal.to);
     if (done[doneKey]) return;
-    var note = '自動（' + v.peopleWithRows + '人の担当予約' + v.total + '件のうち' + Math.round(v.share * 100) + '%）';
-    if (appendAffiliationAlias_(v.kind, v.from, v.top, note)) linked.push({ kind: v.kind, from: v.from, to: v.top, note: note });
+    if (appendAffiliationAlias_(v.kind, v.from, v.proposal.to, v.proposal.reason)) {
+      linked.push({ kind: v.kind, from: v.from, to: v.proposal.to, note: v.proposal.reason });
+    }
     done[doneKey] = true;
   });
   if (linked.length) props.setProperty(AUTO_LINK_DONE_PROP_, JSON.stringify(Object.keys(done)));
   return { linked: linked, votes: votes };
+}
+
+/**
+ * 所属の対応表にまとめて追加する（マスタ権限のみ。照合状況の画面の「選んだものをまとめて対応づける」から呼ぶ）。
+ * items：[{kind, from, to}]。予約データに無い表記・種類の誤りは、その行だけ飛ばして理由を返す。
+ */
+function addAffiliationAliases(items) {
+  assertMaster_();
+  var sheet = getDataSheet_();
+  var snap = loadSnapshot_(sheet, getDataVersion_(), sheet.getLastRow(), {}).snap;
+  var known = { office: {}, area: {} };
+  ['office', 'area'].forEach(function (k) { distinctOf_(snap.cols[k]).forEach(function (v) { known[k][affiliationText_(v)] = true; }); });
+  return withScriptLock_(function () {
+    var added = 0, errors = [];
+    (items || []).forEach(function (it) {
+      var kind = it && it.kind, from = String((it && it.from) || '').trim(), to = String((it && it.to) || '').trim();
+      if ((kind !== 'office' && kind !== 'area') || !from || !to) { errors.push({ from: from, message: '指定が正しくありません。' }); return; }
+      if (!known[kind][affiliationText_(to)]) { errors.push({ from: from, message: '「' + to + '」は予約データにありません。' }); return; }
+      if (appendAffiliationAlias_(kind, from, to, '手動')) added++;
+    });
+    return { ok: true, added: added, errors: errors };
+  });
 }
 
 /** 取込の後などに呼ぶ、失敗しても元の処理を止めない版（排他ロックの中で呼ぶこと）。 */
@@ -1279,7 +1368,7 @@ function getAffiliationDiagnostics() {
     try {
       var auto = autoLinkAffiliations_(loaded.snap);
       autoLinked = auto.linked;
-      votes = voteAffiliationLinks_(loaded.snap); // 登録後の状態で、まだ照合できない所属名の集計
+      votes = autoLinkAffiliations_(loaded.snap).votes; // 登録後の状態で、まだ照合できない所属名の集計と対応先の案（2回目なので新たな登録は通常起きない）
     } finally {
       lock.releaseLock();
     }
@@ -1321,6 +1410,7 @@ function getAffiliationDiagnostics() {
       item.aliasFrom = mineForHint;
       item.suggestions = similarAffiliations_(mineForHint, isManager ? areaCount : officeCount);
       var vote = voteByKey[item.kind + '|' + affiliationKey_(mineForHint)];
+      if (vote && vote.proposal) item.proposal = vote.proposal;
       if (vote && vote.top) {
         // 同じ所属名の人たちの担当予約で一番多い所属を、候補の先頭に出す（条件を満たさず自動では結ばなかったもの）。
         item.vote = { top: vote.top, share: vote.share, total: vote.total, peopleWithRows: vote.peopleWithRows };
