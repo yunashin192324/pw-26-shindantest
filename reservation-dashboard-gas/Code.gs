@@ -24,7 +24,7 @@ var SHEET_NAME = '予約データ';
 var STAFF_SHEET_NAME = 'スタッフ権限';
 var STAFF_NAME_SHEET_NAME = '担当者マスタ';
 var TIMEZONE = 'Asia/Tokyo';
-var SERVER_VERSION = '2.7.5';
+var SERVER_VERSION = '2.7.6';
 
 // 予約番号（チャレンジ番号）は半角英数字ちょうど11桁（Javascript.htmlのCHALLENGE_RECORD_BASE_URL判定と同じ桁数）。
 // 数字だけの予約番号（例：01234567890）はGoogleスプレッドシート上で数値として誤認識され、
@@ -787,6 +787,22 @@ function withScriptLock_(fn) {
   }
 }
 
+/**
+ * 予約データシートへ書き込む処理用の排他制御。withScriptLock_ に加えて、途中で失敗した場合も版番号を更新する。
+ * 書き込みの一部だけが反映された状態で失敗すると、版番号が変わらないため、画面には失敗前の写し（シートの実際の
+ * 内容と違うデータ）が有効期限まで表示され続けるため。
+ */
+function withDataWriteLock_(fn) {
+  return withScriptLock_(function () {
+    try {
+      return fn();
+    } catch (e) {
+      try { bumpDataVersion_(); } catch (e2) { console.warn('bumpDataVersion_: ' + e2); }
+      throw e;
+    }
+  });
+}
+
 // ============================================================================
 // 画面初期表示データ
 // ============================================================================
@@ -1502,6 +1518,9 @@ function readAllRows_(sheet) {
       obj[col.key] = normalizeCellValue_(col, raw[c]);
     }
     obj.rowIndex = r + 2; // シート上の実行番号（1始まり）。編集APIの対象行指定に使う。
+    // シートから読んだ元の値も持たせておく（重複削除・アーカイブで行を書き戻すとき、変換後の値ではなく元の値を書くため。
+    // 変換後の値から書き戻すと、日付の列に直接入力された「未定」などの文字が消えたり、別の日付に化けたりする）。
+    Object.defineProperty(obj, '__raw', { value: raw.slice(0, ALL_COLUMNS.length), enumerable: false });
     rows.push(obj);
   }
   return rows;
@@ -1629,23 +1648,39 @@ function detectHeaderRow_(matrix) {
   return { rowIndex: bestRow, colIndexByKey: bestMap, missingLabels: missingLabels };
 }
 
+/** 年・月・日が実在する日付か（2月30日・13月などは false）。 */
+function isValidYmd_(y, m, d) {
+  if (!(m >= 1 && m <= 12 && d >= 1)) return false;
+  return d <= new Date(y, m, 0).getDate();
+}
+
+/** 取込で読めなかった値（空欄として取り込んだもの）を、種類ごとに件数と例（最大3件）で記録する。 */
+function noteUnreadable_(stats, kind, col, value) {
+  if (!stats) return;
+  var bucket = stats[kind] = stats[kind] || { count: 0, examples: [] };
+  bucket.count++;
+  if (bucket.examples.length < 3) bucket.examples.push(col.label + '「' + String(value).slice(0, 30) + '」');
+}
+
 /**
  * CSVの1セルを、項目の型（text/number/date）に応じて正規形の値へ変換する。
  * readAllRows_() が返す形式と揃えることで、重複判定やシート書き戻しを共通化している。
  */
-function convertValue_(col, raw) {
+function convertValue_(col, raw, stats) {
   var s = (raw === undefined || raw === null) ? '' : String(raw).trim();
   if (col.type === 'date') {
     if (!s || s === '-') return null;
     var m = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
-    if (!m) return null;
+    // 「2026/02/30」のような実在しない日付は、そのままシートに書くと3月2日などに化けるため、空欄にして件数を知らせる。
+    if (!m || !isValidYmd_(Number(m[1]), Number(m[2]), Number(m[3]))) { noteUnreadable_(stats, 'date', col, s); return null; }
     var mo = ('0' + m[2]).slice(-2), d = ('0' + m[3]).slice(-2);
     return m[1] + '-' + mo + '-' + d;
   }
   if (col.type === 'number') {
     if (!s || s === '-') return null;
     var n = Number(s.replace(/,/g, ''));
-    return isNaN(n) ? null : n;
+    if (isNaN(n)) { noteUnreadable_(stats, 'number', col, s); return null; }
+    return n;
   }
   if (col.key === 'reservationNo' && /^\d+$/.test(s) && s.length > 0 && s.length < RESERVATION_NO_DIGIT_LENGTH) {
     // CSVを作る側（Excel等）で既に先頭の0が失われた数字だけの予約番号も、シート上で数値化された場合
@@ -1688,6 +1723,7 @@ function countFilledEditableFields_(record) {
  */
 function recordsToSheetRows_(records) {
   return records.map(function (rec) {
+    if (rec.__raw) return rec.__raw.slice(); // シートから読んだ行は、読んだときの値のまま書き戻す
     return ALL_COLUMNS.map(function (col) { return cellValueFor_(col, rec[col.key]); });
   });
 }
@@ -1723,6 +1759,9 @@ function applyColumnFormats_(sheet, startRow, numRows) {
  *   0件になる場合も空の2行目だけは残す。
  */
 function rewriteDataRows_(sheet, records) {
+  // 書き直しの途中で実行時間の上限などで打ち切られた場合（エラー処理も動かない）も、
+  // 書き直し前の写しを使い続けないよう、先に版番号を変えておく（書き直し後にも markDataChanged_ で変える）。
+  bumpDataVersion_();
   var n = records.length;
   if (n > 0) {
     ensureRowCapacity_(sheet, n + 1);
@@ -1821,7 +1860,7 @@ function importCsv(csvText, fileName) {
   // 既存データの重複チェックから追記までを排他ロックの中で行う。ロックが無いと、
   // 複数人が同時にCSVインポートした場合に、お互いの「既存行」の読み取りがすれ違って
   // 重複チェックが効かなくなったり、書き込み位置（末尾行）が衝突したりする。
-  return withScriptLock_(function () {
+  return withDataWriteLock_(function () {
   var sheet = getDataSheet_();
   var existingRows = readAllRows_(sheet);
   var existingKeys = {};
@@ -1831,6 +1870,7 @@ function importCsv(csvText, fileName) {
   var batchKeys = {};
   var skippedDuplicate = 0;
   var skippedBlank = 0;
+  var unreadable = {}; // 日付・数値として読めなかった値（空欄として取り込んだもの）
 
   for (var r = headerInfo.rowIndex + 1; r < matrix.length; r++) {
     var rawRow = matrix[r];
@@ -1842,7 +1882,7 @@ function importCsv(csvText, fileName) {
       var col = COLUMNS[ci];
       var idx = headerInfo.colIndexByKey[col.key];
       var raw = (idx === -1 || idx === undefined) ? '' : rawRow[idx];
-      record[col.key] = convertValue_(col, raw);
+      record[col.key] = convertValue_(col, raw, unreadable);
     }
 
     var allEmpty = COLUMNS.every(function (col) {
@@ -1881,6 +1921,7 @@ function importCsv(csvText, fileName) {
     csvDataRows: matrix.length - headerInfo.rowIndex - 1,
     imported: newRecords.length,
     autoLinked: autoLinked.length,
+    unreadable: unreadable,
     skippedDuplicate: skippedDuplicate,
     skippedArchived: skippedArchived,
     skippedBlank: skippedBlank,
@@ -2081,7 +2122,7 @@ function bulkUpdateCellValue(rowIndexes, columnKey, value, rowTokens) {
   if (columnKey !== 'chkDate' && columnKey !== 'memo') {
     throw new Error('この項目は一括登録できません。');
   }
-  return withScriptLock_(function () {
+  return withDataWriteLock_(function () {
     var ctx = getCurrentUserContext_();
     var sheet = getDataSheet_();
     var snap = loadSheetForEdit_(sheet, rowIndexes);
@@ -2117,7 +2158,7 @@ function bulkSetAncillaryStatus(rowIndexes, itemKey, status, bulkQty, reason, ro
   if ((bulkStatus === '〇' || bulkStatus === '☆') && parseAncillaryQty_(bulkQty) === null) {
     throw new Error(ANCILLARY_QTY_REQUIRED_MESSAGE_);
   }
-  return withScriptLock_(function () {
+  return withDataWriteLock_(function () {
     var ctx = getCurrentUserContext_();
     var sheet = getDataSheet_();
     var snap = loadSheetForEdit_(sheet, rowIndexes);
@@ -2149,7 +2190,7 @@ function bulkSetAncillaryStatus(rowIndexes, itemKey, status, bulkQty, reason, ro
  * rowIndex・kind・columnKey/itemKey を含める（失敗した変更だけを「未保存」のまま残すため）。
  */
 function batchUpdateCells(changes) {
-  return withScriptLock_(function () {
+  return withDataWriteLock_(function () {
     var ctx = getCurrentUserContext_();
     var sheet = getDataSheet_();
     var snap = loadSheetForEdit_(sheet, (changes || []).map(function (c) { return c && c.rowIndex; }));
@@ -2214,7 +2255,10 @@ function normalizeEditableInput_(col, value) {
   }
   if (col.type === 'date') {
     var m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    return m ? s.slice(0, 10) : null;
+    if (!m) return null;
+    // 実在しない日付（2月30日など）は、そのまま書くと別の日付に化けるため受け付けない。
+    if (!isValidYmd_(Number(m[1]), Number(m[2]), Number(m[3]))) throw new Error('日付が正しくありません（' + s.slice(0, 10) + '）。');
+    return s.slice(0, 10);
   }
   return s;
 }
@@ -2271,7 +2315,7 @@ function removeDuplicateRows() {
   assertMaster_();
   // シート全体を読んで詰め直すため、他のユーザーの保存処理と重なると行番号がずれて
   // 無関係の行を上書きする事故につながる。排他ロックで同時実行を防ぐ。
-  return withScriptLock_(function () {
+  return withDataWriteLock_(function () {
   var sheet = getDataSheet_();
   var rows = readAllRows_(sheet);
   var bestByKey = {};
@@ -2306,7 +2350,7 @@ function clearAllData(confirmText) {
   if (confirmText !== '削除') {
     throw new Error('確認文字列が一致しません。「削除」と入力してから実行してください。');
   }
-  return withScriptLock_(function () {
+  return withDataWriteLock_(function () {
   var sheet = getDataSheet_();
   rewriteDataRows_(sheet, []);
   markDataChanged_();
@@ -2374,6 +2418,9 @@ function getOrCreateArchiveSpreadsheet_() {
     }
   }
   var ss = SpreadsheetApp.create(ARCHIVE_SPREADSHEET_NAME_);
+  // 作成直後にIDを保存する（この後の準備の途中で失敗した場合に、再実行のたびに新しいアーカイブ先が作られないように。
+  // 準備が終わっていないアーカイブ先は、archiveOldReservations が予約データシートを作り直して使う）。
+  props.setProperty(ARCHIVE_SPREADSHEET_ID_PROP_, ss.getId());
   try { ss.setSpreadsheetTimeZone(TIMEZONE); } catch (e) { console.warn('archive timezone: ' + e); }
   shareArchiveWithMainEditors_(ss);
   var defaultSheet = ss.getSheets()[0];
@@ -2407,6 +2454,21 @@ function assertValidDateString_(dateStr, label) {
   return s;
 }
 
+/** 行の全項目（画面に表示する形にそろえた値）をつないだ文字列。全く同じ内容の行かを比べるのに使う。 */
+function rowContentKey_(r) {
+  return ALL_COLUMNS.map(function (c) { var v = r[c.key]; return v === null || v === undefined ? '' : String(v); }).join('\u0001');
+}
+
+/**
+ * アーカイブの対象か（出発予定日が日付として読めて、基準日より前）。
+ * シートに直接入力された「1月頃」のような日付でない文字は、文字の大小比較で基準日より前と
+ * 判定されてしまうため、空欄と同じく対象にしない。
+ */
+function isArchivableBefore_(r, cutoff) {
+  var d = r.departureDate;
+  return typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d) && d < cutoff;
+}
+
 /**
  * 指定した基準日より前（出発予定日 < cutoffDate）の行が何件あるか、実際には動かさずに確認する
  * （マスタ権限のみ。アーカイブ実行前の確認表示用）。
@@ -2416,7 +2478,7 @@ function previewArchiveCandidates(cutoffDate) {
   var cutoff = assertValidDateString_(cutoffDate, '基準日');
   var sheet = getDataSheet_();
   var rows = readAllRows_(sheet);
-  var archivable = rows.filter(function (r) { return r.departureDate && r.departureDate < cutoff; }).length;
+  var archivable = rows.filter(function (r) { return isArchivableBefore_(r, cutoff); }).length;
   return { archivable: archivable, totalRows: rows.length };
 }
 
@@ -2434,13 +2496,13 @@ function archiveOldReservations(cutoffDate, confirmText) {
 
   // シート全体を読んで詰め直すため、他のユーザーの保存処理と重なると行番号がずれて
   // 無関係の行を上書きする事故につながる。排他ロックで同時実行を防ぐ。
-  return withScriptLock_(function () {
+  return withDataWriteLock_(function () {
   var sheet = getDataSheet_();
   var rows = readAllRows_(sheet);
   var toArchive = [];
   var toKeep = [];
   rows.forEach(function (r) {
-    if (r.departureDate && r.departureDate < cutoff) {
+    if (isArchivableBefore_(r, cutoff)) {
       toArchive.push(r);
     } else {
       toKeep.push(r);
@@ -2459,7 +2521,23 @@ function archiveOldReservations(cutoffDate, confirmText) {
 
   var archiveSs = getOrCreateArchiveSpreadsheet_();
   var archiveSheet = archiveSs.getSheetByName(SHEET_NAME);
-  appendRecords_(archiveSheet, toArchive);
+  // 前回、アーカイブ先の準備（見出し行の作成）の途中で失敗していた場合は、準備をやり直す
+  // （見出し行が無いまま追記すると、1行目に予約データが入り、読み込み時に見出しとして扱われて見えなくなるため）。
+  if (!archiveSheet || archiveSheet.getRange(1, 1, 1, ALL_COLUMNS.length).getValues()[0].every(function (v) { return v === '' || v === null; })) {
+    archiveSheet = buildDataSheet_(archiveSs);
+  }
+  // 前回のアーカイブが「アーカイブ先への追記の後、本体の書き直しの前後」で失敗していた場合、その行は
+  // アーカイブ先と本体の両方に残っている。もう一度実行したときに同じ行をアーカイブ先へ2重に追記しないよう、
+  // アーカイブ先に既に同じ内容（全項目が同じ）の行がある分は追記せず、本体から除くだけにする。
+  var alreadyArchived = 0;
+  var existingCount = {};
+  readAllRows_(archiveSheet).forEach(function (r) { var k = rowContentKey_(r); existingCount[k] = (existingCount[k] || 0) + 1; });
+  var toAppend = toArchive.filter(function (r) {
+    var k = rowContentKey_(r);
+    if (existingCount[k] > 0) { existingCount[k]--; alreadyArchived++; return false; }
+    return true;
+  });
+  appendRecords_(archiveSheet, toAppend);
 
   // アーカイブ先への追記が終わってから本体を詰め直す。本体の書き戻しが途中で失敗しても、
   // 移動対象の行はアーカイブ先と本体の両方に残るだけで、どちらからも消えることはない。
@@ -2476,6 +2554,7 @@ function archiveOldReservations(cutoffDate, confirmText) {
 
   return {
     archived: toArchive.length,
+    alreadyArchived: alreadyArchived,
     kept: toKeep.length,
     archiveSpreadsheetUrl: archiveSs.getUrl(),
     lastArchivedAt: now
@@ -2571,6 +2650,13 @@ function addStaffAccess(email, name, office, area, role) {
   return withScriptLock_(function () {
   var sheet = getOrCreateStaffSheet_();
   var newRow = [String(email).trim().toLowerCase(), name || '', office || '', area || '', role];
+  // 同じアカウントの最新の行と全く同じ内容なら追加しない（「追加」を2回押した場合など）。
+  var latest = null;
+  listStaffAccess_().forEach(function (s) { if (s.email.toLowerCase() === newRow[0]) latest = s; });
+  if (latest && latest.name === String(newRow[1]).trim() && latest.office === String(newRow[2]).trim() &&
+      latest.area === String(newRow[3]).trim() && latest.role === newRow[4]) {
+    return listStaffAccess_();
+  }
   assertMasterRemains_(readStaffRows_(sheet).concat([newRow]));
   var rowIndex = sheet.getLastRow() + 1;
   sheet.getRange(rowIndex, 1, 1, 5).setValues(protectSheetRows_([newRow]));
@@ -2697,6 +2783,12 @@ function addStaffName(code, name) {
   validateStaffNameInput_(code, name);
   return withScriptLock_(function () {
   var sheet = getOrCreateStaffNameSheet_();
+  // 同じ担当者コードを2行登録しない（「追加」を2回押した場合や、既にある担当者を追加しようとした場合）。
+  var existing = getStaffNameList().filter(function (s) { return s.code === String(code).trim(); })[0];
+  if (existing) {
+    if (existing.name === String(name).trim()) return getStaffNameList();
+    throw new Error('担当者コード「' + String(code).trim() + '」は既に登録されています（氏名：' + existing.name + '）。変更する場合は一覧の「編集」を使ってください。');
+  }
   var rowIndex = sheet.getLastRow() + 1;
   sheet.getRange(rowIndex, 1, 1, 2).setNumberFormat('@').setValues(protectSheetRows_([[String(code).trim(), String(name).trim()]]));
   return getStaffNameList();

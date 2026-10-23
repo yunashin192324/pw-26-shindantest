@@ -2441,6 +2441,9 @@ function bindStaffEvents_() {
 
   document.getElementById('staff-form').addEventListener('submit', function (ev) {
     ev.preventDefault();
+    var form = ev.currentTarget;
+    if (!acquireFormSubmit_(form)) return;
+    var onFail = function (err) { releaseFormSubmit_(form); onServerError(err); };
     var rowIndex = document.getElementById('staff-form-rowindex').value;
     var email = document.getElementById('staff-form-email').value.trim();
     var name = document.getElementById('staff-form-name').value.trim();
@@ -2448,10 +2451,12 @@ function bindStaffEvents_() {
     var area = document.getElementById('staff-form-area').value.trim();
     var role = document.getElementById('staff-form-role').value;
 
-    var call = rowIndex
-      ? google.script.run.withSuccessHandler(onStaffSaved).withFailureHandler(onServerError)
-          .updateStaffAccess(Number(rowIndex), email, name, office, area, role, staffEmailAt_(Number(rowIndex)))
-      : google.script.run.withSuccessHandler(onStaffSaved).withFailureHandler(onServerError).addStaffAccess(email, name, office, area, role);
+    if (rowIndex) {
+      google.script.run.withSuccessHandler(onStaffSaved).withFailureHandler(onFail)
+        .updateStaffAccess(Number(rowIndex), email, name, office, area, role, staffEmailAt_(Number(rowIndex)));
+    } else {
+      google.script.run.withSuccessHandler(onStaffSaved).withFailureHandler(onFail).addStaffAccess(email, name, office, area, role);
+    }
   });
 }
 
@@ -2476,7 +2481,23 @@ function closeStaffModal() {
   document.getElementById('staff-modal').classList.remove('flex');
 }
 
+/**
+ * フォームの送信中は同じフォームをもう一度送信しない（保存ボタンを素早く2回押したときの二重登録を防ぐ）。
+ * 送信できたらtrue。終わったら release_(form) を呼ぶ。
+ */
+function acquireFormSubmit_(form) {
+  if (form.dataset.busy === '1') return false;
+  form.dataset.busy = '1';
+  Array.from(form.querySelectorAll('button[type="submit"], button:not([type])')).forEach(function (b) { b.disabled = true; });
+  return true;
+}
+function releaseFormSubmit_(form) {
+  form.dataset.busy = '';
+  Array.from(form.querySelectorAll('button[type="submit"], button:not([type])')).forEach(function (b) { b.disabled = false; });
+}
+
 function onStaffSaved(list) {
+  releaseFormSubmit_(document.getElementById('staff-form'));
   closeStaffModal();
   showToast('保存しました', 'success');
   onStaffListChanged_(list);
@@ -2548,15 +2569,18 @@ function bindStaffNameEvents_() {
 
   document.getElementById('staff-name-form').addEventListener('submit', function (ev) {
     ev.preventDefault();
+    var form = ev.currentTarget;
+    if (!acquireFormSubmit_(form)) return;
+    var onFail = function (err) { releaseFormSubmit_(form); onServerError(err); };
     var rowIndex = document.getElementById('staff-name-form-rowindex').value;
     var code = document.getElementById('staff-name-form-code').value.trim();
     var name = document.getElementById('staff-name-form-name').value.trim();
 
     if (rowIndex) {
-      google.script.run.withSuccessHandler(onStaffNameSaved).withFailureHandler(onServerError)
+      google.script.run.withSuccessHandler(onStaffNameSaved).withFailureHandler(onFail)
         .updateStaffName(Number(rowIndex), code, name, staffNameCodeAt_(Number(rowIndex)));
     } else {
-      google.script.run.withSuccessHandler(onStaffNameSaved).withFailureHandler(onServerError).addStaffName(code, name);
+      google.script.run.withSuccessHandler(onStaffNameSaved).withFailureHandler(onFail).addStaffName(code, name);
     }
   });
 }
@@ -2580,6 +2604,7 @@ function closeStaffNameModal() {
 }
 
 function onStaffNameSaved(list) {
+  releaseFormSubmit_(document.getElementById('staff-name-form'));
   renderStaffNameList(list);
   closeStaffNameModal();
   showToast('保存しました', 'success');
@@ -3785,6 +3810,14 @@ function onCsvImportSuccess(result) {
     lines.push('<p class="text-amber-600 mt-1"><i class="fa-solid fa-triangle-exclamation"></i> CSVから見つからなかった項目：' +
       result.missingColumns.map(escapeHtml).join('、') + '（該当セルは空欄として取り込みました）</p>');
   }
+  // 日付・金額などとして読めず、空欄で取り込んだ値があれば知らせる（黙って空欄にしない）。
+  [['date', '日付として読めない値'], ['number', '数値として読めない値']].forEach(function (p) {
+    var u = result.unreadable && result.unreadable[p[0]];
+    if (u && u.count > 0) {
+      lines.push('<p class="text-amber-700 mt-1"><i class="fa-solid fa-triangle-exclamation"></i> ' + p[1] + '：' + formatNumber(u.count) +
+        ' 件（空欄として取り込みました。例：' + u.examples.map(escapeHtml).join('、') + '）</p>');
+    }
+  });
   box.innerHTML = lines.join('');
   box.classList.remove('hidden');
   showToast('CSVを取り込みました（新規 ' + result.imported + ' 件）', 'success');

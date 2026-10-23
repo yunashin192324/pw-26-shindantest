@@ -24,8 +24,23 @@ function onOpen() {
     .addToUi();
 }
 
+/**
+ * メニュー用の関数は名前の末尾に「_」が無いため、Webアプリの画面（google.script.run）からも呼べてしまう。
+ * スプレッドシートのメニューから実行された場合（＝スプレッドシートの編集者）以外は、Webアプリの初期セットアップと
+ * 同じ確認（マスタ権限、またはデプロイした本人）を行い、権限の無い人には何も実行させない。
+ */
+function assertCalledFromSpreadsheetMenu_() {
+  try {
+    SpreadsheetApp.getUi(); // メニューから実行された場合だけ使える（Webアプリからの呼び出しでは例外になる）
+    return;
+  } catch (e) {
+    assertSetupAllowed_();
+  }
+}
+
 /** メニューから実行する用（完了メッセージをUIで表示する）。ウェブアプリからは runInitialSetup() を呼ぶこと。 */
 function setupAllSheetsFromMenu() {
+  assertCalledFromSpreadsheetMenu_();
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var tz = ensureSpreadsheetTimeZone_(ss);
   buildDataSheet_(ss);
@@ -44,6 +59,7 @@ function setupAllSheetsFromMenu() {
 
 /** メニューから実行する用の重複削除。 */
 function removeDuplicateRowsFromMenu() {
+  assertCalledFromSpreadsheetMenu_();
   var result = removeDuplicateRows();
   SpreadsheetApp.getUi().alert(
     result.removed > 0
