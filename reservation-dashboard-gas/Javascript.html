@@ -2279,7 +2279,7 @@ function aliasFormHtml_(problems, d) {
   });
   var registeredHtml = (d.aliases || []).length
     ? '<details class="mt-1"><summary class="cursor-pointer text-slate-600">登録済みの対応（' + formatNumber(d.aliases.length) + '件）</summary>' +
-      d.aliases.map(function (a) { return escapeHtml((a.kind === 'area' ? 'エリア：' : '店舗：') + a.from + ' ＝ ' + a.to); }).join('<br>') + '</details>'
+      d.aliases.map(function (a) { return escapeHtml((a.kind === 'area' ? 'エリア：' : '店舗：') + a.from + ' ＝ ' + a.to + (a.note ? '　' + a.note : '')); }).join('<br>') + '</details>'
     : '';
   if (!order.length) return registeredHtml ? '<div class="mt-2 bg-white rounded-lg p-2">' + registeredHtml + '</div>' : '';
   order.sort(function (a, b) { return groups[b].count - groups[a].count; });
@@ -2292,7 +2292,10 @@ function aliasFormHtml_(problems, d) {
     var all = g.kind === 'area' ? (d.dataAreas || []) : (d.dataOffices || []);
     var sugg = g.suggestions.map(function (v) { return v.value; });
     var options = '<option value="">（選んでください）</option>' +
-      (sugg.length ? '<optgroup label="名前の近い候補">' + sugg.map(function (v) { return '<option value="' + escapeHtml(v) + '">' + escapeHtml(v) + '</option>'; }).join('') + '</optgroup>' : '') +
+      (sugg.length ? '<optgroup label="候補">' + g.suggestions.map(function (v) {
+        var why = v.share !== undefined ? '（この所属の人の担当予約の' + Math.round(v.share * 100) + '%）' : '（名前が近い）';
+        return '<option value="' + escapeHtml(v.value) + '">' + escapeHtml(v.value) + why + '</option>';
+      }).join('') + '</optgroup>' : '') +
       '<optgroup label="予約データにある' + (g.kind === 'area' ? 'エリア' : '営業所') + '">' +
       all.filter(function (v) { return sugg.indexOf(v.value) === -1; }).map(function (v) {
         return '<option value="' + escapeHtml(v.value) + '">' + escapeHtml(v.value) + '（' + formatNumber(v.count) + '件）</option>';
@@ -2352,6 +2355,11 @@ function renderAffiliationDiagnostics_(d) {
             : '') +
           '</td></tr>';
       }).join('') + '</tbody></table></div>';
+  }
+  if ((d.autoLinked || []).length) {
+    html += '<div class="mt-2 bg-emerald-50 border border-emerald-200 rounded-lg p-2"><p class="font-semibold text-emerald-800">自動で対応づけました（' + formatNumber(d.autoLinked.length) + '件）</p>' +
+      '<p class="text-slate-500">同じ所属名の人たち全員の担当予約の多くが同じ営業所／エリアに入っているものを、同じ所属として登録しました。違う場合は、シート「所属の対応表」のその行を削除してください（削除したものは自動では登録し直しません）。</p>' +
+      d.autoLinked.map(function (a) { return escapeHtml((a.kind === 'area' ? 'エリア：' : '店舗：') + a.from + ' ＝ ' + a.to + '　' + a.note); }).join('<br>') + '</div>';
   }
   html += aliasFormHtml_(problems, d);
   var amb = (d.ambiguous.office || []).concat(d.ambiguous.area || []);

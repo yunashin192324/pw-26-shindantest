@@ -24,7 +24,7 @@ var SHEET_NAME = '予約データ';
 var STAFF_SHEET_NAME = 'スタッフ権限';
 var STAFF_NAME_SHEET_NAME = '担当者マスタ';
 var TIMEZONE = 'Asia/Tokyo';
-var SERVER_VERSION = '2.7.3';
+var SERVER_VERSION = '2.7.4';
 
 // 予約番号（チャレンジ番号）は半角英数字ちょうど11桁（Javascript.htmlのCHALLENGE_RECORD_BASE_URL判定と同じ桁数）。
 // 数字だけの予約番号（例：01234567890）はGoogleスプレッドシート上で数値として誤認識され、
@@ -440,14 +440,14 @@ function getAffiliationAliases_() {
   try {
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(AFFILIATION_ALIAS_SHEET_NAME);
     if (sheet && sheet.getLastRow() >= 2) {
-      sheet.getRange(2, 1, sheet.getLastRow() - 1, 3).getValues().forEach(function (r) {
+      sheet.getRange(2, 1, sheet.getLastRow() - 1, Math.min(4, Math.max(3, sheet.getLastColumn()))).getValues().forEach(function (r) {
         var kindLabel = String(r[0] || '').trim();
         var kind = kindLabel === AFFILIATION_ALIAS_KIND_LABELS_.area ? 'area' : (kindLabel === AFFILIATION_ALIAS_KIND_LABELS_.office ? 'office' : null);
         var fromKey = affiliationKey_(r[1]);
         var to = affiliationText_(r[2]);
         if (!kind || !fromKey || !to) return;
         (out[kind][fromKey] = out[kind][fromKey] || []).push(to);
-        out.list.push({ kind: kind, from: String(r[1]).trim(), to: to });
+        out.list.push({ kind: kind, from: String(r[1]).trim(), to: to, note: String(r[3] || '').trim() });
       });
     }
   } catch (e) {
@@ -484,25 +484,159 @@ function addAffiliationAlias(kind, fromText, toValue) {
     throw new Error('「' + to + '」は予約データにありません。一覧から選んでください。');
   }
   return withScriptLock_(function () {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var aliasSheet = ss.getSheetByName(AFFILIATION_ALIAS_SHEET_NAME);
-    if (!aliasSheet) {
-      aliasSheet = ss.insertSheet(AFFILIATION_ALIAS_SHEET_NAME);
-      aliasSheet.getRange(1, 1, 1, 3).setValues([['種類（店舗／エリア）', 'スタッフ権限・人事データでの所属', '予約データでの所属']]);
-      try { aliasSheet.setFrozenRows(1); } catch (e) { /* 見た目だけの設定のため、失敗しても続ける */ }
-    }
-    affiliationAliasMemo_ = null;
-    var exists = getAffiliationAliases_().list.some(function (a) {
-      return a.kind === kind && affiliationKey_(a.from) === affiliationKey_(from) && a.to === affiliationText_(to);
-    });
-    if (!exists) {
-      var rowIndex = Math.max(aliasSheet.getLastRow(), 1) + 1;
-      aliasSheet.getRange(rowIndex, 1, 1, 3).setNumberFormat('@')
-        .setValues(protectSheetRows_([[AFFILIATION_ALIAS_KIND_LABELS_[kind], from, to]]));
-    }
-    affiliationAliasMemo_ = null;
-    return { ok: true, added: !exists };
+    return { ok: true, added: appendAffiliationAlias_(kind, from, to, '手動') };
   });
+}
+
+/** 所属の対応表に1行追加する（同じ対応が既にあれば何もしない）。排他ロックの中で呼ぶこと。追加したらtrue。 */
+function appendAffiliationAlias_(kind, from, to, note) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var aliasSheet = ss.getSheetByName(AFFILIATION_ALIAS_SHEET_NAME);
+  if (!aliasSheet) {
+    aliasSheet = ss.insertSheet(AFFILIATION_ALIAS_SHEET_NAME);
+    aliasSheet.getRange(1, 1, 1, 4).setValues([['種類（店舗／エリア）', 'スタッフ権限・人事データでの所属', '予約データでの所属', '登録の根拠']]);
+    try { aliasSheet.setFrozenRows(1); } catch (e) { /* 見た目だけの設定のため、失敗しても続ける */ }
+  }
+  affiliationAliasMemo_ = null;
+  var exists = getAffiliationAliases_().list.some(function (a) {
+    return a.kind === kind && affiliationKey_(a.from) === affiliationKey_(from) && a.to === affiliationText_(to);
+  });
+  if (!exists) {
+    var rowIndex = Math.max(aliasSheet.getLastRow(), 1) + 1;
+    aliasSheet.getRange(rowIndex, 1, 1, 4).setNumberFormat('@')
+      .setValues(protectSheetRows_([[AFFILIATION_ALIAS_KIND_LABELS_[kind], from, to, note || '']]));
+  }
+  affiliationAliasMemo_ = null;
+  return !exists;
+}
+
+// ---- 所属の自動対応づけ（同じ所属名の人たち全員の担当予約による多数決） ----
+// 人事データの所属名と予約データの所属名が、略称などで違っていて書き方の決まりでは結べない場合に、
+// 「その所属名の人たち（担当者コードで予約データとつながる人）が担当した予約が、どの営業所／エリアに入っているか」を
+// まとめて数え、次の条件をすべて満たすときだけ自動で対応づける（1人の担当予約だけで判断することはしない）。
+// ・担当予約のある人が2人以上 ・担当予約が合計10件以上 ・その営業所／エリアの予約が全体の80%以上
+// ・その人たちの60%以上が、自分の担当予約の一番多い営業所／エリアとしてそこを持っている
+// 本社の部署などで担当予約がいろいろな店舗に散らばっている所属は、条件を満たさないので結びつけない。
+// 自動で結んだものは「所属の対応表」に根拠（人数・件数・割合）付きで記録され、行を削除すれば取り消せる
+// （取り消したものは、次からは自動では結び直さない）。
+var AUTO_LINK_MIN_PEOPLE_ = 2;
+var AUTO_LINK_MIN_ROWS_ = 10;
+var AUTO_LINK_MIN_SHARE_ = 0.8;
+var AUTO_LINK_MIN_PEOPLE_SHARE_ = 0.6;
+var AUTO_LINK_DONE_PROP_ = 'affiliationAutoLinked';
+
+/** 氏名の比較用表記（全角半角・空白の違いをそろえる）。 */
+function personNameKey_(name) {
+  return String(name || '').normalize('NFKC').replace(/\s+/g, '');
+}
+
+/**
+ * 照合できない所属名ごとに、その所属名の人たちの担当予約を数える。
+ * 戻り値：[{kind, from, people, peopleWithRows, total, top, topCount, share, peopleShare, confident}]
+ */
+function voteAffiliationLinks_(snap) {
+  var cols = snap.cols;
+  var codesByName = {};
+  var nameMap = getStaffNameMap_();
+  Object.keys(nameMap).forEach(function (code) {
+    var k = personNameKey_(nameMap[code]);
+    if (k) (codesByName[k] = codesByName[k] || []).push(code);
+  });
+  var countsByCode = { office: {}, area: {} };
+  for (var i = 0; i < snap.n; i++) {
+    var code = cols.staff[i];
+    if (!code) continue;
+    ['office', 'area'].forEach(function (kind) {
+      var v = cols[kind][i];
+      if (!v) return;
+      var m = countsByCode[kind][code] = countsByCode[kind][code] || {};
+      m[v] = (m[v] || 0) + 1;
+    });
+  }
+  var offices = distinctOf_(cols.office), areas = distinctOf_(cols.area);
+  var affIndex = buildAffiliationIndex_(offices, areas);
+  var latestByEmail = {};
+  listStaffAccess_().forEach(function (s) { var k = String(s.email || '').trim().toLowerCase(); if (k) latestByEmail[k] = s; });
+
+  var groups = {}, order = [];
+  var addVote = function (kind, from, code) {
+    var key = kind + '|' + affiliationKey_(from);
+    if (!affiliationKey_(from)) return;
+    var g = groups[key];
+    if (!g) { g = groups[key] = { kind: kind, from: from, people: 0, peopleWithRows: 0, counts: {}, topAgree: {} }; order.push(key); }
+    g.people++;
+    var personal = code ? countsByCode[kind][code] : null;
+    if (!personal) return;
+    g.peopleWithRows++;
+    var best = null, bestN = 0;
+    Object.keys(personal).forEach(function (v) {
+      g.counts[v] = (g.counts[v] || 0) + personal[v];
+      if (personal[v] > bestN) { bestN = personal[v]; best = v; }
+    });
+    if (best) g.topAgree[best] = (g.topAgree[best] || 0) + 1;
+  };
+  Object.keys(latestByEmail).forEach(function (email) {
+    var s = latestByEmail[email];
+    var role = String(s.role || '').trim();
+    if (role !== ROLE_STAFF && role !== ROLE_MANAGER) return;
+    var codes = codesByName[personNameKey_(s.name)] || [];
+    var code = codes.length === 1 ? codes[0] : null; // 同姓同名で担当者コードが決まらない人は、数に入れない
+    var ctx = { role: role, office: s.office, area: s.area };
+    if (role === ROLE_STAFF && affiliationText_(s.office) &&
+        !offices.some(function (v) { return staffOfficeMatches_(ctx, v, affIndex.office); })) {
+      addVote('office', storeNameWithoutArea_(s.office, s.area), code);
+    }
+    if (affiliationText_(s.area) && !areas.some(function (v) { return managerAreaMatches_(ctx, v, affIndex.area); })) {
+      addVote('area', s.area, code);
+    }
+  });
+  return order.map(function (key) {
+    var g = groups[key];
+    var total = 0, top = null, topCount = 0;
+    Object.keys(g.counts).forEach(function (v) { total += g.counts[v]; if (g.counts[v] > topCount) { topCount = g.counts[v]; top = v; } });
+    var share = total ? topCount / total : 0;
+    var peopleShare = g.peopleWithRows ? (g.topAgree[top] || 0) / g.peopleWithRows : 0;
+    return {
+      kind: g.kind, from: g.from, people: g.people, peopleWithRows: g.peopleWithRows, total: total, top: top, topCount: topCount,
+      share: share, peopleShare: peopleShare,
+      confident: !!top && g.peopleWithRows >= AUTO_LINK_MIN_PEOPLE_ && total >= AUTO_LINK_MIN_ROWS_ &&
+        share >= AUTO_LINK_MIN_SHARE_ && peopleShare >= AUTO_LINK_MIN_PEOPLE_SHARE_
+    };
+  });
+}
+
+/**
+ * 条件を満たす所属名を、所属の対応表へ自動で登録する（排他ロックの中で呼ぶこと）。
+ * 一度自動で登録したもの（後で管理者が行を削除したものを含む）は、二度目は登録しない。
+ * 戻り値：{ linked: 今回登録したもの, votes: すべての集計結果 }
+ */
+function autoLinkAffiliations_(snap) {
+  var votes = voteAffiliationLinks_(snap);
+  var props = PropertiesService.getDocumentProperties();
+  var done = {};
+  try { (JSON.parse(props.getProperty(AUTO_LINK_DONE_PROP_) || '[]') || []).forEach(function (k) { done[k] = true; }); } catch (e) { done = {}; }
+  var linked = [];
+  votes.forEach(function (v) {
+    if (!v.confident) return;
+    var doneKey = v.kind + '|' + affiliationKey_(v.from) + '|' + affiliationText_(v.top);
+    if (done[doneKey]) return;
+    var note = '自動（' + v.peopleWithRows + '人の担当予約' + v.total + '件のうち' + Math.round(v.share * 100) + '%）';
+    if (appendAffiliationAlias_(v.kind, v.from, v.top, note)) linked.push({ kind: v.kind, from: v.from, to: v.top, note: note });
+    done[doneKey] = true;
+  });
+  if (linked.length) props.setProperty(AUTO_LINK_DONE_PROP_, JSON.stringify(Object.keys(done)));
+  return { linked: linked, votes: votes };
+}
+
+/** 取込の後などに呼ぶ、失敗しても元の処理を止めない版（排他ロックの中で呼ぶこと）。 */
+function autoLinkAffiliationsQuietly_() {
+  try {
+    var sheet = getDataSheet_();
+    return autoLinkAffiliations_(loadSnapshot_(sheet, getDataVersion_(), sheet.getLastRow(), {}).snap).linked;
+  } catch (e) {
+    console.warn('autoLinkAffiliationsQuietly_: ' + e);
+    return [];
+  }
 }
 
 /** 所属店舗の先頭にある、その人の所属エリア名を除いた店舗名（付いていなければ空文字）。 */
@@ -1138,6 +1272,20 @@ function getAffiliationDiagnostics() {
   assertMaster_();
   var sheet = getDataSheet_();
   var loaded = loadSnapshot_(sheet, getDataVersion_(), sheet.getLastRow(), {});
+  // 先に、条件を満たす所属名を自動で対応づける（他の人が書き込み中なら今回は行わない）。
+  var autoLinked = [], votes = [];
+  var lock = LockService.getScriptLock();
+  if (lock.tryLock(5000)) {
+    try {
+      var auto = autoLinkAffiliations_(loaded.snap);
+      autoLinked = auto.linked;
+      votes = voteAffiliationLinks_(loaded.snap); // 登録後の状態で、まだ照合できない所属名の集計
+    } finally {
+      lock.releaseLock();
+    }
+  }
+  var voteByKey = {};
+  votes.forEach(function (v) { voteByKey[v.kind + '|' + affiliationKey_(v.from)] = v; });
   var cols = loaded.snap.cols;
   var countOf = function (arr) {
     var m = Object.create(null);
@@ -1172,6 +1320,13 @@ function getAffiliationDiagnostics() {
       item.kind = isManager ? 'area' : 'office';
       item.aliasFrom = mineForHint;
       item.suggestions = similarAffiliations_(mineForHint, isManager ? areaCount : officeCount);
+      var vote = voteByKey[item.kind + '|' + affiliationKey_(mineForHint)];
+      if (vote && vote.top) {
+        // 同じ所属名の人たちの担当予約で一番多い所属を、候補の先頭に出す（条件を満たさず自動では結ばなかったもの）。
+        item.vote = { top: vote.top, share: vote.share, total: vote.total, peopleWithRows: vote.peopleWithRows };
+        item.suggestions = [{ value: vote.top, count: (isManager ? areaCount : officeCount)[vote.top] || 0, share: vote.share }]
+          .concat(item.suggestions.filter(function (x) { return x.value !== vote.top; })).slice(0, 3);
+      }
       item.problem = kindIndex.ambiguous[affiliationKey_(mineForHint)]
         ? '同じ名前で番号の違う' + (isManager ? 'エリア' : '店舗') + 'が予約データに複数あり、どれか決められないため、何も表示されません。所属欄に番号付き（例：717:○○）で入力してください。'
         : '予約データに、この' + (isManager ? '所属エリア' : '所属店舗') + 'と一致する' + (isManager ? 'エリア' : '営業所') + 'がありません（表記の違い・店舗名ではなく部署名が入っている等）。';
@@ -1196,7 +1351,8 @@ function getAffiliationDiagnostics() {
     ambiguous: { office: ambiguousList(affIndex.office, officeCount), area: ambiguousList(affIndex.area, areaCount) },
     dataOffices: countList(officeCount),
     dataAreas: countList(areaCount),
-    aliases: getAffiliationAliases_().list
+    aliases: getAffiliationAliases_().list,
+    autoLinked: autoLinked
   };
 }
 
@@ -1627,11 +1783,14 @@ function importCsv(csvText, fileName) {
   var props = PropertiesService.getDocumentProperties();
   props.setProperty('lastImportedAt', new Date().toISOString());
   props.setProperty('lastImportedFile', fileName || '');
+  // 新しい予約データで、照合できていなかった所属名を自動で対応づけられるようになる場合があるため。
+  var autoLinked = newRecords.length > 0 ? autoLinkAffiliationsQuietly_() : [];
 
   return {
     fileName: fileName || '',
     csvDataRows: matrix.length - headerInfo.rowIndex - 1,
     imported: newRecords.length,
+    autoLinked: autoLinked.length,
     skippedDuplicate: skippedDuplicate,
     skippedArchived: skippedArchived,
     skippedBlank: skippedBlank,
@@ -2872,6 +3031,8 @@ function importStaffNameCsv(csvText, fileName) {
       staffSheet.getRange(accountStartRow, 1, accountRowsToAppend.length, 5).setValues(protectSheetRows_(accountRowsToAppend));
     }
   }
+  // 取り込んだ所属名・担当者コードで、照合できない所属名を自動で対応づける（条件を満たすものだけ）。
+  var autoLinkedByHr = (accountsDetected || added + updated > 0) ? autoLinkAffiliationsQuietly_() : [];
 
   return {
     fileName: fileName || '',
@@ -2881,6 +3042,7 @@ function importStaffNameCsv(csvText, fileName) {
     skipped: skipped,
     list: getStaffNameList(),
     accountsDetected: accountsDetected,
+    autoLinked: autoLinkedByHr.length,
     accountsAdded: accountsAdded,
     accountsUpdated: accountsUpdated,
     accountsSkipped: accountsSkipped,
