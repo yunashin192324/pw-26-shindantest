@@ -1,0 +1,3985 @@
+<script>
+/**
+ * ============================================================================
+ * Javascript.html
+ * 営業セールスダッシュボード - フロントエンド
+ * ----------------------------------------------------------------------------
+ * サーバー（Code.gs）からは起動時に一度だけ（権限で絞り込み済みの）全データを取得し、
+ * 絞り込み・並べ替え・集計・グラフ描画はすべてこの中（ブラウザ側）で行う。
+ * 分析ダッシュボードタブと予約データ一覧タブは、それぞれ別のフィルタを持つ。
+ * ============================================================================
+ */
+
+// ---- 予約データ一覧タブの列定義（表示順の初期値・編集の種類をここで決める） ----
+// kind: 'csv'（CSV由来・読み取り専用） / 'date'（CHK日など編集可の日付）
+//       'ancillary'（保険/Wifi/キャンサポ/TAViCA：ステータス＋数量の組） / 'memo'（自由記述の編集可テキスト）
+var DISPLAY_COLUMN_DEFS = [
+  { key: 'reservationNo',  label: '予約番号',           kind: 'csv',       field: 'reservationNo' },
+  { key: 'staff',          label: '担当者',             kind: 'csv',       field: 'staff' },
+  { key: 'departureDate',  label: '出発予定日',         kind: 'csv',       field: 'departureDate' },
+  { key: 'chkDate',        label: 'CHK日',              kind: 'date',      field: 'chkDate' },
+  { key: 'memo',           label: 'メモ',               kind: 'memo',      field: 'memo' },
+  { key: 'insurance',      label: '保険',               kind: 'ancillary', item: 'insurance' },
+  { key: 'wifi',           label: 'Wifi',               kind: 'ancillary', item: 'wifi' },
+  { key: 'cansapo',        label: 'キャンサポ',         kind: 'ancillary', item: 'cansapo' },
+  { key: 'tavica',         label: 'TAViCA',             kind: 'ancillary', item: 'tavica' },
+  { key: 'bookingDate',    label: '予約日',             kind: 'csv',       field: 'bookingDate' },
+  { key: 'destination',    label: '最終目的地',         kind: 'csv',       field: 'destination' },
+  { key: 'travelDays',     label: '旅行日数',           kind: 'csv',       field: 'travelDays' },
+  { key: 'productCategory',label: '商品分類',           kind: 'csv',       field: 'productCategory' },
+  { key: 'tourBrand',      label: 'ツアーブランド区分', kind: 'csv',       field: 'tourBrand' },
+  { key: 'tourCode',       label: 'ツアーコード',       kind: 'csv',       field: 'tourCode' },
+  { key: 'carrier',        label: 'キャリア',           kind: 'csv',       field: 'carrier' },
+  { key: 'salesAmount',    label: '売上(商品請求金額)', kind: 'csv',       field: 'salesAmount' },
+  { key: 'paymentAmount',  label: '入金額',             kind: 'csv',       field: 'paymentAmount' },
+  { key: 'sts',            label: 'STS',                kind: 'csv',       field: 'sts' },
+  { key: 'productTitle',   label: '商品タイトル',       kind: 'csv',       field: 'productTitle' },
+  { key: 'office',         label: '営業所',             kind: 'csv',       field: 'office' }
+];
+var DISPLAY_COLUMN_DEFS_BY_KEY = {};
+DISPLAY_COLUMN_DEFS.forEach(function (d) { DISPLAY_COLUMN_DEFS_BY_KEY[d.key] = d; });
+var DEFAULT_COLUMN_ORDER = DISPLAY_COLUMN_DEFS.map(function (d) { return d.key; });
+
+// ---- 予約番号（記録番号／チャレンジ番号）→「チャレンジ記録」へのリンク ----
+// ベースURLが変わった場合はここだけ書き換えればよい。
+var CHALLENGE_RECORD_BASE_URL = 'http://applweb.center.his/cgi-bin/b/btcq1_0_3ui?scid=_new&rsv=01102';
+/** 半角英数字ちょうど11文字のときだけ「チャレンジ記録」へのURLを組み立てる。それ以外はnull（通常の値として扱う）。 */
+function buildChallengeRecordUrl_(value) {
+  if (typeof value !== 'string' || !/^[0-9A-Za-z]{11}$/.test(value)) return null;
+  return CHALLENGE_RECORD_BASE_URL + value;
+}
+
+var STATE = {
+  ready: false,
+  accessDenied: false,
+  invalidRole: false,
+  columns: [], columnByKey: {},
+  editableColumns: [], editableColumnByKey: {},
+  ancillaryItems: [], ancillaryItemByKey: {},
+  ancillaryStatusOptions: [], ancillaryStatusLabelByValue: {},
+  userContext: null,
+  meta: null,
+  rows: [],
+  staffList: [],
+  staffNameMap: {},
+  staffNameList: [],
+
+  dashFiltered: [],
+  dataFiltered: [],
+
+  rankingSortKey: 'count', rankingSortDir: -1,
+  dataSortKey: 'departureDate', dataSortDir: -1,
+  dataPage: 1, dataPageSize: 50,
+  personalSortKey: 'count', personalSortDir: -1,
+
+  columnOrder: DEFAULT_COLUMN_ORDER.slice(),
+  charts: {},
+
+  selectedRowIndexes: {}, // 予約データ一覧の一括登録用：チェックされている行番号の集合
+  currentPageRowIndexes: [],
+
+  pendingChanges: {}, // 予約データ一覧「まとめて保存する」用：未保存の編集（key→変更内容）
+
+  // 編集は常に「予約データ一覧」タブで発生するため、見えていないダッシュボード／個人別サマリータブは
+  // 編集直後には再描画せず「汚れている」とだけ記録しておき、実際にそのタブへ切り替えられた時点で
+  // まとめて再描画する（非表示タブのグラフ再描画・再集計という無駄な処理を避けるための遅延評価）。
+  activeTab: 'dashboard',
+  appliedDataWindowUi: null, // 最後に実際に読み込んだときの表示期間の入力欄の状態（再読込を取りやめた時に戻す用）
+  dashDirty: false,
+  personalDirty: false
+};
+
+document.addEventListener('DOMContentLoaded', function () {
+  bindStaticEvents();
+  boot();
+});
+
+// 未保存の変更がある状態でタブを閉じる・再読み込みする場合に、ブラウザの確認を出す。
+// （Apps ScriptのWebアプリは埋め込み枠の中で動くため、ブラウザによっては確認が表示されない場合がある）
+window.addEventListener('beforeunload', function (e) {
+  if (!hasPendingChanges_()) return;
+  e.preventDefault();
+  e.returnValue = '';
+});
+
+// ============================================================================
+// 初期ロード
+// ============================================================================
+
+/**
+ * データを読み込み直す。サーバー側でデータを変更した直後（CSV取込・重複削除など）に呼ぶため、
+ * 未保存の変更の確認は呼び出し元の操作の前に済ませておく（confirmDiscardPending_）。
+ * 画面を開いた直後の1回目は、Index.html の先頭で部品の読み込みと並行して始めておいた
+ * データの取得（window.__bootRequest）の結果を使う（待ち時間を重ねて起動を速くするため）。
+ */
+function boot() {
+  var early = window.__bootRequest;
+  window.__bootRequest = null;
+  var option = buildRangeOptionFromUi_();
+  if (early && early.option && early.option.mode === option.mode && !!early.option.includeArchive === !!option.includeArchive) {
+    var uiAtRequest = snapshotDataWindowUi_();
+    showLoading(true);
+    var onData = function (data) { handleBootstrapResponse_(data, early.startedAt, early.receivedAt || performance.now(), uiAtRequest); };
+    // 先行取得が失敗した場合は、通常の取得でもう一度だけ試す（一時的な通信の失敗で起動できなくなるのを防ぐ）。
+    var onError = function () { requestDataWindow_(option, { skipConfirm: true }); };
+    if (early.done) { if (early.error) onError(early.error); else onData(early.data); }
+    else early.waiters.push({ ok: onData, ng: onError });
+    return;
+  }
+  requestDataWindow_(option, { skipConfirm: true });
+}
+
+/** 行データの送り方：gzipを展開できるブラウザは圧縮形式、できない古いブラウザは非圧縮の列形式で受け取る。 */
+function bootPacking_() {
+  if (STATE.forceUncompressed) return 'col';
+  return (typeof DecompressionStream === 'function') ? 'gzip' : 'col';
+}
+
+function base64ToBytes_(b64) {
+  var bin = window.atob(b64);
+  var out = new Uint8Array(bin.length);
+  for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+function gunzipToText_(bytes) {
+  var stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return new Response(stream).text();
+}
+
+/**
+ * サーバーから届いた行データ（packedRows：列ごとにまとめて辞書化・圧縮した文字列）を、
+ * 画面の処理で使う「行ごとのオブジェクト」の配列（data.rows）に戻す。
+ */
+function decodeBootstrapData_(data) {
+  if (!data || typeof data.packedRows !== 'string') return Promise.resolve(data);
+  // 展開の準備中の失敗（その場で起きる例外）も、取り直しの処理へ渡せるよう Promise の失敗として扱う。
+  return Promise.resolve().then(function () {
+    return data.packing === 'gzip' ? gunzipToText_(base64ToBytes_(data.packedRows)) : data.packedRows;
+  }).then(function (text) {
+    var o = JSON.parse(text);
+    var keys = o.k, n = o.n;
+    var getters = keys.map(function (k, ci) {
+      var c = o.c[ci];
+      return c.d ? function (i) { return c.d[c.i[i]]; } : function (i) { return c.v[i]; };
+    });
+    var rows = new Array(n);
+    for (var i = 0; i < n; i++) {
+      var r = {};
+      for (var k = 0; k < keys.length; k++) {
+        var v = getters[k](i);
+        if (keys[k] === 'isArchived' && !v) continue;
+        r[keys[k]] = v;
+      }
+      rows[i] = r;
+    }
+    data.rows = rows;
+    delete data.packedRows;
+    return data;
+  });
+}
+
+/**
+ * 起動データの受信後の共通処理（展開→画面表示→かかった時間の記録）。
+ * 圧縮の展開に失敗した場合（ブラウザの不具合など）は、以後は圧縮しない形式で1回だけ取り直す。
+ */
+function handleBootstrapResponse_(data, startedAt, receivedAt, uiAtRequest) {
+  var wasCompressed = !!(data && data.packing === 'gzip');
+  decodeBootstrapData_(data).then(function (decoded) {
+    var decodedAt = performance.now();
+    STATE.appliedDataWindowUi = uiAtRequest;
+    onBootstrapSuccess(decoded);
+    recordBootTiming_(decoded, startedAt, receivedAt, decodedAt, performance.now());
+  }, function (err) {
+    if (wasCompressed && !STATE.forceUncompressed) {
+      STATE.forceUncompressed = true;
+      if (window.console && console.warn) console.warn('圧縮データの展開に失敗したため、圧縮しない形式で取り直します', err);
+      requestDataWindow_(buildRangeOptionFromUi_(), { skipConfirm: true });
+      return;
+    }
+    showLoading(false);
+    onServerError(err);
+  }).catch(function (err) {
+    // 画面表示の途中での失敗も、読み込み中の表示を消して知らせる（画面が読み込み中のまま止まらないように）。
+    showLoading(false);
+    onServerError(err);
+  });
+}
+
+/**
+ * 起動にかかった時間の内訳を記録する（データ管理タブの「状況」に表示する）。
+ * サーバー処理・通信（サーバーとの往復からサーバー処理を除いた時間）・展開・画面表示に分けて記録し、
+ * 遅いと感じたときにどこに時間がかかっているかを確認できるようにする。
+ */
+function recordBootTiming_(data, startedAt, receivedAt, decodedAt, renderedAt) {
+  var t = (data && data.meta && data.meta.timing) || {};
+  var roundTrip = receivedAt - startedAt;
+  STATE.lastBootTiming = {
+    totalMs: Math.round(renderedAt - startedAt),
+    serverMs: t.serverMs || 0,
+    transferMs: Math.max(0, Math.round(roundTrip - (t.serverMs || 0))),
+    decodeMs: Math.round(decodedAt - receivedAt),
+    renderMs: Math.round(renderedAt - decodedAt),
+    source: t.snapshot || '',
+    sizeKb: data && data.meta && data.meta.packedChars ? Math.round(data.meta.packedChars / 1024) : null,
+    rows: (data && data.rows) ? data.rows.length : 0
+  };
+  if (window.console && console.info) console.info('起動時間の内訳', STATE.lastBootTiming);
+  renderAdminStatus();
+}
+
+/**
+ * データを変更した後、結果を待たずにサーバーへ「写しの作り直し」を頼んでおく
+ * （次に画面を開く人が、シートの読み込みを待たずに済むようにするため）。短時間に何度呼ばれても1回にまとめる。
+ */
+function warmSnapshotSoon_() {
+  if (STATE.warmTimer) clearTimeout(STATE.warmTimer);
+  STATE.warmTimer = setTimeout(function () {
+    STATE.warmTimer = null;
+    try { google.script.run.withFailureHandler(function () {}).warmSnapshot(); } catch (e) { /* 写しの作り直しは補助的な処理のため、失敗しても画面の動作には影響させない */ }
+  }, 1500);
+}
+
+function hasPendingChanges_() { return Object.keys(STATE.pendingChanges).length > 0; }
+
+/**
+ * 未保存の変更がある場合に、それが破棄される操作を行ってよいかを事前に確認する。
+ * 変更が無ければ確認せずtrueを返す。actionTextは「データを読み込み直す」のような操作の説明。
+ */
+function confirmDiscardPending_(actionText) {
+  if (!hasPendingChanges_()) return true;
+  return window.confirm('未保存の変更が' + Object.keys(STATE.pendingChanges).length + '件あります。' + actionText +
+    'と、保存されていない変更は破棄されます。続けますか？\n（保存する場合は「キャンセル」を押し、「まとめて保存する」を押してください）');
+}
+
+/** 表示期間の入力欄（期間の種類・期間指定・アーカイブを含めるか）の現在値を記録用に取り出す。 */
+function snapshotDataWindowUi_() {
+  return {
+    mode: document.getElementById('data-window-mode').value,
+    from: document.getElementById('data-window-from').value,
+    to: document.getElementById('data-window-to').value,
+    includeArchive: document.getElementById('data-window-include-archive').checked
+  };
+}
+
+/** 表示期間の入力欄を、最後に実際に読み込んだときの状態に戻す（再読込を取りやめた場合用）。 */
+function restoreDataWindowUi_() {
+  var ui = STATE.appliedDataWindowUi;
+  if (!ui) return;
+  document.getElementById('data-window-mode').value = ui.mode;
+  document.getElementById('data-window-from').value = ui.from;
+  document.getElementById('data-window-to').value = ui.to;
+  document.getElementById('data-window-include-archive').checked = ui.includeArchive;
+  var customBox = document.getElementById('data-window-custom');
+  var isCustom = ui.mode === 'custom';
+  customBox.classList.toggle('hidden', !isCustom);
+  customBox.classList.toggle('flex', isCustom);
+}
+
+// ============================================================================
+// 表示期間（データが増えるほど画面が重くなるのを防ぐための絞り込み。Code.gsのgetBootstrapData参照）
+// ============================================================================
+
+/**
+ * 「表示期間」セレクタ・カスタム期間入力・「アーカイブ済みデータも含める」チェックボックスの
+ * 現在値から、getBootstrapData()へ渡すrangeOptionを作る。
+ */
+function buildRangeOptionFromUi_() {
+  var mode = document.getElementById('data-window-mode').value;
+  var includeArchiveEl = document.getElementById('data-window-include-archive');
+  var includeArchive = !!(includeArchiveEl && includeArchiveEl.checked);
+
+  var base;
+  if (mode === 'all') base = { mode: 'all' };
+  else if (mode === '1y') base = { mode: 'custom', from: isoDateMonthsAgo_(12), to: null };
+  else if (mode === 'fy-current' || mode === 'fy-prev') {
+    var fy = computeFiscalYearRange_(mode === 'fy-current' ? 0 : -1);
+    base = { mode: 'custom', from: fy.from, to: fy.to };
+  } else if (mode === 'custom') {
+    var from = document.getElementById('data-window-from').value || null;
+    var to = document.getElementById('data-window-to').value || null;
+    base = { mode: 'custom', from: from, to: to };
+  } else {
+    base = { mode: 'default' }; // 既定（直近6ヶ月＋今後の予定。サーバー側で計算する）
+  }
+  base.includeArchive = includeArchive;
+  return base;
+}
+
+/** 今日からNヶ月前の日付を'yyyy-MM-dd'で返す（表示期間セレクタの「直近1年」用）。 */
+function isoDateMonthsAgo_(n) {
+  // その月に同じ日が無い場合は月末にする（2月29日の1年前は2月28日。setMonthだけだと3月1日になる）。
+  var d = new Date();
+  var day = d.getDate();
+  d.setDate(1);
+  d.setMonth(d.getMonth() - n);
+  d.setDate(Math.min(day, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()));
+  var pad = function (v) { return (v < 10 ? '0' : '') + v; };
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+}
+
+/**
+ * 「期」の範囲（出発予定日ベース、開始は11月・終了は翌年10月）を'yyyy-MM-dd'で返す。
+ * offsetYears: 0=今期、-1=前期。
+ */
+function computeFiscalYearRange_(offsetYears) {
+  var now = new Date();
+  var fyStartYear = (now.getMonth() + 1 >= 11) ? now.getFullYear() : now.getFullYear() - 1;
+  fyStartYear += offsetYears;
+  return { from: fyStartYear + '-11-01', to: (fyStartYear + 1) + '-10-31' };
+}
+
+/** 表示期間セレクタが変更されたときの処理。「期間を指定」は入力欄を出すだけで、「適用」を押すまで再読み込みしない。 */
+function onDataWindowModeChange_() {
+  var mode = document.getElementById('data-window-mode').value;
+  var customBox = document.getElementById('data-window-custom');
+  var isCustom = mode === 'custom';
+  customBox.classList.toggle('hidden', !isCustom);
+  customBox.classList.toggle('flex', isCustom);
+  if (isCustom) return;
+  requestDataWindow_(buildRangeOptionFromUi_());
+}
+
+/**
+ * rangeOptionを指定してサーバーからデータを読み込み直す（onBootstrapSuccessで画面を丸ごと更新する）。
+ * 読み込み直すと未保存の変更は破棄されるため、変更がある場合は事前に確認する（opts.skipConfirmで省略）。
+ * 取りやめた場合は、表示期間の入力欄を元の状態に戻す。
+ */
+function requestDataWindow_(rangeOption, opts) {
+  if (!(opts && opts.skipConfirm) && !confirmDiscardPending_('データを読み込み直す')) {
+    restoreDataWindowUi_();
+    return;
+  }
+  var uiAtRequest = snapshotDataWindowUi_();
+  showLoading(true);
+  var startedAt = performance.now();
+  var option = Object.assign({}, rangeOption || {}, { packing: bootPacking_() });
+  google.script.run
+    .withSuccessHandler(function (data) { handleBootstrapResponse_(data, startedAt, performance.now(), uiAtRequest); })
+    .withFailureHandler(function (err) { showLoading(false); onServerError(err); })
+    .getBootstrapData(option);
+}
+
+/** 表示期間バーの説明文（現在の期間・件数・期間外で非表示になっている件数）を更新する。 */
+function renderDataWindowBanner_() {
+  var box = document.getElementById('data-window-summary');
+  var meta = STATE.meta;
+  if (!box || !meta || !meta.window) { if (box) box.textContent = ''; return; }
+  var w = meta.window;
+  var rangeText;
+  if (w.mode === 'all') {
+    rangeText = '全期間';
+  } else {
+    var fromText = w.from ? ('出発予定日 ' + w.from + ' 以降') : '';
+    var toText = w.to ? '（' + w.to + ' まで）' : '（今後の予定も含む）';
+    rangeText = fromText + toText;
+  }
+  var text = '表示期間：' + rangeText + '　／　表示中：' + formatNumber(meta.totalRows) + ' 件';
+  if (meta.includesArchive) {
+    text += '　／　うちアーカイブ済み：' + formatNumber(meta.archivedRowCount || 0) + ' 件（閲覧専用）';
+  }
+  if (meta.excludedByWindow > 0) {
+    text += '　／　表示期間外のため非表示：' + formatNumber(meta.excludedByWindow) + ' 件（「全期間を表示」で確認できます）';
+  }
+  box.textContent = text;
+}
+
+function onBootstrapSuccess(data) {
+  showLoading(false);
+  STATE.columns = data.columns;
+  STATE.columnByKey = {};
+  data.columns.forEach(function (c) { STATE.columnByKey[c.key] = c; });
+
+  STATE.editableColumns = data.editableColumns || [];
+  STATE.editableColumnByKey = {};
+  STATE.editableColumns.forEach(function (c) { STATE.editableColumnByKey[c.key] = c; });
+
+  STATE.ancillaryItems = data.ancillaryItems || [];
+  STATE.ancillaryItemByKey = {};
+  STATE.ancillaryItems.forEach(function (a) { STATE.ancillaryItemByKey[a.key] = a; });
+
+  STATE.ancillaryStatusOptions = data.ancillaryStatusOptions || [];
+  STATE.ancillaryStatusLabelByValue = {};
+  STATE.ancillaryStatusOptions.forEach(function (o) { STATE.ancillaryStatusLabelByValue[o.value] = o.label; });
+
+  STATE.staffNameMap = data.staffNameMap || {};
+
+  // データを読み込み直すと行番号(rowIndex)の対応関係が変わる可能性がある（重複削除・アーカイブ等で
+  // 行がずれる、表示期間の変更で対象行の集合が変わる等）。古いrowIndexを指したまま残った選択・
+  // 未保存の変更は、後で別の行を誤って一括編集・上書きする事故につながるため、読み込み直す前に
+  // 必ず破棄し、未保存の変更があった場合はその旨を知らせる。
+  var hadPendingChanges = STATE.pendingChanges && Object.keys(STATE.pendingChanges).length > 0;
+  STATE.pendingChanges = {};
+  STATE.selectedRowIndexes = {};
+
+  STATE.userContext = data.userContext || null;
+  STATE.rows = data.rows || [];
+  STATE.ready = data.ready;
+  STATE.accessDenied = !!data.accessDenied;
+  STATE.invalidRole = !!data.invalidRole;
+
+  document.getElementById('setup-banner').classList.toggle('hidden', data.ready);
+  if (!data.ready) {
+    document.getElementById('setup-banner-detail').textContent = (data.status && data.status.detail) || '';
+    document.getElementById('access-denied-banner').classList.add('hidden');
+    document.getElementById('invalid-role-banner').classList.add('hidden');
+    document.getElementById('app-content').classList.add('hidden');
+    renderRoleBadge();
+    return;
+  }
+
+  document.getElementById('access-denied-banner').classList.toggle('hidden', !STATE.accessDenied);
+  document.getElementById('invalid-role-banner').classList.toggle('hidden', !STATE.invalidRole);
+  document.getElementById('app-content').classList.toggle('hidden', STATE.accessDenied || STATE.invalidRole);
+  renderRoleBadge();
+  if (STATE.accessDenied) {
+    document.getElementById('access-denied-email').textContent = (STATE.userContext && STATE.userContext.email) || '';
+    return;
+  }
+  if (STATE.invalidRole) {
+    document.getElementById('invalid-role-email').textContent = (STATE.userContext && STATE.userContext.email) || '';
+    return;
+  }
+
+  var lastLabel = document.getElementById('last-imported-label');
+  if (data.meta && data.meta.lastImportedAt) {
+    lastLabel.textContent = '最終取込：' + formatDateTime(data.meta.lastImportedAt) +
+      (data.meta.lastImportedFile ? '（' + data.meta.lastImportedFile + '）' : '');
+    lastLabel.classList.remove('hidden');
+  } else {
+    lastLabel.classList.add('hidden');
+  }
+
+  STATE.columnOrder = sanitizeColumnOrder_(data.columnOrder);
+  STATE.meta = data.meta || null;
+  renderDataWindowBanner_();
+
+  populateFilterOptions();
+  populateBulkAncillarySelects_();
+  applyRoleUi_();
+  renderColumnOrderEditor();
+  renderDataThead();
+  applyDashFilters();
+  applyDataFilters();
+  renderPersonalTab();
+  renderAdminStatus();
+  updatePendingChangesBar_();
+  if (hadPendingChanges) {
+    showToast('データを読み込み直したため、保存されていなかった編集内容は破棄されました。', 'info');
+  }
+}
+
+function onServerError(err) {
+  var message = (err && err.message) ? err.message : String(err);
+  showToast(message, 'error');
+}
+
+function showLoading(visible) {
+  document.getElementById('loading-overlay').classList.toggle('hidden', !visible);
+}
+
+/** 保存済みの列順に、定義に無いキーが混ざっていても安全に使えるよう整える。 */
+function sanitizeColumnOrder_(saved) {
+  if (!saved || !saved.length) return DEFAULT_COLUMN_ORDER.slice();
+  var valid = saved.filter(function (k) { return !!DISPLAY_COLUMN_DEFS_BY_KEY[k]; });
+  DEFAULT_COLUMN_ORDER.forEach(function (k) { if (valid.indexOf(k) === -1) valid.push(k); });
+  return valid;
+}
+
+function renderRoleBadge() {
+  var el = document.getElementById('role-badge');
+  var ctx = STATE.userContext;
+  if (!ctx || !ctx.role) { el.classList.add('hidden'); return; }
+  var scope = (ctx.role === 'マスタ権限' || ctx.role === 'AL')
+    ? '全エリア'
+    : (ctx.role === '所長・チーフ' ? ('エリア：' + (ctx.area || '未設定')) : ('店舗：' + (ctx.office || '未設定')));
+  el.innerHTML = '<i class="fa-solid fa-shield-halved"></i> ' + escapeHtml(ctx.role) + '（' + escapeHtml(scope) + '）' +
+    (ctx.bootstrapMode ? '<span class="text-amber-600">・初回セットアップ中</span>' : '');
+  el.classList.remove('hidden');
+}
+
+/** マスタ権限のみ操作できるUI（CSVインポート・重複削除・全削除・権限管理）の表示切り替え。 */
+function applyRoleUi_() {
+  var isMaster = STATE.userContext && STATE.userContext.role === 'マスタ権限';
+  document.getElementById('btn-open-csv-modal').classList.toggle('hidden', !isMaster);
+  document.getElementById('master-only-admin').classList.toggle('hidden', !isMaster);
+  // 列の並び順は全員の表示に反映されるため、変更できるのはマスタ権限だけ（サーバー側でも確認する）。
+  document.getElementById('column-order-card').classList.toggle('hidden', !isMaster);
+  if (isMaster) { loadStaffList(); loadStaffNameList(); loadArchiveInfo(); }
+}
+
+/**
+ * 担当者コードを、担当者マスタに登録があれば氏名に変換する（未登録ならコードのまま）。
+ * 同じ氏名（空白の有無の違いを含む）の担当者が複数いる場合は、区別できるようコードを併記する
+ * （絞り込みの選択肢や集計表で、同姓同名の別人が見分けられなくなるのを防ぐ）。
+ */
+function formatStaffName_(code) {
+  if (!code) return code;
+  var name = STATE.staffNameMap[code];
+  if (!name) return code;
+  return duplicateStaffNames_()[String(name).replace(/\s+/g, '')] ? name + '（' + code + '）' : name;
+}
+
+function duplicateStaffNames_() {
+  if (STATE.staffNameDupFor === STATE.staffNameMap) return STATE.staffNameDup;
+  // 氏名が「toString」などでも、元から持つ名前と混ざって同姓同名と誤判定しないように
+  var count = Object.create(null), dup = Object.create(null);
+  Object.keys(STATE.staffNameMap).forEach(function (c) {
+    var key = String(STATE.staffNameMap[c]).replace(/\s+/g, '');
+    count[key] = (count[key] || 0) + 1;
+    if (count[key] > 1) dup[key] = true;
+  });
+  STATE.staffNameDupFor = STATE.staffNameMap;
+  STATE.staffNameDup = dup;
+  return dup;
+}
+
+/** 保険/Wifi/TAViCA/キャンサポのステータス値を、既定値'-'（NO ACT）にそろえて返す（空欄='-'扱い）。 */
+function normalizeAncillaryStatus_(v) {
+  return (v === null || v === undefined || v === '') ? '-' : v;
+}
+
+// ============================================================================
+// フィルタ共通ユーティリティ
+// ============================================================================
+
+function distinctValues_(key) {
+  var set = {};
+  STATE.rows.forEach(function (r) {
+    var v = r[key];
+    if (v !== null && v !== undefined && v !== '') set[v] = true;
+  });
+  return Object.keys(set).sort(function (a, b) { return a.localeCompare(b, 'ja'); });
+}
+
+function fillMultiSelect_(id, values) {
+  var el = document.getElementById(id);
+  el.innerHTML = values.map(function (v) {
+    return '<option value="' + escapeHtml(v) + '">' + escapeHtml(v) + '</option>';
+  }).join('');
+}
+
+/** 値とラベルが異なる選択肢（保険STS等の '〇'→'NB付帯' のような表示）用。 */
+function fillMultiSelectWithLabels_(id, options) {
+  var el = document.getElementById(id);
+  el.innerHTML = options.map(function (o) {
+    return '<option value="' + escapeHtml(o.value) + '">' + escapeHtml(o.value) + ' ' + escapeHtml(o.label) + '</option>';
+  }).join('');
+}
+
+function fillDatalist_(id, values) {
+  var el = document.getElementById(id);
+  el.innerHTML = values.map(function (v) { return '<option value="' + escapeHtml(v) + '">'; }).join('');
+}
+
+function populateFilterOptions() {
+  fillMultiSelect_('dash-filter-area', distinctValues_('area'));
+  fillMultiSelect_('dash-filter-office', distinctValues_('office'));
+  fillMultiSelect_('dash-filter-category', distinctValues_('productCategory'));
+  fillMultiSelect_('dash-filter-tourbrand', distinctValues_('tourBrand'));
+  fillMultiSelect_('dash-filter-destination', distinctValues_('destination'));
+
+  fillMultiSelect_('data-filter-area', distinctValues_('area'));
+  updateDataOfficeStaffFilterOptions_();
+  fillMultiSelectWithLabels_('data-filter-insurance-status', STATE.ancillaryStatusOptions);
+  fillMultiSelectWithLabels_('data-filter-wifi-status', STATE.ancillaryStatusOptions);
+  fillMultiSelectWithLabels_('data-filter-tavica-status', STATE.ancillaryStatusOptions);
+  fillMultiSelectWithLabels_('data-filter-cansapo-status', STATE.ancillaryStatusOptions);
+
+  fillDatalist_('staff-office-options', distinctValues_('office'));
+  fillDatalist_('staff-area-options', distinctValues_('area'));
+}
+
+function getSelectedValues_(id) {
+  return Array.from(document.getElementById(id).selectedOptions).map(function (o) { return o.value; });
+}
+
+function toSet_(arr) {
+  if (!arr || arr.length === 0) return null;
+  var s = Object.create(null); // 値が「toString」などでも、元から持つ名前と混ざらないように
+  arr.forEach(function (v) { s[v] = true; });
+  return s;
+}
+
+/** 行配列から、指定キーの重複無し値一覧を五十音順で返す（distinctValues_のSTATE.rows全体版に対して、絞り込み済みの行集合に使う）。 */
+function distinctValuesFromRows_(rows, key) {
+  var set = {};
+  rows.forEach(function (r) {
+    var v = r[key];
+    if (v !== null && v !== undefined && v !== '') set[v] = true;
+  });
+  return Object.keys(set).sort(function (a, b) { return a.localeCompare(b, 'ja'); });
+}
+
+/** 選択肢を入れ替えつつ、入れ替え後も有効な選択済みの値は選択状態を維持する（連動フィルタ用）。 */
+function fillMultiSelectPreserving_(id, values, labelFn) {
+  var el = document.getElementById(id);
+  var prevSelected = toSet_(Array.from(el.selectedOptions).map(function (o) { return o.value; }));
+  el.innerHTML = values.map(function (v) {
+    var label = labelFn ? labelFn(v) : v;
+    var sel = (prevSelected && prevSelected[v]) ? ' selected' : '';
+    return '<option value="' + escapeHtml(v) + '"' + sel + '>' + escapeHtml(label) + '</option>';
+  }).join('');
+}
+
+/**
+ * 予約データ一覧の「店舗」「担当者」フィルタの選択肢を、現在の「エリア」「店舗」の選択状況に応じて絞り込む。
+ * エリアを選ぶと同じエリアの店舗だけに、店舗を選ぶと同じ店舗の担当者だけに選択肢が絞り込まれる。
+ * 担当者の表示名は担当者マスタで氏名に変換する（コードのまま出さない）。
+ */
+function updateDataOfficeStaffFilterOptions_() {
+  var areaSet = toSet_(getSelectedValues_('data-filter-area'));
+  var rowsInArea = areaSet ? STATE.rows.filter(function (r) { return areaSet[r.area]; }) : STATE.rows;
+  fillMultiSelectPreserving_('data-filter-office', distinctValuesFromRows_(rowsInArea, 'office'));
+
+  var officeSet = toSet_(getSelectedValues_('data-filter-office'));
+  var rowsInOffice = officeSet ? rowsInArea.filter(function (r) { return officeSet[r.office]; }) : rowsInArea;
+  // 担当者の選択肢は、表示している氏名の五十音順に並べる（担当者コード順にしない）。
+  var staffCodes = distinctValuesFromRows_(rowsInOffice, 'staff').sort(function (a, b) {
+    return String(formatStaffName_(a)).localeCompare(String(formatStaffName_(b)), 'ja');
+  });
+  fillMultiSelectPreserving_('data-filter-staff', staffCodes, formatStaffName_);
+}
+
+// ============================================================================
+// 分析ダッシュボードタブ：フィルタ・KPI・グラフ・ランキング
+// ============================================================================
+
+function applyDashFilters() {
+  var areaSet = toSet_(getSelectedValues_('dash-filter-area'));
+  var officeSet = toSet_(getSelectedValues_('dash-filter-office'));
+  var catSet = toSet_(getSelectedValues_('dash-filter-category'));
+  var tourBrandSet = toSet_(getSelectedValues_('dash-filter-tourbrand'));
+  var destinationSet = toSet_(getSelectedValues_('dash-filter-destination'));
+  var dateField = document.getElementById('dash-filter-date-field').value || 'bookingDate';
+  var dateFrom = document.getElementById('dash-filter-date-from').value || '';
+  var dateTo = document.getElementById('dash-filter-date-to').value || '';
+
+  STATE.dashFiltered = STATE.rows.filter(function (r) {
+    if (areaSet && !areaSet[r.area]) return false;
+    if (officeSet && !officeSet[r.office]) return false;
+    if (catSet && !catSet[r.productCategory]) return false;
+    if (tourBrandSet && !tourBrandSet[r.tourBrand]) return false;
+    if (destinationSet && !destinationSet[r.destination]) return false;
+    var dateVal = r[dateField];
+    if (dateFrom && (!dateVal || dateVal < dateFrom)) return false;
+    if (dateTo && (!dateVal || dateVal > dateTo)) return false;
+    return true;
+  });
+
+  document.getElementById('dash-filter-summary').textContent =
+    STATE.dashFiltered.length + ' 件を表示中（あなたが閲覧できる ' + STATE.rows.length + ' 件中）';
+
+  renderKpis();
+  renderCharts();
+  renderRanking();
+}
+
+function clearDashFilters() {
+  ['dash-filter-area', 'dash-filter-office', 'dash-filter-category', 'dash-filter-tourbrand', 'dash-filter-destination'].forEach(function (id) {
+    Array.from(document.getElementById(id).options).forEach(function (o) { o.selected = false; });
+  });
+  document.getElementById('dash-filter-date-from').value = '';
+  document.getElementById('dash-filter-date-to').value = '';
+  applyDashFilters();
+}
+
+// typeof NaN === 'number' となるため、typeof チェックだけではNaNを除外できない。
+// 1件でもNaNが混ざると集計全体がNaNに汚染されてしまうため、isNaN()も必ず併用する。
+function isValidNumber_(v) { return typeof v === 'number' && !isNaN(v); }
+function sumBy_(rows, key) {
+  var sum = 0;
+  rows.forEach(function (r) { if (isValidNumber_(r[key])) sum += r[key]; });
+  return sum;
+}
+function avgBy_(rows, key) {
+  var sum = 0, n = 0;
+  rows.forEach(function (r) { if (isValidNumber_(r[key])) { sum += r[key]; n++; } });
+  return n > 0 ? sum / n : 0;
+}
+function countBy_(rows, key) {
+  var map = {};
+  rows.forEach(function (r) {
+    var v = (r[key] === null || r[key] === undefined || r[key] === '') ? '(空欄)' : r[key];
+    map[v] = (map[v] || 0) + 1;
+  });
+  return map;
+}
+function topEntries_(map, n) {
+  return Object.keys(map)
+    .map(function (k) { return [k, map[k]]; })
+    .sort(function (a, b) { return b[1] - a[1]; })
+    .slice(0, n);
+}
+
+/**
+ * ヘッダーKPI：予約件数と、保険/Wifi/TAViCA/キャンサポの合計数量（数量欄の合計）。
+ * 数量は個人別サマリーと同じ集計（保険=加入PAX数、Wifi=販売台数、TAViCA=加入数、キャンサポ=加入PAX数）。
+ */
+function renderKpis() {
+  var rows = STATE.dashFiltered;
+  document.getElementById('kpi-total').textContent = formatNumber(rows.length);
+  document.getElementById('kpi-insurance').textContent = formatNumber(sumBy_(rows, 'insuranceQty'));
+  document.getElementById('kpi-wifi').textContent = formatNumber(sumBy_(rows, 'wifiQty'));
+  document.getElementById('kpi-tavica').textContent = formatNumber(sumBy_(rows, 'tavicaQty'));
+  document.getElementById('kpi-cansapo').textContent = formatNumber(sumBy_(rows, 'cansapoQty'));
+}
+
+var CHART_COLORS = ['#1d4ed8', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#0ea5e9', '#f97316', '#84cc16', '#ec4899', '#64748b'];
+
+function upsertChart_(canvasId, config) {
+  var canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  if (STATE.charts[canvasId]) { STATE.charts[canvasId].destroy(); delete STATE.charts[canvasId]; }
+  // グラフ部品（Chart.js）を外部から読み込めなかった場合も、グラフ以外（集計表・一覧・編集）は使えるようにする。
+  if (typeof Chart !== 'function') { notifyChartLibMissing_(); return; }
+  STATE.charts[canvasId] = new Chart(canvas.getContext('2d'), config);
+}
+
+/**
+ * グラフ部品がまだ無い場合：読み込み中なら、読み込み終わった時点でグラフを描き直す。
+ * 読み込みに失敗した（または長時間届かない）場合だけ、グラフ以外は使える旨を知らせる。
+ */
+function notifyChartLibMissing_() {
+  if (STATE.chartLibWaiting || STATE.chartLibWarned) return;
+  STATE.chartLibWaiting = true;
+  var warn = function () {
+    if (STATE.chartLibWarned || typeof Chart === 'function') return;
+    STATE.chartLibWarned = true;
+    showToast('グラフの表示部品を読み込めなかったため、グラフを表示できません（集計表・一覧・編集は使えます）。ページを読み込み直すと表示される場合があります。', 'error');
+  };
+  var el = document.getElementById('chartjs-lib');
+  if (!el || window.__chartLibFailed) { warn(); return; } // 既に読み込みに失敗している場合はすぐ知らせる
+  el.addEventListener('load', function () {
+    STATE.chartLibWaiting = false;
+    if (typeof Chart !== 'function') { warn(); return; }
+    if (STATE.activeTab === 'dashboard') renderCharts(); else STATE.dashDirty = true;
+  });
+  el.addEventListener('error', warn);
+  setTimeout(warn, 20000); // 読み込みの成否の知らせを受け取れなかった場合の保険
+}
+
+function renderCharts() {
+  var rows = STATE.dashFiltered;
+  renderCategoryChart_(rows);
+  renderDestinationComboChart_(rows);
+  renderTopChart_('chart-carrier', rows, 'carrier');
+  renderAncillaryCombinedChart_(rows);
+  renderAncillaryChart_('chart-insurance', rows, 'insuranceQty', '保険加入数');
+  renderAncillaryChart_('chart-wifi', rows, 'wifiQty', 'Wifi販売数');
+  renderAncillaryChart_('chart-cansapo', rows, 'cansapoQty', 'キャンサポ加入数');
+  renderAncillaryChart_('chart-tavica', rows, 'tavicaQty', 'TVC加入数');
+  renderAncillaryBreakdown_(rows);
+}
+
+function getDashDateField_() {
+  return document.getElementById('dash-filter-date-field').value || 'bookingDate';
+}
+
+/** 保険/Wifi/キャンサポ/TAViCAの月別数量（加入・販売数）を1つの折れ線グラフに重ねて表示する（総合比較用）。 */
+function renderAncillaryCombinedChart_(rows) {
+  var field = getDashDateField_();
+  var items = [
+    { qtyKey: 'insuranceQty', label: '保険', color: '#1d4ed8' },
+    { qtyKey: 'wifiQty', label: 'Wifi', color: '#f59e0b' },
+    { qtyKey: 'cansapoQty', label: 'キャンサポ', color: '#ec4899' },
+    { qtyKey: 'tavicaQty', label: 'TAViCA', color: '#8b5cf6' }
+  ];
+  var monthSet = {};
+  rows.forEach(function (r) {
+    var v = r[field];
+    if (v) monthSet[v.slice(0, 7)] = true;
+  });
+  var months = Object.keys(monthSet).sort();
+
+  upsertChart_('chart-ancillary-combined', {
+    data: {
+      labels: months,
+      datasets: items.map(function (it) {
+        var byMonth = {};
+        months.forEach(function (m) { byMonth[m] = 0; });
+        rows.forEach(function (r) {
+          var v = r[field];
+          if (!v) return;
+          var m = v.slice(0, 7);
+          if (typeof r[it.qtyKey] === 'number') byMonth[m] += r[it.qtyKey];
+        });
+        return {
+          type: 'line', label: it.label, data: months.map(function (m) { return byMonth[m]; }),
+          borderColor: it.color, backgroundColor: it.color, tension: 0.25
+        };
+      })
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'bottom' } },
+      scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+    }
+  });
+}
+
+/** 保険/Wifi/キャンサポ/TAViCAそれぞれの「NB付帯（〇）」「PUSH成約（☆）」の実績件数をカードの見出し下に表示する。 */
+function renderAncillaryBreakdown_(rows) {
+  STATE.ancillaryItems.forEach(function (item) {
+    var el = document.getElementById('ancillary-breakdown-' + item.key);
+    if (!el) return;
+    var nb = 0, push = 0;
+    rows.forEach(function (r) {
+      var status = r[item.statusKey];
+      if (status === '〇') nb++;
+      else if (status === '☆') push++;
+    });
+    el.textContent = 'NB付帯実績：' + formatNumber(nb) + '件　／　PUSH成約実績：' + formatNumber(push) + '件';
+  });
+}
+
+/** 保険・Wifi・TAViCA・キャンサポ共通：棒＝リスト数（月別件数）、折れ線＝加入・販売数（数量合計）。 */
+function renderAncillaryChart_(canvasId, rows, qtyKey, lineLabel) {
+  var field = getDashDateField_();
+  var byMonth = {};
+  rows.forEach(function (r) {
+    var v = r[field];
+    if (!v) return;
+    var month = v.slice(0, 7);
+    if (!byMonth[month]) byMonth[month] = { count: 0, qty: 0 };
+    byMonth[month].count++;
+    if (typeof r[qtyKey] === 'number') byMonth[month].qty += r[qtyKey];
+  });
+  var months = Object.keys(byMonth).sort();
+  upsertChart_(canvasId, {
+    data: {
+      labels: months,
+      datasets: [
+        { type: 'bar', label: 'リスト数', data: months.map(function (m) { return byMonth[m].count; }), backgroundColor: '#c7d2fe', yAxisID: 'y' },
+        { type: 'line', label: lineLabel, data: months.map(function (m) { return byMonth[m].qty; }), borderColor: '#059669', backgroundColor: '#059669', yAxisID: 'y1', tension: 0.25 }
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } },
+      scales: {
+        y: { beginAtZero: true, ticks: { precision: 0, font: { size: 9 } } },
+        y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { precision: 0, font: { size: 9 } } },
+        x: { ticks: { font: { size: 9 } } }
+      }
+    }
+  });
+}
+
+/**
+ * 方面別（最終目的地）グラフ：棒＝方面ごとの予約件数（上位10）、折れ線＝同じ方面の
+ * 保険・Wifi・キャンサポ・TAViCA各付帯の販売数量。件数の多い方面トップ10に絞って表示する。
+ */
+function renderDestinationComboChart_(rows) {
+  var items = [
+    { qtyKey: 'insuranceQty', label: '保険', color: '#1d4ed8' },
+    { qtyKey: 'wifiQty', label: 'Wifi', color: '#f59e0b' },
+    { qtyKey: 'cansapoQty', label: 'キャンサポ', color: '#ec4899' },
+    { qtyKey: 'tavicaQty', label: 'TAViCA', color: '#8b5cf6' }
+  ];
+  var countMap = countBy_(rows, 'destination');
+  var topDestinations = topEntries_(countMap, 10).map(function (e) { return e[0]; });
+
+  var qtyByDestination = {};
+  topDestinations.forEach(function (d) {
+    qtyByDestination[d] = { insuranceQty: 0, wifiQty: 0, cansapoQty: 0, tavicaQty: 0 };
+  });
+  rows.forEach(function (r) {
+    var d = (r.destination === null || r.destination === undefined || r.destination === '') ? '(空欄)' : r.destination;
+    if (!qtyByDestination[d]) return;
+    items.forEach(function (it) {
+      if (typeof r[it.qtyKey] === 'number') qtyByDestination[d][it.qtyKey] += r[it.qtyKey];
+    });
+  });
+
+  upsertChart_('chart-destination', {
+    data: {
+      labels: topDestinations,
+      datasets: [
+        { type: 'bar', label: '予約件数', data: topDestinations.map(function (d) { return countMap[d]; }), backgroundColor: '#c7d2fe', yAxisID: 'y' }
+      ].concat(items.map(function (it) {
+        return {
+          type: 'line', label: it.label, data: topDestinations.map(function (d) { return qtyByDestination[d][it.qtyKey]; }),
+          borderColor: it.color, backgroundColor: it.color, yAxisID: 'y1', tension: 0.25
+        };
+      }))
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } },
+      scales: {
+        y: { beginAtZero: true, ticks: { precision: 0, font: { size: 9 } } },
+        y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { precision: 0, font: { size: 9 } } },
+        x: { ticks: { font: { size: 9 } } }
+      }
+    }
+  });
+}
+
+function renderCategoryChart_(rows) {
+  var map = countBy_(rows, 'productCategory');
+  var entries = topEntries_(map, 12);
+  upsertChart_('chart-category', {
+    type: 'pie',
+    data: {
+      labels: entries.map(function (e) { return e[0]; }),
+      datasets: [{ data: entries.map(function (e) { return e[1]; }), backgroundColor: CHART_COLORS }]
+    },
+    options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } } }
+  });
+}
+
+function renderTopChart_(canvasId, rows, key) {
+  var map = countBy_(rows, key);
+  var entries = topEntries_(map, 10);
+  upsertChart_(canvasId, {
+    type: 'bar',
+    data: {
+      labels: entries.map(function (e) { return e[0]; }),
+      datasets: [{ label: '件数', data: entries.map(function (e) { return e[1]; }), backgroundColor: '#1d4ed8' }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: { x: { beginAtZero: true } }
+    }
+  });
+}
+
+/** 営業所別ランキング：個人別サマリーと同じ集計（エリア・営業所・担当者ごとの記録件数と付帯実績）を使う。 */
+function renderRanking() {
+  var list = buildPersonalSummary_(STATE.dashFiltered);
+  var key = STATE.rankingSortKey, dir = STATE.rankingSortDir;
+  list.sort(function (a, b) {
+    if (key === 'area') return a.area.localeCompare(b.area, 'ja') * dir;
+    if (key === 'office') return a.office.localeCompare(b.office, 'ja') * dir;
+    if (key === 'staff') return formatStaffName_(a.staff).localeCompare(formatStaffName_(b.staff), 'ja') * dir;
+    return (a[key] - b[key]) * dir;
+  });
+  renderSortMarks_('tab-panel-dashboard', key, dir);
+
+  var tbody = document.getElementById('ranking-tbody');
+  if (list.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-slate-400 py-6">データがありません</td></tr>';
+    return;
+  }
+  tbody.innerHTML = list.map(function (b) {
+    return '<tr class="hover:bg-slate-50">' +
+      '<td class="px-3 py-2">' + escapeHtml(b.area) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(b.office) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(formatStaffName_(b.staff)) + '</td>' +
+      '<td class="px-3 py-2 text-right">' + formatNumber(b.count) + '</td>' +
+      '<td class="px-3 py-2 text-right">' + formatAncillaryTallyCell_(b.insurance) + '</td>' +
+      '<td class="px-3 py-2 text-right">' + formatAncillaryTallyCell_(b.wifi) + '</td>' +
+      '<td class="px-3 py-2 text-right">' + formatAncillaryTallyCell_(b.cansapo) + '</td>' +
+      '<td class="px-3 py-2 text-right">' + formatAncillaryTallyCell_(b.tavica) + '</td>' +
+      '</tr>';
+  }).join('');
+}
+
+// ============================================================================
+// 予約データ一覧タブ：フィルタ・列の並び替え・編集・並べ替え・ページング
+// ============================================================================
+
+function applyDataFilters() {
+  var areaSet = toSet_(getSelectedValues_('data-filter-area'));
+  var officeSet = toSet_(getSelectedValues_('data-filter-office'));
+  var staffSet = toSet_(getSelectedValues_('data-filter-staff'));
+  var dateFrom = document.getElementById('data-filter-date-from').value || '';
+  var dateTo = document.getElementById('data-filter-date-to').value || '';
+  var insuranceStsSet = toSet_(getSelectedValues_('data-filter-insurance-status'));
+  var wifiStsSet = toSet_(getSelectedValues_('data-filter-wifi-status'));
+  var tavicaStsSet = toSet_(getSelectedValues_('data-filter-tavica-status'));
+  var cansapoStsSet = toSet_(getSelectedValues_('data-filter-cansapo-status'));
+
+  STATE.dataFiltered = STATE.rows.filter(function (r) {
+    if (areaSet && !areaSet[r.area]) return false;
+    if (officeSet && !officeSet[r.office]) return false;
+    if (staffSet && !staffSet[r.staff]) return false;
+    var dep = r.departureDate;
+    if (dateFrom && (!dep || dep < dateFrom)) return false;
+    if (dateTo && (!dep || dep > dateTo)) return false;
+    if (insuranceStsSet && !insuranceStsSet[normalizeAncillaryStatus_(r.insuranceStatus)]) return false;
+    if (wifiStsSet && !wifiStsSet[normalizeAncillaryStatus_(r.wifiStatus)]) return false;
+    if (tavicaStsSet && !tavicaStsSet[normalizeAncillaryStatus_(r.tavicaStatus)]) return false;
+    if (cansapoStsSet && !cansapoStsSet[normalizeAncillaryStatus_(r.cansapoStatus)]) return false;
+    return true;
+  });
+
+  // フィルタ変更で画面から隠れた行の選択は、本人が見えないまま一括編集の対象になってしまうため解除する。
+  var visibleRowIndexes = {};
+  STATE.dataFiltered.forEach(function (r) { visibleRowIndexes[r.rowIndex] = true; });
+  Object.keys(STATE.selectedRowIndexes).forEach(function (ri) {
+    if (!visibleRowIndexes[ri]) delete STATE.selectedRowIndexes[ri];
+  });
+
+  document.getElementById('data-filter-summary').textContent =
+    STATE.dataFiltered.length + ' 件を表示中（あなたが閲覧できる ' + STATE.rows.length + ' 件中）';
+
+  STATE.dataPage = 1;
+  renderDataTable();
+}
+
+function clearDataFilters() {
+  ['data-filter-area', 'data-filter-office', 'data-filter-staff',
+    'data-filter-insurance-status', 'data-filter-wifi-status', 'data-filter-tavica-status', 'data-filter-cansapo-status'].forEach(function (id) {
+    Array.from(document.getElementById(id).options).forEach(function (o) { o.selected = false; });
+  });
+  document.getElementById('data-filter-date-from').value = '';
+  document.getElementById('data-filter-date-to').value = '';
+  updateDataOfficeStaffFilterOptions_();
+  applyDataFilters();
+}
+
+function renderDataThead() {
+  var thead = document.getElementById('data-thead');
+  var checkboxTh = '<th class="px-2 py-2 text-center w-8"><input type="checkbox" id="data-select-all-page" title="このページの行をすべて選択"></th>';
+  thead.innerHTML = '<tr>' + checkboxTh + STATE.columnOrder.map(function (key) {
+    var def = DISPLAY_COLUMN_DEFS_BY_KEY[key];
+    if (!def) return '';
+    var sortable = def.kind !== 'ancillary';
+    var col = def.kind === 'csv' ? STATE.columnByKey[def.field] : null;
+    var align = (col && col.type === 'number') ? 'text-right' : (def.kind === 'ancillary' ? 'text-center' : 'text-left');
+    var editableBg = def.kind === 'ancillary' || def.kind === 'date' || def.kind === 'memo' ? ' bg-blue-50' : '';
+    var mark = (sortable && STATE.dataSortKey === key) ? ('<span class="sort-mark">' + (STATE.dataSortDir > 0 ? '▲' : '▼') + '</span>') : '';
+    var cls = (sortable ? 'sortable ' : '') + 'px-3 py-2 ' + align + editableBg;
+    var dataSort = sortable ? ' data-sort="' + key + '"' : '';
+    return '<th class="' + cls + '"' + dataSort + '>' + escapeHtml(def.label) + mark + '</th>';
+  }).join('') + '</tr>';
+
+  thead.querySelectorAll('.sortable').forEach(function (th) {
+    th.addEventListener('click', function () {
+      var key = th.getAttribute('data-sort');
+      if (STATE.dataSortKey === key) STATE.dataSortDir *= -1; else { STATE.dataSortKey = key; STATE.dataSortDir = 1; }
+      renderDataThead();
+      renderDataTable();
+    });
+  });
+
+  document.getElementById('data-select-all-page').addEventListener('change', function (e) {
+    var checked = e.target.checked;
+    STATE.currentPageRowIndexes.forEach(function (ri) {
+      if (checked) STATE.selectedRowIndexes[ri] = true; else delete STATE.selectedRowIndexes[ri];
+    });
+    renderDataTable();
+  });
+}
+
+function compareRows_(a, b, def) {
+  if (!def) return 0;
+  var va = a[def.field], vb = b[def.field];
+  var type = def.kind === 'csv' ? STATE.columnByKey[def.field].type : (def.kind === 'date' ? 'date' : 'text');
+  var aEmpty = (va === null || va === undefined || va === '');
+  var bEmpty = (vb === null || vb === undefined || vb === '');
+  if (aEmpty && bEmpty) return 0;
+  if (aEmpty) return 1;
+  if (bEmpty) return -1;
+  if (type === 'number') return va - vb;
+  // 担当者は画面に表示している氏名（担当者マスタで変換した名前）の順に並べる。
+  if (def.field === 'staff') return String(formatStaffName_(va)).localeCompare(String(formatStaffName_(vb)), 'ja');
+  return String(va).localeCompare(String(vb), 'ja');
+}
+
+/** 予約データ一覧に表示する順（今の並べ替え）にした行の配列。 */
+function sortedDataRows_() {
+  var def = DISPLAY_COLUMN_DEFS_BY_KEY[STATE.dataSortKey];
+  var rows = STATE.dataFiltered.slice();
+  rows.sort(function (a, b) { return compareRows_(a, b, def) * STATE.dataSortDir; });
+  return rows;
+}
+
+/** 指定した行が載っているページを開く（今の絞り込み結果に無ければfalse）。 */
+function showDataRow_(rowIndex) {
+  var rows = sortedDataRows_();
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].rowIndex === rowIndex) {
+      STATE.dataPage = Math.floor(i / STATE.dataPageSize) + 1;
+      if (STATE.activeTab !== 'data') switchTab('data');
+      renderDataTable();
+      return true;
+    }
+  }
+  return false;
+}
+
+function renderDataTable() {
+  var rows = sortedDataRows_();
+
+  var total = rows.length;
+  var totalPages = Math.max(1, Math.ceil(total / STATE.dataPageSize));
+  if (STATE.dataPage > totalPages) STATE.dataPage = totalPages;
+  var start = (STATE.dataPage - 1) * STATE.dataPageSize;
+  var pageRows = rows.slice(start, start + STATE.dataPageSize);
+
+  var tbody = document.getElementById('data-tbody');
+  document.getElementById('data-empty').classList.toggle('hidden', total > 0);
+  hideHoverTooltip_(); // 再描画でホバー中の要素が消えると、ツールチップが消えずに残るため
+
+  // アーカイブ済みの行（閲覧専用）は、「このページを全選択」や一括登録の対象に含めない。
+  STATE.currentPageRowIndexes = pageRows.filter(function (r) { return !r.isArchived; }).map(function (r) { return r.rowIndex; });
+
+  tbody.innerHTML = pageRows.map(function (r) {
+    // アーカイブ済みの行（別スプレッドシートから読み込んだ過去データ）は閲覧専用。
+    // 一括登録の選択対象にもしない（選択チェックボックスの代わりに鍵アイコンを表示する）。
+    var checkboxTd = r.isArchived
+      ? '<td class="px-2 py-2 text-center text-slate-300" title="アーカイブ済み（閲覧専用）"><i class="fa-solid fa-lock"></i></td>'
+      : (function () {
+          var checked = STATE.selectedRowIndexes[r.rowIndex] ? ' checked' : '';
+          return '<td class="px-2 py-2 text-center"><input type="checkbox" class="row-select-checkbox" data-row="' + r.rowIndex + '"' + checked + '></td>';
+        })();
+    var rowClass = r.isArchived ? 'hover:bg-amber-50 bg-amber-50/40' : 'hover:bg-slate-50';
+    return '<tr class="' + rowClass + '" data-row-index="' + r.rowIndex + '">' + checkboxTd + STATE.columnOrder.map(function (key) {
+      return buildCellHtml_(r, DISPLAY_COLUMN_DEFS_BY_KEY[key]);
+    }).join('') + '</tr>';
+  }).join('');
+
+  document.getElementById('pagination-info').textContent =
+    total === 0 ? '0件' : (start + 1) + '〜' + Math.min(start + STATE.dataPageSize, total) + ' / ' + total + '件';
+  document.getElementById('btn-prev-page').disabled = STATE.dataPage <= 1;
+  document.getElementById('btn-next-page').disabled = STATE.dataPage >= totalPages;
+
+  syncSelectAllCheckbox_();
+  updateBulkEditBar_();
+}
+
+/** ヘッダーの「このページを全選択」チェックボックスを、現在の選択状態に合わせて更新する（全選択／一部選択／未選択）。 */
+function syncSelectAllCheckbox_() {
+  var cb = document.getElementById('data-select-all-page');
+  if (!cb) return;
+  var pageIndexes = STATE.currentPageRowIndexes;
+  var allSelected = pageIndexes.length > 0 && pageIndexes.every(function (ri) { return !!STATE.selectedRowIndexes[ri]; });
+  var someSelected = pageIndexes.some(function (ri) { return !!STATE.selectedRowIndexes[ri]; });
+  cb.checked = allSelected;
+  cb.indeterminate = !allSelected && someSelected;
+}
+
+function getSelectedRowIndexes_() { return Object.keys(STATE.selectedRowIndexes).map(Number); }
+
+function clearRowSelection_() {
+  STATE.selectedRowIndexes = {};
+  syncSelectAllCheckbox_();
+  updateBulkEditBar_();
+  renderDataTable();
+}
+
+/** 一括登録バーの表示・選択件数を、現在の選択状態に合わせて更新する。 */
+function updateBulkEditBar_() {
+  var count = getSelectedRowIndexes_().length;
+  var countEl = document.getElementById('bulk-selected-count');
+  if (countEl) countEl.textContent = count;
+  var bar = document.getElementById('bulk-edit-bar');
+  if (bar) bar.classList.toggle('hidden', count === 0);
+}
+
+function formatCell_(v, col) {
+  if (v === null || v === undefined || v === '') return '<span class="text-slate-300">－</span>';
+  if (col.type === 'number') return formatNumber(v);
+  if (col.type === 'date') return escapeHtml(String(v).replace(/-/g, '/'));
+  return escapeHtml(String(v));
+}
+
+/** 保険/Wifi/TAViCA/キャンサポ：ステータスに応じて数量欄を編集できるかどうか（〇・☆のみ入力必須で編集可）。 */
+function isAncillaryQtyEditable_(status) {
+  return status === '〇' || status === '☆';
+}
+
+function buildCellHtml_(row, def) {
+  if (!def) return '<td></td>';
+  var archived = !!row.isArchived;
+
+  if (def.kind === 'csv') {
+    var col = STATE.columnByKey[def.field];
+    var align = col.type === 'number' ? 'text-right' : 'text-left';
+    var displayValue = row[def.field];
+    if (def.field === 'staff' && displayValue) displayValue = formatStaffName_(displayValue);
+    if (def.field === 'reservationNo') {
+      var badge = archived ? '<span class="text-[10px] font-semibold text-amber-600 bg-amber-100 rounded px-1 py-0.5 mr-1" title="アーカイブ済み（閲覧専用）">アーカイブ</span>' : '';
+      if (displayValue) {
+        var challengeUrl = buildChallengeRecordUrl_(displayValue);
+        if (challengeUrl) {
+          return '<td class="px-3 py-2 ' + align + '">' + badge + '<a href="' + escapeHtml(challengeUrl) + '" target="_blank" rel="noopener noreferrer" class="text-blue-700 hover:underline">' + escapeHtml(displayValue) + '</a></td>';
+        }
+        return '<td class="px-3 py-2 ' + align + '">' + badge + formatCell_(displayValue, col) + '</td>';
+      }
+      return '<td class="px-3 py-2 ' + align + '">' + badge + formatCell_(displayValue, col) + '</td>';
+    }
+    return '<td class="px-3 py-2 ' + align + '">' + formatCell_(displayValue, col) + '</td>';
+  }
+
+  // アーカイブ済みの行は、現場入力項目（CHK日・保険/Wifi/TAViCA/キャンサポ・メモ）も
+  // 編集用の入力欄ではなく、通常のCSV項目と同じ読み取り専用表示にする
+  // （アーカイブ先スプレッドシートへの書き戻しには対応していないため）。
+  if (archived) {
+    if (def.kind === 'date') {
+      return '<td class="px-3 py-2 text-left">' + formatCell_(row[def.field], { type: 'date' }) + '</td>';
+    }
+    if (def.kind === 'memo') {
+      var mv0 = row[def.field] || '';
+      var truncated0 = mv0.length > 10 ? mv0.slice(0, 10) + '…' : mv0;
+      return '<td class="px-3 py-2 text-left"' + (mv0 ? ' title="' + escapeHtml(mv0) + '"' : '') + '>' + (mv0 ? escapeHtml(truncated0) : '<span class="text-slate-300">－</span>') + '</td>';
+    }
+    if (def.kind === 'ancillary') {
+      var item0 = STATE.ancillaryItemByKey[def.item];
+      var status0 = normalizeAncillaryStatus_(row[item0.statusKey]);
+      var qty0 = row[item0.qtyKey];
+      var text0 = status0 + (qty0 !== null && qty0 !== undefined && qty0 !== '' ? '（' + formatNumber(qty0) + '）' : '');
+      return '<td class="px-3 py-2 text-center">' + escapeHtml(text0) + '</td>';
+    }
+  }
+
+  if (def.kind === 'date') {
+    var dv = row[def.field] || '';
+    var pendingDate = hasPendingFieldChange_(row.rowIndex, def.field) ? ' pending-edit' : '';
+    return '<td class="editable-cell px-2 py-1"><input type="date" data-row="' + row.rowIndex + '" data-col="' + def.field + '" value="' + escapeHtml(dv) + '" class="border border-slate-300 rounded px-1 py-1 text-xs w-32' + pendingDate + '"></td>';
+  }
+
+  if (def.kind === 'memo') {
+    var mv = row[def.field] || '';
+    var truncated = mv.length > 10 ? mv.slice(0, 10) + '…' : mv;
+    var pendingMemo = hasPendingFieldChange_(row.rowIndex, def.field) ? ' pending-edit' : '';
+    var display = mv
+      ? '<span class="memo-display' + pendingMemo + '" data-row="' + row.rowIndex + '" data-col="' + def.field + '" data-tooltip="' + escapeHtml(mv) + '">' + escapeHtml(truncated) + '</span>'
+      : '<span class="memo-display text-slate-300' + pendingMemo + '" data-row="' + row.rowIndex + '" data-col="' + def.field + '">（ダブルクリックで入力）</span>';
+    return '<td class="editable-cell px-2 py-1">' + display + '</td>';
+  }
+
+  if (def.kind === 'ancillary') {
+    var item = STATE.ancillaryItemByKey[def.item];
+    var status = normalizeAncillaryStatus_(row[item.statusKey]);
+    var qty = row[item.qtyKey];
+    var reason = row[item.reasonKey];
+    var opts = STATE.ancillaryStatusOptions.map(function (o) {
+      return '<option value="' + o.value + '"' + (status === o.value ? ' selected' : '') + '>' + o.value + ' ' + escapeHtml(o.label) + '</option>';
+    }).join('');
+    var qtyEditable = isAncillaryQtyEditable_(status);
+    var qtyVal = (qty === null || qty === undefined) ? '' : qty;
+    var qtyTooltip = (status === '×' && reason) ? ' data-tooltip="失注理由：' + escapeHtml(reason) + '"' : '';
+    var flagged = (status === '〇' || status === '☆') && (qty === null || qty === undefined || qty === '') ? ' ancillary-flagged' : '';
+    var pendingAncillary = hasPendingAncillaryChange_(row.rowIndex, item.key) ? ' pending-edit' : '';
+    // 失注（×）の行は、同じ「×」を選び直しても変更イベントが起きず理由を直せないため、理由の編集ボタンを出す。
+    var reasonBtn = status === '×'
+      ? '<button type="button" class="ancillary-reason-edit text-slate-400 hover:text-blue-700 text-xs px-1" data-row="' + row.rowIndex + '" data-item="' + item.key + '" title="失注理由を編集" aria-label="失注理由を編集">✎</button>'
+      : '';
+    return '<td class="editable-cell px-2 py-1 text-center">' +
+      '<div class="flex items-center justify-center gap-1"' + qtyTooltip + '>' +
+      '<select data-row="' + row.rowIndex + '" data-col="' + item.statusKey + '" data-item="' + item.key + '" class="ancillary-status border border-slate-300 rounded px-1 py-1 text-xs' + pendingAncillary + '">' + opts + '</select>' +
+      '<input type="number" min="0" step="1" data-row="' + row.rowIndex + '" data-col="' + item.qtyKey + '" data-item="' + item.key + '" value="' + escapeHtml(String(qtyVal)) + '" ' + (qtyEditable ? '' : 'disabled') + ' class="ancillary-qty' + flagged + pendingAncillary + ' border border-slate-300 rounded px-1 py-1 text-xs w-14" placeholder="数">' +
+      reasonBtn +
+      '</div></td>';
+  }
+
+  return '<td class="px-3 py-2"></td>';
+}
+
+// ============================================================================
+// 予約データ一覧：編集の「まとめて保存する」（他のリセール管理システムと同様、
+// 1項目ずつ即時保存するのではなく、複数の編集をためておいて1回のボタン操作でまとめて保存する）
+// ============================================================================
+
+function pendingKey_(rowIndex, fieldOrItem) { return rowIndex + '|' + fieldOrItem; }
+function hasPendingFieldChange_(rowIndex, columnKey) { return !!STATE.pendingChanges[pendingKey_(rowIndex, columnKey)]; }
+function hasPendingAncillaryChange_(rowIndex, itemKey) { return !!STATE.pendingChanges[pendingKey_(rowIndex, 'ancillary:' + itemKey)]; }
+
+/** 保険/Wifi/TAViCA/キャンサポの未保存変更レコードを取得（無ければ現在値をoriginalとして新規作成）する。 */
+function getOrCreatePendingAncillary_(rowIndex, itemKey) {
+  var key = pendingKey_(rowIndex, 'ancillary:' + itemKey);
+  if (!STATE.pendingChanges[key]) {
+    var row = STATE.rows.filter(function (r) { return r.rowIndex === rowIndex; })[0];
+    var item = STATE.ancillaryItemByKey[itemKey];
+    STATE.pendingChanges[key] = {
+      kind: 'ancillary', rowIndex: rowIndex, itemKey: itemKey,
+      original: { status: row[item.statusKey], qty: row[item.qtyKey], reason: row[item.reasonKey] }
+    };
+  }
+  return STATE.pendingChanges[key];
+}
+
+/** 画面に表示している行の行トークン（保存時にサーバーで今の行と照合する値）。 */
+function rowTokenOf_(rowIndex) {
+  var row = findRow_(rowIndex);
+  return row && row._t ? row._t : null;
+}
+
+/** rowIndexの行データを返す（無ければundefined）。数万行でも速く引けるよう、行番号の索引を作って使う。 */
+function findRow_(rowIndex) {
+  if (STATE.rowIndexMapFor !== STATE.rows) {
+    var map = Object.create(null);
+    STATE.rows.forEach(function (r) { map[r.rowIndex] = r; });
+    STATE.rowIndexMap = map;
+    STATE.rowIndexMapFor = STATE.rows;
+  }
+  return STATE.rowIndexMap[rowIndex];
+}
+
+/**
+ * 予約データ一覧の、1行の1項目（CHK日・メモ・付帯商品1件）のセルだけを描き直す。
+ * 表全体（tbody）を作り直すと、編集を確定した瞬間（入力欄からフォーカスが外れた瞬間）に、
+ * 次にクリック・Tabキーで移ろうとしていた別のセルの入力欄やプルダウンまで作り直されてしまい、
+ * クリックが空振りしたりフォーカスが消えたりするため。並べ替え・絞り込みもこの時点では適用し直さない
+ * （入力した瞬間に行が別の位置・別のページへ飛ばないようにするため。次に絞り込み・並べ替え・
+ * ページ移動をした時点で反映される）。該当セルが今のページに表示されていなければfalseを返す。
+ */
+function refreshDataCell_(rowIndex, displayKey) {
+  var colPos = STATE.columnOrder.indexOf(displayKey);
+  if (colPos === -1) return false;
+  var findTd = function () {
+    var tr = document.querySelector('#data-tbody tr[data-row-index="' + rowIndex + '"]');
+    return tr ? tr.children[colPos + 1] : null; // 先頭の列は選択チェックボックス
+  };
+  var td = findTd();
+  if (!td) return false;
+  // 差し替えるセルの中の入力欄に入力中の場合は、先に入力を確定させる。差し替えの途中で入力欄が
+  // 取り除かれると、その瞬間に確定処理（同じセルの描き直し）が割り込み、差し替え先のセルが
+  // 既に無くなっている状態になるため（確定処理が描き直した後のセルを改めて探して差し替える）。
+  var active = document.activeElement;
+  if (active && active !== document.body && td.contains(active)) {
+    active.blur();
+    td = findTd();
+    if (!td) return false;
+  }
+  var row = findRow_(rowIndex);
+  if (!row) return false;
+  var holder = document.createElement('tbody');
+  holder.innerHTML = '<tr>' + buildCellHtml_(row, DISPLAY_COLUMN_DEFS_BY_KEY[displayKey]) + '</tr>';
+  hideHoverTooltip_();
+  if (!td.parentNode) return false;
+  td.replaceWith(holder.firstChild.firstChild);
+  return true;
+}
+
+/**
+ * 画面を編集した直後の共通処理（この時点ではまだサーバーには保存しない）。
+ * rowIndexとdisplayKey（CHK日='chkDate'、メモ='memo'、付帯商品=itemKey）が指定されれば、
+ * 予約データ一覧はそのセルだけを描き直す（refreshDataCell_参照）。指定が無ければ表全体を描き直す。
+ * ダッシュボード（グラフ7〜8個）・個人別サマリーは、今見えていないタブなら再描画せず
+ * 「汚れている」フラグだけ立て、実際にそのタブへ切り替えられた時に再描画する
+ * （1件編集するたびに非表示のグラフまで全部再描画する無駄を避けるため）。
+ */
+function afterLocalEdit_(rowIndex, displayKey) {
+  if (rowIndex === undefined || !refreshDataCell_(rowIndex, displayKey)) renderDataTable();
+  if (STATE.activeTab === 'dashboard') applyDashFilters(); else STATE.dashDirty = true;
+  if (STATE.activeTab === 'personal') renderPersonalTab(); else STATE.personalDirty = true;
+  updatePendingChangesBar_();
+}
+// 旧名（他の箇所からの呼び出しと互換のため残す）。
+function afterCellSaved_() { afterLocalEdit_(); }
+
+/** 未入力（null・undefined・空文字）を同じものとみなして、2つの値が同じかを判定する。 */
+function sameEditValue_(a, b) {
+  var na = (a === null || a === undefined || a === '') ? null : String(a).trim();
+  var nb = (b === null || b === undefined || b === '') ? null : String(b).trim();
+  return na === nb;
+}
+
+/**
+ * 保留中の変更が、結果的に元の値と同じになった（何も変えずにフォーカスを外した・元の値に戻した）
+ * 場合は、「未保存の変更」から取り除く。
+ */
+function prunePendingIfUnchanged_(key) {
+  var c = STATE.pendingChanges[key];
+  if (!c) return;
+  var unchanged = c.kind === 'field'
+    ? sameEditValue_(c.value, c.original)
+    : (normalizeAncillaryStatus_(c.status) === normalizeAncillaryStatus_(c.original.status) &&
+       sameEditValue_(c.qty, c.original.qty) && sameEditValue_(c.reason, c.original.reason));
+  if (unchanged) delete STATE.pendingChanges[key];
+}
+
+/** 未保存の変更バー（件数表示・保存/取消ボタン）の表示を更新する。 */
+function updatePendingChangesBar_() {
+  var count = Object.keys(STATE.pendingChanges).length;
+  var countEl = document.getElementById('pending-changes-count');
+  if (countEl) countEl.textContent = count;
+  var bar = document.getElementById('pending-changes-bar');
+  if (bar) bar.classList.toggle('hidden', count === 0);
+}
+
+/**
+ * 一覧の編集セル1つ分を画面上でだけ変更する（CHK日・メモに使う。保険等のステータス/数量は専用の
+ * ハンドラーを使う）。サーバーへは送らず、「まとめて保存する」を押すまで保留する。
+ */
+function saveCell(rowIndex, columnKey, value) {
+  var row = findRow_(rowIndex);
+  if (!row) return;
+  // サーバー側でも前後の空白は取り除いて保存するため、画面上の値もそろえておく。
+  var trimmed = (value === undefined || value === null) ? '' : String(value).trim();
+  var normalized = trimmed === '' ? null : trimmed;
+
+  var key = pendingKey_(rowIndex, columnKey);
+  if (!STATE.pendingChanges[key]) {
+    if (sameEditValue_(normalized, row[columnKey])) {
+      // 値を変えずにフォーカスを外しただけ：未保存の変更にはしない（メモの編集欄を表示に戻すだけ）。
+      afterLocalEdit_(rowIndex, columnKey);
+      return;
+    }
+    STATE.pendingChanges[key] = { kind: 'field', rowIndex: rowIndex, columnKey: columnKey, original: row[columnKey] };
+  }
+  STATE.pendingChanges[key].value = normalized;
+  row[columnKey] = normalized;
+  prunePendingIfUnchanged_(key);
+
+  afterLocalEdit_(rowIndex, columnKey);
+}
+
+/**
+ * 保険/Wifi/TAViCA/キャンサポのステータスが変更されたときの処理。
+ * ・「×（失注）」を選ぶと理由の入力を求める（キャンセルした場合は選択を元に戻す）。
+ * ・「〇（NB付帯）」「☆（PUSH成約）」を選んだときに数量が未入力なら、アラートで入力を促す。
+ * ・それ以外（NO ACT／セールス中）に変えたときは数量・理由をクリアする。
+ * いずれも画面上の変更を保留するだけで、サーバーへの保存は「まとめて保存する」を押すまで行わない。
+ */
+function handleAncillaryStatusChange(selectEl) {
+  var rowIndex = Number(selectEl.dataset.row);
+  var itemKey = selectEl.dataset.item;
+  var item = STATE.ancillaryItemByKey[itemKey];
+  var row = STATE.rows.filter(function (r) { return r.rowIndex === rowIndex; })[0];
+  if (!row || !item) return;
+  var previousStatus = normalizeAncillaryStatus_(row[item.statusKey]);
+  var newStatus = selectEl.value;
+
+  if (newStatus === '×') {
+    var reason = window.prompt('失注理由を入力してください（キャンセルすると変更されません）', row[item.reasonKey] || '');
+    if (reason === null) {
+      selectEl.value = previousStatus;
+      return;
+    }
+    var pendingLost = getOrCreatePendingAncillary_(rowIndex, itemKey);
+    pendingLost.status = '×';
+    pendingLost.qty = 0;
+    pendingLost.reason = reason.trim();
+    row[item.statusKey] = '×';
+    row[item.qtyKey] = 0;
+    row[item.reasonKey] = reason.trim();
+    prunePendingIfUnchanged_(pendingKey_(rowIndex, 'ancillary:' + itemKey));
+    afterLocalEdit_(rowIndex, itemKey);
+    return;
+  }
+
+  var pending = getOrCreatePendingAncillary_(rowIndex, itemKey);
+  pending.status = newStatus;
+  pending.qty = (newStatus === '〇' || newStatus === '☆') ? row[item.qtyKey] : null;
+  pending.reason = null;
+
+  row[item.statusKey] = newStatus;
+  if (newStatus !== '〇' && newStatus !== '☆') row[item.qtyKey] = null;
+  row[item.reasonKey] = null;
+  prunePendingIfUnchanged_(pendingKey_(rowIndex, 'ancillary:' + itemKey));
+
+  afterLocalEdit_(rowIndex, itemKey);
+
+  if ((newStatus === '〇' || newStatus === '☆') && (row[item.qtyKey] === null || row[item.qtyKey] === undefined || row[item.qtyKey] === '')) {
+    showToast(item.label + 'の数量が入力されていません。数量を入力してください。', 'error');
+    setTimeout(function () {
+      var qtyInput = document.querySelector('input.ancillary-qty[data-row="' + rowIndex + '"][data-item="' + itemKey + '"]');
+      if (qtyInput) qtyInput.focus();
+    }, 0);
+  }
+}
+
+/**
+ * 保険/Wifi/TAViCA/キャンサポの数量欄からフォーカスが外れたときの処理。
+ * ステータスが「〇」「☆」なのに数量が未入力ならアラートを出して保留しない（値も変更しない）。
+ */
+function handleAncillaryQtyBlur(inputEl) {
+  var rowIndex = Number(inputEl.dataset.row);
+  var itemKey = inputEl.dataset.item;
+  var item = STATE.ancillaryItemByKey[itemKey];
+  var row = STATE.rows.filter(function (r) { return r.rowIndex === rowIndex; })[0];
+  if (!row || !item) return;
+  var status = normalizeAncillaryStatus_(row[item.statusKey]);
+  var currentQty = row[item.qtyKey];
+  // 入力欄の表示を、内部で保持している数量（変更しなかった場合は元の値）に戻す。
+  var restoreInput = function () {
+    inputEl.value = (currentQty === null || currentQty === undefined) ? '' : String(currentQty);
+  };
+  if (!isAncillaryQtyEditable_(status)) { restoreInput(); return; }
+
+  // 入力欄が数値として読めない文字（記号だけ等）の場合も、ブラウザはvalueを空文字にする。
+  var raw = inputEl.value.trim();
+  if (raw === '') {
+    // ここで inputEl.focus() を呼ぶと、自分自身のblurハンドラーの中で再度フォーカスし直すことになり、
+    // ブラウザによってはblur→focus→blur…の無限ループ（アラートが閉じられず画面が固まる不具合）を招く。
+    // そのためフォーカスは戻さず、トースト通知のみで知らせる。値は変更せず、表示も元の値に戻す
+    // （空欄の表示のまま内部の値だけ元の数量が残り、見た目と実データが食い違うのを防ぐ）。
+    showToast(item.label + 'の数量が入力されていません。数量を入力してください。', 'error');
+    restoreInput();
+    return;
+  }
+  var n = Number(raw);
+  if (!isFinite(n) || n < 0) {
+    showToast('数量には0以上の数値を入力してください。', 'error');
+    restoreInput();
+    return;
+  }
+  // サーバー側と同じく0以上の整数にそろえる（小数は切り捨て）。画面の表示・集計と保存値を一致させるため。
+  var normalizedQty = Math.floor(n);
+  if (sameEditValue_(normalizedQty, currentQty)) { restoreInput(); return; }
+  var pending = getOrCreatePendingAncillary_(rowIndex, itemKey);
+  pending.status = status;
+  pending.qty = normalizedQty;
+  pending.reason = row[item.reasonKey];
+  row[item.qtyKey] = normalizedQty;
+  prunePendingIfUnchanged_(pendingKey_(rowIndex, 'ancillary:' + itemKey));
+  afterLocalEdit_(rowIndex, itemKey);
+}
+
+/** 失注（×）の行で、失注理由だけを編集し直す（同じ「×」を選び直しても変更イベントが起きないため）。 */
+function editAncillaryReason_(btn) {
+  var rowIndex = Number(btn.dataset.row);
+  var itemKey = btn.dataset.item;
+  var item = STATE.ancillaryItemByKey[itemKey];
+  var row = findRow_(rowIndex);
+  if (!row || !item || normalizeAncillaryStatus_(row[item.statusKey]) !== '×') return;
+  var reason = window.prompt('失注理由を入力してください（キャンセルすると変更されません）', row[item.reasonKey] || '');
+  if (reason === null) return;
+  var pending = getOrCreatePendingAncillary_(rowIndex, itemKey);
+  pending.status = '×';
+  pending.qty = 0;
+  pending.reason = reason.trim();
+  row[item.reasonKey] = reason.trim();
+  prunePendingIfUnchanged_(pendingKey_(rowIndex, 'ancillary:' + itemKey));
+  afterLocalEdit_(rowIndex, itemKey);
+}
+
+/** 「まとめて保存する」：保留中の変更をすべて1回のサーバー呼び出しで反映する。 */
+function saveAllPendingChanges_() {
+  // 一覧の入力欄に入力中（確定前）の内容があれば、先に確定させてから保存対象に含める。
+  var active = document.activeElement;
+  var tbody = document.getElementById('data-tbody');
+  if (active && active !== document.body && tbody && tbody.contains(active)) active.blur();
+  var sentKeys = Object.keys(STATE.pendingChanges);
+  var changes = sentKeys.map(function (k) { return STATE.pendingChanges[k]; });
+  if (changes.length === 0) return;
+
+  // 「〇（NB付帯）」「☆（PUSH成約）」なのに数量が空欄の変更は保存させない（件数と数量合計の集計が合わなくなるため）。
+  var missingQty = changes.filter(function (c) {
+    return c.kind === 'ancillary' && (c.status === '〇' || c.status === '☆') &&
+      (c.qty === null || c.qty === undefined || c.qty === '');
+  });
+  if (missingQty.length > 0) {
+    var first = missingQty[0];
+    var firstItem = STATE.ancillaryItemByKey[first.itemKey];
+    showToast('「〇」「☆」なのに数量が入力されていない変更が' + missingQty.length + '件あります（例：' +
+      (firstItem ? firstItem.label : '') + '）。数量を入力してから保存してください。', 'error');
+    var qtyInput = document.querySelector('input.ancillary-qty[data-row="' + first.rowIndex + '"][data-item="' + first.itemKey + '"]');
+    if (!qtyInput && showDataRow_(first.rowIndex)) {
+      // 別のページにある場合は、そのページを開いてから入力欄に移る。
+      qtyInput = document.querySelector('input.ancillary-qty[data-row="' + first.rowIndex + '"][data-item="' + first.itemKey + '"]');
+    }
+    if (qtyInput) {
+      qtyInput.focus();
+    } else {
+      // 絞り込みで一覧に出ていない場合は、予約番号を知らせる。
+      var hiddenRow = findRow_(first.rowIndex);
+      showToast('数量が未入力の行は、今の絞り込み条件では一覧に表示されていません（予約番号：' +
+        ((hiddenRow && hiddenRow.reservationNo) || '不明') + '）。絞り込みを解除して確認してください。', 'error');
+    }
+    return;
+  }
+
+  // 行トークン（画面に表示した時点の行の内容から作った値）も送り、サーバー側で今の行と照合させる。
+  var payload = changes.map(function (c) {
+    var token = rowTokenOf_(c.rowIndex);
+    return c.kind === 'field'
+      ? { kind: 'field', rowIndex: c.rowIndex, token: token, columnKey: c.columnKey, value: c.value }
+      : { kind: 'ancillary', rowIndex: c.rowIndex, token: token, itemKey: c.itemKey, status: c.status, qty: c.qty, reason: c.reason };
+  });
+
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (result) {
+      showLoading(false);
+      // 保存できなかった変更は「未保存の変更」として残す（オレンジ枠のまま。「取り消す」で元の値に戻せる）。
+      // 以前はすべて消していたため、保存に失敗した行も画面上は保存済みに見えていた。
+      var errors = result.errors || [];
+      var failedKeys = {};
+      errors.forEach(function (err) {
+        if (err.kind === 'field') failedKeys[pendingKey_(err.rowIndex, err.columnKey)] = true;
+        else if (err.kind === 'ancillary') failedKeys[pendingKey_(err.rowIndex, 'ancillary:' + err.itemKey)] = true;
+      });
+      var sentKeySet = {};
+      sentKeys.forEach(function (k) { sentKeySet[k] = true; });
+      Object.keys(STATE.pendingChanges).forEach(function (k) {
+        if (sentKeySet[k] && !failedKeys[k]) delete STATE.pendingChanges[k];
+      });
+      afterLocalEdit_();
+      if (result.updated > 0) warmSnapshotSoon_();
+      if (errors.length > 0) {
+        showToast(formatNumber(result.updated) + '件を保存しました。' + formatNumber(errors.length) +
+          '件は保存できませんでした（理由：' + errors[0].message + '）。保存できなかった変更は未保存のまま残しています。', 'error');
+      } else {
+        showToast(formatNumber(result.updated) + '件を保存しました', 'success');
+      }
+    })
+    .withFailureHandler(function (err) { showLoading(false); onServerError(err); })
+    .batchUpdateCells(payload);
+}
+
+/** 「取り消す」：保留中の変更をすべて画面上でも元に戻す（サーバーへは何も送らない）。 */
+function discardPendingChanges_() {
+  var count = Object.keys(STATE.pendingChanges).length;
+  if (count === 0) return;
+  if (!window.confirm('未保存の変更（' + count + '件）を取り消します。よろしいですか？')) return;
+
+  Object.keys(STATE.pendingChanges).forEach(function (k) {
+    var c = STATE.pendingChanges[k];
+    var row = STATE.rows.filter(function (r) { return r.rowIndex === c.rowIndex; })[0];
+    if (!row) return;
+    if (c.kind === 'field') {
+      row[c.columnKey] = c.original;
+    } else {
+      var item = STATE.ancillaryItemByKey[c.itemKey];
+      row[item.statusKey] = c.original.status;
+      row[item.qtyKey] = c.original.qty;
+      row[item.reasonKey] = c.original.reason;
+    }
+  });
+  STATE.pendingChanges = {};
+  afterLocalEdit_();
+  showToast('未保存の変更を取り消しました', 'info');
+}
+
+function bindPendingChangesEvents_() {
+  document.getElementById('btn-save-pending-changes').addEventListener('click', saveAllPendingChanges_);
+  document.getElementById('btn-discard-pending-changes').addEventListener('click', discardPendingChanges_);
+}
+
+// ============================================================================
+// 予約データ一覧：一括登録（複数行を選択して同じ値をまとめて登録する）
+// ============================================================================
+
+/** 一括登録バーの保険/Wifi/キャンサポ/TAViCAステータス選択肢を、通常の行と同じ5段階で用意する。 */
+function populateBulkAncillarySelects_() {
+  document.querySelectorAll('.bulk-ancillary-status').forEach(function (el) {
+    el.innerHTML = STATE.ancillaryStatusOptions.map(function (o) {
+      return '<option value="' + o.value + '">' + o.value + ' ' + escapeHtml(o.label) + '</option>';
+    }).join('');
+    // 最初に選ばれている状態（NO ACT）では数量を入力できないようにする（入力しても使われないため）。
+    var qtyInput = document.getElementById('bulk-' + el.dataset.item + '-qty');
+    if (qtyInput) {
+      qtyInput.disabled = !isAncillaryQtyEditable_(el.value);
+      if (qtyInput.disabled) qtyInput.value = '';
+    }
+  });
+}
+
+/** 一括登録結果（成功件数・エラー件数）をバー下部に表示する。 */
+function showBulkEditResult_(result) {
+  if (result.updated > 0) warmSnapshotSoon_();
+  var el = document.getElementById('bulk-edit-result');
+  var lines = [formatNumber(result.updated) + '件に反映しました。'];
+  if (result.errors && result.errors.length > 0) {
+    lines.push('（' + formatNumber(result.errors.length) + '件は反映されませんでした。理由：' + result.errors[0].message + '）');
+  }
+  el.textContent = lines.join('');
+  el.classList.remove('hidden');
+  showToast(lines.join(''), result.errors && result.errors.length > 0 ? 'error' : 'success');
+}
+
+/** CHK日・メモの一括登録（選択中の行すべてに同じ値を設定する）。 */
+function applyBulkField_(field) {
+  var rowIndexes = getSelectedRowIndexes_();
+  if (rowIndexes.length === 0) { showToast('行が選択されていません。', 'error'); return; }
+  var value = field === 'chkDate'
+    ? document.getElementById('bulk-chkdate-input').value
+    : document.getElementById('bulk-memo-input').value;
+
+  // 処理中にボタンを何度も押されないよう、完了まで読み込み中の表示で画面を覆う。
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (result) {
+      showLoading(false);
+      var trimmed = String(value || '').trim();
+      var normalized = trimmed === '' ? null : trimmed;
+      var failedRowIndexes = {};
+      (result.errors || []).forEach(function (err) { failedRowIndexes[err.rowIndex] = true; });
+      rowIndexes.forEach(function (ri) {
+        if (failedRowIndexes[ri]) return; // サーバー側で拒否された行には反映しない
+        var row = STATE.rows.filter(function (r) { return r.rowIndex === ri; })[0];
+        if (row) row[field] = normalized;
+        // 一括登録はサーバーへ即時保存されるため、この行に関する未保存の変更（保留中）は
+        // 古い値のまま残ってしまうと、後で「まとめて保存する」を押した際に今回の一括登録結果を
+        // 上書きしてしまう。保存済みになった分の保留は破棄する。
+        delete STATE.pendingChanges[pendingKey_(ri, field)];
+      });
+      afterCellSaved_();
+      showBulkEditResult_(result);
+    })
+    .withFailureHandler(function (err) { showLoading(false); onServerError(err); })
+    .bulkUpdateCellValue(rowIndexes, field, value, rowIndexes.map(rowTokenOf_));
+}
+
+/** 保険/Wifi/キャンサポ/TAViCAの一括登録（選択中の行すべてに同じステータス・数量を設定する）。 */
+function applyBulkAncillary_(itemKey) {
+  var rowIndexes = getSelectedRowIndexes_();
+  if (rowIndexes.length === 0) { showToast('行が選択されていません。', 'error'); return; }
+  var item = STATE.ancillaryItemByKey[itemKey];
+  var status = document.getElementById('bulk-' + itemKey + '-status').value;
+  var qtyInput = document.getElementById('bulk-' + itemKey + '-qty');
+  var qty = qtyInput.value;
+  var reason = '';
+
+  if (status === '×') {
+    reason = window.prompt('失注理由を入力してください（キャンセルすると変更されません）', '');
+    if (reason === null) return;
+  } else if ((status === '〇' || status === '☆') && qty.trim() === '') {
+    showToast(item.label + 'の数量を入力してください。', 'error');
+    return;
+  } else if ((status === '〇' || status === '☆') && (!isFinite(Number(qty)) || Number(qty) < 0)) {
+    showToast('数量には0以上の数値を入力してください。', 'error');
+    return;
+  }
+
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (result) {
+      showLoading(false);
+      var failedRowIndexes = {};
+      (result.errors || []).forEach(function (err) { failedRowIndexes[err.rowIndex] = true; });
+      rowIndexes.forEach(function (ri) {
+        if (failedRowIndexes[ri]) return; // サーバー側で拒否された行には反映しない
+        var row = STATE.rows.filter(function (r) { return r.rowIndex === ri; })[0];
+        if (!row) return;
+        row[item.statusKey] = status;
+        if (status === '×') {
+          row[item.qtyKey] = 0;
+          row[item.reasonKey] = reason.trim();
+        } else if (status === '〇' || status === '☆') {
+          row[item.qtyKey] = qty === '' ? null : Math.floor(Number(qty)); // サーバー側と同じく整数に切り捨て
+          row[item.reasonKey] = null;
+        } else {
+          row[item.qtyKey] = null;
+          row[item.reasonKey] = null;
+        }
+        // applyBulkField_と同様、保存済みになった分の保留中の変更は破棄する（古い値による上書きを防ぐ）。
+        delete STATE.pendingChanges[pendingKey_(ri, 'ancillary:' + itemKey)];
+      });
+      afterCellSaved_();
+      showBulkEditResult_(result);
+    })
+    .withFailureHandler(function (err) { showLoading(false); onServerError(err); })
+    .bulkSetAncillaryStatus(rowIndexes, itemKey, status, qty, reason, rowIndexes.map(rowTokenOf_));
+}
+
+function bindBulkEditEvents_() {
+  document.getElementById('btn-bulk-clear-selection').addEventListener('click', clearRowSelection_);
+  document.querySelectorAll('.bulk-apply-field-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () { applyBulkField_(btn.dataset.field); });
+  });
+  document.querySelectorAll('.bulk-apply-ancillary-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () { applyBulkAncillary_(btn.dataset.item); });
+  });
+  document.querySelectorAll('.bulk-ancillary-status').forEach(function (sel) {
+    sel.addEventListener('change', function () {
+      var qtyInput = document.getElementById('bulk-' + sel.dataset.item + '-qty');
+      qtyInput.disabled = !isAncillaryQtyEditable_(sel.value);
+      if (qtyInput.disabled) qtyInput.value = '';
+    });
+  });
+}
+
+/** メモ欄をダブルクリックしたセルだけを、その場でテキスト入力に切り替える。 */
+function beginMemoEdit_(span) {
+  var rowIndex = Number(span.dataset.row);
+  var columnKey = span.dataset.col;
+  var current = span.getAttribute('data-tooltip') || '';
+  var td = span.closest('td');
+  // ホバー中の要素（span）を消すとツールチップを閉じるきっかけ（mouseout）が起きなくなるため、先に閉じる。
+  hideHoverTooltip_();
+  td.innerHTML = '<input type="text" class="memo-edit-input border border-slate-300 rounded px-1 py-1 text-xs w-48" data-row="' + rowIndex + '" data-col="' + columnKey + '" value="' + escapeHtml(current) + '">';
+  var input = td.querySelector('input');
+  input.focus();
+  input.select();
+}
+
+function bindDataTableEditEvents_() {
+  var tbody = document.getElementById('data-tbody');
+
+  tbody.addEventListener('change', function (e) {
+    var t = e.target;
+    if (t.matches('input[type="date"][data-col]')) {
+      saveCell(Number(t.dataset.row), t.dataset.col, t.value);
+    } else if (t.matches('select.ancillary-status')) {
+      handleAncillaryStatusChange(t);
+    } else if (t.matches('input.row-select-checkbox')) {
+      var rowIndex = Number(t.dataset.row);
+      if (t.checked) STATE.selectedRowIndexes[rowIndex] = true; else delete STATE.selectedRowIndexes[rowIndex];
+      syncSelectAllCheckbox_();
+      updateBulkEditBar_();
+    }
+  });
+
+  // blurはバブリングしないため、capture:trueでイベント委譲する
+  tbody.addEventListener('blur', function (e) {
+    var t = e.target;
+    if (t.matches('input.memo-edit-input')) {
+      if (t.dataset.cancelled === '1') {
+        // Escキーで取り消した場合は保存せず、元の表示に戻すだけにする。
+        afterLocalEdit_(Number(t.dataset.row), t.dataset.col);
+        return;
+      }
+      saveCell(Number(t.dataset.row), t.dataset.col, t.value);
+    } else if (t.matches('input.ancillary-qty')) {
+      handleAncillaryQtyBlur(t);
+    }
+  }, true);
+
+  // メモ欄・数量欄：Enterキーで確定、メモ欄はEscキーで取り消し。
+  tbody.addEventListener('keydown', function (e) {
+    var t = e.target;
+    if (!t.matches('input.memo-edit-input, input.ancillary-qty')) return;
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      t.blur();
+    } else if (e.key === 'Escape' && t.matches('input.memo-edit-input')) {
+      e.preventDefault();
+      t.dataset.cancelled = '1';
+      t.blur();
+    }
+  });
+
+  tbody.addEventListener('click', function (e) {
+    var btn = e.target.closest('.ancillary-reason-edit');
+    if (btn) editAncillaryReason_(btn);
+  });
+
+  tbody.addEventListener('dblclick', function (e) {
+    var span = e.target.closest('.memo-display');
+    if (span) beginMemoEdit_(span);
+  });
+
+  // メモ全文・失注理由のホバー表示（要素は再描画のたびに入れ替わるためイベント委譲する）
+  tbody.addEventListener('mouseover', function (e) {
+    var target = e.target.closest('[data-tooltip]');
+    if (target) showHoverTooltip_(e.clientX, e.clientY, target.getAttribute('data-tooltip'));
+  });
+  tbody.addEventListener('mousemove', function (e) {
+    var target = e.target.closest('[data-tooltip]');
+    if (target) showHoverTooltip_(e.clientX, e.clientY, target.getAttribute('data-tooltip'));
+  });
+  tbody.addEventListener('mouseout', function (e) {
+    if (e.target.closest('[data-tooltip]')) hideHoverTooltip_();
+  });
+  // 表や画面をスクロールすると、ツールチップだけが元の位置に取り残されるため閉じる。
+  window.addEventListener('scroll', hideHoverTooltip_, true);
+}
+
+/** メモ全文・失注理由を表示する共通のホバーポップアップ。 */
+function showHoverTooltip_(x, y, text) {
+  if (!text) return;
+  var el = document.getElementById('hover-tooltip');
+  el.textContent = text;
+  el.classList.remove('hidden');
+  // 実際の大きさを測ってから、画面の右端・下端からはみ出さない位置に置く（狭い画面・画面下部でも見切れないように）。
+  var margin = 8;
+  var w = el.offsetWidth, h = el.offsetHeight;
+  var left = Math.max(margin, Math.min(x + 12, window.innerWidth - w - margin));
+  var top = y + 16;
+  if (top + h > window.innerHeight - margin) top = Math.max(margin, y - h - 12);
+  el.style.left = left + 'px';
+  el.style.top = top + 'px';
+}
+function hideHoverTooltip_() {
+  document.getElementById('hover-tooltip').classList.add('hidden');
+}
+
+// ============================================================================
+// 予約データ一覧タブ：列の並び順の編集（データ管理タブから操作する）
+// ============================================================================
+
+function renderColumnOrderEditor() {
+  var container = document.getElementById('column-order-list');
+  container.innerHTML = STATE.columnOrder.map(function (key, i) {
+    var def = DISPLAY_COLUMN_DEFS_BY_KEY[key];
+    if (!def) return '';
+    return '<div class="col-order-row flex items-center justify-between px-3 py-2 text-sm">' +
+      '<span>' + escapeHtml(def.label) + '</span>' +
+      '<span class="flex gap-1">' +
+      '<button type="button" class="col-order-up text-slate-400 hover:text-blue-700 px-1" data-index="' + i + '"' + (i === 0 ? ' disabled' : '') + '>▲</button>' +
+      '<button type="button" class="col-order-down text-slate-400 hover:text-blue-700 px-1" data-index="' + i + '"' + (i === STATE.columnOrder.length - 1 ? ' disabled' : '') + '>▼</button>' +
+      '</span></div>';
+  }).join('');
+}
+
+function bindColumnOrderEvents_() {
+  document.getElementById('column-order-list').addEventListener('click', function (e) {
+    var upBtn = e.target.closest('.col-order-up');
+    var downBtn = e.target.closest('.col-order-down');
+    if (!upBtn && !downBtn) return;
+    var idx = Number((upBtn || downBtn).dataset.index);
+    var swapWith = upBtn ? idx - 1 : idx + 1;
+    if (swapWith < 0 || swapWith >= STATE.columnOrder.length) return;
+    var tmp = STATE.columnOrder[idx];
+    STATE.columnOrder[idx] = STATE.columnOrder[swapWith];
+    STATE.columnOrder[swapWith] = tmp;
+    renderColumnOrderEditor();
+    renderDataThead();
+    renderDataTable();
+  });
+
+  document.getElementById('btn-save-column-order').addEventListener('click', function () {
+    google.script.run
+      .withSuccessHandler(function () {
+        var el = document.getElementById('column-order-result');
+        el.textContent = '並び順を保存しました。全員のこの画面に反映されます。';
+        el.className = 'text-xs mt-2 text-emerald-600';
+        el.classList.remove('hidden');
+        showToast('列の並び順を保存しました', 'success');
+      })
+      .withFailureHandler(onServerError)
+      .saveColumnOrderPreference(STATE.columnOrder);
+  });
+
+  document.getElementById('btn-reset-column-order').addEventListener('click', function () {
+    STATE.columnOrder = DEFAULT_COLUMN_ORDER.slice();
+    renderColumnOrderEditor();
+    renderDataThead();
+    renderDataTable();
+  });
+}
+
+// ============================================================================
+// 個人別サマリータブ
+// ============================================================================
+
+/** 付帯商品1件分の集計初期値（合計数量・NB付帯件数・PUSH成約件数）。 */
+function emptyAncillaryTally_() {
+  return { qty: 0, nb: 0, push: 0 };
+}
+function addToAncillaryTally_(tally, row, item) {
+  if (typeof row[item.qtyKey] === 'number') tally.qty += row[item.qtyKey];
+  var status = row[item.statusKey];
+  if (status === '〇') tally.nb++;
+  else if (status === '☆') tally.push++;
+}
+
+function buildPersonalSummary_(rows) {
+  var map = {};
+  rows.forEach(function (r) {
+    var key = (r.area || '(未設定)') + '\u0001' + (r.office || '(未設定)') + '\u0001' + (r.staff || '(未設定)');
+    if (!map[key]) {
+      map[key] = {
+        area: r.area || '(未設定)', office: r.office || '(未設定)', staff: r.staff || '(未設定)', count: 0,
+        insurance: emptyAncillaryTally_(), wifi: emptyAncillaryTally_(), cansapo: emptyAncillaryTally_(), tavica: emptyAncillaryTally_()
+      };
+    }
+    var b = map[key];
+    b.count++;
+    addToAncillaryTally_(b.insurance, r, STATE.ancillaryItemByKey.insurance);
+    addToAncillaryTally_(b.wifi, r, STATE.ancillaryItemByKey.wifi);
+    addToAncillaryTally_(b.cansapo, r, STATE.ancillaryItemByKey.cansapo);
+    addToAncillaryTally_(b.tavica, r, STATE.ancillaryItemByKey.tavica);
+  });
+  return Object.keys(map).map(function (k) { return map[k]; });
+}
+
+/** ランキング・個人別サマリーの見出しに、現在の並べ替えの列と向き（▲昇順／▼降順）を表示する。 */
+function renderSortMarks_(panelId, key, dir) {
+  document.querySelectorAll('#' + panelId + ' th[data-sort]').forEach(function (th) {
+    var old = th.querySelector('.sort-mark');
+    if (old) old.remove();
+    if (th.getAttribute('data-sort') === key) {
+      var mark = document.createElement('span');
+      mark.className = 'sort-mark';
+      mark.textContent = dir > 0 ? '▲' : '▼';
+      th.appendChild(mark);
+    }
+  });
+}
+
+/** 付帯商品1件分のセル表示：合計／NB付帯／PUSH成約の3つの数値を1セルにまとめて表示する。 */
+function formatAncillaryTallyCell_(tally) {
+  return '<div>合計 ' + formatNumber(tally.qty) + '</div>' +
+    '<div class="text-[10px] text-slate-400">NB付帯 ' + formatNumber(tally.nb) + '／PUSH成約 ' + formatNumber(tally.push) + '</div>';
+}
+
+function renderPersonalTab() {
+  var keyword = (document.getElementById('personal-search').value || '').trim().toLowerCase();
+  var list = buildPersonalSummary_(STATE.rows).filter(function (b) {
+    if (!keyword) return true;
+    // 画面に表示されるのは担当者コードを氏名に変換した表示名のため、検索も表示名を対象にする
+    // （担当者コードのままだと、画面に見えている氏名で検索しても0件になってしまう）。
+    return (b.area + ' ' + b.office + ' ' + formatStaffName_(b.staff)).toLowerCase().indexOf(keyword) !== -1;
+  });
+
+  var key = STATE.personalSortKey, dir = STATE.personalSortDir;
+  list.sort(function (a, b) {
+    if (key === 'area') return a.area.localeCompare(b.area, 'ja') * dir;
+    if (key === 'office') return a.office.localeCompare(b.office, 'ja') * dir;
+    if (key === 'staff') return formatStaffName_(a.staff).localeCompare(formatStaffName_(b.staff), 'ja') * dir;
+    return (a[key] - b[key]) * dir;
+  });
+  renderSortMarks_('tab-panel-personal', key, dir);
+
+  var tbody = document.getElementById('personal-tbody');
+  document.getElementById('personal-empty').classList.toggle('hidden', list.length > 0);
+  tbody.innerHTML = list.map(function (b) {
+    return '<tr class="hover:bg-slate-50">' +
+      '<td class="px-3 py-2">' + escapeHtml(b.area) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(b.office) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(formatStaffName_(b.staff)) + '</td>' +
+      '<td class="px-3 py-2 text-right">' + formatNumber(b.count) + '</td>' +
+      '<td class="px-3 py-2 text-right">' + formatAncillaryTallyCell_(b.insurance) + '</td>' +
+      '<td class="px-3 py-2 text-right">' + formatAncillaryTallyCell_(b.wifi) + '</td>' +
+      '<td class="px-3 py-2 text-right">' + formatAncillaryTallyCell_(b.cansapo) + '</td>' +
+      '<td class="px-3 py-2 text-right">' + formatAncillaryTallyCell_(b.tavica) + '</td>' +
+      '</tr>';
+  }).join('');
+}
+
+// ============================================================================
+// データ管理タブ：状態表示・重複削除・全削除
+// ============================================================================
+
+function renderAdminStatus() {
+  var box = document.getElementById('admin-status');
+  if (!STATE.ready) {
+    box.innerHTML = '<p class="text-amber-600">初期セットアップが完了していないため、データがありません。</p>';
+    return;
+  }
+  box.innerHTML =
+    '<p>あなたが閲覧できる件数：<b>' + formatNumber(STATE.rows.length) + '</b> 件</p>' +
+    '<p>分析ダッシュボードの現在の絞り込み結果：<b>' + formatNumber(STATE.dashFiltered.length) + '</b> 件</p>' +
+    bootTimingHtml_(STATE.lastBootTiming) +
+    changeWatchWarningHtml_();
+}
+
+/**
+ * スプレッドシートの直接の変更（並べ替え・行の削除など）を検知する設定が未登録の場合に、マスタ権限の人へ知らせる。
+ * 未登録でも動作はするが、直接の変更が画面に反映されるまで最大5分かかる。
+ */
+function changeWatchWarningHtml_() {
+  var isMaster = STATE.userContext && STATE.userContext.role === 'マスタ権限';
+  if (!isMaster || !STATE.meta) return '';
+  var tz = STATE.meta.spreadsheetTimeZone;
+  var tzHtml = (tz && tz !== 'Asia/Tokyo')
+    ? '<p class="mt-2 text-xs text-amber-700">スプレッドシートのタイムゾーンが「' + escapeHtml(tz) + '」になっています（このアプリは「Asia/Tokyo」が前提です）。' +
+      'シート上の日付が1日ずれて表示される場合があります。変更する前に、README「スプレッドシートのタイムゾーン」をご確認ください。</p>'
+    : '';
+  if (STATE.meta.changeWatchInstalled !== false) return tzHtml;
+  return '<p class="mt-2 text-xs text-amber-700">スプレッドシートを直接変更したことを検知する設定が、まだ登録されていません。' +
+    'スプレッドシートのメニュー「営業セールスダッシュボード」→「① 初期セットアップ」を一度実行してください' +
+    '（未登録の間は、スプレッドシートを直接並べ替えたり行を削除したりした内容が、この画面に反映されるまで最大5分かかります）。</p>' + tzHtml;
+}
+
+/** 直近のデータ読み込みにかかった時間の内訳（遅いと感じたときに、どこで時間がかかっているかを確かめる用）。 */
+function bootTimingHtml_(t) {
+  if (!t) return '';
+  var sec = function (ms) { return (Math.round(ms / 100) / 10).toFixed(1) + ' 秒'; };
+  var sourceLabel = { cache: 'サーバーに保存済みの写しを使用', sheet: 'シートから読み込み', 'response-cache': '同じ条件の結果を再利用' };
+  return '<p class="mt-2 text-xs text-slate-500">直近の読み込み時間：合計 <b>' + sec(t.totalMs) + '</b>' +
+    '（サーバー処理 ' + sec(t.serverMs) + '／通信 ' + sec(t.transferMs) + '／展開 ' + sec(t.decodeMs) + '／画面表示 ' + sec(t.renderMs) + '）' +
+    '　データ量 ' + (t.sizeKb === null ? '—' : formatNumber(t.sizeKb) + ' KB') + '・' + formatNumber(t.rows) + ' 件' +
+    (t.source ? '　' + escapeHtml(sourceLabel[t.source] || t.source) : '') + '</p>';
+}
+
+function removeDuplicates() {
+  if (!confirmDiscardPending_('重複削除を行う')) return;
+  if (!window.confirm('CSV由来19項目すべてが完全一致する重複行を削除します。よろしいですか？')) return;
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (result) {
+      showLoading(false);
+      var el = document.getElementById('duplicate-result');
+      el.textContent = result.removed > 0
+        ? result.removed + ' 件の重複行を削除しました（残り ' + result.totalRows + ' 件）。' +
+          (result.merged > 0 ? '削除した行にだけ入力されていた項目 ' + result.merged + ' 件は、残した行へ移しました。' : '') +
+          (result.conflicts > 0 ? '両方の行に違う内容が入力されていた項目 ' + result.conflicts + ' 件は、入力の多い方の行の内容を残しました。' : '')
+        : '重複している行はありませんでした。';
+      el.className = 'text-xs mt-2 ' + (result.removed > 0 ? 'text-emerald-600' : 'text-slate-500');
+      el.classList.remove('hidden');
+      showToast('重複削除が完了しました', 'success');
+      boot();
+    })
+    .withFailureHandler(function (err) { showLoading(false); onServerError(err); })
+    .removeDuplicateRows();
+}
+
+function clearAllData() {
+  var input = document.getElementById('clear-confirm-input');
+  if (input.value !== '削除') { showToast('確認欄に「削除」と入力してください。', 'error'); return; }
+  if (!confirmDiscardPending_('全データ削除を行う')) return;
+  if (!window.confirm('取り込んだデータをすべて削除します。元に戻せません。よろしいですか？')) return;
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function () {
+      showLoading(false);
+      input.value = '';
+      var el = document.getElementById('clear-result');
+      el.textContent = '削除しました。';
+      el.classList.remove('hidden');
+      showToast('データを削除しました', 'success');
+      boot();
+    })
+    .withFailureHandler(function (err) { showLoading(false); onServerError(err); })
+    .clearAllData(input.value);
+}
+
+// ============================================================================
+// データアーカイブ（容量対策）※マスタ権限のみ
+// ============================================================================
+
+/** 基準日の入力欄に既定値（前期の開始日＝今期・前期・今後の予定は残し、それより古いものを対象にする）を入れる。 */
+function initArchiveCutoffDefault_() {
+  var input = document.getElementById('archive-cutoff-date');
+  if (!input.value) {
+    input.value = computeFiscalYearRange_(-1).from;
+  }
+}
+
+function loadArchiveInfo() {
+  initArchiveCutoffDefault_();
+  google.script.run
+    .withSuccessHandler(renderArchiveInfo_)
+    .withFailureHandler(onServerError)
+    .getArchiveInfo();
+}
+
+function renderArchiveInfo_(info) {
+  var box = document.getElementById('archive-info');
+  if (!info || !info.archiveSpreadsheetUrl) {
+    box.textContent = 'まだアーカイブは実行されていません。';
+    return;
+  }
+  box.innerHTML = 'アーカイブ先：<a href="' + escapeHtml(info.archiveSpreadsheetUrl) + '" target="_blank" class="text-blue-700 hover:underline">' +
+    'スプレッドシートを開く <i class="fa-solid fa-arrow-up-right-from-square"></i></a>' +
+    (info.lastArchivedAt ? '　／　最終実行：' + escapeHtml(info.lastArchivedAt) : '');
+}
+
+function previewArchive() {
+  var cutoff = document.getElementById('archive-cutoff-date').value;
+  if (!cutoff) { showToast('基準日を指定してください。', 'error'); return; }
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (result) {
+      showLoading(false);
+      var el = document.getElementById('archive-preview-result');
+      el.textContent = '対象：' + formatNumber(result.archivable) + ' 件（全' + formatNumber(result.totalRows) + '件中。残りは' +
+        formatNumber(result.totalRows - result.archivable) + '件になります）';
+      el.classList.remove('hidden');
+    })
+    .withFailureHandler(function (err) { showLoading(false); onServerError(err); })
+    .previewArchiveCandidates(cutoff);
+}
+
+function runArchive() {
+  var cutoff = document.getElementById('archive-cutoff-date').value;
+  if (!cutoff) { showToast('基準日を指定してください。', 'error'); return; }
+  var input = document.getElementById('archive-confirm-input');
+  if (input.value !== 'アーカイブ') { showToast('確認欄に「アーカイブ」と入力してください。', 'error'); return; }
+  if (!confirmDiscardPending_('アーカイブを行う')) return;
+  if (!window.confirm(cutoff + ' より前の出発予定日のデータを、別のスプレッドシートへ移動します。移動後は編集できません（「アーカイブ済みデータも含める」で閲覧のみ可能です）。よろしいですか？')) return;
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (result) {
+      showLoading(false);
+      input.value = '';
+      var el = document.getElementById('archive-run-result');
+      el.textContent = result.archived > 0
+        ? result.archived + ' 件をアーカイブしました（残り ' + result.kept + ' 件）。'
+        : 'アーカイブ対象のデータはありませんでした。';
+      el.className = 'text-xs mt-2 ' + (result.archived > 0 ? 'text-emerald-600' : 'text-slate-500');
+      el.classList.remove('hidden');
+      document.getElementById('archive-preview-result').classList.add('hidden');
+      showToast(result.archived > 0 ? 'データをアーカイブしました' : 'アーカイブ対象はありませんでした', 'success');
+      if (result.archived > 0) { renderArchiveInfo_(result); boot(); }
+    })
+    .withFailureHandler(function (err) { showLoading(false); onServerError(err); })
+    .archiveOldReservations(cutoff, input.value);
+}
+
+function runSetup() {
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (status) {
+      showLoading(false);
+      showToast('初期セットアップが完了しました', 'success');
+      if (status && status.timeZoneWarning) showToast(status.timeZoneWarning, 'error');
+      boot();
+    })
+    .withFailureHandler(function (err) { showLoading(false); onServerError(err); })
+    .runInitialSetup();
+}
+
+// ============================================================================
+// 権限管理（スタッフ権限）※マスタ権限のみ
+// ============================================================================
+
+function loadStaffList() {
+  google.script.run
+    .withSuccessHandler(renderStaffList)
+    .withFailureHandler(onServerError)
+    .getStaffAccessList();
+}
+
+/**
+ * 同じGoogleアカウントの行が複数ある場合（人事データCSVで所属変更を履歴として追加した場合など）、
+ * ログイン時に実際に使われるのは一番下の行だけ（Code.gsのgetCurrentUserContext_）。
+ * どの行が有効かを返す（メールアドレス（小文字）→ 有効な行のrowIndex）。
+ */
+function latestStaffRowIndexByEmail_(list) {
+  var latest = {};
+  list.forEach(function (s) { latest[String(s.email || '').trim().toLowerCase()] = s.rowIndex; });
+  return latest;
+}
+
+function renderStaffList(list) {
+  STATE.staffList = list || [];
+  var tbody = document.getElementById('staff-tbody');
+  document.getElementById('staff-empty').classList.toggle('hidden', STATE.staffList.length > 0);
+  var latest = latestStaffRowIndexByEmail_(STATE.staffList);
+  tbody.innerHTML = STATE.staffList.map(function (s) {
+    // 有効でない（古い）行は「履歴」として薄く表示し、編集ボタンは出さない。古い行の権限を変更しても
+    // ログイン時の判定には使われず、「変更したのに本人の権限が変わらない」状態になるため。
+    var isHistory = latest[String(s.email || '').trim().toLowerCase()] !== s.rowIndex;
+    var historyBadge = isHistory
+      ? ' <span class="text-[10px] font-semibold text-slate-500 bg-slate-200 rounded px-1 py-0.5" title="同じアカウントのより新しい行があるため、この行はログイン時の判定に使われません（所属の履歴）">履歴（無効）</span>'
+      : '';
+    var editBtn = isHistory
+      ? ''
+      : '<button type="button" class="staff-edit text-blue-600 hover:underline text-xs mr-2" data-row="' + s.rowIndex + '">編集</button>';
+    return '<tr' + (isHistory ? ' class="text-slate-400 bg-slate-50"' : '') + '>' +
+      '<td class="px-3 py-2 font-mono text-xs">' + escapeHtml(s.email) + historyBadge + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(s.name) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(s.office) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(s.area) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(s.role) + '</td>' +
+      '<td class="px-3 py-2 text-right">' + editBtn +
+      '<button type="button" class="staff-delete text-red-600 hover:underline text-xs" data-row="' + s.rowIndex + '">削除</button>' +
+      '</td></tr>';
+  }).join('');
+}
+
+/**
+ * 権限の追加・変更・削除の後の共通処理。自分自身のマスタ権限を外した（別のマスタ権限の人がいる
+ * 場合のみ可能）ときは、管理画面をそのまま使い続けられないため、画面を読み込み直す。
+ */
+function onStaffListChanged_(list) {
+  renderStaffList(list);
+  var me = STATE.userContext && STATE.userContext.email ? String(STATE.userContext.email).toLowerCase() : '';
+  if (!me) return;
+  var latest = latestStaffRowIndexByEmail_(STATE.staffList);
+  var myRow = STATE.staffList.filter(function (s) { return s.rowIndex === latest[me]; })[0];
+  if (!myRow || myRow.role !== 'マスタ権限') {
+    showToast('あなた自身のマスタ権限が外れたため、画面を読み込み直します。', 'info');
+    boot();
+  }
+}
+
+/**
+ * 照合できない所属名ごとに（同じ所属名の人はまとめて）、予約データ側のどの所属に当たるかを選んで
+ * 「所属の対応表」に登録する欄を作る。候補（名前の近いもの）を先頭に並べ、その他の所属も選べるようにする。
+ */
+function aliasFormHtml_(problems, d) {
+  var groups = {}, order = [];
+  problems.forEach(function (s) {
+    if (!s.kind || !s.aliasFrom) return;
+    var key = s.kind + '|' + s.aliasFrom;
+    if (!groups[key]) { groups[key] = { kind: s.kind, from: s.aliasFrom, count: 0, suggestions: s.suggestions || [], proposal: s.proposal || null }; order.push(key); }
+    groups[key].count++;
+  });
+  var registeredHtml = (d.aliases || []).length
+    ? '<details class="mt-1"><summary class="cursor-pointer text-slate-600">登録済みの対応（' + formatNumber(d.aliases.length) + '件）</summary>' +
+      d.aliases.map(function (a) { return escapeHtml((a.kind === 'area' ? 'エリア：' : '店舗：') + a.from + ' ＝ ' + a.to + (a.note ? '　' + a.note : '')); }).join('<br>') + '</details>'
+    : '';
+  if (!order.length) return registeredHtml ? '<div class="mt-2 bg-white rounded-lg p-2">' + registeredHtml + '</div>' : '';
+  order.sort(function (a, b) { return groups[b].count - groups[a].count; });
+  var html = '<div class="mt-2 bg-white rounded-lg p-2"><p class="font-semibold text-indigo-800">予約データ側の所属と対応づける（同じ所属名の人はまとめて直ります）</p>' +
+    '<p class="text-slate-500">自動では決めきれなかった所属名です。一番有力な候補を選んだ状態にしてあるので、右の理由を見て正しければそのまま、' +
+    '違えば選び直してください（店舗ではない部署などは「（選んでください）」のままにします）。「選んだものをまとめて対応づける」で一度に登録できます。' +
+    'シート「所属の対応表」に記録され、取り消す場合はそのシートの行を削除します。</p>' +
+    '<div class="my-1"><button type="button" id="btn-alias-add-all" class="bg-indigo-700 hover:bg-indigo-800 text-white rounded px-3 py-1 font-semibold">選んだものをまとめて対応づける</button></div>' +
+    '<div class="overflow-auto max-h-[40vh]"><table class="w-full"><tbody>';
+  order.forEach(function (key, i) {
+    var g = groups[key];
+    var all = g.kind === 'area' ? (d.dataAreas || []) : (d.dataOffices || []);
+    var sugg = g.suggestions.map(function (v) { return v.value; });
+    if (g.proposal && g.proposal.to && sugg.indexOf(g.proposal.to) === -1) {
+      g.suggestions = [{ value: g.proposal.to }].concat(g.suggestions);
+      sugg.unshift(g.proposal.to);
+    }
+    var selectedValue = g.proposal && g.proposal.to ? g.proposal.to : '';
+    var options = '<option value="">（選んでください）</option>' +
+      (sugg.length ? '<optgroup label="候補">' + g.suggestions.map(function (v) {
+        var why = v.share !== undefined ? '（この所属の人の担当予約の' + Math.round(v.share * 100) + '%）' : (v.value === selectedValue ? '' : '（名前が近い）');
+        return '<option value="' + escapeHtml(v.value) + '"' + (v.value === selectedValue ? ' selected' : '') + '>' + escapeHtml(v.value) + why + '</option>';
+      }).join('') + '</optgroup>' : '') +
+      '<optgroup label="予約データにある' + (g.kind === 'area' ? 'エリア' : '営業所') + '">' +
+      all.filter(function (v) { return sugg.indexOf(v.value) === -1; }).map(function (v) {
+        return '<option value="' + escapeHtml(v.value) + '">' + escapeHtml(v.value) + '（' + formatNumber(v.count) + '件）</option>';
+      }).join('') + '</optgroup>';
+    html += '<tr class="border-t border-slate-100"><td class="px-2 py-1">' + (g.kind === 'area' ? 'エリア' : '店舗') + '</td>' +
+      '<td class="px-2 py-1 font-semibold">' + escapeHtml(g.from) + '</td><td class="px-2 py-1 text-slate-500">' + formatNumber(g.count) + '人</td>' +
+      '<td class="px-2 py-1">＝ <select class="alias-target border border-slate-300 rounded text-xs p-1 max-w-xs" data-index="' + i +
+      '" data-kind="' + g.kind + '" data-from="' + escapeHtml(g.from) + '">' + options + '</select>' +
+      (g.proposal && g.proposal.reason ? '<div class="text-slate-500">' + escapeHtml(g.proposal.auto ? '以前に自動で登録したものが削除されています。確認してください。' : g.proposal.reason) + '</div>' : '') + '</td>' +
+      '<td class="px-2 py-1"><button type="button" class="alias-add bg-indigo-600 hover:bg-indigo-700 text-white rounded px-2 py-1" data-index="' + i +
+      '" data-kind="' + g.kind + '" data-from="' + escapeHtml(g.from) + '">対応づける</button></td></tr>';
+  });
+  html += '</tbody></table></div>' + registeredHtml;
+  return html + '</div>';
+}
+
+function onAliasAddClick_(e) {
+  if (e.target.closest('#btn-alias-add-all')) { onAliasAddAll_(); return; }
+  var btn = e.target.closest('.alias-add');
+  if (!btn) return;
+  var select = document.querySelector('#affiliation-diagnostics select.alias-target[data-index="' + btn.dataset.index + '"]');
+  var to = select ? select.value : '';
+  if (!to) { showToast('予約データ側の所属を選んでください。', 'error'); return; }
+  var kindLabel = btn.dataset.kind === 'area' ? 'エリア' : '店舗';
+  if (!window.confirm(kindLabel + '「' + btn.dataset.from + '」を、予約データの「' + to + '」と同じ' + kindLabel + 'として扱います。よろしいですか？')) return;
+  btn.disabled = true;
+  google.script.run
+    .withSuccessHandler(function () { showToast('対応づけました。照合状況を確認し直します。', 'success'); loadAffiliationDiagnostics_(); })
+    .withFailureHandler(function (err) { btn.disabled = false; onServerError(err); })
+    .addAffiliationAlias(btn.dataset.kind, btn.dataset.from, to);
+}
+
+/** 照合状況の画面で、所属が選ばれている行をまとめて所属の対応表に登録する。 */
+function onAliasAddAll_() {
+  var items = Array.from(document.querySelectorAll('#affiliation-diagnostics select.alias-target'))
+    .filter(function (sel) { return !!sel.value; })
+    .map(function (sel) { return { kind: sel.dataset.kind, from: sel.dataset.from, to: sel.value }; });
+  if (!items.length) { showToast('対応づける所属が選ばれていません。', 'error'); return; }
+  var preview = items.slice(0, 15).map(function (it) { return '・' + it.from + ' ＝ ' + it.to; }).join('\n') + (items.length > 15 ? '\n…ほか' + (items.length - 15) + '件' : '');
+  if (!window.confirm(items.length + '件をまとめて対応づけます。内容を確認してください。\n\n' + preview)) return;
+  var btn = document.getElementById('btn-alias-add-all');
+  if (btn) btn.disabled = true;
+  google.script.run
+    .withSuccessHandler(function (res) {
+      showToast(formatNumber(res.added) + '件を対応づけました' + (res.errors.length ? '（' + res.errors.length + '件は登録できませんでした：' + res.errors[0].message + '）' : '') + '。照合状況を確認し直します。',
+        res.errors.length ? 'error' : 'success');
+      loadAffiliationDiagnostics_();
+    })
+    .withFailureHandler(function (err) { if (btn) btn.disabled = false; onServerError(err); })
+    .addAffiliationAliases(items);
+}
+
+/** 所属の照合状況（各アカウントに何件の予約が見えるか・表記が紛らわしい所属名）を表示する。 */
+function loadAffiliationDiagnostics_() {
+  var box = document.getElementById('affiliation-diagnostics');
+  box.classList.remove('hidden');
+  box.textContent = '照合状況を確認しています…';
+  google.script.run
+    .withSuccessHandler(renderAffiliationDiagnostics_)
+    .withFailureHandler(function (err) { box.classList.add('hidden'); onServerError(err); })
+    .getAffiliationDiagnostics();
+}
+
+function renderAffiliationDiagnostics_(d) {
+  var box = document.getElementById('affiliation-diagnostics');
+  var problems = d.staff.filter(function (s) { return s.problem; });
+  var ok = d.staff.length - problems.length;
+  var html = '<p class="font-semibold text-indigo-800">所属の照合状況（予約データ ' + formatNumber(d.totalRows) + ' 件・アカウント ' + formatNumber(d.staff.length) + ' 件）</p>';
+  html += '<p>正しく照合できているアカウント：<b>' + formatNumber(ok) + '</b> 件　／　要確認：<b class="' + (problems.length ? 'text-red-700' : '') + '">' + formatNumber(problems.length) + '</b> 件</p>';
+  if (problems.length) {
+    html += '<div class="overflow-auto max-h-[40vh]"><table class="w-full bg-white rounded-lg"><thead class="bg-slate-100"><tr>' +
+      '<th class="text-left px-2 py-1">アカウント</th><th class="text-left px-2 py-1">氏名</th><th class="text-left px-2 py-1">権限</th>' +
+      '<th class="text-left px-2 py-1">所属店舗</th><th class="text-left px-2 py-1">所属エリア</th><th class="text-left px-2 py-1">理由・直し方</th></tr></thead><tbody>' +
+      problems.map(function (s) {
+        return '<tr class="border-t border-slate-100"><td class="px-2 py-1">' + escapeHtml(s.email) + '</td><td class="px-2 py-1">' + escapeHtml(s.name) +
+          '</td><td class="px-2 py-1">' + escapeHtml(s.role) + '</td><td class="px-2 py-1">' + escapeHtml(s.office) + '</td><td class="px-2 py-1">' + escapeHtml(s.area) +
+          '</td><td class="px-2 py-1 text-red-700">' + escapeHtml(s.problem) +
+          (s.suggestions && s.suggestions.length
+            ? '<div class="text-slate-600 mt-1">予約データ上の近い名前：' + s.suggestions.map(function (v) { return escapeHtml(v.value) + '（' + formatNumber(v.count) + '件）'; }).join('、') + '</div>'
+            : '') +
+          '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+  if ((d.autoLinked || []).length) {
+    html += '<div class="mt-2 bg-emerald-50 border border-emerald-200 rounded-lg p-2"><p class="font-semibold text-emerald-800">自動で対応づけました（' + formatNumber(d.autoLinked.length) + '件）</p>' +
+      '<p class="text-slate-500">同じ所属名の人たち全員の担当予約の多くが同じ営業所／エリアに入っているものを、同じ所属として登録しました。違う場合は、シート「所属の対応表」のその行を削除してください（削除したものは自動では登録し直しません）。</p>' +
+      d.autoLinked.map(function (a) { return escapeHtml((a.kind === 'area' ? 'エリア：' : '店舗：') + a.from + ' ＝ ' + a.to + '　' + a.note); }).join('<br>') + '</div>';
+  }
+  html += aliasFormHtml_(problems, d);
+  var amb = (d.ambiguous.office || []).concat(d.ambiguous.area || []);
+  if (amb.length) {
+    html += '<p class="font-semibold text-amber-800 mt-2">番号だけが違う同じ名前の所属（自動では一致させていません）</p><ul class="list-disc pl-5">' +
+      amb.map(function (g) {
+        return '<li>' + g.values.map(function (v) { return escapeHtml(v.value) + '（' + formatNumber(v.count) + '件）'; }).join('、') + '</li>';
+      }).join('') + '</ul><p class="text-slate-500">これらの所属のアカウントは、スタッフ権限シートの所属欄に番号付き（例：717:○○）で入力すると正しく照合されます。</p>';
+  }
+  var listHtml = function (title, list) {
+    return '<details class="mt-1"><summary class="cursor-pointer text-indigo-800 font-semibold">' + title + '（' + formatNumber((list || []).length) + '種類）</summary>' +
+      '<div class="overflow-auto max-h-[30vh] bg-white rounded-lg p-2 mt-1">' +
+      (list || []).map(function (v) { return escapeHtml(v.value) + '（' + formatNumber(v.count) + '件）'; }).join('<br>') + '</div></details>';
+  };
+  html += listHtml('予約データにある「営業所」の一覧', d.dataOffices) + listHtml('予約データにある「エリア」の一覧', d.dataAreas);
+  html += '<p class="text-slate-500">閲覧範囲は所属欄の表記だけで決まります（氏名・担当者コードなどから推測して広げることはしません）。直す場合はスタッフ権限シート（または上の一覧の「編集」）で所属欄を修正してください。</p>';
+  box.innerHTML = html;
+}
+
+/** 一覧で表示している行（行番号）のGoogleアカウント／担当者コード（サーバー側で今も同じ行かを確かめるために送る）。 */
+function staffEmailAt_(rowIndex) {
+  var t = STATE.staffList.filter(function (s) { return s.rowIndex === rowIndex; })[0];
+  return t ? t.email : null;
+}
+function staffNameCodeAt_(rowIndex) {
+  var t = (STATE.staffNameList || []).filter(function (s) { return s.rowIndex === rowIndex; })[0];
+  return t ? t.code : null;
+}
+
+function bindStaffEvents_() {
+  document.getElementById('btn-affiliation-diagnostics').addEventListener('click', loadAffiliationDiagnostics_);
+  document.getElementById('affiliation-diagnostics').addEventListener('click', onAliasAddClick_);
+  document.getElementById('btn-open-staff-modal').addEventListener('click', function () { openStaffModal(null); });
+  document.getElementById('btn-close-staff-modal').addEventListener('click', closeStaffModal);
+  document.getElementById('btn-cancel-staff-modal').addEventListener('click', closeStaffModal);
+
+  document.getElementById('staff-tbody').addEventListener('click', function (e) {
+    var editBtn = e.target.closest('.staff-edit');
+    var delBtn = e.target.closest('.staff-delete');
+    if (editBtn) openStaffModal(Number(editBtn.dataset.row));
+    if (delBtn) {
+      if (!window.confirm('このアカウントを削除しますか？')) return;
+      var delRow = Number(delBtn.dataset.row);
+      var delTarget = STATE.staffList.filter(function (s) { return s.rowIndex === delRow; })[0];
+      google.script.run.withSuccessHandler(onStaffListChanged_).withFailureHandler(onServerError)
+        .deleteStaffAccess(delRow, delTarget ? delTarget.email : null);
+    }
+  });
+
+  document.getElementById('staff-form').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var form = ev.currentTarget;
+    if (!acquireFormSubmit_(form)) return;
+    var onFail = function (err) { releaseFormSubmit_(form); onServerError(err); };
+    var rowIndex = document.getElementById('staff-form-rowindex').value;
+    var email = document.getElementById('staff-form-email').value.trim();
+    var name = document.getElementById('staff-form-name').value.trim();
+    var office = document.getElementById('staff-form-office').value.trim();
+    var area = document.getElementById('staff-form-area').value.trim();
+    var role = document.getElementById('staff-form-role').value;
+
+    if (rowIndex) {
+      google.script.run.withSuccessHandler(onStaffSaved).withFailureHandler(onFail)
+        .updateStaffAccess(Number(rowIndex), email, name, office, area, role, staffEmailAt_(Number(rowIndex)));
+    } else {
+      google.script.run.withSuccessHandler(onStaffSaved).withFailureHandler(onFail).addStaffAccess(email, name, office, area, role);
+    }
+  });
+}
+
+function openStaffModal(rowIndex) {
+  var isEdit = rowIndex !== null && rowIndex !== undefined;
+  document.getElementById('staff-modal-title').innerHTML = isEdit
+    ? '<i class="fa-solid fa-user-shield"></i> アカウントを編集'
+    : '<i class="fa-solid fa-user-shield"></i> アカウントを追加';
+  var target = isEdit ? STATE.staffList.filter(function (s) { return s.rowIndex === rowIndex; })[0] : null;
+  document.getElementById('staff-form-rowindex').value = isEdit ? rowIndex : '';
+  document.getElementById('staff-form-email').value = target ? target.email : '';
+  document.getElementById('staff-form-name').value = target ? target.name : '';
+  document.getElementById('staff-form-office').value = target ? target.office : '';
+  document.getElementById('staff-form-area').value = target ? target.area : '';
+  document.getElementById('staff-form-role').value = target ? target.role : '社員';
+  document.getElementById('staff-modal').classList.remove('hidden');
+  document.getElementById('staff-modal').classList.add('flex');
+}
+
+function closeStaffModal() {
+  document.getElementById('staff-modal').classList.add('hidden');
+  document.getElementById('staff-modal').classList.remove('flex');
+}
+
+/**
+ * フォームの送信中は同じフォームをもう一度送信しない（保存ボタンを素早く2回押したときの二重登録を防ぐ）。
+ * 送信できたらtrue。終わったら release_(form) を呼ぶ。
+ */
+function acquireFormSubmit_(form) {
+  if (form.dataset.busy === '1') return false;
+  form.dataset.busy = '1';
+  Array.from(form.querySelectorAll('button[type="submit"], button:not([type])')).forEach(function (b) { b.disabled = true; });
+  return true;
+}
+function releaseFormSubmit_(form) {
+  form.dataset.busy = '';
+  Array.from(form.querySelectorAll('button[type="submit"], button:not([type])')).forEach(function (b) { b.disabled = false; });
+}
+
+function onStaffSaved(list) {
+  releaseFormSubmit_(document.getElementById('staff-form'));
+  closeStaffModal();
+  showToast('保存しました', 'success');
+  onStaffListChanged_(list);
+}
+
+// ============================================================================
+// 担当者マスタ（CSVの担当者コード→氏名の対応表）※マスタ権限のみ
+// ============================================================================
+
+function loadStaffNameList() {
+  google.script.run
+    .withSuccessHandler(renderStaffNameList)
+    .withFailureHandler(onServerError)
+    .getStaffNameList();
+}
+
+function renderStaffNameList(list) {
+  // 担当者マスタが変わる前後で、一覧に出てくる担当者の表示名が変わったかを比べる（変わった場合だけ描き直す）。
+  var shownCodes = distinctStaffCodesInRows_();
+  var before = shownCodes.map(formatStaffName_).join('\u0001');
+  STATE.staffNameList = list || [];
+  STATE.staffNameMap = {};
+  STATE.staffNameList.forEach(function (s) { if (s.code && s.name) STATE.staffNameMap[s.code] = s.name; });
+  var namesChanged = shownCodes.map(formatStaffName_).join('\u0001') !== before;
+
+  var tbody = document.getElementById('staff-name-tbody');
+  document.getElementById('staff-name-empty').classList.toggle('hidden', STATE.staffNameList.length > 0);
+  tbody.innerHTML = STATE.staffNameList.map(function (s) {
+    return '<tr>' +
+      '<td class="px-3 py-2 font-mono text-xs">' + escapeHtml(s.code) + '</td>' +
+      '<td class="px-3 py-2">' + escapeHtml(s.name) + '</td>' +
+      '<td class="px-3 py-2 text-right">' +
+      '<button type="button" class="staff-name-edit text-blue-600 hover:underline text-xs mr-2" data-row="' + s.rowIndex + '">編集</button>' +
+      '<button type="button" class="staff-name-delete text-red-600 hover:underline text-xs" data-row="' + s.rowIndex + '">削除</button>' +
+      '</td></tr>';
+  }).join('');
+
+  // 氏名表示に反映されるよう、絞り込みの選択肢・一覧・個人別サマリー・ダッシュボード（ランキング）を描き直す
+  if (!namesChanged || !STATE.ready) return;
+  updateDataOfficeStaffFilterOptions_(); // 担当者の絞り込みの選択肢（選択中の項目は保ったまま表示名だけ更新）
+  renderDataTable();
+  if (STATE.activeTab === 'personal') renderPersonalTab(); else STATE.personalDirty = true;
+  if (STATE.activeTab === 'dashboard') applyDashFilters(); else STATE.dashDirty = true;
+}
+
+/** 読み込んだ行に出てくる担当者コードの一覧（重複なし）。 */
+function distinctStaffCodesInRows_() {
+  var seen = {}, out = [];
+  (STATE.rows || []).forEach(function (r) { if (r.staff && !seen[r.staff]) { seen[r.staff] = true; out.push(r.staff); } });
+  return out;
+}
+
+function bindStaffNameEvents_() {
+  document.getElementById('btn-open-staff-name-modal').addEventListener('click', function () { openStaffNameModal(null); });
+  document.getElementById('btn-close-staff-name-modal').addEventListener('click', closeStaffNameModal);
+  document.getElementById('btn-cancel-staff-name-modal').addEventListener('click', closeStaffNameModal);
+
+  document.getElementById('staff-name-tbody').addEventListener('click', function (e) {
+    var editBtn = e.target.closest('.staff-name-edit');
+    var delBtn = e.target.closest('.staff-name-delete');
+    if (editBtn) openStaffNameModal(Number(editBtn.dataset.row));
+    if (delBtn) {
+      if (!window.confirm('この担当者を削除しますか？')) return;
+      var delNameRow = Number(delBtn.dataset.row);
+      google.script.run.withSuccessHandler(renderStaffNameList).withFailureHandler(onServerError)
+        .deleteStaffName(delNameRow, staffNameCodeAt_(delNameRow));
+    }
+  });
+
+  document.getElementById('staff-name-form').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var form = ev.currentTarget;
+    if (!acquireFormSubmit_(form)) return;
+    var onFail = function (err) { releaseFormSubmit_(form); onServerError(err); };
+    var rowIndex = document.getElementById('staff-name-form-rowindex').value;
+    var code = document.getElementById('staff-name-form-code').value.trim();
+    var name = document.getElementById('staff-name-form-name').value.trim();
+
+    if (rowIndex) {
+      google.script.run.withSuccessHandler(onStaffNameSaved).withFailureHandler(onFail)
+        .updateStaffName(Number(rowIndex), code, name, staffNameCodeAt_(Number(rowIndex)));
+    } else {
+      google.script.run.withSuccessHandler(onStaffNameSaved).withFailureHandler(onFail).addStaffName(code, name);
+    }
+  });
+}
+
+function openStaffNameModal(rowIndex) {
+  var isEdit = rowIndex !== null && rowIndex !== undefined;
+  document.getElementById('staff-name-modal-title').innerHTML = isEdit
+    ? '<i class="fa-solid fa-id-card"></i> 担当者を編集'
+    : '<i class="fa-solid fa-id-card"></i> 担当者を追加';
+  var target = isEdit ? STATE.staffNameList.filter(function (s) { return s.rowIndex === rowIndex; })[0] : null;
+  document.getElementById('staff-name-form-rowindex').value = isEdit ? rowIndex : '';
+  document.getElementById('staff-name-form-code').value = target ? target.code : '';
+  document.getElementById('staff-name-form-name').value = target ? target.name : '';
+  document.getElementById('staff-name-modal').classList.remove('hidden');
+  document.getElementById('staff-name-modal').classList.add('flex');
+}
+
+function closeStaffNameModal() {
+  document.getElementById('staff-name-modal').classList.add('hidden');
+  document.getElementById('staff-name-modal').classList.remove('flex');
+}
+
+function onStaffNameSaved(list) {
+  releaseFormSubmit_(document.getElementById('staff-name-form'));
+  renderStaffNameList(list);
+  closeStaffNameModal();
+  showToast('保存しました', 'success');
+}
+
+// ============================================================================
+// CSVファイルの文字コード自動判定（UTF-8 / Shift_JIS 両対応）
+// ============================================================================
+
+/**
+ * CSVファイルの中身をArrayBufferから文字列に変換する。
+ * UTF-8のBOM付き／BOM無しはUTF-8として、UTF-8として解釈できない場合は
+ * 業務系システムのCSV書き出しで多いShift_JIS（CP932）として解釈する。
+ * これにより「006:エリア」等の見出しが文字化けして検出できない、という問題を防ぐ。
+ */
+function decodeCsvArrayBuffer_(buffer) {
+  var bytes = new Uint8Array(buffer);
+  if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
+    return new TextDecoder('utf-8').decode(bytes.subarray(3));
+  }
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch (e) {
+    return new TextDecoder('shift_jis').decode(bytes);
+  }
+}
+
+// ============================================================================
+// Excel（.xlsx・パスワード付き.xlsx）の読み取り
+// ============================================================================
+
+// ---- Office パスワード付きExcel（ECMA-376 Agile Encryption / Standard Encryption）復号器 ----
+var sha512Sync_ = (function () {
+  var K_HEX = [
+    "428a2f98d728ae22","7137449123ef65cd","b5c0fbcfec4d3b2f","e9b5dba58189dbbc","3956c25bf348b538","59f111f1b605d019","923f82a4af194f9b","ab1c5ed5da6d8118",
+    "d807aa98a3030242","12835b0145706fbe","243185be4ee4b28c","550c7dc3d5ffb4e2","72be5d74f27b896f","80deb1fe3b1696b1","9bdc06a725c71235","c19bf174cf692694",
+    "e49b69c19ef14ad2","efbe4786384f25e3","0fc19dc68b8cd5b5","240ca1cc77ac9c65","2de92c6f592b0275","4a7484aa6ea6e483","5cb0a9dcbd41fbd4","76f988da831153b5",
+    "983e5152ee66dfab","a831c66d2db43210","b00327c898fb213f","bf597fc7beef0ee4","c6e00bf33da88fc2","d5a79147930aa725","06ca6351e003826f","142929670a0e6e70",
+    "27b70a8546d22ffc","2e1b21385c26c926","4d2c6dfc5ac42aed","53380d139d95b3df","650a73548baf63de","766a0abb3c77b2a8","81c2c92e47edaee6","92722c851482353b",
+    "a2bfe8a14cf10364","a81a664bbc423001","c24b8b70d0f89791","c76c51a30654be30","d192e819d6ef5218","d69906245565a910","f40e35855771202a","106aa07032bbd1b8",
+    "19a4c116b8d2d0c8","1e376c085141ab53","2748774cdf8eeb99","34b0bcb5e19b48a8","391c0cb3c5c95a63","4ed8aa4ae3418acb","5b9cca4f7763e373","682e6ff3d6b2b8a3",
+    "748f82ee5defb2fc","78a5636f43172f60","84c87814a1f0ab72","8cc702081a6439ec","90befffa23631e28","a4506cebde82bde9","bef9a3f7b2c67915","c67178f2e372532b",
+    "ca273eceea26619c","d186b8c721c0c207","eada7dd6cde0eb1e","f57d4f7fee6ed178","06f067aa72176fba","0a637dc5a2c898a6","113f9804bef90dae","1b710b35131c471b",
+    "28db77f523047d84","32caab7b40c72493","3c9ebe0a15c9bebc","431d67c49c100d4c","4cc5d4becb3e42b6","597f299cfc657e2a","5fcb6fab3ad6faec","6c44198c4a475817"
+  ];
+  var SHA512_KH_ = new Int32Array(80), SHA512_KL_ = new Int32Array(80);
+  K_HEX.forEach(function (h, i) {
+    SHA512_KH_[i] = parseInt(h.slice(0, 8), 16) | 0;
+    SHA512_KL_[i] = parseInt(h.slice(8, 16), 16) | 0;
+  });
+  var SHA512_WH_ = new Int32Array(80), SHA512_WL_ = new Int32Array(80);
+  var REUSE_PAD = new Uint8Array(256);
+  var REUSE_DV = new DataView(REUSE_PAD.buffer);
+  return function (msg) {
+  var len = msg.length;
+  var padLen = (len + 17 + 127) & ~127;
+  var buf, dv;
+  if (padLen <= 256) {
+    REUSE_PAD.fill(0, 0, padLen);
+    REUSE_PAD.set(msg);
+    REUSE_PAD[len] = 0x80;
+    buf = REUSE_PAD;
+    dv = REUSE_DV;
+  } else {
+    buf = new Uint8Array(padLen);
+    buf.set(msg);
+    buf[len] = 0x80;
+    dv = new DataView(buf.buffer);
+  }
+  var bitLen = len * 8;
+  dv.setUint32(padLen - 8, Math.floor(bitLen / 0x100000000), false);
+  dv.setUint32(padLen - 4, bitLen >>> 0, false);
+  var h0H=0x6a09e667|0, h0L=0xf3bcc908|0, h1H=0xbb67ae85|0, h1L=0x84caa73b|0,
+      h2H=0x3c6ef372|0, h2L=0xfe94f82b|0, h3H=0xa54ff53a|0, h3L=0x5f1d36f1|0,
+      h4H=0x510e527f|0, h4L=0xade682d1|0, h5H=0x9b05688c|0, h5L=0x2b3e6c1f|0,
+      h6H=0x1f83d9ab|0, h6L=0xfb41bd6b|0, h7H=0x5be0cd19|0, h7L=0x137e2179|0;
+  for (var off = 0; off < padLen; off += 128) {
+    for (var i = 0; i < 16; i++) {
+      SHA512_WH_[i] = dv.getInt32(off + i * 8, false);
+      SHA512_WL_[i] = dv.getInt32(off + i * 8 + 4, false);
+    }
+    for (var i = 16; i < 80; i++) {
+      var xH = SHA512_WH_[i-15], xL = SHA512_WL_[i-15];
+      var s0H = ((xH >>> 1) | (xL << 31)) ^ ((xH >>> 8) | (xL << 24)) ^ (xH >>> 7);
+      var s0L = ((xL >>> 1) | (xH << 31)) ^ ((xL >>> 8) | (xH << 24)) ^ ((xL >>> 7) | (xH << 25));
+      xH = SHA512_WH_[i-2]; xL = SHA512_WL_[i-2];
+      var s1H = ((xH >>> 19) | (xL << 13)) ^ ((xH << 3) | (xL >>> 29)) ^ (xH >>> 6);
+      var s1L = ((xL >>> 19) | (xH << 13)) ^ ((xL << 3) | (xH >>> 29)) ^ ((xL >>> 6) | (xH << 26));
+      var l0 = (SHA512_WL_[i-16] >>> 0) + (s0L >>> 0) + (SHA512_WL_[i-7] >>> 0) + (s1L >>> 0);
+      SHA512_WL_[i] = l0 | 0;
+      SHA512_WH_[i] = (SHA512_WH_[i-16] + s0H + SHA512_WH_[i-7] + s1H + Math.floor(l0 / 0x100000000)) | 0;
+    }
+    var aH=h0H,aL=h0L,bH=h1H,bL=h1L,cH=h2H,cL=h2L,dH=h3H,dL=h3L,eH=h4H,eL=h4L,fH=h5H,fL=h5L,gH=h6H,gL=h6L,hH=h7H,hL=h7L;
+    for (var i = 0; i < 80; i++) {
+      var S1H = ((eH >>> 14) | (eL << 18)) ^ ((eH >>> 18) | (eL << 14)) ^ ((eL >>> 9) | (eH << 23));
+      var S1L = ((eL >>> 14) | (eH << 18)) ^ ((eL >>> 18) | (eH << 14)) ^ ((eH >>> 9) | (eL << 23));
+      var chH = (eH & fH) ^ (~eH & gH), chL = (eL & fL) ^ (~eL & gL);
+      var t1L = (hL >>> 0) + (S1L >>> 0) + (chL >>> 0) + (SHA512_KL_[i] >>> 0) + (SHA512_WL_[i] >>> 0);
+      var t1H = (hH + S1H + chH + SHA512_KH_[i] + SHA512_WH_[i] + Math.floor(t1L / 0x100000000)) | 0;
+      t1L = t1L | 0;
+      var S0H = ((aH >>> 28) | (aL << 4)) ^ ((aL >>> 2) | (aH << 30)) ^ ((aL >>> 7) | (aH << 25));
+      var S0L = ((aL >>> 28) | (aH << 4)) ^ ((aH >>> 2) | (aL << 30)) ^ ((aH >>> 7) | (aL << 25));
+      var majH = (aH & bH) ^ (aH & cH) ^ (bH & cH), majL = (aL & bL) ^ (aL & cL) ^ (bL & cL);
+      var t2L = (S0L >>> 0) + (majL >>> 0);
+      var t2H = (S0H + majH + Math.floor(t2L / 0x100000000)) | 0;
+      t2L = t2L | 0;
+      hH=gH; hL=gL; gH=fH; gL=fL; fH=eH; fL=eL;
+      var dSumL = (dL >>> 0) + (t1L >>> 0);
+      eH = (dH + t1H + Math.floor(dSumL / 0x100000000)) | 0; eL = dSumL | 0;
+      dH=cH; dL=cL; cH=bH; cL=bL; bH=aH; bL=aL;
+      var aSumL = (t1L >>> 0) + (t2L >>> 0);
+      aH = (t1H + t2H + Math.floor(aSumL / 0x100000000)) | 0; aL = aSumL | 0;
+    }
+    var s;
+    s=(h0L>>>0)+(aL>>>0); h0H=(h0H+aH+Math.floor(s/0x100000000))|0; h0L=s|0;
+    s=(h1L>>>0)+(bL>>>0); h1H=(h1H+bH+Math.floor(s/0x100000000))|0; h1L=s|0;
+    s=(h2L>>>0)+(cL>>>0); h2H=(h2H+cH+Math.floor(s/0x100000000))|0; h2L=s|0;
+    s=(h3L>>>0)+(dL>>>0); h3H=(h3H+dH+Math.floor(s/0x100000000))|0; h3L=s|0;
+    s=(h4L>>>0)+(eL>>>0); h4H=(h4H+eH+Math.floor(s/0x100000000))|0; h4L=s|0;
+    s=(h5L>>>0)+(fL>>>0); h5H=(h5H+fH+Math.floor(s/0x100000000))|0; h5L=s|0;
+    s=(h6L>>>0)+(gL>>>0); h6H=(h6H+gH+Math.floor(s/0x100000000))|0; h6L=s|0;
+    s=(h7L>>>0)+(hL>>>0); h7H=(h7H+hH+Math.floor(s/0x100000000))|0; h7L=s|0;
+  }
+  var out = new Uint8Array(64);
+  var odv = new DataView(out.buffer);
+  odv.setInt32(0,h0H,false); odv.setInt32(4,h0L,false); odv.setInt32(8,h1H,false); odv.setInt32(12,h1L,false);
+  odv.setInt32(16,h2H,false); odv.setInt32(20,h2L,false); odv.setInt32(24,h3H,false); odv.setInt32(28,h3L,false);
+  odv.setInt32(32,h4H,false); odv.setInt32(36,h4L,false); odv.setInt32(40,h5H,false); odv.setInt32(44,h5L,false);
+  odv.setInt32(48,h6H,false); odv.setInt32(52,h6L,false); odv.setInt32(56,h7H,false); odv.setInt32(60,h7L,false);
+  return out;
+};
+})();
+
+function sha256Sync_(msg) {
+  var K = [
+    0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+    0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+    0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+    0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+    0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+    0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+    0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+    0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
+  ];
+  var len = msg.length;
+  var padLen = (len + 9 + 63) & ~63;
+  var buf = new Uint8Array(padLen);
+  buf.set(msg); buf[len] = 0x80;
+  var dv = new DataView(buf.buffer);
+  var bitLen = len * 8;
+  dv.setUint32(padLen - 8, Math.floor(bitLen / 0x100000000), false);
+  dv.setUint32(padLen - 4, bitLen >>> 0, false);
+  var h0=0x6a09e667|0,h1=0xbb67ae85|0,h2=0x3c6ef372|0,h3=0xa54ff53a|0,h4=0x510e527f|0,h5=0x9b05688c|0,h6=0x1f83d9ab|0,h7=0x5be0cd19|0;
+  var W = new Int32Array(64);
+  for (var off = 0; off < padLen; off += 64) {
+    for (var i = 0; i < 16; i++) W[i] = dv.getInt32(off + i * 4, false);
+    for (var i = 16; i < 64; i++) {
+      var x = W[i-15], s0 = ((x >>> 7) | (x << 25)) ^ ((x >>> 18) | (x << 14)) ^ (x >>> 3);
+      x = W[i-2]; var s1 = ((x >>> 17) | (x << 15)) ^ ((x >>> 19) | (x << 13)) ^ (x >>> 10);
+      W[i] = (W[i-16] + s0 + W[i-7] + s1) | 0;
+    }
+    var a=h0,b=h1,c=h2,d=h3,e=h4,f=h5,g=h6,h=h7;
+    for (var i = 0; i < 64; i++) {
+      var S1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
+      var ch = (e & f) ^ (~e & g);
+      var t1 = (h + S1 + ch + K[i] + W[i]) | 0;
+      var S0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
+      var maj = (a & b) ^ (a & c) ^ (b & c);
+      var t2 = (S0 + maj) | 0;
+      h=g; g=f; f=e; e=(d+t1)|0; d=c; c=b; b=a; a=(t1+t2)|0;
+    }
+    h0=(h0+a)|0; h1=(h1+b)|0; h2=(h2+c)|0; h3=(h3+d)|0; h4=(h4+e)|0; h5=(h5+f)|0; h6=(h6+g)|0; h7=(h7+h)|0;
+  }
+  var out = new Uint8Array(32);
+  var odv = new DataView(out.buffer);
+  odv.setInt32(0,h0,false); odv.setInt32(4,h1,false); odv.setInt32(8,h2,false); odv.setInt32(12,h3,false);
+  odv.setInt32(16,h4,false); odv.setInt32(20,h5,false); odv.setInt32(24,h6,false); odv.setInt32(28,h7,false);
+  return out;
+}
+
+function sha1Sync_(msg) {
+  var len = msg.length;
+  var padLen = (len + 9 + 63) & ~63;
+  var buf = new Uint8Array(padLen);
+  buf.set(msg); buf[len] = 0x80;
+  var dv = new DataView(buf.buffer);
+  var bitLen = len * 8;
+  dv.setUint32(padLen - 8, Math.floor(bitLen / 0x100000000), false);
+  dv.setUint32(padLen - 4, bitLen >>> 0, false);
+  var h0=0x67452301|0, h1=0xefcdab89|0, h2=0x98badcfe|0, h3=0x10325476|0, h4=0xc3d2e1f0|0;
+  var W = new Int32Array(80);
+  for (var off = 0; off < padLen; off += 64) {
+    for (var i = 0; i < 16; i++) W[i] = dv.getInt32(off + i * 4, false);
+    for (var i = 16; i < 80; i++) {
+      var t = W[i-3] ^ W[i-8] ^ W[i-14] ^ W[i-16];
+      W[i] = (t << 1) | (t >>> 31);
+    }
+    var a=h0, b=h1, c=h2, d=h3, e=h4;
+    for (var i = 0; i < 80; i++) {
+      var f = i < 20 ? ((b & c) | (~b & d)) : i < 40 ? (b ^ c ^ d) : i < 60 ? ((b & c) | (b & d) | (c & d)) : (b ^ c ^ d);
+      var k = i < 20 ? 0x5a827999 : i < 40 ? 0x6ed9eba1 : i < 60 ? 0x8f1bbcdc : 0xca62c1d6;
+      var temp = (((a << 5) | (a >>> 27)) + f + e + k + W[i]) | 0;
+      e=d; d=c; c=(b << 30) | (b >>> 2); b=a; a=temp;
+    }
+    h0=(h0+a)|0; h1=(h1+b)|0; h2=(h2+c)|0; h3=(h3+d)|0; h4=(h4+e)|0;
+  }
+  var out = new Uint8Array(20);
+  var odv = new DataView(out.buffer);
+  odv.setInt32(0,h0,false); odv.setInt32(4,h1,false); odv.setInt32(8,h2,false); odv.setInt32(12,h3,false); odv.setInt32(16,h4,false);
+  return out;
+}
+
+function hashByAlg_(alg, msg) {
+  var a = String(alg || 'SHA512').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (a === 'SHA1') return sha1Sync_(msg);
+  if (a === 'SHA256') return sha256Sync_(msg);
+  return sha512Sync_(msg);
+}
+
+function base64ToUint8_(b64) {
+  var binStr = window.atob(String(b64 || '').replace(/\s+/g, ''));
+  var out = new Uint8Array(binStr.length);
+  for (var i = 0; i < binStr.length; i++) out[i] = binStr.charCodeAt(i);
+  return out;
+}
+
+function fitToSize_(bytes, len, padByte) {
+  var out = new Uint8Array(len);
+  out.fill(padByte);
+  out.set(bytes.subarray(0, Math.min(bytes.length, len)), 0);
+  return out;
+}
+
+async function aesCbcDecryptNoPad_(rawKey, iv, ciphertext) {
+  var subtle = window.crypto && window.crypto.subtle;
+  if (!subtle) throw new Error('お使いのブラウザは暗号化解除（Web Crypto API）に対応していません。');
+  var key = await subtle.importKey('raw', rawKey, { name: 'AES-CBC' }, false, ['encrypt', 'decrypt']);
+  var lastBlock = ciphertext.subarray(ciphertext.length - 16);
+  var padBlock = new Uint8Array(await subtle.encrypt({ name: 'AES-CBC', iv: lastBlock }, key, new Uint8Array(0)));
+  var combined = new Uint8Array(ciphertext.length + 16);
+  combined.set(ciphertext, 0);
+  combined.set(padBlock, ciphertext.length);
+  return new Uint8Array(await subtle.decrypt({ name: 'AES-CBC', iv: iv }, key, combined));
+}
+
+/**
+ * AES-ECB の復号（Web Crypto API は ECB を直接扱えないため、CBC を使って一括で計算する）。
+ * CBC（初期値0）で復号した各ブロックは「ECBの復号結果 XOR 直前の暗号ブロック」になるため、
+ * 直前の暗号ブロックを XOR し直すと ECB の復号結果が得られる（1ブロックずつ呼ぶより大幅に速い）。
+ */
+async function aesEcbDecryptNoPad_(rawKey, ciphertext) {
+  if (ciphertext.length % 16 !== 0) throw new Error('暗号化データの長さが正しくありません（ファイルが壊れている可能性があります）。');
+  var cbc = await aesCbcDecryptNoPad_(rawKey, new Uint8Array(16), ciphertext);
+  var out = new Uint8Array(ciphertext.length);
+  for (var i = 0; i < ciphertext.length; i++) {
+    out[i] = cbc[i] ^ (i >= 16 ? ciphertext[i - 16] : 0);
+  }
+  return out;
+}
+
+function extractOle2Streams_(buffer) {
+  var bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  if (bytes.length < 512) return null;
+  var magic = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
+  for (var m = 0; m < 8; m++) {
+    if (bytes[m] !== magic[m]) return null;
+  }
+  var dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  var sectorShift = dv.getUint16(30, true);
+  var miniSectorShift = dv.getUint16(32, true);
+  var sectorSize = 1 << sectorShift;
+  var miniSectorSize = 1 << miniSectorShift;
+  var firstDirSec = dv.getUint32(48, true);
+  var miniCutoff = dv.getUint32(56, true);
+  var firstMiniFatSec = dv.getUint32(60, true);
+  var numMiniFatSecs = dv.getUint32(64, true);
+  var firstDifatSec = dv.getUint32(68, true);
+  var numDifatSecs = dv.getUint32(72, true);
+
+  var difat = [];
+  for (var i = 0; i < 109; i++) {
+    var sec = dv.getUint32(76 + i * 4, true);
+    if (sec !== 0xFFFFFFFF && sec !== 0xFFFFFFFE) difat.push(sec);
+  }
+  var difatSec = firstDifatSec;
+  var entriesPerDifat = (sectorSize / 4) - 1;
+  for (var d = 0; d < numDifatSecs && difatSec !== 0xFFFFFFFE && difatSec !== 0xFFFFFFFF; d++) {
+    var dOff = (difatSec + 1) * sectorSize;
+    if (dOff + sectorSize > bytes.length) break;
+    for (var j = 0; j < entriesPerDifat; j++) {
+      var s = dv.getUint32(dOff + j * 4, true);
+      if (s !== 0xFFFFFFFF && s !== 0xFFFFFFFE) difat.push(s);
+    }
+    difatSec = dv.getUint32(dOff + entriesPerDifat * 4, true);
+  }
+
+  var fat = new Uint32Array(difat.length * (sectorSize / 4));
+  var fatIdx = 0;
+  for (var f = 0; f < difat.length; f++) {
+    var fOff = (difat[f] + 1) * sectorSize;
+    if (fOff + sectorSize > bytes.length) break;
+    for (var k = 0; k < sectorSize / 4; k++) {
+      fat[fatIdx++] = dv.getUint32(fOff + k * 4, true);
+    }
+  }
+
+  var readSectorChain = function (startSec, exactSize) {
+    var chunks = [];
+    var total = 0;
+    var cur = startSec;
+    var guard = 0;
+    while (cur !== 0xFFFFFFFE && cur !== 0xFFFFFFFF && cur < fat.length && guard++ < 200000) {
+      var pos = (cur + 1) * sectorSize;
+      if (pos + sectorSize > bytes.length) break;
+      chunks.push(bytes.subarray(pos, pos + sectorSize));
+      total += sectorSize;
+      if (exactSize !== undefined && total >= exactSize) break;
+      cur = fat[cur];
+    }
+    var out = new Uint8Array(exactSize !== undefined ? Math.min(total, exactSize) : total);
+    var w = 0;
+    for (var c = 0; c < chunks.length && w < out.length; c++) {
+      var take = Math.min(chunks[c].length, out.length - w);
+      out.set(chunks[c].subarray(0, take), w);
+      w += take;
+    }
+    return out;
+  };
+
+  var dirBytes = readSectorChain(firstDirSec);
+  var dirDv = new DataView(dirBytes.buffer, dirBytes.byteOffset, dirBytes.byteLength);
+  var numEntries = Math.floor(dirBytes.length / 128);
+  var entries = [];
+  for (var e = 0; e < numEntries; e++) {
+    var eOff = e * 128;
+    var objType = dirBytes[eOff + 66];
+    if (objType === 0) continue;
+    var nameByteLen = dirDv.getUint16(eOff + 64, true);
+    var nameChars = [];
+    for (var n = 0; n + 1 < nameByteLen - 2 && n < 64; n += 2) {
+      nameChars.push(String.fromCharCode(dirDv.getUint16(eOff + n, true)));
+    }
+    var name = nameChars.join('');
+    var startSec = dirDv.getUint32(eOff + 116, true);
+    var sizeLow = dirDv.getUint32(eOff + 120, true);
+    entries.push({ name: name, objType: objType, startSec: startSec, size: sizeLow });
+  }
+
+  var rootEntry = entries.filter(function (x) { return x.objType === 5; })[0];
+  var miniStream = rootEntry ? readSectorChain(rootEntry.startSec, rootEntry.size) : new Uint8Array(0);
+  var miniFatBytes = (numMiniFatSecs > 0 && firstMiniFatSec !== 0xFFFFFFFE && firstMiniFatSec !== 0xFFFFFFFF)
+    ? readSectorChain(firstMiniFatSec)
+    : new Uint8Array(0);
+  var miniFatDv = new DataView(miniFatBytes.buffer, miniFatBytes.byteOffset, miniFatBytes.byteLength);
+  var miniFat = new Uint32Array(Math.floor(miniFatBytes.length / 4));
+  for (var mf = 0; mf < miniFat.length; mf++) {
+    miniFat[mf] = miniFatDv.getUint32(mf * 4, true);
+  }
+
+  var readMiniChain = function (startSec, exactSize) {
+    var out = new Uint8Array(exactSize);
+    var w = 0;
+    var cur = startSec;
+    var guard = 0;
+    while (cur !== 0xFFFFFFFE && cur !== 0xFFFFFFFF && w < exactSize && guard++ < 200000) {
+      var pos = cur * miniSectorSize;
+      if (pos >= miniStream.length) break;
+      var take = Math.min(miniSectorSize, miniStream.length - pos, exactSize - w);
+      out.set(miniStream.subarray(pos, pos + take), w);
+      w += take;
+      cur = cur < miniFat.length ? miniFat[cur] : 0xFFFFFFFE;
+    }
+    return out;
+  };
+
+  var streams = {};
+  entries.forEach(function (ent) {
+    if (ent.objType !== 2) return;
+    if (ent.size < miniCutoff && miniStream.length > 0) {
+      streams[ent.name] = readMiniChain(ent.startSec, ent.size);
+    } else {
+      streams[ent.name] = readSectorChain(ent.startSec, ent.size);
+    }
+  });
+  return streams;
+}
+
+function isEncryptedOfficeFile_(buffer) {
+  var streams = extractOle2Streams_(buffer);
+  return !!(streams && streams.EncryptionInfo && streams.EncryptedPackage);
+}
+
+async function decryptOfficeEncryptedXlsx_(buffer, password) {
+  var streams = extractOle2Streams_(buffer);
+  if (!streams || !streams.EncryptionInfo || !streams.EncryptedPackage) {
+    throw new Error('暗号化されたExcelデータが見つかりません。');
+  }
+  var encInfoBytes = streams.EncryptionInfo;
+  var encPkgBytes = streams.EncryptedPackage;
+  var infoDv = new DataView(encInfoBytes.buffer, encInfoBytes.byteOffset, encInfoBytes.byteLength);
+  var vMajor = infoDv.getUint16(0, true);
+  var vMinor = infoDv.getUint16(2, true);
+
+  var pwBytes = new Uint8Array(password.length * 2);
+  for (var c = 0; c < password.length; c++) {
+    var code = password.charCodeAt(c);
+    pwBytes[c * 2] = code & 0xff;
+    pwBytes[c * 2 + 1] = (code >>> 8) & 0xff;
+  }
+
+  // Standard Encryption (vMinor === 2)
+  if (vMinor === 2 && (vMajor === 2 || vMajor === 3 || vMajor === 4)) {
+    var headerSize = infoDv.getUint32(8, true);
+    var keySizeBits = infoDv.getUint32(28, true) || 128;
+    var verifierOff = 12 + headerSize;
+    var saltSize = infoDv.getUint32(verifierOff, true);
+    var salt = encInfoBytes.subarray(verifierOff + 4, verifierOff + 4 + saltSize);
+    var encVerifier = encInfoBytes.subarray(verifierOff + 4 + saltSize, verifierOff + 20 + saltSize);
+    var verifierHashSize = infoDv.getUint32(verifierOff + 20 + saltSize, true);
+    var encVerifierHash = encInfoBytes.subarray(verifierOff + 24 + saltSize, verifierOff + 56 + saltSize);
+
+    var initStd = new Uint8Array(salt.length + pwBytes.length);
+    initStd.set(salt, 0);
+    initStd.set(pwBytes, salt.length);
+    var hStd = sha1Sync_(initStd);
+    var spinStd = new Uint8Array(24);
+    var spinStdDv = new DataView(spinStd.buffer);
+    for (var s = 0; s < 50000; s++) {
+      spinStdDv.setUint32(0, s, true);
+      spinStd.set(hStd, 4);
+      hStd = sha1Sync_(spinStd);
+    }
+    var finalIn = new Uint8Array(24);
+    finalIn.set(hStd, 0);
+    var hFinal = sha1Sync_(finalIn);
+    var b1 = new Uint8Array(64), b2 = new Uint8Array(64);
+    b1.fill(0x36); b2.fill(0x5c);
+    for (var x = 0; x < hFinal.length; x++) { b1[x] ^= hFinal[x]; b2[x] ^= hFinal[x]; }
+    var x1 = sha1Sync_(b1), x2 = sha1Sync_(b2);
+    var derivedFull = new Uint8Array(40);
+    derivedFull.set(x1, 0); derivedFull.set(x2, 20);
+    var stdKey = derivedFull.subarray(0, keySizeBits / 8);
+
+    var decVerifier = await aesEcbDecryptNoPad_(stdKey, encVerifier);
+    var decVerifierHash = await aesEcbDecryptNoPad_(stdKey, encVerifierHash);
+    var actualStdHash = sha1Sync_(decVerifier);
+    for (var v = 0; v < verifierHashSize; v++) {
+      if (decVerifierHash[v] !== actualStdHash[v]) throw new Error('パスワードが正しくありません。');
+    }
+    var pkgTotal = new DataView(encPkgBytes.buffer, encPkgBytes.byteOffset, encPkgBytes.byteLength).getUint32(0, true);
+    var decPkg = await aesEcbDecryptNoPad_(stdKey, encPkgBytes.subarray(8));
+    return decPkg.subarray(0, pkgTotal);
+  }
+
+  // Agile Encryption (vMajor === 4 && vMinor === 4)
+  var xmlText = new TextDecoder('utf-8').decode(encInfoBytes.subarray(8));
+  var getAttr = function (tagRegex, attr) {
+    var m = xmlText.match(tagRegex);
+    if (!m) return null;
+    var am = m[0].match(new RegExp(attr + '\\s*=\\s*(?:"([^"]*)"|\'([^\']*)\')'));
+    return am ? (am[1] !== undefined ? am[1] : am[2]) : null;
+  };
+  var kdRegex = /<keyData\b[^>]*>/i;
+  var ekRegex = /<(?:p:)?encryptedKey\b[^>]*>/i;
+  var kdSalt = base64ToUint8_(getAttr(kdRegex, 'saltValue'));
+  var kdKeyBits = Number(getAttr(kdRegex, 'keyBits') || 256);
+  var kdBlockSize = Number(getAttr(kdRegex, 'blockSize') || 16);
+  var kdHashAlg = getAttr(kdRegex, 'hashAlgorithm') || 'SHA512';
+
+  var spinCount = Number(getAttr(ekRegex, 'spinCount') || 100000);
+  var ekSalt = base64ToUint8_(getAttr(ekRegex, 'saltValue'));
+  var ekKeyBits = Number(getAttr(ekRegex, 'keyBits') || 256);
+  var ekBlockSize = Number(getAttr(ekRegex, 'blockSize') || 16);
+  var ekHashSize = Number(getAttr(ekRegex, 'hashSize') || 64);
+  var ekHashAlg = getAttr(ekRegex, 'hashAlgorithm') || 'SHA512';
+  var encVerifierIn = base64ToUint8_(getAttr(ekRegex, 'encryptedVerifierHashInput'));
+  var encVerifierVal = base64ToUint8_(getAttr(ekRegex, 'encryptedVerifierHashValue'));
+  var encKeyVal = base64ToUint8_(getAttr(ekRegex, 'encryptedKeyValue'));
+
+  var initBuf = new Uint8Array(ekSalt.length + pwBytes.length);
+  initBuf.set(ekSalt, 0);
+  initBuf.set(pwBytes, ekSalt.length);
+  var h = hashByAlg_(ekHashAlg, initBuf);
+
+  var spinBuf = new Uint8Array(4 + h.length);
+  var spinDv = new DataView(spinBuf.buffer);
+  for (var i = 0; i < spinCount; i++) {
+    spinDv.setUint32(0, i, true);
+    spinBuf.set(h, 4);
+    h = hashByAlg_(ekHashAlg, spinBuf);
+  }
+
+  var deriveKey = function (blockKey) {
+    var b = new Uint8Array(h.length + blockKey.length);
+    b.set(h, 0);
+    b.set(blockKey, h.length);
+    return fitToSize_(hashByAlg_(ekHashAlg, b), ekKeyBits / 8, 0x36);
+  };
+
+  var iv = fitToSize_(ekSalt, ekBlockSize, 0x36);
+  var verifierIn = await aesCbcDecryptNoPad_(deriveKey(new Uint8Array([0xfe, 0xa7, 0xd2, 0x76, 0x3b, 0x4b, 0x9e, 0x79])), iv, encVerifierIn);
+  var verifierHashExpected = await aesCbcDecryptNoPad_(deriveKey(new Uint8Array([0xd7, 0xaa, 0x0f, 0x6d, 0x30, 0x61, 0x34, 0x4e])), iv, encVerifierVal);
+  var verifierHashActual = hashByAlg_(ekHashAlg, verifierIn.subarray(0, ekSalt.length));
+
+  for (var k = 0; k < ekHashSize; k++) {
+    if (verifierHashExpected[k] !== verifierHashActual[k]) {
+      throw new Error('パスワードが正しくありません。');
+    }
+  }
+
+  var secretKeyRaw = await aesCbcDecryptNoPad_(deriveKey(new Uint8Array([0x14, 0x6e, 0x0b, 0xe7, 0xab, 0xac, 0xd0, 0xd6])), iv, encKeyVal);
+  var secretKey = secretKeyRaw.subarray(0, kdKeyBits / 8);
+
+  var pkgDv = new DataView(encPkgBytes.buffer, encPkgBytes.byteOffset, encPkgBytes.byteLength);
+  var totalSize = pkgDv.getUint32(0, true);
+  var out = new Uint8Array(totalSize);
+  var offset = 8;
+  var segIdx = 0;
+  var written = 0;
+  while (offset < encPkgBytes.length && written < totalSize) {
+    var segLen = Math.min(4096, encPkgBytes.length - offset);
+    var segCipher = encPkgBytes.subarray(offset, offset + segLen);
+    var ivInput = new Uint8Array(kdSalt.length + 4);
+    ivInput.set(kdSalt, 0);
+    new DataView(ivInput.buffer).setUint32(kdSalt.length, segIdx, true);
+    var segIv = fitToSize_(hashByAlg_(kdHashAlg, ivInput), kdBlockSize, 0x36);
+    var decSeg = await aesCbcDecryptNoPad_(secretKey, segIv, segCipher);
+    var take = Math.min(decSeg.length, totalSize - written);
+    out.set(decSeg.subarray(0, take), written);
+    written += take;
+    offset += segLen;
+    segIdx++;
+  }
+  return out;
+}
+
+// ---- Excel（.xlsx）の読み取り（外部の部品を使わない内蔵の読み取り処理） ----
+// 外部の部品（SheetJS）は、npmで配布されている最終版（0.18.5）に既知の脆弱性があり、修正版は別の配布元にしか無く、
+// 読み込みにも時間がかかるため使わない。.xlsx はZIP形式の中にXMLが入っているだけなので、必要な部分だけを読む。
+// 読み取る値はセルに保存されている「生の値」（表示形式で飾る前の値）。ただし日付の表示形式のセルは
+// 'yyyy-MM-dd'、先頭ゼロ付きの表示形式（00123など）の数値は表示どおりのゼロ付き文字列にする。
+
+var EXCEL_MAX_FILE_BYTES_ = 60 * 1024 * 1024;
+
+/** ZIPの中身の一覧（名前→{method, data}）を作る。展開は必要なファイルだけ後で行う。 */
+function listZipEntries_(zipBytes) {
+  var dv = new DataView(zipBytes.buffer, zipBytes.byteOffset, zipBytes.byteLength);
+  var eocdPos = -1;
+  for (var i = zipBytes.length - 22; i >= Math.max(0, zipBytes.length - 65557); i--) {
+    if (dv.getUint32(i, true) === 0x06054b50) { eocdPos = i; break; }
+  }
+  if (eocdPos === -1) throw new Error('Excelファイルの読み取りに失敗しました（ファイルが壊れているか、Excel形式ではありません）。');
+  var cdCount = dv.getUint16(eocdPos + 10, true);
+  var cdOffset = dv.getUint32(eocdPos + 16, true);
+  if (cdCount === 0xFFFF || cdOffset === 0xFFFFFFFF) throw new Error('この形式のExcelファイル（4GBを超える形式）には対応していません。');
+  var entries = {};
+  var pos = cdOffset;
+  var utf8 = new TextDecoder('utf-8');
+  for (var c = 0; c < cdCount; c++) {
+    if (pos + 46 > zipBytes.length || dv.getUint32(pos, true) !== 0x02014b50) {
+      throw new Error('Excelファイルの読み取りに失敗しました（ファイルが壊れている可能性があります）。');
+    }
+    var method = dv.getUint16(pos + 10, true);
+    var crc = zipBytes.subarray(pos + 16, pos + 20);
+    var compSize = dv.getUint32(pos + 20, true);
+    var uncompSizeBytes = zipBytes.subarray(pos + 24, pos + 28);
+    var nameLen = dv.getUint16(pos + 28, true);
+    var extraLen = dv.getUint16(pos + 30, true);
+    var commentLen = dv.getUint16(pos + 32, true);
+    var localOffset = dv.getUint32(pos + 42, true);
+    var name = utf8.decode(zipBytes.subarray(pos + 46, pos + 46 + nameLen)).replace(/\\/g, '/').replace(/^\//, '');
+    pos += 46 + nameLen + extraLen + commentLen;
+    if (localOffset + 30 > zipBytes.length || dv.getUint32(localOffset, true) !== 0x04034b50) continue;
+    var dataStart = localOffset + 30 + dv.getUint16(localOffset + 26, true) + dv.getUint16(localOffset + 28, true);
+    if (dataStart + compSize > zipBytes.length) throw new Error('Excelファイルの読み取りに失敗しました（ファイルの途中で切れています）。');
+    entries[name] = { method: method, data: zipBytes.subarray(dataStart, dataStart + compSize), crc: crc, uncompSizeBytes: uncompSizeBytes };
+  }
+  return entries;
+}
+
+function readStreamToBytes_(readable) {
+  return new Response(readable).arrayBuffer().then(function (ab) { return new Uint8Array(ab); });
+}
+
+/** ZIPの1ファイルを展開する（deflate形式）。ブラウザ内蔵の展開機能を使い、gzip形式に包んで中身の検査（CRC）も行う。 */
+function inflateZipEntry_(entry) {
+  if (entry.method === 0) return Promise.resolve(entry.data);
+  if (entry.method !== 8) return Promise.reject(new Error('このExcelファイルの圧縮方式（' + entry.method + '）には対応していません。'));
+  if (typeof DecompressionStream !== 'function') {
+    return Promise.reject(new Error('お使いのブラウザはExcelファイルの読み取りに対応していません。Google Chrome または Microsoft Edge の最新版でお試しください。'));
+  }
+  var gz = new Uint8Array(10 + entry.data.length + 8);
+  gz.set([0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03], 0);
+  gz.set(entry.data, 10);
+  gz.set(entry.crc, 10 + entry.data.length);
+  gz.set(entry.uncompSizeBytes, 14 + entry.data.length);
+  return readStreamToBytes_(new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip')));
+}
+
+/** ZIPの中のXMLファイルを文字列で返す（無ければnull）。タグ名の名前空間の接頭辞（x:row など）は取り除く。 */
+function readZipXml_(entries, path) {
+  var entry = entries[path];
+  if (!entry) return Promise.resolve(null);
+  return inflateZipEntry_(entry).then(function (bytes) {
+    var text = new TextDecoder('utf-8').decode(bytes);
+    return text.replace(/<(\/?)[A-Za-z_][\w.\-]*:(?=[A-Za-z_])/g, '<$1');
+  });
+}
+
+// 1回の置き換えで戻す（順に置き換えると「&#38;lt;」が「&lt;」を経て「<」まで戻りすぎるため）。
+var XML_NAMED_ENTITIES_ = { quot: '"', apos: "'", lt: '<', gt: '>', amp: '&' };
+function decodeXmlEntities_(s) {
+  return String(s || '').replace(/&(?:#x([0-9a-fA-F]+)|#(\d+)|(quot|apos|lt|gt|amp));/g, function (all, h, d, name) {
+    if (name) return XML_NAMED_ENTITIES_[name];
+    var cp = h ? parseInt(h, 16) : parseInt(d, 10);
+    return (cp >= 0 && cp <= 0x10FFFF) ? String.fromCodePoint(cp) : all;
+  });
+}
+
+/** 文字列セルの中身（<si> / <is>）から表示される文字だけを取り出す。ふりがな（<rPh>）は含めない。 */
+function excelRichTextToString_(xml) {
+  var body = String(xml || '').replace(/<rPh\b[\s\S]*?<\/rPh>/g, '').replace(/<phoneticPr\b[^>]*\/?>/g, '');
+  var parts = [];
+  var re = /<t\b[^>]*?(?:\/>|>([\s\S]*?)<\/t>)/g, m;
+  while ((m = re.exec(body)) !== null) parts.push(m[1] || '');
+  // Excelは改行などの制御文字を _x000D_ のような形で保存するため、元の文字に戻す。
+  return decodeXmlEntities_(parts.join('')).replace(/_x([0-9A-Fa-f]{4})_/g, function (_, h) { return String.fromCharCode(parseInt(h, 16)); });
+}
+
+function xmlAttr_(attrs, name) {
+  // 属性の値は " でも ' でも囲める（XMLの決まり）。
+  var m = String(attrs || '').match(new RegExp('(?:^|\\s)' + name + '\\s*=\\s*(?:"([^"]*)"|\'([^\']*)\')'));
+  return m ? decodeXmlEntities_(m[1] !== undefined ? m[1] : m[2]) : null;
+}
+
+function colLettersToIndex_(letters) {
+  var n = 0;
+  for (var i = 0; i < letters.length; i++) n = n * 26 + (letters.charCodeAt(i) - 64);
+  return n - 1;
+}
+
+/** ZIP内の相対パス（関係ファイルの Target）を、ZIP内の絶対パスに直す。 */
+function resolveZipPath_(baseDir, target) {
+  if (!target) return null;
+  if (target.charAt(0) === '/') return target.slice(1);
+  var parts = (baseDir + target).split('/'), out = [];
+  parts.forEach(function (p) { if (p === '..') out.pop(); else if (p !== '.' && p !== '') out.push(p); });
+  return out.join('/');
+}
+
+/**
+ * 表示形式の種類を判定する：'date'（日付）／'time'（時刻だけ）／'zero'（先頭ゼロ付きの整数。桁数をwidthに）／null（それ以外）。
+ * 組み込みの表示形式（番号のみで指定される）は、日本語版Excelの番号の意味に合わせる。
+ */
+var EXCEL_BUILTIN_DATE_FMT_ = { 14: 1, 15: 1, 16: 1, 17: 1, 22: 1, 27: 1, 28: 1, 29: 1, 30: 1, 31: 1, 34: 1, 35: 1, 36: 1, 50: 1, 51: 1, 52: 1, 53: 1, 54: 1, 55: 1, 56: 1, 57: 1, 58: 1 };
+var EXCEL_BUILTIN_TIME_FMT_ = { 18: 1, 19: 1, 20: 1, 21: 1, 32: 1, 33: 1, 45: 1, 46: 1, 47: 1 };
+function classifyExcelFormat_(numFmtId, formatCode) {
+  if (formatCode === null || formatCode === undefined) {
+    if (EXCEL_BUILTIN_DATE_FMT_[numFmtId]) return { kind: 'date' };
+    if (EXCEL_BUILTIN_TIME_FMT_[numFmtId]) return { kind: 'time' };
+    return null;
+  }
+  var code = String(formatCode).split(';')[0]
+    .replace(/"[^"]*"/g, '')       // "年" のような文字の表示
+    .replace(/\\./g, '')           // \- のような1文字の表示
+    .replace(/[_*]./g, '')         // 空白の幅合わせ・繰り返し
+    .replace(/\[[^\]]*\]/g, '');   // [赤] [$-411] [h] など
+  if (/^0+$/.test(code)) return { kind: 'zero', width: code.length };
+  if (/[#0?]/.test(code) || /General/i.test(code) || code === '@') return null;
+  if (/[yYdDeEgG]/.test(code)) return { kind: 'date' };
+  if (/[hHsS]/.test(code)) return { kind: 'time' };
+  if (/[mM]/.test(code)) return { kind: 'date' }; // 「m月」のような月だけの表示も日付とみなす
+  return null;
+}
+
+/** Excelの日付の通し番号を 'yyyy-MM-dd' にする（時刻を含む値も日付部分だけ。1904年基準のファイルにも対応）。 */
+function excelSerialToIsoDate_(serial, date1904) {
+  var num = Number(serial);
+  if (!isFinite(num)) return String(serial);
+  // 小数の誤差（例：46082.99999999999）で前日にならないよう、ミリ秒単位に丸めてから日付を求める。
+  var ms = Math.round(num * 86400000);
+  var days = Math.floor(ms / 86400000) + (date1904 ? 1462 : 0);
+  if (days < 61) days += 1; // 1900年2月29日（Excelにだけ存在する日）より前の補正
+  var d = new Date(Date.UTC(1899, 11, 30) + days * 86400000);
+  if (isNaN(d.getTime())) return String(serial);
+  var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+  return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate());
+}
+
+function excelSerialToTime_(serial, withSeconds) {
+  var num = Number(serial);
+  if (!isFinite(num)) return String(serial);
+  var sec = Math.round((num - Math.floor(num)) * 86400) % 86400;
+  var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+  return Math.floor(sec / 3600) + ':' + pad(Math.floor(sec / 60) % 60) + (withSeconds ? ':' + pad(sec % 60) : '');
+}
+
+/** 数値セルの値を文字列にする（整数はそのまま、小数はExcelの表示と同じく15桁に丸めて誤差を消す）。 */
+function excelNumberText_(raw) {
+  var s = String(raw).trim();
+  if (/^-?\d+$/.test(s)) return s;
+  var n = Number(s);
+  if (!isFinite(n)) return s;
+  return String(Number(n.toPrecision(15)));
+}
+
+/** .xlsx のバイト列から、全シートの {name, hidden, matrix（2次元の文字列配列）} を読み取る。 */
+async function parseXlsxBytes_(zipBytes) {
+  var entries = listZipEntries_(zipBytes);
+  var wbXml = await readZipXml_(entries, 'xl/workbook.xml');
+  if (wbXml === null) throw new Error('Excelファイルの中にブック情報が見つかりません（Excel形式ではない可能性があります）。');
+  var relsXml = (await readZipXml_(entries, 'xl/_rels/workbook.xml.rels')) || '';
+  var rels = {};
+  var relRe = /<Relationship\b([^>]*?)\/?>/g, rm;
+  while ((rm = relRe.exec(relsXml)) !== null) {
+    rels[xmlAttr_(rm[1], 'Id')] = { type: xmlAttr_(rm[1], 'Type') || '', target: resolveZipPath_('xl/', xmlAttr_(rm[1], 'Target')) };
+  }
+  var relOfType = function (suffix, fallback) {
+    var hit = Object.keys(rels).filter(function (k) { return /\/(\w+)$/.exec(rels[k].type) && /\/(\w+)$/.exec(rels[k].type)[1] === suffix; })[0];
+    return hit ? rels[hit].target : fallback;
+  };
+  var wbPr = wbXml.match(/<workbookPr\b([^>]*)>/);
+  var date1904Attr = wbPr ? xmlAttr_(wbPr[1], 'date1904') : null;
+  var date1904 = date1904Attr === '1' || date1904Attr === 'true';
+
+  var sharedStrings = [];
+  var ssXml = await readZipXml_(entries, relOfType('sharedStrings', 'xl/sharedStrings.xml'));
+  if (ssXml) {
+    var siRe = /<si\b[^>]*?(?:\/>|>([\s\S]*?)<\/si>)/g, sm;
+    while ((sm = siRe.exec(ssXml)) !== null) sharedStrings.push(excelRichTextToString_(sm[1] || ''));
+  }
+
+  var styleKinds = [];
+  var stXml = await readZipXml_(entries, relOfType('styles', 'xl/styles.xml'));
+  if (stXml) {
+    var customFmt = {};
+    var nfRe = /<numFmt\b([^>]*?)\/?>/g, nm;
+    while ((nm = nfRe.exec(stXml)) !== null) customFmt[Number(xmlAttr_(nm[1], 'numFmtId'))] = xmlAttr_(nm[1], 'formatCode');
+    var xfsMatch = stXml.match(/<cellXfs\b[^>]*>([\s\S]*?)<\/cellXfs>/);
+    if (xfsMatch) {
+      var xfRe = /<xf\b([^>]*?)(?:\/>|>[\s\S]*?<\/xf>)/g, xm;
+      while ((xm = xfRe.exec(xfsMatch[1])) !== null) {
+        var fmtId = Number(xmlAttr_(xm[1], 'numFmtId') || 0);
+        styleKinds.push(classifyExcelFormat_(fmtId, Object.prototype.hasOwnProperty.call(customFmt, fmtId) ? customFmt[fmtId] : null));
+      }
+    }
+  }
+
+  var sheetDefs = [];
+  var shRe = /<sheet\b([^>]*?)\/?>/g, shm;
+  while ((shm = shRe.exec(wbXml)) !== null) {
+    var ridm = shm[1].match(/\s[\w]+:id\s*=\s*(?:"([^"]*)"|'([^']*)')/);
+    var rid = ridm ? (ridm[1] !== undefined ? ridm[1] : ridm[2]) : undefined;
+    var target = rid && rels[rid] ? rels[rid].target : null;
+    sheetDefs.push({ name: xmlAttr_(shm[1], 'name') || ('Sheet' + (sheetDefs.length + 1)), hidden: !!xmlAttr_(shm[1], 'state') && xmlAttr_(shm[1], 'state') !== 'visible', path: target });
+  }
+  if (!sheetDefs.length) {
+    Object.keys(entries).filter(function (k) { return /^xl\/worksheets\/sheet\d+\.xml$/i.test(k); }).sort().forEach(function (k, i) {
+      sheetDefs.push({ name: 'Sheet' + (i + 1), hidden: false, path: k });
+    });
+  }
+
+  var sheets = [];
+  for (var s = 0; s < sheetDefs.length; s++) {
+    var def = sheetDefs[s];
+    if (!def.path || !entries[def.path]) continue; // グラフシートなど、表ではないシート
+    var xml = await readZipXml_(entries, def.path);
+    var matrix = [], width = 0;
+    var rowRe = /<row\b([^>]*?)(?:\/>|>([\s\S]*?)<\/row>)/g, rowM;
+    while ((rowM = rowRe.exec(xml)) !== null) {
+      var cellsXml = rowM[2] || '';
+      if (!cellsXml) continue;
+      var rowArr = [], nextCol = 0, any = false;
+      var cRe = /<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g, cm;
+      while ((cm = cRe.exec(cellsXml)) !== null) {
+        var attrs = cm[1] || '', inner = cm[2] || '';
+        var ref = xmlAttr_(attrs, 'r');
+        var refM = ref ? ref.match(/^([A-Za-z]+)\d*$/) : null;
+        var col = refM ? colLettersToIndex_(refM[1].toUpperCase()) : nextCol;
+        nextCol = col + 1;
+        var t = xmlAttr_(attrs, 't') || 'n';
+        var styleIdx = Number(xmlAttr_(attrs, 's') || 0);
+        var vM = inner.match(/<v\b[^>]*>([\s\S]*?)<\/v>/);
+        var raw = vM ? decodeXmlEntities_(vM[1]) : '';
+        var val = '';
+        if (t === 's') {
+          var si = Number(raw);
+          val = (raw !== '' && si >= 0 && si < sharedStrings.length) ? sharedStrings[si] : '';
+        } else if (t === 'inlineStr') {
+          var isM = inner.match(/<is\b[^>]*>([\s\S]*?)<\/is>/);
+          val = isM ? excelRichTextToString_(isM[1]) : '';
+        } else if (t === 'str' || t === 'e') {
+          val = raw;
+        } else if (t === 'b') {
+          val = raw === '1' ? 'TRUE' : (raw === '0' ? 'FALSE' : raw);
+        } else if (t === 'd') {
+          val = /^\d{4}-\d{2}-\d{2}/.test(raw) ? raw.slice(0, 10) : raw;
+        } else if (raw !== '') {
+          var kind = styleKinds[styleIdx] || null;
+          if (kind && kind.kind === 'date') val = excelSerialToIsoDate_(raw, date1904);
+          else if (kind && kind.kind === 'time') val = excelSerialToTime_(raw, true);
+          else if (kind && kind.kind === 'zero' && /^\d+$/.test(raw) && raw.length < kind.width) val = new Array(kind.width - raw.length + 1).join('0') + raw;
+          else val = excelNumberText_(raw);
+        }
+        while (rowArr.length < col) rowArr.push('');
+        rowArr[col] = val;
+        if (val !== '') any = true;
+      }
+      if (!any) continue; // 空の行は取り込みに関係しないため除く
+      if (rowArr.length > width) width = rowArr.length;
+      matrix.push(rowArr);
+    }
+    matrix.forEach(function (r) { while (r.length < width) r.push(''); });
+    sheets.push({ name: def.name, hidden: def.hidden, matrix: matrix });
+  }
+  return sheets;
+}
+
+/** 見出しの文字から、先頭の番号（006:）や記号（■）・空白を除く（シートの判定用）。 */
+function normalizeExcelHeaderCell_(cell) {
+  return String(cell || '').replace(/^[﻿\s■●◆□]+/, '').replace(/^\d{1,6}\s*[:：]\s*/, '').replace(/\s+/g, '');
+}
+
+/**
+ * 複数のシートがある場合に、取り込みたい表のシートを選ぶための点数（先頭20行の見出しらしさ）。
+ * mode='reservation'：予約データの項目名と一致する見出しの数／mode='staff'：人事データの代表的な見出しの数。
+ */
+function scoreSheetMatrixForMode_(matrix, mode) {
+  var labels = {};
+  if (mode === 'staff') {
+    ['担当者NO', '担当者No', '担当者コード', '担当者CD', '社員NO', '社員番号', '社員コード', 'スタッフコード',
+      '社員名称', '社員名', '氏名', '漢字氏名', '担当者名', 'スタッフ名', '駐在所属名称', '所属', '所属名称', '役職', '役職名称']
+      .forEach(function (l) { labels[l] = 1; });
+  } else {
+    (STATE.columns || []).forEach(function (c) { labels[normalizeExcelHeaderCell_(c.label)] = 1; });
+  }
+  var best = 0, limit = Math.min((matrix || []).length, 20); // サーバー側の見出し検出（先頭20行）と同じ範囲
+  for (var r = 0; r < limit; r++) {
+    var score = 0, seen = {};
+    if (mode === 'staff') {
+      // サーバー側で必須の「担当者NO」「社員名称」が同じ行にそろっていれば、そのシートを最優先にする。
+      var keys = (matrix[r] || []).map(normalizeExcelHeaderCell_);
+      if (keys.indexOf('担当者NO') !== -1 && keys.indexOf('社員名称') !== -1) score += 1000;
+    }
+    (matrix[r] || []).forEach(function (cell) {
+      var key = normalizeExcelHeaderCell_(cell);
+      if (key && labels[key] && !seen[key]) { seen[key] = 1; score++; }
+      else if (mode === 'staff' && /メール|アカウント|Email|Gmail/i.test(key) && !seen.mail) { seen.mail = 1; score++; }
+    });
+    if (score > best) best = score;
+  }
+  return best;
+}
+
+/** .xlsx のバイト列から、取り込む表のシートを選び、その表（行×列の文字列）を返す。 */
+async function convertExcelBytesToCsv_(bytes, mode) {
+  var sheets = await parseXlsxBytes_(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes));
+  var usable = sheets.filter(function (s) { return s.matrix.length > 0; });
+  if (!usable.length) throw new Error('Excelファイルの中に、データの入ったシートが見つかりませんでした。');
+  var best = null, bestScore = -1;
+  usable.forEach(function (s) {
+    var sc = scoreSheetMatrixForMode_(s.matrix, mode) * 2 + (s.hidden ? 0 : 1); // 同点なら表示中のシートを優先
+    if (sc > bestScore) { bestScore = sc; best = s; }
+  });
+  return { matrix: best.matrix, sheetName: best.name, sheetCount: usable.length };
+}
+
+function isZipBytes_(bytes) {
+  return bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4B && bytes[2] === 0x03 && bytes[3] === 0x04;
+}
+function isOle2Bytes_(bytes) {
+  return bytes.length >= 8 && bytes[0] === 0xD0 && bytes[1] === 0xCF && bytes[2] === 0x11 && bytes[3] === 0xE0 &&
+    bytes[4] === 0xA1 && bytes[5] === 0xB1 && bytes[6] === 0x1A && bytes[7] === 0xE1;
+}
+
+var EXCEL_XLS_UNSUPPORTED_MESSAGE_ = '古い形式のExcelファイル（.xls）には対応していません。Excelで開き、「名前を付けて保存」で' +
+  '「Excelブック（.xlsx）」または「CSV」を選んで保存し直してから取り込んでください（パスワード付きの .xls も同様です）。';
+
+/**
+ * CSVまたはExcelファイル（パスワード付き.xlsx含む）を読み込む共通処理。中身（先頭のバイト）で形式を判定する。
+ * 結果は onReady({csvText}（CSVの場合）または {matrix, sheetName, sheetCount}（Excelの場合））／
+ * パスワード付きなら onEncrypted(bytes) ／ 失敗なら onError(err)。
+ */
+function readSpreadsheetFileAuto_(file, mode, onReady, onEncrypted, onError) {
+  if (file.size > EXCEL_MAX_FILE_BYTES_) {
+    onError(new Error('ファイルが大きすぎます（' + Math.round(file.size / 1024 / 1024) + 'MB）。60MB以下のファイルにしてください。'));
+    return;
+  }
+  var reader = new FileReader();
+  reader.onload = function (evt) {
+    var bytes = new Uint8Array(evt.target.result);
+    Promise.resolve().then(function () {
+      if (isOle2Bytes_(bytes)) {
+        if (isEncryptedOfficeFile_(bytes)) { onEncrypted(bytes); return null; }
+        throw new Error(EXCEL_XLS_UNSUPPORTED_MESSAGE_);
+      }
+      if (isZipBytes_(bytes)) return convertExcelBytesToCsv_(bytes, mode).then(onReady);
+      var ext = (file.name.split('.').pop() || '').toLowerCase();
+      if (ext === 'xlsx' || ext === 'xlsm' || ext === 'xls') throw new Error('Excelファイルとして読み取れませんでした（ファイルが壊れている可能性があります）。');
+      onReady({ csvText: decodeCsvArrayBuffer_(evt.target.result), sheetName: null, sheetCount: 0 });
+      return null;
+    }).catch(onError);
+  };
+  reader.onerror = function () { onError(reader.error || new Error('ファイルの読み込みに失敗しました。')); };
+  reader.readAsArrayBuffer(file);
+}
+
+async function unlockEncryptedSpreadsheetBuffer_(bytes, password, mode) {
+  if (!password) throw new Error('パスワードを入力してください。');
+  var decrypted = await decryptOfficeEncryptedXlsx_(bytes, password);
+  if (!isZipBytes_(decrypted)) throw new Error(EXCEL_XLS_UNSUPPORTED_MESSAGE_);
+  return convertExcelBytesToCsv_(decrypted, mode);
+}
+
+/**
+ * ファイル選択欄・パスワード入力欄・概要表示・取込ボタンをまとめて扱う（CSV取込と人事データ取込で共通）。
+ * 別のファイルを選び直した場合は、前のファイルの読み取り結果が後から届いても使わない（取り違え防止）。
+ * ids：{file, passwordBox, passwordInput, unlockBtn, summary, submit}。
+ * onData(取込データ, fileName)：取込データはCSVなら文字列、Excelなら {matrix}（サーバーの取込処理はどちらも受け付ける）。
+ */
+function bindSpreadsheetPicker_(mode, ids, onData, onClear) {
+  var el = function (id) { return document.getElementById(id); };
+  var state = { seq: 0, encrypted: null, fileName: null, busy: false };
+  var setSummary = function (text) { var s = el(ids.summary); s.textContent = text; s.classList.toggle('hidden', !text); };
+  var reset = function () {
+    state.seq++;
+    state.encrypted = null;
+    state.fileName = null;
+    el(ids.passwordBox).classList.add('hidden');
+    el(ids.passwordInput).value = '';
+    el(ids.submit).disabled = true;
+    onClear();
+  };
+  var describe = function (file, res) {
+    return 'ファイル：' + file.name + '（' + Math.ceil(file.size / 1024) + ' KB）' +
+      (res.sheetName ? '　読み込むシート：「' + res.sheetName + '」' + (res.sheetCount > 1 ? '（' + res.sheetCount + 'シート中。見出しから自動で選択）' : '') : '');
+  };
+  el(ids.file).addEventListener('change', function (e) {
+    reset();
+    setSummary('');
+    var file = e.target.files && e.target.files[0];
+    if (!file) return;
+    var mySeq = state.seq;
+    state.fileName = file.name;
+    setSummary('ファイルを読み取っています…：' + file.name);
+    readSpreadsheetFileAuto_(file, mode, function (res) {
+      if (mySeq !== state.seq) return;
+      onData(res.matrix ? { matrix: res.matrix } : res.csvText, file.name);
+      setSummary(describe(file, res));
+      el(ids.submit).disabled = false;
+    }, function (bytes) {
+      if (mySeq !== state.seq) return;
+      state.encrypted = { bytes: bytes, file: file };
+      el(ids.passwordBox).classList.remove('hidden');
+      setSummary('パスワード付きのExcelファイルです：' + file.name + '（パスワードを入力して「ロック解除して読み込む」を押してください）');
+      el(ids.passwordInput).focus();
+    }, function (err) {
+      if (mySeq !== state.seq) return;
+      setSummary('');
+      showToast((err && err.message) || 'ファイルの読み込みに失敗しました。', 'error');
+    });
+  });
+  var unlock = function () {
+    if (!state.encrypted || state.busy) return;
+    var password = el(ids.passwordInput).value;
+    if (!password) { showToast('Excelのパスワードを入力してください。', 'error'); return; }
+    var mySeq = state.seq, enc = state.encrypted, btn = el(ids.unlockBtn);
+    state.busy = true;
+    btn.disabled = true;
+    unlockEncryptedSpreadsheetBuffer_(enc.bytes, password, mode).then(function (res) {
+      if (mySeq !== state.seq) return;
+      state.encrypted = null;
+      el(ids.passwordBox).classList.add('hidden');
+      el(ids.passwordInput).value = '';
+      onData({ matrix: res.matrix }, enc.file.name);
+      setSummary('ロックを解除しました。' + describe(enc.file, res));
+      el(ids.submit).disabled = false;
+    }).catch(function (err) {
+      if (mySeq !== state.seq) return;
+      showToast((err && err.message) || 'パスワードの解除に失敗しました。', 'error');
+      el(ids.passwordInput).select();
+    }).then(function () {
+      state.busy = false;
+      btn.disabled = false;
+    });
+  };
+  el(ids.unlockBtn).addEventListener('click', unlock);
+  el(ids.passwordInput).addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); unlock(); }
+  });
+  return { reset: function () { el(ids.file).value = ''; reset(); setSummary(''); } };
+}
+
+// ============================================================================
+// 担当者マスタ：人事データ（CSV・Excel）インポート
+// ============================================================================
+
+var staffNameImportSelectedText = null;
+var staffNameImportSelectedFileName = null;
+var staffNameImportProgressTimer = null;
+
+function bindStaffNameImportEvents_() {
+  document.getElementById('btn-open-staff-name-import-modal').addEventListener('click', openStaffNameImportModal);
+  document.getElementById('btn-close-staff-name-import-modal').addEventListener('click', closeStaffNameImportModal);
+  document.getElementById('btn-cancel-staff-name-import-modal').addEventListener('click', closeStaffNameImportModal);
+  STATE.staffNameImportPicker = bindSpreadsheetPicker_('staff', {
+    file: 'staff-name-import-file-input', passwordBox: 'staff-name-import-password-box', passwordInput: 'staff-name-import-password-input',
+    unlockBtn: 'btn-unlock-staff-name-xlsx', summary: 'staff-name-import-file-summary', submit: 'btn-submit-staff-name-import'
+  }, function (text, fileName) {
+    staffNameImportSelectedText = text;
+    staffNameImportSelectedFileName = fileName;
+  }, function () {
+    staffNameImportSelectedText = null;
+    staffNameImportSelectedFileName = null;
+  });
+  document.getElementById('btn-submit-staff-name-import').addEventListener('click', submitStaffNameImport);
+}
+
+function openStaffNameImportModal() {
+  resetStaffNameImportModal_();
+  document.getElementById('staff-name-import-modal').classList.remove('hidden');
+  document.getElementById('staff-name-import-modal').classList.add('flex');
+}
+function closeStaffNameImportModal() {
+  document.getElementById('staff-name-import-modal').classList.add('hidden');
+  document.getElementById('staff-name-import-modal').classList.remove('flex');
+  stopStaffNameImportProgress_();
+}
+function resetStaffNameImportModal_() {
+  STATE.staffNameImportPicker.reset();
+  document.getElementById('staff-name-import-result').classList.add('hidden');
+  document.getElementById('staff-name-import-progress').classList.add('hidden');
+}
+
+function submitStaffNameImport() {
+  if (!staffNameImportSelectedText) return;
+  document.getElementById('btn-submit-staff-name-import').disabled = true;
+  startStaffNameImportProgress_();
+  google.script.run
+    .withSuccessHandler(function (result) { stopStaffNameImportProgress_(); onStaffNameImportSuccess(result); })
+    .withFailureHandler(function (err) {
+      stopStaffNameImportProgress_();
+      document.getElementById('btn-submit-staff-name-import').disabled = false;
+      onServerError(err);
+    })
+    .importStaffNameCsv(staffNameImportSelectedText, staffNameImportSelectedFileName);
+}
+
+function startStaffNameImportProgress_() {
+  var box = document.getElementById('staff-name-import-progress');
+  var bar = document.getElementById('staff-name-import-progress-bar');
+  var timeLabel = document.getElementById('staff-name-import-progress-time');
+  box.classList.remove('hidden');
+  var elapsed = 0;
+  bar.style.width = '5%';
+  staffNameImportProgressTimer = setInterval(function () {
+    elapsed++;
+    timeLabel.textContent = elapsed + '秒';
+    bar.style.width = Math.min(90, 5 + elapsed * 4) + '%';
+  }, 1000);
+}
+function stopStaffNameImportProgress_() {
+  if (staffNameImportProgressTimer) { clearInterval(staffNameImportProgressTimer); staffNameImportProgressTimer = null; }
+  document.getElementById('staff-name-import-progress-bar').style.width = '100%';
+}
+
+function onStaffNameImportSuccess(result) {
+  var box = document.getElementById('staff-name-import-result');
+  var lines = [
+    '<p class="font-semibold text-emerald-700"><i class="fa-solid fa-circle-check"></i> 取り込みが完了しました</p>',
+    '<p>CSVのデータ行数：' + formatNumber(result.csvDataRows) + ' 行</p>',
+    '<p>担当者マスタ：新規登録 <b>' + formatNumber(result.added) + '</b> 件／氏名を更新 <b>' + formatNumber(result.updated) + '</b> 件</p>',
+    '<p>担当者NO・社員名称が空欄などのためスキップ：' + formatNumber(result.skipped) + ' 件</p>'
+  ];
+  if (result.accountsDetected) {
+    lines.push(
+      '<p class="mt-2 pt-2 border-t border-slate-200 font-semibold text-slate-700">Googleアカウント（スタッフ権限）も検出しました</p>',
+      '<p>スタッフ権限：新規登録 <b>' + formatNumber(result.accountsAdded) + '</b> 件／氏名を更新 <b>' + formatNumber(result.accountsUpdated) + '</b> 件／権限を同期 <b>' + formatNumber(result.accountsRoleSynced) + '</b> 件</p>'
+    );
+    if (result.roleColumnDetected) {
+      lines.push('<p class="text-slate-500">権限欄として「' + escapeHtml(result.roleColumnHeader || '') + '」列を使用しました。</p>');
+    } else {
+      lines.push(
+        '<p class="text-amber-700"><i class="fa-solid fa-triangle-exclamation"></i> CSVから権限（役職）の列を検出できなかったため、' +
+        '新規アカウントはすべて「社員」として登録されました。見出し行の列名をご確認ください' +
+        '（「権限」「役職」「役職名」などの表記に対応しています）。</p>'
+      );
+    }
+    if (result.accountsAffiliationChanged > 0) {
+      lines.push(
+        '<p>所属（所属店舗・所属エリア）が変わったため、既存の行は残したまま新しい行として追加：<b>' +
+        formatNumber(result.accountsAffiliationChanged) + '</b> 件</p>'
+      );
+    }
+    if (result.accountsSkipped > 0) {
+      lines.push('<p>メールアドレスの形式が不正なためスキップ：' + formatNumber(result.accountsSkipped) + ' 件</p>');
+    }
+    if (result.accountsMasterDowngraded > 0) {
+      lines.push(
+        '<p class="text-amber-700"><i class="fa-solid fa-triangle-exclamation"></i> ' +
+        formatNumber(result.accountsMasterDowngraded) +
+        ' 件はCSVの権限欄が「マスタ権限」相当でしたが、安全のため自動では付与せず「社員」として登録しました。' +
+        '必要な場合は「権限管理（スタッフ権限）」から手動でマスタ権限に変更してください。</p>'
+      );
+    }
+    if (result.roleRawTally) {
+      var tallyKeys = Object.keys(result.roleRawTally);
+      if (tallyKeys.length > 0) {
+        var tallyRows = tallyKeys.map(function (k) {
+          return '<tr><td class="pr-3">' + escapeHtml(k) + '</td><td class="text-right">' + formatNumber(result.roleRawTally[k]) + ' 件</td></tr>';
+        }).join('');
+        lines.push(
+          '<details class="mt-1"><summary class="text-xs text-slate-500 cursor-pointer">CSVの権限欄の内訳を見る</summary>' +
+          '<table class="text-xs mt-1"><tbody>' + tallyRows + '</tbody></table></details>'
+        );
+      }
+    }
+    lines.push(
+      '<p class="text-slate-500">既存のGoogleアカウントは、マスタ権限を除き、CSVの権限欄（役職名）に合わせて権限も同期します' +
+      '（権限欄が空欄の行は変更しません）。所属が変わった場合は既存行を変更せず新しい行を追加します。</p>'
+    );
+  } else {
+    lines.push('<p class="text-slate-500">CSVにGoogleアカウント（メールアドレス）の列が見つからなかったため、スタッフ権限への登録は行っていません。</p>');
+  }
+  box.innerHTML = lines.join('');
+  box.classList.remove('hidden');
+  showToast('人事データCSVを取り込みました（担当者マスタ：新規 ' + result.added + ' 件・更新 ' + result.updated + ' 件）', 'success');
+  renderStaffNameList(result.list);
+  if (result.accountsDetected && result.staffAccessList) {
+    renderStaffList(result.staffAccessList);
+  }
+  document.getElementById('btn-submit-staff-name-import').disabled = false;
+}
+
+// ============================================================================
+// CSVインポート
+// ============================================================================
+
+var csvSelectedText = null;
+var csvSelectedFileName = null;
+var csvProgressTimer = null;
+
+function openCsvModal() {
+  resetCsvModal_();
+  document.getElementById('csv-import-modal').classList.remove('hidden');
+  document.getElementById('csv-import-modal').classList.add('flex');
+}
+function closeCsvModal() {
+  document.getElementById('csv-import-modal').classList.add('hidden');
+  document.getElementById('csv-import-modal').classList.remove('flex');
+  stopCsvProgress_();
+}
+function resetCsvModal_() {
+  STATE.csvPicker.reset();
+  document.getElementById('csv-import-result').classList.add('hidden');
+  document.getElementById('csv-progress').classList.add('hidden');
+}
+
+function submitCsvImport() {
+  if (!csvSelectedText) return;
+  if (!confirmDiscardPending_('CSVを取り込む（取込後にデータを読み込み直す）')) return;
+  document.getElementById('btn-submit-csv').disabled = true;
+  startCsvProgress_();
+  google.script.run
+    .withSuccessHandler(function (result) { stopCsvProgress_(); onCsvImportSuccess(result); })
+    .withFailureHandler(function (err) {
+      stopCsvProgress_();
+      document.getElementById('btn-submit-csv').disabled = false;
+      onServerError(err);
+    })
+    .importCsv(csvSelectedText, csvSelectedFileName);
+}
+
+function startCsvProgress_() {
+  var box = document.getElementById('csv-progress');
+  var bar = document.getElementById('csv-progress-bar');
+  var timeLabel = document.getElementById('csv-progress-time');
+  box.classList.remove('hidden');
+  var elapsed = 0;
+  bar.style.width = '5%';
+  csvProgressTimer = setInterval(function () {
+    elapsed++;
+    timeLabel.textContent = elapsed + '秒';
+    bar.style.width = Math.min(90, 5 + elapsed * 4) + '%';
+  }, 1000);
+}
+function stopCsvProgress_() {
+  if (csvProgressTimer) { clearInterval(csvProgressTimer); csvProgressTimer = null; }
+  document.getElementById('csv-progress-bar').style.width = '100%';
+}
+
+function onCsvImportSuccess(result) {
+  var box = document.getElementById('csv-import-result');
+  var lines = [
+    '<p class="font-semibold text-emerald-700"><i class="fa-solid fa-circle-check"></i> 取り込みが完了しました</p>',
+    '<p>CSVのデータ行数：' + formatNumber(result.csvDataRows) + ' 行</p>',
+    '<p>新規登録：<b>' + formatNumber(result.imported) + '</b> 件</p>',
+    '<p>重複のためスキップ：' + formatNumber(result.skippedDuplicate) + ' 件</p>',
+    (result.skippedArchived > 0 ? '<p>アーカイブ済みのためスキップ：' + formatNumber(result.skippedArchived) + ' 件</p>' : ''),
+    '<p>空欄行のためスキップ：' + formatNumber(result.skippedBlank) + ' 件</p>',
+    '<p>取込後の合計件数：' + formatNumber(result.totalRows) + ' 件</p>'
+  ];
+  if (result.missingColumns && result.missingColumns.length > 0) {
+    lines.push('<p class="text-amber-600 mt-1"><i class="fa-solid fa-triangle-exclamation"></i> CSVから見つからなかった項目：' +
+      result.missingColumns.map(escapeHtml).join('、') + '（該当セルは空欄として取り込みました）</p>');
+  }
+  // 日付・金額などとして読めず、空欄で取り込んだ値があれば知らせる（黙って空欄にしない）。
+  [['date', '日付として読めない値'], ['number', '数値として読めない値']].forEach(function (p) {
+    var u = result.unreadable && result.unreadable[p[0]];
+    if (u && u.count > 0) {
+      lines.push('<p class="text-amber-700 mt-1"><i class="fa-solid fa-triangle-exclamation"></i> ' + p[1] + '：' + formatNumber(u.count) +
+        ' 件（空欄として取り込みました。例：' + u.examples.map(escapeHtml).join('、') + '）</p>');
+    }
+  });
+  // 日付の後ろに時刻以外の文字が付いていた値（日付の部分だけを取り込んだもの）。
+  [['dateExtra', '日付の後ろに余分な文字がある値']].forEach(function (p) {
+    var u = result.unreadable && result.unreadable[p[0]];
+    if (u && u.count > 0) {
+      lines.push('<p class="text-amber-700 mt-1"><i class="fa-solid fa-triangle-exclamation"></i> ' + p[1] + '：' + formatNumber(u.count) +
+        ' 件（日付の部分だけを取り込みました。例：' + u.examples.map(escapeHtml).join('、') + '）</p>');
+    }
+  });
+  box.innerHTML = lines.join('');
+  box.classList.remove('hidden');
+  showToast('CSVを取り込みました（新規 ' + result.imported + ' 件）', 'success');
+  boot();
+}
+
+// ============================================================================
+// イベント結線・タブ切り替え
+// ============================================================================
+
+function bindStaticEvents() {
+  document.querySelectorAll('.tab-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () { switchTab(btn.getAttribute('data-tab')); });
+  });
+
+  // 再読込ボタンは、未保存の変更がある場合に確認してから読み込み直す（boot()は確認しない）。
+  document.getElementById('btn-refresh').addEventListener('click', function () { requestDataWindow_(buildRangeOptionFromUi_()); });
+  document.getElementById('btn-run-setup').addEventListener('click', runSetup);
+
+  // 表示期間（データが増えるほど画面が重くなるのを防ぐための絞り込み）
+  document.getElementById('data-window-mode').addEventListener('change', onDataWindowModeChange_);
+  document.getElementById('btn-apply-data-window').addEventListener('click', function () {
+    requestDataWindow_(buildRangeOptionFromUi_());
+  });
+  document.getElementById('data-window-include-archive').addEventListener('change', function () {
+    requestDataWindow_(buildRangeOptionFromUi_());
+  });
+
+  // 分析ダッシュボードタブのフィルタ
+  ['dash-filter-area', 'dash-filter-office', 'dash-filter-category', 'dash-filter-tourbrand', 'dash-filter-destination', 'dash-filter-date-field'].forEach(function (id) {
+    document.getElementById(id).addEventListener('change', applyDashFilters);
+  });
+  document.getElementById('dash-filter-date-from').addEventListener('change', applyDashFilters);
+  document.getElementById('dash-filter-date-to').addEventListener('change', applyDashFilters);
+  document.getElementById('btn-clear-dash-filter').addEventListener('click', clearDashFilters);
+
+  document.querySelectorAll('#tab-panel-dashboard [data-sort]').forEach(function (th) {
+    th.addEventListener('click', function () {
+      var key = th.getAttribute('data-sort');
+      if (STATE.rankingSortKey === key) STATE.rankingSortDir *= -1; else { STATE.rankingSortKey = key; STATE.rankingSortDir = -1; }
+      renderRanking();
+    });
+  });
+
+  // 予約データ一覧タブのフィルタ
+  ['data-filter-area', 'data-filter-office'].forEach(function (id) {
+    document.getElementById(id).addEventListener('change', function () {
+      updateDataOfficeStaffFilterOptions_();
+      applyDataFilters();
+    });
+  });
+  ['data-filter-staff',
+    'data-filter-insurance-status', 'data-filter-wifi-status', 'data-filter-tavica-status', 'data-filter-cansapo-status'].forEach(function (id) {
+    document.getElementById(id).addEventListener('change', applyDataFilters);
+  });
+  document.getElementById('data-filter-date-from').addEventListener('change', applyDataFilters);
+  document.getElementById('data-filter-date-to').addEventListener('change', applyDataFilters);
+  document.getElementById('btn-clear-data-filter').addEventListener('click', clearDataFilters);
+
+  document.getElementById('btn-prev-page').addEventListener('click', function () { STATE.dataPage--; renderDataTable(); });
+  document.getElementById('btn-next-page').addEventListener('click', function () { STATE.dataPage++; renderDataTable(); });
+  bindDataTableEditEvents_();
+  bindBulkEditEvents_();
+  bindPendingChangesEvents_();
+
+  document.getElementById('btn-open-csv-modal').addEventListener('click', openCsvModal);
+  document.getElementById('btn-close-csv-modal').addEventListener('click', closeCsvModal);
+  document.getElementById('btn-cancel-csv-modal').addEventListener('click', closeCsvModal);
+  STATE.csvPicker = bindSpreadsheetPicker_('reservation', {
+    file: 'csv-file-input', passwordBox: 'csv-password-box', passwordInput: 'csv-password-input',
+    unlockBtn: 'btn-unlock-csv-xlsx', summary: 'csv-file-summary', submit: 'btn-submit-csv'
+  }, function (text, fileName) {
+    csvSelectedText = text;
+    csvSelectedFileName = fileName;
+  }, function () {
+    csvSelectedText = null;
+    csvSelectedFileName = null;
+  });
+  document.getElementById('btn-submit-csv').addEventListener('click', submitCsvImport);
+
+  // 個人別サマリータブ
+  document.getElementById('personal-search').addEventListener('input', debounce_(renderPersonalTab, 200));
+  document.querySelectorAll('#tab-panel-personal [data-sort]').forEach(function (th) {
+    th.addEventListener('click', function () {
+      var key = th.getAttribute('data-sort');
+      if (STATE.personalSortKey === key) STATE.personalSortDir *= -1; else { STATE.personalSortKey = key; STATE.personalSortDir = -1; }
+      renderPersonalTab();
+    });
+  });
+
+  // データ管理タブ
+  bindColumnOrderEvents_();
+  document.getElementById('btn-remove-duplicates').addEventListener('click', removeDuplicates);
+  document.getElementById('btn-clear-all-data').addEventListener('click', clearAllData);
+  document.getElementById('btn-preview-archive').addEventListener('click', previewArchive);
+  document.getElementById('btn-run-archive').addEventListener('click', runArchive);
+  bindStaffEvents_();
+  bindStaffNameEvents_();
+  bindStaffNameImportEvents_();
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-tab') === tab); });
+  document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.toggle('hidden', p.id !== 'tab-panel-' + tab); });
+  STATE.activeTab = tab;
+  hideHoverTooltip_();
+  // 非表示の間に編集が行われて「汚れている」タブへ切り替えた時だけ、ここで初めて再描画する。
+  if (tab === 'dashboard' && STATE.dashDirty) { applyDashFilters(); STATE.dashDirty = false; }
+  if (tab === 'personal' && STATE.personalDirty) { renderPersonalTab(); STATE.personalDirty = false; }
+}
+
+// ============================================================================
+// 共通ユーティリティ
+// ============================================================================
+
+function formatNumber(n) { return Number(n || 0).toLocaleString('ja-JP'); }
+function formatDateTime(iso) {
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.getFullYear() + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + String(d.getDate()).padStart(2, '0') +
+    ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+function debounce_(fn, wait) {
+  var t = null;
+  return function () {
+    var args = arguments;
+    clearTimeout(t);
+    t = setTimeout(function () { fn.apply(null, args); }, wait);
+  };
+}
+
+function showToast(message, type) {
+  var container = document.getElementById('toast-container');
+  var color = type === 'error' ? 'bg-red-600' : (type === 'success' ? 'bg-emerald-600' : 'bg-slate-700');
+  var icon = type === 'error' ? 'fa-circle-exclamation' : (type === 'success' ? 'fa-circle-check' : 'fa-circle-info');
+  var toast = document.createElement('div');
+  toast.className = 'toast ' + color + ' text-white text-sm rounded-lg shadow-lg px-4 py-3 flex items-start gap-2';
+  toast.innerHTML = '<i class="fa-solid ' + icon + ' mt-0.5"></i><span>' + escapeHtml(message) + '</span>';
+  container.appendChild(toast);
+  setTimeout(function () {
+    toast.style.transition = 'opacity .3s ease';
+    toast.style.opacity = '0';
+    setTimeout(function () { toast.remove(); }, 300);
+  }, 4000);
+}
+</script>

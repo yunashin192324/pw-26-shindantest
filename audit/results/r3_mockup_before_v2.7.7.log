@@ -1,0 +1,9 @@
+FAIL: index.html：個人別サマリーを担当者の氏名「佐藤 一郎」で検索すると該当行が出る
+FAIL: index.html：「〇」で数量が空欄の変更は保存されない
+FAIL: index.html：数量に「-3」を入れても受け付けない（前=3 後=-3）
+PASS: index.html：画面のエラーなし []
+FAIL: index-mobile.html：個人別サマリーを担当者の氏名「佐藤 一郎」で検索すると該当行が出る
+FAIL: index-mobile.html：「〇」で数量が空欄の変更は保存されない
+FAIL: index-mobile.html：数量に「-3」を入れても受け付けない（前=3 後=-3）
+PASS: index-mobile.html：画面のエラーなし []
+TOTAL PASS=2 FAIL=6

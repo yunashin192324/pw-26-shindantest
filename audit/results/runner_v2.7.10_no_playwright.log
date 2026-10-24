@@ -1,0 +1,41 @@
+注意: Playwright が見つかりません。画面を使う試験は実行できず「未実施」になります（NODE_PATH を確認してください）。
+== tests/r1_archive_text.js
+TOTAL PASS=3 FAIL=0
+== tests/r1_authz_matrix.js
+TOTAL PASS=100 FAIL=0
+== tests/r1_double_submit.js
+   未実施（画面を使う試験。Playwright が無い）
+== tests/r1_rewrite_text.js
+TOTAL PASS=5 FAIL=0
+== tests/r2_dataflow_fuzz.js
+   未実施（画面を使う試験。Playwright が無い）
+== tests/r2_edit_columns.js
+TOTAL PASS=2 FAIL=0
+== tests/r2_edit_scope.js
+TOTAL PASS=3 FAIL=0
+== tests/r2_fault_injection.js
+TOTAL PASS=20 FAIL=0
+== tests/r2_kpi_oracle.js
+   未実施（画面を使う試験。Playwright が無い）
+== tests/r2_service_faults.js
+TOTAL PASS=10 FAIL=0
+== tests/r2_state_combo.js
+   未実施（画面を使う試験。Playwright が無い）
+== tests/r3_external_review.js
+TOTAL PASS=33 FAIL=0
+== tests/r3_mockup.js
+   未実施（画面を使う試験。Playwright が無い）
+== tests/r4_column_order.js
+   未実施（画面を使う試験。Playwright が無い）
+== tests/r5_external_review2.js
+   未実施（画面を使う試験。Playwright が無い）
+== tests/repro_dates.js
+   R1 出発予定日=null 売上=1000
+   R2 出発予定日=null 売上=null
+   R3 出発予定日=null 売上=null
+   R4 出発予定日=2024-02-29 売上=null
+   R5 出発予定日=2026-03-05 売上=null
+TOTAL PASS=6 FAIL=0
+
+合格 9 本／失敗 0 本／未実施 7 本
+未実施: tests/r1_double_submit.js tests/r2_dataflow_fuzz.js tests/r2_kpi_oracle.js tests/r2_state_combo.js tests/r3_mockup.js tests/r4_column_order.js tests/r5_external_review2.js

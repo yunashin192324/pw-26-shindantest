@@ -1,0 +1,194 @@
+== tests/r1_archive_text.js
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Module.require (node:internal/modules/cjs/loader:1463:12)
+    at require (node:internal/modules/helpers:147:16)
+    at Object.<anonymous> (（作業フォルダ）/fresh279/audit/harness/uh_cur.js:5:22)
+    at Module._compile (node:internal/modules/cjs/loader:1705:14) {
+    '（作業フォルダ）/fresh279/audit/harness/uh_cur.js',
+    '（作業フォルダ）/fresh279/audit/tests/r1_archive_text.js'
+== tests/r1_authz_matrix.js
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Module.require (node:internal/modules/cjs/loader:1463:12)
+    at require (node:internal/modules/helpers:147:16)
+    at Object.<anonymous> (（作業フォルダ）/fresh279/audit/harness/uh_cur.js:5:22)
+    at Module._compile (node:internal/modules/cjs/loader:1705:14) {
+    '（作業フォルダ）/fresh279/audit/harness/uh_cur.js',
+    '（作業フォルダ）/fresh279/audit/tests/r1_authz_matrix.js'
+== tests/r1_double_submit.js
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Module.require (node:internal/modules/cjs/loader:1463:12)
+    at require (node:internal/modules/helpers:147:16)
+    at Object.<anonymous> (（作業フォルダ）/fresh279/audit/harness/uh_cur.js:5:22)
+    at Module._compile (node:internal/modules/cjs/loader:1705:14) {
+    '（作業フォルダ）/fresh279/audit/harness/uh_cur.js',
+    '（作業フォルダ）/fresh279/audit/tests/r1_double_submit.js'
+== tests/r1_rewrite_text.js
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Module.require (node:internal/modules/cjs/loader:1463:12)
+    at require (node:internal/modules/helpers:147:16)
+    at Object.<anonymous> (（作業フォルダ）/fresh279/audit/harness/uh_cur.js:5:22)
+    at Module._compile (node:internal/modules/cjs/loader:1705:14) {
+    '（作業フォルダ）/fresh279/audit/harness/uh_cur.js',
+    '（作業フォルダ）/fresh279/audit/tests/r1_rewrite_text.js'
+== tests/r2_dataflow_fuzz.js
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Module.require (node:internal/modules/cjs/loader:1463:12)
+    at require (node:internal/modules/helpers:147:16)
+    at Object.<anonymous> (（作業フォルダ）/fresh279/audit/harness/uh_cur.js:5:22)
+    at Module._compile (node:internal/modules/cjs/loader:1705:14) {
+    '（作業フォルダ）/fresh279/audit/harness/uh_cur.js',
+    '（作業フォルダ）/fresh279/audit/tests/r2_dataflow_fuzz.js'
+== tests/r2_edit_columns.js
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Module.require (node:internal/modules/cjs/loader:1463:12)
+    at require (node:internal/modules/helpers:147:16)
+    at Object.<anonymous> (（作業フォルダ）/fresh279/audit/harness/uh_cur.js:5:22)
+    at Module._compile (node:internal/modules/cjs/loader:1705:14) {
+    '（作業フォルダ）/fresh279/audit/harness/uh_cur.js',
+    '（作業フォルダ）/fresh279/audit/tests/r2_edit_columns.js'
+== tests/r2_edit_scope.js
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Module.require (node:internal/modules/cjs/loader:1463:12)
+    at require (node:internal/modules/helpers:147:16)
+    at Object.<anonymous> (（作業フォルダ）/fresh279/audit/harness/uh_cur.js:5:22)
+    at Module._compile (node:internal/modules/cjs/loader:1705:14) {
+    '（作業フォルダ）/fresh279/audit/harness/uh_cur.js',
+    '（作業フォルダ）/fresh279/audit/tests/r2_edit_scope.js'
+== tests/r2_fault_injection.js
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Module.require (node:internal/modules/cjs/loader:1463:12)
+    at require (node:internal/modules/helpers:147:16)
+    at Object.<anonymous> (（作業フォルダ）/fresh279/audit/harness/uh_cur.js:5:22)
+    at Module._compile (node:internal/modules/cjs/loader:1705:14) {
+    '（作業フォルダ）/fresh279/audit/harness/uh_cur.js',
+    '（作業フォルダ）/fresh279/audit/tests/r2_fault_injection.js'
+== tests/r2_kpi_oracle.js
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Module.require (node:internal/modules/cjs/loader:1463:12)
+    at require (node:internal/modules/helpers:147:16)
+    at Object.<anonymous> (（作業フォルダ）/fresh279/audit/harness/uh_cur.js:5:22)
+    at Module._compile (node:internal/modules/cjs/loader:1705:14) {
+    '（作業フォルダ）/fresh279/audit/harness/uh_cur.js',
+    '（作業フォルダ）/fresh279/audit/tests/r2_kpi_oracle.js'
+== tests/r2_service_faults.js
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Module.require (node:internal/modules/cjs/loader:1463:12)
+    at require (node:internal/modules/helpers:147:16)
+    at Object.<anonymous> (（作業フォルダ）/fresh279/audit/harness/uh_cur.js:5:22)
+    at Module._compile (node:internal/modules/cjs/loader:1705:14) {
+    '（作業フォルダ）/fresh279/audit/harness/uh_cur.js',
+    '（作業フォルダ）/fresh279/audit/tests/r2_service_faults.js'
+== tests/r2_state_combo.js
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Module.require (node:internal/modules/cjs/loader:1463:12)
+    at require (node:internal/modules/helpers:147:16)
+    at Object.<anonymous> (（作業フォルダ）/fresh279/audit/harness/uh_cur.js:5:22)
+    at Module._compile (node:internal/modules/cjs/loader:1705:14) {
+    '（作業フォルダ）/fresh279/audit/harness/uh_cur.js',
+    '（作業フォルダ）/fresh279/audit/tests/r2_state_combo.js'
+== tests/r3_external_review.js
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Module.require (node:internal/modules/cjs/loader:1463:12)
+    at require (node:internal/modules/helpers:147:16)
+    at Object.<anonymous> (（作業フォルダ）/fresh279/audit/harness/uh_cur.js:5:22)
+    at Module._compile (node:internal/modules/cjs/loader:1705:14) {
+    '（作業フォルダ）/fresh279/audit/harness/uh_cur.js',
+    '（作業フォルダ）/fresh279/audit/tests/r3_external_review.js'
+== tests/r3_mockup.js
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Module.require (node:internal/modules/cjs/loader:1463:12)
+    at require (node:internal/modules/helpers:147:16)
+    at Object.<anonymous> (（作業フォルダ）/fresh279/audit/tests/r3_mockup.js:4:22)
+    at Module._compile (node:internal/modules/cjs/loader:1705:14) {
+    '（作業フォルダ）/fresh279/audit/tests/r3_mockup.js'
+== tests/r4_column_order.js
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Module.require (node:internal/modules/cjs/loader:1463:12)
+    at require (node:internal/modules/helpers:147:16)
+    at Object.<anonymous> (（作業フォルダ）/fresh279/audit/harness/uh_cur.js:5:22)
+    at Module._compile (node:internal/modules/cjs/loader:1705:14) {
+    '（作業フォルダ）/fresh279/audit/harness/uh_cur.js',
+    '（作業フォルダ）/fresh279/audit/tests/r4_column_order.js'
+== tests/repro_dates.js
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Module.require (node:internal/modules/cjs/loader:1463:12)
+    at require (node:internal/modules/helpers:147:16)
+    at Object.<anonymous> (（作業フォルダ）/fresh279/audit/harness/uh_cur.js:5:22)
+    at Module._compile (node:internal/modules/cjs/loader:1705:14) {
+    '（作業フォルダ）/fresh279/audit/harness/uh_cur.js',
+    '（作業フォルダ）/fresh279/audit/tests/repro_dates.js'
