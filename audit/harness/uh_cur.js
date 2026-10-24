@@ -2,7 +2,19 @@
 const fs = require('fs');
 const vm = require('vm');
 const path = require('path');
-const { chromium } = require('playwright');
+
+// Playwright（画面を動かす部品）は、画面を使う試験のときだけ読み込む（サーバーだけの試験は Playwright が無くても動くように）。
+function loadChromium() {
+  try { return require('playwright').chromium; } catch (e) {
+    throw new Error('Playwright が見つかりません（画面を使う試験には Playwright と Chromium が必要です）: ' + e.message);
+  }
+}
+// Chromium の場所：環境変数 CHROMIUM_PATH があればそれ、この作業環境の決まった場所にあればそれ、無ければ Playwright の既定。
+function chromiumLaunchOptions() {
+  const p = process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+  if (process.env.CHROMIUM_PATH && !fs.existsSync(p)) throw new Error('CHROMIUM_PATH の Chromium が見つかりません: ' + p);
+  return fs.existsSync(p) ? { executablePath: p } : {};
+}
 
 const APP = process.env.APP_DIR || path.join(__dirname, '..', '..', 'reservation-dashboard-gas') + path.sep;
 
@@ -63,7 +75,7 @@ function buildPage(outPath) {
 }
 
 async function launch(backend, htmlPath) {
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const browser = await loadChromium().launch(chromiumLaunchOptions());
   const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
   page.__calls = [];
   await page.exposeFunction('__gasCall', (name, argsJson) => {
@@ -91,4 +103,4 @@ async function launch(backend, htmlPath) {
   return { browser, page };
 }
 
-module.exports = { createBackend, buildPage, launch };
+module.exports = { createBackend, buildPage, launch, loadChromium, chromiumLaunchOptions };

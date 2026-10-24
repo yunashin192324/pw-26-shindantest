@@ -403,7 +403,7 @@ select[multiple]{height:88px; font-size:13px;}
         <div id="admin-status" style="font-size:12.5px; color:var(--slate-600); line-height:1.7;"></div>
       </div>
 
-      <div class="card">
+      <div class="card" id="column-order-card">
         <h2>↕️ 列の並び順</h2>
         <p class="muted" style="margin-bottom:8px;">▲▼で並び替えると「予約データ一覧」のカード内の表示順が変わります。</p>
         <div class="col-order-list" id="column-order-list"></div>
@@ -829,6 +829,9 @@ function applyRoleUi(){
   var isMaster = STATE.role === 'マスタ権限';
   document.getElementById('btn-open-csv-modal').classList.toggle('hidden', !isMaster);
   document.getElementById('master-only-admin').classList.toggle('hidden', !isMaster);
+  // 本体アプリと同じく、列の並び順（全員に反映される設定）はマスタ権限だけが変更できる
+  var colCard = document.getElementById('column-order-card');
+  if (colCard) colCard.classList.toggle('hidden', !isMaster);
 }
 function onRoleChanged(){
   STATE.role = document.getElementById('role-switcher').value;
@@ -1501,6 +1504,7 @@ function applyBulkField(field){
   rowIndexes.forEach(function(ri){
     var row = STATE.rows.find(function(r){ return r.rowIndex === ri; });
     if (row) row[field] = normalized;
+    delete STATE.pendingChanges[pendingKey(ri, field)]; // 本体アプリと同じく、一括登録した項目の未保存の変更は消す（「取り消す」で戻らないように）
   });
   afterCellSaved();
   showBulkEditResult(rowIndexes.length);
@@ -1527,6 +1531,7 @@ function applyBulkAncillary(itemKey){
   rowIndexes.forEach(function(ri){
     var row = STATE.rows.find(function(r){ return r.rowIndex === ri; });
     if (!row) return;
+    delete STATE.pendingChanges[pendingKey(ri, 'ancillary:' + itemKey)]; // 本体アプリと同じく、一括登録した項目の未保存の変更は消す
     row[item.statusKey] = status;
     if (status === '×'){ row[item.qtyKey] = 0; row[item.reasonKey] = reason.trim(); }
     else if (isAncillaryQtyEditable(status)){ row[item.qtyKey] = qty === '' ? null : Math.floor(Number(qty)); row[item.reasonKey] = ''; }
@@ -1765,6 +1770,9 @@ function bindStaffNameEvents(){
       name: document.getElementById('staff-name-form-name').value.trim()
     };
     if (!payload.code || !payload.name){ showToast('担当者コードと氏名を入力してください。', 'error'); return; }
+    // 本体アプリと同じく、同じ担当者コードを2行にしない
+    var dupCode = STATE.staffNameList.find(function(s){ return s.code === payload.code && s.rowIndex !== Number(rowIndex || 0); });
+    if (dupCode){ showToast('担当者コード「' + payload.code + '」は既に登録されています（氏名：' + dupCode.name + '）。', 'error'); return; }
     if (rowIndex){
       var target = STATE.staffNameList.find(function(s){ return s.rowIndex === Number(rowIndex); });
       if (target) Object.assign(target, payload);
@@ -1855,8 +1863,11 @@ function detectStaffCsvHeaderRow(matrix){
 }
 /** CSVの「権限」欄の表記を権限（社員／所長・チーフ／AL）へ変換する。安全のため、CSVの値がマスタ相当でも自動ではマスタ権限にしない。 */
 function mapCsvRoleToAppRole(raw){
-  var s = String(raw || '').trim();
+  // 本体アプリと同じく、半角カタカナ・全角英数字の違い（NFKC）と、区切りの「・」や空白の違いをそろえてから判定する
+  var s = String(raw || '').normalize('NFKC').trim();
   if (!s) return { role: '社員', downgraded: false };
+  var compact = s.replace(/[\s・･\-－_／/]/g, '');
+  if (compact.indexOf('エリアリーダー') !== -1) return { role: 'AL', downgraded: false };
   if (['M0','M1','M2','M3','契約社員','嘱託社員','アルバイト'].indexOf(s) !== -1) return { role: '社員', downgraded: false };
   if (['エグゼクティブコンサルタント・チーフ','チーフ','所長','副所長','担当リーダー','大型店所長'].indexOf(s) !== -1) return { role: '所長・チーフ', downgraded: false };
   if (s === 'エリアリーダー') return { role: 'AL', downgraded: false };
@@ -1993,15 +2004,18 @@ function finishStaffNameImportDemo(){
       var existing = existingByEmail[email];
       if (existing){
         var affiliationChanged = existing.office !== acc.office || existing.area !== acc.area;
+        // 本体アプリと同じく、権限はCSVの役職に合わせる（マスタ権限は変えない・役職が空欄なら変えない）
+        var syncedRole = (acc.roleRaw && existing.role !== 'マスタ権限') ? mapCsvRoleToAppRole(acc.roleRaw).role : existing.role;
         if (affiliationChanged){
           // 所属が変わった場合は既存行をそのまま残し、同じ権限を引き継いだ新しい行を追加する（履歴を残すため）。
           var rowIndex = Math.max.apply(null, STATE.staffList.map(function(s){return s.rowIndex;}).concat([1])) + 1;
-          var created = { rowIndex: rowIndex, email: acc.email, name: acc.name, office: acc.office, area: acc.area, role: existing.role };
+          var created = { rowIndex: rowIndex, email: acc.email, name: acc.name, office: acc.office, area: acc.area, role: syncedRole };
           STATE.staffList.push(created);
           existingByEmail[email] = created;
           accountsAffiliationChanged++;
-        } else if (existing.name !== acc.name){
+        } else if (existing.name !== acc.name || existing.role !== syncedRole){
           existing.name = acc.name;
+          existing.role = syncedRole;
           accountsUpdated++;
         }
       } else {

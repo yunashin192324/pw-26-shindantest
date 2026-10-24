@@ -24,7 +24,7 @@ var SHEET_NAME = '予約データ';
 var STAFF_SHEET_NAME = 'スタッフ権限';
 var STAFF_NAME_SHEET_NAME = '担当者マスタ';
 var TIMEZONE = 'Asia/Tokyo';
-var SERVER_VERSION = '2.7.9';
+var SERVER_VERSION = '2.7.10';
 
 // 予約番号（チャレンジ番号）は半角英数字ちょうど11桁（Javascript.htmlのCHALLENGE_RECORD_BASE_URL判定と同じ桁数）。
 // 数字だけの予約番号（例：01234567890）はGoogleスプレッドシート上で数値として誤認識され、
@@ -100,7 +100,7 @@ var ANCILLARY_ITEMS = [
   { key: 'cansapo',    label: 'キャンサポ', statusKey: 'cansapoStatus',  qtyKey: 'cansapoQty',    reasonKey: 'cansapoReason' },
   { key: 'tavica',     label: 'TAViCA',    statusKey: 'tavicaStatus',    qtyKey: 'tavicaQty',     reasonKey: 'tavicaReason' }
 ];
-var ANCILLARY_ITEM_BY_KEY = {};
+var ANCILLARY_ITEM_BY_KEY = Object.create(null); // 「toString」などの名前で引いても何も返さないように
 ANCILLARY_ITEMS.forEach(function (a) { ANCILLARY_ITEM_BY_KEY[a.key] = a; });
 var ANCILLARY_ITEM_BY_STATUS_KEY = {};
 ANCILLARY_ITEMS.forEach(function (a) { ANCILLARY_ITEM_BY_STATUS_KEY[a.statusKey] = a; });
@@ -393,7 +393,9 @@ function affiliationMatches_(staffValue, rowValue, kindIndex) {
   var ka = affiliationKey_(a), kb = affiliationKey_(b);
   if (!ka || ka !== kb) return false;
   var ca = affiliationCode_(a), cb = affiliationCode_(b);
-  if (ca && cb && ca !== cb) return false;
+  // 双方に店舗・エリアのコードがあれば、コードの一致で決める（「717:イオン店」と「717:イオン」は、
+  // 同名で別コードの「718:イオン」があっても同じ店舗）。どちらかにコードが無い場合だけ、紛らわしい表記を一致させない。
+  if (ca && cb) return ca === cb;
   if (kindIndex && kindIndex.ambiguous[kb]) return false;
   return true;
 }
@@ -541,7 +543,7 @@ function personNameKey_(name) {
  */
 function voteAffiliationLinks_(snap) {
   var cols = snap.cols;
-  var codesByName = {};
+  var codesByName = Object.create(null); // 氏名が「toString」などでも壊れないように
   var nameMap = getStaffNameMap_();
   Object.keys(nameMap).forEach(function (code) {
     var k = personNameKey_(nameMap[code]);
@@ -706,6 +708,7 @@ function autoLinkAffiliations_(snap) {
  */
 function addAffiliationAliases(items) {
   assertMaster_();
+  if (!Array.isArray(items)) throw new Error('登録する内容の指定が正しくありません。');
   var sheet = getDataSheet_();
   var snap = loadSnapshot_(sheet, getDataVersion_(), sheet.getLastRow(), {}).snap;
   var known = { office: {}, area: {} };
@@ -1402,6 +1405,11 @@ function getAffiliationDiagnostics() {
     } finally {
       lock.releaseLock();
     }
+  } else {
+    // 他の人が書き込み中で自動の対応づけ（書き込み）ができない場合も、集計と案（読み取りだけ）は出す。
+    var dataValues = { office: distinctOf_(loaded.snap.cols.office), area: distinctOf_(loaded.snap.cols.area) };
+    votes = voteAffiliationLinks_(loaded.snap);
+    votes.forEach(function (v) { v.proposal = proposeAffiliationLink_(v, dataValues[v.kind]); });
   }
   var voteByKey = {};
   votes.forEach(function (v) { voteByKey[v.kind + '|' + affiliationKey_(v.from)] = v; });
@@ -2183,6 +2191,7 @@ function applyAncillaryInMemory_(snap, rowIndex, item, statusRaw, qtyRaw, reason
  * 1件でも編集できない行があってもエラーで全体を止めず、成功した行数とエラー内容を返す。
  */
 function bulkUpdateCellValue(rowIndexes, columnKey, value, rowTokens) {
+  if (!Array.isArray(rowIndexes)) throw new Error('対象の行の指定が正しくありません。');
   if (columnKey !== 'chkDate' && columnKey !== 'memo') {
     throw new Error('この項目は一括登録できません。');
   }
@@ -2213,6 +2222,7 @@ function bulkUpdateCellValue(rowIndexes, columnKey, value, rowTokens) {
  * 一括登録する。ステータスによる数量・理由の扱いは applyAncillaryInMemory_ を参照。
  */
 function bulkSetAncillaryStatus(rowIndexes, itemKey, status, bulkQty, reason, rowTokens) {
+  if (!Array.isArray(rowIndexes)) throw new Error('対象の行の指定が正しくありません。');
   var item = ANCILLARY_ITEM_BY_KEY[itemKey];
   if (!item) throw new Error('付帯商品の指定が不正です。');
   // 値そのものの誤り（不正な数量・ステータス）は、行ごとのエラーではなく全体のエラーとして先に返す。
@@ -2254,6 +2264,7 @@ function bulkSetAncillaryStatus(rowIndexes, itemKey, status, bulkQty, reason, ro
  * rowIndex・kind・columnKey/itemKey を含める（失敗した変更だけを「未保存」のまま残すため）。
  */
 function batchUpdateCells(changes) {
+  if (!Array.isArray(changes)) throw new Error('保存する内容の指定が正しくありません。');
   return withDataWriteLock_(function () {
     var ctx = getCurrentUserContext_();
     var sheet = getDataSheet_();
@@ -2747,7 +2758,7 @@ function updateStaffAccess(rowIndex, email, name, office, area, role, expectedEm
   return withScriptLock_(function () {
   var sheet = getOrCreateStaffSheet_();
   rowIndex = Number(rowIndex);
-  if (!rowIndex || rowIndex < 2 || rowIndex > sheet.getLastRow()) {
+  if (!rowIndex || Math.floor(rowIndex) !== rowIndex || rowIndex < 2 || rowIndex > sheet.getLastRow()) {
     throw new Error('対象の行が見つかりません。画面を再読込してください。');
   }
   assertRowStillMatches_(sheet, rowIndex, expectedEmail, true);
@@ -2796,7 +2807,7 @@ function deleteStaffAccess(rowIndex, expectedEmail) {
   return withScriptLock_(function () {
   var sheet = getOrCreateStaffSheet_();
   rowIndex = Number(rowIndex);
-  if (!rowIndex || rowIndex < 2 || rowIndex > sheet.getLastRow()) {
+  if (!rowIndex || Math.floor(rowIndex) !== rowIndex || rowIndex < 2 || rowIndex > sheet.getLastRow()) {
     throw new Error('対象の行が見つかりません。画面を再読込してください。');
   }
   assertRowStillMatches_(sheet, rowIndex, expectedEmail, true);
@@ -2878,7 +2889,7 @@ function updateStaffName(rowIndex, code, name, expectedCode) {
   return withScriptLock_(function () {
   var sheet = getOrCreateStaffNameSheet_();
   rowIndex = Number(rowIndex);
-  if (!rowIndex || rowIndex < 2 || rowIndex > sheet.getLastRow()) {
+  if (!rowIndex || Math.floor(rowIndex) !== rowIndex || rowIndex < 2 || rowIndex > sheet.getLastRow()) {
     throw new Error('対象の行が見つかりません。画面を再読込してください。');
   }
   assertRowStillMatches_(sheet, rowIndex, expectedCode, false);
@@ -2896,7 +2907,7 @@ function deleteStaffName(rowIndex, expectedCode) {
   return withScriptLock_(function () {
   var sheet = getOrCreateStaffNameSheet_();
   rowIndex = Number(rowIndex);
-  if (!rowIndex || rowIndex < 2 || rowIndex > sheet.getLastRow()) {
+  if (!rowIndex || Math.floor(rowIndex) !== rowIndex || rowIndex < 2 || rowIndex > sheet.getLastRow()) {
     throw new Error('対象の行が見つかりません。画面を再読込してください。');
   }
   assertRowStillMatches_(sheet, rowIndex, expectedCode, false);
@@ -3189,7 +3200,7 @@ function importStaffNameCsv(csvText, fileName) {
   // ここからは「何をどう書き換えるか」を先にすべて決め、マスタ権限が残ることを確かめてから書き込む
   // （途中まで書いてから失敗して、担当者マスタだけ・一部のアカウントだけ反映される状態を作らないため）。
   var sheet = getOrCreateStaffNameSheet_();
-  var existingByCode = {};
+  var existingByCode = Object.create(null);
   getStaffNameList().forEach(function (s) { existingByCode[s.code] = s; });
 
   var added = 0, updated = 0;
@@ -3210,7 +3221,7 @@ function importStaffNameCsv(csvText, fileName) {
   });
 
   var accountsAdded = 0, accountsUpdated = 0, accountsMasterDowngraded = 0, accountsAffiliationChanged = 0, accountsRoleSynced = 0;
-  var roleRawTally = {}; // 診断用：CSVの権限欄に実際に書かれていた文言ごとの件数
+  var roleRawTally = Object.create(null); // 診断用：CSVの権限欄に実際に書かれていた文言ごとの件数
   var staffSheet = null, accountRowsToAppend = [], accountCellUpdates = [];
   if (accountsDetected) {
     staffSheet = getOrCreateStaffSheet_();

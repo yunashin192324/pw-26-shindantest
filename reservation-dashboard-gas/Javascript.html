@@ -522,7 +522,8 @@ function formatStaffName_(code) {
 
 function duplicateStaffNames_() {
   if (STATE.staffNameDupFor === STATE.staffNameMap) return STATE.staffNameDup;
-  var count = {}, dup = {};
+  // 氏名が「toString」などでも、元から持つ名前と混ざって同姓同名と誤判定しないように
+  var count = Object.create(null), dup = Object.create(null);
   Object.keys(STATE.staffNameMap).forEach(function (c) {
     var key = String(STATE.staffNameMap[c]).replace(/\s+/g, '');
     count[key] = (count[key] || 0) + 1;
@@ -595,7 +596,7 @@ function getSelectedValues_(id) {
 
 function toSet_(arr) {
   if (!arr || arr.length === 0) return null;
-  var s = {};
+  var s = Object.create(null); // 値が「toString」などでも、元から持つ名前と混ざらないように
   arr.forEach(function (v) { s[v] = true; });
   return s;
 }

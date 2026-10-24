@@ -1,11 +1,11 @@
 // 外部の指摘 BUG-12：モックアップ（PC版・スマホ版）の個人別サマリーの検索を、担当者の氏名でもできるか、
 // 数量の負の数・「〇」「☆」の数量未入力の保存を、本体アプリと同じく受け付けないか。
 const path = require('path');
-const { chromium } = require('playwright');
+const { loadChromium, chromiumLaunchOptions } = require(process.argv[2] || path.join(__dirname, '..', 'harness', 'uh_cur.js'));
 const DIR = process.env.MOCKUP_DIR || path.join(__dirname, '..', '..', 'reservation-dashboard-gas', 'mockup');
 let pass = 0, fail = 0; const assert = (c, m) => { console.log((c ? 'PASS' : 'FAIL') + ': ' + m); c ? pass++ : fail++; };
 (async () => {
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const browser = await loadChromium().launch(chromiumLaunchOptions());
   for (const f of ['index.html', 'index-mobile.html']) {
     const page = await browser.newPage(); const errors = [];
     page.on('pageerror', e => errors.push(e.message)); page.on('dialog', d => d.accept());
