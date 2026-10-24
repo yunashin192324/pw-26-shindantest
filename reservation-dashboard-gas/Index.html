@@ -534,10 +534,10 @@
           <div id="admin-status" class="text-sm text-slate-600 space-y-1 mt-2"></div>
         </div>
 
-        <!-- 列の表示順（誰でも変更できる。保存すると全員に反映される） -->
-        <div class="bg-white rounded-xl shadow p-4">
+        <!-- 列の表示順（マスタ権限のみ変更できる。保存すると全員に反映される） -->
+        <div id="column-order-card" class="hidden bg-white rounded-xl shadow p-4">
           <h2 class="text-base font-bold text-slate-800 mb-1"><i class="fa-solid fa-arrow-down-up-across-line text-blue-600"></i> 予約データ一覧の列の並び順</h2>
-          <p class="text-xs text-slate-500 mb-3">▲▼で並び替えて保存すると、「予約データ一覧」タブの表示順が全員分変わります。</p>
+          <p class="text-xs text-slate-500 mb-3">▲▼で並び替えて保存すると、「予約データ一覧」タブの表示順が全員分変わります（マスタ権限のみ）。</p>
           <div id="column-order-list" class="border border-slate-200 rounded-lg divide-y divide-slate-100 max-w-md"></div>
           <div class="flex gap-2 mt-3">
             <button id="btn-save-column-order" class="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-1.5 text-xs font-semibold shadow">

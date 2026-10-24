@@ -503,6 +503,8 @@ function applyRoleUi_() {
   var isMaster = STATE.userContext && STATE.userContext.role === 'マスタ権限';
   document.getElementById('btn-open-csv-modal').classList.toggle('hidden', !isMaster);
   document.getElementById('master-only-admin').classList.toggle('hidden', !isMaster);
+  // 列の並び順は全員の表示に反映されるため、変更できるのはマスタ権限だけ（サーバー側でも確認する）。
+  document.getElementById('column-order-card').classList.toggle('hidden', !isMaster);
   if (isMaster) { loadStaffList(); loadStaffNameList(); loadArchiveInfo(); }
 }
 

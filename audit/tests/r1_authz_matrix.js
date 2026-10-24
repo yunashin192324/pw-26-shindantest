@@ -43,10 +43,7 @@ for (const who of ['nobody@example.com', 'staff@example.com', 'mgr@example.com']
     if (READ_ONLY_OK.includes(fn)) {
       const allowedChange = fn === 'onSpreadsheetChange' ? false : false;
       assert(!leaked && (!changed || allowedChange), who + ' → ' + fn + '：他店舗のデータを返さず、シート・設定を変えない' + (changed ? '（変化あり）' : '') + (leaked ? '（他店舗のメモが見えた）' : ''));
-    } else if (fn === 'saveColumnOrderPreference' && who !== 'nobody@example.com') {
-      // 現在の仕様：登録済みの利用者なら誰でも全員分の列順を保存できる（変更するかは利用者の判断待ち）
-      console.log('SPEC: ' + who + ' → ' + fn + '：' + (changed ? '保存できる（現在の仕様。マスタのみにするかは判断待ち）' : '保存されない'));
-    } else {
+    } else { // 列順の保存も、v2.7.9 からマスタ権限のみ（利用者の判断による）
       assert(!changed && !leaked, who + ' → ' + fn + '：' + (err ? '拒否（' + err.slice(0, 30) + '）' : '例外なし') + (changed ? '・シート／設定が変わった' : '・変化なし'));
     }
   }

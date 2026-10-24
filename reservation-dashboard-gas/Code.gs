@@ -24,7 +24,7 @@ var SHEET_NAME = '予約データ';
 var STAFF_SHEET_NAME = 'スタッフ権限';
 var STAFF_NAME_SHEET_NAME = '担当者マスタ';
 var TIMEZONE = 'Asia/Tokyo';
-var SERVER_VERSION = '2.7.8';
+var SERVER_VERSION = '2.7.9';
 
 // 予約番号（チャレンジ番号）は半角英数字ちょうど11桁（Javascript.htmlのCHALLENGE_RECORD_BASE_URL判定と同じ桁数）。
 // 数字だけの予約番号（例：01234567890）はGoogleスプレッドシート上で数値として誤認識され、
@@ -2349,11 +2349,8 @@ var DISPLAY_COLUMN_KEYS_ = ['reservationNo', 'staff', 'departureDate', 'chkDate'
 
 /** 列順（キーの配列）をスプレッドシート単位で保存し、全員に反映させる。 */
 function saveColumnOrderPreference(orderKeys) {
-  // 全員の表示に反映される設定のため、アプリを使える（スタッフ権限に正しく登録された）人だけが変更できる。
-  var ctx = getCurrentUserContext_();
-  if (!ctx.bootstrapMode && (!ctx.registered || ROLES.indexOf(ctx.role) === -1)) {
-    throw new Error('この操作を行う権限がありません。');
-  }
+  // 全員の表示に反映される設定のため、マスタ権限のユーザーだけが変更できる。
+  assertMaster_();
   if (!Array.isArray(orderKeys) || !orderKeys.length) {
     throw new Error('列の並び順が空です。');
   }

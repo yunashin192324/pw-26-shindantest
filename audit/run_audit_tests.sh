@@ -4,7 +4,7 @@
 # 修正前の版で試す場合は APP_DIR=元のフォルダ/ を付けて実行する（最後の / を忘れずに）。
 cd "$(dirname "$0")"
 H="$PWD/harness/uh_cur.js"
-for f in tests/r1_*.js tests/r2_*.js tests/r3_*.js tests/repro_dates.js; do
+for f in tests/r1_*.js tests/r2_*.js tests/r3_*.js tests/r4_*.js tests/repro_dates.js; do
   echo "== $f"
   node "$f" "$H" 2>&1 | grep -E "^(PASS|FAIL|SPEC|NOTE|TOTAL)|^   " | grep -v "^PASS"
 done
