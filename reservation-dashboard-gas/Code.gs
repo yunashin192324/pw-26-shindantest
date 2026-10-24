@@ -24,7 +24,7 @@ var SHEET_NAME = '予約データ';
 var STAFF_SHEET_NAME = 'スタッフ権限';
 var STAFF_NAME_SHEET_NAME = '担当者マスタ';
 var TIMEZONE = 'Asia/Tokyo';
-var SERVER_VERSION = '2.7.6';
+var SERVER_VERSION = '2.7.7';
 
 // 予約番号（チャレンジ番号）は半角英数字ちょうど11桁（Javascript.htmlのCHALLENGE_RECORD_BASE_URL判定と同じ桁数）。
 // 数字だけの予約番号（例：01234567890）はGoogleスプレッドシート上で数値として誤認識され、
@@ -1066,7 +1066,8 @@ function gunzipBase64_(b64) {
 
 /**
  * CacheServiceは1件100KBまでのため、大きな文字列は分割して保存する。すべての断片がそろい、
- * 長さも一致した場合だけ読み出しに成功とみなす（一部だけ消えていた場合は使わない）。
+ * 長さと照合値（保存時の文字列から作った値）も一致した場合だけ読み出しに成功とみなす
+ * （一部だけ消えていた・中身が変わっていた場合は使わず、シートから読み直す）。
  */
 function cacheGetLarge_(key) {
   var cache = CacheService.getScriptCache();
@@ -1083,13 +1084,14 @@ function cacheGetLarge_(key) {
   }
   var text = pieces.join('');
   if (text.length !== meta.len) return null;
+  if (meta.h && hashText_(text) !== meta.h) return null;
   return { text: text, extra: meta.x || null };
 }
 
 function cachePutLarge_(key, text, extra) {
   var count = Math.ceil(text.length / CACHE_CHUNK_CHARS_);
   if (count > CACHE_MAX_CHUNKS_) return false;
-  var metaText = JSON.stringify({ c: count, len: text.length, x: extra || null });
+  var metaText = JSON.stringify({ c: count, len: text.length, h: hashText_(text), x: extra || null });
   if (metaText.length > CACHE_CHUNK_CHARS_) return false;
   var items = {};
   for (var i = 0; i < count; i++) items[key + '#' + i] = text.substr(i * CACHE_CHUNK_CHARS_, CACHE_CHUNK_CHARS_);
@@ -1114,8 +1116,11 @@ function loadSnapshot_(sheet, version, lastRow, timing) {
   var t0 = new Date().getTime();
   var hit = null;
   try { hit = cacheGetLarge_(key); } catch (e) { hit = null; }
+  var snapFromCache = null;
   if (hit) {
-    var snapFromCache = unpackColumnar_(gunzipBase64_(hit.text));
+    try { snapFromCache = unpackColumnar_(gunzipBase64_(hit.text)); } catch (e) { snapFromCache = null; } // 展開できない写しは使わない
+  }
+  if (snapFromCache) {
     timing.snapshot = 'cache';
     timing.snapshotMs = new Date().getTime() - t0;
     return { snap: snapFromCache, packedAllB64: hit.text, source: 'cache' };

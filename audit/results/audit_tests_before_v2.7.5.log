@@ -1,0 +1,51 @@
+== tests/r1_archive_text.js
+FAIL: 事前確認の対象件数は2件（A2・A3）：3
+FAIL: 移動したのは2件：3
+FAIL: 本体に残ったのは A1（1月頃）と A4：["A4"]
+TOTAL PASS=0 FAIL=3
+== tests/r1_authz_matrix.js
+FAIL: nobody@example.com → setupAllSheetsFromMenu：拒否（Cannot call SpreadsheetApp.get）・シート／設定が変わった
+SPEC: staff@example.com → saveColumnOrderPreference：保存できる（現在の仕様。マスタのみにするかは判断待ち）
+FAIL: staff@example.com → setupAllSheetsFromMenu：拒否（Cannot call SpreadsheetApp.get）・シート／設定が変わった
+SPEC: mgr@example.com → saveColumnOrderPreference：保存できる（現在の仕様。マスタのみにするかは判断待ち）
+FAIL: mgr@example.com → setupAllSheetsFromMenu：拒否（Cannot call SpreadsheetApp.get）・シート／設定が変わった
+TOTAL PASS=95 FAIL=3
+== tests/r1_double_submit.js
+FAIL: アカウントの追加を2回続けて押しても1行だけ登録される（登録数=2）
+FAIL: 担当者マスタの追加を2回続けて押しても1行だけ登録される（登録数=2）
+TOTAL PASS=0 FAIL=2
+== tests/r1_rewrite_text.js
+FAIL: 日付列の「未定」が書き直しで消えない
+FAIL: CHK日の「要確認」が書き直しで消えない
+FAIL: 日付列の「2026/02/30」が3月2日に化けない
+TOTAL PASS=2 FAIL=3
+== tests/r2_dataflow_fuzz.js
+TOTAL PASS=6 FAIL=0
+== tests/r2_edit_columns.js
+TOTAL PASS=2 FAIL=0
+== tests/r2_edit_scope.js
+TOTAL PASS=3 FAIL=0
+== tests/r2_fault_injection.js
+FAIL: removeDuplicateRows：失敗後に画面へ返すデータがシートの実際の内容と一致する（不一致 1/2）
+FAIL: archiveOldReservations：失敗後に画面へ返すデータがシートの実際の内容と一致する（不一致 1/4）
+FAIL: archiveOldReservations：失敗後の再実行で正しい結果になる（不正 5/4）
+FAIL: batchUpdateCells：失敗後に画面へ返すデータがシートの実際の内容と一致する（不一致 1/2）
+TOTAL PASS=16 FAIL=4
+== tests/r2_kpi_oracle.js
+NOTE: master@example.com：出発予定日が空欄の行 20 件は、どの表示期間でも表示される
+NOTE: s@example.com：出発予定日が空欄の行 6 件は、どの表示期間でも表示される
+NOTE: m@example.com：出発予定日が空欄の行 6 件は、どの表示期間でも表示される
+TOTAL PASS=33 FAIL=0
+== tests/r2_service_faults.js
+FAIL: 50行：キャッシュの断片（全 4 件を1つずつ）が 1文字壊れている 場合も正しいデータを返す（失敗 1） 例: v3:r:…:51:ay2lhe.1f6i21j#0 → 例外: invalid literal/lengths set
+FAIL: 6000行：キャッシュの断片（全 6 件を1つずつ）が 1文字壊れている 場合も正しいデータを返す（失敗 2） 例: v3:r:…:6001:ay2lhe.1f6i21j#0 → 例外: invalid literal/lengths set
+TOTAL PASS=8 FAIL=2
+== tests/r2_state_combo.js
+    保険の欄: "×"（理由の入力画面の有無により「×」または変更なし）
+TOTAL PASS=15 FAIL=0
+== tests/repro_dates.js
+   R1 出発予定日=2026-03-02 売上=1000
+   R2 出発予定日=2027-01-01 売上=null
+   R3 出発予定日=null 売上=null
+   R4 出発予定日=2024-02-29 売上=null
+   R5 出発予定日=2026-03-05 売上=null
