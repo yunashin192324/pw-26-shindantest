@@ -2083,7 +2083,9 @@ function removeDuplicates() {
       showLoading(false);
       var el = document.getElementById('duplicate-result');
       el.textContent = result.removed > 0
-        ? result.removed + ' 件の重複行を削除しました（残り ' + result.totalRows + ' 件）。'
+        ? result.removed + ' 件の重複行を削除しました（残り ' + result.totalRows + ' 件）。' +
+          (result.merged > 0 ? '削除した行にだけ入力されていた項目 ' + result.merged + ' 件は、残した行へ移しました。' : '') +
+          (result.conflicts > 0 ? '両方の行に違う内容が入力されていた項目 ' + result.conflicts + ' 件は、入力の多い方の行の内容を残しました。' : '')
         : '重複している行はありませんでした。';
       el.className = 'text-xs mt-2 ' + (result.removed > 0 ? 'text-emerald-600' : 'text-slate-500');
       el.classList.remove('hidden');
@@ -3064,8 +3066,8 @@ async function decryptOfficeEncryptedXlsx_(buffer, password) {
   var getAttr = function (tagRegex, attr) {
     var m = xmlText.match(tagRegex);
     if (!m) return null;
-    var am = m[0].match(new RegExp(attr + '\\s*=\\s*"([^"]*)"'));
-    return am ? am[1] : null;
+    var am = m[0].match(new RegExp(attr + '\\s*=\\s*(?:"([^"]*)"|\'([^\']*)\')'));
+    return am ? (am[1] !== undefined ? am[1] : am[2]) : null;
   };
   var kdRegex = /<keyData\b[^>]*>/i;
   var ekRegex = /<(?:p:)?encryptedKey\b[^>]*>/i;
@@ -3214,15 +3216,14 @@ function readZipXml_(entries, path) {
   });
 }
 
+// 1回の置き換えで戻す（順に置き換えると「&#38;lt;」が「&lt;」を経て「<」まで戻りすぎるため）。
+var XML_NAMED_ENTITIES_ = { quot: '"', apos: "'", lt: '<', gt: '>', amp: '&' };
 function decodeXmlEntities_(s) {
-  return String(s || '')
-    .replace(/&#x([0-9a-fA-F]+);/g, function (_, h) { return String.fromCodePoint(parseInt(h, 16)); })
-    .replace(/&#(\d+);/g, function (_, d) { return String.fromCodePoint(parseInt(d, 10)); })
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&');
+  return String(s || '').replace(/&(?:#x([0-9a-fA-F]+)|#(\d+)|(quot|apos|lt|gt|amp));/g, function (all, h, d, name) {
+    if (name) return XML_NAMED_ENTITIES_[name];
+    var cp = h ? parseInt(h, 16) : parseInt(d, 10);
+    return (cp >= 0 && cp <= 0x10FFFF) ? String.fromCodePoint(cp) : all;
+  });
 }
 
 /** 文字列セルの中身（<si> / <is>）から表示される文字だけを取り出す。ふりがな（<rPh>）は含めない。 */
@@ -3236,8 +3237,9 @@ function excelRichTextToString_(xml) {
 }
 
 function xmlAttr_(attrs, name) {
-  var m = String(attrs || '').match(new RegExp('(?:^|\\s)' + name + '\\s*=\\s*"([^"]*)"'));
-  return m ? decodeXmlEntities_(m[1]) : null;
+  // 属性の値は " でも ' でも囲める（XMLの決まり）。
+  var m = String(attrs || '').match(new RegExp('(?:^|\\s)' + name + '\\s*=\\s*(?:"([^"]*)"|\'([^\']*)\')'));
+  return m ? decodeXmlEntities_(m[1] !== undefined ? m[1] : m[2]) : null;
 }
 
 function colLettersToIndex_(letters) {
@@ -3356,7 +3358,8 @@ async function parseXlsxBytes_(zipBytes) {
   var sheetDefs = [];
   var shRe = /<sheet\b([^>]*?)\/?>/g, shm;
   while ((shm = shRe.exec(wbXml)) !== null) {
-    var rid = (shm[1].match(/\s[\w]+:id\s*=\s*"([^"]*)"/) || [])[1];
+    var ridm = shm[1].match(/\s[\w]+:id\s*=\s*(?:"([^"]*)"|'([^']*)')/);
+    var rid = ridm ? (ridm[1] !== undefined ? ridm[1] : ridm[2]) : undefined;
     var target = rid && rels[rid] ? rels[rid].target : null;
     sheetDefs.push({ name: xmlAttr_(shm[1], 'name') || ('Sheet' + (sheetDefs.length + 1)), hidden: !!xmlAttr_(shm[1], 'state') && xmlAttr_(shm[1], 'state') !== 'visible', path: target });
   }
@@ -3816,6 +3819,14 @@ function onCsvImportSuccess(result) {
     if (u && u.count > 0) {
       lines.push('<p class="text-amber-700 mt-1"><i class="fa-solid fa-triangle-exclamation"></i> ' + p[1] + '：' + formatNumber(u.count) +
         ' 件（空欄として取り込みました。例：' + u.examples.map(escapeHtml).join('、') + '）</p>');
+    }
+  });
+  // 日付の後ろに時刻以外の文字が付いていた値（日付の部分だけを取り込んだもの）。
+  [['dateExtra', '日付の後ろに余分な文字がある値']].forEach(function (p) {
+    var u = result.unreadable && result.unreadable[p[0]];
+    if (u && u.count > 0) {
+      lines.push('<p class="text-amber-700 mt-1"><i class="fa-solid fa-triangle-exclamation"></i> ' + p[1] + '：' + formatNumber(u.count) +
+        ' 件（日付の部分だけを取り込みました。例：' + u.examples.map(escapeHtml).join('、') + '）</p>');
     }
   });
   box.innerHTML = lines.join('');

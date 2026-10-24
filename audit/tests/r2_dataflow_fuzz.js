@@ -29,7 +29,9 @@ const TEXTS = ['', ' 前後空白 ', '改行\nあり', 'タブ\tあり', '"引�
       if (v === '' || v === null) return null;
       if (v instanceof be.SDate || (v && v.getFullYear)) return v.getFullYear() + '-' + pad(v.getMonth() + 1) + '-' + pad(v.getDate());
       const m = String(v).trim().match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
-      return m ? m[1] + '-' + pad(m[2]) + '-' + pad(m[3]) : String(v);
+      // 実在しない日付（2026/02/30 など）は日付の形にそろえず、入力された文字のまま（v2.7.8〜。外部の指摘 DATE-001）
+      const real = m && (() => { const y = +m[1], mo = +m[2], d = +m[3]; return mo >= 1 && mo <= 12 && d >= 1 && d <= new Date(y, mo, 0).getDate(); })();
+      return real ? m[1] + '-' + pad(m[2]) + '-' + pad(m[3]) : String(v);
     }
     if (col.type === 'number') {
       if (v === '' || v === null) return null;

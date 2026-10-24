@@ -1159,7 +1159,7 @@ function renderRanking(){
   list.sort(function(a,b){
     if (key === 'area') return a.area.localeCompare(b.area,'ja') * dir;
     if (key === 'office') return a.office.localeCompare(b.office,'ja') * dir;
-    if (key === 'staff') return a.staff.localeCompare(b.staff,'ja') * dir;
+    if (key === 'staff') return formatStaffName(a.staff).localeCompare(formatStaffName(b.staff),'ja') * dir;
     return (a[key]-b[key]) * dir;
   });
   var el = document.getElementById('ranking-list');
@@ -1332,6 +1332,12 @@ function afterCellSaved(){
 function saveAllPendingChanges(){
   var changes = Object.keys(STATE.pendingChanges).map(function(k){ return STATE.pendingChanges[k]; });
   if (changes.length === 0) return;
+  // 本体アプリと同じく、「〇」「☆」なのに数量が空欄の変更は保存させない。
+  var missingQty = changes.filter(function(c){ return c.kind === 'ancillary' && (c.status === '〇' || c.status === '☆') && (c.qty === null || c.qty === undefined || c.qty === ''); });
+  if (missingQty.length > 0){
+    showToast('「〇」「☆」なのに数量が入力されていない変更が' + missingQty.length + '件あります。数量を入力してから保存してください。', 'error');
+    return;
+  }
   STATE.pendingChanges = {};
   afterCellSaved();
   showToast(formatNumber(changes.length) + '件を保存しました', 'success');
@@ -1422,7 +1428,14 @@ function handleAncillaryQtyBlur(inputEl){
     showToast(item.label + 'の数量が入力されていません。数量を入力してください。', 'error');
     return;
   }
-  var normalizedQty = inputEl.value === '' ? null : Number(inputEl.value);
+  // 本体アプリと同じく、負の数・数値でない値は受け付けず、元の値に戻す（小数は切り捨て）。
+  var rawQty = inputEl.value === '' ? null : Number(inputEl.value);
+  if (rawQty !== null && (!isFinite(rawQty) || rawQty < 0)){
+    showToast('数量には0以上の数値を入力してください。', 'error');
+    inputEl.value = (row[item.qtyKey] === null || row[item.qtyKey] === undefined) ? '' : row[item.qtyKey];
+    return;
+  }
+  var normalizedQty = rawQty === null ? null : Math.floor(rawQty);
   var pending = getOrCreatePendingAncillary(rowIndex, item.key);
   pending.status = status; pending.qty = normalizedQty; pending.reason = row[item.reasonKey];
   row[item.qtyKey] = normalizedQty;
@@ -1507,12 +1520,16 @@ function applyBulkAncillary(itemKey){
     showToast(item.label + 'の数量を入力してください。', 'error');
     return;
   }
+  if (isAncillaryQtyEditable(status) && (!isFinite(Number(qty)) || Number(qty) < 0)){
+    showToast('数量には0以上の数値を入力してください。', 'error');
+    return;
+  }
   rowIndexes.forEach(function(ri){
     var row = STATE.rows.find(function(r){ return r.rowIndex === ri; });
     if (!row) return;
     row[item.statusKey] = status;
     if (status === '×'){ row[item.qtyKey] = 0; row[item.reasonKey] = reason.trim(); }
-    else if (isAncillaryQtyEditable(status)){ row[item.qtyKey] = qty === '' ? null : Number(qty); row[item.reasonKey] = ''; }
+    else if (isAncillaryQtyEditable(status)){ row[item.qtyKey] = qty === '' ? null : Math.floor(Number(qty)); row[item.reasonKey] = ''; }
     else { row[item.qtyKey] = null; row[item.reasonKey] = ''; }
   });
   afterCellSaved();
@@ -1601,7 +1618,7 @@ function renderPersonalTab(){
   var keyword = (document.getElementById('personal-search').value||'').trim().toLowerCase();
   var list = buildPersonalSummary(STATE.rows).filter(function(b){
     if (!keyword) return true;
-    return (b.area+' '+b.office+' '+b.staff).toLowerCase().indexOf(keyword) !== -1;
+    return (b.area+' '+b.office+' '+formatStaffName(b.staff)).toLowerCase().indexOf(keyword) !== -1;
   });
   list.sort(function(a,b){ return b.count - a.count; });
   var el = document.getElementById('personal-list');

@@ -1,0 +1,38 @@
+== tests/r1_archive_text.js
+TOTAL PASS=3 FAIL=0
+== tests/r1_authz_matrix.js
+SPEC: staff@example.com → saveColumnOrderPreference：保存できる（現在の仕様。マスタのみにするかは判断待ち）
+SPEC: mgr@example.com → saveColumnOrderPreference：保存できる（現在の仕様。マスタのみにするかは判断待ち）
+TOTAL PASS=98 FAIL=0
+== tests/r1_double_submit.js
+TOTAL PASS=2 FAIL=0
+== tests/r1_rewrite_text.js
+TOTAL PASS=5 FAIL=0
+== tests/r2_dataflow_fuzz.js
+TOTAL PASS=6 FAIL=0
+== tests/r2_edit_columns.js
+TOTAL PASS=2 FAIL=0
+== tests/r2_edit_scope.js
+TOTAL PASS=3 FAIL=0
+== tests/r2_fault_injection.js
+TOTAL PASS=20 FAIL=0
+== tests/r2_kpi_oracle.js
+NOTE: master@example.com：出発予定日が空欄の行 20 件は、どの表示期間でも表示される
+NOTE: s@example.com：出発予定日が空欄の行 6 件は、どの表示期間でも表示される
+NOTE: m@example.com：出発予定日が空欄の行 6 件は、どの表示期間でも表示される
+TOTAL PASS=33 FAIL=0
+== tests/r2_service_faults.js
+TOTAL PASS=10 FAIL=0
+== tests/r2_state_combo.js
+    保険の欄: "×"（理由の入力画面の有無により「×」または変更なし）
+TOTAL PASS=15 FAIL=0
+== tests/r3_external_review.js
+TOTAL PASS=33 FAIL=0
+== tests/r3_mockup.js
+TOTAL PASS=8 FAIL=0
+== tests/repro_dates.js
+   R1 出発予定日=null 売上=1000
+   R2 出発予定日=null 売上=null
+   R3 出発予定日=null 売上=null
+   R4 出発予定日=2024-02-29 売上=null
+   R5 出発予定日=2026-03-05 売上=null

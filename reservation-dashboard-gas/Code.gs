@@ -24,7 +24,7 @@ var SHEET_NAME = '予約データ';
 var STAFF_SHEET_NAME = 'スタッフ権限';
 var STAFF_NAME_SHEET_NAME = '担当者マスタ';
 var TIMEZONE = 'Asia/Tokyo';
-var SERVER_VERSION = '2.7.7';
+var SERVER_VERSION = '2.7.8';
 
 // 予約番号（チャレンジ番号）は半角英数字ちょうど11桁（Javascript.htmlのCHALLENGE_RECORD_BASE_URL判定と同じ桁数）。
 // 数字だけの予約番号（例：01234567890）はGoogleスプレッドシート上で数値として誤認識され、
@@ -336,10 +336,15 @@ function kanjiNumberToDigits_(k) {
  * ・漢数字の「第一」〜「第十」と算用数字 ・末尾の「営業所」「支店」「店」「エリア」（1回だけ）
  * それ以外の文字（地名・施設名など）は1文字でも違えば別の所属として扱う。
  */
+/** 「第一」〜「第九十九」の漢数字を算用数字にする（「東京第一エリア」→「東京第1エリア」）。 */
+function ordinalsToDigits_(t) {
+  return t.replace(/第([一二三四五六七八九]?十[一二三四五六七八九]?|[一二三四五六七八九])/g, function (_, k) { return '第' + kanjiNumberToDigits_(k); });
+}
+
 function affiliationKey_(s) {
   var t = affiliationText_(s).replace(AFFILIATION_CODE_PATTERN_, '');
   t = t.replace(/[（(][^）)]*[）)]/g, '').replace(/\s+/g, '');
-  t = t.replace(/第([一二三四五六七八九]?十[一二三四五六七八九]?|[一二三四五六七八九])/g, function (_, k) { return '第' + kanjiNumberToDigits_(k); });
+  t = ordinalsToDigits_(t);
   t = t.toUpperCase(); // 「No.1」と「NO.1」のような英字の大文字・小文字の違いはそろえる
   // 末尾の「営業所」「支店」「店」「エリア」を、両側で同じ回数（最大2回）取り除く。1回だけだと、
   // 「専門店エリア」（→専門店）と「専門店」（→専門）のように、両側で結果がずれて一致しなくなるため。
@@ -730,8 +735,10 @@ function autoLinkAffiliationsQuietly_() {
 
 /** 所属店舗の先頭にある、その人の所属エリア名を除いた店舗名（付いていなければ空文字）。 */
 function officeWithoutAreaPrefix_(office, area) {
-  var o = affiliationText_(office).replace(AFFILIATION_CODE_PATTERN_, '');
-  var a = affiliationText_(area);
+  // 所属店舗「東京第一ｴﾘｱ…」と所属エリア「10:東京第1エリア」のように、漢数字と算用数字だけが違う場合も
+  // 先頭のエリア名として取り除けるよう、両方の「第一」などを算用数字にそろえてから比べる。
+  var o = ordinalsToDigits_(affiliationText_(office).replace(AFFILIATION_CODE_PATTERN_, ''));
+  var a = ordinalsToDigits_(affiliationText_(area));
   if (!o || !a) return '';
   var candidates = [a, a.replace(AFFILIATION_CODE_PATTERN_, '').trim()];
   for (var i = 0; i < candidates.length; i++) {
@@ -837,9 +844,11 @@ function resolveListWindow_(rangeOption) {
     return { mode: 'all', from: null, to: null };
   }
   if (rangeOption && rangeOption.mode === 'custom') {
-    var from = rangeOption.from || null;
-    var to = rangeOption.to || null;
+    var from = rangeOption.from ? assertValidDateString_(rangeOption.from, '表示期間の開始日') : null;
+    var to = rangeOption.to ? assertValidDateString_(rangeOption.to, '表示期間の終了日') : null;
     if (!from && !to) return { mode: 'all', from: null, to: null }; // 期間未指定は全期間として扱う
+    // 開始日と終了日が逆に指定された場合は入れ替える（そのままでは必ず0件になるため）。
+    if (from && to && from > to) { var tmp = from; from = to; to = tmp; }
     return { mode: 'custom', from: from, to: to };
   }
   var cutoff = monthsAgo_(new Date(), DEFAULT_LIST_WINDOW_MONTHS);
@@ -1556,20 +1565,24 @@ function normalizeCellValue_(col, v) {
     // スプレッドシートを直接編集して「2026/10/5」のような文字列として入った日付も、CSV取込時
     // （convertValue_）と同じ 'yyyy-MM-dd' にそろえる。そろえないと、表示期間の判定（文字列の大小比較）・
     // 重複判定・画面の日付入力欄への表示がずれる。日付として読めない文字列はそのまま返す。
+    // 「2026/02/30」のような実在しない日付は、日付の形にそろえず入力された文字のまま返す（日付として扱わない）。
     var dm = String(v).trim().match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
-    return dm ? dm[1] + '-' + ('0' + dm[2]).slice(-2) + '-' + ('0' + dm[3]).slice(-2) : String(v);
+    if (!dm || !isValidYmd_(Number(dm[1]), Number(dm[2]), Number(dm[3]))) return String(v);
+    return dm[1] + '-' + ('0' + dm[2]).slice(-2) + '-' + ('0' + dm[3]).slice(-2);
   }
   if (col.type === 'number') {
     if (v === '' || v === null || v === undefined) return null;
-    if (typeof v === 'number') return isNaN(v) ? null : v;
+    // 無限大（1e309 など）も数値として扱わない（合計が∞になり、画面へ送ると空欄に変わるため）。
+    if (typeof v === 'number') return isFinite(v) ? v : null;
     // 「1,000」のような桁区切り付きの文字列も数値として読み、「-」等の数値でない文字列は空欄扱いにする
     // （CSV取込時のconvertValue_と同じ扱い。NaNのまま集計や書き戻しに使われるのを防ぐ）。
     var numText = String(v).replace(/,/g, '').trim();
     if (numText === '') return null;
     var n = Number(numText);
-    return isNaN(n) ? null : n;
+    return isFinite(n) ? n : null;
   }
-  if (col.key === 'reservationNo' && typeof v === 'number') {
+  // 先頭0の復元は、0以上の整数だけ（負の数・小数に0を足すと「0000000-123」のような値になるため）。
+  if (col.key === 'reservationNo' && typeof v === 'number' && isFinite(v) && v >= 0 && Math.floor(v) === v) {
     return zeroPadReservationNo_(v);
   }
   return (v === null || v === undefined) ? '' : String(v);
@@ -1675,16 +1688,24 @@ function convertValue_(col, raw, stats) {
   var s = (raw === undefined || raw === null) ? '' : String(raw).trim();
   if (col.type === 'date') {
     if (!s || s === '-') return null;
-    var m = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+    var m = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})([\s\S]*)$/);
     // 「2026/02/30」のような実在しない日付は、そのままシートに書くと3月2日などに化けるため、空欄にして件数を知らせる。
     if (!m || !isValidYmd_(Number(m[1]), Number(m[2]), Number(m[3]))) { noteUnreadable_(stats, 'date', col, s); return null; }
+    // 日付の後ろは、正しい時刻（「 10:30」「 10:30:00」）だけを黙って読み飛ばす。それ以外の文字（「oops」「(金)」
+    // 「25:99」など）が付いている場合は、日付の部分は使ったうえで、取込結果に件数と例を知らせる
+    // （空欄にすると正しい日付まで失われ、取込全体を止めると他の行も取り込めなくなるため）。
+    var rest = m[4];
+    var tm = rest.match(/^\s+(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+    if (rest !== '' && !(tm && Number(tm[1]) <= 23 && Number(tm[2]) <= 59 && (tm[3] === undefined || Number(tm[3]) <= 59))) {
+      noteUnreadable_(stats, 'dateExtra', col, s);
+    }
     var mo = ('0' + m[2]).slice(-2), d = ('0' + m[3]).slice(-2);
     return m[1] + '-' + mo + '-' + d;
   }
   if (col.type === 'number') {
     if (!s || s === '-') return null;
     var n = Number(s.replace(/,/g, ''));
-    if (isNaN(n)) { noteUnreadable_(stats, 'number', col, s); return null; }
+    if (!isFinite(n)) { noteUnreadable_(stats, 'number', col, s); return null; }
     return n;
   }
   if (col.key === 'reservationNo' && /^\d+$/.test(s) && s.length > 0 && s.length < RESERVATION_NO_DIGIT_LENGTH) {
@@ -1712,14 +1733,52 @@ function buildDedupeKey_(record) {
   }).join('\u0001');
 }
 
-/** 行オブジェクトのうち、現場入力項目が何個埋まっているかを数える（重複統合時の優先判定に使う）。 */
+/** 付帯商品のステータス欄の値が「未入力」と同じか（空欄、または既定値の「-」（NO ACT））。 */
+var ANCILLARY_STATUS_KEY_SET_ = {};
+ANCILLARY_ITEMS.forEach(function (it) { ANCILLARY_STATUS_KEY_SET_[it.statusKey] = true; });
+function isEmptyEditableValue_(key, v) {
+  if (v === null || v === undefined || v === '') return true;
+  return ANCILLARY_STATUS_KEY_SET_[key] === true && String(v).trim() === '-';
+}
+
+/**
+ * 行オブジェクトのうち、現場入力項目が何個埋まっているかを数える（重複統合時の優先判定に使う）。
+ * 付帯商品のステータスの既定値「-」（NO ACT）は入力として数えない（数えると、4商品とも「-」なだけの行が、
+ * 「〇」と数量・メモが入った行より優先され、入力済みの実績が消えるため）。
+ */
 function countFilledEditableFields_(record) {
   var n = 0;
   EDITABLE_COLUMNS.forEach(function (col) {
-    var v = record[col.key];
-    if (v !== null && v !== undefined && v !== '') n++;
+    if (!isEmptyEditableValue_(col.key, record[col.key])) n++;
   });
   return n;
+}
+
+/**
+ * 重複行を1行にまとめるとき、残す行（keep）で未入力の現場入力項目を、他の重複行（other）の入力で補う。
+ * CHK日・メモは1項目ずつ、付帯商品はステータス・数量・理由を1組として補う（組の一部だけを混ぜると、
+ * 「〇」なのに数量が別の行のもの、のような食い違いが起きるため）。両方に入力がある項目は残す行の値を使い、
+ * その件数を conflicts に数える。シートへは読み込んだときの値（__raw）を書き戻すため、__raw も同じように補う。
+ */
+function mergeEditableInto_(keep, other, stats) {
+  var groups = [['chkDate'], ['memo']];
+  ANCILLARY_ITEMS.forEach(function (it) { groups.push([it.statusKey, it.qtyKey, it.reasonKey]); });
+  groups.forEach(function (keys) {
+    var keepEmpty = keys.every(function (k) { return isEmptyEditableValue_(k, keep[k]); });
+    var otherEmpty = keys.every(function (k) { return isEmptyEditableValue_(k, other[k]); });
+    if (otherEmpty) return;
+    if (!keepEmpty) {
+      var same = keys.every(function (k) { return String(keep[k] === null || keep[k] === undefined ? '' : keep[k]) === String(other[k] === null || other[k] === undefined ? '' : other[k]); });
+      if (!same) stats.conflicts++;
+      return;
+    }
+    keys.forEach(function (k) {
+      keep[k] = other[k];
+      var ci = ALL_COLUMN_INDEX_BY_KEY[k];
+      if (keep.__raw && other.__raw) keep.__raw[ci] = other.__raw[ci];
+    });
+    stats.merged++;
+  });
 }
 
 /**
@@ -1982,7 +2041,7 @@ function loadSheetForEdit_(sheet, rowIndexes) {
  * 保存のたびにシート全体を読まずに済むよう、所属名の2列だけを読み、結果は版番号ごとに保存して使い回す。
  */
 function getAffiliationIndexFor_(sheet, lastRow) {
-  var key = CACHE_PREFIX_ + 'a:' + getDataVersion_() + ':' + lastRow;
+  var key = CACHE_PREFIX_ + 'ai:' + getDataVersion_() + ':' + lastRow;
   try {
     var hit = cacheGetLarge_(key);
     if (hit) { var o = JSON.parse(hit.text); return buildAffiliationIndex_(o.o, o.a); }
@@ -2241,7 +2300,10 @@ function batchUpdateCells(changes) {
  * サーバー側でも必ず検証する）。0以上の整数に丸める。
  */
 function parseAncillaryQty_(value) {
-  if (value === '' || value === null || value === undefined) return null;
+  if (value === null || value === undefined) return null;
+  // 数値・文字以外（true/false・配列など）は受け付けない（Number(false)=0、Number([])=0 のように化けるため）。
+  if (typeof value !== 'number' && typeof value !== 'string') throw new Error('数量には0以上の数値を入力してください。');
+  if (typeof value === 'string' && value.trim() === '') return null; // 空白だけは未入力（Number('  ')=0 に化けさせない）
   var n = Number(value);
   if (!isFinite(n) || n < 0) {
     throw new Error('数量には0以上の数値を入力してください。');
@@ -2256,11 +2318,12 @@ function normalizeEditableInput_(col, value) {
   if (!s) return null;
   if (col.type === 'number') {
     var n = Number(s);
-    return isNaN(n) ? null : n;
+    return isFinite(n) ? n : null;
   }
   if (col.type === 'date') {
     var m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (!m) return null;
+    // 日付として読めない値で保存すると、入力済みの日付が知らせなく消えるため、保存せずにエラーにする（空欄は消去として受け付ける）。
+    if (!m) throw new Error('日付の形式が正しくありません（' + s.slice(0, 20) + '）。');
     // 実在しない日付（2月30日など）は、そのまま書くと別の日付に化けるため受け付けない。
     if (!isValidYmd_(Number(m[1]), Number(m[2]), Number(m[3]))) throw new Error('日付が正しくありません（' + s.slice(0, 10) + '）。');
     return s.slice(0, 10);
@@ -2314,7 +2377,8 @@ function saveColumnOrderPreference(orderKeys) {
 /**
  * 完全一致（CSV由来19項目が同じ）の重複行を1件に統合する。
  * 複数行が重複している場合は、現場入力項目（CHK日・保険など）がより多く
- * 埋まっている行を優先して残す（入力済みの記録を誤って消さないため）。
+ * 埋まっている行を優先して残し、残す行で未入力の項目は他の重複行の入力で補う
+ * （入力済みの記録を誤って消さないため。mergeEditableInto_）。
  */
 function removeDuplicateRows() {
   assertMaster_();
@@ -2336,16 +2400,23 @@ function removeDuplicateRows() {
     }
   });
 
+  // 残す行で未入力の項目を、他の重複行の入力で補う（別々の行に入力された実績・メモを消さないため）。
+  var mergeStats = { merged: 0, conflicts: 0 };
+  rows.forEach(function (r) {
+    var keep = bestByKey[buildDedupeKey_(r)];
+    if (keep !== r) mergeEditableInto_(keep, r, mergeStats);
+  });
+
   var deduped = order.map(function (k) { return bestByKey[k]; });
   var removed = rows.length - deduped.length;
   if (removed === 0) {
-    return { removed: 0, totalRows: rows.length };
+    return { removed: 0, totalRows: rows.length, merged: 0, conflicts: 0 };
   }
 
   rewriteDataRows_(sheet, deduped);
   markDataChanged_();
 
-  return { removed: removed, totalRows: deduped.length };
+  return { removed: removed, totalRows: deduped.length, merged: mergeStats.merged, conflicts: mergeStats.conflicts };
   });
 }
 
@@ -2455,6 +2526,9 @@ function assertValidDateString_(dateStr, label) {
   var s = String(dateStr || '').trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) {
     throw new Error(label + 'の形式が正しくありません（例：2025-11-01）。');
+  }
+  if (!isValidYmd_(Number(s.slice(0, 4)), Number(s.slice(5, 7)), Number(s.slice(8, 10)))) {
+    throw new Error(label + 'が実在しない日付です（' + s + '）。');
   }
   return s;
 }
@@ -2811,6 +2885,9 @@ function updateStaffName(rowIndex, code, name, expectedCode) {
     throw new Error('対象の行が見つかりません。画面を再読込してください。');
   }
   assertRowStillMatches_(sheet, rowIndex, expectedCode, false);
+  // 他の行に同じ担当者コードがある場合は書き換えない（同じコードが2行になり、どちらの氏名を使うか決まらなくなるため）。
+  var dup = getStaffNameList().filter(function (s) { return s.code === String(code).trim() && s.rowIndex !== rowIndex; })[0];
+  if (dup) throw new Error('担当者コード「' + String(code).trim() + '」は別の行（氏名：' + dup.name + '）で既に登録されています。');
   sheet.getRange(rowIndex, 1, 1, 2).setNumberFormat('@').setValues(protectSheetRows_([[String(code).trim(), String(name).trim()]]));
   return getStaffNameList();
   });
