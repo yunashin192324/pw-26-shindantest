@@ -10,10 +10,10 @@
   root.VENUE_DIAG.QUESTIONS = [
     {
       id: 'kids', section: 'GUESTS', type: 'single',
-      title: 'お子さまと一緒に、結婚式を迎えますか？',
-      sub: 'お二人のお子さまや、ご親族のお子さまの参列予定をお聞かせください。',
+      title: '結婚式には、お子さまも参列されますか？',
+      sub: 'お二人のお子さまや、ご親族・ご友人のお子さまの参列予定をお聞かせください。',
       opts: [
-        { v: 'yes', main: 'はい、子どもも一緒です', sub: 'お子さまと一緒に過ごせる式場を探したい', categories: ['子供と一緒'], label: 'お子さまと一緒に過ごせること' },
+        { v: 'yes', main: 'はい、子どもも参列します', sub: 'お子さまと一緒に参加しやすい式場がいい', categories: ['子供と一緒'], label: 'お子さまと一緒に参加しやすいこと' },
         { v: 'no', main: 'いいえ、大人のみです', sub: 'お二人だけ、または大人のゲストのみ', categories: [] }
       ]
     },
@@ -32,7 +32,6 @@
       title: 'どんな景色の中で、誓いの瞬間を迎えたいですか？',
       sub: '心惹かれるものをすべてお選びください（複数選択可）。',
       opts: [
-        { v: 'seaview', text: '海が見える式場', categories: ['海が見える'] },
         { v: 'beach', text: 'ビーチが目の前の式場', categories: ['ビーチが目の前'] },
         { v: 'garden', text: '緑あふれるガーデン', categories: ['ガーデンがある'] },
         { v: 'nature', text: '豊かな自然に囲まれた場所', categories: ['自然豊か'] },
@@ -42,9 +41,10 @@
     },
     {
       id: 'space', section: 'CEREMONY', type: 'multi',
-      title: '挙式の空間は、どんな雰囲気に惹かれますか？',
+      title: '挙式を挙げる会場は、どんなところが理想ですか？',
       sub: '理想に近いものをすべてお選びください（複数選択可）。',
       opts: [
+        { v: 'seaview', text: '海の見えるチャペル', categories: ['海が見える'] },
         { v: 'church', text: '歴史ある教会・大聖堂', categories: ['教会・大聖堂'] },
         { v: 'glass', text: 'ステンドグラスのある空間', categories: ['ステンドグラスがある'] },
         { v: 'athome', text: 'アットホームな雰囲気', categories: ['アットホーム'] },

@@ -54,7 +54,7 @@ test('条件をすべて「こだわらない」にすると、おすすめを�
 });
 
 test('パターンA: 子連れ・時差なし・海/ビーチ・パーティ・コスパ（最重視=ビーチが目の前）', () => {
-  const d = run({ kids: 'yes', access: 'nojetlag', scenery: ['seaview', 'beach'], space: ['none'], stay: ['party'], focus: ['cost'], priority: 'ビーチが目の前' });
+  const d = run({ kids: 'yes', access: 'nojetlag', scenery: ['beach'], space: ['seaview'], stay: ['party'], focus: ['cost'], priority: 'ビーチが目の前' });
   assert.equal(d.status, 'ok');
   assert.equal(d.conditions.length, 6);
   // 6条件すべてに該当するのはこの2式場のみ（同順位、掲載順）

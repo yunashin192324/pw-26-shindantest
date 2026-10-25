@@ -70,18 +70,18 @@ for (const file of TARGETS) {
       await page.click('#start-btn');
       assert.equal(await active(page), 'screen-q');
       assert.equal(await frac(page), '1 / 6');
-      await single(page, 'はい、子どもも一緒です');
+      await single(page, 'はい、子どもも参列します');
       assert.equal(await frac(page), '2 / 6');
       await single(page, '時差のない場所がいい');
       // 複数選択：未選択では次へ不可
       assert.equal(await page.isDisabled('#next-btn'), true);
-      await multi(page, ['海が見える式場', 'ビーチが目の前の式場']);
+      await multi(page, ['ビーチが目の前の式場']);
       assert.equal(await page.isDisabled('#next-btn'), false);
       // 重視条件の質問が追加され、全7問になる
       assert.equal(await frac(page), '3 / 7');
       await noOverflow(page, 'q3'); await shot('2-question-multi');
       await next(page);
-      await multi(page, ['特にこだわらない']);
+      await multi(page, ['海の見えるチャペル']);
       await next(page);
       await multi(page, ['挙式の後、同じ場所でパーティをしたい']);
       await next(page);
@@ -97,7 +97,7 @@ for (const file of TARGETS) {
       assert.equal(await page.locator('.cond-table tbody tr').count(), 6);
       assert.equal(await page.locator('.alt-card').count(), 4);
       const alts = await page.locator('.alt-card .alt-name').allTextContents();
-      const exp = await expected(page, { kids: 'yes', access: 'nojetlag', scenery: ['seaview', 'beach'], space: ['none'], stay: ['party'], focus: ['cost'], priority: 'ビーチが目の前' });
+      const exp = await expected(page, { kids: 'yes', access: 'nojetlag', scenery: ['beach'], space: ['seaview'], stay: ['party'], focus: ['cost'], priority: 'ビーチが目の前' });
       assert.deepEqual(alts, exp.slice(1, 5));
       assert.match(await page.textContent('#res-notice'), /同じ評価の式場が2件/);
       assert.match(await page.textContent('.reason'), /最も重視された「ビーチが目の前」に該当/);
