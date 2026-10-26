@@ -1,0 +1,9 @@
+overseas/long/お城・宮殿/サンセット（黄金の光）/sightseeing/couple/3 => パリ | alt: オーストラリア,カッパドキア,ハワイ,グアム
+domestic/short/ビーチ・海/こだわりなし・おまかせ/resort/couple/1 => 条件に合うエリアが見つかりませんでした | alt: 
+ブラウザのエラー: [
+  'Failed to load resource: net::ERR_FAILED',
+  'Failed to load resource: net::ERR_FAILED',
+  'Failed to load resource: net::ERR_FAILED',
+  'Failed to load resource: net::ERR_FAILED',
+  'Failed to load resource: net::ERR_FAILED'
+]

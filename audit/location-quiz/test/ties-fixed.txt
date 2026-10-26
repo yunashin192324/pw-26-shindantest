@@ -1,0 +1,2 @@
+候補2件以上 76095 第1位同点 15356 20.2%
+[[{"region":"overseas","days":"medium","scene":["beach","architecture"],"moment":["none"],"style":"shopping","who":"group","budget":2},"グアム","バリ島",10],[{"region":"overseas","days":"ultra","scene":["beach","street","villa"],"moment":["nightview"],"style":"sightseeing","who":"family_kids","budget":6},"ドブロブニク","ブレッド湖",6],[{"region":"overseas","days":"verylong","scene":["beach","nature","street","architecture","ruins"],"moment":["none"],"style":"resort","who":"couple","budget":2},"バリ島","ダナン",15]]

@@ -1,0 +1,446 @@
+{
+ "file": "../fixed.txt",
+ "stats": {
+  "combos": 22257664,
+  "uiPaths": 332400,
+  "noResult": 8638464,
+  "noResultButSelectable": 0,
+  "noResultDueToMaxScore": 0,
+  "regionLeak": 0,
+  "topMissingHard": 5933296,
+  "topNoScene": 121495,
+  "altBeatsTop": 95468,
+  "allBudgetsDisabledReleased": 89984,
+  "autoBudget": 6144,
+  "budgetDisabledButHasResult": 0,
+  "shown": 13619200,
+  "rateHist": {
+   "8": 8,
+   "9": 204,
+   "10": 1604,
+   "11": 6590,
+   "13": 16814,
+   "14": 28959,
+   "15": 3360,
+   "17": 50203,
+   "18": 51870,
+   "19": 64,
+   "20": 141698,
+   "21": 6928,
+   "22": 184963,
+   "23": 30476,
+   "24": 16,
+   "25": 340239,
+   "27": 216227,
+   "29": 239131,
+   "30": 368118,
+   "31": 58148,
+   "33": 825268,
+   "35": 16,
+   "36": 329410,
+   "38": 578646,
+   "40": 587716,
+   "41": 40,
+   "42": 153995,
+   "43": 454909,
+   "44": 611934,
+   "45": 315078,
+   "46": 65970,
+   "47": 4390,
+   "50": 1713910,
+   "53": 6258,
+   "54": 88827,
+   "55": 381969,
+   "56": 658660,
+   "57": 539385,
+   "58": 202358,
+   "59": 48,
+   "60": 696584,
+   "62": 68652,
+   "63": 589832,
+   "64": 302656,
+   "67": 901163,
+   "69": 19920,
+   "70": 262593,
+   "71": 354456,
+   "73": 92234,
+   "75": 359093,
+   "77": 1680,
+   "78": 149051,
+   "80": 165580,
+   "82": 10832,
+   "83": 129003,
+   "86": 97247,
+   "88": 50544,
+   "89": 17440,
+   "90": 3616,
+   "91": 336,
+   "100": 82281
+  }
+ },
+ "examples": {
+  "altBeatsTop": [
+   {
+    "top": "okinawa",
+    "alt": "okinawa_rito",
+    "region": "domestic",
+    "days": "short",
+    "scene": [
+     "beach"
+    ],
+    "moment": [
+     "none"
+    ],
+    "style": "active",
+    "who": "family_kids",
+    "budget": 2
+   },
+   {
+    "top": "okinawa",
+    "alt": "okinawa_rito",
+    "region": "domestic",
+    "days": "short",
+    "scene": [
+     "beach"
+    ],
+    "moment": [
+     "sunset"
+    ],
+    "style": "active",
+    "who": "family_kids",
+    "budget": 2
+   },
+   {
+    "top": "okinawa",
+    "alt": "okinawa_rito",
+    "region": "domestic",
+    "days": "short",
+    "scene": [
+     "beach"
+    ],
+    "moment": [
+     "starry"
+    ],
+    "style": "active",
+    "who": "family_kids",
+    "budget": 2
+   },
+   {
+    "top": "okinawa",
+    "alt": "okinawa_rito",
+    "region": "domestic",
+    "days": "short",
+    "scene": [
+     "beach"
+    ],
+    "moment": [
+     "sunset",
+     "starry"
+    ],
+    "style": "active",
+    "who": "family_kids",
+    "budget": 2
+   },
+   {
+    "top": "okinawa",
+    "alt": "okinawa_rito",
+    "region": "domestic",
+    "days": "short",
+    "scene": [
+     "beach"
+    ],
+    "moment": [
+     "nightview"
+    ],
+    "style": "active",
+    "who": "family_kids",
+    "budget": 2
+   },
+   {
+    "top": "okinawa",
+    "alt": "okinawa_rito",
+    "region": "domestic",
+    "days": "short",
+    "scene": [
+     "beach"
+    ],
+    "moment": [
+     "sunset",
+     "nightview"
+    ],
+    "style": "active",
+    "who": "family_kids",
+    "budget": 2
+   },
+   {
+    "top": "okinawa",
+    "alt": "okinawa_rito",
+    "region": "domestic",
+    "days": "short",
+    "scene": [
+     "beach"
+    ],
+    "moment": [
+     "starry",
+     "nightview"
+    ],
+    "style": "active",
+    "who": "family_kids",
+    "budget": 2
+   },
+   {
+    "top": "okinawa",
+    "alt": "okinawa_rito",
+    "region": "domestic",
+    "days": "short",
+    "scene": [
+     "beach"
+    ],
+    "moment": [
+     "sunset",
+     "starry",
+     "nightview"
+    ],
+    "style": "active",
+    "who": "family_kids",
+    "budget": 2
+   }
+  ],
+  "topNoScene": [
+   {
+    "top": "okinawa",
+    "region": "domestic",
+    "days": "short",
+    "scene": [
+     "garden"
+    ],
+    "moment": [
+     "none"
+    ],
+    "style": "resort",
+    "who": "family_kids",
+    "budget": 1
+   },
+   {
+    "top": "okinawa",
+    "region": "domestic",
+    "days": "short",
+    "scene": [
+     "garden"
+    ],
+    "moment": [
+     "none"
+    ],
+    "style": "shopping",
+    "who": "family_kids",
+    "budget": 1
+   },
+   {
+    "top": "okinawa",
+    "region": "domestic",
+    "days": "short",
+    "scene": [
+     "garden"
+    ],
+    "moment": [
+     "none"
+    ],
+    "style": "resort",
+    "who": "family_kids",
+    "budget": 2
+   },
+   {
+    "top": "okinawa",
+    "region": "domestic",
+    "days": "short",
+    "scene": [
+     "garden"
+    ],
+    "moment": [
+     "none"
+    ],
+    "style": "shopping",
+    "who": "family_kids",
+    "budget": 2
+   },
+   {
+    "top": "okinawa",
+    "region": "domestic",
+    "days": "short",
+    "scene": [
+     "garden"
+    ],
+    "moment": [
+     "sunset"
+    ],
+    "style": "resort",
+    "who": "family_kids",
+    "budget": 1
+   },
+   {
+    "top": "okinawa",
+    "region": "domestic",
+    "days": "short",
+    "scene": [
+     "garden"
+    ],
+    "moment": [
+     "sunset"
+    ],
+    "style": "shopping",
+    "who": "family_kids",
+    "budget": 1
+   },
+   {
+    "top": "okinawa",
+    "region": "domestic",
+    "days": "short",
+    "scene": [
+     "garden"
+    ],
+    "moment": [
+     "sunset"
+    ],
+    "style": "resort",
+    "who": "family_kids",
+    "budget": 2
+   },
+   {
+    "top": "okinawa",
+    "region": "domestic",
+    "days": "short",
+    "scene": [
+     "garden"
+    ],
+    "moment": [
+     "sunset"
+    ],
+    "style": "shopping",
+    "who": "family_kids",
+    "budget": 2
+   }
+  ],
+  "topMissingHard": [
+   {
+    "top": "bali",
+    "region": "overseas",
+    "days": "medium",
+    "scene": [
+     "beach"
+    ],
+    "moment": [
+     "starry",
+     "animal"
+    ],
+    "style": "resort",
+    "who": "couple",
+    "budget": 2
+   },
+   {
+    "top": "bali",
+    "region": "overseas",
+    "days": "medium",
+    "scene": [
+     "beach"
+    ],
+    "moment": [
+     "starry",
+     "animal"
+    ],
+    "style": "resort",
+    "who": "family_kids",
+    "budget": 2
+   },
+   {
+    "top": "bali",
+    "region": "overseas",
+    "days": "medium",
+    "scene": [
+     "beach"
+    ],
+    "moment": [
+     "starry",
+     "animal"
+    ],
+    "style": "resort",
+    "who": "family_elder",
+    "budget": 2
+   },
+   {
+    "top": "bali",
+    "region": "overseas",
+    "days": "medium",
+    "scene": [
+     "beach"
+    ],
+    "moment": [
+     "starry",
+     "animal"
+    ],
+    "style": "resort",
+    "who": "group",
+    "budget": 2
+   },
+   {
+    "top": "phuket",
+    "region": "overseas",
+    "days": "medium",
+    "scene": [
+     "beach"
+    ],
+    "moment": [
+     "starry",
+     "animal"
+    ],
+    "style": "sightseeing",
+    "who": "couple",
+    "budget": 2
+   },
+   {
+    "top": "bali",
+    "region": "overseas",
+    "days": "medium",
+    "scene": [
+     "beach"
+    ],
+    "moment": [
+     "starry",
+     "animal"
+    ],
+    "style": "sightseeing",
+    "who": "family_kids",
+    "budget": 2
+   },
+   {
+    "top": "bali",
+    "region": "overseas",
+    "days": "medium",
+    "scene": [
+     "beach"
+    ],
+    "moment": [
+     "starry",
+     "animal"
+    ],
+    "style": "sightseeing",
+    "who": "family_elder",
+    "budget": 2
+   },
+   {
+    "top": "bali",
+    "region": "overseas",
+    "days": "medium",
+    "scene": [
+     "beach"
+    ],
+    "moment": [
+     "starry",
+     "animal"
+    ],
+    "style": "sightseeing",
+    "who": "group",
+    "budget": 2
+   }
+  ]
+ }
+}

@@ -1,0 +1,694 @@
+<script>
+if(!Array.prototype.indexOf){Array.prototype.indexOf=function(v){for(var i=0;i<this.length;i++){if(this[i]===v)return i;}return -1;};}
+if(!Array.prototype.includes){Array.prototype.includes=function(v){return this.indexOf(v)!==-1;};}
+if(!String.prototype.includes){String.prototype.includes=function(v){return this.indexOf(v)!==-1;};}
+
+/* === DESTINATIONS === */
+const DEST = {
+    okinawa: { name:'沖縄本島', en:'Okinawa, Japan', img:'https://www.his-wedding.com/location_quiz/images/dst/okinawa.jpg', link:'https://www.his-wedding.com/photowedding/okinawa/', reason:'国内最高クラスの透明な海と空。2~3泊からでも充実した撮影が可能で、チャペル撮影もあり、ご家族同行も安心のサポート体制です。', tags:['ビーチ・海','チャペルあり','家族同行OK'], subCities:['那覇','読谷','恩納村','瀬長島'], chapel:true, studio:false, starry:true, balloon:false, animal:false, nature:true, landscape:false, street:true, castle:false, architecture:false, ruins:true, garden:false, villa:false, sunset:true, domestic:true},
+    okinawa_rito: { name:'沖縄離島', en:'Okinawa Islands, Japan', img:'https://www.his-wedding.com/location_quiz/images/dst/ishigakijima.jpg', link:'https://www.his-wedding.com/photowedding/okinawa/', reason:'宮古島・石垣島・竹富島など手つかずの自然と透明度抜群の海。本島とは違う静かな非日常空間でのフォトウェディングが叶います。', tags:['ビーチ・海','絶景','プライベート感'], subCities:['宮古島','石垣島','竹富島','小浜島'], chapel:true, studio:true, starry:true, balloon:false, animal:false, nature:true, landscape:false, street:true, castle:false, architecture:false, ruins:false, garden:false, villa:false, domestic:true},
+    hokkaido: { name:'北海道', en:'Hokkaido, Japan', img:'https://www.his-wedding.com/files/media/image00066231.png', link:'https://www.his-wedding.com/photowedding/japan/hokkaido_photo/', reason:'広大な大地と花畑、雪景色など四季折々の絶景が広がる国内随一の自然ロケーション。ラベンダー畑や美瑛の丘での撮影が人気です。', tags:['大自然','花畑・庭園','四季の絶景'], subCities:['富良野','美瑛','函館','小樽'], chapel:false, studio:false, starry:false, balloon:false, animal:false, nature:true, landscape:false, street:true, castle:false, architecture:false, ruins:false, garden:true, villa:false, sunset:true, domestic:true},
+   
+    // korea: { name:'韓国', en:'Seoul / Busan, Korea', img:'https://www.his-wedding.com/location_quiz/images/dst/seoul.jpg', link:'https://www.his-wedding.com/photowedding/overseas/', reason:'近場でコストを抑えながらスタジオ撮影や街並みロケが充実。トレンド感あふれる写真が撮れると人気急上昇中のエリアです。', tags:['街並み・建築','スタジオ撮影','近場'], subCities:['ソウル','釜山','済州島'], chapel:false, studio:true, starry:false, balloon:false, animal:false, nature:true, landscape:false, street:true, castle:true, architecture:false, ruins:false, garden:false, villa:false, sunset:false, nightview:true, domestic:false},
+   
+    guam: { name:'グアム', en:'Guam, USA', img:'https://www.his-wedding.com/files/media/image00065799.png', link:'https://www.his-wedding.com/photowedding/micronesia/', reason:'日本から4時間弱でアクセスできる定番ビーチリゾート。チャペル撮影も充実しており、家族同行にも安心の環境が整っています。', tags:['ビーチ・海','チャペルあり','家族同行OK'], subCities:['タモン','リティディアンビーチ'], chapel:true, studio:false, starry:false, balloon:false, animal:false, nature:true, landscape:false, street:true, castle:false, architecture:false, ruins:false, garden:false, villa:true, sunset:true, nightview:false, domestic:false},
+    bali: { name:'バリ島', en:'Bali, Indonesia', img:'https://www.his-wedding.com/location_quiz/images/dst/bali.jpg', link:'https://www.his-wedding.com/photowedding/asia/', reason:'ヴィラリゾートと棚田・寺院が融合する独特の雰囲気。チャペル撮影も可能で、南国リゾートと異国情緒を同時に楽しめます。', tags:['リゾートヴィラ','チャペルあり','大自然'], subCities:['ウブド','クタ','ジンバラン','スミニャック'], chapel:true, studio:false, starry:false, balloon:false, animal:true, nature:false, landscape:false, street:true, castle:false, architecture:false, ruins:true, garden:false, villa:true, sunset:true, nightview:false, domestic:false},
+    danang: { name:'ダナン', en:'Da Nang, Vietnam', img:'https://www.his-wedding.com/files/media/image00078047.png', link:'https://www.his-wedding.com/photowedding/overseas/danang_photo/', reason:'ランタンの灯るノスタルジックな街並みと美しいビーチを組み合わせた撮影が人気。コスパも高くアクセスも良好です。', tags:['ビーチ・街並み','エモーショナル','コスパ重視'], subCities:['ダナン市街','ホイアン','バーナーヒルズ'], chapel:false, studio:false, starry:false, balloon:false, animal:false, nature:false, landscape:false, street:true, castle:false, architecture:false, ruins:true, garden:false, villa:false, domestic:false},
+    cebu: { name:'セブ島', en:'Cebu, Philippines', img:'https://www.his-wedding.com/files/media/image00078240.png', link:'https://www.his-wedding.com/photowedding/overseas/his_ceb/', reason:'フィリピンの楽園リゾート。透き通る海とホワイトサンドビーチでのフォトウェディングはコスパも良く家族同行にも人気です。', tags:['ビーチ・海','リゾート','家族同行OK'], subCities:['マクタン島','モアルボアル','オスロブ'], chapel:false, studio:false, starry:false, balloon:false, animal:false, nature:false, landscape:false, street:false, castle:false, architecture:false, ruins:false, garden:false, villa:false, sunset:true, domestic:false},
+    singapore: { name:'シンガポール', en:'Singapore', img:'https://www.his-wedding.com/files/media/image00083542.png', link:'https://www.his-wedding.com/photowedding/overseas/', reason:'都市と自然が融合する近未来都市。マリーナベイサンズやガーデンズ・バイ・ザ・ベイなど唯一無二のロケーションが揃います。', tags:['都市・夜景','近未来感','ショッピング'], subCities:['マリーナベイ','ガーデンズバイザベイ','セントーサ島'], chapel:false, studio:false, starry:false, balloon:false, animal:false, nature:false, landscape:false, street:true, castle:false, architecture:false, ruins:false, garden:true, villa:true, domestic:false},
+    phuket: { name:'プーケット', en:'Phuket, Thailand', img:'https://www.his-wedding.com/files/media/image00071792.png', link:'https://www.his-wedding.com/photowedding/overseas/his_phuket/', reason:'タイ最大のリゾートアイランド。エメラルドグリーンの海とゾウとの撮影体験も人気。リゾートライフと撮影を同時に満喫できます。', tags:['ビーチ・海','ゾウ体験','リゾートライフ'], subCities:['パトンビーチ','カタビーチ','ピピ島'], chapel:false, studio:false, starry:false, balloon:false, animal:true, nature:false, landscape:false, street:true, castle:false, architecture:false, ruins:false, garden:false, villa:false, domestic:false},
+    hawaii: { name:'ハワイ', en:'Hawaii, USA', img:'https://www.his-wedding.com/files/media/image00077522.png', link:'https://www.his-wedding.com/photowedding/hawaii/', reason:'王道のリゾートウェディング定番地。チャペル・ビーチ・サンセットと多彩な撮影スタイルが揃い、大自然とオーシャンビューも楽しめます。', tags:['ビーチ・海','チャペルあり','サンセット'], subCities:['オアフ島','マウイ島','ハワイ島','ラナイ島'], chapel:true, studio:false, starry:true, balloon:false, animal:false, nature:true, landscape:false, street:true, castle:false, architecture:false, ruins:false, garden:false, villa:true, sunset:true, domestic:false},
+    australia: { name:'オーストラリア', en:'Australia', img:'https://www.his-wedding.com/files/media/image00079416.png', link:'https://www.his-wedding.com/photowedding/oceania/', reason:'海・大地・自然と多彩なロケーション。コアラとの撮影も可能で、チャペル撮影も充実。アクティブな観光との組み合わせも抜群です。', tags:['大自然','コアラ体験','チャペルあり'], subCities:['ケアンズ','ゴールドコースト','シドニー','ウルル'], chapel:true, studio:false, starry:true, balloon:false, animal:true, nature:true, landscape:true, street:true, castle:false, architecture:true, ruins:false, garden:false, villa:false, sunset:true, domestic:false},
+    lasvegas: { name:'ラスベガス', en:'Las Vegas, USA', img:'https://www.his-wedding.com/location_quiz/images/dst/lasvegas.jpg', link:'https://www.his-wedding.com/photowedding/usa/his_las/', reason:'非日常のエンタメ都市で型にはまらないダイナミックな撮影を。砂漠・夜景・ストリップなど唯一無二のロケーションが揃います。', tags:['夜景・絶景','砂漠','エンタメ感'], subCities:['ストリップ','モハベ砂漠','セドナ'], chapel:false, studio:false, starry:false, balloon:false, animal:false, nature:true, landscape:true, street:true, castle:false, architecture:false, ruins:false, garden:false, villa:false, sunset:true, domestic:false},
+    newyork: { name:'ニューヨーク', en:'New York, USA', img:'https://www.his-wedding.com/files/media/image00070899.png', link:'https://www.his-wedding.com/photowedding/usa/worldlocation_usa/', reason:'世界一の都市景観をバックにした圧倒的なスケール感。セントラルパーク・ブルックリンブリッジなど映画のような一枚が残せます。', tags:['都市・夜景','映画的世界観','ショッピング'], subCities:['セントラルパーク','ブルックリンブリッジ','マンハッタン'], chapel:false, studio:false, starry:false, balloon:false, animal:false, nature:false, landscape:false, street:true, castle:false, architecture:false, ruins:false, domestic:false},
+    fiji: { name:'フィジー', en:'Fiji', img:'https://www.his-wedding.com/files/media/image00077399.png', link:'https://www.his-wedding.com/photowedding/south/fiji/', reason:'南太平洋の秘境リゾート。手つかずの自然とチャペル撮影が魅力。世界屈指の透明度を誇る海での撮影は息を呑む美しさです。', tags:['ビーチ・海','チャペルあり','秘境リゾート'], subCities:['ナンディ','マナ島','ヤサワ諸島'], chapel:true, studio:false, starry:false, balloon:false, animal:false, nature:false, landscape:false, street:false, castle:false, architecture:false, ruins:false, garden:false, villa:true, sunset:true, nightview:false, domestic:false},
+    canada: { name:'カナダ', en:'Canada', img:'https://www.his-wedding.com/files/media/image00080479.png', link:'https://www.his-wedding.com/photowedding/usa/his_canada/', reason:'バンクーバーの都市美とプリンスエドワード島の牧歌的な風景。大自然と都市の両方が楽しめる多彩なロケーションが魅力です。', tags:['大自然','街並み','四季の絶景'], subCities:['バンクーバー','プリンスエドワード島'], chapel:false, studio:false, starry:false, balloon:false, animal:false, nature:true, landscape:false, street:true, castle:false, architecture:false, ruins:false, garden:false, villa:false, sunset:false, nightview:false, domestic:false},
+    cancun: { name:'カンクン', en:'Cancun, Mexico', img:'https://www.his-wedding.com/files/media/image00075996.png', link:'https://www.his-wedding.com/photowedding/usa/cun_photo/', reason:'カリブ海の透き通る海と白砂のビーチ。セノーテ（地底湖）での幻想的な撮影も人気で、非日常感あふれる体験ができます。', tags:['ビーチ・海','セノーテ','リゾートライフ'], subCities:['カンクン市街','セノーテ','コスメル島'], chapel:false, studio:false, starry:false, balloon:false, animal:false, nature:false, landscape:false, street:true, castle:false, architecture:false, ruins:true, garden:false, villa:false, sunset:true, domestic:false},
+    maldives: { name:'モルディブ', en:'Maldives', img:'https://www.his-wedding.com/files/media/image00082071.png', link:'https://www.his-wedding.com/photowedding/south/', reason:'水上ヴィラに滞在しながらプライベートな撮影。チャペル・サンセット・星空すべてが揃う最上級のラグジュアリーリゾートです。', tags:['水上ヴィラ','チャペルあり','ラグジュアリー'], subCities:['マーレ環礁','バア環礁'], chapel:true, studio:false, starry:true, balloon:false, animal:false, nature:false, landscape:false, street:false, castle:false, architecture:false, ruins:false, garden:false, villa:true, sunset:true, nightview:false, domestic:false},
+    nz: { name:'ニュージーランド', en:'New Zealand', img:'https://www.his-wedding.com/files/media/image00076887.png', link:'https://www.his-wedding.com/photowedding/oceania/nz_photo/', reason:'フィヨルドや大草原など圧倒的スケールの大自然。テカポ湖の星空は世界最高クラスで、馬との撮影も人気です。', tags:['大自然','星空','馬との撮影'], subCities:['クイーンズタウン','テカポ湖','クライストチャーチ'], chapel:false, studio:false, starry:true, balloon:false, animal:false, nature:true, landscape:false, street:true, castle:false, architecture:false, ruins:false, garden:false, villa:false, sunset:false, nightview:false, domestic:false},
+    dubai: { name:'ドバイ', en:'Dubai, UAE', img:'https://www.his-wedding.com/files/media/image00075871.png', link:'https://www.his-wedding.com/photowedding/overseas/his_dubai/', reason:'砂漠と超高層ビルが共存する唯一無二の都市。バージュ・ハリファや砂漠でのラクダとの撮影など、スケール感抜群の一枚が残せます。', tags:['都市・砂漠','ラクダ体験','ラグジュアリー'], subCities:['バージュハリファ','砂漠サファリ','パームジュメイラ'], chapel:false, studio:false, starry:false, balloon:false, animal:true, nature:false, landscape:true, street:true, castle:false, architecture:false, ruins:false, garden:false, villa:false, domestic:false},
+    egypt: { name:'エジプト', en:'Egypt', img:'https://www.his-wedding.com/files/media/image00075875.png', link:'https://www.his-wedding.com/photowedding/overseas/his_cairo/', reason:'ピラミッドをバックにした圧倒的なスケール感。世界最大の遺跡群を舞台にした他に類を見ない歴史的フォトが叶います。', tags:['遺跡・歴史','スケール感','唯一無二'], subCities:['ギザ','ルクソール','アスワン'], chapel:false, studio:false, starry:false, balloon:false, animal:false, nature:false, landscape:true, street:false, castle:false, architecture:true, ruins:true, garden:false, villa:false, sunset:false, nightview:false, domestic:false},
+    morocco: { name:'モロッコ', en:'Morocco', img:'https://www.his-wedding.com/files/media/image00081744.png', link:'https://www.his-wedding.com/photowedding/overseas/his_morocco/', reason:'迷宮都市マラケシュと青い街シャウエン。異国情緒あふれる路地や砂漠でのラクダ撮影が、世界観のある唯一無二の写真を生み出します。', tags:['異国情緒','砂漠・ラクダ','カラフルな街並み'], subCities:['マラケシュ','シャウエン','サハラ砂漠'], chapel:false, studio:false, starry:false, balloon:false, animal:false, nature:false, landscape:true, street:true, castle:false, architecture:false, ruins:false, garden:false, villa:true, domestic:false},
+    masaimara: { name:'マサイマラ', en:'Masai Mara, Kenya', img:'https://www.his-wedding.com/files/media/image00080837.png', link:'https://www.his-wedding.com/photowedding/overseas/his_kenya/', reason:'大草原に広がるサバンナと野生動物、気球撮影まで。世界でここだけの圧倒的な自然の中で究極のフォトウェディングが叶います。', tags:['サバンナ・野生動物','気球撮影','唯一無二'], subCities:['マサイマラ国立公園','ナイロビ'], chapel:false, studio:false, starry:false, balloon:false, animal:true, nature:true, landscape:false, street:false, castle:false, architecture:false, ruins:false, garden:false, villa:true, domestic:false},
+    uyuni: { name:'ウユニ塩湖', en:'Uyuni Salt Flat, Bolivia', img:'https://www.his-wedding.com/files/media/image00068294.png', link:'https://www.his-wedding.com/photowedding/overseas/his_bolivia/', reason:'世界最大の鏡張りの絶景。白い大地が空と溶け合う圧倒的な非日常空間で、世界中のカップルが憧れる一枚が残せます。', tags:['絶景地形','鏡張り','唯一無二'], subCities:['ウユニ市街','インカワシ島'], chapel:false, studio:false, starry:true, balloon:false, animal:false, nature:false, landscape:true, street:false, castle:false, architecture:false, ruins:false, garden:false, villa:false, sunset:true, nightview:false, domestic:false},
+    paris: { name:'パリ', en:'Paris, France', img:'https://www.his-wedding.com/files/media/image00074381.png', link:'https://www.his-wedding.com/photowedding/europe/his_paris/', reason:'ヨーロッパ最高峰のロマンチックな街並みとエッフェル塔の絶景。夜景・早朝の光・サンセットと多彩なシーンが楽しめます。', tags:['ヨーロッパ街並み','ロマンチック','夜景'], subCities:['エッフェル塔','モンマルトル','ヴェルサイユ宮殿','ルーヴル美術館'], chapel:false, studio:false, starry:false, balloon:false, animal:false, nature:false, landscape:false, street:true, castle:true, architecture:false, ruins:false, garden:false, domestic:false},
+    mont_saint: { name:'モンサンミシェル', en:'Mont Saint-Michel, France', img:'https://www.his-wedding.com/files/media/image00081768.png', link:'https://www.his-wedding.com/photowedding/europe/ppw_michel/', reason:'海に浮かぶ幻想的な修道院島。潮の満ち引きで表情を変える神秘的な景観をバックに、おとぎ話のような一枚が残せます。', tags:['幻想的','歴史建築','フランス'], subCities:['モンサンミシェル島','サンマロ'], chapel:true, studio:false, starry:false, balloon:false, animal:false, nature:true, landscape:false, street:false, castle:false, architecture:true, ruins:false, garden:false, villa:false, sunset:true, domestic:false},
+    wien: { name:'ウィーン', en:'Vienna, Austria', img:'https://www.his-wedding.com/files/media/image00078338.png', link:'https://www.his-wedding.com/photowedding/europe/his_wien/', reason:'美術史美術館（KHM）やベルヴェデーレ宮殿など格式高い建築が集結。気品あるドレス映えが叶うヨーロッパの名所です。', tags:['宮殿・美術館','クラシカル','格式'], subCities:['ベルヴェデーレ宮殿','シェーンブルン宮殿','リンク通り'], chapel:false, studio:false, starry:false, balloon:false, animal:false, nature:false, landscape:false, street:true, castle:true, architecture:true, ruins:false, garden:false, villa:true, sunset:true, domestic:false},
+    italy: { name:'イタリア', en:'Italy', img:'https://www.his-wedding.com/files/media/image00079792.png', link:'https://www.his-wedding.com/photowedding/europe/his_italy/', reason:'ローマ・フィレンツェ・ベネチア・アマルフィなど多彩な絶景が揃う。チャペル撮影も可能でヨーロッパ最高峰の撮影地です。', tags:['歴史・遺跡','チャペルあり','多彩な景観'], subCities:['ローマ','フィレンツェ','ベネチア','アマルフィ','ポジターノ','トスカーナ'], chapel:true, studio:false, starry:false, balloon:false, animal:false, nature:false, landscape:false, street:true, castle:true, architecture:true, ruins:true, garden:false, domestic:false},
+    barcelona: { name:'バルセロナ', en:'Barcelona, Spain', img:'https://www.his-wedding.com/files/media/image00078829.png', link:'https://www.his-wedding.com/photowedding/europe/laboda/', reason:'ガウディ建築とカラフルな街並み、地中海の青い海が融合。チャペル撮影も可能で芸術的な一枚が残せます。', tags:['ガウディ建築','チャペルあり','地中海'], subCities:['サグラダファミリア','グエル公園','バルセロネータ'], chapel:true, studio:false, starry:false, balloon:false, animal:false, nature:false, landscape:false, street:true, castle:false, architecture:true, ruins:false, garden:false, villa:false, sunset:false, domestic:false},
+    portugal: { name:'ポルトガル', en:'Portugal', img:'https://www.his-wedding.com/files/media/image00081551.png', link:'https://www.his-wedding.com/photowedding/europe/ppw_portugal/', reason:'リスボンの路面電車とシントラの幻想的な宮殿。ヨーロッパの中でも独特の哀愁と美しさが共存する穴場の撮影地です。', tags:['ヨーロッパ街並み','宮殿・庭園','哀愁ある景観'], subCities:['リスボン','シントラ','ポルト'], chapel:false, studio:false, starry:false, balloon:false, animal:false, nature:false, landscape:false, street:true, castle:false, architecture:false, ruins:false, garden:false, villa:false, sunset:false, domestic:false},
+    malta: { name:'マルタ', en:'Malta', img:'https://www.his-wedding.com/files/media/image00081545.png', link:'https://www.his-wedding.com/photowedding/europe/ppw_malta/', reason:'地中海に浮かぶ小さな島国。古代遺跡と青い海が共存する唯一無二の景観と、ヨーロッパ有数の透明度を誇る海が魅力です。', tags:['地中海','古代遺跡','秘境感'], subCities:['バレッタ','ゴゾ島','コミノ島'], chapel:false, studio:false, starry:false, balloon:false, animal:false, nature:false, landscape:false, street:true, castle:true, architecture:false, ruins:false, garden:false, villa:false, sunset:false, nightview:false, morning:false, domestic:false},
+    greece: { name:'サントリーニ島', en:'Santorini, Greece', img:'https://www.his-wedding.com/files/media/image00077898.png', link:'https://www.his-wedding.com/photowedding/europe/his_greece/', reason:'白と青のコントラストが美しいエーゲ海の島。世界三大サンセットのひとつを舞台にした撮影は息を呑む美しさです。', tags:['サンセット','ビーチ・水辺','ロマンチック'], subCities:['イア','フィラ','アクロティリ','アテネ'], chapel:false, studio:false, starry:false, balloon:false, animal:false, nature:false, landscape:false, street:true, castle:false, architecture:false, ruins:false, garden:false, villa:false, domestic:false},
+    cappadocia: { name:'カッパドキア', en:'Cappadocia, Turkey', img:'https://www.his-wedding.com/files/media/image00076514.png', link:'https://www.his-wedding.com/photowedding/europe/his_turky/', reason:'奇岩地形に浮かぶ気球は世界でここだけ。早朝のゴールデンタイムに気球と馬と撮る一枚は一生忘れられない写真になります。', tags:['奇岩・絶景地形','気球・馬','早朝の光'], subCities:['ギョレメ','ウチヒサル','デリンクユ'], chapel:false, studio:false, starry:false, balloon:true, animal:false, nature:false, landscape:true, street:false, castle:false, architecture:false, ruins:false, garden:false, villa:false, domestic:false},
+    swiss: { name:'スイス', en:'Switzerland', img:'https://www.his-wedding.com/files/media/image00077738.png', link:'https://www.his-wedding.com/photowedding/europe/his_switzerland/', reason:'アルプスの山々と湖の静寂の中でこだわりのプレミアム撮影が叶います。世界最高峰の絶景の中での一枚は格別です。', tags:['大自然・山岳','湖・水辺','プレミアム'], subCities:['グリンデルワルト','ツェルマット','イゼルトワルト'], chapel:false, studio:false, starry:false, balloon:false, animal:false, nature:true, landscape:false, street:false, castle:false, architecture:false, ruins:false, garden:false, villa:false, sunset:true, domestic:false},
+    central_eu: { name:'中欧', en:'Central Europe', img:'https://www.his-wedding.com/files/media/image00078330.png', link:'https://www.his-wedding.com/photowedding/europe/his_prague/', reason:'プラハの石畳とブダペストのドナウ川夜景。おとぎ話のような中世の街並みが残るヨーロッパの隠れた名撮影地です。', tags:['中世の街並み','夜景','ヨーロッパ'], subCities:['プラハ','チェスキークルムロフ','ブダペスト'], chapel:false, studio:false, starry:false, balloon:false, animal:false, nature:false, landscape:false, street:true, castle:false, architecture:false, ruins:false, garden:false, villa:false, sunset:false, domestic:false},
+    romantic_road: { name:'ロマンティック街道', en:'Romantic Road, Germany', img:'https://www.his-wedding.com/files/media/image00081567.png', link:'https://www.his-wedding.com/photowedding/europe/his_germany/', reason:'ノイシュバンシュタイン城やローテンブルクなど、まるでおとぎ話の世界に迷い込んだような絶景が続くドイツの人気ルートです。', tags:['城・古城','中世の街並み','ファンタジー'], subCities:['ノイシュバンシュタイン城','ローテンブルク','フュッセン'], chapel:true, studio:false, starry:false, balloon:false, animal:false, nature:false, landscape:false, street:true, castle:true, architecture:false, domestic:false},
+    netherlands: { name:'オランダ', en:'Netherlands', img:'https://www.his-wedding.com/files/media/image00078939.png', link:'https://www.his-wedding.com/photowedding/europe/his_ams/', reason:'チューリップ畑と風車、運河の街アムステルダム。春のキューケンホフ公園の花畑は世界最大級で花嫁に大人気の撮影地です。', tags:['花畑・チューリップ','運河・水辺','ヨーロッパ'], subCities:['アムステルダム','キューケンホフ','ハーグ'], chapel:false, studio:false, starry:false, balloon:false, animal:false, nature:false, landscape:false, street:true, castle:false, architecture:false, ruins:false, garden:true, villa:false, domestic:false},
+    dubrovnik: { name:'ドブロブニク', en:'Dubrovnik, Croatia', img:'https://www.his-wedding.com/files/media/image00080088.png', link:'https://www.his-wedding.com/photowedding/europe/his_hrv_svn/', reason:'アドリア海に面した城壁に囲まれた旧市街は「アドリア海の真珠」と称される絶景。オレンジ色の屋根と青い海のコントラストが美しい。', tags:['城壁・旧市街','アドリア海','映画的世界観'], subCities:['旧市街','ロクルム島','スルジ山展望台'], chapel:false, studio:false, starry:false, balloon:false, animal:false, nature:false, landscape:false, street:true, castle:false, architecture:false, ruins:false, garden:false, domestic:false},
+    bled: { name:'ブレッド湖', en:'Lake Bled, Slovenia', img:'https://www.his-wedding.com/files/media/image00080095.png', link:'https://www.his-wedding.com/photowedding/europe/his_hrv_svn/', reason:'湖の中央に浮かぶ小島と背後にそびえるアルプス。ヨーロッパで最も美しいといわれる湖の絶景をバックにした幻想的な一枚が残せます。', tags:['湖・水辺','アルプス','幻想的'], subCities:['ブレッド湖','ブレッド城','ヴィントガル渓谷'], chapel:false, studio:false, starry:false, balloon:false, animal:false, nature:true, landscape:false, street:true, castle:false, architecture:true, ruins:false, garden:false, villa:false, domestic:false},
+    nordic: { name:'北欧', en:'Scandinavia', img:'https://www.his-wedding.com/files/media/image00080054.png', link:'https://www.his-wedding.com/photowedding/europe/his_swe_fin/', reason:'白夜やオーロラ、チャペル撮影まで揃う唯一無二の撮影地。ヘルシンキの白い大聖堂やストックホルムの水辺の景観が人気です。', tags:['オーロラ・白夜','チャペルあり','水辺の景観'], subCities:['ヘルシンキ','ストックホルム','コペンハーゲン'], chapel:true, studio:false, starry:false, balloon:false, animal:false, nature:false, landscape:false, street:true, castle:false, architecture:false, ruins:false, garden:false, villa:false, domestic:false},
+    london: { name:'ロンドン', en:'London, UK', img:'https://www.his-wedding.com/files/media/image00081559.png', link:'https://www.his-wedding.com/photowedding/europe/his_london/', reason:'ビッグベンやタワーブリッジ、チャペル撮影まで揃う歴史都市。格調ある英国の街並みをバックにした一枚は品格があります。', tags:['歴史建築','チャペルあり','格調ある街並み'], subCities:['タワーブリッジ','コッツウォルズ','ウィンザー城'], chapel:true, studio:false, starry:false, balloon:false, animal:false, nature:false, landscape:false, street:true, castle:false, architecture:false, ruins:false, garden:false, villa:true, domestic:false}
+};
+
+const BUDGET_KEYS = {
+    1: ['okinawa','hokkaido','korea','danang','cebu'],
+    2: ['okinawa','hokkaido','korea','danang','cebu','okinawa_rito','guam','bali','phuket'],
+    3: ['okinawa_rito','guam','bali','phuket','singapore','australia','cappadocia','hawaii','dubai','fiji','paris','netherlands'],
+    4: ['singapore','australia','cappadocia','hawaii','dubai','fiji','paris','netherlands','egypt','malta','wien','morocco','barcelona','nz','italy','cancun','lasvegas','central_eu','canada','newyork','maldives','london','romantic_road','portugal','mont_saint','greece'],
+    5: ['egypt','malta','wien','morocco','barcelona','nz','italy','cancun','lasvegas','central_eu','canada','newyork','maldives','london','romantic_road','portugal','mont_saint','greece','dubrovnik','bled','nordic','swiss'],
+    6: ['uyuni','masaimara','dubrovnik','bled','nordic','swiss'],
+};
+
+const DAYS_KEYS = {
+    short:    ['okinawa','okinawa_rito','hokkaido','korea','guam'],
+    medium:   ['okinawa','okinawa_rito','hokkaido','korea','guam','bali','danang','cebu','phuket'],
+    long:     ['okinawa','okinawa_rito','hokkaido','korea','guam','bali','danang','cebu','phuket','hawaii','australia','paris','wien','italy','barcelona','greece','central_eu','romantic_road','netherlands','london','dubrovnik','bled','portugal','malta','cappadocia','nordic','mont_saint'],
+    verylong: ['okinawa','okinawa_rito','hokkaido','korea','guam','bali','danang','cebu','singapore','phuket','hawaii','australia','lasvegas','newyork','fiji','canada','cancun','nz','dubai','egypt','morocco','masaimara','maldives','swiss','uyuni','paris','mont_saint','wien','italy','barcelona','portugal','malta','greece','cappadocia','central_eu','romantic_road','netherlands','dubrovnik','bled','nordic','london'],
+    ultra:    'all',
+};
+
+// 景色・演出に対応しているエリア一覧（DEST の属性を補う）。
+// 候補選定 score()・予算の選択可否・一致率 calcMatching() の判定をこの一覧と DEST 属性の両方で統一する。
+var SCENE_LIST = {
+    beach:        ['okinawa','okinawa_rito','guam','bali','danang','cebu','phuket','hawaii','australia','fiji','cancun','maldives','malta','greece'],
+    nature:       ['okinawa_rito','hokkaido','australia','canada','nz','masaimara','swiss','nordic'],
+    landscape:    ['lasvegas','cancun','dubai','egypt','morocco','uyuni','cappadocia','swiss'],
+    street:       ['korea','danang','singapore','lasvegas','newyork','paris','mont_saint','wien','italy','barcelona','portugal','malta','central_eu','romantic_road','london','dubrovnik'],
+    castle:       ['paris','wien','central_eu','romantic_road','mont_saint','london'],
+    architecture: ['singapore','newyork','paris','wien','italy','barcelona','portugal','central_eu','london'],
+    ruins:        ['egypt','italy','greece','malta'],
+    chapel:       ['okinawa','okinawa_rito','guam','bali','cebu','phuket','hawaii','australia','fiji','maldives','italy','barcelona','london','nordic'],
+    garden:       ['hokkaido','wien','netherlands','canada'],
+    villa:        ['guam','bali','phuket','fiji','cancun','maldives'],
+    studio:       ['korea']
+};
+var MOMENT_LIST = {
+    sunset:    ['okinawa','okinawa_rito','guam','bali','danang','cebu','phuket','hawaii','australia','lasvegas','fiji','cancun','maldives','nz','greece','paris'],
+    starry:    ['okinawa_rito','hawaii','nz','maldives','uyuni'],
+    nightview: ['singapore','lasvegas','newyork','dubai','paris','london','central_eu'],
+    balloon:   ['cappadocia','masaimara'],
+    animal:    ['phuket','australia','nz','dubai','masaimara'],
+    morning:   ['paris','cappadocia','hawaii','okinawa']
+};
+function hasFeature(key,x){
+    var d=DEST[key]; if(!d) return false;
+    if(d[x]) return true;
+    var l=SCENE_LIST[x]||MOMENT_LIST[x];
+    return !!(l&&l.indexOf(key)!==-1);
+}
+
+const QS = [
+    { id:'region', section:'DESTINATION', step:1, title:'理想の舞台は、国内それとも海外ですか？', sub:'まずは思い描いているウェディングのおおまかな方向性をお聞かせください。', type:'single',
+      opts:[{main:'国内',sub:'沖縄・北海道など',v:'domestic'},{main:'海外',sub:'アジア・ヨーロッパなど',v:'overseas'}]},
+    { id:'days', section:'SCHEDULE', step:2, title:'旅の期間はどのくらいをご予定ですか？', sub:'フライトなどの移動日を含めた、ご旅行のトータル日数をお選びください。', type:'single',
+      opts:[{main:'2~3日',sub:'週末をつかってサクッと',v:'short'},{main:'4~5日',sub:'有給を1~2日プラスして',v:'medium'},{main:'6~7日',sub:'旅行と撮影をしっかり満喫',v:'long'},{main:'8~10日',sub:'じっくり遠方まで視野に',v:'verylong'},{main:'11日以上',sub:'長期でとことん楽しみたい',v:'ultra'}]},
+   
+ 
+    { id:'scene', section:'LOCATION', step:3, title:'どんな景色の中で、お二人の姿を残したいですか？', sub:'心惹かれるロケーションをお選びください（複数選択可）。', type:'multi',
+      opts:[{text:'ビーチ・海',v:'beach'},{text:'大自然・森・草原',v:'nature'},{text:'奇岩・砂漠・絶景地形',v:'landscape'},{text:'街並み・路地裏',v:'street'},{text:'お城・宮殿',v:'castle'},{text:'美術館・歴史建築',v:'architecture'},{text:'遺跡',v:'ruins'},{text:'チャペル・教会',v:'chapel'},{text:'花畑・庭園',v:'garden'},{text:'ラグジュアリーホテル・ヴィラ',v:'villa'}
+      /* ,{text:'スタジオ',v:'studio'} */ ]},
+     
+    { id:'moment', section:'SPECIAL MOMENT', step:4, title:'写真に収めたい、特別な瞬間や情景はありますか？', sub:'叶えたい演出やシチュエーションをお選びください（複数選択可）。', type:'multi',
+      opts:[{text:'サンセット（黄金の光）',v:'sunset'},{text:'星空',v:'starry'},{text:'夜景・イルミネーション',v:'nightview'},{text:'気球・バルーン',v:'balloon'},{text:'動物と一緒',v:'animal'},{text:'朝日・早朝の光',v:'morning'},{text:'こだわりなし・おまかせ',v:'none'}]},
+    { id:'style', section:'TRAVEL STYLE', step:5, title:'フォトウェディングと一緒に、どんな時間を過ごしたいですか？', sub:'撮影の合間や前後に楽しみたい、理想の過ごし方をお聞かせください。', type:'single',
+      opts:[{main:'のんびりリゾートライフ',sub:'プールやヴィラでゆっくり過ごしたい',v:'resort'},{main:'観光地めぐり・文化体験',sub:'世界遺産や美術館をたっぷり観たい',v:'sightseeing'},{main:'グルメ・ショッピング',sub:'地元の食や買い物をとことん楽しみたい',v:'shopping'},{main:'アクティブ・冒険',sub:'ダイビング・ハイキングで体を動かしたい',v:'active'}]},
+    { id:'who', section:'PARTY', step:6, title:'この特別な旅を、どなたと分かち合いたいですか？', sub:'一緒にご旅行される同行者様をお選びください。', type:'single',
+      opts:[{main:'お二人だけ',sub:'プライベートでロマンチックに',v:'couple'},{main:'子どもと一緒',sub:'ファミリーフォトも残したい',v:'family_kids'},{main:'ご両親・ご親族も一緒',sub:'みんなで思い出をつくりたい',v:'family_elder'},{main:'親族＋友人も招待したい',sub:'小規模パーティー的に行いたい',v:'group'}]},
+    { id:'budget', section:'BUDGET', step:7, title:'旅全体（撮影＋旅費）のご予算イメージは？', sub:'撮影費と旅費を含めた総額の目安をお聞かせください。（※これまでの回答によって一部選択できない枠があります）', type:'single',
+      opts:[{main:'60万円未満',sub:'近場でしっかり楽しみたい',v:1},{main:'60~100万円未満',sub:'ゆとりを持って楽しみたい',v:2},{main:'100~140万円未満',sub:'特別な旅として思い切りたい',v:3},{main:'140~180万円未満',sub:'一生に一度の体験にこだわりたい',v:4},{main:'180~250万円未満',sub:'プレミアムな旅を楽しみたい',v:5},{main:'250万円以上',sub:'最上級の旅にしたい',v:6}]}
+];
+
+function setToArray(s){var a=[];s.forEach(function(v){a.push(v);});return a;}
+
+function getEligible(ans) {
+    var days=ans.days||'ultra', budget=ans.budget||5;
+    var dk=DAYS_KEYS[days]==='all'?Object.keys(DEST):(DAYS_KEYS[days]||Object.keys(DEST));
+    var bk=BUDGET_KEYS[budget]||Object.keys(DEST);
+    var result=[];
+    for(var i=0;i<dk.length;i++){
+        var key = dk[i];
+        if(bk.indexOf(key)!==-1 && DEST[key]){
+            if(ans.region === 'domestic' && !DEST[key].domestic) continue;
+            if(ans.region === 'overseas' && DEST[key].domestic) continue;
+            result.push(key);
+        }
+    }
+    return result;
+}
+
+function score(ans) {
+    var scene0=ans.scene||[];
+    if(scene0.includes('studio') && scene0.length === 1){
+        var wantDomestic=(ans.region==='domestic');
+        var se0=[];
+        for(var k0 in DEST){
+            if(Object.prototype.hasOwnProperty.call(DEST,k0)&&DEST[k0].studio&&!!DEST[k0].domestic===wantDomestic) se0.push(k0);
+        }
+        window._lastMaxScore=se0.length?1:0;
+        return se0;
+    }
+
+    var eligible=getEligible(ans);
+    var s={};
+    for(var i=0;i<eligible.length;i++) s[eligible[i]]=0;
+    var who=ans.who||'', scene=ans.scene||[], moment=ans.moment||[], style=ans.style||'';
+
+    function add(ks,p){ for(var i=0;i<ks.length;i++){ if(ks[i] in s) s[ks[i]]+=p; } }
+    function sub(ks,p){ for(var i=0;i<ks.length;i++){ if(ks[i] in s) s[ks[i]]-=p; } }
+    var sc=0;
+    for(var i=0;i<scene.length;i++){ if(scene[i]!=='none') sc++; }
+    var pd=sc>1?sc:1;
+    function penExcept(pos,p){
+        for(var i=0;i<eligible.length;i++){
+            var k=eligible[i];
+            if(pos.indexOf(k)===-1 && k in s) s[k]-=Math.ceil(p/pd);
+        }
+    }
+
+    var hm=[];
+    for(var i=0;i<moment.length;i++){ if(moment[i]==='starry'||moment[i]==='balloon'||moment[i]==='animal') hm.push(moment[i]); }
+    var hasNone=moment.indexOf('none')!==-1;
+    if(hm.length>0&&!hasNone){
+        var mu=[];
+        for(var i=0;i<eligible.length;i++){
+            var k=eligible[i];
+            if((hm.indexOf('starry')!==-1&&hasFeature(k,'starry'))||
+               (hm.indexOf('balloon')!==-1&&hasFeature(k,'balloon'))||
+               (hm.indexOf('animal')!==-1&&hasFeature(k,'animal'))){
+                mu.push(k);
+            }
+        }
+        if(!mu.length) return [];
+        eligible=mu;
+        var newS={};
+        for(var i=0;i<eligible.length;i++) newS[eligible[i]]=0;
+        s=newS;
+    }
+
+    var nns=[];
+    for(var i=0;i<scene.length;i++){ if(scene[i]!=='none') nns.push(scene[i]); }
+    if(nns.length>0){
+        var anySceneOk=false;
+        for(var i=0;i<nns.length;i++){
+            for(var j=0;j<eligible.length;j++){
+                if(hasFeature(eligible[j],nns[i])){ anySceneOk=true; break; }
+            }
+            if(anySceneOk) break;
+        }
+        if(!anySceneOk) return [];
+    }
+
+    if(who==='couple')       add(['okinawa_rito','paris','maldives','greece','cappadocia','wien','bled','portugal','mont_saint','swiss'],3);
+    if(who==='family_kids')  { add(['okinawa','guam','hawaii','bali','danang','cebu','australia'],4); sub(['paris','cappadocia','swiss','uyuni','masaimara'],3); }
+    if(who==='family_elder') add(['hokkaido','hawaii','okinawa','guam','bali','paris','wien','italy'],3);
+    if(who==='group')        add(['hawaii','okinawa','bali','guam'],3);
+
+    var ss={beach:4,nature:4,landscape:5,street:4,castle:5,architecture:4,ruins:5,chapel:5,garden:5,villa:4,studio:4};
+    for(var i=0;i<scene.length;i++){
+        var stype=scene[i];
+        if(stype==='none') continue;
+        var p=ss[stype]||4;
+        var mk=[];
+        for(var j=0;j<eligible.length;j++){ if(hasFeature(eligible[j],stype)) mk.push(eligible[j]); }
+        add(mk,p);
+        penExcept(mk,Math.ceil(p/2));
+    }
+
+    if(!hasNone){
+        var ms={sunset:4,starry:5,nightview:4,balloon:8,animal:5,morning:3};
+        for(var i=0;i<moment.length;i++){
+            var mtype=moment[i];
+            if(!ms[mtype]) continue;
+            var p=ms[mtype];
+            var mk=[];
+            for(var j=0;j<eligible.length;j++){ if(hasFeature(eligible[j],mtype)) mk.push(eligible[j]); }
+            add(mk,p);
+            if(mtype==='starry'||mtype==='balloon'){
+                for(var j=0;j<eligible.length;j++){
+                    var k=eligible[j];
+                    if(mk.indexOf(k)===-1&&k in s) s[k]-=3;
+                }
+            }
+        }
+    }
+
+    if(style==='resort')      { add(['okinawa','okinawa_rito','guam','maldives','bali','hawaii','fiji','cancun','phuket','cebu','danang','malta','greece'],4); sub(['paris','wien','central_eu','romantic_road','netherlands','egypt','morocco','newyork','london'],1); }
+    if(style==='sightseeing') { add(['hokkaido','korea','danang','singapore','australia','lasvegas','newyork','canada','dubai','egypt','morocco','masaimara','uyuni','paris','mont_saint','wien','italy','barcelona','portugal','malta','greece','cappadocia','swiss','central_eu','romantic_road','netherlands','dubrovnik','bled','nordic','london'],4); sub(['okinawa','okinawa_rito','maldives','fiji','bali','guam','cebu'],1); }
+    if(style==='shopping')    add(['okinawa','korea','guam','bali','singapore','hawaii','newyork','dubai','paris','italy','barcelona','london'],4);
+    if(style==='active')      { add(['okinawa_rito','hokkaido','australia','lasvegas','canada','cancun','nz','masaimara','uyuni','cappadocia','swiss','nordic'],4); sub(['maldives','paris','wien','central_eu'],1); }
+
+    var euroKeys=['paris','wien','italy','barcelona','greece','central_eu','romantic_road','netherlands','london','dubrovnik','bled','portugal','malta','cappadocia','nordic','mont_saint'];
+    if(ans.days==='long'){
+        var hasEuro=false;
+        for(var i=0;i<eligible.length;i++){ if(euroKeys.indexOf(eligible[i])!==-1){hasEuro=true;break;} }
+        if(hasEuro) sub(euroKeys,2);
+    }
+
+    var pairs=[];
+    for(var k in s){ if(Object.prototype.hasOwnProperty.call(s,k)) pairs.push([k,s[k]]); }
+   
+   
+    var finalPairs = [];
+    var wantDomestic = (ans.region === 'domestic');
+    for(var i=0; i<pairs.length; i++){
+        var k = pairs[i][0];
+        if(DEST[k] && !!DEST[k].domestic === wantDomestic){
+            finalPairs.push(pairs[i]);
+        }
+    }
+    finalPairs.sort(function(a,b){return b[1]-a[1];});
+    window._lastMaxScore=finalPairs.length>0?finalPairs[0][1]:0;
+   
+    var result=[];
+    for(var i=0;i<finalPairs.length;i++) result.push(finalPairs[i][0]);
+    return result;
+}
+
+
+
+function calcMatching(key,ans) {
+    var d=DEST[key]; if(!d) return {rate:0,matched:[],unmatched:[]};
+    var scene=ans.scene||[], moment=ans.moment||[], style=ans.style||'';
+
+    var SL={beach:'ビーチ・海',nature:'大自然・森',landscape:'奇岩・砂漠',street:'街並み・路地裏',castle:'お城・宮殿',architecture:'美術館・歴史建築',ruins:'遺跡',chapel:'チャペル・教会',garden:'花畑・庭園',villa:'ヴィラ・ホテル',studio:'スタジオ'};
+    var ML={sunset:'サンセット',starry:'星空',nightview:'夜景・イルミネーション',balloon:'気球・バルーン',animal:'動物との撮影',morning:'朝日・早朝の光'};
+    var SML={resort:'のんびりリゾート',sightseeing:'観光めぐり',shopping:'グルメ・ショッピング',active:'アクティブ・冒険'};
+
+    // 1. 景色・ロケーション（scene）、2. 特別な瞬間（moment）の対応判定は hasFeature()（SCENE_LIST / MOMENT_LIST）に統一
+
+    // 3. 旅行スタイル（style）に対応しているエリア一覧
+    var resortList=['okinawa','okinawa_rito','guam','maldives','bali','hawaii','fiji','cancun','phuket','cebu','danang','malta','greece'];
+    var sightList=['hokkaido','korea','danang','singapore','australia','lasvegas','newyork','canada','dubai','egypt','morocco','masaimara','uyuni','paris','mont_saint','wien','italy','barcelona','portugal','malta','greece','cappadocia','swiss','central_eu','romantic_road','netherlands','dubrovnik','bled','nordic','london'];
+    var shopList=['okinawa','korea','guam','bali','singapore','hawaii','newyork','dubai','paris','italy','barcelona','london'];
+    var activeList=['okinawa_rito','hokkaido','australia','lasvegas','canada','cancun','nz','masaimara','uyuni','cappadocia','swiss','nordic'];
+
+    var styleMatch={
+        resort:function(){ return resortList.indexOf(key)!==-1; },
+        sightseeing:function(){ return sightList.indexOf(key)!==-1; },
+        shopping:function(){ return shopList.indexOf(key)!==-1; },
+        active:function(){ return activeList.indexOf(key)!==-1; }
+    };
+
+    var conds=[];
+
+
+    for(var i=0;i<scene.length;i++){
+        var x=scene[i]; if(x==='none') continue;
+        if(SL[x]){
+            var isSceneMatch = hasFeature(key,x);
+            conds.push({label:SL[x], matched:isSceneMatch, type:'scene'});
+        }
+    }
+
+ 
+    for(var i=0;i<moment.length;i++){
+        var x=moment[i]; if(x==='none') continue;
+        if(ML[x]){
+            var isMomentMatch = hasFeature(key,x);
+            conds.push({label:ML[x], matched:isMomentMatch, type:'moment'});
+        }
+    }
+
+
+    if(style&&styleMatch[style]) conds.push({label:SML[style]||style,matched:styleMatch[style](),type:'style'});
+
+    var matched=[],unmatched=[];
+    for(var i=0;i<conds.length;i++){
+        if(conds[i].matched) matched.push(conds[i]);
+        else unmatched.push(conds[i]);
+    }
+    var rate=conds.length>0?Math.round(matched.length/conds.length*100):100;
+    return {rate:rate,matched:matched,unmatched:unmatched};
+}
+
+
+
+
+
+
+
+
+function buildSummary(ans) {
+    var dm={short:'2~3日',medium:'4~5日',long:'6~7日',verylong:'8~10日',ultra:'11日以上'};
+    var wm={couple:'お二人で',family_kids:'お子さまと',family_elder:'ご両親と',group:'グループ'};
+    var sm={resort:'のんびりリゾート',sightseeing:'観光めぐり',shopping:'グルメ・ショッピング',active:'アクティブ'};
+    var bm={1:'~60万円',2:'60~100万円',3:'100~140万円',4:'140~180万円',5:'180~250万円',6:'250万円以上'};
+    return [dm[ans.days],wm[ans.who],sm[ans.style],bm[ans.budget]].filter(Boolean);
+}
+
+var qFlow=[0,1,2,3,4,5,6], curQIdx=0, answers={}, multiSel={};
+function getCurrentQ(){ return QS[qFlow[curQIdx]]; }
+function getTotalSteps(){ return qFlow.length; }
+
+function updateFlow(){
+    var sel=multiSel[2]?Object.keys(multiSel[2]||{}):[];
+    if (sel.includes('studio') && sel.length === 1) {
+        qFlow = [0, 1, 2];
+    } else {
+        qFlow = [0, 1, 2, 3, 4, 5, 6];
+    }
+    delete answers.budget;
+}
+
+// 単一選択後の自動遷移は1回だけ予約する（連続クリックによる質問の読み飛ばし・二重の結果表示を防ぐ）
+var navTimer=null;
+function goNext(delay){
+    cancelNext();
+    navTimer=setTimeout(function(){navTimer=null; if(curQIdx<getTotalSteps()-1){curQIdx++;renderQ('right');}else showLoading();},delay);
+}
+function cancelNext(){ if(navTimer){ clearTimeout(navTimer); navTimer=null; } }
+
+// 選択できない予算について、選ばれた景色・演出のうちその予算帯で対応エリアがないものを示す
+function budgetReason(b){
+    var bl={1:'60万円未満',2:'60~100万円未満',3:'100~140万円未満',4:'140~180万円未満',5:'180~250万円未満',6:'250万円以上'};
+    var lb={landscape:'奇岩・砂漠',castle:'お城・宮殿',architecture:'歴史建築・美術館',ruins:'遺跡',villa:'ヴィラ',chapel:'チャペル',garden:'花畑・庭園',nature:'大自然',beach:'ビーチ・海',street:'街並み',starry:'星空撮影',balloon:'気球撮影',animal:'動物との撮影'};
+    var want=(answers.scene||[]).concat((answers.moment||[]).filter(function(m){return m==='starry'||m==='balloon'||m==='animal';}));
+    var rs=[];
+    for(var i=0;i<want.length;i++){
+        var x=want[i]; if(!lb[x]) continue;
+        var ok=[];
+        for(var bb=1;bb<=6;bb++){
+            var ta={}; for(var ak in answers){ if(Object.prototype.hasOwnProperty.call(answers,ak)) ta[ak]=answers[ak]; }
+            ta.budget=bb;
+            if(getEligible(ta).some(function(k){return hasFeature(k,x);})) ok.push(bl[bb]);
+        }
+        if(ok.length&&ok.indexOf(bl[b])===-1) rs.push(lb[x]+'は'+ok.join('・')+'で');
+    }
+    return rs.length>0?rs.join('、')+'ご案内可能です':'選択された旅行日数・条件ではご案内できません';
+}
+
+function renderQ(dir){
+    dir=dir||'right';
+    var q=getCurrentQ(), total=getTotalSteps(), step=curQIdx+1;
+    document.getElementById('q-step').textContent='STEP '+step;
+    document.getElementById('q-frac').textContent=step+' / '+total;
+    document.getElementById('q-bar').style.width=(step/total*100)+'%';
+    document.getElementById('q-section').textContent=q.section;
+    document.getElementById('q-title').textContent=q.title;
+    document.getElementById('q-sub').textContent=q.sub||'';
+    document.getElementById('back-btn').style.display='block';
+    var $s=document.getElementById('opts-single');
+    var $m=document.getElementById('opts-multi');
+    var $n=document.getElementById('next-btn');
+    if(q.type==='single'){
+        $s.style.display='flex'; $m.style.display='none'; $n.style.display='none'; $s.innerHTML='';
+        var disabledBudgets={};
+        if(q.id==='budget'){
+            // 最終的な候補選定 score() と同じ判定で、候補が残らない予算を選択不可にする（国内・海外とも）
+            for(var b=1;b<=6;b++){
+                var tb={}; for(var ak in answers){ if(Object.prototype.hasOwnProperty.call(answers,ak)) tb[ak]=answers[ak]; }
+                tb.budget=b;
+                if(!score(tb).length) disabledBudgets[b]=true;
+            }
+        }
+   
+        if(q.id==='budget'){
+            var valid=q.opts.filter(function(o){return !disabledBudgets[o.v];});
+            if(valid.length===1){
+                answers['budget']=valid[0].v;
+                goNext(50);
+                return;
+            }
+            if(valid.length===0){
+                disabledBudgets = {};
+            }
+        }
+       
+        q.opts.forEach(function(opt){
+            var dis=q.id==='budget'&&disabledBudgets[opt.v];
+            var btn=document.createElement('button');
+            btn.className='opt'+(answers[q.id]===opt.v?' selected':'')+(dis?' opt-disabled':'');
+            if(dis) btn.disabled=true;
+            var dr='';
+            if(dis) dr=budgetReason(opt.v);
+            btn.innerHTML='<span class="opt-inner"><span class="opt-texts"><span class="opt-main">'+opt.main+'</span>'+(dis?'<span class="opt-sub-text opt-disabled-reason">'+dr+'</span>':(opt.sub?'<span class="opt-sub-text">'+opt.sub+'</span>':''))+'</span><span class="opt-radio"></span></span>';
+            btn.addEventListener('click',function(e){
+                if(dis) return;
+                answers[q.id]=opt.v;
+                $s.querySelectorAll('.opt').forEach(function(b){b.classList.remove('selected');});
+                btn.classList.add('selected');
+                if(q.id==='scene') updateFlow();
+                goNext(300);
+            });
+            $s.appendChild(btn);
+        });
+    } else {
+        $s.style.display='none'; $m.style.display='flex'; $n.style.display='block'; $n.disabled=true; $m.innerHTML='';
+        var qi=qFlow[curQIdx];
+        if(!multiSel[qi]){multiSel[qi]={}; var _ia=answers[q.id]||[]; for(var _ii=0;_ii<_ia.length;_ii++) multiSel[qi][_ia[_ii]]=true;}
+        var hiddenVals={};
+        if(answers.region==='domestic'){
+            if(q.id==='scene')  hiddenVals={landscape:true,castle:true,architecture:true,villa:true};
+            if(q.id==='moment') hiddenVals={balloon:true,animal:true};
+        }
+        // 海外→国内に回答を変えた場合、非表示になった選択肢が選択状態のまま残らないようにする
+        for(var hv in hiddenVals){ if(multiSel[qi][hv]) delete multiSel[qi][hv]; }
+        var visibleOpts=q.opts.filter(function(o){return !hiddenVals[o.v];});
+        visibleOpts.forEach(function(opt){
+            var btn=document.createElement('button');
+            btn.className='opt-multi'+(multiSel[qi][opt.v]?' selected':'');
+            btn.innerHTML='<span class="chk"></span><span class="opt-multi-text">'+opt.text+'</span>';
+            btn.addEventListener('click',function(){
+                if(multiSel[qi][opt.v]){delete multiSel[qi][opt.v]; btn.classList.remove('selected');}
+                else{
+                    if(opt.v==='none'){multiSel[qi]={}; $m.querySelectorAll('.opt-multi').forEach(function(b){b.classList.remove('selected');});}
+                    else{delete multiSel[qi]['none']; $m.querySelectorAll('.opt-multi').forEach(function(b){if(b.querySelector('.opt-multi-text')&&b.querySelector('.opt-multi-text').textContent.includes('こだわりなし')) b.classList.remove('selected');});}
+                    multiSel[qi][opt.v]=true; btn.classList.add('selected');
+                }
+                $n.disabled=Object.keys(multiSel[qi]||{}).length===0;
+                if(q.id==='scene') updateFlow();
+            });
+            $m.appendChild(btn);
+        });
+        $n.disabled=Object.keys(multiSel[qi]||{}).length===0;
+    }
+    showScreen('screen-q',dir==='right'?'anim-right':'anim-left');
+}
+
+document.getElementById('next-btn').addEventListener('click',function(){
+    var q=getCurrentQ(), qi=qFlow[curQIdx];
+    if(q.type==='multi'){answers[q.id]=Object.keys(multiSel[qi]||{}); if(q.id==='scene') updateFlow();}
+    if(curQIdx<getTotalSteps()-1){curQIdx++;renderQ('right');}else showLoading();
+});
+document.getElementById('back-btn').addEventListener('click',function(){
+    cancelNext();
+    if(curQIdx>0){var lq=getCurrentQ(); curQIdx--; if(lq.id==='budget') delete answers.budget; renderQ('left');}
+    else{ showScreen('screen-start','anim-left'); }
+});
+
+function showLoading(){
+    showScreen('screen-loading','anim-up');
+    var ranked=score(answers), origMax=window._lastMaxScore;
+    var allNames=Object.values(DEST).map(function(d){return d.name;});
+    var si=document.getElementById('slot-inner'), fe=document.getElementById('loading-final');
+    fe.style.display='none'; fe.classList.remove('visible');
+    var items=allNames.concat(allNames.slice(0,10),(DEST[ranked[0]]?DEST[ranked[0]].name:''));
+    si.innerHTML=items.map(function(n){return '<div class="loading-slot-item">'+n+'</div>';}).join('');
+    var idx=0,speed=80,count=0,max=items.length-1;
+    function spin(){
+        si.style.transform='translateY(-'+(idx*60)+'px)';
+        idx++; count++;
+        speed=count<max*.6?80:count<max*.85?120:200;
+        if(count<max){setTimeout(spin,speed);}
+        else{setTimeout(function(){
+            document.querySelector('.loading-slot').style.display='none';
+            fe.style.display='flex'; fe.textContent=(DEST[ranked[0]]?DEST[ranked[0]].name:'');
+            setTimeout(function(){fe.classList.add('visible');},50);
+            setTimeout(function(){renderResult(ranked,origMax);},1200);
+        },300);}
+    }
+    setTimeout(spin,400);
+}
+
+function renderResult(ranked,origMax){
+    // 候補が1件以上あれば表示する（最高点が0以下でも候補は条件を満たしているため「見つかりません」にしない）
+    if(!ranked||!ranked.length||!DEST[ranked[0]]){
+        document.getElementById('res-name').textContent='条件に合うエリアが見つかりませんでした';
+        document.getElementById('res-name').style.fontSize='1.3rem';
+        document.getElementById('res-name-en').textContent='No matching destination found';
+        document.getElementById('res-summary').innerHTML=buildSummary(answers).map(function(t){return '<span class="summary-tag">'+t+'</span>';}).join('');
+        document.getElementById('res-matching').innerHTML='';
+        document.getElementById('res-appeal').textContent='選ばれた条件の組み合わせでは、現在ご案内できるエリアが見つかりませんでした。';
+        document.getElementById('res-main-card').innerHTML='';
+        document.getElementById('res-upsell').innerHTML='';
+        document.getElementById('res-alt').innerHTML='';
+        document.querySelector('.alt-panel').style.display='none';
+        showScreen('screen-result','anim-up');
+        return;
+    }
+
+    var top=DEST[ranked[0]];
+    var alts=[];
+    for(var i=1;i<Math.min(ranked.length,5);i++){ if(DEST[ranked[i]]) alts.push(ranked[i]); }
+    var budget=answers.budget||1;
+
+    document.getElementById('res-name').textContent=top.name;
+    document.getElementById('res-name').style.fontSize='';
+    document.getElementById('res-name-en').textContent=top.en;
+    document.getElementById('res-summary').innerHTML=buildSummary(answers).map(function(t){return '<span class="summary-tag">'+t+'</span>';}).join('');
+    document.getElementById('res-appeal').textContent=top.reason;
+
+    var mt=calcMatching(ranked[0],answers);
+    var matchedHtml='', unmatchedHtml='';
+    if(mt.matched.length){
+        matchedHtml='<span class="chips-label">- マッチした条件 -</span><div class="chips">';
+        for(var i=0;i<mt.matched.length;i++) matchedHtml+='<span class="chip chip-yes">〇 '+mt.matched[i].label+'</span>';
+        matchedHtml+='</div>';
+    }
+    if(mt.unmatched.length){
+        unmatchedHtml='<span class="chips-label">- このエリアでは対応できない条件 -</span><div class="chips">';
+        for(var i=0;i<mt.unmatched.length;i++) unmatchedHtml+='<span class="chip chip-no">× '+mt.unmatched[i].label+'</span>';
+        unmatchedHtml+='</div>';
+    }
+    document.getElementById('res-matching').innerHTML=
+        '<div class="matching-bar-wrap">'
+        +'<div class="matching-label-row"><span class="matching-label-text">MATCHING SCORE</span><span class="matching-rate">'+mt.rate+'%</span></div>'
+        +'<div class="matching-track"><div class="matching-fill" id="match-fill" style="width:0%"></div></div>'
+        +'</div>'
+        +'<div class="chips-wrap">'+matchedHtml+unmatchedHtml+'</div>';
+    setTimeout(function(){ var b=document.getElementById('match-fill'); if(b) b.style.width=mt.rate+'%'; },300);
+
+    var subHtml='';
+    if(top.subCities&&top.subCities.length){
+        subHtml='<div class="sub-cities"><span class="sub-cities-label">- このエリアの主な撮影都市 -</span><div class="sub-cities-list">';
+        for(var i=0;i<top.subCities.length;i++) subHtml+='<span class="sub-city">'+top.subCities[i]+'</span>';
+        subHtml+='</div></div>';
+    }
+    var tagsHtml='';
+    for(var i=0;i<top.tags.length;i++) tagsHtml+='<span class="dest-tag">'+top.tags[i]+'</span>';
+
+    document.getElementById('res-main-card').innerHTML=
+        '<div class="dest-card" id="main-card-el">'
+        +'<div class="dest-card-head"><span class="dest-card-head-label">RECOMMENDED DESTINATION</span><span class="dest-card-head-rank">Best Match</span></div>'
+        +'<div class="dest-card-img-wrap"><img class="dest-card-img" src="'+top.img+'" alt="'+top.name+'"></div>'
+        +'<div class="dest-card-body">'
+        +'<h3 class="dest-card-title">'+top.name+'（'+top.en+'）</h3>'
+        +'<p class="dest-card-reason">'+top.reason+'</p>'
+        +'<div class="dest-tags">'+tagsHtml+'</div>'
+        +subHtml
+        +'<a href="'+top.link+'" target="_blank" class="dest-link">このエリアのプランを見る</a>'
+        +'</div></div>';
+
+    var consultEl=document.getElementById('res-consult');
+    if(consultEl){
+        var visitUrl = 'https://www.his-wedding.com/special/shop_visit/';
+        var onlineUrl = 'https://krs.bz/his/m/avanti_online/?e_998651=%E3%83%95%E3%82%A9%E3%83%88%E3%82%A6%E3%82%A7%E3%83%87%E3%82%A3%E3%83%B3%E3%82%B0%E3%81%8C%E3%81%97%E3%81%9F%E3%81%84%E6%96%B9&e_998655=/special/online/&e_1001504=/special/online/';
+        consultEl.innerHTML='<div class="consult-block" id="consult-el">'
+            +'<span class="consult-label">CONSULTATION</span>'
+            +'<p class="consult-title">フォトウェディングのこと、<br>もっと詳しく相談しませんか？</p>'
+            +'<a href="'+visitUrl+'" target="_blank" class="consult-btn">ご来店での無料相談はこちら</a>'
+            +'<a href="'+onlineUrl+'" target="_blank" class="consult-btn-sub">オンラインでの無料相談はこちら</a>'
+            +'<p class="consult-note">診断結果を元にスタッフが詳しくご案内します。</p>'
+            +'</div>';
+        setTimeout(function(){ var ce=document.getElementById('consult-el'); if(ce) ce.classList.add('card-visible'); },200);
+    }
+
+    var uel=document.getElementById('res-upsell');
+    if(budget<6){
+        var nb=budget+1;
+        var nbk=BUDGET_KEYS[nb]||[];
+        var cbk=BUDGET_KEYS[budget]||[];
+        var nok=[];
+        for(var i=0;i<nbk.length;i++){ if(cbk.indexOf(nbk[i])===-1) nok.push(nbk[i]); }
+        var vl=DAYS_KEYS['verylong']||[];
+        var ne=[];
+        for(var i=0;i<vl.length;i++){ if(nok.indexOf(vl[i])!==-1&&DEST[vl[i]]) ne.push(vl[i]); }
+        if(ne.length){
+            var ta={};
+            for(var k in answers){ if(Object.prototype.hasOwnProperty.call(answers,k)) ta[k]=answers[k]; }
+            ta.budget=nb;
+            var nr=score(ta);
+            var tn=[];
+            for(var i=0;i<nr.length;i++){ if(ne.indexOf(nr[i])!==-1&&DEST[nr[i]]) tn.push(DEST[nr[i]]); if(tn.length>=3) break; }
+            if(tn.length){
+                var uLinks='';
+                for(var i=0;i<tn.length;i++) uLinks+='<a href="'+tn[i].link+'" target="_blank" style="font-size:.75rem;color:var(--c-gold);text-decoration:none;border-bottom:1px solid var(--c-gold);padding-bottom:2px;letter-spacing:.05em;">'+tn[i].name+' ›</a> ';
+                var uNames='';
+                for(var i=0;i<tn.length;i++) uNames+=(i>0?'・':'')+'<strong>'+tn[i].name+'</strong>';
+                uel.innerHTML='<div class="upsell-block" id="upsell-el">'
+                    +'<span class="upsell-label">もう少し予算を広げると…</span>'
+                    +'<p class="upsell-text">'+uNames+'も視野に入ります</p>'
+                    +'<div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;">'+uLinks+'</div>'
+                    +'</div>';
+            } else { uel.innerHTML=''; }
+        } else { uel.innerHTML=''; }
+    } else { uel.innerHTML=''; }
+
+    var altHtml='';
+    for(var i=0;i<alts.length;i++){
+        var d=DEST[alts[i]];
+        var am=calcMatching(alts[i],answers);
+        var tagStr=d.tags.slice(0,2).join(' ');
+        altHtml+='<a href="'+d.link+'" target="_blank" class="alt-card" style="transition-delay:'+(0.08+i*0.07)+'s">'
+            +'<div class="alt-card-img-wrap"><img class="alt-card-img" src="'+d.img+'" alt="'+d.name+'"></div>'
+            +'<div class="alt-card-body">'
+            +'<p class="alt-card-name">'+d.name+'</p>'
+            +'<div class="alt-match-bar-wrap"><div class="alt-match-bar"><div class="alt-match-fill" style="width:'+am.rate+'%"></div></div><span class="alt-match-pct">'+am.rate+'%</span></div>'
+            +'<p class="alt-card-sub">'+tagStr+'</p>'
+            +'</div></a>';
+    }
+    document.getElementById('res-alt').innerHTML=altHtml;
+    document.querySelector('.alt-panel').style.display='block';
+
+    showScreen('screen-result','anim-up');
+
+    setTimeout(function(){
+        var mc=document.getElementById('main-card-el'); if(mc) mc.classList.add('card-visible');
+        var ue=document.getElementById('upsell-el'); if(ue) ue.classList.add('card-visible');
+        var cards=document.querySelectorAll('.alt-card');
+        for(var i=0;i<cards.length;i++){
+            (function(el,idx){ setTimeout(function(){ el.classList.add('card-visible'); },100+idx*80); })(cards[i],i);
+        }
+    },100);
+
+    var url=window.location.href.split('?')[0];
+    var shareText='フォトウェディング診断で「'+top.name+'」をおすすめされました!\n';
+
+    document.getElementById('insta-copy-btn').onclick=function(){
+        var msg='『'+top.name+'』をおすすめされました!\n\nフォトウェディング撮影地診断-> https://www.his-wedding.com\n\n#フォトウェディング #'+top.name+' #HISWedding';
+        if(!navigator.clipboard){ toast('コピーできませんでした'); return; }
+        navigator.clipboard.writeText(msg).then(function(){ toast('コピーしました！インスタストーリーに貼りつけてシェア！'); }).catch(function(){toast('コピーできませんでした');})
+    };
+    document.getElementById('share-x').onclick=function(){ window.open('https://twitter.com/intent/tweet?text='+encodeURIComponent(shareText+url),'_blank'); };
+    document.getElementById('share-line').onclick=function(){ window.open('https://social-plugins.line.me/lineit/share?url='+encodeURIComponent(url)+'&text='+encodeURIComponent(shareText),'_blank'); };
+    document.getElementById('share-copy').onclick=function(){ if(!navigator.clipboard){ toast('コピーできませんでした'); return; } navigator.clipboard.writeText(url).then(function(){ toast('URLをコピーしました'); }).catch(function(){toast('コピーできませんでした');}) };
+}
+
+function showScreen(id,anim){
+    anim=anim||'anim-right';
+    document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');s.style.display='none';});
+    var el=document.getElementById(id);
+    el.style.display='block'; el.classList.add('active');
+    el.classList.remove('anim-right','anim-left','anim-up');
+    void el.offsetWidth; el.classList.add(anim);
+    if(id==='screen-loading'){document.querySelector('.loading-slot').style.display='block';document.getElementById('loading-final').style.display='none';document.getElementById('loading-final').classList.remove('visible');}
+window.scrollTo({top:0,behavior:'instant'});
+
+
+    document.querySelectorAll('.bg-image').forEach(function(bg){ bg.classList.remove('active'); });
+   
+
+    if(id === 'screen-start') {
+        document.getElementById('bg-start').classList.add('active');
+    } else if (id === 'screen-q') {
+        var stepId = 'bg-q' + (curQIdx + 1);
+        var bgEl = document.getElementById(stepId);
+        if(bgEl) bgEl.classList.add('active');
+        else document.getElementById('bg-q1').classList.add('active');
+    } else if (id === 'screen-loading' || id === 'screen-result') {
+        var resultBg = document.getElementById('bg-result');
+        if(resultBg) resultBg.classList.add('active');
+    } else {
+        var lastBg = document.getElementById('bg-q' + (curQIdx + 1));
+        if(lastBg) lastBg.classList.add('active');
+        else document.getElementById('bg-start').classList.add('active');
+    }
+}
+
+function toast(msg){var t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},3000);}
+
+document.getElementById('start-btn').addEventListener('click',function(){cancelNext();answers={};multiSel={};curQIdx=0;qFlow=[0,1,2,3,4,5,6];renderQ('right');});
+document.getElementById('restart-btn').addEventListener('click',function(){cancelNext();answers={};multiSel={};curQIdx=0;qFlow=[0,1,2,3,4,5,6];showScreen('screen-start','anim-up');});
+</script>
+
+

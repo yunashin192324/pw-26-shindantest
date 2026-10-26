@@ -1,0 +1,40 @@
+{
+ "total": 1593472,
+ "empty": 788512,
+ "elig0": 112832,
+ "hard0": 596664,
+ "scene0": 79016,
+ "beachOnlyLike": 0,
+ "byRegionBudget": {
+  "domestic/b1": 400,
+  "domestic/b2": 400,
+  "domestic/b3": 1200,
+  "domestic/b4": 10160,
+  "domestic/b5": 10160,
+  "domestic/b6": 10160,
+  "overseas/b1": 284128,
+  "overseas/b2": 159344,
+  "overseas/b3": 94352,
+  "overseas/b4": 21168,
+  "overseas/b5": 102608,
+  "overseas/b6": 94432
+ }
+}
+{"scene0":[{"region":"domestic","days":"short","scene":["beach"],"moment":["none"],"style":"resort","who":"couple","budget":1},{"region":"domestic","days":"short","scene":["beach"],"moment":["none"],"style":"resort","who":"couple","budget":2},{"region":"domestic","days":"short","scene":["beach"],"moment":["none"],"style":"resort","who":"couple","budget":3},{"region":"domestic","days":"short","scene":["beach"],"moment":["sunset"],"style":"resort","who":"couple","budget":1}],"elig0":[{"region":"domestic","days":"short","scene":["beach"],"moment":["none"],"style":"resort","who":"couple","budget":4},{"region":"domestic","days":"short","scene":["beach"],"moment":["none"],"style":"resort","who":"couple","budget":5},{"region":"domestic","days":"short","scene":["beach"],"moment":["none"],"style":"resort","who":"couple","budget":6},{"region":"domestic","days":"short","scene":["beach"],"moment":["sunset"],"style":"resort","who":"couple","budget":4}],"hard0":[{"region":"overseas","days":"short","scene":["beach"],"moment":["starry"],"style":"resort","who":"couple","budget":2},{"region":"overseas","days":"short","scene":["beach"],"moment":["starry"],"style":"resort","who":"couple","budget":3},{"region":"overseas","days":"short","scene":["beach"],"moment":["sunset","starry"],"style":"resort","who":"couple","budget":2},{"region":"overseas","days":"short","scene":["beach"],"moment":["sunset","starry"],"style":"resort","who":"couple","budget":3}]}
+single scene domestic beach 結果あり 0 / 30
+single scene domestic nature 結果あり 15 / 30
+single scene domestic landscape 結果あり 0 / 30
+single scene domestic street 結果あり 15 / 30
+single scene domestic ruins 結果あり 10 / 30
+single scene domestic chapel 結果あり 15 / 30
+single scene domestic garden 結果あり 10 / 30
+single scene overseas beach 結果あり 0 / 30
+single scene overseas nature 結果あり 19 / 30
+single scene overseas landscape 結果あり 10 / 30
+single scene overseas street 結果あり 23 / 30
+single scene overseas castle 結果あり 9 / 30
+single scene overseas architecture 結果あり 12 / 30
+single scene overseas ruins 結果あり 18 / 30
+single scene overseas chapel 結果あり 19 / 30
+single scene overseas garden 結果あり 6 / 30
+single scene overseas villa 結果あり 18 / 30
