@@ -96,6 +96,12 @@ for (const region of ['domestic', 'overseas']) {
       const LBL = { starry: '星空', balloon: '気球・バルーン', animal: '動物との撮影' };
       if (wantHard.length && wantHard.some(h => mt.unmatched.some(u => u.label === LBL[h]))) { stats.topMissingHard++; ex('topMissingHard', Object.assign({ top: ranked[0] }, ans)); }
       if (!mt.matched.some(c => c.type === 'scene')) { stats.topNoScene++; ex('topNoScene', Object.assign({ top: ranked[0] }, ans)); }
+      // 優先順位の検証: 第1候補より必須演出を多く満たす候補、または同数で景色を満たす候補が下位にないか
+      const hardN = k => { const m = api.calcMatching(k, { moment: wantHard }); return m.matched.length; };
+      const sceneHit = k => api.calcMatching(k, { scene }).matched.length > 0 ? 1 : 0;
+      const th = hardN(ranked[0]), ts = sceneHit(ranked[0]);
+      if (ranked.some(k => hardN(k) > th)) { stats.betterHardBelow = (stats.betterHardBelow || 0) + 1; ex('betterHardBelow', Object.assign({ top: ranked[0] }, ans)); }
+      if (ranked.some(k => hardN(k) === th && sceneHit(k) > ts)) { stats.betterSceneBelow = (stats.betterSceneBelow || 0) + 1; ex('betterSceneBelow', Object.assign({ top: ranked[0] }, ans)); }
       for (let i = 1; i < Math.min(ranked.length, 5); i++) {
         if (api.calcMatching(ranked[i], ans).rate > mt.rate) { stats.altBeatsTop++; ex('altBeatsTop', Object.assign({ top: ranked[0], alt: ranked[i] }, ans)); break; }
       }

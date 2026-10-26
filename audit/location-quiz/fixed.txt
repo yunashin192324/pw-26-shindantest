@@ -123,7 +123,10 @@ function setToArray(s){var a=[];s.forEach(function(v){a.push(v);});return a;}
 function getEligible(ans) {
     var days=ans.days||'ultra', budget=ans.budget||5;
     var dk=DAYS_KEYS[days]==='all'?Object.keys(DEST):(DAYS_KEYS[days]||Object.keys(DEST));
-    var bk=BUDGET_KEYS[budget]||Object.keys(DEST);
+    // 予算は上限として扱う：選んだ予算以下の区分に登録された撮影地をすべて対象にする
+    var bk=[];
+    for(var bb=1;bb<=budget;bb++){ var bl=BUDGET_KEYS[bb]||[]; for(var bi=0;bi<bl.length;bi++){ if(bk.indexOf(bl[bi])===-1) bk.push(bl[bi]); } }
+    if(!BUDGET_KEYS[budget]) bk=Object.keys(DEST);
     var result=[];
     for(var i=0;i<dk.length;i++){
         var key = dk[i];
@@ -199,7 +202,7 @@ function score(ans) {
     }
 
     if(who==='couple')       add(['okinawa_rito','paris','maldives','greece','cappadocia','wien','bled','portugal','mont_saint','swiss'],3);
-    if(who==='family_kids')  { add(['okinawa','guam','hawaii','bali','danang','cebu','australia'],4); sub(['paris','cappadocia','swiss','uyuni','masaimara'],3); }
+    if(who==='family_kids')  { add(['okinawa','hokkaido','guam','hawaii','bali','danang','cebu','australia'],4); sub(['paris','cappadocia','swiss','uyuni','masaimara'],3); }
     if(who==='family_elder') add(['hokkaido','hawaii','okinawa','guam','bali','paris','wien','italy'],3);
     if(who==='group')        add(['hawaii','okinawa','bali','guam'],3);
 
@@ -256,7 +259,16 @@ function score(ans) {
             finalPairs.push(pairs[i]);
         }
     }
-    finalPairs.sort(function(a,b){return b[1]-a[1];});
+    // 並べ替えの優先順位：①選んだ星空・気球・動物を多く満たす ②選んだ景色を1つ以上満たす ③一致率（画面に表示する順位と一致率を矛盾させない） ④点数 ⑤同点なら選んだ予算区分に登録された撮影地
+    var nsc=[]; for(var i=0;i<scene.length;i++){ if(scene[i]!=='none') nsc.push(scene[i]); }
+    function rankKey(k){
+        var h=0; if(!hasNone){ for(var i=0;i<hm.length;i++){ if(hasFeature(k,hm[i])) h++; } }
+        var sh=0; for(var i=0;i<nsc.length;i++){ if(hasFeature(k,nsc[i])){ sh=1; break; } }
+        var ib=(BUDGET_KEYS[ans.budget]||[]).indexOf(k)!==-1?1:0;
+        return [h,sh,ib,calcMatching(k,ans).rate];
+    }
+    for(var i=0;i<finalPairs.length;i++) finalPairs[i].push(rankKey(finalPairs[i][0]));
+    finalPairs.sort(function(a,b){ return (b[2][0]-a[2][0])||(b[2][1]-a[2][1])||(b[2][3]-a[2][3])||(b[1]-a[1])||(b[2][2]-a[2][2]); });
     window._lastMaxScore=finalPairs.length>0?finalPairs[0][1]:0;
    
     var result=[];
@@ -500,6 +512,13 @@ function showLoading(){
     setTimeout(spin,400);
 }
 
+// 星空・気球・動物のうち、そのエリアで満たせない条件名を「」付きで返す
+function hardUnmetText(mt){
+    var hl={'星空':1,'気球・バルーン':1,'動物との撮影':1}, r=[];
+    for(var i=0;i<mt.unmatched.length;i++){ if(mt.unmatched[i].type==='moment'&&hl[mt.unmatched[i].label]) r.push('「'+mt.unmatched[i].label+'」'); }
+    return r.join('');
+}
+
 function renderResult(ranked,origMax){
     // 候補が1件以上あれば表示する（最高点が0以下でも候補は条件を満たしているため「見つかりません」にしない）
     if(!ranked||!ranked.length||!DEST[ranked[0]]){
@@ -519,7 +538,8 @@ function renderResult(ranked,origMax){
 
     var top=DEST[ranked[0]];
     var alts=[];
-    for(var i=1;i<Math.min(ranked.length,5);i++){ if(DEST[ranked[i]]) alts.push(ranked[i]); }
+    // 一致率0%の撮影地は代替候補に表示しない（最大4件）
+    for(var i=1;i<ranked.length&&alts.length<4;i++){ if(DEST[ranked[i]]&&calcMatching(ranked[i],answers).rate>0) alts.push(ranked[i]); }
     var budget=answers.budget||1;
 
     document.getElementById('res-name').textContent=top.name;
@@ -540,8 +560,10 @@ function renderResult(ranked,origMax){
         for(var i=0;i<mt.unmatched.length;i++) unmatchedHtml+='<span class="chip chip-no">× '+mt.unmatched[i].label+'</span>';
         unmatchedHtml+='</div>';
     }
+    var hardNote=hardUnmetText(mt);
     document.getElementById('res-matching').innerHTML=
-        '<div class="matching-bar-wrap">'
+        (hardNote?'<p class="matching-hard-note" style="font-size:.85rem;font-weight:bold;margin:0 0 10px;">※ご希望の'+hardNote+'は、このエリアでは撮影できません</p>':'')
+        +'<div class="matching-bar-wrap">'
         +'<div class="matching-label-row"><span class="matching-label-text">MATCHING SCORE</span><span class="matching-rate">'+mt.rate+'%</span></div>'
         +'<div class="matching-track"><div class="matching-fill" id="match-fill" style="width:0%"></div></div>'
         +'</div>'
@@ -587,7 +609,7 @@ function renderResult(ranked,origMax){
     if(budget<6){
         var nb=budget+1;
         var nbk=BUDGET_KEYS[nb]||[];
-        var cbk=BUDGET_KEYS[budget]||[];
+        var cbk=[]; for(var bb=1;bb<=budget;bb++) cbk=cbk.concat(BUDGET_KEYS[bb]||[]);
         var nok=[];
         for(var i=0;i<nbk.length;i++){ if(cbk.indexOf(nbk[i])===-1) nok.push(nbk[i]); }
         var vl=DAYS_KEYS['verylong']||[];
@@ -619,6 +641,7 @@ function renderResult(ranked,origMax){
         var d=DEST[alts[i]];
         var am=calcMatching(alts[i],answers);
         var tagStr=d.tags.slice(0,2).join(' ');
+        var an=hardUnmetText(am); if(an) tagStr+='<br>※'+an+'は撮影不可';
         altHtml+='<a href="'+d.link+'" target="_blank" class="alt-card" style="transition-delay:'+(0.08+i*0.07)+'s">'
             +'<div class="alt-card-img-wrap"><img class="alt-card-img" src="'+d.img+'" alt="'+d.name+'"></div>'
             +'<div class="alt-card-body">'

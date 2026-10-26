@@ -96,7 +96,8 @@ scenario(7, '星空撮影を必須', { region: 'overseas', days: 'verylong', sce
   'ニュージーランド（テカポ湖）など星空対応エリアのみ', ({ res, d }) => ({ ok: shown(res) && d.ranked.every(k => T.calcMatching(k, { moment: ['starry'] }).matched.length === 1), why: res.name }));
 
 scenario(8, '動物との撮影を必須', { region: 'overseas', days: 'verylong', scene: ['nature'], moment: ['animal'], style: 'active', who: 'family_kids', budget: 6 },
-  'マサイマラ', ({ res }) => res.name === 'マサイマラ');
+  '動物との撮影に対応するエリア（予算は上限扱いのため、子ども同行の加点があるオーストラリアも対象）。対応しないエリアが第1候補にならない',
+  ({ res, d }) => ({ ok: shown(res) && T.calcMatching(d.ranked[0], { moment: ['animal'] }).matched.length === 1, why: res.name }));
 
 scenario(9, '複数の景色と演出を同時に選択', { region: 'overseas', days: 'ultra', scene: ['beach', 'street', 'castle', 'chapel', 'garden'], moment: ['sunset', 'nightview', 'starry'], style: 'shopping', who: 'group', budget: 4 },
   '星空（必須扱い）に対応するエリアのみが残り、第1候補の一致率が代替候補以上',

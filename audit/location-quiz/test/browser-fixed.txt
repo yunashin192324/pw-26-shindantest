@@ -1,7 +1,6 @@
-overseas/long/お城・宮殿/サンセット（黄金の光）/sightseeing/couple/3 => パリ | alt: オーストラリア,カッパドキア,プーケット,ハワイ
-domestic/short/ビーチ・海/こだわりなし・おまかせ/resort/couple/1 => 沖縄本島 | alt: 北海道
+overseas/long/お城・宮殿/サンセット（黄金の光）/sightseeing/couple/3 => パリ | alt: オーストラリア,ダナン,カッパドキア,プーケット
+domestic/short/ビーチ・海/こだわりなし・おまかせ/resort/couple/1 => 沖縄本島 | alt: 
 ブラウザのエラー: [
-  'Failed to load resource: net::ERR_FAILED',
   'Failed to load resource: net::ERR_FAILED',
   'Failed to load resource: net::ERR_FAILED',
   'Failed to load resource: net::ERR_FAILED',
