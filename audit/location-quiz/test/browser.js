@@ -20,7 +20,7 @@ ${fs.readFileSync(file,'utf8')}</body>`;
   await p.route('**/*', r => r.request().url().startsWith('http') ? r.abort() : r.continue()); // 外部画像は読み込まない（欠落時の挙動確認を兼ねる）
   await p.setContent(html);
   const flows = [
-    ['overseas','long',['お城・宮殿'],['サンセット（黄金の光）'],'sightseeing','couple',3],
+    ['overseas','verylong',['お城・宮殿'],['サンセット（黄金の光）'],'sightseeing','couple',3],
     ['domestic','short',['ビーチ・海'],['こだわりなし・おまかせ'],'resort','couple',1],
   ];
   for (const f of flows) {

@@ -78,7 +78,7 @@ scenario(4, '海・リゾート・子ども同行', { region: 'overseas', days: 
   'ビーチのあるアジアのリゾート（グアム・バリ島・セブ島・プーケット・ダナン）',
   ({ res }) => ({ ok: ['グアム', 'バリ島', 'セブ島', 'プーケット', 'ダナン'].includes(res.name), why: res.name }));
 
-scenario(5, '歴史建築・宮殿・観光重視', { region: 'overseas', days: 'long', scene: ['castle', 'architecture'], moment: ['none'], style: 'sightseeing', who: 'family_elder', budget: 4 },
+scenario(5, '歴史建築・宮殿・観光重視', { region: 'overseas', days: 'verylong', scene: ['castle', 'architecture'], moment: ['none'], style: 'sightseeing', who: 'family_elder', budget: 4 },
   'ウィーン・パリ・イタリア・ロンドンなど城や歴史建築のある都市',
   ({ res, d }) => {
     const top = d.ranked[0];
@@ -86,7 +86,7 @@ scenario(5, '歴史建築・宮殿・観光重視', { region: 'overseas', days: 
     return { ok: shown(res) && m.matched.filter(c => c.type === 'scene').length === 2, why: res.name };
   });
 
-scenario(6, '気球撮影を必須（6〜7日・100〜140万円）', { region: 'overseas', days: 'long', scene: ['landscape'], moment: ['balloon'], style: 'active', who: 'couple', budget: 3 },
+scenario(6, '気球撮影を必須（8〜10日・100〜140万円）', { region: 'overseas', days: 'verylong', scene: ['landscape'], moment: ['balloon'], style: 'active', who: 'couple', budget: 3 },
   'カッパドキア', ({ res }) => res.name === 'カッパドキア');
 
 scenario('6b', '気球撮影を必須（8〜10日・250万円以上）', { region: 'overseas', days: 'verylong', scene: ['nature'], moment: ['balloon'], style: 'active', who: 'couple', budget: 6 },
@@ -153,15 +153,15 @@ uiCase(10, '国内で対応エリアがない景色（奇岩・砂漠）の扱�
   return { ok: false, why: `国内でも選択肢が表示され、予算の選択不可は${dis}件。選択後の結果は「${r.name}」` };
 });
 
-uiCase(11, '条件を満たす候補地がゼロ（6〜7日・ビーチ＋気球）', () => {
-  const vis = D.visibleValues(D.load(file), 'overseas', 'long', 'moment', { scene: ['beach'] });
+uiCase(11, '条件を満たす候補地がゼロ（8〜10日・ビーチ＋気球）', () => {
+  const vis = D.visibleValues(D.load(file), 'overseas', 'verylong', 'moment', { scene: ['beach'] });
   const api = D.load(file);
   if (!vis.includes('balloon')) {
     api.renderResult([], 0); // 画面操作では到達しないが、空の結果でも画面が崩れないことを直接確認
     const r = D.readResult(api);
     return { ok: r.name === NOT_FOUND && r.altNames.length === 0, why: 'ビーチを選ぶと気球を表示しない（ゼロ件に到達しない）。空の結果を直接渡した場合も「見つかりませんでした」画面を正常に表示' };
   }
-  const r = D.run(file, { region: 'overseas', days: 'long', scene: ['beach'], moment: ['balloon'], style: 'sightseeing', who: 'couple', budget: 3 }).result;
+  const r = D.run(file, { region: 'overseas', days: 'verylong', scene: ['beach'], moment: ['balloon'], style: 'sightseeing', who: 'couple', budget: 3 }).result;
   return { ok: r.name === NOT_FOUND, why: '気球が表示され、結果「' + r.name + '」' };
 });
 
@@ -169,13 +169,13 @@ uiCase(14, '途中で戻って回答を変更（海外→国内）', () => {
   const api = D.load(file);
   api.els['start-btn'].click();
   D.clickSingle(api, 'overseas'); api.advance(400);
-  D.clickSingle(api, 'long'); api.advance(400);
+  D.clickSingle(api, 'verylong'); api.advance(400);
   D.clickMulti(api, ['castle', 'landscape', 'chapel']);
   D.clickMulti(api, ['balloon', 'sunset']);
   // 過ごし方の画面から質問1まで戻る
   for (let i = 0; i < 4; i++) api.els['back-btn'].click();
   D.clickSingle(api, 'domestic'); api.advance(400);
-  D.clickSingle(api, 'long'); api.advance(400);
+  D.clickSingle(api, 'verylong'); api.advance(400);
   api.els['next-btn'].click(); // 景色は表示中の選択（チャペル）のまま次へ
   api.els['next-btn'].click(); // 演出も表示中の選択（サンセット）のまま次へ
   const sc = api.answers.scene.slice(), mo = api.answers.moment.slice();
@@ -233,7 +233,7 @@ function api0() { return T; }
 
 uiCase(17, '予算選択肢がゼロになる（制限解除。画面操作では到達しないため回答を直接設定）', () => {
   const api = D.load(file);
-  api.answers = { region: 'overseas', days: 'long', scene: ['beach'], moment: ['balloon'], style: 'resort', who: 'couple' };
+  api.answers = { region: 'overseas', days: 'verylong', scene: ['beach'], moment: ['balloon'], style: 'resort', who: 'couple' };
   api.curQIdx = 6; api.renderQ('right');
   const b = D.singleButtons(api);
   const dis = b.filter(x => x.disabled).length;
@@ -250,10 +250,10 @@ uiCase(18, 'スタジオ撮影だけを選択', () => {
 });
 
 uiCase(19, '選択条件をすべて満たす地域が複数ある', () => {
-  const ans = { region: 'overseas', days: 'long', scene: ['street'], moment: ['sunset'], style: 'sightseeing', who: 'couple', budget: 3 };
+  const ans = { region: 'overseas', days: 'verylong', scene: ['street'], moment: ['sunset'], style: 'sightseeing', who: 'couple', budget: 3 };
   const d = detail(ans);
   const full = d.rows.filter(r => r.rate === 100);
-  return { ok: true, why: `一致率100%のエリア: ${full.map(r => nm(r.k) + '(' + r.total + '点:' + r.parts.join(' ') + ')').join('、')}。順位差は同行者・過ごし方の加点と6〜7日の欧州減点で説明できる` };
+  return { ok: true, why: `一致率100%のエリア: ${full.map(r => nm(r.k) + '(' + r.total + '点:' + r.parts.join(' ') + ')').join('、')}。順位差は並べ替えの優先順位（景色・必須演出・一致率・点数）で説明できる` };
 });
 
 uiCase(20, '必須条件（気球）と旅行日数（4〜5日）が両立しない', () => {
@@ -299,14 +299,14 @@ uiCase('追加3', '選択直後に「戻る」を押す', () => {
 });
 
 uiCase('追加4', 'シェア文の改行', () => {
-  const r = D.run(file, { region: 'overseas', days: 'long', scene: ['castle'], moment: ['sunset'], style: 'sightseeing', who: 'couple', budget: 3 });
+  const r = D.run(file, { region: 'overseas', days: 'verylong', scene: ['castle'], moment: ['sunset'], style: 'sightseeing', who: 'couple', budget: 3 });
   r.api.els['insta-copy-btn'].onclick();
   const t = r.api.clipboardLog[0] || '';
   return { ok: !/!n/.test(t), why: 'コピー文: ' + JSON.stringify(t) };
 });
 
 uiCase('追加5', 'クリップボード機能がない環境（http 等）', () => {
-  const r = D.run(file, { region: 'overseas', days: 'long', scene: ['castle'], moment: ['sunset'], style: 'sightseeing', who: 'couple', budget: 3 }, { noClipboard: true });
+  const r = D.run(file, { region: 'overseas', days: 'verylong', scene: ['castle'], moment: ['sunset'], style: 'sightseeing', who: 'couple', budget: 3 }, { noClipboard: true });
   try { r.api.els['share-copy'].onclick(); } catch (e) { return { ok: false, why: '例外: ' + e.message + '（トースト表示なし）' }; }
   return { ok: true, why: '例外なし' };
 });

@@ -10,8 +10,9 @@ const file = process.argv[2] || path.join(__dirname, '..', 'fixed.txt');
 const A = load(file);
 const { DEST, QS, BUDGET_KEYS, DAYS_KEYS } = A;
 const src = fs.readFileSync(file, 'utf8');
-const list = name => eval('(' + new RegExp('var ' + name + ' = (\\{[\\s\\S]*?\\n\\});').exec(src.replace(/\r/g, ''))[1] + ')');
+const list = name => { const m = new RegExp('var ' + name + ' = (\\{[\\s\\S]*?\\n\\});').exec(src.replace(/\r/g, '')); return m ? eval('(' + m[1] + ')') : {}; }; // 一本化後は一覧なし
 const SL = list('SCENE_LIST'), ML = list('MOMENT_LIST');
+const hasLists = Object.keys(SL).length + Object.keys(ML).length > 0;
 
 const ITEMS = QS[2].opts.map(o => [o.v, '景色', o.text]).concat(QS[3].opts.filter(o => o.v !== 'none').map(o => [o.v, '演出', o.text]));
 // 推薦文・タグ・主な撮影都市に、その項目を思わせる語があるか（機械的な目安。判断は人が行う）
@@ -39,8 +40,8 @@ for (const k of Object.keys(DEST)) {
     let why = '';
     if (on && !hits.length) why = '対応にしているが、推薦文・タグに記述がない';
     else if (!on && hits.length) why = '推薦文・タグに記述があるが、非対応';
-    else if (on && inD !== inL) why = '2か所の登録が食い違う（片方だけ対応）';
-    feat.push([k, d.name, kind, label, on ? '○' : '×', on ? (inD && inL ? '両方' : inD ? '撮影地データのみ' : '対応一覧のみ') : '', hits.join('・'), why, '', '', '', '', '']);
+    else if (on && inD !== inL && hasLists) why = '2か所の登録が食い違う（片方だけ対応）';
+    feat.push([k, d.name, kind, label, on ? '○' : '×', on ? (!hasLists ? '撮影地データ' : inD && inL ? '両方' : inD ? '撮影地データのみ' : '対応一覧のみ') : '', hits.join('・'), why, '', '', '', '', '']);
   }
 }
 

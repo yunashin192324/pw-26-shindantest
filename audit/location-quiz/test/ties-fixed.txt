@@ -1,2 +1,2 @@
-候補2件以上 150438 第1位同点 23732 15.8%
+候補2件以上 151136 第1位同点 24081 15.9%
 [[{"region":"overseas","days":"medium","scene":["beach","architecture"],"moment":["none"],"style":"shopping","who":"group","budget":2},"グアム","バリ島",10],[{"region":"overseas","days":"medium","scene":["beach","landscape"],"moment":["none"],"style":"active","who":"family_elder","budget":6},"グアム","バリ島",5],[{"region":"overseas","days":"ultra","scene":["beach","street","villa"],"moment":["nightview"],"style":"sightseeing","who":"family_kids","budget":6},"シンガポール","ロンドン",15]]
