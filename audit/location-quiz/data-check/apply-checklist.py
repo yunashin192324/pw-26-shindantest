@@ -94,12 +94,15 @@ rebuild('BUDGET_KEYS', lambda b: [k for k, d in dest.items() if int(b) in d['ban
 rebuild('DAYS_KEYS', lambda dk: [k for k, d in dest.items() if dk in d['days']])
 
 # 判定を撮影地データに一本化する
-a = s.index('// 景色・演出に対応しているエリア一覧（DEST の属性を補う）。')
-b = s.index('function hasFeature(key,x){')
-e = s.index('}\n', s.index("return !!(l&&l.indexOf(key)!==-1);", b)) + 2
-s = s[:a] + ("// 景色・演出への対応は撮影地データ（DEST）の属性に一本化（商品担当者の確認済みチェック表から反映）。\n"
-             "// 候補選定 score()・予算の選択可否・質問の選択肢・一致率 calcMatching() のすべてがこの判定を使う。\n"
-             "function hasFeature(key,x){\n    var d=DEST[key];\n    return !!(d&&d[x]);\n}\n") + s[e:]
+if '// 景色・演出に対応しているエリア一覧（DEST の属性を補う）。' not in s:  # 一本化済みなら何もしない
+    pass
+else:
+  a = s.index('// 景色・演出に対応しているエリア一覧（DEST の属性を補う）。')
+  b = s.index('function hasFeature(key,x){')
+  e = s.index('}\n', s.index("return !!(l&&l.indexOf(key)!==-1);", b)) + 2
+  s = s[:a] + ("// 景色・演出への対応は撮影地データ（DEST）の属性に一本化（商品担当者の確認済みチェック表から反映）。\n"
+               "// 候補選定 score()・予算の選択可否・質問の選択肢・一致率 calcMatching() のすべてがこの判定を使う。\n"
+               "function hasFeature(key,x){\n    var d=DEST[key];\n    return !!(d&&d[x]);\n}\n") + s[e:]
 
 open(target, 'w', encoding='utf-8', newline='').write(s.replace('\n', nl))
 for c in changes: print(c)

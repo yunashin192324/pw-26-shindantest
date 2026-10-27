@@ -89,8 +89,8 @@ scenario(5, '歴史建築・宮殿・観光重視', { region: 'overseas', days: 
 scenario(6, '気球撮影を必須（8〜10日・100〜140万円）', { region: 'overseas', days: 'verylong', scene: ['landscape'], moment: ['balloon'], style: 'active', who: 'couple', budget: 3 },
   'カッパドキア', ({ res }) => res.name === 'カッパドキア');
 
-scenario('6b', '気球撮影を必須（8〜10日・250万円以上）', { region: 'overseas', days: 'verylong', scene: ['nature'], moment: ['balloon'], style: 'active', who: 'couple', budget: 6 },
-  '気球撮影を紹介文・タグに掲げるマサイマラが表示される', ({ res, disabled }) => ({ ok: res.name === 'マサイマラ', why: disabled.includes(6) ? '250万円以上が選択不可' : res.name }));
+scenario('6b', '気球撮影を必須（8〜10日・250万円以上。予算は上限扱い）', { region: 'overseas', days: 'verylong', scene: ['landscape'], moment: ['balloon'], style: 'active', who: 'couple', budget: 6 },
+  '気球撮影に対応するカッパドキアが表示される（マサイマラは商品担当者の確認で気球撮影なし）', ({ res, disabled }) => ({ ok: res.name === 'カッパドキア', why: disabled.includes(6) ? '250万円以上が選択不可' : res.name }));
 
 scenario(7, '星空撮影を必須', { region: 'overseas', days: 'verylong', scene: ['nature'], moment: ['starry'], style: 'active', who: 'couple', budget: 5 },
   'ニュージーランド（テカポ湖）など星空対応エリアのみ', ({ res, d }) => ({ ok: shown(res) && d.ranked.every(k => T.calcMatching(k, { moment: ['starry'] }).matched.length === 1), why: res.name }));
