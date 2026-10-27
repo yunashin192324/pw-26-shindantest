@@ -1,26 +1,13 @@
 {
- "total": 939996,
- "empty": 40596,
+ "total": 814952,
+ "empty": 0,
  "elig0": 0,
- "hard0": 13202,
- "scene0": 27394,
+ "hard0": 0,
+ "scene0": 0,
  "beachOnlyLike": 0,
- "byRegionBudget": {
-  "domestic/b1": 20,
-  "domestic/b2": 20,
-  "domestic/b3": 20,
-  "domestic/b4": 20,
-  "domestic/b5": 20,
-  "domestic/b6": 20,
-  "overseas/b1": 6746,
-  "overseas/b2": 6746,
-  "overseas/b3": 6746,
-  "overseas/b4": 6746,
-  "overseas/b5": 6746,
-  "overseas/b6": 6746
- }
+ "byRegionBudget": {}
 }
-{"scene0":[{"region":"domestic","days":"short","scene":["garden"],"moment":["starry"],"style":"resort","who":"couple","budget":1},{"region":"domestic","days":"short","scene":["garden"],"moment":["starry"],"style":"resort","who":"couple","budget":2},{"region":"domestic","days":"short","scene":["garden"],"moment":["starry"],"style":"resort","who":"couple","budget":3},{"region":"domestic","days":"short","scene":["garden"],"moment":["starry"],"style":"resort","who":"couple","budget":4}],"hard0":[{"region":"overseas","days":"medium","scene":["nature"],"moment":["animal"],"style":"resort","who":"couple","budget":1},{"region":"overseas","days":"medium","scene":["nature"],"moment":["sunset","animal"],"style":"resort","who":"couple","budget":1},{"region":"overseas","days":"long","scene":["beach"],"moment":["balloon"],"style":"resort","who":"couple","budget":1},{"region":"overseas","days":"long","scene":["beach"],"moment":["balloon"],"style":"resort","who":"couple","budget":2}]}
+{}
 single scene domestic beach 結果あり 30 / 30
 single scene domestic nature 結果あり 30 / 30
 single scene domestic landscape 結果あり 0 / 30

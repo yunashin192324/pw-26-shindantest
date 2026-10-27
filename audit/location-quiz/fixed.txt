@@ -461,6 +461,16 @@ function renderQ(dir){
                 if(!reach.some(function(k){return hasFeature(k,o.v);})) hiddenVals[o.v]=true;
             });
         }
+        // 星空・気球・動物は、先に選んだ景色を1つ以上持つ撮影地で撮影できる場合だけ表示する
+        // （両立する撮影地がない組み合わせを選んで「見つかりませんでした」になるのを防ぐ）
+        if(q.id==='moment'){
+            var selScene=(answers.scene||[]).filter(function(x){return x!=='none';});
+            ['starry','balloon','animal'].forEach(function(h){
+                if(hiddenVals[h]||!selScene.length) return;
+                var ok=reach.some(function(k){ return hasFeature(k,h)&&selScene.some(function(x){return hasFeature(k,x);}); });
+                if(!ok) hiddenVals[h]=true;
+            });
+        }
         // 海外→国内に回答を変えた場合、非表示になった選択肢が選択状態のまま残らないようにする
         for(var hv in hiddenVals){ if(multiSel[qi][hv]) delete multiSel[qi][hv]; }
         var visibleOpts=q.opts.filter(function(o){return !hiddenVals[o.v];});

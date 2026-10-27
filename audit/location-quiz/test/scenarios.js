@@ -103,9 +103,6 @@ scenario(9, '複数の景色と演出を同時に選択', { region: 'overseas', 
   '星空（必須扱い）に対応するエリアのみが残り、第1候補の一致率が代替候補以上',
   ({ res, d }) => ({ ok: shown(res) && res.altRates.every(r => r <= res.rate), why: shown(res) ? `第1候補${res.rate}% 代替${res.altRates.join('/')}` : '結果なし' }));
 
-scenario(11, '条件を満たす候補地がゼロ（6〜7日・ビーチ＋気球。気球対応はカッパドキアのみで、ビーチがない）', { region: 'overseas', days: 'long', scene: ['beach'], moment: ['balloon'], style: 'sightseeing', who: 'couple', budget: 3 },
-  '「見つかりませんでした」画面が崩れずに表示される', ({ res }) => res.name === NOT_FOUND);
-
 // 試験12: 同点
 (function () {
   const ans = { region: 'domestic', days: 'medium', scene: ['street'], moment: ['none'], style: 'shopping', who: 'couple', budget: 2 };
@@ -156,12 +153,24 @@ uiCase(10, '国内で対応エリアがない景色（奇岩・砂漠）の扱�
   return { ok: false, why: `国内でも選択肢が表示され、予算の選択不可は${dis}件。選択後の結果は「${r.name}」` };
 });
 
+uiCase(11, '条件を満たす候補地がゼロ（6〜7日・ビーチ＋気球）', () => {
+  const vis = D.visibleValues(D.load(file), 'overseas', 'long', 'moment', { scene: ['beach'] });
+  const api = D.load(file);
+  if (!vis.includes('balloon')) {
+    api.renderResult([], 0); // 画面操作では到達しないが、空の結果でも画面が崩れないことを直接確認
+    const r = D.readResult(api);
+    return { ok: r.name === NOT_FOUND && r.altNames.length === 0, why: 'ビーチを選ぶと気球を表示しない（ゼロ件に到達しない）。空の結果を直接渡した場合も「見つかりませんでした」画面を正常に表示' };
+  }
+  const r = D.run(file, { region: 'overseas', days: 'long', scene: ['beach'], moment: ['balloon'], style: 'sightseeing', who: 'couple', budget: 3 }).result;
+  return { ok: r.name === NOT_FOUND, why: '気球が表示され、結果「' + r.name + '」' };
+});
+
 uiCase(14, '途中で戻って回答を変更（海外→国内）', () => {
   const api = D.load(file);
   api.els['start-btn'].click();
   D.clickSingle(api, 'overseas'); api.advance(400);
   D.clickSingle(api, 'long'); api.advance(400);
-  D.clickMulti(api, ['castle', 'chapel']);
+  D.clickMulti(api, ['castle', 'landscape', 'chapel']);
   D.clickMulti(api, ['balloon', 'sunset']);
   // 過ごし方の画面から質問1まで戻る
   for (let i = 0; i < 4; i++) api.els['back-btn'].click();
@@ -176,7 +185,7 @@ uiCase(14, '途中で戻って回答を変更（海外→国内）', () => {
   if (btns.length) { const i = btns.findIndex(b => !b.disabled); btns[i].click(); }
   api.advance(60000);
   const r = D.readResult(api);
-  const leak = sc.includes('castle') || mo.includes('balloon');
+  const leak = sc.includes('castle') || sc.includes('landscape') || mo.includes('balloon');
   return { ok: !leak && r.name !== NOT_FOUND, why: `国内に変更後の回答 景色=${sc.join(',')} 演出=${mo.join(',')} → 結果「${r.name}」` };
 });
 
@@ -193,7 +202,9 @@ uiCase(15, '再診断を連続実行', () => {
     api.advance(60000);
     return D.readResult(api);
   };
-  const r1 = play({ region: 'overseas', days: 'long', scene: ['beach'], moment: ['balloon'], style: 'sightseeing', who: 'couple', budget: 3 });
+  // 1回目は「見つかりませんでした」画面を表示させる（画面操作では到達しないため直接呼ぶ）
+  api.els['start-btn'].click(); api.renderResult([], 0);
+  const r1 = D.readResult(api);
   api.els['restart-btn'].click();
   const sel1 = JSON.stringify(api.answers) + JSON.stringify(api.multiSel);
   const r2 = play({ region: 'domestic', days: 'short', scene: ['nature'], moment: ['none'], style: 'resort', who: 'couple', budget: 1 });
@@ -220,7 +231,7 @@ uiCase(16, '予算選択肢が一つだけになる（自動遷移）', () => {
 });
 function api0() { return T; }
 
-uiCase(17, '予算選択肢がゼロになる（制限解除）', () => {
+uiCase(17, '予算選択肢がゼロになる（制限解除。画面操作では到達しないため回答を直接設定）', () => {
   const api = D.load(file);
   api.answers = { region: 'overseas', days: 'long', scene: ['beach'], moment: ['balloon'], style: 'resort', who: 'couple' };
   api.curQIdx = 6; api.renderQ('right');
@@ -228,7 +239,7 @@ uiCase(17, '予算選択肢がゼロになる（制限解除）', () => {
   const dis = b.filter(x => x.disabled).length;
   b[0].click(); api.advance(60000);
   const r = D.readResult(api);
-  return { ok: dis === 0 && r.name === NOT_FOUND, why: `全予算が選択可能に戻り（選択不可${dis}件）、選択後は「${r.name}」を表示。どの予算でも結果が出ないことは事前に案内されない` };
+  return { ok: dis === 0 && r.name === NOT_FOUND, why: `全予算が選択可能に戻り（選択不可${dis}件）、選択後は「${r.name}」を表示。画面操作では、どの予算でも結果が出ない組み合わせを選べないことを総当たりで確認済み` };
 });
 
 uiCase(18, 'スタジオ撮影だけを選択', () => {

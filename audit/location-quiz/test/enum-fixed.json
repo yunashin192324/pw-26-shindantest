@@ -1,75 +1,75 @@
 {
  "file": "../fixed.txt",
  "stats": {
-  "combos": 15039936,
-  "uiPaths": 199250,
-  "noResult": 649536,
+  "combos": 13039232,
+  "uiPaths": 174340,
+  "noResult": 0,
   "noResultButSelectable": 0,
   "noResultDueToMaxScore": 0,
   "regionLeak": 0,
-  "topMissingHard": 5575680,
-  "topNoScene": 99328,
-  "altBeatsTop": 805228,
-  "allBudgetsDisabledReleased": 6766,
+  "topMissingHard": 4262400,
+  "topNoScene": 51200,
+  "altBeatsTop": 671884,
+  "allBudgetsDisabledReleased": 0,
   "autoBudget": 6144,
   "budgetDisabledButHasResult": 0,
-  "shown": 14390400,
+  "shown": 13039232,
   "rateHist": {
    "9": 48,
    "10": 492,
    "11": 2220,
    "13": 5892,
    "14": 10332,
-   "15": 1120,
-   "17": 18252,
-   "18": 20880,
-   "20": 58728,
+   "15": 1104,
+   "17": 18092,
+   "18": 20120,
+   "20": 56432,
    "21": 1536,
-   "22": 82948,
-   "23": 8920,
-   "25": 144236,
-   "27": 84156,
-   "29": 107464,
-   "30": 159428,
-   "31": 14992,
-   "33": 371460,
-   "36": 139312,
-   "38": 308312,
-   "40": 327648,
+   "22": 78012,
+   "23": 8904,
+   "25": 136020,
+   "27": 82204,
+   "29": 98144,
+   "30": 151924,
+   "31": 14832,
+   "33": 342940,
+   "36": 129424,
+   "38": 272440,
+   "40": 291856,
    "41": 24,
-   "42": 93860,
-   "43": 294740,
-   "44": 464148,
-   "45": 279376,
-   "46": 67544,
-   "47": 4520,
-   "50": 1738024,
-   "53": 10400,
-   "54": 139184,
-   "55": 562992,
-   "56": 878940,
-   "57": 629040,
-   "58": 334428,
+   "42": 83276,
+   "43": 254284,
+   "44": 395068,
+   "45": 240056,
+   "46": 60464,
+   "47": 4224,
+   "50": 1498752,
+   "53": 9864,
+   "54": 126952,
+   "55": 496232,
+   "56": 760468,
+   "57": 556032,
+   "58": 305124,
    "59": 96,
-   "60": 1003312,
-   "62": 118608,
-   "63": 866948,
-   "64": 521076,
-   "67": 1397816,
-   "69": 36640,
-   "70": 466112,
-   "71": 557008,
-   "73": 168192,
-   "75": 600136,
+   "60": 901792,
+   "62": 111800,
+   "63": 774588,
+   "64": 480252,
+   "67": 1288096,
+   "69": 35680,
+   "70": 434472,
+   "71": 518344,
+   "73": 160504,
+   "75": 567920,
    "77": 3360,
-   "78": 269480,
-   "80": 276628,
-   "82": 20736,
-   "83": 224952,
-   "86": 178084,
-   "88": 95124,
-   "89": 33392,
-   "90": 7040,
+   "78": 256144,
+   "80": 268220,
+   "82": 20384,
+   "83": 218232,
+   "86": 172924,
+   "88": 92788,
+   "89": 32808,
+   "90": 6976,
    "91": 672,
    "100": 179392
   }
@@ -199,7 +199,7 @@
   ],
   "topMissingHard": [
    {
-    "top": "hawaii",
+    "top": "bali",
     "region": "overseas",
     "days": "long",
     "scene": [
@@ -207,14 +207,14 @@
     ],
     "moment": [
      "starry",
-     "balloon"
+     "animal"
     ],
     "style": "resort",
     "who": "couple",
-    "budget": 3
+    "budget": 2
    },
    {
-    "top": "hawaii",
+    "top": "bali",
     "region": "overseas",
     "days": "long",
     "scene": [
@@ -222,14 +222,14 @@
     ],
     "moment": [
      "starry",
-     "balloon"
+     "animal"
     ],
     "style": "resort",
     "who": "family_kids",
-    "budget": 3
+    "budget": 2
    },
    {
-    "top": "hawaii",
+    "top": "bali",
     "region": "overseas",
     "days": "long",
     "scene": [
@@ -237,14 +237,14 @@
     ],
     "moment": [
      "starry",
-     "balloon"
+     "animal"
     ],
     "style": "resort",
     "who": "family_elder",
-    "budget": 3
+    "budget": 2
    },
    {
-    "top": "hawaii",
+    "top": "bali",
     "region": "overseas",
     "days": "long",
     "scene": [
@@ -252,14 +252,14 @@
     ],
     "moment": [
      "starry",
-     "balloon"
+     "animal"
     ],
     "style": "resort",
     "who": "group",
-    "budget": 3
+    "budget": 2
    },
    {
-    "top": "australia",
+    "top": "phuket",
     "region": "overseas",
     "days": "long",
     "scene": [
@@ -267,14 +267,14 @@
     ],
     "moment": [
      "starry",
-     "balloon"
+     "animal"
     ],
     "style": "sightseeing",
     "who": "couple",
-    "budget": 3
+    "budget": 2
    },
    {
-    "top": "australia",
+    "top": "bali",
     "region": "overseas",
     "days": "long",
     "scene": [
@@ -282,14 +282,14 @@
     ],
     "moment": [
      "starry",
-     "balloon"
+     "animal"
     ],
     "style": "sightseeing",
     "who": "family_kids",
-    "budget": 3
+    "budget": 2
    },
    {
-    "top": "australia",
+    "top": "bali",
     "region": "overseas",
     "days": "long",
     "scene": [
@@ -297,14 +297,14 @@
     ],
     "moment": [
      "starry",
-     "balloon"
+     "animal"
     ],
     "style": "sightseeing",
     "who": "family_elder",
-    "budget": 3
+    "budget": 2
    },
    {
-    "top": "australia",
+    "top": "bali",
     "region": "overseas",
     "days": "long",
     "scene": [
@@ -312,11 +312,11 @@
     ],
     "moment": [
      "starry",
-     "balloon"
+     "animal"
     ],
     "style": "sightseeing",
     "who": "group",
-    "budget": 3
+    "budget": 2
    }
   ],
   "topNoScene": [
@@ -325,7 +325,7 @@
     "region": "overseas",
     "days": "long",
     "scene": [
-     "ruins"
+     "villa"
     ],
     "moment": [
      "starry",
@@ -340,7 +340,7 @@
     "region": "overseas",
     "days": "long",
     "scene": [
-     "ruins"
+     "villa"
     ],
     "moment": [
      "starry",
@@ -355,7 +355,7 @@
     "region": "overseas",
     "days": "long",
     "scene": [
-     "ruins"
+     "villa"
     ],
     "moment": [
      "starry",
@@ -370,7 +370,7 @@
     "region": "overseas",
     "days": "long",
     "scene": [
-     "ruins"
+     "villa"
     ],
     "moment": [
      "starry",
@@ -385,7 +385,7 @@
     "region": "overseas",
     "days": "long",
     "scene": [
-     "ruins"
+     "villa"
     ],
     "moment": [
      "starry",
@@ -400,7 +400,7 @@
     "region": "overseas",
     "days": "long",
     "scene": [
-     "ruins"
+     "villa"
     ],
     "moment": [
      "starry",
@@ -415,7 +415,7 @@
     "region": "overseas",
     "days": "long",
     "scene": [
-     "ruins"
+     "villa"
     ],
     "moment": [
      "starry",
@@ -430,7 +430,7 @@
     "region": "overseas",
     "days": "long",
     "scene": [
-     "ruins"
+     "villa"
     ],
     "moment": [
      "starry",

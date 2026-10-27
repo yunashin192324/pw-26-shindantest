@@ -6,7 +6,7 @@ const sub=a=>{const r=[];for(let m=1;m<(1<<a.length);m++)r.push(a.filter((_,i)=>
 const H={domestic:{s:['castle','architecture','villa'],m:['balloon','animal']},overseas:{s:[],m:[]}};
 const c={total:0,empty:0,elig0:0,hard0:0,scene0:0,beachOnlyLike:0,byRegionBudget:{}};const exs={};
 const {visibleValues}=require('./driver');const VV={};const vis=(r,d,q)=>VV[r+d+q]||(VV[r+d+q]=visibleValues(api,r,d,q));
-for(const region of ['domestic','overseas'])for(const days of QS[1].opts.map(o=>o.v))for(const scene of sub(vis(region,days,'scene')))for(const moment of [['none']].concat(sub(vis(region,days,'moment').filter(v=>v!=='none')))){
+for(const region of ['domestic','overseas'])for(const days of QS[1].opts.map(o=>o.v))for(const scene of sub(vis(region,days,'scene')))for(const moment of [['none']].concat(sub(visibleValues(api,region,days,'moment',{scene}).filter(v=>v!=='none')))){
   const base={region,days,scene,moment,style:'resort',who:'couple'};
   api.answers=Object.assign({},base);api.curQIdx=6;api.renderQ();const bt=api.els['opts-single'].children;
   let en=bt.length?QS[6].opts.filter((o,i)=>!bt[i].disabled).map(o=>o.v):[api.answers.budget];api.advance(1000);

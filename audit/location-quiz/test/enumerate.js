@@ -60,8 +60,10 @@ const { visibleValues } = require('./driver');
 for (const region of ['domestic', 'overseas']) for (const days of DAYS) {
   // 選択肢は、対象ファイルの画面描画で実際に表示されるものだけを使う
   const sceneSets = subsets(visibleValues(api, region, days, 'scene'));
-  const momentSets = [['none']].concat(subsets(visibleValues(api, region, days, 'moment').filter(v => v !== 'none')));
-  for (const scene of sceneSets) for (const moment of momentSets) {
+  for (const scene of sceneSets) {
+  // 演出の選択肢は、先に選んだ景色によって変わる
+  const momentSets = [['none']].concat(subsets(visibleValues(api, region, days, 'moment', { scene }).filter(v => v !== 'none')));
+  for (const moment of momentSets) {
     const base = { region, days, scene, moment, style: 'resort', who: 'couple' };
     const ui = budgetUi(base);
     const allDisabledReleased = !ui.auto && ui.enabled.length === 6 && (() => {
@@ -107,6 +109,7 @@ for (const region of ['domestic', 'overseas']) for (const days of DAYS) {
       }
     }
     stats.uiPaths++;
+  }
   }
 }
 const res = { file, stats, examples };
