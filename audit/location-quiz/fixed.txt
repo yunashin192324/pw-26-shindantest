@@ -259,7 +259,7 @@ function score(ans) {
             finalPairs.push(pairs[i]);
         }
     }
-    // 並べ替えの優先順位：①選んだ星空・気球・動物を多く満たす ②選んだ景色を1つ以上満たす ③一致率（画面に表示する順位と一致率を矛盾させない） ④点数 ⑤同点なら選んだ予算区分に登録された撮影地
+    // 並べ替えの優先順位：①選んだ景色を1つ以上満たす ②選んだ星空・気球・動物を多く満たす ③一致率（画面に表示する順位と一致率を矛盾させない） ④点数 ⑤同点なら選んだ予算区分に登録された撮影地
     var nsc=[]; for(var i=0;i<scene.length;i++){ if(scene[i]!=='none') nsc.push(scene[i]); }
     function rankKey(k){
         var h=0; if(!hasNone){ for(var i=0;i<hm.length;i++){ if(hasFeature(k,hm[i])) h++; } }
@@ -268,7 +268,7 @@ function score(ans) {
         return [h,sh,ib,calcMatching(k,ans).rate];
     }
     for(var i=0;i<finalPairs.length;i++) finalPairs[i].push(rankKey(finalPairs[i][0]));
-    finalPairs.sort(function(a,b){ return (b[2][0]-a[2][0])||(b[2][1]-a[2][1])||(b[2][3]-a[2][3])||(b[1]-a[1])||(b[2][2]-a[2][2]); });
+    finalPairs.sort(function(a,b){ return (b[2][1]-a[2][1])||(b[2][0]-a[2][0])||(b[2][3]-a[2][3])||(b[1]-a[1])||(b[2][2]-a[2][2]); });
     window._lastMaxScore=finalPairs.length>0?finalPairs[0][1]:0;
    
     var result=[];

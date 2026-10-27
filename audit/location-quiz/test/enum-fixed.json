@@ -7,9 +7,9 @@
   "noResultButSelectable": 0,
   "noResultDueToMaxScore": 0,
   "regionLeak": 0,
-  "topMissingHard": 4262400,
-  "topNoScene": 51200,
-  "altBeatsTop": 671884,
+  "topMissingHard": 4307456,
+  "topNoScene": 0,
+  "altBeatsTop": 632172,
   "allBudgetsDisabledReleased": 0,
   "autoBudget": 6144,
   "budgetDisabledButHasResult": 0,
@@ -19,56 +19,56 @@
    "10": 492,
    "11": 2220,
    "13": 5892,
-   "14": 10332,
-   "15": 1104,
-   "17": 18092,
-   "18": 20120,
-   "20": 56432,
-   "21": 1536,
-   "22": 78012,
-   "23": 8904,
-   "25": 136020,
-   "27": 82204,
-   "29": 98144,
-   "30": 151924,
+   "14": 10316,
+   "15": 944,
+   "17": 17372,
+   "18": 18200,
+   "20": 53024,
+   "21": 1520,
+   "22": 73644,
+   "23": 8744,
+   "25": 131028,
+   "27": 80236,
+   "29": 95008,
+   "30": 148236,
    "31": 14832,
-   "33": 342940,
-   "36": 129424,
-   "38": 272440,
-   "40": 291856,
+   "33": 336548,
+   "36": 129480,
+   "38": 268176,
+   "40": 292016,
    "41": 24,
-   "42": 83276,
-   "43": 254284,
-   "44": 395068,
-   "45": 240056,
-   "46": 60464,
+   "42": 83372,
+   "43": 252132,
+   "44": 396996,
+   "45": 240912,
+   "46": 60528,
    "47": 4224,
-   "50": 1498752,
+   "50": 1505096,
    "53": 9864,
-   "54": 126952,
-   "55": 496232,
-   "56": 760468,
-   "57": 556032,
-   "58": 305124,
+   "54": 127128,
+   "55": 497992,
+   "56": 765084,
+   "57": 559256,
+   "58": 305748,
    "59": 96,
-   "60": 901792,
-   "62": 111800,
-   "63": 774588,
-   "64": 480252,
-   "67": 1288096,
+   "60": 904584,
+   "62": 111880,
+   "63": 778708,
+   "64": 481308,
+   "67": 1292064,
    "69": 35680,
-   "70": 434472,
-   "71": 518344,
-   "73": 160504,
-   "75": 567920,
+   "70": 435416,
+   "71": 520264,
+   "73": 160664,
+   "75": 568888,
    "77": 3360,
-   "78": 256144,
-   "80": 268220,
+   "78": 256576,
+   "80": 268612,
    "82": 20384,
-   "83": 218232,
-   "86": 172924,
-   "88": 92788,
-   "89": 32808,
+   "83": 218600,
+   "86": 173084,
+   "88": 92868,
+   "89": 32824,
    "90": 6976,
    "91": 672,
    "100": 179392
@@ -317,128 +317,6 @@
     "style": "sightseeing",
     "who": "group",
     "budget": 2
-   }
-  ],
-  "topNoScene": [
-   {
-    "top": "australia",
-    "region": "overseas",
-    "days": "long",
-    "scene": [
-     "villa"
-    ],
-    "moment": [
-     "starry",
-     "animal"
-    ],
-    "style": "resort",
-    "who": "couple",
-    "budget": 3
-   },
-   {
-    "top": "australia",
-    "region": "overseas",
-    "days": "long",
-    "scene": [
-     "villa"
-    ],
-    "moment": [
-     "starry",
-     "animal"
-    ],
-    "style": "resort",
-    "who": "family_kids",
-    "budget": 3
-   },
-   {
-    "top": "australia",
-    "region": "overseas",
-    "days": "long",
-    "scene": [
-     "villa"
-    ],
-    "moment": [
-     "starry",
-     "animal"
-    ],
-    "style": "resort",
-    "who": "family_elder",
-    "budget": 3
-   },
-   {
-    "top": "australia",
-    "region": "overseas",
-    "days": "long",
-    "scene": [
-     "villa"
-    ],
-    "moment": [
-     "starry",
-     "animal"
-    ],
-    "style": "resort",
-    "who": "group",
-    "budget": 3
-   },
-   {
-    "top": "australia",
-    "region": "overseas",
-    "days": "long",
-    "scene": [
-     "villa"
-    ],
-    "moment": [
-     "starry",
-     "animal"
-    ],
-    "style": "sightseeing",
-    "who": "couple",
-    "budget": 3
-   },
-   {
-    "top": "australia",
-    "region": "overseas",
-    "days": "long",
-    "scene": [
-     "villa"
-    ],
-    "moment": [
-     "starry",
-     "animal"
-    ],
-    "style": "sightseeing",
-    "who": "family_kids",
-    "budget": 3
-   },
-   {
-    "top": "australia",
-    "region": "overseas",
-    "days": "long",
-    "scene": [
-     "villa"
-    ],
-    "moment": [
-     "starry",
-     "animal"
-    ],
-    "style": "sightseeing",
-    "who": "family_elder",
-    "budget": 3
-   },
-   {
-    "top": "australia",
-    "region": "overseas",
-    "days": "long",
-    "scene": [
-     "villa"
-    ],
-    "moment": [
-     "starry",
-     "animal"
-    ],
-    "style": "sightseeing",
-    "who": "group",
-    "budget": 3
    }
   ]
  }
