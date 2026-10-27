@@ -66,3 +66,14 @@ function readResult(api) {
 }
 
 module.exports = { load, run, cur, clickSingle, clickMulti, singleButtons, multiButtons, readResult };
+
+// 実際の画面描画（renderQ）で、地域・日数ごとに表示される選択肢の値を読み取る
+function visibleValues(api, region, days, qid) {
+  const idx = api.QS.findIndex(q => q.id === qid);
+  api.answers = { region, days };
+  api.curQIdx = api.qFlow.indexOf(idx);
+  api.renderQ('right');
+  const q = api.QS[idx];
+  return api.els['opts-multi'].children.map(b => q.opts.find(o => b.innerHTML.includes('>' + o.text + '<')).v);
+}
+module.exports.visibleValues = visibleValues;

@@ -103,7 +103,7 @@ scenario(9, '複数の景色と演出を同時に選択', { region: 'overseas', 
   '星空（必須扱い）に対応するエリアのみが残り、第1候補の一致率が代替候補以上',
   ({ res, d }) => ({ ok: shown(res) && res.altRates.every(r => r <= res.rate), why: shown(res) ? `第1候補${res.rate}% 代替${res.altRates.join('/')}` : '結果なし' }));
 
-scenario(11, '条件を満たす候補地がゼロ', { region: 'overseas', days: 'short', scene: ['castle'], moment: ['balloon'], style: 'sightseeing', who: 'couple', budget: 2 },
+scenario(11, '条件を満たす候補地がゼロ（6〜7日・ビーチ＋気球。気球対応はカッパドキアのみで、ビーチがない）', { region: 'overseas', days: 'long', scene: ['beach'], moment: ['balloon'], style: 'sightseeing', who: 'couple', budget: 3 },
   '「見つかりませんでした」画面が崩れずに表示される', ({ res }) => res.name === NOT_FOUND);
 
 // 試験12: 同点
@@ -193,7 +193,7 @@ uiCase(15, '再診断を連続実行', () => {
     api.advance(60000);
     return D.readResult(api);
   };
-  const r1 = play({ region: 'overseas', days: 'short', scene: ['castle'], moment: ['balloon'], style: 'sightseeing', who: 'couple', budget: 2 });
+  const r1 = play({ region: 'overseas', days: 'long', scene: ['beach'], moment: ['balloon'], style: 'sightseeing', who: 'couple', budget: 3 });
   api.els['restart-btn'].click();
   const sel1 = JSON.stringify(api.answers) + JSON.stringify(api.multiSel);
   const r2 = play({ region: 'domestic', days: 'short', scene: ['nature'], moment: ['none'], style: 'resort', who: 'couple', budget: 1 });
@@ -222,7 +222,7 @@ function api0() { return T; }
 
 uiCase(17, '予算選択肢がゼロになる（制限解除）', () => {
   const api = D.load(file);
-  api.answers = { region: 'overseas', days: 'short', scene: ['castle'], moment: ['balloon'], style: 'resort', who: 'couple' };
+  api.answers = { region: 'overseas', days: 'long', scene: ['beach'], moment: ['balloon'], style: 'resort', who: 'couple' };
   api.curQIdx = 6; api.renderQ('right');
   const b = D.singleButtons(api);
   const dis = b.filter(x => x.disabled).length;
@@ -246,13 +246,15 @@ uiCase(19, '選択条件をすべて満たす地域が複数ある', () => {
 });
 
 uiCase(20, '必須条件（気球）と旅行日数（4〜5日）が両立しない', () => {
+  const vis = D.visibleValues(D.load(file), 'overseas', 'medium', 'moment');
+  if (!vis.includes('balloon')) return { ok: true, why: '4〜5日では「気球・バルーン」を表示しない' };
   const api = D.load(file);
   api.answers = { region: 'overseas', days: 'medium', scene: ['beach'], moment: ['balloon'], style: 'resort', who: 'couple' };
   api.curQIdx = 6; api.renderQ('right');
   const b = D.singleButtons(api);
   b[1].click(); api.advance(60000);
   const r = D.readResult(api);
-  return { ok: r.name === NOT_FOUND, why: `結果「${r.name}」（無理に推薦しない）` };
+  return { ok: r.name === NOT_FOUND, why: `選択肢は表示され、結果「${r.name}」` };
 });
 
 uiCase('追加1', '単一選択の連続クリック（質問の読み飛ばし）', () => {

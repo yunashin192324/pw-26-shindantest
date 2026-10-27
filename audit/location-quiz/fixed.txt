@@ -453,6 +453,14 @@ function renderQ(dir){
             if(q.id==='scene')  hiddenVals={landscape:true,castle:true,architecture:true,villa:true};
             if(q.id==='moment') hiddenVals={balloon:true,animal:true};
         }
+        // 選んだ地域・日数で（どの予算でも）対応する撮影地が1件もない選択肢は表示しない
+        if(q.id==='scene'||q.id==='moment'){
+            var reach=getEligible({region:answers.region,days:answers.days,budget:6});
+            q.opts.forEach(function(o){
+                if(o.v==='none') return;
+                if(!reach.some(function(k){return hasFeature(k,o.v);})) hiddenVals[o.v]=true;
+            });
+        }
         // 海外→国内に回答を変えた場合、非表示になった選択肢が選択状態のまま残らないようにする
         for(var hv in hiddenVals){ if(multiSel[qi][hv]) delete multiSel[qi][hv]; }
         var visibleOpts=q.opts.filter(function(o){return !hiddenVals[o.v];});

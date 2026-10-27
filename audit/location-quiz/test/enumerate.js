@@ -56,12 +56,12 @@ const stats = {
 const examples = {};
 function ex(k, v) { (examples[k] = examples[k] || []).length < 8 && examples[k].push(v); }
 
-for (const region of ['domestic', 'overseas']) {
-  const hs = (HIDDEN[region] || {}).scene || [];
-  const hm = (HIDDEN[region] || {}).moment || [];
-  const sceneSets = subsets(SCENES.filter(s => !hs.includes(s)));
-  const momentSets = [['none']].concat(subsets(MOMENTS.filter(s => !hm.includes(s))));
-  for (const days of DAYS) for (const scene of sceneSets) for (const moment of momentSets) {
+const { visibleValues } = require('./driver');
+for (const region of ['domestic', 'overseas']) for (const days of DAYS) {
+  // 選択肢は、対象ファイルの画面描画で実際に表示されるものだけを使う
+  const sceneSets = subsets(visibleValues(api, region, days, 'scene'));
+  const momentSets = [['none']].concat(subsets(visibleValues(api, region, days, 'moment').filter(v => v !== 'none')));
+  for (const scene of sceneSets) for (const moment of momentSets) {
     const base = { region, days, scene, moment, style: 'resort', who: 'couple' };
     const ui = budgetUi(base);
     const allDisabledReleased = !ui.auto && ui.enabled.length === 6 && (() => {
