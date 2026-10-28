@@ -190,4 +190,10 @@
 ### 試験追加5: クリップボード機能がない環境（http 等）
 - 判定: **不合格**（例外: Cannot read properties of undefined (reading 'writeText')（トースト表示なし））
 
-## 集計: 合格 12 / 不合格 15
+### 試験追加6: 読み込み中に新しい診断を始める（前回の読み込み処理が結果画面を出さない）
+- 判定: **不合格**（前回の読み込み処理が結果画面を表示した）
+
+### 試験追加7: 外部リンクに rel="noopener" が付いている
+- 判定: **不合格**（エラー: Cannot read properties of undefined (reading 'innerHTML')）
+
+## 集計: 合格 12 / 不合格 17

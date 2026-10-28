@@ -51,7 +51,7 @@ function traceSrc(src) {
   rep("        var stype=scene[i];", "        var stype=scene[i]; __L='景色:'+stype;");
   rep("            var mtype=moment[i];", "            var mtype=moment[i]; __L='演出:'+mtype;");
   rep("    if(style==='resort')", "    __L='過ごし方';\n    if(style==='resort')");
-  rep("    var euroKeys=", "    __L='6~7日欧州減点';\n    var euroKeys=");
+  if (src.includes("    var euroKeys=")) rep("    var euroKeys=", "    __L='6~7日欧州減点';\n    var euroKeys="); // 削除済みの版では省略
   rep("function score(ans) {", "var __L='',__TR={};function __T(k,d){(__TR[k]=__TR[k]||[]).push(__L+(d>0?'+':'')+d);}\nfunction score(ans) {__TR={};");
   src += "\n;this.__trace=function(){return __TR;};";
   return src;

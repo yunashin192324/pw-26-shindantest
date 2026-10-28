@@ -311,5 +311,22 @@ uiCase('追加5', 'クリップボード機能がない環境（http 等）', ()
   return { ok: true, why: '例外なし' };
 });
 
+uiCase('追加6', '読み込み中に新しい診断を始める（前回の読み込み処理が結果画面を出さない）', () => {
+  const api = D.load(file);
+  api.answers = { region: 'overseas', days: 'verylong', scene: ['beach'], moment: ['none'], style: 'resort', who: 'couple', budget: 3 };
+  api.showLoading(); api.advance(1500);
+  api.els['start-btn'].click(); // 読み込み中に最初からやり直す（画面操作では通常起きないが、念のため確認）
+  api.advance(60000);
+  const onResult = api.els['screen-result'].style.display === 'block';
+  return { ok: !onResult && D.cur(api).id === 'region', why: onResult ? '前回の読み込み処理が結果画面を表示した' : '前回の読み込み処理は止まり、質問1のまま' };
+});
+
+uiCase('追加7', '外部リンクに rel="noopener" が付いている', () => {
+  const r = D.run(file, { region: 'overseas', days: 'verylong', scene: ['beach'], moment: ['none'], style: 'resort', who: 'couple', budget: 3 });
+  const html = ['res-main-card', 'res-consult', 'res-upsell', 'res-alt'].map(id => r.api.els[id].innerHTML).join('');
+  const all = (html.match(/target="_blank"/g) || []).length, ok = (html.match(/target="_blank" rel="noopener"/g) || []).length;
+  return { ok: all > 0 && all === ok, why: `別画面で開くリンク ${all} 件中 ${ok} 件に付与` };
+});
+
 P(`## 集計: 合格 ${pass} / 不合格 ${fail}`);
 console.log(out.join('\n'));

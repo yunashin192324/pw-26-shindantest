@@ -51,8 +51,8 @@ const DEST = {
 };
 
 const BUDGET_KEYS = {
-    1: ['okinawa','hokkaido','korea','danang','cebu'],
-    2: ['okinawa','hokkaido','korea','danang','cebu','okinawa_rito','guam','bali','phuket'],
+    1: ['okinawa','hokkaido','danang','cebu'],
+    2: ['okinawa','hokkaido','danang','cebu','okinawa_rito','guam','bali','phuket'],
     3: ['okinawa_rito','guam','bali','phuket','singapore','australia','cappadocia','hawaii','dubai','fiji','paris','netherlands'],
     4: ['singapore','australia','cappadocia','hawaii','dubai','fiji','paris','netherlands','egypt','malta','wien','morocco','barcelona','nz','italy','cancun','lasvegas','central_eu','canada','newyork','maldives','london','romantic_road','portugal','mont_saint','greece'],
     5: ['egypt','malta','wien','morocco','barcelona','nz','italy','cancun','lasvegas','central_eu','canada','newyork','maldives','london','romantic_road','portugal','mont_saint','greece','dubrovnik','bled','nordic','swiss'],
@@ -60,10 +60,10 @@ const BUDGET_KEYS = {
 };
 
 const DAYS_KEYS = {
-    short:    ['okinawa','okinawa_rito','hokkaido','korea','guam'],
-    medium:   ['okinawa','okinawa_rito','hokkaido','korea','guam','bali','danang','cebu','phuket','singapore'],
-    long:     ['okinawa','okinawa_rito','hokkaido','korea','guam','bali','danang','cebu','phuket','hawaii','australia','singapore','lasvegas'],
-    verylong: ['okinawa','okinawa_rito','hokkaido','korea','guam','bali','danang','cebu','singapore','phuket','hawaii','australia','lasvegas','newyork','fiji','canada','cancun','nz','dubai','egypt','morocco','masaimara','maldives','swiss','uyuni','paris','mont_saint','wien','italy','barcelona','portugal','malta','greece','cappadocia','central_eu','romantic_road','netherlands','dubrovnik','bled','nordic','london'],
+    short:    ['okinawa','okinawa_rito','hokkaido','guam'],
+    medium:   ['okinawa','okinawa_rito','hokkaido','guam','bali','danang','cebu','phuket','singapore'],
+    long:     ['okinawa','okinawa_rito','hokkaido','guam','bali','danang','cebu','phuket','hawaii','australia','singapore','lasvegas'],
+    verylong: ['okinawa','okinawa_rito','hokkaido','guam','bali','danang','cebu','singapore','phuket','hawaii','australia','lasvegas','newyork','fiji','canada','cancun','nz','dubai','egypt','morocco','masaimara','maldives','swiss','uyuni','paris','mont_saint','wien','italy','barcelona','portugal','malta','greece','cappadocia','central_eu','romantic_road','netherlands','dubrovnik','bled','nordic','london'],
     ultra:    'all',
 };
 
@@ -213,16 +213,9 @@ function score(ans) {
     }
 
     if(style==='resort')      { add(['okinawa','okinawa_rito','guam','maldives','bali','hawaii','fiji','cancun','phuket','cebu','danang','malta','greece'],4); sub(['paris','wien','central_eu','romantic_road','netherlands','egypt','morocco','newyork','london'],1); }
-    if(style==='sightseeing') { add(['hokkaido','korea','danang','singapore','australia','lasvegas','newyork','canada','dubai','egypt','morocco','masaimara','uyuni','paris','mont_saint','wien','italy','barcelona','portugal','malta','greece','cappadocia','swiss','central_eu','romantic_road','netherlands','dubrovnik','bled','nordic','london'],4); sub(['okinawa','okinawa_rito','maldives','fiji','bali','guam','cebu'],1); }
-    if(style==='shopping')    add(['okinawa','korea','guam','bali','singapore','hawaii','newyork','dubai','paris','italy','barcelona','london'],4);
+    if(style==='sightseeing') { add(['hokkaido','danang','singapore','australia','lasvegas','newyork','canada','dubai','egypt','morocco','masaimara','uyuni','paris','mont_saint','wien','italy','barcelona','portugal','malta','greece','cappadocia','swiss','central_eu','romantic_road','netherlands','dubrovnik','bled','nordic','london'],4); sub(['okinawa','okinawa_rito','maldives','fiji','bali','guam','cebu'],1); }
+    if(style==='shopping')    add(['okinawa','guam','bali','singapore','hawaii','newyork','dubai','paris','italy','barcelona','london'],4);
     if(style==='active')      { add(['okinawa_rito','hokkaido','australia','lasvegas','canada','cancun','nz','masaimara','uyuni','cappadocia','swiss','nordic'],4); sub(['maldives','paris','wien','central_eu'],1); }
-
-    var euroKeys=['paris','wien','italy','barcelona','greece','central_eu','romantic_road','netherlands','london','dubrovnik','bled','portugal','malta','cappadocia','nordic','mont_saint'];
-    if(ans.days==='long'){
-        var hasEuro=false;
-        for(var i=0;i<eligible.length;i++){ if(euroKeys.indexOf(eligible[i])!==-1){hasEuro=true;break;} }
-        if(hasEuro) sub(euroKeys,2);
-    }
 
     var pairs=[];
     for(var k in s){ if(Object.prototype.hasOwnProperty.call(s,k)) pairs.push([k,s[k]]); }
@@ -267,8 +260,8 @@ function calcMatching(key,ans) {
 
     // 3. 旅行スタイル（style）に対応しているエリア一覧
     var resortList=['okinawa','okinawa_rito','guam','maldives','bali','hawaii','fiji','cancun','phuket','cebu','danang','malta','greece'];
-    var sightList=['hokkaido','korea','danang','singapore','australia','lasvegas','newyork','canada','dubai','egypt','morocco','masaimara','uyuni','paris','mont_saint','wien','italy','barcelona','portugal','malta','greece','cappadocia','swiss','central_eu','romantic_road','netherlands','dubrovnik','bled','nordic','london'];
-    var shopList=['okinawa','korea','guam','bali','singapore','hawaii','newyork','dubai','paris','italy','barcelona','london'];
+    var sightList=['hokkaido','danang','singapore','australia','lasvegas','newyork','canada','dubai','egypt','morocco','masaimara','uyuni','paris','mont_saint','wien','italy','barcelona','portugal','malta','greece','cappadocia','swiss','central_eu','romantic_road','netherlands','dubrovnik','bled','nordic','london'];
+    var shopList=['okinawa','guam','bali','singapore','hawaii','newyork','dubai','paris','italy','barcelona','london'];
     var activeList=['okinawa_rito','hokkaido','australia','lasvegas','canada','cancun','nz','masaimara','uyuni','cappadocia','swiss','nordic'];
 
     var styleMatch={
@@ -483,7 +476,10 @@ document.getElementById('back-btn').addEventListener('click',function(){
     else{ showScreen('screen-start','anim-left'); }
 });
 
+// 読み込み演出の世代番号。新しい診断を始めると増え、前回の演出の続きは何もしない
+var loadRun=0;
 function showLoading(){
+    var run=++loadRun;
     showScreen('screen-loading','anim-up');
     var ranked=score(answers), origMax=window._lastMaxScore;
     var allNames=Object.values(DEST).map(function(d){return d.name;});
@@ -493,15 +489,17 @@ function showLoading(){
     si.innerHTML=items.map(function(n){return '<div class="loading-slot-item">'+n+'</div>';}).join('');
     var idx=0,speed=80,count=0,max=items.length-1;
     function spin(){
+        if(run!==loadRun) return;
         si.style.transform='translateY(-'+(idx*60)+'px)';
         idx++; count++;
         speed=count<max*.6?80:count<max*.85?120:200;
         if(count<max){setTimeout(spin,speed);}
         else{setTimeout(function(){
+            if(run!==loadRun) return;
             document.querySelector('.loading-slot').style.display='none';
             fe.style.display='flex'; fe.textContent=(DEST[ranked[0]]?DEST[ranked[0]].name:'');
             setTimeout(function(){fe.classList.add('visible');},50);
-            setTimeout(function(){renderResult(ranked,origMax);},1200);
+            setTimeout(function(){ if(run===loadRun) renderResult(ranked,origMax); },1200);
         },300);}
     }
     setTimeout(spin,400);
@@ -583,7 +581,7 @@ function renderResult(ranked,origMax){
         +'<p class="dest-card-reason">'+top.reason+'</p>'
         +'<div class="dest-tags">'+tagsHtml+'</div>'
         +subHtml
-        +'<a href="'+top.link+'" target="_blank" class="dest-link">このエリアのプランを見る</a>'
+        +'<a href="'+top.link+'" target="_blank" rel="noopener" class="dest-link">このエリアのプランを見る</a>'
         +'</div></div>';
 
     var consultEl=document.getElementById('res-consult');
@@ -593,8 +591,8 @@ function renderResult(ranked,origMax){
         consultEl.innerHTML='<div class="consult-block" id="consult-el">'
             +'<span class="consult-label">CONSULTATION</span>'
             +'<p class="consult-title">フォトウェディングのこと、<br>もっと詳しく相談しませんか？</p>'
-            +'<a href="'+visitUrl+'" target="_blank" class="consult-btn">ご来店での無料相談はこちら</a>'
-            +'<a href="'+onlineUrl+'" target="_blank" class="consult-btn-sub">オンラインでの無料相談はこちら</a>'
+            +'<a href="'+visitUrl+'" target="_blank" rel="noopener" class="consult-btn">ご来店での無料相談はこちら</a>'
+            +'<a href="'+onlineUrl+'" target="_blank" rel="noopener" class="consult-btn-sub">オンラインでの無料相談はこちら</a>'
             +'<p class="consult-note">診断結果を元にスタッフが詳しくご案内します。</p>'
             +'</div>';
         setTimeout(function(){ var ce=document.getElementById('consult-el'); if(ce) ce.classList.add('card-visible'); },200);
@@ -619,7 +617,7 @@ function renderResult(ranked,origMax){
             for(var i=0;i<nr.length;i++){ if(ne.indexOf(nr[i])!==-1&&DEST[nr[i]]) tn.push(DEST[nr[i]]); if(tn.length>=3) break; }
             if(tn.length){
                 var uLinks='';
-                for(var i=0;i<tn.length;i++) uLinks+='<a href="'+tn[i].link+'" target="_blank" style="font-size:.75rem;color:var(--c-gold);text-decoration:none;border-bottom:1px solid var(--c-gold);padding-bottom:2px;letter-spacing:.05em;">'+tn[i].name+' ›</a> ';
+                for(var i=0;i<tn.length;i++) uLinks+='<a href="'+tn[i].link+'" target="_blank" rel="noopener" style="font-size:.75rem;color:var(--c-gold);text-decoration:none;border-bottom:1px solid var(--c-gold);padding-bottom:2px;letter-spacing:.05em;">'+tn[i].name+' ›</a> ';
                 var uNames='';
                 for(var i=0;i<tn.length;i++) uNames+=(i>0?'・':'')+'<strong>'+tn[i].name+'</strong>';
                 uel.innerHTML='<div class="upsell-block" id="upsell-el">'
@@ -637,7 +635,7 @@ function renderResult(ranked,origMax){
         var am=calcMatching(alts[i],answers);
         var tagStr=d.tags.slice(0,2).join(' ');
         var an=hardUnmetText(am); if(an) tagStr+='<br>※'+an+'は撮影不可';
-        altHtml+='<a href="'+d.link+'" target="_blank" class="alt-card" style="transition-delay:'+(0.08+i*0.07)+'s">'
+        altHtml+='<a href="'+d.link+'" target="_blank" rel="noopener" class="alt-card" style="transition-delay:'+(0.08+i*0.07)+'s">'
             +'<div class="alt-card-img-wrap"><img class="alt-card-img" src="'+d.img+'" alt="'+d.name+'"></div>'
             +'<div class="alt-card-body">'
             +'<p class="alt-card-name">'+d.name+'</p>'
@@ -705,8 +703,8 @@ window.scrollTo({top:0,behavior:'instant'});
 
 function toast(msg){var t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},3000);}
 
-document.getElementById('start-btn').addEventListener('click',function(){cancelNext();answers={};multiSel={};curQIdx=0;qFlow=[0,1,2,3,4,5,6];renderQ('right');});
-document.getElementById('restart-btn').addEventListener('click',function(){cancelNext();answers={};multiSel={};curQIdx=0;qFlow=[0,1,2,3,4,5,6];showScreen('screen-start','anim-up');});
+document.getElementById('start-btn').addEventListener('click',function(){cancelNext();loadRun++;answers={};multiSel={};curQIdx=0;qFlow=[0,1,2,3,4,5,6];renderQ('right');});
+document.getElementById('restart-btn').addEventListener('click',function(){cancelNext();loadRun++;answers={};multiSel={};curQIdx=0;qFlow=[0,1,2,3,4,5,6];showScreen('screen-start','anim-up');});
 </script>
 
 
