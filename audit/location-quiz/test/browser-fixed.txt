@@ -1,4 +1,4 @@
-overseas/verylong/お城・宮殿/サンセット（黄金の光）/sightseeing/couple/3 => パリ | alt: オーストラリア,ダナン,カッパドキア,シンガポール
+overseas/verylong/お城・宮殿/サンセット/sightseeing/couple/3 => パリ | alt: カッパドキア,オーストラリア,ダナン,シンガポール
 domestic/short/ビーチ・海/こだわりなし・おまかせ/resort/couple/1 => 沖縄本島 | alt: 
 ブラウザのエラー: [
   'Failed to load resource: net::ERR_FAILED',

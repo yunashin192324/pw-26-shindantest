@@ -18,7 +18,7 @@ feats = rd(os.path.join(recv, 'checklist-features.csv'))
 
 ITEM = {'ビーチ・海': 'beach', '大自然・森・草原': 'nature', '奇岩・砂漠・絶景地形': 'landscape', '街並み・路地裏': 'street',
         'お城・宮殿': 'castle', '美術館・歴史建築': 'architecture', '遺跡': 'ruins', 'チャペル・教会': 'chapel', '花畑・庭園': 'garden',
-        'ラグジュアリーホテル・ヴィラ': 'villa', 'サンセット（黄金の光）': 'sunset', '星空': 'starry', '夜景・イルミネーション': 'nightview',
+        'ラグジュアリーホテル・ヴィラ': 'villa', 'サンセット（黄金の光）': 'sunset', 'サンセット・夕景': 'sunset', '星空': 'starry', '夜景・イルミネーション': 'nightview',
         '気球・バルーン': 'balloon', '動物と一緒': 'animal', '朝日・早朝の光': 'morning'}
 ATTR_ORDER = ['beach', 'nature', 'landscape', 'street', 'castle', 'architecture', 'ruins', 'chapel', 'garden', 'villa',
               'sunset', 'starry', 'nightview', 'balloon', 'animal', 'morning']
@@ -38,6 +38,7 @@ for i, ln in enumerate(lines):
                                 sub=re.findall(r"'([^']*)'", m.group(9)), attrs=attrs, comma=ln.rstrip().endswith(','))
 
 vocab = set(t for d in dest.values() for t in d['tags'])
+vocab.add('サンセット・夕景')  # 質問の選択肢名と同じ言葉は1つのタグとして扱う
 def split_tags(text):
     tok = text.split('・'); out = []; i = 0
     while i < len(tok):
@@ -60,7 +61,7 @@ for r in areas:
 
 for r in feats:
     k = r['撮影地キー']; x = ITEM[r['項目']]
-    v = (r['正しい判定（○か×を記入）'] or r['診断での現在の判定']).strip()
+    v = (r['正しい判定（○か×を記入）'] or r['診断での現在の判定']).strip().replace('〇', '○')  # 漢数字のゼロも○として扱う
     assert v in ('○', '×'), (k, x, v)
     dest[k].setdefault('feat', {})[x] = (v == '○')
 
