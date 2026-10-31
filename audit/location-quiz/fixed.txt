@@ -12,7 +12,7 @@ const DEST = {
     // korea: { name:'韓国', en:'Seoul / Busan, Korea', img:'https://www.his-wedding.com/location_quiz/images/dst/seoul.jpg', link:'https://www.his-wedding.com/photowedding/overseas/', reason:'近場でコストを抑えながらスタジオ撮影や街並みロケが充実。トレンド感あふれる写真が撮れると人気急上昇中のエリアです。', tags:['街並み・建築','スタジオ撮影','近場'], subCities:['ソウル','釜山','済州島'], chapel:false, studio:true, starry:false, balloon:false, animal:false, nature:true, landscape:false, street:true, castle:true, architecture:false, ruins:false, garden:false, villa:false, sunset:false, nightview:true, domestic:false},
    
     guam: { name:'グアム', en:'Guam, USA', img:'https://www.his-wedding.com/files/media/image00065799.png', link:'https://www.his-wedding.com/photowedding/micronesia/', reason:'日本から4時間弱でアクセスできる定番ビーチリゾート。チャペル撮影も充実しており、家族同行にも安心の環境が整っています。', tags:['ビーチ・海','チャペルあり','家族同行OK'], subCities:['タモン','リティディアンビーチ'], beach:true, nature:true, landscape:false, street:true, castle:false, architecture:false, ruins:false, chapel:true, garden:false, villa:true, sunset:true, starry:false, nightview:false, balloon:false, animal:false, morning:false, studio:false, domestic:false},
-    bali: { name:'バリ島', en:'Bali, Indonesia', img:'https://www.his-wedding.com/location_quiz/images/dst/bali.jpg', link:'https://www.his-wedding.com/photowedding/asia/', reason:'ヴィラなどのラグジュアリーリゾートと寺院やライステラスなどの文化が融合する独特の雰囲気。チャペル撮影も可能で、南国リゾートと異国情緒を同時に楽しめます。', tags:['リゾートヴィラ','チャペルあり','大自然'], subCities:['ウブド','ヌサドゥア','ジンバラン','スミニャック'], beach:true, nature:false, landscape:false, street:true, castle:false, architecture:false, ruins:true, chapel:true, garden:false, villa:true, sunset:true, starry:false, nightview:false, balloon:false, animal:true, morning:false, studio:false, domestic:false},
+    bali: { name:'バリ島', en:'Bali, Indonesia', img:'https://www.his-wedding.com/location_quiz/images/dst/bali.jpg', link:'https://www.his-wedding.com/photowedding/asia/', reason:'ヴィラなどのラグジュアリーリゾートと寺院やライステラスなどの文化が融合する独特の雰囲気。チャペル撮影も可能で、南国リゾートと異国情緒を同時に楽しめます。', tags:['リゾートヴィラ','チャペルあり','大自然'], subCities:['ウブド','ヌサドゥア','ジンバラン','スミニャック'], beach:true, nature:true, landscape:false, street:true, castle:false, architecture:false, ruins:true, chapel:true, garden:false, villa:true, sunset:true, starry:false, nightview:false, balloon:false, animal:true, morning:false, studio:false, domestic:false},
     danang: { name:'ダナン', en:'Da Nang, Vietnam', img:'https://www.his-wedding.com/files/media/image00078047.png', link:'https://www.his-wedding.com/photowedding/overseas/danang_photo/', reason:'ランタンの灯るノスタルジックなホイアンの街並みとダナンの美しいビーチを組み合わせた撮影が人気。コスパも高くアクセスも良好です。', tags:['ビーチ・街並み','エモーショナル','コスパ重視'], subCities:['ダナン市街','ホイアン','バナヒルズ'], beach:true, nature:false, landscape:false, street:true, castle:false, architecture:false, ruins:true, chapel:false, garden:false, villa:false, sunset:true, starry:false, nightview:false, balloon:false, animal:false, morning:false, studio:false, domestic:false},
     cebu: { name:'セブ島', en:'Cebu, Philippines', img:'https://www.his-wedding.com/files/media/image00078240.png', link:'https://www.his-wedding.com/photowedding/overseas/his_ceb/', reason:'フィリピンの楽園リゾート。透き通る海とホワイトサンドビーチでのフォトウェディングはコスパも良く家族同行にも人気です。', tags:['ビーチ・海','リゾート','家族同行OK'], subCities:['マクタン島','ホテル敷地内','カオハガン島'], beach:true, nature:false, landscape:false, street:false, castle:false, architecture:false, ruins:false, chapel:true, garden:false, villa:false, sunset:true, starry:false, nightview:false, balloon:false, animal:false, morning:false, studio:false, domestic:false},
     singapore: { name:'シンガポール', en:'Singapore', img:'https://www.his-wedding.com/files/media/image00083542.png', link:'https://www.his-wedding.com/photowedding/overseas/', reason:'都市と自然が融合する近未来都市。マリーナベイサンズやガーデンズ・バイ・ザ・ベイなど唯一無二のロケーションが揃います。', tags:['都市・夜景','近未来感','ショッピング'], subCities:['マリーナベイ','ガーデンズバイザベイ'], beach:false, nature:false, landscape:false, street:true, castle:false, architecture:true, ruins:false, chapel:false, garden:true, villa:true, sunset:false, starry:false, nightview:true, balloon:false, animal:false, morning:false, studio:false, domestic:false},
@@ -203,7 +203,7 @@ function score(ans) {
             var mk=[];
             for(var j=0;j<eligible.length;j++){ if(hasFeature(eligible[j],mtype)) mk.push(eligible[j]); }
             add(mk,p);
-            if(mtype==='starry'||mtype==='balloon'){
+            if(mtype==='starry'||mtype==='balloon'||mtype==='animal'){
                 for(var j=0;j<eligible.length;j++){
                     var k=eligible[j];
                     if(mk.indexOf(k)===-1&&k in s) s[k]-=3;
@@ -423,11 +423,11 @@ function renderQ(dir){
                 if(!reach.some(function(k){return hasFeature(k,o.v);})) hiddenVals[o.v]=true;
             });
         }
-        // 星空・気球・動物は、先に選んだ景色を1つ以上持つ撮影地で撮影できる場合だけ表示する
-        // （両立する撮影地がない組み合わせを選んで「見つかりませんでした」になるのを防ぐ）
+        // 演出は、先に選んだ景色を1つ以上持つ撮影地で撮影できる場合だけ表示する
+        // （星空・気球・動物は「見つかりませんでした」を防ぐため、それ以外は必ず×になる選択肢を出さないため）
         if(q.id==='moment'){
             var selScene=(answers.scene||[]).filter(function(x){return x!=='none';});
-            ['starry','balloon','animal'].forEach(function(h){
+            ['sunset','starry','nightview','balloon','animal','morning'].forEach(function(h){
                 if(hiddenVals[h]||!selScene.length) return;
                 var ok=reach.some(function(k){ return hasFeature(k,h)&&selScene.some(function(x){return hasFeature(k,x);}); });
                 if(!ok) hiddenVals[h]=true;
