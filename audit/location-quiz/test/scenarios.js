@@ -328,5 +328,27 @@ uiCase('追加7', '外部リンクに rel="noopener" が付いている', () => 
   return { ok: all > 0 && all === ok, why: `別画面で開くリンク ${all} 件中 ${ok} 件に付与` };
 });
 
+uiCase('追加8', '選択できない予算の理由が、実際に選べる最低予算と一致する', () => {
+  const api = D.load(file); const SC = api.QS[2].opts.map(o => o.v); const from = { 2: '60万円', 3: '100万円', 4: '140万円', 5: '180万円', 6: '250万円' };
+  let n = 0, bad = []; 
+  for (const region of ['domestic', 'overseas']) for (const days of ['short', 'medium', 'long', 'verylong', 'ultra']) for (const s1 of SC) for (const m of [['none'], ['starry'], ['balloon'], ['animal']]) {
+    const vis = D.visibleValues(api, region, days, 'scene'); if (!vis.includes(s1)) continue;
+    const vm = D.visibleValues(api, region, days, 'moment', { scene: [s1] }); if (m[0] !== 'none' && !vm.includes(m[0])) continue;
+    api.answers = { region, days, scene: [s1], moment: m, style: 'resort', who: 'couple' }; api.curQIdx = 6; api.renderQ('right');
+    const btns = D.singleButtons(api); const en = btns.map(x => !x.disabled); const min = en.indexOf(true) + 1;
+    btns.forEach((x, i) => { if (!x.disabled) return; n++; const msg = (/opt-disabled-reason">([^<]*)/.exec(x.innerHTML) || [])[1] || '';
+      if (!msg.includes('ご予算' + from[min] + '以上')) bad.push(region + days + s1 + m + '予算' + (i + 1) + ':' + msg); });
+    api.advance(1000);
+  }
+  return { ok: n > 0 && bad.length === 0, why: `選択不可の予算 ${n} 件を確認、理由と実際に選べる最低予算の食い違い ${bad.length} 件${bad.length ? '（例: ' + bad[0] + '）' : ''}` };
+});
+
+uiCase('追加9', '通知（トースト）を3秒以内に2回出しても、2回目が早く消えない', () => {
+  const api = D.load(file);
+  api.toast('1回目'); const t = api.els['toast']; api.advance(2000); api.toast('2回目'); api.advance(1500);
+  const shown = t.classList.contains('show'); api.advance(2000);
+  return { ok: shown && !t.classList.contains('show'), why: shown ? '2回目の通知は3秒間表示され、その後に消える' : '2回目の通知が1回目のタイマーで早く消えた' };
+});
+
 P(`## 集計: 合格 ${pass} / 不合格 ${fail}`);
 console.log(out.join('\n'));

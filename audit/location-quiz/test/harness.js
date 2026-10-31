@@ -96,7 +96,7 @@ function load(file, opts) {
   src = src.replace(/<\/?script>/g, '');
   if (opts.trace) src = traceSrc(src);
   // const / function 宣言を外から参照できるよう末尾で公開する
-  src += '\n;this.__api={DEST:DEST,BUDGET_KEYS:BUDGET_KEYS,DAYS_KEYS:DAYS_KEYS,QS:QS,getEligible:getEligible,score:score,calcMatching:calcMatching,renderQ:renderQ,renderResult:renderResult,showLoading:showLoading,'
+  src += '\n;this.__api={DEST:DEST,BUDGET_KEYS:BUDGET_KEYS,DAYS_KEYS:DAYS_KEYS,QS:QS,getEligible:getEligible,score:score,calcMatching:calcMatching,renderQ:renderQ,renderResult:renderResult,showLoading:showLoading,toast:toast,'
     + 'get answers(){return answers;},set answers(v){answers=v;},get multiSel(){return multiSel;},get qFlow(){return qFlow;},get curQIdx(){return curQIdx;},set curQIdx(v){curQIdx=v;}};';
   vm.runInContext(src, ctx, { filename: file });
   const api = ctx.__api;

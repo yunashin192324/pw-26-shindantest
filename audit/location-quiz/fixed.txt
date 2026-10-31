@@ -340,23 +340,15 @@ function goNext(delay){
 }
 function cancelNext(){ if(navTimer){ clearTimeout(navTimer); navTimer=null; } }
 
-// 選択できない予算について、選ばれた景色・演出のうちその予算帯で対応エリアがないものを示す
+// 選択できない予算について、同じ回答で結果が出る最も低い予算を示す（予算画面の選択可否と同じ score() で判定）
 function budgetReason(b){
-    var bl={1:'60万円未満',2:'60~100万円未満',3:'100~140万円未満',4:'140~180万円未満',5:'180~250万円未満',6:'250万円以上'};
-    var lb={landscape:'奇岩・砂漠',castle:'お城・宮殿',architecture:'歴史建築・美術館',ruins:'遺跡',villa:'ヴィラ',chapel:'チャペル',garden:'花畑・庭園',nature:'大自然',beach:'ビーチ・海',street:'街並み',starry:'星空撮影',balloon:'気球撮影',animal:'動物との撮影'};
-    var want=(answers.scene||[]).concat((answers.moment||[]).filter(function(m){return m==='starry'||m==='balloon'||m==='animal';}));
-    var rs=[];
-    for(var i=0;i<want.length;i++){
-        var x=want[i]; if(!lb[x]) continue;
-        var ok=[];
-        for(var bb=1;bb<=6;bb++){
-            var ta={}; for(var ak in answers){ if(Object.prototype.hasOwnProperty.call(answers,ak)) ta[ak]=answers[ak]; }
-            ta.budget=bb;
-            if(getEligible(ta).some(function(k){return hasFeature(k,x);})) ok.push(bl[bb]);
-        }
-        if(ok.length&&ok.indexOf(bl[b])===-1) rs.push(lb[x]+'は'+ok.join('・')+'で');
+    var from={2:'60万円',3:'100万円',4:'140万円',5:'180万円',6:'250万円'};
+    for(var bb=b+1;bb<=6;bb++){
+        var ta={}; for(var ak in answers){ if(Object.prototype.hasOwnProperty.call(answers,ak)) ta[ak]=answers[ak]; }
+        ta.budget=bb;
+        if(score(ta).length) return 'この条件ではご予算'+from[bb]+'以上でご案内可能です';
     }
-    return rs.length>0?rs.join('、')+'ご案内可能です':'選択された旅行日数・条件ではご案内できません';
+    return '選択された旅行日数・条件ではご案内できません';
 }
 
 function renderQ(dir){
@@ -525,6 +517,8 @@ function renderResult(ranked,origMax){
         document.getElementById('res-upsell').innerHTML='';
         document.getElementById('res-alt').innerHTML='';
         document.querySelector('.alt-panel').style.display='none';
+        // 前回の診断の共有ボタン（前回の撮影地名を共有する処理）を残さない
+        ['insta-copy-btn','share-x','share-line','share-copy'].forEach(function(id){ var el=document.getElementById(id); if(el) el.onclick=null; });
         showScreen('screen-result','anim-up');
         return;
     }
@@ -701,7 +695,8 @@ window.scrollTo({top:0,behavior:'instant'});
     }
 }
 
-function toast(msg){var t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},3000);}
+var toastTimer=null;
+function toast(msg){var t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');if(toastTimer) clearTimeout(toastTimer);toastTimer=setTimeout(function(){t.classList.remove('show');toastTimer=null;},3000);}
 
 document.getElementById('start-btn').addEventListener('click',function(){cancelNext();loadRun++;answers={};multiSel={};curQIdx=0;qFlow=[0,1,2,3,4,5,6];renderQ('right');});
 document.getElementById('restart-btn').addEventListener('click',function(){cancelNext();loadRun++;answers={};multiSel={};curQIdx=0;qFlow=[0,1,2,3,4,5,6];showScreen('screen-start','anim-up');});
