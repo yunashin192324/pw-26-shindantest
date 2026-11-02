@@ -178,7 +178,7 @@ function score(ans) {
         if(!anySceneOk) return [];
     }
 
-    if(who==='couple')       add(['okinawa_rito','paris','maldives','greece','cappadocia','wien','bled','portugal','mont_saint','swiss'],3);
+    if(who==='couple')       add(['okinawa_rito','paris','maldives','greece','cappadocia','wien','bled','portugal','mont_saint','swiss','fiji','central_eu'],3);
     if(who==='family_kids')  { add(['okinawa','hokkaido','guam','hawaii','bali','danang','cebu','australia'],4); sub(['paris','cappadocia','swiss','uyuni','masaimara'],3); }
     if(who==='family_elder') add(['hokkaido','hawaii','okinawa','guam','bali','paris','wien','italy'],3);
     if(who==='group')        add(['hawaii','okinawa','bali','guam'],3);
@@ -216,6 +216,9 @@ function score(ans) {
     if(style==='sightseeing') { add(['hokkaido','danang','singapore','australia','lasvegas','newyork','canada','dubai','egypt','morocco','masaimara','uyuni','paris','mont_saint','wien','italy','barcelona','portugal','malta','greece','cappadocia','swiss','central_eu','romantic_road','netherlands','dubrovnik','bled','nordic','london'],4); sub(['okinawa','okinawa_rito','maldives','fiji','bali','guam','cebu'],1); }
     if(style==='shopping')    add(['okinawa','guam','bali','singapore','hawaii','newyork','dubai','paris','italy','barcelona','london'],4);
     if(style==='active')      { add(['okinawa_rito','hokkaido','australia','lasvegas','canada','cancun','nz','masaimara','uyuni','cappadocia','swiss','nordic'],4); sub(['maldives','paris','wien','central_eu'],1); }
+
+    // 花畑・庭園を選んだ人には、チューリップ畑の名所としてオランダを優先する
+    if(scene.indexOf('garden')!==-1) add(['netherlands'],5);
 
     var pairs=[];
     for(var k in s){ if(Object.prototype.hasOwnProperty.call(s,k)) pairs.push([k,s[k]]); }
