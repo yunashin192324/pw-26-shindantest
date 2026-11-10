@@ -44,7 +44,7 @@ test('Excelの代表的な行が正しく取り込まれている', () => {
     ['ガーデンがある', '海が見える', 'ビーチが目の前', 'アットホーム', 'ホテル内', 'パーティ会場併設', 'キャラクターと一緒']);
   assert.deepEqual(byName['星野リゾート トマム 水の教会'].categories,
     ['ガーデンがある', '食事がおいしい', 'ホテル内', 'パーティ会場併設', 'フライト時間が短い', '時差がない', '自然豊か', '子供と一緒']);
-  assert.equal(byName['ザ・プライベート・ガーデン・アロハ・ケ･アクア'].row, 8); // Excelの表記（半角の中点）をそのまま保持
+  assert.equal(byName['ザ・プライベート・ガーデン・アロハ・ケ・アクア'].row, 8); // 半角の中点（･）を全角（・）に統一済み
 });
 
 test('条件をすべて「こだわらない」にすると、おすすめを出さない', () => {
@@ -93,9 +93,9 @@ test('最重視の条件は、同じ条件を選んでも最重視しない場�
   const prio = run(Object.assign({}, a, { priority: 'ステンドグラスがある' }));
   // 最重視なし: 教会・大聖堂＋衣裳（2件一致、ステンドグラスなし）のチャペル・バイ・ザ・レイクは、ステンドグラスのみ（1件一致）の式場より上
   const pos = (d, n) => names(d.recommended).indexOf(n);
-  assert.ok(pos(plain, 'チャペル・バイ・ザ・レイク') < pos(plain, 'ザ・プライベート・ガーデン・アロハ・ケ･アクア'));
+  assert.ok(pos(plain, 'チャペル・バイ・ザ・レイク') < pos(plain, 'ザ・プライベート・ガーデン・アロハ・ケ・アクア'));
   // 最重視=ステンドグラス: 該当式場がすべて上位に来る
-  assert.ok(pos(prio, 'チャペル・バイ・ザ・レイク') > pos(prio, 'ザ・プライベート・ガーデン・アロハ・ケ･アクア'));
+  assert.ok(pos(prio, 'チャペル・バイ・ザ・レイク') > pos(prio, 'ザ・プライベート・ガーデン・アロハ・ケ・アクア'));
 });
 
 test('最重視が無効な値（選んだ条件に無い）の場合は無視される', () => {
@@ -163,4 +163,18 @@ test('全回答パターンで、独立実装と順位が完全一致し、根�
     });
   });
   assert.ok(checked > 10000, '検証件数: ' + checked);
+});
+
+test('同点時の表示順：一致具合が同じ式場どうしの並びだけが変わる', () => {
+  const a = Object.assign({}, NONE, { scenery: ['heritage'] });
+  const base = run(a);
+  assert.deepEqual(names(base.recommended), ['ヒルトン ブルーホライズン', 'アラマンダ グレートバリアリーフチャペル']);
+  const d = L.diagnose(DATA, QUESTIONS, a, { order: { 'アラマンダ グレートバリアリーフチャペル': 1 } });
+  assert.deepEqual(names(d.recommended), ['アラマンダ グレートバリアリーフチャペル', 'ヒルトン ブルーホライズン']);
+  assert.ok(d.recommended.every(r => r.rank === 1 && r.tied));
+  // 一致数が多い式場は、表示順の数字に関係なく上のまま
+  const b = { kids: 'yes', access: 'nojetlag', scenery: ['beach'], space: ['seaview'], stay: ['party'], focus: ['cost'], priority: 'ビーチが目の前' };
+  const d2 = L.diagnose(DATA, QUESTIONS, b, { order: { 'ジュエル・バイ・ザ・シー': 1, 'ホテルアオ石垣': 2 } });
+  assert.deepEqual(names(d2.recommended.slice(0, 2)), ['ホテルアオ石垣', 'ザ・サーフ ビーチサイドテラス']);
+  assert.ok(names(d2.recommended).indexOf('ジュエル・バイ・ザ・シー') > 1);
 });

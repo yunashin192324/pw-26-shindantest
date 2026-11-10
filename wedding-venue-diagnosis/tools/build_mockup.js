@@ -1,5 +1,6 @@
-/* index.html と CSS・JS を1つの HTML ファイルにまとめ、オフラインでそのまま開けるモックアップを作る。
-   実行: node tools/build_mockup.js  → dist/wedding-venue-diagnosis-mockup.html */
+/* 配布用ファイルを作る。実行: node tools/build_mockup.js
+   1) dist/wedding-venue-diagnosis-mockup.html … CSS・JS を1つにまとめたモックアップ（オフラインで開ける）
+   2) dist/site/ … 自社サイトにアップロードする公開用一式（index.html・css・js・images） */
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -17,3 +18,14 @@ fs.mkdirSync(path.join(ROOT, 'dist'), { recursive: true });
 const out = path.join(ROOT, 'dist', 'wedding-venue-diagnosis-mockup.html');
 fs.writeFileSync(out, html);
 console.log('書き出しました: ' + out + ' (' + Math.round(html.length / 1024) + ' KB)');
+
+// 公開用一式
+const SITE = path.join(ROOT, 'dist', 'site');
+fs.rmSync(SITE, { recursive: true, force: true });
+const copy = rel => {
+  const from = path.join(ROOT, rel);
+  if (!fs.existsSync(from)) return;
+  fs.cpSync(from, path.join(SITE, rel), { recursive: true });
+};
+['index.html', 'css', 'js', 'images'].forEach(copy);
+console.log('書き出しました: ' + SITE + '（このフォルダの中身をサーバーにアップロードしてください）');

@@ -7,7 +7,7 @@
       (1) 最も重視する条件に該当している式場が上
       (2) 該当した希望条件の数が多い式場が上
       (3) 該当した条件が、より多くの質問にまたがっている式場が上（特定の質問だけに偏った一致より、希望全体に広く合う式場を上にする）
-      (4) それでも並ぶ場合は Excel の掲載順（行番号が小さい順）。この場合は画面上「同順位」と表示する。
+      (4) それでも並ぶ場合は「同点時の表示順」（式場追加情報.xlsx。小さい順、未入力は後ろ）→ Excel の掲載順。この場合は画面上「同順位」と表示する。
    4. 希望条件に1つも該当しない式場は、おすすめに含めない。 */
 (function (root) {
   'use strict';
@@ -56,6 +56,7 @@
     return (b.priorityMatch - a.priorityMatch) ||
       (b.matchCount - a.matchCount) ||
       (b.breadth - a.breadth) ||
+      (a.order - b.order || 0) ||
       (a.venue.row - b.venue.row);
   }
 
@@ -63,8 +64,10 @@
     return a.priorityMatch === b.priorityMatch && a.matchCount === b.matchCount && a.breadth === b.breadth;
   }
 
-  /* 診断の実行。status: 'ok' | 'no_conditions' | 'no_match' */
-  function diagnose(data, questions, answers) {
+  /* 診断の実行。status: 'ok' | 'no_conditions' | 'no_match'
+     options.order: { 式場名: 同点時の表示順 }（省略可） */
+  function diagnose(data, questions, answers, options) {
+    var order = (options && options.order) || {};
     var conditions = collectConditions(questions, answers);
     var cats = conditions.map(function (c) { return c.category; });
     var priority = (answers.priority && cats.indexOf(answers.priority) !== -1) ? answers.priority : null;
@@ -73,7 +76,11 @@
       return { status: 'no_conditions', conditions: [], priority: null, ranked: [], recommended: [], ties: 0 };
     }
 
-    var ranked = data.venues.map(function (v) { return evaluateVenue(v, conditions, priority); });
+    var ranked = data.venues.map(function (v) {
+      var r = evaluateVenue(v, conditions, priority);
+      r.order = typeof order[v.name] === 'number' ? order[v.name] : Infinity;
+      return r;
+    });
     ranked.sort(compareResults);
     ranked.forEach(function (r, i) {
       r.rank = (i > 0 && sameRank(r, ranked[i - 1])) ? ranked[i - 1].rank : i + 1;

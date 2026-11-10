@@ -12,7 +12,8 @@
 |---|---|
 | `index.html` / `css/style.css` | 画面 |
 | `js/data/venues.js` | 式場とカテゴリ（Excel から自動生成。直接編集しない） |
-| `js/data/venue-extras.js` | 画像・URL・地域など Excel に無い情報の設定欄（現在は空） |
+| `js/data/venue-extras.js` | 写真・URL・地域・同点時の表示順（`source/式場追加情報.xlsx` から自動生成。現在は空） |
+| `images/` | 写真を置くフォルダ |
 | `js/data/questions.js` | 質問・選択肢と、Excel カテゴリとの対応 |
 | `js/config.js` | 候補の表示件数、背景写真、相談ボタン、シェア文 |
 | `js/logic.js` | 判定処理（画面処理なし） |
@@ -20,6 +21,17 @@
 | `tools/` | Excel 取り込み・照合・一覧表・1ファイル版作成 |
 | `tests/` | 判定処理のテスト、ブラウザ操作のテスト |
 | `docs/` | 設計資料、データ一覧、画面の写し |
+
+## 写真・式場情報を入れるとき
+```sh
+# source/式場追加情報.xlsx に入力してから
+python3 tools/build_extras.py                   # Excel → js/data/venue-extras.js（入力ミスはエラー表示）
+node tools/build_mockup.js                      # モックアップと公開用フォルダ dist/site/ を作り直す
+```
+式場を追加・改名した後は `python3 tools/make_extras_template.py --sync` で入力用Excelの式場名を更新できます（入力済みの内容は残ります）。
+
+## 自社サイトへの公開
+`node tools/build_mockup.js` で作られる `dist/site/` の中身（index.html・css・js・images）を、そのままサーバーにアップロードしてください。サーバー側の特別な設定は不要です。
 
 ## 式場・カテゴリを変更するとき
 ```sh

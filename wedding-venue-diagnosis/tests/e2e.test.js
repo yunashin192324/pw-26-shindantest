@@ -54,7 +54,7 @@ async function noOverflow(page, label) {
 const frac = page => page.textContent('#q-frac');
 const expected = (page, ans) => page.evaluate(a => {
   const NS = window.VENUE_DIAG;
-  return NS.logic.diagnose(NS.DATA, NS.QUESTIONS, a).recommended.map(r => r.venue.name);
+  return NS.logic.diagnose(NS.DATA, NS.QUESTIONS, a, { order: NS.app.tieOrder }).recommended.map(r => r.venue.name);
 }, ans);
 
 for (const file of TARGETS) {
@@ -81,7 +81,7 @@ for (const file of TARGETS) {
       assert.equal(await frac(page), '3 / 7');
       await noOverflow(page, 'q3'); await shot('2-question-multi');
       await next(page);
-      await multi(page, ['海の見えるチャペル']);
+      await multi(page, ['海の見える式場']);
       await next(page);
       await multi(page, ['挙式の後、同じ場所でパーティをしたい']);
       await next(page);

@@ -44,7 +44,7 @@
       title: '挙式を挙げる会場は、どんなところが理想ですか？',
       sub: '理想に近いものをすべてお選びください（複数選択可）。',
       opts: [
-        { v: 'seaview', text: '海の見えるチャペル', categories: ['海が見える'] },
+        { v: 'seaview', text: '海の見える式場', categories: ['海が見える'] },
         { v: 'church', text: '歴史ある教会・大聖堂', categories: ['教会・大聖堂'] },
         { v: 'glass', text: 'ステンドグラスのある空間', categories: ['ステンドグラスがある'] },
         { v: 'athome', text: 'アットホームな雰囲気', categories: ['アットホーム'] },

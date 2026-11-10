@@ -4,6 +4,9 @@
 
   var NS = window.VENUE_DIAG || {};
   var DATA = NS.DATA, QUESTIONS = NS.QUESTIONS || [], CONFIG = NS.CONFIG || {}, EXTRAS = NS.EXTRAS || {}, logic = NS.logic;
+  var SCENES = NS.SCENE_IMAGES || CONFIG.sceneImages || {};
+  var TIE_ORDER = {};
+  Object.keys(EXTRAS).forEach(function (n) { if (typeof EXTRAS[n].order === 'number') TIE_ORDER[n] = EXTRAS[n].order; });
 
   var answers = {}, flow = [], curIdx = 0, busy = false, lastDiag = null, loadingTimers = [];
 
@@ -81,7 +84,7 @@
     $('q-sub').textContent = q.sub || '';
     var bg = $('bg-q');
     bg.setAttribute('data-tone', String((flow[curIdx] % 6) + 1));
-    setBg(bg, (CONFIG.sceneImages && CONFIG.sceneImages.question || [])[flow[curIdx]]);
+    setBg(bg, (SCENES.question || [])[flow[curIdx]]);
 
     var $s = $('opts-single'), $m = $('opts-multi'), $n = $('next-btn'), $c = $('multi-count');
     $s.innerHTML = ''; $m.innerHTML = '';
@@ -211,9 +214,9 @@
   function later(fn, ms) { loadingTimers.push(setTimeout(fn, ms)); }
 
   function showLoading() {
-    lastDiag = logic.diagnose(DATA, QUESTIONS, answers);
+    lastDiag = logic.diagnose(DATA, QUESTIONS, answers, { order: TIE_ORDER });
     showScreen('screen-loading', 'anim-up');
-    setBg($('bg-loading'), CONFIG.sceneImages && CONFIG.sceneImages.loading);
+    setBg($('bg-loading'), SCENES.loading);
     var slot = $('loading-slot'), inner = $('slot-inner'), fin = $('loading-final');
     clearLoading();
     fin.style.display = 'none'; fin.classList.remove('visible'); slot.style.display = 'block';
@@ -263,7 +266,7 @@
     $('res-notice').innerHTML = '';
     $('res-main').innerHTML = '';
     $('res-alt-wrap').innerHTML = '';
-    setBg($('bg-result'), CONFIG.sceneImages && CONFIG.sceneImages.result);
+    setBg($('bg-result'), SCENES.result);
 
     $('res-summary').innerHTML = '<p class="summary-label">あなたの回答</p>' + answerSummary(D).map(function (t) {
       return '<span class="summary-tag' + (t.prio ? ' is-priority' : '') + '">' + esc(t.text) + '</span>';
@@ -291,7 +294,7 @@
     $('res-badges').innerHTML = badges.map(function (b) { return '<span class="result-badge">' + esc(b) + '</span>'; }).join('');
 
     var notes = [];
-    if (topTies > 1) notes.push('同じ評価の式場が<strong>' + topTies + '件</strong>あります。同じ評価の場合は、データの掲載順に表示しています。');
+    if (topTies > 1) notes.push('同じ評価の式場が<strong>' + topTies + '件</strong>あります。同じ評価の式場は、おすすめの表示順に並べています。');
     if (D.recommended.length <= 3) notes.push('お選びいただいた条件に1つでも該当する式場は<strong>' + D.recommended.length + '件</strong>でした。条件を減らすと、候補が広がります。');
     if (D.priority && !D.priorityCount) notes.push('最も重視された「' + esc(D.priority) + '」に該当する式場は、登録データ上ありませんでした。');
     if (notes.length) $('res-notice').innerHTML = '<div class="notice">' + notes.join('<br>') + '</div>';
@@ -434,7 +437,7 @@
     $('pill-count').textContent = DATA.venues.length + '式場から診断';
     var hl = CONFIG.headerLink;
     if (hl && safeUrl(hl.url)) { $('header-link').href = hl.url; $('header-link-label').textContent = hl.label; $('header-link').hidden = false; }
-    setBg($('bg-start'), CONFIG.sceneImages && CONFIG.sceneImages.start);
+    setBg($('bg-start'), SCENES.start);
 
     $('start-btn').addEventListener('click', function () { answers = {}; curIdx = 0; renderQ('right'); });
     $('next-btn').addEventListener('click', goNext);
@@ -455,7 +458,7 @@
   }
 
   // テスト・確認用（画面操作には影響しない）
-  NS.app = { getAnswers: function () { return JSON.parse(JSON.stringify(answers)); }, getLastDiagnosis: function () { return lastDiag; } };
+  NS.app = { tieOrder: TIE_ORDER, getAnswers: function () { return JSON.parse(JSON.stringify(answers)); }, getLastDiagnosis: function () { return lastDiag; } };
 
   init();
 })();

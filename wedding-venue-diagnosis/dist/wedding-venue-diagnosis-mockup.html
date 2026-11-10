@@ -540,7 +540,7 @@ a{color:inherit}
   {
    "id": "v07",
    "row": 8,
-   "name": "ザ・プライベート・ガーデン・アロハ・ケ･アクア",
+   "name": "ザ・プライベート・ガーデン・アロハ・ケ・アクア",
    "categories": [
     "ガーデンがある",
     "海が見える",
@@ -1161,26 +1161,26 @@ a{color:inherit}
 
 </script>
 <script>
-/* 式場の追加情報（Excel に無い情報）を後から設定するためのファイル。
-   ・キーは Excel（シート1 A列）の式場名と完全に同じ文字列にしてください。
-   ・空欄・未設定の項目は画面に表示されません。存在しない画像やURLは設定しないでください。
-   ・この情報は診断の順位計算には一切使いません（順位の根拠は Excel のカテゴリのみ）。
-
-   設定例:
-   'プルメリアガーデン': {
-     area: '',          // 地域名（例: エリア名）
-     image: '',         // 画像ファイルのパスまたはURL（例: 'images/plumeria.jpg'）
-     imageAlt: '',      // 画像の説明文
-     url: '',           // 詳細ページ・公式サイトのURL
-     address: '',       // 住所
-     price: '',         // 料金の目安（表示用の文字列）
-     description: ''    // 紹介文
-   },
-*/
+/* 自動生成ファイル: tools/build_extras.py により source/式場追加情報.xlsx から生成。直接編集しないでください。
+   EXTRAS: 式場ごとの表示用情報（order は同点時の表示順。これ以外は順位計算に使いません）
+   SCENE_IMAGES: 各画面の背景写真（空欄は写真なし） */
 (function (root) {
   root.VENUE_DIAG = root.VENUE_DIAG || {};
-  root.VENUE_DIAG.EXTRAS = {
-  };
+  root.VENUE_DIAG.EXTRAS = {};
+  root.VENUE_DIAG.SCENE_IMAGES = {
+  "start": "",
+  "question": [
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    ""
+  ],
+  "loading": "",
+  "result": ""
+};
 })(typeof window !== 'undefined' ? window : globalThis);
 
 </script>
@@ -1231,7 +1231,7 @@ a{color:inherit}
       title: '挙式を挙げる会場は、どんなところが理想ですか？',
       sub: '理想に近いものをすべてお選びください（複数選択可）。',
       opts: [
-        { v: 'seaview', text: '海の見えるチャペル', categories: ['海が見える'] },
+        { v: 'seaview', text: '海の見える式場', categories: ['海が見える'] },
         { v: 'church', text: '歴史ある教会・大聖堂', categories: ['教会・大聖堂'] },
         { v: 'glass', text: 'ステンドグラスのある空間', categories: ['ステンドグラスがある'] },
         { v: 'athome', text: 'アットホームな雰囲気', categories: ['アットホーム'] },
@@ -1280,8 +1280,8 @@ a{color:inherit}
     // 「その他のおすすめ式場」に表示する最大件数
     maxAlternatives: 4,
 
-    // 各画面の背景写真。空欄の場合は写真なしのグラデーション背景になります。
-    // 例: start: 'images/bg-start.jpg'（このフォルダからの相対パス、またはURL）
+    // 各画面の背景写真。通常は source/式場追加情報.xlsx の「背景写真」シートで設定します（そちらが優先）。
+    // 空欄の場合は写真なしのグラデーション背景になります。
     sceneImages: {
       start: '',
       question: ['', '', '', '', '', '', ''],
@@ -1318,7 +1318,7 @@ a{color:inherit}
       (1) 最も重視する条件に該当している式場が上
       (2) 該当した希望条件の数が多い式場が上
       (3) 該当した条件が、より多くの質問にまたがっている式場が上（特定の質問だけに偏った一致より、希望全体に広く合う式場を上にする）
-      (4) それでも並ぶ場合は Excel の掲載順（行番号が小さい順）。この場合は画面上「同順位」と表示する。
+      (4) それでも並ぶ場合は「同点時の表示順」（式場追加情報.xlsx。小さい順、未入力は後ろ）→ Excel の掲載順。この場合は画面上「同順位」と表示する。
    4. 希望条件に1つも該当しない式場は、おすすめに含めない。 */
 (function (root) {
   'use strict';
@@ -1367,6 +1367,7 @@ a{color:inherit}
     return (b.priorityMatch - a.priorityMatch) ||
       (b.matchCount - a.matchCount) ||
       (b.breadth - a.breadth) ||
+      (a.order - b.order || 0) ||
       (a.venue.row - b.venue.row);
   }
 
@@ -1374,8 +1375,10 @@ a{color:inherit}
     return a.priorityMatch === b.priorityMatch && a.matchCount === b.matchCount && a.breadth === b.breadth;
   }
 
-  /* 診断の実行。status: 'ok' | 'no_conditions' | 'no_match' */
-  function diagnose(data, questions, answers) {
+  /* 診断の実行。status: 'ok' | 'no_conditions' | 'no_match'
+     options.order: { 式場名: 同点時の表示順 }（省略可） */
+  function diagnose(data, questions, answers, options) {
+    var order = (options && options.order) || {};
     var conditions = collectConditions(questions, answers);
     var cats = conditions.map(function (c) { return c.category; });
     var priority = (answers.priority && cats.indexOf(answers.priority) !== -1) ? answers.priority : null;
@@ -1384,7 +1387,11 @@ a{color:inherit}
       return { status: 'no_conditions', conditions: [], priority: null, ranked: [], recommended: [], ties: 0 };
     }
 
-    var ranked = data.venues.map(function (v) { return evaluateVenue(v, conditions, priority); });
+    var ranked = data.venues.map(function (v) {
+      var r = evaluateVenue(v, conditions, priority);
+      r.order = typeof order[v.name] === 'number' ? order[v.name] : Infinity;
+      return r;
+    });
     ranked.sort(compareResults);
     ranked.forEach(function (r, i) {
       r.rank = (i > 0 && sameRank(r, ranked[i - 1])) ? ranked[i - 1].rank : i + 1;
@@ -1474,6 +1481,9 @@ a{color:inherit}
 
   var NS = window.VENUE_DIAG || {};
   var DATA = NS.DATA, QUESTIONS = NS.QUESTIONS || [], CONFIG = NS.CONFIG || {}, EXTRAS = NS.EXTRAS || {}, logic = NS.logic;
+  var SCENES = NS.SCENE_IMAGES || CONFIG.sceneImages || {};
+  var TIE_ORDER = {};
+  Object.keys(EXTRAS).forEach(function (n) { if (typeof EXTRAS[n].order === 'number') TIE_ORDER[n] = EXTRAS[n].order; });
 
   var answers = {}, flow = [], curIdx = 0, busy = false, lastDiag = null, loadingTimers = [];
 
@@ -1551,7 +1561,7 @@ a{color:inherit}
     $('q-sub').textContent = q.sub || '';
     var bg = $('bg-q');
     bg.setAttribute('data-tone', String((flow[curIdx] % 6) + 1));
-    setBg(bg, (CONFIG.sceneImages && CONFIG.sceneImages.question || [])[flow[curIdx]]);
+    setBg(bg, (SCENES.question || [])[flow[curIdx]]);
 
     var $s = $('opts-single'), $m = $('opts-multi'), $n = $('next-btn'), $c = $('multi-count');
     $s.innerHTML = ''; $m.innerHTML = '';
@@ -1681,9 +1691,9 @@ a{color:inherit}
   function later(fn, ms) { loadingTimers.push(setTimeout(fn, ms)); }
 
   function showLoading() {
-    lastDiag = logic.diagnose(DATA, QUESTIONS, answers);
+    lastDiag = logic.diagnose(DATA, QUESTIONS, answers, { order: TIE_ORDER });
     showScreen('screen-loading', 'anim-up');
-    setBg($('bg-loading'), CONFIG.sceneImages && CONFIG.sceneImages.loading);
+    setBg($('bg-loading'), SCENES.loading);
     var slot = $('loading-slot'), inner = $('slot-inner'), fin = $('loading-final');
     clearLoading();
     fin.style.display = 'none'; fin.classList.remove('visible'); slot.style.display = 'block';
@@ -1733,7 +1743,7 @@ a{color:inherit}
     $('res-notice').innerHTML = '';
     $('res-main').innerHTML = '';
     $('res-alt-wrap').innerHTML = '';
-    setBg($('bg-result'), CONFIG.sceneImages && CONFIG.sceneImages.result);
+    setBg($('bg-result'), SCENES.result);
 
     $('res-summary').innerHTML = '<p class="summary-label">あなたの回答</p>' + answerSummary(D).map(function (t) {
       return '<span class="summary-tag' + (t.prio ? ' is-priority' : '') + '">' + esc(t.text) + '</span>';
@@ -1761,7 +1771,7 @@ a{color:inherit}
     $('res-badges').innerHTML = badges.map(function (b) { return '<span class="result-badge">' + esc(b) + '</span>'; }).join('');
 
     var notes = [];
-    if (topTies > 1) notes.push('同じ評価の式場が<strong>' + topTies + '件</strong>あります。同じ評価の場合は、データの掲載順に表示しています。');
+    if (topTies > 1) notes.push('同じ評価の式場が<strong>' + topTies + '件</strong>あります。同じ評価の式場は、おすすめの表示順に並べています。');
     if (D.recommended.length <= 3) notes.push('お選びいただいた条件に1つでも該当する式場は<strong>' + D.recommended.length + '件</strong>でした。条件を減らすと、候補が広がります。');
     if (D.priority && !D.priorityCount) notes.push('最も重視された「' + esc(D.priority) + '」に該当する式場は、登録データ上ありませんでした。');
     if (notes.length) $('res-notice').innerHTML = '<div class="notice">' + notes.join('<br>') + '</div>';
@@ -1904,7 +1914,7 @@ a{color:inherit}
     $('pill-count').textContent = DATA.venues.length + '式場から診断';
     var hl = CONFIG.headerLink;
     if (hl && safeUrl(hl.url)) { $('header-link').href = hl.url; $('header-link-label').textContent = hl.label; $('header-link').hidden = false; }
-    setBg($('bg-start'), CONFIG.sceneImages && CONFIG.sceneImages.start);
+    setBg($('bg-start'), SCENES.start);
 
     $('start-btn').addEventListener('click', function () { answers = {}; curIdx = 0; renderQ('right'); });
     $('next-btn').addEventListener('click', goNext);
@@ -1925,7 +1935,7 @@ a{color:inherit}
   }
 
   // テスト・確認用（画面操作には影響しない）
-  NS.app = { getAnswers: function () { return JSON.parse(JSON.stringify(answers)); }, getLastDiagnosis: function () { return lastDiag; } };
+  NS.app = { tieOrder: TIE_ORDER, getAnswers: function () { return JSON.parse(JSON.stringify(answers)); }, getLastDiagnosis: function () { return lastDiag; } };
 
   init();
 })();
