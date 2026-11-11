@@ -326,7 +326,7 @@
     }).join('');
     var selected = D.conditions.map(function (c) { return c.category; });
     var img = safeUrl(ex.image);
-    var meta = [ex.area, ex.address, ex.price].filter(Boolean).map(esc).join(' ／ ');
+    var meta = [ex.area, ex.address, ex.price ? ex.price + '（目安）' : ''].filter(Boolean).map(esc).join(' ／ ');
     return '<div class="section-title"><span>最もおすすめの式場</span></div>' +
       '<div class="matching"><div class="matching-row"><span class="matching-label">MATCHING SCORE</span><span class="matching-rate">' + r.rate + '%</span></div>' +
       '<div class="matching-track"><div class="matching-fill"></div></div>' +
