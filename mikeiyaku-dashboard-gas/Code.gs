@@ -1388,7 +1388,7 @@ function lockedEndpoint_(fn) {
  * 「is not a function」という分かりにくいエラーになるため、
  * 画面側から版数を確認できるようにしている。
  */
-const SERVER_VERSION = '2026-10-07';
+const SERVER_VERSION = '2026-11-13';
 
 /**
  * サーバー側の版数を返す。画面側は、自分が期待する版数と一致するかを起動時に確認する。
@@ -1562,6 +1562,33 @@ function importParsedRows_(rows) {
       const v = row[idx];
       return v === undefined || v === null ? '' : String(v).trim();
     };
+
+    // 店舗マスタに載っているのに、同じ名前のシートが無い店舗がCSVに含まれる場合の扱い。
+    // （店舗マスタの店舗名を書き換えたあとなど。何もせず進めると、その店舗の行が黙って捨てられてしまう）
+    //  ・名前が変わっただけで、データは別名のシートに残っている → 何も書き込まずに止め、修復を案内する
+    //  ・本当に新しい店舗でデータシートがまだ無い → シートを作って取り込む
+    const missingCodes = {};
+    for (let rr = headerRowIndex + 1; rr < rows.length; rr++) {
+      const code0 = normalizeOfficeCode_(getVal(rows[rr] || [], '営業所コード'));
+      if (code0 && officeCodeToSheetName[code0] && !ss.getSheetByName(officeCodeToSheetName[code0])) missingCodes[code0] = true;
+    }
+    if (Object.keys(missingCodes).length > 0) {
+      const repairPlan = buildShopSheetRepairPlan_(ss);
+      const blocked = [];
+      repairPlan.plan.forEach(function (p) { if (missingCodes[p.code]) blocked.push(p.shopName + '（データは「' + p.fromSheet + '」に残っています）'); });
+      repairPlan.manual.forEach(function (m) { if (missingCodes[m.code] && m.kind !== 'none') blocked.push(m.shopName); });
+      if (blocked.length > 0) {
+        throw new Error('取り込みを中止しました（データは何も変わっていません）。\n' +
+          '店舗マスタの店舗名と、データのシートの名前が一致していない店舗があります：\n・' + blocked.join('\n・') +
+          '\n「店舗・スタッフ管理」タブの「店舗マスタとデータシートの対応チェック」で直してから、もう一度取り込んでください。');
+      }
+      Object.keys(missingCodes).forEach(function (code1) {
+        const shop1 = { code: code1, name: officeCodeToSheetName[code1] };
+        createShopSheets_(ss, [shop1], HEADERS_MAIN);
+        repairOfficeCodeFormatting_(ss, [shop1]);
+        if (!summaryHasShop_(ss, code1)) appendShopRowToSummary_(ss, shop1);
+      });
+    }
 
     const rowsBySheet = {}; // sheetName -> 27列配列の配列
     let skippedDuplicateCount = 0;
@@ -2998,11 +3025,20 @@ function getSetupStatus() {
     const missing = [SHOP_MASTER_SHEET_NAME, STAFF_MASTER_SHEET_NAME].filter(function (name) {
       return !ss.getSheetByName(name);
     });
+    const ctx = getCurrentUserContext_();
+    let unlinkedShops = [];
+    if (missing.length === 0) {
+      try { unlinkedShops = findUnlinkedShops_(ss); } catch (e) { unlinkedShops = []; }
+    }
     return {
       success: true,
       ready: missing.length === 0,
       missingSheets: missing,
-      canRunSetup: getCurrentUserContext_().canManageMaster
+      canRunSetup: ctx.canManageMaster,
+      // 店舗マスタに載っているのに、同じ名前のデータシートが無い店舗（＝画面にデータが出ない店舗）の数。
+      // 名前は管理権限のある人にだけ返す。
+      unlinkedShopCount: unlinkedShops.length,
+      unlinkedShopNames: ctx.canManageMaster ? unlinkedShops.map(function (s) { return s.name; }) : []
     };
   } catch (err) {
     return { success: false, error: err.message, detail: err.stack };
@@ -3031,6 +3067,154 @@ function runInitialSetupImpl_() {
     return { success: true, shopCount: getShopList_().length };
   } catch (err) {
     return { success: false, error: err.message, detail: err.stack };
+  }
+}
+
+// ---- 店舗マスタとデータシートの対応チェック・修復 ------------------------------------
+// 店舗のデータは「店舗マスタの店舗名と同じ名前のシート」から読み込まれる。店舗マスタの店舗名を書き換えたり、
+// 表をまるごと貼り直したりして、名前がシートの名前と一致しなくなると、データがシートに残っていても
+// 画面には何も出なくなる。ここでは、その食い違いの検出と、シート名を店舗マスタに合わせる修復を行う。
+
+/** システムが使うシート名（店舗のデータシートではないもの） */
+function systemSheetNames_() {
+  return [SHOP_MASTER_SHEET_NAME, STAFF_MASTER_SHEET_NAME, SUMMARY_SHEET_NAME, '個人別サマリ(上期)', '個人別サマリ(下期)',
+    AI_REPORT_SHEET_NAME, AI_SUMMARY_SHEET_NAME];
+}
+
+/** 店舗マスタ（有効な店舗）のうち、同じ名前のシートが無い店舗を返す */
+function findUnlinkedShops_(ss) {
+  return getShopList_().filter(function (shop) { return !ss.getSheetByName(shop.name); });
+}
+
+/** 比較用に名前をそろえる（全角半角・空白・末尾の「営業所」・先頭の「(旧)」の違いを無視） */
+function looseShopName_(name) {
+  let s = String(name || '');
+  if (typeof s.normalize === 'function') s = s.normalize('NFKC');
+  return s.replace(/\s+/g, '').replace(/営業所$/, '').replace(/^\(旧\)/, '').toUpperCase();
+}
+
+/** 店舗のデータシートか（1行目の見出しで判定。システムのシートは除く） */
+function isShopDataSheet_(sheet) {
+  if (systemSheetNames_().indexOf(sheet.getName()) !== -1) return false;
+  if (sheet.getMaxColumns() < 5) return false;
+  const head = sheet.getRange(1, 1, 1, 5).getValues()[0];
+  return String(head[0]).trim() === HEADERS_MAIN[0] && String(head[4]).trim() === HEADERS_MAIN[4];
+}
+
+/**
+ * 店舗マスタと各シートの対応を調べ、直し方の案を作る。
+ * ・unlinked：店舗マスタにあるのにシートが無い店舗
+ * ・orphans ：どの店舗にも結び付いていないデータシート（営業所コードの多数派つき）
+ * ・plan    ：シート名を店舗マスタの名前に変える案（営業所コードが一致する1枚だけのとき）
+ * ・manual  ：自動では決められないもの（理由つき）
+ */
+function buildShopSheetRepairPlan_(ss) {
+  const allRows = getAllShopMasterRows_() || [];
+  const masterNames = {};
+  allRows.forEach(function (r) { masterNames[r.name] = true; });
+  const unlinked = findUnlinkedShops_(ss);
+
+  const orphans = [];
+  ss.getSheets().forEach(function (sheet) {
+    if (masterNames[sheet.getName()] || !isShopDataSheet_(sheet)) return;
+    const lastRow = sheet.getLastRow();
+    const counts = {};
+    let rows = 0;
+    if (lastRow >= 2) {
+      sheet.getRange(2, 6, lastRow - 1, 1).getValues().forEach(function (r) {
+        const code = normalizeOfficeCode_(r[0]);
+        if (!code) return;
+        rows++;
+        counts[code] = (counts[code] || 0) + 1;
+      });
+    }
+    let top = '', topN = 0;
+    Object.keys(counts).forEach(function (c) { if (counts[c] > topN) { top = c; topN = counts[c]; } });
+    orphans.push({ name: sheet.getName(), rows: rows, code: top, share: rows ? topN / rows : 0 });
+  });
+
+  const plan = [];
+  const manual = [];
+  const claimed = {};
+  unlinked.forEach(function (shop) {
+    let cands = orphans.filter(function (o) { return o.code === shop.code && o.share >= 0.8; });
+    if (cands.length === 0) {
+      cands = orphans.filter(function (o) { return looseShopName_(o.name) === looseShopName_(shop.name); });
+    }
+    if (cands.length === 1) {
+      plan.push({ code: shop.code, shopName: shop.name, fromSheet: cands[0].name, rows: cands[0].rows });
+      claimed[cands[0].name] = (claimed[cands[0].name] || 0) + 1;
+    } else if (cands.length > 1) {
+      manual.push({ code: shop.code, shopName: shop.name, reason: '候補のシートが複数あります（' + cands.map(function (c) { return c.name; }).join('、') + '）' });
+    } else {
+      manual.push({ code: shop.code, shopName: shop.name, kind: 'none', reason: '対応するデータシートが見つかりません（新しい店舗であれば、CSVを取り込むと自動で作られます）' });
+    }
+  });
+  // 1枚のシートを複数の店舗が取り合うときは自動では決めない
+  const finalPlan = [];
+  plan.forEach(function (p) {
+    if (claimed[p.fromSheet] > 1) {
+      manual.push({ code: p.code, shopName: p.shopName, reason: 'シート「' + p.fromSheet + '」を複数の店舗が取り合っています' });
+    } else {
+      finalPlan.push(p);
+    }
+  });
+
+  // 店舗マスタの名前のシートが既にあるのに、データは別名のシートに残っている店舗
+  // （名前を直す前にCSVを取り込み、空の新しいシートができてしまった場合など）
+  const doubled = [];
+  orphans.forEach(function (o) {
+    if (!o.code || o.rows === 0 || claimed[o.name]) return;
+    const shop = getShopList_().filter(function (s) { return s.code === o.code; })[0];
+    if (shop && ss.getSheetByName(shop.name)) {
+      const live = ss.getSheetByName(shop.name);
+      doubled.push({ code: o.code, shopName: shop.name, fromSheet: o.name, rows: o.rows, existingRows: Math.max(0, live.getLastRow() - 1) });
+    }
+  });
+  doubled.forEach(function (d) {
+    manual.push({ code: d.code, shopName: d.shopName, reason: 'データが別名のシート「' + d.fromSheet + '」（' + d.rows + '件）に残っていて、「' + d.shopName + '」にも' + d.existingRows + '件あります。自動では統合しません（担当者へご相談ください）' });
+  });
+
+  return { unlinked: unlinked, orphans: orphans, plan: finalPlan, manual: manual };
+}
+
+/**
+ * 店舗マスタとデータシートの食い違いを調べる／直す（マスタ管理者のみ）。
+ * apply が true のときだけ、データシートの名前を店舗マスタの名前に合わせて変更する
+ * （中身は一切変わらない。集計シートの数式はシート名の変更に自動で追従する）。
+ */
+function repairShopSheetLinks(apply) {
+  if (!apply) return repairShopSheetLinksImpl_(false);
+  return lockedEndpoint_(function () { return repairShopSheetLinksImpl_(true); });
+}
+
+/** repairShopSheetLinks の本体（同時実行制御は上の公開関数で行う。直接呼ばないこと） */
+function repairShopSheetLinksImpl_(apply) {
+  try {
+    assertCanManageMaster_();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const result = buildShopSheetRepairPlan_(ss);
+    const done = [];
+    if (apply) {
+      result.plan.forEach(function (p) {
+        const sheet = ss.getSheetByName(p.fromSheet);
+        if (!sheet || ss.getSheetByName(p.shopName)) return; // 直前に状況が変わっていたら何もしない
+        sheet.setName(p.shopName);
+        updateShopNameInSummary_(ss, p.code, p.shopName);
+        done.push(p);
+      });
+    }
+    return {
+      success: true,
+      applied: !!apply,
+      unlinkedCount: result.unlinked.length,
+      plan: result.plan,
+      done: done,
+      manual: result.manual,
+      orphans: result.orphans.filter(function (o) { return o.rows > 0; })
+    };
+  } catch (err) {
+    return { success: false, error: errorForClient_(err) };
   }
 }
 
@@ -3262,6 +3446,15 @@ function updateShopNameInSummary_(ss, code, newName) {
  * 店舗別サマリの末尾に、新規店舗の集計行（COUNTIFS/SUMIFS数式）を1行追加する。
  * InitSheet.gs の createShopSummarySheet_ と同一のブロック構成・数式ロジックを踏襲する。
  */
+/** 店舗別サマリに、その店番の行が既にあるか */
+function summaryHasShop_(ss, code) {
+  const sheet = ss.getSheetByName(SUMMARY_SHEET_NAME);
+  if (!sheet) return true; // サマリが無ければ追加も不要
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 3) return false;
+  return sheet.getRange(3, 1, lastRow - 2, 1).getValues().some(function (r) { return normalizeOfficeCode_(r[0]) === code; });
+}
+
 function appendShopRowToSummary_(ss, shop) {
   const sheet = ss.getSheetByName(SUMMARY_SHEET_NAME);
   if (!sheet) return;

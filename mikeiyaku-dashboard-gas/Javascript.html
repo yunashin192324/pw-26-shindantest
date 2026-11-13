@@ -216,7 +216,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // 画面側が前提としているサーバー（Code.gs）の版数。Code.gs の SERVER_VERSION と対で更新する。
-const REQUIRED_SERVER_VERSION = '2026-10-07';
+const REQUIRED_SERVER_VERSION = '2026-11-13';
 
 /**
  * Code.gs が画面と同じ版数まで更新されているか確認する。
@@ -256,12 +256,109 @@ function checkServerVersion() {
 // ============================================================================
 function initSetupEvents() {
   document.getElementById('btn-run-setup').addEventListener('click', onRunInitialSetup);
+  document.getElementById('btn-open-link-check').addEventListener('click', onOpenLinkCheck);
 }
 
 /** シートが揃っているか確認し、未完了なら画面上部に案内バーを出す */
+// 店舗マスタの店舗名に合うデータシートが無い店舗があるときの案内バー
+function updateLinkBanner(res) {
+  const banner = document.getElementById('link-banner');
+  const count = res && res.success ? Number(res.unlinkedShopCount) || 0 : 0;
+  banner.classList.toggle('hidden', count === 0);
+  if (count === 0) return;
+  const names = (res.unlinkedShopNames || []).slice(0, 8);
+  document.getElementById('link-banner-detail').textContent = res.canRunSetup
+    ? '対象 ' + count + ' 店舗：' + names.join('、') + (count > names.length ? ' ほか' : '')
+    : '対象 ' + count + ' 店舗。マスタ管理権限を持つ担当者に、「店舗・スタッフ管理」タブの「店舗マスタとデータシートの対応チェック」の実行を依頼してください。';
+  document.getElementById('btn-open-link-check').classList.toggle('hidden', !res.canRunSetup);
+}
+
+function onOpenLinkCheck() {
+  const tab = document.querySelector('.tab-btn[data-tab="admin"]');
+  if (tab) tab.click();
+  setTimeout(function () {
+    const card = document.getElementById('link-check-card');
+    if (card && card.scrollIntoView) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 200);
+}
+
+// 食い違いの結果を表示する（applied=trueなら修復後の結果）
+function renderLinkCheckResult(res) {
+  const box = document.getElementById('link-check-result');
+  const repairBtn = document.getElementById('btn-run-link-repair');
+  box.classList.remove('hidden');
+  if (!res || !res.success) {
+    box.className = 'text-xs mt-2 text-red-600';
+    box.textContent = '失敗しました：' + (res ? res.error : '不明なエラー');
+    repairBtn.classList.add('hidden');
+    return;
+  }
+  const esc = escapeHtml;
+  let html = '';
+  if (res.applied) {
+    html += '<p class="text-emerald-700 font-semibold">' + res.done.length + ' 枚のシート名を店舗マスタに合わせました。データを再読み込みしました。</p>';
+    if (res.done.length) {
+      html += '<ul class="list-disc ml-5 text-slate-600">' + res.done.map(function (p) {
+        return '<li>「' + esc(p.fromSheet) + '」→「' + esc(p.shopName) + '」（' + p.rows + '件）</li>';
+      }).join('') + '</ul>';
+    }
+  } else if (res.plan.length === 0 && res.manual.length === 0) {
+    html += '<p class="text-emerald-700 font-semibold">食い違いはありません。店舗マスタの全店舗に、同じ名前のデータシートがあります。</p>';
+  } else if (res.plan.length) {
+    html += '<p class="text-amber-700 font-semibold">次の ' + res.plan.length + ' 枚のシート名を、店舗マスタの店舗名に変更できます（営業所コードが一致するシートのみ・中身は変わりません）：</p>';
+    html += '<ul class="list-disc ml-5 text-slate-600">' + res.plan.map(function (p) {
+      return '<li>「' + esc(p.fromSheet) + '」→「' + esc(p.shopName) + '」（店番 ' + esc(p.code) + '・' + p.rows + '件）</li>';
+    }).join('') + '</ul>';
+  }
+  if (res.manual.length) {
+    html += '<p class="text-red-600 font-semibold mt-2">自動では直せないもの（' + res.manual.length + ' 件）：</p>';
+    html += '<ul class="list-disc ml-5 text-slate-600">' + res.manual.map(function (m) {
+      return '<li>' + esc(m.shopName) + '（店番 ' + esc(m.code) + '）：' + esc(m.reason) + '</li>';
+    }).join('') + '</ul>';
+  }
+  box.className = 'text-xs mt-2';
+  box.innerHTML = html;
+  repairBtn.classList.toggle('hidden', !(res.plan.length > 0 && !res.applied));
+}
+
+function onCheckLinkProblems() {
+  const buttons = ['btn-check-link', 'btn-run-link-repair'].map(function (id) { return document.getElementById(id); });
+  buttons.forEach(function (b) { b.disabled = true; });
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false); buttons.forEach(function (b) { b.disabled = false; });
+      renderLinkCheckResult(res);
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false); buttons.forEach(function (b) { b.disabled = false; });
+      showToast('通信エラー（repairShopSheetLinks）: ' + err.message, 'error');
+    })
+    .repairShopSheetLinks(false);
+}
+
+function onRunLinkRepair() {
+  if (!window.confirm('データのシートの名前を、店舗マスタの店舗名に合わせて変更します。\n（シートの中身は変わりません。名前を変えるだけです）\nよろしいですか？')) return;
+  const buttons = ['btn-check-link', 'btn-run-link-repair'].map(function (id) { return document.getElementById(id); });
+  buttons.forEach(function (b) { b.disabled = true; });
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false); buttons.forEach(function (b) { b.disabled = false; });
+      renderLinkCheckResult(res);
+      if (res && res.success) { checkSetupStatus(); loadAllData(); }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false); buttons.forEach(function (b) { b.disabled = false; });
+      showToast('通信エラー（repairShopSheetLinks）: ' + err.message, 'error');
+    })
+    .repairShopSheetLinks(true);
+}
+
 function checkSetupStatus() {
   google.script.run
     .withSuccessHandler(function (res) {
+      updateLinkBanner(res);
       if (!res || !res.success || res.ready) {
         document.getElementById('setup-banner').classList.add('hidden');
         return;
@@ -2907,6 +3004,8 @@ function initAdminEvents() {
   document.getElementById('btn-remove-duplicates').addEventListener('click', function () { runDuplicateCleanup(false); });
   document.getElementById('btn-clear-all-data').addEventListener('click', onClearAllImportedData);
   document.getElementById('btn-merge-placeholders').addEventListener('click', onMergePlaceholderShops);
+  document.getElementById('btn-check-link').addEventListener('click', onCheckLinkProblems);
+  document.getElementById('btn-run-link-repair').addEventListener('click', onRunLinkRepair);
   document.getElementById('btn-check-archive').addEventListener('click', onCheckArchivePreview);
   document.getElementById('btn-run-archive').addEventListener('click', onRunArchive);
   document.getElementById('staff-email-file').addEventListener('change', function () {

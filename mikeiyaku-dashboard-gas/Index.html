@@ -150,6 +150,23 @@
       </div>
     </div>
 
+    <!-- ============ 店舗マスタの店舗名に合うデータシートが無いときに出る案内バー ============ -->
+    <div id="link-banner" class="hidden mb-5 bg-amber-50 border border-amber-300 rounded-xl p-4">
+      <div class="flex flex-wrap items-start gap-3">
+        <i class="fa-solid fa-link-slash text-amber-500 text-xl mt-0.5"></i>
+        <div class="flex-1 min-w-0">
+          <p class="font-bold text-amber-800">データが表示されない店舗があります</p>
+          <p class="text-sm text-amber-700 mt-1">
+            店舗マスタの店舗名と同じ名前のデータシートが見つからない店舗があります（店舗名を書き換えた直後などに起こります）。データが消えたわけではありません。
+          </p>
+          <p id="link-banner-detail" class="text-xs text-amber-600 mt-1"></p>
+        </div>
+        <button id="btn-open-link-check" class="hidden bg-amber-600 hover:bg-amber-700 text-white rounded-lg px-4 py-2 text-sm font-semibold shadow whitespace-nowrap">
+          <i class="fa-solid fa-screwdriver-wrench"></i> 対応チェックを開く
+        </button>
+      </div>
+    </div>
+
     <!-- ============ 初期セットアップ未実行のときだけ出る案内バー ============ -->
     <div id="setup-banner" class="hidden mb-5 bg-amber-50 border border-amber-300 rounded-xl p-4">
       <div class="flex flex-wrap items-start gap-3">
@@ -589,6 +606,24 @@
               </button>
             </div>
             <p id="duplicate-result" class="hidden text-xs mt-2"></p>
+          </div>
+
+          <div id="link-check-card" class="border border-slate-200 rounded-lg p-3">
+            <p class="text-sm font-semibold text-slate-700">店舗マスタとデータシートの対応チェック</p>
+            <p class="text-xs text-slate-500 mt-1 mb-3">
+              店舗のデータは「店舗マスタの店舗名と同じ名前のシート」から読み込まれます。店舗マスタの店舗名を書き換えたり、表を貼り直したりして名前が一致しなくなると、
+              データがシートに残っていても画面には出なくなります。ここで食い違いを調べ、シートの名前を店舗マスタに合わせて直せます（シートの中身は変わりません）。
+              エリア名だけを変えた場合は、この作業は不要です。
+            </p>
+            <div class="flex gap-2">
+              <button id="btn-check-link" class="bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg px-3 py-1.5 text-xs font-semibold">
+                <i class="fa-solid fa-magnifying-glass"></i> 食い違いを調べる
+              </button>
+              <button id="btn-run-link-repair" class="hidden bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-1.5 text-xs font-semibold shadow">
+                <i class="fa-solid fa-screwdriver-wrench"></i> シート名を店舗マスタに合わせる
+              </button>
+            </div>
+            <div id="link-check-result" class="hidden text-xs mt-2"></div>
           </div>
 
           <div class="border border-slate-200 rounded-lg p-3">
