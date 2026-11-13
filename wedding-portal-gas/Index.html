@@ -2653,8 +2653,10 @@ const Controller = {
       this.initNewsFilterOptions();
       
       if (!isInitialized) {
-        UI.initEditors();
-        UI.setupResizer(); 
+        // ★高速化: Quillエディタ(30個近く)は管理者が編集画面を使う時にしか必要ないため、
+        //         閲覧者には初期化しない(DOM生成・JS初期化コストを丸ごと回避)
+        if (State.isAdmin) UI.initEditors();
+        UI.setupResizer();
       }
       
       if (INITIAL_PLAN_ID && !isInitialized && !targetId) {

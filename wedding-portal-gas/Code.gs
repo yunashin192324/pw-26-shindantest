@@ -502,61 +502,73 @@ function uploadImage(base64Data) {
   } finally { lock.releaseLock(); }
 }
 
+// ★高速化: 全行・全列(=全画像のBase64本体)を毎回読み込んでいたのをやめ、
+//         まずID列(A列)だけを読んで該当行を特定し、必要な行のBase64だけを読み込む
 function getImagesByIds(ids) {
   try {
     if (!ids || ids.length === 0) return {};
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(CONFIG.SHEET_IMAGES);
-    if (!sheet) return {};
-    const data = sheet.getDataRange().getValues();
+    if (!sheet || sheet.getLastRow() < 2) return {};
+
+    const lastRow = sheet.getLastRow();
+    const lastCol = sheet.getLastColumn();
+    const wanted = new Set(ids);
+    const idColumn = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+
     const result = {};
-    for (let i = 1; i < data.length; i++) {
-      const row = data[i];
+    idColumn.forEach((row, i) => {
       const imgId = row[0];
-      if (ids.includes(imgId)) {
-        result[imgId] = row.slice(2).join(""); 
+      if (wanted.has(imgId)) {
+        const rowNum = i + 2;
+        const rowData = sheet.getRange(rowNum, 3, 1, lastCol - 2).getValues()[0];
+        result[imgId] = rowData.join("");
       }
-    }
+    });
     return result;
   } catch(e) { return {}; }
 }
 
+// ★高速化: 本文(巨大なJSON分割列)を含むシート全体を毎回読み書きしていたのをやめ、
+//         更新対象行の season_year〜tags(F:J列, 5列)だけを個別に読み書きする
 function bulkUpdatePlans(updates) {
   if (!checkAdmin_(Session.getActiveUser().getEmail().toLowerCase())) throw new Error("Unauthorized.");
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(10000)) throw new Error("System is busy.");
   try {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.SHEET_MAIN);
-    const dataRange = sheet.getDataRange();
-    const values = dataRange.getValues();
-
+    const lastRow = sheet.getLastRow();
     const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy/MM/dd HH:mm:ss");
 
     updates.forEach(u => {
-      const rowIdx = parseInt(u.rowId, 10) - 1; 
-      if (rowIdx > 0 && rowIdx < values.length) {
-        if (u.season_year !== undefined) values[rowIdx][5] = u.season_year;
-        if (u.season_type !== undefined) values[rowIdx][6] = u.season_type;
-        if (u.is_draft !== undefined) values[rowIdx][7] = u.is_draft;
-        
-        let currentTags = values[rowIdx][9] ? String(values[rowIdx][9]).split(',').map(t=>t.trim()) : [];
-        if (u.add_tags) {
-            u.add_tags.split(',').forEach(t => { if(t.trim() && !currentTags.includes(t.trim())) currentTags.push(t.trim()); });
-        }
-        if (u.remove_tags) {
-            const toRemove = u.remove_tags.split(',').map(t=>t.trim());
-            currentTags = currentTags.filter(t => !toRemove.includes(t));
-        }
-        values[rowIdx][9] = currentTags.filter(Boolean).join(', ');
-        values[rowIdx][8] = timestamp;
-        
-        backupData_('BULK_UPDATE', u.rowId, values[rowIdx]);
+      const rowNum = parseInt(u.rowId, 10);
+      if (isNaN(rowNum) || rowNum < 2 || rowNum > lastRow) return;
+
+      // F列(season_year) 〜 J列(tags) の5列だけを対象にする
+      const range = sheet.getRange(rowNum, 6, 1, 5);
+      const vals = range.getValues()[0];
+
+      if (u.season_year !== undefined) vals[0] = u.season_year;
+      if (u.season_type !== undefined) vals[1] = u.season_type;
+      if (u.is_draft !== undefined) vals[2] = u.is_draft;
+
+      let currentTags = vals[4] ? String(vals[4]).split(',').map(t=>t.trim()) : [];
+      if (u.add_tags) {
+          u.add_tags.split(',').forEach(t => { if(t.trim() && !currentTags.includes(t.trim())) currentTags.push(t.trim()); });
       }
+      if (u.remove_tags) {
+          const toRemove = u.remove_tags.split(',').map(t=>t.trim());
+          currentTags = currentTags.filter(t => !toRemove.includes(t));
+      }
+      vals[4] = currentTags.filter(Boolean).join(', ');
+      vals[3] = timestamp;
+
+      range.setValues([vals]);
+      backupData_('BULK_UPDATE', rowNum, vals);
     });
-    
-    dataRange.setValues(values);
+
     SpreadsheetApp.flush();
-    bumpCache_(); 
+    bumpCache_();
     return { status: "success" };
   } finally { lock.releaseLock(); }
 }
