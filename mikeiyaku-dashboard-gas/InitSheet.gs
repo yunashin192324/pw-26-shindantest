@@ -5,7 +5,7 @@
  * ----------------------------------------------------------------------------
  * このファイルをGoogle Apps Scriptエディタに貼り付け、setupAllSheets() を実行するだけで、
  *   ① 店舗別データシート（10枚・27列共通ヘッダー）
- *   ② 店舗別サマリシート（46期累計＋月別12ブロックの集計テンプレート）
+ *   ② 店舗別サマリシート（当期累計＋月別12ブロックの集計テンプレート）
  *   ③ 個人別サマリ(上期) / 個人別サマリ(下期) シート（2段ヘッダーのダミーレイアウト）
  *   ④ 店舗マスタ / スタッフマスタ シート（Webアプリの「店舗・スタッフ管理」タブが読み書きする台帳）
  * を自動構築します。既存のシートは上書きせず、スキップされます。
@@ -17,7 +17,7 @@
  */
 function onOpen() {
   SpreadsheetApp.getUi()
-    .createMenu('46期未成約ダッシュボード')
+    .createMenu('未成約ダッシュボード')
     .addItem('① 全シートを初期化（InitSheet）', 'setupAllSheets')
     .addItem('② AI分析用サマリを作成／更新（Gemini用）', 'buildAiAnalysisSheetFromMenu')
     .addSeparator()
@@ -279,7 +279,7 @@ function repairShopSheetHeaders_(sheet, headers) {
 
 /**
  * ② 「店舗別サマリ」シートを作成する。
- * ・A~J列: 46期累計パート
+ * ・A~J列: 当期累計パート
  * ・L列以降: 11月〜10月の月別パート（同じ10列構成のブロックを右方向に展開）
  * ・1行目: ブロックラベル（結合セル）、2行目: サブヘッダー
  * ・3行目以降: 10店舗分の店番・店舗名（マスター行）＋ 各種集計式（COUNTIFS/SUMIFS）
@@ -296,7 +296,7 @@ function createShopSummarySheet_(ss, shopList, monthCodesFull) {
   const sheet = existing || ss.insertSheet(sheetName);
 
   const subHeaders = ['店番', '店舗', '未成約件数', 'リセールアクション数', '成約件数', 'PAX数', 'リセール中', '失注数', 'リセール率', 'リセール成約率'];
-  const blockLabels = ['46期累計'].concat(monthCodesFull.map(monthLabel_));
+  const blockLabels = ['当期累計'].concat(monthCodesFull.map(monthLabel_));
 
   // 各ブロックの開始列を計算（1ブロック=10列、ブロック間に空白1列）
   const blockStartCols = [];
@@ -347,7 +347,7 @@ function createShopSummarySheet_(ss, shopList, monthCodesFull) {
       let f未成約, fリセールアクション, f成約, fPAX, fリセール中, f失注;
 
       if (blockIdx === 0) {
-        // 46期累計：シート全体を対象に集計
+        // 当期累計：シート全体を対象に集計
         f未成約 = "=COUNTA('" + sheetRef + "'!$E$2:$E)";
         fリセールアクション = "=COUNTIFS('" + sheetRef + "'!$A$2:$A,\"〇\")";
         f成約 = "=COUNTIFS('" + sheetRef + "'!$B$2:$B,\"成約\")";

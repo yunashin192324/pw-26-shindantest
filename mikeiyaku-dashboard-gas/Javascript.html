@@ -18,7 +18,8 @@ const MULTILINE_COLUMNS = ['次回ACT・進捗★手入力', '詳細']; // イ�
 let allDataCache = [];              // getDashboardData() の統合生データ（超高速フィルタの元データ・直近2年分）
 let metaMasters = {};                // getMetaMasters() のマスタ一式
 let employeeSummaryCache = {};       // periodKey（例: "46_second_half"）をキーに取得結果をキャッシュ
-let availablePeriods = [];           // getAvailablePeriods() が返す直近2年（4半期）の期一覧
+let availablePeriods = [];           // getAvailablePeriods() が返す、画面に表示する期の一覧（標準は当期のみ）
+let fiscalInfo = null;               // 表示中の期の情報（見出し・「表示中」バッジ用）
 let currentEmployeePeriod = null;    // 現在選択中の期キー
 let myChart1 = null;
 let myChart2 = null;
@@ -216,7 +217,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // 画面側が前提としているサーバー（Code.gs）の版数。Code.gs の SERVER_VERSION と対で更新する。
-const REQUIRED_SERVER_VERSION = '2026-11-13';
+const REQUIRED_SERVER_VERSION = '2026-11-14';
 
 /**
  * Code.gs が画面と同じ版数まで更新されているか確認する。
@@ -546,6 +547,8 @@ function loadAllData() {
       try {
         if (res && res.success) {
           availablePeriods = res.periods;
+          fiscalInfo = res.fiscal || null;
+          renderAppTitle();
           renderEmpPeriodTabs();
           if (availablePeriods.length) {
             currentEmployeePeriod = availablePeriods[availablePeriods.length - 1].key; // 直近（最新）の期を初期選択
@@ -1001,7 +1004,7 @@ function buildAiSummaryText() {
   L.push('# 未成約リセール 傾向分析用サマリ');
   L.push('作成日時: ' + now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()));
   L.push('閲覧範囲: ' + (currentUserContext.scopeLabel || (currentUserContext.canViewAllStores ? '全エリア' : (currentUserContext.officeName || '自店舗') + 'のみ')));
-  L.push('表示期間: 直近2年（' + availablePeriods.map(function (p) { return p.label; }).join('・') + '）');
+  L.push('表示期間: ' + availablePeriods.map(function (p) { return p.label; }).join('・') + (fiscalInfo ? '（' + fiscalInfo.label + '）' : ''));
   L.push('絞り込み: エリア=' + (selectedAreas.length ? selectedAreas.join('/') : 'すべて') +
     ' , 店舗=' + (selectedShops.length ? selectedShops.join('/') : 'すべて') +
     ' , 月=' + (selectedMonths.length ? selectedMonths.join('/') : 'すべて'));
@@ -1066,7 +1069,7 @@ function buildAiSummaryText() {
     if (!periodMap[label]) periodMap[label] = [];
     periodMap[label].push(r);
   });
-  L.push('## 期別の推移（46期は2025年11月始まり。上期=11〜4月 / 下期=5〜10月）');
+  L.push('## 期別の推移（期は11月始まり・10月終わり。上期=11〜4月 / 下期=5〜10月）');
   L.push('期\t未成約数\tリセール数\t継続率%\t成約数\tPAX');
   availablePeriods.forEach(function (p) {
     const rows = periodMap[p.label] || [];
@@ -1612,7 +1615,26 @@ function initEmployeeEvents() {
   document.getElementById('emp-filter-area').addEventListener('change', renderEmployeeTab);
 }
 
-// 直近2年（4半期）分のタブボタンを動的に生成する（例: 45期上期・45期下期・46期上期・46期下期）
+// 見出し・ブラウザのタブ・「表示中」バッジに、いま画面に出ている期を表示する（例：47期）
+function renderAppTitle() {
+  if (!fiscalInfo || !availablePeriods.length) return;
+  const num = fiscalInfo.periodNumber;
+  const titleEl = document.getElementById('app-title');
+  if (titleEl) titleEl.textContent = num + '期未成約リスト ダッシュボード';
+  try { document.title = num + '期未成約ダッシュボード'; } catch (e) { /* タイトルを変えられない環境では何もしない */ }
+  const from = String(fiscalInfo.displayFrom || '');
+  const fromText = from.length === 8 ? from.substring(0, 4) + '年' + Number(from.substring(4, 6)) + '月' : '';
+  const labels = availablePeriods.map(function (p) { return p.label; });
+  const badge = document.getElementById('app-period-badge');
+  if (badge) {
+    badge.textContent = '表示中：' + (labels.length === 1 ? labels[0] : num + '期（' + labels.map(function (l) { return l.replace(/^\d+期/, ''); }).join('・') + '）') +
+      (fromText ? '　' + fromText + 'から' : '');
+    badge.title = 'この画面に出ているのは ' + fiscalInfo.label + ' のデータです。これより前の期のデータは、履歴アーカイブ（別のスプレッドシート）に保管されています。';
+    badge.classList.remove('hidden');
+  }
+}
+
+// 表示中の期のタブボタンを動的に生成する（例: 47期上期。下期になると 47期上期・47期下期）
 function renderEmpPeriodTabs() {
   const container = document.getElementById('emp-period-tabs');
   container.innerHTML = availablePeriods.map(function (p) {
@@ -2960,7 +2982,7 @@ function renderCsvImportResult(res) {
     }).join(' / ') + '</p>';
   }
   if (res.archivedCount) {
-    html += '<p class="mt-1 text-slate-500">保存期間（直近2年）を過ぎたデータ ' + res.archivedCount + ' 件を履歴アーカイブへ退避しました。' +
+    html += '<p class="mt-1 text-slate-500">保存期間（当期より前）を過ぎたデータ ' + res.archivedCount + ' 件を履歴アーカイブへ退避しました。' +
       formatArchivePeriodLinks(res.archivePeriods) + '</p>';
   }
   box.innerHTML = html;
@@ -3212,7 +3234,7 @@ function onCheckArchivePreview() {
       }
       if (res.eligibleCount === 0) {
         box.className = 'text-xs mt-2 text-slate-500';
-        box.textContent = 'アーカイブ対象のデータはありません（すべて直近2年以内のデータです）。';
+        box.textContent = 'アーカイブ対象のデータはありません（すべて当期のデータです）。';
         return;
       }
       box.className = 'text-xs mt-2 text-amber-700';
@@ -3233,7 +3255,7 @@ function onRunArchive() {
   const box = document.getElementById('archive-result');
   const buttons = ['btn-check-archive', 'btn-run-archive'].map(function (id) { return document.getElementById(id); });
 
-  if (!window.confirm('保存期間（直近2年）を過ぎたデータを履歴アーカイブへ退避します。\n（データは消えず、別のスプレッドシートに移動するだけです）\nよろしいですか？')) return;
+  if (!window.confirm('保存期間（当期より前）を過ぎたデータを履歴アーカイブへ退避します。\n（データは消えず、別のスプレッドシートに移動するだけです）\nよろしいですか？')) return;
 
   buttons.forEach(function (b) { b.disabled = true; });
   showLoading(true);

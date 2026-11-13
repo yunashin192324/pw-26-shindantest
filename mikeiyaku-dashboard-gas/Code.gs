@@ -132,7 +132,7 @@ const STAFF_MASTER_SHEET_NAME = 'スタッフマスタ';
 function doGet(e) {
   return HtmlService.createTemplateFromFile('Index')
     .evaluate()
-    .setTitle('46期未成約ダッシュボード')
+    .setTitle(appTitle_())
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
@@ -140,6 +140,16 @@ function doGet(e) {
 /**
  * Index.html から他のHTMLファイル（Javascript.html等）をインクルードするためのヘルパー。
  */
+/** 画面・ブラウザのタブに出すタイトル。表示中の期の番号が入る（例：「47期未成約ダッシュボード」） */
+function appTitle_() {
+  try {
+    const periods = getRecentPeriods_();
+    return periods[periods.length - 1].periodNumber + '期未成約ダッシュボード';
+  } catch (e) {
+    return '未成約ダッシュボード';
+  }
+}
+
 function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
@@ -700,7 +710,11 @@ function getMetaMasters() {
 // ============================================================================
 const FISCAL_BASE_PERIOD = 46;
 const FISCAL_BASE_START_CAL_YEAR = 2025; // 46期の開始暦年（2025年11月に開始）
-const RETENTION_PERIOD_COUNT = 4;        // 保存対象：直近4半期（＝過去2年）
+// 画面に表示する範囲（＝保存期間。これより前のデータは履歴アーカイブへ退避される）
+//   'FISCAL_YEAR'   … 当期のみ（11月始まりの1年。上期＝11〜4月の間は上期だけ、下期＝5〜10月は上期＋下期）
+//   'RECENT_HALVES' … 直近 RETENTION_PERIOD_COUNT 半期（4なら過去2年）
+const RETENTION_MODE = 'FISCAL_YEAR';
+const RETENTION_PERIOD_COUNT = 4;        // RETENTION_MODE が 'RECENT_HALVES' のときの半期数（4＝過去2年）
 
 /**
  * "YYYYMMDD" 形式の対象年月日から、その日付が属する会計期・上期/下期を算出する。
@@ -726,9 +740,9 @@ function periodLabel_(periodNumber, half) {
 }
 
 /**
- * 指定日時点（省略時は現在時刻）を基準に、直近 RETENTION_PERIOD_COUNT 半期分
- * （＝過去2年）の期を古い順に並べて返す。個人別サマリのタブ一覧・データ保存期間の
- * 両方で同じ「直近2年」の定義を共有するための唯一の基準関数。
+ * 指定日時点（省略時は現在時刻）を基準に、画面に表示する期（RETENTION_MODE 参照。標準は当期のみ）を
+ * 古い順に並べて返す。個人別サマリのタブ一覧・データ保存期間の
+ * 両方で同じ範囲の定義を共有するための唯一の基準関数。
  */
 function getRecentPeriods_(referenceDate) {
   const now = referenceDate || new Date();
@@ -737,8 +751,10 @@ function getRecentPeriods_(referenceDate) {
   let p = FISCAL_BASE_PERIOD + (((m >= 11) ? y : y - 1) - FISCAL_BASE_START_CAL_YEAR);
   let h = (m >= 11 || m <= 4) ? 'first_half' : 'second_half';
 
+  // 当期のみの場合：上期（11〜4月）なら上期の1つ、下期（5〜10月）なら上期と下期の2つ
+  const count = RETENTION_MODE === 'FISCAL_YEAR' ? (h === 'first_half' ? 1 : 2) : RETENTION_PERIOD_COUNT;
   const seq = [];
-  for (let i = 0; i < RETENTION_PERIOD_COUNT; i++) {
+  for (let i = 0; i < count; i++) {
     seq.push({ periodNumber: p, half: h, key: periodKey_(p, h), label: periodLabel_(p, h) });
     if (h === 'second_half') { h = 'first_half'; } else { h = 'second_half'; p = p - 1; }
   }
@@ -751,7 +767,20 @@ function getRecentPeriods_(referenceDate) {
  */
 function getAvailablePeriods() {
   try {
-    return { success: true, periods: getRecentPeriods_() };
+    const periods = getRecentPeriods_();
+    const newest = periods[periods.length - 1];
+    const cutoff = getRetentionCutoffDate_();
+    return {
+      success: true,
+      periods: periods,
+      // 画面の見出し・「表示中」の案内用
+      fiscal: {
+        periodNumber: newest.periodNumber,
+        label: fiscalYearLabel_(newest.periodNumber),
+        displayFrom: cutoff,
+        periodLabels: periods.map(function (p) { return p.label; })
+      }
+    };
   } catch (err) {
     return { success: false, error: errorForClient_(err) };
   }
@@ -808,7 +837,7 @@ function collectDashboardRowsForShop_(ss, shop, cutoffDate) {
     });
     if (hasError) continue;
 
-    // 保存期間（直近2年）より前のデータは対象外
+    // 保存期間（表示範囲）より前のデータは対象外
     const targetDate = normalizeTargetDate_(row[4]); // 対象年月日（5列目）
     if (targetDate && targetDate < cutoffDate) continue;
 
@@ -1388,7 +1417,7 @@ function lockedEndpoint_(fn) {
  * 「is not a function」という分かりにくいエラーになるため、
  * 画面側から版数を確認できるようにしている。
  */
-const SERVER_VERSION = '2026-11-13';
+const SERVER_VERSION = '2026-11-14';
 
 /**
  * サーバー側の版数を返す。画面側は、自分が期待する版数と一致するかを起動時に確認する。
@@ -2248,7 +2277,7 @@ function permissionDeniedMessage_(what, ctx) {
   }
   return what + 'は「マスタ管理」権限を持つ方のみ実行できます。\n' + who + '：' + reason + '\n' +
     'マスタ管理者に登録を依頼してください。スプレッドシートを編集できる方は、メニュー' +
-    '「46期未成約ダッシュボード」→「自分をマスタ管理者として登録」から登録できます。';
+    '「未成約ダッシュボード」→「自分をマスタ管理者として登録」から登録できます。';
 }
 
 /**
@@ -3012,7 +3041,7 @@ function setupRequiredMessage_(sheetName) {
   return '「' + sheetName + '」シートがまだ作られていません（初期セットアップが未実行です）。\n' +
     'この画面の上部に出ている「初期セットアップを実行する」ボタンを押してください。\n' +
     'ボタンが出ていない場合は、元のスプレッドシートを開き、メニューバーの\n' +
-    '「46期未成約ダッシュボード」→「① 全シートを初期化（InitSheet）」を実行してください。';
+    '「未成約ダッシュボード」→「① 全シートを初期化（InitSheet）」を実行してください。';
 }
 
 /**
@@ -3460,7 +3489,7 @@ function appendShopRowToSummary_(ss, shop) {
   if (!sheet) return;
 
   const MONTH_CODES_FULL = ['11', '12', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10'];
-  const blockLabels = ['46期累計'].concat(MONTH_CODES_FULL.map(monthLabel_));
+  const blockLabels = ['当期累計'].concat(MONTH_CODES_FULL.map(monthLabel_));
   const blockStartCols = [];
   let cursor = 1;
   blockLabels.forEach(function () { blockStartCols.push(cursor); cursor += 11; });
@@ -4368,7 +4397,7 @@ function buildAiAnalysisSheet_() {
 
   const note = [
     ['このシートは「AI分析用サマリ」です（メニューから再作成できます）'],
-    ['集計対象: 直近2年（' + periods.map(function (p) { return p.label; }).join('・') + '） / 基準日 ' + cutoff + ' 以降'],
+    ['集計対象: 表示期間（' + periods.map(function (p) { return p.label; }).join('・') + '） / 基準日 ' + cutoff + ' 以降'],
     ['用語: 未成約=その場で成約に至らなかった相談 / リセール=再提案・フォローの実施'],
     ['リセール継続率 = リセール数 ÷ 未成約数（最重要指標） / リセール成約率 = 成約数 ÷ リセール数'],
     ['お客様個人が特定される情報は含めていません'],

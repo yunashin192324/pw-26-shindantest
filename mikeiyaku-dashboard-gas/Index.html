@@ -74,7 +74,8 @@
     <div class="max-w-[1600px] mx-auto px-4 py-3">
       <div class="flex items-center justify-between mb-3">
         <h1 class="text-xl font-bold text-blue-800 flex items-center gap-2">
-          <i class="fa-solid fa-chart-line"></i> 46期未成約リスト ダッシュボード
+          <i class="fa-solid fa-chart-line"></i> <span id="app-title">未成約リスト ダッシュボード</span>
+          <span id="app-period-badge" class="hidden ml-2 text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 rounded-full px-3 py-1"></span>
         </h1>
         <button id="btn-refresh" class="text-sm text-blue-700 border border-blue-200 rounded-lg px-3 py-1.5 hover:bg-blue-50">
           <i class="fa-solid fa-rotate"></i> データ再読込
@@ -298,7 +299,7 @@
       </div>
 
       <div class="bg-white rounded-xl shadow p-4">
-        <p class="text-xs text-slate-500 mb-2"><i class="fa-solid fa-circle-info"></i> 社員名をクリックすると、その方の未成約理由・都市コード別の詳細内訳が見られます。表示期間は直近2年（4半期分）です。</p>
+        <p class="text-xs text-slate-500 mb-2"><i class="fa-solid fa-circle-info"></i> 社員名をクリックすると、その方の未成約理由・都市コード別の詳細内訳が見られます。表示期間は画面上部の「表示中」の期です。</p>
         <div class="overflow-auto max-h-[65vh]">
           <table class="min-w-full text-sm whitespace-nowrap">
             <thead id="employee-thead" class="bg-slate-100 text-slate-600 sticky top-0 z-10"></thead>
@@ -316,7 +317,7 @@
         <div>
           <h2 class="text-base font-bold text-slate-800"><i class="fa-solid fa-table-list text-blue-600"></i> リセールリスト</h2>
           <p class="text-xs text-slate-500 mt-0.5">
-            日報CSVに載らない相談（飛び込み等）の登録・営業日報CSVの取り込みはこちらから行います（表示は直近2年分）。<strong>新規登録の担当スタッフは検索して選ぶ方式</strong>で、店舗名・社員名を直接入力することはできません（集計がずれないようにするため）。
+            日報CSVに載らない相談（飛び込み等）の登録・営業日報CSVの取り込みはこちらから行います（表示は当期分）。<strong>新規登録の担当スタッフは検索して選ぶ方式</strong>で、店舗名・社員名を直接入力することはできません（集計がずれないようにするため）。
             <span class="inline-block w-2.5 h-2.5 rounded-sm bg-amber-100 border border-amber-300 align-middle ml-2 mr-1"></span>の列（リセール／STS／成約PAX／ACT日／ACT内容／メモ／詳細）はスタッフが編集できます。それ以外はCSV由来の読み取り専用です。
           </p>
         </div>
@@ -629,9 +630,9 @@
           <div class="border border-slate-200 rounded-lg p-3">
             <p class="text-sm font-semibold text-slate-700">古いデータを履歴アーカイブへ退避する</p>
             <p class="text-xs text-slate-500 mt-1 mb-3">
-              保存期間（直近2年）を過ぎたデータを、別の「未成約リスト履歴アーカイブ」スプレッドシートへ移します。
+              保存期間（当期のみ。前の期のデータ）を過ぎたデータを、期ごとに別の「未成約リスト履歴アーカイブ」スプレッドシートへ移します。
               店舗数・データ量が増えてもダッシュボードの読み込みが重くならないようにするための整理で、
-              ダッシュボードの見え方（直近2年分の表示）は変わりません。データは消えず、アーカイブ側にそのまま残ります。
+              ダッシュボードの見え方（当期分の表示）は変わりません。データは消えず、アーカイブ側にそのまま残ります。
             </p>
             <div class="flex gap-2">
               <button id="btn-check-archive" class="bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg px-3 py-1.5 text-xs font-semibold">
