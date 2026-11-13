@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SRC = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "source" / "式場追加情報.xlsx"
 OUT = ROOT / "js" / "data" / "venue-extras.js"
 KEYS = ["area", "url", "address", "price", "description", "image", "imageAlt", "order"]
-SCENES = ["開始画面"] + ["質問%d" % i for i in range(1, 8)] + ["読み込み中", "結果画面"]
+SCENES = ["開始画面"] + ["質問%d" % i for i in range(1, 7)] + ["読み込み中", "結果画面"]
 SAFE = re.compile(r"^(https?://[^\s]+|[\w./-]+\.(jpe?g|png|webp|gif|avif))$", re.I)
 
 
@@ -61,7 +61,7 @@ def main():
     if missing:
         errors.append("「式場情報」シートに無い式場があります（make_extras_template.py --sync で追加できます）: " + "、".join(sorted(missing)))
 
-    scenes = {"start": "", "question": [""] * 7, "loading": "", "result": ""}
+    scenes = {"start": "", "question": [""] * 6, "loading": "", "result": ""}
     for row in wb["背景写真"].iter_rows(min_row=2):
         label, v = row[0].value, row[1].value
         if label not in SCENES or v is None or not str(v).strip():

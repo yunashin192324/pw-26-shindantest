@@ -9,7 +9,7 @@
     // 空欄の場合は写真なしのグラデーション背景になります。
     sceneImages: {
       start: '',
-      question: ['', '', '', '', '', '', ''],
+      question: ['', '', '', '', '', ''],
       loading: '',
       result: ''
     },

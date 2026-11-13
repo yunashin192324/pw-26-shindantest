@@ -19,7 +19,7 @@
     },
     {
       id: 'access', section: 'ACCESS', type: 'single',
-      title: '式場までの移動について、ご希望はありますか？',
+      title: '移動について、ご希望はありますか？',
       sub: '日本からの移動時間や時差について、近いものをお選びください。',
       opts: [
         { v: 'nojetlag', main: '時差のない場所がいい', sub: '到着してすぐ、いつもの調子で過ごしたい', categories: ['時差がない'], label: '時差がないこと' },
@@ -28,26 +28,18 @@
       ]
     },
     {
-      id: 'scenery', section: 'LOCATION', type: 'multi',
-      title: 'どんな景色の中で、誓いの瞬間を迎えたいですか？',
+      id: 'scenery', section: 'VENUE', type: 'multi',
+      title: 'どんな式場で、誓いの瞬間を迎えたいですか？',
       sub: '心惹かれるものをすべてお選びください（複数選択可）。',
       opts: [
+        { v: 'seaview', text: '海の見える式場', categories: ['海が見える'] },
         { v: 'beach', text: 'ビーチが目の前の式場', categories: ['ビーチが目の前'] },
         { v: 'garden', text: '緑あふれるガーデン', categories: ['ガーデンがある'] },
         { v: 'nature', text: '豊かな自然に囲まれた場所', categories: ['自然豊か'] },
-        { v: 'heritage', text: '世界遺産のある場所', categories: ['世界遺産'] },
-        { v: 'none', text: '特にこだわらない', categories: [], exclusive: true }
-      ]
-    },
-    {
-      id: 'space', section: 'CEREMONY', type: 'multi',
-      title: '挙式を挙げる会場は、どんなところが理想ですか？',
-      sub: '理想に近いものをすべてお選びください（複数選択可）。',
-      opts: [
-        { v: 'seaview', text: '海の見える式場', categories: ['海が見える'] },
         { v: 'church', text: '歴史ある教会・大聖堂', categories: ['教会・大聖堂'] },
         { v: 'glass', text: 'ステンドグラスのある空間', categories: ['ステンドグラスがある'] },
         { v: 'athome', text: 'アットホームな雰囲気', categories: ['アットホーム'] },
+        { v: 'heritage', text: '世界遺産のある場所', categories: ['世界遺産'] },
         { v: 'none', text: '特にこだわらない', categories: [], exclusive: true }
       ]
     },

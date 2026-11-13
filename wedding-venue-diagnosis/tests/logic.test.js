@@ -14,7 +14,7 @@ const { DATA, QUESTIONS, EXTRAS } = globalThis.VENUE_DIAG;
 const byName = Object.fromEntries(DATA.venues.map(v => [v.name, v]));
 const run = a => L.diagnose(DATA, QUESTIONS, a);
 const names = list => list.map(r => r.venue.name);
-const NONE = { kids: 'no', access: 'any', scenery: ['none'], space: ['none'], stay: ['none'], focus: ['none'] };
+const NONE = { kids: 'no', access: 'any', scenery: ['none'], stay: ['none'], focus: ['none'] };
 
 test('データ件数: 式場51件・カテゴリ19件', () => {
   assert.equal(DATA.venues.length, 51);
@@ -54,7 +54,7 @@ test('条件をすべて「こだわらない」にすると、おすすめを�
 });
 
 test('パターンA: 子連れ・時差なし・海/ビーチ・パーティ・コスパ（最重視=ビーチが目の前）', () => {
-  const d = run({ kids: 'yes', access: 'nojetlag', scenery: ['beach'], space: ['seaview'], stay: ['party'], focus: ['cost'], priority: 'ビーチが目の前' });
+  const d = run({ kids: 'yes', access: 'nojetlag', scenery: ['seaview', 'beach'], stay: ['party'], focus: ['cost'], priority: 'ビーチが目の前' });
   assert.equal(d.status, 'ok');
   assert.equal(d.conditions.length, 6);
   // 6条件すべてに該当するのはこの2式場のみ（同順位、掲載順）
@@ -65,16 +65,19 @@ test('パターンA: 子連れ・時差なし・海/ビーチ・パーティ・�
 });
 
 test('パターンB: 大人のみ・ガーデン/自然・教会・ヴィラ・衣裳（最重視なし）', () => {
-  const d = run({ kids: 'no', access: 'any', scenery: ['garden', 'nature'], space: ['church'], stay: ['villa'], focus: ['dress'] });
+  const d = run({ kids: 'no', access: 'any', scenery: ['garden', 'nature', 'church'], stay: ['villa'], focus: ['dress'] });
   assert.equal(d.priority, null);
   assert.deepEqual(names(d.recommended.filter(r => r.rank === 1)), [
     'ウブドフォレスト アット フォーシーズンズ サヤン', 'ウォーターフォールウェディング',
-    'チャペル・バイ・ザ・レイク', 'フォーシーズンズ ランダギラーバル ウェディング']);
+    'フォーシーズンズ ランダギラーバル ウェディング']);
   d.recommended.filter(r => r.rank === 1).forEach(r => assert.equal(r.matchCount, 4));
+  // 同じ4件一致でも、一致が2つの質問にしかまたがらないため4位
+  assert.equal(d.recommended[3].venue.name, 'チャペル・バイ・ザ・レイク');
+  assert.equal(d.recommended[3].rank, 4);
 });
 
 test('パターンC: キャラクターを最重視すると、唯一該当する式場が1位', () => {
-  const d = run({ kids: 'yes', access: 'any', scenery: ['none'], space: ['none'], stay: ['hotel'], focus: ['character'], priority: 'キャラクターと一緒' });
+  const d = run({ kids: 'yes', access: 'any', scenery: ['none'], stay: ['hotel'], focus: ['character'], priority: 'キャラクターと一緒' });
   assert.equal(d.recommended[0].venue.name, 'ディズニー・フェアリーテール・ウエディング・アウラニ');
   assert.equal(d.recommended[0].rank, 1);
   assert.equal(d.recommended[0].tied, false);
@@ -88,7 +91,7 @@ test('パターンE: 世界遺産のみ選択 → 該当する2式場だけを�
 });
 
 test('最重視の条件は、同じ条件を選んでも最重視しない場合より順位に強く効く', () => {
-  const a = { kids: 'no', access: 'any', scenery: ['none'], space: ['church', 'glass'], stay: ['none'], focus: ['dress'] };
+  const a = { kids: 'no', access: 'any', scenery: ['church', 'glass'], stay: ['none'], focus: ['dress'] };
   const plain = run(a);
   const prio = run(Object.assign({}, a, { priority: 'ステンドグラスがある' }));
   // 最重視なし: 教会・大聖堂＋衣裳（2件一致、ステンドグラスなし）のチャペル・バイ・ザ・レイクは、ステンドグラスのみ（1件一致）の式場より上
@@ -99,7 +102,7 @@ test('最重視の条件は、同じ条件を選んでも最重視しない場�
 });
 
 test('最重視が無効な値（選んだ条件に無い）の場合は無視される', () => {
-  const d = run({ kids: 'yes', access: 'short', scenery: ['none'], space: ['none'], stay: ['none'], focus: ['none'], priority: '世界遺産' });
+  const d = run({ kids: 'yes', access: 'short', scenery: ['none'], stay: ['none'], focus: ['none'], priority: '世界遺産' });
   assert.equal(d.priority, null);
 });
 
@@ -140,7 +143,7 @@ function reference(a) {
 const FULL = process.env.FULL === '1';
 test('全回答パターンで、独立実装と順位が完全一致し、根拠のないおすすめが無い', () => {
   const combos = allCombos();
-  assert.equal(combos.length, 2 * 3 * 32 * 8 * 16 * 16); // 393,216通り
+  assert.equal(combos.length, 2 * 3 * 256 * 16 * 16); // 393,216通り
   let checked = 0;
   combos.forEach((a, n) => {
     const conds = L.collectConditions(QUESTIONS, a).map(c => c.category);
@@ -173,7 +176,7 @@ test('同点時の表示順：一致具合が同じ式場どうしの並びだ�
   assert.deepEqual(names(d.recommended), ['アラマンダ グレートバリアリーフチャペル', 'ヒルトン ブルーホライズン']);
   assert.ok(d.recommended.every(r => r.rank === 1 && r.tied));
   // 一致数が多い式場は、表示順の数字に関係なく上のまま
-  const b = { kids: 'yes', access: 'nojetlag', scenery: ['beach'], space: ['seaview'], stay: ['party'], focus: ['cost'], priority: 'ビーチが目の前' };
+  const b = { kids: 'yes', access: 'nojetlag', scenery: ['seaview', 'beach'], stay: ['party'], focus: ['cost'], priority: 'ビーチが目の前' };
   const d2 = L.diagnose(DATA, QUESTIONS, b, { order: { 'ジュエル・バイ・ザ・シー': 1, 'ホテルアオ石垣': 2 } });
   assert.deepEqual(names(d2.recommended.slice(0, 2)), ['ホテルアオ石垣', 'ザ・サーフ ビーチサイドテラス']);
   assert.ok(names(d2.recommended).indexOf('ジュエル・バイ・ザ・シー') > 1);

@@ -29,7 +29,7 @@ VENUE_COLS = [
     ("写真の説明", 28),
     ("同点時の表示順（数字・小さいほど上）", 22),
 ]
-SCENES = ["開始画面"] + ["質問%d" % i for i in range(1, 8)] + ["読み込み中", "結果画面"]
+SCENES = ["開始画面"] + ["質問%d" % i for i in range(1, 7)] + ["読み込み中", "結果画面"]
 HEAD_FILL = PatternFill("solid", fgColor="1D3A3A")
 LOCK_FILL = PatternFill("solid", fgColor="EEEEEE")
 HEAD_FONT = Font(bold=True, color="FFFFFF")

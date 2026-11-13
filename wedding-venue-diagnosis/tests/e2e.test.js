@@ -69,19 +69,17 @@ for (const file of TARGETS) {
       await noOverflow(page, 'start'); await shot('1-start');
       await page.click('#start-btn');
       assert.equal(await active(page), 'screen-q');
-      assert.equal(await frac(page), '1 / 6');
+      assert.equal(await frac(page), '1 / 5');
       await single(page, 'はい、子どもも参列します');
-      assert.equal(await frac(page), '2 / 6');
+      assert.equal(await frac(page), '2 / 5');
       await single(page, '時差のない場所がいい');
       // 複数選択：未選択では次へ不可
       assert.equal(await page.isDisabled('#next-btn'), true);
-      await multi(page, ['ビーチが目の前の式場']);
+      await multi(page, ['海の見える式場', 'ビーチが目の前の式場']);
       assert.equal(await page.isDisabled('#next-btn'), false);
-      // 重視条件の質問が追加され、全7問になる
-      assert.equal(await frac(page), '3 / 7');
+      // 重視条件の質問が追加され、全6問になる
+      assert.equal(await frac(page), '3 / 6');
       await noOverflow(page, 'q3'); await shot('2-question-multi');
-      await next(page);
-      await multi(page, ['海の見える式場']);
       await next(page);
       await multi(page, ['挙式の後、同じ場所でパーティをしたい']);
       await next(page);
@@ -97,7 +95,7 @@ for (const file of TARGETS) {
       assert.equal(await page.locator('.cond-table tbody tr').count(), 6);
       assert.equal(await page.locator('.alt-card').count(), 4);
       const alts = await page.locator('.alt-card .alt-name').allTextContents();
-      const exp = await expected(page, { kids: 'yes', access: 'nojetlag', scenery: ['beach'], space: ['seaview'], stay: ['party'], focus: ['cost'], priority: 'ビーチが目の前' });
+      const exp = await expected(page, { kids: 'yes', access: 'nojetlag', scenery: ['seaview', 'beach'], stay: ['party'], focus: ['cost'], priority: 'ビーチが目の前' });
       assert.deepEqual(alts, exp.slice(1, 5));
       assert.match(await page.textContent('#res-notice'), /同じ評価の式場が2件/);
       assert.match(await page.textContent('.reason'), /最も重視された「ビーチが目の前」に該当/);
@@ -126,15 +124,11 @@ for (const file of TARGETS) {
     await page.click('#start-btn');
     await single(page, 'いいえ、大人のみです');
     await single(page, '移動時間や時差は気にしない');
-    await multi(page, ['緑あふれるガーデン', '豊かな自然に囲まれた場所']);
+    await multi(page, ['緑あふれるガーデン', '豊かな自然に囲まれた場所', '歴史ある教会・大聖堂']);
     await next(page);
-    await multi(page, ['歴史ある教会・大聖堂']);
-    await next(page);
-    // Q5 → 戻る → Q4・Q3 の選択が残っている
+    // Q4 → 戻る → Q3 の選択が残っている
     await page.click('#back-btn'); await page.waitForTimeout(200);
-    assert.deepEqual(await page.locator('#opts-multi .opt-multi.selected').allTextContents(), ['歴史ある教会・大聖堂']);
-    await page.click('#back-btn'); await page.waitForTimeout(200);
-    assert.deepEqual(await page.locator('#opts-multi .opt-multi.selected').allTextContents(), ['緑あふれるガーデン', '豊かな自然に囲まれた場所']);
+    assert.deepEqual(await page.locator('#opts-multi .opt-multi.selected').allTextContents(), ['緑あふれるガーデン', '豊かな自然に囲まれた場所', '歴史ある教会・大聖堂']);
     // 単一選択も保持
     await page.click('#back-btn'); await page.waitForTimeout(200);
     assert.match(await page.locator('#opts-single .opt.selected').textContent(), /気にしない/);
@@ -143,21 +137,21 @@ for (const file of TARGETS) {
     // 「こだわらない」は他と同時に選べない
     await multi(page, ['特にこだわらない']);
     assert.deepEqual(await page.locator('#opts-multi .opt-multi.selected').allTextContents(), ['特にこだわらない']);
-    await multi(page, ['緑あふれるガーデン', '豊かな自然に囲まれた場所']);
-    assert.deepEqual(await page.locator('#opts-multi .opt-multi.selected').allTextContents(), ['緑あふれるガーデン', '豊かな自然に囲まれた場所']);
-    await next(page); await next(page);
+    await multi(page, ['緑あふれるガーデン', '豊かな自然に囲まれた場所', '歴史ある教会・大聖堂']);
+    assert.deepEqual(await page.locator('#opts-multi .opt-multi.selected').allTextContents(), ['緑あふれるガーデン', '豊かな自然に囲まれた場所', '歴史ある教会・大聖堂']);
+    await next(page);
     await multi(page, ['ヴィラ・水上ヴィラに泊まりたい']); await next(page);
     await multi(page, ['ドレス・衣裳にこだわりたい']); await next(page);
     await single(page, 'どれも同じくらい大切');
     await waitResult(page);
     const first = await page.textContent('#res-name');
-    const ansB = { kids: 'no', access: 'any', scenery: ['garden', 'nature'], space: ['church'], stay: ['villa'], focus: ['dress'], priority: 'none' };
+    const ansB = { kids: 'no', access: 'any', scenery: ['garden', 'nature', 'church'], stay: ['villa'], focus: ['dress'], priority: 'none' };
     assert.equal(first, (await expected(page, ansB))[0]);
     assert.equal(first, 'ウブドフォレスト アット フォーシーズンズ サヤン');
     // 回答を見直す → 最重視を「教会・大聖堂」に変更
     await page.click('#review-btn'); await page.waitForTimeout(300);
     assert.match(await page.locator('#opts-single .opt.selected').textContent(), /大人のみ/);
-    for (let i = 0; i < 6; i++) await next(page);
+    for (let i = 0; i < 5; i++) await next(page);
     assert.match(await page.textContent('#q-title'), /いちばん重視/);
     assert.match(await page.locator('#opts-single .opt.selected').textContent(), /どれも同じくらい大切/);
     await single(page, '歴史ある教会・大聖堂');
@@ -179,20 +173,22 @@ for (const file of TARGETS) {
     // 条件なし
     await page.click('#start-btn');
     await single(page, 'いいえ、大人のみです'); await single(page, '移動時間や時差は気にしない');
-    for (let i = 0; i < 4; i++) { await multi(page, ['特にこだわらない']); await next(page); }
+    for (let i = 0; i < 3; i++) { await multi(page, ['特にこだわらない']); await next(page); }
     await waitResult(page);
     assert.equal(await page.textContent('#res-name'), '希望条件が選ばれていません');
     assert.equal(await page.isVisible('#share-row'), false);
     assert.equal(await page.locator('.cond-table').count(), 0);
     // 世界遺産のみ（条件1つ → 重視の質問は表示されない、候補2件）
     await page.click('#review-btn'); await page.waitForTimeout(200);
-    assert.equal(await frac(page), '1 / 6');
+    assert.equal(await frac(page), '1 / 5');
     await next(page); await next(page);
     await multi(page, ['世界遺産のある場所']);
-    assert.equal(await frac(page), '3 / 6');
-    for (let i = 0; i < 4; i++) await next(page);
+    assert.equal(await frac(page), '3 / 5');
+    for (let i = 0; i < 3; i++) await next(page);
     await waitResult(page);
-    assert.equal(await page.textContent('#res-name'), 'ヒルトン ブルーホライズン');
+    // 同点の2式場は人気順（アラマンダ1位・ヒルトン2位）で並ぶ
+    assert.equal(await page.textContent('#res-name'), 'アラマンダ グレートバリアリーフチャペル');
+    assert.match(await page.locator('.venue-card-meta').textContent(), /オーストラリア・ケアンズ/);
     assert.equal(await page.locator('.alt-card').count(), 1);
     assert.match(await page.textContent('#res-notice'), /1つでも該当する式場は2件/);
     assert.match(await page.locator('.alt-card .alt-rank').textContent(), /同率 No\.1/);
