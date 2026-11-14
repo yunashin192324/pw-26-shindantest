@@ -76,12 +76,12 @@
       <div class="card-icon">📊</div>
       <div class="card-title">月次集計を今すぐ実行</div>
       <div class="card-desc">
-        今年度データ（店舗×月）を集計し、SUMMARYシートへ書き出します。既存データは削除しません。<br>
+        今期データ（店舗×月）を集計し、SUMMARYシートへ書き出します。既存データは削除しません。<br>
         月次自動メールの送信対象とは別に、いつでも手動実行できます。
       </div>
       <div class="stat-row">
         <div class="stat">
-          <div class="stat-label">DATAシート行数</div>
+          <div class="stat-label" id="dataRowsLabel">今期データ行数</div>
           <div class="stat-val" id="dataRows">-</div>
         </div>
         <div class="stat">
@@ -122,8 +122,8 @@
         前年度データを整理する機能です。
       </div>
       <div class="info-box">
-        ℹ️ このシステムは年が変わると自動的に <strong>DATA_2026</strong> のような
-        年度別シートへ切り替わり、過去データは既存の DATA_年 シートにそのまま残ります。
+        ℹ️ このシステムは期（11月始まり）が変わると自動的に <strong>DATA_47期</strong> のような
+        期別シートへ切り替わり、過去データは既存の DATA_○期 シートにそのまま残ります。
         そのため手動でのアーカイブ操作は現在必要ありません。
       </div>
       <button class="btn btn-warning" id="btnArchive" onclick="runArchive()">
@@ -160,6 +160,7 @@
     }
     document.getElementById('menuGrid').style.display = 'grid';
     document.getElementById('dataRows').textContent    = data.dataRows.toLocaleString() + '件';
+    if (data.dataSheetName) document.getElementById('dataRowsLabel').textContent = data.dataSheetName + ' の行数';
     document.getElementById('summaryRows').textContent = data.summaryRows.toLocaleString() + '件';
     document.getElementById('lastUpdated').textContent = data.lastUpdated;
   }

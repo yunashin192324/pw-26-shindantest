@@ -278,7 +278,7 @@
           <div class="chart-container panel"><canvas id="trendChart"></canvas></div>
           <div class="chart-container panel"><canvas id="mediaChart"></canvas></div>
         </div>
-        <div class="section-title">エリア・式場別 月次問合せマトリクス</div>
+        <div class="section-title" id="pivotTitle">エリア・式場別 月次問合せマトリクス</div>
         <div class="table-wrapper panel" id="pivotContainer"></div>
       </div>
 
@@ -578,8 +578,38 @@
 
       drawCharts(thisMonthCurrent, thisMonthPrev, currentMonth);
       renderPivotTable(currentData.filter(function(row) {
-        return row[0] && new Date(row[0]).getFullYear() === currentYear;
+        return row[0] && isInCurrentPeriod(new Date(row[0]));
       }));
+    }
+
+    // ==========================================
+    // 期（11月始まり）の補助。期の設定はサーバー（Code.gs の FISCAL_START_MONTH）から受け取る。
+    // ==========================================
+
+    function fiscal() {
+      var f = rawData.fiscal || {};
+      var startMonth = f.startMonth || 11;
+      var now = new Date();
+      var startYear = f.startYear || (now.getMonth() + 1 >= startMonth ? now.getFullYear() : now.getFullYear() - 1);
+      return { period: f.period, startYear: startYear, startMonth: startMonth };
+    }
+    function periodStartYearOf(d) {
+      var sm = fiscal().startMonth;
+      return d.getMonth() + 1 >= sm ? d.getFullYear() : d.getFullYear() - 1;
+    }
+    function isInCurrentPeriod(d) {
+      return !isNaN(d.getTime()) && periodStartYearOf(d) === fiscal().startYear;
+    }
+    function fiscalMonthIndex(d) {
+      return (d.getMonth() + 1 - fiscal().startMonth + 12) % 12;
+    }
+    function fiscalMonthLabels() {
+      var sm = fiscal().startMonth;
+      return Array.from({ length: 12 }, function(_, i) { return ((sm - 1 + i) % 12 + 1) + '月'; });
+    }
+    function periodLabel() {
+      var f = fiscal();
+      return (f.period ? f.period + '期' : '今期') + '（' + f.startYear + '年' + f.startMonth + '月〜）';
     }
 
     function buildYoyHtml(cur, prev) {
@@ -646,10 +676,11 @@
 
     function renderPivotTable(data) {
       var pivotData = {};
-      var months = Array.from({length:12}, function(_, i) { return (i+1) + '月'; });
+      var months = fiscalMonthLabels();
+      document.getElementById('pivotTitle').textContent = 'エリア・式場別 月次問合せマトリクス ' + periodLabel();
       data.forEach(function(row) {
         var d = new Date(row[0]);
-        var m = (d.getMonth() + 1) + '月';
+        var m = months[fiscalMonthIndex(d)];
         var area  = row[10] || '方面未設定';
         var venue = row[13] || '式場未設定';
         if (!pivotData[area]) pivotData[area] = { total:0, byMonth:{}, venues:{} };
@@ -660,12 +691,12 @@
         pivotData[area].venues[venue].byMonth[m] = (pivotData[area].venues[venue].byMonth[m] || 0) + 1;
       });
 
-      var html = '<table class="matrix-table"><thead><tr><th>方面 / 式場</th><th>年間合計</th>';
+      var html = '<table class="matrix-table"><thead><tr><th>方面 / 式場</th><th>期合計</th>';
       months.forEach(function(m) { html += '<th>' + m + '</th>'; });
       html += '</tr></thead><tbody>';
 
       var areas = Object.keys(pivotData).sort(function(a,b) { return pivotData[b].total - pivotData[a].total; });
-      if (areas.length === 0) { document.getElementById('pivotContainer').innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-muted);">今年のデータはまだありません。</div>'; return; }
+      if (areas.length === 0) { document.getElementById('pivotContainer').innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-muted);">今期のデータはまだありません。</div>'; return; }
 
       areas.forEach(function(area) {
         var a = pivotData[area];
@@ -702,11 +733,10 @@
       var resultFilter  = document.getElementById('resultFilter').value;
       if (!selectedVenue) return;
 
-      var currentYear = new Date().getFullYear();
       var venueData = currentFilteredData.filter(function(row) {
         if (!row[9]) return false;
         var d = new Date(row[9]);
-        if (isNaN(d.getTime()) || d.getFullYear() !== currentYear) return false;
+        if (!isInCurrentPeriod(d)) return false;
         if (row[13] !== selectedVenue) return false;
         if (resultFilter === '成約' && !isContract(row[11])) return false;
         if (resultFilter === '未成約' && isContract(row[11])) return false;
@@ -715,11 +745,12 @@
 
       // 月別サマリ
       var monthCounts = new Array(12).fill(0);
-      venueData.forEach(function(r) { monthCounts[new Date(r[9]).getMonth()]++; });
-      var curMonth = new Date().getMonth();
-      var summaryHtml = '<div class="mini-kpi"><div class="mini-kpi-title">年間合計</div><div class="mini-kpi-val">' + venueData.length + '件</div></div>';
+      venueData.forEach(function(r) { monthCounts[fiscalMonthIndex(new Date(r[9]))]++; });
+      var curMonth = fiscalMonthIndex(new Date());
+      var monthLabels = fiscalMonthLabels();
+      var summaryHtml = '<div class="mini-kpi"><div class="mini-kpi-title">' + escHtml(periodLabel().replace(/（.*$/, '')) + '合計</div><div class="mini-kpi-val">' + venueData.length + '件</div></div>';
       for (var i = 0; i < 12; i++) {
-        summaryHtml += '<div class="mini-kpi ' + (i===curMonth?'active':'') + '" style="' + (monthCounts[i]===0?'opacity:0.4;':'') + '"><div class="mini-kpi-title">' + (i+1) + '月</div><div class="mini-kpi-val">' + monthCounts[i] + '</div></div>';
+        summaryHtml += '<div class="mini-kpi ' + (i===curMonth?'active':'') + '" style="' + (monthCounts[i]===0?'opacity:0.4;':'') + '"><div class="mini-kpi-title">' + monthLabels[i] + '</div><div class="mini-kpi-val">' + monthCounts[i] + '</div></div>';
       }
       document.getElementById('venueMonthlySummary').innerHTML = summaryHtml;
 

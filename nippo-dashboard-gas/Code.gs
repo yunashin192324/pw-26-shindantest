@@ -1,5 +1,14 @@
 /**
- * 日報管理システム バックエンド (V8.3)
+ * 日報管理システム バックエンド (V9)
+ *
+ * V9 での変更:
+ *   ・データシートを暦年（DATA_2026）から期単位（DATA_47期 = 2026年11月〜2027年10月）に変更。
+ *     前期比較は DATA_46期 を参照する。期の開始月は FISCAL_START_MONTH で変更できる。
+ *   ・「既存」（旅行の追加手配）は元の成約と同じチャレンジNOを使う運用のため、
+ *     チャレンジNOの重複チェックを「新規」同士だけに限定（既存行が登録できない不具合の修正）。
+ *   ・ダッシュボードに送る前期データを「前年同月」の行だけに絞り、データが溜まっても
+ *     読み込みが重くならないようにした。
+ *   ・過去の月次日報スプレッドシートの取り込みは import.gs（スプレッドシートの「日報取込」メニュー）。
  *
  * V8.3 での修正:
  *   ・「店舗」行の 地方・区分 の実際の列位置は C列/D列ではなく D列(地方)/E列(区分)
@@ -48,7 +57,10 @@
  */
 
 const SS = SpreadsheetApp.getActiveSpreadsheet();
-const CACHE_KEY_DASHBOARD = 'dashboard_raw_v5';
+const CACHE_KEY_DASHBOARD = 'dashboard_raw_v6';
+// 期は11月始まり。47期 = 2026年11月〜2027年10月（期 = 開始年 - 1979）
+const FISCAL_START_MONTH = 11;
+const FISCAL_PERIOD_OFFSET = 1979;
 const CACHE_DURATION = 600;
 const CHALLENGE_PATTERN = /^[a-zA-Z0-9]{11}$/;
 
@@ -71,9 +83,25 @@ function getSheet(name) {
   return SS.getSheetByName(name);
 }
 
-function getCurrentYearSheet() {
-  const year = new Date().getFullYear();
-  const name = 'DATA_' + year;
+/** 日付が属する期の情報を返す。start は期の初日、end は翌期の初日（その日を含まない）。 */
+function getFiscalPeriod(date) {
+  const d = date ? new Date(date) : new Date();
+  const startYear = d.getMonth() + 1 >= FISCAL_START_MONTH ? d.getFullYear() : d.getFullYear() - 1;
+  return {
+    period: startYear - FISCAL_PERIOD_OFFSET,
+    startYear: startYear,
+    start: new Date(startYear, FISCAL_START_MONTH - 1, 1),
+    end: new Date(startYear + 1, FISCAL_START_MONTH - 1, 1)
+  };
+}
+
+function periodSheetName(period) {
+  return 'DATA_' + period + '期';
+}
+
+/** 指定した期のデータシートを返す（なければ DATA シートの書式を引き継いで作る）。 */
+function getPeriodSheet(period) {
+  const name = periodSheetName(period);
   let sheet = SS.getSheetByName(name);
   if (!sheet) {
     const base = SS.getSheetByName('DATA');
@@ -90,23 +118,29 @@ function getCurrentYearSheet() {
   return sheet;
 }
 
-function getPrevYearSheet() {
-  const year = new Date().getFullYear() - 1;
-  return SS.getSheetByName('DATA_' + year) || SS.getSheetByName('PREV_YEAR');
+function getCurrentPeriodSheet() {
+  return getPeriodSheet(getFiscalPeriod().period);
+}
+
+function getPrevPeriodSheet() {
+  return SS.getSheetByName(periodSheetName(getFiscalPeriod().period - 1)) || SS.getSheetByName('PREV_YEAR');
 }
 
 /**
- * チャレンジNOの重複チェック（対象列のみ取得して比較する）
+ * 「新規」のチャレンジNOの重複チェック（区分・チャレンジ列だけ取得して比較する）。
+ * 旅行の追加手配などの「既存」行は同じチャレンジNOを使う運用なので、比較対象にしない。
  * excludeRowIndex を指定すると、その行自身は比較対象から除外する。
  */
 function isChallengeDuplicate_(sheet, challengeVal, excludeRowIndex) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return false;
-  const values = sheet.getRange(2, COL.challenge, lastRow - 1, 1).getValues();
+  const width = COL.challenge - COL.type + 1;
+  const values = sheet.getRange(2, COL.type, lastRow - 1, width).getValues();
   return values.some(function(r, i) {
     const rowIndex = i + 2;
     if (excludeRowIndex && rowIndex === excludeRowIndex) return false;
-    return String(r[0] || '').trim() === challengeVal;
+    if (String(r[0] || '').trim() !== '新規') return false;
+    return String(r[width - 1] || '').trim() === challengeVal;
   });
 }
 
@@ -231,7 +265,7 @@ function submitDailyReport(payload) {
   try {
     lock.waitLock(10000);
 
-    const sheet = getCurrentYearSheet();
+    const sheet = getCurrentPeriodSheet();
     if (!sheet) throw new Error('データシートの取得に失敗しました');
 
     // チャレンジNOの形式チェック（フロント側のバリデーションを回避されても防御できるように）
@@ -244,7 +278,7 @@ function submitDailyReport(payload) {
           errorType: 'INVALID_CHALLENGE'
         };
       }
-      if (isChallengeDuplicate_(sheet, challengeVal, null)) {
+      if (String(payload.type || '').trim() === '新規' && isChallengeDuplicate_(sheet, challengeVal, null)) {
         return {
           success: false,
           error: 'チャレンジNO「' + challengeVal + '」はすでに登録されています。',
@@ -296,7 +330,7 @@ function updateRow(sheetName, rowIndex, payload) {
           errorType: 'INVALID_CHALLENGE'
         };
       }
-      if (isChallengeDuplicate_(sheet, newChallenge, rowIndex)) {
+      if (String(payload.type || '').trim() === '新規' && isChallengeDuplicate_(sheet, newChallenge, rowIndex)) {
         return {
           success: false,
           error: 'チャレンジNO「' + newChallenge + '」は他の行で使用されています',
@@ -353,9 +387,9 @@ function deleteRow(sheetName, rowIndex) {
  * 役割に応じた絞り込みは必ず getRawDataForDashboard 側で行うこと。
  */
 function _buildDashboardCache() {
-  // 今年度データ（行番号・シート名を末尾に付加）
+  // 今期データ（行番号・シート名を末尾に付加）
   let currentData = [];
-  const currentSheet = getCurrentYearSheet();
+  const currentSheet = getCurrentPeriodSheet();
   const currentSheetName = currentSheet ? currentSheet.getName() : '';
   if (currentSheet && currentSheet.getLastRow() > 0) {
     currentData = currentSheet.getDataRange().getValues().map(function(row, idx) {
@@ -368,16 +402,27 @@ function _buildDashboardCache() {
     });
   }
 
-  // 前年度データ
+  // 前期データ。ダッシュボードで使うのは「前年同月」の比較だけなので、その月の行だけに絞る
+  // （データが溜まっても送信量が前期1年分まで膨らまないように）。
   let prevData = [];
-  const prevSheet = getPrevYearSheet();
-  if (prevSheet && prevSheet.getLastRow() > 0) {
-    prevData = prevSheet.getDataRange().getValues().map(function(row) {
-      return row.map(function(cell) {
-        return cell instanceof Date ? cell.toISOString() : cell;
+  const prevSheet = getPrevPeriodSheet();
+  if (prevSheet && prevSheet.getLastRow() > 1) {
+    const now = new Date();
+    const targetYear = now.getFullYear() - 1;
+    const targetMonth = now.getMonth();
+    prevData = prevSheet.getRange(2, 1, prevSheet.getLastRow() - 1, DATA_HEADERS.length).getValues()
+      .filter(function(row) {
+        const d = row[0] instanceof Date ? row[0] : new Date(row[0]);
+        return !isNaN(d.getTime()) && d.getFullYear() === targetYear && d.getMonth() === targetMonth;
+      })
+      .map(function(row) {
+        return row.map(function(cell) {
+          return cell instanceof Date ? cell.toISOString() : cell;
+        });
       });
-    });
   }
+
+  const fp = getFiscalPeriod();
 
   // 店舗一覧（MASTERシートの「店舗」行は B列:店舗名 / C列:(未使用・他キーの親列と共用) /
   // D列:地方 / E列:区分(一般・AVA等) を持つ。C列は「式場」行などが方面を入れる共用列で、
@@ -416,7 +461,8 @@ function _buildDashboardCache() {
     storeMeta: storeMeta,
     regions: Object.keys(regionSet).sort(),
     categories: Object.keys(categorySet).sort(),
-    kpiConfig: getKpiConfig()
+    kpiConfig: getKpiConfig(),
+    fiscal: { period: fp.period, startYear: fp.startYear, startMonth: FISCAL_START_MONTH }
   };
 }
 
@@ -433,7 +479,8 @@ function getRawDataForDashboard() {
       kpiConfig: getKpiConfig(),
       storeMeta: {},
       regions: [],
-      categories: []
+      categories: [],
+      fiscal: { period: getFiscalPeriod().period, startYear: getFiscalPeriod().startYear, startMonth: FISCAL_START_MONTH }
     };
   }
 
@@ -461,7 +508,8 @@ function getRawDataForDashboard() {
     kpiConfig: full.kpiConfig,
     storeMeta: full.storeMeta,
     regions: full.regions,
-    categories: full.categories
+    categories: full.categories,
+    fiscal: full.fiscal
   };
 }
 
@@ -503,7 +551,7 @@ function sendMonthlyReport() {
   const targetYear  = prevMonth.getFullYear();
   const targetMonth = prevMonth.getMonth();
 
-  const sheet = getSheet('DATA_' + targetYear) || getSheet('DATA') || getSheet('PREV_YEAR');
+  const sheet = getSheet(periodSheetName(getFiscalPeriod(prevMonth).period)) || getSheet('DATA') || getSheet('PREV_YEAR');
   if (!sheet) { Logger.log('sendMonthlyReport: データシートが見つかりません'); return; }
 
   const allData = sheet.getDataRange().getValues();
@@ -578,26 +626,32 @@ function getAdminMenuData() {
   const auth = _getUserAuth();
   if (auth.role !== 'admin') return { success: false, error: '管理者のみアクセスできます' };
   try {
-    const dataSheet = getCurrentYearSheet();
+    const dataSheet = getCurrentPeriodSheet();
     const dataRows = dataSheet ? Math.max(dataSheet.getLastRow() - 1, 0) : 0;
     const summarySheet = getSheet('SUMMARY');
     const summaryRows = summarySheet ? Math.max(summarySheet.getLastRow() - 1, 0) : 0;
     const lastUpdated = PropertiesService.getScriptProperties().getProperty(PROP_KEY_SUMMARY_UPDATED) || '未実行';
-    return { success: true, dataRows: dataRows, summaryRows: summaryRows, lastUpdated: lastUpdated };
+    return {
+      success: true,
+      dataSheetName: dataSheet ? dataSheet.getName() : '',
+      dataRows: dataRows,
+      summaryRows: summaryRows,
+      lastUpdated: lastUpdated
+    };
   } catch (e) {
     return { success: false, error: e.toString() };
   }
 }
 
 /**
- * 今年度データを店舗×月で集計し、SUMMARYシートへ書き出す。
+ * 今期データを店舗×月で集計し、SUMMARYシートへ書き出す。
  * 既存データを削除する処理は含まない（安全な集計のみ）。
  */
 function runBuildSummary() {
   const auth = _getUserAuth();
   if (auth.role !== 'admin') return { success: false, error: '管理者のみ実行できます' };
   try {
-    const sheet = getCurrentYearSheet();
+    const sheet = getCurrentPeriodSheet();
     if (!sheet || sheet.getLastRow() < 2) return { success: false, error: '集計対象のデータがありません' };
 
     const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, DATA_HEADERS.length).getValues();
@@ -607,9 +661,10 @@ function runBuildSummary() {
       const d = new Date(row[COL.timestamp - 1]);
       if (isNaN(d.getTime())) return;
       const store = String(row[COL.store - 1] || '不明').trim();
-      const month = d.getMonth() + 1;
-      const key = store + '|' + month;
-      if (!stats[key]) stats[key] = { store: store, month: month, total: 0, contracts: 0 };
+      // 期の並び（11月→翌10月）でソートできるよう、期首からの月数をキーに含める
+      const monthIndex = (d.getMonth() + 1 - FISCAL_START_MONTH + 12) % 12;
+      const key = store + '|' + ('0' + monthIndex).slice(-2);
+      if (!stats[key]) stats[key] = { store: store, label: d.getFullYear() + '年' + (d.getMonth() + 1) + '月', total: 0, contracts: 0 };
       stats[key].total++;
       if (String(row[COL.result - 1]).trim() === '成約') stats[key].contracts++;
     });
@@ -622,7 +677,7 @@ function runBuildSummary() {
     const rows = Object.keys(stats).sort().map(function(key) {
       const s = stats[key];
       const cvr = s.total > 0 ? Math.round((s.contracts / s.total) * 1000) / 10 : 0;
-      return [s.store, s.month + '月', s.total, s.contracts, cvr];
+      return [s.store, s.label, s.total, s.contracts, cvr];
     });
 
     summarySheet.getRange(1, 1, 1, header.length).setValues([header]);
@@ -664,8 +719,8 @@ function setupMonthlyTrigger() {
 /**
  * 年度末アーカイブ。
  *
- * ⚠ 未実装（意図的）: このシステムは getCurrentYearSheet() により年度ごとに
- * DATA_2025 / DATA_2026 のように自動でシートが分かれる設計です。admin.html が
+ * ⚠ 未実装（意図的）: このシステムは getCurrentPeriodSheet() により期ごとに
+ * DATA_46期 / DATA_47期 のように自動でシートが分かれる設計です。admin.html が
  * 想定している「単一のDATAシートから前年度データをPREV_YEARへ移動して削除する」
  * という仕様は、現在のデータ構造と矛盾し、誤って実装すると年度別シートの
  * データを壊す危険があります。そのため安全側に倒し、データを一切変更せず
@@ -677,8 +732,8 @@ function runArchive() {
   if (auth.role !== 'admin') return { success: false, error: '管理者のみ実行できます' };
   return {
     success: false,
-    error: '現在のシステムは年度ごとに自動でシート（DATA_' + new Date().getFullYear() +
+    error: '現在のシステムは期（11月始まり）ごとに自動でシート（' + periodSheetName(getFiscalPeriod().period) +
       ' 等）が分かれる設計のため、手動でのアーカイブ処理は行っていません。' +
-      '過去年度のデータは各 DATA_年 シートをご確認ください。仕様変更が必要な場合は開発担当にご相談ください。'
+      '過去の期のデータは各 DATA_○期 シートをご確認ください。仕様変更が必要な場合は開発担当にご相談ください。'
   };
 }
