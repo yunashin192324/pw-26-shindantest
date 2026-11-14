@@ -41,18 +41,24 @@ function bumpCache_() {
   CacheService.getScriptCache().put('DATA_CACHE_VER', new Date().getTime().toString(), 21600);
 }
 
+// ★高速化: 分割キャッシュは putAll / getAll で1回の呼び出しにまとめて読み書きする。
+//   1エントリ上限(100KB)に対し、日本語(UTF-8で最大3バイト)でも収まるよう30,000文字ずつ分割。
+const LARGE_CACHE_CHUNK = 30000;
+const LARGE_CACHE_MAX_CHARS = 8000000;
+
 function putLargeCache_(key, dataObj) {
   try {
     const cache = CacheService.getScriptCache();
     const jsonStr = JSON.stringify(dataObj);
-    if (jsonStr.length > 1500000) return;
-    const chunkSize = 20000; 
-    const chunksCount = Math.ceil(jsonStr.length / chunkSize);
-    const meta = { count: chunksCount };
-    cache.put(key, JSON.stringify(meta), 21600);
+    if (jsonStr.length > LARGE_CACHE_MAX_CHARS) return;
+    const chunksCount = Math.ceil(jsonStr.length / LARGE_CACHE_CHUNK);
+    const entries = {};
     for (let i = 0; i < chunksCount; i++) {
-      cache.put(`${key}_${i}`, jsonStr.substring(i * chunkSize, (i + 1) * chunkSize), 21600);
+      entries[`${key}_${i}`] = jsonStr.substring(i * LARGE_CACHE_CHUNK, (i + 1) * LARGE_CACHE_CHUNK);
     }
+    cache.putAll(entries, 21600);
+    // 本体が全部書けてから目印を置く(途中失敗時に壊れたキャッシュを読まないため)
+    cache.put(key, JSON.stringify({ count: chunksCount }), 21600);
   } catch(e) {}
 }
 
@@ -62,10 +68,13 @@ function getLargeCache_(key) {
     const metaStr = cache.get(key);
     if (!metaStr) return null;
     const meta = JSON.parse(metaStr);
+    const keys = [];
+    for (let i = 0; i < meta.count; i++) keys.push(`${key}_${i}`);
+    const got = cache.getAll(keys);
     let jsonStr = "";
-    for (let i = 0; i < meta.count; i++) {
-      const chunk = cache.get(`${key}_${i}`);
-      if (!chunk) return null; 
+    for (let i = 0; i < keys.length; i++) {
+      const chunk = got[keys[i]];
+      if (chunk == null) return null;
       jsonStr += chunk;
     }
     return JSON.parse(jsonStr);
@@ -306,6 +315,23 @@ function getInitialDataLight() {
   }
 }
 
+// ★高速化: 検索用テキストからHTMLタグ・URL・連続空白・検索に不要な項目を除いて軽量化する
+//   (全プラン分をキャッシュし、閲覧者のブラウザへ毎回送るデータのため)
+const SEARCH_SKIP_KEYS = { rowId: 1, status: 1, is_draft: 1, updated_at: 1, co: 1, md_gallery: 1, md_img_url: 1,
+  sheet_embed: 1, promo: 1, season_type: 1, season_year: 1, raw_backup: 1 };
+
+function buildSearchText_(record) {
+  return Object.keys(record)
+    .filter(k => !SEARCH_SKIP_KEYS[k] && record[k] !== '' && record[k] != null)
+    .map(k => String(record[k]))
+    .join(' ')
+    .replace(/<[^>]*>?/gm, ' ')
+    .replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&')
+    .replace(/https?:\/\/\S+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
 function getHeavyDataForSearch() {
   try {
     const userEmail = Session.getActiveUser().getEmail().toLowerCase() || "unknown";
@@ -346,10 +372,12 @@ function getHeavyDataForSearch() {
           return acc;
         }, {});
       }
-      fullSearchText = Object.values(record).join(" ").replace(/<[^>]*>?/gm, ' ').toLowerCase();
+      fullSearchText = buildSearchText_(record);
 
-      let p_av = String(record.p_av || "").trim();
-      let p_bk = String(record.p_bk || "").trim();
+      // データ不備チェックは「入力の有無」しか見ないため本文は送らない(転送量削減)
+      const filled = v => { const t = String(v || "").trim(); return (t && t !== '<p><br></p>') ? '1' : ''; };
+      let p_av = filled(record.p_av);
+      let p_bk = filled(record.p_bk);
       let agtCode = String(record.agt_code || "").trim();
 
       heavyData[rowId] = {
@@ -704,5 +732,57 @@ function checkCacheSize() {
   const data = sheet.getDataRange().getValues();
   Logger.log('行数: ' + data.length);
   Logger.log('シートデータサイズ: ' + JSON.stringify(data).length + ' bytes');
-  Logger.log('1.5MB上限に対して: ' + Math.round(JSON.stringify(data).length / 15000) + '%');
+  Logger.log('キャッシュ上限に対して: ' + Math.round(JSON.stringify(data).length / LARGE_CACHE_MAX_CHARS * 100) + '%');
+}
+
+/**
+ * 旧商説スプレッドシートからの一括移行(1回だけ実行)
+ * 1. 変換済みの「移行データ.xlsx」を、このスプレッドシートに「新しいシートを挿入」で読み込む(シート名: 移行データ)
+ * 2. Apps Scriptエディタでこの関数を選んで実行する
+ * 3. 完了したら「移行データ」シートは削除してよい
+ */
+const LEGACY_SHEET_NAME = '移行データ';
+
+function importLegacyData() {
+  if (!checkAdmin_(Session.getActiveUser().getEmail().toLowerCase())) throw new Error("Unauthorized.");
+  const props = PropertiesService.getScriptProperties();
+  if (props.getProperty('LEGACY_IMPORTED') === 'true') {
+    throw new Error('移行データは既に取り込み済みです(二重登録防止)。やり直す場合はスクリプトプロパティ LEGACY_IMPORTED を削除してから実行してください。');
+  }
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const src = ss.getSheetByName(LEGACY_SHEET_NAME);
+  if (!src) throw new Error(`「${LEGACY_SHEET_NAME}」シートが見つかりません。移行データ.xlsx を「新しいシートを挿入」で読み込んでください。`);
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) throw new Error("System is busy.");
+  try {
+    const rows = src.getDataRange().getValues().slice(1)
+      .filter(r => String(r[4] || '').trim() && String(r[11] || '').trim().startsWith('{'));
+    if (rows.length === 0) throw new Error('取り込む行がありません。');
+
+    // 末尾の空セルを除いた最大列数
+    let width = 11;
+    rows.forEach(r => { for (let c = r.length - 1; c >= width; c--) { if (r[c] !== '' && r[c] != null) { width = c + 1; break; } } });
+    const values = rows.map(r => {
+      const out = [];
+      for (let c = 0; c < width; c++) out.push(r[c] == null ? '' : String(r[c]));
+      JSON.parse(out.slice(11).join(''));  // 壊れた行があれば書き込む前に止める
+      return out;
+    });
+
+    let dest = ss.getSheetByName(CONFIG.SHEET_MAIN);
+    if (!dest) dest = ss.insertSheet(CONFIG.SHEET_MAIN);
+    const startRow = Math.max(dest.getLastRow(), 1) + 1;
+    if (dest.getMaxColumns() < width) dest.insertColumnsAfter(dest.getMaxColumns(), width - dest.getMaxColumns());
+    if (dest.getMaxRows() < startRow + values.length - 1) dest.insertRowsAfter(dest.getMaxRows(), startRow + values.length - 1 - dest.getMaxRows());
+
+    const range = dest.getRange(startRow, 1, values.length, width);
+    range.setNumberFormat('@');  // 本文(JSON)が数式・日付・数値として解釈されないよう書式なしテキストにする
+    range.setValues(values);
+    SpreadsheetApp.flush();
+    bumpCache_();
+    props.setProperty('LEGACY_IMPORTED', 'true');
+    backupData_('LEGACY_IMPORT', `${startRow}-${startRow + values.length - 1}`, [`${values.length}件`]);
+    Logger.log(`${values.length}件を「${CONFIG.SHEET_MAIN}」の${startRow}行目から取り込みました。`);
+  } finally { lock.releaseLock(); }
 }
