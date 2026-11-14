@@ -493,48 +493,48 @@ def fill_merged(ws):
 
 
 def list_html(ws):
-    grid = fill_merged(ws)
-    by_row = collections.defaultdict(list)
-    for (r, c), cell in grid.items():
-        by_row[r].append((c, cell))
-    rws = [sorted(v, key=lambda x: x[0]) for k, v in sorted(by_row.items())]
-    if not rws:
+    """一覧・比較表: 元シートの表をそのままHTMLの表として再現(結合セルはrowspan/colspan)"""
+    vals = {}
+    for r in ws.iter_rows():
+        for c in r:
+            if c.value not in (None, '') and fmt_value(c.value).strip() not in ('', '社外秘'):
+                vals[(c.row, c.column)] = c
+    if not vals:
         return ''
-    # ヘッダ行: 先頭10行内で最もセル数が多い行
-    cand = rws[:10]
-    hdr = max(cand, key=len)
-    out = []
-    started = False
-    hdr_cols = {c: fmt_value(cell.value).strip().replace('\n', ' ') for c, cell in hdr} if len(hdr) >= 3 else {}
-    for row in rws:
-        if row is hdr and hdr_cols:
-            started = True
-            frags = [cell_html(cell) for _, cell in row]
-            out.append('<p><strong>【表の列】</strong>' + '　｜　'.join(f for f in frags if f) + '</p>')
-            continue
-        if not started or not hdr_cols or len(row) < 2:
-            frags = [cell_html(cell) for _, cell in row]
-            frags = [f for f in frags if f]
-            if frags:
-                if len(row) == 1 and len(fmt_value(row[0][1].value)) <= 30:
-                    out.append('<h3>' + frags[0] + '</h3>')
-                else:
-                    out.append('<p>' + '　｜　'.join(frags) + '</p>')
-            continue
-        first_c, first_cell = row[0]
-        out.append('<p><strong>▼ ' + cell_html(first_cell) + '</strong></p>')
-        lines = []
-        for c, cell in row[1:]:
-            h = hdr_cols.get(c)
-            if h is None:
-                # 結合などで列位置がずれている場合は直前のヘッダ列
-                keys = [k for k in hdr_cols if k <= c]
-                h = hdr_cols[max(keys)] if keys else ''
-            vl = [x for x in cell_lines(cell) if x]
-            if vl:
-                lines.append((f'{html.escape(h)}：' if h else '') + vl[0])
-                lines.extend(vl[1:])
-        out.extend(f'<p>{x}</p>' for x in lines)
+    span = {}      # 左上セル -> (rowspan, colspan)
+    covered = set()
+    for mr in ws.merged_cells.ranges:
+        tl = (mr.min_row, mr.min_col)
+        span[tl] = (mr.max_row - mr.min_row + 1, mr.max_col - mr.min_col + 1)
+        for rr in range(mr.min_row, mr.max_row + 1):
+            for cc in range(mr.min_col, mr.max_col + 1):
+                if (rr, cc) != tl:
+                    covered.add((rr, cc))
+    # 値のある結合範囲が及ぶ行・列だけを残す
+    used_rows, used_cols = set(), set()
+    for (r, c) in vals:
+        rs, cs = span.get((r, c), (1, 1))
+        used_rows.update(range(r, r + rs))
+        used_cols.update(range(c, c + cs))
+    rows = sorted(used_rows)
+    cols = sorted(used_cols)
+    col_set = set(cols)
+    out = ['<div style="overflow-x:auto;"><table class="meisai-table" style="text-align:left; word-break:normal; min-width:600px;"><tbody>']
+    for r in rows:
+        tds = []
+        for c in cols:
+            if (r, c) in covered:
+                continue
+            rs, cs = span.get((r, c), (1, 1))
+            # 削除した空列の分だけcolspanを減らす
+            cs = len([x for x in range(c, c + cs) if x in col_set])
+            rs = len([x for x in range(r, r + rs) if x in used_rows])
+            cell = vals.get((r, c))
+            inner = '<br>'.join(x for x in cell_lines(cell)) if cell is not None else ''
+            attrs = (f' rowspan="{rs}"' if rs > 1 else '') + (f' colspan="{cs}"' if cs > 1 else '')
+            tds.append(f'<td{attrs}>{inner}</td>')
+        out.append('<tr>' + ''.join(tds) + '</tr>')
+    out.append('</tbody></table></div>')
     return ''.join(out)
 
 
