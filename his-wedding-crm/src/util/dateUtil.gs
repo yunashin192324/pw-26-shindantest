@@ -78,3 +78,50 @@ function deliveryAlertLevel_(deliveryDueDate) {
   if (days <= warnDays) return 'WARNING';
   return null;
 }
+
+/* ============================================================
+ * 期（会計期間）。期は11月始まりで、47期＝2026年11月〜2027年10月（期＝期の初月の年−1979）。
+ * Settingsの FISCAL_START_MONTH・FISCAL_PERIOD_OFFSET で変えられる（既定 11・1979）。
+ * ============================================================ */
+
+function fiscalStartMonth_() {
+  const m = Number(getSetting_('FISCAL_START_MONTH', 11));
+  return m >= 1 && m <= 12 ? m : 11;
+}
+
+function fiscalPeriodOffset_() {
+  const n = Number(getSetting_('FISCAL_PERIOD_OFFSET', 1979));
+  return isNaN(n) ? 1979 : n;
+}
+
+/**
+ * 日付が属する期の情報。
+ * @return {Object} { period: 47, startYear: 2026, fromIso: '2026-11-01', toIso: '2027-10-31', months: ['2026-11', … '2027-10'] }
+ */
+function fiscalPeriodOf_(date) {
+  const d = date ? new Date(date) : new Date();
+  const sm = fiscalStartMonth_();
+  const startYear = d.getMonth() + 1 >= sm ? d.getFullYear() : d.getFullYear() - 1;
+  return fiscalPeriodByStartYear_(startYear);
+}
+
+function fiscalPeriodByStartYear_(startYear) {
+  const sm = fiscalStartMonth_();
+  const months = [];
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(startYear, sm - 1 + i, 1);
+    months.push(d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2));
+  }
+  return {
+    period: startYear - fiscalPeriodOffset_(),
+    startYear: startYear,
+    fromIso: months[0] + '-01',
+    toIso: formatDateISO_(new Date(startYear + 1, sm - 1, 0)),
+    months: months
+  };
+}
+
+/** 今期の初日（'yyyy-MM-dd'）。期間を指定しない集計の既定の開始日に使う */
+function fiscalPeriodStartIso_(date) {
+  return fiscalPeriodOf_(date).fromIso;
+}

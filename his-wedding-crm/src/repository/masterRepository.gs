@@ -100,8 +100,11 @@ function upsertByCompositeKey_(sheetName, keyCols, obj) {
 
 function settingsRepo_getAll() { return masterRepo_getAll(SHEET_NAMES.SETTINGS); }
 
+// 1回の実行の中では設定を1度だけ読む（期の判定などで何度も呼ばれるため）。saveSetting_で書き換えたら読み直す。
+let settingsCache_ = null;
 function getSetting_(key, defaultValue) {
-  const rows = settingsRepo_getAll();
+  if (settingsCache_ === null) settingsCache_ = settingsRepo_getAll();
+  const rows = settingsCache_;
   const row = rows.find(function (r) { return r.キー === key; });
   return row ? row.値 : defaultValue;
 }
@@ -113,6 +116,7 @@ function getSettingNumber_(key, defaultValue) {
 }
 
 function saveSetting_(key, value, description) {
+  settingsCache_ = null;
   const sheet = getSheet_(SHEET_NAMES.SETTINGS);
   const rowIndex = findRowIndexByKey_(sheet, 'キー', key);
   if (rowIndex === -1) {

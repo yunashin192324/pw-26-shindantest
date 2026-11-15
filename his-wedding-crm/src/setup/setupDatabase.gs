@@ -23,6 +23,19 @@
  *      DB_SPREADSHEET_ID を手動でセットしてから実行すれば、新規作成をスキップしてシート追加のみ行う。
  */
 
+// 方面マスタの初期値：[方面名, 日報方面]。月次日報の方面（データ元タブの方面）に対応づけている。
+const AREA_SEED_ = [
+  ['ハワイ', 'ハワイ'], ['グアム・サイパン・パラオ', 'グアム・サイパン・パラオ'], ['沖縄', '沖縄'],
+  ['バリ島', 'バリ島・他アジア'], ['その他アジア', 'バリ島・他アジア'], ['ヨーロッパ', 'ヨーロッパ'],
+  ['モルディブ・南太平洋', 'モルディブ・南太平洋'], ['オーストラリア・ニュージーランド', 'オセアニア・アメリカ・カリブ'],
+  ['アメリカ・カリブ', 'オセアニア・アメリカ・カリブ'], ['南米', '海外他'], ['アフリカ・中近東', '海外他'],
+  ['北海道', '北海道'], ['軽井沢', '軽井沢'], ['国内（その他）', '国内他']
+];
+// 問合せ方法・媒体の初期値（月次日報の店舗タブの「対応方法」「問合せ媒体」と同じ並び）
+const INQUIRY_METHOD_SEED_ = ['来店', '電話', 'オンライン', 'メール', 'LINE', '国内'];
+const MEDIA_SEED_ = ['AVAホームページ', 'j-com', 'ゼクシィネット', 'ゼクシィMOOK', 'マイナビ', 'ウェディングパーク', 'インスタ',
+  '他店紹介', '知人紹介', 'HIS公式LINE', 'AVA公式LINE', 'Google', 'Yahoo!', 'Google広告', 'Yahoo!広告', '未確認', '他', 'CiaoPF'];
+
 const SHEET_DEFINITIONS_ = [
   { name: SHEET_NAMES.FORM_RESPONSES, headers: ['受信日時', 'FORM_RESPONSE_ID', 'CASE_ID', '生データJSON'] },
   { name: SHEET_NAMES.UNMAPPED_RESPONSES, headers: ['受信日時', 'FORM_RESPONSE_ID', 'ITEM_ID', '質問文', '回答値', '処理済み'] },
@@ -127,8 +140,9 @@ const SHEET_DEFINITIONS_ = [
     headers: ['STORE_ID', '店舗名', '地方', '区分', '責任者', 'メール', '使用終了']
   },
   {
+    // 日報での表記：過去の月次日報の担当者欄の書き方（例：姓だけ）。担当者別の前年比で日報の数字をこの担当者に寄せる。
     name: SHEET_NAMES.STAFF,
-    headers: ['STAFF_ID', '氏名', '店舗ID', '役職', 'メール', '権限', '在籍']
+    headers: ['STAFF_ID', '氏名', '店舗ID', '役職', 'メール', '権限', '在籍', '日報での表記']
   },
   {
     name: SHEET_NAMES.PRODUCTS,
@@ -141,8 +155,9 @@ const SHEET_DEFINITIONS_ = [
   },
   {
     // 海外挙式・フォトの方面（ハワイ／グアム・サイパン・パラオ／沖縄／バリ島／ヨーロッパ 等）
+    // 日報方面：月次日報での方面の呼び方（集計方面）。方面・都市は細かく記録し、前年比はこの単位にまとめて比べる。
     name: SHEET_NAMES.AREAS,
-    headers: ['AREA_ID', '方面名', '表示順', '使用終了']
+    headers: ['AREA_ID', '方面名', '表示順', '使用終了', '日報方面']
   },
   { name: SHEET_NAMES.CITIES, headers: ['CITY_ID', 'AREA_ID', '都市名', '表示順', '使用終了'] },
   {
@@ -233,6 +248,7 @@ function setupDatabase() {
 
   seedDefaultSettings_();
   seedSampleMasterData_();
+  syncMastersWithNippo();
 
   Logger.log('データベース・スプレッドシートを作成/更新しました: ' + ss.getUrl());
   return ss.getUrl();
@@ -243,6 +259,7 @@ function setupDatabase() {
  * まだ無い設定だけを追加する（以前はsetupDatabaseを再実行するたびに、画面で変えた値が初期値に戻っていた）。
  */
 function seedSettingIfMissing_(key, value, description) {
+  settingsCache_ = null;
   const sheet = getSheet_(SHEET_NAMES.SETTINGS);
   if (findRowIndexByKey_(sheet, 'キー', key) !== -1) return;
   appendRowFromObject_(sheet, { キー: key, 値: value, 説明: description || '' });
@@ -264,6 +281,9 @@ function seedDefaultSettings_() {
   // 空欄なら本体シートで一番古い案件の受付月を自動で使う。
   seedSettingIfMissing_('SYSTEM_START_MONTH', '', '本システムの稼働開始月（例：2026-12）。これより前の月は前年実績（日報取込・手入力）を使う。空欄なら最初の案件の受付月');
   // フォーム経由の案件の問合せ方法の初期値。空欄＝未設定（スタッフが案件詳細で選ぶ）。
+  // 期（会計期間）：期は11月始まり、47期＝2026年11月〜2027年10月（期＝期の初月の年−1979）
+  seedSettingIfMissing_('FISCAL_START_MONTH', 11, '期の初月（11なら11月始まり）');
+  seedSettingIfMissing_('FISCAL_PERIOD_OFFSET', 1979, '期の番号＝期の初月の年−この値（1979なら2026年11月〜が47期）');
   seedSettingIfMissing_('FORM_DEFAULT_INQUIRY_METHOD', '', 'カウンセリングシート経由の案件の問合せ方法の初期値。空欄なら未設定にしてスタッフが選ぶ（例：Web）');
 }
 
@@ -289,11 +309,10 @@ function seedSampleMasterData_() {
   // 方面（Q&A一巡目C-10の実データをそのまま投入）
   const areaSheet = getSheet_(SHEET_NAMES.AREAS);
   if (areaSheet.getLastRow() < 2) {
-    ['ハワイ', 'グアム・サイパン・パラオ', '沖縄', 'バリ島', 'ヨーロッパ', 'その他アジア', 'アメリカ・カリブ',
-      '南米', 'アフリカ・中近東', 'オーストラリア・ニュージーランド', 'モルディブ・南太平洋', '国内（北海道等）']
-      .forEach(function (a, i) {
-        appendRowFromObject_(areaSheet, { AREA_ID: 'AR-' + Utilities.formatString('%03d', i + 1), 方面名: a, 表示順: i + 1, 使用終了: false });
-      });
+    // [方面名, 日報方面]。方面名は細かく記録するための区分、日報方面は月次日報の方面（前年比を比べる単位）。
+    AREA_SEED_.forEach(function (a, i) {
+      appendRowFromObject_(areaSheet, { AREA_ID: 'AR-' + Utilities.formatString('%03d', i + 1), 方面名: a[0], 表示順: i + 1, 使用終了: false, 日報方面: a[1] });
+    });
   }
 
   // 都市：撮影可能都市一覧（Q&A一巡目C-10）のうち、方面が明確に判定できるものを暫定で投入。
@@ -318,7 +337,9 @@ function seedSampleMasterData_() {
       'オーストラリア・ニュージーランド': ['ケアンズ', 'ゴールドコースト', 'シドニー', 'ウルル', 'パース',
         'ロットネスト島', 'メルボルン', 'テカポ湖', 'クイーンズタウン', 'クライストチャーチ'],
       'モルディブ・南太平洋': ['ボラボラ島', 'ナンディ', 'ヌーメア', 'マーレ'],
-      '国内（北海道等）': ['北海道']
+      '北海道': ['札幌', '小樽', 'トマム'],
+      '軽井沢': ['軽井沢'],
+      '国内（その他）': []
     };
     const areaByName = {};
     sheetToObjects_(areaSheet).forEach(function (a) { areaByName[a.方面名] = a.AREA_ID; });
@@ -336,7 +357,7 @@ function seedSampleMasterData_() {
   // 問合せ方法（Q&A一巡目G-19：オンライン相談を追加）
   const methodSheet = getSheet_(SHEET_NAMES.INQUIRY_METHODS);
   if (methodSheet.getLastRow() < 2) {
-    ['来店', '電話', 'メール', 'Web', 'オンライン相談'].forEach(function (m, i) {
+    INQUIRY_METHOD_SEED_.forEach(function (m, i) {
       appendRowFromObject_(methodSheet, { METHOD_ID: 'M-00' + (i + 1), 名称: m, 表示順: i + 1, 使用終了: false });
     });
   }
@@ -344,7 +365,7 @@ function seedSampleMasterData_() {
   // ここでは手動登録（フォームを介さない問い合わせ）用の簡易マスタのみ用意する（Q&A一巡目G-18）。
   const mediaSheet = getSheet_(SHEET_NAMES.MEDIA_MASTER);
   if (mediaSheet.getLastRow() < 2) {
-    ['Instagram', '紹介', '検索(SEO)', 'HISサイト', 'その他'].forEach(function (m, i) {
+    MEDIA_SEED_.forEach(function (m, i) {
       appendRowFromObject_(mediaSheet, { MEDIA_ID: 'MD-00' + (i + 1), 名称: m, 表示順: i + 1, 使用終了: false });
     });
   }
@@ -362,4 +383,41 @@ function seedSampleMasterData_() {
       appendRowFromObject_(docChecklistSheet, { ITEM_ID: 'DC-' + Utilities.formatString('%03d', i + 1), グループ: item[0], 項目名: item[1], 表示順: i + 1, 使用終了: false });
     });
   }
+}
+
+
+/**
+ * 既にデータベースを作ってある場合に、月次日報に合わせたマスタの値を足す（既存の行は変えない・消さない）。
+ *  ・問合せ方法・媒体：日報にあって無いものを末尾に追加
+ *  ・方面マスタ：「日報方面」列を追加し、空欄の方面には初期値の対応（AREA_SEED_）を入れる
+ *  ・担当者マスタ：「日報での表記」列を追加
+ * setupDatabase から自動で呼ばれる。単独でエディタから実行してもよい。
+ */
+function syncMastersWithNippo() {
+  function addMissing(sheetName, idCol, prefix, names) {
+    const sheet = getSheet_(sheetName);
+    const rows = sheetToObjects_(sheet);
+    const existing = {};
+    rows.forEach(function (r) { existing[String(r.名称).trim()] = true; });
+    let order = rows.reduce(function (m, r) { return Math.max(m, Number(r.表示順) || 0); }, 0);
+    let seq = rows.length;
+    names.forEach(function (n) {
+      if (existing[n]) return;
+      seq++; order++;
+      appendRowFromObject_(sheet, { [idCol]: prefix + Utilities.formatString('%03d', seq), 名称: n, 表示順: order, 使用終了: false });
+    });
+  }
+  addMissing(SHEET_NAMES.INQUIRY_METHODS, 'METHOD_ID', 'M-', INQUIRY_METHOD_SEED_);
+  addMissing(SHEET_NAMES.MEDIA_MASTER, 'MEDIA_ID', 'MD-', MEDIA_SEED_);
+
+  const areaSheet = getSheet_(SHEET_NAMES.AREAS);
+  ensureColumns_(areaSheet, ['日報方面']);
+  const seedByName = {};
+  AREA_SEED_.forEach(function (a) { seedByName[a[0]] = a[1]; });
+  sheetToObjects_(areaSheet).forEach(function (a) {
+    if (String(a.日報方面 || '').trim()) return;
+    const g = seedByName[a.方面名];
+    if (g) updateRowAtIndex_(areaSheet, a.__row, { 日報方面: g });
+  });
+  ensureColumns_(getSheet_(SHEET_NAMES.STAFF), ['日報での表記']);
 }

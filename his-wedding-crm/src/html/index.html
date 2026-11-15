@@ -252,6 +252,12 @@ function renderAccessDenied() {
 }
 function renderNotFound() { document.getElementById('view-root').innerHTML = '<div class="panel">ページが見つかりません。</div>'; }
 
+/** 集計方面（月次日報の方面の単位）の選択肢。前年比のある集計（方面内ランキング・エリア進捗）で使う */
+function areaGroupOptions_(selected) {
+  return (REF_MASTERS.areaGroups || []).map(function (g) {
+    return '<option value="' + escapeHtml(g) + '"' + (g === selected ? ' selected' : '') + '>' + escapeHtml(g) + '</option>';
+  }).join('');
+}
 function optionList_(rows, idKey, labelKey) {
   return (rows || []).map(function (r) { return '<option value="' + r[idKey] + '">' + escapeHtml(r[labelKey]) + '</option>'; }).join('');
 }
@@ -340,7 +346,7 @@ function renderDashboard() {
     '<div id="dashboard-charts">集計中...</div>' +
     '<div class="panel"><h3>新規問合せの媒体別比率</h3><div id="media-breakdown">集計中...</div></div>' +
     '<div class="panel"><h3>方面内ランキング（式場・プラン・現地会社）</h3>' +
-    '<div class="row"><div class="col"><select id="rank-area" onchange="loadAreaRankings_()"><option value="">方面を選択</option>' + areaOptionsByName + '</select></div></div>' +
+    '<div class="row"><div class="col"><select id="rank-area" onchange="loadAreaRankings_()"><option value="">方面を選択</option>' + areaGroupOptions_() + '</select></div></div>' +
     '<div id="area-rankings" class="muted" style="margin-top:10px;">方面を選択してください</div></div>' +
     (isHqLevel ? '<div class="panel"><h3>地方×区分（一般／AVA）マトリクス</h3>' +
       '<div class="row"><div class="col"><label>方面で絞り込み</label><select id="matrix-area" onchange="loadRegionMatrix_()"><option value="">すべて</option>' + areaOptionsByName + '</select></div>' +
@@ -370,7 +376,7 @@ function applyDashboardFilter() {
   callApi('getDashboardData', filter).then(renderDashboardBody).catch(handleApiError);
 
   Promise.all([callApi('getMediaBreakdown', filter), callApi('getAgtShare', filter), callApi('getAreaShare', filter)]).then(function (results) {
-    document.getElementById('media-breakdown').innerHTML = renderBarList_(results[0].map(function (r) { return { label: r.media, value: r.count }; }), 12);
+    document.getElementById('media-breakdown').innerHTML = renderMediaWithPrev_(results[0]);
     document.getElementById('agt-share').innerHTML = renderBarList_(results[1].map(function (r) { return { label: r.label, value: r.count }; }), 12);
     document.getElementById('area-share').innerHTML = renderBarList_(results[2].map(function (r) { return { label: r.label, value: r.count }; }), 12);
   }).catch(handleApiError);
@@ -380,6 +386,17 @@ function applyDashboardFilter() {
   if (['HQ', 'ARRANGE', 'ADMIN'].indexOf(CURRENT_USER.role) !== -1) {
     loadRegionMatrix_();
   }
+}
+
+/** 媒体別（今期と前年同期間）。稼働前の前年は取り込んだ過去の日報の明細（媒体1件目・2件目）から数える */
+function renderMediaWithPrev_(rows) {
+  if (!rows || rows.length === 0) return '<div class="muted">データがありません。</div>';
+  const total = rows.reduce(function (s, r) { return s + r.count; }, 0);
+  return '<table><thead><tr><th>媒体</th><th>件数</th><th>比率</th><th>前年</th><th>前年比</th></tr></thead><tbody>' +
+    rows.slice(0, 20).map(function (r) {
+      return '<tr><td>' + escapeHtml(r.media) + '</td><td>' + r.count + '</td><td>' + (total ? Math.round(r.count / total * 1000) / 10 + '%' : '-') + '</td>' +
+        '<td>' + (r.prevCount === null ? '—' : r.prevCount) + '</td><td>' + fmtNippoPct_(r.yoy) + '</td></tr>';
+    }).join('') + '</tbody></table>';
 }
 
 /** 地方×区分マトリクスは、上部の期間・店舗フィルタに加えて方面（ハワイ・沖縄等）・AGTでも絞り込める */
@@ -559,13 +576,18 @@ function renderNippoStaff_() {
   const now = todayIso_();
   const from = now.slice(0, 8) + '01';
   callApi('getStaffReport', { from: from, to: now }).then(function (rows) {
-    let html = '<p class="muted">今月（' + from + '〜' + now + '）の担当者別実績です。新規問合せは受付担当、成約・CXLは契約担当（自由記述の氏名）で集計しています。</p>' +
-      '<table><thead><tr><th>担当者</th><th>新規問合せ</th><th>NB</th><th>成約率</th><th>CXL</th><th>NET</th><th>PAX(NB)</th><th>PAX(NET)</th></tr></thead><tbody>';
+    let html = '<p class="muted">今月（' + from + '〜' + now + '）の担当者別実績と、前年同期間の実績です。新規問合せは受付担当、成約・CXLは契約担当（自由記述の氏名）で集計しています。' +
+      '本システム稼働前の前年は、取り込んだ過去の日報の担当者名（担当者マスタの「日報での表記」で氏名にそろえます）で数えます。</p>' +
+      '<div style="overflow-x:auto;"><table><thead><tr><th>担当者</th><th>新規問合せ</th><th>前年</th><th>前年比</th><th>NB</th><th>前年</th><th>前年比</th><th>成約率</th>' +
+      '<th>CXL</th><th>NET</th><th>前年NET</th><th>PAX(NB)</th><th>前年PAX(NB)</th><th>PAX(NET)</th></tr></thead><tbody>';
     rows.forEach(function (r) {
-      html += '<tr><td>' + escapeHtml(r.staff) + '</td><td>' + r.新規問合せ + '</td><td>' + r.NB + '</td><td>' + fmtNippoPct_(r.成約率) + '</td>' +
-        '<td>' + r.CXL + '</td><td>' + r.NET + '</td><td>' + r.PAX_NB + '</td><td>' + r.PAX_NET + '</td></tr>';
+      const p = r.前年;
+      const pv = function (f) { return p ? fmtNippoVal_(p[f]) : '—'; };
+      html += '<tr><td>' + escapeHtml(r.staff) + '</td><td>' + r.新規問合せ + '</td><td>' + pv('新規問合せ') + '</td><td>' + fmtNippoPct_(r.新規前年比) + '</td>' +
+        '<td>' + r.NB + '</td><td>' + pv('NB') + '</td><td>' + fmtNippoPct_(r.NB前年比) + '</td><td>' + fmtNippoPct_(r.成約率) + '</td>' +
+        '<td>' + r.CXL + '</td><td>' + r.NET + '</td><td>' + pv('NET') + '</td><td>' + r.PAX_NB + '</td><td>' + pv('PAX_NB') + '</td><td>' + r.PAX_NET + '</td></tr>';
     });
-    html += '</tbody></table>';
+    html += '</tbody></table></div>';
     document.getElementById('nippo-body').innerHTML = html;
   }).catch(handleApiError);
 }
@@ -583,9 +605,7 @@ function renderNippoRanking_() {
 
 /** エリア進捗管理：縦軸＝式場／フォトプラン、横軸＝店舗＋前年実績＋前年比（目標はマスタ未整備のため実績のみ） */
 function renderNippoArea_(area) {
-  const areaOptionsByName = (REF_MASTERS.areas || []).map(function (a) {
-    return '<option value="' + escapeHtml(a.方面名) + '"' + (a.方面名 === area ? ' selected' : '') + '>' + escapeHtml(a.方面名) + '</option>';
-  }).join('');
+  const areaOptionsByName = areaGroupOptions_(area);
   const selectHtml = '<div class="row"><div class="col"><label>方面</label><select id="np-area-select" onchange="renderNippoArea_(this.value)">' +
     '<option value="">方面を選択</option>' + areaOptionsByName + '</select></div></div>';
   if (!area) {
@@ -627,28 +647,34 @@ function renderNippoNationwide_() {
   }).catch(handleApiError);
 }
 
-/** 通期進捗管理：今年・前年・前々年の月次推移（前々年は稼働前ならHistoricalActuals由来でCXL/NET/PAXは「—」） */
+/** 通期進捗管理：今期・前期・前々期の月次推移（期は11月始まり。上期・下期・通期の合計つき） */
 function renderNippoTrend_() {
   callApi('getMultiYearTrend', {}, 3).then(function (data) {
-    let html = '<p class="muted">今年・前年・前々年の月次推移です。本システム稼働前の月は、取り込んだ過去の月次日報（または手入力した前年実績）の値を表示します。' +
-      '手入力の前年実績（来店数・成約数のみ）の月は、CXL・NET・PAX数が「—」になります。</p>' +
+    let html = '<p class="muted">期ごと（' + escapeHtml(data.periods[0].label) + '＝' + data.periods[0].fromIso + '〜' + data.periods[0].toIso + '）の月次推移です。' +
+      '本システム稼働前の月は、取り込んだ過去の月次日報（または手入力した前年実績）の値を表示します。手入力の前年実績（来店数・成約数のみ）の月は、CXL・NET・PAX数が「—」になります。</p>' +
       '<div style="overflow-x:auto;"><table><thead><tr><th>月</th>';
-    data.years.forEach(function (y) { html += '<th colspan="2">' + y + '年（NB／新規問合せ）</th>'; });
+    data.periods.forEach(function (p) { html += '<th colspan="3">' + escapeHtml(p.label) + '（NB／新規／NET）</th>'; });
     html += '<th>前年比</th><th>前々年比</th></tr></thead><tbody>';
-    data.table.forEach(function (row) {
-      html += '<tr><td>' + row.month + '</td>';
-      data.years.forEach(function (y, idx) {
-        const cell = row['y' + idx];
-        html += '<td>' + (cell && cell.hasData ? cell.NB : '—') + '</td><td>' + (cell && cell.hasData ? cell.新規問合せ : '—') + '</td>';
-      });
-      html += '<td>' + fmtNippoPct_(row.前年比) + '</td><td>' + fmtNippoPct_(row.前々年比) + '</td></tr>';
+    function cellHtml(cell) {
+      if (!cell || !cell.hasData) return '<td>—</td><td>—</td><td>—</td>';
+      return '<td>' + fmtNippoVal_(cell.NB) + '</td><td>' + fmtNippoVal_(cell.新規問合せ) + '</td><td>' + fmtNippoVal_(cell.NET) + '</td>';
+    }
+    function rowHtml(row, bold) {
+      let h = '<tr' + (bold ? ' style="font-weight:bold;background:#f5f7fb;"' : '') + '><td>' + row.month + '</td>';
+      data.periods.forEach(function (p, idx) { h += cellHtml(row['y' + idx]); });
+      return h + '<td>' + fmtNippoPct_(row.前年比) + '</td><td>' + fmtNippoPct_(row.前々年比) + '</td></tr>';
+    }
+    data.table.forEach(function (row, i) {
+      html += rowHtml(row, false);
+      if (i === 5) html += rowHtml(data.subtotals[0], true);
     });
+    html += rowHtml(data.subtotals[1], true) + rowHtml(data.subtotals[2], true);
     html += '</tbody></table></div>';
     html += '<h3 style="font-size:13px;margin-top:16px;">通期計</h3>' +
-      '<table><thead><tr><th>年</th><th>データ源</th><th>新規問合せ</th><th>NB</th><th>CXL</th><th>NET</th><th>PAX(NB)</th><th>PAX(NET)</th></tr></thead><tbody>';
-    data.totalsByYear.forEach(function (t) {
+      '<table><thead><tr><th>期</th><th>データ源</th><th>新規問合せ</th><th>NB</th><th>CXL</th><th>NET</th><th>PAX(NB)</th><th>PAX(NET)</th></tr></thead><tbody>';
+    data.totalsByPeriod.forEach(function (t) {
       const sourceLabel = t.source === 'historical' ? '前年実績（日報取込・集計）' : t.source === 'mixed' ? '実データ＋前年実績' : t.source === 'none' ? 'データなし' : '実データ';
-      html += '<tr><td>' + t.year + '</td><td>' + sourceLabel + '</td><td>' + fmtNippoVal_(t.新規問合せ) + '</td><td>' + fmtNippoVal_(t.NB) + '</td>' +
+      html += '<tr><td>' + escapeHtml(t.label) + '</td><td>' + sourceLabel + '</td><td>' + fmtNippoVal_(t.新規問合せ) + '</td><td>' + fmtNippoVal_(t.NB) + '</td>' +
         '<td>' + fmtNippoVal_(t.CXL) + '</td><td>' + fmtNippoVal_(t.NET) + '</td><td>' + fmtNippoVal_(t.PAX_NB) + '</td><td>' + fmtNippoVal_(t.PAX_NET) + '</td></tr>';
     });
     html += '</tbody></table>';
@@ -812,7 +838,8 @@ function openManualCaseModal() {
     '<div class="field"><label><input type="checkbox" id="mc-contracted" style="width:auto;" onchange="document.getElementById(\'mc-contract-section\').style.display=this.checked?\'block\':\'none\'"> すでに成約が決まっている（バックログ登録）</label></div>' +
     '<div id="mc-contract-section" style="display:none;">' +
     '<div class="row"><div class="col field"><label>挙式日（撮影日）</label><input type="date" id="mc-weddingdate"></div>' +
-    '<div class="col field"><label>方面</label><select id="mc-area">' + optionListByLabel_(REF_MASTERS.areas, '方面名') + '</select></div></div>' +
+    '<div class="col field"><label>方面</label><select id="mc-area" onchange="fillCityOptions_(\'mc-area\', \'mc-city\')">' + optionListByLabel_(REF_MASTERS.areas, '方面名') + '</select></div>' +
+    '<div class="col field"><label>都市</label><select id="mc-city">' + cityOptionsForArea_((REF_MASTERS.areas || [])[0] ? REF_MASTERS.areas[0].方面名 : '') + '</select></div></div>' +
     '<div class="row"><div class="col field"><label>式場／フォトプラン名</label><input id="mc-venue"></div>' +
     '<div class="col field"><label>プラン</label><input id="mc-plan"></div></div>' +
     '<div class="field"><label>商品</label><select id="mc-product">' + optionList_(REF_MASTERS.products, 'PRODUCT_ID', '商品名') + '</select></div>' +
@@ -842,6 +869,7 @@ function submitManualCaseModal() {
   if (contracted) {
     input.挙式日 = document.getElementById('mc-weddingdate').value;
     input.方面 = document.getElementById('mc-area').value;
+    input.都市 = document.getElementById('mc-city').value;
     input['式場またはプラン名'] = document.getElementById('mc-venue').value;
     input.プラン = document.getElementById('mc-plan').value;
     input.商品 = document.getElementById('mc-product').value;
@@ -1166,6 +1194,18 @@ function submitRegisterLostModal(caseId) {
 }
 
 /** 契約フォーム（方面・CPL旅行人数・列席旅行人数を追加。見積は経由せずここで初めて条件を確定する） */
+/** 方面に属する都市の選択肢（都市マスタのAREA_IDで絞る） */
+function cityOptionsForArea_(areaName) {
+  const area = (REF_MASTERS.areas || []).find(function (a) { return a.方面名 === areaName; });
+  const cities = (REF_MASTERS.cities || []).filter(function (c) {
+    return area && c.AREA_ID === area.AREA_ID && c.使用終了 !== true && c.使用終了 !== 'TRUE';
+  }).sort(function (a, b) { return (Number(a.表示順) || 0) - (Number(b.表示順) || 0); });
+  return '<option value="">-</option>' + cities.map(function (c) { return '<option value="' + escapeHtml(c.都市名) + '">' + escapeHtml(c.都市名) + '</option>'; }).join('');
+}
+function fillCityOptions_(areaSelectId, citySelectId) {
+  const el = document.getElementById(citySelectId);
+  if (el) el.innerHTML = cityOptionsForArea_(document.getElementById(areaSelectId).value);
+}
 function contractFormHtml_(prefix) {
   const productOptions = optionList_(REF_MASTERS.products, 'PRODUCT_ID', '商品名');
   // 方面・式場・現地会社はテーブル側に名称文字列で保存する運用のため、value・表示ともに名称にする
@@ -1178,7 +1218,8 @@ function contractFormHtml_(prefix) {
     '<div class="col field"><label>商品*</label><select id="' + prefix + 'c-product">' + productOptions + '</select></div>' +
     '<div class="col field"><label>プラン*</label><input id="' + prefix + 'c-plan"></div>' +
     '</div><div class="row">' +
-    '<div class="col field"><label>方面*</label><select id="' + prefix + 'c-area">' + areaOptions + '</select></div>' +
+    '<div class="col field"><label>方面*</label><select id="' + prefix + 'c-area" onchange="fillCityOptions_(\'' + prefix + 'c-area\', \'' + prefix + 'c-city\')">' + areaOptions + '</select></div>' +
+    '<div class="col field"><label>都市</label><select id="' + prefix + 'c-city">' + cityOptionsForArea_((REF_MASTERS.areas || [])[0] ? REF_MASTERS.areas[0].方面名 : '') + '</select></div>' +
     '<div class="col field"><label>式場／フォトプラン名</label><select id="' + prefix + 'c-venue"><option value="">-</option>' + venueOptions + '</select></div>' +
     '<div class="col field"><label>現地会社（AGT）</label><select id="' + prefix + 'c-partner"><option value="">-</option>' + partnerOptions + '</select></div>' +
     '</div><div class="row">' +
@@ -1242,7 +1283,7 @@ function renderContractTab_(body, detail) {
     return Object.assign({}, ct, { 商品表示: productById[ct.商品] || ct.商品 });
   });
   let html = listTable_(contractsForDisplay, [
-    ['契約日', '契約日', 'date'], ['商品', '商品表示'], ['プラン', 'プラン'], ['方面', '方面'], ['式場', '式場'], ['契約担当', '契約担当'], ['有効', '有効フラグ']
+    ['契約日', '契約日', 'date'], ['商品', '商品表示'], ['プラン', 'プラン'], ['方面', '方面'], ['都市', '都市'], ['式場', '式場'], ['契約担当', '契約担当'], ['有効', '有効フラグ']
   ]);
   const activeStatuses = ['来店前', '来店済', '商談中', '保留'];
   if (active) {
@@ -1263,6 +1304,7 @@ function submitRegisterContractModal(caseId) {
     商品: document.getElementById('rc-c-product').value,
     プラン: document.getElementById('rc-c-plan').value,
     方面: document.getElementById('rc-c-area').value,
+    都市: document.getElementById('rc-c-city').value,
     式場: document.getElementById('rc-c-venue').value,
     現地会社: document.getElementById('rc-c-partner').value,
     挙式日: document.getElementById('rc-c-wdate').value,
@@ -1714,7 +1756,7 @@ function renderMasters(tab) {
 const COMMON_MASTER_FIELDS = {
   products: { idCol: 'PRODUCT_ID', fields: [['商品名', '商品名'], ['商品区分', '商品区分（挙式／フォト）'], ['会社', '会社'], ['利益率', '利益率（例：0.2）'], ['販売開始', '販売開始日'], ['販売終了', '販売終了日'], ['使用終了', '使用終了（TRUE/FALSE）']] },
   regions: { idCol: 'REGION_ID', fields: [['地方名', '地方名'], ['表示順', '表示順（数値）']] },
-  areas: { idCol: 'AREA_ID', fields: [['方面名', '方面名'], ['表示順', '表示順（数値）'], ['使用終了', '使用終了（TRUE/FALSE）']] },
+  areas: { idCol: 'AREA_ID', fields: [['方面名', '方面名'], ['日報方面', '日報方面（月次日報での方面の呼び方。前年比はこの単位で比べる。空欄なら方面名のまま）'], ['表示順', '表示順（数値）'], ['使用終了', '使用終了（TRUE/FALSE）']] },
   cities: { idCol: 'CITY_ID', fields: [['AREA_ID', 'AREA_ID（所属する方面）'], ['都市名', '都市名'], ['表示順', '表示順（数値）'], ['使用終了', '使用終了（TRUE/FALSE）']] },
   venues: { idCol: 'VENUE_ID', fields: [['会社', '会社'], ['方面', '方面'], ['都市', '都市'], ['式場名', '式場名'], ['標準納品日数', '標準納品日数（未入力は既定30日）'], ['販売状況', '販売状況']] },
   photoPlans: { idCol: 'PLAN_ID', fields: [['会社', '会社'], ['方面', '方面'], ['都市', '都市'], ['プラン名', 'プラン名'], ['標準納品日数', '標準納品日数（未入力は既定30日）'], ['販売状況', '販売状況']] },
@@ -1748,7 +1790,8 @@ function openMasterEditModal(kind, obj) {
   obj = obj || {};
   const fields = kind === 'stores'
     ? [['STORE_ID', 'STORE_ID（既存を編集する場合のみ入力）'], ['店舗名', '店舗名'], ['地方', '地方（関東/関西/中部/東北/北海道/中四国/九州）'], ['区分', '区分（一般 または AVA）'], ['責任者', '責任者'], ['メール', 'メール']]
-    : [['STAFF_ID', 'STAFF_ID（既存を編集する場合のみ入力）'], ['氏名', '氏名'], ['店舗ID', '店舗ID'], ['役職', '役職'], ['メール', 'メール'], ['権限', '権限（ADMIN/HQ/ARRANGE/MANAGER/STAFF）'], ['在籍', '在籍（TRUE/FALSE）']];
+    : [['STAFF_ID', 'STAFF_ID（既存を編集する場合のみ入力）'], ['氏名', '氏名'], ['店舗ID', '店舗ID'], ['役職', '役職'], ['メール', 'メール'], ['権限', '権限（ADMIN/HQ/ARRANGE/MANAGER/STAFF）'], ['在籍', '在籍（TRUE/FALSE）'],
+      ['日報での表記', '日報での表記（過去の月次日報の担当者欄の書き方。例：姓だけ。複数あれば「、」区切り）']];
   openModal('<h3>' + (kind === 'stores' ? '店舗' : '担当者') + 'マスタ編集</h3>' +
     fields.map(function (f) { return '<div class="field"><label>' + f[1] + '</label><input id="mm-' + f[0] + '" value="' + escapeHtml(obj[f[0]] || '') + '"></div>'; }).join('') +
     '<div class="row" style="margin-top:12px;"><button class="secondary" onclick="closeModal()">キャンセル</button>' +

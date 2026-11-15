@@ -37,9 +37,9 @@ const PAST_NIPPO_SKIP_STORE_ = '対象外';
 // 見出しが見つからない列に使う既定の位置（0始まり）
 const PAST_NIPPO_ENTRY_COLS_ = {
   type: 1, method: 2, media: 4, nbDate: 8, staff: 10, challenge: 11, cplTour: 13, guestTour: 14,
-  weddingDate: 15, area: 17, result: 19, agt: 20, venue: 21, plan: 25
+  weddingDate: 15, area: 17, result: 19, agt: 20, venue: 21, plan: 25, reason: 27
 };
-const PAST_NIPPO_CANCEL_COLS_ = { cxlDate: 1, staff: 3, challenge: 4, weddingDate: 6, pax: 8, area: 9, agt: 11, venue: 12 };
+const PAST_NIPPO_CANCEL_COLS_ = { cxlDate: 1, staff: 3, challenge: 4, weddingDate: 6, pax: 8, area: 9, agt: 11, venue: 12, reason: 16 };
 
 // ==========================================
 // 実行用の関数（エディタから実行する）
@@ -79,7 +79,8 @@ function pastNippo_clearImported() {
   const result = pastNippo_rebuildHistoricalActuals_();
   const src = getOrCreateSheet_(SHEET_NAMES.PAST_NIPPO_SOURCES, PAST_NIPPO_SOURCES_HEADERS_);
   if (src.getLastRow() > 1) src.getRange(2, 2, src.getLastRow() - 1, 1).clearContent();
-  Logger.log('取り込んだ集計値を取り消しました（HistoricalActualsから ' + result.removed + '行を削除）。');
+  pastDetail_clearAll_();
+  Logger.log('取り込んだ集計値と明細を取り消しました（HistoricalActualsから ' + result.removed + '行を削除）。');
 }
 
 // ==========================================
@@ -143,6 +144,7 @@ function pastNippo_process_(write) {
         }
 
         pastNippo_replaceMonthlyRows_(book.getId(), book.getName(), agg.rows);
+        pastDetail_replaceFileRows_(book.getId(), parsed, storeMap);
         wroteAny = true;
         pastNippo_writeStatus_(srcSheet, rowNo, PAST_NIPPO_STATUS_.DONE, agg.entryCount, agg.cancelCount, notes.join(' / '));
         summary.files++; summary.entries += agg.entryCount; summary.cancels += agg.cancelCount;
@@ -427,8 +429,11 @@ function pastNippo_parseTab_(values, ctx) {
     if (label === 'AGT') return 'agt';
     if (label === '式場') return 'venue';
     if (label === 'プラン') return 'plan';
+    if (label.indexOf('未成約理由') >= 0 || label.indexOf('備考') >= 0) return 'reason';
     return null;
   });
+  // 媒体は1件目・2件目の2列（日報の媒体別集計はE〜G列の両方を数えている）
+  entryCols.media2 = entryCols.media + 2;
 
   const entryEnd = pastNippo_findSectionEnd_(values, entryHeader + 1);
   const entries = [];
@@ -436,10 +441,11 @@ function pastNippo_parseTab_(values, ctx) {
     const row = values[r];
     const pick = function (key) { return pastNippo_cell_(row, entryCols[key]); };
     const e = {
-      type: pick('type'), method: pick('method'), media: pick('media'), staff: pick('staff'),
+      type: pick('type'), method: pick('method'), media: pick('media'), media2: pick('media2'), staff: pick('staff'),
       challenge: pastNippo_challenge_(row[entryCols.challenge]),
       cplTour: pastNippo_number_(row[entryCols.cplTour]), guestTour: pastNippo_number_(row[entryCols.guestTour]),
-      area: pick('area'), result: pick('result'), agt: pick('agt'), venue: pick('venue'), plan: pick('plan')
+      area: pick('area'), result: pick('result'), agt: pick('agt'), venue: pick('venue'), plan: pick('plan'),
+      reason: pick('reason')
     };
     // 挙式月の列は空行でも数式で「1899/12」が入っているため、内容の有無の判定には使わない
     const hasContent = e.type || e.staff || e.challenge || e.area || e.venue || e.result || e.agt ||
@@ -464,6 +470,7 @@ function pastNippo_parseTab_(values, ctx) {
       if (label === '方面') return 'area';
       if (label === 'AGT') return 'agt';
       if (label === '式場') return 'venue';
+      if (label === '理由') return 'reason';
       return null;
     });
     const cancelEnd = pastNippo_findSectionEnd_(values, cancelHeader + 1);
@@ -476,7 +483,9 @@ function pastNippo_parseTab_(values, ctx) {
         pax: pastNippo_number_(row[cancelCols.pax]),
         area: pastNippo_cell_(row, cancelCols.area),
         agt: pastNippo_cell_(row, cancelCols.agt),
-        venue: pastNippo_cell_(row, cancelCols.venue)
+        venue: pastNippo_cell_(row, cancelCols.venue),
+        weddingDate: pastNippo_toDate_(row[cancelCols.weddingDate], ctx),
+        reason: pastNippo_cell_(row, cancelCols.reason)
       };
       const hasContent = pastNippo_cell_(row, cancelCols.cxlDate) || c.challenge || c.staff || c.agt || c.pax;
       if (!hasContent) continue;
@@ -486,20 +495,20 @@ function pastNippo_parseTab_(values, ctx) {
   return { entries: entries, cancels: cancels };
 }
 
-/** ファイル名（例：「47期AVA日報12月」）から期と月を読み取る。期の初月は11月（47期＝2026年11月〜2027年10月） */
+/** ファイル名（例：「47期AVA日報12月」）から期と月を読み取る（47期＝2026年11月〜2027年10月） */
 function pastNippo_contextFromBookName_(name) {
   const p = String(name).match(/(\d+)\s*期/);
-  const startYear = p ? Number(p[1]) + PAST_NIPPO_PERIOD_OFFSET_ : null;
+  // 期の初月・期の数え方はSettings（FISCAL_START_MONTH・FISCAL_PERIOD_OFFSET。既定は11月・47期＝2026年11月〜）
+  const fiscalStartMonth = fiscalStartMonth_();
+  const startYear = p ? Number(p[1]) + fiscalPeriodOffset_() : null;
   const m = String(name).replace(/(\d+)\s*期/, '').match(/(\d{1,2})\s*月/);
   let fileMonth = null;
   if (startYear && m) {
     const month = Number(m[1]);
-    if (month >= 1 && month <= 12) fileMonth = new Date(month >= PAST_NIPPO_FISCAL_START_MONTH_ ? startYear : startYear + 1, month - 1, 1);
+    if (month >= 1 && month <= 12) fileMonth = new Date(month >= fiscalStartMonth ? startYear : startYear + 1, month - 1, 1);
   }
-  return { startYear: startYear, fileMonth: fileMonth };
+  return { startYear: startYear, fileMonth: fileMonth, fiscalStartMonth: fiscalStartMonth };
 }
-const PAST_NIPPO_FISCAL_START_MONTH_ = 11;
-const PAST_NIPPO_PERIOD_OFFSET_ = 1979; // 期 = 期の初月の年 − 1979（47期 → 2026年11月始まり）
 
 /**
  * セルの値を日付にする。Date・シリアル値・「2026/12/5」「2026-12-05」「2026年12月5日」・
@@ -520,7 +529,7 @@ function pastNippo_toDate_(v, ctx) {
   m = s.match(/^(\d{1,2})\s*[\/月]\s*(\d{1,2})\s*日?$/);
   if (m && ctx && ctx.startYear) {
     const month = Number(m[1]);
-    return pastNippo_validDate_(month >= PAST_NIPPO_FISCAL_START_MONTH_ ? ctx.startYear : ctx.startYear + 1, month, Number(m[2]));
+    return pastNippo_validDate_(month >= (ctx.fiscalStartMonth || 11) ? ctx.startYear : ctx.startYear + 1, month, Number(m[2]));
   }
   return null;
 }

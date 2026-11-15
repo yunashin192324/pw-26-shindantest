@@ -37,7 +37,17 @@ function nippoService_scopeCases_(cases, scope) {
  * 本体（現在＋ARCHIVE_KEEP_YEARS年分）はライブシートから、それより古い年はアーカイブ済みの
  * 年別スプレッドシートから読む。アーカイブも無い場合（本システム稼働前の年）はnullを返す。
  */
+let nippoService_familyCache_ = {};
 function nippoService_yearlyCaseFamily_(year, scope) {
+  // 1回の実行の中で同じ年・同じスコープを何度も読まないようにする（月×週×前年で何十回も呼ばれるため）
+  const cacheKey = year + '|' + JSON.stringify(scope || {});
+  if (cacheKey in nippoService_familyCache_) return nippoService_familyCache_[cacheKey];
+  const result = nippoService_yearlyCaseFamilyUncached_(year, scope);
+  nippoService_familyCache_[cacheKey] = result;
+  return result;
+}
+
+function nippoService_yearlyCaseFamilyUncached_(year, scope) {
   const keepYears = archiveService_keepYears_();
   const cutoffYear = new Date().getFullYear() - keepYears + 1;
 
@@ -70,9 +80,24 @@ function nippoService_yearlyCaseFamily_(year, scope) {
  * 全件のcontractsから拾う）。
  */
 function nippoService_kpisForRange_(fromIso, toIso, scope) {
-  // 本システム稼働前の期間は、0件ではなく「データなし」として扱う（前年比が0%と誤って出ないように）
-  const startYm = nippoService_systemStartMonth_();
-  if (startYm && toIso.slice(0, 7) < startYm) return { hasData: false };
+  // 稼働開始月より前の部分は、取り込んだ過去の月次日報の明細から数える（明細が無ければ「データなし」。
+  // 0件として扱うと前年比が0%と誤って出るため）。稼働後の部分は実データから数える。
+  const parts = pastDetail_splitRange_(fromIso, toIso);
+  const past = parts.past ? pastDetail_kpis_(parts.past.from, parts.past.to, scope) : null;
+  const live = parts.live ? nippoService_liveKpisForRange_(parts.live.from, parts.live.to, scope) : null;
+  if (!past) return live;
+  if (!live || !live.hasData) return past;
+  if (!past.hasData) return live;
+  const sum = { hasData: true, fromPastDetail: true };
+  ['新規問合せ', 'NB', 'CXL', 'PAX_NB', 'PAX_CXL'].forEach(function (f) { sum[f] = (past[f] || 0) + (live[f] || 0); });
+  sum.NET = sum.NB - sum.CXL;
+  sum.PAX_NET = sum.PAX_NB - sum.PAX_CXL;
+  sum.未成約 = null; sum.成約率 = null;
+  return sum;
+}
+
+/** 実データ（本体シート／アーカイブ）からの期間KPI */
+function nippoService_liveKpisForRange_(fromIso, toIso, scope) {
   const fromYear = Number(fromIso.slice(0, 4));
   const fam = nippoService_yearlyCaseFamily_(fromYear, scope);
   if (!fam) return { hasData: false };
@@ -186,75 +211,128 @@ function nippoService_getWeeklySummary(filter, scope) {
 }
 
 /**
- * 担当者別集計（新規問合せ・成約(NB)・成約率・CXL・NET・PAX数）。
+ * 担当者別集計（新規問合せ・成約(NB)・成約率・CXL・NET・PAX数）と、前年同期間の値・前年比。
  * 新規問合せはCases.担当者ID（受付担当）、成約・CXLはContracts.契約担当／LostCases.担当者
  * （いずれも氏名の自由記述で、案件のライフサイクルの中で受付担当と成約担当が異なるケースがあるため、
  * 日報の実運用に合わせて別々の軸で集計し、氏名をキーに合算する）。
+ * 稼働開始月より前の期間（主に前年）は、取り込んだ過去の月次日報の明細から数える。日報の担当者名は
+ * 担当者マスタの「日報での表記」でCRMの氏名にそろえる（日報の担当者別集計と同じく、CXLはキャンセル欄の全行）。
  */
 function nippoService_getStaffReport(filter, scope) {
   filter = filter || {};
   const now = new Date();
   const periodFrom = filter.from || formatDateISO_(new Date(now.getFullYear(), now.getMonth(), 1));
   const periodTo = filter.to || formatDateISO_(now);
+  const prevFrom = shiftYearIso_(periodFrom, -1), prevTo = shiftYearIso_(periodTo, -1);
 
-  const cases = nippoService_scopeCases_(caseRepo_getAll(), scope);
-  const caseIds = {};
-  cases.forEach(function (c) { caseIds[c.CASE_ID] = true; });
+  const current = nippoService_staffStats_(periodFrom, periodTo, scope);
+  const previous = nippoService_staffStats_(prevFrom, prevTo, scope);
+  const names = {};
+  Object.keys(current.byStaff).forEach(function (k) { names[k] = true; });
+  Object.keys(previous.byStaff).forEach(function (k) { names[k] = true; });
 
-  const staffById = {};
-  staffRepo_getAll().forEach(function (s) { staffById[s.STAFF_ID] = s; });
-
-  const contracts = sheetToObjects_(getSheet_(SHEET_NAMES.CONTRACTS)).filter(function (r) { return caseIds[r.CASE_ID]; });
-  const lostCases = caseRepo_getAllLostCases().filter(function (r) { return caseIds[r.CASE_ID]; });
-
-  const byStaff = {};
-  function ensure(name) {
-    const key = name || '未設定';
-    byStaff[key] = byStaff[key] || { staff: key, 新規問合せ: 0, NB: 0, CXL: 0, 未成約: 0, PAX_NB: 0, PAX_CXL: 0 };
-    return byStaff[key];
-  }
-
-  cases.forEach(function (c) {
-    if (!c.受付日時) return;
-    const d = formatDateISO_(c.受付日時);
-    if (d < periodFrom || d > periodTo) return;
-    const staffName = (staffById[c.担当者ID] && staffById[c.担当者ID].氏名) || c.担当者ID;
-    ensure(staffName).新規問合せ += 1;
-  });
-
-  const contractByCaseId = {};
-  contracts.forEach(function (r) {
-    if (!r.契約日) return;
-    if (!contractByCaseId[r.CASE_ID] || r.契約日 > contractByCaseId[r.CASE_ID].契約日) contractByCaseId[r.CASE_ID] = r;
-  });
-  contracts.forEach(function (r) {
-    // あとでキャンセルされた成約も含めて数える（CXLは別に数え、NET＝NB−CXL。kpisForRange_と同じ考え方）
-    const d = nippoService_isoDate_(r.契約日);
-    if (!d || d < periodFrom || d > periodTo) return;
-    const row = ensure(r.契約担当);
-    row.NB += 1;
-    row.PAX_NB += (Number(r.CPL旅行人数) || 0) + (Number(r.列席旅行人数) || 0);
-  });
-  lostCases.forEach(function (l) {
-    const ld = nippoService_isoDate_(l.未成約日);
-    if (!ld || ld < periodFrom || ld > periodTo) return;
-    const row = ensure(l.担当者);
-    if (l.種別 === 'キャンセル') {
-      row.CXL += 1;
-      const ct = contractByCaseId[l.CASE_ID];
-      if (ct) row.PAX_CXL += (Number(ct.CPL旅行人数) || 0) + (Number(ct.列席旅行人数) || 0);
-    } else {
-      row.未成約 += 1;
-    }
-  });
-
-  return Object.values(byStaff).map(function (r) {
+  function finish(r) {
+    if (!r) return null;
     const denom = r.NB + r.未成約;
     r.NET = r.NB - r.CXL;
     r.PAX_NET = r.PAX_NB - r.PAX_CXL;
-    r.成約率 = denom > 0 ? Math.round((r.NB / denom) * 1000) / 10 : null;
+    r.成約率 = (r.未成約 !== null && denom > 0) ? Math.round((r.NB / denom) * 1000) / 10 : null;
     return r;
+  }
+  return Object.keys(names).map(function (name) {
+    const cur = finish(current.byStaff[name] || nippoService_emptyStaffRow_(name));
+    const prev = previous.hasData ? finish(previous.byStaff[name] || nippoService_emptyStaffRow_(name)) : null;
+    cur.前年 = prev;
+    cur.NB前年比 = prev && prev.NB > 0 ? Math.round((cur.NB / prev.NB) * 1000) / 10 : null;
+    cur.新規前年比 = prev && prev.新規問合せ > 0 ? Math.round((cur.新規問合せ / prev.新規問合せ) * 1000) / 10 : null;
+    return cur;
+  }).filter(function (r) {
+    // 今期も前年も0件の担当者は出さない
+    return r.新規問合せ || r.NB || r.CXL || r.未成約 || (r.前年 && (r.前年.新規問合せ || r.前年.NB || r.前年.CXL));
   }).sort(function (a, b) { return b.NB - a.NB; });
+}
+
+function nippoService_emptyStaffRow_(name) {
+  return { staff: name, 新規問合せ: 0, NB: 0, CXL: 0, 未成約: 0, PAX_NB: 0, PAX_CXL: 0 };
+}
+
+/** 期間の担当者別の数字（稼働前の部分は過去の日報の明細、稼働後は実データ）。{ hasData, byStaff } */
+function nippoService_staffStats_(fromIso, toIso, scope) {
+  const byStaff = {};
+  function ensure(name) {
+    const key = name || '未設定';
+    byStaff[key] = byStaff[key] || nippoService_emptyStaffRow_(key);
+    return byStaff[key];
+  }
+  const parts = pastDetail_splitRange_(fromIso, toIso);
+  let hasData = false;
+
+  if (parts.past) {
+    const entries = pastDetail_entries_(parts.past.from, parts.past.to, scope);
+    if (entries !== null) {
+      hasData = true;
+      entries.forEach(function (e) {
+        const row = ensure(staffNameFromNippo_(e.担当者));
+        if (e.区分 === '新規') row.新規問合せ += 1;
+        if (e.問合結果 === '成約') row.NB += 1;
+        row.PAX_NB += pastDetail_pax_(e);
+      });
+      pastDetail_cancels_(parts.past.from, parts.past.to, scope).forEach(function (c) {
+        const row = ensure(staffNameFromNippo_(c.担当者));
+        row.CXL += 1;
+        row.PAX_CXL += Number(c.PAX) || 0;
+      });
+    }
+  }
+  const includesPast = hasData;
+
+  if (parts.live) {
+    hasData = true;
+    const pFrom = parts.live.from, pTo = parts.live.to;
+    const cases = nippoService_scopeCases_(caseRepo_getAll(), scope);
+    const caseIds = {};
+    cases.forEach(function (c) { caseIds[c.CASE_ID] = true; });
+    const staffById = {};
+    staffRepo_getAll().forEach(function (s) { staffById[s.STAFF_ID] = s; });
+    const contracts = sheetToObjects_(getSheet_(SHEET_NAMES.CONTRACTS)).filter(function (r) { return caseIds[r.CASE_ID]; });
+    const lostCases = caseRepo_getAllLostCases().filter(function (r) { return caseIds[r.CASE_ID]; });
+
+    cases.forEach(function (c) {
+      const d = nippoService_isoDate_(c.受付日時);
+      if (!d || d < pFrom || d > pTo) return;
+      const staffName = (staffById[c.担当者ID] && staffById[c.担当者ID].氏名) || c.担当者ID;
+      ensure(staffName).新規問合せ += 1;
+    });
+    const contractByCaseId = {};
+    contracts.forEach(function (r) {
+      const d = nippoService_isoDate_(r.契約日);
+      if (!d) return;
+      if (!contractByCaseId[r.CASE_ID] || d > nippoService_isoDate_(contractByCaseId[r.CASE_ID].契約日)) contractByCaseId[r.CASE_ID] = r;
+    });
+    contracts.forEach(function (r) {
+      // あとでキャンセルされた成約も含めて数える（CXLは別に数え、NET＝NB−CXL。kpisForRange_と同じ考え方）
+      const d = nippoService_isoDate_(r.契約日);
+      if (!d || d < pFrom || d > pTo) return;
+      const row = ensure(r.契約担当);
+      row.NB += 1;
+      row.PAX_NB += (Number(r.CPL旅行人数) || 0) + (Number(r.列席旅行人数) || 0);
+    });
+    lostCases.forEach(function (l) {
+      const ld = nippoService_isoDate_(l.未成約日);
+      if (!ld || ld < pFrom || ld > pTo) return;
+      const row = ensure(l.担当者);
+      if (l.種別 === 'キャンセル') {
+        row.CXL += 1;
+        const ct = contractByCaseId[l.CASE_ID];
+        if (ct) row.PAX_CXL += (Number(ct.CPL旅行人数) || 0) + (Number(ct.列席旅行人数) || 0);
+      } else {
+        row.未成約 += 1;
+      }
+    });
+  }
+  // 日報には「未成約」の件数が無いため、稼働前の部分を含む期間は成約率を出さない
+  if (includesPast) Object.keys(byStaff).forEach(function (k) { byStaff[k].未成約 = null; });
+  return { hasData: hasData, byStaff: byStaff };
 }
 
 /**
@@ -265,12 +343,13 @@ function nippoService_getStaffReport(filter, scope) {
 function nippoService_getAreaProgressByStore(area, filter, scope) {
   filter = filter || {};
   const now = new Date();
-  const periodFrom = filter.from || formatDateISO_(new Date(now.getFullYear(), 0, 1));
+  const periodFrom = filter.from || fiscalPeriodStartIso_(now);
   const periodTo = filter.to || formatDateISO_(now);
   const prevFrom = shiftYearIso_(periodFrom, -1), prevTo = shiftYearIso_(periodTo, -1);
 
-  const rows = dashboardService_scopedContracts_(Object.assign({}, filter, { area: area, from: periodFrom, to: periodTo }), scope || {});
-  const prevRows = dashboardService_scopedContracts_(Object.assign({}, filter, { area: area, from: prevFrom, to: prevTo }), scope || {});
+  // 稼働前の期間は取り込んだ過去の日報の明細から数える。方面は集計方面（日報の方面）でそろえる。
+  const rows = dashboardService_comparableContracts_({ area: area, from: periodFrom, to: periodTo }, scope || {});
+  const prevRows = dashboardService_comparableContracts_({ area: area, from: prevFrom, to: prevTo }, scope || {});
 
   const stores = storeRepo_getAll().filter(function (s) { return !scope || !scope.region || s.地方 === scope.region; });
   const storeIds = stores.map(function (s) { return s.STORE_ID; });
@@ -305,7 +384,7 @@ function nippoService_getAreaProgressByStore(area, filter, scope) {
 function nippoService_getStoreAreaMatrix(filter) {
   filter = filter || {};
   const now = new Date();
-  const periodFrom = filter.from || formatDateISO_(new Date(now.getFullYear(), 0, 1));
+  const periodFrom = filter.from || fiscalPeriodStartIso_(now);
   const periodTo = filter.to || formatDateISO_(now);
 
   const stores = storeRepo_getAll();
@@ -316,8 +395,8 @@ function nippoService_getStoreAreaMatrix(filter) {
   const contracts = sheetToObjects_(getSheet_(SHEET_NAMES.CONTRACTS))
     .filter(function (r) { const d = nippoService_isoDate_(r.契約日); return d && d >= periodFrom && d <= periodTo; });
 
-  const areasFromMaster = areaRepo_getAll().filter(function (a) { return a.使用終了 !== true && a.使用終了 !== 'TRUE'; })
-    .sort(function (a, b) { return (a.表示順 || 0) - (b.表示順 || 0); }).map(function (a) { return a.方面名; });
+  // 列は集計方面（方面マスタの日報方面。月次日報の全国店舗成約と同じ方面の単位）
+  const areasFromMaster = areaGroupList_();
 
   const visitsByStore = {};
   cases.forEach(function (c) {
@@ -331,7 +410,7 @@ function nippoService_getStoreAreaMatrix(filter) {
     const row = { storeId: s.STORE_ID, storeName: s.店舗名, 来店数: visitsByStore[s.STORE_ID] || 0, byArea: {} };
     let total = 0;
     areasFromMaster.forEach(function (area) {
-      const count = contracts.filter(function (r) { const c = caseById[r.CASE_ID]; return c && c.店舗ID === s.STORE_ID && r.方面 === area; }).length;
+      const count = contracts.filter(function (r) { const c = caseById[r.CASE_ID]; return c && c.店舗ID === s.STORE_ID && areaGroupOf_(r.方面) === area; }).length;
       row.byArea[area] = count;
       total += count;
     });
@@ -350,21 +429,9 @@ function nippoService_getStoreAreaMatrix(filter) {
   return { areas: areasFromMaster, stores: table, total: totalRow, periodFrom: periodFrom, periodTo: periodTo };
 }
 
-/** 年（1〜12月）ぶんのKPIを、生データ（ライブ／アーカイブ）から月次に集計する */
-function nippoService_monthlyKpisForYear_(year, scope) {
-  const fam = nippoService_yearlyCaseFamily_(year, scope);
-  const months = {};
-  for (let m = 1; m <= 12; m++) {
-    const ym = year + '-' + (m < 10 ? '0' + m : String(m));
-    const from = ym + '-01';
-    const to = formatDateISO_(new Date(year, m, 0));
-    months[ym] = fam ? nippoService_kpisForRange_(from, to, scope) : { hasData: false };
-  }
-  return { months: months, source: fam ? 'data' : 'none' };
-}
 
 /**
- * 年（1〜12月）ぶんのKPIを、月ごとに「実データ」と「HistoricalActuals（前年実績）」のどちらかから返す。
+ * 指定した月（'yyyy-MM'の配列）のKPIを、月ごとに「実データ」と「HistoricalActuals（前年実績）」のどちらかから返す。
  *  ・本システム稼働前の月 … HistoricalActuals（過去の月次日報の取り込み、または手入力）
  *  ・本体シートに残っている年（今年・前年） … 実データ
  *  ・過去データアーカイブへ移した年 … アーカイブ時に保存した月次集計（登録者＝システム集計）があればそれを使い、
@@ -372,36 +439,27 @@ function nippoService_monthlyKpisForYear_(year, scope) {
  * HistoricalActualsにCXL数・PAXの列が入っている行（取り込み・システム集計）は、CXL・NET・PAX数も出す。
  * 手入力の行（来店数・成約数のみ）の月は、CXL・NET・PAX数がnull（画面では「—」）になる。
  */
-function nippoService_monthlyKpisForYearWithFallback_(year, scope) {
+function nippoService_monthlyKpisForMonths_(months, scope) {
   const startYm = nippoService_systemStartMonth_();
   const cutoffYear = new Date().getFullYear() - archiveService_keepYears_() + 1;
   const histByYm = nippoService_historicalByMonth_(scope);
-
-  let live = null;
-  function liveMonths() {
-    if (live === null) live = nippoService_monthlyKpisForYear_(year, scope);
-    return live;
-  }
-
-  const months = {};
+  const result = {};
   let usedData = false, usedHist = false;
-  for (let m = 1; m <= 12; m++) {
-    const ym = year + '-' + (m < 10 ? '0' + m : String(m));
+  months.forEach(function (ym) {
+    const year = Number(ym.slice(0, 4));
     const hist = histByYm[ym];
     const preferHist = (startYm && ym < startYm) || year < cutoffYear;
-    if (preferHist && hist) {
-      months[ym] = hist; usedHist = true;
-    } else if (startYm && ym < startYm) {
-      months[ym] = { hasData: false };
-    } else {
-      const lm = liveMonths();
-      if (lm.source !== 'none' && lm.months[ym] && lm.months[ym].hasData) { months[ym] = lm.months[ym]; usedData = true; }
-      else if (hist) { months[ym] = hist; usedHist = true; }
-      else months[ym] = { hasData: false };
-    }
-  }
+    if (preferHist && hist) { result[ym] = hist; usedHist = true; return; }
+    if (startYm && ym < startYm) { result[ym] = { hasData: false }; return; }
+    const from = ym + '-01';
+    const to = formatDateISO_(new Date(year, Number(ym.slice(5, 7)), 0));
+    const live = nippoService_liveKpisForRange_(from, to, scope);
+    if (live && live.hasData) { result[ym] = live; usedData = true; }
+    else if (hist) { result[ym] = hist; usedHist = true; }
+    else result[ym] = { hasData: false };
+  });
   const source = usedData && usedHist ? 'mixed' : usedHist ? 'historical' : usedData ? 'data' : 'none';
-  return { months: months, source: source };
+  return { months: result, source: source };
 }
 
 /**
@@ -471,45 +529,60 @@ function nippoService_isoDate_(v) {
 }
 
 /**
- * 通期進捗管理（複数年の月次推移。「46期」のような期の呼び方は本システムでは扱わず、西暦年で表示する）。
- * 今年・前年は必ず算出し、yearsBack>=3なら前々年もできる範囲で算出する（Q&A八巡目：
- * 「前年比のみで良いが可能なら前々年比もできたらなおよし」）。
+ * 通期進捗管理（期ごとの月次推移）。期は11月始まり（Settings の FISCAL_START_MONTH）で、
+ * 47期＝2026年11月〜2027年10月。今期・前期・前々期を並べ、月計のほか上期（前半6か月）・下期・通期の合計を出す
+ * （月次日報の「通期」タブと同じ区切り）。
+ * @param {number} periodsBack 何期分を並べるか（既定3＝今期・前期・前々期）
  */
-function nippoService_getMultiYearTrend(filter, scope, yearsBack) {
-  yearsBack = yearsBack || 3;
-  const currentYear = new Date().getFullYear();
-  const years = [];
-  for (let i = 0; i < yearsBack; i++) years.push(currentYear - i);
+function nippoService_getMultiYearTrend(filter, scope, periodsBack) {
+  periodsBack = periodsBack || 3;
+  const current = fiscalPeriodOf_(new Date());
+  const periods = [];
+  for (let i = 0; i < periodsBack; i++) periods.push(fiscalPeriodByStartYear_(current.startYear - i));
 
-  const perYear = years.map(function (y) {
-    const r = nippoService_monthlyKpisForYearWithFallback_(y, scope);
-    return { year: y, months: r.months, source: r.source };
+  const perPeriod = periods.map(function (p) {
+    const r = nippoService_monthlyKpisForMonths_(p.months, scope);
+    return { period: p, months: r.months, source: r.source };
   });
 
+  function ratio(a, b) { return (a && a.hasData && b && b.hasData && b.NB > 0) ? Math.round((a.NB / b.NB) * 1000) / 10 : null; }
   const table = [];
-  for (let m = 1; m <= 12; m++) {
-    const mm = m < 10 ? '0' + m : String(m);
-    const row = { month: mm + '月' };
-    perYear.forEach(function (py, idx) { row['y' + idx] = py.months[py.year + '-' + mm]; });
-    const cur = row.y0;
-    row.前年比 = (cur && cur.hasData && row.y1 && row.y1.hasData && row.y1.NB > 0) ? Math.round((cur.NB / row.y1.NB) * 1000) / 10 : null;
-    row.前々年比 = (yearsBack >= 3 && cur && cur.hasData && row.y2 && row.y2.hasData && row.y2.NB > 0) ? Math.round((cur.NB / row.y2.NB) * 1000) / 10 : null;
+  for (let i = 0; i < 12; i++) {
+    const ym0 = periods[0].months[i];
+    const row = { month: Number(ym0.slice(5, 7)) + '月', monthIndex: i };
+    perPeriod.forEach(function (pp, idx) { row['y' + idx] = pp.months[pp.period.months[i]]; });
+    row.前年比 = ratio(row.y0, row.y1);
+    row.前々年比 = periodsBack >= 3 ? ratio(row.y0, row.y2) : null;
     table.push(row);
   }
 
-  function sumField(key, field) {
-    let sum = 0, any = false;
-    table.forEach(function (r) { const cell = r[key]; if (cell && cell.hasData && cell[field] != null) { sum += cell[field]; any = true; } });
-    return any ? sum : null;
+  const FIELDS = ['新規問合せ', 'NB', 'CXL', 'NET', 'PAX_NB', 'PAX_NET'];
+  function sumCells(cells) {
+    const out = { hasData: false };
+    FIELDS.forEach(function (f) {
+      let sum = 0, any = false;
+      cells.forEach(function (c) { if (c && c.hasData && c[f] !== null && c[f] !== undefined) { sum += c[f]; any = true; } });
+      out[f] = any ? sum : null;
+      if (any) out.hasData = true;
+    });
+    return out;
   }
-  const totalsByYear = perYear.map(function (py, idx) {
-    const key = 'y' + idx;
-    return {
-      year: py.year, source: py.source,
-      新規問合せ: sumField(key, '新規問合せ'), NB: sumField(key, 'NB'), CXL: sumField(key, 'CXL'),
-      NET: sumField(key, 'NET'), PAX_NB: sumField(key, 'PAX_NB'), PAX_NET: sumField(key, 'PAX_NET')
-    };
+  // 上期（期の前半6か月）・下期・通期の合計行
+  const subtotals = [['上期', 0, 6], ['下期', 6, 12], ['通期', 0, 12]].map(function (d) {
+    const row = { month: d[0] };
+    perPeriod.forEach(function (pp, idx) { row['y' + idx] = sumCells(table.slice(d[1], d[2]).map(function (r) { return r['y' + idx]; })); });
+    row.前年比 = ratio(row.y0, row.y1);
+    row.前々年比 = periodsBack >= 3 ? ratio(row.y0, row.y2) : null;
+    return row;
   });
 
-  return { years: years, table: table, totalsByYear: totalsByYear };
+  const totalsByPeriod = perPeriod.map(function (pp, idx) {
+    const t = subtotals[2]['y' + idx];
+    return Object.assign({ period: pp.period.period, label: pp.period.period + '期', startYear: pp.period.startYear, source: pp.source }, t);
+  });
+
+  return {
+    periods: periods.map(function (p) { return { period: p.period, label: p.period + '期', fromIso: p.fromIso, toIso: p.toIso }; }),
+    table: table, subtotals: subtotals, totalsByPeriod: totalsByPeriod
+  };
 }

@@ -220,6 +220,7 @@ function caseService_createManualCase(input, ctx) {
       商品: input.商品 || '',
       プラン: input.プラン || '',
       方面: input.方面 || '',
+      都市: input.都市 || '',
       式場: input['式場またはプラン名'] || '',
       挙式日: input.挙式日 || ''
     }, ctx);

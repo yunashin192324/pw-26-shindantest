@@ -269,6 +269,24 @@ function makeStoreTab(entries, cancels, layoutOffset) {
 
 // ------------------------------------------------------------
 section('4. 稼働前の月の前年比較・NETの数え方・古くなったデータ');
+/** 期ごとの通期推移から、指定した年月のセルを探す */
+function trendCell(trend, ym) {
+  for (let i = 0; i < trend.periods.length; i++) {
+    const p = trend.periods[i];
+    if (ym >= p.fromIso.slice(0, 7) && ym <= p.toIso.slice(0, 7)) {
+      const mi = (Number(ym.slice(5, 7)) - 11 + 12) % 12;
+      return trend.table[mi]['y' + i];
+    }
+  }
+  return undefined;
+}
+function trendTotal(trend, ym) {
+  for (let i = 0; i < trend.periods.length; i++) {
+    const p = trend.periods[i];
+    if (ym >= p.fromIso.slice(0, 7) && ym <= p.toIso.slice(0, 7)) return trend.totalsByPeriod[i];
+  }
+  return undefined;
+}
 (function () {
   const t = freshEnv();
   const now = new Date();
@@ -291,24 +309,23 @@ section('4. 稼働前の月の前年比較・NETの数え方・古くなった�
   t.run('cancelContract({ CASE_ID: ' + JSON.stringify(c1) + ', 未成約理由カテゴリ: "価格" })');
 
   t.run('nippoService_startMonthCache_ = null');
-  const trend = t.run('nippoService_getMultiYearTrend({}, {}, 2)');
-  const cur = trend.table[now.getMonth()].y0;
+  const trend = t.run('nippoService_getMultiYearTrend({}, {}, 3)');
+  check('通期推移は期（11月始まり）で並ぶ', trend.table[0].month === '11月' && trend.table[11].month === '10月' && /期$/.test(trend.periods[0].label), trend.periods);
+  const cur = trendCell(trend, thisYm);
   check('稼働後の月：あとでキャンセルされた成約もNBに数え、CXLを別に数える（NB1・CXL1・NET0）', cur.NB === 1 && cur.CXL === 1 && cur.NET === 0 && cur.PAX_NB === 8 && cur.PAX_CXL === 8, cur);
-  const prev = trend.table[now.getMonth()].y1;
+  const prev = trendCell(trend, prevYm);
   check('前年同月：取り込んだ値（新規10・NB6・CXL1・NET5）', prev.hasData && prev.新規問合せ === 10 && prev.NB === 6 && prev.CXL === 1 && prev.NET === 5, prev);
-  if (lastMonth.getFullYear() === Y) {
-    const lm = trend.table[lastMonth.getMonth()].y0;
-    check('今年の稼働前の月：0件ではなく取り込んだ値を出す', lm.hasData && lm.新規問合せ === 8 && lm.fromHistorical === true, lm);
-  }
+  const lm = trendCell(trend, lastYm);
+  check('稼働前の月：0件ではなく取り込んだ値を出す', lm && lm.hasData && lm.新規問合せ === 8 && lm.fromHistorical === true, lm);
   const weekly = t.run('nippoService_getWeeklySummary({ yearMonth: ' + JSON.stringify(thisYm) + ' }, {})');
   check('週次の前年（稼働前）は0ではなく「データなし」', weekly.rows.every(function (r) { return r.previous.hasData === false; }), weekly.rows.map(function (r) { return r.previous; }));
 
   t.run('batchRebuildAnalyticsCache()');
-  const dash = t.run('dashboardService_getData({})');
-  if (lastMonth.getFullYear() === Y) {
-    check('ダッシュボードの今年の値に、今年の稼働前の月（取り込み値：新規8・成約5）が含まれる',
-      dash.summary.来店数 === 8 + 2 && dash.summary.成約数 === 5 + 1 && dash.summary.稼働前の月を含む === true, dash.summary);
-  }
+  const dash = t.run('dashboardService_getData({ from: "' + lastYm + '-01", to: "' + t.run('formatDateISO_(new Date())') + '" })');
+  check('ダッシュボードの期間に稼働前の月があれば、取り込み値（新規8・成約5）を足す',
+    dash.summary.来店数 === 8 + 2 && dash.summary.成約数 === 5 + 1 && dash.summary.稼働前の月を含む === true, dash.summary);
+  const dashDefault = t.run('dashboardService_getData({})');
+  check('ダッシュボードの期間を指定しないときは今期（期首〜今日）', dashDefault.periodFrom === t.run('fiscalPeriodStartIso_()') && /-11-01$/.test(dashDefault.periodFrom), dashDefault.periodFrom);
   check('ダッシュボードの前年（稼働前の月）は取り込んだ値を使う（前年同月の新規10）', dash.summary && dash.summary.来店数前年 === 10 && dash.summary.成約数前年 === 6, dash.summary);
 
   // 古くなったデータ：アーカイブ前の月次集計
@@ -330,14 +347,93 @@ section('4. 稼働前の月の前年比較・NETの数え方・古くなった�
   check('　挙式月成約数は挙式月（9月）に入る', sep && sep.挙式月成約数 === 1, sep);
   t2.run('nippoService_startMonthCache_ = null');
   t2.run('saveSetting_("SYSTEM_START_MONTH", "' + oldYear + '-01")');
-  const afterTrend = t2.run('nippoService_getMultiYearTrend({}, {}, 4)');
-  const idx = 3; // 3年前
-  const tot = afterTrend.totalsByYear[idx];
+  const afterTrend = t2.run('nippoService_getMultiYearTrend({}, {}, 5)');
+  const tot = trendTotal(afterTrend, oldYear + '-03');
   check('アーカイブ後も、移した年の通期推移に数字が出る（新規1・NB1・NB_PAX5）', tot.新規問合せ === 1 && tot.NB === 1 && tot.PAX_NB === 5, tot);
   const dash2 = t2.run('dashboardService_getData({ from: "' + (oldYear + 1) + '-01-01", to: "' + (oldYear + 1) + '-12-31" })');
   check('ダッシュボードの前年（アーカイブ済みの年）は保存した月次集計を使う', dash2.summary && dash2.summary.成約数前年 === 1, dash2.summary);
   t2.run('batchArchiveOldRecords()');
   check('2回目のバッチで同じ年の集計を二重に保存しない', t2.run('historicalActualsRepo_getAll()').filter(function (h) { return h.登録者 === 'システム集計'; }).length === snap.length);
+})();
+
+// ------------------------------------------------------------
+section('5. 稼働前の内訳の前年比（担当者別・式場/プラン/AGT・媒体・週次）・方面のまとめ・マスタ');
+(function () {
+  const t = freshEnv();
+  const now = new Date();
+  const Y = now.getFullYear();
+  const pad = function (n) { return n < 10 ? '0' + n : String(n); };
+  const thisYm = Y + '-' + pad(now.getMonth() + 1);
+  t.run('saveSetting_("SYSTEM_START_MONTH", ' + JSON.stringify(thisYm) + ')');
+  // 担当者マスタの「日報での表記」で、日報の「山」をCRMの「スタッフ」にそろえる
+  t.run('ensureColumns_(getSheet_(SHEET_NAMES.STAFF), ["日報での表記"]); updateRowByKey_(getSheet_(SHEET_NAMES.STAFF), "STAFF_ID", "S-STF", { 日報での表記: "山" })');
+
+  const D = function (m, d) { return new Date(Y - 1, m - 1, d); };
+  const fp = t.run('fiscalPeriodOf_(new Date(' + (Y - 1) + ', ' + now.getMonth() + ', 2))').period;
+  const book = new t.env.Spreadsheet(fp + '期AVA日報' + (now.getMonth() + 1) + '月');
+  book.sheets = [new t.env.Sheet('新宿', makeStoreTab([
+    { type: '新規', nb: D(now.getMonth() + 1, 1), staff: '山', result: '成約', area: 'バリ島/他アジア', venue: 'アヤナ', agt: 'BSB', cpl: 2, guest: 4, media: 'インスタ' },
+    { type: '新規', nb: D(now.getMonth() + 1, 2), staff: '山', result: '未成約', area: 'ハワイ', media: 'Google' },
+    { type: '新規', nb: D(now.getMonth() + 1, 3), staff: '川', result: '成約', area: 'ハワイ', venue: 'カハラ', agt: 'ARW', cpl: 2, guest: 0, media: 'インスタ' }
+  ], [
+    { date: D(now.getMonth() + 1, 4), staff: '山', pax: 6, area: 'バリ島/他アジア', agt: 'BSB' }
+  ]))];
+  // 媒体2件目（G列）を入れる
+  book.sheets[0].data[33][6] = 'ゼクシィネット';
+  t.env.ctx.SpreadsheetApp.register(book);
+  t.run('pastNippo_setup()');
+  t.run('appendRowFromObject_(getSheet_(SHEET_NAMES.PAST_NIPPO_SOURCES), { "スプレッドシートのURL": ' + JSON.stringify(book.getUrl()) + ' })');
+  const imp = t.run('pastNippo_import()');
+  check('取り込みで、明細が別のスプレッドシート（過去日報明細）に期ごとのシートで保存される',
+    imp.files === 1 && t.run('pastDetail_spreadsheet_(false) !== null') && t.run('pastDetail_spreadsheet_(false).getSheetByName("Entries_' + fp + '期").getLastRow()') === 4, imp);
+  check('明細の保存先はCRMのデータ用スプレッドシートとは別', t.run('pastDetail_spreadsheet_(false).getId() !== getDatabaseSpreadsheet_().getId()'));
+
+  // 今期の実データ（成約1件：バリ島）
+  t.as('admin@example.com');
+  manualCase(t, { チャレンジ番号: 'MN123456789', 既に成約済みか: true, 商品: 'PRD-1', プラン: 'P1', 式場またはプラン名: 'アヤナ', 方面: 'バリ島', 都市: 'バリ島', 挙式日: (Y + 1) + '-05-01' });
+  t.run('nippoService_startMonthCache_ = null; nippoService_familyCache_ = {};');
+
+  const today = t.run('formatDateISO_(new Date())');
+  const staff = t.run('nippoService_getStaffReport({ from: "' + thisYm + '-01", to: "' + today + '" }, {})');
+  const yama = staff.find(function (r) { return r.staff === 'スタッフ'; });
+  check('担当者別：稼働前の前年を日報の明細から出す（「山」→担当者「スタッフ」：新規2・NB1・CXL1・PAX6）',
+    yama && yama.前年 && yama.前年.新規問合せ === 2 && yama.前年.NB === 1 && yama.前年.CXL === 1 && yama.前年.PAX_NB === 6, yama);
+  const kawa = staff.find(function (r) { return r.staff === '川'; });
+  check('担当者別：日報での表記が無い担当者は日報の名前のまま出る', kawa && kawa.前年.NB === 1, kawa);
+
+  const rank = t.run('dashboardService_getAreaRankings("バリ島・他アジア", { from: "' + thisYm + '-01", to: "' + today + '" }, {})');
+  const ayana = rank.venueRanking.find(function (r) { return r.label === 'アヤナ'; });
+  check('方面内ランキング：今期（バリ島）と前年（日報の「バリ島/他アジア」）を同じ集計方面で比べる', ayana && ayana.count === 1 && ayana.prevCount === 1, rank.venueRanking);
+  const agt = rank.agtRanking.find(function (r) { return r.label === 'BSB'; });
+  check('AGTランキングの前年も日報の明細から出る', agt && agt.prevCount === 1, rank.agtRanking);
+  const hwRank = t.run('dashboardService_getAreaRankings("ハワイ", { from: "' + thisYm + '-01", to: "' + today + '" }, {})');
+  check('別の方面（ハワイ）の前年には混ざらない', hwRank.venueRanking.some(function (r) { return r.label === 'カハラ' && r.prevCount === 1; }) && !hwRank.venueRanking.some(function (r) { return r.label === 'アヤナ'; }), hwRank.venueRanking);
+
+  const media = t.run('dashboardService_getMediaBreakdown({ from: "' + thisYm + '-01", to: "' + today + '" }, {})');
+  const insta = media.find(function (m) { return m.media === 'インスタ'; });
+  const zexy = media.find(function (m) { return m.media === 'ゼクシィネット'; });
+  check('媒体別：前年を日報の明細から出す（インスタ2件、2件目の媒体も数える）', insta && insta.prevCount === 2 && zexy && zexy.prevCount === 1, media);
+
+  const weekly = t.run('nippoService_getWeeklySummary({ yearMonth: ' + JSON.stringify(thisYm) + ' }, {})');
+  const prevNB = weekly.rows.reduce(function (s, r) { return s + (r.previous.hasData ? r.previous.NB : 0); }, 0);
+  check('週次：稼働前の前年の週も日報の明細から出る（NB合計2）', prevNB === 2 && weekly.rows.some(function (r) { return r.previous.hasData; }), weekly.rows.map(function (r) { return r.previous; }));
+
+  const prog = t.run('nippoService_getAreaProgressByStore("バリ島・他アジア", { from: "' + thisYm + '-01", to: "' + today + '" }, {})');
+  const progRow = prog.table.find(function (r) { return r.plan === 'アヤナ'; });
+  check('エリア進捗：前年を日報の明細から出す', progRow && progRow.byStore['ST-SJK'].prev === 1, prog.table);
+
+  const nat = t.run('nippoService_getStoreAreaMatrix({ from: "' + thisYm + '-01", to: "' + today + '" })');
+  check('全国店舗×方面の列は日報の方面（集計方面）', nat.areas.indexOf('バリ島・他アジア') !== -1 && nat.areas.indexOf('バリ島') === -1, nat.areas);
+
+  const masters = t.run('getReferenceMasters()').data;
+  check('問合せ方法マスタは日報と同じ（来店・電話・オンライン・メール・LINE・国内）',
+    masters.inquiryMethods.map(function (m) { return m.名称; }).join(',') === '来店,電話,オンライン,メール,LINE,国内', masters.inquiryMethods.map(function (m) { return m.名称; }));
+  check('媒体マスタは日報の問合せ媒体の一覧', masters.media.some(function (m) { return m.名称 === 'AVA公式LINE'; }) && masters.media.length === 18);
+  check('方面の選択肢（集計方面）は日報の方面', masters.areaGroups.indexOf('バリ島・他アジア') !== -1 && masters.areaGroups.indexOf('オセアニア・アメリカ・カリブ') !== -1, masters.areaGroups);
+  const added = t.run('saveCommonMasterData("inquiryMethods", { 名称: "Instagram DM", 表示順: 7, 使用終了: false })');
+  check('問合せ方法は本部が画面から追加できる', added.ok === true && t.run('masterRepo_getAll(SHEET_NAMES.INQUIRY_METHODS).length') === 7, added);
+  const ct = t.run('sheetToObjects_(getSheet_(SHEET_NAMES.CONTRACTS))').find(function (r) { return r.方面 === 'バリ島'; });
+  check('成約に都市が記録される', ct && ct.都市 === 'バリ島', ct);
 })();
 
 console.log('\n結果：' + passes + '件成功 / ' + failures + '件失敗');

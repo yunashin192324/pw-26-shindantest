@@ -100,13 +100,14 @@ function dashboardService_monthsBetween_(fromIso, toIso) {
 /**
  * フィルタ（期間・店舗・地方・区分・商品）を受け取り、サマリーKPIを計算して返す。
  * 来店数・成約数には前年同期間との比較（前年実数・前年比%）も添える（Q&A五巡目）。
- * 期間未指定時は「今年（1/1〜本日）」を既定期間とする（前年比較を成立させるため。方面内ランキング等と同じ既定ルール）。
+ * 期間未指定時は「今期（期首〜本日）」を既定期間とする（前年比較を成立させるため。方面内ランキング等と同じ既定ルール）。
  * @param {Object} filter { from, to, storeId, region, category, product }
  */
 function dashboardService_getData(filter) {
   filter = filter || {};
   const now = new Date();
-  const periodFrom = filter.from || formatDateISO_(new Date(now.getFullYear(), 0, 1));
+  // 期間未指定なら今期（期首〜今日）。期は11月始まり（Settings の FISCAL_START_MONTH）
+  const periodFrom = filter.from || fiscalPeriodStartIso_(now);
   const periodTo = filter.to || formatDateISO_(now);
   const prevFrom = shiftYearIso_(periodFrom, -1);
   const prevTo = shiftYearIso_(periodTo, -1);
@@ -258,34 +259,95 @@ function dashboardService_lostReasonBreakdown_(filter) {
  * 新規問合せの媒体別比率（Q&A一巡目G-18：Cases.媒体＝カウンセリングシート項目18の回答を流用）
  * ============================================================ */
 function dashboardService_getMediaBreakdown(filter, scope) {
-  let rows = caseRepo_getAll();
-  if (scope.storeId) rows = rows.filter(function (r) { return r.店舗ID === scope.storeId; });
-  // バグ修正：地方（region）スコープが未対応だったため追加（他の集計関数と同じ扱いに統一）
-  if (scope.region) rows = rows.filter(function (r) { const s = storeRepo_getById(r.店舗ID); return s && s.地方 === scope.region; });
-  const map = {};
-  rows.forEach(function (r) {
-    const d = formatDateISO_(r.受付日時);
-    if (filter.from && d < filter.from) return;
-    if (filter.to && d > filter.to) return;
-    const key = r.媒体 || '未分類';
-    map[key] = (map[key] || 0) + 1;
-  });
-  return Object.keys(map).map(function (k) { return { media: k, count: map[k] }; });
+  filter = filter || {};
+  // 期間の指定が無ければ今期（期首〜今日）。前年同期間と並べる（稼働前の期間は取り込んだ過去の日報の明細から）
+  const periodFrom = filter.from || fiscalPeriodStartIso_();
+  const periodTo = filter.to || formatDateISO_(new Date());
+  const cur = dashboardService_mediaCounts_(periodFrom, periodTo, scope);
+  const prev = dashboardService_mediaCounts_(shiftYearIso_(periodFrom, -1), shiftYearIso_(periodTo, -1), scope);
+  const keys = Object.keys(Object.assign({}, cur.counts, prev.counts));
+  return keys.map(function (k) {
+    const count = cur.counts[k] || 0;
+    const prevCount = prev.hasData ? (prev.counts[k] || 0) : null;
+    return { media: k, count: count, prevCount: prevCount, yoy: prevCount ? Math.round((count / prevCount) * 1000) / 10 : null };
+  }).sort(function (a, b) { return b.count - a.count || (b.prevCount || 0) - (a.prevCount || 0); });
+}
+
+/**
+ * 期間の新規問合せの媒体別件数。稼働後はCases.媒体（カウンセリングシートの回答、または編集した値）、
+ * 稼働前は過去の日報の行の媒体1件目・2件目（日報の媒体別集計と同じく両方を数える）。
+ */
+function dashboardService_mediaCounts_(fromIso, toIso, scope) {
+  const counts = {};
+  let hasData = false;
+  const parts = pastDetail_splitRange_(fromIso, toIso);
+  if (parts.past) {
+    const entries = pastDetail_entries_(parts.past.from, parts.past.to, scope);
+    if (entries !== null) {
+      hasData = true;
+      // 日報の媒体別集計（E〜G列のCOUNTIF）と同じく、行の区分は問わず媒体1件目・2件目を数える
+      // （日報の運用では媒体は新規の行にだけ入れる）
+      entries.forEach(function (e) {
+        [e.媒体, e.媒体2].forEach(function (m) {
+          const k = String(m || '').trim();
+          if (k) counts[k] = (counts[k] || 0) + 1;
+        });
+      });
+    }
+  }
+  if (parts.live) {
+    hasData = true;
+    let rows = caseRepo_getAll();
+    if (scope.storeId) rows = rows.filter(function (r) { return r.店舗ID === scope.storeId; });
+    // バグ修正：地方（region）スコープが未対応だったため追加（他の集計関数と同じ扱いに統一）
+    if (scope.region) rows = rows.filter(function (r) { const s = storeRepo_getById(r.店舗ID); return s && s.地方 === scope.region; });
+    rows.forEach(function (r) {
+      const d = nippoService_isoDate_(r.受付日時);
+      if (!d || d < parts.live.from || d > parts.live.to) return;
+      const key = r.媒体 || '未分類';
+      counts[key] = (counts[key] || 0) + 1;
+    });
+  }
+  return { hasData: hasData, counts: counts };
 }
 
 /* ============================================================
  * Contractsの共通スコープ絞り込み（店舗フィルタ・期間フィルタ）
  * ============================================================ */
 function dashboardService_scopedContracts_(filter, scope) {
-  let rows = sheetToObjects_(getSheet_(SHEET_NAMES.CONTRACTS)).filter(function (r) { return r.有効フラグ === true || r.有効フラグ === 'TRUE'; });
+  let rows = sheetToObjects_(getSheet_(SHEET_NAMES.CONTRACTS));
+  // includeInactive：あとでキャンセルされた成約も含める（前年比のある集計は、月次日報と同じく「成約した件数」で比べる）
+  if (!filter.includeInactive) rows = rows.filter(function (r) { return r.有効フラグ === true || r.有効フラグ === 'TRUE'; });
   const caseById = {};
   caseRepo_getAll().forEach(function (c) { caseById[c.CASE_ID] = c; });
   rows = rows.map(function (r) { r.__case = caseById[r.CASE_ID]; return r; }).filter(function (r) { return r.__case; });
   if (scope.storeId) rows = rows.filter(function (r) { return r.__case.店舗ID === scope.storeId; });
   if (scope.region) rows = rows.filter(function (r) { const s = storeRepo_getById(r.__case.店舗ID); return s && s.地方 === scope.region; });
-  if (filter.from) rows = rows.filter(function (r) { return r.契約日 >= filter.from; });
-  if (filter.to) rows = rows.filter(function (r) { return r.契約日 <= filter.to; });
-  if (filter.area) rows = rows.filter(function (r) { return r.方面 === filter.area; });
+  if (filter.from) rows = rows.filter(function (r) { return nippoService_isoDate_(r.契約日) >= filter.from; });
+  if (filter.to) rows = rows.filter(function (r) { const d = nippoService_isoDate_(r.契約日); return d && d <= filter.to; });
+  if (filter.areaGroup) rows = rows.filter(function (r) { return areaGroupOf_(r.方面) === filter.areaGroup; });
+  else if (filter.area) rows = rows.filter(function (r) { return r.方面 === filter.area; });
+  return rows;
+}
+
+/**
+ * 前年比のある集計（方面内ランキング・プランランキング・エリア進捗）に使う成約の一覧。
+ * ・稼働後の期間：Contracts（あとでキャンセルされた成約も含む＝月次日報の「成約」と同じ数え方）
+ * ・稼働前の期間：取り込んだ過去の日報の明細の「成約」の行
+ * 方面は「集計方面」（方面マスタの日報方面）でそろえて絞り込む。
+ * @param {Object} filter { from, to, area }
+ */
+function dashboardService_comparableContracts_(filter, scope) {
+  const parts = pastDetail_splitRange_(filter.from, filter.to);
+  const group = filter.area ? areaGroupOf_(filter.area) : '';
+  let rows = [];
+  if (parts.live) {
+    rows = rows.concat(dashboardService_scopedContracts_({ from: parts.live.from, to: parts.live.to, includeInactive: true, areaGroup: group }, scope || {}));
+  }
+  if (parts.past) {
+    rows = rows.concat(pastDetail_contractLikeRows_(parts.past.from, parts.past.to, scope || {})
+      .filter(function (r) { return !group || areaGroupOf_(r.方面) === group; }));
+  }
   return rows;
 }
 
@@ -307,7 +369,8 @@ function dashboardService_getAreaShare(filter, scope) {
 
 /**
  * 方面内ランキング（式場・フォトプラン・AGT）。前年の実数値・前年比%も添える（Q&A四巡目）。
- * 「前年」は前年の実データ（Contracts）から拾う。期間未指定の場合は「今年（1/1〜本日）」を既定期間とし、
+ * 「前年」は前年の実データ（Contracts）から拾い、稼働前の期間は取り込んだ過去の日報の明細から拾う。
+ * 期間未指定の場合は「今期（期首〜本日）」を既定期間とし、
  * その1年前の同じ期間（契約日ベース）と比較する。
  * フォトプランランキングは「プランランキング」ではなく、フォトウェディング（相談区分＝フォト）の
  * 契約のみに絞ったプラン別ランキングとする（Q&A五巡目）。式場・AGTランキングは挙式・フォト両方を含む。
@@ -315,13 +378,14 @@ function dashboardService_getAreaShare(filter, scope) {
 function dashboardService_getAreaRankings(area, filter, scope) {
   filter = filter || {};
   const now = new Date();
-  const periodFrom = filter.from || formatDateISO_(new Date(now.getFullYear(), 0, 1));
+  const periodFrom = filter.from || fiscalPeriodStartIso_(now);
   const periodTo = filter.to || formatDateISO_(now);
   const prevFrom = shiftYearIso_(periodFrom, -1);
   const prevTo = shiftYearIso_(periodTo, -1);
 
-  const rows = dashboardService_scopedContracts_(Object.assign({}, filter, { area: area, from: periodFrom, to: periodTo }), scope);
-  const prevRows = dashboardService_scopedContracts_(Object.assign({}, filter, { area: area, from: prevFrom, to: prevTo }), scope);
+  // 稼働前の期間（前年など）は取り込んだ過去の日報の明細から数える。方面は集計方面でそろえる。
+  const rows = dashboardService_comparableContracts_({ area: area, from: periodFrom, to: periodTo }, scope);
+  const prevRows = dashboardService_comparableContracts_({ area: area, from: prevFrom, to: prevTo }, scope);
   const photoRows = rows.filter(function (r) { return r.__case && r.__case.相談区分 === 'フォト'; });
   const photoPrevRows = prevRows.filter(function (r) { return r.__case && r.__case.相談区分 === 'フォト'; });
 
@@ -385,7 +449,7 @@ function dashboardService_getBookingPipeline(filter, scope, monthsAhead) {
     const wd = op ? op['挙式日（撮影日）'] : '';
     if (!wd || !r.契約日) return;
     const ym = String(wd).slice(0, 7);
-    const area = r.方面 || '未設定';
+    const area = areaGroupOf_(r.方面) || '未設定'; // 集計方面（日報の方面）でまとめる
 
     byAreaMonth[area] = byAreaMonth[area] || {};
     byAreaMonth[area][ym] = (byAreaMonth[area][ym] || 0) + 1;
@@ -410,7 +474,7 @@ function dashboardService_getBookingPipeline(filter, scope, monthsAhead) {
   const histFinal = {};
   historical.forEach(function (h) {
     if (scope.storeId && h.店舗ID !== scope.storeId) return;
-    const area = h.方面 || '未設定';
+    const area = areaGroupOf_(h.方面) || '未設定';
     const ym = pastNippo_normYm_(h.年月);
     const hasWeddingMonth = h.挙式月成約数 !== '' && h.挙式月成約数 !== null && h.挙式月成約数 !== undefined;
     const n = hasWeddingMonth ? (Number(h.挙式月成約数) || 0) : (Number(h.成約数) || 0);
@@ -426,10 +490,8 @@ function dashboardService_getBookingPipeline(filter, scope, monthsAhead) {
 
   // 方面は実績が0件の方面も含め、方面マスタの全件を対象とする（Q&A二巡目：「積み上げは全方面記載してほしい。数字が0でも」）。
   // マスタに無い自由入力値（未設定等）が実績側にだけ存在する場合はそれも末尾に追加する。
-  const areasFromMaster = areaRepo_getAll()
-    .filter(function (a) { return a.使用終了 !== true && a.使用終了 !== 'TRUE'; })
-    .sort(function (a, b) { return (a.表示順 || 0) - (b.表示順 || 0); })
-    .map(function (a) { return a.方面名; });
+  // 行は集計方面（方面マスタの日報方面）。細かい方面（都市単位など）で記録しても、前年（日報の方面）と比べられる単位にまとめる。
+  const areasFromMaster = areaGroupList_();
   const areasFromData = Object.keys(byAreaMonth).filter(function (a) { return areasFromMaster.indexOf(a) === -1; });
   const areas = areasFromMaster.concat(areasFromData);
 

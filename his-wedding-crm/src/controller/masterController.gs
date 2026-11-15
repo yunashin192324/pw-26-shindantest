@@ -96,6 +96,7 @@ function getReferenceMasters() {
         products: productRepo_getAll(),
         regions: regionRepo_getAll(),
         areas: areaRepo_getAll(),
+        areaGroups: areaGroupList_(),
         cities: cityRepo_getAll(),
         venues: venueRepo_getAll(),
         photoPlans: photoPlanRepo_getAll(),
