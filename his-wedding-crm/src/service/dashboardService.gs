@@ -149,15 +149,43 @@ function dashboardService_getData(filter) {
     if (filter.region) { const s = storeRepo_getById(h.店舗ID); if (!s || s.地方 !== filter.region) return false; }
     return true;
   });
+  // 今期の期間に本システム稼働前の月が含まれる場合（例：稼働した年の「今年1/1〜」）、その月は
+  // AnalyticsCacheに何も無いため、取り込んだ過去の月次日報（または手入力）の来店数・成約数・CXL数を足す。
+  // 未成約数はHistoricalActualsに無いため足さない（成約率は稼働後の実データだけで計算される）。
+  const startYmForCurrent = nippoService_systemStartMonth_();
+  if (startYmForCurrent) {
+    dashboardService_monthsBetween_(periodFrom, periodTo).forEach(function (ym) {
+      if (ym >= startYmForCurrent) return;
+      historical.filter(function (h) { return pastNippo_normYm_(h.年月) === ym; }).forEach(function (h) {
+        summary.来店数 += Number(h.来店数) || 0;
+        summary.成約数 += Number(h.成約数) || 0;
+        summary.キャンセル数 += Number(h.CXL数) || 0;
+        summary.稼働前の月を含む = true;
+      });
+    });
+  }
+
   let prevVisits = 0, prevContracts = 0, hasPrevData = false;
+  // 稼働前の月、および過去データアーカイブ時に月次集計を保存した月（登録者＝システム集計）は、
+  // AnalyticsCacheに一部の行が残っていても完全な値ではないため、HistoricalActualsを優先する。
+  const startYm = nippoService_systemStartMonth_();
+  const snapshotMonths = {};
+  historical.forEach(function (h) { if (h.登録者 === ARCHIVE_SNAPSHOT_REGISTRANT_) snapshotMonths[pastNippo_normYm_(h.年月)] = true; });
   prevMonths.forEach(function (ym) {
-    if (analyticsMonthsWithData[ym]) {
+    const preferHistorical = (startYm && ym < startYm) || snapshotMonths[ym];
+    const monthHistoricalRows = historical.filter(function (h) { return pastNippo_normYm_(h.年月) === ym; });
+    if (preferHistorical && monthHistoricalRows.length > 0) {
+      hasPrevData = true;
+      monthHistoricalRows.forEach(function (h) {
+        prevVisits += Number(h.来店数) || 0; prevContracts += Number(h.成約数) || 0;
+      });
+    } else if (analyticsMonthsWithData[ym]) {
       hasPrevData = true;
       prevRows.filter(function (r) { return String(r.集計日).slice(0, 7) === ym; }).forEach(function (r) {
         prevVisits += Number(r.来店数) || 0; prevContracts += Number(r.成約数) || 0;
       });
     } else {
-      const monthHistorical = historical.filter(function (h) { return h.年月 === ym; });
+      const monthHistorical = monthHistoricalRows;
       if (monthHistorical.length > 0) hasPrevData = true;
       monthHistorical.forEach(function (h) {
         prevVisits += Number(h.来店数) || 0; prevContracts += Number(h.成約数) || 0;
@@ -377,13 +405,23 @@ function dashboardService_getBookingPipeline(filter, scope, monthsAhead) {
     byAreaMonthFinalPrev[area] = Object.assign({}, byAreaMonth[area]);
   });
   const historical = historicalActualsRepo_getAll();
+  // この表の「月」は挙式月。過去の月次日報の取り込み・アーカイブ時の月次集計の行は、挙式月で数えた成約数
+  // （挙式月成約数）を持っているのでそれを使う。手入力の行（挙式月成約数が空欄）は従来どおり成約数を使う。
+  const histFinal = {};
   historical.forEach(function (h) {
     if (scope.storeId && h.店舗ID !== scope.storeId) return;
     const area = h.方面 || '未設定';
+    const ym = pastNippo_normYm_(h.年月);
+    const hasWeddingMonth = h.挙式月成約数 !== '' && h.挙式月成約数 !== null && h.挙式月成約数 !== undefined;
+    const n = hasWeddingMonth ? (Number(h.挙式月成約数) || 0) : (Number(h.成約数) || 0);
+    histFinal[area] = histFinal[area] || {};
+    histFinal[area][ym] = (histFinal[area][ym] || 0) + n;
+  });
+  Object.keys(histFinal).forEach(function (area) {
     byAreaMonthFinalPrev[area] = byAreaMonthFinalPrev[area] || {};
-    if (!byAreaMonthFinalPrev[area][h.年月]) {
-      byAreaMonthFinalPrev[area][h.年月] = Number(h.成約数) || 0;
-    }
+    Object.keys(histFinal[area]).forEach(function (ym) {
+      if (!byAreaMonthFinalPrev[area][ym]) byAreaMonthFinalPrev[area][ym] = histFinal[area][ym];
+    });
   });
 
   // 方面は実績が0件の方面も含め、方面マスタの全件を対象とする（Q&A二巡目：「積み上げは全方面記載してほしい。数字が0でも」）。

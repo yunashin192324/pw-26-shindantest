@@ -165,6 +165,50 @@ function updateCaseCore(caseId, patch) {
 }
 
 /**
+ * 同じお客様と思われる案件の候補一覧（重複した案件の結合用）。
+ * STAFF・MANAGERは自店舗の案件のみ、HQ・ADMINは全店舗から探す。
+ */
+function findDuplicateCases(caseId) {
+  try {
+    const ctx = getCurrentUserContext();
+    requireRole_(ctx, [ROLES.STAFF, ROLES.MANAGER, ROLES.HQ, ROLES.ADMIN]);
+    assertOwnStoreForCase_(ctx, caseId);
+    const scope = (ctx.role === ROLES.STAFF || ctx.role === ROLES.MANAGER) ? { storeId: ctx.storeId } : {};
+    return { ok: true, data: caseMerge_findDuplicateCandidates(caseId, scope) };
+  } catch (e) {
+    return handleControllerError_(e, 'findDuplicateCases');
+  }
+}
+
+/**
+ * 重複した案件の結合（removeCaseIdの記録をkeepCaseIdへ移し、removeCaseIdを消す）。
+ * データを消す操作のため、店長（MANAGER・自店舗の案件同士のみ）と本部・管理者（HQ・ADMIN）に限る。
+ */
+function mergeCases(keepCaseId, removeCaseId) {
+  try {
+    const ctx = getCurrentUserContext();
+    requireRole_(ctx, [ROLES.MANAGER, ROLES.HQ, ROLES.ADMIN]);
+    assertOwnStoreForCase_(ctx, keepCaseId);
+    assertOwnStoreForCase_(ctx, removeCaseId);
+    return { ok: true, data: caseMerge_merge(keepCaseId, removeCaseId, ctx) };
+  } catch (e) {
+    return handleControllerError_(e, 'mergeCases');
+  }
+}
+
+/** 案件の削除（関連する記録もすべて消す。控えはDeletedRecordsに残る）。MANAGER（自店舗）・HQ・ADMINのみ */
+function deleteCase(caseId) {
+  try {
+    const ctx = getCurrentUserContext();
+    requireRole_(ctx, [ROLES.MANAGER, ROLES.HQ, ROLES.ADMIN]);
+    assertOwnStoreForCase_(ctx, caseId);
+    return { ok: true, data: caseMerge_deleteCase(caseId, ctx) };
+  } catch (e) {
+    return handleControllerError_(e, 'deleteCase');
+  }
+}
+
+/**
  * 経過メモ（CaseNotes）：後日の電話対応など、正式な接客記録ではない経過をいつでも追記できる。
  * 当該店舗のスタッフ（STAFF・MANAGER）・本部（HQ・ADMIN）が閲覧・追記できる（Q&A一巡目A-1）。
  */

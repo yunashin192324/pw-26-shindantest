@@ -90,7 +90,10 @@ function onFormSubmitInstallable(e) {
       受付日時: nowTs,
       CUSTOMER_ID: customerId,
       相談区分: mapped.consultationType || '',
-      問合せ方法: 'Web', // フォーム経由の問い合わせは一律「Web」（Q&A一巡目G-19。電話・来店等は手動登録時に選択）
+      // 問合せ方法はフォームからは分からない（来店時に答える場合もWeb経由の場合もある）ため、
+      // 既定は空欄（未設定）にし、スタッフが接客結果を入れるときに案件詳細の「基本情報を編集」から選ぶ。
+      // 以前のように一律「Web」にしたい場合は、Settingsシートの FORM_DEFAULT_INQUIRY_METHOD に「Web」を入れる。
+      問合せ方法: String(getSetting_('FORM_DEFAULT_INQUIRY_METHOD', '') || ''),
       案件状態: '来店前', // 6.
       現在担当部署: '販売店', // 6.
       作成日時: nowTs,

@@ -48,8 +48,25 @@ const SHEET_NAMES = {
   FORM_ITEM_MASTER: 'FormItemMaster',
   SETTINGS: 'Settings',
   // 過去データアーカイブ（年ごとに別ファイルのスプレッドシートへ退避する）の索引。Q&A六巡目。
-  ARCHIVE_INDEX: 'ArchiveIndex'
+  ARCHIVE_INDEX: 'ArchiveIndex',
+  // 案件の削除・結合で消した行の控え（誤操作時に手で戻せるよう、元の行をJSONで残す。追記のみ）
+  DELETED_RECORDS: 'DeletedRecords',
+  // 過去の月次日報スプレッドシートの取り込み（service/pastNippoImportService.gs）
+  PAST_NIPPO_SOURCES: 'PastNippoSources',
+  PAST_NIPPO_STORE_MAP: 'PastNippoStoreMap',
+  PAST_NIPPO_MONTHLY: 'PastNippoMonthly'
 };
+
+// 後から追加したシートの見出し。SHEET_NAMESと同じファイルに置き、setupDatabase.gs（SHEET_DEFINITIONS_）
+// からもservice側からも同じ定義を参照する（Apps Scriptはファイルの読み込み順に依存するため、
+// SHEET_NAMESと同じ場所に置いておけば必ず先に定義される）。
+const DELETED_RECORDS_HEADERS_ = ['削除日時', '実行者', '操作', '対象CASE_ID', '残した案件ID', 'シート名', '元の行JSON'];
+const PAST_NIPPO_SOURCES_HEADERS_ = ['スプレッドシートのURL', '状態', '処理日時', '問合せ件数', 'キャンセル件数', 'メモ'];
+const PAST_NIPPO_STORE_MAP_HEADERS_ = ['タブ名', '店舗ID', '店舗名（確認用）', '判定'];
+const PAST_NIPPO_MONTHLY_HEADERS_ = ['取込元ID', '取込元ファイル名', '年月', '店舗ID', '方面',
+  '新規問合せ', '成約数', 'CXL数', 'NB_PAX', 'CXL_PAX', '挙式月成約数', '取込日時'];
+// HistoricalActualsに後から足した列（setupDatabase.gsの定義と同じ）
+const HISTORICAL_ACTUALS_EXTRA_HEADERS_ = ['CXL数', 'NB_PAX', 'CXL_PAX', '挙式月成約数'];
 
 /**
  * データベース用スプレッドシート（第7章7-1：既存の回答シートとは別に新規で用意する専用DB）を取得する。
@@ -75,6 +92,50 @@ function getSheet_(sheetName) {
     throw new AppError('SYSTEM', 'シートが見つかりません: ' + sheetName);
   }
   return sheet;
+}
+
+/**
+ * シートが無ければ作成してヘッダーを書き込む（後から追加したシート用。setupDatabaseを再実行しなくても
+ * 動くようにするため）。既存シートの場合は、足りない列だけを右端に追加する。
+ */
+function getOrCreateSheet_(sheetName, headers) {
+  const ss = getDatabaseSpreadsheet_();
+  let sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.setFrozenRows(1);
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+    return sheet;
+  }
+  ensureColumns_(sheet, headers);
+  return sheet;
+}
+
+/** 既存シートのヘッダーに、指定した列名のうち無いものを右端へ追加する（既存の列・データは動かさない） */
+function ensureColumns_(sheet, headers) {
+  const headerMap = getHeaderMap_(sheet);
+  const missing = headers.filter(function (h) { return !(h in headerMap); });
+  if (missing.length === 0) return;
+  const startCol = sheet.getLastColumn() + 1;
+  sheet.getRange(1, startCol, 1, missing.length).setValues([missing]);
+  sheet.getRange(1, startCol, 1, missing.length).setFontWeight('bold');
+}
+
+/** CASE_ID列が fromId の行を、すべて toId に書き換える（列全体を1回で読み書きする）。書き換えた行数を返す */
+function repointCaseId_(sheet, fromId, toId) {
+  const headerMap = getHeaderMap_(sheet);
+  if (!('CASE_ID' in headerMap)) return 0;
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return 0;
+  const range = sheet.getRange(2, headerMap.CASE_ID + 1, lastRow - 1, 1);
+  const values = range.getValues();
+  let count = 0;
+  values.forEach(function (r) {
+    if (r[0] === fromId) { r[0] = toId; count++; }
+  });
+  if (count > 0) range.setValues(values);
+  return count;
 }
 
 /** ヘッダー行（1行目）から {列名: 0始まりインデックス} のマップを作る */

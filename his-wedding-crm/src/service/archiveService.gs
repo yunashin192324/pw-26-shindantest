@@ -190,13 +190,126 @@ function archiveService_archiveLogRows_() {
   return movedTotal;
 }
 
+/** アーカイブ前に保存する月次集計の行の「登録者」 */
+const ARCHIVE_SNAPSHOT_REGISTRANT_ = 'システム集計';
+
 /**
- * 過去データアーカイブ処理フロー（毎日深夜。AnalyticsCache再計算の後に実行すること。
- * ダッシュボードの集計値はAnalyticsCacheが既に持っているため、その後で本体シートから
- * 行を退避してもダッシュボードの数字自体は変わらない）。
+ * 過去データアーカイブの前に、これから本体シートから出ていく年の数字を、月×店舗×方面の集計値として
+ * HistoricalActuals（登録者＝システム集計）に保存する。
+ *
+ * なぜ必要か：AnalyticsCache（ダッシュボードの集計）は毎晩、本体シートに残っている案件だけから作り直す。
+ * そのため案件をアーカイブへ移すと、その年の数字はダッシュボードから消えてしまう。また、アーカイブは
+ * 挙式日の年でファイルを分けるため、受付・成約・キャンセルの日付の年とファイルの年が一致しないことがあり、
+ * アーカイブから数え直すと数字がずれる。移す前に一度だけ集計を保存しておけば、明細がどこにあっても
+ * 前年比・通期推移の数字は変わらない（過去の月次日報を取り込んだ行と同じ形で残る）。
+ *
+ * 対象：今年−(ARCHIVE_KEEP_YEARS−1)年より前の年のうち、まだ保存していない年。稼働開始月より前の月は
+ * 対象外（その月は過去の月次日報の取り込み・手入力の値を使う）。
+ * @return {Array<number>} 保存した年
+ */
+function archiveService_snapshotMonthlyActuals_() {
+  const cutoffYear = new Date().getFullYear() - archiveService_keepYears_() + 1;
+  const startYm = nippoService_systemStartMonth_();
+  const histSheet = getSheet_(SHEET_NAMES.HISTORICAL_ACTUALS);
+  ensureColumns_(histSheet, HISTORICAL_ACTUALS_EXTRA_HEADERS_);
+  const doneYears = {};
+  sheetToObjects_(histSheet).forEach(function (h) {
+    if (h.登録者 === ARCHIVE_SNAPSHOT_REGISTRANT_) doneYears[pastNippo_normYm_(h.年月).slice(0, 4)] = true;
+  });
+
+  const cases = caseRepo_getAll();
+  const contracts = sheetToObjects_(getSheet_(SHEET_NAMES.CONTRACTS));
+  const lostCases = caseRepo_getAllLostCases();
+  const caseById = {};
+  cases.forEach(function (c) { caseById[c.CASE_ID] = c; });
+  const weddingDateByCaseId = {};
+  operationRepo_getAll().forEach(function (op) { weddingDateByCaseId[op.CASE_ID] = op['挙式日（撮影日）']; });
+  const latestContractByCaseId = {};
+  contracts.forEach(function (ct) {
+    const d = nippoService_isoDate_(ct.契約日);
+    const cur = latestContractByCaseId[ct.CASE_ID];
+    if (!cur || d >= nippoService_isoDate_(cur.契約日)) latestContractByCaseId[ct.CASE_ID] = ct;
+  });
+
+  function targetYm(v) {
+    const d = nippoService_isoDate_(v);
+    if (!d) return '';
+    const ym = d.slice(0, 7);
+    const y = Number(ym.slice(0, 4));
+    if (y >= cutoffYear || doneYears[String(y)]) return '';
+    if (startYm && ym < startYm) return '';
+    return ym;
+  }
+  const buckets = {};
+  function bucket(ym, storeId, area) {
+    const key = ym + '|' + (storeId || '') + '|' + (area || '');
+    if (!buckets[key]) {
+      buckets[key] = { 年月: ym, 店舗ID: storeId || '', 方面: area || '', 来店数: 0, 成約数: 0, CXL数: 0, NB_PAX: 0, CXL_PAX: 0, 挙式月成約数: 0 };
+    }
+    return buckets[key];
+  }
+  function pax(ct) { return ct ? (Number(ct.CPL旅行人数) || 0) + (Number(ct.列席旅行人数) || 0) : 0; }
+
+  cases.forEach(function (c) {
+    const ym = targetYm(c.受付日時);
+    if (ym) bucket(ym, c.店舗ID, '').来店数 += 1;
+  });
+  contracts.forEach(function (ct) {
+    const c = caseById[ct.CASE_ID];
+    const storeId = c ? c.店舗ID : '';
+    const ym = targetYm(ct.契約日);
+    if (ym) {
+      const b = bucket(ym, storeId, ct.方面);
+      b.成約数 += 1;
+      b.NB_PAX += pax(ct);
+    }
+    const wym = targetYm(weddingDateByCaseId[ct.CASE_ID]);
+    if (wym) bucket(wym, storeId, ct.方面).挙式月成約数 += 1;
+  });
+  lostCases.forEach(function (l) {
+    if (l.種別 !== 'キャンセル') return;
+    const ym = targetYm(l.未成約日);
+    if (!ym) return;
+    const c = caseById[l.CASE_ID];
+    const ct = latestContractByCaseId[l.CASE_ID];
+    const b = bucket(ym, c ? c.店舗ID : '', ct ? ct.方面 : '');
+    b.CXL数 += 1;
+    b.CXL_PAX += pax(ct);
+  });
+
+  const rows = Object.keys(buckets).sort().map(function (k) { return buckets[k]; });
+  if (rows.length === 0) return [];
+  const headerMap = getHeaderMap_(histSheet);
+  const lastCol = histSheet.getLastColumn();
+  const now = new Date();
+  const values = rows.map(function (r) {
+    const obj = Object.assign({ 登録者: ARCHIVE_SNAPSHOT_REGISTRANT_, 登録日時: now }, r);
+    const row = new Array(lastCol).fill('');
+    Object.keys(obj).forEach(function (k) { if (k in headerMap) row[headerMap[k]] = obj[k]; });
+    return row;
+  });
+  const startRow = histSheet.getLastRow() + 1;
+  histSheet.getRange(startRow, 1, values.length, lastCol).setValues(values);
+  // 年月は文字列のまま保つ（日付に自動変換されると前年比較で一致しなくなる）
+  histSheet.getRange(startRow, headerMap['年月'] + 1, values.length, 1).setNumberFormat('@')
+    .setValues(rows.map(function (r) { return [r.年月]; }));
+  const years = {};
+  rows.forEach(function (r) { years[r.年月.slice(0, 4)] = true; });
+  return Object.keys(years).map(Number).sort();
+}
+
+/**
+ * 過去データアーカイブ処理フロー（毎日深夜。AnalyticsCache再計算の後に実行すること）。
+ * 案件を移す前に、その年の数字を月次集計としてHistoricalActualsに保存する
+ * （AnalyticsCacheは本体シートの案件だけから毎晩作り直されるため、移した年の数字はそちらから消える。
+ *  以前のコメントでは「退避してもダッシュボードの数字は変わらない」としていたが、翌晩の再計算で消えていた）。
  */
 function batchArchiveOldRecords() {
   try {
+    const snapshotYears = archiveService_snapshotMonthlyActuals_();
+    if (snapshotYears.length > 0) {
+      writeSystemLog_({ 実行者: 'batch', 操作種別: 'SNAPSHOT_MONTHLY_ACTUALS', 対象CASE_ID: '', 変更前後の値の要約: snapshotYears.join('、') + '年の月次集計をHistoricalActualsに保存しました。' });
+    }
     const targets = archiveService_findCasesToArchive_();
     targets.forEach(function (t) { archiveService_archiveCase_(t.caseId, t.year); });
     if (targets.length > 0) {

@@ -130,7 +130,9 @@ function caseService_getCaseDetail(caseId) {
     documentChecklist: caseService_getDocumentChecklistStatus_(caseId),
     contracts: caseRepo_getContractsByCaseId(caseId),
     lostCases: caseRepo_getLostCasesByCaseId(caseId),
-    tasks: taskRepo_getByCaseId(caseId)
+    tasks: taskRepo_getByCaseId(caseId),
+    // 同じお客様と思われる別の案件（同じ店舗内のみ。フォーム回答と手動登録で2件できた場合などに画面で知らせる）
+    duplicateCandidates: caseMerge_findDuplicateCandidates(caseId, { storeId: caseRecord.店舗ID })
   };
 }
 
@@ -167,8 +169,10 @@ function caseService_createManualCase(input, ctx) {
   assertRequired_(input.相談内容, '相談内容');
   assertRequired_(input.担当者, '担当者');
   validateCaseCore_(input);
-  if (caseRepo_isChallengeNumberDuplicate(input.チャレンジ番号, null)) {
-    throw new AppError('VALIDATION', 'チャレンジ番号「' + input.チャレンジ番号 + '」はすでに登録されています。');
+  const sameChallenge = caseRepo_findCaseIdsByChallengeNumber(input.チャレンジ番号, null);
+  if (sameChallenge.length > 0) {
+    throw new AppError('VALIDATION', 'チャレンジ番号「' + input.チャレンジ番号 + '」はすでに案件 ' + sameChallenge.join('、') +
+      ' で登録されています。同じお客様の場合は、新しく登録せずにその案件を開いて接客結果を入れてください。');
   }
 
   const caseId = generateCaseId();
@@ -225,16 +229,40 @@ function caseService_createManualCase(input, ctx) {
   return result;
 }
 
-/** 案件の基本情報（チャレンジ番号等）を後から編集する場合に使う */
+/**
+ * 案件の基本情報のうち、後から直してよい項目。これ以外の列（案件状態・店舗ID等）は、
+ * 画面以外から直接呼ばれても書き換えられないようにする（以前は渡された項目をそのまま書き込んでいた）。
+ */
+const CASE_CORE_EDITABLE_FIELDS_ = ['チャレンジ番号', '問合せ方法', '媒体'];
+
+/**
+ * 案件の基本情報（チャレンジ番号・問合せ方法・媒体）を後から編集する。
+ * フォーム経由の案件は問合せ方法が空欄で作られるため、スタッフが接客結果を入れるときにここで選ぶ。
+ * 媒体はフォームの回答（流入経路）がそのまま入るが、誤りがあればここで直せる。
+ */
 function caseService_updateCaseCore(caseId, patch, ctx) {
   const caseRecord = caseRepo_getById(caseId);
   if (!caseRecord) throw new AppError('VALIDATION', '対象の案件が見つかりません。');
-  validateCaseCore_(patch);
-  if (patch.チャレンジ番号 && caseRepo_isChallengeNumberDuplicate(patch.チャレンジ番号, caseId)) {
-    throw new AppError('VALIDATION', 'チャレンジ番号「' + patch.チャレンジ番号 + '」はすでに登録されています。');
+  const clean = {};
+  CASE_CORE_EDITABLE_FIELDS_.forEach(function (f) {
+    if (patch && Object.prototype.hasOwnProperty.call(patch, f)) clean[f] = String(patch[f] === null || patch[f] === undefined ? '' : patch[f]).trim();
+  });
+  if (Object.keys(clean).length === 0) throw new AppError('VALIDATION', '変更する項目がありません。');
+  validateCaseCore_(clean);
+  if (clean.チャレンジ番号) {
+    const others = caseRepo_findCaseIdsByChallengeNumber(clean.チャレンジ番号, caseId);
+    if (others.length > 0) {
+      throw new AppError('VALIDATION', 'チャレンジ番号「' + clean.チャレンジ番号 + '」はすでに案件 ' + others.join('、') +
+        ' で使われています。同じお客様の案件が2件できている場合は、基本情報タブの「重複した案件を結合」から1件にまとめてください。');
+    }
   }
-  caseRepo_updateById(caseId, patch);
-  writeSystemLog_({ 実行者: ctx.email, 操作種別: 'UPDATE_CASE_CORE', 対象CASE_ID: caseId, 変更前後の値の要約: JSON.stringify(patch) });
+  const before = {};
+  Object.keys(clean).forEach(function (f) { before[f] = caseRecord[f]; });
+  caseRepo_updateById(caseId, clean);
+  writeSystemLog_({
+    実行者: ctx.email, 操作種別: 'UPDATE_CASE_CORE', 対象CASE_ID: caseId,
+    変更前後の値の要約: JSON.stringify({ 変更前: before, 変更後: clean })
+  });
 }
 
 /* ---------- 経過メモ（CaseNotes）。後日の電話対応等をいつでも追記できるログ ---------- */

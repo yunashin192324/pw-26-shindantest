@@ -129,8 +129,11 @@ function assertChallengeNumberFormat_(value) {
  */
 function validateContract_(rec) {
   assertRequired_(rec.契約日, '契約日');
-  const today = new Date();
-  if (new Date(rec.契約日) > today) {
+  // 日付同士を「yyyy-MM-dd」の文字列で比べる。以前は new Date('2026-11-16') と現在時刻を比べていたため、
+  // 文字列の日付が世界標準時の0時（日本時間の9時）として扱われ、日本時間の0時〜9時に「今日」を契約日にして
+  // 成約登録すると「未来日」と判定されて登録できなかった。
+  const contractIso = nippoService_isoDate_(rec.契約日);
+  if (contractIso && contractIso > formatDateISO_(new Date())) {
     throw new AppError('VALIDATION', '契約日に未来日は指定できません。');
   }
   assertRequired_(rec.商品, '商品');

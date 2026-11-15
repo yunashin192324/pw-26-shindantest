@@ -74,6 +74,8 @@
   button.secondary { background: #eef1f6; color: var(--color-text); }
   button.secondary:hover { background: #dfe4ec; }
   button.danger { background: var(--color-danger); }
+  .notice { padding: 8px 12px; border-radius: var(--radius); font-size: 13px; line-height: 1.6; }
+  .notice.warn { background: #fff8e1; border: 1px solid #f0d58a; color: #6b4e00; }
   input, select, textarea { border: 1px solid var(--color-border); border-radius: 6px; padding: 7px 8px; font-size: 13px; width: 100%; font-family: inherit; }
   label { font-size: 12px; color: var(--color-muted); display: block; margin-bottom: 4px; }
   .field { margin-bottom: 10px; }
@@ -413,6 +415,7 @@ function renderDashboardBody(data) {
   }).join('') + '</div>';
   kpiHtml += '<div class="muted" style="margin-bottom:10px;">期間：' + data.periodFrom + '〜' + data.periodTo +
     '　／　前年同期間：' + data.prevPeriodFrom + '〜' + data.prevPeriodTo + '</div>';
+  if (s.稼働前の月を含む) kpiHtml += '<div class="muted" style="margin-bottom:6px;">※本システム稼働前の月は、取り込んだ過去の月次日報（または手入力した前年実績）の来店数・成約数・キャンセル数を含みます。</div>';
   if (data.viewingOtherStore) kpiHtml += '<div class="panel muted">他店舗の集計値のみ表示しています。</div>';
   kpiHtml += '<div class="muted">最新の反映：' + (data.lastUpdated ? fmtDate(data.lastUpdated) : '未集計') + '</div>';
   document.getElementById('dashboard-kpis').innerHTML = kpiHtml;
@@ -627,7 +630,8 @@ function renderNippoNationwide_() {
 /** 通期進捗管理：今年・前年・前々年の月次推移（前々年は稼働前ならHistoricalActuals由来でCXL/NET/PAXは「—」） */
 function renderNippoTrend_() {
   callApi('getMultiYearTrend', {}, 3).then(function (data) {
-    let html = '<p class="muted">今年・前年・前々年の月次推移です（前々年で本システム稼働前の月は、遡及入力した前年実績（来店数・成約数のみ）から表示するため、CXL・NET・PAX数は「—」になります）。</p>' +
+    let html = '<p class="muted">今年・前年・前々年の月次推移です。本システム稼働前の月は、取り込んだ過去の月次日報（または手入力した前年実績）の値を表示します。' +
+      '手入力の前年実績（来店数・成約数のみ）の月は、CXL・NET・PAX数が「—」になります。</p>' +
       '<div style="overflow-x:auto;"><table><thead><tr><th>月</th>';
     data.years.forEach(function (y) { html += '<th colspan="2">' + y + '年（NB／新規問合せ）</th>'; });
     html += '<th>前年比</th><th>前々年比</th></tr></thead><tbody>';
@@ -643,7 +647,7 @@ function renderNippoTrend_() {
     html += '<h3 style="font-size:13px;margin-top:16px;">通期計</h3>' +
       '<table><thead><tr><th>年</th><th>データ源</th><th>新規問合せ</th><th>NB</th><th>CXL</th><th>NET</th><th>PAX(NB)</th><th>PAX(NET)</th></tr></thead><tbody>';
     data.totalsByYear.forEach(function (t) {
-      const sourceLabel = t.source === 'historical' ? '前年実績入力' : '実データ';
+      const sourceLabel = t.source === 'historical' ? '前年実績（日報取込・集計）' : t.source === 'mixed' ? '実データ＋前年実績' : t.source === 'none' ? 'データなし' : '実データ';
       html += '<tr><td>' + t.year + '</td><td>' + sourceLabel + '</td><td>' + fmtNippoVal_(t.新規問合せ) + '</td><td>' + fmtNippoVal_(t.NB) + '</td>' +
         '<td>' + fmtNippoVal_(t.CXL) + '</td><td>' + fmtNippoVal_(t.NET) + '</td><td>' + fmtNippoVal_(t.PAX_NB) + '</td><td>' + fmtNippoVal_(t.PAX_NET) + '</td></tr>';
     });
@@ -878,7 +882,10 @@ function renderCaseDetailShell_(caseId, tab, detail) {
     escapeHtml(cust.新婦姓 || '') + ' ' + escapeHtml(cust.新婦名 || '') +
     ' <span class="badge status-' + c.案件状態 + '">' + escapeHtml(c.案件状態) + '</span></h2>' +
     '<div class="muted">案件ID: ' + c.CASE_ID + '　相談区分: ' + escapeHtml(c.相談区分) +
-    '　チャレンジ番号: ' + escapeHtml(c.チャレンジ番号 || '未設定') + ' <a onclick="openEditChallengeModal(\'' + caseId + '\')">編集</a></div></div>' +
+    '　チャレンジ番号: ' + escapeHtml(c.チャレンジ番号 || '未設定') +
+    '　問合せ方法: ' + escapeHtml(c.問合せ方法 || '未設定') + '　媒体: ' + escapeHtml(c.媒体 || '未設定') +
+    (role !== 'ARRANGE' ? ' <a onclick="openEditCaseCoreModal(\'' + caseId + '\')">基本情報を編集</a>' : '') + '</div>' +
+    caseDetailNoticesHtml_(caseId, detail) + '</div>' +
     '<div class="tabs">' + visibleTabs.map(function (t) {
       return '<a class="' + (t.key === tab ? 'active' : '') + '" onclick="location.hash=\'#/cases/' + caseId + '/' + t.key + '\'">' + t.label + '</a>';
     }).join('') + '</div>' +
@@ -887,15 +894,115 @@ function renderCaseDetailShell_(caseId, tab, detail) {
   renderCaseTabBody_(tab, detail);
 }
 
-function openEditChallengeModal(caseId) {
-  openModal('<h3>チャレンジ番号の編集</h3>' +
-    '<div class="field"><label>チャレンジ番号（半角英数11桁）</label><input id="ec-challenge" maxlength="11" oninput="this.value=this.value.replace(/[^a-zA-Z0-9]/g,\'\')"></div>' +
-    '<div class="row" style="margin-top:12px;"><button class="secondary" onclick="closeModal()">キャンセル</button>' +
-    '<button onclick="submitEditChallenge(\'' + caseId + '\')">保存</button></div>');
+/** 案件詳細の上部に出す注意書き（問合せ方法の未設定・重複の可能性）と、結合・削除のボタン */
+function caseDetailNoticesHtml_(caseId, detail) {
+  const c = detail.caseRecord, role = detail.currentRole;
+  const canMerge = role === 'MANAGER' || role === 'HQ' || role === 'ADMIN';
+  let html = '';
+  if (!c.問合せ方法 && role !== 'ARRANGE') {
+    html += '<div class="notice warn" style="margin-top:8px;">問合せ方法が未設定です。日報の集計（問合せ方法別）に使うため、' +
+      '<a onclick="openEditCaseCoreModal(\'' + caseId + '\')">基本情報を編集</a>から選んでください。</div>';
+  }
+  const dups = detail.duplicateCandidates || [];
+  if (dups.length > 0) {
+    html += '<div class="notice warn" style="margin-top:8px;">同じお客様と思われる案件が ' + dups.length + '件あります（' +
+      dups.map(function (d) { return '<a onclick="location.hash=\'#/cases/' + d.CASE_ID + '\'">' + escapeHtml(d.CASE_ID) + '</a>（' + escapeHtml(d.理由) + '）'; }).join('、') +
+      '）。' + (canMerge ? '' : '店長または本部に結合を依頼してください。') + '</div>';
+  }
+  if (canMerge) {
+    html += '<div class="row" style="margin-top:8px;gap:8px;">' +
+      '<button class="secondary" onclick="openMergeCaseModal(\'' + caseId + '\')">重複した案件を結合</button>' +
+      '<button class="danger" onclick="openDeleteCaseModal(\'' + caseId + '\')">この案件を削除</button></div>';
+  }
+  return html;
 }
-function submitEditChallenge(caseId) {
-  callApi('updateCaseCore', caseId, { チャレンジ番号: document.getElementById('ec-challenge').value }).then(function () {
+
+/** 基本情報（チャレンジ番号・問合せ方法・媒体）の編集。マスタに無い現在の値も選べるように残す */
+function selectWithCurrent_(id, rows, labelKey, current) {
+  const labels = (rows || []).filter(function (r) { return r.使用終了 !== true && r.使用終了 !== 'TRUE'; }).map(function (r) { return String(r[labelKey]); });
+  if (current && labels.indexOf(String(current)) === -1) labels.unshift(String(current));
+  return '<select id="' + id + '"><option value="">（未設定）</option>' + labels.map(function (l) {
+    return '<option value="' + escapeHtml(l) + '"' + (String(current) === l ? ' selected' : '') + '>' + escapeHtml(l) + '</option>';
+  }).join('') + '</select>';
+}
+function openEditCaseCoreModal(caseId) {
+  const c = (currentCaseDetail && currentCaseDetail.caseRecord) || {};
+  const mediaList = (REF_MASTERS.media || []).map(function (m) { return '<option value="' + escapeHtml(m.名称) + '">'; }).join('');
+  openModal('<h3>基本情報の編集</h3>' +
+    '<div class="field"><label>チャレンジ番号（半角英数11桁）</label><input id="ec-challenge" maxlength="11" value="' + escapeHtml(c.チャレンジ番号 || '') + '" oninput="this.value=this.value.replace(/[^a-zA-Z0-9]/g,\'\')"></div>' +
+    '<div class="field"><label>問合せ方法</label>' + selectWithCurrent_('ec-method', REF_MASTERS.inquiryMethods, '名称', c.問合せ方法) + '</div>' +
+    '<div class="field"><label>媒体（何を見て問い合わせたか）</label><input id="ec-media" list="ec-media-list" value="' + escapeHtml(c.媒体 || '') + '"><datalist id="ec-media-list">' + mediaList + '</datalist>' +
+    '<div class="muted" style="font-size:12px;">カウンセリングシートの回答（流入経路）がそのまま入っています。誤りがあれば直してください。</div></div>' +
+    '<div class="row" style="margin-top:12px;"><button class="secondary" onclick="closeModal()">キャンセル</button>' +
+    '<button onclick="submitEditCaseCore(\'' + caseId + '\')">保存</button></div>');
+}
+function submitEditCaseCore(caseId) {
+  callApi('updateCaseCore', caseId, {
+    チャレンジ番号: document.getElementById('ec-challenge').value,
+    問合せ方法: document.getElementById('ec-method').value,
+    媒体: document.getElementById('ec-media').value
+  }).then(function () {
     toast('更新しました。', 'success'); closeModal(); renderCaseDetail(caseId, 'basic');
+  }).catch(handleApiError);
+}
+
+/* ---- 重複した案件の結合・案件の削除 ---- */
+function openMergeCaseModal(caseId) {
+  callApi('findDuplicateCases', caseId).then(function (cands) {
+    let list = '';
+    if (cands.length > 0) {
+      list = '<table><thead><tr><th></th><th>案件ID</th><th>新郎／新婦</th><th>店舗</th><th>登録経路</th><th>受付日</th><th>状態</th><th>理由</th></tr></thead><tbody>' +
+        cands.map(function (d, i) {
+          return '<tr><td><input type="radio" name="mg-other" value="' + escapeHtml(d.CASE_ID) + '"' + (i === 0 ? ' checked' : '') + ' style="width:auto;"></td>' +
+            '<td>' + escapeHtml(d.CASE_ID) + '</td><td>' + escapeHtml(d.新郎姓名) + '／' + escapeHtml(d.新婦姓名) + '</td><td>' + escapeHtml(d.店舗名) + '</td>' +
+            '<td>' + escapeHtml(d.登録経路) + '</td><td>' + escapeHtml(d.受付日時) + '</td><td>' + escapeHtml(d.案件状態) + '</td><td>' + escapeHtml(d.理由) + '</td></tr>';
+        }).join('') + '</tbody></table>';
+    } else {
+      list = '<p class="muted">同じお客様と思われる案件は自動では見つかりませんでした。結合する相手の案件IDを下に入力してください。</p>';
+    }
+    openModal('<h3>重複した案件の結合</h3>' +
+      '<p class="muted">この案件（' + escapeHtml(caseId) + '）と、相手の案件を1件にまとめます。消す方の案件の接客履歴・メモ・成約・未成約・手配・タスクは、' +
+      'すべて残す方の案件へ移ります。両方に入っている項目は残す方の値を使い、残す方で空欄の項目だけ消す方の値で埋めます。</p>' +
+      list +
+      '<div class="field"><label>相手の案件ID（一覧に無い場合のみ入力）</label><input id="mg-other-free" placeholder="例：CASE-..."></div>' +
+      '<div class="field"><label>どちらを残しますか</label><select id="mg-keep">' +
+      '<option value="this">この案件（' + escapeHtml(caseId) + '）を残し、相手を消す</option>' +
+      '<option value="other">相手の案件を残し、この案件を消す</option></select></div>' +
+      '<div class="row" style="margin-top:12px;"><button class="secondary" onclick="closeModal()">キャンセル</button>' +
+      '<button onclick="submitMergeCase(\'' + caseId + '\')">結合する</button></div>');
+  }).catch(handleApiError);
+}
+function submitMergeCase(caseId) {
+  const free = document.getElementById('mg-other-free').value.trim();
+  const checked = document.querySelector('input[name="mg-other"]:checked');
+  const other = free || (checked ? checked.value : '');
+  if (!other) { toast('結合する相手の案件を選んでください。', 'error'); return; }
+  const keepThis = document.getElementById('mg-keep').value === 'this';
+  const keepId = keepThis ? caseId : other, removeId = keepThis ? other : caseId;
+  if (!confirm('案件 ' + removeId + ' を ' + keepId + ' に結合し、' + removeId + ' を消します。よろしいですか？')) return;
+  callApi('mergeCases', keepId, removeId).then(function () {
+    toast('結合しました（' + removeId + ' → ' + keepId + '）。', 'success');
+    closeModal();
+    location.hash = '#/cases/' + keepId;
+    if (keepThis) renderCaseDetail(keepId, 'basic');
+  }).catch(handleApiError);
+}
+function openDeleteCaseModal(caseId) {
+  openModal('<h3>案件の削除</h3>' +
+    '<p>案件 <b>' + escapeHtml(caseId) + '</b> と、それにひもづく接客履歴・メモ・成約・未成約・手配・タスクをすべて削除します。' +
+    '成約がある案件を消すと、その成約は集計から外れます。</p>' +
+    '<p class="muted">消した内容は DeletedRecords シートに控えとして残ります（誤って消した場合は本部が手で戻せます）。' +
+    '同じお客様の案件が2件ある場合は、削除ではなく「重複した案件を結合」を使うと記録が失われません。</p>' +
+    '<div class="field"><label>確認のため、案件IDを入力してください</label><input id="dc-confirm"></div>' +
+    '<div class="row" style="margin-top:12px;"><button class="secondary" onclick="closeModal()">キャンセル</button>' +
+    '<button class="danger" onclick="submitDeleteCase(\'' + caseId + '\')">削除する</button></div>');
+}
+function submitDeleteCase(caseId) {
+  if (document.getElementById('dc-confirm').value.trim() !== caseId) { toast('入力した案件IDが一致しません。', 'error'); return; }
+  callApi('deleteCase', caseId).then(function () {
+    toast('案件を削除しました。', 'success');
+    closeModal();
+    location.hash = '#/cases';
   }).catch(handleApiError);
 }
 
@@ -1732,15 +1839,26 @@ function renderHistoricalActualsList_() {
   callApi('getHistoricalActuals').then(function (rows) {
     const storeById = {};
     (REF_MASTERS.stores || []).forEach(function (s) { storeById[s.STORE_ID] = s.店舗名; });
-    let html = '<div class="panel"><p class="muted">本システム稼働前の実績を月・店舗・方面単位で入力すると、ダッシュボードの前年比較に使われます。</p>' +
+    let html = '<div class="panel"><p class="muted">本システム稼働前の実績を月・店舗・方面単位で入力すると、ダッシュボードの前年比較に使われます。' +
+      '登録者が「日報取込」の行は過去の月次日報から取り込んだ値、「システム集計」の行は過去データアーカイブの前に保存した値です（どちらも自動で作られます）。</p>' +
       '<button onclick="openHistoricalActualModal()">＋ 前年実績を入力</button><hr class="section-divider">' +
-      '<table><thead><tr><th>年月</th><th>店舗</th><th>方面</th><th>来店数</th><th>成約数</th></tr></thead><tbody>';
-    rows.forEach(function (r) {
-      html += '<tr><td>' + r.年月 + '</td><td>' + escapeHtml(storeById[r.店舗ID] || r.店舗ID) + '</td><td>' + escapeHtml(r.方面) + '</td><td>' + r.来店数 + '</td><td>' + r.成約数 + '</td></tr>';
+      '<div style="overflow-x:auto;"><table><thead><tr><th>年月</th><th>店舗</th><th>方面</th><th>来店数（新規問合せ）</th><th>成約数</th><th>CXL数</th><th>NB(PAX)</th><th>CXL(PAX)</th><th>登録者</th></tr></thead><tbody>';
+    rows.slice().sort(function (a, b) { return String(b.年月).localeCompare(String(a.年月)); }).forEach(function (r) {
+      const v = function (x) { return (x === '' || x === null || x === undefined) ? '—' : escapeHtml(x); };
+      html += '<tr><td>' + escapeHtml(fmtYm_(r.年月)) + '</td><td>' + escapeHtml(storeById[r.店舗ID] || r.店舗ID) + '</td><td>' + escapeHtml(r.方面) + '</td>' +
+        '<td>' + v(r.来店数) + '</td><td>' + v(r.成約数) + '</td><td>' + v(r.CXL数) + '</td><td>' + v(r.NB_PAX) + '</td><td>' + v(r.CXL_PAX) + '</td><td>' + v(r.登録者) + '</td></tr>';
     });
-    html += '</tbody></table></div>';
+    html += '</tbody></table></div></div>';
     document.getElementById('targets-body').innerHTML = html;
   }).catch(handleApiError);
+}
+/** 年月の表示（シートで日付に変換されて届いた場合も「2025-12」の形で出す） */
+function fmtYm_(v) {
+  if (!v) return '';
+  const m = String(v).match(/^(\d{4})[\/\-](\d{1,2})/);
+  if (m) return m[1] + '-' + ('0' + Number(m[2])).slice(-2);
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? String(v) : d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2);
 }
 function openHistoricalActualModal() {
   const storeOptions = CURRENT_USER.role === 'MANAGER'

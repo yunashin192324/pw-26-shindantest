@@ -54,8 +54,8 @@ function getCurrentUserInfo() {
  * 日次バッチトリガー（第7章3章）をまとめて設置する。
  * ・毎日早朝：期限アラート通知（第8章7章）
  * ・毎日深夜：AnalyticsCache再計算（第8章8章）
- * ・AnalyticsCache再計算の直後：過去データアーカイブ（Q&A六巡目）。ダッシュボードの集計値は
- *   AnalyticsCacheに既に反映済みのため、その後で本体シートから退避しても集計は変わらない。
+ * ・AnalyticsCache再計算の直後：過去データアーカイブ（Q&A六巡目）。案件を移す前に、移す年の数字を
+ *   月次集計としてHistoricalActualsに保存する（AnalyticsCacheは本体シートの案件だけから毎晩作り直すため）。
  */
 function installDailyTriggers() {
   ['batchSendDeadlineAlerts', 'batchRebuildAnalyticsCache', 'batchArchiveOldRecords'].forEach(function (fn) {

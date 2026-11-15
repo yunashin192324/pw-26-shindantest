@@ -46,6 +46,20 @@ function caseRepo_isChallengeNumberDuplicate(challengeNo, excludeCaseId) {
   });
 }
 
+/** 同じチャレンジ番号を持つ案件のCASE_ID一覧（excludeCaseIdは除く）。重複時に相手の案件を案内するために使う */
+function caseRepo_findCaseIdsByChallengeNumber(challengeNo, excludeCaseId) {
+  if (!challengeNo) return [];
+  const sheet = getSheet_(SHEET_NAMES.CASES);
+  const ids = getColumnValues_(sheet, 'CASE_ID');
+  const values = getColumnValues_(sheet, 'チャレンジ番号');
+  const result = [];
+  values.forEach(function (v, i) {
+    if (excludeCaseId && ids[i] === excludeCaseId) return;
+    if (String(v || '').trim() === String(challengeNo).trim()) result.push(ids[i]);
+  });
+  return result;
+}
+
 /* ---------- Customers（案件に紐づく参照。実体はcustomerRepository.gs） ---------- */
 
 function caseRepo_getCustomerByCaseId(caseId) {

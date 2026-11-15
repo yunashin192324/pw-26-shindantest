@@ -70,6 +70,9 @@ function nippoService_yearlyCaseFamily_(year, scope) {
  * 全件のcontractsから拾う）。
  */
 function nippoService_kpisForRange_(fromIso, toIso, scope) {
+  // 本システム稼働前の期間は、0件ではなく「データなし」として扱う（前年比が0%と誤って出ないように）
+  const startYm = nippoService_systemStartMonth_();
+  if (startYm && toIso.slice(0, 7) < startYm) return { hasData: false };
   const fromYear = Number(fromIso.slice(0, 4));
   const fam = nippoService_yearlyCaseFamily_(fromYear, scope);
   if (!fam) return { hasData: false };
@@ -90,14 +93,18 @@ function nippoService_kpisForRange_(fromIso, toIso, scope) {
   });
 
   fam.contracts.forEach(function (r) {
-    if (r.有効フラグ !== true && r.有効フラグ !== 'TRUE') return;
-    if (!r.契約日 || r.契約日 < fromIso || r.契約日 > toIso) return;
+    // NBは「成約した件数」。あとでキャンセルされた成約（有効フラグOFF）も含めて数え、キャンセルはCXLで別に数える
+    // （月次日報と同じ考え方：成約の行はそのまま残し、キャンセル欄に別途記入してNET＝成約−CXL）。
+    // 以前は有効な成約だけを数えていたため、キャンセルが成約とCXLの両方から引かれ、NETが実際より少なく出ていた。
+    const d = nippoService_isoDate_(r.契約日);
+    if (!d || d < fromIso || d > toIso) return;
     NB += 1;
     PAX_NB += (Number(r.CPL旅行人数) || 0) + (Number(r.列席旅行人数) || 0);
   });
 
   fam.lostCases.forEach(function (l) {
-    if (!l.未成約日 || l.未成約日 < fromIso || l.未成約日 > toIso) return;
+    const ld = nippoService_isoDate_(l.未成約日);
+    if (!ld || ld < fromIso || ld > toIso) return;
     if (l.種別 === 'キャンセル') {
       CXL += 1;
       const ct = contractByCaseId[l.CASE_ID];
@@ -221,14 +228,16 @@ function nippoService_getStaffReport(filter, scope) {
     if (!contractByCaseId[r.CASE_ID] || r.契約日 > contractByCaseId[r.CASE_ID].契約日) contractByCaseId[r.CASE_ID] = r;
   });
   contracts.forEach(function (r) {
-    if (r.有効フラグ !== true && r.有効フラグ !== 'TRUE') return;
-    if (!r.契約日 || r.契約日 < periodFrom || r.契約日 > periodTo) return;
+    // あとでキャンセルされた成約も含めて数える（CXLは別に数え、NET＝NB−CXL。kpisForRange_と同じ考え方）
+    const d = nippoService_isoDate_(r.契約日);
+    if (!d || d < periodFrom || d > periodTo) return;
     const row = ensure(r.契約担当);
     row.NB += 1;
     row.PAX_NB += (Number(r.CPL旅行人数) || 0) + (Number(r.列席旅行人数) || 0);
   });
   lostCases.forEach(function (l) {
-    if (!l.未成約日 || l.未成約日 < periodFrom || l.未成約日 > periodTo) return;
+    const ld = nippoService_isoDate_(l.未成約日);
+    if (!ld || ld < periodFrom || ld > periodTo) return;
     const row = ensure(l.担当者);
     if (l.種別 === 'キャンセル') {
       row.CXL += 1;
@@ -303,8 +312,9 @@ function nippoService_getStoreAreaMatrix(filter) {
   const cases = caseRepo_getAll();
   const caseById = {};
   cases.forEach(function (c) { caseById[c.CASE_ID] = c; });
+  // 成約数は、あとでキャンセルされた成約も含めた「成約した件数」（月次日報の全国店舗成約と同じ数え方）
   const contracts = sheetToObjects_(getSheet_(SHEET_NAMES.CONTRACTS))
-    .filter(function (r) { return (r.有効フラグ === true || r.有効フラグ === 'TRUE') && r.契約日 >= periodFrom && r.契約日 <= periodTo; });
+    .filter(function (r) { const d = nippoService_isoDate_(r.契約日); return d && d >= periodFrom && d <= periodTo; });
 
   const areasFromMaster = areaRepo_getAll().filter(function (a) { return a.使用終了 !== true && a.使用終了 !== 'TRUE'; })
     .sort(function (a, b) { return (a.表示順 || 0) - (b.表示順 || 0); }).map(function (a) { return a.方面名; });
@@ -354,35 +364,110 @@ function nippoService_monthlyKpisForYear_(year, scope) {
 }
 
 /**
- * 年（1〜12月）ぶんのKPIを、生データが無い場合はHistoricalActuals（来店数・成約数のみ、遡及入力）で
- * 補って返す。稼働前の期間はCXL・NET・PAX数がnull（データなし）になる。
+ * 年（1〜12月）ぶんのKPIを、月ごとに「実データ」と「HistoricalActuals（前年実績）」のどちらかから返す。
+ *  ・本システム稼働前の月 … HistoricalActuals（過去の月次日報の取り込み、または手入力）
+ *  ・本体シートに残っている年（今年・前年） … 実データ
+ *  ・過去データアーカイブへ移した年 … アーカイブ時に保存した月次集計（登録者＝システム集計）があればそれを使い、
+ *    無ければ（この仕組みより前に移した年）アーカイブ用スプレッドシートの実データから数える
+ * HistoricalActualsにCXL数・PAXの列が入っている行（取り込み・システム集計）は、CXL・NET・PAX数も出す。
+ * 手入力の行（来店数・成約数のみ）の月は、CXL・NET・PAX数がnull（画面では「—」）になる。
  */
 function nippoService_monthlyKpisForYearWithFallback_(year, scope) {
-  const result = nippoService_monthlyKpisForYear_(year, scope);
-  if (result.source !== 'none') return result;
+  const startYm = nippoService_systemStartMonth_();
+  const cutoffYear = new Date().getFullYear() - archiveService_keepYears_() + 1;
+  const histByYm = nippoService_historicalByMonth_(scope);
 
-  const historical = historicalActualsRepo_getAll().filter(function (h) {
-    if (scope && scope.storeId) return h.店舗ID === scope.storeId;
-    if (scope && scope.region) { const s = storeRepo_getById(h.店舗ID); return s && s.地方 === scope.region; }
-    return true;
-  });
+  let live = null;
+  function liveMonths() {
+    if (live === null) live = nippoService_monthlyKpisForYear_(year, scope);
+    return live;
+  }
+
   const months = {};
+  let usedData = false, usedHist = false;
   for (let m = 1; m <= 12; m++) {
     const ym = year + '-' + (m < 10 ? '0' + m : String(m));
-    const matched = historical.filter(function (h) { return h.年月 === ym; });
-    if (matched.length === 0) {
+    const hist = histByYm[ym];
+    const preferHist = (startYm && ym < startYm) || year < cutoffYear;
+    if (preferHist && hist) {
+      months[ym] = hist; usedHist = true;
+    } else if (startYm && ym < startYm) {
       months[ym] = { hasData: false };
     } else {
-      months[ym] = {
-        hasData: true,
-        新規問合せ: matched.reduce(function (s, h) { return s + (Number(h.来店数) || 0); }, 0),
-        NB: matched.reduce(function (s, h) { return s + (Number(h.成約数) || 0); }, 0),
-        CXL: null, NET: null, 未成約: null, 成約率: null, PAX_NB: null, PAX_CXL: null, PAX_NET: null,
-        fromHistorical: true
-      };
+      const lm = liveMonths();
+      if (lm.source !== 'none' && lm.months[ym] && lm.months[ym].hasData) { months[ym] = lm.months[ym]; usedData = true; }
+      else if (hist) { months[ym] = hist; usedHist = true; }
+      else months[ym] = { hasData: false };
     }
   }
-  return { months: months, source: 'historical' };
+  const source = usedData && usedHist ? 'mixed' : usedHist ? 'historical' : usedData ? 'data' : 'none';
+  return { months: months, source: source };
+}
+
+/**
+ * HistoricalActuals を（スコープで絞った上で）年月ごとに合計し、KPIの形にして返す。
+ * { 'yyyy-MM': { hasData, 新規問合せ, NB, CXL, NET, PAX_NB, PAX_CXL, PAX_NET, fromHistorical } }
+ */
+function nippoService_historicalByMonth_(scope) {
+  const storeById = {};
+  storeRepo_getAll().forEach(function (s) { storeById[s.STORE_ID] = s; });
+  const byYm = {};
+  historicalActualsRepo_getAll().forEach(function (h) {
+    if (scope && scope.storeId && h.店舗ID !== scope.storeId) return;
+    if (scope && scope.region) { const s = storeById[h.店舗ID]; if (!s || s.地方 !== scope.region) return; }
+    const ym = pastNippo_normYm_(h.年月);
+    if (!ym) return;
+    const cur = byYm[ym] || (byYm[ym] = { 新規問合せ: 0, NB: 0, CXL: 0, PAX_NB: 0, PAX_CXL: 0, hasDetail: false, rows: 0 });
+    cur.rows += 1;
+    cur.新規問合せ += Number(h.来店数) || 0;
+    cur.NB += Number(h.成約数) || 0;
+    if (h.CXL数 !== '' && h.CXL数 !== null && h.CXL数 !== undefined) {
+      cur.hasDetail = true;
+      cur.CXL += Number(h.CXL数) || 0;
+      cur.PAX_NB += Number(h.NB_PAX) || 0;
+      cur.PAX_CXL += Number(h.CXL_PAX) || 0;
+    }
+  });
+  const result = {};
+  Object.keys(byYm).forEach(function (ym) {
+    const c = byYm[ym];
+    result[ym] = {
+      hasData: true, fromHistorical: true,
+      新規問合せ: c.新規問合せ, NB: c.NB,
+      CXL: c.hasDetail ? c.CXL : null, NET: c.hasDetail ? c.NB - c.CXL : null,
+      未成約: null, 成約率: null,
+      PAX_NB: c.hasDetail ? c.PAX_NB : null, PAX_CXL: c.hasDetail ? c.PAX_CXL : null,
+      PAX_NET: c.hasDetail ? c.PAX_NB - c.PAX_CXL : null
+    };
+  });
+  return result;
+}
+
+/**
+ * 本システムの稼働開始月（'yyyy-MM'）。これより前の月は「実データなし」として HistoricalActuals を使う。
+ * Settings の SYSTEM_START_MONTH があればそれを使い、無ければ本体シートで一番古い案件の受付月とする。
+ */
+let nippoService_startMonthCache_ = null;
+function nippoService_systemStartMonth_() {
+  if (nippoService_startMonthCache_ !== null) return nippoService_startMonthCache_;
+  let ym = pastNippo_normYm_(getSetting_('SYSTEM_START_MONTH', ''));
+  if (!/^\d{4}-\d{2}$/.test(ym)) {
+    ym = '';
+    getColumnValues_(getSheet_(SHEET_NAMES.CASES), '受付日時').forEach(function (v) {
+      const d = nippoService_isoDate_(v);
+      if (d && (!ym || d.slice(0, 7) < ym)) ym = d.slice(0, 7);
+    });
+  }
+  nippoService_startMonthCache_ = ym;
+  return ym;
+}
+
+/** 日付の値（Date／'yyyy-MM-dd'文字列）を'yyyy-MM-dd'にそろえる。読めなければ'' */
+function nippoService_isoDate_(v) {
+  if (v === null || v === undefined || v === '') return '';
+  if (Object.prototype.toString.call(v) === '[object Date]') return isNaN(v.getTime()) ? '' : formatDateISO_(v);
+  const m = String(v).trim().match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  return m ? m[1] + '-' + ('0' + Number(m[2])).slice(-2) + '-' + ('0' + Number(m[3])).slice(-2) : '';
 }
 
 /**

@@ -167,7 +167,10 @@ const SHEET_DEFINITIONS_ = [
   {
     // 本システム稼働前の実績を遡及入力するためのシート（前年同月比較用。Q&A一巡目 A-1・G-17）
     name: SHEET_NAMES.HISTORICAL_ACTUALS,
-    headers: ['年月', '店舗ID', '方面', '来店数', '成約数', '登録者', '登録日時']
+    // CXL数〜挙式月成約数は、過去の月次日報の取り込み（登録者＝日報取込）と、過去データアーカイブ時の
+    // 月次集計の保存（登録者＝システム集計）で埋まる。手入力の行では空欄のままでよい。
+    // 挙式月成約数だけは「年月」を挙式月として数えた成約数（月別・方面別の積み上げの前年着地に使う）。
+    headers: ['年月', '店舗ID', '方面', '来店数', '成約数', '登録者', '登録日時', 'CXL数', 'NB_PAX', 'CXL_PAX', '挙式月成約数']
   },
   {
     name: SHEET_NAMES.ANALYTICS_CACHE,
@@ -190,7 +193,15 @@ const SHEET_DEFINITIONS_ = [
     // 回避することの両方を狙い、年ごとに"別ファイルの"スプレッドシートへ完了案件一式を退避する。
     name: SHEET_NAMES.ARCHIVE_INDEX,
     headers: ['年', 'スプレッドシートID', '作成日時']
-  }
+  },
+  {
+    // 案件の削除・結合で消した行の控え（1行＝消した元の1行。誤操作時に手で戻せるようにする）
+    name: SHEET_NAMES.DELETED_RECORDS,
+    headers: DELETED_RECORDS_HEADERS_
+  },
+  { name: SHEET_NAMES.PAST_NIPPO_SOURCES, headers: PAST_NIPPO_SOURCES_HEADERS_ },
+  { name: SHEET_NAMES.PAST_NIPPO_STORE_MAP, headers: PAST_NIPPO_STORE_MAP_HEADERS_ },
+  { name: SHEET_NAMES.PAST_NIPPO_MONTHLY, headers: PAST_NIPPO_MONTHLY_HEADERS_ }
 ];
 
 function setupDatabase() {
@@ -227,19 +238,33 @@ function setupDatabase() {
   return ss.getUrl();
 }
 
-/** 第2章11-1章・第8章7章：期限アラート基準日数の初期値。画面13（設定）から変更可能。 */
+/**
+ * 第2章11-1章・第8章7章：期限アラート基準日数の初期値。画面13（設定）から変更可能。
+ * まだ無い設定だけを追加する（以前はsetupDatabaseを再実行するたびに、画面で変えた値が初期値に戻っていた）。
+ */
+function seedSettingIfMissing_(key, value, description) {
+  const sheet = getSheet_(SHEET_NAMES.SETTINGS);
+  if (findRowIndexByKey_(sheet, 'キー', key) !== -1) return;
+  appendRowFromObject_(sheet, { キー: key, 値: value, 説明: description || '' });
+}
+
 function seedDefaultSettings_() {
-  saveSetting_('FNL_DAYS_BEFORE', 45, 'FNL日＝挙式日（撮影日）の何日前か');
+  seedSettingIfMissing_('FNL_DAYS_BEFORE', 45, 'FNL日＝挙式日（撮影日）の何日前か');
   // Q&A一巡目F-15：30日が通常、60日は一部プランのみ（WeddingVenues/PhotoPlansの標準納品日数で個別上書き）、
   // 早期納品は日数固定ではないため自動算出せず手動入力とする（operationService.gs参照）
-  saveSetting_('DELIVERY_DAYS_NORMAL', 30, '納品予定日＝撮影日＋何日か（標準納品日数が未設定の場合の既定値）');
-  saveSetting_('DELIVERY_WARN_DAYS', 7, '納品予定日の何日前から警告色にするか');
-  saveSetting_('NOTIFY_EMAIL', 't-avantikikaku@his-world.com', '未マッピング回答・手配引き継ぎ等の通知先（Q&A一巡目 I-22）');
-  saveSetting_('FORM_ID', '11nTvJm6I0jRwiPi0iAItbmFrmwZW8XfqCceepBmAuxU', 'カウンセリングシートのフォームID');
-  saveSetting_('CHALLENGE_NUMBER_PATTERN', '^[a-zA-Z0-9]{11}$', 'チャレンジ番号の形式チェック用正規表現');
+  seedSettingIfMissing_('DELIVERY_DAYS_NORMAL', 30, '納品予定日＝撮影日＋何日か（標準納品日数が未設定の場合の既定値）');
+  seedSettingIfMissing_('DELIVERY_WARN_DAYS', 7, '納品予定日の何日前から警告色にするか');
+  seedSettingIfMissing_('NOTIFY_EMAIL', 't-avantikikaku@his-world.com', '未マッピング回答・手配引き継ぎ等の通知先（Q&A一巡目 I-22）');
+  seedSettingIfMissing_('FORM_ID', '11nTvJm6I0jRwiPi0iAItbmFrmwZW8XfqCceepBmAuxU', 'カウンセリングシートのフォームID');
+  seedSettingIfMissing_('CHALLENGE_NUMBER_PATTERN', '^[a-zA-Z0-9]{11}$', 'チャレンジ番号の形式チェック用正規表現');
   // Q&A六巡目：完了・未成約・キャンセル案件のうち、今年・前年より前のものだけを過去アーカイブへ退避する。
   // 今年＋前年の2年分は常に本体シートに残すため、ダッシュボードの前年比較は退避後も壊れない。
-  saveSetting_('ARCHIVE_KEEP_YEARS', 2, '過去アーカイブへ退避せず本体シートに残す年数（今年を含む）。前年比較機能のため既定2年');
+  seedSettingIfMissing_('ARCHIVE_KEEP_YEARS', 2, '過去アーカイブへ退避せず本体シートに残す年数（今年を含む）。前年比較機能のため既定2年');
+  // 稼働開始月（yyyy-MM）。これより前の月は、過去の月次日報の取り込み・前年実績の手入力の値で前年比較する。
+  // 空欄なら本体シートで一番古い案件の受付月を自動で使う。
+  seedSettingIfMissing_('SYSTEM_START_MONTH', '', '本システムの稼働開始月（例：2026-12）。これより前の月は前年実績（日報取込・手入力）を使う。空欄なら最初の案件の受付月');
+  // フォーム経由の案件の問合せ方法の初期値。空欄＝未設定（スタッフが案件詳細で選ぶ）。
+  seedSettingIfMissing_('FORM_DEFAULT_INQUIRY_METHOD', '', 'カウンセリングシート経由の案件の問合せ方法の初期値。空欄なら未設定にしてスタッフが選ぶ（例：Web）');
 }
 
 /**
