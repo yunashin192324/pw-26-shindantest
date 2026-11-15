@@ -1,0 +1,1789 @@
+<!--
+  index.html
+  HIS WEDDING CRM & Operation System — Webアプリ（HTML Service）シングルページ構成。
+  ハッシュルーティング（#/cases, #/cases/{CASE_ID} 等）でページ全体のリロードを避ける。
+  画面一覧と権限マトリクスに基づき、メニュー・タブの出し分けをサーバー返却値に従って行う。
+
+  v2（Q&A一巡目の確定内容を反映）：
+    ・接客記録は「案件」にひもづく接客結果のみ（区分は自動判定、チャレンジ番号・媒体・問合せ方法は
+      案件側に1つだけ持つため入力しない）
+    ・見積（Quotes）タブを撤去
+    ・経過メモ（後日の電話対応等）タブを新設
+    ・契約フォームに方面・CPL旅行人数・列席旅行人数を追加
+    ・未成約理由カテゴリを実データに更新
+    ・ダッシュボードにAGTシェア・方面シェア・方面内ランキング・月別方面別パイプライン・
+      地方×区分マトリクスを追加
+    ・目標設定画面に前年実績の遡及入力を追加
+-->
+<style>
+  :root {
+    --color-bg: #f5f6f8;
+    --color-panel: #ffffff;
+    --color-border: #e2e5eb;
+    --color-text: #24292f;
+    --color-muted: #6b7280;
+    --color-primary: #2f6feb;
+    --color-primary-dark: #1f4fb0;
+    --color-danger: #d1453b;
+    --color-warning: #b8860b;
+    --color-success: #1a7f37;
+    --radius: 8px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--color-bg); color: var(--color-text);
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif; font-size: 14px; }
+  a { color: var(--color-primary); text-decoration: none; cursor: pointer; }
+  #app-shell { display: flex; min-height: 100vh; }
+  #sidebar { width: 220px; flex-shrink: 0; background: #1c2333; color: #dfe3ee; padding: 16px 0; }
+  #sidebar .brand { font-weight: bold; font-size: 15px; padding: 0 16px 16px; border-bottom: 1px solid #333c52; margin-bottom: 12px; }
+  #sidebar .user { padding: 0 16px 16px; font-size: 12px; color: #a6adc4; border-bottom: 1px solid #333c52; margin-bottom: 8px; }
+  #sidebar nav a { display: block; padding: 10px 16px; color: #dfe3ee; font-size: 13px; }
+  #sidebar nav a.active { background: var(--color-primary); color: #fff; font-weight: bold; }
+  #sidebar nav a:hover { background: #2a3348; }
+  #main-col { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #topbar { background: var(--color-panel); border-bottom: 1px solid var(--color-border); padding: 10px 20px;
+    display: flex; justify-content: space-between; align-items: center; }
+  #view-root { padding: 20px; flex: 1; overflow-x: auto; }
+  .panel { background: var(--color-panel); border: 1px solid var(--color-border); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; }
+  .panel h2 { margin: 0 0 12px; font-size: 16px; }
+  .panel h3 { margin: 0 0 8px; font-size: 14px; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .col { flex: 1; min-width: 160px; }
+  .kpi-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .kpi-card { background: var(--color-panel); border: 1px solid var(--color-border); border-radius: var(--radius); padding: 14px; }
+  .kpi-card .label { font-size: 12px; color: var(--color-muted); }
+  .kpi-card .value { font-size: 22px; font-weight: bold; margin-top: 4px; }
+  .kpi-card .delta { font-size: 11px; margin-top: 3px; font-weight: 600; color: var(--color-muted); }
+  .kpi-card .delta.up { color: var(--color-success); }
+  .kpi-card .delta.down { color: var(--color-danger); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table th, table td { border-bottom: 1px solid var(--color-border); padding: 8px 10px; text-align: left; white-space: nowrap; }
+  table th { background: #f0f2f6; font-weight: 600; position: sticky; top: 0; }
+  table tr:hover td { background: #f7f9fc; }
+  table tr.clickable { cursor: pointer; }
+  table td.clickable { cursor: pointer; color: var(--color-primary); text-decoration: underline; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; background: #eef1f6; color: var(--color-text); }
+  .badge.status-成約, .badge.status-完了 { background: #e3f6e8; color: var(--color-success); }
+  .badge.status-未成約, .badge.status-キャンセル { background: #fbe9e8; color: var(--color-danger); }
+  .badge.status-保留 { background: #fdf3d9; color: var(--color-warning); }
+  .alert-overdue { background: #fbe9e8 !important; }
+  .alert-warning { background: #fdf3d9 !important; }
+  button, .btn { background: var(--color-primary); color: #fff; border: none; border-radius: 6px; padding: 8px 14px;
+    cursor: pointer; font-size: 13px; }
+  button:hover { background: var(--color-primary-dark); }
+  button.secondary { background: #eef1f6; color: var(--color-text); }
+  button.secondary:hover { background: #dfe4ec; }
+  button.danger { background: var(--color-danger); }
+  input, select, textarea { border: 1px solid var(--color-border); border-radius: 6px; padding: 7px 8px; font-size: 13px; width: 100%; font-family: inherit; }
+  label { font-size: 12px; color: var(--color-muted); display: block; margin-bottom: 4px; }
+  .field { margin-bottom: 10px; }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--color-border); margin-bottom: 14px; flex-wrap: wrap; }
+  .tabs a { padding: 8px 14px; border-radius: 6px 6px 0 0; color: var(--color-muted); font-size: 13px; }
+  .tabs a.active { background: var(--color-panel); border: 1px solid var(--color-border); border-bottom-color: var(--color-panel); color: var(--color-primary); font-weight: bold; margin-bottom: -1px; }
+  #modal-root .overlay { position: fixed; inset: 0; background: rgba(20,24,34,0.5); display: flex; align-items: center; justify-content: center; z-index: 100; }
+  #modal-root .modal-box { background: #fff; border-radius: var(--radius); padding: 20px; width: 560px; max-width: 92vw; max-height: 88vh; overflow-y: auto; }
+  #toast { position: fixed; top: 16px; right: 16px; z-index: 200; }
+  #toast .msg { background: #24292f; color: #fff; padding: 10px 16px; border-radius: 6px; margin-bottom: 8px; font-size: 13px; }
+  #toast .msg.error { background: var(--color-danger); }
+  #toast .msg.success { background: var(--color-success); }
+  .muted { color: var(--color-muted); font-size: 12px; }
+  .section-divider { border: none; border-top: 1px solid var(--color-border); margin: 16px 0; }
+  .chart-bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 12px; }
+  .chart-bar-row .bar-label { width: 110px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chart-bar-row .bar-track { flex: 1; background: #eef1f6; border-radius: 4px; height: 14px; overflow: hidden; }
+  .chart-bar-row .bar-fill { background: var(--color-primary); height: 100%; }
+  .access-denied { text-align: center; padding: 80px 20px; }
+</style>
+
+<div id="app-shell">
+  <div id="sidebar">
+    <div class="brand">HIS WEDDING CRM</div>
+    <div class="user" id="sidebar-user">読み込み中...</div>
+    <nav id="sidebar-nav"></nav>
+  </div>
+  <div id="main-col">
+    <div id="topbar">
+      <div id="breadcrumb" style="font-weight:bold;"></div>
+      <div class="muted" id="topbar-right"></div>
+    </div>
+    <div id="view-root">読み込み中...</div>
+  </div>
+</div>
+<div id="modal-root"></div>
+<div id="toast"></div>
+
+<script>
+/* ============================================================
+ * app.js 相当（Controller呼び出しをフロントから行う薄いSPA）
+ * ============================================================ */
+
+const STATUS_LABELS = ['来店前','来店済','商談中','保留','成約','完了','未成約','キャンセル'];
+const OPERATION_STATUS_FLOW = ['未着手','営業引継','現地依頼','返信待ち','予約完了','撮影済','RAW受領','AI加工','納品準備','納品済','完了','キャンセル'];
+const TASK_STATUS_FLOW = ['未着手', '進行中', '完了'];
+const LOST_REASON_CATEGORIES = ['価格','日程','お預かり','迷って決めきれず','親や会社などに要確認','競合','その他'];
+// 接客履歴の媒体・窓口（Q&A九巡目：実際の履歴シートに合わせた固定選択肢）
+const SALES_HISTORY_MEDIA_OPTIONS = ['電話（着信）','電話（発信）','メール（受信）','メール（送信）','郵送（受領）','郵送（送付）','来店','オンライン(PC)'];
+const SALES_HISTORY_WINDOW_OPTIONS = ['新郎','新婦','その他'];
+const MENU_ITEMS = [
+  { key: 'dashboard', label: 'ダッシュボード', hash: '#/dashboard' },
+  { key: 'nippo', label: '日報・進捗管理', hash: '#/nippo/weekly' },
+  { key: 'caseList', label: '案件一覧', hash: '#/cases' },
+  { key: 'tasks', label: 'タスク', hash: '#/tasks' },
+  { key: 'operations', label: '手配管理', hash: '#/operations' },
+  { key: 'masters', label: 'マスタ管理', hash: '#/masters/stores' },
+  { key: 'targets', label: '目標・前年実績', hash: '#/targets' },
+  { key: 'settings', label: '設定', hash: '#/settings' }
+];
+
+let CURRENT_USER = null;
+let REF_MASTERS = null;
+
+function escapeHtml(v) {
+  if (v === null || v === undefined) return '';
+  return String(v).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+function fmtDate(v) {
+  if (!v) return '';
+  if (typeof v === 'string') return v.substring(0, 10);
+  return v;
+}
+/**
+ * 今日の日付を'yyyy-MM-dd'文字列で返す（バグ修正：fmtDate(new Date())はDateオブジェクトが文字列でない
+ * 場合そのまま返す実装のため、日付の文字列比較に使うと常に不正な結果になっていた）。
+ */
+function todayIso_() {
+  const d = new Date();
+  const pad = function (n) { return n < 10 ? '0' + n : String(n); };
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+}
+
+/** google.script.run をPromise化する共通ラッパー */
+function callApi(fnName) {
+  const args = Array.prototype.slice.call(arguments, 1);
+  return new Promise(function (resolve, reject) {
+    google.script.run
+      .withSuccessHandler(function (resp) {
+        if (resp && resp.ok === false) reject(resp);
+        else resolve(resp && ('data' in resp) ? resp.data : resp);
+      })
+      .withFailureHandler(function (err) {
+        reject({ ok: false, type: 'SYSTEM', message: err && err.message ? err.message : String(err) });
+      })[fnName].apply(null, args);
+  });
+}
+
+function toast(message, type) {
+  const el = document.createElement('div');
+  el.className = 'msg' + (type ? ' ' + type : '');
+  el.textContent = message;
+  document.getElementById('toast').appendChild(el);
+  setTimeout(function () { el.remove(); }, 4000);
+}
+
+function handleApiError(err) {
+  console.error(err);
+  if (err && err.type === 'PERMISSION') { renderAccessDenied(); return; }
+  toast((err && err.message) || 'エラーが発生しました。', 'error');
+}
+
+function openModal(innerHtml) {
+  document.getElementById('modal-root').innerHTML =
+    '<div class="overlay" onclick="if(event.target===this) closeModal()"><div class="modal-box">' + innerHtml + '</div></div>';
+}
+function closeModal() { document.getElementById('modal-root').innerHTML = ''; }
+
+/* ---------------- 初期化・ルーティング ---------------- */
+
+window.addEventListener('hashchange', route);
+
+document.addEventListener('DOMContentLoaded', function () {
+  Promise.all([callApi('getCurrentUserInfo'), callApi('getReferenceMasters')])
+    .then(function (results) {
+      CURRENT_USER = results[0];
+      REF_MASTERS = results[1];
+      renderSidebar();
+      if (!location.hash) location.hash = '#/dashboard';
+      route();
+    })
+    .catch(handleApiError);
+});
+
+function renderSidebar() {
+  document.getElementById('sidebar-user').textContent = CURRENT_USER.name + '（' + CURRENT_USER.role + '）';
+  const nav = document.getElementById('sidebar-nav');
+  nav.innerHTML = MENU_ITEMS.filter(function (m) { return CURRENT_USER.menu[m.key]; })
+    .map(function (m) { return '<a href="' + m.hash + '" data-key="' + m.key + '">' + m.label + '</a>'; })
+    .join('');
+}
+function markActiveNav(key) {
+  document.querySelectorAll('#sidebar-nav a').forEach(function (a) {
+    a.classList.toggle('active', a.getAttribute('data-key') === key);
+  });
+}
+
+function route() {
+  const hash = location.hash || '#/dashboard';
+  const parts = hash.replace(/^#\//, '').split('/');
+  const root = document.getElementById('view-root');
+  root.innerHTML = '読み込み中...';
+
+  if (parts[0] === 'dashboard') { markActiveNav('dashboard'); setBreadcrumb('ダッシュボード'); renderDashboard(); }
+  else if (parts[0] === 'nippo') { markActiveNav('nippo'); setBreadcrumb('日報・進捗管理'); renderNippo(parts[1] || 'weekly'); }
+  else if (parts[0] === 'cases' && !parts[1]) { markActiveNav('caseList'); setBreadcrumb('案件一覧'); renderCaseList(); }
+  else if (parts[0] === 'cases' && parts[1]) { markActiveNav('caseList'); setBreadcrumb('案件詳細'); renderCaseDetail(parts[1], parts[2] || 'basic'); }
+  else if (parts[0] === 'operations' && !parts[1]) { markActiveNav('operations'); setBreadcrumb('手配管理一覧'); renderOperationsList(); }
+  else if (parts[0] === 'operations' && parts[1]) { markActiveNav('operations'); setBreadcrumb('手配詳細編集'); renderOperationDetail(parts[1]); }
+  else if (parts[0] === 'tasks') { markActiveNav('tasks'); setBreadcrumb('タスク管理'); renderTasks(); }
+  else if (parts[0] === 'masters') { markActiveNav('masters'); setBreadcrumb('マスタ管理'); renderMasters(parts[1] || 'stores'); }
+  else if (parts[0] === 'targets') { markActiveNav('targets'); setBreadcrumb('目標・前年実績'); renderTargets(); }
+  else if (parts[0] === 'settings') { markActiveNav('settings'); setBreadcrumb('設定'); renderSettings(); }
+  else { renderNotFound(); }
+}
+function setBreadcrumb(text) { document.getElementById('breadcrumb').textContent = text; }
+function renderAccessDenied() {
+  document.getElementById('view-root').innerHTML =
+    '<div class="access-denied"><h2>この画面を表示する権限がありません</h2>' +
+    '<p class="muted">心当たりがない場合は本部にご連絡ください。</p>' +
+    '<button onclick="location.hash=\'#/dashboard\'">ダッシュボードへ戻る</button></div>';
+}
+function renderNotFound() { document.getElementById('view-root').innerHTML = '<div class="panel">ページが見つかりません。</div>'; }
+
+function optionList_(rows, idKey, labelKey) {
+  return (rows || []).map(function (r) { return '<option value="' + r[idKey] + '">' + escapeHtml(r[labelKey]) + '</option>'; }).join('');
+}
+/** value・表示ともに名称文字列を使うプルダウン（方面・式場名など、名称そのものをテーブルに保存する項目用） */
+function optionListByLabel_(rows, labelKey) {
+  return (rows || []).map(function (r) { return '<option value="' + escapeHtml(r[labelKey]) + '">' + escapeHtml(r[labelKey]) + '</option>'; }).join('');
+}
+function kvTable_(pairs) {
+  return '<table>' + pairs.map(function (p) {
+    return '<tr><th style="width:160px;">' + escapeHtml(p[0]) + '</th><td>' + escapeHtml(p[1]) + '</td></tr>';
+  }).join('') + '</table>';
+}
+/**
+ * cols: [[見出し, フィールド名, 'date'（省略可）], ...]
+ * バグ修正：以前は全カラムに無条件でfmtDate()（文字列の場合は先頭10文字にsubstringする実装）を
+ * 適用していたため、日付以外の項目（プラン名・メモ・詳細・更新履歴の内容など10文字を超える文字列）が
+ * 軒並み先頭10文字で切り詰められて表示されていた。3番目の要素で明示的に'date'指定した列のみ
+ * fmtDate()を適用し、それ以外はそのまま表示する。
+ */
+function listTable_(rows, cols) {
+  if (!rows || rows.length === 0) return '<div class="muted">データがありません。</div>';
+  return '<table><thead><tr>' + cols.map(function (c) { return '<th>' + c[0] + '</th>'; }).join('') + '</tr></thead><tbody>' +
+    rows.map(function (r) {
+      return '<tr>' + cols.map(function (c) {
+        const raw = r[c[1]];
+        const value = c[2] === 'date' ? fmtDate(raw) : raw;
+        return '<td>' + escapeHtml(value) + '</td>';
+      }).join('') + '</tr>';
+    }).join('') + '</tbody></table>';
+}
+function renderBarList_(items, limit) {
+  const max = Math.max.apply(null, items.map(function (i) { return Number(i.value) || 0; }).concat([1]));
+  if (items.length === 0) return '<div class="muted">データがありません</div>';
+  const sliced = limit ? items.slice(0, limit) : items; // limit未指定（0/undefined）の場合は全件表示
+  return sliced.map(function (i) {
+    const pct = Math.round((Number(i.value) || 0) / max * 100);
+    return '<div class="chart-bar-row"><div class="bar-label">' + escapeHtml(i.label) + '</div>' +
+      '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%"></div></div>' +
+      '<div class="bar-value">' + i.value + '</div></div>';
+  }).join('');
+}
+
+/**
+ * 前年実数・前年比%を添えたランキング表示（方面内ランキング用。Q&A四巡目）。
+ * items: [{label, count, prevCount, yoy}]
+ */
+function renderRankingList_(items, limit) {
+  if (items.length === 0) return '<div class="muted">データがありません</div>';
+  const max = Math.max.apply(null, items.map(function (i) { return Number(i.count) || 0; }).concat([1]));
+  const sliced = limit ? items.slice(0, limit) : items;
+  return sliced.map(function (i) {
+    const pct = Math.round((Number(i.count) || 0) / max * 100);
+    const yoyText = i.yoy !== null && i.yoy !== undefined ? i.yoy + '%' : '-';
+    return '<div class="chart-bar-row"><div class="bar-label">' + escapeHtml(i.label) + '</div>' +
+      '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%"></div></div>' +
+      '<div class="bar-value">' + i.count + '</div></div>' +
+      '<div class="muted" style="margin:-4px 0 8px 118px;font-size:11px;">前年' + i.prevCount + '件・前年比' + yoyText + '</div>';
+  }).join('');
+}
+
+/* ============================================================
+ * 画面：ダッシュボード
+ * ============================================================ */
+function renderDashboard() {
+  const root = document.getElementById('view-root');
+  const isHqLevel = ['HQ', 'ARRANGE', 'ADMIN'].indexOf(CURRENT_USER.role) !== -1;
+  const storeOptions = optionList_(REF_MASTERS.stores, 'STORE_ID', '店舗名');
+  const regionOptionsByName = (REF_MASTERS.regions || []).map(function (r) { return '<option value="' + escapeHtml(r.地方名) + '">' + escapeHtml(r.地方名) + '</option>'; }).join('');
+  const areaOptionsByName = (REF_MASTERS.areas || []).map(function (a) { return '<option value="' + escapeHtml(a.方面名) + '">' + escapeHtml(a.方面名) + '</option>'; }).join('');
+
+  root.innerHTML =
+    '<div class="panel"><div class="row">' +
+    '<div class="col"><label>期間から</label><input type="date" id="f-from"></div>' +
+    '<div class="col"><label>期間まで</label><input type="date" id="f-to"></div>' +
+    (CURRENT_USER.role !== 'STAFF' ? '<div class="col"><label>店舗</label><select id="f-store"><option value="">全店舗</option>' + storeOptions + '</select></div>' : '') +
+    (isHqLevel ? '<div class="col"><label>地方</label><select id="f-region"><option value="">全地方</option>' + regionOptionsByName + '</select></div>' : '') +
+    '<div class="col" style="display:flex;align-items:flex-end;"><button onclick="applyDashboardFilter()">絞り込み</button></div>' +
+    '</div></div>' +
+    // 表示順（Q&A四巡目）：KPI→AGT/方面シェア→積み上げ→（未成約理由・店舗別/地方別実績）→媒体別→方面内ランキング→地方×区分マトリクス
+    '<div id="dashboard-kpis">集計中...</div>' +
+    '<div class="row">' +
+    '<div class="col panel"><h3>AGTシェア</h3><div id="agt-share">集計中...</div></div>' +
+    '<div class="col panel"><h3>方面別シェア</h3><div id="area-share">集計中...</div></div>' +
+    '</div>' +
+    '<div class="panel"><h3>月別・方面別 積み上げ（今後12ヶ月／前年比較）</h3><div id="booking-pipeline">集計中...</div></div>' +
+    '<div id="dashboard-charts">集計中...</div>' +
+    '<div class="panel"><h3>新規問合せの媒体別比率</h3><div id="media-breakdown">集計中...</div></div>' +
+    '<div class="panel"><h3>方面内ランキング（式場・プラン・現地会社）</h3>' +
+    '<div class="row"><div class="col"><select id="rank-area" onchange="loadAreaRankings_()"><option value="">方面を選択</option>' + areaOptionsByName + '</select></div></div>' +
+    '<div id="area-rankings" class="muted" style="margin-top:10px;">方面を選択してください</div></div>' +
+    (isHqLevel ? '<div class="panel"><h3>地方×区分（一般／AVA）マトリクス</h3>' +
+      '<div class="row"><div class="col"><label>方面で絞り込み</label><select id="matrix-area" onchange="loadRegionMatrix_()"><option value="">すべて</option>' + areaOptionsByName + '</select></div>' +
+      '<div class="col"><label>AGTで絞り込み</label><select id="matrix-agt" onchange="loadRegionMatrix_()"><option value="">すべて</option>' + optionListByLabel_(REF_MASTERS.partners, '会社名') + '</select></div></div>' +
+      '<div id="region-matrix" style="margin-top:10px;">集計中...</div></div>' +
+      '<div class="panel"><h3>地方内の方面別実績</h3><div class="row"><div class="col"><select id="drill-region" onchange="loadRegionAreaStats_()"><option value="">地方を選択</option>' + regionOptionsByName + '</select></div></div>' +
+      '<div id="region-area-stats" class="muted" style="margin-top:10px;">地方を選択してください</div></div>' : '');
+
+  applyDashboardFilter();
+}
+
+function currentDashboardFilter_() {
+  const filter = {};
+  const fromEl = document.getElementById('f-from');
+  const toEl = document.getElementById('f-to');
+  const storeEl = document.getElementById('f-store');
+  const regionEl = document.getElementById('f-region');
+  if (fromEl && fromEl.value) filter.from = fromEl.value;
+  if (toEl && toEl.value) filter.to = toEl.value;
+  if (storeEl && storeEl.value) filter.storeId = storeEl.value;
+  if (regionEl && regionEl.value) filter.region = regionEl.value;
+  return filter;
+}
+
+function applyDashboardFilter() {
+  const filter = currentDashboardFilter_();
+  callApi('getDashboardData', filter).then(renderDashboardBody).catch(handleApiError);
+
+  Promise.all([callApi('getMediaBreakdown', filter), callApi('getAgtShare', filter), callApi('getAreaShare', filter)]).then(function (results) {
+    document.getElementById('media-breakdown').innerHTML = renderBarList_(results[0].map(function (r) { return { label: r.media, value: r.count }; }), 12);
+    document.getElementById('agt-share').innerHTML = renderBarList_(results[1].map(function (r) { return { label: r.label, value: r.count }; }), 12);
+    document.getElementById('area-share').innerHTML = renderBarList_(results[2].map(function (r) { return { label: r.label, value: r.count }; }), 12);
+  }).catch(handleApiError);
+
+  callApi('getBookingPipeline', filter, 12).then(renderBookingPipeline_).catch(handleApiError);
+
+  if (['HQ', 'ARRANGE', 'ADMIN'].indexOf(CURRENT_USER.role) !== -1) {
+    loadRegionMatrix_();
+  }
+}
+
+/** 地方×区分マトリクスは、上部の期間・店舗フィルタに加えて方面（ハワイ・沖縄等）・AGTでも絞り込める */
+function loadRegionMatrix_() {
+  const filter = currentDashboardFilter_();
+  const areaEl = document.getElementById('matrix-area');
+  const agtEl = document.getElementById('matrix-agt');
+  if (areaEl && areaEl.value) filter.area = areaEl.value;
+  if (agtEl && agtEl.value) filter.agt = agtEl.value;
+  callApi('getRegionCategoryMatrix', filter).then(renderRegionMatrix_).catch(handleApiError);
+}
+
+// Q&A四巡目：「来店・成約・未成約の推移（週次）」は不要のため撤去。AGTシェア・方面別シェア・
+// 積み上げは上部（KPIのすぐ下）に移動したため、ここでは残りの集計（未成約理由・店舗別/地方別実績）のみ扱う。
+function renderDashboardBody(data) {
+  const s = data.summary;
+  // 保留数（案件状態が「保留」の件数）はQ&A四巡目で不要と判断し撤去。集計自体（dashboardService側）は
+  // 案件一覧の状態フィルタ等で引き続き使うため残し、KPIカード表示からのみ外す。
+  // 来店数・成約数は前年同期間比較（前年実数・前年比%）を添える（Q&A五巡目）。
+  function yoyDelta(prev, yoy) {
+    if (prev === null || prev === undefined) return '<div class="delta">前年データなし</div>';
+    const cls = yoy === null ? '' : (yoy >= 100 ? 'up' : 'down');
+    return '<div class="delta ' + cls + '">前年' + prev + '件・前年比' + (yoy !== null ? yoy + '%' : '-') + '</div>';
+  }
+  const cards = [
+    ['来店数', s.来店数, yoyDelta(s.来店数前年, s.来店数前年比)],
+    ['成約数', s.成約数, yoyDelta(s.成約数前年, s.成約数前年比)],
+    ['未成約数', s.未成約数], ['キャンセル数', s.キャンセル数],
+    ['成約率', s.成約率 !== null ? s.成約率 + '%' : '-']
+  ];
+  let kpiHtml = '<div class="kpi-cards">' + cards.map(function (c) {
+    return '<div class="kpi-card"><div class="label">' + c[0] + '</div><div class="value">' + c[1] + '</div>' + (c[2] || '') + '</div>';
+  }).join('') + '</div>';
+  kpiHtml += '<div class="muted" style="margin-bottom:10px;">期間：' + data.periodFrom + '〜' + data.periodTo +
+    '　／　前年同期間：' + data.prevPeriodFrom + '〜' + data.prevPeriodTo + '</div>';
+  if (data.viewingOtherStore) kpiHtml += '<div class="panel muted">他店舗の集計値のみ表示しています。</div>';
+  kpiHtml += '<div class="muted">最新の反映：' + (data.lastUpdated ? fmtDate(data.lastUpdated) : '未集計') + '</div>';
+  document.getElementById('dashboard-kpis').innerHTML = kpiHtml;
+
+  let chartsHtml = '<div class="panel"><h3>未成約理由の内訳</h3>' + renderBarList_(data.lostReasonBreakdown.map(function (r) { return { label: r.category, value: r.count }; }), 12) + '</div>';
+  // 店舗別実績はSTAFF（自店舗しか担当しない役割）には不要なので表示しない
+  if (CURRENT_USER.role !== 'STAFF') {
+    chartsHtml += '<div class="row">';
+    chartsHtml += '<div class="col panel"><h3>店舗別実績（成約数）</h3>' + renderBarList_(data.byStore.map(function (r) { return { label: r.key, value: r.成約数 }; }), 12) + '</div>';
+    chartsHtml += '<div class="col panel"><h3>地方別実績（成約数）</h3>' + renderBarList_(data.byRegion.map(function (r) { return { label: r.key, value: r.成約数 }; }), 12) + '</div>';
+    chartsHtml += '</div>';
+  }
+  document.getElementById('dashboard-charts').innerHTML = chartsHtml;
+}
+
+function loadAreaRankings_() {
+  const area = document.getElementById('rank-area').value;
+  if (!area) { document.getElementById('area-rankings').innerHTML = '方面を選択してください'; return; }
+  callApi('getAreaRankings', area, currentDashboardFilter_()).then(function (data) {
+    document.getElementById('area-rankings').innerHTML =
+      '<div class="muted" style="margin-bottom:8px;">期間：' + data.periodFrom + '〜' + data.periodTo +
+      '　／　前年同期間：' + data.prevPeriodFrom + '〜' + data.prevPeriodTo + '</div>' +
+      '<div class="row">' +
+      '<div class="col"><h3 style="font-size:12px;">式場ランキング</h3>' + renderRankingList_(data.venueRanking) + '</div>' +
+      '<div class="col"><h3 style="font-size:12px;">フォトプランランキング</h3>' + renderRankingList_(data.photoPlanRanking, 12) + '</div>' +
+      '<div class="col"><h3 style="font-size:12px;">AGTランキング</h3>' + renderRankingList_(data.agtRanking, 12) + '</div>' +
+      '</div>';
+  }).catch(handleApiError);
+}
+
+function renderBookingPipeline_(pipeline) {
+  const el = document.getElementById('booking-pipeline');
+  if (!pipeline.table.length) { el.innerHTML = '<div class="muted">データがありません</div>'; return; }
+  const paceNote = pipeline.paceAvailable
+    ? '<div class="muted" style="margin-bottom:8px;">前年＝稼働から1年経っているため「前年同日時点」（1年前の今日までに確保できていた件数）で比較しています。</div>'
+    : '<div class="muted" style="margin-bottom:8px;">※本システム稼働からまだ1年経っていないため、前年は「最終着地値」（HistoricalActuals含む）で比較しています。</div>';
+  function row(r, isTotal) {
+    return '<tr' + (isTotal ? ' style="font-weight:bold;background:#f0f2f6;"' : '') + '><td>' + escapeHtml(r.area) + '</td>' + pipeline.months.map(function (m) {
+      const cell = r.months[m];
+      const yoy = cell.yoy !== null ? cell.yoy + '%' : '-';
+      return '<td>' + cell.count + '件<br><span class="muted">前年' + cell.prevCount + '件・' + yoy + '</span></td>';
+    }).join('') + '</tr>';
+  }
+  let html = paceNote + '<table><thead><tr><th>方面</th>' + pipeline.months.map(function (m) { return '<th>' + m + '</th>'; }).join('') + '</tr></thead><tbody>';
+  pipeline.table.forEach(function (r) { html += row(r, false); });
+  html += row(pipeline.totalRow, true); // 縦計
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function renderRegionMatrix_(matrix) {
+  const el = document.getElementById('region-matrix');
+  if (!el) return;
+  let html = '<table><thead><tr><th>地方</th><th>一般（来店/成約）</th><th>AVA（来店/成約）</th><th>オール（来店/成約）</th></tr></thead><tbody>';
+  matrix.forEach(function (row) {
+    const isTotal = row.region === '全国合計';
+    html += '<tr' + (isTotal ? ' style="font-weight:bold;background:#f0f2f6;"' : '') + '><td>' + escapeHtml(row.region) + '</td>' +
+      '<td>' + row['一般'].来店数 + ' / ' + row['一般'].成約数 + '</td>' +
+      '<td>' + row['AVA'].来店数 + ' / ' + row['AVA'].成約数 + '</td>' +
+      '<td>' + row['オール'].来店数 + ' / ' + row['オール'].成約数 + '</td></tr>';
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function loadRegionAreaStats_() {
+  const region = document.getElementById('drill-region').value;
+  if (!region) { document.getElementById('region-area-stats').innerHTML = '地方を選択してください'; return; }
+  callApi('getRegionAreaStats', region, currentDashboardFilter_()).then(function (data) {
+    let html = '<div class="row">';
+    html += '<div class="col"><h3 style="font-size:12px;">方面別成約数</h3>' + renderBarList_(data.byArea.map(function (r) { return { label: r.area, value: r.成約数 }; }), 12) + '</div>';
+    html += '</div><div class="section-divider"></div>';
+    html += '<h3 style="font-size:12px;">店舗別成約率</h3>' + listTable_(data.byStore, [['店舗ID', 'storeId'], ['来店数', '来店数'], ['成約数', '成約数'], ['成約率(%)', '成約率']]);
+    html += '<h3 style="font-size:12px;margin-top:10px;">担当者別成約率</h3>' + listTable_(data.byStaff, [['担当者ID', 'staffId'], ['来店数', '来店数'], ['成約数', '成約数'], ['成約率(%)', '成約率']]);
+    document.getElementById('region-area-stats').innerHTML = html;
+  }).catch(handleApiError);
+}
+
+/* ============================================================
+ * 画面：日報・進捗管理（Q&A八巡目：実際に使われている店舗日報・エリア進捗・全国集計・通期進捗の
+ * 仕組みを、既存のカウンセリングシート項目＝Cases/Contracts/LostCasesと同じデータから再現する）。
+ * 時間帯集計（来店予約枠ごとの目標・実績）は、接客記録に時間帯の項目が無いため対象外にしている。
+ * ============================================================ */
+const NIPPO_TABS = [
+  { key: 'weekly', label: '週次サマリー' },
+  { key: 'staff', label: '担当者別' },
+  { key: 'ranking', label: 'プランランキング' },
+  { key: 'area', label: 'エリア進捗' },
+  { key: 'nationwide', label: '全国店舗×方面', hqOnly: true },
+  { key: 'trend', label: '通期推移' }
+];
+function fmtNippoVal_(v) { return (v === null || v === undefined) ? '—' : v; }
+function fmtNippoPct_(v) { return (v === null || v === undefined) ? '—' : v + '%'; }
+
+function renderNippo(tab) {
+  const isHqLevel = ['HQ', 'ARRANGE', 'ADMIN'].indexOf(CURRENT_USER.role) !== -1;
+  if (tab === 'nationwide' && !isHqLevel) { renderAccessDenied(); return; }
+  const visibleTabs = NIPPO_TABS.filter(function (t) { return !t.hqOnly || isHqLevel; });
+  const html = '<div class="tabs">' + visibleTabs.map(function (t) {
+    return '<a class="' + (t.key === tab ? 'active' : '') + '" onclick="location.hash=\'#/nippo/' + t.key + '\'">' + t.label + '</a>';
+  }).join('') + '</div><div id="nippo-body" class="panel">読み込み中...</div>';
+  document.getElementById('view-root').innerHTML = html;
+
+  if (tab === 'weekly') renderNippoWeekly_();
+  else if (tab === 'staff') renderNippoStaff_();
+  else if (tab === 'ranking') renderNippoRanking_();
+  else if (tab === 'area') renderNippoArea_();
+  else if (tab === 'nationwide') renderNippoNationwide_();
+  else if (tab === 'trend') renderNippoTrend_();
+  else renderNotFound();
+}
+
+/** 週次サマリー：月内を週区切り（実物の日報と同じ「1日〜4日」「5日〜11日」形式）にして、新規問合せ・
+ *  NB（成約）・CXL・NET・成約率・PAX数を前年同期間と対比する。週単位の目標はマスタ未整備のため実績のみ。 */
+function renderNippoWeekly_(yearMonth) {
+  yearMonth = yearMonth || todayIso_().slice(0, 7);
+  callApi('getWeeklySummary', { yearMonth: yearMonth }).then(function (data) {
+    let html = '<div class="row"><div class="col"><label>対象月</label>' +
+      '<input type="month" id="np-week-month" value="' + data.yearMonth + '" onchange="renderNippoWeekly_(this.value)"></div></div>' +
+      '<p class="muted">週区切りの新規問合せ・成約(NB)・CXL・NET・成約率・PAX数を、前年同期間と比較します（週単位の目標はマスタ未整備のため実績のみ表示）。</p>' +
+      '<table><thead><tr><th>週</th><th>新規問合せ</th><th>NB</th><th>CXL</th><th>NET</th><th>成約率</th><th>PAX(NB)</th><th>PAX(NET)</th><th>前年NB</th><th>前年比</th></tr></thead><tbody>';
+    data.rows.forEach(function (r) {
+      html += '<tr><td>' + escapeHtml(r.label) + '</td>' +
+        '<td>' + fmtNippoVal_(r.current.新規問合せ) + '</td><td>' + fmtNippoVal_(r.current.NB) + '</td><td>' + fmtNippoVal_(r.current.CXL) + '</td>' +
+        '<td>' + fmtNippoVal_(r.current.NET) + '</td><td>' + fmtNippoPct_(r.current.成約率) + '</td>' +
+        '<td>' + fmtNippoVal_(r.current.PAX_NB) + '</td><td>' + fmtNippoVal_(r.current.PAX_NET) + '</td>' +
+        '<td>' + fmtNippoVal_(r.previous.NB) + '</td><td>' + fmtNippoPct_(r.前年比) + '</td></tr>';
+    });
+    const t = data.total;
+    html += '<tr style="font-weight:700;"><td>月計</td>' +
+      '<td>' + fmtNippoVal_(t.新規問合せ) + '</td><td>' + fmtNippoVal_(t.NB) + '</td><td>' + fmtNippoVal_(t.CXL) + '</td>' +
+      '<td>' + fmtNippoVal_(t.NET) + '</td><td>' + fmtNippoPct_(t.成約率) + '</td>' +
+      '<td>' + fmtNippoVal_(t.PAX_NB) + '</td><td>' + fmtNippoVal_(t.PAX_NET) + '</td><td></td><td></td></tr>';
+    html += '</tbody></table>';
+    document.getElementById('nippo-body').innerHTML = html;
+  }).catch(handleApiError);
+}
+
+/** 担当者別：新規問合せは受付担当（Cases.担当者ID）、成約・CXLは契約担当・未成約担当（自由記述の氏名）で集計 */
+function renderNippoStaff_() {
+  const now = todayIso_();
+  const from = now.slice(0, 8) + '01';
+  callApi('getStaffReport', { from: from, to: now }).then(function (rows) {
+    let html = '<p class="muted">今月（' + from + '〜' + now + '）の担当者別実績です。新規問合せは受付担当、成約・CXLは契約担当（自由記述の氏名）で集計しています。</p>' +
+      '<table><thead><tr><th>担当者</th><th>新規問合せ</th><th>NB</th><th>成約率</th><th>CXL</th><th>NET</th><th>PAX(NB)</th><th>PAX(NET)</th></tr></thead><tbody>';
+    rows.forEach(function (r) {
+      html += '<tr><td>' + escapeHtml(r.staff) + '</td><td>' + r.新規問合せ + '</td><td>' + r.NB + '</td><td>' + fmtNippoPct_(r.成約率) + '</td>' +
+        '<td>' + r.CXL + '</td><td>' + r.NET + '</td><td>' + r.PAX_NB + '</td><td>' + r.PAX_NET + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    document.getElementById('nippo-body').innerHTML = html;
+  }).catch(handleApiError);
+}
+
+/** プランランキング：既存の方面内ランキングAPI（getAreaRankings）をarea未指定で呼び、全方面合算にする */
+function renderNippoRanking_() {
+  callApi('getAreaRankings', null, {}).then(function (data) {
+    let html = '<p class="muted">全方面合算の成約実績ランキングです（方面ごとの内訳はダッシュボードの「方面内ランキング」をご覧ください）。</p>' +
+      '<h3 style="font-size:13px;">式場ランキング</h3>' + renderRankingList_(data.venueRanking, 0) +
+      '<h3 style="font-size:13px;margin-top:14px;">フォトプランランキング</h3>' + renderRankingList_(data.photoPlanRanking, 0) +
+      '<h3 style="font-size:13px;margin-top:14px;">AGTランキング</h3>' + renderRankingList_(data.agtRanking, 0);
+    document.getElementById('nippo-body').innerHTML = html;
+  }).catch(handleApiError);
+}
+
+/** エリア進捗管理：縦軸＝式場／フォトプラン、横軸＝店舗＋前年実績＋前年比（目標はマスタ未整備のため実績のみ） */
+function renderNippoArea_(area) {
+  const areaOptionsByName = (REF_MASTERS.areas || []).map(function (a) {
+    return '<option value="' + escapeHtml(a.方面名) + '"' + (a.方面名 === area ? ' selected' : '') + '>' + escapeHtml(a.方面名) + '</option>';
+  }).join('');
+  const selectHtml = '<div class="row"><div class="col"><label>方面</label><select id="np-area-select" onchange="renderNippoArea_(this.value)">' +
+    '<option value="">方面を選択</option>' + areaOptionsByName + '</select></div></div>';
+  if (!area) {
+    document.getElementById('nippo-body').innerHTML = selectHtml + '<div class="muted" style="margin-top:10px;">方面を選択してください</div>';
+    return;
+  }
+  callApi('getAreaProgressByStore', area, {}).then(function (data) {
+    let html = selectHtml + '<p class="muted">' + escapeHtml(data.note) + '</p>' +
+      '<div style="overflow-x:auto;"><table><thead><tr><th>式場／プラン</th>' +
+      data.stores.map(function (s) { return '<th>' + escapeHtml(s.name) + '</th>'; }).join('') + '<th>合計</th></tr></thead><tbody>';
+    data.table.forEach(function (row) {
+      html += '<tr><td>' + escapeHtml(row.plan) + '</td>';
+      data.stores.forEach(function (s) {
+        const c = row.byStore[s.id];
+        html += '<td>' + c.current + '<span class="muted" style="display:block;font-size:10px;">前年' + c.prev + '・' + fmtNippoPct_(c.yoy) + '</span></td>';
+      });
+      html += '<td>' + row.total.current + '<span class="muted" style="display:block;font-size:10px;">前年' + row.total.prev + '・' + fmtNippoPct_(row.total.yoy) + '</span></td></tr>';
+    });
+    html += '</tbody></table></div>';
+    document.getElementById('nippo-body').innerHTML = html;
+  }).catch(handleApiError);
+}
+
+/** 全国店舗成約・地区別集計：縦軸＝店舗、横軸＝方面（成約数）＋来店数（店舗単位のみ）。HQ・ARRANGE・ADMIN限定 */
+function renderNippoNationwide_() {
+  callApi('getStoreAreaMatrix', {}).then(function (data) {
+    let html = '<p class="muted">今年（' + data.periodFrom + '〜' + data.periodTo + '）の店舗別・方面別 成約数一覧です。来店数は方面確定前の実績のため店舗単位のみで表示します。</p>' +
+      '<div style="overflow-x:auto;"><table><thead><tr><th>店舗</th><th>来店数</th>' +
+      data.areas.map(function (a) { return '<th>' + escapeHtml(a) + '</th>'; }).join('') + '<th>成約計</th></tr></thead><tbody>';
+    data.stores.forEach(function (r) {
+      html += '<tr><td>' + escapeHtml(r.storeName) + '</td><td>' + r.来店数 + '</td>' +
+        data.areas.map(function (a) { return '<td>' + (r.byArea[a] || 0) + '</td>'; }).join('') + '<td>' + r.成約数 + '</td></tr>';
+    });
+    const t = data.total;
+    html += '<tr style="font-weight:700;"><td>' + escapeHtml(t.storeName) + '</td><td>' + t.来店数 + '</td>' +
+      data.areas.map(function (a) { return '<td>' + (t.byArea[a] || 0) + '</td>'; }).join('') + '<td>' + t.成約数 + '</td></tr>';
+    html += '</tbody></table></div>';
+    document.getElementById('nippo-body').innerHTML = html;
+  }).catch(handleApiError);
+}
+
+/** 通期進捗管理：今年・前年・前々年の月次推移（前々年は稼働前ならHistoricalActuals由来でCXL/NET/PAXは「—」） */
+function renderNippoTrend_() {
+  callApi('getMultiYearTrend', {}, 3).then(function (data) {
+    let html = '<p class="muted">今年・前年・前々年の月次推移です（前々年で本システム稼働前の月は、遡及入力した前年実績（来店数・成約数のみ）から表示するため、CXL・NET・PAX数は「—」になります）。</p>' +
+      '<div style="overflow-x:auto;"><table><thead><tr><th>月</th>';
+    data.years.forEach(function (y) { html += '<th colspan="2">' + y + '年（NB／新規問合せ）</th>'; });
+    html += '<th>前年比</th><th>前々年比</th></tr></thead><tbody>';
+    data.table.forEach(function (row) {
+      html += '<tr><td>' + row.month + '</td>';
+      data.years.forEach(function (y, idx) {
+        const cell = row['y' + idx];
+        html += '<td>' + (cell && cell.hasData ? cell.NB : '—') + '</td><td>' + (cell && cell.hasData ? cell.新規問合せ : '—') + '</td>';
+      });
+      html += '<td>' + fmtNippoPct_(row.前年比) + '</td><td>' + fmtNippoPct_(row.前々年比) + '</td></tr>';
+    });
+    html += '</tbody></table></div>';
+    html += '<h3 style="font-size:13px;margin-top:16px;">通期計</h3>' +
+      '<table><thead><tr><th>年</th><th>データ源</th><th>新規問合せ</th><th>NB</th><th>CXL</th><th>NET</th><th>PAX(NB)</th><th>PAX(NET)</th></tr></thead><tbody>';
+    data.totalsByYear.forEach(function (t) {
+      const sourceLabel = t.source === 'historical' ? '前年実績入力' : '実データ';
+      html += '<tr><td>' + t.year + '</td><td>' + sourceLabel + '</td><td>' + fmtNippoVal_(t.新規問合せ) + '</td><td>' + fmtNippoVal_(t.NB) + '</td>' +
+        '<td>' + fmtNippoVal_(t.CXL) + '</td><td>' + fmtNippoVal_(t.NET) + '</td><td>' + fmtNippoVal_(t.PAX_NB) + '</td><td>' + fmtNippoVal_(t.PAX_NET) + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    document.getElementById('nippo-body').innerHTML = html;
+  }).catch(handleApiError);
+}
+
+/* ============================================================
+ * 画面：案件一覧
+ * ============================================================ */
+let caseListCache = [];
+// 「現在」＝完了・未成約・キャンセル以外（まだ動いている案件）。「過去」＝完了・未成約・キャンセル。
+// 過去タブでは、さらに古い年（本体シートから退避済みのアーカイブ）も年セレクタで呼び出せる（Q&A六巡目）。
+// STAFF・MANAGERは自店舗のみ（店舗用の過去一覧）、HQ・ARRANGE・ADMINは全国。
+const CASE_TERMINAL_STATUSES_ = ['完了', '未成約', 'キャンセル'];
+let caseListViewTab_ = 'current';
+let caseArchiveCache_ = [];
+let caseArchiveYear_ = '';
+
+// 案件一覧の状態フィルタは「成約／未成約」の2択に集約する（Q&A二巡目：「成約か未成約しかないです。ほかいらない」）。
+// 全国を見られるHQ・ARRANGE・ADMINには地方フィルタも表示する。方面・AGT・月フィルタは全ロール共通で、
+// STAFF・MANAGERも同じ絞り込みUIを使えるが、案件データ自体はOWN_STORE（自店舗）スコープに留まる。
+function renderCaseList() {
+  const root = document.getElementById('view-root');
+  const canCreate = ['STAFF', 'MANAGER', 'HQ', 'ADMIN'].indexOf(CURRENT_USER.role) !== -1;
+  const canSeeAllRegions = ['HQ', 'ARRANGE', 'ADMIN'].indexOf(CURRENT_USER.role) !== -1;
+  const regionOptions = (REF_MASTERS.regions || []).slice()
+    .sort(function (a, b) { return (a.表示順 || 0) - (b.表示順 || 0); })
+    .map(function (r) { return '<option value="' + escapeHtml(r.地方名) + '">' + escapeHtml(r.地方名) + '</option>'; }).join('');
+  const areaOptions = optionListByLabel_(REF_MASTERS.areas, '方面名');
+  const agtOptions = optionListByLabel_(REF_MASTERS.partners, '会社名');
+
+  root.innerHTML = '<div class="tabs">' +
+    '<a class="' + (caseListViewTab_ === 'current' ? 'active' : '') + '" onclick="switchCaseListViewTab_(\'current\')">現在</a>' +
+    '<a class="' + (caseListViewTab_ === 'past' ? 'active' : '') + '" onclick="switchCaseListViewTab_(\'past\')">過去</a>' +
+    '</div>' +
+    '<div class="panel">' +
+    '<div class="row">' +
+    '<div class="col"><label>氏名検索</label><input id="cl-search" oninput="filterCaseList()" placeholder="新郎新婦氏名"></div>' +
+    (caseListViewTab_ === 'current' ? '<div class="col"><label>状態</label><select id="cl-status" onchange="filterCaseList()"><option value="">すべて</option>' +
+      '<option value="成約">成約</option><option value="未成約">未成約</option></select></div>' : '') +
+    '<div class="col"><label>相談区分</label><select id="cl-type" onchange="filterCaseList()"><option value="">すべて</option><option value="挙式">挙式</option><option value="フォト">フォト</option></select></div>' +
+    (canSeeAllRegions ? '<div class="col"><label>地方</label><select id="cl-region" onchange="filterCaseList()"><option value="">全国</option>' + regionOptions + '</select></div>' : '') +
+    '<div class="col"><label>方面（国）</label><select id="cl-area" onchange="filterCaseList()"><option value="">すべて</option>' + areaOptions + '</select></div>' +
+    '<div class="col"><label>AGT</label><select id="cl-agt" onchange="filterCaseList()"><option value="">すべて</option>' + agtOptions + '</select></div>' +
+    '<div class="col"><label>挙式月</label><select id="cl-month" onchange="filterCaseList()"><option value="">すべて</option></select></div>' +
+    (canCreate && caseListViewTab_ === 'current' ? '<div class="col" style="display:flex;align-items:flex-end;"><button onclick="openManualCaseModal()">＋ 新規案件を手動登録</button></div>' : '') +
+    '</div>' +
+    (caseListViewTab_ === 'past' ? '<div class="row" style="align-items:flex-end;">' +
+      '<div class="col"><label>さらに過去を見る（年）</label><select id="cl-archive-year" onchange="onCaseArchiveYearChange_()"><option value="">本体データのみ（今年・前年の完了分）</option></select></div>' +
+      '</div>' : '') +
+    '</div>' +
+    '<div class="panel"><div id="cl-table">読み込み中...</div></div>';
+
+  if (caseListViewTab_ === 'past') loadCaseArchiveYears_();
+
+  callApi('getCaseList').then(function (rows) {
+    caseListCache = rows;
+    const months = Array.from(new Set(rows.map(function (c) { return c.挙式月; }).filter(Boolean))).sort();
+    document.getElementById('cl-month').innerHTML = '<option value="">すべて</option>' +
+      months.map(function (m) { return '<option value="' + m + '">' + m + '</option>'; }).join('');
+    filterCaseList();
+  }).catch(handleApiError);
+}
+function switchCaseListViewTab_(tab) {
+  caseListViewTab_ = tab;
+  caseArchiveCache_ = [];
+  caseArchiveYear_ = '';
+  renderCaseList();
+}
+function loadCaseArchiveYears_() {
+  callApi('getCaseArchiveYears').then(function (years) {
+    const sel = document.getElementById('cl-archive-year');
+    if (!sel) return;
+    years.forEach(function (y) { sel.innerHTML += '<option value="' + y + '">' + y + '年以前もあわせて表示</option>'; });
+  }).catch(handleApiError);
+}
+function onCaseArchiveYearChange_() {
+  const year = document.getElementById('cl-archive-year').value;
+  caseArchiveYear_ = year;
+  if (!year) { caseArchiveCache_ = []; filterCaseList(); return; }
+  document.getElementById('cl-table').innerHTML = '読み込み中...';
+  callApi('getCaseArchiveList', year).then(function (rows) {
+    caseArchiveCache_ = rows.map(function (r) { return Object.assign({ __archived: true, 新郎姓名: r.新郎姓名, 新婦姓名: r.新婦姓名, 案件状態: r.案件状態 }, r); });
+    filterCaseList();
+  }).catch(handleApiError);
+}
+
+function filterCaseList() {
+  const search = (document.getElementById('cl-search').value || '').trim();
+  const statusEl = document.getElementById('cl-status');
+  const status = statusEl ? statusEl.value : '';
+  const type = document.getElementById('cl-type').value;
+  const regionEl = document.getElementById('cl-region');
+  const region = regionEl ? regionEl.value : '';
+  const area = document.getElementById('cl-area').value;
+  const agt = document.getElementById('cl-agt').value;
+  const month = document.getElementById('cl-month').value;
+
+  // 「現在」＝終了状態（完了／未成約／キャンセル）以外。「過去」＝終了状態のみ＋（年選択時は）アーカイブ分を合算
+  let source = caseListViewTab_ === 'current'
+    ? caseListCache.filter(function (c) { return CASE_TERMINAL_STATUSES_.indexOf(c.案件状態) === -1; })
+    : caseListCache.filter(function (c) { return CASE_TERMINAL_STATUSES_.indexOf(c.案件状態) !== -1; }).concat(caseArchiveYear_ ? caseArchiveCache_ : []);
+
+  const filtered = source.filter(function (c) {
+    if (search && (c.新郎姓名 + c.新婦姓名).indexOf(search) === -1) return false;
+    if (status && c.簡易状態 !== status) return false;
+    if (type && c.相談区分 !== type) return false;
+    if (region && c.地方 !== region) return false;
+    if (area && c.方面 !== area) return false;
+    if (agt && c.AGT !== agt) return false;
+    if (month && c.挙式月 !== month) return false;
+    return true;
+  });
+
+  let html = '<table><thead><tr><th>新郎</th><th>新婦</th><th>店舗</th><th>地方</th><th>相談区分</th><th>方面</th><th>AGT</th>' +
+    '<th>登録経路</th><th>案件状態</th><th>手配状態</th><th>更新日</th></tr></thead><tbody>';
+  filtered.forEach(function (c) {
+    html += '<tr class="' + (c.__archived ? '' : 'clickable') + '" onclick="' + (c.__archived ? '' : 'location.hash=\'#/cases/' + c.CASE_ID + '\'') + '">' +
+      '<td>' + escapeHtml(c.新郎姓名) + '</td><td>' + escapeHtml(c.新婦姓名) + '</td>' +
+      '<td>' + escapeHtml(c.店舗名 || c.店舗ID) + '</td><td>' + escapeHtml(c.地方) + '</td><td>' + escapeHtml(c.相談区分) + '</td>' +
+      '<td>' + escapeHtml(c.方面) + '</td><td>' + escapeHtml(c.AGT) + '</td>' +
+      '<td>' + escapeHtml(c.登録経路 || 'フォーム') + '</td>' +
+      '<td><span class="badge status-' + c.案件状態 + '">' + escapeHtml(c.案件状態) + '</span></td>' +
+      '<td>' + escapeHtml(c.手配状態 || '-') + '</td><td>' + fmtDate(c.更新日時) + '</td></tr>';
+  });
+  html += '</tbody></table>';
+  if (filtered.length === 0) html = '<div class="muted">該当する案件がありません。</div>';
+  document.getElementById('cl-table').innerHTML = html;
+}
+
+/** フォームを介さない新規問い合わせ（電話・飛び込み来店等）の手動登録 */
+function openManualCaseModal() {
+  const storeOptions = optionList_(REF_MASTERS.stores, 'STORE_ID', '店舗名');
+  // バグ修正：以前はvalueがMETHOD_ID/MEDIA_ID（内部ID）になっており、カウンセリングシート経由の案件
+  // （フォーム回答のテキストをそのまま保存）とCases.問合せ方法／媒体の値の形式が食い違っていた
+  // （ダッシュボードの媒体別比率などの集計が割れる原因になる）。名称文字列に統一する。
+  const methodOptions = optionListByLabel_(REF_MASTERS.inquiryMethods, '名称');
+  const mediaOptions = optionListByLabel_(REF_MASTERS.media, '名称');
+  openModal('<h3>新規案件の手動登録</h3><p class="muted">電話・飛び込み来店など、カウンセリングシートを介さない問い合わせを登録します。</p>' +
+    '<div class="row">' +
+    '<div class="col field"><label>新郎姓*</label><input id="mc-groom-last"></div>' +
+    '<div class="col field"><label>新郎名</label><input id="mc-groom-first"></div>' +
+    '</div><div class="row">' +
+    '<div class="col field"><label>新婦姓*</label><input id="mc-bride-last"></div>' +
+    '<div class="col field"><label>新婦名</label><input id="mc-bride-first"></div>' +
+    '</div><div class="row">' +
+    '<div class="col field"><label>電話番号</label><input id="mc-phone"></div>' +
+    '<div class="col field"><label>代表メール</label><input id="mc-email"></div>' +
+    '</div><div class="row">' +
+    '<div class="col field"><label>店舗*</label><select id="mc-store">' + storeOptions + '</select></div>' +
+    '<div class="col field"><label>相談区分*</label><select id="mc-type"><option value="挙式">挙式</option><option value="フォト">フォト</option></select></div>' +
+    '</div><div class="row">' +
+    '<div class="col field"><label>問合せ方法</label><select id="mc-method"><option value="">-</option>' + methodOptions + '</select></div>' +
+    '<div class="col field"><label>媒体</label><select id="mc-media"><option value="">-</option>' + mediaOptions + '</select></div>' +
+    '</div>' +
+    '<div class="field"><label>チャレンジ番号*（半角英数11桁）</label><input id="mc-challenge" maxlength="11" oninput="this.value=this.value.replace(/[^a-zA-Z0-9]/g,\'\')"></div>' +
+    '<div class="field"><label>相談内容*</label><textarea id="mc-content"></textarea></div>' +
+    '<div class="field"><label>担当者*</label><input id="mc-staff" value="' + escapeHtml(CURRENT_USER.name) + '"></div>' +
+    '<div class="field"><label>相談予定日</label><input type="date" id="mc-visitdate"></div>' +
+    '<div class="field"><label><input type="checkbox" id="mc-contracted" style="width:auto;" onchange="document.getElementById(\'mc-contract-section\').style.display=this.checked?\'block\':\'none\'"> すでに成約が決まっている（バックログ登録）</label></div>' +
+    '<div id="mc-contract-section" style="display:none;">' +
+    '<div class="row"><div class="col field"><label>挙式日（撮影日）</label><input type="date" id="mc-weddingdate"></div>' +
+    '<div class="col field"><label>方面</label><select id="mc-area">' + optionListByLabel_(REF_MASTERS.areas, '方面名') + '</select></div></div>' +
+    '<div class="row"><div class="col field"><label>式場／フォトプラン名</label><input id="mc-venue"></div>' +
+    '<div class="col field"><label>プラン</label><input id="mc-plan"></div></div>' +
+    '<div class="field"><label>商品</label><select id="mc-product">' + optionList_(REF_MASTERS.products, 'PRODUCT_ID', '商品名') + '</select></div>' +
+    '</div>' +
+    '<div class="row" style="margin-top:12px;"><button class="secondary" onclick="closeModal()">キャンセル</button>' +
+    '<button onclick="submitManualCaseModal()">登録する</button></div>');
+}
+function submitManualCaseModal() {
+  const contracted = document.getElementById('mc-contracted').checked;
+  const input = {
+    新郎姓: document.getElementById('mc-groom-last').value,
+    新郎名: document.getElementById('mc-groom-first').value,
+    新婦姓: document.getElementById('mc-bride-last').value,
+    新婦名: document.getElementById('mc-bride-first').value,
+    新郎電話: document.getElementById('mc-phone').value,
+    代表メール: document.getElementById('mc-email').value,
+    店舗ID: document.getElementById('mc-store').value,
+    相談区分: document.getElementById('mc-type').value,
+    問合せ方法: document.getElementById('mc-method').value,
+    媒体: document.getElementById('mc-media').value,
+    チャレンジ番号: document.getElementById('mc-challenge').value,
+    相談内容: document.getElementById('mc-content').value,
+    担当者: document.getElementById('mc-staff').value,
+    相談予定日: document.getElementById('mc-visitdate').value,
+    既に成約済みか: contracted
+  };
+  if (contracted) {
+    input.挙式日 = document.getElementById('mc-weddingdate').value;
+    input.方面 = document.getElementById('mc-area').value;
+    input['式場またはプラン名'] = document.getElementById('mc-venue').value;
+    input.プラン = document.getElementById('mc-plan').value;
+    input.商品 = document.getElementById('mc-product').value;
+  }
+  callApi('createCase', input).then(function (result) {
+    toast('案件を登録しました。', 'success');
+    closeModal();
+    location.hash = '#/cases/' + result.caseId;
+  }).catch(handleApiError);
+}
+
+/* ============================================================
+ * 画面：案件詳細
+ * ============================================================ */
+let currentCaseDetail = null;
+const CASE_TABS = [
+  { key: 'basic', label: '基本情報' }, { key: 'consult', label: '相談内容' }, { key: 'sales', label: '接客履歴' },
+  { key: 'notes', label: '経過メモ' }, { key: 'summary', label: '案件メモ' }, { key: 'documents', label: '書類チェック' },
+  { key: 'contract', label: '日報登録' }, { key: 'lost', label: '未成約' },
+  { key: 'operation', label: '手配' }, { key: 'task', label: 'タスク' }
+];
+
+function renderCaseDetail(caseId, tab) {
+  callApi('getCaseDetail', caseId).then(function (detail) {
+    currentCaseDetail = detail;
+    renderCaseDetailShell_(caseId, tab, detail);
+  }).catch(handleApiError);
+}
+
+function renderCaseDetailShell_(caseId, tab, detail) {
+  const c = detail.caseRecord, cust = detail.customer || {}, role = detail.currentRole;
+  const visibleTabs = CASE_TABS.filter(function (t) {
+    if (t.key === 'operation') return role === 'HQ' || role === 'ARRANGE' || role === 'ADMIN';
+    return true;
+  });
+  let html = '<div class="panel">' +
+    '<h2>' + escapeHtml(cust.新郎姓 || '') + ' ' + escapeHtml(cust.新郎名 || '') + ' ／ ' +
+    escapeHtml(cust.新婦姓 || '') + ' ' + escapeHtml(cust.新婦名 || '') +
+    ' <span class="badge status-' + c.案件状態 + '">' + escapeHtml(c.案件状態) + '</span></h2>' +
+    '<div class="muted">案件ID: ' + c.CASE_ID + '　相談区分: ' + escapeHtml(c.相談区分) +
+    '　チャレンジ番号: ' + escapeHtml(c.チャレンジ番号 || '未設定') + ' <a onclick="openEditChallengeModal(\'' + caseId + '\')">編集</a></div></div>' +
+    '<div class="tabs">' + visibleTabs.map(function (t) {
+      return '<a class="' + (t.key === tab ? 'active' : '') + '" onclick="location.hash=\'#/cases/' + caseId + '/' + t.key + '\'">' + t.label + '</a>';
+    }).join('') + '</div>' +
+    '<div id="case-tab-body" class="panel"></div>';
+  document.getElementById('view-root').innerHTML = html;
+  renderCaseTabBody_(tab, detail);
+}
+
+function openEditChallengeModal(caseId) {
+  openModal('<h3>チャレンジ番号の編集</h3>' +
+    '<div class="field"><label>チャレンジ番号（半角英数11桁）</label><input id="ec-challenge" maxlength="11" oninput="this.value=this.value.replace(/[^a-zA-Z0-9]/g,\'\')"></div>' +
+    '<div class="row" style="margin-top:12px;"><button class="secondary" onclick="closeModal()">キャンセル</button>' +
+    '<button onclick="submitEditChallenge(\'' + caseId + '\')">保存</button></div>');
+}
+function submitEditChallenge(caseId) {
+  callApi('updateCaseCore', caseId, { チャレンジ番号: document.getElementById('ec-challenge').value }).then(function () {
+    toast('更新しました。', 'success'); closeModal(); renderCaseDetail(caseId, 'basic');
+  }).catch(handleApiError);
+}
+
+function renderCaseTabBody_(tab, detail) {
+  const body = document.getElementById('case-tab-body');
+  const c = detail.caseRecord, cust = detail.customer || {};
+  const activeStatuses = ['来店前', '来店済', '商談中', '保留']; // まだ成約・未成約・完了・キャンセルのいずれにも至っていない案件
+  if (tab === 'basic') {
+    let html = '';
+    if (activeStatuses.indexOf(c.案件状態) !== -1 && c.案件状態 !== '保留') {
+      html += '<button onclick="submitMarkOnHold(\'' + c.CASE_ID + '\')">保留にする</button><hr class="section-divider">';
+    }
+    html += kvTable_([
+      ['登録経路', c.登録経路 || 'フォーム'], ['受付日時', fmtDate(c.受付日時)], ['相談予定日', fmtDate(c.相談予定日)],
+      ['店舗ID', c.店舗ID], ['担当者ID', c.担当者ID], ['チャレンジ番号', c.チャレンジ番号], ['問合せ方法', c.問合せ方法], ['媒体', c.媒体],
+      ['相談内容', c.相談内容], ['流入経路', c.流入経路], ['検索ワード', c.検索ワード], ['来店理由', c.来店理由],
+      ['新郎氏名', (cust.新郎姓 || '') + ' ' + (cust.新郎名 || '') + '（' + (cust.新郎カナ || '') + '）'],
+      ['新郎電話', cust.新郎電話], ['新郎住所', cust.新郎住所],
+      ['新婦氏名', (cust.新婦姓 || '') + ' ' + (cust.新婦名 || '') + '（' + (cust.新婦カナ || '') + '）'],
+      ['新婦電話', cust.新婦電話], ['新婦住所', cust.新婦住所],
+      ['代表メール', cust.代表メール], ['優先連絡先', cust.優先連絡先], ['入籍状況', cust.入籍状況]
+    ]);
+    body.innerHTML = html;
+  } else if (tab === 'consult') {
+    const req = detail.weddingRequest || detail.photoRequest;
+    body.innerHTML = req ? kvTable_(Object.keys(req).filter(function (k) { return k !== 'CASE_ID' && k !== '__row'; })
+      .map(function (k) { return [k, req[k]]; })) : '<div class="muted">相談内容の登録がありません（フォーム未経由の案件の可能性があります）。</div>';
+  } else if (tab === 'sales') { renderSalesTab_(body, detail); }
+  else if (tab === 'notes') { renderNotesTab_(body, detail); }
+  else if (tab === 'summary') { renderSummaryMemoTab_(body, detail); }
+  else if (tab === 'documents') { renderDocumentChecklistTab_(body, detail); }
+  else if (tab === 'contract') { renderContractTab_(body, detail); }
+  else if (tab === 'lost') { renderLostTab_(body, detail); }
+  else if (tab === 'operation') { renderOperationRefTab_(body, detail); }
+  else if (tab === 'task') { renderCaseTaskTab_(body, detail); }
+}
+function submitMarkOnHold(caseId) {
+  callApi('markCaseOnHold', caseId).then(function () {
+    toast('案件を保留にしました。', 'success');
+    renderCaseDetail(caseId, 'basic');
+  }).catch(handleApiError);
+}
+
+/* ---- 接客履歴タブ＋接客記録入力モーダル（Q&A九巡目：実際の履歴シートの項目に合わせた） ---- */
+function renderSalesTab_(body, detail) {
+  body.innerHTML = '<button onclick="openSalesModal(\'' + detail.caseRecord.CASE_ID + '\')">＋ 接客記録を追加</button>' +
+    '<p class="muted" style="margin-top:6px;">成約登録・未成約登録・保留は、それぞれ「日報登録」「未成約」タブ・基本情報タブの専用ボタンから行います。</p>' +
+    '<hr class="section-divider">' +
+    listTable_(detail.salesHistory, [
+      ['日付', '日付', 'date'], ['媒体', '媒体'], ['窓口', '窓口'], ['担当', '担当'], ['備考', '備考']
+    ]);
+}
+function openSalesModal(caseId) {
+  openModal(
+    '<h3>接客記録入力</h3>' +
+    '<p class="muted">チャレンジ番号・問合せ方法・媒体（集客経路）は案件の基本情報に1つだけ持つため、ここでは入力しません。</p>' +
+    '<div class="field"><label>日付*</label><input type="date" id="sh-date"></div>' +
+    '<div class="field"><label>媒体（やり取りの手段）*</label><select id="sh-media">' +
+    SALES_HISTORY_MEDIA_OPTIONS.map(function (m) { return '<option value="' + m + '">' + m + '</option>'; }).join('') + '</select></div>' +
+    '<div class="field"><label>窓口（相手方）</label><select id="sh-window"><option value="">-</option>' +
+    SALES_HISTORY_WINDOW_OPTIONS.map(function (w) { return '<option value="' + w + '">' + w + '</option>'; }).join('') + '</select></div>' +
+    '<div class="field"><label>担当*</label><input id="sh-staff" value="' + escapeHtml(CURRENT_USER.name) + '"></div>' +
+    '<div class="field"><label>備考</label><textarea id="sh-note" maxlength="1000"></textarea></div>' +
+    '<div class="row" style="margin-top:12px;"><button class="secondary" onclick="closeModal()">キャンセル</button>' +
+    '<button onclick="submitSalesModal(\'' + caseId + '\')">保存</button></div>'
+  );
+}
+function submitSalesModal(caseId) {
+  const input = {
+    CASE_ID: caseId,
+    日付: document.getElementById('sh-date').value,
+    媒体: document.getElementById('sh-media').value,
+    窓口: document.getElementById('sh-window').value,
+    担当: document.getElementById('sh-staff').value,
+    備考: document.getElementById('sh-note').value
+  };
+  callApi('saveSalesHistory', input).then(function () {
+    toast('接客記録を保存しました。', 'success');
+    closeModal();
+    renderCaseDetail(caseId, 'sales');
+  }).catch(handleApiError);
+}
+
+/* ---- 案件メモタブ（構造化。実際の接客記録シートの備考欄にある固定見出しを再現。Q&A九巡目） ---- */
+const CASE_SUMMARY_MEMO_FIELDS = ['CPLこんな方です', '時期', 'エリア', 'ゲスト・パーティー', '式場', '旅行', 'お披露目・前撮り', 'TAVICA', '結果'];
+function renderSummaryMemoTab_(body, detail) {
+  const memo = detail.summaryMemo || {};
+  let html = '<p class="muted">案件の理解が進むにつれて随時上書き保存する自由記述のメモです（カウンセリングシート回答とは別物）。</p>';
+  CASE_SUMMARY_MEMO_FIELDS.forEach(function (f) {
+    const placeholder = f === 'CPLこんな方です' ? 'MR：\nMS：' : '';
+    html += '<div class="field"><label>' + f + '</label><textarea id="sm-' + f + '" maxlength="2000" placeholder="' + placeholder + '">' +
+      escapeHtml(memo[f] || '') + '</textarea></div>';
+  });
+  html += '<button onclick="submitSummaryMemo(\'' + detail.caseRecord.CASE_ID + '\')">保存</button>';
+  if (memo.更新日時) html += '<span class="muted" style="margin-left:10px;">最終更新：' + fmtDate(memo.更新日時) + '（' + escapeHtml(memo.更新者) + '）</span>';
+  body.innerHTML = html;
+}
+function submitSummaryMemo(caseId) {
+  const input = { CASE_ID: caseId };
+  CASE_SUMMARY_MEMO_FIELDS.forEach(function (f) { input[f] = document.getElementById('sm-' + f).value; });
+  callApi('saveCaseSummaryMemo', input).then(function () {
+    toast('案件メモを保存しました。', 'success');
+    renderCaseDetail(caseId, 'summary');
+  }).catch(handleApiError);
+}
+
+/* ---- 書類チェックタブ（お渡し・回収書類。Q&A九巡目） ---- */
+function renderDocumentChecklistTab_(body, detail) {
+  const items = detail.documentChecklist || [];
+  if (!items.length) { body.innerHTML = '<div class="muted">チェックリストの項目がありません。</div>'; return; }
+  const groups = {};
+  items.forEach(function (it) { groups[it.グループ] = groups[it.グループ] || []; groups[it.グループ].push(it); });
+  let html = '';
+  Object.keys(groups).forEach(function (g) {
+    html += '<h3 style="font-size:13px;margin-top:14px;">【' + escapeHtml(g) + '】</h3>';
+    groups[g].forEach(function (it) {
+      html += '<div class="field" style="margin-bottom:4px;"><label style="display:flex;align-items:center;gap:6px;font-weight:normal;">' +
+        '<input type="checkbox" style="width:auto;" ' + (it.チェック済み ? 'checked' : '') +
+        ' onchange="toggleDocCheck(\'' + detail.caseRecord.CASE_ID + '\',\'' + it.ITEM_ID + '\',this.checked)"> ' + escapeHtml(it.項目名) + '</label></div>';
+    });
+  });
+  body.innerHTML = html;
+}
+function toggleDocCheck(caseId, itemId, checked) {
+  callApi('toggleDocumentCheck', caseId, itemId, checked).then(function () {
+    toast(checked ? 'チェックしました。' : 'チェックを外しました。', 'success');
+  }).catch(handleApiError);
+}
+
+/* ---- 未成約タブ（登録は専用ボタンから行う。Q&A九巡目：接客記録から切り離した） ---- */
+function renderLostTab_(body, detail) {
+  const c = detail.caseRecord;
+  const activeStatuses = ['来店前', '来店済', '商談中', '保留'];
+  let html = '';
+  if (activeStatuses.indexOf(c.案件状態) !== -1) {
+    html += '<button onclick="openRegisterLostModal(\'' + c.CASE_ID + '\')">＋ 未成約登録</button><hr class="section-divider">';
+  }
+  html += listTable_(detail.lostCases, [
+    ['種別', '種別'], ['未成約日', '未成約日', 'date'], ['理由', '未成約理由カテゴリ'], ['詳細', '詳細']
+  ]);
+  body.innerHTML = html;
+}
+function openRegisterLostModal(caseId) {
+  openModal('<h3>未成約登録</h3>' + lostFormHtml_('rl-') +
+    '<div class="row" style="margin-top:12px;"><button class="secondary" onclick="closeModal()">キャンセル</button>' +
+    '<button onclick="submitRegisterLostModal(\'' + caseId + '\')">登録する</button></div>');
+}
+function submitRegisterLostModal(caseId) {
+  const input = {
+    未成約日: document.getElementById('rl-l-date').value,
+    未成約理由カテゴリ: document.getElementById('rl-l-category').value,
+    未成約理由その他: document.getElementById('rl-l-other').value,
+    '競合会社（自由記述）': document.getElementById('rl-l-competitor-free').value,
+    詳細: document.getElementById('rl-l-detail').value
+  };
+  callApi('registerLostCase', caseId, input).then(function () {
+    toast('未成約登録を行いました。', 'success');
+    closeModal();
+    renderCaseDetail(caseId, 'lost');
+  }).catch(handleApiError);
+}
+
+/** 契約フォーム（方面・CPL旅行人数・列席旅行人数を追加。見積は経由せずここで初めて条件を確定する） */
+function contractFormHtml_(prefix) {
+  const productOptions = optionList_(REF_MASTERS.products, 'PRODUCT_ID', '商品名');
+  // 方面・式場・現地会社はテーブル側に名称文字列で保存する運用のため、value・表示ともに名称にする
+  const areaOptions = optionListByLabel_(REF_MASTERS.areas, '方面名');
+  const venueOptions = optionListByLabel_(REF_MASTERS.venues, '式場名');
+  const partnerOptions = optionListByLabel_(REF_MASTERS.partners, '会社名');
+  return '<hr class="section-divider"><h3>契約情報（成約）</h3>' +
+    '<div class="row">' +
+    '<div class="col field"><label>契約日*</label><input type="date" id="' + prefix + 'c-date"></div>' +
+    '<div class="col field"><label>商品*</label><select id="' + prefix + 'c-product">' + productOptions + '</select></div>' +
+    '<div class="col field"><label>プラン*</label><input id="' + prefix + 'c-plan"></div>' +
+    '</div><div class="row">' +
+    '<div class="col field"><label>方面*</label><select id="' + prefix + 'c-area">' + areaOptions + '</select></div>' +
+    '<div class="col field"><label>式場／フォトプラン名</label><select id="' + prefix + 'c-venue"><option value="">-</option>' + venueOptions + '</select></div>' +
+    '<div class="col field"><label>現地会社（AGT）</label><select id="' + prefix + 'c-partner"><option value="">-</option>' + partnerOptions + '</select></div>' +
+    '</div><div class="row">' +
+    '<div class="col field"><label>挙式日（撮影日）</label><input type="date" id="' + prefix + 'c-wdate"></div>' +
+    '<div class="col field"><label>CPL旅行人数</label><input type="number" id="' + prefix + 'c-cpltour" min="0"></div>' +
+    '<div class="col field"><label>列席旅行人数</label><input type="number" id="' + prefix + 'c-guesttour" min="0"></div>' +
+    '</div><div class="row">' +
+    '<div class="col field"><label>旅行代金</label><input type="number" id="' + prefix + 'c-travel" min="0"></div>' +
+    '<div class="col field"><label>挙式代金</label><input type="number" id="' + prefix + 'c-wedding" min="0"></div>' +
+    '<div class="col field"><label>衣装代金</label><input type="number" id="' + prefix + 'c-dress" min="0"></div>' +
+    '<div class="col field"><label>オプション</label><input type="number" id="' + prefix + 'c-option" min="0"></div>' +
+    '</div>' +
+    '<div class="field"><label>利益</label><input type="number" id="' + prefix + 'c-profit"></div>';
+}
+
+function lostFormHtml_(prefix) {
+  // バグ修正：以前は「競合会社」の選択肢に自社のAGT（現地手配会社）マスタが誤って使われていた
+  // （REF_MASTERS.partnersは自社が提携する現地会社であり、他社に負けた際の「競合」ではない）。
+  // 競合会社を管理するマスタは存在しないため、自由記述欄のみとする。
+  return '<hr class="section-divider"><h3>未成約理由</h3>' +
+    '<div class="field"><label>未成約日*</label><input type="date" id="' + prefix + 'l-date"></div>' +
+    '<div class="field"><label>未成約理由カテゴリ*</label><select id="' + prefix + 'l-category" onchange="toggleLostOtherReason(\'' + prefix + '\')">' +
+    LOST_REASON_CATEGORIES.map(function (c) { return '<option value="' + c + '">' + c + '</option>'; }).join('') + '</select></div>' +
+    '<div class="field" id="' + prefix + 'l-other-wrap" style="display:none;"><label>未成約理由その他*</label><input id="' + prefix + 'l-other" maxlength="200"></div>' +
+    '<div class="field"><label>競合会社（自由記述）</label><input id="' + prefix + 'l-competitor-free" maxlength="50" placeholder="例：JTB、渡辺ウェディング等"></div>' +
+    '<div class="field"><label>詳細</label><textarea id="' + prefix + 'l-detail" maxlength="500"></textarea></div>';
+}
+function toggleLostOtherReason(prefix) {
+  const v = document.getElementById(prefix + 'l-category').value;
+  document.getElementById(prefix + 'l-other-wrap').style.display = (v === 'その他') ? 'block' : 'none';
+}
+
+/* ---- 経過メモタブ（後日の電話対応等の追記ログ） ---- */
+function renderNotesTab_(body, detail) {
+  const notes = detail.caseNotes || [];
+  body.innerHTML = '<div class="field"><label>経過メモを追記</label><textarea id="cn-input" placeholder="例：本日15時にお客様よりお電話。来週再来店予定。" maxlength="1000"></textarea></div>' +
+    '<button onclick="submitCaseNote(\'' + detail.caseRecord.CASE_ID + '\')">追記する</button>' +
+    '<hr class="section-divider">' +
+    (notes.length ? notes.map(function (n) {
+      return '<div class="field"><div class="muted">' + fmtDate(n.投稿日時) + ' ・ ' + escapeHtml(n.投稿者) + '</div><div>' + escapeHtml(n.内容) + '</div></div>';
+    }).join('<hr class="section-divider">') : '<div class="muted">経過メモはまだありません。</div>');
+}
+function submitCaseNote(caseId) {
+  const content = document.getElementById('cn-input').value;
+  if (!content) return;
+  callApi('addCaseNote', caseId, content).then(function () {
+    toast('経過メモを追記しました。', 'success');
+    renderCaseDetail(caseId, 'notes');
+  }).catch(handleApiError);
+}
+
+/* ---- 契約タブ（日報登録）＋キャンセル登録 ---- */
+function renderContractTab_(body, detail) {
+  const c = detail.caseRecord;
+  const active = (detail.contracts || []).find(function (ct) { return ct.有効フラグ === true || ct.有効フラグ === 'TRUE'; });
+  // バグ修正：Contracts.商品はPRODUCT_ID（内部コード）で保存されているため、そのまま表示すると
+  // 「PRD-1」のようなIDが出てしまう。商品マスタから商品名に解決して表示する。
+  const productById = {};
+  (REF_MASTERS.products || []).forEach(function (p) { productById[p.PRODUCT_ID] = p.商品名; });
+  const contractsForDisplay = (detail.contracts || []).map(function (ct) {
+    return Object.assign({}, ct, { 商品表示: productById[ct.商品] || ct.商品 });
+  });
+  let html = listTable_(contractsForDisplay, [
+    ['契約日', '契約日', 'date'], ['商品', '商品表示'], ['プラン', 'プラン'], ['方面', '方面'], ['式場', '式場'], ['契約担当', '契約担当'], ['有効', '有効フラグ']
+  ]);
+  const activeStatuses = ['来店前', '来店済', '商談中', '保留'];
+  if (active) {
+    html = '<button class="danger" onclick="openCancelModal(\'' + c.CASE_ID + '\')">キャンセル登録</button><hr class="section-divider">' + html;
+  } else if (activeStatuses.indexOf(c.案件状態) !== -1) {
+    html = '<button onclick="openRegisterContractModal(\'' + c.CASE_ID + '\')">＋ 成約登録</button><hr class="section-divider">' + html;
+  }
+  body.innerHTML = html;
+}
+function openRegisterContractModal(caseId) {
+  openModal('<h3>成約登録</h3>' + contractFormHtml_('rc-') +
+    '<div class="row" style="margin-top:12px;"><button class="secondary" onclick="closeModal()">キャンセル</button>' +
+    '<button onclick="submitRegisterContractModal(\'' + caseId + '\')">登録する</button></div>');
+}
+function submitRegisterContractModal(caseId) {
+  const input = {
+    契約日: document.getElementById('rc-c-date').value,
+    商品: document.getElementById('rc-c-product').value,
+    プラン: document.getElementById('rc-c-plan').value,
+    方面: document.getElementById('rc-c-area').value,
+    式場: document.getElementById('rc-c-venue').value,
+    現地会社: document.getElementById('rc-c-partner').value,
+    挙式日: document.getElementById('rc-c-wdate').value,
+    CPL旅行人数: document.getElementById('rc-c-cpltour').value,
+    列席旅行人数: document.getElementById('rc-c-guesttour').value,
+    旅行代金: document.getElementById('rc-c-travel').value,
+    挙式代金: document.getElementById('rc-c-wedding').value,
+    衣装代金: document.getElementById('rc-c-dress').value,
+    オプション: document.getElementById('rc-c-option').value,
+    利益: document.getElementById('rc-c-profit').value
+  };
+  callApi('registerContract', caseId, input).then(function () {
+    toast('成約登録を行いました。', 'success');
+    closeModal();
+    renderCaseDetail(caseId, 'contract');
+  }).catch(handleApiError);
+}
+function openCancelModal(caseId) {
+  openModal('<h3>キャンセル登録</h3><p class="muted">一度成約した案件が取り消しになった場合に登録します。</p>' +
+    lostFormHtml_('cx-') +
+    '<div class="row" style="margin-top:12px;"><button class="secondary" onclick="closeModal()">閉じる</button>' +
+    '<button class="danger" onclick="submitCancelModal(\'' + caseId + '\')">キャンセル登録を確定</button></div>');
+}
+function submitCancelModal(caseId) {
+  const input = {
+    CASE_ID: caseId,
+    キャンセル日: document.getElementById('cx-l-date').value,
+    未成約理由カテゴリ: document.getElementById('cx-l-category').value,
+    未成約理由その他: document.getElementById('cx-l-other').value,
+    '競合会社（自由記述）': document.getElementById('cx-l-competitor-free').value,
+    詳細: document.getElementById('cx-l-detail').value
+  };
+  callApi('cancelContract', input).then(function () {
+    toast('キャンセル登録を行いました。', 'success'); closeModal();
+    renderCaseDetail(caseId, 'contract');
+  }).catch(handleApiError);
+}
+
+/* ---- 手配タブ（参照専用） ---- */
+function renderOperationRefTab_(body, detail) {
+  callApi('getOperationDetail', detail.caseRecord.CASE_ID).then(function (opDetail) {
+    const op = opDetail.operation;
+    body.innerHTML = kvTable_([
+      ['手配状態', op.手配状態], ['NB日', fmtDate(op.NB日)], ['チャレンジ番号', op.チャレンジ番号], ['プラン', op.プラン],
+      ['挙式日（撮影日）', fmtDate(op['挙式日（撮影日）'])], ['AGT', op.AGT], ['FNL日', fmtDate(op.FNL日)],
+      ['フォトブリッジ登録済', op.フォトブリッジ登録済], ['AI加工有無', op.AI加工有無], ['データアップロード', op.データアップロード],
+      ['納品予定日', fmtDate(op.納品予定日)], ['CXL日', fmtDate(op.CXL日)], ['備考（早期納品有無等）', op['備考（早期納品有無等）']]
+    ]) + '<button style="margin-top:10px;" onclick="location.hash=\'#/operations/' + detail.caseRecord.CASE_ID + '\'">手配管理を開く</button>' +
+      '<h3 style="margin-top:16px;">更新履歴</h3>' + listTable_(opDetail.history, [['更新日時', '更新日時', 'date'], ['担当', '担当'], ['ステータス', 'ステータス'], ['内容', '内容']]);
+  }).catch(function () {
+    body.innerHTML = '<div class="muted">手配情報はまだ作成されていません（未成約段階）。</div>';
+  });
+}
+
+function renderCaseTaskTab_(body, detail) {
+  // バグ修正：以前はlistTable_（読み取り専用）で状態を更新する手段が無かったため、タスク一覧と同じ
+  // インライン更新セレクトに差し替える。
+  let html = '<button onclick="openTaskModal(\'' + detail.caseRecord.CASE_ID + '\')">＋ タスクを追加</button><hr class="section-divider">';
+  if (!detail.tasks || detail.tasks.length === 0) {
+    html += '<div class="muted">タスクの登録はまだありません。</div>';
+  } else {
+    html += '<table><thead><tr><th>内容</th><th>担当者</th><th>期限</th><th>状態</th><th>優先度</th></tr></thead><tbody>';
+    detail.tasks.forEach(function (t) {
+      html += '<tr><td>' + escapeHtml(t.内容) + '</td><td>' + escapeHtml(t.担当者) + '</td><td>' + fmtDate(t.期限) + '</td>' +
+        '<td><select onchange="quickUpdateTaskStatus(\'' + t.TASK_ID + '\',this.value)">' +
+        TASK_STATUS_FLOW.map(function (s) { return '<option value="' + s + '" ' + (s === t.状態 ? 'selected' : '') + '>' + s + '</option>'; }).join('') +
+        '</select></td><td>' + escapeHtml(t.優先度) + '</td></tr>';
+    });
+    html += '</tbody></table>';
+  }
+  body.innerHTML = html;
+}
+
+/* ============================================================
+ * 画面：手配管理一覧（本部・手配課専用。インライン編集）
+ * カウンセリングシートから発生し、販売店スタッフが「成約」にした案件のみがここに並ぶ
+ * （Operationsは成約時にのみ自動生成されるため）。
+ * 地方チェックボックスで絞り込み可能。東日本＝北海道・東北・関東・中部、西日本＝関西・中四国・九州の
+ * 大区分をチェックすると配下の地方が自動で選択／解除される。「記憶する」でlocalStorageに保存し、
+ * 次回アクセス時に同じ絞り込みから始まる。
+ * 方面（ハワイ等）・AGT・挙式日の期間でも絞り込める。一覧は常に挙式日と「今日」との近さ順に
+ * 自動ソートされ、今に近い日付（直近の過去〜これから）が上に来る（Q&A六巡目）。
+ * ============================================================ */
+const REGION_GROUPS_ = {
+  東日本: ['北海道', '東北', '関東', '中部'],
+  西日本: ['関西', '中四国', '九州']
+};
+const OPERATIONS_FILTER_STORAGE_KEY_ = 'hisWeddingCrm.operationsRegionFilter';
+let operationsListCache_ = [];
+// 「現在」＝挙式日が今日以降（未設定含む）。「過去」＝挙式日が今日より前。
+// 過去タブでは、さらに古い年（本体シートから退避済みのアーカイブ）も年セレクタで呼び出せる（Q&A六巡目）。
+let operationsViewTab_ = 'current';
+let operationsArchiveCache_ = [];
+let operationsArchiveYear_ = '';
+
+function renderOperationsList() {
+  const regions = (REF_MASTERS.regions || []).slice().sort(function (a, b) { return (a.表示順 || 0) - (b.表示順 || 0); }).map(function (r) { return r.地方名; });
+  const saved = loadOperationsFilter_();
+  const selected = saved && saved.length ? saved : regions.slice(); // 未保存時は「全国」＝全地方選択
+  const areaOptions = optionListByLabel_(REF_MASTERS.areas, '方面名');
+  const agtOptions = optionListByLabel_(REF_MASTERS.partners, '会社名');
+
+  let html = '<div class="tabs">' +
+    '<a class="' + (operationsViewTab_ === 'current' ? 'active' : '') + '" onclick="switchOperationsViewTab_(\'current\')">現在</a>' +
+    '<a class="' + (operationsViewTab_ === 'past' ? 'active' : '') + '" onclick="switchOperationsViewTab_(\'past\')">過去</a>' +
+    '</div>' +
+    '<div class="panel">' +
+    '<div style="margin-bottom:10px;"><strong>地方で絞り込み：</strong></div>' +
+    '<div class="row" style="margin-bottom:6px;">' +
+    Object.keys(REGION_GROUPS_).map(function (g) {
+      return '<label style="display:inline-flex;align-items:center;gap:4px;width:auto;margin-right:16px;">' +
+        '<input type="checkbox" style="width:auto;" id="opf-group-' + g + '" onchange="toggleOperationsRegionGroup_(\'' + g + '\')"> ' + g + '</label>';
+    }).join('') +
+    '</div><div class="row" style="margin-bottom:10px;">' +
+    regions.map(function (r) {
+      return '<label style="display:inline-flex;align-items:center;gap:4px;width:auto;margin-right:14px;">' +
+        '<input type="checkbox" class="opf-region" value="' + escapeHtml(r) + '" ' + (selected.indexOf(r) !== -1 ? 'checked' : '') +
+        ' onchange="onOperationsRegionChange_()"> ' + escapeHtml(r) + '</label>';
+    }).join('') +
+    '</div><div class="row" style="align-items:center;margin-bottom:10px;">' +
+    '<button class="secondary" onclick="setAllOperationsRegions_(true)">全国</button>' +
+    '<button class="secondary" onclick="setAllOperationsRegions_(false)">全解除</button>' +
+    '<button onclick="rememberOperationsFilter_()">この絞り込みを記憶する</button>' +
+    '<span class="muted" id="opf-remember-status" style="margin-left:8px;"></span>' +
+    '</div>' +
+    '<div class="row">' +
+    '<div class="col"><label>方面</label><select id="opf-area" onchange="renderOperationsTable_()"><option value="">すべて</option>' + areaOptions + '</select></div>' +
+    '<div class="col"><label>AGT</label><select id="opf-agt" onchange="renderOperationsTable_()"><option value="">すべて</option>' + agtOptions + '</select></div>' +
+    '<div class="col"><label>挙式日（から）</label><input type="date" id="opf-date-from" onchange="renderOperationsTable_()"></div>' +
+    '<div class="col"><label>挙式日（まで）</label><input type="date" id="opf-date-to" onchange="renderOperationsTable_()"></div>' +
+    '</div>' +
+    (operationsViewTab_ === 'past' ? '<div class="row" style="align-items:flex-end;margin-top:8px;">' +
+      '<div class="col"><label>さらに過去を見る（年）</label><select id="opf-archive-year" onchange="onOperationsArchiveYearChange_()"><option value="">本体データのみ（直近の過去）</option></select></div>' +
+      '</div>' : '') +
+    '<div class="muted" style="margin-top:6px;">挙式日が「今日」に近い順（直近の過去〜これから）に自動で並び替えて表示しています。</div>' +
+    '</div>' +
+    '<div class="panel"><div id="ops-table">読み込み中...</div></div>';
+  document.getElementById('view-root').innerHTML = html;
+  syncOperationsGroupCheckboxes_();
+
+  if (operationsViewTab_ === 'past') loadOperationsArchiveYears_();
+
+  callApi('getOperationList').then(function (rows) {
+    operationsListCache_ = rows;
+    renderOperationsTable_();
+  }).catch(handleApiError);
+}
+function switchOperationsViewTab_(tab) {
+  operationsViewTab_ = tab;
+  operationsArchiveCache_ = [];
+  operationsArchiveYear_ = '';
+  renderOperationsList();
+}
+function loadOperationsArchiveYears_() {
+  callApi('getOperationArchiveYears').then(function (years) {
+    const sel = document.getElementById('opf-archive-year');
+    if (!sel) return;
+    years.forEach(function (y) { sel.innerHTML += '<option value="' + y + '">' + y + '年以前もあわせて表示</option>'; });
+  }).catch(handleApiError);
+}
+function onOperationsArchiveYearChange_() {
+  const year = document.getElementById('opf-archive-year').value;
+  operationsArchiveYear_ = year;
+  if (!year) { operationsArchiveCache_ = []; renderOperationsTable_(); return; }
+  document.getElementById('ops-table').innerHTML = '読み込み中...';
+  callApi('getOperationArchiveList', year).then(function (rows) {
+    operationsArchiveCache_ = rows;
+    renderOperationsTable_();
+  }).catch(handleApiError);
+}
+
+function loadOperationsFilter_() {
+  try {
+    const raw = localStorage.getItem(OPERATIONS_FILTER_STORAGE_KEY_);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+function rememberOperationsFilter_() {
+  const selected = Array.prototype.slice.call(document.querySelectorAll('.opf-region:checked')).map(function (el) { return el.value; });
+  try {
+    localStorage.setItem(OPERATIONS_FILTER_STORAGE_KEY_, JSON.stringify(selected));
+    document.getElementById('opf-remember-status').textContent = '記憶しました。次回から自動的にこの絞り込みで表示します。';
+  } catch (e) { /* localStorage不可時は何もしない */ }
+}
+function setAllOperationsRegions_(checked) {
+  document.querySelectorAll('.opf-region').forEach(function (el) { el.checked = checked; });
+  onOperationsRegionChange_();
+}
+function toggleOperationsRegionGroup_(groupName) {
+  const groupChecked = document.getElementById('opf-group-' + groupName).checked;
+  const members = REGION_GROUPS_[groupName];
+  document.querySelectorAll('.opf-region').forEach(function (el) {
+    if (members.indexOf(el.value) !== -1) el.checked = groupChecked;
+  });
+  onOperationsRegionChange_();
+}
+function syncOperationsGroupCheckboxes_() {
+  Object.keys(REGION_GROUPS_).forEach(function (g) {
+    const members = REGION_GROUPS_[g];
+    const checkedEls = Array.prototype.slice.call(document.querySelectorAll('.opf-region')).filter(function (el) { return members.indexOf(el.value) !== -1; });
+    const allChecked = checkedEls.length > 0 && checkedEls.every(function (el) { return el.checked; });
+    const groupEl = document.getElementById('opf-group-' + g);
+    if (groupEl) groupEl.checked = allChecked;
+  });
+}
+function onOperationsRegionChange_() {
+  syncOperationsGroupCheckboxes_();
+  document.getElementById('opf-remember-status').textContent = '';
+  renderOperationsTable_();
+}
+/** 挙式日と「今日」との近さ（絶対値）でソートするための距離を計算する。未設定の挙式日は末尾に回す */
+function opDateDistanceFromToday_(dateStr) {
+  if (!dateStr) return Infinity;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return Infinity;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  d.setHours(0, 0, 0, 0);
+  return Math.abs(d.getTime() - today.getTime());
+}
+function renderOperationsTable_() {
+  const selectedRegions = Array.prototype.slice.call(document.querySelectorAll('.opf-region:checked')).map(function (el) { return el.value; });
+  const areaEl = document.getElementById('opf-area');
+  const agtEl = document.getElementById('opf-agt');
+  const dateFromEl = document.getElementById('opf-date-from');
+  const dateToEl = document.getElementById('opf-date-to');
+  const area = areaEl ? areaEl.value : '';
+  const agt = agtEl ? agtEl.value : '';
+  const dateFrom = dateFromEl ? dateFromEl.value : '';
+  const dateTo = dateToEl ? dateToEl.value : '';
+  const todayIso = todayIso_();
+
+  // 「現在」＝挙式日が今日以降（未設定含む）、「過去」＝挙式日が今日より前（Q&A六巡目）
+  let rows = operationsListCache_.filter(function (op) {
+    const wd = op['挙式日（撮影日）'] ? String(fmtDate(op['挙式日（撮影日）'])) : '';
+    if (operationsViewTab_ === 'current') return !wd || wd >= todayIso;
+    return wd && wd < todayIso;
+  });
+  // 過去タブでは、年セレクタで選んだアーカイブ済みデータも合わせて表示する（参照専用）
+  if (operationsViewTab_ === 'past' && operationsArchiveYear_) {
+    rows = rows.concat(operationsArchiveCache_.map(function (op) { return Object.assign({ __archived: true }, op); }));
+  }
+  rows = rows.filter(function (op) {
+    if (selectedRegions.indexOf(op.__region) === -1) return false;
+    if (area && op.__area !== area) return false;
+    if (agt && op.AGT !== agt) return false;
+    const wd = op['挙式日（撮影日）'] ? String(fmtDate(op['挙式日（撮影日）'])) : '';
+    if (dateFrom && (!wd || wd < dateFrom)) return false;
+    if (dateTo && (!wd || wd > dateTo)) return false;
+    return true;
+  });
+  // 挙式日順に自動ソート。「今日」に近い日付（直近の過去〜これから）を上に持ってくる（Q&A六巡目）
+  rows = rows.slice().sort(function (a, b) {
+    return opDateDistanceFromToday_(a['挙式日（撮影日）']) - opDateDistanceFromToday_(b['挙式日（撮影日）']);
+  });
+
+  // 一覧の列は「新郎新婦・地方・店舗・方面・案件ID・プラン」（本システム独自の絞り込み・識別用）＋
+  // 実際の手配課シートの列（NB日〜備考（早期納品有無等）まで、A〜P列と同じ並び）＋
+  // 手配状態・手配担当者（実シートには無いが、本システムの進捗管理の中核なので残す）で構成する（Q&A十巡目）。
+  let html = '<table><thead><tr>' +
+    '<th>新郎新婦</th><th>地方</th><th>店舗</th><th>方面</th><th>案件ID</th><th>プラン</th>' +
+    '<th>NB日</th><th>チャレンジ番号</th><th>挙式日（撮影日）</th><th>AGT</th><th>FNL日</th>' +
+    '<th>フォトブリッジ登録済</th><th>名前</th><th>AI加工有無</th><th>データアップロード</th><th>名前</th>' +
+    '<th>納品予定日</th><th>CXL日</th><th>キャンセル☑</th><th>備考（早期納品有無等）</th>' +
+    '<th>手配状態</th><th>手配担当者</th><th></th></tr></thead><tbody>';
+  rows.forEach(function (op) {
+    const rowClass = op.__deliveryAlert === 'OVERDUE' ? 'alert-overdue' : (op.__deliveryAlert === 'WARNING' || op.__fnlAlert ? 'alert-warning' : '');
+    // アーカイブ済みの行は別ファイルのため、この画面からの直接編集はできない（参照専用でステータスは文字表示のみ）
+    const statusCell = op.__archived
+      ? escapeHtml(op.手配状態) + '（アーカイブ）'
+      : '<select onchange="quickUpdateOperation(\'' + op.CASE_ID + '\',\'手配状態\',this.value)">' +
+        OPERATION_STATUS_FLOW.map(function (s) { return '<option value="' + s + '" ' + (s === op.手配状態 ? 'selected' : '') + '>' + s + '</option>'; }).join('') +
+        '</select>';
+    const detailCell = op.__archived ? '<span class="muted">過去データ</span>' : '<a onclick="location.hash=\'#/operations/' + op.CASE_ID + '\'">詳細</a>';
+    html += '<tr class="' + rowClass + '">' +
+      '<td>' + escapeHtml(op.__customerName) + '</td><td>' + escapeHtml(op.__region) + '</td><td>' + escapeHtml(op.__storeName) + '</td>' +
+      '<td>' + escapeHtml(op.__area) + '</td>' +
+      '<td>' + op.CASE_ID + '</td><td>' + escapeHtml(op.プラン) + '</td>' +
+      '<td>' + fmtDate(op.NB日) + '</td><td>' + escapeHtml(op.チャレンジ番号) + '</td>' +
+      '<td>' + fmtDate(op['挙式日（撮影日）']) + '</td><td>' + escapeHtml(op.AGT) + '</td>' +
+      '<td>' + fmtDate(op.FNL日) + (op.__fnlAlert ? ' ⚠' : '') + '</td>' +
+      '<td>' + (op.フォトブリッジ登録済 ? '済' : '') + '</td><td>' + escapeHtml(op['名前①']) + '</td>' +
+      '<td>' + (op.AI加工有無 ? '有' : '') + '</td><td>' + (op.データアップロード ? '済' : '') + '</td><td>' + escapeHtml(op['名前②']) + '</td>' +
+      '<td>' + (op.納品予定日 ? fmtDate(op.納品予定日) : '未設定（早期納品）') + (op.__deliveryAlert ? ' ⚠' : '') + '</td>' +
+      '<td>' + fmtDate(op.CXL日) + '</td><td>' + (op['キャンセル☑'] ? '☑' : '') + '</td>' +
+      '<td>' + escapeHtml(op['備考（早期納品有無等）']) + '</td>' +
+      '<td>' + statusCell + '</td>' +
+      '<td>' + escapeHtml(op.手配担当者) + '</td>' +
+      '<td>' + detailCell + '</td></tr>';
+  });
+  html += '</tbody></table>';
+  if (rows.length === 0) html = '<div class="muted">該当する案件がありません。</div>';
+  document.getElementById('ops-table').innerHTML = html;
+}
+function quickUpdateOperation(caseId, field, value) {
+  const patch = { CASE_ID: caseId };
+  patch[field] = value;
+  callApi('saveOperation', patch).then(function () { toast('更新しました。', 'success'); }).catch(handleApiError);
+}
+
+/* ============================================================
+ * 画面：手配詳細編集
+ * ============================================================ */
+function renderOperationDetail(caseId) {
+  callApi('getOperationDetail', caseId).then(function (d) {
+    const op = d.operation;
+    const partnerOptions = optionListByLabel_(REF_MASTERS.partners, '会社名'); // OperationsのAGT列は名称文字列で保持する
+    let html = '<div class="panel"><h2>' + caseId + ' の手配詳細</h2>' +
+      '<div class="field"><label>手配状態</label><select id="op-status">' +
+      OPERATION_STATUS_FLOW.map(function (s) { return '<option value="' + s + '" ' + (s === op.手配状態 ? 'selected' : '') + '>' + s + '</option>'; }).join('') + '</select></div>' +
+      '<div class="row">' +
+      '<div class="col field"><label>NB日</label><input type="date" id="op-nb" value="' + fmtDate(op.NB日) + '"></div>' +
+      '<div class="col field"><label>チャレンジ番号</label><input id="op-challenge" value="' + escapeHtml(op.チャレンジ番号) + '" maxlength="11"></div>' +
+      '<div class="col field"><label>プラン</label><input id="op-plan" value="' + escapeHtml(op.プラン) + '"></div>' +
+      '</div><div class="row">' +
+      '<div class="col field"><label>挙式日（撮影日）</label><input type="date" id="op-wdate" value="' + fmtDate(op['挙式日（撮影日）']) + '"></div>' +
+      '<div class="col field"><label>AGT</label><select id="op-agt"><option value="">-</option>' + partnerOptions + '</select></div>' +
+      '<div class="col field"><label>FNL日</label><input type="date" id="op-fnl" value="' + fmtDate(op.FNL日) + '"></div>' +
+      '</div><div class="row">' +
+      '<div class="col field"><label><input type="checkbox" id="op-photobridge" ' + (op.フォトブリッジ登録済 ? 'checked' : '') + ' style="width:auto;"> フォトブリッジ登録済</label><input id="op-name1" placeholder="名前①（フォトブリッジ登録担当者）" value="' + escapeHtml(op['名前①']) + '" maxlength="30"></div>' +
+      '<div class="col field"><label><input type="checkbox" id="op-ai" ' + (op.AI加工有無 ? 'checked' : '') + ' style="width:auto;"> AI加工有無</label></div>' +
+      '<div class="col field"><label><input type="checkbox" id="op-upload" ' + (op.データアップロード ? 'checked' : '') + ' style="width:auto;"> データアップロード</label><input id="op-name2" placeholder="名前②（データアップロード担当者）" value="' + escapeHtml(op['名前②']) + '" maxlength="30"></div>' +
+      '</div><div class="row">' +
+      '<div class="col field"><label>納品予定日</label><input type="date" id="op-delivery" value="' + fmtDate(op.納品予定日) + '"></div>' +
+      '<div class="col field"><label><input type="checkbox" id="op-recalc" style="width:auto;"> 標準日数で再計算する（式場／プランの標準納品日数から自動算出。早期納品等の個別対応時はOFFのまま納品予定日を直接入力してください）</label>' +
+      '<div class="muted">ONで保存すると、上の納品予定日欄の入力は標準日数からの自動計算値で上書きされます。</div></div>' +
+      '</div>' +
+      '<div class="field"><label>備考（早期納品有無等）</label><textarea id="op-note" maxlength="500">' + escapeHtml(op['備考（早期納品有無等）']) + '</textarea></div>' +
+      '<div class="field"><label>手配担当者</label><input id="op-staff" value="' + escapeHtml(op.手配担当者) + '"></div>' +
+      '<button onclick="submitOperationDetail(\'' + caseId + '\')">保存</button></div>' +
+      '<div class="panel"><h3>更新履歴</h3>' + listTable_(d.history, [['更新日時', '更新日時', 'date'], ['担当', '担当'], ['内容', '内容']]) + '</div>' +
+      '<div class="panel"><h3>自由記述メモ</h3><textarea id="op-memo-input" placeholder="メモを追記"></textarea>' +
+      '<button style="margin-top:8px;" onclick="submitOperationMemo(\'' + caseId + '\')">メモを追記</button>' +
+      '<hr class="section-divider">' + listTable_(d.memos, [['投稿日時', '投稿日時', 'date'], ['投稿者', '投稿者'], ['内容', '内容']]) + '</div>';
+    document.getElementById('view-root').innerHTML = html;
+    if (op.AGT) document.getElementById('op-agt').value = op.AGT;
+  }).catch(handleApiError);
+}
+function submitOperationDetail(caseId) {
+  const input = {
+    CASE_ID: caseId,
+    手配状態: document.getElementById('op-status').value,
+    NB日: document.getElementById('op-nb').value,
+    チャレンジ番号: document.getElementById('op-challenge').value,
+    プラン: document.getElementById('op-plan').value,
+    '挙式日（撮影日）': document.getElementById('op-wdate').value,
+    AGT: document.getElementById('op-agt').value,
+    FNL日: document.getElementById('op-fnl').value,
+    フォトブリッジ登録済: document.getElementById('op-photobridge').checked,
+    '名前①': document.getElementById('op-name1').value,
+    AI加工有無: document.getElementById('op-ai').checked,
+    データアップロード: document.getElementById('op-upload').checked,
+    '名前②': document.getElementById('op-name2').value,
+    納品予定日: document.getElementById('op-delivery').value,
+    再計算納品日: document.getElementById('op-recalc').checked, // ONの場合のみサーバー側で標準日数から再計算する
+    '備考（早期納品有無等）': document.getElementById('op-note').value,
+    手配担当者: document.getElementById('op-staff').value
+  };
+  callApi('saveOperation', input).then(function () {
+    toast('手配情報を保存しました。', 'success');
+    renderOperationDetail(caseId);
+  }).catch(handleApiError);
+}
+function submitOperationMemo(caseId) {
+  const content = document.getElementById('op-memo-input').value;
+  if (!content) return;
+  callApi('addOperationMemo', caseId, content).then(function () { renderOperationDetail(caseId); }).catch(handleApiError);
+}
+
+/* ============================================================
+ * 画面：タスク管理
+ * ============================================================ */
+function renderTasks() {
+  callApi('getTaskList').then(function (rows) {
+    let html = '<div class="panel"><button onclick="openTaskModal()">＋ タスクを追加</button><hr class="section-divider">' +
+      '<table><thead><tr><th>案件</th><th>担当部署</th><th>担当者</th><th>内容</th><th>期限</th><th>状態</th><th>優先度</th></tr></thead><tbody>';
+    rows.forEach(function (t) {
+      // バグ修正：以前は状態が読み取り専用テキストで、タスクを完了などに更新する手段が画面上に一切なかった
+      html += '<tr>' +
+        '<td class="clickable" onclick="location.hash=\'#/cases/' + t.CASE_ID + '/task\'">' + t.CASE_ID + '</td>' +
+        '<td>' + escapeHtml(t.担当部署) + '</td><td>' + escapeHtml(t.担当者) + '</td>' +
+        '<td>' + escapeHtml(t.内容) + '</td><td>' + fmtDate(t.期限) + '</td>' +
+        '<td><select onchange="quickUpdateTaskStatus(\'' + t.TASK_ID + '\',this.value)">' +
+        TASK_STATUS_FLOW.map(function (s) { return '<option value="' + s + '" ' + (s === t.状態 ? 'selected' : '') + '>' + s + '</option>'; }).join('') +
+        '</select></td>' +
+        '<td>' + escapeHtml(t.優先度) + '</td></tr>';
+    });
+    html += '</tbody></table></div>';
+    document.getElementById('view-root').innerHTML = html;
+  }).catch(handleApiError);
+}
+function quickUpdateTaskStatus(taskId, status) {
+  callApi('saveTask', { TASK_ID: taskId, 状態: status }).then(function () { toast('更新しました。', 'success'); }).catch(handleApiError);
+}
+function openTaskModal(caseId) {
+  openModal('<h3>タスク登録</h3>' +
+    '<div class="field"><label>案件ID</label><input id="tk-case" value="' + (caseId || '') + '"></div>' +
+    '<div class="field"><label>内容*</label><input id="tk-content"></div>' +
+    '<div class="field"><label>期限</label><input type="date" id="tk-due"></div>' +
+    '<div class="field"><label>優先度</label><select id="tk-priority"><option>高</option><option>中</option><option>低</option></select></div>' +
+    '<div class="row" style="margin-top:12px;"><button class="secondary" onclick="closeModal()">キャンセル</button>' +
+    '<button onclick="submitTaskModal()">保存</button></div>');
+}
+function submitTaskModal() {
+  const input = {
+    CASE_ID: document.getElementById('tk-case').value,
+    内容: document.getElementById('tk-content').value,
+    期限: document.getElementById('tk-due').value,
+    優先度: document.getElementById('tk-priority').value,
+    担当者: CURRENT_USER.name
+  };
+  callApi('saveTask', input).then(function () { toast('タスクを保存しました。', 'success'); closeModal(); route(); }).catch(handleApiError);
+}
+
+/* ============================================================
+ * 画面：マスタ管理
+ * ============================================================ */
+const MASTER_TABS = [
+  { key: 'stores', label: '店舗マスタ' }, { key: 'staff', label: '担当者マスタ' },
+  { key: 'products', label: '商品' }, { key: 'regions', label: '地方' }, { key: 'areas', label: '方面' },
+  { key: 'cities', label: '都市' }, { key: 'venues', label: '式場' }, { key: 'photoPlans', label: 'フォトプラン' },
+  { key: 'partners', label: '現地会社' }, { key: 'inquiryMethods', label: '問合せ方法' }, { key: 'media', label: '媒体' }
+];
+function renderMasters(tab) {
+  const restrictedToHqAdmin = ['products', 'regions', 'areas', 'cities', 'venues', 'photoPlans', 'partners', 'inquiryMethods', 'media'];
+  // 手配課・本部・管理者は同格（Q&A二巡目：「手配課と本部と管理者は同じ」）
+  const canEditCommon = ['HQ', 'ARRANGE', 'ADMIN'].indexOf(CURRENT_USER.role) !== -1;
+  let html = '<div class="tabs">' + MASTER_TABS.map(function (t) {
+    return '<a class="' + (t.key === tab ? 'active' : '') + '" onclick="location.hash=\'#/masters/' + t.key + '\'">' + t.label + '</a>';
+  }).join('') + '</div><div class="panel" id="masters-body">読み込み中...</div>';
+  document.getElementById('view-root').innerHTML = html;
+
+  if (tab === 'stores' || tab === 'staff') {
+    callApi('getMasterData', tab).then(function (rows) { renderMasterTable_(tab, rows); }).catch(handleApiError);
+  } else {
+    if (restrictedToHqAdmin.indexOf(tab) !== -1 && !canEditCommon) {
+      document.getElementById('masters-body').innerHTML = '<div class="muted">このマスタの編集は本部・手配課・管理者のみ可能です。閲覧のみ表示しています。</div>' + renderReadonlyList_(tab);
+      return;
+    }
+    document.getElementById('masters-body').innerHTML = renderReadonlyList_(tab) +
+      '<hr class="section-divider"><button onclick="openCommonMasterModal(\'' + tab + '\')">＋ 追加</button>';
+  }
+}
+/**
+ * 全社共通マスタ（商品・地方・方面・都市・式場・フォトプラン・現地会社・問合せ方法・媒体）の
+ * kindごとのフィールド定義。saveCommonMasterDataのidColByKind（masterController.gs）と対応させる。
+ * バグ修正：以前はここが生JSON手入力の追加専用モーダルしかなく、既存行の編集手段が一切なかった。
+ */
+const COMMON_MASTER_FIELDS = {
+  products: { idCol: 'PRODUCT_ID', fields: [['商品名', '商品名'], ['商品区分', '商品区分（挙式／フォト）'], ['会社', '会社'], ['利益率', '利益率（例：0.2）'], ['販売開始', '販売開始日'], ['販売終了', '販売終了日'], ['使用終了', '使用終了（TRUE/FALSE）']] },
+  regions: { idCol: 'REGION_ID', fields: [['地方名', '地方名'], ['表示順', '表示順（数値）']] },
+  areas: { idCol: 'AREA_ID', fields: [['方面名', '方面名'], ['表示順', '表示順（数値）'], ['使用終了', '使用終了（TRUE/FALSE）']] },
+  cities: { idCol: 'CITY_ID', fields: [['AREA_ID', 'AREA_ID（所属する方面）'], ['都市名', '都市名'], ['表示順', '表示順（数値）'], ['使用終了', '使用終了（TRUE/FALSE）']] },
+  venues: { idCol: 'VENUE_ID', fields: [['会社', '会社'], ['方面', '方面'], ['都市', '都市'], ['式場名', '式場名'], ['標準納品日数', '標準納品日数（未入力は既定30日）'], ['販売状況', '販売状況']] },
+  photoPlans: { idCol: 'PLAN_ID', fields: [['会社', '会社'], ['方面', '方面'], ['都市', '都市'], ['プラン名', 'プラン名'], ['標準納品日数', '標準納品日数（未入力は既定30日）'], ['販売状況', '販売状況']] },
+  partners: { idCol: 'PARTNER_ID', fields: [['会社名', '会社名'], ['方面', '方面'], ['都市', '都市'], ['担当者', '担当者'], ['メール', 'メール'], ['電話', '電話'], ['備考', '備考']] },
+  inquiryMethods: { idCol: 'METHOD_ID', fields: [['名称', '名称'], ['表示順', '表示順（数値）'], ['使用終了', '使用終了（TRUE/FALSE）']] },
+  media: { idCol: 'MEDIA_ID', fields: [['名称', '名称'], ['表示順', '表示順（数値）'], ['使用終了', '使用終了（TRUE/FALSE）']] }
+};
+function renderReadonlyList_(tab) {
+  const rows = REF_MASTERS[tab] || [];
+  const def = COMMON_MASTER_FIELDS[tab];
+  if (rows.length === 0) return '<div class="muted">データがありません。</div>';
+  const cols = Object.keys(rows[0]).filter(function (k) { return k !== '__row'; });
+  return '<table><thead><tr>' + cols.map(function (c) { return '<th>' + c + '</th>'; }).join('') + (def ? '<th></th>' : '') + '</tr></thead><tbody>' +
+    rows.map(function (r) {
+      return '<tr>' + cols.map(function (c) { return '<td>' + escapeHtml(r[c]) + '</td>'; }).join('') +
+        (def ? '<td><a onclick=\'openCommonMasterModal("' + tab + '", ' + JSON.stringify(r).replace(/'/g, "&#39;") + ')\'>編集</a></td>' : '') + '</tr>';
+    }).join('') +
+    '</tbody></table>';
+}
+function renderMasterTable_(kind, rows) {
+  const cols = kind === 'stores' ? ['STORE_ID', '店舗名', '地方', '区分', '責任者', 'メール'] : ['STAFF_ID', '氏名', '店舗ID', '役職', 'メール', '権限', '在籍'];
+  let html = '<table><thead><tr>' + cols.map(function (c) { return '<th>' + c + '</th>'; }).join('') + '<th></th></tr></thead><tbody>';
+  rows.forEach(function (r) {
+    html += '<tr>' + cols.map(function (c) { return '<td>' + escapeHtml(r[c]) + '</td>'; }).join('') +
+      '<td><a onclick=\'openMasterEditModal("' + kind + '", ' + JSON.stringify(r).replace(/'/g, "&#39;") + ')\'>編集</a></td></tr>';
+  });
+  html += '</tbody></table><button style="margin-top:10px;" onclick="openMasterEditModal(\'' + kind + '\', null)">＋ 新規追加</button>';
+  document.getElementById('masters-body').innerHTML = html;
+}
+function openMasterEditModal(kind, obj) {
+  obj = obj || {};
+  const fields = kind === 'stores'
+    ? [['STORE_ID', 'STORE_ID（既存を編集する場合のみ入力）'], ['店舗名', '店舗名'], ['地方', '地方（関東/関西/中部/東北/北海道/中四国/九州）'], ['区分', '区分（一般 または AVA）'], ['責任者', '責任者'], ['メール', 'メール']]
+    : [['STAFF_ID', 'STAFF_ID（既存を編集する場合のみ入力）'], ['氏名', '氏名'], ['店舗ID', '店舗ID'], ['役職', '役職'], ['メール', 'メール'], ['権限', '権限（ADMIN/HQ/ARRANGE/MANAGER/STAFF）'], ['在籍', '在籍（TRUE/FALSE）']];
+  openModal('<h3>' + (kind === 'stores' ? '店舗' : '担当者') + 'マスタ編集</h3>' +
+    fields.map(function (f) { return '<div class="field"><label>' + f[1] + '</label><input id="mm-' + f[0] + '" value="' + escapeHtml(obj[f[0]] || '') + '"></div>'; }).join('') +
+    '<div class="row" style="margin-top:12px;"><button class="secondary" onclick="closeModal()">キャンセル</button>' +
+    '<button onclick="submitMasterEditModal(\'' + kind + '\')">保存</button></div>');
+}
+function submitMasterEditModal(kind) {
+  const fields = kind === 'stores' ? ['STORE_ID', '店舗名', '地方', '区分', '責任者', 'メール'] : ['STAFF_ID', '氏名', '店舗ID', '役職', 'メール', '権限', '在籍'];
+  const obj = {};
+  fields.forEach(function (f) { const v = document.getElementById('mm-' + f).value; if (v !== '') obj[f] = v; });
+  callApi('saveMasterData', kind, obj).then(function () { toast('保存しました。', 'success'); closeModal(); location.reload(); }).catch(handleApiError);
+}
+/**
+ * obj省略時＝新規追加、obj指定時＝既存行の編集（バグ修正：以前は編集手段が無く、JSON手入力の
+ * 新規追加しかできなかった）。
+ */
+function openCommonMasterModal(kind, obj) {
+  obj = obj || null;
+  const def = COMMON_MASTER_FIELDS[kind];
+  const label = (MASTER_TABS.find(function (t) { return t.key === kind; }) || {}).label || kind;
+  const idField = obj ? '<div class="muted" style="margin-bottom:8px;">編集対象：' + escapeHtml(obj[def.idCol]) + '</div>' : '';
+  openModal('<h3>' + label + (obj ? 'の編集' : 'の追加') + '</h3>' + idField +
+    def.fields.map(function (f) {
+      return '<div class="field"><label>' + f[1] + '</label><input id="cm-' + f[0] + '" value="' + escapeHtml(obj ? (obj[f[0]] || '') : '') + '"></div>';
+    }).join('') +
+    '<div class="row" style="margin-top:12px;"><button class="secondary" onclick="closeModal()">キャンセル</button>' +
+    '<button onclick="submitCommonMasterModal(\'' + kind + '\', ' + (obj ? '"' + obj[def.idCol] + '"' : 'null') + ')">保存</button></div>');
+}
+function submitCommonMasterModal(kind, existingId) {
+  const def = COMMON_MASTER_FIELDS[kind];
+  const obj = {};
+  if (existingId) obj[def.idCol] = existingId;
+  def.fields.forEach(function (f) {
+    const v = document.getElementById('cm-' + f[0]).value;
+    if (v !== '') obj[f[0]] = v;
+  });
+  callApi('saveCommonMasterData', kind, obj).then(function () { toast('保存しました。', 'success'); closeModal(); location.reload(); }).catch(handleApiError);
+}
+
+/* ============================================================
+ * 画面：目標設定・前年実績入力
+ * ============================================================ */
+let targetsTab_ = 'targets';
+function renderTargets() {
+  let html = '<div class="tabs">' +
+    '<a class="' + (targetsTab_ === 'targets' ? 'active' : '') + '" onclick="targetsTab_=\'targets\';renderTargets();">目標設定</a>' +
+    '<a class="' + (targetsTab_ === 'history' ? 'active' : '') + '" onclick="targetsTab_=\'history\';renderTargets();">前年実績入力</a>' +
+    '</div><div id="targets-body">読み込み中...</div>';
+  document.getElementById('view-root').innerHTML = html;
+  if (targetsTab_ === 'targets') renderTargetsList_(); else renderHistoricalActualsList_();
+}
+function renderTargetsList_() {
+  callApi('getTargets').then(function (rows) {
+    const storeById = {};
+    (REF_MASTERS.stores || []).forEach(function (s) { storeById[s.STORE_ID] = s.店舗名; });
+    let html = '<div class="panel"><button onclick="openTargetModal()">＋ 目標を設定</button><hr class="section-divider">' +
+      '<table><thead><tr><th>年月</th><th>店舗</th><th>目標来店数</th><th>目標成約数</th></tr></thead><tbody>';
+    rows.forEach(function (t) {
+      html += '<tr><td>' + t.年月 + '</td><td>' + escapeHtml(storeById[t.店舗ID] || t.店舗ID) + '</td><td>' + t.目標来店数 + '</td><td>' + t.目標成約数 + '</td></tr>';
+    });
+    html += '</tbody></table></div>';
+    document.getElementById('targets-body').innerHTML = html;
+  }).catch(handleApiError);
+}
+function openTargetModal() {
+  const storeOptions = CURRENT_USER.role === 'MANAGER'
+    ? '<option value="' + CURRENT_USER.storeId + '">' + CURRENT_USER.storeId + '（自店舗）</option>'
+    : optionList_(REF_MASTERS.stores, 'STORE_ID', '店舗名');
+  openModal('<h3>目標設定</h3>' +
+    '<div class="field"><label>年月（YYYY-MM）</label><input id="tg-yearmonth" placeholder="2026-08"></div>' +
+    '<div class="field"><label>店舗</label><select id="tg-store">' + storeOptions + '</select></div>' +
+    '<div class="field"><label>目標来店数</label><input type="number" id="tg-visits" value="0"></div>' +
+    '<div class="field"><label>目標成約数</label><input type="number" id="tg-contracts" value="0"></div>' +
+    '<div class="row" style="margin-top:12px;"><button class="secondary" onclick="closeModal()">キャンセル</button>' +
+    '<button onclick="submitTargetModal()">保存</button></div>');
+}
+function submitTargetModal() {
+  const obj = {
+    年月: document.getElementById('tg-yearmonth').value,
+    店舗ID: document.getElementById('tg-store').value,
+    目標来店数: document.getElementById('tg-visits').value,
+    目標成約数: document.getElementById('tg-contracts').value
+  };
+  callApi('saveTargets', obj).then(function () { toast('目標を保存しました。', 'success'); closeModal(); renderTargetsList_(); }).catch(handleApiError);
+}
+
+/** 前年実績の遡及入力（本システム稼働前のデータをダッシュボードの前年比較に使うための手入力） */
+function renderHistoricalActualsList_() {
+  callApi('getHistoricalActuals').then(function (rows) {
+    const storeById = {};
+    (REF_MASTERS.stores || []).forEach(function (s) { storeById[s.STORE_ID] = s.店舗名; });
+    let html = '<div class="panel"><p class="muted">本システム稼働前の実績を月・店舗・方面単位で入力すると、ダッシュボードの前年比較に使われます。</p>' +
+      '<button onclick="openHistoricalActualModal()">＋ 前年実績を入力</button><hr class="section-divider">' +
+      '<table><thead><tr><th>年月</th><th>店舗</th><th>方面</th><th>来店数</th><th>成約数</th></tr></thead><tbody>';
+    rows.forEach(function (r) {
+      html += '<tr><td>' + r.年月 + '</td><td>' + escapeHtml(storeById[r.店舗ID] || r.店舗ID) + '</td><td>' + escapeHtml(r.方面) + '</td><td>' + r.来店数 + '</td><td>' + r.成約数 + '</td></tr>';
+    });
+    html += '</tbody></table></div>';
+    document.getElementById('targets-body').innerHTML = html;
+  }).catch(handleApiError);
+}
+function openHistoricalActualModal() {
+  const storeOptions = CURRENT_USER.role === 'MANAGER'
+    ? '<option value="' + CURRENT_USER.storeId + '">' + CURRENT_USER.storeId + '（自店舗）</option>'
+    : optionList_(REF_MASTERS.stores, 'STORE_ID', '店舗名');
+  const areaOptions = (REF_MASTERS.areas || []).map(function (a) { return '<option value="' + escapeHtml(a.方面名) + '">' + escapeHtml(a.方面名) + '</option>'; }).join('');
+  openModal('<h3>前年実績の入力</h3>' +
+    '<div class="field"><label>年月（YYYY-MM）</label><input id="ha-yearmonth" placeholder="2025-08"></div>' +
+    '<div class="field"><label>店舗</label><select id="ha-store">' + storeOptions + '</select></div>' +
+    '<div class="field"><label>方面</label><select id="ha-area">' + areaOptions + '</select></div>' +
+    '<div class="field"><label>来店数</label><input type="number" id="ha-visits" value="0"></div>' +
+    '<div class="field"><label>成約数</label><input type="number" id="ha-contracts" value="0"></div>' +
+    '<div class="row" style="margin-top:12px;"><button class="secondary" onclick="closeModal()">キャンセル</button>' +
+    '<button onclick="submitHistoricalActualModal()">保存</button></div>');
+}
+function submitHistoricalActualModal() {
+  const obj = {
+    年月: document.getElementById('ha-yearmonth').value,
+    店舗ID: document.getElementById('ha-store').value,
+    方面: document.getElementById('ha-area').value,
+    来店数: document.getElementById('ha-visits').value,
+    成約数: document.getElementById('ha-contracts').value
+  };
+  callApi('saveHistoricalActuals', obj).then(function () { toast('前年実績を保存しました。', 'success'); closeModal(); renderHistoricalActualsList_(); }).catch(handleApiError);
+}
+
+/* ============================================================
+ * 画面：設定（ADMIN専用）
+ * ============================================================ */
+function renderSettings() {
+  callApi('getSettings').then(function (rows) {
+    let html = '<div class="panel"><h2>システム設定</h2><table><thead><tr><th>キー</th><th>値</th><th>説明</th><th></th></tr></thead><tbody>';
+    rows.forEach(function (s) {
+      html += '<tr><td>' + s.キー + '</td><td><input id="st-' + s.キー + '" value="' + escapeHtml(s.値) + '" style="width:160px;display:inline-block;"></td>' +
+        '<td class="muted">' + escapeHtml(s.説明) + '</td>' +
+        '<td><button onclick="submitSetting(\'' + s.キー + '\')">保存</button></td></tr>';
+    });
+    html += '</tbody></table></div>';
+    document.getElementById('view-root').innerHTML = html;
+  }).catch(handleApiError);
+}
+function submitSetting(key) {
+  const value = document.getElementById('st-' + key).value;
+  callApi('saveSettings', key, value).then(function () { toast('設定を保存しました。', 'success'); }).catch(handleApiError);
+}
+</script>
