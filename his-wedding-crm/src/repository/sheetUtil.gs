@@ -54,7 +54,12 @@ const SHEET_NAMES = {
   // 過去の月次日報スプレッドシートの取り込み（service/pastNippoImportService.gs）
   PAST_NIPPO_SOURCES: 'PastNippoSources',
   PAST_NIPPO_STORE_MAP: 'PastNippoStoreMap',
-  PAST_NIPPO_MONTHLY: 'PastNippoMonthly'
+  PAST_NIPPO_MONTHLY: 'PastNippoMonthly',
+  // 精算（施行後の売上・原価。本部・手配課・管理者のみ閲覧・入力）。1案件に複数行（本体・衣裳組み込み等）
+  SETTLEMENTS: 'Settlements',
+  // 過去の精算スプレッドシート（方面別・月別の売上・粗利表）の取り込み
+  PAST_SETTLEMENT_SOURCES: 'PastSettlementSources',
+  PAST_SETTLEMENT_AREA_MAP: 'PastSettlementAreaMap'
 };
 
 // 後から追加したシートの見出し。SHEET_NAMESと同じファイルに置き、setupDatabase.gs（SHEET_DEFINITIONS_）
@@ -65,6 +70,13 @@ const PAST_NIPPO_SOURCES_HEADERS_ = ['スプレッドシートのURL', '状態',
 const PAST_NIPPO_STORE_MAP_HEADERS_ = ['タブ名', '店舗ID', '店舗名（確認用）', '判定'];
 const PAST_NIPPO_MONTHLY_HEADERS_ = ['取込元ID', '取込元ファイル名', '年月', '店舗ID', '方面',
   '新規問合せ', '成約数', 'CXL数', 'NB_PAX', 'CXL_PAX', '挙式月成約数', '取込日時'];
+// 精算：計上月（yyyy-MM）の月で集計する。区分＝挙式／フォト、種別＝本体／衣裳（組み込み）。
+// 粗利・原価率は保存せず、集計時に売上・原価から計算する。
+// 店舗ID・チャレンジ番号・方面は、保存時に案件・成約から写しておく（アーカイブ後も精算行だけで集計できるように）。
+const SETTLEMENT_HEADERS_ = ['SETTLEMENT_ID', 'CASE_ID', 'チャレンジ番号', '店舗ID', '方面', '計上月', '区分', '種別', 'AGT', '式場', 'プラン',
+  '売上', '原価', 'CXL', 'メモ', '登録者', '登録日時', '更新者', '更新日時'];
+const PAST_SETTLEMENT_SOURCES_HEADERS_ = ['スプレッドシートのURL', '状態', '処理日時', '明細件数', '売上合計', 'メモ'];
+const PAST_SETTLEMENT_AREA_MAP_HEADERS_ = ['シート名', '方面（集計方面）', '判定'];
 // HistoricalActualsに後から足した列（setupDatabase.gsの定義と同じ）
 const HISTORICAL_ACTUALS_EXTRA_HEADERS_ = ['CXL数', 'NB_PAX', 'CXL_PAX', '挙式月成約数'];
 

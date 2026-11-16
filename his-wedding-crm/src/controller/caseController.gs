@@ -43,6 +43,11 @@ function getCaseDetail(caseId) {
     }
     // HQ・ADMIN = ALL
 
+    // 利益（売上・原価に関わる数字）は本部・手配課・管理者だけに見せる。店舗にはデータ自体を送らない。
+    if (!isBackofficeRole_(ctx.role)) {
+      detail.contracts = (detail.contracts || []).map(function (ct) { const c = Object.assign({}, ct); delete c.利益; return c; });
+    }
+
     detail.menuVisibility = getMenuVisibility_(ctx.role);
     detail.currentRole = ctx.role;
     return { ok: true, data: detail };

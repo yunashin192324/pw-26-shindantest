@@ -27,7 +27,7 @@ const ARCHIVE_CASE_FAMILY_SHEETS_ = [
   SHEET_NAMES.CASES, SHEET_NAMES.CUSTOMERS, SHEET_NAMES.WEDDING_REQUESTS, SHEET_NAMES.PHOTO_REQUESTS,
   SHEET_NAMES.SALES_HISTORY, SHEET_NAMES.CASE_NOTES, SHEET_NAMES.CASE_SUMMARY_MEMO, SHEET_NAMES.CONTRACTS,
   SHEET_NAMES.LOST_CASES, SHEET_NAMES.OPERATIONS, SHEET_NAMES.OPERATION_HISTORY, SHEET_NAMES.OPERATION_MEMOS,
-  SHEET_NAMES.TASKS, SHEET_NAMES.CASE_DOCUMENT_CHECKS
+  SHEET_NAMES.TASKS, SHEET_NAMES.CASE_DOCUMENT_CHECKS, SHEET_NAMES.SETTLEMENTS
 ];
 
 const ARCHIVE_TERMINAL_STATUSES_ = ['完了', '未成約', 'キャンセル'];
@@ -119,7 +119,15 @@ function archiveService_ensureLogSheetsExist_(ss) {
 function archiveService_archiveCase_(caseId, year) {
   const archiveSs = archiveService_getOrCreateArchiveSpreadsheet_(year);
   ARCHIVE_CASE_FAMILY_SHEETS_.forEach(function (sheetName) {
-    const liveSheet = getSheet_(sheetName);
+    const liveSheet = getDatabaseSpreadsheet_().getSheetByName(sheetName);
+    if (!liveSheet) return; // 後から追加したシート（精算など）がまだ無いデータベースの場合
+    // 後から追加したシートが、以前に作った年アーカイブファイルに無ければ作る
+    if (!archiveSs.getSheetByName(sheetName)) {
+      const def = SHEET_DEFINITIONS_.find(function (d) { return d.name === sheetName; });
+      const created = archiveSs.insertSheet(sheetName);
+      created.getRange(1, 1, 1, def.headers.length).setValues([def.headers]);
+      created.setFrozenRows(1);
+    }
     const rows = getRowsAsObjectsByKey_(liveSheet, 'CASE_ID', caseId);
     if (rows.length === 0) return;
     const archiveSheet = archiveSs.getSheetByName(sheetName);

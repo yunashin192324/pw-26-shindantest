@@ -94,7 +94,9 @@ function getMenuVisibility_(role) {
     operations: backoffice,
     masters: (role === ROLES.MANAGER || backoffice),
     targets: (role === ROLES.MANAGER || backoffice),
-    settings: backoffice
+    settings: backoffice,
+    // 精算（売上・原価）の集計は本部・手配課・管理者のみ
+    settlements: backoffice
   };
   return menus;
 }

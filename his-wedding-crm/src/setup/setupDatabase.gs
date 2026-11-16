@@ -136,8 +136,9 @@ const SHEET_DEFINITIONS_ = [
   },
   {
     // 地方（D列相当）・区分（E列相当：一般／AVA）を追加。目標はTargetsシートに一本化。
+    // 店番：チャレンジ番号の先頭3桁（例：018）。過去の精算表の取り込みで、店番から店舗を引き当てる。
     name: SHEET_NAMES.STORES,
-    headers: ['STORE_ID', '店舗名', '地方', '区分', '責任者', 'メール', '使用終了']
+    headers: ['STORE_ID', '店舗名', '地方', '区分', '責任者', 'メール', '使用終了', '店番']
   },
   {
     // 日報での表記：過去の月次日報の担当者欄の書き方（例：姓だけ）。担当者別の前年比で日報の数字をこの担当者に寄せる。
@@ -216,7 +217,11 @@ const SHEET_DEFINITIONS_ = [
   },
   { name: SHEET_NAMES.PAST_NIPPO_SOURCES, headers: PAST_NIPPO_SOURCES_HEADERS_ },
   { name: SHEET_NAMES.PAST_NIPPO_STORE_MAP, headers: PAST_NIPPO_STORE_MAP_HEADERS_ },
-  { name: SHEET_NAMES.PAST_NIPPO_MONTHLY, headers: PAST_NIPPO_MONTHLY_HEADERS_ }
+  { name: SHEET_NAMES.PAST_NIPPO_MONTHLY, headers: PAST_NIPPO_MONTHLY_HEADERS_ },
+  // 精算（施行後の売上・原価）。本部・手配課・管理者のみ閲覧・入力できる
+  { name: SHEET_NAMES.SETTLEMENTS, headers: SETTLEMENT_HEADERS_ },
+  { name: SHEET_NAMES.PAST_SETTLEMENT_SOURCES, headers: PAST_SETTLEMENT_SOURCES_HEADERS_ },
+  { name: SHEET_NAMES.PAST_SETTLEMENT_AREA_MAP, headers: PAST_SETTLEMENT_AREA_MAP_HEADERS_ }
 ];
 
 function setupDatabase() {
@@ -420,4 +425,6 @@ function syncMastersWithNippo() {
     if (g) updateRowAtIndex_(areaSheet, a.__row, { 日報方面: g });
   });
   ensureColumns_(getSheet_(SHEET_NAMES.STAFF), ['日報での表記']);
+  ensureColumns_(getSheet_(SHEET_NAMES.STORES), ['店番']);
+  getOrCreateSheet_(SHEET_NAMES.SETTLEMENTS, SETTLEMENT_HEADERS_);
 }

@@ -436,5 +436,164 @@ section('5. 稼働前の内訳の前年比（担当者別・式場/プラン/AGT
   check('成約に都市が記録される', ct && ct.都市 === 'バリ島', ct);
 })();
 
+// ------------------------------------------------------------
+section('6. 精算（売上・原価）：本部のみ・集計・過去の精算表の取り込み');
+
+/** 精算スプレッドシートの方面別シートと同じ形（月ごとのかたまり・アバンティ／一般店舗の欄・TTL行）の架空シート */
+function makeSettlementSheet(blocks) {
+  // blocks: [{ month: 11, ava: [rows], ippan: [rows], ttlOverride }]  row: [challenge, AGT, NET, 売上, CXL, 式場, プラン, 店番, 仕分け]
+  const W = 2 + 14 * blocks.length, rows = [];
+  const blank = function () { return new Array(W).fill(''); };
+  for (let i = 0; i < 69; i++) rows.push(blank());
+  const top = rows[0];
+  blocks.forEach(function (b, k) { top[1 + 14 * k] = 'ハワイ　' + b.month + '月'; });
+  let r = blank(); blocks.forEach(function (b, k) { r[1 + 14 * k] = b.month + '月'; }); rows.push(r);
+  r = blank(); blocks.forEach(function (b, k) { r[1 + 14 * k] = 'アバンティ'; }); rows.push(r);
+  r = blank(); blocks.forEach(function (b, k) {
+    ['No.', 'Challenge No', 'AGT', '挙式NET', '挙式部分 総売上', '', 'CXL', '式場', 'プラン', '店番', 'PROFIT', k === 1 ? '' : '仕分け', '挙式部分原価率']
+      .forEach(function (h, j) { r[1 + 14 * k + j] = h; });
+  }); rows.push(r);
+  const n = Math.max.apply(null, blocks.map(function (b) { return Math.max(b.ava.length, b.ippan.length); })) + 2;
+  function section(key) {
+    for (let i = 0; i < n; i++) {
+      const x = blank();
+      blocks.forEach(function (b, k) {
+        const d = b[key][i]; if (!d) return;
+        const c = 1 + 14 * k;
+        x[c + 1] = d[0]; x[c + 2] = d[1]; x[c + 3] = d[2]; x[c + 4] = d[3]; x[c + 6] = d[4]; x[c + 7] = d[5]; x[c + 8] = d[6]; x[c + 9] = d[7]; x[c + 11] = d[8];
+      });
+      rows.push(x);
+    }
+    const t = blank();
+    blocks.forEach(function (b, k) {
+      const c = 1 + 14 * k; t[c] = 'TTL';
+      t[c + 3] = b[key].reduce(function (s, d) { return s + (d[2] || 0); }, 0);
+      t[c + 4] = b[key].reduce(function (s, d) { return s + (d[3] || 0); }, 0) + (key === 'ava' && b.ttlOverride ? b.ttlOverride : 0);
+    });
+    rows.push(t);
+  }
+  section('ava');
+  r = blank(); blocks.forEach(function (b, k) { r[1 + 14 * k] = '一般店舗'; }); rows.push(r);
+  section('ippan');
+  r = blank(); blocks.forEach(function (b, k) { r[1 + 14 * k] = '総計'; }); rows.push(r);
+  return rows;
+}
+
+(function () {
+  const t = freshEnv();
+  t.run('syncMastersWithNippo()');
+  t.run('updateRowByKey_(getSheet_(SHEET_NAMES.STORES), "STORE_ID", "ST-SJK", { 店番: "018" })');
+  t.as('admin@example.com');
+  const now = new Date();
+  const fp = t.run('fiscalPeriodOf_(new Date())');
+  const ym0 = fp.months[0], ym1 = fp.months[1];
+  const c1 = manualCase(t, { チャレンジ番号: '01826000001', 既に成約済みか: true, 商品: 'PRD-1', プラン: 'P1', 式場またはプラン名: 'カハラ', 方面: 'ハワイ', 挙式日: ym0 + '-10' }).data.caseId;
+  const ippanCase = (function () {
+    t.as('other@example.com');
+    const r = manualCase(t, { 店舗ID: 'ST-002', チャレンジ番号: '55526000002', 新郎姓: '一', 新婦姓: '般', 既に成約済みか: true, 商品: 'PRD-1', プラン: 'P1', 式場またはプラン名: 'LAVフォト', 方面: 'ハワイ', 相談区分: 'フォト', 挙式日: ym1 + '-05' });
+    t.as('admin@example.com');
+    return r.data.caseId;
+  })();
+
+  // 店舗からは見えない・使えない
+  t.as('mgr@example.com');
+  const denied = t.run('getCaseSettlements(' + JSON.stringify(c1) + ')');
+  const deniedSum = t.run('getSettlementSalesSummary({})');
+  const deniedSave = t.run('saveSettlement({ CASE_ID: ' + JSON.stringify(c1) + ', 計上月: "' + ym0 + '", 区分: "挙式", 売上: 1 })');
+  check('店舗（店長）は精算を見られない・入力できない・集計も見られない', denied.ok === false && denied.type === 'PERMISSION' && deniedSum.ok === false && deniedSave.ok === false);
+  check('店舗のメニューに「精算・売上集計」は出ない', t.run('getMenuVisibility_("MANAGER").settlements') === false && t.run('getMenuVisibility_("HQ").settlements') === true);
+  t.run('updateRowByKey_(getSheet_(SHEET_NAMES.CONTRACTS), "CASE_ID", ' + JSON.stringify(c1) + ', { 利益: 99999 })');
+  const storeDetail = t.run('getCaseDetail(' + JSON.stringify(c1) + ')').data;
+  check('店舗が開く案件詳細には利益のデータ自体が送られない', storeDetail.contracts.every(function (ct) { return !('利益' in ct); }));
+  t.as('admin@example.com');
+  check('本部が開く案件詳細には利益が入る', t.run('getCaseDetail(' + JSON.stringify(c1) + ')').data.contracts[0].利益 === 99999);
+
+  // 入力
+  const def = t.run('getCaseSettlements(' + JSON.stringify(c1) + ')').data.defaults;
+  check('精算の初期値は成約・手配から入る（計上月＝挙式月・方面・式場）', def.計上月 === ym0 && def.方面 === 'ハワイ' && def.式場 === 'カハラ', def);
+  const s1 = t.run('saveSettlement({ CASE_ID: ' + JSON.stringify(c1) + ', 計上月: "' + ym0 + '", 区分: "挙式", 種別: "本体", AGT: "WED", 式場: "カハラ", プラン: "HISパッケージ", 売上: "300,000", 原価: 200000 })');
+  t.run('saveSettlement({ CASE_ID: ' + JSON.stringify(c1) + ', 計上月: "' + ym0 + '", 区分: "挙式", 種別: "衣裳", AGT: "TKM（衣裳）", 式場: "衣裳（組み込み・TKM）", 売上: 50000, 原価: 30000 })');
+  t.run('saveSettlement({ CASE_ID: ' + JSON.stringify(ippanCase) + ', 計上月: "' + ym1 + '", 区分: "フォト", AGT: "LAV", 式場: "LAVフォト", プラン: "フォトプラン", 売上: 100000, 原価: 60000 })');
+  t.run('saveSettlement({ CASE_ID: ' + JSON.stringify(ippanCase) + ', 計上月: "' + ym1 + '", 区分: "フォト", AGT: "LAV", 式場: "LAVフォト", プラン: "フォトプラン", 売上: 0, 原価: 0, CXL: true })');
+  const bad = t.run('saveSettlement({ CASE_ID: ' + JSON.stringify(c1) + ', 計上月: "来月", 区分: "挙式" })');
+  check('計上月の形が違うと保存できない', bad.ok === false && /計上月/.test(bad.message));
+  const forCase = t.run('getCaseSettlements(' + JSON.stringify(c1) + ')').data.rows;
+  check('精算行の粗利・原価率は自動で計算される（売上「300,000」も数字として読む）', s1.ok && forCase[0].粗利 === 100000 && forCase[0].原価率 === 66.7, forCase[0]);
+
+  // 売上・粗利
+  const sum = t.run('getSettlementSalesSummary({ periodStartYear: ' + fp.startYear + ' })').data;
+  const hw = sum.areas.find(function (a) { return a.area === 'ハワイ'; });
+  check('売上・粗利：ハワイ AVA 挙式（期の1か月目）＝本体＋衣裳（売上350,000・原価230,000）', hw.cur.AVA.挙式.売上[0] === 350000 && hw.cur.AVA.挙式.原価[0] === 230000, hw.cur.AVA.挙式);
+  check('売上・粗利：一般店（区分＝一般の店舗）のフォトは一般に入る', hw.cur.一般.フォト.売上[1] === 100000 && hw.cur.合計.フォト.売上[1] === 100000, hw.cur.一般.フォト);
+  const all = sum.areas.find(function (a) { return a.area === '全体'; });
+  check('売上・粗利：全体の行もある', all && all.cur.合計.挙式.売上[0] === 350000);
+
+  // FNL件数
+  const fnl = t.run('getSettlementFnlCounts({ periodStartYear: ' + fp.startYear + ' })').data;
+  const hwF = fnl.areas.find(function (a) { return a.area === 'ハワイ'; });
+  const wed = hwF.agts.find(function (g) { return g.agt === 'WED'; });
+  const lav = hwF.agts.find(function (g) { return g.agt === 'LAV'; });
+  check('FNL件数：衣裳の行は数えない', !hwF.agts.some(function (g) { return g.agt === 'TKM（衣裳）'; }) && wed.AVA.挙式[0] === 1, hwF.agts.map(function (g) { return g.agt; }));
+  check('FNL件数：CXLの行は件数に入れず、CXLとして別に数える', lav.一般.フォト[1] === 1 && lav.CXL.フォト === 1, lav);
+
+  // 過去の精算表の取り込み（前期）
+  const prevPeriod = fp.period - 1;
+  const book = new t.env.Spreadsheet(prevPeriod + '期 精算（関東）');
+  book.sheets = [new t.env.Sheet('【集計】売上・粗利', [[prevPeriod + '期売上（関東）']]),
+    new t.env.Sheet('ハワイ', makeSettlementSheet([
+      { month: 11, ava: [['01825000001\t', 'WED', 200000, 300000, '', 'カハラ', 'HISパッケージ', '018', 'WA'],
+                         ['01825000002', 'TKM（衣裳）', 10000, 20000, '', '衣裳（組み込み・TKM）', '', '018', 'WAinc'],
+                         ['01825000003', 'WED', 0, 0, 'CXL', 'カハラ', 'HISパッケージ', '018', 'WA']],
+        ippan: [['55525000004', 'LAV', 50000, 80000, '', 'LAVフォト', 'フォトプラン', '555', 'PO']] },
+      { month: 12, ava: [['01825000005', 'WED', 100000, 150000, '', 'カハラ', 'HISパッケージ', '018', 'WA']], ippan: [], ttlOverride: 1 }  // 12月は「仕分け」の見出しが空欄・TTLが合わない
+    ]))];
+  t.env.ctx.SpreadsheetApp.register(book);
+  t.run('pastSettlement_setup()');
+  t.run('appendRowFromObject_(getSheet_(SHEET_NAMES.PAST_SETTLEMENT_SOURCES), { "スプレッドシートのURL": ' + JSON.stringify(book.getUrl()) + ' })');
+  const pv = t.run('pastSettlement_preview()');
+  const memo = t.run('sheetToObjects_(getSheet_(SHEET_NAMES.PAST_SETTLEMENT_SOURCES))[0].メモ');
+  check('取り込み（確認）：期を【集計】シートの見出しから読み、明細5件を数える', pv.files === 1 && pv.rows === 5 && new RegExp('期: ' + prevPeriod + '期').test(memo), { pv: pv, memo: memo });
+  check('取り込み（確認）：TTL行と合わないかたまりをメモ欄に出す', /12月 AVA：読み取った合計/.test(memo), memo);
+  const areaMap = t.run('sheetToObjects_(getSheet_(SHEET_NAMES.PAST_SETTLEMENT_AREA_MAP))');
+  check('シート名から方面を推測する（ハワイ→ハワイ）', areaMap[0].シート名 === 'ハワイ' && areaMap[0]['方面（集計方面）'] === 'ハワイ', areaMap);
+  const imp = t.run('pastSettlement_import()');
+  check('取り込み：別スプレッドシートの Settlements_○期 に入る', imp.files === 1 && t.run('pastDetail_spreadsheet_(false).getSheetByName("Settlements_' + prevPeriod + '期").getLastRow()') === 6, imp);
+  t.run('pastSettlement_import()');
+  t.run('getSheet_(SHEET_NAMES.PAST_SETTLEMENT_SOURCES).getRange(2, 2).setValue("")');
+  t.run('pastSettlement_import()');
+  check('同じファイルをもう一度取り込んでも二重にならない', t.run('pastDetail_spreadsheet_(false).getSheetByName("Settlements_' + prevPeriod + '期").getLastRow()') === 6);
+
+  const sum2 = t.run('getSettlementSalesSummary({ periodStartYear: ' + fp.startYear + ' })').data;
+  const hw2 = sum2.areas.find(function (a) { return a.area === 'ハワイ'; });
+  check('前期の売上：取り込んだ分（AVA挙式：11月 300,000＋衣裳20,000、12月 150,000）', hw2.prev.AVA.挙式.売上[0] === 320000 && hw2.prev.AVA.挙式.売上[1] === 150000, hw2.prev.AVA.挙式.売上);
+  check('前期の売上：一般店舗の欄は一般に入る', hw2.prev.一般.フォト.売上[0] === 80000, hw2.prev.一般.フォト);
+  const fnl2 = t.run('getSettlementFnlCounts({ periodStartYear: ' + (fp.startYear - 1) + ' })').data;
+  const wed2 = fnl2.areas.find(function (a) { return a.area === 'ハワイ'; }).agts.find(function (g) { return g.agt === 'WED'; });
+  check('取り込んだ分のFNL件数：11月はCXLを除いて1件、12月は見出しが空欄でも仕分けを読んで1件', wed2.AVA.挙式[0] === 1 && wed2.AVA.挙式[1] === 1 && wed2.CXL.挙式 === 1, wed2);
+  const list = t.run('getSettlementList({ periodStartYear: ' + (fp.startYear - 1) + ' })').data.rows;
+  const sjk = list.find(function (r) { return r.チャレンジ番号 === '01825000001'; });
+  check('店番（チャレンジ番号の先頭3桁）から店舗を引き当てる（タブ文字も除く）', sjk && sjk.店舗ID === 'ST-SJK', sjk);
+
+  // CRMに同じチャレンジ番号の精算があれば、取り込んだ分は使わない
+  t.as('admin@example.com');
+  const dupCase = manualCase(t, { チャレンジ番号: '01825000005', 新郎姓: '重', 新婦姓: '複' }).data.caseId;
+  t.run('saveSettlement({ CASE_ID: ' + JSON.stringify(dupCase) + ', 計上月: "' + fp.months[0].replace(/^\d{4}/, String(fp.startYear - 1)) + '", 区分: "挙式", AGT: "WED", 売上: 999, 原価: 1, 方面: "ハワイ" })');
+  const list2 = t.run('getSettlementList({ periodStartYear: ' + (fp.startYear - 1) + ' })').data.rows.filter(function (r) { return r.チャレンジ番号 === '01825000005'; });
+  check('同じチャレンジ番号の精算がCRMにある場合は、取り込んだ分を数えない（二重にしない）', list2.length === 1 && list2[0].出所 === 'CRM' && list2[0].売上 === 999, list2);
+
+  const bd = t.run('getSettlementBreakdown({ periodStartYear: ' + (fp.startYear - 1) + ', area: "ハワイ" })').data;
+  const kahala = bd.venues.find(function (v) { return v.label === 'カハラ'; });
+  check('式場別の件数（AVA／一般。12月の1件はCRMの精算に置き換わったので2件）', kahala && kahala.AVA === 2 && bd.venues.some(function (v) { return v.label === 'LAVフォト' && v.一般 === 1; }), bd.venues);
+
+  // 結合で精算も移る
+  t.as('mgr@example.com');
+  const k1 = manualCase(t, { チャレンジ番号: '01826000777', 新郎姓: '結', 新婦姓: '合' }).data.caseId;
+  const k2 = formCase(t, { 新郎姓: '結', 新婦姓: '合' }, '新宿');
+  t.as('admin@example.com');
+  t.run('saveSettlement({ CASE_ID: ' + JSON.stringify(k1) + ', 計上月: "' + ym0 + '", 区分: "挙式", 売上: 10, 原価: 5 })');
+  t.run('mergeCases(' + JSON.stringify(k2) + ', ' + JSON.stringify(k1) + ')');
+  check('案件を結合すると精算行も残す案件へ移る', t.run('getCaseSettlements(' + JSON.stringify(k2) + ')').data.rows.length === 1);
+})();
+
 console.log('\n結果：' + passes + '件成功 / ' + failures + '件失敗');
 process.exit(failures ? 1 : 0);

@@ -20,7 +20,7 @@ const CASE_MERGE_SINGLE_ROW_SHEETS_ = [
 const CASE_MERGE_MULTI_ROW_SHEETS_ = [
   SHEET_NAMES.SALES_HISTORY, SHEET_NAMES.CASE_NOTES, SHEET_NAMES.CONTRACTS, SHEET_NAMES.LOST_CASES,
   SHEET_NAMES.OPERATIONS, SHEET_NAMES.OPERATION_HISTORY, SHEET_NAMES.OPERATION_MEMOS, SHEET_NAMES.TASKS,
-  SHEET_NAMES.FORM_RESPONSES
+  SHEET_NAMES.FORM_RESPONSES, SHEET_NAMES.SETTLEMENTS
 ];
 
 /** 結合後の案件状態を決めるための進み具合（大きいほど先へ進んでいる） */
@@ -216,7 +216,8 @@ function caseMerge_merge(keepId, removeId, ctx) {
 
     // 3. 複数行のシート（接客履歴・経過メモ・契約・未成約・手配・タスク・フォーム受信ログ）はそのまま付け替える
     CASE_MERGE_MULTI_ROW_SHEETS_.forEach(function (sheetName) {
-      moved += repointCaseId_(getSheet_(sheetName), removeId, keepId);
+      const sheet = getDatabaseSpreadsheet_().getSheetByName(sheetName);
+      if (sheet) moved += repointCaseId_(sheet, removeId, keepId);
     });
 
     // 4. 案件（Cases）の行：残す案件で空欄の項目を埋め、受付日時は早い方、案件状態は進んでいる方にそろえる
@@ -271,7 +272,8 @@ function caseMerge_deleteCase(caseId, ctx) {
     let deleted = 0;
     const sheetNames = CASE_MERGE_SINGLE_ROW_SHEETS_.concat([SHEET_NAMES.CASE_DOCUMENT_CHECKS], CASE_MERGE_MULTI_ROW_SHEETS_);
     sheetNames.forEach(function (sheetName) {
-      const sheet = getSheet_(sheetName);
+      const sheet = getDatabaseSpreadsheet_().getSheetByName(sheetName);
+      if (!sheet) return;
       const rows = sheetToObjects_(sheet).filter(function (r) { return r.CASE_ID === caseId; });
       if (rows.length === 0) return;
       caseMerge_backupRows_(sheetName, rows, 'DELETE', caseId, '', ctx);

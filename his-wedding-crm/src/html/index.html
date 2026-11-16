@@ -134,7 +134,8 @@ const MENU_ITEMS = [
   { key: 'operations', label: '手配管理', hash: '#/operations' },
   { key: 'masters', label: 'マスタ管理', hash: '#/masters/stores' },
   { key: 'targets', label: '目標・前年実績', hash: '#/targets' },
-  { key: 'settings', label: '設定', hash: '#/settings' }
+  { key: 'settings', label: '設定', hash: '#/settings' },
+  { key: 'settlements', label: '精算・売上集計', hash: '#/settlements/sales' }
 ];
 
 let CURRENT_USER = null;
@@ -241,6 +242,7 @@ function route() {
   else if (parts[0] === 'masters') { markActiveNav('masters'); setBreadcrumb('マスタ管理'); renderMasters(parts[1] || 'stores'); }
   else if (parts[0] === 'targets') { markActiveNav('targets'); setBreadcrumb('目標・前年実績'); renderTargets(); }
   else if (parts[0] === 'settings') { markActiveNav('settings'); setBreadcrumb('設定'); renderSettings(); }
+  else if (parts[0] === 'settlements') { markActiveNav('settlements'); setBreadcrumb('精算・売上集計'); renderSettlements(parts[1] || 'sales'); }
   else { renderNotFound(); }
 }
 function setBreadcrumb(text) { document.getElementById('breadcrumb').textContent = text; }
@@ -889,7 +891,7 @@ const CASE_TABS = [
   { key: 'basic', label: '基本情報' }, { key: 'consult', label: '相談内容' }, { key: 'sales', label: '接客履歴' },
   { key: 'notes', label: '経過メモ' }, { key: 'summary', label: '案件メモ' }, { key: 'documents', label: '書類チェック' },
   { key: 'contract', label: '日報登録' }, { key: 'lost', label: '未成約' },
-  { key: 'operation', label: '手配' }, { key: 'task', label: 'タスク' }
+  { key: 'operation', label: '手配' }, { key: 'settlement', label: '精算（本部のみ）' }, { key: 'task', label: 'タスク' }
 ];
 
 function renderCaseDetail(caseId, tab) {
@@ -902,7 +904,7 @@ function renderCaseDetail(caseId, tab) {
 function renderCaseDetailShell_(caseId, tab, detail) {
   const c = detail.caseRecord, cust = detail.customer || {}, role = detail.currentRole;
   const visibleTabs = CASE_TABS.filter(function (t) {
-    if (t.key === 'operation') return role === 'HQ' || role === 'ARRANGE' || role === 'ADMIN';
+    if (t.key === 'operation' || t.key === 'settlement') return role === 'HQ' || role === 'ARRANGE' || role === 'ADMIN';
     return true;
   });
   let html = '<div class="panel">' +
@@ -1066,6 +1068,7 @@ function renderCaseTabBody_(tab, detail) {
   else if (tab === 'lost') { renderLostTab_(body, detail); }
   else if (tab === 'operation') { renderOperationRefTab_(body, detail); }
   else if (tab === 'task') { renderCaseTaskTab_(body, detail); }
+  else if (tab === 'settlement') { renderSettlementTab_(body, detail); }
 }
 function submitMarkOnHold(caseId) {
   callApi('markCaseOnHold', caseId).then(function () {
@@ -1232,7 +1235,8 @@ function contractFormHtml_(prefix) {
     '<div class="col field"><label>衣装代金</label><input type="number" id="' + prefix + 'c-dress" min="0"></div>' +
     '<div class="col field"><label>オプション</label><input type="number" id="' + prefix + 'c-option" min="0"></div>' +
     '</div>' +
-    '<div class="field"><label>利益</label><input type="number" id="' + prefix + 'c-profit"></div>';
+    // 利益は本部・手配課・管理者だけが入力・閲覧する（店舗には欄を出さない）
+    (isBackofficeUser_() ? '<div class="field"><label>利益</label><input type="number" id="' + prefix + 'c-profit"></div>' : '');
 }
 
 function lostFormHtml_(prefix) {
@@ -1314,7 +1318,7 @@ function submitRegisterContractModal(caseId) {
     挙式代金: document.getElementById('rc-c-wedding').value,
     衣装代金: document.getElementById('rc-c-dress').value,
     オプション: document.getElementById('rc-c-option').value,
-    利益: document.getElementById('rc-c-profit').value
+    利益: document.getElementById('rc-c-profit') ? document.getElementById('rc-c-profit').value : ''
   };
   callApi('registerContract', caseId, input).then(function () {
     toast('成約登録を行いました。', 'success');
@@ -1946,5 +1950,270 @@ function renderSettings() {
 function submitSetting(key) {
   const value = document.getElementById('st-' + key).value;
   callApi('saveSettings', key, value).then(function () { toast('設定を保存しました。', 'success'); }).catch(handleApiError);
+}
+
+/* ============================================================
+ * 精算（施行後の売上・原価）。本部・手配課・管理者のみ（サーバー側でも必ず拒否される）
+ * ============================================================ */
+function isBackofficeUser_() { return CURRENT_USER && ['HQ', 'ARRANGE', 'ADMIN'].indexOf(CURRENT_USER.role) !== -1; }
+function yen_(v) { return (v === null || v === undefined || v === '') ? '—' : Number(v).toLocaleString('ja-JP'); }
+function pct_(num, den) { return den ? (Math.round(num / den * 1000) / 10) + '%' : '—'; }
+const SETTLEMENT_PLAN_SUGGESTIONS_ = ['基本', 'HISパッケージ', 'フェア商品', 'フィール（CPN含）', 'プレミアムプラン', 'CIAOプラン', 'CPN（フォト除く）', 'フォトプラン', 'MY DRESS style', 'その他'];
+
+/* ---- 案件詳細の「精算」タブ ---- */
+let settlementCache_ = null;
+function renderSettlementTab_(body, detail) {
+  const caseId = detail.caseRecord.CASE_ID;
+  body.innerHTML = '読み込み中...';
+  callApi('getCaseSettlements', caseId).then(function (data) {
+    settlementCache_ = data;
+    const rows = data.rows;
+    let sumSales = 0, sumCost = 0;
+    rows.forEach(function (r) { sumSales += Number(r.売上) || 0; sumCost += Number(r.原価) || 0; });
+    let html = '<p class="muted">施行後の精算です（本部・手配課・管理者だけに表示されます）。本体と衣裳の組み込み分など、1件に複数行を入れられます。' +
+      '集計は「計上月」の月に入ります。衣裳の行はFNL件数に数えず、売上・原価には含めます。</p>' +
+      '<button onclick="openSettlementModal(\'' + caseId + '\')">＋ 精算を追加</button><hr class="section-divider">';
+    if (rows.length === 0) {
+      html += '<div class="muted">まだ精算の入力がありません。</div>';
+    } else {
+      html += '<div style="overflow-x:auto;"><table><thead><tr><th>計上月</th><th>区分</th><th>種別</th><th>AGT</th><th>式場</th><th>プラン</th>' +
+        '<th>売上</th><th>原価（NET）</th><th>粗利</th><th>原価率</th><th>CXL</th><th>メモ</th><th></th></tr></thead><tbody>' +
+        rows.map(function (r, i) {
+          return '<tr><td>' + escapeHtml(r.計上月) + '</td><td>' + escapeHtml(r.区分) + '</td><td>' + escapeHtml(r.種別) + '</td><td>' + escapeHtml(r.AGT) + '</td>' +
+            '<td>' + escapeHtml(r.式場) + '</td><td>' + escapeHtml(r.プラン) + '</td><td>' + yen_(r.売上) + '</td><td>' + yen_(r.原価) + '</td>' +
+            '<td>' + yen_(r.粗利) + '</td><td>' + (r.原価率 === null ? '—' : r.原価率 + '%') + '</td><td>' + (r.CXL === true || r.CXL === 'TRUE' ? 'CXL' : '') + '</td>' +
+            '<td>' + escapeHtml(r.メモ) + '</td><td><a onclick="openSettlementModal(\'' + caseId + '\', ' + i + ')">編集</a> ／ ' +
+            '<a onclick="submitDeleteSettlement(\'' + caseId + '\', \'' + r.SETTLEMENT_ID + '\')">削除</a></td></tr>';
+        }).join('') +
+        '<tr style="font-weight:bold;"><td colspan="6">合計</td><td>' + yen_(sumSales) + '</td><td>' + yen_(sumCost) + '</td><td>' + yen_(sumSales - sumCost) + '</td><td>' + pct_(sumCost, sumSales) + '</td><td colspan="3"></td></tr>' +
+        '</tbody></table></div>';
+    }
+    body.innerHTML = html;
+  }).catch(handleApiError);
+}
+function openSettlementModal(caseId, index) {
+  const r = index !== undefined ? settlementCache_.rows[index] : Object.assign({ 種別: '本体', 売上: '', 原価: '', CXL: false, メモ: '' }, settlementCache_.defaults);
+  const partnerList = (REF_MASTERS.partners || []).map(function (p) { return '<option value="' + escapeHtml(p.会社名) + '">'; }).join('');
+  const venueList = (REF_MASTERS.venues || []).map(function (v) { return '<option value="' + escapeHtml(v.式場名) + '">'; }).join('') +
+    (REF_MASTERS.photoPlans || []).map(function (v) { return '<option value="' + escapeHtml(v.プラン名) + '">'; }).join('');
+  const planList = SETTLEMENT_PLAN_SUGGESTIONS_.map(function (p) { return '<option value="' + escapeHtml(p) + '">'; }).join('');
+  const sel = function (id, opts, cur) { return '<select id="' + id + '">' + opts.map(function (o) { return '<option' + (o === cur ? ' selected' : '') + '>' + o + '</option>'; }).join('') + '</select>'; };
+  openModal('<h3>精算の' + (index !== undefined ? '編集' : '追加') + '</h3>' +
+    '<div class="row"><div class="col field"><label>計上月*</label><input type="month" id="se-ym" value="' + escapeHtml(r.計上月 || '') + '"></div>' +
+    '<div class="col field"><label>区分*</label>' + sel('se-kind', ['挙式', 'フォト'], r.区分) + '</div>' +
+    '<div class="col field"><label>種別</label>' + sel('se-type', ['本体', '衣裳'], r.種別 || '本体') + '</div></div>' +
+    '<div class="row"><div class="col field"><label>AGT（現地会社）</label><input id="se-agt" list="se-agt-list" value="' + escapeHtml(r.AGT || '') + '"><datalist id="se-agt-list">' + partnerList + '</datalist></div>' +
+    '<div class="col field"><label>式場／フォトプラン名</label><input id="se-venue" list="se-venue-list" value="' + escapeHtml(r.式場 || '') + '"><datalist id="se-venue-list">' + venueList + '</datalist></div>' +
+    '<div class="col field"><label>プラン</label><input id="se-plan" list="se-plan-list" value="' + escapeHtml(r.プラン || '') + '"><datalist id="se-plan-list">' + planList + '</datalist></div></div>' +
+    '<div class="row"><div class="col field"><label>売上（総売上）</label><input type="number" id="se-sales" value="' + escapeHtml(r.売上) + '"></div>' +
+    '<div class="col field"><label>原価（NET）</label><input type="number" id="se-cost" value="' + escapeHtml(r.原価) + '"></div>' +
+    '<div class="col field"><label>方面</label><select id="se-area"><option value="">（成約の方面）</option>' + optionListByLabel_(REF_MASTERS.areas, '方面名') + '</select></div></div>' +
+    '<div class="field"><label><input type="checkbox" id="se-cxl" style="width:auto;"' + (r.CXL === true || r.CXL === 'TRUE' ? ' checked' : '') + '> CXL</label></div>' +
+    '<div class="field"><label>メモ</label><input id="se-memo" value="' + escapeHtml(r.メモ || '') + '"></div>' +
+    '<div class="muted" style="font-size:12px;">粗利・原価率は売上と原価から自動で計算します。</div>' +
+    '<div class="row" style="margin-top:12px;"><button class="secondary" onclick="closeModal()">キャンセル</button>' +
+    '<button onclick="submitSettlement(\'' + caseId + '\', \'' + (r.SETTLEMENT_ID || '') + '\')">保存</button></div>');
+  if (r.方面) document.getElementById('se-area').value = r.方面;
+}
+function submitSettlement(caseId, settlementId) {
+  const obj = {
+    CASE_ID: caseId, SETTLEMENT_ID: settlementId || '',
+    計上月: document.getElementById('se-ym').value, 区分: document.getElementById('se-kind').value, 種別: document.getElementById('se-type').value,
+    AGT: document.getElementById('se-agt').value, 式場: document.getElementById('se-venue').value, プラン: document.getElementById('se-plan').value,
+    売上: document.getElementById('se-sales').value, 原価: document.getElementById('se-cost').value, 方面: document.getElementById('se-area').value,
+    CXL: document.getElementById('se-cxl').checked, メモ: document.getElementById('se-memo').value
+  };
+  callApi('saveSettlement', obj).then(function () {
+    toast('精算を保存しました。', 'success'); closeModal(); renderCaseDetail(caseId, 'settlement');
+  }).catch(handleApiError);
+}
+function submitDeleteSettlement(caseId, settlementId) {
+  if (!confirm('この精算行を削除しますか？（控えはDeletedRecordsシートに残ります）')) return;
+  callApi('deleteSettlement', settlementId).then(function () {
+    toast('削除しました。', 'success'); renderCaseDetail(caseId, 'settlement');
+  }).catch(handleApiError);
+}
+
+/* ---- 精算・売上集計の画面 ---- */
+const SETTLEMENT_TABS_ = [
+  { key: 'sales', label: '売上・粗利' }, { key: 'fnl', label: 'FNL件数' },
+  { key: 'breakdown', label: '式場・プラン別' }, { key: 'list', label: '明細一覧' }
+];
+let settlementFilter_ = null;
+function renderSettlements(tab) {
+  if (!isBackofficeUser_()) { renderAccessDenied(); return; }
+  if (!settlementFilter_) {
+    const now = new Date();
+    const sy = now.getMonth() + 1 >= 11 ? now.getFullYear() : now.getFullYear() - 1;
+    settlementFilter_ = { periodStartYear: sy, region: '', storeId: '' };
+  }
+  const f = settlementFilter_;
+  let periodOptions = '';
+  for (let i = 0; i < 6; i++) {
+    const y = f.periodStartYear + 1 - i;
+    periodOptions += '<option value="' + y + '"' + (y === f.periodStartYear ? ' selected' : '') + '>' + (y - 1979) + '期（' + y + '年11月〜）</option>';
+  }
+  const regionOptions = (REF_MASTERS.regions || []).map(function (r) { return '<option value="' + escapeHtml(r.地方名) + '"' + (r.地方名 === f.region ? ' selected' : '') + '>' + escapeHtml(r.地方名) + '</option>'; }).join('');
+  const storeOptions = (REF_MASTERS.stores || []).map(function (s) { return '<option value="' + escapeHtml(s.STORE_ID) + '"' + (s.STORE_ID === f.storeId ? ' selected' : '') + '>' + escapeHtml(s.店舗名) + '</option>'; }).join('');
+  document.getElementById('view-root').innerHTML =
+    '<div class="tabs">' + SETTLEMENT_TABS_.map(function (t) {
+      return '<a class="' + (t.key === tab ? 'active' : '') + '" onclick="location.hash=\'#/settlements/' + t.key + '\'">' + t.label + '</a>';
+    }).join('') + '</div>' +
+    '<div class="panel"><div class="row">' +
+    '<div class="col"><label>期</label><select id="sf-period">' + periodOptions + '</select></div>' +
+    '<div class="col"><label>地方</label><select id="sf-region"><option value="">全地方</option>' + regionOptions + '</select></div>' +
+    '<div class="col"><label>店舗</label><select id="sf-store"><option value="">全店舗</option>' + storeOptions + '</select></div>' +
+    '<div class="col" style="display:flex;align-items:flex-end;"><button onclick="applySettlementFilter_(\'' + tab + '\')">表示</button></div>' +
+    '</div><p class="muted" style="margin:6px 0 0;">精算の「計上月」で集計します。取り込んだ過去の精算スプレッドシートの分も含みます（同じチャレンジ番号の精算がCRMにある場合はCRMの値を使います）。</p></div>' +
+    '<div id="settlement-body" class="panel">集計中...</div>';
+  if (tab === 'sales') loadSettlementSales_();
+  else if (tab === 'fnl') loadSettlementFnl_();
+  else if (tab === 'breakdown') loadSettlementBreakdown_();
+  else loadSettlementList_();
+}
+function applySettlementFilter_(tab) {
+  settlementFilter_ = {
+    periodStartYear: Number(document.getElementById('sf-period').value),
+    region: document.getElementById('sf-region').value,
+    storeId: document.getElementById('sf-store').value
+  };
+  renderSettlements(tab);
+}
+/** 月の値の配列（期の12か月）に、上期・下期・通期の合計を足した列の並びを返す */
+function withHalfTotals_(arr) {
+  const s = function (a, b) { return arr.slice(a, b).reduce(function (x, y) { return x + y; }, 0); };
+  return arr.slice(0, 6).concat([s(0, 6)], arr.slice(6, 12), [s(6, 12), s(0, 12)]);
+}
+function settlementMonthHeaders_(months) {
+  return months.slice(0, 6).concat(['上期'], months.slice(6, 12), ['下期', '通期']);
+}
+
+function loadSettlementSales_() {
+  callApi('getSettlementSalesSummary', settlementFilter_).then(function (data) {
+    const heads = settlementMonthHeaders_(data.months);
+    let html = '<h3 style="font-size:14px;">' + data.period + '期 売上・原価・粗利（前期＝' + data.prevPeriod + '期）</h3>' +
+      '<p class="muted">売上・原価は衣裳・CXLの行も含めた合計です（元の【集計】売上・粗利と同じ）。原価率＝原価÷売上。</p>';
+    data.areas.forEach(function (a) {
+      html += '<h3 style="font-size:13px;margin-top:16px;">' + escapeHtml(a.area) + '</h3><div style="overflow-x:auto;"><table style="font-size:12px;"><thead><tr><th>店舗</th><th>項目</th>' +
+        heads.map(function (h) { return '<th colspan="2">' + h + '</th>'; }).join('') + '<th>挙式＋フォト</th><th>前期 通期</th><th>前期比</th></tr><tr><th></th><th></th>' +
+        heads.map(function () { return '<th>挙式</th><th>フォト</th>'; }).join('') + '<th></th><th></th><th></th></tr></thead><tbody>';
+      ['AVA', '一般', '合計'].forEach(function (seg) {
+        const t = a.cur[seg], p = a.prev[seg];
+        const salesW = withHalfTotals_(t.挙式.売上), salesP = withHalfTotals_(t.フォト.売上);
+        const costW = withHalfTotals_(t.挙式.原価), costP = withHalfTotals_(t.フォト.原価);
+        const prevSales = p.挙式.売上.concat(p.フォト.売上).reduce(function (x, y) { return x + y; }, 0);
+        const prevCost = p.挙式.原価.concat(p.フォト.原価).reduce(function (x, y) { return x + y; }, 0);
+        const lines = [
+          ['売上', salesW, salesP, null, prevSales],
+          ['原価', costW, costP, null, prevCost],
+          ['粗利', salesW.map(function (v, i) { return v - costW[i]; }), salesP.map(function (v, i) { return v - costP[i]; }), null, prevSales - prevCost],
+          ['原価率', null, null, null, null]
+        ];
+        lines.forEach(function (ln, li) {
+          html += '<tr' + (seg === '合計' ? ' style="font-weight:bold;"' : '') + '><td>' + (li === 0 ? seg : '') + '</td><td>' + ln[0] + '</td>';
+          if (ln[0] === '原価率') {
+            for (let i = 0; i < heads.length; i++) html += '<td>' + pct_(costW[i], salesW[i]) + '</td><td>' + pct_(costP[i], salesP[i]) + '</td>';
+            const tw = salesW[heads.length - 1] + salesP[heads.length - 1], tc = costW[heads.length - 1] + costP[heads.length - 1];
+            html += '<td>' + pct_(tc, tw) + '</td><td>' + pct_(prevCost, prevSales) + '</td><td></td></tr>';
+            return;
+          }
+          for (let i = 0; i < heads.length; i++) html += '<td>' + yen_(ln[1][i]) + '</td><td>' + yen_(ln[2][i]) + '</td>';
+          const total = ln[1][heads.length - 1] + ln[2][heads.length - 1];
+          html += '<td>' + yen_(total) + '</td><td>' + yen_(ln[4]) + '</td><td>' + yen_(total - ln[4]) + '</td></tr>';
+        });
+      });
+      html += '</tbody></table></div>';
+    });
+    document.getElementById('settlement-body').innerHTML = html;
+  }).catch(handleApiError);
+}
+
+function loadSettlementFnl_(segment) {
+  segment = segment || '合計';
+  callApi('getSettlementFnlCounts', settlementFilter_).then(function (data) {
+    const heads = settlementMonthHeaders_(data.months);
+    let html = '<h3 style="font-size:14px;">' + data.period + '期 FNL件数（AGT別。衣裳を除き、CXLを除いた件数）</h3>' +
+      '<div class="row"><div class="col"><label>店舗区分</label><select id="sf-seg" onchange="loadSettlementFnl_(this.value)">' +
+      ['合計', 'AVA', '一般'].map(function (s) { return '<option' + (s === segment ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select></div></div>';
+    data.areas.forEach(function (a) {
+      html += '<h3 style="font-size:13px;margin-top:16px;">' + escapeHtml(a.area) + '</h3><div style="overflow-x:auto;"><table style="font-size:12px;"><thead><tr><th>AGT</th>' +
+        heads.map(function (h) { return '<th colspan="2">' + h + '</th>'; }).join('') + '<th colspan="2">CXL</th><th colspan="2">前期 通期</th><th colspan="2">前年比</th></tr><tr><th></th>' +
+        heads.map(function () { return '<th>挙式</th><th>フォト</th>'; }).join('') + '<th>挙式</th><th>フォト</th><th>挙式</th><th>フォト</th><th>挙式</th><th>フォト</th></tr></thead><tbody>';
+      const totW = new Array(heads.length).fill(0), totP = new Array(heads.length).fill(0);
+      let cxlW = 0, cxlP = 0, prevW = 0, prevP = 0;
+      a.agts.forEach(function (g) {
+        const w = withHalfTotals_(g[segment].挙式), p = withHalfTotals_(g[segment].フォト);
+        w.forEach(function (v, i) { totW[i] += v; }); p.forEach(function (v, i) { totP[i] += v; });
+        cxlW += g.CXL.挙式; cxlP += g.CXL.フォト; prevW += g.前期.挙式; prevP += g.前期.フォト;
+        html += '<tr><td>' + escapeHtml(g.agt) + '</td>' + w.map(function (v, i) { return '<td>' + v + '</td><td>' + p[i] + '</td>'; }).join('') +
+          '<td>' + g.CXL.挙式 + '</td><td>' + g.CXL.フォト + '</td><td>' + g.前期.挙式 + '</td><td>' + g.前期.フォト + '</td>' +
+          '<td>' + pct_(w[heads.length - 1], g.前期.挙式) + '</td><td>' + pct_(p[heads.length - 1], g.前期.フォト) + '</td></tr>';
+      });
+      html += '<tr style="font-weight:bold;"><td>' + data.period + '期計</td>' + totW.map(function (v, i) { return '<td>' + v + '</td><td>' + totP[i] + '</td>'; }).join('') +
+        '<td>' + cxlW + '</td><td>' + cxlP + '</td><td>' + prevW + '</td><td>' + prevP + '</td><td>' + pct_(totW[heads.length - 1], prevW) + '</td><td>' + pct_(totP[heads.length - 1], prevP) + '</td></tr>';
+      html += '</tbody></table></div>';
+    });
+    html += '<p class="muted">CXL・前期・前年比は店舗区分によらず合計（AVA＋一般）の値です。</p>';
+    document.getElementById('settlement-body').innerHTML = html;
+  }).catch(handleApiError);
+}
+
+function loadSettlementBreakdown_() {
+  const areaSel = document.getElementById('sb-area');
+  const filter = Object.assign({}, settlementFilter_, {
+    area: areaSel ? areaSel.value : '',
+    fromYm: document.getElementById('sb-from') ? document.getElementById('sb-from').value : '',
+    toYm: document.getElementById('sb-to') ? document.getElementById('sb-to').value : ''
+  });
+  callApi('getSettlementBreakdown', filter).then(function (data) {
+    const table = function (title, rows) {
+      return '<div class="col"><h3 style="font-size:13px;">' + title + '</h3><table style="font-size:12px;"><thead><tr><th></th><th>AVA</th><th>一般</th><th>計</th></tr></thead><tbody>' +
+        rows.map(function (r) { return '<tr><td>' + escapeHtml(r.label) + '</td><td>' + r.AVA + '</td><td>' + r.一般 + '</td><td>' + r.計 + '</td></tr>'; }).join('') + '</tbody></table></div>';
+    };
+    document.getElementById('settlement-body').innerHTML =
+      '<div class="row"><div class="col"><label>方面</label><select id="sb-area"><option value="">すべて</option>' + areaGroupOptions_(data.area) + '</select></div>' +
+      '<div class="col"><label>計上月から</label><input type="month" id="sb-from" value="' + data.fromYm + '"></div>' +
+      '<div class="col"><label>計上月まで</label><input type="month" id="sb-to" value="' + data.toYm + '"></div>' +
+      '<div class="col" style="display:flex;align-items:flex-end;"><button onclick="loadSettlementBreakdown_()">表示</button></div></div>' +
+      '<p class="muted">件数は衣裳・CXLの行も含めた行数です（元の方面別シート上部の表と同じ）。</p>' +
+      '<div class="row">' + table('式場別', data.venues) + table('プラン別', data.plans) + '</div>';
+  }).catch(handleApiError);
+}
+
+let settlementListCache_ = [];
+function loadSettlementList_() {
+  const g = function (id) { const el = document.getElementById(id); return el ? el.value : ''; };
+  const filter = Object.assign({}, settlementFilter_, { area: g('sl-area'), agt: g('sl-agt'), segment: g('sl-seg'), fromYm: g('sl-from'), toYm: g('sl-to') });
+  callApi('getSettlementList', filter).then(function (data) {
+    settlementListCache_ = data.rows;
+    let sumS = 0, sumC = 0;
+    data.rows.forEach(function (r) { sumS += r.売上; sumC += r.原価; });
+    let html = '<div class="row"><div class="col"><label>方面</label><select id="sl-area"><option value="">すべて</option>' + areaGroupOptions_(filter.area) + '</select></div>' +
+      '<div class="col"><label>AGT</label><input id="sl-agt" value="' + escapeHtml(filter.agt) + '"></div>' +
+      '<div class="col"><label>店舗区分</label><select id="sl-seg"><option value="">すべて</option><option' + (filter.segment === 'AVA' ? ' selected' : '') + '>AVA</option><option' + (filter.segment === '一般' ? ' selected' : '') + '>一般</option></select></div>' +
+      '<div class="col"><label>計上月から</label><input type="month" id="sl-from" value="' + data.fromYm + '"></div>' +
+      '<div class="col"><label>計上月まで</label><input type="month" id="sl-to" value="' + data.toYm + '"></div>' +
+      '<div class="col" style="display:flex;align-items:flex-end;gap:6px;"><button onclick="loadSettlementList_()">表示</button><button class="secondary" onclick="downloadSettlementCsv_()">CSV</button></div></div>' +
+      '<p class="muted">' + data.rows.length + '件　売上 ' + yen_(sumS) + '　原価 ' + yen_(sumC) + '　粗利 ' + yen_(sumS - sumC) + '　原価率 ' + pct_(sumC, sumS) + '</p>' +
+      '<div style="overflow-x:auto;"><table style="font-size:12px;"><thead><tr><th>計上月</th><th>方面</th><th>店舗</th><th>AVA/一般</th><th>チャレンジ番号</th><th>区分</th><th>種別</th><th>AGT</th><th>式場</th><th>プラン</th>' +
+      '<th>売上</th><th>原価</th><th>粗利</th><th>原価率</th><th>CXL</th><th>出所</th></tr></thead><tbody>';
+    data.rows.slice(0, 1000).forEach(function (r) {
+      html += '<tr><td>' + r.計上月 + '</td><td>' + escapeHtml(r.方面) + '</td><td>' + escapeHtml(r.店舗名 || '') + '</td><td>' + escapeHtml(r.店舗区分) + '</td>' +
+        '<td>' + (r.CASE_ID ? '<a onclick="location.hash=\'#/cases/' + r.CASE_ID + '/settlement\'">' + escapeHtml(r.チャレンジ番号 || r.CASE_ID) + '</a>' : escapeHtml(r.チャレンジ番号)) + '</td>' +
+        '<td>' + r.区分 + '</td><td>' + r.種別 + '</td><td>' + escapeHtml(r.AGT) + '</td><td>' + escapeHtml(r.式場) + '</td><td>' + escapeHtml(r.プラン) + '</td>' +
+        '<td>' + yen_(r.売上) + '</td><td>' + yen_(r.原価) + '</td><td>' + yen_(r.粗利) + '</td><td>' + (r.原価率 === null ? '—' : r.原価率 + '%') + '</td><td>' + (r.CXL ? 'CXL' : '') + '</td><td>' + escapeHtml(r.出所) + '</td></tr>';
+    });
+    html += '</tbody></table></div>' + (data.rows.length > 1000 ? '<p class="muted">画面には先頭1,000件を表示しています（CSVには全件出ます）。</p>' : '');
+    document.getElementById('settlement-body').innerHTML = html;
+  }).catch(handleApiError);
+}
+function downloadSettlementCsv_() {
+  const cols = ['計上月', '方面', '地方', '店舗名', '店舗区分', 'チャレンジ番号', '区分', '種別', 'AGT', '式場', 'プラン', '売上', '原価', '粗利', '原価率', 'CXL', '出所'];
+  const esc = function (v) { const s = v === null || v === undefined ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const csv = '﻿' + [cols.join(',')].concat(settlementListCache_.map(function (r) { return cols.map(function (c) { return esc(c === 'CXL' ? (r.CXL ? 'CXL' : '') : r[c]); }).join(','); })).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = '精算明細.csv';
+  a.click();
 }
 </script>
