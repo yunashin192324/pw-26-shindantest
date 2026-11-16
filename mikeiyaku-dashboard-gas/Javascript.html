@@ -19,6 +19,7 @@ let allDataCache = [];              // getDashboardData() の統合生データ�
 let metaMasters = {};                // getMetaMasters() のマスタ一式
 let employeeSummaryCache = {};       // periodKey（例: "46_second_half"）をキーに取得結果をキャッシュ
 let availablePeriods = [];           // getAvailablePeriods() が返す、画面に表示する期の一覧（標準は当期のみ）
+let selectedFyNumber = null;         // 「表示する期」で選ばれている期の番号（null＝当期）
 let fiscalInfo = null;               // 表示中の期の情報（見出し・「表示中」バッジ用）
 let currentEmployeePeriod = null;    // 現在選択中の期キー
 let myChart1 = null;
@@ -217,7 +218,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // 画面側が前提としているサーバー（Code.gs）の版数。Code.gs の SERVER_VERSION と対で更新する。
-const REQUIRED_SERVER_VERSION = '2026-11-14';
+const REQUIRED_SERVER_VERSION = '2026-11-17';
 
 /**
  * Code.gs が画面と同じ版数まで更新されているか確認する。
@@ -320,6 +321,75 @@ function renderLinkCheckResult(res) {
   box.className = 'text-xs mt-2';
   box.innerHTML = html;
   repairBtn.classList.toggle('hidden', !(res.plan.length > 0 && !res.applied));
+}
+
+// アーカイブから画面へ戻す：戻せる期の一覧を読み込む
+function loadRestorableArchives() {
+  const sel = document.getElementById('restore-period');
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) return;
+      const opts = (res.archives || []).map(function (a) {
+        return '<option value="' + a.periodNumber + '"' + (a.restorable ? '' : ' disabled') + '>' +
+          escapeHtml(a.label + (a.restorable ? '' : '（表示範囲の外のため戻せません）')) + '</option>';
+      });
+      sel.innerHTML = opts.length ? opts.join('') : '<option value="">（退避済みの期はありません）</option>';
+      const firstOk = (res.archives || []).filter(function (a) { return a.restorable; })[0];
+      if (firstOk) sel.value = String(firstOk.periodNumber);
+    })
+    .getRestorableArchives();
+}
+
+function onRestoreArchive(apply) {
+  const sel = document.getElementById('restore-period');
+  const box = document.getElementById('restore-result');
+  const runBtn = document.getElementById('btn-run-restore');
+  const no = Number(sel.value);
+  if (!no) { showToast('戻す期を選んでください。', 'error'); return; }
+  if (apply && !window.confirm(no + '期のアーカイブを、店舗のシートへ戻します。\n（戻した行はアーカイブ側から取り除かれます）\nよろしいですか？')) return;
+  const buttons = [document.getElementById('btn-check-restore'), runBtn];
+  buttons.forEach(function (b) { b.disabled = true; });
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      showLoading(false); buttons.forEach(function (b) { b.disabled = false; });
+      box.classList.remove('hidden');
+      if (!res || !res.success) {
+        box.className = 'text-xs mt-2 text-red-600';
+        box.textContent = '失敗しました：' + (res ? res.error : '不明なエラー');
+        runBtn.classList.add('hidden');
+        return;
+      }
+      if (!res.found) {
+        box.className = 'text-xs mt-2 text-slate-500';
+        box.textContent = res.label + ' のアーカイブはありません。';
+        runBtn.classList.add('hidden');
+        return;
+      }
+      const shops = Object.keys(res.perShop).filter(function (n) { return res.perShop[n] > 0; });
+      let html = '<p class="' + (res.applied ? 'text-emerald-700' : 'text-amber-700') + ' font-semibold">' + escapeHtml(res.label) + '：' +
+        res.restoredCount + ' 件を' + (res.applied ? '店舗のシートへ戻しました。' : '戻せます。') + '</p>';
+      if (shops.length) {
+        html += '<p class="text-slate-600">' + shops.map(function (n) { return escapeHtml(n) + ' ' + res.perShop[n] + '件'; }).join(' / ') + '</p>';
+      }
+      if (res.keptDifferent) html += '<p class="text-slate-500">店舗のシートに同じ相談が別の内容で既にある ' + res.keptDifferent + ' 件は、戻さずアーカイブに残しています。</p>';
+      if (res.skipped && res.skipped.length) {
+        html += '<p class="text-red-600">戻し先のシートが見つからないため戻せなかった店舗：' + res.skipped.map(function (s) { return escapeHtml(s.name) + '（' + s.rows + '件）'; }).join('、') +
+          '。「店舗マスタとデータシートの対応チェック」を確認してください。</p>';
+      }
+      if (res.remainingSheets && res.remainingSheets.length) {
+        html += '<p class="text-amber-700">時間の都合で ' + res.remainingSheets.length + ' 店舗ぶんが残っています。もう一度「画面に戻す」を押してください。</p>';
+      }
+      box.className = 'text-xs mt-2';
+      box.innerHTML = html;
+      runBtn.classList.toggle('hidden', !(res.restoredCount > 0 && !res.applied));
+      if (res.applied) { loadAllData(); loadRestorableArchives(); }
+    })
+    .withFailureHandler(function (err) {
+      showLoading(false); buttons.forEach(function (b) { b.disabled = false; });
+      showToast('通信エラー（restoreArchivedPeriod）: ' + err.message, 'error');
+    })
+    .restoreArchivedPeriod(no, apply);
 }
 
 function onCheckLinkProblems() {
@@ -483,14 +553,14 @@ function fetchDashboardRows(callback) {
             }).catch(function (e) { fail('データの展開に失敗しました: ' + (e && e.message ? e.message : e)); });
           })
           .withFailureHandler(function (err) { fail('通信エラー（getDashboardChunk）: ' + (err && err.message ? err.message : err)); })
-          .getDashboardChunk(groups[idx], useGzip);
+          .getDashboardChunk(groups[idx], useGzip, selectedFyNumber);
       };
       pump();
     })
     .withFailureHandler(function (err) {
       finish(null, '通信エラー（getDashboardPlan）: ' + (err && err.message ? err.message : err));
     })
-    .getDashboardPlan();
+    .getDashboardPlan(selectedFyNumber);
 }
 
 function loadAllData() {
@@ -566,7 +636,7 @@ function loadAllData() {
       showToast('通信エラー（getAvailablePeriods）: ' + err.message, 'error');
       onLoadStepComplete();
     })
-    .getAvailablePeriods();
+    .getAvailablePeriods(selectedFyNumber);
 
   google.script.run
     .withSuccessHandler(function (res) {
@@ -707,6 +777,7 @@ function initTabs() {
       // 店舗・スタッフ管理タブは開くたびに最新状態を取得する（頻繁に変わる画面ではないため）
       if (btn.dataset.tab === 'admin') {
         loadAdminData();
+        loadRestorableArchives();
       }
     });
   });
@@ -1619,20 +1690,58 @@ function initEmployeeEvents() {
 function renderAppTitle() {
   if (!fiscalInfo || !availablePeriods.length) return;
   const num = fiscalInfo.periodNumber;
+  const isCurrent = fiscalInfo.isCurrent !== false;
   const titleEl = document.getElementById('app-title');
-  if (titleEl) titleEl.textContent = num + '期未成約リスト ダッシュボード';
-  try { document.title = num + '期未成約ダッシュボード'; } catch (e) { /* タイトルを変えられない環境では何もしない */ }
+  if (titleEl) titleEl.textContent = num + '期未成約リスト ダッシュボード' + (isCurrent ? '' : '（前期）');
+  try { document.title = num + '期未成約ダッシュボード' + (isCurrent ? '' : '（前期）'); } catch (e) { /* タイトルを変えられない環境では何もしない */ }
   const from = String(fiscalInfo.displayFrom || '');
   const fromText = from.length === 8 ? from.substring(0, 4) + '年' + Number(from.substring(4, 6)) + '月' : '';
   const labels = availablePeriods.map(function (p) { return p.label; });
   const badge = document.getElementById('app-period-badge');
   if (badge) {
-    badge.textContent = '表示中：' + (labels.length === 1 ? labels[0] : num + '期（' + labels.map(function (l) { return l.replace(/^\d+期/, ''); }).join('・') + '）') +
-      (fromText ? '　' + fromText + 'から' : '');
-    badge.title = 'この画面に出ているのは ' + fiscalInfo.label + ' のデータです。これより前の期のデータは、履歴アーカイブ（別のスプレッドシート）に保管されています。';
+    badge.textContent = isCurrent
+      ? '表示中：' + (labels.length === 1 ? labels[0] : num + '期（' + labels.map(function (l) { return l.replace(/^\d+期/, ''); }).join('・') + '）') + (fromText ? '　' + fromText + 'から' : '')
+      : '表示中：' + num + '期（前期）　※当期ではありません';
+    badge.className = 'ml-2 text-xs font-semibold rounded-full px-3 py-1 border ' +
+      (isCurrent ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-amber-100 text-amber-800 border-amber-400');
+    badge.title = 'この画面に出ているのは ' + fiscalInfo.label + ' のデータです。' +
+      (isCurrent ? '前の期は「表示する期」で切り替えて見られます。表示範囲より前の期は、履歴アーカイブ（別のスプレッドシート）に保管されています。' : '当期に戻すには「表示する期」で当期を選んでください。');
     badge.classList.remove('hidden');
   }
+  // 「表示する期」の切り替え（選べる期が2つ以上あるときだけ表示）
+  const wrap = document.getElementById('fy-select-wrap');
+  const sel = document.getElementById('fy-select');
+  const terms = fiscalInfo.terms || [];
+  if (wrap && sel) {
+    wrap.classList.toggle('hidden', terms.length < 2);
+    sel.innerHTML = terms.map(function (t) {
+      return '<option value="' + t.periodNumber + '"' + (t.periodNumber === num ? ' selected' : '') + '>' +
+        escapeHtml(t.periodNumber + '期（' + (t.isCurrent ? '当期' : '前期') + '）') + '</option>';
+    }).join('');
+  }
 }
+
+// 「表示する期」を切り替える（未保存の変更があれば確認し、データを読み込み直す）
+function onChangeFiscalYear() {
+  const sel = document.getElementById('fy-select');
+  const next = Number(sel.value);
+  if (fiscalInfo && next === fiscalInfo.periodNumber) return;
+  if (Object.keys(pendingChanges).length > 0 &&
+      !window.confirm('保存していない変更があります。期を切り替えると、その変更は破棄されます。\nよろしいですか？')) {
+    sel.value = String(fiscalInfo ? fiscalInfo.periodNumber : next);
+    return;
+  }
+  selectedFyNumber = next;
+  loadAllData();
+}
+
+// 対象年月日（YYYYMMDD）が属する期の番号（11月始まり。46期＝2025年11月〜）
+function fiscalNumberOfDate(yyyymmdd) {
+  const y = Number(yyyymmdd.substring(0, 4));
+  const m = Number(yyyymmdd.substring(4, 6));
+  return 46 + ((m >= 11 ? y : y - 1) - 2025);
+}
+
 
 // 表示中の期のタブボタンを動的に生成する（例: 47期上期。下期になると 47期上期・47期下期）
 function renderEmpPeriodTabs() {
@@ -2691,7 +2800,15 @@ function onSubmitRegisterForm(ev) {
       showLoading(false);
       submitBtn.disabled = false;
       if (res && res.success) {
-        showToast('新規相談を登録しました。', 'success');
+        const dateDigits = String(rowObject['対象年月日']).replace(/\D/g, '');
+        const regNo = dateDigits.length === 8 ? fiscalNumberOfDate(dateDigits) : null;
+        if (regNo && fiscalInfo && regNo !== fiscalInfo.periodNumber) {
+          const other = (fiscalInfo.terms || []).filter(function (t) { return t.periodNumber === regNo; })[0];
+          showToast('新規相談を登録しました。ただし ' + regNo + '期の日付のため、いまの表示（' + fiscalInfo.periodNumber + '期）には出ません。' +
+            (other ? '「表示する期」を ' + regNo + '期に切り替えると見られます。' : ''), 'success');
+        } else {
+          showToast('新規相談を登録しました。', 'success');
+        }
         closeModal();
         loadAllData();
       } else {
@@ -2982,7 +3099,7 @@ function renderCsvImportResult(res) {
     }).join(' / ') + '</p>';
   }
   if (res.archivedCount) {
-    html += '<p class="mt-1 text-slate-500">保存期間（当期より前）を過ぎたデータ ' + res.archivedCount + ' 件を履歴アーカイブへ退避しました。' +
+    html += '<p class="mt-1 text-slate-500">保存期間（前々期以前）を過ぎたデータ ' + res.archivedCount + ' 件を履歴アーカイブへ退避しました。' +
       formatArchivePeriodLinks(res.archivePeriods) + '</p>';
   }
   box.innerHTML = html;
@@ -3026,6 +3143,9 @@ function initAdminEvents() {
   document.getElementById('btn-remove-duplicates').addEventListener('click', function () { runDuplicateCleanup(false); });
   document.getElementById('btn-clear-all-data').addEventListener('click', onClearAllImportedData);
   document.getElementById('btn-merge-placeholders').addEventListener('click', onMergePlaceholderShops);
+  document.getElementById('fy-select').addEventListener('change', onChangeFiscalYear);
+  document.getElementById('btn-check-restore').addEventListener('click', function () { onRestoreArchive(false); });
+  document.getElementById('btn-run-restore').addEventListener('click', function () { onRestoreArchive(true); });
   document.getElementById('btn-check-link').addEventListener('click', onCheckLinkProblems);
   document.getElementById('btn-run-link-repair').addEventListener('click', onRunLinkRepair);
   document.getElementById('btn-check-archive').addEventListener('click', onCheckArchivePreview);
@@ -3234,7 +3354,7 @@ function onCheckArchivePreview() {
       }
       if (res.eligibleCount === 0) {
         box.className = 'text-xs mt-2 text-slate-500';
-        box.textContent = 'アーカイブ対象のデータはありません（すべて当期のデータです）。';
+        box.textContent = 'アーカイブ対象のデータはありません（すべて当期・前期のデータです）。';
         return;
       }
       box.className = 'text-xs mt-2 text-amber-700';
@@ -3255,7 +3375,7 @@ function onRunArchive() {
   const box = document.getElementById('archive-result');
   const buttons = ['btn-check-archive', 'btn-run-archive'].map(function (id) { return document.getElementById(id); });
 
-  if (!window.confirm('保存期間（当期より前）を過ぎたデータを履歴アーカイブへ退避します。\n（データは消えず、別のスプレッドシートに移動するだけです）\nよろしいですか？')) return;
+  if (!window.confirm('保存期間（前々期以前）を過ぎたデータを履歴アーカイブへ退避します。\n（データは消えず、別のスプレッドシートに移動するだけです）\nよろしいですか？')) return;
 
   buttons.forEach(function (b) { b.disabled = true; });
   showLoading(true);

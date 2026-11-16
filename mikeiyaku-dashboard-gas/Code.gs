@@ -711,9 +711,11 @@ function getMetaMasters() {
 const FISCAL_BASE_PERIOD = 46;
 const FISCAL_BASE_START_CAL_YEAR = 2025; // 46期の開始暦年（2025年11月に開始）
 // 画面に表示する範囲（＝保存期間。これより前のデータは履歴アーカイブへ退避される）
+//   'FISCAL_YEAR_AND_PREVIOUS' … 当期＋前期（11月始まりの2年分）。画面は標準で当期を表示し、「表示する期」で前期へ切り替えて
+//                                見る・入力できる。前々期より前は履歴アーカイブへ退避される
 //   'FISCAL_YEAR'   … 当期のみ（11月始まりの1年。上期＝11〜4月の間は上期だけ、下期＝5〜10月は上期＋下期）
 //   'RECENT_HALVES' … 直近 RETENTION_PERIOD_COUNT 半期（4なら過去2年）
-const RETENTION_MODE = 'FISCAL_YEAR';
+const RETENTION_MODE = 'FISCAL_YEAR_AND_PREVIOUS';
 const RETENTION_PERIOD_COUNT = 4;        // RETENTION_MODE が 'RECENT_HALVES' のときの半期数（4＝過去2年）
 
 /**
@@ -752,7 +754,10 @@ function getRecentPeriods_(referenceDate) {
   let h = (m >= 11 || m <= 4) ? 'first_half' : 'second_half';
 
   // 当期のみの場合：上期（11〜4月）なら上期の1つ、下期（5〜10月）なら上期と下期の2つ
-  const count = RETENTION_MODE === 'FISCAL_YEAR' ? (h === 'first_half' ? 1 : 2) : RETENTION_PERIOD_COUNT;
+  const currentFyHalves = (h === 'first_half' ? 1 : 2);
+  const count = RETENTION_MODE === 'FISCAL_YEAR' ? currentFyHalves
+    : RETENTION_MODE === 'FISCAL_YEAR_AND_PREVIOUS' ? currentFyHalves + 2
+    : RETENTION_PERIOD_COUNT;
   const seq = [];
   for (let i = 0; i < count; i++) {
     seq.push({ periodNumber: p, half: h, key: periodKey_(p, h), label: periodLabel_(p, h) });
@@ -765,25 +770,62 @@ function getRecentPeriods_(referenceDate) {
 /**
  * フロントエンドから呼び出す、個人別サマリのタブに表示する直近2年分の期一覧API。
  */
-function getAvailablePeriods() {
+function getAvailablePeriods(fyNumber) {
   try {
-    const periods = getRecentPeriods_();
-    const newest = periods[periods.length - 1];
-    const cutoff = getRetentionCutoffDate_();
+    const term = resolveFiscalTerm_(fyNumber);
+    const periods = getRecentPeriods_().filter(function (p) { return p.periodNumber === term.periodNumber; });
     return {
       success: true,
       periods: periods,
-      // 画面の見出し・「表示中」の案内用
+      // 画面の見出し・「表示中」の案内・「表示する期」の切り替え用
       fiscal: {
-        periodNumber: newest.periodNumber,
-        label: fiscalYearLabel_(newest.periodNumber),
-        displayFrom: cutoff,
-        periodLabels: periods.map(function (p) { return p.label; })
+        periodNumber: term.periodNumber,
+        label: term.label,
+        displayFrom: term.from,
+        isCurrent: term.isCurrent,
+        periodLabels: periods.map(function (p) { return p.label; }),
+        terms: getFiscalTerms_().map(function (t) { return { periodNumber: t.periodNumber, label: t.label, isCurrent: t.isCurrent }; })
       }
     };
   } catch (err) {
     return { success: false, error: errorForClient_(err) };
   }
+}
+
+/**
+ * 画面で切り替えて表示できる「期（11月始まりの1年）」の一覧を、新しい順に返す。
+ * 保存期間（getRecentPeriods_）に含まれる期だけ。標準では 当期＋前期。
+ * from／to は、その期の対象年月日の範囲（当期は未来の日付も含めるため to を持たない）。
+ */
+function getFiscalTerms_() {
+  const byNo = {};
+  const order = [];
+  getRecentPeriods_().forEach(function (p) {
+    if (!byNo[p.periodNumber]) { byNo[p.periodNumber] = []; order.push(p.periodNumber); }
+    byNo[p.periodNumber].push(p);
+  });
+  const newest = order[order.length - 1];
+  return order.slice().reverse().map(function (no) {
+    const halves = byNo[no];
+    const startYear = FISCAL_BASE_START_CAL_YEAR + (no - FISCAL_BASE_PERIOD);
+    return {
+      periodNumber: no,
+      label: fiscalYearLabel_(no),
+      isCurrent: no === newest,
+      from: periodStartDate_(no, halves[0].half),
+      to: no === newest ? '99999999' : (startYear + 1) + '1031'
+    };
+  });
+}
+
+/** 期の番号から表示対象の期を決める。未指定は当期。保存期間に含まれない期は例外 */
+function resolveFiscalTerm_(fyNumber) {
+  const terms = getFiscalTerms_();
+  if (fyNumber === undefined || fyNumber === null || fyNumber === '') return terms[0];
+  const n = Number(fyNumber);
+  const found = terms.filter(function (t) { return t.periodNumber === n; })[0];
+  if (!found) throw new Error('指定された期は表示できません（表示できるのは ' + terms.map(function (t) { return t.label; }).join('、') + ' です）。');
+  return found;
 }
 
 /**
@@ -814,7 +856,7 @@ function getRetentionCutoffDate_() {
  * 1店舗ぶんの生データを、画面用の行オブジェクトにして返す（保存期間外・空行・エラー値の行は除く）。
  * getDashboardData（一括）と getDashboardChunk（分割）の共通処理。
  */
-function collectDashboardRowsForShop_(ss, shop, cutoffDate) {
+function collectDashboardRowsForShop_(ss, shop, cutoffDate, term) {
   const result = [];
   const errorTokens = ['#NUM!', '#REF!', '#N/A', '#VALUE!', '#DIV/0!', '#NAME?', '#NULL!', '#ERROR!'];
   const lastCol = HEADERS_MAIN.length;
@@ -840,6 +882,14 @@ function collectDashboardRowsForShop_(ss, shop, cutoffDate) {
     // 保存期間（表示範囲）より前のデータは対象外
     const targetDate = normalizeTargetDate_(row[4]); // 対象年月日（5列目）
     if (targetDate && targetDate < cutoffDate) continue;
+    // 表示する期（term）の指定があるときは、その期の日付の行だけ。日付として読めない行は当期にだけ出す
+    if (term) {
+      if (/^\d{8}$/.test(targetDate)) {
+        if (targetDate < term.from || targetDate > term.to) continue;
+      } else if (!term.isCurrent) {
+        continue;
+      }
+    }
 
     const obj = {};
     for (let c = 0; c < lastCol; c++) {
@@ -895,8 +945,9 @@ function dashboardColumns_() {
 }
 
 /** 閲覧できる店舗を取得グループに分けて返す。画面はこの順に getDashboardChunk を呼ぶ。 */
-function getDashboardPlan() {
+function getDashboardPlan(fyNumber) {
   try {
+    resolveFiscalTerm_(fyNumber); // 表示できない期の指定は拒否
     const ctx = getCurrentUserContext_();
     const names = filterShopsByScope_(getShopList_(), ctx).map(function (s) { return s.name; });
     const groups = [];
@@ -914,12 +965,13 @@ function getDashboardPlan() {
  * @param {string[]} shopNames 店舗シート名（getDashboardPlan の1グループ）
  * @param {boolean} useGzip trueなら gzip＋base64 の文字列で返す（画面側が解凍できる場合）
  */
-function getDashboardChunk(shopNames, useGzip) {
+function getDashboardChunk(shopNames, useGzip, fyNumber) {
   try {
     if (!Array.isArray(shopNames) || shopNames.length === 0 || shopNames.length > DASHBOARD_CHUNK_MAX_SHOPS ||
         shopNames.some(function (n) { return typeof n !== 'string'; })) {
       throw new Error('取得する店舗の指定が正しくありません。');
     }
+    const term = resolveFiscalTerm_(fyNumber);
     const ctx = getCurrentUserContext_();
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const allShops = getShopList_();
@@ -930,7 +982,7 @@ function getDashboardChunk(shopNames, useGzip) {
       const shopName = String(name);
       assertShopInScope_(shopName, allShops, ctx); // 範囲外・存在しない店舗は拒否
       const shop = allShops.filter(function (s) { return s.name === shopName; })[0];
-      collectDashboardRowsForShop_(ss, shop, cutoffDate).forEach(function (obj) {
+      collectDashboardRowsForShop_(ss, shop, cutoffDate, term).forEach(function (obj) {
         rows.push(cols.map(function (c) { return obj[c]; }));
       });
     });
@@ -1162,6 +1214,10 @@ function addUncontractedDataImpl_(rowObject, staffRowIndex, expectedStaff) {
     const targetDate = normalizeTargetDate_(rowObject && rowObject['対象年月日']);
     if (!isValidYmd_(targetDate)) {
       throw new Error('対象年月日を正しい日付で入力してください（入力値: ' + (rowObject && rowObject['対象年月日']) + '）');
+    }
+    if (targetDate < getRetentionCutoffDate_()) {
+      throw new Error('その日付（' + targetDate + '）は表示範囲より前の期のため登録できません（画面に出ず、次回のアーカイブで退避されてしまいます）。' +
+        '表示できる期：' + getFiscalTerms_().map(function (t) { return t.label; }).join('、') + '。');
     }
     newRow[HEADERS_MAIN.indexOf('対象年月日')] = targetDate;
     newRow[3] = targetDate.substring(4, 6);
@@ -1417,7 +1473,7 @@ function lockedEndpoint_(fn) {
  * 「is not a function」という分かりにくいエラーになるため、
  * 画面側から版数を確認できるようにしている。
  */
-const SERVER_VERSION = '2026-11-14';
+const SERVER_VERSION = '2026-11-17';
 
 /**
  * サーバー側の版数を返す。画面側は、自分が期待する版数と一致するかを起動時に確認する。
@@ -2775,6 +2831,124 @@ function excludeAlreadyArchivedRows_(archiveSheet, rows) {
     if (remaining[sig] > 0) { remaining[sig]--; return false; }
     return true;
   });
+}
+
+// ---- 履歴アーカイブから画面へ戻す ----------------------------------------------------
+// 保存期間を「当期のみ」から「当期＋前期」へ広げたとき、すでに前期がアーカイブへ退避されていた場合に、
+// 退避済みの行を店舗のシートへ戻す。表示範囲の外の期は、戻しても次回のアーカイブで再び退避されるため戻せない。
+
+/** 取り込みの重複判定と同じキー（対象年月日＋営業所コード＋社員番号＋都市コード＋出発年月） */
+function rowDedupKey_(row) {
+  return [normalizeTargetDate_(row[4]), row[5], row[6], row[9], row[11]].map(canonicalKeyPart_).join('｜');
+}
+
+/** 履歴アーカイブにある期の一覧。画面に戻せる（表示範囲に含まれる）期かどうかつき（マスタ管理者のみ） */
+function getRestorableArchives() {
+  try {
+    assertCanManageMaster_();
+    const cutoff = getRetentionCutoffDate_();
+    const map = getArchiveSpreadsheetMap_();
+    const list = Object.keys(map).filter(function (k) { return /^\d+$/.test(k); }).map(function (k) {
+      const no = Number(k);
+      return { periodNumber: no, label: fiscalYearLabel_(no), url: map[k].url, restorable: periodStartDate_(no, 'first_half') >= cutoff };
+    }).sort(function (a, b) { return b.periodNumber - a.periodNumber; });
+    return { success: true, archives: list };
+  } catch (err) {
+    return { success: false, error: errorForClient_(err) };
+  }
+}
+
+/**
+ * 指定した期のアーカイブを、店舗のシートへ戻す（マスタ管理者のみ）。apply が false のときは件数の確認だけ。
+ * 戻した行は、アーカイブ側から取り除く（二重に残さない）。すでに同じ相談の行が店舗のシートにある場合は戻さない。
+ */
+function restoreArchivedPeriod(periodNumber, apply) {
+  if (!apply) return restoreArchivedPeriodImpl_(periodNumber, false);
+  return lockedEndpoint_(function () { return restoreArchivedPeriodImpl_(periodNumber, true); });
+}
+
+/** restoreArchivedPeriod の本体（同時実行制御は上の公開関数で行う。直接呼ばないこと） */
+function restoreArchivedPeriodImpl_(periodNumber, apply) {
+  try {
+    assertCanManageMaster_();
+    const no = Number(periodNumber);
+    if (!isFinite(no) || no < 1) throw new Error('期の指定が正しくありません。');
+    const terms = getFiscalTerms_();
+    if (periodStartDate_(no, 'first_half') < getRetentionCutoffDate_()) {
+      throw new Error(fiscalYearLabel_(no) + ' は現在の表示範囲（' + terms.map(function (t) { return t.label; }).join('、') + '）の外のため、' +
+        '画面に戻しても次回のアーカイブで再び退避されます。戻せるのは表示範囲に含まれる期だけです。');
+    }
+    const map = getArchiveSpreadsheetMap_();
+    if (!map[String(no)]) {
+      return { success: true, applied: !!apply, label: fiscalYearLabel_(no), found: false, restoredCount: 0, perShop: {}, skipped: [], keptDifferent: 0, remainingSheets: [] };
+    }
+    const archiveSs = SpreadsheetApp.openById(map[String(no)].id);
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const perShop = {};
+    const skipped = [];
+    const remainingSheets = [];
+    let restoredCount = 0;
+    let keptDifferent = 0;
+
+    archiveSs.getSheets().forEach(function (archSheet) {
+      const name = archSheet.getName();
+      const lastRow = archSheet.getLastRow();
+      if (lastRow < 2) return;
+      if (apply && executionElapsedMs_() > ARCHIVE_TIME_BUDGET_MS) { remainingSheets.push(name); return; }
+      const live = ss.getSheetByName(name);
+      if (!live || !isShopDataSheet_(live)) {
+        skipped.push({ name: name, rows: lastRow - 1 });
+        return;
+      }
+      const archRows = archSheet.getRange(2, 1, lastRow - 1, HEADERS_MAIN.length).getValues();
+      const liveLast = live.getLastRow();
+      const liveByKey = {};
+      if (liveLast >= 2) {
+        live.getRange(2, 1, liveLast - 1, HEADERS_MAIN.length).getValues().forEach(function (r) { liveByKey[rowDedupKey_(r)] = rowSignature_(r); });
+      }
+      const toRestore = [];
+      const toRestoreIdx = [];
+      const dropIdx = []; // 戻す行＋店舗のシートに同じ内容で既にある行（アーカイブから取り除いてよい行）
+      const seen = {};
+      archRows.forEach(function (r, i) {
+        if (r.every(function (v) { return v === '' || v === null; })) return;
+        const key = rowDedupKey_(r);
+        if (liveByKey[key] === undefined && !seen[key]) {
+          seen[key] = true;
+          toRestore.push(r);
+          toRestoreIdx.push(i);
+          dropIdx.push(i);
+        } else if (liveByKey[key] !== undefined && liveByKey[key] === rowSignature_(r)) {
+          dropIdx.push(i);
+        } else {
+          keptDifferent++;
+        }
+      });
+      if (toRestore.length === 0 && dropIdx.length === 0) return;
+      perShop[name] = toRestore.length;
+      restoredCount += toRestore.length;
+      if (!apply) return;
+
+      if (toRestore.length > 0) {
+        const startRow = live.getLastRow() + 1;
+        ensureRowCapacity_(live, startRow + toRestore.length - 1);
+        setValuesSafe_(live.getRange(startRow, 1, toRestore.length, HEADERS_MAIN.length), toRestore);
+      }
+      // 店舗のシートへ書き終えてから、アーカイブ側の行を取り除く（途中で止まっても、データは失われず重複するだけ）
+      if (archSheet.getMaxRows() < lastRow + 2) archSheet.insertRowsAfter(archSheet.getMaxRows(), lastRow + 2 - archSheet.getMaxRows());
+      const runs = [];
+      dropIdx.forEach(function (idx) {
+        const last = runs[runs.length - 1];
+        if (last && last.start + last.count === idx) last.count++; else runs.push({ start: idx, count: 1 });
+      });
+      for (let k = runs.length - 1; k >= 0; k--) archSheet.deleteRows(runs[k].start + 2, runs[k].count);
+    });
+
+    return { success: true, applied: !!apply, label: fiscalYearLabel_(no), found: true, url: map[String(no)].url,
+      restoredCount: restoredCount, perShop: perShop, skipped: skipped, keptDifferent: keptDifferent, remainingSheets: remainingSheets };
+  } catch (err) {
+    return { success: false, error: errorForClient_(err) };
+  }
 }
 
 /** アーカイブ側に、店舗ごとの27列ヘッダー付きシートを用意する（無ければ作る） */
