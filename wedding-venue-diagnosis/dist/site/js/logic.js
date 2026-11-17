@@ -125,7 +125,7 @@
 
       var opts;
       if (q.type === 'region') {
-        opts = regionOptions(model, pool).concat(q.undecidedOption ? [q.undecidedOption] : []);
+        opts = (q.undecidedOption ? [q.undecidedOption] : []).concat(regionOptions(model, pool));   // 「まだ決めていない」を先頭に
       } else if (q.type === 'regionPick') {
         opts = regionPickOptions(model, answers);
       } else {

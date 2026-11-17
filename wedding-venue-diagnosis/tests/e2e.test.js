@@ -76,6 +76,7 @@ for (const file of TARGETS) {
       await page.click('#start-btn');
       assert.match(await title(page), /国・地域/);
       assert.equal((await optTexts(page)).length, 10);
+      assert.equal((await optTexts(page))[0], 'まだ決めていない');
       await noOverflow(page, 'region'); await shot('2-question-region');
       await single(page, 'ハワイ');
       await single(page, 'いいえ、大人のみです');
