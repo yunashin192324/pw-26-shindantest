@@ -1473,7 +1473,7 @@ function lockedEndpoint_(fn) {
  * 「is not a function」という分かりにくいエラーになるため、
  * 画面側から版数を確認できるようにしている。
  */
-const SERVER_VERSION = '2026-11-17';
+const SERVER_VERSION = '2026-11-18';
 
 /**
  * サーバー側の版数を返す。画面側は、自分が期待する版数と一致するかを起動時に確認する。
@@ -1956,6 +1956,57 @@ function assertRowIdentity_(sheet, rowIndex, expected) {
   if (mismatch) throw new Error(ROW_MOVED_MESSAGE);
 }
 
+// ---- 同時編集の検知（他の人が先に変えたセルを、気づかずに上書きしない） -------------------
+// 画面は、保存する項目ごとに「画面を開いたとき（最後に読み込んだとき）の値」を一緒に送る。
+// 保存の瞬間にシートの値がその値と違えば、他の人が先に変更したということなので、その行は保存せず、
+// 変更後の最新の値を返す（画面はそれを見て、利用者が確かめてから保存し直せる）。
+
+/** セルの値を、画面が持っている値（serializeCellValue_）と比べられる文字列にそろえる */
+function cellCompareText_(v) {
+  const s = serializeCellValue_(v);
+  return String(s === null || s === undefined ? '' : s).trim();
+}
+
+/** 1行の現在の内容を、画面用の行オブジェクトにして返す */
+function currentRowObject_(sheet, sheetName, rIdx) {
+  const values = sheet.getRange(rIdx, 1, 1, HEADERS_MAIN.length).getValues()[0];
+  const obj = {};
+  for (let c = 0; c < HEADERS_MAIN.length; c++) {
+    obj[HEADERS_MAIN[c]] = serializeCellValue_(values[c]);
+  }
+  obj['対象年月日'] = normalizeTargetDate_(values[4]);
+  obj.__sheetName = sheetName;
+  obj.__rowIndex = rIdx;
+  return obj;
+}
+
+/**
+ * これから書き換える列について、シートの現在の値が「画面を開いたときの値」と同じかを確認する。
+ * 違う列があれば、最新の行の内容つきの例外（conflict）を投げる。expected が無い（古い画面）場合は確認しない。
+ * @param {Object} expected 列名→画面が持っていた値
+ * @param {string[]} columns 書き換える列名
+ */
+function assertNoConcurrentEdit_(sheet, sheetName, rIdx, expected, columns) {
+  if (!expected || typeof expected !== 'object') return;
+  const changed = [];
+  columns.forEach(function (col) {
+    if (!Object.prototype.hasOwnProperty.call(expected, col)) return;
+    const colIdx = HEADERS_MAIN.indexOf(col);
+    if (colIdx === -1) return;
+    const now = cellCompareText_(sheet.getRange(rIdx, colIdx + 1).getValue());
+    const was = String(expected[col] === null || expected[col] === undefined ? '' : expected[col]).trim();
+    if (now !== was) changed.push({ column: col, now: now, was: was });
+  });
+  if (changed.length === 0) return;
+  const clip = function (s) { return s.length > 30 ? s.substring(0, 30) + '…' : s; };
+  const err = new Error('他の方が先に変更していたため、保存しませんでした：' + changed.map(function (x) {
+    return '「' + x.column + '」（いまの値「' + clip(x.now) + '」／画面に表示していた値「' + clip(x.was) + '」）';
+  }).join('、') + '。画面を最新の内容にしました。確かめてから、もう一度保存してください。');
+  err.conflict = true;
+  err.currentRow = currentRowObject_(sheet, sheetName, rIdx);
+  throw err;
+}
+
 // ---- リセールリストでスタッフが編集できる列（それ以外はCSV由来の読み取り専用） ---
 // 一般スタッフ（店舗スタッフ）も自店舗の行であればこれらを編集できる。
 // 「STS」だけは成約PAXのクリアやリセール補完を伴うため、updateCellValueでは更新せず、まとめて保存（saveRowChanges）で更新する。
@@ -2055,12 +2106,12 @@ function normalizeContractPax_(value) {
  * @param {string} columnName HEADERS_MAIN に含まれる列名（EDITABLE_COLUMNSのいずれかのみ）
  * @param {*} value 更新後の値
  */
-function updateCellValue(sheetName, rowIndex, columnName, value, expectedIdentity) {
-  return lockedEndpoint_(function () { return updateCellValueImpl_(sheetName, rowIndex, columnName, value, expectedIdentity); });
+function updateCellValue(sheetName, rowIndex, columnName, value, expectedIdentity, expectedValue) {
+  return lockedEndpoint_(function () { return updateCellValueImpl_(sheetName, rowIndex, columnName, value, expectedIdentity, expectedValue); });
 }
 
 /** updateCellValue の本体（同時実行制御は上の公開関数で行う。直接呼ばないこと） */
-function updateCellValueImpl_(sheetName, rowIndex, columnName, value, expectedIdentity) {
+function updateCellValueImpl_(sheetName, rowIndex, columnName, value, expectedIdentity, expectedValue) {
   try {
     assertShopInScope_(sheetName);
 
@@ -2090,6 +2141,10 @@ function updateCellValueImpl_(sheetName, rowIndex, columnName, value, expectedId
       throw new Error('シートが見つかりません: ' + sheetName);
     }
     assertRowIdentity_(sheet, rIdx, expectedIdentity);
+    if (expectedValue !== undefined) {
+      const exp = {}; exp[columnName] = expectedValue;
+      assertNoConcurrentEdit_(sheet, sheetName, rIdx, exp, [columnName]);
+    }
 
     if (TEXT_CELL_COLUMNS[columnName]) {
       setTextCell_(sheet, rIdx, colIdx + 1, value);
@@ -2115,6 +2170,7 @@ function updateCellValueImpl_(sheetName, rowIndex, columnName, value, expectedId
 
     return { success: true, data: updatedObj };
   } catch (err) {
+    if (err && err.conflict) return { success: false, error: err.message, conflict: true, currentRow: err.currentRow };
     return { success: false, error: errorForClient_(err) };
   }
 }
@@ -2195,6 +2251,14 @@ function saveRowChangesImpl_(changes) {
         if (!hasResale && !hasSts && !hasPax && simpleColumnsPresent.length === 0) {
           throw new Error('変更内容がありません。');
         }
+
+        // 他の人が先に変更していないかを確認する（変えた項目だけ。違えばこの行は何も書き込まない）
+        const touched = [];
+        if (hasResale) touched.push('リセール');
+        if (hasSts) touched.push('STS');
+        if (hasPax) touched.push('成約PAX');
+        simpleColumnsPresent.forEach(function (cname) { touched.push(cname); });
+        assertNoConcurrentEdit_(sheet, sheetName, rIdx, change.__expected, touched);
 
         // ---- 入力値の検証（1つでも不正ならこの行は何も書き込まない） ----
         let resaleValue = null;
@@ -2290,7 +2354,9 @@ function saveRowChangesImpl_(changes) {
         updatedRows.push(obj);
       } catch (rowErr) {
         // 1行の失敗で全体を止めない。どの行が失敗したかを画面へ返す。
-        failures.push({ sheetName: sheetName, rowIndex: rowIndex, error: rowErr.message });
+        const failure = { sheetName: sheetName, rowIndex: rowIndex, error: rowErr.message };
+        if (rowErr && rowErr.conflict) { failure.conflict = true; failure.currentRow = rowErr.currentRow; }
+        failures.push(failure);
       }
     });
 

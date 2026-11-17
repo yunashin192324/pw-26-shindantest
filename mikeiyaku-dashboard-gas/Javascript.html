@@ -99,10 +99,15 @@ function restoreCellValue(sheetName, rowIndex, column, value, callback) {
   if (PENDING_COLUMNS.indexOf(column) !== -1) {
     const change = { sheetName: sheetName, rowIndex: rowIndex, __identity: rowIdentityOf(sheetName, rowIndex) };
     change[column] = value;
+    change.__expected = {};
+    change.__expected[column] = cachedCellValue(sheetName, rowIndex, column);
     google.script.run
       .withSuccessHandler(function (res) {
         if (!res || !res.success) { callback(false, res ? res.error : '不明なエラー'); return; }
-        if (res.failures && res.failures.length > 0) { callback(false, res.failures[0].error); return; }
+        if (res.failures && res.failures.length > 0) {
+          if (res.failures[0].conflict && res.failures[0].currentRow) applyUpdatedRowToCache(res.failures[0].currentRow);
+          callback(false, res.failures[0].error); return;
+        }
         (res.updatedRows || []).forEach(applyUpdatedRowToCache);
         callback(true);
       })
@@ -111,12 +116,15 @@ function restoreCellValue(sheetName, rowIndex, column, value, callback) {
   } else {
     google.script.run
       .withSuccessHandler(function (res) {
-        if (!res || !res.success) { callback(false, res ? res.error : '不明なエラー'); return; }
+        if (!res || !res.success) {
+          if (res && res.conflict && res.currentRow) applyUpdatedRowToCache(res.currentRow);
+          callback(false, res ? res.error : '不明なエラー'); return;
+        }
         applyUpdatedRowToCache(res.data);
         callback(true);
       })
       .withFailureHandler(function (err) { callback(false, err.message); })
-      .updateCellValue(sheetName, rowIndex, column, value, rowIdentityOf(sheetName, rowIndex));
+      .updateCellValue(sheetName, rowIndex, column, value, rowIdentityOf(sheetName, rowIndex), cachedCellValue(sheetName, rowIndex, column));
   }
 }
 
@@ -124,6 +132,16 @@ function restoreCellValue(sheetName, rowIndex, column, value, callback) {
 // サーバーは書き込み前に、その行が今もこの相談かを確かめる（アーカイブ・異動・重複整理などで
 // 行の並びが変わっていれば保存を中止し、別のお客様の行を上書きしないようにする）。
 const ROW_IDENTITY_COLUMNS = ['対象年月日', '営業所コード', '社員番号', '都市コード', '出発年月'];
+
+// 画面が持っている（最後に読み込んだ・保存した）セルの値。保存時に「他の人が先に変更していないか」の確認に使う
+function cachedCellValue(sheetName, rowIndex, column) {
+  const row = allDataCache.find(function (r) {
+    return r.__sheetName === sheetName && String(r.__rowIndex) === String(rowIndex);
+  });
+  if (!row) return '';
+  const v = row[column];
+  return v === null || v === undefined ? '' : v;
+}
 
 function rowIdentityOf(sheetName, rowIndex) {
   const row = allDataCache.find(function (r) {
@@ -218,7 +236,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // 画面側が前提としているサーバー（Code.gs）の版数。Code.gs の SERVER_VERSION と対で更新する。
-const REQUIRED_SERVER_VERSION = '2026-11-17';
+const REQUIRED_SERVER_VERSION = '2026-11-18';
 
 /**
  * Code.gs が画面と同じ版数まで更新されているか確認する。
@@ -2420,6 +2438,9 @@ function onSavePendingChanges() {
     const entry = pendingChanges[k];
     const change = { sheetName: entry.sheetName, rowIndex: entry.rowIndex, __identity: rowIdentityOf(entry.sheetName, entry.rowIndex) };
     Object.keys(entry.values).forEach(function (col) { change[col] = entry.values[col]; });
+    // 保存の瞬間に「他の人が先に変更していないか」を確かめるため、画面が持っている（最後に読み込んだ）値も送る
+    change.__expected = {};
+    Object.keys(entry.values).forEach(function (col) { change.__expected[col] = cachedCellValue(entry.sheetName, entry.rowIndex, col); });
     return change;
   });
 
@@ -2436,6 +2457,8 @@ function onSavePendingChanges() {
         return;
       }
       (res.updatedRows || []).forEach(applyUpdatedRowToCache);
+      // 他の人が先に変更していた行は、画面を最新の内容にする（保存待ちの入力はそのまま残し、確かめてから保存し直せる）
+      (res.failures || []).forEach(function (f) { if (f.conflict && f.currentRow) applyUpdatedRowToCache(f.currentRow); });
 
       // 保存できた行だけ保存待ちから外す（失敗した行は残して、もう一度保存できるようにする）
       const failedRids = {};
@@ -2454,8 +2477,10 @@ function onSavePendingChanges() {
       renderDataManagerGrid();
 
       if (res.failures && res.failures.length > 0) {
+        const conflicts = res.failures.filter(function (f) { return f.conflict; });
         showToast(res.updatedCount + '件を保存しましたが、' + res.failures.length +
-          '件は保存できませんでした：' + res.failures[0].error, 'error');
+          '件は保存できませんでした：' + res.failures[0].error +
+          (conflicts.length > 1 ? '（他の方が先に変更していた行：' + conflicts.length + '件）' : ''), 'error');
       } else {
         showToast(res.updatedCount + '件を保存しました。', 'success');
       }
@@ -2635,6 +2660,7 @@ function callUpdateCellValue(sheetName, rowIndex, columnName, value, oldValue) {
           recordEdit(sheetName, rowIndex, columnName, oldValue, value, true);
         }
       } else {
+        if (res && res.conflict && res.currentRow) applyUpdatedRowToCache(res.currentRow);
         showToast('更新に失敗しました: ' + (res ? res.error : '不明なエラー'), 'error');
       }
       renderDataManagerGrid();
@@ -2643,7 +2669,7 @@ function callUpdateCellValue(sheetName, rowIndex, columnName, value, oldValue) {
       showToast('通信エラー（updateCellValue）: ' + err.message, 'error');
       renderDataManagerGrid();
     })
-    .updateCellValue(sheetName, rowIndex, columnName, value, rowIdentityOf(sheetName, rowIndex));
+    .updateCellValue(sheetName, rowIndex, columnName, value, rowIdentityOf(sheetName, rowIndex), cachedCellValue(sheetName, rowIndex, columnName));
 }
 
 // 保存後にサーバーから返る行データには、ダッシュボード読み込み時にだけ付ける項目
