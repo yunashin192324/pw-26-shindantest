@@ -1,183 +1,168 @@
-/* 診断ロジックとデータの検証。実行: node --test tests/ */
+/* 診断ロジックとデータの検証。実行: node --test tests/logic.test.js */
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
 
 const base = path.join(__dirname, '..', 'js');
-require(path.join(base, 'data', 'venues.js'));
-require(path.join(base, 'data', 'venue-extras.js'));
-require(path.join(base, 'data', 'questions.js'));
+['venues', 'venue-extras', 'questions'].forEach(f => require(path.join(base, 'data', f + '.js')));
+require(path.join(base, 'config.js'));
 const L = require(path.join(base, 'logic.js'));
-const { DATA, QUESTIONS, EXTRAS } = globalThis.VENUE_DIAG;
+const { DATA, QUESTIONS, EXTRAS, CONFIG } = globalThis.VENUE_DIAG;
+const M = L.prepare(DATA, EXTRAS, CONFIG);
 
-const byName = Object.fromEntries(DATA.venues.map(v => [v.name, v]));
-const run = a => L.diagnose(DATA, QUESTIONS, a);
+const byName = Object.fromEntries(M.venues.map(v => [v.name, v]));
+const run = a => L.diagnose(M, QUESTIONS, a);
+const flowIds = a => L.evaluateFlow(M, QUESTIONS, a).steps.map(s => s.q.id);
 const names = list => list.map(r => r.venue.name);
-const NONE = { kids: 'no', access: 'any', scenery: ['none'], stay: ['none'], focus: ['none'] };
 
-test('データ件数: 式場51件・カテゴリ19件', () => {
-  assert.equal(DATA.venues.length, 51);
-  assert.equal(DATA.categories.length, 19);
-  assert.equal(DATA.venues.reduce((n, v) => n + v.categories.length, 0), 327);
+test('データ件数: 式場51件・カテゴリ19件・付与327個', () => {
+  assert.equal(M.venues.length, 51);
+  assert.equal(M.categories.length, 19);
+  assert.equal(M.venues.reduce((n, v) => n + v.excel.length, 0), 327);
 });
 
-test('データと質問の整合性にエラー・警告がない', () => {
-  const r = L.validate(DATA, QUESTIONS);
+test('データ・質問の整合性にエラーがない（未使用カテゴリは警告のみ）', () => {
+  const r = L.validate(M, QUESTIONS);
   assert.deepEqual(r.errors, []);
-  assert.deepEqual(r.warnings, []);
+  r.warnings.forEach(w => assert.match(w, /どの質問でも使われていません/));
 });
 
-test('Excelの全19カテゴリが、いずれか1つの選択肢にちょうど1回対応している', () => {
-  const used = [];
-  QUESTIONS.forEach(q => (q.opts || []).forEach(o => used.push(...(o.categories || []))));
-  assert.deepEqual([...used].sort(), [...DATA.categories].sort());
-});
-
-test('追加情報ファイルのキーは、すべて実在する式場名', () => {
+test('全式場にエリアと地域が設定されている', () => {
+  const count = {};
+  M.venues.forEach(v => { assert.ok(v.region, v.name); count[v.region] = (count[v.region] || 0) + 1; });
+  assert.deepEqual(count, { hawaii: 14, okinawa: 14, guam: 5, bali: 10, europe: 3, cairns: 2, nz: 1, maldives: 1, hokkaido: 1 });
   Object.keys(EXTRAS).forEach(k => assert.ok(byName[k], '存在しない式場名: ' + k));
 });
 
 test('Excelの代表的な行が正しく取り込まれている', () => {
-  assert.deepEqual(byName['プルメリアガーデン'].categories, ['ガーデンがある', '海が見える', 'アットホーム', 'パーティ会場併設', '自然豊か']);
-  assert.deepEqual(byName['ディズニー・フェアリーテール・ウエディング・アウラニ'].categories,
-    ['ガーデンがある', '海が見える', 'ビーチが目の前', 'アットホーム', 'ホテル内', 'パーティ会場併設', 'キャラクターと一緒']);
-  assert.deepEqual(byName['星野リゾート トマム 水の教会'].categories,
+  assert.deepEqual(byName['プルメリアガーデン'].excel, ['ガーデンがある', '海が見える', 'アットホーム', 'パーティ会場併設', '自然豊か']);
+  assert.deepEqual(byName['星野リゾート トマム 水の教会'].excel,
     ['ガーデンがある', '食事がおいしい', 'ホテル内', 'パーティ会場併設', 'フライト時間が短い', '時差がない', '自然豊か', '子供と一緒']);
-  assert.equal(byName['ザ・プライベート・ガーデン・アロハ・ケ・アクア'].row, 8); // 半角の中点（･）を全角（・）に統一済み
+  assert.equal(byName['ザ・プライベート・ガーデン・アロハ・ケ・アクア'].row, 8);
 });
 
-test('条件をすべて「こだわらない」にすると、おすすめを出さない', () => {
-  const d = run(NONE);
-  assert.equal(d.status, 'no_conditions');
-  assert.equal(d.recommended.length, 0);
+test('追加情報から作る特徴（ご回答の内容）', () => {
+  const f = n => byName[n].features;
+  assert.ok(f('ザ・テラス バイ・ザ・シー').includes('内観：白系') && f('ザ・テラス バイ・ザ・シー').includes('内観：茶系'));
+  assert.ok(f('ザ・モアナチャペル').includes('ワイキキから30分圏内'));          // ホテル内
+  assert.ok(!f('コオリナ・チャペル・プレイス・オブ・ジョイ').includes('ワイキキから30分圏内')); // 60分程度
+  assert.ok(f('ブルーアステール').includes('独立型'));                         // ホテル内なし
+  assert.ok(!f('ジュエル・バイ・ザ・シー').includes('独立型'));
+  assert.ok(f('サザンチャペル キラナリゾート沖縄').includes('立地：南部'));
+  assert.ok(f('コンラッド インフィニティ').includes('立地：ベノア'));
+  assert.ok(f('アメリカンチャーチ').includes('撮影：エッフェル塔'));
+  assert.ok(f('プルメリアガーデン').includes('挙式：ガーデン') && !f('プルメリアガーデン').includes('挙式：チャペル'));
 });
 
-test('パターンA: 子連れ・時差なし・海/ビーチ・パーティ・コスパ（最重視=ビーチが目の前）', () => {
-  const d = run({ kids: 'yes', access: 'nojetlag', scenery: ['seaview', 'beach'], stay: ['party'], focus: ['cost'], priority: 'ビーチが目の前' });
+test('地域が決まっていれば、その地域の質問だけが出る', () => {
+  assert.deepEqual(flowIds({ region: 'hawaii' }), ['region', 'kids', 'hawaiiStyle', 'hawaiiMove', 'focus']);
+  assert.deepEqual(flowIds({ region: 'europe' }), ['region', 'europeGlass', 'europeSpot']);   // 子連れ・こだわりは違いが出ないため省略
+  assert.deepEqual(flowIds({ region: 'maldives' }), ['region']);                             // 1件のみ
+  assert.deepEqual(flowIds({ region: 'okinawa', okinawaIsland: 'ishigaki' }), ['region', 'okinawaIsland']);
+});
+
+test('地域が未定なら、日数とお子さまの有無でおすすめの地域を出す', () => {
+  const pick = a => L.evaluateFlow(M, QUESTIONS, a).steps.find(s => s.q.id === 'regionPick').opts.map(o => o.v);
+  assert.deepEqual(pick({ region: 'undecided', kids: 'yes', days: 3 }), ['guam', 'okinawa', 'hokkaido']);
+  assert.deepEqual(pick({ region: 'undecided', kids: 'yes', days: 6 }), ['guam', 'okinawa', 'bali', 'hawaii', 'cairns', 'hokkaido']);
+  assert.deepEqual(pick({ region: 'undecided', kids: 'no', days: 8 }), CONFIG.regions.map(r => r.id));
+  assert.equal(run({ region: 'undecided', kids: 'no', days: 3 }).status, 'no_region');
+});
+
+test('ハワイ：白系の海の見えるチャペル・ビーチ・ホテル内 → モアナ', () => {
+  const d = run({ region: 'hawaii', kids: 'no', hawaiiStyle: 'chapelWhite', hawaiiView: 'beach', hawaiiMove: 'hotel', focus: ['none'] });
   assert.equal(d.status, 'ok');
-  assert.equal(d.conditions.length, 6);
-  // 6条件すべてに該当するのはこの2式場のみ（同順位、掲載順）
-  assert.deepEqual(names(d.recommended.slice(0, 2)), ['ザ・サーフ ビーチサイドテラス', 'ホテルアオ石垣']);
-  assert.equal(d.recommended[0].rank, 1); assert.equal(d.recommended[1].rank, 1);
-  assert.equal(d.recommended[0].matchCount, 6);
-  assert.equal(d.recommended[2].matchCount, 5);
+  assert.equal(d.recommended[0].venue.name, 'ザ・モアナチャペル');
+  d.recommended.forEach(r => assert.ok(r.venue.categories.includes('内観：白系') && r.venue.categories.includes('挙式：チャペル')));
 });
 
-test('パターンB: 大人のみ・ガーデン/自然・教会・ヴィラ・衣裳（最重視なし）', () => {
-  const d = run({ kids: 'no', access: 'any', scenery: ['garden', 'nature', 'church'], stay: ['villa'], focus: ['dress'] });
-  assert.equal(d.priority, null);
-  assert.deepEqual(names(d.recommended.filter(r => r.rank === 1)), [
-    'ウブドフォレスト アット フォーシーズンズ サヤン', 'ウォーターフォールウェディング',
-    'フォーシーズンズ ランダギラーバル ウェディング']);
-  d.recommended.filter(r => r.rank === 1).forEach(r => assert.equal(r.matchCount, 4));
-  // 同じ4件一致でも、一致が2つの質問にしかまたがらないため4位
-  assert.equal(d.recommended[3].venue.name, 'チャペル・バイ・ザ・レイク');
-  assert.equal(d.recommended[3].rank, 4);
+test('ハワイ：教会・アットホーム → キャルバリー、次にセントアンドリュース（教会以外は出さない）', () => {
+  const d = run({ region: 'hawaii', kids: 'no', hawaiiStyle: 'church', hawaiiChurch: 'athome', hawaiiMove: 'any', focus: ['none'] });
+  assert.deepEqual(names(d.recommended), ['キャルバリー・バイ・ザ・シー教会', 'セント・アンドリュース・カテドラル教会 大聖堂']);
 });
 
-test('パターンC: キャラクターを最重視すると、唯一該当する式場が1位', () => {
-  const d = run({ kids: 'yes', access: 'any', scenery: ['none'], stay: ['hotel'], focus: ['character'], priority: 'キャラクターと一緒' });
-  assert.equal(d.recommended[0].venue.name, 'ディズニー・フェアリーテール・ウエディング・アウラニ');
-  assert.equal(d.recommended[0].rank, 1);
-  assert.equal(d.recommended[0].tied, false);
-  assert.equal(d.priorityCount, 1);
+test('ハワイ：ガーデン・30分圏内・ガーデンパーティ → 同点2件は人気順', () => {
+  const d = run({ region: 'hawaii', kids: 'no', hawaiiStyle: 'garden', hawaiiMove: 'near', focus: ['gardenParty'] });
+  assert.deepEqual(names(d.recommended.slice(0, 2)), ['プルメリアガーデン', 'アイネスヴィラノッツェ ワイキキレイア']);
+  assert.ok(d.recommended[0].tied && d.recommended[1].tied);
 });
 
-test('パターンE: 世界遺産のみ選択 → 該当する2式場だけを同順位でおすすめ', () => {
-  const d = run(Object.assign({}, NONE, { scenery: ['heritage'] }));
-  assert.deepEqual(names(d.recommended), ['ヒルトン ブルーホライズン', 'アラマンダ グレートバリアリーフチャペル']);
-  assert.ok(d.recommended.every(r => r.rank === 1 && r.tied));
+test('沖縄本島：恩納村・読谷を最重視 → 該当する式場が上位を占める', () => {
+  const d = run({ region: 'okinawa', okinawaIsland: 'main', okinawaLocation: 'resort', resortStyle: 'chapelWhite', place: ['beach'], focus: ['food'], priority: '立地：恩納村・読谷' });
+  assert.equal(d.priority, '立地：恩納村・読谷');
+  assert.equal(d.recommended[0].venue.name, 'ザ・ヨミタンリゾート アクアグレイス・チャペル');
+  const firstNon = d.recommended.findIndex(r => !r.priorityMatch);
+  if (firstNon !== -1) d.recommended.slice(firstNon).forEach(r => assert.equal(r.priorityMatch, false));
 });
 
-test('最重視の条件は、同じ条件を選んでも最重視しない場合より順位に強く効く', () => {
-  const a = { kids: 'no', access: 'any', scenery: ['church', 'glass'], stay: ['none'], focus: ['dress'] };
-  const plain = run(a);
-  const prio = run(Object.assign({}, a, { priority: 'ステンドグラスがある' }));
-  // 最重視なし: 教会・大聖堂＋衣裳（2件一致、ステンドグラスなし）のチャペル・バイ・ザ・レイクは、ステンドグラスのみ（1件一致）の式場より上
-  const pos = (d, n) => names(d.recommended).indexOf(n);
-  assert.ok(pos(plain, 'チャペル・バイ・ザ・レイク') < pos(plain, 'ザ・プライベート・ガーデン・アロハ・ケ・アクア'));
-  // 最重視=ステンドグラス: 該当式場がすべて上位に来る
-  assert.ok(pos(prio, 'チャペル・バイ・ザ・レイク') > pos(prio, 'ザ・プライベート・ガーデン・アロハ・ケ・アクア'));
+test('沖縄：宮古島・茶系チャペル → 宮古島チャペル／石垣島 → ホテルアオ石垣（エリアの式場として案内）', () => {
+  assert.equal(run({ region: 'okinawa', okinawaIsland: 'miyako', resortStyle: 'chapelBrown' }).recommended[0].venue.name, '宮古島チャペル');
+  const d = run({ region: 'okinawa', okinawaIsland: 'ishigaki' });
+  assert.equal(d.status, 'region_only');
+  assert.deepEqual(names(d.recommended), ['ホテルアオ石垣']);
 });
 
-test('最重視が無効な値（選んだ条件に無い）の場合は無視される', () => {
-  const d = run({ kids: 'yes', access: 'short', scenery: ['none'], stay: ['none'], focus: ['none'], priority: '世界遺産' });
-  assert.equal(d.priority, null);
+test('グアム：ガーデン → クラウンプラザガーデンのみ', () => {
+  assert.deepEqual(names(run({ region: 'guam', resortStyle: 'garden' }).recommended), ['クラウンプラザガーデン']);
 });
 
-/* 網羅テスト: すべての回答の組み合わせについて、独立に書いた判定と結果が一致するか */
-function allCombos() {
-  const qs = QUESTIONS.filter(q => q.type !== 'priority');
-  const choices = qs.map(q => {
-    if (q.type === 'single') return q.opts.map(o => o.v);
-    const real = q.opts.filter(o => !o.exclusive).map(o => o.v);
-    const subsets = [['none']];
-    for (let m = 1; m < (1 << real.length); m++) subsets.push(real.filter((_, i) => m & (1 << i)));
-    return subsets;
-  });
-  const out = [];
-  (function rec(i, acc) {
-    if (i === qs.length) { out.push(acc); return; }
-    choices[i].forEach(c => rec(i + 1, Object.assign({}, acc, { [qs[i].id]: c })));
-  })(0, {});
-  return out;
+test('ヨーロッパ：ステンドグラス重視はフィレンツェ→パリ、コロッセオはローマ', () => {
+  assert.deepEqual(names(run({ region: 'europe', europeGlass: 'yes', europeSpot: 'any' }).recommended.slice(0, 2)), ['セント・ジェームス教会', 'アメリカンチャーチ']);
+  assert.equal(run({ region: 'europe', europeGlass: 'no', europeSpot: 'colosseum' }).recommended[0].venue.name, 'セント・ポールズ・ウィズ イン・ザ・ウォールズ教会');
+  assert.equal(run({ region: 'europe', europeGlass: 'no', europeSpot: 'eiffel' }).recommended[0].venue.name, 'アメリカンチャーチ');
+});
+
+test('モルディブ：質問なしでその式場を案内', () => {
+  const d = run({ region: 'maldives' });
+  assert.equal(d.status, 'region_only');
+  assert.deepEqual(names(d.recommended), ['フォーシーズンズ ランダギラーバル ウェディング']);
+});
+
+/* 無作為な回答（各質問で、表示された選択肢から選ぶ）を多数作り、別に書いた判定と比べる */
+function randomAnswers(seed) {
+  let x = seed;
+  const rnd = n => { x = (x * 1103515245 + 12345) % 2147483648; return x % n; };
+  const a = {};
+  for (let guard = 0; guard < 30; guard++) {
+    const steps = L.evaluateFlow(M, QUESTIONS, a).steps;
+    const next = steps.find(s => a[s.q.id] === undefined);
+    if (!next) break;
+    const opts = next.opts;
+    if (next.q.type === 'multi') {
+      const real = opts.filter(o => !o.exclusive);
+      const pick = real.filter(() => rnd(3) === 0).filter((o, i, arr) => !o.group || arr.findIndex(p => p.group === o.group) === i);
+      a[next.q.id] = pick.length ? pick.map(o => o.v) : [opts.find(o => o.exclusive).v];
+    } else a[next.q.id] = opts[rnd(opts.length)].v;
+  }
+  return a;
 }
 
 function reference(a) {
-  // 選択肢 → カテゴリ（質問定義を直接読む独立実装）
-  const conds = [];
-  QUESTIONS.forEach(q => (q.opts || []).forEach(o => {
-    const sel = Array.isArray(a[q.id]) ? a[q.id].includes(o.v) : a[q.id] === o.v;
-    if (sel) o.categories.forEach(c => conds.push([c, q.id]));
-  }));
-  const pr = conds.some(c => c[0] === a.priority) ? a.priority : null;
-  return DATA.venues.map(v => {
-    const hit = conds.filter(c => v.categories.includes(c[0]));
-    return { name: v.name, row: v.row, p: pr && v.categories.includes(pr) ? 1 : 0, m: hit.length, b: new Set(hit.map(h => h[1])).size };
-  }).filter(x => x.m > 0).sort((x, y) => y.p - x.p || y.m - x.m || y.b - x.b || x.row - y.row);
+  const f = L.evaluateFlow(M, QUESTIONS, a);
+  const conds = f.conditions.map(c => c.category);
+  const pr = f.shown.priority && conds.includes(a.priority) ? a.priority : null;
+  const tie = f.tieOrder || [];
+  const rows = f.pool.map(v => ({ v, p: pr && v.categories.includes(pr) ? 1 : 0, m: conds.filter(c => v.categories.includes(c)).length,
+    t: tie.includes(v.name) ? tie.indexOf(v.name) : Infinity }));
+  rows.sort((x, y) => y.p - x.p || y.m - x.m || (x.t - y.t || 0) || (x.v.order - y.v.order || 0) || x.v.row - y.v.row);
+  const hit = conds.length ? rows.filter(r => r.m > 0) : [];
+  return (hit.length ? hit : rows).map(r => r.v.name);
 }
 
-// 通常は「最重視なし」を全件、「最重視あり」を13件に1件の割合で検証（約40秒）。
-// FULL=1 node --test tests/ で全組み合わせ×全最重視を検証（約4分）。
-const FULL = process.env.FULL === '1';
-test('全回答パターンで、独立実装と順位が完全一致し、根拠のないおすすめが無い', () => {
-  const combos = allCombos();
-  assert.equal(combos.length, 2 * 3 * 256 * 16 * 16); // 393,216通り
-  let checked = 0;
-  combos.forEach((a, n) => {
-    const conds = L.collectConditions(QUESTIONS, a).map(c => c.category);
-    const prios = conds.length >= 2 && (FULL || n % 13 === 0) ? [undefined].concat(conds) : [undefined];
-    prios.forEach(p => {
-      const ans = Object.assign({}, a, p ? { priority: p } : {});
-      const d = run(ans);
-      const ref = reference(ans);
-      if (!conds.length) { assert.equal(d.status, 'no_conditions'); return; }
-      assert.deepEqual(names(d.recommended), ref.map(r => r.name));
-      d.recommended.forEach((r, i) => {
-        assert.ok(r.matchCount > 0);
-        if (i > 0) {
-          const prev = d.recommended[i - 1];
-          const same = prev.priorityMatch === r.priorityMatch && prev.matchCount === r.matchCount && prev.breadth === r.breadth;
-          assert.equal(r.rank === prev.rank, same);
-        }
-      });
-      checked++;
+test('無作為な回答3000通りで、別実装と順位が一致し、地域外・絞り込み外の式場を出さない', () => {
+  let ok = 0;
+  for (let s = 1; s <= 3000; s++) {
+    const a = randomAnswers(s);
+    const d = run(a);
+    if (d.status === 'no_region') continue;
+    assert.deepEqual(names(d.recommended), reference(a), JSON.stringify(a));
+    d.recommended.forEach(r => {
+      assert.equal(r.venue.region, d.region);
+      d.conditions.filter(c => c.required).forEach(c => assert.ok(r.venue.categories.includes(c.category)));
+      if (d.status === 'ok') assert.ok(r.matchCount > 0);
     });
-  });
-  assert.ok(checked > 10000, '検証件数: ' + checked);
-});
-
-test('同点時の表示順：一致具合が同じ式場どうしの並びだけが変わる', () => {
-  const a = Object.assign({}, NONE, { scenery: ['heritage'] });
-  const base = run(a);
-  assert.deepEqual(names(base.recommended), ['ヒルトン ブルーホライズン', 'アラマンダ グレートバリアリーフチャペル']);
-  const d = L.diagnose(DATA, QUESTIONS, a, { order: { 'アラマンダ グレートバリアリーフチャペル': 1 } });
-  assert.deepEqual(names(d.recommended), ['アラマンダ グレートバリアリーフチャペル', 'ヒルトン ブルーホライズン']);
-  assert.ok(d.recommended.every(r => r.rank === 1 && r.tied));
-  // 一致数が多い式場は、表示順の数字に関係なく上のまま
-  const b = { kids: 'yes', access: 'nojetlag', scenery: ['seaview', 'beach'], stay: ['party'], focus: ['cost'], priority: 'ビーチが目の前' };
-  const d2 = L.diagnose(DATA, QUESTIONS, b, { order: { 'ジュエル・バイ・ザ・シー': 1, 'ホテルアオ石垣': 2 } });
-  assert.deepEqual(names(d2.recommended.slice(0, 2)), ['ホテルアオ石垣', 'ザ・サーフ ビーチサイドテラス']);
-  assert.ok(names(d2.recommended).indexOf('ジュエル・バイ・ザ・シー') > 1);
+    ok++;
+  }
+  assert.ok(ok > 2500, '検証件数: ' + ok);
 });

@@ -28,8 +28,14 @@ VENUE_COLS = [
     ("式場写真（ファイル名またはURL）", 36),
     ("写真の説明", 28),
     ("同点時の表示順（数字・小さいほど上）", 22),
+    ("挙式スタイル（チャペル・教会・ガーデン）", 22),
+    ("内観の色（白系・茶系）", 16),
+    ("立地・地区", 18),
+    ("ワイキキからの移動（ホテル内・30分圏内・60分程度）", 22),
+    ("ガーデンでパーティ（できる場合は○）", 18),
+    ("撮影スポット", 24),
 ]
-SCENES = ["開始画面"] + ["質問%d" % i for i in range(1, 7)] + ["読み込み中", "結果画面"]
+SCENES = ["開始画面", "質問画面", "読み込み中", "結果画面"]
 HEAD_FILL = PatternFill("solid", fgColor="1D3A3A")
 LOCK_FILL = PatternFill("solid", fgColor="EEEEEE")
 HEAD_FONT = Font(bold=True, color="FFFFFF")
@@ -82,6 +88,9 @@ def build(existing=None):
         "・「式場情報」シート：灰色の式場名は変更しないでください（診断データの式場名と照合します）。",
         "・空欄の項目は画面に表示されません。分からない項目は空欄のままにしてください。",
         "・写真は、Webで公開されている画像のURL（https://〜）か、公開フォルダ内のファイル名（例：images/plumeria.jpg）を入力します。",
+        "・「挙式スタイル」「内観の色」は、複数あるときは「・」で区切ります（例：チャペル・ガーデン）。",
+        "・「立地・地区」は質問の選択肢と同じ言葉で入力します（沖縄本島：南部／恩納村・読谷／宜野座・名護・北部、バリ島：ヌサドゥア／ベノアなど）。",
+        "・「ホテル内」が付いていない式場は、自動的に「独立型」として扱います。",
         "・「同点時の表示順」は、希望条件の一致具合が同じ式場どうしを並べる順番です（例：人気順）。小さい数字ほど上に表示します。",
         "　空欄の式場は、数字が入っている式場の後に、診断データの掲載順で並びます。一致具合が違う式場の順位は変わりません。",
         "・「背景写真」シート：各画面の背景に使う写真です。空欄の画面は写真なし（グラデーション）になります。",
@@ -98,7 +107,8 @@ def read_existing():
     venues = {}
     for row in ws.iter_rows(min_row=2, values_only=True):
         if row[0]:
-            venues[row[0]] = list(row[1:len(VENUE_COLS)])
+            vals = list(row[1:len(VENUE_COLS)])
+            venues[row[0]] = vals + [None] * (len(VENUE_COLS) - 1 - len(vals))
     scenes = {row[0]: row[1] for row in ws2.iter_rows(min_row=2, values_only=True) if row[0]}
     return {"venues": venues, "scenes": scenes}
 

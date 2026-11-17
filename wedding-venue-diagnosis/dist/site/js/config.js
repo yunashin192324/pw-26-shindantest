@@ -5,11 +5,27 @@
     // 「その他のおすすめ式場」に表示する最大件数
     maxAlternatives: 4,
 
+    // 国・地域。areaPrefixes は式場追加情報.xlsx の「エリア」の先頭文字。minDays はおすすめに入れる最低日数。
+    // 並び順は「国・地域を選ぶ」質問の表示順です。
+    regions: [
+      { id: 'hawaii', label: 'ハワイ（オアフ島）', areaPrefixes: ['ハワイ'], minDays: 6 },
+      { id: 'okinawa', label: '沖縄', areaPrefixes: ['沖縄'], minDays: 3 },
+      { id: 'guam', label: 'グアム', areaPrefixes: ['グアム'], minDays: 3 },
+      { id: 'bali', label: 'バリ島', areaPrefixes: ['バリ島'], minDays: 6 },
+      { id: 'cairns', label: 'オーストラリア（ケアンズ）', areaPrefixes: ['オーストラリア'], minDays: 6 },
+      { id: 'europe', label: 'ヨーロッパ（パリ・フィレンツェ・ローマ）', areaPrefixes: ['フランス', 'イタリア'], minDays: 8 },
+      { id: 'maldives', label: 'モルディブ', areaPrefixes: ['モルディブ'], minDays: 8 },
+      { id: 'nz', label: 'ニュージーランド', areaPrefixes: ['ニュージーランド'], minDays: 8 },
+      { id: 'hokkaido', label: '北海道', areaPrefixes: ['北海道'], minDays: 3 }
+    ],
+    // お子さまが参列する場合のおすすめ順（ここに無い地域は、その後ろに上の並び順で続きます）
+    kidsRegionOrder: ['guam', 'okinawa', 'bali', 'hawaii', 'cairns'],
+
     // 各画面の背景写真。通常は source/式場追加情報.xlsx の「背景写真」シートで設定します（そちらが優先）。
     // 空欄の場合は写真なしのグラデーション背景になります。
     sceneImages: {
       start: '',
-      question: ['', '', '', '', '', ''],
+      question: '',
       loading: '',
       result: ''
     },

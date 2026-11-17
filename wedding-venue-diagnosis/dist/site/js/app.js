@@ -5,10 +5,9 @@
   var NS = window.VENUE_DIAG || {};
   var DATA = NS.DATA, QUESTIONS = NS.QUESTIONS || [], CONFIG = NS.CONFIG || {}, EXTRAS = NS.EXTRAS || {}, logic = NS.logic;
   var SCENES = NS.SCENE_IMAGES || CONFIG.sceneImages || {};
-  var TIE_ORDER = {};
-  Object.keys(EXTRAS).forEach(function (n) { if (typeof EXTRAS[n].order === 'number') TIE_ORDER[n] = EXTRAS[n].order; });
+  var MODEL = logic && DATA ? logic.prepare(DATA, EXTRAS, CONFIG) : null;
 
-  var answers = {}, flow = [], curIdx = 0, busy = false, lastDiag = null, loadingTimers = [];
+  var answers = {}, steps = [], curIdx = 0, busy = false, lastDiag = null, loadingTimers = [];
 
   function $(id) { return document.getElementById(id); }
   function esc(s) {
@@ -18,32 +17,30 @@
   }
   function pad2(n) { return (n < 10 ? '0' : '') + n; }
   function reducedMotion() { return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
-  function extrasOf(v) { return EXTRAS[v.name] || {}; }
+  function extrasOf(v) { return v.extras || {}; }
   function safeUrl(u) { u = String(u || '').trim(); return u && !/^(javascript|data|vbscript):/i.test(u) ? u : ''; }
 
-  /* ───── 質問の流れ（分岐） ───── */
-  function priorityQuestionIndex() {
-    for (var i = 0; i < QUESTIONS.length; i++) if (QUESTIONS[i].type === 'priority') return i;
-    return -1;
+  /* ───── 質問の流れ（分岐） ─────
+     表示する質問と選択肢は logic.evaluateFlow が回答から決める。
+     表示されなくなった質問・選択肢の回答は取り除く（取り除くと流れが変わるため、変化がなくなるまで繰り返す）。 */
+  function computeSteps() {
+    for (var guard = 0; guard < 20; guard++) {
+      var f = logic.evaluateFlow(MODEL, QUESTIONS, answers), changed = false, byId = {};
+      f.steps.forEach(function (st) { byId[st.q.id] = st; });
+      Object.keys(answers).forEach(function (k) {
+        var st = byId[k];
+        if (!st) { delete answers[k]; changed = true; return; }
+        var vals = st.opts.map(function (o) { return o.v; });
+        if (Array.isArray(answers[k])) {
+          var kept = answers[k].filter(function (v) { return vals.indexOf(v) !== -1; });
+          if (kept.length !== answers[k].length) { if (kept.length) answers[k] = kept; else delete answers[k]; changed = true; }
+        } else if (vals.indexOf(answers[k]) === -1) { delete answers[k]; changed = true; }
+      });
+      if (!changed) return f.steps;
+    }
+    return logic.evaluateFlow(MODEL, QUESTIONS, answers).steps;
   }
-  function computeFlow() {
-    var list = [];
-    QUESTIONS.forEach(function (q, i) { if (q.type !== 'priority') list.push(i); });
-    var pi = priorityQuestionIndex();
-    if (pi !== -1 && logic.collectConditions(QUESTIONS, answers).length >= 2) list.push(pi);
-    else delete answers.priority;
-    return list;
-  }
-  function currentQ() { return QUESTIONS[flow[curIdx]]; }
-
-  /* 重視条件の質問は、選ばれた条件から選択肢を作る */
-  function optionsFor(q) {
-    if (q.type !== 'priority') return q.opts;
-    var conds = logic.collectConditions(QUESTIONS, answers);
-    var opts = conds.map(function (c) { return { v: c.category, main: c.label, sub: '該当カテゴリ：' + c.category }; });
-    if (q.noneOption) opts.push(q.noneOption);
-    return opts;
-  }
+  function currentQ() { return steps[curIdx].q; }
 
   /* ───── 画面切り替え ───── */
   function showScreen(id, anim) {
@@ -70,10 +67,10 @@
 
   /* ───── 質問画面 ───── */
   function renderQ(dir) {
-    flow = computeFlow();
-    if (curIdx >= flow.length) curIdx = flow.length - 1;
-    var q = currentQ(), total = flow.length, step = curIdx + 1;
-    var opts = optionsFor(q);
+    steps = computeSteps();
+    if (curIdx >= steps.length) curIdx = steps.length - 1;
+    var q = currentQ(), total = steps.length, step = curIdx + 1;
+    var opts = steps[curIdx].opts;
 
     $('q-step').textContent = 'QUESTION ' + pad2(step);
     $('q-frac').textContent = step + ' / ' + total;
@@ -83,8 +80,8 @@
     $('q-title').textContent = q.title;
     $('q-sub').textContent = q.sub || '';
     var bg = $('bg-q');
-    bg.setAttribute('data-tone', String((flow[curIdx] % 6) + 1));
-    setBg(bg, (SCENES.question || [])[flow[curIdx]]);
+    bg.setAttribute('data-tone', String((QUESTIONS.indexOf(q) % 6) + 1));
+    setBg(bg, Array.isArray(SCENES.question) ? SCENES.question[0] : SCENES.question);
 
     var $s = $('opts-single'), $m = $('opts-multi'), $n = $('next-btn'), $c = $('multi-count');
     $s.innerHTML = ''; $m.innerHTML = '';
@@ -117,7 +114,7 @@
     } else {
       $s.hidden = false; $m.hidden = true; $c.hidden = true;
       var hasAnswer = opts.some(function (o) { return answers[q.id] === o.v; });
-      if (q.type === 'priority' && !hasAnswer) delete answers[q.id];
+      if (!hasAnswer) delete answers[q.id];
       $n.hidden = !hasAnswer; $n.disabled = !hasAnswer;
       opts.forEach(function (opt, k) {
         var b = document.createElement('button');
@@ -142,11 +139,12 @@
         $s.appendChild(b);
       });
     }
-    $n.textContent = curIdx === flow.length - 1 ? '診断する' : '次へ';
+    $n.textContent = curIdx === steps.length - 1 ? '診断する' : '次へ';
     if (!$('screen-q').classList.contains('active') || dir) showScreen('screen-q', dir === 'left' ? 'anim-left' : 'anim-right');
   }
 
-  function isExclusive(q, v) { return q.opts.some(function (o) { return o.v === v && o.exclusive; }); }
+  function isExclusive(q, v) { return (q.opts || []).some(function (o) { return o.v === v && o.exclusive; }); }
+  function groupOf(q, v) { for (var i = 0; i < (q.opts || []).length; i++) if (q.opts[i].v === v) return q.opts[i].group; return null; }
   function optText(q, v) { for (var i = 0; i < q.opts.length; i++) if (q.opts[i].v === v) return q.opts[i].text; return ''; }
 
   function toggleMulti(q, opt) {
@@ -155,7 +153,7 @@
     if (i !== -1) sel.splice(i, 1);
     else if (opt.exclusive) sel = [opt.v];
     else {
-      sel = sel.filter(function (v) { return !isExclusive(q, v); });
+      sel = sel.filter(function (v) { return !isExclusive(q, v) && !(opt.group && groupOf(q, v) === opt.group); });
       sel.push(opt.v);
     }
     // 選択肢の並び順で保存（回答の再現性のため）
@@ -179,8 +177,8 @@
   function goNext() {
     var q = currentQ();
     if (!answered(q)) return;
-    flow = computeFlow();
-    if (curIdx < flow.length - 1) { curIdx++; renderQ('right'); }
+    steps = computeSteps();
+    if (curIdx < steps.length - 1) { curIdx++; renderQ('right'); }
     else showLoading();
   }
 
@@ -214,7 +212,7 @@
   function later(fn, ms) { loadingTimers.push(setTimeout(fn, ms)); }
 
   function showLoading() {
-    lastDiag = logic.diagnose(DATA, QUESTIONS, answers, { order: TIE_ORDER });
+    lastDiag = logic.diagnose(MODEL, QUESTIONS, answers);
     showScreen('screen-loading', 'anim-up');
     setBg($('bg-loading'), SCENES.loading);
     var slot = $('loading-slot'), inner = $('slot-inner'), fin = $('loading-final');
@@ -222,14 +220,14 @@
     fin.style.display = 'none'; fin.classList.remove('visible'); slot.style.display = 'block';
     inner.style.transform = 'translateY(0)';
 
-    var top = lastDiag.status === 'ok' ? lastDiag.recommended[0].venue.name : '';
+    var top = lastDiag.recommended.length ? lastDiag.recommended[0].venue.name : '';
     if (!top || reducedMotion()) {
       inner.innerHTML = '';
       later(function () { renderResult(lastDiag); }, top ? 600 : 1200);
       return;
     }
-    var names = DATA.venues.map(function (v) { return v.name; });
-    var items = names.slice(0, 18).concat([top]);
+    var names = (lastDiag.pool.length > 3 ? lastDiag.pool : MODEL.venues).map(function (v) { return v.name; });
+    var items = names.concat(names).slice(0, 14).concat([top]);
     inner.innerHTML = items.map(function (n) { return '<div class="loading-slot-item">' + esc(n) + '</div>'; }).join('');
     var idx = 0, max = items.length - 1;
     (function spin() {
@@ -247,13 +245,13 @@
   /* ───── 結果画面 ───── */
   function answerSummary(diag) {
     var tags = [];
-    flow.forEach(function (qi) {
-      var q = QUESTIONS[qi], a = answers[q.id];
+    steps.forEach(function (st) {
+      var q = st.q, a = answers[q.id];
       if (q.type === 'priority') {
         if (diag.priority) tags.push({ text: '最重視：' + diag.priority, prio: true });
         return;
       }
-      (q.opts || []).forEach(function (o) {
+      st.opts.forEach(function (o) {
         if (q.type === 'multi' ? (a || []).indexOf(o.v) !== -1 && !o.exclusive : a === o.v) tags.push({ text: o.main || o.text });
       });
     });
@@ -272,12 +270,10 @@
       return '<span class="summary-tag' + (t.prio ? ' is-priority' : '') + '">' + esc(t.text) + '</span>';
     }).join('');
 
-    if (D.status !== 'ok') {
+    if (D.status === 'no_region' || !D.recommended.length) {
       $('res-kicker').textContent = '診断結果';
-      $('res-name').textContent = D.status === 'no_conditions' ? '希望条件が選ばれていません' : '条件に合う式場が見つかりませんでした';
-      $('res-notice').innerHTML = '<div class="notice">' + (D.status === 'no_conditions'
-        ? 'すべての質問で「こだわらない」などを選ばれたため、式場を絞り込む手がかりがありませんでした。根拠のないおすすめは行わないため、順位は表示していません。<br><strong>気になる条件を1つ以上選んで、もう一度お試しください。</strong>'
-        : 'お選びいただいた条件に該当する式場は、登録データ上ありませんでした。<br><strong>条件を変えて、もう一度お試しください。</strong>') + '</div>';
+      $('res-name').textContent = '式場が見つかりませんでした';
+      $('res-notice').innerHTML = '<div class="notice">お選びいただいたエリアに、ご案内できる式場がありませんでした。<br><strong>エリアを変えて、もう一度お試しください。</strong></div>';
       renderConsult(null);
       $('share-row').hidden = true;
       showScreen('screen-result', 'anim-up');
@@ -289,21 +285,25 @@
     var topTies = D.recommended.filter(function (r) { return r.rank === top.rank; }).length;
     $('res-kicker').textContent = 'お二人におすすめの式場は';
     $('res-name').textContent = top.venue.name;
-    var badges = ['一致率 ' + top.rate + '%', '希望条件 ' + D.conditions.length + '件中 ' + top.matchCount + '件に該当'];
+    var badges = [D.regionLabel];
+    if (D.status === 'ok') badges.push('希望条件 ' + D.conditions.length + '件中 ' + top.matchCount + '件に該当');
     if (D.priority && top.priorityMatch) badges.push('最重視の条件に該当');
     $('res-badges').innerHTML = badges.map(function (b) { return '<span class="result-badge">' + esc(b) + '</span>'; }).join('');
 
     var notes = [];
-    if (topTies > 1) notes.push('同じ評価の式場が<strong>' + topTies + '件</strong>あります。同じ評価の式場は、おすすめの表示順に並べています。');
-    if (D.recommended.length <= 3) notes.push('お選びいただいた条件に1つでも該当する式場は<strong>' + D.recommended.length + '件</strong>でした。条件を減らすと、候補が広がります。');
+    if (D.status === 'region_only') notes.push(D.noMatch
+      ? 'ご希望の条件に該当する式場は、このエリアにありませんでした。このエリアの式場を人気の高い順にご案内しています。'
+      : 'このエリアの式場（' + D.recommended.length + '件）を、人気の高い順にご案内しています。');
+    else if (topTies > 1) notes.push('同じ評価の式場が<strong>' + topTies + '件</strong>あります。同じ評価の式場は、おすすめの表示順に並べています。');
+    if (D.status === 'ok' && D.recommended.length <= 3) notes.push('お選びいただいた条件に1つでも該当する式場は<strong>' + D.recommended.length + '件</strong>でした。条件を減らすと、候補が広がります。');
     if (D.priority && !D.priorityCount) notes.push('最も重視された「' + esc(D.priority) + '」に該当する式場は、登録データ上ありませんでした。');
     if (notes.length) $('res-notice').innerHTML = '<div class="notice">' + notes.join('<br>') + '</div>';
 
     $('res-main').innerHTML = mainSection(top, D);
     var alts = D.recommended.slice(1, 1 + (CONFIG.maxAlternatives || 4));
-    $('res-alt-wrap').innerHTML = '<div class="section-title"><span>その他のおすすめ式場</span></div>' + (alts.length
-      ? '<div class="alt-grid">' + alts.map(function (r) { return altCard(r, D); }).join('') + '</div>'
-      : '<p class="notice">ほかに、希望条件に該当する式場はありませんでした。</p>');
+    $('res-alt-wrap').innerHTML = alts.length
+      ? '<div class="section-title"><span>その他のおすすめ式場</span></div><div class="alt-grid">' + alts.map(function (r) { return altCard(r, D); }).join('') + '</div>'
+      : (D.status === 'ok' && D.pool.length > 1 ? '<div class="section-title"><span>その他のおすすめ式場</span></div><p class="notice">このエリアで、ほかに希望条件に該当する式場はありませんでした。</p>' : '');
     renderConsult(top);
 
     showScreen('screen-result', 'anim-up');
@@ -317,7 +317,7 @@
   function rankLabel(r) { return (r.tied ? '同率 ' : '') + 'No.' + r.rank; }
 
   function mainSection(r, D) {
-    var v = r.venue, ex = extrasOf(v);
+    var v = r.venue, ex = extrasOf(v), scored = D.status === 'ok';
     var rows = D.conditions.map(function (c) {
       var hit = v.categories.indexOf(c.category) !== -1;
       return '<tr><td>' + esc(c.category) + (D.priority === c.category ? '<span class="prio-mark">最重視</span>' : '') +
@@ -327,11 +327,11 @@
     var selected = D.conditions.map(function (c) { return c.category; });
     var img = safeUrl(ex.image);
     var meta = [ex.area, ex.address, ex.price ? ex.price + '（目安）' : ''].filter(Boolean).map(esc).join(' ／ ');
-    return '<div class="section-title"><span>最もおすすめの式場</span></div>' +
+    return '<div class="section-title"><span>最もおすすめの式場</span></div>' + (scored ?
       '<div class="matching"><div class="matching-row"><span class="matching-label">MATCHING SCORE</span><span class="matching-rate">' + r.rate + '%</span></div>' +
       '<div class="matching-track"><div class="matching-fill"></div></div>' +
       '<p class="matching-caption">希望条件 ' + D.conditions.length + '件中 ' + r.matchCount + '件に該当</p></div>' +
-      '<table class="cond-table"><caption>希望条件と、この式場の一致状況</caption><thead><tr><th scope="col">希望条件（カテゴリ）</th><th scope="col" style="text-align:right">この式場</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+      '<table class="cond-table"><caption>希望条件と、この式場の一致状況</caption><thead><tr><th scope="col">希望条件（カテゴリ）</th><th scope="col" style="text-align:right">この式場</th></tr></thead><tbody>' + rows + '</tbody></table>' : '') +
       '<div class="reason"><p class="reason-title">おすすめの理由</p>' + logic.buildReasons(r, D).map(function (l) { return '<p>' + esc(l) + '</p>'; }).join('') + '</div>' +
       '<article class="venue-card">' +
         '<div class="venue-card-band' + (img ? ' has-img' : '') + '">' + (img ? '<img src="' + esc(img) + '" alt="' + esc(ex.imageAlt || v.name) + '" onerror="this.remove()">' : '') +
@@ -349,11 +349,12 @@
   function altCard(r, D) {
     var hits = r.matched.map(function (c) { return c.category; });
     return '<button type="button" class="alt-card" data-detail="' + esc(r.venue.id) + '">' +
-      '<span class="alt-top"><span class="alt-rank">' + esc(rankLabel(r)) + '</span><span class="alt-pct">一致率 ' + r.rate + '%</span></span>' +
+      '<span class="alt-top"><span class="alt-rank">' + esc(rankLabel(r)) + '</span>' + (D.status === 'ok' ? '<span class="alt-pct">一致率 ' + r.rate + '%</span>' : '') + '</span>' +
       '<span class="alt-name">' + esc(r.venue.name) + '</span>' +
-      '<span class="alt-bar"><i style="width:' + r.rate + '%"></i></span>' +
-      '<span class="alt-hits"><b>該当：</b>' + esc(hits.join('・')) +
-      (D.priority ? '<br>最重視の条件：' + (r.priorityMatch ? '該当' : '登録なし') : '') + '</span>' +
+      (D.status === 'ok' ? '<span class="alt-bar"><i style="width:' + r.rate + '%"></i></span>' +
+        '<span class="alt-hits"><b>該当：</b>' + esc(hits.join('・')) +
+        (D.priority ? '<br>最重視の条件：' + (r.priorityMatch ? '該当' : '登録なし') : '') + '</span>'
+        : '<span class="alt-hits">' + esc(r.venue.area) + '</span>') +
       '<span class="alt-more">特徴の一覧を見る</span></button>';
   }
 
@@ -371,7 +372,7 @@
   var lastFocus = null;
   function openDetail(id) {
     var v = null;
-    for (var i = 0; i < DATA.venues.length; i++) if (DATA.venues[i].id === id) v = DATA.venues[i];
+    for (var i = 0; i < MODEL.venues.length; i++) if (MODEL.venues[i].id === id) v = MODEL.venues[i];
     if (!v) return;
     var ex = extrasOf(v);
     var selected = lastDiag && lastDiag.conditions ? lastDiag.conditions.map(function (c) { return c.category; }) : [];
@@ -379,13 +380,15 @@
     var url = safeUrl(ex.url);
     $('modal-box').innerHTML =
       '<div class="modal-head"><h3 class="modal-title" id="modal-title">' + esc(v.name) + '</h3><button type="button" class="modal-close" id="modal-close" aria-label="閉じる">×</button></div>' +
-      '<p class="modal-sub">登録されている特徴：' + v.categories.length + ' / ' + DATA.categories.length + 'カテゴリ' + (selected.length ? '（太字はあなたが選んだ条件）' : '') + '</p>' +
+      '<p class="modal-sub">診断.xlsx の特徴：' + v.excel.length + ' / ' + DATA.categories.length + 'カテゴリ' + (selected.length ? '（太字はあなたが選んだ条件）' : '') + '</p>' +
       (ex.description ? '<p class="venue-card-desc">' + esc(ex.description) + '</p>' : '') +
       (info.length ? '<div class="extras"><dl>' + info.map(function (p) { return '<dt>' + esc(p[0]) + '</dt><dd>' + esc(p[1]) + '</dd>'; }).join('') + '</dl></div>' : '') +
       '<div class="cat-grid">' + DATA.categories.map(function (c) {
-        var on = v.categories.indexOf(c) !== -1;
+        var on = v.excel.indexOf(c) !== -1;
         return '<div class="cat-item ' + (on ? 'on' : 'off') + (selected.indexOf(c) !== -1 ? ' sel' : '') + '"><span class="mk">' + (on ? '○' : '－') + '</span>' + esc(c) + '</div>';
       }).join('') + '</div>' +
+      (v.features.length ? '<span class="tag-label">追加情報の特徴（式場追加情報.xlsx）</span><div class="tags">' + v.features.map(function (c) {
+        return '<span class="tag' + (selected.indexOf(c) !== -1 ? ' hit' : '') + '">' + esc(c) + '</span>'; }).join('') + '</div>' : '') +
       (url ? '<a class="btn-solid" href="' + esc(url) + '" target="_blank" rel="noopener">式場の詳細ページへ</a>' : '') +
       '<p class="modal-note">○は診断用データ（' + esc(DATA.source && DATA.source.file || '') + '）に登録されている特徴です。「－」は登録がないことを示し、対応していないという意味ではありません。詳しくはスタッフにご確認ください。</p>';
     lastFocus = document.activeElement;
@@ -407,7 +410,7 @@
   }
   function pageUrl() { return location.href.split('#')[0].split('?')[0]; }
   function shareText() {
-    var name = lastDiag && lastDiag.status === 'ok' ? lastDiag.recommended[0].venue.name : '';
+    var name = lastDiag && lastDiag.recommended.length ? lastDiag.recommended[0].venue.name : '';
     return (CONFIG.shareText || '').replace('{name}', name);
   }
   function copyText(text) {
@@ -426,7 +429,7 @@
 
   /* ───── 初期化 ───── */
   function init() {
-    var check = logic ? logic.validate(DATA, QUESTIONS) : { errors: ['診断プログラムが読み込めませんでした'], warnings: [] };
+    var check = MODEL ? logic.validate(MODEL, QUESTIONS) : { errors: ['診断プログラムが読み込めませんでした'], warnings: [] };
     if (check.errors.length) {
       var box = $('data-error');
       box.hidden = false;
@@ -434,7 +437,7 @@
       $('start-btn').disabled = true;
       return;
     }
-    $('pill-count').textContent = DATA.venues.length + '式場から診断';
+    $('pill-count').textContent = MODEL.venues.filter(function (v) { return v.region; }).length + '式場から診断';
     var hl = CONFIG.headerLink;
     if (hl && safeUrl(hl.url)) { $('header-link').href = hl.url; $('header-link-label').textContent = hl.label; $('header-link').hidden = false; }
     setBg($('bg-start'), SCENES.start);
@@ -458,7 +461,7 @@
   }
 
   // テスト・確認用（画面操作には影響しない）
-  NS.app = { tieOrder: TIE_ORDER, getAnswers: function () { return JSON.parse(JSON.stringify(answers)); }, getLastDiagnosis: function () { return lastDiag; } };
+  NS.app = { model: MODEL, getAnswers: function () { return JSON.parse(JSON.stringify(answers)); }, getLastDiagnosis: function () { return lastDiag; } };
 
   init();
 })();
