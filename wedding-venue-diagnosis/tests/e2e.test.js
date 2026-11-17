@@ -95,7 +95,7 @@ for (const file of TARGETS) {
       await waitResult(page);
       const ans = await answers(page);
       assert.equal(await page.textContent('#res-name'), (await expected(page, ans))[0]);
-      assert.equal(await page.textContent('#res-name'), 'ザ・モアナチャペル');
+      assert.equal(await page.textContent('#res-name'), 'コオリナ・チャペル・プレイス・オブ・ジョイ');
       assert.match(await page.textContent('#res-badges'), /ハワイ（オアフ島）/);
       assert.equal(await page.locator('.cond-table tbody tr').count(), 6);
       assert.match(await page.locator('.venue-card-meta').textContent(), /ハワイ・オアフ島.*基本挙式料金 408,000円〜（目安）/);

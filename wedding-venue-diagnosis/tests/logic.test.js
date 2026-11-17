@@ -16,10 +16,10 @@ const run = a => L.diagnose(M, QUESTIONS, a);
 const flowIds = a => L.evaluateFlow(M, QUESTIONS, a).steps.map(s => s.q.id);
 const names = list => list.map(r => r.venue.name);
 
-test('データ件数: 式場51件・カテゴリ19件・付与327個', () => {
+test('データ件数: 式場51件・カテゴリ19件・付与326個', () => {
   assert.equal(M.venues.length, 51);
   assert.equal(M.categories.length, 19);
-  assert.equal(M.venues.reduce((n, v) => n + v.excel.length, 0), 327);
+  assert.equal(M.venues.reduce((n, v) => n + v.excel.length, 0), 326);
 });
 
 test('データ・質問の整合性にエラーがない（未使用カテゴリは警告のみ）', () => {
