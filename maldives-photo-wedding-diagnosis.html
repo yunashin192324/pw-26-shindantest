@@ -1215,6 +1215,9 @@ function scoreHotels() {
     });
   });
 
+  // チャペルを選んだ場合は、チャペルフォトができるホテルを必ず上位に並べる
+  const wantsChapel = (weights.chapel || 0) > 0;
+
   return HOTELS.map(h => {
     let score = 0, max = 0;
 
@@ -1247,7 +1250,13 @@ function scoreHotels() {
 
     const pct = max > 0 ? Math.round(score / max * 100) : 0;
     return { ...h, score, pct, mantaOK, whaleOK };
-  }).sort((a, b) => b.score - a.score);
+  }).sort((a, b) => {
+    if (wantsChapel) {
+      const d = (b.f.chapel ? 1 : 0) - (a.f.chapel ? 1 : 0);
+      if (d !== 0) return d;
+    }
+    return b.score - a.score;
+  });
 }
 
 // ─────────────────────────────────────────────
