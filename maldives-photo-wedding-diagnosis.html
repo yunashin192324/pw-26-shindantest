@@ -779,6 +779,7 @@
 //   true      … パンフレットで「＊」印
 //   '文字列'  … 条件付き（例：特定の客室カテゴリーのみ）。チップに注記として表示
 //   'extra'   … オールインクルーシブ「追加有」（追加料金で選択可）
+//   chapel    … チャペルフォトが可能（パンフレット外の情報。社内確認にもとづき手動で設定）
 // manta：マンタポイントが近い月（1〜12）。[] はパンフレットに記載なし
 // ─────────────────────────────────────────────
 
@@ -938,17 +939,18 @@ const HOTELS = [
     name: 'ギリ・ランカンフシ',
     grade: 'L', transport: 'スピードボート',
     manta: [12,1,2,3,4], mantaLabel: '12〜4月', whale: [],
-    f: { natural:true, wide_lagoon:true, diving:true, surfing:true,
+    f: { chapel:true, natural:true, wide_lagoon:true, diving:true, surfing:true,
          checkout_lounge:'有料', checkout_shower:'ブティック横', glass_floor:'ギリレジデンス',
          bathtub_sea:true, terrace_bath:true, villa_pool:true, two_story:'デッキのみ', hammock:true,
          water_spa:true, pool:true, fitness:true, all_inclusive:'extra', organic_garden:true },
     notes: ['パンフレット上の分類は「部屋数50室以下のリゾート」。'],
     scenes: [
+      { icon:'⛪', name:'チャペルフォト', desc:'チャペルでのフォトウェディングが可能です。' },
       { icon:'🌴', name:'ヴィラのハンモック', desc:'ハンモック・プール・海の見えるバスタブあり。' },
       { icon:'🌱', name:'自家栽培のオーガニックガーデン', desc:'緑を背景にしたナチュラルな撮影に。' },
       { icon:'🔲', name:'ガラス床（ギリレジデンス）', desc:'ギリレジデンスのカテゴリーにガラス床あり。' }
     ],
-    reason: 'スピードボートで行けるLグレード。部屋数50室以下で落ち着いた滞在ができ、サーフィンもできます。キッズクラブはありません。'
+    reason: 'チャペルフォトができ、スピードボートで行けるLグレード。部屋数50室以下で落ち着いた滞在ができ、サーフィンもできます。キッズクラブはありません。'
   },
   {
     id: 'kuda_huraa',
@@ -1040,7 +1042,8 @@ const QUESTIONS = [
       { icon:'🏝️', label:'サンドバンク（白い砂州）', sub:'海に浮かぶ白い砂の上で', w:{ sandbank:4 } },
       { icon:'💦', label:'プール付きの水上ヴィラ', sub:'客室でプライベートな撮影を', w:{ villa_pool:3, bathtub_sea:1 } },
       { icon:'🌊', label:'ビーチ × 広いラグーン', sub:'どこまでも続く浅い海', w:{ wide_lagoon:3, reef:1 } },
-      { icon:'🐠', label:'他にはない特別な背景', sub:'ガラス床・水中レストランなど', w:{ glass_floor:3, underwater_restaurant:3 } }
+      { icon:'🐠', label:'他にはない特別な背景', sub:'ガラス床・水中レストランなど', w:{ glass_floor:3, underwater_restaurant:3 } },
+      { icon:'⛪', label:'チャペル', sub:'チャペルでのフォトウェディング', w:{ chapel:4 } }
     ]
   },
   {
@@ -1096,7 +1099,7 @@ const QUESTIONS = [
 // ─────────────────────────────────────────────
 
 const LABELS = {
-  luxury:'ラグジュアリー', natural:'ナチュラル', reef:'綺麗なハウスリーフ', dropoff:'ドロップオフ',
+  chapel:'チャペルフォト', luxury:'ラグジュアリー', natural:'ナチュラル', reef:'綺麗なハウスリーフ', dropoff:'ドロップオフ',
   wide_lagoon:'広いラグーン', sandbank:'サンドバンク', diving:'ダイビング', surfing:'サーフィン',
   checkout_lounge:'CO後ラウンジ', checkout_shower:'CO後シャワー', glass_floor:'ガラス床',
   bathtub_sea:'海が見えるバスタブ', terrace_bath:'テラス直結バスルーム', villa_pool:'ヴィラにプール',
@@ -1104,7 +1107,7 @@ const LABELS = {
   pool:'プール', kids:'キッズクラブ', fitness:'フィットネス', all_inclusive:'オールインクルーシブ',
   organic_garden:'オーガニックガーデン'
 };
-const HIGHLIGHT = ['sandbank','glass_floor','underwater_restaurant','all_inclusive','villa_pool','luxury','natural','surfing'];
+const HIGHLIGHT = ['chapel','sandbank','glass_floor','underwater_restaurant','all_inclusive','villa_pool','luxury','natural','surfing'];
 
 // ─────────────────────────────────────────────
 // STATE / UI
