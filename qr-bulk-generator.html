@@ -2628,7 +2628,8 @@ var qrcode = function() {
       ctx.font = '600 ' + fontSize + 'px ' + LABEL_FONT;
       lines = wrapText(ctx, labelText, qrPx - cell * QUIET_ZONE * 2, 2);
     }
-    var textArea = lines.length ? lines.length * lineHeight + cell * QUIET_ZONE : 0;
+    // 文字はQRコード下の余白（規格で必要なセル4個分）より下に置き、その下にセル2個分の余白を取る
+    var textArea = lines.length ? lines.length * lineHeight + cell * 2 : 0;
 
     canvas.width = qrPx;
     canvas.height = qrPx + textArea;
@@ -2647,8 +2648,7 @@ var qrcode = function() {
       ctx.fillStyle = '#1e293b';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      // QRコード下の余白（セル4個分）の後半から文字を置く
-      var top = qrPx - Math.round(cell * QUIET_ZONE / 2);
+      var top = qrPx;   // qrPx にはQRコード下の余白（セル4個分）がすでに含まれている
       for (var i = 0; i < lines.length; i++) {
         ctx.fillText(lines[i], qrPx / 2, top + lineHeight * i + lineHeight / 2);
       }
