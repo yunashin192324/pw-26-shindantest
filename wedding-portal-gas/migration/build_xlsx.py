@@ -49,5 +49,70 @@ for x in data:
 ws.append(header + [f'data{i + 1}' for i in range(max_chunks)])
 for r in rows:
     ws.append(r)
+
+# ---- AGTマスタ(コード・会社名・電話・メール・参照URL) ----
+import re, html as _html, collections
+
+
+def plain(h):
+    h = re.sub(r'<a href="([^"]*)"[^>]*>(.*?)</a>', lambda m: f'{m.group(2)}（{_html.unescape(m.group(1))}）', h or '')
+    h = re.sub(r'</p>|<br>', '\n', h)
+    return _html.unescape(re.sub(r'<[^>]+>', '', h))
+
+
+agt = collections.OrderedDict()
+for x in data:
+    for code, t in (x['report'].get('agt_info') or {}).items():
+        agt.setdefault(code, {'texts': []})['texts'].append(t)
+codes = sorted({x['payload']['agt_code'] for x in data if x['payload'].get('agt_code')})
+alltext = {c: [] for c in codes}
+for x in data:
+    c = x['payload'].get('agt_code')
+    if c:
+        alltext[c].append(' '.join(plain(v) for k, v in x['payload'].items() if isinstance(v, str)))
+
+AGT_HEADER = ['AGTコード', '正式会社名', '電話番号', 'メールアドレス', 'WEBサイトURL', '営業時間/定休日', '空き状況確認', '予約方法',
+              'OP追加時', 'ファイナル', '変更', 'CXL', '備考', '衣裳概要', '衣裳合わせ', '早期特典', '衣裳持込', '差額収受先',
+              'お着換え', 'アルバム概要', 'オプション概要', '予約後お渡しする書類', '注意事項', 'ブーケについて']
+agt_rows = []
+for code in codes:
+    texts = agt.get(code, {}).get('texts', [])
+    name = ''
+    for t in texts:
+        first = t.split('\n')[0]
+        m = re.match(r'^\s*(.+?)\s*(?:[（(]\s*(?:AGTコード[：:]\s*)?' + code + r'\s*[)）]|/\s*AGTコード)', first) or \
+            re.match(r'^\s*(.+?)\s*/?\s*AGTコード', t.replace('\n', ' '))
+        if m:
+            name = m.group(1).strip(' 　/')
+            break
+    if not name:
+        for t in alltext.get(code, []):
+            m = re.search(r'AGTコード\s*[＝=：:]\s*' + code + r'\s*[（(]([^）)]{2,25})[）)]', t)
+            if m:
+                name = m.group(1).strip()
+                break
+    src = '\n'.join(texts)
+    phone = (re.search(r'0\d{1,3}-\d{2,4}-\d{3,4}', src) or [''])[0]
+    mail = (re.search(r'[\w.+-]+@[\w-]+\.[\w.-]+', src) or [''])[0]
+    url = (re.search(r'https?://[^\s）)]+', src) or [''])[0]
+    agt_rows.append([code, name, phone, mail, url] + [''] * (len(AGT_HEADER) - 5))
+wa = wb.create_sheet('移行AGTマスタ')
+wa.append(AGT_HEADER)
+for r in agt_rows:
+    wa.append([clean(v) for v in r])
+
+# ---- エリアマスタ ----
+areas = []
+for x in data:
+    a = x['payload'].get('area')
+    if x['payload']['cat'] in ('フォト', 'ウェディング') and a and a not in areas:
+        areas.append(a)
+we = wb.create_sheet('移行エリア')
+we.append(['エリア'])
+for a in areas:
+    we.append([a])
+print('agt', len(agt_rows), 'named', sum(1 for r in agt_rows if r[1]), 'areas', areas)
+for r in agt_rows:
+    print('  ', r[:5])
 wb.save(out_path)
 print('rows', len(rows), 'max chunks', max_chunks)

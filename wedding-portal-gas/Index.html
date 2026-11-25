@@ -689,11 +689,14 @@
             </div>
             <div class="form-group only-photo"><label>滞在先対象エリア</label><div class="mini-editor-wrap"><div id="f-area_f"></div></div></div>
             <div class="form-group only-photo"><label>データ納品について</label><div class="mini-editor-wrap"><div id="f-deliv"></div></div></div>
-            <div class="form-group only-photo"><label>撮影当日のお支度場所</label><div class="mini-editor-wrap"><div id="f-loc"></div></div></div>
+            <div class="form-group only-photo only-wed"><label>催行会社について<br><span style="font-size:11px; color:#888; font-weight:normal;">(連絡先・社名変更などの補足)</span></label><div class="mini-editor-wrap"><div id="f-x_agt_note"></div></div></div>
+            <div class="form-group only-photo only-wed"><label>プラン内容・コース・時間<br><span style="font-size:11px; color:#888; font-weight:normal;">(撮影コース・撮影可能都市・挙式開始時間など)</span></label><div class="mini-editor-wrap"><div id="f-x_course"></div></div></div>
+            <div class="form-group only-photo only-wed"><label>送迎・現地打ち合わせ</label><div class="mini-editor-wrap"><div id="f-x_transfer"></div></div></div>
+            <div class="form-group only-photo only-wed"><label>当日のお支度場所</label><div class="mini-editor-wrap"><div id="f-loc"></div></div></div>
             <div class="form-group only-photo"><label>お子様が同行される場合</label><div class="mini-editor-wrap"><div id="f-child"></div></div></div>
             <div class="form-group only-photo"><label>同行者について</label><div class="mini-editor-wrap"><div id="f-comp"></div></div></div>
             
-            <div class="form-group only-wed"><label>挙式不可能日</label><div class="mini-editor-wrap"><div id="f-w_imp"></div></div></div>
+            <div class="form-group only-photo only-wed"><label>挙式／撮影不可日</label><div class="mini-editor-wrap"><div id="f-w_imp"></div></div></div>
             <div class="form-group only-wed"><label>即日回答</label><input type="text" id="f-w_ins" class="form-control"></div>
           </div>
         </div>
@@ -702,8 +705,8 @@
       <div id="cms-pane-outfit" class="smart-pane">
         <div class="cms-section">
           <h3 class="cms-section-title">衣装について</h3>
-          <div class="form-group only-photo"><label>衣裳概要</label><div class="mini-editor-wrap"><div id="f-c_sum"></div></div></div>
-          <div class="form-group only-photo"><label>「衣裳合わせ」について</label><div class="mini-editor-wrap"><div id="f-c_fit"></div></div></div>
+          <div class="form-group only-photo only-wed"><label>衣裳概要</label><div class="mini-editor-wrap"><div id="f-c_sum"></div></div></div>
+          <div class="form-group only-photo only-wed"><label>「衣裳合わせ」について</label><div class="mini-editor-wrap"><div id="f-c_fit"></div></div></div>
           <div class="form-group only-photo"><label>早期申し込み特典について</label><div class="mini-editor-wrap"><div id="f-c_ben"></div></div></div>
           <div class="form-group only-photo"><label>衣裳持込</label><div class="mini-editor-wrap"><div id="f-c_fee"></div></div></div>
           <div class="form-group"><label>衣裳差額収受先・小物集金先</label><div class="mini-editor-wrap"><div id="f-c_pay"></div></div></div>
@@ -712,11 +715,11 @@
           <div class="form-group only-wed"><label>放棄する場合の対応</label><div class="mini-editor-wrap"><div id="f-w_abd"></div></div></div>
           <div class="form-group only-wed"><label>現地での返却時間・場所</label><div class="mini-editor-wrap"><div id="f-w_ret"></div></div></div>
         </div>
-        <div class="cms-section only-photo">
+        <div class="cms-section only-photo only-wed">
           <h3 class="cms-section-title">アルバム・オプション・書類</h3>
-          <div class="form-group"><label>アルバム概要</label><div class="mini-editor-wrap"><div id="f-alb"></div></div></div>
+          <div class="form-group only-photo"><label>アルバム概要</label><div class="mini-editor-wrap"><div id="f-alb"></div></div></div>
           <div class="form-group"><label>オプション概要</label><div class="mini-editor-wrap"><div id="f-opt"></div></div></div>
-          <div class="form-group"><label>ブーケについて</label><div class="mini-editor-wrap"><div id="f-bouquet"></div></div></div>
+          <div class="form-group only-photo"><label>ブーケについて</label><div class="mini-editor-wrap"><div id="f-bouquet"></div></div></div>
           <div class="form-group"><label>予約後お渡しする書類</label><div class="mini-editor-wrap"><div id="f-docs"></div></div></div>
           <div class="form-group"><label>注意事項</label><div class="mini-editor-wrap"><div id="f-attn"></div></div></div>
         </div>
@@ -813,7 +816,8 @@ const RICH_FIELDS = [
   'alb', 'opt', 'docs', 'attn', 'bouquet',
   'p_av', 'p_bk', 'p_op', 'p_fn', 'p_ch', 'p_cx', 'w_ga', 'p_rem',
   'w_flw', 'm_sum',
-  'md_plan_resort', 'md_plan_party', 'md_pay_his', 'md_pay_agt', 'point'
+  'md_plan_resort', 'md_plan_party', 'md_pay_his', 'md_pay_agt', 'point',
+  'x_agt_note', 'x_course', 'x_transfer'
 ];
 
 const Compare = {
@@ -2038,6 +2042,9 @@ const CMS = {
 
     paneBasicHtml += topLinksHtml;
     paneBasicHtml += agtCardHtml;
+    if (!isOther && data.x_agt_note && data.x_agt_note !== '<p><br></p>') {
+      paneBasicHtml += UI.buildBlockList([{lbl: '催行会社について', val: data.x_agt_note}]);
+    }
 
     if (isOther) {
       const isMdFormat = (data.cat === 'その他' && (data.md_feature || data.md_plan_resort || data.md_hp || data.md_c_name));
@@ -2079,16 +2086,24 @@ const CMS = {
           {lbl: 'データ納品', val: data.deliv},
           {lbl: 'お支度場所', val: data.loc},
           {lbl: 'お子様同行', val: data.child},
-          {lbl: '同行者', val: data.comp}
+          {lbl: '同行者', val: data.comp},
+          {lbl: '撮影不可日', val: data.w_imp}
         );
       } else if (data.cat === 'ウェディング') {
         basicItems.push(
           {lbl: '挙式不可能日', val: data.w_imp},
-          {lbl: '即日回答', val: data.w_ins}
+          {lbl: '即日回答', val: data.w_ins},
+          {lbl: 'お支度場所', val: data.loc}
         );
       }
       const basicRows = UI.buildTable(basicItems);
       if (basicRows) paneBasicHtml += `<div class="sec-title" style="margin-top:10px;">基本情報</div>` + basicRows;
+
+      const courseRows = UI.buildBlockList([
+        {lbl: data.cat === 'ウェディング' ? 'プラン内容・挙式時間' : 'プラン内容・撮影コース・時間', val: data.x_course},
+        {lbl: '送迎・現地打ち合わせ', val: data.x_transfer}
+      ]);
+      if (courseRows) paneBasicHtml += `<div class="sec-title">プラン内容・当日について</div>` + courseRows;
 
       let outfitItems = [];
       if (data.cat === 'フォト') {
@@ -2098,6 +2113,7 @@ const CMS = {
         );
       } else if (data.cat === 'ウェディング') {
         outfitItems.push(
+          {lbl: '衣裳概要', val: data.c_sum}, {lbl: '衣裳合わせ', val: data.c_fit},
           {lbl: '衣裳差額・小物集金先', val: data.c_pay}, {lbl: '衣裳小物持込可否', val: data.w_fit},
           {lbl: '放棄する場合の対応', val: data.w_abd}, {lbl: '現地での返却時間・場所', val: data.w_ret}
         );
@@ -2112,6 +2128,11 @@ const CMS = {
           {lbl: 'お渡し書類', val: data.docs}, {lbl: '注意事項', val: data.attn}
         ]);
         if (photoRows) paneBasicHtml += `<div class="sec-title">アルバム・OP・書類</div>` + photoRows;
+      } else if (data.cat === 'ウェディング') {
+        const wedEtcRows = UI.buildBlockList([
+          {lbl: 'オプション概要', val: data.opt}, {lbl: 'お渡し書類', val: data.docs}, {lbl: '注意事項', val: data.attn}
+        ]);
+        if (wedEtcRows) paneBasicHtml += `<div class="sec-title">オプション・書類・注意事項</div>` + wedEtcRows;
       }
 
       let flowItems = [

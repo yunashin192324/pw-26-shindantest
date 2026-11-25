@@ -191,12 +191,16 @@ def norm_label(s):
 RULES = [
     ('agt', ['催行会社']),
     ('product_url', ['商品詳細']),
-    ('w_imp', ['挙式不可']),
+    ('point', ['ポイント', 'POINT']),
+    ('x_transfer', ['送迎', '打ち合わせ', '打合せ', '待ち合わせ', '集合場所']),
+    ('x_course', ['撮影コース', 'コースについて', '撮影可能都市', '撮影場所', '撮影時間', '挙式開始時間', '挙式時間',
+                  '対応可能時間', '含まれる内容', '含まれるもの', 'プラン内容', 'ロケーション', '撮影箇所']),
+    ('w_imp', ['挙式不可', '撮影不可']),
     ('w_ins', ['即日回答']),
     ('area_f', ['滞在先対象', '対象エリア']),
     ('deliv', ['データ納品']),
     ('loc', ['お支度場所', '支度場所']),
-    ('child', ['お子様']),
+    ('child', ['お子様', 'ベビーシッター']),
     ('comp', ['同行者']),
     ('c_ben', ['早期申し込み特典', '早期申込', '早期特典']),
     ('c_fit', ['衣裳合わせ', '衣装合わせ', '試着']),
@@ -209,21 +213,22 @@ RULES = [
     ('opt', ['OPについて', 'オプションについて', 'オプション概要']),
     ('alb', ['アルバム']),
     ('bouquet', ['ブーケ']),
-    ('docs', ['書類', '同意書', '約款']),
+    ('docs', ['書類', '同意書', '約款', '提出物']),
     ('attn', ['注意事項']),
     ('qa', ['よくある質問']),
     ('w_flw', ['現地到着後', '現地BFG', '挙式当日']),
     ('sch', ['スケジュール']),
     ('p_av', ['空き状況', '空き照会', 'STS確認', 'HOLD']),
-    ('p_bk', ['予約方法', '予約フロー', '予約の流れ', '手配フロー']),
-    ('m_sum', ['明細作成', '必要な明細', '明細']),
+    ('p_bk', ['予約方法', '予約フロー', '予約の流れ', '手配フロー', 'NBコメント', 'NB時', '電子契約']),
+    ('m_sum', ['明細作成', '必要な明細', '流す明細', '明細']),
     ('p_op', ['OPが追加', 'OPの追加', 'OP追加', '追加オプション', '登録内容変更']),
+    ('w_ga', ['最終書面']),
     ('p_fn', ['ファイナル', 'FNL']),
     ('w_ga', ['書面お渡し', 'G/A']),
     ('p_cx', ['取消', 'キャンセル', 'CXL']),
     ('p_ch', ['変更']),
-    ('p_rem', ['備考', '申込期限']),
-    ('c_sum', ['衣裳について', '衣装について', '衣裳概要', '衣裳', '衣装']),
+    ('p_rem', ['備考', '申込期限', '申込み期限', 'お申込み可能期間', '申込可能期間', '受付期間']),
+    ('c_sum', ['衣裳について', '衣装について', '衣裳概要', '手持ち衣裳', 'レンタル衣裳', '衣裳', '衣装']),
 ]
 
 UI_LABEL = {
@@ -234,16 +239,27 @@ UI_LABEL = {
     'p_av': '空き状況確認方法', 'p_bk': '予約方法', 'p_op': 'OPが追加になった場合', 'p_fn': 'ファイナル', 'p_ch': '変更',
     'p_cx': 'CXL', 'p_rem': '備考', 'w_imp': '挙式不可日', 'w_fit': '衣裳小物持込', 'w_abd': '放棄する場合の対応',
     'w_ret': '現地での返却時間・場所', 'w_ga': '書面お渡し（G/A）', 'w_flw': '現地到着後の流れ', 'm_sum': '明細作成',
+    'x_agt_note': '催行会社', 'x_course': 'プラン内容・コース', 'x_transfer': '送迎・現地打ち合わせ', 'point': 'ポイント',
+}
+
+# ポータル側の表示名(カテゴリで異なるもの)
+UI_ALIASES = {
+    'c_pay': ['衣裳差額・小物集金先', '差額収受先', '衣装差額収受先'], 'w_fit': ['衣裳小物持込可否', '衣装小物持込'],
+    'w_imp': ['挙式不可能日', '撮影不可日', '撮影不可能日'], 'loc': ['お支度場所'], 'p_av': ['空き状況確認'],
+    'p_op': ['OP追加時'], 'w_ga': ['書面お渡し'], 'c_fit': ['衣裳合わせ', '衣装合わせ'], 'c_sum': ['衣裳概要', '衣装について'],
+    'child': ['お子様同行'], 'comp': ['同行者'], 'deliv': ['データ納品'], 'm_sum': ['チャレンジ明細作成方法', '明細作成方法'],
 }
 
 PHOTO_FIELDS = {'area_f', 'deliv', 'loc', 'child', 'comp', 'c_sum', 'c_fit', 'c_ben', 'c_fee', 'c_pay', 'c_chg',
                 'alb', 'opt', 'bouquet', 'docs', 'attn', 'p_av', 'p_bk', 'p_op', 'p_fn', 'p_ch', 'p_cx', 'p_rem',
-                'm_sum', 'qa', 'sch', 'product_url', 'agt'}
+                'm_sum', 'qa', 'sch', 'product_url', 'agt', 'w_imp', 'x_course', 'x_transfer', 'point'}
 WED_FIELDS = {'w_imp', 'w_ins', 'c_pay', 'w_fit', 'w_abd', 'w_ret', 'p_av', 'p_bk', 'p_op', 'p_fn', 'p_ch', 'p_cx',
-              'w_ga', 'p_rem', 'w_flw', 'm_sum', 'qa', 'product_url', 'agt'}
+              'w_ga', 'p_rem', 'w_flw', 'm_sum', 'qa', 'product_url', 'agt',
+              'c_sum', 'c_fit', 'opt', 'docs', 'attn', 'loc', 'x_course', 'x_transfer', 'point'}
 # カテゴリで表示されない項目の振替先
-PHOTO_FALLBACK = {'w_fit': 'c_fee', 'w_abd': 'c_fee', 'w_ret': 'c_chg', 'w_ga': 'p_fn', 'w_ins': 'p_rem'}
-WED_FALLBACK = {'c_fee': 'w_fit', 'c_chg': 'w_ret', 'docs': 'w_ga'}
+PHOTO_FALLBACK = {'w_fit': 'c_fee', 'w_abd': 'c_fee', 'w_ret': 'c_chg', 'w_ga': 'p_fn', 'w_ins': 'p_rem', 'w_flw': 'x_course'}
+WED_FALLBACK = {'c_fee': 'w_fit', 'c_chg': 'w_ret', 'c_ben': 'c_sum', 'alb': 'opt', 'bouquet': 'opt',
+                'area_f': 'x_course', 'deliv': 'opt', 'child': 'x_transfer', 'comp': 'x_transfer', 'sch': 'w_flw'}
 
 
 def match_rule(text):
@@ -331,7 +347,10 @@ def parse_form(ws):
                 m = re.match(r'^([^\n：:]{2,45}?)\s*[：:]\s*(.+)$', label_text, re.S)
                 if m and re.search(r'\d$', m.group(1)):
                     m = None  # 「8:45」等の時刻はラベル区切りではない
-                if m:
+                lead = split_lead_label(label_text)
+                if lead and not m:
+                    blocks.append(dict(section=section, label=lead[0], rows=[], inline=lead[1], src=first))
+                elif m:
                     blocks.append(dict(section=section, label=m.group(1), rows=[], inline=m.group(2), src=first))
                 elif not link_of(first) and ((short and is_section_title(label_text)) or strict_section(label_text)):
                     section = label_text
@@ -347,6 +366,9 @@ def parse_form(ws):
                     blocks.append(dict(section=section, label=label_text, rows=[], header=True))
                     if lead_rows or cont:
                         blocks.append(dict(section=section, label='', rows=lead_rows + cont, loose=True))
+                elif not short and split_lead_label(label_text):
+                    lab2, rest = split_lead_label(label_text)
+                    blocks.append(dict(section=section, label=lab2, rows=lead_rows + cont, inline=rest, src=first))
                 elif not short:
                     # 長文が見出し列に入っているケース(本文扱い)
                     blocks.append(dict(section=section, label='', rows=[[first] + value_cells] + cont, loose=True))
@@ -358,6 +380,16 @@ def parse_form(ws):
             blocks.append(dict(section=section, label='', rows=[cells], loose=True))
             i += 1
     return blocks
+
+
+def split_lead_label(text):
+    """「②予約方法　手配先　AGTコード＝UZW」→ ('②予約方法', '手配先　AGTコード＝UZW')"""
+    first, _, more = text.partition('\n')
+    m = re.match(r'^([①-⑳■●・※]?[^\s　：:]{2,15})[\s　]+(\S.*)$', first)
+    if not m or not match_rule(m.group(1)):
+        return None
+    rest = m.group(2) + ('\n' + more if more else '')
+    return m.group(1), rest
 
 
 SECTION_WORDS = ['基本情報', '手配方法', 'その他', '料金', 'プラン内容', '商品概要', '同行者', '衣装', '衣裳']
@@ -378,6 +410,21 @@ def strict_section(t):
     if '\n' in t or len(t) > 40:
         return False
     return bool(re.match(r'^[★☆].*[★☆]$', t) or re.match(r'^【[^】]*】.*★', t) or '手配方法' in t)
+
+
+def short_sec(sec):
+    """「★手配方法（AVA・一般店共通）★」→「AVA・一般店共通」、「【2024/7/1～】★手配方法（AVA店舗）」→「AVA店舗（2024/7/1～）」"""
+    t = sec.strip()
+    date = re.search(r'【([^】]*\d[^】]*)】', t) or re.search(r'(\d{4}/\d{1,2}/\d{1,2}\s*[～~])', t)
+    if '手配方法' in t:
+        m = re.search(r'手配方法\s*[（(]([^）)]+)[）)]', t)
+        name = m.group(1) if m else re.sub(r'【[^】]*】', '', t)
+    else:
+        name = re.sub(r'【[^】]*】', '', t)
+    name = re.sub(r'[★☆■◆]', '', name).strip()
+    if date:
+        name += f'（{date.group(1).strip()}）'
+    return name or t
 
 
 def short_section_like(t):
@@ -596,11 +643,12 @@ def convert(path, fname):
     payload['area'] = f'{area}（Feel）' if 'Feel' in book else area
     payload['country'] = country_of(area, book, tab, full_title, all_text)
     payload['title'] = tab
-    allowed = PHOTO_FIELDS if cat == 'フォト' else WED_FIELDS
+    allowed = (PHOTO_FIELDS if cat == 'フォト' else WED_FIELDS) | {'x_agt_note'}
     fallback = PHOTO_FALLBACK if cat == 'フォト' else WED_FALLBACK
 
     blocks = parse_form(ws)
     fields = collections.OrderedDict()   # field -> list of (heading, html)
+    agt_info = {}
     notice = []                          # html parts
     qa_items = []
     sch_blocks = []
@@ -614,6 +662,7 @@ def convert(path, fname):
         fields.setdefault(field, []).append((heading, h))
 
     cur_section_header = None
+    last_field = [None]
     for b in blocks:
         if b.get('header'):
             first_section_seen = True
@@ -635,6 +684,14 @@ def convert(path, fname):
             field = 'qa'
         if label and field is None and sec_field in ('w_flw',):
             field = 'w_flw'
+        # セクション見出しが項目に対応していれば、その下の見出し無し・未対応の本文も同じ項目へ
+        if field is None and sec_field and sec_field not in ('agt', 'product_url', 'qa'):
+            field = sec_field
+        # 明細表の直後にある注記(※関西はカップルで作成 等)は明細欄へ
+        if field is None and last_field[0] == 'm_sum':
+            t0 = (label or html_to_plain(rows_html(b['rows']))).strip()
+            if t0.startswith(('※', '（', '(', '・', '【')) or len(t0) <= 40:
+                field = 'm_sum'
 
         rows = b['rows']
         if field == 'm_sum' or (field is None and any(
@@ -645,16 +702,21 @@ def convert(path, fname):
                 field = 'm_sum'
         if not body:
             body = rows_html(rows)
+        elif b.get('inline') is not None and rows:
+            body += rows_html(rows)
 
         if not first_section_seen and not label:
             notice.append(body)
             continue
 
         if field == 'agt':
-            code = find_agt(html_to_plain(body))
+            plain = html_to_plain(body)
+            code = find_agt(plain)
             if code:
                 payload['agt_code'] = code
-            notice.append(f'<p><strong>{html.escape(label)}</strong></p>{body}')
+                agt_info.setdefault(code, plain)
+            add('x_agt_note', '', body)
+            last_field[0] = 'x_agt_note'
             continue
         if field == 'product_url':
             m = re.search(r'href="(https?://[^"]+)"', body)
@@ -692,18 +754,23 @@ def convert(path, fname):
             notice.append(sec_h + (f'<p><strong>{html.escape(heading)}</strong></p>' if heading else '') + body)
             continue
         heading = label
-        generic = norm_label(sec) in SECTION_WORDS or norm_label(sec).rstrip('について') in SECTION_WORDS
+        generic = norm_label(sec) in SECTION_WORDS or norm_label(sec).removesuffix('について') in SECTION_WORDS
         if sec and not generic and match_rule(sec) is None and sec != label:
-            heading = f'{sec} ／ {label}' if label else sec
+            ss = short_sec(sec)
+            heading = f'{ss} ／ {label}' if label else ss
         add(field, heading, body)
+        last_field[0] = field
 
     # ---- 書き込み ----
     def needs_heading(f, hd):
         if not hd:
             return False
-        ui = norm_label(UI_LABEL.get(f, ''))
         n = norm_label(hd)
-        return not (ui and (ui in n and len(n) <= len(ui) + 4 or n in ui))
+        for lab in [UI_LABEL.get(f, '')] + UI_ALIASES.get(f, []):
+            ui = norm_label(lab)
+            if ui and (n in ui or n.endswith(ui) or (ui in n and len(n) <= len(ui) + 4)):
+                return False
+        return True
 
     for f, parts in fields.items():
         if f == 'w_ins':
@@ -729,6 +796,7 @@ def convert(path, fname):
     for k, v in payload.items():
         if k in ('notice',) or k in fields:
             out_chars += len(re.sub(r'\s', '', html_to_plain(v)))
+    report['agt_info'] = agt_info
     report.update(cat=cat, country=payload['country'], agt=payload['agt_code'], mapped=sorted(fields.keys()) +
                   [('m_' + k) for k in meisai] + (['qa'] if qa_items else []) + (['sch'] if sch_blocks else []),
                   notice_chars=len(re.sub(r'\s', '', html_to_plain(payload['notice']))))

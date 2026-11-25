@@ -737,9 +737,10 @@ function checkCacheSize() {
 
 /**
  * 旧商説スプレッドシートからの一括移行(1回だけ実行)
- * 1. 変換済みの「移行データ.xlsx」を、このスプレッドシートに「新しいシートを挿入」で読み込む(シート名: 移行データ)
+ * 1. 変換済みの「移行データ.xlsx」を、このスプレッドシートに「新しいシートを挿入」で読み込む
+ *    (シート「移行データ」「移行AGTマスタ」「移行エリア」が追加される)
  * 2. Apps Scriptエディタでこの関数を選んで実行する
- * 3. 完了したら「移行データ」シートは削除してよい
+ * 3. 完了したら上記3シートは削除してよい
  */
 const LEGACY_SHEET_NAME = '移行データ';
 
@@ -779,10 +780,48 @@ function importLegacyData() {
     const range = dest.getRange(startRow, 1, values.length, width);
     range.setNumberFormat('@');  // 本文(JSON)が数式・日付・数値として解釈されないよう書式なしテキストにする
     range.setValues(values);
+    const agtAdded = importLegacyAgtMaster_(ss);
+    const areaAdded = importLegacyAreaMaster_(ss);
     SpreadsheetApp.flush();
     bumpCache_();
     props.setProperty('LEGACY_IMPORTED', 'true');
+    Logger.log(`AGTマスタに${agtAdded}社、エリアマスタに${areaAdded}件を追加しました。`);
     backupData_('LEGACY_IMPORT', `${startRow}-${startRow + values.length - 1}`, [`${values.length}件`]);
     Logger.log(`${values.length}件を「${CONFIG.SHEET_MAIN}」の${startRow}行目から取り込みました。`);
   } finally { lock.releaseLock(); }
 }
+
+// 「移行AGTマスタ」シートの行のうち、AGTマスタに未登録のコードだけを追加する
+function importLegacyAgtMaster_(ss) {
+  const src = ss.getSheetByName('移行AGTマスタ');
+  if (!src || src.getLastRow() < 2) return 0;
+  const rows = src.getDataRange().getValues();
+  const header = rows[0].map(String);
+  let dest = ss.getSheetByName(CONFIG.SHEET_AGT);
+  if (!dest) { dest = ss.insertSheet(CONFIG.SHEET_AGT); dest.appendRow(header); }
+  const existing = new Set(dest.getLastRow() > 1
+    ? dest.getRange(2, 1, dest.getLastRow() - 1, 1).getValues().flat().map(v => String(v).trim()) : []);
+  const add = rows.slice(1)
+    .filter(r => String(r[0]).trim() && !existing.has(String(r[0]).trim()))
+    .map(r => header.map((_, i) => r[i] == null ? '' : String(r[i])));
+  if (add.length) dest.getRange(dest.getLastRow() + 1, 1, add.length, header.length).setValues(add);
+  return add.length;
+}
+
+// 「移行エリア」シートのエリアのうち、管理マスタC列に未登録のものだけを追加する
+function importLegacyAreaMaster_(ss) {
+  const src = ss.getSheetByName('移行エリア');
+  if (!src || src.getLastRow() < 2) return 0;
+  const areas = src.getRange(2, 1, src.getLastRow() - 1, 1).getValues().flat().map(v => String(v).trim()).filter(Boolean);
+  const admin = ss.getSheetByName(CONFIG.SHEET_ADMIN);
+  if (!admin) return 0;
+  const colC = admin.getLastRow() > 1 ? admin.getRange(2, 3, admin.getLastRow() - 1, 1).getValues().flat().map(v => String(v).trim()) : [];
+  const existing = new Set(colC.filter(Boolean));
+  const add = areas.filter(a => !existing.has(a));
+  if (!add.length) return 0;
+  let lastC = colC.length;
+  while (lastC > 0 && !colC[lastC - 1]) lastC--;
+  admin.getRange(2 + lastC, 3, add.length, 1).setValues(add.map(a => [a]));
+  return add.length;
+}
+

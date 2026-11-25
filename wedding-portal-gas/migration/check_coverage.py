@@ -1,7 +1,7 @@
 import sys, os, re, json, html, collections
 import openpyxl
 sys.path.insert(0, os.path.dirname(__file__))
-from convert_legacy import dec, fmt_value, html_to_plain, match_rule, is_section_title
+from convert_legacy import dec, fmt_value, html_to_plain, match_rule, is_section_title, strict_section, short_sec, split_lead_label
 src, out = sys.argv[1], sys.argv[2]
 res = json.load(open(out, encoding='utf-8'))
 def norm(s): return re.sub(r'[\s　]', '', html.unescape(s))
@@ -39,6 +39,11 @@ for f in sorted(os.listdir(src)):
                 n = norm(html.escape(line, quote=False))
                 n2 = norm(line)
                 if len(n2)<2: continue
+                if strict_section(line) and norm(short_sec(line)) in blob:
+                    continue
+                sl = split_lead_label(line)
+                if sl and norm(sl[1]) in blob:
+                    continue
                 if len(line.strip())<=25 and (match_rule(line) or is_section_title(line)):
                     continue  # 見出しとして新ポータルの項目名に置き換わった行
                 # 「見出し：本文」形式は見出しと本文に分割して確認
