@@ -922,3 +922,150 @@ function saveTreeOrder(parentKey, names) {
   } finally { lock.releaseLock(); }
 }
 
+// ==========================================
+// ★ 旧商説スプレッドシートからの再取り込み(差分同期)
+//   ブラウザ側(Index.html の LegacyConverter)で xlsx を変換し、ここで既存行と照合・反映する。
+//   照合キー: 元ブック名(タグの先頭) + タイトル。同名が複数ある場合は出現順で対応付ける。
+// ==========================================
+const LEGACY_FP_SKIP = { rowId: 1, status: 1, is_draft: 1, updated_at: 1, src: 1 };
+
+// legacy_converter.js の fnv / fieldFingerprints と同じ計算
+function legacyFnv_(str) {
+  let h1 = 0x811c9dc5, h2 = 0x01000193;
+  for (let i = 0; i < str.length; i++) {
+    const c = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 16777619) >>> 0;
+    h2 = Math.imul(h2 ^ c, 2246822519) >>> 0;
+  }
+  return h1.toString(36) + h2.toString(36);
+}
+
+function legacyFingerprints_(rec) {
+  const out = {};
+  Object.keys(rec).sort().forEach(k => {
+    if (!LEGACY_FP_SKIP[k] && rec[k] !== '' && rec[k] != null) out[k] = legacyFnv_(String(rec[k]));
+  });
+  return out;
+}
+
+function getLegacySyncIndex() {
+  if (!checkAdmin_(Session.getActiveUser().getEmail().toLowerCase())) throw new Error("Unauthorized.");
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.SHEET_MAIN);
+  if (!sheet || sheet.getLastRow() < 2) return { status: "success", rows: [] };
+  const data = sheet.getDataRange().getValues();
+  const rows = [];
+  for (let i = 1; i < data.length; i++) {
+    const r = data[i];
+    const title = String(r[4] || '').trim();
+    if (!title) continue;
+    const tags = String(r[9] || '').split(',').map(t => t.trim()).filter(Boolean);
+    let rec = null;
+    for (const idx of [11, 10, 8, 7, 5]) {
+      if (String(r[idx] || '').trim().startsWith('{')) { rec = parseJsonSafe_(r.slice(idx).join('')); if (rec) break; }
+    }
+    rows.push({
+      rowId: i + 1,
+      title: title,
+      cat: String(r[3] || ''),
+      book: tags[0] || '',
+      edited: String(r[8] || '').trim() !== '',   // ポータルで保存されると更新日時が入る
+      fp: rec ? legacyFingerprints_(rec) : {}
+    });
+  }
+  return { status: "success", rows: rows };
+}
+
+function legacyRowValues_(payload, keepDraft) {
+  const json = JSON.stringify(payload);
+  const chunks = [];
+  for (let i = 0; i < json.length; i += 30000) chunks.push(json.substring(i, i + 30000));
+  return [
+    payload.area || '', payload.country || '', payload.city || '', payload.cat || '', payload.title || '',
+    payload.season_year || '', payload.season_type || '', keepDraft || payload.is_draft || 'false',
+    '',  // 更新日時は空(旧シート由来の行の目印。ポータルで保存すると日時が入る)
+    payload.tags || '', payload.product_url || ''
+  ].concat(chunks);
+}
+
+/** items: [{ rowId: 既存行(更新時) or null(新規), expectTitle: 更新対象のタイトル, payload }] */
+function applyLegacySync(items) {
+  if (!checkAdmin_(Session.getActiveUser().getEmail().toLowerCase())) throw new Error("Unauthorized.");
+  if (!Array.isArray(items) || !items.length) return { status: "success", updated: 0, added: 0, skipped: [] };
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) throw new Error("System is busy.");
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.SHEET_MAIN);
+    let updated = 0, added = 0;
+    const skipped = [];
+    items.forEach(it => {
+      const p = it.payload || {};
+      if (!p.title || !p.cat) return;
+      const rowId = parseInt(it.rowId, 10);
+      if (!isNaN(rowId) && rowId >= 2) {
+        // プレビュー後に行がずれていないか確認
+        const cur = sheet.getRange(rowId, 1, 1, 11).getValues()[0];
+        if (String(cur[4] || '').trim() !== String(it.expectTitle || '').trim()) { skipped.push(p.title); return; }
+        const lastCol = Math.max(sheet.getLastColumn(), 11);
+        const old = sheet.getRange(rowId, 1, 1, lastCol).getValues()[0];
+        backupData_('LEGACY_SYNC', rowId, old);
+        const values = legacyRowValues_(p, String(cur[7] || '').trim());
+        if (sheet.getMaxColumns() < values.length) sheet.insertColumnsAfter(sheet.getMaxColumns(), values.length - sheet.getMaxColumns());
+        sheet.getRange(rowId, 1, 1, lastCol).clearContent();
+        const range = sheet.getRange(rowId, 1, 1, values.length);
+        range.setNumberFormat('@');
+        range.setValues([values]);
+        updated++;
+      } else {
+        const values = legacyRowValues_(p, '');
+        if (sheet.getMaxColumns() < values.length) sheet.insertColumnsAfter(sheet.getMaxColumns(), values.length - sheet.getMaxColumns());
+        const nextRow = Math.max(sheet.getLastRow(), 1) + 1;
+        const range = sheet.getRange(nextRow, 1, 1, values.length);
+        range.setNumberFormat('@');
+        range.setValues([values]);
+        backupData_('LEGACY_SYNC_NEW', nextRow, [p.title]);
+        added++;
+      }
+    });
+    SpreadsheetApp.flush();
+    bumpCache_();
+    return { status: "success", updated: updated, added: added, skipped: skipped };
+  } finally { lock.releaseLock(); }
+}
+
+/** 新しく出てきたAGTコード・エリアだけをマスタに追加(既存の行は変更しない) */
+function applyLegacyMasters(agtRows, areas) {
+  if (!checkAdmin_(Session.getActiveUser().getEmail().toLowerCase())) throw new Error("Unauthorized.");
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) throw new Error("System is busy.");
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let agtAdded = 0, areaAdded = 0;
+    const agt = ss.getSheetByName(CONFIG.SHEET_AGT);
+    if (agt && Array.isArray(agtRows) && agtRows.length) {
+      const width = Math.max(agt.getLastColumn(), 5);
+      const existing = new Set(agt.getLastRow() > 1 ? agt.getRange(2, 1, agt.getLastRow() - 1, 1).getValues().flat().map(v => String(v).trim()) : []);
+      const add = agtRows.filter(a => a && a.code && !existing.has(String(a.code).trim())).map(a => {
+        const row = new Array(width).fill('');
+        row[0] = a.code; row[1] = a.name || ''; row[2] = a.phone || ''; row[3] = a.email || ''; row[4] = a.web || '';
+        return row;
+      });
+      if (add.length) { agt.getRange(agt.getLastRow() + 1, 1, add.length, width).setValues(add); agtAdded = add.length; }
+    }
+    const admin = ss.getSheetByName(CONFIG.SHEET_ADMIN);
+    if (admin && Array.isArray(areas) && areas.length) {
+      const colC = admin.getLastRow() > 1 ? admin.getRange(2, 3, admin.getLastRow() - 1, 1).getValues().flat().map(v => String(v).trim()) : [];
+      const existing = new Set(colC.filter(Boolean));
+      const add = areas.map(a => String(a).trim()).filter(a => a && !existing.has(a));
+      if (add.length) {
+        let lastC = colC.length;
+        while (lastC > 0 && !colC[lastC - 1]) lastC--;
+        admin.getRange(2 + lastC, 3, add.length, 1).setValues(add.map(a => [a]));
+        areaAdded = add.length;
+      }
+    }
+    SpreadsheetApp.flush();
+    if (agtAdded || areaAdded) bumpCache_();
+    return { status: "success", agtAdded: agtAdded, areaAdded: areaAdded };
+  } finally { lock.releaseLock(); }
+}
+

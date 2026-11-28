@@ -97,8 +97,9 @@ def fmt_value(v):
         return str(int(v))
     s = str(v)
     # xlsxの文字エスケープ(_xHHHH_)を復元。_x000b_ はスプレッドシートのセル内改行
-    s = re.sub(r'_x([0-9A-Fa-f]{4})_', lambda m: '' if m.group(1).lower() == '000d' else
-               ('\n' if m.group(1).lower() in ('000a', '000b') else chr(int(m.group(1), 16))), s)
+    s = re.sub(r'_x000[dD]_(?=\n)', '', s)  # CR+LF の CR 部分
+    s = re.sub(r'_x([0-9A-Fa-f]{4})_', lambda m: '\n' if m.group(1).lower() in ('000a', '000b', '000d')
+               else chr(int(m.group(1), 16)), s)
     s = s.replace('\r\n', '\n').replace('\r', '\n').replace('\x0b', '\n')
     s = re.sub(r'[\x00-\x08\x0c\x0e-\x1f\x7f]', '', s)
     return s
@@ -110,6 +111,12 @@ def link_of(c):
         return None
     t = h.target
     if t and re.match(r'^(https?:|mailto:)', t):
+        # スプレッドシートの特定タブへのリンク(#gid=…)は location 側に入っているので付け直す
+        if h.location and '#' not in t:
+            t = t + '#' + h.location
+        # 書き出し時に二重エスケープされた & を戻す(壊れたクエリパラメータの修復)
+        while '&amp;' in t:
+            t = t.replace('&amp;', '&')
         return t
     return None
 
