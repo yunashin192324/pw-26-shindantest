@@ -9,6 +9,7 @@ const CONFIG = {
   SHEET_BACKUP: 'バックアップ', 
   SHEET_AGT: 'AGTマスタ', 
   SHEET_IMAGES: '画像DB', 
+  SHEET_ORDER: '表示順',
   CACHE_TIME: 3600 
 };
 
@@ -23,6 +24,24 @@ const SCHEMA_MAP = [
   "md_feature", "md_img_url", "md_plan_resort", "md_plan_party", "md_hp", "md_salon", "md_c_name", "md_c_agt", "md_c_city", "md_c_ivr",
   "md_pay_dest", "md_pay_his", "md_pay_agt", "md_gallery", "season_year", "season_type", "is_draft", "updated_at", "tags", "product_url", "point", "promo"
 ];
+
+// ==========================================
+// ★ JSONの読み込み(制御文字が混入した行でも読めるようにする)
+//   旧xlsxのセル内改行(_x000b_)がスプレッドシート取り込み時に制御文字へ戻るケースへの対策
+// ==========================================
+function sanitizeJsonString_(str) {
+  return String(str)
+    .replace(/\r\n/g, '\\n')
+    .replace(/[\r\n\u000b]/g, '\\n')
+    .replace(/\t/g, '\\t')
+    .replace(/[\u0000-\u001F\u007F]/g, '');
+}
+
+function parseJsonSafe_(jsonStr) {
+  try { return JSON.parse(jsonStr); } catch (e) {
+    try { return JSON.parse(sanitizeJsonString_(jsonStr)); } catch (e2) { return null; }
+  }
+}
 
 // ==========================================
 // ★ 超速キャッシュ管理
@@ -165,6 +184,7 @@ function getInitialDataLight() {
     const cachedData = getLargeCache_(cacheKey);
     if (cachedData) {
       cachedData.userEmail = userEmail;
+      cachedData.treeOrder = getTreeOrder_();
       return cachedData;
     }
 
@@ -248,7 +268,7 @@ function getInitialDataLight() {
       "その他": { "お披露目パーティー": [], "前撮り": [], "リング": [], "アルバム": [], "画像加工": [], "ブーケ": [], "ペーパーアイテム": [], "MY DRESS STYLE": [] }
     };
 
-    if (!sheet || sheet.getLastRow() < 2) return { status: "success", structure: baseStructure, isAdmin, userEmail, agtMaster, areaMaster, contactInfo };
+    if (!sheet || sheet.getLastRow() < 2) return { status: "success", structure: baseStructure, isAdmin, userEmail, agtMaster, areaMaster, contactInfo, treeOrder: getTreeOrder_() };
 
     const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 11).getValues();
     
@@ -309,6 +329,7 @@ function getInitialDataLight() {
 
     const result = { status: "success", structure, isAdmin, userEmail, agtMaster, areaMaster, contactInfo };
     putLargeCache_(cacheKey, result);
+    result.treeOrder = getTreeOrder_();
     return result;
   } catch (e) {
     return { status: "error", message: `Init Error: ${e.message}` };
@@ -360,7 +381,7 @@ function getHeavyDataForSearch() {
       const checkChunk = (chunkIdx) => {
         const col = String(row[chunkIdx] || "").trim();
         if (col.startsWith("{")) {
-          try { return JSON.parse(row.slice(chunkIdx).join("")); } catch(e) { return null; }
+          return parseJsonSafe_(row.slice(chunkIdx).join(""));
         }
         return null;
       };
@@ -408,12 +429,12 @@ function getPlanDetail(rowIndex) {
     const checkChunk = (idx) => {
       const col = String(rowData[idx] || "").trim();
       if (col.startsWith("{")) {
-        try {
-          const record = JSON.parse(rowData.slice(idx).join(""));
+        const record = parseJsonSafe_(rowData.slice(idx).join(""));
+        if (record) {
           record.status = "success";
           record.rowId = rowNum;
           return record;
-        } catch(e) { return null; }
+        }
       }
       return null;
     };
@@ -473,11 +494,16 @@ function saveData(payload) {
     
     if (!isNaN(targetRow) && targetRow >= 2) {
       sheet.getRange(targetRow, 1, 1, sheet.getLastColumn() || 1).clearContent();
-      sheet.getRange(targetRow, 1, 1, rowToSave.length).setValues([rowToSave]);
+      const range = sheet.getRange(targetRow, 1, 1, rowToSave.length);
+      range.setNumberFormat('@');  // 本文(JSON)が数式・日付として解釈されないよう書式なしテキストで保存
+      range.setValues([rowToSave]);
       savedId = targetRow;
     } else {
-      sheet.appendRow(rowToSave);
-      savedId = sheet.getLastRow();
+      const nextRow = Math.max(sheet.getLastRow(), 1) + 1;
+      const range = sheet.getRange(nextRow, 1, 1, rowToSave.length);
+      range.setNumberFormat('@');
+      range.setValues([rowToSave]);
+      savedId = nextRow;
     }
     SpreadsheetApp.flush(); 
     bumpCache_(); 
@@ -757,17 +783,28 @@ function importLegacyData() {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(30000)) throw new Error("System is busy.");
   try {
-    const rows = src.getDataRange().getValues().slice(1)
-      .filter(r => String(r[4] || '').trim() && String(r[11] || '').trim().startsWith('{'));
+    const raw = src.getDataRange().getValues();
+    const rows = [];
+    for (let i = 1; i < raw.length; i++) {
+      const r = raw[i];
+      if (String(r[4] || '').trim() && String(r[11] || '').trim().startsWith('{')) rows.push({ rowNum: i + 1, data: r });
+    }
     if (rows.length === 0) throw new Error('取り込む行がありません。');
 
     // 末尾の空セルを除いた最大列数
     let width = 11;
-    rows.forEach(r => { for (let c = r.length - 1; c >= width; c--) { if (r[c] !== '' && r[c] != null) { width = c + 1; break; } } });
-    const values = rows.map(r => {
+    rows.forEach(({ data: r }) => { for (let c = r.length - 1; c >= width; c--) { if (r[c] !== '' && r[c] != null) { width = c + 1; break; } } });
+    const values = rows.map(({ rowNum, data: r }) => {
       const out = [];
-      for (let c = 0; c < width; c++) out.push(r[c] == null ? '' : String(r[c]));
-      JSON.parse(out.slice(11).join(''));  // 壊れた行があれば書き込む前に止める
+      for (let c = 0; c < width; c++) {
+        const v = r[c] == null ? '' : String(r[c]);
+        out.push(c >= 11 ? sanitizeJsonString_(v) : v);
+      }
+      try {
+        JSON.parse(out.slice(11).join(''));  // 壊れた行があれば書き込む前に止める
+      } catch (e) {
+        throw new Error(`移行データ ${rowNum}行目（${out[4]}）のJSONエラー: ${e.message}`);
+      }
       return out;
     });
 
@@ -823,5 +860,65 @@ function importLegacyAreaMaster_(ss) {
   while (lastC > 0 && !colC[lastC - 1]) lastC--;
   admin.getRange(2 + lastC, 3, add.length, 1).setValues(add.map(a => [a]));
   return add.length;
+}
+
+// ==========================================
+// ★ サイドバーの並び順(管理者がドラッグで変更)
+//   「表示順」シート: A列=親のパス(JSON配列) / B列=子の並び(JSON配列) / C列=更新者 / D列=更新日時
+//   本体データのキャッシュは消さず、並び順だけ別キャッシュで管理する
+// ==========================================
+const TREE_ORDER_CACHE_KEY = 'TREE_ORDER_V1';
+
+function getTreeOrder_() {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get(TREE_ORDER_CACHE_KEY);
+  if (cached) { try { return JSON.parse(cached); } catch (e) {} }
+  const order = {};
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.SHEET_ORDER);
+    if (sheet && sheet.getLastRow() >= 2) {
+      sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues().forEach(r => {
+        const key = String(r[0] || '');
+        if (!key) return;
+        const list = parseJsonSafe_(String(r[1] || '[]'));
+        if (Array.isArray(list)) order[key] = list.map(String);
+      });
+    }
+    const json = JSON.stringify(order);
+    if (json.length < 90000) cache.put(TREE_ORDER_CACHE_KEY, json, 21600);
+  } catch (e) {}
+  return order;
+}
+
+function saveTreeOrder(parentKey, names) {
+  if (!checkAdmin_(Session.getActiveUser().getEmail().toLowerCase())) throw new Error("Unauthorized.");
+  if (typeof parentKey !== 'string' || !Array.isArray(names)) throw new Error("Invalid request.");
+  const list = names.map(n => String(n)).slice(0, 2000);
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) throw new Error("System is busy.");
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sheet = ss.getSheetByName(CONFIG.SHEET_ORDER);
+    if (!sheet) {
+      sheet = ss.insertSheet(CONFIG.SHEET_ORDER);
+      sheet.appendRow(['親のパス', '並び順', '更新者', '更新日時']);
+    }
+    const user = Session.getActiveUser().getEmail();
+    const ts = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy/MM/dd HH:mm:ss");
+    const row = [parentKey, JSON.stringify(list), user, ts];
+    const last = sheet.getLastRow();
+    let target = -1;
+    if (last >= 2) {
+      const keys = sheet.getRange(2, 1, last - 1, 1).getValues().flat().map(String);
+      const i = keys.indexOf(parentKey);
+      if (i >= 0) target = i + 2;
+    }
+    const range = sheet.getRange(target > 0 ? target : last + 1, 1, 1, 4);
+    range.setNumberFormat('@');
+    range.setValues([row]);
+    SpreadsheetApp.flush();
+    CacheService.getScriptCache().remove(TREE_ORDER_CACHE_KEY);
+    return { status: "success" };
+  } finally { lock.releaseLock(); }
 }
 

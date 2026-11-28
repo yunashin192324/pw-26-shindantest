@@ -77,6 +77,13 @@
     .p-link-icon { color: var(--c-sub); font-size: 14px; flex-shrink: 0; margin-right: 6px; }
     .p-link-text { flex: 1 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
     .p-link-badges { display: flex; flex-shrink: 0; gap: 4px; align-items: center; margin-left: 6px; }
+    /* 管理者用: ツリーのドラッグ並べ替え */
+    #tree [data-tree-name] { position: relative; }
+    #tree.tree-sortable [data-tree-name] > .tree-item, #tree.tree-sortable .p-link { cursor: grab; }
+    #tree .tree-dragging { opacity: 0.4; }
+    #tree .tree-drop-before::before, #tree .tree-drop-after::after { content: ''; position: absolute; left: 0; right: 0; height: 3px; background: var(--c-primary); z-index: 5; pointer-events: none; }
+    #tree .tree-drop-before::before { top: -1px; }
+    #tree .tree-drop-after::after { bottom: -1px; }
 
     .presence-container { display: flex; gap: 6px; align-items: center; border-left: 2px solid var(--c-border); padding-left: 15px; margin-left: 10px; }
     .presence-user { position: relative; background: #e0ecf8; color: var(--c-primary); border: 1px solid #b3d4fc; width: 32px; height: 32px; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 12px; font-weight: bold; text-transform: uppercase; cursor: default; }
@@ -800,6 +807,7 @@ const State = {
   lastSearchKeyword: "",
   agtMaster: {},
   areaMaster: [],
+  treeOrder: {},
   isHeavyDataLoaded: false
 };
 
@@ -1572,17 +1580,32 @@ const CMS = {
     }
   },
 
+  // 管理者が保存した並び順(State.treeOrder[親のパス])を優先し、未指定のものは従来の順で後ろに並べる
+  orderTreeKeys: (keys, parentKey, fallback) => {
+    const saved = (State.treeOrder || {})[parentKey] || [];
+    const pos = new Map(saved.map((n, i) => [n, i]));
+    return keys.slice().sort((a, b) => {
+      const ha = pos.has(a), hb = pos.has(b);
+      if (ha && hb) return pos.get(a) - pos.get(b);
+      if (ha !== hb) return ha ? -1 : 1;
+      return fallback(a, b);
+    });
+  },
+
   renderTree: (struct) => {
     const root = document.getElementById('tree');
     root.innerHTML = '';
+    root.classList.toggle('tree-sortable', !!State.isAdmin);
+    UI.initTreeDnD();
     
-    const build = (obj, lvl) => {
+    const build = (obj, lvl, path) => {
       const frag = document.createDocumentFragment();
-      let keys = Object.keys(obj);
+      const parentKey = JSON.stringify(path);
+      let keys;
       
       if (lvl === 0) {
         const order = ["キャンペーン", "フォト", "ウェディング", "お役立ち情報", "その他"];
-        keys.sort((a, b) => {
+        keys = UI.orderTreeKeys(Object.keys(obj), parentKey, (a, b) => {
           let idxA = order.indexOf(a);
           let idxB = order.indexOf(b);
           if(idxA === -1) idxA = 999;
@@ -1591,13 +1614,16 @@ const CMS = {
           return idxA - idxB;
         });
       } else {
-        keys.sort();
+        keys = UI.orderTreeKeys(Object.keys(obj), parentKey, (a, b) => (a < b ? -1 : a > b ? 1 : 0));
       }
 
       keys.forEach(k => {
         const wrap = document.createElement('div');
         const node = document.createElement('div');
         const group = document.createElement('div');
+        wrap.dataset.treeName = k;
+        wrap.dataset.treeParent = parentKey;
+        if (State.isAdmin) wrap.draggable = true;
         
         node.className = `tree-item ${lvl===0?'lvl-0':`indent-${Math.min(lvl, 3)}`}`;
         node.innerHTML = `<span>${k}</span> <i class="bi bi-chevron-right"></i>`;
@@ -1624,7 +1650,8 @@ const CMS = {
             grouped[base].push(p);
           });
 
-          Object.keys(grouped).sort().forEach(baseTitle => {
+          const planParentKey = JSON.stringify(path.concat(k));
+          UI.orderTreeKeys(Object.keys(grouped), planParentKey, (a, b) => (a < b ? -1 : a > b ? 1 : 0)).forEach(baseTitle => {
              const plans = grouped[baseTitle];
              plans.sort((a, b) => {
                if (a.sy !== b.sy) return Number(b.sy || 0) - Number(a.sy || 0); 
@@ -1657,18 +1684,83 @@ const CMS = {
              d.innerHTML = `<i class="bi bi-file-earmark-text p-link-icon"></i> <span class="p-link-text" title="${baseTitle}">${baseTitle}</span><div class="p-link-badges">${badge}${newBadge}</div>`;
              d.dataset.action = "viewPlanSearch";
              d.dataset.payload = defaultPlan.id;
+             d.dataset.treeName = baseTitle;
+             d.dataset.treeParent = planParentKey;
+             if (State.isAdmin) d.draggable = true;
              group.appendChild(d);
           });
 
         } else {
-          group.appendChild(build(obj[k], lvl + 1));
+          group.appendChild(build(obj[k], lvl + 1, path.concat(k)));
         }
         wrap.append(node, group);
         frag.appendChild(wrap);
       });
       return frag;
     };
-    root.appendChild(build(struct, 0));
+    root.appendChild(build(struct, 0, []));
+  },
+
+  // サイドバーのツリーを管理者がドラッグで並べ替える(同じ階層の中だけ)。並び順はサーバーに保存し全員に反映
+  initTreeDnD: () => {
+    const root = document.getElementById('tree');
+    if (!root || root.dataset.dndBound) return;
+    root.dataset.dndBound = '1';
+    let dragEl = null;
+    const itemOf = (e) => e.target.closest ? e.target.closest('[data-tree-name]') : null;
+    const clearMarks = () => root.querySelectorAll('.tree-drop-before, .tree-drop-after')
+      .forEach(x => x.classList.remove('tree-drop-before', 'tree-drop-after'));
+    const canDrop = (el) => el && dragEl && el !== dragEl && !dragEl.contains(el) &&
+      el.dataset.treeParent === dragEl.dataset.treeParent;
+
+    root.addEventListener('dragstart', (e) => {
+      const el = itemOf(e);
+      if (!el || !State.isAdmin) return;
+      dragEl = el;
+      el.classList.add('tree-dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', el.dataset.treeName);
+    });
+    root.addEventListener('dragend', () => {
+      if (dragEl) dragEl.classList.remove('tree-dragging');
+      dragEl = null;
+      clearMarks();
+    });
+    root.addEventListener('dragover', (e) => {
+      const el = itemOf(e);
+      if (!canDrop(el)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const head = el.classList.contains('p-link') ? el : el.firstElementChild;
+      const r = head.getBoundingClientRect();
+      const before = e.clientY < r.top + r.height / 2;
+      if (!el.classList.contains(before ? 'tree-drop-before' : 'tree-drop-after')) {
+        clearMarks();
+        el.classList.add(before ? 'tree-drop-before' : 'tree-drop-after');
+      }
+    });
+    root.addEventListener('drop', async (e) => {
+      const el = itemOf(e);
+      if (!canDrop(el)) return;
+      e.preventDefault();
+      const before = el.classList.contains('tree-drop-before');
+      clearMarks();
+      const moved = dragEl;
+      el.parentNode.insertBefore(moved, before ? el : el.nextSibling);
+      const parentKey = moved.dataset.treeParent;
+      const names = Array.from(el.parentNode.children)
+        .filter(c => c.dataset && c.dataset.treeParent === parentKey)
+        .map(c => c.dataset.treeName);
+      State.treeOrder = State.treeOrder || {};
+      State.treeOrder[parentKey] = names;
+      try {
+        const res = await API.saveTreeOrder(parentKey, names);
+        if (res && res.status === 'success') UI.showToast('並び順を保存しました');
+        else throw new Error(res && res.message);
+      } catch (err) {
+        UI.showToast('並び順の保存に失敗しました', 'error');
+      }
+    });
   },
 
   renderQuickAccess: () => {
@@ -2651,6 +2743,7 @@ const Controller = {
       
       if (initRes.agtMaster) State.agtMaster = initRes.agtMaster;
       if (initRes.areaMaster) State.areaMaster = initRes.areaMaster;
+      State.treeOrder = initRes.treeOrder || {};
       
       const contactContainer = document.getElementById('contact-info-container');
       if (contactContainer && initRes.contactInfo) {

@@ -96,7 +96,11 @@ def fmt_value(v):
     if isinstance(v, float) and v.is_integer():
         return str(int(v))
     s = str(v)
-    s = s.replace('_x000d_', '').replace('\r\n', '\n').replace('\r', '\n')
+    # xlsxの文字エスケープ(_xHHHH_)を復元。_x000b_ はスプレッドシートのセル内改行
+    s = re.sub(r'_x([0-9A-Fa-f]{4})_', lambda m: '' if m.group(1).lower() == '000d' else
+               ('\n' if m.group(1).lower() in ('000a', '000b') else chr(int(m.group(1), 16))), s)
+    s = s.replace('\r\n', '\n').replace('\r', '\n').replace('\x0b', '\n')
+    s = re.sub(r'[\x00-\x08\x0c\x0e-\x1f\x7f]', '', s)
     return s
 
 
