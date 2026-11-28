@@ -877,7 +877,9 @@
 
   /** ファイル名(拡張子なし)とシート名から (元ブック名, タブ名) を決める */
   function bookAndTab(fileBase, sheetName, sheetCount) {
-    const name = String(fileBase).replace(/#U([0-9a-fA-F]{4})/g, (m, h) => String.fromCharCode(parseInt(h, 16)));
+    const name = String(fileBase).replace(/#U([0-9a-fA-F]{4})/g, (m, h) => String.fromCharCode(parseInt(h, 16)))
+      // 同じファイルを複数回ダウンロードしたときにブラウザが付ける「 (1)」「 (2)」を除く
+      .replace(/\s+\(\d+\)\s*$/, '');
     if (sheetCount === 1 && name.includes('_')) {
       const i = name.indexOf('_');
       return [name.slice(0, i), strip(name.slice(i + 1))];

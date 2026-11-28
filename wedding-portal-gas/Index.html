@@ -1681,7 +1681,9 @@
 
   /** ファイル名(拡張子なし)とシート名から (元ブック名, タブ名) を決める */
   function bookAndTab(fileBase, sheetName, sheetCount) {
-    const name = String(fileBase).replace(/#U([0-9a-fA-F]{4})/g, (m, h) => String.fromCharCode(parseInt(h, 16)));
+    const name = String(fileBase).replace(/#U([0-9a-fA-F]{4})/g, (m, h) => String.fromCharCode(parseInt(h, 16)))
+      // 同じファイルを複数回ダウンロードしたときにブラウザが付ける「 (1)」「 (2)」を除く
+      .replace(/\s+\(\d+\)\s*$/, '');
     if (sheetCount === 1 && name.includes('_')) {
       const i = name.indexOf('_');
       return [name.slice(0, i), strip(name.slice(i + 1))];
@@ -1970,6 +1972,7 @@ const LegacySync = {
   results: [],
   plan: [],
   missing: [],
+  dupNote: '',
   busy: false,
   LIBS: [
     ['XLSX', 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'],
@@ -2081,8 +2084,19 @@ const LegacySync = {
     try {
       LegacySync.status('準備中…');
       await LegacySync.ensureLibs();
-      const entries = (await LegacySync.readFiles(fileList)).sort((x, y) => (x.base < y.base ? -1 : x.base > y.base ? 1 : 0));
+      let entries = (await LegacySync.readFiles(fileList)).sort((x, y) => (x.base < y.base ? -1 : x.base > y.base ? 1 : 0));
       if (!entries.length) throw new Error('xlsx ファイルが見つかりませんでした。');
+      // 同じファイルを複数回ダウンロードしたもの(「名前 (1)」など)は、番号が一番大きい(新しい)1つだけを使う
+      const latest = new Map();
+      for (const e of entries) {
+        const m = /\s+\((\d+)\)\s*$/.exec(e.base);
+        const key = e.base.replace(/\s+\(\d+\)\s*$/, '');
+        const n = m ? parseInt(m[1], 10) : 0;
+        if (!latest.has(key) || n > latest.get(key).n) latest.set(key, { e, n });
+      }
+      LegacySync.dupNote = entries.length > latest.size
+        ? `同じファイルが複数選ばれていたため、${entries.length - latest.size}個は除外し、番号の大きい（新しくダウンロードした）方を使いました。` : '';
+      entries = Array.from(latest.values()).map(x => x.e);
       const results = [];
       for (let i = 0; i < entries.length; i++) {
         LegacySync.status(`変換中… ${i + 1} / ${entries.length} ファイル`);
@@ -2166,6 +2180,7 @@ const LegacySync = {
         ${chg ? `<div>${chg}</div>` : ''}</div></label>`;
     };
     let html = `<div style="font-size:13px; margin-bottom:6px;">${LegacySync.results.length} 件を変換しました。</div>`;
+    if (LegacySync.dupNote) html += `<div class="ls-meta" style="color:#b45309; margin-bottom:6px;"><i class="bi bi-info-circle"></i> ${esc(LegacySync.dupNote)}</div>`;
     for (const [st, name, color, desc] of groups) {
       const list = P.filter(x => x.status === st);
       if (!list.length) continue;
